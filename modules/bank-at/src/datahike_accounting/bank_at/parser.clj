@@ -1,0 +1,152 @@
+(ns datahike-accounting.bank-at.parser
+  "Austrian bank-statement CSV configs + categorizer.
+
+   Generic CSV engine lives in `datahike-accounting.bank-csv`. AT and
+   DE bank exports are very close (German-language, EUR, dd.MM.yyyy)
+   but the column orders differ per bank — and Austria has its own
+   set of dominant retail banks (Erste, Raiffeisen, Bank Austria,
+   BAWAG).
+
+   Supported:
+     :erste            — Erste Bank / Sparkassen (george / netbanking)
+     :raiffeisen       — Raiffeisen-Landesbanken
+     :bank-austria     — UniCredit Bank Austria
+     :bawag-psk        — BAWAG P.S.K. (PSK successor)
+
+   Notes (column specs derived from each bank's documented CSV
+   export — we keep the parser format-tolerant since regional
+   Raiffeisen banks and Sparkassen each lightly vary their layouts):
+
+     ERSTE BANK / GEORGE
+       Header: 'Buchungsdatum;Valutadatum;Buchungsinformation;
+                IBAN Auftraggeber;BIC Auftraggeber;Auftraggeber;
+                IBAN Empfänger;BIC Empfänger;Empfänger;Betrag;Währung'
+       Date: dd.MM.yyyy  •  Amount: signed German (1.234,56)
+
+     RAIFFEISEN
+       Header: 'Buchungstag;Wertstellung;Buchungstext;Verwendungszweck;
+                Auftraggeber/Empfänger;IBAN;BIC;Betrag;Währung;Saldo'
+       Date: dd.MM.yyyy  •  Amount: signed German
+
+     BANK AUSTRIA (UniCredit)
+       Header: 'Datum;Valutadatum;Empfänger/Auftraggeber;Buchungstext;
+                Betrag;Währung;Verwendungszweck'
+       Date: dd.MM.yyyy  •  Amount: signed German
+
+     BAWAG P.S.K.
+       Header: 'Buchungsdatum;Valutadatum;Buchungstext;Auftraggeber;
+                Empfänger;Verwendungszweck;Betrag;Währung'
+       Date: dd.MM.yyyy  •  Amount: signed German"
+  (:require [clojure.string :as str]
+            [datahike-accounting.bank-csv :as csv-core]))
+
+(def parse-german-amount csv-core/parse-german-amount)
+(def parse-date csv-core/parse-date)
+
+;; ============================================================================
+;; Bank configurations
+;; ============================================================================
+
+(def bank-configs
+  {:erste
+   {:encoding "UTF-8" :skip-rows 0 :date-format "dd.MM.yyyy" :separator \;
+    :amount-style :german
+    :col-indexes {:date 0 :value-date 1 :description 2 :iban-sender 3
+                  :bic-sender 4 :counterparty 5 :iban 6 :bic 7
+                  :recipient 8 :amount 9 :currency 10}}
+
+   :raiffeisen
+   {:encoding "UTF-8" :skip-rows 0 :date-format "dd.MM.yyyy" :separator \;
+    :amount-style :german
+    :col-indexes {:date 0 :value-date 1 :type 2 :description 3
+                  :counterparty 4 :iban 5 :bic 6 :amount 7
+                  :currency 8 :balance 9}}
+
+   :bank-austria
+   {:encoding "UTF-8" :skip-rows 0 :date-format "dd.MM.yyyy" :separator \;
+    :amount-style :german
+    :col-indexes {:date 0 :value-date 1 :counterparty 2 :type 3
+                  :amount 4 :currency 5 :description 6}}
+
+   :bawag-psk
+   {:encoding "UTF-8" :skip-rows 0 :date-format "dd.MM.yyyy" :separator \;
+    :amount-style :german
+    :col-indexes {:date 0 :value-date 1 :type 2 :counterparty-sender 3
+                  :counterparty 4 :description 5 :amount 6 :currency 7}}})
+
+;; ============================================================================
+;; Detection
+;; ============================================================================
+
+(defn detect-bank
+  [filename content-preview]
+  (let [lower (str/lower-case (str filename))
+        preview (str content-preview)]
+    (cond
+      (str/includes? lower "erste")          :erste
+      (str/includes? lower "george")         :erste
+      (str/includes? lower "raiffeisen")     :raiffeisen
+      (str/includes? lower "rlb")            :raiffeisen
+      (str/includes? lower "bank-austria")   :bank-austria
+      (str/includes? lower "bankaustria")    :bank-austria
+      (str/includes? lower "unicredit")      :bank-austria
+      (str/includes? lower "bawag")          :bawag-psk
+      (str/includes? lower "psk")            :bawag-psk
+      (str/includes? preview "Buchungsinformation;IBAN Auftraggeber") :erste
+      (str/includes? preview "Buchungstag;Wertstellung;Buchungstext;Verwendungszweck;Auftraggeber") :raiffeisen
+      (str/includes? preview "Datum;Valutadatum;Empfänger/Auftraggeber;Buchungstext") :bank-austria
+      (str/includes? preview "Buchungsdatum;Valutadatum;Buchungstext;Auftraggeber;Empfänger") :bawag-psk
+      :else nil)))
+
+;; ============================================================================
+;; Categorizer (German-language patterns; AT-flavored merchants)
+;; ============================================================================
+
+(def category-patterns
+  {:einnahmen        [#"(?i)\bGEHALT\b" #"(?i)LOHN" #"(?i)\bENTGELT\b"
+                      #"(?i)RECHNUNG" #"(?i)HONORAR" #"(?i)PROVISION"
+                      #"(?i)FAMILIENBEIHILFE"]
+   :miete            [#"(?i)\bMIETE\b" #"(?i)GENOSSENSCHAFT" #"(?i)BAUTRÄGER"]
+   :strom-gas        [#"(?i)\bWIEN ENERGIE\b" #"(?i)\bENERGIE AG\b"
+                      #"(?i)\bVERBUND\b" #"(?i)\bEVN\b"]
+   :telekom          [#"(?i)\bA1\b" #"(?i)MAGENTA TELEKOM" #"(?i)\bDREI\b"
+                      #"(?i)\bUPC\b" #"(?i)\bSIMPLITV\b"]
+   :lebensmittel     [#"(?i)BILLA" #"(?i)SPAR" #"(?i)\bHOFER\b" #"(?i)PENNY"
+                      #"(?i)LIDL" #"(?i)\bMERKUR\b" #"(?i)\bMPREIS\b"]
+   :gastronomie      [#"(?i)RESTAURANT" #"(?i)\bWIRT\b" #"(?i)\bBEISL\b"
+                      #"(?i)\bCAFE\b" #"(?i)KONDITOREI" #"(?i)MCDONALD"]
+   :transport        [#"(?i)\bWIENER LINIEN\b" #"(?i)\bÖBB\b" #"(?i)WESTBAHN"
+                      #"(?i)\bUBER\b" #"(?i)\bBOLT\b"]
+   :treibstoff       [#"(?i)\bOMV\b" #"(?i)\bBP\b" #"(?i)SHELL" #"(?i)JET"
+                      #"(?i)TURMÖL" #"(?i)\bENI\b"]
+   :software         [#"(?i)ADOBE" #"(?i)MICROSOFT" #"(?i)GOOGLE.*WORKSPACE"
+                      #"(?i)\bAWS\b" #"(?i)NETFLIX" #"(?i)SPOTIFY"
+                      #"(?i)CHATGPT" #"(?i)\bOPENAI\b"]
+   :versicherung     [#"(?i)VERSICHERUNG" #"(?i)\bUNIQA\b" #"(?i)\bWIENER STÄDTISCHE\b"
+                      #"(?i)\bGENERALI\b" #"(?i)\bOÖGKK\b" #"(?i)\bSVS\b"]
+   :bankspesen       [#"(?i)KONTOFÜHRUNGSGEBÜHR" #"(?i)BANKSPESEN" #"(?i)\bSPESEN\b"]
+   :steuer           [#"(?i)FINANZAMT" #"(?i)\bUSt\b" #"(?i)EINKOMMENSTEUER"]})
+
+(defn categorize-transaction
+  [tx]
+  (let [text   (str/upper-case (str (:counterparty tx) " " (:description tx)
+                                    " " (:transaction-type tx)))
+        amount (or (:amount tx) 0M)
+        base   (if (>= (.signum ^java.math.BigDecimal amount) 0)
+                 :einnahmen :sonstige-betriebsausgaben)
+        match (reduce (fn [_ [cat patterns]]
+                        (when (some #(re-find % text) patterns) (reduced cat)))
+                      nil category-patterns)]
+    (assoc tx :category (or match base))))
+
+;; ============================================================================
+;; Public
+;; ============================================================================
+
+(defn parse-statement
+  [path]
+  (csv-core/parse-statement
+   {:bank-configs   bank-configs
+    :detect-bank-fn detect-bank
+    :categorize-fn  categorize-transaction}
+   path))

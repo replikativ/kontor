@@ -1,0 +1,16 @@
+Buchungsdatum;Valutadatum;Buchungstext;Auftraggeber;Empfänger;Verwendungszweck;Betrag;Währung
+02.01.2026;02.01.2026;Gehalt;ACME GMBH;Max Mustermann;Gehalt 01.2026;3550,00;EUR
+03.01.2026;03.01.2026;Lastschrift Energie;Max Mustermann;ENERGIE AG OBEROESTERREICH;Strom Janner 2026;-118,40;EUR
+04.01.2026;04.01.2026;Kartenzahlung;Max Mustermann;HOFER KG;Einkauf;-58,18;EUR
+05.01.2026;05.01.2026;Kartenzahlung;Max Mustermann;CAFE CENTRAL WIEN;;-14,40;EUR
+06.01.2026;06.01.2026;Lastschrift Telekom;Max Mustermann;A1 TELEKOM AUSTRIA AG;Mobilfunk;-29,90;EUR
+08.01.2026;08.01.2026;Kartenzahlung;Max Mustermann;WIENER LINIEN;Jahreskarte;-365,00;EUR
+10.01.2026;10.01.2026;Kartenzahlung;Max Mustermann;TURMOEL TANKSTELLE;Tanken;-62,80;EUR
+12.01.2026;12.01.2026;Dauerauftrag Miete;Max Mustermann;ÖSTERREICH HEIMSTAETTE;Miete Februar 2026;-780,00;EUR
+15.01.2026;15.01.2026;Lastschrift Streaming;Max Mustermann;OPENAI LLC;ChatGPT Plus;20,00;EUR
+18.01.2026;18.01.2026;Kartenzahlung;Max Mustermann;MERKUR WARENHANDELS AG;Einkauf;-78,40;EUR
+20.01.2026;20.01.2026;Kartenzahlung;Max Mustermann;WESTBAHN MANAGEMENT;Bahnticket Wien-Salzburg;-39,00;EUR
+22.01.2026;22.01.2026;Lastschrift Steuer;Max Mustermann;FINANZAMT WIEN;Umsatzsteuer Janner;-2400,00;EUR
+25.01.2026;25.01.2026;Lastschrift Versicherung;Max Mustermann;UNIQA OESTERREICH;Krankenversicherung;-145,00;EUR
+28.01.2026;28.01.2026;Kartenzahlung;Max Mustermann;MCDONALDS RESTAURANT;;-9,80;EUR
+30.01.2026;30.01.2026;Spesen;BAWAG P.S.K.;Max Mustermann;Kontofuehrungsspesen;-5,90;EUR

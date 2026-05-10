@@ -17,6 +17,10 @@
          "modules/l10n-ca/src"     "modules/l10n-ca/resources"
          "modules/l10n-us/src"     "modules/l10n-us/resources"
          "modules/bank-de/src"     "modules/bank-de/resources"
+         "modules/bank-at/src"     "modules/bank-at/resources"
+         "modules/bank-fr/src"     "modules/bank-fr/resources"
+         "modules/bank-ca/src"     "modules/bank-ca/resources"
+         "modules/bank-us/src"     "modules/bank-us/resources"
          "modules/einvoice-de/src" "modules/einvoice-de/resources"]
 
  :deps
@@ -41,6 +45,10 @@
                  "modules/l10n-ca/test"      "modules/l10n-ca/test/resources"
                  "modules/l10n-us/test"      "modules/l10n-us/test/resources"
                  "modules/bank-de/test"      "modules/bank-de/test/resources"
+                 "modules/bank-at/test"      "modules/bank-at/test/resources"
+                 "modules/bank-fr/test"      "modules/bank-fr/test/resources"
+                 "modules/bank-ca/test"      "modules/bank-ca/test/resources"
+                 "modules/bank-us/test"      "modules/bank-us/test/resources"
                  "modules/einvoice-de/test"  "modules/einvoice-de/test/resources"]
    :extra-deps  {lambdaisland/kaocha     {:mvn/version "1.91.1392"}
                  org.clojure/test.check  {:mvn/version "1.1.1"}}
@@ -56,6 +64,10 @@
                  "modules/l10n-ca/test"      "modules/l10n-ca/test/resources"
                  "modules/l10n-us/test"      "modules/l10n-us/test/resources"
                  "modules/bank-de/test"      "modules/bank-de/test/resources"
+                 "modules/bank-at/test"      "modules/bank-at/test/resources"
+                 "modules/bank-fr/test"      "modules/bank-fr/test/resources"
+                 "modules/bank-ca/test"      "modules/bank-ca/test/resources"
+                 "modules/bank-us/test"      "modules/bank-us/test/resources"
                  "modules/einvoice-de/test"  "modules/einvoice-de/test/resources"]
    :extra-deps  {nrepl/nrepl             {:mvn/version "1.3.0"}
                  lambdaisland/kaocha     {:mvn/version "1.91.1392"}
