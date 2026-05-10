@@ -1,0 +1,64 @@
+;; datahike-accounting — double-entry accounting kernel on datahike.
+;;
+;; Kernel deps are deliberately minimal. Country-specific data,
+;; e-invoicing wrappers, and bank-statement importers ship as separate
+;; artifacts (see doc/architecture.md).
+;; Monorepo layout (per ADR-006 + iteration-speed concerns):
+;; the kernel ships from src/ + resources/; per-country / per-bank /
+;; per-format modules under modules/<name>/. Each module's src/ + test/
+;; + resources/ live next to its own README, but ALL paths are merged
+;; here so a single REPL / single bb ci sees the whole tree. When a
+;; module hardens enough to have external consumers, it can be split
+;; into its own artifact without code changes — only deps.edn moves.
+{:paths ["src" "resources"
+         "modules/l10n-de/src"     "modules/l10n-de/resources"
+         "modules/bank-de/src"     "modules/bank-de/resources"
+         "modules/einvoice-de/src" "modules/einvoice-de/resources"]
+
+ :deps
+ {org.clojure/clojure              {:mvn/version "1.12.4"}
+  org.replikativ/datahike          {:mvn/version "0.8.1681"}
+  ;; Declarative datalog invariants — see ADR-011 + research note 04.
+  ;; Currently linked locally; switch to :git/url + :sha once we cut a
+  ;; release of the bumped library.
+  io.datopia/invariant             {:local/root "../datopia/invariant"}
+  ;; Beancount parser (Phase 1 acceptance test — ADR-009). Small EPL
+  ;; library, no further transitive deps to speak of.
+  instaparse/instaparse            {:mvn/version "1.5.0"}
+  ;; CSV parsing — used by modules/bank-de. EPL.
+  org.clojure/data.csv             {:mvn/version "1.1.0"}}
+
+ :aliases
+ {:test
+  {:extra-paths ["test" "test/resources"
+                 "modules/l10n-de/test"      "modules/l10n-de/test/resources"
+                 "modules/bank-de/test"      "modules/bank-de/test/resources"
+                 "modules/einvoice-de/test"  "modules/einvoice-de/test/resources"]
+   :extra-deps  {lambdaisland/kaocha     {:mvn/version "1.91.1392"}
+                 org.clojure/test.check  {:mvn/version "1.1.1"}}
+   :main-opts   ["-m" "kaocha.runner"]}
+
+  ;; REPL with test sources on the classpath + nREPL for editor wiring.
+  ;; Mirrors the convention used in pg-datahike and beleg.
+  :dev
+  {:extra-paths ["test" "test/resources" "dev"
+                 "modules/l10n-de/test"      "modules/l10n-de/test/resources"
+                 "modules/bank-de/test"      "modules/bank-de/test/resources"
+                 "modules/einvoice-de/test"  "modules/einvoice-de/test/resources"]
+   :extra-deps  {nrepl/nrepl             {:mvn/version "1.3.0"}
+                 lambdaisland/kaocha     {:mvn/version "1.91.1392"}
+                 org.clojure/test.check  {:mvn/version "1.1.1"}
+                 cider/cider-nrepl       {:mvn/version "0.45.0"}}}
+
+  :format
+  {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.0"}}
+   :main-opts  ["-m" "cljfmt.main" "check"]}
+
+  :ffix
+  {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.0"}}
+   :main-opts  ["-m" "cljfmt.main" "fix"]}
+
+  :build
+  {:extra-deps {io.github.clojure/tools.build {:mvn/version "0.10.5"}
+                slipset/deps-deploy           {:mvn/version "0.2.2"}}
+   :ns-default build}}}

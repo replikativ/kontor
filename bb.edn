@@ -1,0 +1,26 @@
+{:min-bb-version "0.8.0"
+ :pods {clj-kondo/clj-kondo {:version "2026.01.19"}}
+ :tasks
+ {:requires ([babashka.process :refer [shell]]
+             [pod.borkdude.clj-kondo :as clj-kondo])
+
+  test {:doc "Run unit test suite via kaocha."
+        :task (apply shell "clojure -M:test" *command-line-args*)}
+
+  nrepl {:doc "Boot a Clojure REPL with test paths + nREPL on a free port."
+         :task (shell "clojure -M:dev -m nrepl.cmdline --middleware [cider.nrepl/cider-middleware]")}
+
+  format {:doc "Check Clojure source formatting with cljfmt."
+          :task (shell "clojure -M:format")}
+
+  ffix {:doc "Fix Clojure source formatting with cljfmt."
+        :task (shell "clojure -M:ffix")}
+
+  lint {:doc "Run clj-kondo on src/ + test/."
+        :task (do (clj-kondo/print!
+                   (clj-kondo/run! {:lint ["src" "test"]}))
+                  nil)}
+
+  ci {:doc "Format check + lint + tests, in that order."
+      :depends [format lint test]
+      :task (println "[ci] all green")}}}

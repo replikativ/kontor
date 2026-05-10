@@ -1,0 +1,37 @@
+.cpcache/
+.clj-kondo/
+.lsp/
+.calva/
+target/
+out/
+classes/
+*.jar
+*.class
+.nrepl-port
+.shadow-cljs/
+node_modules/
+
+# Local datahike stores used by tests / dev REPL
+/data/
+/databases/
+/tmp-store/
+
+# Editor + OS noise
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local secrets / per-machine config
+.env
+.env.local
+local.edn
+
+# Reference source-of-extraction (not a deliverable). The 14 bank-CSV
+# fixtures and any code we want from this tree get lifted into
+# modules/* with provenance documented in their own README. Keeping
+# it out of git avoids mixing the agent-runtime infrastructure
+# (SOUL.md, MEMORY.md, daily memory files, transcripts) with our
+# deliverables.
+openclaw/

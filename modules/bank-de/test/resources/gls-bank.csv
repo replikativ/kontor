@@ -1,0 +1,19 @@
+﻿Bezeichnung Auftragskonto;IBAN Auftragskonto;BIC Auftragskonto;Bankname Auftragskonto;Buchungstag;Valutadatum;Name Zahlungsbeteiligter;IBAN Zahlungsbeteiligter;BIC (SWIFT-Code) Zahlungsbeteiligter;Buchungstext;Verwendungszweck;Betrag;Waehrung;Saldo nach Buchung;Bemerkung;Gekennzeichneter Umsatz;Glaeubiger ID;Mandatsreferenz
+GLS Konto Geschäft;DE89370400440532013000;GENODEM1GLS;GLS Gemeinschaftsbank eG;17.12.2025;17.12.2025;Max Mustermann ;DE89370400440532013000;GENxxxx;Basislastschrift;Miete;-52,93;EUR;28764,28;;;;
+GLS Konto Geschäft;DE89370400440532013000;GENODEM1GLS;GLS Gemeinschaftsbank eG;16.12.2025;16.12.2025;Max Mustermann ;DE89370400440532013000;GENxxxx;Basislastschrift;Kauf;-42,24;EUR;28817,21;;;;
+GLS Konto Geschäft;DE89370400440532013000;GENODEM1GLS;GLS Gemeinschaftsbank eG;16.12.2025;16.12.2025;Max Mustermann ;DE89370400440532013000;GENxxxx;Basislastschrift;Kauf;-39,2;EUR;28859,45;;;;
+GLS Konto Geschäft;DE89370400440532013000;GENODEM1GLS;GLS Gemeinschaftsbank eG;16.12.2025;16.12.2025;Max Mustermann ;DE89370400440532013000;GENxxxx;Basislastschrift;Miete;-50,05;EUR;28898,65;;;;
+GLS Konto Geschäft;DE89370400440532013000;GENODEM1GLS;GLS Gemeinschaftsbank eG;15.12.2025;15.12.2025;Max Mustermann ;DE89370400440532013000;GENxxxx;Kartenzahlung girocard;Kauf;-20;EUR;28948,7;;;;
+GLS Konto Geschäft;DE89370400440532013000;GENODEM1GLS;GLS Gemeinschaftsbank eG;15.12.2025;15.12.2025;Max Mustermann ;DE89370400440532013000;GENxxxx;Überweisungsgutschr.;Kauf;1284;EUR;28968,7;;;;
+GLS Konto Geschäft;DE89370400440532013000;GENODEM1GLS;GLS Gemeinschaftsbank eG;15.12.2025;15.12.2025;Max Mustermann ;DE89370400440532013000;GENxxxx;Kartenzahlung girocard;Miete;-36;EUR;27684,7;;;;
+GLS Konto Geschäft;DE89370400440532013000;GENODEM1GLS;GLS Gemeinschaftsbank eG;15.12.2025;15.12.2025;Max Mustermann ;DE89370400440532013000;GENxxxx;Kartenzahlung girocard;Kauf;-23,07;EUR;27720,7;;;;
+GLS Konto Geschäft;DE89370400440532013000;GENODEM1GLS;GLS Gemeinschaftsbank eG;15.12.2025;15.12.2025;Max Mustermann ;DE89370400440532013000;GENxxxx;Kartenzahlung girocard;Kauf;-21,39;EUR;27743,77;;;;
+GLS Konto Geschäft;DE89370400440532013000;GENODEM1GLS;GLS Gemeinschaftsbank eG;15.12.2025;15.12.2025;Max Mustermann ;DE89370400440532013000;GENxxxx;Basislastschrift;Miete;-38,81;EUR;27765,16;;;;
+GLS Konto Geschäft;DE89370400440532013000;GENODEM1GLS;GLS Gemeinschaftsbank eG;15.12.2025;15.12.2025;Max Mustermann ;DE89370400440532013000;GENxxxx;Basislastschrift;Verwendungszweck;-42;EUR;27803,97;;;;
+GLS Konto Geschäft;DE89370400440532013000;GENODEM1GLS;GLS Gemeinschaftsbank eG;12.12.2025;12.12.2025;Max Mustermann ;DE89370400440532013000;GENxxxx;Basislastschrift;Kauf;-30,41;EUR;27845,97;;;;
+GLS Konto Geschäft;DE89370400440532013000;GENODEM1GLS;GLS Gemeinschaftsbank eG;11.12.2025;11.12.2025;Max Mustermann ;DE89370400440532013000;GENxxxx;Basislastschrift;Miete;-33,19;EUR;27876,38;;;;
+GLS Konto Geschäft;DE89370400440532013000;GENODEM1GLS;GLS Gemeinschaftsbank eG;11.12.2025;11.12.2025;Max Mustermann ;DE89370400440532013000;GENxxxx;Basislastschrift;Kauf;-24,16;EUR;27909,57;;;;
+GLS Konto Geschäft;DE89370400440532013000;GENODEM1GLS;GLS Gemeinschaftsbank eG;11.12.2025;11.12.2025;Max Mustermann ;DE89370400440532013000;GENxxxx;Überweisungsgutschr.;Rechnung;1499,88;EUR;27933,73;;;;
+GLS Konto Geschäft;DE89370400440532013000;GENODEM1GLS;GLS Gemeinschaftsbank eG;10.12.2025;10.12.2025;Max Mustermann ;DE89370400440532013000;GENxxxx;Überweisungsauftrag;Miete;-2856;EUR;26433,85;;;;
+GLS Konto Geschäft;DE89370400440532013000;GENODEM1GLS;GLS Gemeinschaftsbank eG;10.12.2025;10.12.2025;Max Mustermann ;DE89370400440532013000;GENxxxx;Überweisungsauftrag;Kauf;-24;EUR;29289,85;;;;
+GLS Konto Geschäft;DE89370400440532013000;GENODEM1GLS;GLS Gemeinschaftsbank eG;10.12.2025;10.12.2025;Max Mustermann ;DE89370400440532013000;GENxxxx;Basislastschrift;Kauf;-40,65;EUR;29313,85;;;;

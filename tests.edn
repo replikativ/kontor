@@ -1,0 +1,10 @@
+#kaocha/v1
+{:tests [{:id :unit
+          :test-paths ["test"
+                       "modules/l10n-de/test"
+                       "modules/bank-de/test"
+                       "modules/einvoice-de/test"]
+          :ns-patterns [".*-test$"]}]
+ :color? true
+ :randomize? false
+ :fail-fast? false}
