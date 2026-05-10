@@ -1,0 +1,98 @@
+;; Canada has no statutory chart of accounts (unlike DE SKR04 / FR
+;; PCG / AT EKR). The de-facto standard for SMBs is the QuickBooks
+;; Online Canada default chart, with extensions for tax accounts
+;; specific to GST/HST/PST/QST routing.
+;;
+;; Tax-account convention:
+;;   GST/HST collected → liability accounts ("output VAT", recoverable
+;;     by the customer; we owe to CRA)
+;;   GST/HST paid (input tax credits / ITCs) → asset accounts
+;;     (recoverable, reduces what we owe CRA)
+;;   PST collected (BC, SK, MB) → liability ("RST" in MB) — owe to
+;;     province
+;;   PST PAID → expense (NOT recoverable; PST is a retail sales tax,
+;;     becomes cost of input)
+;;   QST collected → liability (recoverable; we owe to Revenu Québec)
+;;   QST paid (Input Tax Refund / ITR) → asset (recoverable)
+;;
+;; Tags use :ca-{authority}-{box-code} naming so the report engine
+;; can group by both the authority and the specific filing box.
+
+[;; Assets
+ {:code "1000" :path "Assets:Bank"
+  :type :asset :name "Bank — Operating account" :reconcilable? true}
+ {:code "1010" :path "Assets:Bank:CAD"
+  :type :asset :name "Bank — CAD chequing" :reconcilable? true}
+ {:code "1100" :path "Assets:Receivable"
+  :type :asset :name "Accounts receivable" :reconcilable? true}
+
+ ;; GST/HST input tax credit (recoverable, asset)
+ {:code "1310" :path "Assets:GST-HST-ITC"
+  :type :asset :name "GST/HST input tax credits"
+  :tax-recoverable? true :tags [:ca-cra-line-108]}
+ ;; QST input tax refund (recoverable, asset, separate authority)
+ {:code "1320" :path "Assets:QST-ITR"
+  :type :asset :name "QST input tax refunds"
+  :tax-recoverable? true :tags [:ca-rq-line-206]}
+
+ ;; Liabilities
+ {:code "2000" :path "Liabilities:Payable"
+  :type :liability :name "Accounts payable" :reconcilable? true}
+ ;; GST/HST collected — single line because HST already combines fed+prov
+ {:code "2310" :path "Liabilities:GST-HST-Collected"
+  :type :liability :name "GST/HST collected (federal/HST)"
+  :tax-payable? true :tags [:ca-cra-line-103]}
+
+ ;; PST collected — per province
+ {:code "2320" :path "Liabilities:BC-PST-Collected"
+  :type :liability :name "BC PST collected"
+  :tax-payable? true :tags [:ca-bc-pst-line-A]}
+ {:code "2321" :path "Liabilities:SK-PST-Collected"
+  :type :liability :name "SK PST collected"
+  :tax-payable? true :tags [:ca-sk-pst]}
+ {:code "2322" :path "Liabilities:MB-RST-Collected"
+  :type :liability :name "MB RST collected"
+  :tax-payable? true :tags [:ca-mb-rst]}
+
+ ;; QST — Revenu Québec
+ {:code "2330" :path "Liabilities:QST-Collected"
+  :type :liability :name "QST collected (Revenu Québec)"
+  :tax-payable? true :tags [:ca-rq-line-203]}
+
+ ;; Equity (minimal)
+ {:code "3000" :path "Equity:Owner"
+  :type :equity :name "Owner's equity"}
+ {:code "3100" :path "Equity:Retained-Earnings"
+  :type :equity :name "Retained earnings"}
+
+ ;; Income (revenue) — split by tax-treatment for tagging
+ {:code "4000" :path "Income:Sales"
+  :type :income :name "Sales — domestic taxable"
+  :tags [:ca-cra-line-101]}
+ {:code "4010" :path "Income:Sales:Zero-Rated"
+  :type :income :name "Sales — zero-rated (groceries, exports)"
+  :tags [:ca-cra-line-101]}
+ {:code "4020" :path "Income:Sales:Exempt"
+  :type :income :name "Sales — exempt (financial services)"
+  :tags [:ca-cra-line-101]}
+
+ ;; Expenses (expense)
+ {:code "5000" :path "Expenses:COGS"
+  :type :expense :name "Cost of goods sold"}
+
+ ;; PST PAID — non-recoverable, lands as expense (NOT as Vorsteuer-style asset)
+ {:code "5100" :path "Expenses:BC-PST-Paid"
+  :type :expense :name "BC PST paid (non-recoverable input tax)"}
+
+ {:code "6000" :path "Expenses:Office"
+  :type :expense :name "Office expenses"}
+ {:code "6100" :path "Expenses:Rent"
+  :type :expense :name "Rent"}
+ {:code "6200" :path "Expenses:Utilities"
+  :type :expense :name "Utilities"}
+ {:code "6300" :path "Expenses:Insurance"
+  :type :expense :name "Insurance"}
+ {:code "6400" :path "Expenses:Telecom"
+  :type :expense :name "Telecommunications"}
+ {:code "6500" :path "Expenses:Professional"
+  :type :expense :name "Professional fees"}]

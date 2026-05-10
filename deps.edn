@@ -12,6 +12,10 @@
 ;; into its own artifact without code changes — only deps.edn moves.
 {:paths ["src" "resources"
          "modules/l10n-de/src"     "modules/l10n-de/resources"
+         "modules/l10n-at/src"     "modules/l10n-at/resources"
+         "modules/l10n-fr/src"     "modules/l10n-fr/resources"
+         "modules/l10n-ca/src"     "modules/l10n-ca/resources"
+         "modules/l10n-us/src"     "modules/l10n-us/resources"
          "modules/bank-de/src"     "modules/bank-de/resources"
          "modules/einvoice-de/src" "modules/einvoice-de/resources"]
 
@@ -32,6 +36,10 @@
  {:test
   {:extra-paths ["test" "test/resources"
                  "modules/l10n-de/test"      "modules/l10n-de/test/resources"
+                 "modules/l10n-at/test"      "modules/l10n-at/test/resources"
+                 "modules/l10n-fr/test"      "modules/l10n-fr/test/resources"
+                 "modules/l10n-ca/test"      "modules/l10n-ca/test/resources"
+                 "modules/l10n-us/test"      "modules/l10n-us/test/resources"
                  "modules/bank-de/test"      "modules/bank-de/test/resources"
                  "modules/einvoice-de/test"  "modules/einvoice-de/test/resources"]
    :extra-deps  {lambdaisland/kaocha     {:mvn/version "1.91.1392"}
@@ -43,6 +51,10 @@
   :dev
   {:extra-paths ["test" "test/resources" "dev"
                  "modules/l10n-de/test"      "modules/l10n-de/test/resources"
+                 "modules/l10n-at/test"      "modules/l10n-at/test/resources"
+                 "modules/l10n-fr/test"      "modules/l10n-fr/test/resources"
+                 "modules/l10n-ca/test"      "modules/l10n-ca/test/resources"
+                 "modules/l10n-us/test"      "modules/l10n-us/test/resources"
                  "modules/bank-de/test"      "modules/bank-de/test/resources"
                  "modules/einvoice-de/test"  "modules/einvoice-de/test/resources"]
    :extra-deps  {nrepl/nrepl             {:mvn/version "1.3.0"}

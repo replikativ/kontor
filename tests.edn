@@ -2,6 +2,10 @@
 {:tests [{:id :unit
           :test-paths ["test"
                        "modules/l10n-de/test"
+                       "modules/l10n-at/test"
+                       "modules/l10n-fr/test"
+                       "modules/l10n-ca/test"
+                       "modules/l10n-us/test"
                        "modules/bank-de/test"
                        "modules/einvoice-de/test"]
           :ns-patterns [".*-test$"]}]

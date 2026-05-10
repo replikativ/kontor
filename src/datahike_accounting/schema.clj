@@ -404,7 +404,29 @@
 
    {:db/ident       :tax/active
     :db/valueType   :db.type/boolean
-    :db/cardinality :db.cardinality/one}])
+    :db/cardinality :db.cardinality/one}
+
+   ;; Multi-jurisdiction filing — research note 09 (cross-country
+   ;; variance). One business may file (a) GST/HST to Canada Revenue
+   ;; Agency, (b) PST to Province of BC, (c) QST to Revenu Québec, and
+   ;; (d) state sales tax to Texas Comptroller, all in the same
+   ;; period. Without an explicit authority field the filing-time
+   ;; aggregator has to string-match :tax/code prefixes — fragile
+   ;; across l10n teams. Backfill DE entities with :de-bzst when those
+   ;; ship; nil today (no DE :tax entities exist yet — UStVA tags hang
+   ;; off accounts, not taxes).
+   {:db/ident       :tax/authority
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "Tax-collecting authority that this tax is filed
+                     to. Examples: :de-bzst (Bundeszentralamt),
+                     :ca-cra (Canada Revenue Agency), :ca-rq (Revenu
+                     Québec), :ca-bc-finance, :us-tx-cpa (Texas
+                     Comptroller). Filing reports group by this
+                     attribute. Required from CA / US localizations
+                     forward; optional for single-authority
+                     localizations like DE / AT."}])
 
 (def ^:private tax-rep-attrs
   [{:db/ident       :tax-rep/tax

@@ -1,0 +1,111 @@
+;; QBO-style default chart of accounts for US SMBs (no statutory
+;; chart). Account ranges follow the convention QuickBooks Online
+;; default and many bookkeepers use:
+;;
+;;   1xxx — Assets        (1000=cash; 1100-1199=AR; 1300-1399=ITC/asset taxes)
+;;   2xxx — Liabilities   (2000=AP; 2200-2299=sales-tax payable per state)
+;;   3xxx — Equity        (owner / retained earnings)
+;;   4xxx — Income        (sales / services revenue)
+;;   5xxx — COGS
+;;   6xxx — Operating expenses
+;;   7xxx — Other income / non-operating
+;;
+;; US sales tax is non-recoverable for the END consumer; for B2B
+;; resellers it's their input but they typically use a resale
+;; certificate to skip paying it (no input-tax-credit mechanism
+;; like VAT). Sales tax COLLECTED on B2C sales is a liability owed
+;; to the state DOR; sales tax PAID on inputs (when not exempt) is
+;; expense.
+;;
+;; Tags route postings to per-state filing reports:
+;;   :us-{state}-{box} — e.g. :us-tx-line-1 (Texas state sales tax)
+;;
+;; This is the minimum viable chart; serious customers extend with
+;; per-product GL accounts, location/class dimensions (we have
+;; analytic accounts for that), 1099-NEC-tracked vendor accounts.
+
+[;; Assets
+ {:code "1000" :path "Assets:Cash"
+  :type :asset :name "Cash on hand" :reconcilable? true}
+ {:code "1100" :path "Assets:Bank:Checking"
+  :type :asset :name "Bank — Checking" :reconcilable? true}
+ {:code "1110" :path "Assets:Bank:Savings"
+  :type :asset :name "Bank — Savings" :reconcilable? true}
+ {:code "1200" :path "Assets:Receivable"
+  :type :asset :name "Accounts receivable" :reconcilable? true}
+ {:code "1500" :path "Assets:Inventory"
+  :type :asset :name "Inventory"}
+
+ ;; Liabilities
+ {:code "2000" :path "Liabilities:Payable"
+  :type :liability :name "Accounts payable" :reconcilable? true}
+
+ ;; Sales tax payable per state — one liability account per state we
+ ;; collect from. Tags reference the per-state filing-report box.
+ {:code "2210" :path "Liabilities:SalesTax:CA"
+  :type :liability :name "California sales tax payable"
+  :tax-payable? true :tags [:us-ca-state-line-1]}
+ {:code "2211" :path "Liabilities:SalesTax:TX"
+  :type :liability :name "Texas sales tax payable"
+  :tax-payable? true :tags [:us-tx-state-line-1]}
+ {:code "2212" :path "Liabilities:SalesTax:NY"
+  :type :liability :name "New York sales tax payable"
+  :tax-payable? true :tags [:us-ny-state-line-1]}
+ {:code "2213" :path "Liabilities:SalesTax:WA"
+  :type :liability :name "Washington sales tax payable"
+  :tax-payable? true :tags [:us-wa-state-line-1]}
+ {:code "2214" :path "Liabilities:SalesTax:FL"
+  :type :liability :name "Florida sales tax payable"
+  :tax-payable? true :tags [:us-fl-state-line-1]}
+ ;; Local sub-accounts for jurisdictions that file separately
+ ;; (Colorado home-rule cities, Alabama self-administered cities,
+ ;; LA parishes). One sample below; add per-customer.
+ {:code "2230" :path "Liabilities:SalesTax:CO-Denver"
+  :type :liability :name "Denver, CO sales tax payable (home-rule city)"
+  :tax-payable? true :tags [:us-co-denver-line-1]}
+
+ ;; Federal payroll / 1099 accruals
+ {:code "2400" :path "Liabilities:Payroll:Federal-Withholding"
+  :type :liability :name "Federal income tax withheld (Form 941)"}
+ {:code "2410" :path "Liabilities:Payroll:FICA"
+  :type :liability :name "FICA payable (Social Security + Medicare)"}
+
+ ;; Equity
+ {:code "3000" :path "Equity:Owner"
+  :type :equity :name "Owner's equity"}
+ {:code "3100" :path "Equity:Retained-Earnings"
+  :type :equity :name "Retained earnings"}
+
+ ;; Income (revenue)
+ {:code "4000" :path "Income:Sales"
+  :type :income :name "Product sales"}
+ {:code "4100" :path "Income:Services"
+  :type :income :name "Service revenue"}
+ {:code "4200" :path "Income:Sales:Out-Of-State"
+  :type :income :name "Out-of-state sales (no nexus)"}
+
+ ;; COGS
+ {:code "5000" :path "Expenses:COGS"
+  :type :expense :name "Cost of goods sold"}
+
+ ;; Operating expenses
+ {:code "6000" :path "Expenses:Office"
+  :type :expense :name "Office supplies"}
+ {:code "6100" :path "Expenses:Rent"
+  :type :expense :name "Rent — office"}
+ {:code "6200" :path "Expenses:Utilities"
+  :type :expense :name "Utilities"}
+ {:code "6300" :path "Expenses:Insurance"
+  :type :expense :name "Insurance"}
+ {:code "6400" :path "Expenses:Telecom"
+  :type :expense :name "Telephone & internet"}
+ {:code "6500" :path "Expenses:Professional"
+  :type :expense :name "Professional fees (legal/accounting)"}
+ {:code "6600" :path "Expenses:Advertising"
+  :type :expense :name "Advertising & marketing"}
+ {:code "6700" :path "Expenses:Travel"
+  :type :expense :name "Travel"}
+ {:code "6800" :path "Expenses:Meals-Entertainment"
+  :type :expense :name "Meals & entertainment"}
+ {:code "6900" :path "Expenses:1099-Contractors"
+  :type :expense :name "Contractor payments (1099-NEC tracked)"}]

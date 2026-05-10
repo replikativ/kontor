@@ -1,0 +1,111 @@
+;; Austrian Einheitskontenrahmen (UGB-aligned), load-bearing subset
+;; for UVA / U30 reporting.
+;;
+;; Tax tags map onto the Austrian UVA (Umsatzsteuervoranmeldung)
+;; field codes: 022 (Normalsatz 20%), 029 (ermäßigt 10%), 006 (13%),
+;; 057 (Reverse-Charge §19/1a Bauleistungen), 066 (Vorsteuer total),
+;; 011 (innergem. Lieferungen §6 Abs.1 Z.6), 021 (Steuerfreie Umsätze
+;; §6).
+;;
+;; Source: Bundesministerium für Finanzen UVA-Formular 2026, BMF-XX-
+;; aktuell. Account numbering follows the conventional Einheits-KR
+;; structure (class 0=Anlagevermögen, 2=Umlaufvermögen,
+;; 3=Verbindlichkeiten, 4=Erträge, 5/6/7=Aufwendungen, 8=Finanz/
+;; Steuer, 9=Eröffnungs/Abschlussbuchungen).
+
+[;; Klasse 0 — Anlagevermögen
+ {:code "0400" :path "Anlagevermögen:Maschinen"
+  :type :asset :name "Maschinen und maschinelle Anlagen"}
+ {:code "0670" :path "Anlagevermögen:Geringwertige Wirtschaftsgüter"
+  :type :asset :name "Geringwertige Wirtschaftsgüter (GWG)"}
+
+ ;; Klasse 2 — Umlaufvermögen
+ {:code "2700" :path "Umlaufvermögen:Kasse"
+  :type :asset :name "Kassa" :reconcilable? true}
+ {:code "2800" :path "Umlaufvermögen:Bank"
+  :type :asset :name "Bank — Hauptkonto" :reconcilable? true}
+ {:code "2810" :path "Umlaufvermögen:Bank:Sparda"
+  :type :asset :name "Bank — Nebenkonto" :reconcilable? true}
+ {:code "2000" :path "Umlaufvermögen:Forderungen"
+  :type :asset :name "Forderungen aus Lieferungen und Leistungen (Inland)"
+  :reconcilable? true}
+ {:code "2020" :path "Umlaufvermögen:Forderungen:EU"
+  :type :asset :name "Forderungen aus Lieferungen und Leistungen (EU)"
+  :reconcilable? true}
+
+ ;; Vorsteuer (input VAT) — :tax-recoverable?
+ {:code "2500" :path "Umlaufvermögen:Vorsteuer:Normal"
+  :type :asset :name "Vorsteuer 20%"
+  :tax-recoverable? true :tags [:uva-066]}
+ {:code "2510" :path "Umlaufvermögen:Vorsteuer:Ermaessigt-13"
+  :type :asset :name "Vorsteuer 13%"
+  :tax-recoverable? true :tags [:uva-066]}
+ {:code "2520" :path "Umlaufvermögen:Vorsteuer:Ermaessigt-10"
+  :type :asset :name "Vorsteuer 10%"
+  :tax-recoverable? true :tags [:uva-066]}
+ {:code "2530" :path "Umlaufvermögen:Vorsteuer:Innergemeinschaft"
+  :type :asset :name "Vorsteuer aus innergem. Erwerb"
+  :tax-recoverable? true :tags [:uva-066]}
+ {:code "2540" :path "Umlaufvermögen:Vorsteuer:Reverse-Charge"
+  :type :asset :name "Vorsteuer aus Reverse-Charge §19/1a"
+  :tax-recoverable? true :tags [:uva-066]}
+
+ ;; Klasse 3 — Verbindlichkeiten
+ {:code "3300" :path "Verbindlichkeiten:Lieferanten"
+  :type :liability :name "Verbindlichkeiten aus Lieferungen und Leistungen"
+  :reconcilable? true}
+
+ ;; Umsatzsteuer (output VAT) — :tax-payable?
+ {:code "3500" :path "Verbindlichkeiten:Umsatzsteuer:Normal"
+  :type :liability :name "Umsatzsteuer 20%"
+  :tax-payable? true :tags [:uva-022-ust]}
+ {:code "3510" :path "Verbindlichkeiten:Umsatzsteuer:Ermaessigt-13"
+  :type :liability :name "Umsatzsteuer 13%"
+  :tax-payable? true :tags [:uva-006-ust]}
+ {:code "3520" :path "Verbindlichkeiten:Umsatzsteuer:Ermaessigt-10"
+  :type :liability :name "Umsatzsteuer 10%"
+  :tax-payable? true :tags [:uva-029-ust]}
+ {:code "3530" :path "Verbindlichkeiten:Umsatzsteuer:Reverse-Charge"
+  :type :liability :name "Umsatzsteuer §19/1a Reverse-Charge"
+  :tax-payable? true :tags [:uva-057-ust]}
+
+ ;; Klasse 4 — Erträge (revenue)
+ {:code "4000" :path "Erträge:Erlöse:20"
+  :type :income :name "Erlöse 20% Umsatzsteuer"
+  :tags [:uva-022]}
+ {:code "4010" :path "Erträge:Erlöse:13"
+  :type :income :name "Erlöse 13% Umsatzsteuer"
+  :tags [:uva-006]}
+ {:code "4020" :path "Erträge:Erlöse:10"
+  :type :income :name "Erlöse 10% Umsatzsteuer"
+  :tags [:uva-029]}
+ {:code "4100" :path "Erträge:Erlöse:Innergemeinschaft"
+  :type :income :name "Steuerfreie innergem. Lieferungen §6 Abs.1 Z.6"
+  :tags [:uva-011]}
+ {:code "4200" :path "Erträge:Erlöse:Steuerfrei"
+  :type :income :name "Steuerfreie Umsätze §6"
+  :tags [:uva-021]}
+
+ ;; Klasse 5/6/7 — Aufwendungen
+ {:code "5000" :path "Aufwendungen:Wareneinkauf"
+  :type :expense :name "Wareneingang"}
+ {:code "6000" :path "Aufwendungen:Personal"
+  :type :expense :name "Gehälter"}
+ {:code "7000" :path "Aufwendungen:Raum"
+  :type :expense :name "Mietaufwand"}
+ {:code "7100" :path "Aufwendungen:Versicherungen"
+  :type :expense :name "Versicherungen"}
+ {:code "7200" :path "Aufwendungen:Werbung"
+  :type :expense :name "Werbung"}
+ {:code "7300" :path "Aufwendungen:Reisekosten"
+  :type :expense :name "Reise- und Fahrtaufwand"}
+ {:code "7400" :path "Aufwendungen:Bürobedarf"
+  :type :expense :name "Bürobedarf"}
+ {:code "7500" :path "Aufwendungen:Software"
+  :type :expense :name "Lizenzgebühren / Software"}
+ {:code "7600" :path "Aufwendungen:Telekommunikation"
+  :type :expense :name "Telefon / Internet"}
+ {:code "7700" :path "Aufwendungen:Beratung"
+  :type :expense :name "Rechts- und Beratungsaufwand"}
+ {:code "7800" :path "Aufwendungen:Sonstige"
+  :type :expense :name "Sonstige Aufwendungen"}]
