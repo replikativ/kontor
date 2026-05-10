@@ -571,7 +571,15 @@
     :db/doc         "Discriminator within an effective-date range when
                      multiple periods coexist. Conventional values:
                      :normal (the default if absent), :adjustment-13 ..
-                     :adjustment-16 for SAP-style special periods."}])
+                     :adjustment-16 for SAP-style special periods."}
+
+   {:db/ident       :period/name
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "Optional human-readable label (e.g. \"FY2025\",
+                     \"2026-Q1\"). Indexed so reports can look up
+                     periods by name without scanning."}])
 
 ;; ============================================================================
 ;; Balance assertion — pinned reality at a point in time.
@@ -681,6 +689,15 @@
     :db/doc         "If this transaction is a reversal, the original
                      transaction it reverses. Per ADR-007, corrections
                      are reversals + re-postings, never in-place edits."}
+
+   {:db/ident       :transaction/closes-period
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Marks this transaction as the year-end (or any-
+                     period) closing entry that zeros the P&L accounts
+                     into retained earnings. Unique-identity prevents
+                     a second closing entry for the same period."}
 
    {:db/ident       :transaction/source
     :db/valueType   :db.type/string
