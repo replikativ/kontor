@@ -1,0 +1,154 @@
+;; SKR04 — Standardkontenrahmen 04, German chart of accounts.
+;;
+;; Subset focused on the load-bearing accounts for UStVA / EÜR
+;; reporting. Full SKR04 is ~1500 accounts; we ship the ~50 that
+;; cover most SMB activity and the VAT report. Customers add the
+;; rest by transacting more :account entries.
+;;
+;; Source: facts re-keyed from publicly-documented DATEV SKR04
+;; (DATEV is the German tax-software cooperative; SKR04 numbers
+;; and titles are factual data not under copyright in EU). Tryton's
+;; account_de_skr03 was cross-referenced for structure; that
+;; module is GPLv3 but we have not lifted any of its EDN/XML
+;; verbatim — only the conventional Konto numbers + names.
+;;
+;; Schema fields per account:
+;;   :code                 — the four-digit Konto number (string)
+;;   :path                 — hierarchical name in PTA notation
+;;   :type                 — :asset | :liability | :equity | :income | :expense
+;;   :commodity            — defaults to "EUR" if not set
+;;   :reconcilable?        — true for AR/AP/bank accounts
+;;   :tax-recoverable?     — for input-VAT accounts (1576/1571 etc.)
+;;   :tax-payable?         — for output-VAT accounts (3801/3806 etc.)
+;;   :tags                 — vector of UStVA box keys this account
+;;                           contributes to (e.g. :ust-81 = sales 19%)
+
+[;; ============================================================================
+ ;; Klasse 1 — Anlagevermögen (long-term assets)
+ ;; ============================================================================
+ {:code "0440" :path "Anlagevermögen:Maschinen"
+  :type :asset :name "Maschinen"}
+ {:code "0670" :path "Anlagevermögen:Geschäftsausstattung"
+  :type :asset :name "Geschäftsausstattung (BGA)"}
+ {:code "0690" :path "Anlagevermögen:Geringwertige Wirtschaftsgüter"
+  :type :asset :name "Geringwertige Wirtschaftsgüter (GWG)"}
+
+ ;; ============================================================================
+ ;; Klasse 1 — Umlaufvermögen (current assets)
+ ;; ============================================================================
+ {:code "1000" :path "Umlaufvermögen:Kasse"
+  :type :asset :name "Kasse" :reconcilable? true}
+ {:code "1200" :path "Umlaufvermögen:Bank"
+  :type :asset :name "Bank" :reconcilable? true}
+ {:code "1210" :path "Umlaufvermögen:Bank:Hauptbank"
+  :type :asset :name "Hauptbank" :reconcilable? true}
+ {:code "1220" :path "Umlaufvermögen:Bank:Nebenbank"
+  :type :asset :name "Nebenbank" :reconcilable? true}
+ {:code "1230" :path "Umlaufvermögen:PayPal"
+  :type :asset :name "PayPal-Konto" :reconcilable? true}
+ {:code "1400" :path "Umlaufvermögen:Forderungen"
+  :type :asset :name "Forderungen aus Lieferungen und Leistungen"
+  :reconcilable? true}
+ {:code "1410" :path "Umlaufvermögen:Forderungen:Sonstige"
+  :type :asset :name "Sonstige Forderungen" :reconcilable? true}
+
+ ;; Vorsteuer (input tax) accounts — :tax-recoverable? true
+ {:code "1571" :path "Umlaufvermögen:Vorsteuer:7%"
+  :type :asset :name "Abziehbare Vorsteuer 7%"
+  :tax-recoverable? true :tags [:ust-66]}
+ {:code "1576" :path "Umlaufvermögen:Vorsteuer:19%"
+  :type :asset :name "Abziehbare Vorsteuer 19%"
+  :tax-recoverable? true :tags [:ust-66]}
+ {:code "1577" :path "Umlaufvermögen:Vorsteuer:Innergemeinschaft"
+  :type :asset :name "Abziehbare Vorsteuer aus innergem. Erwerb"
+  :tax-recoverable? true :tags [:ust-66]}
+ {:code "1578" :path "Umlaufvermögen:Vorsteuer:Reverse-Charge"
+  :type :asset :name "Abziehbare Vorsteuer Reverse-Charge"
+  :tax-recoverable? true :tags [:ust-66]}
+
+ ;; ============================================================================
+ ;; Klasse 2 — Eigenkapital (equity)
+ ;; ============================================================================
+ {:code "2000" :path "Eigenkapital:Privatentnahmen"
+  :type :equity :name "Privatentnahmen"}
+ {:code "2100" :path "Eigenkapital:Privateinlagen"
+  :type :equity :name "Privateinlagen"}
+ {:code "2900" :path "Eigenkapital:Gewinnvortrag"
+  :type :equity :name "Gewinnvortrag vor Verwendung"}
+
+ ;; ============================================================================
+ ;; Klasse 3 — Verbindlichkeiten (liabilities)
+ ;; ============================================================================
+ {:code "3300" :path "Verbindlichkeiten:Lieferanten"
+  :type :liability :name "Verbindlichkeiten aus Lieferungen und Leistungen"
+  :reconcilable? true}
+
+ ;; Umsatzsteuer (output tax) accounts — :tax-payable? true
+ {:code "3801" :path "Verbindlichkeiten:Umsatzsteuer:19%"
+  :type :liability :name "Umsatzsteuer 19%"
+  :tax-payable? true :tags [:ust-81-ust]}
+ {:code "3806" :path "Verbindlichkeiten:Umsatzsteuer:7%"
+  :type :liability :name "Umsatzsteuer 7%"
+  :tax-payable? true :tags [:ust-86-ust]}
+ {:code "3820" :path "Verbindlichkeiten:Umsatzsteuer:Innergemeinschaft"
+  :type :liability :name "Umsatzsteuer aus innergem. Lieferungen"
+  :tax-payable? true :tags [:ust-89-ust]}
+
+ ;; ============================================================================
+ ;; Klasse 4 — Erträge (revenue)
+ ;; ============================================================================
+ {:code "4400" :path "Erträge:Erlöse:19%"
+  :type :income :name "Erlöse 19% USt"
+  :tags [:ust-81]}
+ {:code "4300" :path "Erträge:Erlöse:7%"
+  :type :income :name "Erlöse 7% USt"
+  :tags [:ust-86]}
+ {:code "4200" :path "Erträge:Erlöse:Steuerfrei"
+  :type :income :name "Steuerfreie Umsätze §4 UStG"
+  :tags [:ust-43]}
+ {:code "4120" :path "Erträge:Erlöse:Innergemeinschaft"
+  :type :income :name "Steuerfreie innergem. Lieferungen §4 Nr 1b UStG"
+  :tags [:ust-41]}
+ {:code "4125" :path "Erträge:Erlöse:Reverse-Charge"
+  :type :income :name "Steuerfreie sonstige Leistungen §3a Abs. 2 UStG"
+  :tags [:ust-21]}
+ {:code "4830" :path "Erträge:Sonstige:Erstattungen"
+  :type :income :name "Sonstige betriebliche Erträge"}
+
+ ;; ============================================================================
+ ;; Klasse 5/6 — Aufwendungen (expenses)
+ ;; ============================================================================
+ {:code "5400" :path "Aufwendungen:Wareneinkauf"
+  :type :expense :name "Wareneingang 19% Vorsteuer"}
+ {:code "5500" :path "Aufwendungen:Bezogene Leistungen"
+  :type :expense :name "Bezogene Leistungen"}
+ {:code "6020" :path "Aufwendungen:Personal:Gehälter"
+  :type :expense :name "Gehälter"}
+ {:code "6300" :path "Aufwendungen:Raum:Miete"
+  :type :expense :name "Raumkosten"}
+ {:code "6400" :path "Aufwendungen:Raum:Nebenkosten"
+  :type :expense :name "Heizung, Strom, Wasser"}
+ {:code "6520" :path "Aufwendungen:Versicherungen"
+  :type :expense :name "Versicherungen"}
+ {:code "6530" :path "Aufwendungen:Beiträge"
+  :type :expense :name "Beiträge"}
+ {:code "6600" :path "Aufwendungen:Werbung"
+  :type :expense :name "Werbung"}
+ {:code "6650" :path "Aufwendungen:Reisekosten"
+  :type :expense :name "Reisekosten"}
+ {:code "6670" :path "Aufwendungen:Bewirtung"
+  :type :expense :name "Bewirtungskosten"}
+ {:code "6800" :path "Aufwendungen:Bürobedarf"
+  :type :expense :name "Bürobedarf"}
+ {:code "6815" :path "Aufwendungen:Software"
+  :type :expense :name "Wartung Software / Lizenzen"}
+ {:code "6820" :path "Aufwendungen:Telekommunikation"
+  :type :expense :name "Telekommunikation"}
+ {:code "6825" :path "Aufwendungen:Fahrzeuge"
+  :type :expense :name "Kfz-Kosten"}
+ {:code "6850" :path "Aufwendungen:Steuerberater"
+  :type :expense :name "Rechts- und Beratungskosten"}
+ {:code "6855" :path "Aufwendungen:Buchhaltung"
+  :type :expense :name "Buchführungskosten"}
+ {:code "6900" :path "Aufwendungen:Sonstige"
+  :type :expense :name "Sonstige betriebliche Aufwendungen"}]

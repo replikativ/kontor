@@ -199,7 +199,11 @@
 (def ^:private account-tag-attrs
   [{:db/ident       :account-tag/name
     :db/valueType   :db.type/string
-    :db/cardinality :db.cardinality/one}
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Identity attribute — one entity per tag name. Lets
+                     consumers reference tags via [:account-tag/name
+                     \"ust-66\"] lookup refs in tx-data."}
 
    {:db/ident       :account-tag/country-code
     :db/valueType   :db.type/string
