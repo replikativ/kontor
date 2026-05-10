@@ -686,7 +686,16 @@
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Free-form provenance (\"beleg invoice 0001\",
-                     \"bank statement camt053 2026-04-30\")."}])
+                     \"bank statement camt053 2026-04-30\")."}
+
+   {:db/ident       :transaction/settles
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Other transactions this one settles. A payment-
+                     receipt transaction (driven by a bank line)
+                     points to the invoice transactions it pays.
+                     Cardinality many because one bank deposit can
+                     settle multiple invoices for the same partner."}])
 
 ;; ============================================================================
 ;; Posting — individual debit/credit line (Odoo's account.move.line).
@@ -841,6 +850,122 @@
                      :normal)."}])
 
 ;; ============================================================================
+;; Bank statement lines — imported from bank-csv parsers, matched
+;; against open AR/AP, then committed as payment-receipt postings.
+;;
+;; Lifecycle:
+;;   :unmatched   — just imported; no decision yet.
+;;   :matched     — a reconciliation match has been suggested or
+;;                  user-confirmed; not yet posted.
+;;   :reconciled  — a posting has been created; the bank-line is
+;;                  linked to it and its settled-against invoices.
+;;   :ignored     — bookkeeper marked irrelevant (e.g. internal
+;;                  transfer between own accounts already accounted
+;;                  for elsewhere).
+;;
+;; Idempotency: `:bank-line/external-id` is unique-identity. The
+;; ingestion code derives it as a hash of (bank, date, amount,
+;; raw-row) so re-importing the same statement is a no-op.
+;; ============================================================================
+
+(def ^:private bank-line-attrs
+  [{:db/ident       :bank-line/external-id
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Stable id derived from (bank, date, amount,
+                     raw-row-hash). Re-importing the same statement
+                     hits the same id and is idempotent."}
+
+   {:db/ident       :bank-line/bank
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "Bank/format keyword (:dkb :ing :chase :n26 …)."}
+
+   {:db/ident       :bank-line/source-account
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Chart account this bank-line lands on (the bank-
+                     side leg of the eventual posting). E.g. SKR04
+                     1200 / 1210 / 1230. Required at ingestion so the
+                     import driver knows which account to post."}
+
+   {:db/ident       :bank-line/date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/index       true}
+
+   {:db/ident       :bank-line/value-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :bank-line/amount
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Signed: positive = inflow (credit on bank
+                     statement), negative = outflow (debit). Mirrors
+                     the bank's POV; the eventual posting's bank-side
+                     amount has the same sign as this attribute."}
+
+   {:db/ident       :bank-line/commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :bank-line/counterparty
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :bank-line/counterparty-iban
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :bank-line/description
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Free-text Verwendungszweck / memo. Used by the
+                     reference-id matcher to detect invoice external-
+                     ids embedded in the statement text."}
+
+   {:db/ident       :bank-line/transaction-type
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Bank-side type label (Lastschrift, Gutschrift,
+                     ACH_DEBIT, etc.). Free-form per importer."}
+
+   {:db/ident       :bank-line/category
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Auto-categorizer output from bank-csv (e.g.
+                     :miete, :gehalt, :einnahmen). Suggests a contra
+                     account when no AR/AP match is found."}
+
+   {:db/ident       :bank-line/raw-row
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Original CSV row joined with a separator. Stored
+                     for audit / re-parse / diff against future
+                     importer changes."}
+
+   {:db/ident       :bank-line/status
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         ":unmatched | :matched | :reconciled | :ignored.
+                     A reconciliation queue UI filters on this."}
+
+   {:db/ident       :bank-line/posting
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The bank-side posting created when the line is
+                     reconciled. Set during commit-match!"}
+
+   {:db/ident       :bank-line/reconciled-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Tx-time when the bank-line was reconciled."}])
+
+;; ============================================================================
 ;; Analytic accounting (cost-center / profit-center / project) — ADR-012.
 ;;
 ;; A separate dimension orthogonal to the financial account hierarchy.
@@ -974,6 +1099,7 @@
     balance-assertion-attrs
     transaction-attrs
     posting-attrs
+    bank-line-attrs
     analytic-plan-attrs
     analytic-account-attrs
     analytic-distribution-attrs
