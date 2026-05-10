@@ -1,9 +1,9 @@
-Following data is valid as of 20260201083000(YYYYMMDDHHMMSS).
-For account type: CHEQUING
-Account number: '00112345-678'
-Statement period: 20260101 to 20260131
-,
-First Bank Card,Transaction Type,Date Posted,Transaction Amount,Description
+Following data is valid as of 20260201083000 (Year/Month/Day/Hour/Minute/Second)
+
+
+First Bank Card,Transaction Type,Date Posted, Transaction Amount,Description
+
+
 '500766XXXXXX1234',CREDIT,20260102,4250.00,[CW] PAYROLL DEP. ACME CORP
 '500766XXXXXX1234',DEBIT,20260103,-145.00,[ED] BC HYDRO MONTHLY
 '500766XXXXXX1234',DEBIT,20260104,-78.50,[SO] METRO #0432 MARKHAM

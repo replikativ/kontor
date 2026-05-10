@@ -17,26 +17,38 @@
    export — we keep the parser format-tolerant since regional
    Raiffeisen banks and Sparkassen each lightly vary their layouts):
 
-     ERSTE BANK / GEORGE
+     ERSTE BANK / GEORGE  (CAVEAT — user-configurable)
+       George's CSV export lets the user drag-and-drop column order
+       and toggle individual fields. There is NO canonical header.
+       The config below targets one *common* configuration with all
+       counterparty fields enabled. Users with a different field
+       layout should derive a per-export config from this template.
        Header: 'Buchungsdatum;Valutadatum;Buchungsinformation;
                 IBAN Auftraggeber;BIC Auftraggeber;Auftraggeber;
                 IBAN Empfänger;BIC Empfänger;Empfänger;Betrag;Währung'
        Date: dd.MM.yyyy  •  Amount: signed German (1.234,56)
 
-     RAIFFEISEN
-       Header: 'Buchungstag;Wertstellung;Buchungstext;Verwendungszweck;
-                Auftraggeber/Empfänger;IBAN;BIC;Betrag;Währung;Saldo'
+     RAIFFEISEN (Mein ELBA)
+       NO HEADER  •  6 cols: Buchungstag;Buchungstext;Valutadatum;
+                              Betrag;Währung;Zeitstempel
        Date: dd.MM.yyyy  •  Amount: signed German
+       Counterparty + Verwendungszweck embedded in quoted Buchungstext
+       Source: nblock/ofxstatement-austrian sample fixture
 
      BANK AUSTRIA (UniCredit)
-       Header: 'Datum;Valutadatum;Empfänger/Auftraggeber;Buchungstext;
-                Betrag;Währung;Verwendungszweck'
+       Header: 'Buchungsdatum;Valutadatum;Buchungstext;Interne Notiz;
+                Währung;Betrag;Belegdaten'
        Date: dd.MM.yyyy  •  Amount: signed German
+       Source: onetwoapps.de CSV importer config (medium confidence;
+       Bank Austria has not published an authoritative spec)
 
-     BAWAG P.S.K.
-       Header: 'Buchungsdatum;Valutadatum;Buchungstext;Auftraggeber;
-                Empfänger;Verwendungszweck;Betrag;Währung'
-       Date: dd.MM.yyyy  •  Amount: signed German"
+     BAWAG P.S.K. (native short form)
+       NO HEADER  •  6 cols: Account;Buchungstext;Buchungsdatum;
+                              Valutadatum;Betrag;Währung
+       Date: dd.MM.yyyy  •  Amount: signed German with '+' on credits
+       Source: PeterTheOne/bawag-csv-parser unit-test fixture
+       Note: an extended 18-col form exists in newer eBanking exports;
+       use a different config when targeting that variant."
   (:require [clojure.string :as str]
             [datahike-accounting.bank-csv :as csv-core]))
 
@@ -55,24 +67,32 @@
                   :bic-sender 4 :counterparty 5 :iban 6 :bic 7
                   :recipient 8 :amount 9 :currency 10}}
 
+   ;; Raiffeisen / Mein ELBA — 6 cols, NO header, embedded counterparty
+   ;; in quoted Buchungstext field. Confirmed by nblock/ofxstatement-austrian
+   ;; sample fixture (raiffeisen.csv).
    :raiffeisen
-   {:encoding "UTF-8" :skip-rows 0 :date-format "dd.MM.yyyy" :separator \;
+   {:encoding "UTF-8" :no-header? true :date-format "dd.MM.yyyy" :separator \;
     :amount-style :german
-    :col-indexes {:date 0 :value-date 1 :type 2 :description 3
-                  :counterparty 4 :iban 5 :bic 6 :amount 7
-                  :currency 8 :balance 9}}
+    :col-indexes {:date 0 :description 1 :value-date 2 :amount 3
+                  :currency 4 :timestamp 5}}
 
+   ;; Bank Austria (UniCredit) — 7 cols, with header. Counterparty is
+   ;; embedded in Buchungstext. Source: onetwoapps.de CSV importer config
+   ;; (3rd-party — medium confidence; treat as one common variant).
    :bank-austria
    {:encoding "UTF-8" :skip-rows 0 :date-format "dd.MM.yyyy" :separator \;
     :amount-style :german
-    :col-indexes {:date 0 :value-date 1 :counterparty 2 :type 3
-                  :amount 4 :currency 5 :description 6}}
+    :col-indexes {:date 0 :value-date 1 :description 2 :note 3
+                  :currency 4 :amount 5 :belegdaten 6}}
 
+   ;; BAWAG P.S.K. (native short form) — 6 cols, NO header, embedded
+   ;; counterparty in Buchungstext, '+' prefix on credits. Confirmed by
+   ;; PeterTheOne/bawag-csv-parser unit-test fixture (PHP repo).
    :bawag-psk
-   {:encoding "UTF-8" :skip-rows 0 :date-format "dd.MM.yyyy" :separator \;
+   {:encoding "UTF-8" :no-header? true :date-format "dd.MM.yyyy" :separator \;
     :amount-style :german
-    :col-indexes {:date 0 :value-date 1 :type 2 :counterparty-sender 3
-                  :counterparty 4 :description 5 :amount 6 :currency 7}}})
+    :col-indexes {:account 0 :description 1 :date 2 :value-date 3
+                  :amount 4 :currency 5}}})
 
 ;; ============================================================================
 ;; Detection
@@ -93,9 +113,7 @@
       (str/includes? lower "bawag")          :bawag-psk
       (str/includes? lower "psk")            :bawag-psk
       (str/includes? preview "Buchungsinformation;IBAN Auftraggeber") :erste
-      (str/includes? preview "Buchungstag;Wertstellung;Buchungstext;Verwendungszweck;Auftraggeber") :raiffeisen
-      (str/includes? preview "Datum;Valutadatum;Empfänger/Auftraggeber;Buchungstext") :bank-austria
-      (str/includes? preview "Buchungsdatum;Valutadatum;Buchungstext;Auftraggeber;Empfänger") :bawag-psk
+      (str/includes? preview "Buchungsdatum;Valutadatum;Buchungstext;Interne Notiz;Währung") :bank-austria
       :else nil)))
 
 ;; ============================================================================

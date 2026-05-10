@@ -11,26 +11,29 @@
 
    Notes:
 
-     RBC (chequing/savings)
-       NO HEADER  •  cols: Account Type, Account Number, Transaction Date,
-                           Cheque Number, Description 1, Description 2,
-                           CAD$, USD$
+     RBC (chequing/savings)  — confirmed via cphoward/beangulp gist
+       Header: 'Account Type,Account Number,Transaction Date,
+                Cheque Number,Description 1,Description 2,CAD$,USD$'
        Date format: M/d/yyyy  •  Amount: signed English in CAD$
                                  (USD$ separately tracked)
 
-     TD CANADA TRUST (chequing)
+     TD CANADA TRUST (EasyWeb)  — confirmed via deb-sig sample
        NO HEADER  •  cols: Date, Description, Withdrawal, Deposit, Balance
        Date format: MM/dd/yyyy  •  Split-debit-credit (withdrawal+deposit)
 
-     SCOTIABANK (chequing/savings)
-       Header: 'Filter,Date,Time,Description,Sub-description,Status,Type
-                of Transaction,Amount'
-       Date format: yyyy-MM-dd  •  Amount: signed English
+     SCOTIABANK (personal banking)  — confirmed via chuck3r/sb_parser
+       NO HEADER  •  5 cols: Date, signed Amount, [reserved],
+                              Transaction Type, Description
+       Date format: MM/dd/yyyy  •  Amount: signed English ('-' on debits)
+       Note: ScotiaConnect (business banking) uses a different
+       user-template-driven CSV; not modeled here.
 
-     BMO (chequing)
-       Header (5-row preamble then real header):
-         'First Bank Card,Transaction Type,Date Posted,Transaction Amount,
-          Description'
+     BMO (chequing)  — confirmed via deb-sig/double-entry-generator
+       Format: 1 informational preamble line + 2 blanks + header line
+       + 2 blanks before data. Header (note literal leading space
+       before 'Transaction Amount'):
+         'First Bank Card,Transaction Type,Date Posted, Transaction
+          Amount,Description'
        Date format: yyyyMMdd  •  Amount: signed English"
   (:require [clojure.string :as str]
             [datahike-accounting.bank-csv :as csv-core]))
@@ -43,23 +46,37 @@
 ;; ============================================================================
 
 (def bank-configs
+  ;; RBC chequing/savings — header IS present (real export from
+  ;; "Manage My Money → Account Activity"). Confirmed via cphoward
+  ;; beangulp importer.
   {:rbc
-   {:encoding "UTF-8" :no-header? true :date-format "M/d/yyyy" :separator \,
+   {:encoding "UTF-8" :skip-rows 0 :date-format "M/d/yyyy" :separator \,
     :amount-style :english
     :col-indexes {:account-type 0 :account-number 1 :date 2 :check 3
                   :description 4 :description-2 5 :amount 6 :usd-amount 7}}
 
+   ;; TD Canada Trust EasyWeb — NO header, 5 cols (Date, Description,
+   ;; Withdrawal, Deposit, Balance). Confirmed via deb-sig sample.
    :td
    {:encoding "UTF-8" :no-header? true :date-format "MM/dd/yyyy" :separator \,
     :amount-style :split-debit-credit
     :col-indexes {:date 0 :description 1 :debit 2 :credit 3 :balance 4}}
 
+   ;; Scotiabank PERSONAL banking — 5 cols, NO header. Confirmed via
+   ;; chuck3r/sb_parser.  Cols: Date, signed Amount, [reserved/blank],
+   ;; Type-of-transaction, Description.
+   ;; (Note: ScotiaConnect business banking uses a totally different
+   ;; user-template-driven CSV — model that as :scotia-business if
+   ;; needed.)
    :scotiabank
-   {:encoding "UTF-8" :skip-rows 0 :date-format "yyyy-MM-dd" :separator \,
+   {:encoding "UTF-8" :no-header? true :date-format "MM/dd/yyyy" :separator \,
     :amount-style :english
-    :col-indexes {:filter 0 :date 1 :time 2 :description 3
-                  :sub-description 4 :status 5 :type 6 :amount 7}}
+    :col-indexes {:date 0 :amount 1 :reserved 2 :type 3 :description 4}}
 
+   ;; BMO chequing — 1-line preamble + 2 blanks + header + 2 blanks +
+   ;; data (5 leading rows total); header has '. Transaction Amount'
+   ;; with leading space. Confirmed via deb-sig/double-entry-generator
+   ;; example fixture (2023-vintage).
    :bmo
    {:encoding "UTF-8" :skip-rows 5 :date-format "yyyyMMdd" :separator \,
     :amount-style :english
@@ -80,9 +97,9 @@
       (str/includes? lower "scotia")     :scotiabank
       (str/includes? lower "bmo")        :bmo
       (str/includes? lower "montreal")   :bmo
-      (str/includes? preview "Filter,Date,Time,Description") :scotiabank
       (str/includes? preview "First Bank Card,Transaction Type,Date Posted") :bmo
       (str/includes? preview "Following data is valid as of") :bmo
+      (str/includes? preview "Account Type\",\"Account Number\",\"Transaction Date") :rbc
       :else nil)))
 
 ;; ============================================================================

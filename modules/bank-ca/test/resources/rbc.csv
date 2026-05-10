@@ -1,3 +1,4 @@
+"Account Type","Account Number","Transaction Date","Cheque Number","Description 1","Description 2","CAD$","USD$"
 "Chequing","00002-1234567","1/2/2026","","Payroll Dep. ACME","",4250.00,
 "Chequing","00002-1234567","1/3/2026","","Hydro Que","",-145.20,
 "Chequing","00002-1234567","1/4/2026","","Loblaws #0432 MTL","",-89.50,
