@@ -695,7 +695,32 @@
                      receipt transaction (driven by a bank line)
                      points to the invoice transactions it pays.
                      Cardinality many because one bank deposit can
-                     settle multiple invoices for the same partner."}])
+                     settle multiple invoices for the same partner."}
+
+   {:db/ident       :transaction/payment-term
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to a :payment-term entity. When set
+                     plus :transaction/effective-date, the helper
+                     fns in payment-term.clj derive :due-date and
+                     :discount-deadline. Aging reports key off the
+                     resulting due-date."}
+
+   {:db/ident       :transaction/due-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "When the receivable is due. Either materialized
+                     from :payment-term + :effective-date or set
+                     explicitly by the importer / UI. Indexed because
+                     aging reports filter on the relation
+                     `due-date < today`."}
+
+   {:db/ident       :transaction/discount-deadline
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Last day the early-payment discount applies.
+                     nil when the payment-term has no discount."}])
 
 ;; ============================================================================
 ;; Posting — individual debit/credit line (Odoo's account.move.line).
@@ -848,6 +873,49 @@
                      one the posting routes into. Defaults to :normal
                      (i.e. the period whose :period/tag is absent or
                      :normal)."}])
+
+;; ============================================================================
+;; Payment terms — Net N + early-discount window. Reusable
+;; entities (one per term, e.g. NET30, NET14, 2/10-NET30) referenced
+;; from transactions / invoices. The `payment-term.clj` helpers
+;; compute :transaction/due-date + :transaction/discount-deadline
+;; from :transaction/effective-date + :payment-term.
+;; ============================================================================
+
+(def ^:private payment-term-attrs
+  [{:db/ident       :payment-term/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Stable id (\"NET30\", \"NET14\", \"DUE-ON-RECEIPT\",
+                     \"2/10-NET30\")."}
+
+   {:db/ident       :payment-term/name
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Human-readable label (\"30 days net\")."}
+
+   {:db/ident       :payment-term/net-days
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Days from invoice date until full payment is due.
+                     0 means due on receipt."}
+
+   {:db/ident       :payment-term/discount-pct
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional early-pay discount percentage
+                     (e.g. 2.0M for 2%)."}
+
+   {:db/ident       :payment-term/discount-days
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional days within which the discount applies
+                     (e.g. 10 for 2/10-NET30)."}
+
+   {:db/ident       :payment-term/active
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one}])
 
 ;; ============================================================================
 ;; Bank statement lines — imported from bank-csv parsers, matched
@@ -1099,6 +1167,7 @@
     balance-assertion-attrs
     transaction-attrs
     posting-attrs
+    payment-term-attrs
     bank-line-attrs
     analytic-plan-attrs
     analytic-account-attrs
