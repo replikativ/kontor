@@ -197,6 +197,71 @@
       (is (= :exact-amount (:strategy best)))
       (is (= 0.9 (:confidence best)) "partner-name overlap boosts confidence"))))
 
+(deftest multi-line-settlement-finds-subset-sum
+  (testing "ACME pays €1190 + €595 = €1785 in a single bank
+            transfer (Sammelüberweisung). The matcher should find
+            the subset of ACME's open invoices summing to 1785 and
+            return a :multi-line match settling both invoices."
+    (let [conn (bootstrap)
+          ;; Two ACME invoices + one BETA invoice
+          _ (post-invoice! conn "INV-2026-001" "ACME"  1000) ; 1190.00
+          _ (post-invoice! conn "INV-2026-003" "ACME"   500) ; 595.00
+          _ (post-invoice! conn "INV-2026-002" "BETA"  2000) ; 2380.00
+          db (d/db conn)
+          bank-acct (ace db "1200")
+          eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+          consolidated [{:bank :test :date feb-5 :amount 1785.00M
+                         :counterparty "ACME GmbH"
+                         :description "Zahlung mehrere Rechnungen"
+                         :raw-row ["02/05/2026" "+1785,00" "ACME GmbH" "multi"]}]
+          _ (recon/ingest-statement! conn consolidated
+                                     {:source-account-eid bank-acct
+                                      :commodity-eid eur})
+          db (d/db conn)
+          [bl] (d/q '[:find [?bl] :where [?bl :bank-line/amount 1785.00M]] db)
+          best (first (recon/suggest-match db bl {}))]
+      (is (= :multi-line (:strategy best))
+          (str "expected :multi-line; got: " (:strategy best)))
+      (is (= 0.85 (:confidence best)))
+      ;; Both ACME invoices in the settle vector
+      (is (= 2 (count (:transactions (:match best))))
+          "expected 2 settled transactions")
+      (let [settled-ext-ids
+            (set (map (fn [eid]
+                        (:transaction/external-id
+                         (d/pull db [:transaction/external-id] eid)))
+                      (:transactions (:match best))))]
+        (is (= #{"INV-2026-001" "INV-2026-003"} settled-ext-ids)
+            (str "expected ACME's two invoices; got: " settled-ext-ids))))))
+
+(deftest multi-line-settlement-commit-clears-both-invoices
+  (testing "Committing the multi-line match marks both invoices
+            paid (open-receivables-by-tx returns only BETA's after)."
+    (let [conn (bootstrap)
+          _ (post-invoice! conn "INV-2026-001" "ACME"  1000)
+          _ (post-invoice! conn "INV-2026-003" "ACME"   500)
+          _ (post-invoice! conn "INV-2026-002" "BETA"  2000)
+          db0 (d/db conn)
+          bank-acct (ace db0 "1200")
+          eur (:db/id (d/entity db0 [:commodity/symbol "EUR"]))
+          bank-jnl (:db/id (d/entity db0 [:journal/code "BANK"]))
+          _ (recon/ingest-statement! conn
+                                     [{:bank :test :date feb-5 :amount 1785.00M
+                                       :counterparty "ACME GmbH"
+                                       :description "Sammel"
+                                       :raw-row ["02/05/2026" "+1785,00" "ACME" "Sammel"]}]
+                                     {:source-account-eid bank-acct
+                                      :commodity-eid eur})
+          db (d/db conn)
+          [bl] (d/q '[:find [?bl] :where [?bl :bank-line/amount 1785.00M]] db)
+          best (first (recon/suggest-match db bl {}))
+          _ (recon/commit-match! conn bl (:match best) bank-jnl {})
+          opens (recon/open-receivables-by-tx (d/db conn) #{"1400"})
+          ext-ids (set (map :external-id opens))]
+      ;; Only BETA remains open
+      (is (= #{"INV-2026-002"} ext-ids)
+          (str "expected only BETA open; got: " ext-ids)))))
+
 (deftest unmatched-categorizer-fallback
   (testing "Stromrechnung outflow has no matching open invoice
             (it's payment for utilities, not AR/AP), but the

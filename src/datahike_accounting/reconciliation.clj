@@ -17,11 +17,14 @@
           a. reference-id: bank description contains a known
              transaction's `:transaction/external-id`
           b. exact-amount + partner-name match against open AR/AP
-          c. categorizer fallback (the importer's auto-category)
+          c. multi-line: subset-sum search for combinations of
+             same-counterparty open invoices summing to the bank
+             amount (Sammelüberweisung pattern)
+          d. categorizer fallback (the importer's auto-category)
         Each candidate is `{:strategy …, :confidence …, :match …}`
         where `:match` is one of:
-          {:kind :settle, :transactions [eid]}  ; pay against invoices
-          {:kind :categorize, :contra-account eid}  ; expense / income
+          {:kind :settle, :transactions [eid …]}   ; pay invoices
+          {:kind :categorize, :contra-account eid} ; expense / income
 
      3. `commit-match!` — apply a match decision atomically:
           - construct the bank-side transaction (bank ↔ AR/AP/contra)
@@ -33,8 +36,10 @@
         in `:unmatched` status, for a UI / batch tool to walk.
 
    Scope cuts (deferred):
-   - Partial payments (one bank line settles part of an invoice).
-   - Multi-line settlements (multiple bank lines pay one invoice).
+   - Partial payments (one bank line settles part of an invoice;
+     remainder stays open).
+   - Installments (multiple bank lines progressively settle one
+     invoice — needs partial-payment support first).
    - FX revaluation when bank commodity ≠ invoice commodity.
    - Date-tolerance matching (bank lines often hit a few days after
      invoice date; v1 doesn't use date as a match heuristic).
@@ -272,6 +277,51 @@
   (and bank-amount open-amount
        (zero? (.compareTo bank-amount open-amount))))
 
+(defn- counterparty-matches-partner?
+  "True when bank-line counterparty text plausibly refers to the
+   given partner (case-insensitive substring). Handles the typical
+   bank-statement noise like 'BETA AG SEPA' for partner 'Beta AG'."
+  [counterparty partner-name]
+  (when (and counterparty partner-name)
+    (str/includes? (str/lower-case counterparty)
+                   (str/lower-case partner-name))))
+
+(def ^:private ^:const max-subset-search 12)
+
+(defn- subsets-summing-to
+  "Return seq of subsets of `opens` (vec of {:open-amount …}) whose
+   :open-amount sums to `target`. Bounded by `max-subset-search` to
+   avoid combinatorial blowup; if there are more open invoices than
+   that, fall back to a partner-only filter via the caller. Limits
+   results to the first `max-results` matches.
+
+   Strategy: depth-first search with two pruning rules:
+     - skip when the running sum + remaining > target * 2 (no chance
+       to reach target without overshooting)
+     - prefer smaller subsets (caller sorts results by count)"
+  [opens ^java.math.BigDecimal target & {:keys [max-results min-size]
+                                         :or {max-results 5 min-size 2}}]
+  (let [opens (vec (take max-subset-search opens))
+        n (count opens)
+        results (atom [])]
+    (letfn [(go [start picked sum]
+              (when (< (count @results) max-results)
+                (let [cmp (.compareTo ^java.math.BigDecimal sum target)]
+                  (cond
+                    (zero? cmp)
+                    (when (>= (count picked) min-size)
+                      (swap! results conj picked))
+                    (pos? cmp)
+                    nil ; overshot; backtrack
+                    :else
+                    (doseq [i (range start n)]
+                      (let [open (nth opens i)
+                            new-sum (.add ^java.math.BigDecimal sum
+                                          ^java.math.BigDecimal (:open-amount open))]
+                        (go (inc i) (conj picked open) new-sum)))))))]
+      (go 0 [] 0M)
+      @results)))
+
 (defn suggest-match
   "Given a `:bank-line` entity and a db, return a seq of match
    candidates sorted by confidence (high → low). Each candidate:
@@ -326,14 +376,40 @@
                              (:partner/name (d/pull db [:partner/name]
                                                     (:partner-eid open))))
                            cp-overlap?
-                           (when (and cp partner-name)
-                             (str/includes? (str/lower-case cp)
-                                            (str/lower-case partner-name)))]
+                           (counterparty-matches-partner? cp partner-name)]
                        {:strategy :exact-amount
                         :confidence (if cp-overlap? 0.9 0.7)
                         :match {:kind :settle
                                 :transactions [(:transaction-eid open)]}
                         :open open}))))
+        ;; Strategy 2b: multi-line (Sammelüberweisung) — combinations
+        ;; of open invoices for the SAME counterparty summing to the
+        ;; bank-line amount. Only fires when no single-invoice match
+        ;; exists (else it'd compete with a stronger 1:1 signal).
+        multi-line-matches
+        (when (and amount cp (empty? amount-matches))
+          (let [partner-opens
+                (->> opens
+                     (filter (fn [o]
+                               (when-let [pid (:partner-eid o)]
+                                 (let [pn (:partner/name (d/pull db [:partner/name] pid))]
+                                   (counterparty-matches-partner? cp pn))))))
+                subsets (when (seq partner-opens)
+                          (subsets-summing-to partner-opens amount))]
+            (->> subsets
+                 ;; Prefer fewer invoices first.
+                 (sort-by count)
+                 (mapv (fn [subset]
+                         {:strategy :multi-line
+                          ;; 0.85 — strong signal (counterparty + exact
+                          ;; sum) but slightly lower than the 0.9
+                          ;; partner-overlap-1:1 case because subset
+                          ;; coincidence is more plausible than a
+                          ;; single-amount coincidence.
+                          :confidence 0.85
+                          :match {:kind :settle
+                                  :transactions (mapv :transaction-eid subset)}
+                          :opens subset})))))
         ;; Strategy 3: categorizer fallback
         cat-matches (when (and cat category-resolver)
                       (when-let [contra (category-resolver cat)]
@@ -341,7 +417,7 @@
                           :confidence 0.5
                           :match {:kind :categorize
                                   :contra-account contra}}]))]
-    (->> (concat ref-matches amount-matches cat-matches)
+    (->> (concat ref-matches amount-matches multi-line-matches cat-matches)
          (sort-by :confidence >)
          vec)))
 
