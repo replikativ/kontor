@@ -1,4 +1,4 @@
-(ns datahike-accounting.closing
+(ns kontor.closing
   "Year-end (or any-period) close — roll P&L accounts to a single
    retained-earnings (equity) account so the new period starts with
    zeroed income/expense balances.
@@ -34,9 +34,9 @@
    it refuses if the period already has a closing transaction
    (`:transaction/closes-period`)."
   (:require [datahike.api :as d]
-            [datahike-accounting.balance :as balance]
-            [datahike-accounting.period :as period]
-            [datahike-accounting.posting :as posting])
+            [kontor.balance :as balance]
+            [kontor.period :as period]
+            [kontor.posting :as posting])
   (:import [java.util Date]))
 
 ;; ============================================================================

@@ -1,4 +1,4 @@
-(ns datahike-accounting.balance
+(ns kontor.balance
   "Account balance queries — bitemporal-aware.
 
    Per ADR-008 every read takes two implicit dimensions:
@@ -17,7 +17,7 @@
    in multiple commodities (multi-currency books). The map is empty
    when an account has no postings."
   (:require [datahike.api :as d]
-            [datahike-accounting.money :as money])
+            [kontor.money :as money])
   (:import [java.util Date]))
 
 ;; ============================================================================

@@ -1,4 +1,4 @@
-(ns datahike-accounting.reconciliation-test
+(ns kontor.reconciliation-test
   "End-to-end bank reconciliation test:
      - install SKR04 chart + invariants
      - post 3 sales invoices with distinct partners and amounts
@@ -11,11 +11,11 @@
        (:transaction/settles) are correctly populated."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.posting :as posting]
-            [datahike-accounting.reconciliation :as recon]
-            [datahike-accounting.validation :as v]
-            [datahike-accounting.l10n-de.chart :as chart]))
+            [kontor.core :as core]
+            [kontor.posting :as posting]
+            [kontor.reconciliation :as recon]
+            [kontor.validation :as v]
+            [kontor.l10n-de.chart :as chart]))
 
 (def jan-15 #inst "2026-01-15T00:00:00Z")
 (def feb-1  #inst "2026-02-01T00:00:00Z")

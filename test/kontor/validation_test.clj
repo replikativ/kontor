@@ -1,4 +1,4 @@
-(ns datahike-accounting.validation-test
+(ns kontor.validation-test
   "Verify the invariant integration:
      - Schema and built-in invariants install cleanly.
      - account-active invariant fires on a posting against an inactive
@@ -8,9 +8,9 @@
        (treated as active by default — Odoo-compatible)."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.posting :as posting]
-            [datahike-accounting.validation :as v]))
+            [kontor.core :as core]
+            [kontor.posting :as posting]
+            [kontor.validation :as v]))
 
 (def some-date #inst "2026-05-09T00:00:00Z")
 

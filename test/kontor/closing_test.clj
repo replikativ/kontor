@@ -1,4 +1,4 @@
-(ns datahike-accounting.closing-test
+(ns kontor.closing-test
   "Year-end (and any-period) closing — verifies that:
 
    - all P&L accounts have non-zero period-end balances,
@@ -13,12 +13,12 @@
    Uses the SKR04 chart so we exercise the DE wrapper too."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
-            [datahike-accounting.balance :as balance]
-            [datahike-accounting.closing :as closing]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.l10n-de.chart :as chart]
-            [datahike-accounting.l10n-de.closing :as de-closing]
-            [datahike-accounting.posting :as posting]))
+            [kontor.balance :as balance]
+            [kontor.closing :as closing]
+            [kontor.core :as core]
+            [kontor.l10n-de.chart :as chart]
+            [kontor.l10n-de.closing :as de-closing]
+            [kontor.posting :as posting]))
 
 (def jan-1   #inst "2025-01-01T00:00:00Z")
 (def feb-15  #inst "2025-02-15T00:00:00Z")

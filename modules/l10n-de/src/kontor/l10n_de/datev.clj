@@ -1,4 +1,4 @@
-(ns datahike-accounting.l10n-de.datev
+(ns kontor.l10n-de.datev
   "DATEV EXTF (Buchungsstapel) exporter — the test-oracle format the
    user asked us to diff against (per the report-engine direction
    chosen for Phase 2-DE).

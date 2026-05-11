@@ -1,7 +1,7 @@
-(ns datahike-accounting.bank-at.parser
+(ns kontor.bank-at.parser
   "Austrian bank-statement CSV configs + categorizer.
 
-   Generic CSV engine lives in `datahike-accounting.bank-csv`. AT and
+   Generic CSV engine lives in `kontor.bank-csv`. AT and
    DE bank exports are very close (German-language, EUR, dd.MM.yyyy)
    but the column orders differ per bank — and Austria has its own
    set of dominant retail banks (Erste, Raiffeisen, Bank Austria,
@@ -50,7 +50,7 @@
        Note: an extended 18-col form exists in newer eBanking exports;
        use a different config when targeting that variant."
   (:require [clojure.string :as str]
-            [datahike-accounting.bank-csv :as csv-core]))
+            [kontor.bank-csv :as csv-core]))
 
 (def parse-german-amount csv-core/parse-german-amount)
 (def parse-date csv-core/parse-date)

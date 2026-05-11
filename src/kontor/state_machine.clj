@@ -1,4 +1,4 @@
-(ns datahike-accounting.state-machine
+(ns kontor.state-machine
   "Transaction-state lifecycle: enforce that `:transaction/state`
    transitions follow
 

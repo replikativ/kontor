@@ -1,7 +1,7 @@
-(ns datahike-accounting.money-test
+(ns kontor.money-test
   "Money type and arithmetic. Mostly pure unit tests; no datahike."
   (:require [clojure.test :refer [deftest is testing]]
-            [datahike-accounting.money :as m])
+            [kontor.money :as m])
   (:import [java.math BigDecimal]))
 
 ;; ============================================================================

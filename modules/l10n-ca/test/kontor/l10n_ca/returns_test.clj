@@ -1,4 +1,4 @@
-(ns datahike-accounting.l10n-ca.returns-test
+(ns kontor.l10n-ca.returns-test
   "Canadian multi-province end-to-end:
      - BC sale (GST 5% + PST 7%, two output tax postings to two
        different authority accounts)
@@ -11,12 +11,12 @@
    Finance return shapes."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.l10n-ca.chart :as chart]
-            [datahike-accounting.l10n-ca.returns :as ret]
-            [datahike-accounting.money :as money]
-            [datahike-accounting.posting :as posting]
-            [datahike-accounting.validation :as v]))
+            [kontor.core :as core]
+            [kontor.l10n-ca.chart :as chart]
+            [kontor.l10n-ca.returns :as ret]
+            [kontor.money :as money]
+            [kontor.posting :as posting]
+            [kontor.validation :as v]))
 
 (def jan-1   #inst "2026-01-01T00:00:00Z")
 (def jan-15  #inst "2026-01-15T00:00:00Z")

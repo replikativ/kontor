@@ -1,4 +1,4 @@
-(ns datahike-accounting.reconciliation
+(ns kontor.reconciliation
   "Bank-statement reconciliation: ingest bank-csv parser output as
    `:bank-line` entities, match them against open AR/AP, and (on
    confirmation) post the bank-side transaction.
@@ -47,7 +47,7 @@
    v2 layer can address them on top of the v1 schema."
   (:require [clojure.string :as str]
             [datahike.api :as d]
-            [datahike-accounting.posting :as posting])
+            [kontor.posting :as posting])
   (:import [java.util Date]))
 
 ;; ============================================================================

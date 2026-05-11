@@ -1,4 +1,4 @@
-(ns datahike-accounting.dev.pg-experiment
+(ns kontor.dev.pg-experiment
   "Spin up a pg-datahike server fronting an accounting DB pre-seeded
    with the SKR04 chart and a small Q1 fixture book. Used to explore
    what's reachable from a SQL client (psql / pgjdbc) over the kernel.
@@ -19,10 +19,10 @@
      SELECT count(*) FROM posting;"
   (:require [datahike.api :as d]
             [datahike.pg :as pg]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.posting :as posting]
-            [datahike-accounting.validation :as v]
-            [datahike-accounting.l10n-de.chart :as chart]))
+            [kontor.core :as core]
+            [kontor.posting :as posting]
+            [kontor.validation :as v]
+            [kontor.l10n-de.chart :as chart]))
 
 (def jan-15 #inst "2026-01-15T00:00:00Z")
 (def feb-15 #inst "2026-02-15T00:00:00Z")
@@ -76,7 +76,7 @@
 
     (println "[pg-experiment] starting pg-datahike on 127.0.0.1:54320…")
     (println "[pg-experiment] :tx-wrap installed — SQL writes route through")
-    (println "                 datahike-accounting.validation/validate-and-apply")
+    (println "                 kontor.validation/validate-and-apply")
     (let [srv (pg/start-server
                {"accounting" conn}
                {:port 54320 :host "127.0.0.1"

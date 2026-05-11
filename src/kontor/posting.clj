@@ -1,4 +1,4 @@
-(ns datahike-accounting.posting
+(ns kontor.posting
   "Build draft transactions out of postings, validating the structural
    double-entry invariants:
 
@@ -11,9 +11,9 @@
         (journal, effective-date).
 
    What this module does NOT do:
-     - Tax expansion (`datahike-accounting.tax` will plug in there)
-     - Sealing / posted-at lifecycle (`datahike-accounting.sealing`)
-     - Period-locked rejection (`datahike-accounting.period`)
+     - Tax expansion (`kontor.tax` will plug in there)
+     - Sealing / posted-at lifecycle (`kontor.sealing`)
+     - Period-locked rejection (`kontor.period`)
      - Account-active / commodity-match checks (the invariant library
        will, per ADR-011)
 
@@ -22,7 +22,7 @@
    to a db itself — the validations performed here are purely
    structural, not catalog-aware. Callers compose this with the
    db-aware checks in `validation.clj` (Phase 1)."
-  (:require [datahike-accounting.money :as money]))
+  (:require [kontor.money :as money]))
 
 ;; ============================================================================
 ;; Validation predicates

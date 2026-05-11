@@ -1,4 +1,4 @@
-# Going North-American with `datahike-accounting`: a clear-eyed scoping report
+# Going North-American with `kontor`: a clear-eyed scoping report
 
 ## TL;DR
 

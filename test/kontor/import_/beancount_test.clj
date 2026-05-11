@@ -1,12 +1,12 @@
-(ns datahike-accounting.import-.beancount-test
+(ns kontor.import-.beancount-test
   "Phase-1 acceptance: a representative .beancount file round-trips
-   through datahike-accounting (parse → load → dump → re-parse →
+   through kontor (parse → load → dump → re-parse →
    structural equality)."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.import-.beancount :as bc]))
+            [kontor.core :as core]
+            [kontor.import-.beancount :as bc]))
 
 ;; ============================================================================
 ;; Parse smoke

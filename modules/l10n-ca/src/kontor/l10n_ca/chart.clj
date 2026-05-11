@@ -1,4 +1,4 @@
-(ns datahike-accounting.l10n-ca.chart
+(ns kontor.l10n-ca.chart
   "Canadian chart loader. Same shape as DE/AT/FR but emits CAD as
    the default commodity instead of EUR."
   (:require [clojure.edn :as edn]
@@ -6,7 +6,7 @@
             [datahike.api :as d]))
 
 (defn load-chart []
-  (-> "datahike_accounting/l10n_ca/chart.edn" io/resource slurp edn/read-string))
+  (-> "kontor/l10n_ca/chart.edn" io/resource slurp edn/read-string))
 
 (defn- distinct-tags [chart]
   (->> chart (mapcat :tags) distinct vec))

@@ -1,4 +1,4 @@
-(ns datahike-accounting.bank-de.parser-test
+(ns kontor.bank-de.parser-test
   "Round-trip the 14 anonymized German-bank fixtures through the
    parser. Each must produce ≥1 candidate, every candidate must have
    a date and a non-zero amount (most of the time), and the detected
@@ -6,7 +6,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [datahike-accounting.bank-de.parser :as p]))
+            [kontor.bank-de.parser :as p]))
 
 (def fixture-dir
   "Resolved at test time so the resource path is honored regardless

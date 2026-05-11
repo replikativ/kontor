@@ -1,4 +1,4 @@
-(ns datahike-accounting.einvoice-de.factur-x
+(ns kontor.einvoice-de.factur-x
   "Mustang wrapper — generate XRechnung 3.0 / Factur-X / ZUGFeRD XML
    from a plain-Clojure invoice map (see `invoice.clj`), and embed
    that XML into a PDF/A-3 to produce a Factur-X PDF.
@@ -33,7 +33,7 @@
      :basic-wl       — Factur-X BASIC-WL (without lines)
      :minimum        — Factur-X MINIMUM
      :extended       — Factur-X EXTENDED"
-  (:require [datahike-accounting.einvoice-de.invoice :as inv]
+  (:require [kontor.einvoice-de.invoice :as inv]
             [clojure.string :as str])
   (:import [java.math BigDecimal]
            [java.util Date]

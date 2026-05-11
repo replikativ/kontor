@@ -1,4 +1,4 @@
-(ns datahike-accounting.l10n-de.bs
+(ns kontor.l10n-de.bs
   "German Bilanz (Balance Sheet) per HGB §266.
 
    §266 Abs. 2 = Aktiva (assets) side:
@@ -15,7 +15,7 @@
    The §266 Abs. 1 size-class abridgements (kleinst, klein, mittel,
    groß) are out of scope here — we ship the full layout; size-class
    compression is just a cosmetic re-bucketing of the same numbers."
-  (:require [datahike-accounting.financial-statements :as fs]))
+  (:require [kontor.financial-statements :as fs]))
 
 (def aktiva-definition
   {:statement/name    "Bilanz — Aktiva"

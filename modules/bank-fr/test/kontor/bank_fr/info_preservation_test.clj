@@ -1,8 +1,8 @@
-(ns datahike-accounting.bank-fr.info-preservation-test
+(ns kontor.bank-fr.info-preservation-test
   (:require [clojure.test :refer [deftest is]]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [datahike-accounting.bank-fr.parser :as p]))
+            [kontor.bank-fr.parser :as p]))
 
 (def fixture-dir (-> (io/resource "n26.csv") io/file .getParentFile))
 (def fixtures ["n26.csv" "credit-agricole.csv" "societe-generale.csv" "bnp-paribas.csv"])

@@ -1,7 +1,7 @@
 # Period close / reopen / posting authorization — comparative review
 
-Scope: assess whether `datahike-accounting`'s
-`/home/christian-weilbach/Development/datahike-accounting/src/datahike_accounting/period.clj`
+Scope: assess whether `kontor`'s
+`/home/christian-weilbach/Development/kontor/src/kontor/period.clj`
 covers the 80% case before Phase 2-DE, by comparing against six production
 systems. URLs and `file:line` refs cited inline.
 

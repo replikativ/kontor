@@ -1,4 +1,4 @@
-(ns datahike-accounting.schema-test
+(ns kontor.schema-test
   "Phase 0 smoke tests.
 
    We verify that:
@@ -11,8 +11,8 @@
         datahike's tuple feature)."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.schema :as schema]))
+            [kontor.core :as core]
+            [kontor.schema :as schema]))
 
 (def expected-namespaces
   "Every kernel attribute namespace we declare. If you add or remove a

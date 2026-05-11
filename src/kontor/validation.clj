@@ -1,4 +1,4 @@
-(ns datahike-accounting.validation
+(ns kontor.validation
   "Runtime validation of accounting transactions.
 
    Two-layer model per ADR-011:
@@ -24,9 +24,9 @@
             draft → posted → cancelled, no skipping or regressing."
   (:require [clojure.java.io :as io]
             [datahike.api :as d]
-            [datahike-accounting.period :as period]
-            [datahike-accounting.sealing :as sealing]
-            [datahike-accounting.state-machine :as state-machine]
+            [kontor.period :as period]
+            [kontor.sealing :as sealing]
+            [kontor.state-machine :as state-machine]
             [invariant.datahike :as inv]))
 
 ;; ============================================================================
@@ -168,7 +168,7 @@
    speculative `txdb` + the user's original `tx-data`; returns
    tx-data so the transactor applies it. Throws to abort.
 
-   Use as `[:db.fn/call datahike-accounting.validation/validate-and-apply
+   Use as `[:db.fn/call kontor.validation/validate-and-apply
    tx-data]` either from Clojure (via `transact-with-validation`) or
    from pg-datahike (via the `:tx-wrap` config) so SQL writes route
    through the same validators.

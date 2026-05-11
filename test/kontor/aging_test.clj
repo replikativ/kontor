@@ -1,4 +1,4 @@
-(ns datahike-accounting.aging-test
+(ns kontor.aging-test
   "End-to-end aging report test:
      - install SKR04 + payment terms
      - post 5 sales invoices with NET30 terms across 4 months
@@ -6,12 +6,12 @@
        invoice lands in the right bucket."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
-            [datahike-accounting.aging :as aging]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.l10n-de.chart :as chart]
-            [datahike-accounting.payment-term :as pt]
-            [datahike-accounting.posting :as posting]
-            [datahike-accounting.validation :as v]))
+            [kontor.aging :as aging]
+            [kontor.core :as core]
+            [kontor.l10n-de.chart :as chart]
+            [kontor.payment-term :as pt]
+            [kontor.posting :as posting]
+            [kontor.validation :as v]))
 
 ;; Reference frame: as-of = 2026-04-30
 (def as-of #inst "2026-04-30T00:00:00Z")

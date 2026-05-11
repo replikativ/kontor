@@ -1,4 +1,4 @@
-(ns datahike-accounting.l10n-at.chart
+(ns kontor.l10n-at.chart
   "Austrian Einheitskontenrahmen loader.
 
    Mirrors the DE chart-installer pattern (see ../l10n-de/chart.clj).
@@ -10,7 +10,7 @@
             [datahike.api :as d]))
 
 (defn load-chart []
-  (-> "datahike_accounting/l10n_at/kontenrahmen.edn"
+  (-> "kontor/l10n_at/kontenrahmen.edn"
       io/resource
       slurp
       edn/read-string))

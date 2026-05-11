@@ -1,11 +1,11 @@
-(ns datahike-accounting.l10n-fr.chart
+(ns kontor.l10n-fr.chart
   "PCG (Plan Comptable Général) loader. Mirrors the DE/AT pattern."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [datahike.api :as d]))
 
 (defn load-chart []
-  (-> "datahike_accounting/l10n_fr/pcg.edn" io/resource slurp edn/read-string))
+  (-> "kontor/l10n_fr/pcg.edn" io/resource slurp edn/read-string))
 
 (defn- distinct-tags [chart]
   (->> chart (mapcat :tags) distinct vec))

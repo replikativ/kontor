@@ -1,4 +1,4 @@
-;; datahike-accounting — double-entry accounting kernel on datahike.
+;; kontor — double-entry accounting kernel on datahike.
 ;;
 ;; Kernel deps are deliberately minimal. Country-specific data,
 ;; e-invoicing wrappers, and bank-statement importers ship as separate
@@ -99,4 +99,4 @@
   {:extra-paths ["dev"
                  "modules/l10n-de/test/resources"]
    :extra-deps  {org.replikativ/pg-datahike {:local/root "../pg-datahike"}}
-   :main-opts   ["-m" "datahike-accounting.dev.pg-experiment"]}}}
+   :main-opts   ["-m" "kontor.dev.pg-experiment"]}}}

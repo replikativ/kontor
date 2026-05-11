@@ -1,4 +1,4 @@
-(ns datahike-accounting.ledger
+(ns kontor.ledger
   "Ledger view: ordered postings against an account, bitemporal-aware.
 
    Same axes as balance.clj (ADR-008). Each result row carries the
@@ -7,7 +7,7 @@
    by `:posting/valid-from` ascending; pass `:order :desc` for
    reverse-chronological."
   (:require [datahike.api :as d]
-            [datahike-accounting.money :as money])
+            [kontor.money :as money])
   (:import [java.util Date]))
 
 (defn- now ^Date [] (Date.))

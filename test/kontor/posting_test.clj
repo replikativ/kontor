@@ -1,4 +1,4 @@
-(ns datahike-accounting.posting-test
+(ns kontor.posting-test
   "Structural validation of draft transactions:
      - sum-to-zero per commodity
      - missing required fields
@@ -8,9 +8,9 @@
      - end-to-end transact against a fresh kernel DB."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.money :as m]
-            [datahike-accounting.posting :as posting]))
+            [kontor.core :as core]
+            [kontor.money :as m]
+            [kontor.posting :as posting]))
 
 (def some-date #inst "2026-05-09T00:00:00Z")
 

@@ -1,12 +1,12 @@
-(ns datahike-accounting.l10n-fr.ca3-test
+(ns kontor.l10n-fr.ca3-test
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.l10n-fr.ca3 :as ca3]
-            [datahike-accounting.l10n-fr.chart :as chart]
-            [datahike-accounting.money :as money]
-            [datahike-accounting.posting :as posting]
-            [datahike-accounting.validation :as v]))
+            [kontor.core :as core]
+            [kontor.l10n-fr.ca3 :as ca3]
+            [kontor.l10n-fr.chart :as chart]
+            [kontor.money :as money]
+            [kontor.posting :as posting]
+            [kontor.validation :as v]))
 
 (def jan-1   #inst "2026-01-01T00:00:00Z")
 (def jan-15  #inst "2026-01-15T00:00:00Z")

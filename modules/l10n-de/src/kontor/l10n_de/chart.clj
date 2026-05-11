@@ -1,8 +1,8 @@
-(ns datahike-accounting.l10n-de.chart
+(ns kontor.l10n-de.chart
   "SKR04 chart of accounts loader.
 
-   Reads `resources/datahike_accounting/l10n_de/skr04.edn` and
-   transacts the entries into a datahike-accounting connection.
+   Reads `resources/kontor/l10n_de/skr04.edn` and
+   transacts the entries into a kontor connection.
    Idempotent: account paths are :db.unique/identity in the kernel
    schema, so re-installing replaces values without duplication.
 
@@ -25,7 +25,7 @@
 (defn load-skr04
   "Read the SKR04 EDN. Returns a vector of account spec maps."
   []
-  (-> "datahike_accounting/l10n_de/skr04.edn"
+  (-> "kontor/l10n_de/skr04.edn"
       io/resource
       slurp
       edn/read-string))

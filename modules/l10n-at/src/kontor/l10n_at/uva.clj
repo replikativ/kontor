@@ -1,4 +1,4 @@
-(ns datahike-accounting.l10n-at.uva
+(ns kontor.l10n-at.uva
   "Austrian Umsatzsteuervoranmeldung (U30 / monthly UVA).
 
    The UVA is field-coded — every line is a 3-digit Kennzahl. We ship
@@ -26,8 +26,8 @@
    Mirrors the DE UStVA shape (modules/l10n-de/.../ustva.clj). The
    only structural difference is the rate set (20/13/10/0 vs DE's
    19/7/0)."
-  (:require [datahike-accounting.money :as money]
-            [datahike-accounting.report :as report]))
+  (:require [kontor.money :as money]
+            [kontor.report :as report]))
 
 (def report-definition
   "UVA Stand 2026 monthly. 10 load-bearing fields."

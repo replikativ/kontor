@@ -1,4 +1,4 @@
-(ns datahike-accounting.aging
+(ns kontor.aging
   "AR / AP aging reports — categorize open balances by how long
    they've been outstanding past due. Drives collections workflow
    (which customers to chase) and DSO (Days Sales Outstanding)
@@ -14,7 +14,7 @@
    Sits on top of `reconciliation/open-receivables-by-tx` and the
    `:transaction/due-date` attr (set by `payment-term.clj`)."
   (:require [datahike.api :as d]
-            [datahike-accounting.reconciliation :as recon])
+            [kontor.reconciliation :as recon])
   (:import [java.time Instant ZoneOffset]
            [java.util Date]))
 

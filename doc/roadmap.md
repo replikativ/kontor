@@ -8,17 +8,17 @@ For *why* the sequencing is what it is, see [decisions.md](decisions.md). For th
 
 ## Phase 0 — Initialize (this commit)
 
-- [x] Create `../datahike-accounting/` repository
+- [x] Create `../kontor/` repository
 - [x] LICENSE (EPL-1.0)
 - [x] `deps.edn`, `bb.edn`, `tests.edn`
 - [x] `CLAUDE.md` for AI-assisted iteration
 - [x] `doc/decisions.md` recording all locked choices (ADR-001 .. ADR-010)
 - [x] `doc/architecture.md` describing the layer cake
 - [x] `doc/research/` with the three research reports + index
-- [x] `src/datahike_accounting/schema.clj` skeleton with namespaced kernel attrs
-- [x] `src/datahike_accounting/tax_provider.clj` protocol skeleton
-- [x] `src/datahike_accounting/core.clj` entry point
-- [x] `test/datahike_accounting/schema_test.clj` smoke test (schema loads)
+- [x] `src/kontor/schema.clj` skeleton with namespaced kernel attrs
+- [x] `src/kontor/tax_provider.clj` protocol skeleton
+- [x] `src/kontor/core.clj` entry point
+- [x] `test/kontor/schema_test.clj` smoke test (schema loads)
 
 ## Phase 1 — Kernel + tax engine + bitemporal (4-5 weeks)
 
@@ -54,15 +54,15 @@ The smallest thing that is genuinely a working double-entry kernel with tax and 
 
 ## Phase 2-DE — Germany (3-4 weeks)
 
-Separate artifact: `datahike-accounting-l10n-de` (GPLv3, sourced from Tryton `account_de_skr03` + GnuCash community SKR04 + Odoo cross-check).
+Separate artifact: `kontor-l10n-de` (GPLv3, sourced from Tryton `account_de_skr03` + GnuCash community SKR04 + Odoo cross-check).
 
 - [ ] `resources/skr03.edn` and `resources/skr04.edn` — chart of accounts as data
 - [ ] `resources/vat-tags.edn` — VAT report tag definitions
 - [ ] `resources/vat-report-2026.edn` — Umsatzsteuer-Voranmeldung shape
 - [ ] `StaticTableProvider` config for DE (standard 19% + reduced 7% + zero + reverse charge + EU intra-community)
-- [ ] `datahike-accounting-einvoice-de` (separate artifact, EPL-1.0): Mustang wrapper for Factur-X read/write/validate
-- [ ] `datahike-accounting-export-gobd` (separate artifact): GoBD/GDPdU 14-file ASCII bundle generator
-- [ ] `datahike-accounting-import-datev` (separate artifact): DATEV CSV import (the SMB exchange format with their accountant)
+- [ ] `kontor-einvoice-de` (separate artifact, EPL-1.0): Mustang wrapper for Factur-X read/write/validate
+- [ ] `kontor-export-gobd` (separate artifact): GoBD/GDPdU 14-file ASCII bundle generator
+- [ ] `kontor-import-datev` (separate artifact): DATEV CSV import (the SMB exchange format with their accountant)
 - [ ] CI: KoSIT validator gate on every Factur-X output
 
 **Acceptance**: a generated Factur-X invoice passes KoSIT validation; SKR03/SKR04 charts load and pass schema validation; a small fixture invoice → posted journal entry → VAT report shows correct figures.
@@ -78,14 +78,14 @@ Separate artifact: `datahike-accounting-l10n-de` (GPLv3, sourced from Tryton `ac
 
 ## Phase 4-CA — Canada (3-5 weeks)
 
-Separate artifact: `datahike-accounting-l10n-ca` (EPL-1.0 — CRA facts are public).
+Separate artifact: `kontor-l10n-ca` (EPL-1.0 — CRA facts are public).
 
 - [ ] `resources/ca-tax.edn` — GST + each HST province + each PST province + Quebec QST as `tax` + `tax-repartition-line` rows
 - [ ] `resources/ca-coa.edn` — QBO-style baseline CoA, optional Tryton-derived alt
 - [ ] `StaticTableProvider` config for CA: per-province routing, recoverable-vs-not flag
-- [ ] `datahike-accounting-export-cra-t4` (separate artifact): T4 information return XML generator (CRA published schema)
-- [ ] `datahike-accounting-export-cra-t5` (separate artifact): T5 information return XML generator
-- [ ] `datahike-accounting-export-cra-gst` (separate artifact): GST/HST NETFILE-ready figures
+- [ ] `kontor-export-cra-t4` (separate artifact): T4 information return XML generator (CRA published schema)
+- [ ] `kontor-export-cra-t5` (separate artifact): T5 information return XML generator
+- [ ] `kontor-export-cra-gst` (separate artifact): GST/HST NETFILE-ready figures
 - [ ] SR&ED project dimension on postings (analytical-account-style)
 - [ ] CAMT.053 / OFX import covers Canadian banks (most major CA banks publish ISO 20022)
 
@@ -93,14 +93,14 @@ Separate artifact: `datahike-accounting-l10n-ca` (EPL-1.0 — CRA facts are publ
 
 ## Phase 5-US — United States (4-6 weeks)
 
-Separate artifact: `datahike-accounting-l10n-us` (EPL-1.0 kernel pieces; SST data file licensing per SST terms).
+Separate artifact: `kontor-l10n-us` (EPL-1.0 kernel pieces; SST data file licensing per SST terms).
 
 - [ ] `resources/us-coa.edn` — QBO-style default CoA
 - [ ] `SstCsvProvider` — ingests quarterly SST rate + boundary CSVs for ~24 SST states
 - [ ] `AvalaraProvider` adapter scaffold (no API key bundled; customer registers)
 - [ ] `TaxJarProvider` adapter scaffold (same)
 - [ ] 1099-NEC tracking: vendor flag + YTD payment aggregation by vendor
-- [ ] `datahike-accounting-export-irs-iris` (separate artifact, when IRS TCC obtainable): IRIS XML generator for 1099 series
+- [ ] `kontor-export-irs-iris` (separate artifact, when IRS TCC obtainable): IRIS XML generator for 1099 series
 - [ ] Cash-basis reporting view (US SMBs default)
 - [ ] State-by-state sales tax filing pre-fill (no transmission — generate values to enter)
 
@@ -122,8 +122,8 @@ Phase 1 ships before Track B lands. When Track B lands, `audit.clj` in this repo
 
 Used by all phases:
 
-- [ ] `datahike-accounting-bank-camt053` (separate artifact): ISO 20022 CAMT.053 parser → unposted suggestions
-- [ ] `datahike-accounting-bank-nacha` (Phase 5-US, separate artifact): NACHA ACH import
+- [ ] `kontor-bank-camt053` (separate artifact): ISO 20022 CAMT.053 parser → unposted suggestions
+- [ ] `kontor-bank-nacha` (Phase 5-US, separate artifact): NACHA ACH import
 
 Both produce **suggested** postings, never auto-posted. Reconciliation UI lives in consumers (beleg).
 

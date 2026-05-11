@@ -1,7 +1,7 @@
-(ns datahike-accounting.bank-ca.parser
+(ns kontor.bank-ca.parser
   "Canadian bank-statement CSV configs + categorizer.
 
-   Generic CSV engine lives in `datahike-accounting.bank-csv`.
+   Generic CSV engine lives in `kontor.bank-csv`.
 
    Supported:
      :rbc        — Royal Bank of Canada (chequing/savings export)
@@ -36,7 +36,7 @@
           Amount,Description'
        Date format: yyyyMMdd  •  Amount: signed English"
   (:require [clojure.string :as str]
-            [datahike-accounting.bank-csv :as csv-core]))
+            [kontor.bank-csv :as csv-core]))
 
 (def parse-english-amount csv-core/parse-english-amount)
 (def parse-date csv-core/parse-date)

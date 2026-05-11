@@ -1,4 +1,4 @@
-(ns datahike-accounting.l10n-ca.returns
+(ns kontor.l10n-ca.returns
   "Canadian tax returns — split per authority, per ADR-014's
    `:tax/authority` design.
 
@@ -27,8 +27,8 @@
    transact :tax entities later). Today the CA chart uses tags only —
    no :tax entities yet because GST/HST/PST/QST are typically modeled
    as direct postings rather than TaxProvider-derived ones for SMBs."
-  (:require [datahike-accounting.money :as money]
-            [datahike-accounting.report :as report]))
+  (:require [kontor.money :as money]
+            [kontor.report :as report]))
 
 ;; ============================================================================
 ;; CRA GST/HST report

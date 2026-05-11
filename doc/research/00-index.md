@@ -1,6 +1,6 @@
 # Research notes — index
 
-These reports were produced during the design phase of `datahike-accounting`. They are point-in-time inputs to [decisions.md](../decisions.md) and [architecture.md](../architecture.md), not living documentation. If a fact in one of them later changes, **fix decisions.md first** and either annotate the original report or supersede it with a new one.
+These reports were produced during the design phase of `kontor`. They are point-in-time inputs to [decisions.md](../decisions.md) and [architecture.md](../architecture.md), not living documentation. If a fact in one of them later changes, **fix decisions.md first** and either annotate the original report or supersede it with a new one.
 
 | # | Topic | Date | Source agent | Verified? |
 |---|---|---|---|---|

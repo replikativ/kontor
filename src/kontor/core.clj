@@ -1,4 +1,4 @@
-(ns datahike-accounting.core
+(ns kontor.core
   "Public surface of the kernel.
 
    Phase 0 (this commit): create-test-db, install-schema!, smoke
@@ -8,8 +8,8 @@
    — all bitemporal-aware (ADR-008). Until then, exercise the kernel
    via raw datahike calls and the schema in `schema.clj`."
   (:require [datahike.api :as d]
-            [datahike-accounting.schema :as schema]
-            [datahike-accounting.tax-provider :as tp]))
+            [kontor.schema :as schema]
+            [kontor.tax-provider :as tp]))
 
 ;; ============================================================================
 ;; Defaults
@@ -77,7 +77,7 @@
 
 (defn make-default-tax-provider
   "Return a StaticTableProvider configured for the given default country.
-   See `datahike-accounting.tax-provider/make-static-table-provider`."
+   See `kontor.tax-provider/make-static-table-provider`."
   ([] (tp/make-static-table-provider {}))
   ([opts] (tp/make-static-table-provider opts)))
 

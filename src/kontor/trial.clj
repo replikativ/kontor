@@ -1,4 +1,4 @@
-(ns datahike-accounting.trial
+(ns kontor.trial
   "Trial balance — the per-account, per-commodity total derived from
    balance.clj. Same bitemporal axes (ADR-008).
 
@@ -12,8 +12,8 @@
    never silently FX-converts; that is a presentation-time concern
    (apply rates from a price feed)."
   (:require [datahike.api :as d]
-            [datahike-accounting.balance :as balance]
-            [datahike-accounting.money :as money]))
+            [kontor.balance :as balance]
+            [kontor.money :as money]))
 
 (defn- all-account-eids
   "Every :account/path entity in the snapshot."

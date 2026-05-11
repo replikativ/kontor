@@ -1,6 +1,6 @@
 # Architecture
 
-A bird's-eye view of how `datahike-accounting` is laid out, why each layer exists, and how it composes with the surrounding stack (datahike, Mustang, beleg, simmis).
+A bird's-eye view of how `kontor` is laid out, why each layer exists, and how it composes with the surrounding stack (datahike, Mustang, beleg, simmis).
 
 For *why* each choice was made, see [decisions.md](decisions.md). This document describes the *what*.
 
@@ -19,25 +19,25 @@ For *why* each choice was made, see [decisions.md](decisions.md). This document 
                                 │
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Per-country localization modules                                    │
-│   datahike-accounting-l10n-de   (GPLv3, Tryton+GnuCash facts)       │
-│   datahike-accounting-l10n-ca   (EPL-1.0, CRA-published facts)      │
-│   datahike-accounting-l10n-us   (EPL-1.0 + SST CSVs)                │
+│   kontor-l10n-de   (GPLv3, Tryton+GnuCash facts)       │
+│   kontor-l10n-ca   (EPL-1.0, CRA-published facts)      │
+│   kontor-l10n-us   (EPL-1.0 + SST CSVs)                │
 └──────────────────────────────────────────────────────────────────────┘
                                 ▲
                                 │
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Optional adapter modules                                            │
-│   datahike-accounting-einvoice-de  (Mustang APL2 wrapper)           │
-│   datahike-accounting-einvoice-eu  (phax/ph-ubl APL2)               │
-│   datahike-accounting-bank-camt053 (ISO 20022 CAMT.053 importer)    │
-│   datahike-accounting-bank-nacha   (US ACH NACHA importer)          │
-│   datahike-accounting-export-gobd  (DE tax-audit bundle)            │
-│   datahike-accounting-export-datev (DE accountant-handoff)          │
+│   kontor-einvoice-de  (Mustang APL2 wrapper)           │
+│   kontor-einvoice-eu  (phax/ph-ubl APL2)               │
+│   kontor-bank-camt053 (ISO 20022 CAMT.053 importer)    │
+│   kontor-bank-nacha   (US ACH NACHA importer)          │
+│   kontor-export-gobd  (DE tax-audit bundle)            │
+│   kontor-export-datev (DE accountant-handoff)          │
 └──────────────────────────────────────────────────────────────────────┘
                                 ▲
                                 │
 ┌──────────────────────────────────────────────────────────────────────┐
-│  THIS REPO — datahike-accounting                                     │
+│  THIS REPO — kontor                                     │
 │                                                                      │
 │  ┌─ tax_provider ─┐  ┌── sealing ──┐  ┌── audit ──┐                 │
 │  │  TaxProvider   │  │ posted-at   │  │ commit    │                 │
@@ -76,7 +76,7 @@ For *why* each choice was made, see [decisions.md](decisions.md). This document 
 ## Kernel: namespaces
 
 ```
-src/datahike_accounting/
+src/kontor/
   schema.clj            ; the EDN schema for all kernel entities
   core.clj              ; create-db, transact-with-validation, public surface
   money.clj             ; Money type (BigDecimal + commodity), arithmetic, rounding
@@ -226,7 +226,7 @@ Beancount is the most-respected open-source double-entry implementation. We ship
 ## Composition with beleg
 
 ```
-beleg.invoice ─────────┬─────► datahike-accounting.transaction
+beleg.invoice ─────────┬─────► kontor.transaction
    (issued)            │           (posted)
                        │
    :invoice/journal ───┴─► :journal entity in same DB
@@ -251,7 +251,7 @@ The reverse — voiding an issued invoice — emits a reversing transaction (not
 | Branches, commits, history, content addressing, hashing | datahike core |
 | SHA-256 leaf hash, commit signature hook | datahike core (Track B PR) |
 | Beancount parser | here, in `import/beancount.clj` |
-| SKR03/SKR04 facts | `datahike-accounting-l10n-de` |
+| SKR03/SKR04 facts | `kontor-l10n-de` |
 | Factur-X/XRechnung XML | Mustang (we wrap) |
 | UBL/Peppol | phax/ph-ubl (we wrap) |
 | KoSIT validation | KoSIT (Mustang invokes) |

@@ -156,9 +156,9 @@ Explicit deferrals — call these out at pickup if priorities shift, but assume 
 
 ### Code
 
-- Kernel: `src/datahike_accounting/` — schema, posting, balance, ledger, trial, period, state-machine, sealing, validation.
-- DE module: `modules/l10n-de/src/datahike_accounting/l10n_de/` — `bs.clj`, `eur.clj`, `pnl.clj`, `invoice.clj`, `closing.clj`, `datev.clj`, `ustva.clj`, `chart.clj`. **`ustva.clj` is the input to the ELSTER work.**
-- CA module: `modules/l10n-ca/src/datahike_accounting/l10n_ca/` — `chart.clj`, `returns.clj`. **`returns.clj` is the input to the GST/HST work; T1 is greenfield.**
+- Kernel: `src/kontor/` — schema, posting, balance, ledger, trial, period, state-machine, sealing, validation.
+- DE module: `modules/l10n-de/src/kontor/l10n_de/` — `bs.clj`, `eur.clj`, `pnl.clj`, `invoice.clj`, `closing.clj`, `datev.clj`, `ustva.clj`, `chart.clj`. **`ustva.clj` is the input to the ELSTER work.**
+- CA module: `modules/l10n-ca/src/kontor/l10n_ca/` — `chart.clj`, `returns.clj`. **`returns.clj` is the input to the GST/HST work; T1 is greenfield.**
 - Bank importers: `modules/bank-{de,at,fr,ca,us}/` — used to source the postings that feed reports.
 - E-invoice: `modules/einvoice-de/` — Mustang wrapper for ZUGFeRD/XRechnung; relevant when DE invoice obligations mature.
 

@@ -1,4 +1,4 @@
-(ns datahike-accounting.end-to-end-demo-test
+(ns kontor.end-to-end-demo-test
   "End-to-end scenario: a German freelancer's full year on the kernel.
 
    Story: \"Self GmbH\" runs a one-person consultancy. In FY2025 it
@@ -31,18 +31,18 @@
    so a regression in any sub-system surfaces as a failed step here."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
-            [datahike-accounting.aging :as aging]
-            [datahike-accounting.balance :as balance]
-            [datahike-accounting.invoice :as invoice]
-            [datahike-accounting.l10n-de.chart :as chart]
-            [datahike-accounting.l10n-de.closing :as de-closing]
-            [datahike-accounting.l10n-de.eur :as eur]
-            [datahike-accounting.l10n-de.invoice :as inv-de]
-            [datahike-accounting.l10n-de.ustva :as ustva]
-            [datahike-accounting.payment-term :as pt]
-            [datahike-accounting.posting :as posting]
-            [datahike-accounting.reconciliation :as recon]
-            [datahike-accounting.core :as core]))
+            [kontor.aging :as aging]
+            [kontor.balance :as balance]
+            [kontor.invoice :as invoice]
+            [kontor.l10n-de.chart :as chart]
+            [kontor.l10n-de.closing :as de-closing]
+            [kontor.l10n-de.eur :as eur]
+            [kontor.l10n-de.invoice :as inv-de]
+            [kontor.l10n-de.ustva :as ustva]
+            [kontor.payment-term :as pt]
+            [kontor.posting :as posting]
+            [kontor.reconciliation :as recon]
+            [kontor.core :as core]))
 
 ;; ============================================================================
 ;; Calendar

@@ -1,4 +1,4 @@
-(ns datahike-accounting.l10n-de.closing
+(ns kontor.l10n-de.closing
   "DE-specific year-end close: defaults the retained-earnings account
    to SKR04 2900 (Gewinnvortrag vor Verwendung) and the closing
    journal to \"CLOSE\".
@@ -7,7 +7,7 @@
    :gewinnvortrag (2900) from :verlustvortrag (2978) before the
    shareholder resolution may want their own routing."
   (:require [datahike.api :as d]
-            [datahike-accounting.closing :as closing]))
+            [kontor.closing :as closing]))
 
 (def ^:const default-retained-code "2900")
 (def ^:const default-journal-code "CLOSE")

@@ -1,4 +1,4 @@
-(ns datahike-accounting.money
+(ns kontor.money
   "Money values: BigDecimal + commodity tag.
 
    Per ADR-013 in doc/decisions.md:

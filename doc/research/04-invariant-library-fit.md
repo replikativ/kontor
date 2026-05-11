@@ -1,4 +1,4 @@
-# Investigation: `datopia/invariant` library fit for `datahike-accounting`
+# Investigation: `datopia/invariant` library fit for `kontor`
 
 Source library: `/home/christian-weilbach/Development/datopia/invariant`
 Date: 2026-05-09
@@ -76,7 +76,7 @@ Per transaction:
 ### Implementation sketch
 
 ```clojure
-;; src/datahike_accounting/validation.clj
+;; src/kontor/validation.clj
 (defn transact-with-validation
   [conn tx-data]
   (invariant.datahike/assert-invariants conn tx-data)        ;; library

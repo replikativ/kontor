@@ -1,4 +1,4 @@
-(ns datahike-accounting.l10n-de.eur
+(ns kontor.l10n-de.eur
   "Anlage EÜR — Einnahmen-Überschuss-Rechnung.
 
    Cash-basis income calculation per §4 Abs. 3 EStG; the simplified
@@ -30,8 +30,8 @@
    Source: BMF Anlage EÜR Vordruck + Anleitung 2024 (publicly
    downloadable from formulare-bfinv.de). Box numbers and German
    labels are factual data not under copyright."
-  (:require [datahike-accounting.financial-statements :as fs]
-            [datahike-accounting.money :as money]))
+  (:require [kontor.financial-statements :as fs]
+            [kontor.money :as money]))
 
 (def eur-definition
   "EÜR-as-statement: each section corresponds to a sub-area of the

@@ -1,4 +1,4 @@
-# datahike-accounting
+# kontor
 
 A double-entry accounting **kernel** for Clojure, built on [datahike](https://github.com/replikativ/datahike).
 
@@ -21,7 +21,7 @@ A double-entry accounting **kernel** for Clojure, built on [datahike](https://gi
 ## How it composes
 
 ```
-your app  →  datahike-accounting-l10n-de  →  datahike-accounting  →  datahike
+your app  →  kontor-l10n-de  →  kontor  →  datahike
               (chart of accounts,             (kernel: schema,        (storage,
                tax tags, VAT report)           postings, taxes,        history,
                                                sealing, queries)       branches)
@@ -32,7 +32,7 @@ Per-country localizations and adapters (Mustang for Factur-X/XRechnung, CRA fili
 ## Quick start (Phase 1, when ready)
 
 ```clojure
-(require '[datahike-accounting.core :as a])
+(require '[kontor.core :as a])
 
 ;; Open an in-memory accounting DB with the schema loaded.
 (def conn (a/create-test-db))
@@ -69,7 +69,7 @@ Per-country localizations and adapters (Mustang for Factur-X/XRechnung, CRA fili
 
 EPL-1.0. See [LICENSE](LICENSE).
 
-Per-country localization modules ship as separate artifacts with their own licenses (e.g., `datahike-accounting-l10n-de` is GPLv3 because its data is sourced from Tryton/GnuCash). The kernel itself stays EPL-1.0.
+Per-country localization modules ship as separate artifacts with their own licenses (e.g., `kontor-l10n-de` is GPLv3 because its data is sourced from Tryton/GnuCash). The kernel itself stays EPL-1.0.
 
 ## Contributing
 

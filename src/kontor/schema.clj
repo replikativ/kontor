@@ -1,4 +1,4 @@
-(ns datahike-accounting.schema
+(ns kontor.schema
   "Datahike schema for the accounting kernel.
 
    Every attribute is namespaced under one of the kernel namespaces

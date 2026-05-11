@@ -1,4 +1,4 @@
-(ns datahike-accounting.sealing
+(ns kontor.sealing
   "Sealing: refuse silent retraction of `:posting/posted-at`-marked
    datoms. Per ADR-007 in doc/decisions.md:
 

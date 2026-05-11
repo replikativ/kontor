@@ -1,4 +1,4 @@
-(ns datahike-accounting.einvoice-de.factur-x-test
+(ns kontor.einvoice-de.factur-x-test
   "End-to-end test for the Mustang wrapper:
      - build a small DE B2B invoice (1 line, 19% VAT)
      - run it through generate-xml-string at :xrechnung + :en16931 profiles
@@ -13,8 +13,8 @@
    official KoSIT validator if we ever need full conformance proof."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
-            [datahike-accounting.einvoice-de.invoice :as inv]
-            [datahike-accounting.einvoice-de.factur-x :as fx]))
+            [kontor.einvoice-de.invoice :as inv]
+            [kontor.einvoice-de.factur-x :as fx]))
 
 (def sample-invoice
   {:invoice/number     "RG-2026-0001"

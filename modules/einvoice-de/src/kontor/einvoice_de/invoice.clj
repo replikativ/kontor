@@ -1,4 +1,4 @@
-(ns datahike-accounting.einvoice-de.invoice
+(ns kontor.einvoice-de.invoice
   "Plain-Clojure invoice schema, the input shape consumed by the
    Mustang wrapper in `factur-x.clj`. Kept separate so callers can
    build / serialize / store invoices without pulling Mustang's

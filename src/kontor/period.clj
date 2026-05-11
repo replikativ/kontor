@@ -1,4 +1,4 @@
-(ns datahike-accounting.period
+(ns kontor.period
   "Periods and period-locking — two-tier model per ADR-014.
 
    Each `:period/*` entity covers a half-open `[start, end)` range,
@@ -28,7 +28,7 @@
    posting belongs to when multiple periods cover the same date.
    Default tag is `:normal`."
   (:require [datahike.api :as d]
-            [datahike-accounting.money :as money])
+            [kontor.money :as money])
   (:import [java.util Date]))
 
 (def ^:const default-period-tag :normal)

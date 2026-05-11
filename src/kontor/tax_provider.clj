@@ -1,4 +1,4 @@
-(ns datahike-accounting.tax-provider
+(ns kontor.tax-provider
   "The TaxProvider protocol — the only abstraction the kernel uses to
    compute taxes. Per ADR-005 in doc/decisions.md:
 

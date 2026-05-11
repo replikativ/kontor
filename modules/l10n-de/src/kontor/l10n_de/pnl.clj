@@ -1,4 +1,4 @@
-(ns datahike-accounting.l10n-de.pnl
+(ns kontor.l10n-de.pnl
   "German P&L — Gewinn- und Verlustrechnung (HGB §275 Abs. 2,
    Gesamtkostenverfahren / total-cost method).
 
@@ -11,7 +11,7 @@
    Account-code prefixes target SKR04. Adjust for SKR03 in a per-
    tenant override. We use prefix patterns ('4%' = all 4xxx) where
    possible to be tolerant of customer-added accounts."
-  (:require [datahike-accounting.financial-statements :as fs]))
+  (:require [kontor.financial-statements :as fs]))
 
 (def gkv-definition
   "Gesamtkostenverfahren — total-cost method P&L per HGB §275 Abs. 2."

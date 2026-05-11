@@ -64,7 +64,7 @@ job.json). **All stays in openclaw.**
   `services.clj`, `core.clj`, `server.clj`, `render.clj`, `config.clj` —
   application code (HTTP server, invoice rendering, OCR vision pipeline).
   Out of scope for the kernel; if `beleg` continues to exist as a layer
-  on top of datahike-accounting, this stays in beleg.
+  on top of kontor, this stays in beleg.
 - `kluge-krabbe-buchhaltung/src/*.py` (Python, ~3000 LOC) — earlier
   prototype. The Clojure `beleg` IS the rewrite of this. Skip.
 - `duty_analyzer/duty_parser.py` — airline-crew per-diem (Verpflegungs-
@@ -78,7 +78,7 @@ job.json). **All stays in openclaw.**
   directly relevant to our DE l10n work. `10-steuersaetze.md` enumerates
   all DE VAT rules (19/7/0%, Kleinunternehmer §19 UStG, Reverse-Charge §13b
   UStG, intra-EU §4 Nr 1b, exports §4 Nr 1a, §4 Nr 12, agriculture §24,
-  Corona 16/5%) — **this is the requirements list for `datahike-accounting-
+  Corona 16/5%) — **this is the requirements list for `kontor-
   l10n-de`'s tax tables.**
 - `beleg/docs/accountable-integration.md` (9.5 KB) — research on
   `accountable.eu` integration patterns.
@@ -142,7 +142,7 @@ Known issues observed:
 
 ## 3. Accounting schema overlap with the new kernel
 
-The new kernel (`src/datahike_accounting/schema.clj`, 16 namespaces:
+The new kernel (`src/kontor/schema.clj`, 16 namespaces:
 account, journal, transaction, posting, commodity, lot, tax, tax-rep,
 tax-group, account-tag, partner, fiscal-position, period, balance-assertion,
 audit, lot) is a strict, PTA + Odoo-style **double-entry** schema with
@@ -192,7 +192,7 @@ data. Three places:
   Corona rates (16/5% for 2020-07-01 to 2020-12-31), reverse-charge
   triggers, intra-EU rules, agriculture (§24).
 
-For `datahike-accounting-l10n-de`: the doc is the requirements list, the
+For `kontor-l10n-de`: the doc is the requirements list, the
 `tax.clj` SKR04 mapping is the seed data, and the kernel's `:tax/*` +
 `:tax-rep/*` shape is the right target schema. Translation is
 reasonably mechanical.
@@ -206,25 +206,25 @@ reasonably mechanical.
 Nothing from openclaw needs to land in the kernel proper. The kernel
 schema is more advanced. **Skip kernel-direct ports.**
 
-### Pull for Phase 2 — `datahike-accounting-l10n-de`
+### Pull for Phase 2 — `kontor-l10n-de`
 
 | From                                                  | To                                                              |
 | ----------------------------------------------------- | --------------------------------------------------------------- |
-| `beleg/src/org/replikativ/beleg/tax.clj` (`skr04-mapping`, `vat-rates`, `datev-header-columns`, `format-datev-*`, `export-datev`) | `datahike-accounting-l10n-de/src/.../datev.clj` and `.../taxes_de.clj` (port to kernel `:tax/*` and `:tax-rep/*` schema) |
-| `beleg/src/org/replikativ/beleg/tax.clj` (`calculate-ustva`, `calculate-euer`) | `datahike-accounting-l10n-de/src/.../reports.clj` (rewrite against kernel `:posting/*`) |
-| `RechnungsFee/docs/10-steuersaetze.md`                | `datahike-accounting-l10n-de/doc/de-tax-rules.md` (verbatim — this is the spec) |
-| `RechnungsFee/docs/04-ustva.md`, `05-euer.md`         | `datahike-accounting-l10n-de/doc/`                              |
-| `RechnungsFee/vorlagen/datev/datev-export.csv`        | `datahike-accounting-l10n-de/test/resources/datev-fixture.csv` (validation oracle) |
+| `beleg/src/org/replikativ/beleg/tax.clj` (`skr04-mapping`, `vat-rates`, `datev-header-columns`, `format-datev-*`, `export-datev`) | `kontor-l10n-de/src/.../datev.clj` and `.../taxes_de.clj` (port to kernel `:tax/*` and `:tax-rep/*` schema) |
+| `beleg/src/org/replikativ/beleg/tax.clj` (`calculate-ustva`, `calculate-euer`) | `kontor-l10n-de/src/.../reports.clj` (rewrite against kernel `:posting/*`) |
+| `RechnungsFee/docs/10-steuersaetze.md`                | `kontor-l10n-de/doc/de-tax-rules.md` (verbatim — this is the spec) |
+| `RechnungsFee/docs/04-ustva.md`, `05-euer.md`         | `kontor-l10n-de/doc/`                              |
+| `RechnungsFee/vorlagen/datev/datev-export.csv`        | `kontor-l10n-de/test/resources/datev-fixture.csv` (validation oracle) |
 
 ### Pull for Phase 4 — bank-importer module
 
 | From                                                  | To                                                              |
 | ----------------------------------------------------- | --------------------------------------------------------------- |
-| `beleg/src/org/replikativ/beleg/bank.clj`             | `datahike-accounting-bank-de/src/.../parser.clj` — keep `bank-configs` map verbatim, `parse-german-amount`, `detect-bank`. Strip the Datahike `transact!` writes; emit posting-candidate maps instead. |
-| `RechnungsFee/vorlagen/bank-csv/*.csv` (16 files) **and** `RechnungsFee/vorlagen/bank-csv/README.md` | `datahike-accounting-bank-de/test/resources/bank-csv/` |
-| `beleg/test-data/CATALOG.md`                          | `datahike-accounting-bank-de/test/resources/CATALOG.md`         |
-| `beleg/test-data/bank-csv/synthetic-*.csv` (3 files)  | `datahike-accounting-bank-de/test/resources/bank-csv/`          |
-| `beleg/src/org/replikativ/beleg/bank.clj` `category-patterns` | `datahike-accounting-bank-de/src/.../categorize.clj` (keep but mark experimental — better off as user-supplied rules) |
+| `beleg/src/org/replikativ/beleg/bank.clj`             | `kontor-bank-de/src/.../parser.clj` — keep `bank-configs` map verbatim, `parse-german-amount`, `detect-bank`. Strip the Datahike `transact!` writes; emit posting-candidate maps instead. |
+| `RechnungsFee/vorlagen/bank-csv/*.csv` (16 files) **and** `RechnungsFee/vorlagen/bank-csv/README.md` | `kontor-bank-de/test/resources/bank-csv/` |
+| `beleg/test-data/CATALOG.md`                          | `kontor-bank-de/test/resources/CATALOG.md`         |
+| `beleg/test-data/bank-csv/synthetic-*.csv` (3 files)  | `kontor-bank-de/test/resources/bank-csv/`          |
+| `beleg/src/org/replikativ/beleg/bank.clj` `category-patterns` | `kontor-bank-de/src/.../categorize.clj` (keep but mark experimental — better off as user-supplied rules) |
 
 ### Leave in openclaw
 
@@ -239,7 +239,7 @@ schema is more advanced. **Skip kernel-direct ports.**
   `github-setup-anleitung.md`, `issue-13-comment.md` (OSS-project meta).
 - Beleg's app-layer Clojure files (`server.clj`, `services.clj`, `vision.clj`,
   `render.clj`, `intake.clj`, `journal.clj`, `core.clj`, `config.clj`)
-  — if `beleg` continues as a downstream consumer of datahike-accounting,
+  — if `beleg` continues as a downstream consumer of kontor,
   these stay there. If `beleg` is being deprecated, archive separately.
 - `duty_analyzer/` — out of scope.
 
@@ -260,27 +260,27 @@ schema is more advanced. **Skip kernel-direct ports.**
 ```
 # Phase 4 (bank importer)
 openclaw/beleg/src/org/replikativ/beleg/bank.clj
-  → datahike-accounting-bank-de/src/datahike_accounting/bank_de/parser.clj  (port)
+  → kontor-bank-de/src/kontor/bank_de/parser.clj  (port)
 openclaw/RechnungsFee/vorlagen/bank-csv/
-  → datahike-accounting-bank-de/test/resources/bank-csv/                    (copy as-is)
+  → kontor-bank-de/test/resources/bank-csv/                    (copy as-is)
 openclaw/RechnungsFee/vorlagen/bank-csv/README.md
-  → datahike-accounting-bank-de/doc/bank-csv-formats.md                     (copy)
+  → kontor-bank-de/doc/bank-csv-formats.md                     (copy)
 openclaw/beleg/test-data/CATALOG.md
-  → datahike-accounting-bank-de/test/resources/CATALOG.md                   (copy)
+  → kontor-bank-de/test/resources/CATALOG.md                   (copy)
 
 # Phase 2 (DE l10n)
 openclaw/beleg/src/org/replikativ/beleg/tax.clj
-  → datahike-accounting-l10n-de/src/datahike_accounting/l10n_de/datev.clj   (port export-datev)
-  + datahike-accounting-l10n-de/src/datahike_accounting/l10n_de/skr04.clj   (port skr04-mapping)
-  + datahike-accounting-l10n-de/src/datahike_accounting/l10n_de/reports.clj (port calculate-ustva, calculate-euer)
+  → kontor-l10n-de/src/kontor/l10n_de/datev.clj   (port export-datev)
+  + kontor-l10n-de/src/kontor/l10n_de/skr04.clj   (port skr04-mapping)
+  + kontor-l10n-de/src/kontor/l10n_de/reports.clj (port calculate-ustva, calculate-euer)
 openclaw/RechnungsFee/docs/10-steuersaetze.md
-  → datahike-accounting-l10n-de/doc/de-tax-rules.md                         (copy)
+  → kontor-l10n-de/doc/de-tax-rules.md                         (copy)
 openclaw/RechnungsFee/docs/04-ustva.md
-  → datahike-accounting-l10n-de/doc/ustva.md                                (copy)
+  → kontor-l10n-de/doc/ustva.md                                (copy)
 openclaw/RechnungsFee/docs/05-euer.md
-  → datahike-accounting-l10n-de/doc/euer.md                                 (copy)
+  → kontor-l10n-de/doc/euer.md                                 (copy)
 openclaw/RechnungsFee/vorlagen/datev/datev-export.csv
-  → datahike-accounting-l10n-de/test/resources/datev-fixture.csv            (copy)
+  → kontor-l10n-de/test/resources/datev-fixture.csv            (copy)
 ```
 
 Everything else: leave in `openclaw/`.

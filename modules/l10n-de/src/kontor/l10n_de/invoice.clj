@@ -1,4 +1,4 @@
-(ns datahike-accounting.l10n-de.invoice
+(ns kontor.l10n-de.invoice
   "DE-specific posting-builder for the kernel :invoice → :transaction
    translation. Maps SKR04 conventions:
 
@@ -15,7 +15,7 @@
 
    Pass `posting-builder` to invoice/send! to invoke."
   (:require [datahike.api :as d]
-            [datahike-accounting.invoice :as inv]))
+            [kontor.invoice :as inv]))
 
 ;; ============================================================================
 ;; Account lookup

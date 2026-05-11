@@ -1,4 +1,4 @@
-(ns datahike-accounting.report
+(ns kontor.report
   "Declarative report engine.
 
    A report is a (typically named) tree of expressions, each
@@ -54,7 +54,7 @@
   (:require [clojure.set]
             [clojure.string :as str]
             [datahike.api :as d]
-            [datahike-accounting.money :as money])
+            [kontor.money :as money])
   (:import [java.util Date]))
 
 ;; ============================================================================

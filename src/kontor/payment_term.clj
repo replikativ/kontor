@@ -1,4 +1,4 @@
-(ns datahike-accounting.payment-term
+(ns kontor.payment-term
   "Payment-term helpers: derive due-date + discount-deadline from a
    `:payment-term` entity + an effective date. Also ships a small
    library of standard terms (NET14 / NET30 / 2/10-NET30) that

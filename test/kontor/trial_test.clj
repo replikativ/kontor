@@ -1,11 +1,11 @@
-(ns datahike-accounting.trial-test
+(ns kontor.trial-test
   (:require [clojure.test :refer [deftest is]]
             [datahike.api :as d]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.money :as money]
-            [datahike-accounting.posting :as posting]
-            [datahike-accounting.trial :as trial]
-            [datahike-accounting.validation :as v]))
+            [kontor.core :as core]
+            [kontor.money :as money]
+            [kontor.posting :as posting]
+            [kontor.trial :as trial]
+            [kontor.validation :as v]))
 
 (def jan-15 #inst "2026-01-15T00:00:00Z")
 (def feb-15 #inst "2026-02-15T00:00:00Z")

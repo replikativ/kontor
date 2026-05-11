@@ -1,4 +1,4 @@
-(ns datahike-accounting.l10n-de.financial-statements-test
+(ns kontor.l10n-de.financial-statements-test
   "End-to-end test for the DE Gewinn- und Verlustrechnung, Bilanz,
    and Anlage EÜR over a small fixture book.
 
@@ -13,15 +13,15 @@
    sections / boxes."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.financial-statements :as fs]
-            [datahike-accounting.money :as money]
-            [datahike-accounting.posting :as posting]
-            [datahike-accounting.validation :as v]
-            [datahike-accounting.l10n-de.chart :as chart]
-            [datahike-accounting.l10n-de.pnl :as pnl]
-            [datahike-accounting.l10n-de.bs :as bs]
-            [datahike-accounting.l10n-de.eur :as eur]))
+            [kontor.core :as core]
+            [kontor.financial-statements :as fs]
+            [kontor.money :as money]
+            [kontor.posting :as posting]
+            [kontor.validation :as v]
+            [kontor.l10n-de.chart :as chart]
+            [kontor.l10n-de.pnl :as pnl]
+            [kontor.l10n-de.bs :as bs]
+            [kontor.l10n-de.eur :as eur]))
 
 (def jan-1   #inst "2026-01-01T00:00:00Z")
 (def jan-15  #inst "2026-01-15T00:00:00Z")

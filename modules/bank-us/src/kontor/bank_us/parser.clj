@@ -1,7 +1,7 @@
-(ns datahike-accounting.bank-us.parser
+(ns kontor.bank-us.parser
   "US bank-statement CSV configs + categorizer.
 
-   Generic CSV engine lives in `datahike-accounting.bank-csv`; this
+   Generic CSV engine lives in `kontor.bank-csv`; this
    module just adds US bank configs + a USD categorizer.
 
    Supported (so far):
@@ -33,7 +33,7 @@
        Header: 'Date,Description,Amount,Extended Details,Appears On Your Statement As,Address,Reference,Category'
        Date format: MM/DD/YYYY  •  Amount: signed English (positive=charge)"
   (:require [clojure.string :as str]
-            [datahike-accounting.bank-csv :as csv-core]))
+            [kontor.bank-csv :as csv-core]))
 
 ;; Re-exports for ergonomics + back-compat.
 (def parse-english-amount csv-core/parse-english-amount)

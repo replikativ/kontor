@@ -1,6 +1,6 @@
 # Bitemporality in Accounting — Evidence Review for ADR-008
 
-**Audience:** datahike-accounting maintainers
+**Audience:** kontor maintainers
 **Date:** 2026-05-09
 **Verdict (TL;DR):** **Keep, but quietly demote.** The bitemporal axes are cheap to retain and earn their keep in two narrow, real situations (regulatory restatement defense; intra-period delayed entry of backdated invoices). They are *not* the dominant accounting workflow. Neither named SMB accounting product nor any cited Datomic/XTDB *production* case study materially leverages full bitemporal queries — corrections in the wild are overwhelmingly handled by the "reverse-and-repost in current period" pattern. Keep the schema attrs, drop the bitemporal-by-default ergonomics in read helpers, and stop carrying `:as-of-tx`/`:as-of-valid` through every call.
 
@@ -46,7 +46,7 @@ Auditors *do* want both, but in different forms: the **corrected current view** 
 
 ## 3. Cost-benefit in our specific context
 
-**What it costs us today** (per `/home/christian-weilbach/Development/datahike-accounting/src/datahike_accounting/`):
+**What it costs us today** (per `/home/christian-weilbach/Development/kontor/src/kontor/`):
 - 3 schema attrs (`:posting/valid-from`, `:posting/valid-to`, `:posting/temporal-key` tuple) — `schema.clj:694–717`.
 - Every read helper in `balance.clj` and `ledger.clj` carries `:as-of-tx` + `:as-of-valid`, defaulting to "now" — i.e., 2 extra params per query.
 - Every period-close validation in `period.clj` derives an effective `valid-from`.

@@ -1,4 +1,4 @@
-(ns datahike-accounting.bank-de.info-preservation-test
+(ns kontor.bank-de.info-preservation-test
   "Information-preservation assertion (per the user's chosen
    bank-CSV approach): for every parsed candidate, every NON-BLANK
    cell in its `:raw-row` must be reachable from the candidate map
@@ -24,7 +24,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [datahike-accounting.bank-de.parser :as p]))
+            [kontor.bank-de.parser :as p]))
 
 (def fixture-dir
   (-> (io/resource "commerzbank.csv") io/file .getParentFile))

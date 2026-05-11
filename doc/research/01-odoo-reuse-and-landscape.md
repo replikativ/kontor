@@ -1,4 +1,4 @@
-# `datahike-accounting`: Reuse map (research notes)
+# `kontor`: Reuse map (research notes)
 
 A practical "what to lift, what to fork, what to write" assessment for a German/EU SMB-first double-entry accounting kernel built on datahike, informed by Odoo 19 (LGPLv3), Tryton (GPLv3), the plain-text-accounting lineage (MIT/GPL), and the EU e-invoicing stack.
 
@@ -9,13 +9,13 @@ Odoo Community (incl. `addons/account`, `addons/l10n_*`) is LGPLv3
 The FSF's official stance is unambiguous on language ports: "translation of a work is considered a kind of modification", so a Clojure port of Odoo Python *is a derivative work* and must remain LGPLv3
 ([gnu.org/licenses/gpl-faq.html](https://www.gnu.org/licenses/gpl-faq.html#TranslateCode)). LGPLv3's "linking" exemption helps users of the library; it does not transform a translated source into independent work.
 
-Conservative reading for `datahike-accounting`:
+Conservative reading for `kontor`:
 
 - (a) Reading and learning from Odoo source: **fine**, no license obligation from reading.
 - (b) Translating algorithms verbatim to Clojure: **derivative; must be LGPLv3**. Safer route is the classic clean-room: write a spec from the source, then implement against the spec without re-reading. SCOTUS *Google v. Oracle* notwithstanding, FSF's interpretation is what most German legal departments will apply.
 - (c) Lifting XML/CSV data files (CoA, tax tags): **ambiguous but usable** — the `data/*.xml` records carry the Odoo headers (see file inventories at [odoo/odoo addons](https://github.com/odoo/odoo/tree/19.0/addons)) and are functionally *part of* the LGPLv3 module. The underlying *facts* (account codes, statutory tax rates) are uncopyrightable in DE/EU; the *selection and arrangement* may attract sui generis database protection (EU Database Directive 96/9/EC). Treat the XML files themselves as LGPLv3, but the extracted facts (re-keyed as EDN) as essentially free. Re-derive from the regulatory source (BMF/DATEV) where possible.
 - (d) Lifting docstrings/comments verbatim: **derivative — same as code**. Don't.
-- (e) Same-repo vs separate: irrelevant to the license question per se, but a separate `datahike-accounting-l10n-odoo` module that is plainly LGPLv3 and is loaded as data keeps the kernel itself free of the obligation.
+- (e) Same-repo vs separate: irrelevant to the license question per se, but a separate `kontor-l10n-odoo` module that is plainly LGPLv3 and is loaded as data keeps the kernel itself free of the obligation.
 
 **Tryton context.** Tryton was forked from TinyERP 4.2 in late 2007 by Cédric Krier and Bertrand Chenal; it has shipped under GPL-3.0-or-later from day one, and the "modules-account-*" tree is mature ([Wikipedia: Tryton](https://en.wikipedia.org/wiki/Tryton); [tryton.org](https://www.tryton.org/)). The German plug `account_de_skr03` is **GPLv3**, not LGPL ([github.com/tryton/account_de_skr03](https://github.com/tryton/account_de_skr03); [docs.tryton.org/latest/modules-account-de-skr03/](https://docs.tryton.org/latest/modules-account-de-skr03/)), with `account_de.xml` and `tax_de.xml`. There is also a virtualthings community SKR04 ([github.com/virtualthings/account_de_skr04](https://github.com/virtualthings/account_de_skr04)). GPLv3 is *worse* than LGPLv3 for our purposes — it forces the consumer of the library, not just the modifier, into GPL obligations. Use Tryton as a **reference design**, not as code we lift.
 
@@ -31,7 +31,7 @@ DATEV's SKR03/SKR04 themselves: **not in the public domain** in any clean way. D
 - Tryton ships SKR03 (official) and SKR04 (community), GPLv3.
 - Odoo ships SKR03/04 with tax mappings, LGPLv3.
 
-**Recommendation:** ingest the *facts* (account number, name, type, default tax tag) from one or two of the above (Tryton's SKR03 file is small and well-curated; baltpeter/skr-json is a clean JSON projection of GnuCash) and re-publish them as EDN inside a *separately licensed* module (e.g. `datahike-accounting-l10n-de` under the source license — pick GPLv3 if sourced from Tryton/GnuCash, LGPLv3 if sourced from Odoo). Do not try to call this part "MIT".
+**Recommendation:** ingest the *facts* (account number, name, type, default tax tag) from one or two of the above (Tryton's SKR03 file is small and well-curated; baltpeter/skr-json is a clean JSON projection of GnuCash) and re-publish them as EDN inside a *separately licensed* module (e.g. `kontor-l10n-de` under the source license — pick GPLv3 if sourced from Tryton/GnuCash, LGPLv3 if sourced from Odoo). Do not try to call this part "MIT".
 
 For the 90-country footprint Odoo provides, the same pattern works: maintain an `l10n` module per country, license-tagged to its source.
 
@@ -69,9 +69,9 @@ Java libraries we can call directly from Clojure (all JVM-native, no JNI):
 
 Realistic floor for "compliant" in DE 2026–2028: emit XRechnung-CII (or UBL) that passes the KoSIT validator, and emit Factur-X (PDF/A-3 with embedded CII) for the hybrid case. Mustang covers both. Peppol AP integration is a separate project; defer.
 
-Compliance neighbours we should be aware of but probably not implement v1: GoBD/GDPdU "DATEV export" (14-file ASCII bundle + INDEX.XML for tax audit, defined by AO §§146/147; [Microsoft Learn GDPdU overview](https://learn.microsoft.com/en-us/dynamics365/finance/localizations/germany/emea-deu-gdpdu-audit-data-export)). This is what differentiates a "real" DE accounting tool from a toy — plan a `datahike-accounting-gobd-export` module.
+Compliance neighbours we should be aware of but probably not implement v1: GoBD/GDPdU "DATEV export" (14-file ASCII bundle + INDEX.XML for tax audit, defined by AO §§146/147; [Microsoft Learn GDPdU overview](https://learn.microsoft.com/en-us/dynamics365/finance/localizations/germany/emea-deu-gdpdu-audit-data-export)). This is what differentiates a "real" DE accounting tool from a toy — plan a `kontor-gobd-export` module.
 
-## 5. Strategic shape — what `datahike-accounting` should and shouldn't be
+## 5. Strategic shape — what `kontor` should and shouldn't be
 
 **Be:**
 

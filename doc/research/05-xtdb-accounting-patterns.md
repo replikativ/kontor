@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-XTDB is a **strong reference model for bitemporal accounting**, offering native support for valid-time and transaction-time queries via SQL. However, it solves a different problem than `datahike-accounting`: XTDB is a general-purpose database with bitemporal indexes; the accounting patterns are emergent and tested informally. XTDB's commit/audit story is **weaker** than datahike's; moving later would gain ergonomics but cost ecosystem alignment and existing audit hardening work.
+XTDB is a **strong reference model for bitemporal accounting**, offering native support for valid-time and transaction-time queries via SQL. However, it solves a different problem than `kontor`: XTDB is a general-purpose database with bitemporal indexes; the accounting patterns are emergent and tested informally. XTDB's commit/audit story is **weaker** than datahike's; moving later would gain ergonomics but cost ecosystem alignment and existing audit hardening work.
 
 ---
 
@@ -20,7 +20,7 @@ XTDB treats `BigDecimal` as a **first-class, native type** with serialization su
 
 - **Rounding & arithmetic**: Tests show `CEIL(1.1)` → `2M` and `FLOOR(1.1)` → `1M` (lines 558–560). `TRUNCATE(1.12, 1)` → `1.1M` (line 563). No explicit rounding mode documented in the codebase; this is delegated to Java's `BigDecimal` semantics (HALF_UP for `round()`, truncation for `setScale()`). **No separate Currency type**: currency must be modeled as a parallel column or a composite key `[amount, currency-code]`.
 
-### Implications for `datahike-accounting`
+### Implications for `kontor`
 
 XTDB's approach is **solid but minimal**. It treats money as "BigDecimal + you design the schema." The upside: freedom. The downside: no out-of-the-box multi-currency aggregate semantics (e.g., "sum these CHF and USD postings together"). For accounting, we should:
 
@@ -105,7 +105,7 @@ SELECT amount FROM posting WHERE amount > 0
 
 **The gain**: ~70% less boilerplate for typical bitemporal queries. For complex joins or recursive queries, XTDB's Datalog surface also supports `for-valid-time` binding rules (not shown in tests, but documented in core/src/xtdb/query.clj).
 
-**The cost** (for datahike-accounting): Every report query is manually scoped to both axes, which is actually **good for audit** — you can't accidentally query "as of now" when you meant "as of filing date." Trade-off: less ergonomic, more explicit.
+**The cost** (for kontor): Every report query is manually scoped to both axes, which is actually **good for audit** — you can't accidentally query "as of now" when you meant "as of filing date." Trade-off: less ergonomic, more explicit.
 
 ---
 
@@ -157,7 +157,7 @@ For accounting, this means:
 - Leave the replikativ/datahike ecosystem (loss of structural sharing, loss of Clojure-native branching, loss of tight git-like version control semantics).
 - Rewrite all the datahike-specific code (audit middleware, sealing semantics, schema transacting).
 - Lose the Beancount round-trip test (ADR-009) advantage — would need to rebuild parser against XTDB's schema shape.
-- Ecosystem misalignment: beleg and simmis are built on datahike; datahike-accounting in the same repo keeps them atomic.
+- Ecosystem misalignment: beleg and simmis are built on datahike; kontor in the same repo keeps them atomic.
 
 **Verdict**: The ergonomic gain is real but **not worth the ecosystem cost for Phase 1**. Consider XTDB for a Phase 2 SQL layer (Query Service) that **wraps** datahike—read-only SQL surface over a datahike snapshot, with bitemporal modifiers translated to explicit attribute queries.
 
@@ -178,7 +178,7 @@ For accounting, this means:
 
 ## 6. Recommendation
 
-### For Phase 1 (datahike-accounting):
+### For Phase 1 (kontor):
 - **Stay on datahike**. ADR-008 is correct: explicit bitemporality + commit-DAG audit is the right tradeoff.
 - Implement the Beancount round-trip test (ADR-009) against datahike schema.
 - Upstream the cryptographic commit-hash work to datahike (ADR-003, Track B).
@@ -203,6 +203,6 @@ For accounting, this means:
 - `/home/christian-weilbach/Development/xtdb/test/test/xtdb/bitemporal_tale_test.clj:1–357` — Bitemporal patterns (theft example, deletion with valid-time, history queries)
 
 **Datahike-Accounting ADRs:**
-- `/home/christian-weilbach/Development/datahike-accounting/doc/decisions.md:ADR-003` (commit audit, signature hook), `ADR-008` (bitemporal modeling), `ADR-009` (Beancount round-trip)
-- `/home/christian-weilbach/Development/datahike-accounting/doc/research/02-datahike-versioning-and-hashing.md` — Audit gap analysis, recommended fixes
+- `/home/christian-weilbach/Development/kontor/doc/decisions.md:ADR-003` (commit audit, signature hook), `ADR-008` (bitemporal modeling), `ADR-009` (Beancount round-trip)
+- `/home/christian-weilbach/Development/kontor/doc/research/02-datahike-versioning-and-hashing.md` — Audit gap analysis, recommended fixes
 

@@ -1,4 +1,4 @@
-(ns datahike-accounting.financial-statements
+(ns kontor.financial-statements
   "Generic Profit & Loss and Balance Sheet builders.
 
    Both reports are *just* aggregations of postings keyed by account-
@@ -56,8 +56,8 @@
                  = should be 0 for a balanced ledger; non-zero
                  surfaces an out-of-balance condition."
   (:require [datahike.api :as d]
-            [datahike-accounting.money :as money]
-            [datahike-accounting.report :as report])
+            [kontor.money :as money]
+            [kontor.report :as report])
   (:import [java.util Date]))
 
 (defn- now ^Date [] (Date.))

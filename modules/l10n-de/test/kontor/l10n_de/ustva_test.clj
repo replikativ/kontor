@@ -1,4 +1,4 @@
-(ns datahike-accounting.l10n-de.ustva-test
+(ns kontor.l10n-de.ustva-test
   "End-to-end DE VAT report test:
      - install SKR04
      - post a small fixture book (sales 19% / 7%, vorsteuer)
@@ -6,12 +6,12 @@
      - verify line numbers match what an accountant would compute by hand"
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.l10n-de.chart :as chart]
-            [datahike-accounting.l10n-de.ustva :as ustva]
-            [datahike-accounting.money :as money]
-            [datahike-accounting.posting :as posting]
-            [datahike-accounting.validation :as v]))
+            [kontor.core :as core]
+            [kontor.l10n-de.chart :as chart]
+            [kontor.l10n-de.ustva :as ustva]
+            [kontor.money :as money]
+            [kontor.posting :as posting]
+            [kontor.validation :as v]))
 
 (def jan-1   #inst "2026-01-01T00:00:00Z")
 (def jan-15  #inst "2026-01-15T00:00:00Z")

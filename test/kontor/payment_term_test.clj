@@ -1,8 +1,8 @@
-(ns datahike-accounting.payment-term-test
+(ns kontor.payment-term-test
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.payment-term :as pt]))
+            [kontor.core :as core]
+            [kontor.payment-term :as pt]))
 
 (def jan-1  #inst "2026-01-01T00:00:00Z")
 (def jan-11 #inst "2026-01-11T00:00:00Z")

@@ -1,4 +1,4 @@
-(ns datahike-accounting.l10n-at.uva-test
+(ns kontor.l10n-at.uva-test
   "Austrian UVA end-to-end:
      - install Kontenrahmen
      - post fixture invoices at 20% / 13% / 10%
@@ -6,12 +6,12 @@
        values, mirroring the DE UStVA test pattern."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.l10n-at.chart :as chart]
-            [datahike-accounting.l10n-at.uva :as uva]
-            [datahike-accounting.money :as money]
-            [datahike-accounting.posting :as posting]
-            [datahike-accounting.validation :as v]))
+            [kontor.core :as core]
+            [kontor.l10n-at.chart :as chart]
+            [kontor.l10n-at.uva :as uva]
+            [kontor.money :as money]
+            [kontor.posting :as posting]
+            [kontor.validation :as v]))
 
 (def jan-1   #inst "2026-01-01T00:00:00Z")
 (def jan-15  #inst "2026-01-15T00:00:00Z")

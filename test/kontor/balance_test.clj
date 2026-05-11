@@ -1,16 +1,16 @@
-(ns datahike-accounting.balance-test
+(ns kontor.balance-test
   "balance.clj + ledger.clj — bitemporal account-balance and ledger
    queries. Exercises both axes:
      - tx-time (corrections made AFTER a query date are invisible)
      - valid-time (postings dated AFTER the query valid-date excluded)"
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
-            [datahike-accounting.balance :as balance]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.ledger :as ledger]
-            [datahike-accounting.money :as money]
-            [datahike-accounting.posting :as posting]
-            [datahike-accounting.validation :as v]))
+            [kontor.balance :as balance]
+            [kontor.core :as core]
+            [kontor.ledger :as ledger]
+            [kontor.money :as money]
+            [kontor.posting :as posting]
+            [kontor.validation :as v]))
 
 (def jan-15 #inst "2026-01-15T00:00:00Z")
 (def feb-15 #inst "2026-02-15T00:00:00Z")

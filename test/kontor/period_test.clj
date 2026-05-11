@@ -1,4 +1,4 @@
-(ns datahike-accounting.period-test
+(ns kontor.period-test
   "Period locking semantics:
      - Open periods accept postings inside their range.
      - Closed periods refuse new postings whose valid-from falls in.
@@ -7,10 +7,10 @@
      - Domain helpers: open?, close!, reopen!."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.period :as period]
-            [datahike-accounting.posting :as posting]
-            [datahike-accounting.validation :as v]))
+            [kontor.core :as core]
+            [kontor.period :as period]
+            [kontor.posting :as posting]
+            [kontor.validation :as v]))
 
 (def jan-15  #inst "2026-01-15T00:00:00Z")
 (def feb-1   #inst "2026-02-01T00:00:00Z")

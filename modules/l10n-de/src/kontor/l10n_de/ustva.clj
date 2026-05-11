@@ -1,9 +1,9 @@
-(ns datahike-accounting.l10n-de.ustva
+(ns kontor.l10n-de.ustva
   "Umsatzsteuer-Voranmeldung (UStVA — German VAT advance return).
 
    The 8 load-bearing line items, mapped onto the kernel's
    declarative report engine via `:tax-tags`. Account tags are
-   defined in `resources/datahike_accounting/l10n_de/skr04.edn`:
+   defined in `resources/kontor/l10n_de/skr04.edn`:
 
      :ust-81      — Steuerpflichtige Umsätze 19% (revenue, base)
      :ust-86      — Steuerpflichtige Umsätze 7%  (revenue, base)
@@ -26,8 +26,8 @@
    render line-by-line, flag negative balances (refunds), and
    prepare the ELSTER XML for filing (out of scope — separate
    module when we get there)."
-  (:require [datahike-accounting.money :as money]
-            [datahike-accounting.report :as report]))
+  (:require [kontor.money :as money]
+            [kontor.report :as report]))
 
 (def report-definition
   "UStVA 2026 monthly. The 8 load-bearing boxes."

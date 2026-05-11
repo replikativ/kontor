@@ -1,4 +1,4 @@
-(ns datahike-accounting.import-.beancount
+(ns kontor.import-.beancount
   "Beancount round-trip — Phase 1 acceptance test (ADR-009).
 
    Covers the load-bearing subset of Beancount syntax:
@@ -179,7 +179,7 @@ eol        = #'[ \\t]*\\n'
     (->ast-map tree)))
 
 ;; ============================================================================
-;; Load: directives → datahike-accounting tx-data
+;; Load: directives → kontor tx-data
 ;; ============================================================================
 
 (defn- option-tx

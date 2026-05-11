@@ -1,4 +1,4 @@
-(ns datahike-accounting.l10n-us.sales-tax
+(ns kontor.l10n-us.sales-tax
   "Per-state US sales-tax filing reports.
 
    The US has no federal sales tax. Every state with sales tax
@@ -23,8 +23,8 @@
    Sources: per-state DOR forms (TX 01-117, CA CDTFA-401-A2,
    NY ST-100, WA combined excise return, FL DR-15, Denver Sales/Use
    Tax Return)."
-  (:require [datahike-accounting.money :as money]
-            [datahike-accounting.report :as report]))
+  (:require [kontor.money :as money]
+            [kontor.report :as report]))
 
 (def state-codes
   "Map of state-code keyword → {label / authority / tag-prefix}.

@@ -1,4 +1,4 @@
-(ns datahike-accounting.l10n-de.datev-test
+(ns kontor.l10n-de.datev-test
   "DATEV EXTF export — diff against a hand-crafted expected fixture
    (per the user's chosen acceptance: generate DATEV CSV, compare
    against a hand-crafted file, fail on drift)."
@@ -6,11 +6,11 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [datahike.api :as d]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.l10n-de.chart :as chart]
-            [datahike-accounting.l10n-de.datev :as datev]
-            [datahike-accounting.posting :as posting]
-            [datahike-accounting.validation :as v]))
+            [kontor.core :as core]
+            [kontor.l10n-de.chart :as chart]
+            [kontor.l10n-de.datev :as datev]
+            [kontor.posting :as posting]
+            [kontor.validation :as v]))
 
 (def jan-1   #inst "2026-01-01T00:00:00Z")
 (def jan-15  #inst "2026-01-15T00:00:00Z")

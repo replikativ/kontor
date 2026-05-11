@@ -1,11 +1,11 @@
-(ns datahike-accounting.l10n-us.chart
+(ns kontor.l10n-us.chart
   "QBO-style US chart loader. USD commodity. Same shape as DE/AT/FR/CA."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [datahike.api :as d]))
 
 (defn load-chart []
-  (-> "datahike_accounting/l10n_us/chart.edn" io/resource slurp edn/read-string))
+  (-> "kontor/l10n_us/chart.edn" io/resource slurp edn/read-string))
 
 (defn- distinct-tags [chart]
   (->> chart (mapcat :tags) distinct vec))

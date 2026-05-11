@@ -1,10 +1,10 @@
-(ns datahike-accounting.bank-us.info-preservation-test
+(ns kontor.bank-us.info-preservation-test
   "US bank info-preservation: every non-blank source cell must be
    reachable from the parsed candidate (via :raw-row at minimum)."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [datahike-accounting.bank-us.parser :as p]))
+            [kontor.bank-us.parser :as p]))
 
 (def fixture-dir (-> (io/resource "chase.csv") io/file .getParentFile))
 (def fixtures ["chase.csv" "wells-fargo.csv" "bofa.csv" "amex.csv"])

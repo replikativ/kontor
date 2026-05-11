@@ -1,8 +1,8 @@
-(ns datahike-accounting.bank-de.parser
+(ns kontor.bank-de.parser
   "German bank-statement CSV configs + categorizer.
 
    The generic CSV-parsing engine lives in the kernel at
-   `datahike-accounting.bank-csv`; this namespace just supplies
+   `kontor.bank-csv`; this namespace just supplies
    the per-bank `bank-configs` map, a `detect-bank` heuristic,
    and the openclaw-derived auto-categorizer for German-language
    transactions.
@@ -14,8 +14,8 @@
 
    See `test/resources/FORMATS.md` for field-by-field documentation."
   (:require [clojure.string :as str]
-            [datahike-accounting.bank-csv :as csv-core]
-            [datahike-accounting.money :as money]))
+            [kontor.bank-csv :as csv-core]
+            [kontor.money :as money]))
 
 ;; Re-export kernel helpers so existing call-sites (and tests) that
 ;; reach for `parser/parse-german-amount` still work — no semantic
@@ -193,7 +193,7 @@
   "Project a parsed candidate into a balanced posting-pair input for
    posting/build-transaction. Caller supplies a contra-resolver fn
    that maps (category) → contra-account-eid (typically via
-   datahike-accounting.l10n-de.chart/category->contra-eid)."
+   kontor.l10n-de.chart/category->contra-eid)."
   [candidate {:keys [bank-account-eid commodity-eid journal-eid contra-resolver]}]
   (let [contra (contra-resolver (:category candidate))]
     {:transaction

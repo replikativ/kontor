@@ -1,13 +1,13 @@
-(ns datahike-accounting.sealing-test
+(ns kontor.sealing-test
   "Sealing semantics: posted entries cannot be silently retracted.
    Per ADR-007, explicit purges ARE permitted (and recorded as their
    own commits in datahike's commit DAG)."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.posting :as posting]
-            [datahike-accounting.sealing :as sealing]
-            [datahike-accounting.validation :as v]))
+            [kontor.core :as core]
+            [kontor.posting :as posting]
+            [kontor.sealing :as sealing]
+            [kontor.validation :as v]))
 
 (def some-date #inst "2026-05-09T00:00:00Z")
 

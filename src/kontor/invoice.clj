@@ -1,4 +1,4 @@
-(ns datahike-accounting.invoice
+(ns kontor.invoice
   "Kernel-side invoice lifecycle.
 
    Workflow:
@@ -17,8 +17,8 @@
    bring numbers from elsewhere (beleg's existing invoice schema,
    external billing system) avoids round-trip rounding mismatches."
   (:require [datahike.api :as d]
-            [datahike-accounting.payment-term :as pt]
-            [datahike-accounting.posting :as posting])
+            [kontor.payment-term :as pt]
+            [kontor.posting :as posting])
   (:import [java.util Date]))
 
 ;; ============================================================================

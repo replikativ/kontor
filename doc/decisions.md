@@ -26,7 +26,7 @@ Date: 2026-05-09.
 
 **Alternatives.** Two DBs with a posting bridge (rejected: weaker atomicity, two audit chains to reconcile). Embed accounting *inside* beleg (rejected: coupling, prevents reuse from simmis or other consumers).
 
-**Implication.** `datahike-accounting` does not own `(d/connect)` — it accepts a connection. Schema is transactable as `(transact conn schema/all)`. Tests open their own ephemeral memory DBs.
+**Implication.** `kontor` does not own `(d/connect)` — it accepts a connection. Schema is transactable as `(transact conn schema/all)`. Tests open their own ephemeral memory DBs.
 
 Date: 2026-05-09.
 
@@ -45,7 +45,7 @@ Date: 2026-05-09.
 
 **Alternatives.** Patch repo / fork (rejected: divergence cost). App-layer wrapper (rejected: doesn't actually close the gap because attackers writing to konserve directly bypass it).
 
-**Sequencing.** This is **Track B** — runs in parallel with Phase 1 of `datahike-accounting`. Phase 1 ships using today's datahike with `:crypto-hash? true` and a documented gap; the cutover happens when Track B lands.
+**Sequencing.** This is **Track B** — runs in parallel with Phase 1 of `kontor`. Phase 1 ships using today's datahike with `:crypto-hash? true` and a documented gap; the cutover happens when Track B lands.
 
 Date: 2026-05-09.
 
@@ -69,7 +69,7 @@ Date: 2026-05-09.
 
 ## ADR-005 — `tax-provider` protocol from day 1
 
-**Decision.** The kernel defines `datahike-accounting.tax-provider/TaxProvider` protocol as a first-class abstraction. It accepts (transaction context, partner, line items) and returns the tax postings to attach. Three implementations ship:
+**Decision.** The kernel defines `kontor.tax-provider/TaxProvider` protocol as a first-class abstraction. It accepts (transaction context, partner, line items) and returns the tax postings to attach. Three implementations ship:
 
 1. **Static-table provider** — for DE, CA, and any country whose tax rules fit a finite EDN table. The default and most common case.
 2. **CSV-feeder provider** — quarterly-refreshed Streamlined Sales Tax (SST) CSVs for the 24 SST member US states. Free public data.
@@ -87,15 +87,15 @@ Date: 2026-05-09.
 
 ## ADR-006 — Per-country localization modules with their own licenses
 
-**Decision.** Each `datahike-accounting-l10n-<cc>` module is its own artifact with a license matching its data sources:
+**Decision.** Each `kontor-l10n-<cc>` module is its own artifact with a license matching its data sources:
 
-- `datahike-accounting-l10n-de` — **GPLv3** if SKR03/SKR04 facts are sourced from Tryton or GnuCash. LGPLv3 if sourced from Odoo. Pick once, document.
-- `datahike-accounting-l10n-ca` — **EPL-1.0** (CRA-published facts are public; no third-party data dependency).
-- `datahike-accounting-l10n-us` — **EPL-1.0** for the kernel pieces; **SST data files retain SST's public terms**; Avalara/TaxJar adapters carry no API data.
+- `kontor-l10n-de` — **GPLv3** if SKR03/SKR04 facts are sourced from Tryton or GnuCash. LGPLv3 if sourced from Odoo. Pick once, document.
+- `kontor-l10n-ca` — **EPL-1.0** (CRA-published facts are public; no third-party data dependency).
+- `kontor-l10n-us` — **EPL-1.0** for the kernel pieces; **SST data files retain SST's public terms**; Avalara/TaxJar adapters carry no API data.
 
 **Why.** Honest licensing. The GPLv3 vs LGPLv3 decision propagates to consumers, so it must be visible at the artifact boundary. Bundling everything under EPL would be a license-laundering claim we cannot defend.
 
-**Implication.** A consumer who wants German support pulls in `datahike-accounting-l10n-de` and accepts its license terms (likely GPLv3). The kernel itself stays EPL-1.0.
+**Implication.** A consumer who wants German support pulls in `kontor-l10n-de` and accepts its license terms (likely GPLv3). The kernel itself stays EPL-1.0.
 
 **Open question.** Whether the EU sui generis database right (Directive 96/9/EC) attaches to a re-keyed EDN projection of an Odoo CSV. Conservative read: facts (account number 1200 → "Bank") are not protectable; *selection and arrangement* might be. Re-encoding with our own structure + crediting source is the practical compromise.
 
@@ -116,7 +116,7 @@ Date: 2026-05-09.
 
 **Why this is better than Odoo.** Odoo's `inalterable_hash` chain prevents row mutation but provides no story for legally-mandated deletion. A right-to-erasure request against Odoo books either creates a hash-chain break (auditor sees corruption) or requires database surgery outside Odoo (auditor sees nothing). Datahike's model — where deletion is a recorded commit — handles both regulatory regimes coherently.
 
-**What's still on us.** The middleware enforcement that refuses silent retracts and requires `:db/purge` for posted entries lives in `datahike-accounting/sealing.clj`. This is policy, not mechanism; cleanly testable.
+**What's still on us.** The middleware enforcement that refuses silent retracts and requires `:db/purge` for posted entries lives in `kontor/sealing.clj`. This is policy, not mechanism; cleanly testable.
 
 Date: 2026-05-09.
 
@@ -164,7 +164,7 @@ Date: 2026-05-09.
 
 ## ADR-010 — Scope boundaries (what we are not)
 
-**Decision.** `datahike-accounting` is explicitly NOT:
+**Decision.** `kontor` is explicitly NOT:
 
 - **An ERP.** No CRM, no inventory, no MRP, no HR, no project management. Beleg owns customer/offer/invoice. simmis or other consumers own anything else.
 - **A UI.** No web framework, no view layer, no HTML rendering. Consumers (beleg HTMX, simmis Replicant) build their own.
@@ -231,7 +231,7 @@ Date: 2026-05-09. Per [research note 06](research/06-openclaw-extraction-invento
 
 **Alternatives.** Naked `BigDecimal` + parallel `:commodity` reference (rejected: every arithmetic site has to pass both, easy to forget; common bugs class). Joda-Money / `clojure.java-time.Money` (rejected: extra dep, doesn't add enough). Bigint cents (rejected: precision insufficient for FX rates, multi-fractional-digit commodities like crypto).
 
-**Implication.** `src/datahike_accounting/money.clj` ships in Phase 1's first slice. Every kernel function that takes a monetary amount accepts a `Money`; raw BigDecimals are a smell.
+**Implication.** `src/kontor/money.clj` ships in Phase 1's first slice. Every kernel function that takes a monetary amount accepts a `Money`; raw BigDecimals are a smell.
 
 Date: 2026-05-09.
 

@@ -4,7 +4,7 @@ Guidance for Claude Code and other AI assistants working in this repository.
 
 ## Project in one paragraph
 
-`datahike-accounting` is a double-entry accounting **kernel** built on [datahike](https://github.com/replikativ/datahike). It supplies the schema, posting/balance/period semantics, tax engine, sealing/audit story, and bitemporal queries that an accounting workload needs. **It does not ship a UI, an ERP, or country-specific data**; consumer apps (beleg, simmis) and per-country localization modules (`datahike-accounting-l10n-*`) compose on top.
+`kontor` is a double-entry accounting **kernel** built on [datahike](https://github.com/replikativ/datahike). It supplies the schema, posting/balance/period semantics, tax engine, sealing/audit story, and bitemporal queries that an accounting workload needs. **It does not ship a UI, an ERP, or country-specific data**; consumer apps (beleg, simmis) and per-country localization modules (`kontor-l10n-*`) compose on top.
 
 The library is **EPL-1.0**, **Clojure-only**, **single dependency** (datahike). Read [doc/decisions.md](doc/decisions.md) before any non-trivial change — every locked design choice has an ADR there.
 
@@ -14,7 +14,7 @@ The library is **EPL-1.0**, **Clojure-only**, **single dependency** (datahike). 
 2. [doc/architecture.md](doc/architecture.md) — the layer cake, namespace map, kernel module list
 3. [doc/roadmap.md](doc/roadmap.md) — phased plan with acceptance criteria per phase
 4. [doc/research/00-index.md](doc/research/00-index.md) — point-in-time research that informed the decisions
-5. [src/datahike_accounting/schema.clj](src/datahike_accounting/schema.clj) — kernel schema (the source of truth for entities and attributes)
+5. [src/kontor/schema.clj](src/kontor/schema.clj) — kernel schema (the source of truth for entities and attributes)
 
 ## How to work in this repo
 
@@ -23,8 +23,8 @@ The library is **EPL-1.0**, **Clojure-only**, **single dependency** (datahike). 
 This project is being built test-first. The canonical loop:
 
 1. Pick a slice from `doc/roadmap.md` (e.g., "trial balance bitemporal").
-2. Write the failing test in `test/datahike_accounting/<slice>_test.clj`.
-3. Implement in `src/datahike_accounting/<slice>.clj`.
+2. Write the failing test in `test/kontor/<slice>_test.clj`.
+3. Implement in `src/kontor/<slice>.clj`.
 4. `bb test` (uses kaocha).
 5. Update `doc/roadmap.md` checkbox; if the slice produced a new design choice, add an ADR to `doc/decisions.md` and reference it from the code.
 
@@ -36,14 +36,14 @@ This project is being built test-first. The canonical loop:
 
 ```bash
 clj-nrepl-eval --discover-ports                     # find the running port
-clj-nrepl-eval -p 43781 "(require 'datahike-accounting.posting :reload)"
-clj-nrepl-eval -p 43781 "(require 'datahike-accounting.posting-test :reload) \
-                          (clojure.test/test-vars [#'datahike-accounting.posting-test/end-to-end-balanced-tx-transacts])"
+clj-nrepl-eval -p 43781 "(require 'kontor.posting :reload)"
+clj-nrepl-eval -p 43781 "(require 'kontor.posting-test :reload) \
+                          (clojure.test/test-vars [#'kontor.posting-test/end-to-end-balanced-tx-transacts])"
 ```
 
 ≈ 200ms per cycle vs bb's full-JVM ~10s. Use this for every iteration; reserve `bb ci` for the final pre-commit check.
 
-The schema fixture `(datahike-accounting.core/create-test-db)` returns a fresh in-memory connection in ~50ms. Use it freely from the REPL to poke at queries.
+The schema fixture `(kontor.core/create-test-db)` returns a fresh in-memory connection in ~50ms. Use it freely from the REPL to poke at queries.
 
 For schema-shape questions ("what should `:posting/foo` look like?"), the running pg-datahike + Odoo install on `:15433` is a useful reference oracle — see `../pg-datahike/test/integration/odoo/README.md`. We do not lift Odoo's schema verbatim; we use it to cross-check that we haven't missed a real-world concern.
 
@@ -61,11 +61,11 @@ Tick the checkbox in `doc/roadmap.md` AND make sure the per-phase acceptance cri
 
 Every datahike attribute namespaces under one of: `:account/* :journal/* :transaction/* :posting/* :commodity/* :lot/* :tax/* :tax-rep/* :tax-group/* :account-tag/* :partner/* :fiscal-position/* :period/* :balance-assertion/*`. New namespaces require an ADR.
 
-This convention is what lets datahike-accounting cohabit with beleg in one DB (ADR-002).
+This convention is what lets kontor cohabit with beleg in one DB (ADR-002).
 
 ### Money
 
-Always `BigDecimal` + commodity tag. Never doubles. The `Money` type in `src/datahike_accounting/money.clj` is the canonical representation. Rounding is HALF-EVEN unless a regulator mandates otherwise (some VAT jurisdictions require HALF-UP — those are documented case-by-case in l10n modules).
+Always `BigDecimal` + commodity tag. Never doubles. The `Money` type in `src/kontor/money.clj` is the canonical representation. Rounding is HALF-EVEN unless a regulator mandates otherwise (some VAT jurisdictions require HALF-UP — those are documented case-by-case in l10n modules).
 
 ### Bitemporal
 
@@ -77,7 +77,7 @@ A posting transitions from "draft" to "posted" by setting `:posting/posted-at`. 
 
 ### Tax
 
-The `TaxProvider` protocol is the only abstraction the kernel uses to compute taxes. Per-country tax data lives in `datahike-accounting-l10n-<cc>` artifacts; the kernel ships `StaticTableProvider` as a default impl. Avalara/TaxJar adapters scaffold but do not bundle API keys. ADR-005.
+The `TaxProvider` protocol is the only abstraction the kernel uses to compute taxes. Per-country tax data lives in `kontor-l10n-<cc>` artifacts; the kernel ships `StaticTableProvider` as a default impl. Avalara/TaxJar adapters scaffold but do not bundle API keys. ADR-005.
 
 ## What NOT to do
 
@@ -92,8 +92,8 @@ The `TaxProvider` protocol is the only abstraction the kernel uses to compute ta
 ## Relationship to nearby projects
 
 - **`../pg-datahike`** — Postgres-wire-protocol shim over datahike. Currently used to validate that real Odoo runs against datahike (see its `test/integration/odoo/`). Useful as a reference oracle for schema decisions, not a runtime dependency.
-- **`../beleg`** — contractor invoice management. Will become the *first consumer* of `datahike-accounting`: posting an issued invoice writes both `:invoice/status` and the matching `:transaction` + `:posting`s in one tx. ADR-002.
-- **`../simmis`** — distributed-scope ClojureScript app. Long-term consumer for ERP-shaped workloads on top of `datahike-accounting` + `../spindel`'s reactive primitives.
+- **`../beleg`** — contractor invoice management. Will become the *first consumer* of `kontor`: posting an issued invoice writes both `:invoice/status` and the matching `:transaction` + `:posting`s in one tx. ADR-002.
+- **`../simmis`** — distributed-scope ClojureScript app. Long-term consumer for ERP-shaped workloads on top of `kontor` + `../spindel`'s reactive primitives.
 - **`../spindel`** — incremental reactive computation; the simulation/computation engine simmis builds on. Not a direct dep here, but design-aligned (event-sourced, deterministic recomputation).
 - **`../odoo`** — Odoo 19 source. Read-only reference oracle. We do not lift its code.
 
@@ -110,7 +110,7 @@ bb ci                  # all of the above
 
 ```clojure
 ;; In the REPL: open an in-memory accounting DB
-(require '[datahike-accounting.core :as a])
+(require '[kontor.core :as a])
 (def conn (a/create-test-db))    ; ephemeral, schema loaded
 (a/post-transaction! conn ...)
 ```
@@ -129,7 +129,7 @@ doc/
   architecture.md           layer cake + module map
   roadmap.md                phased plan with acceptance criteria
   research/                 point-in-time research reports
-src/datahike_accounting/    kernel
+src/kontor/    kernel
   schema.clj                schema EDN
   core.clj                  public surface
   money.clj                 Money + arithmetic
@@ -145,5 +145,5 @@ src/datahike_accounting/    kernel
   query.clj                 bitemporal helpers
   import/
     beancount.clj           Beancount parser + dumper
-test/datahike_accounting/   tests, mirroring src
+test/kontor/   tests, mirroring src
 ```

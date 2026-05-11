@@ -1,4 +1,4 @@
-(ns datahike-accounting.bank-csv
+(ns kontor.bank-csv
   "Generic bank-statement CSV parser.
 
    The kernel ships the engine; per-country `modules/bank-{cc}/`

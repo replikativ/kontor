@@ -1,4 +1,4 @@
-(ns datahike-accounting.invoice-test
+(ns kontor.invoice-test
   "End-to-end kernel :invoice lifecycle test.
 
    - create! a draft, send! it (auto-creates accounting tx via
@@ -10,13 +10,13 @@
      points back via :transaction/reverses"
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
-            [datahike-accounting.core :as core]
-            [datahike-accounting.invoice :as inv]
-            [datahike-accounting.l10n-de.chart :as chart]
-            [datahike-accounting.l10n-de.invoice :as inv-de]
-            [datahike-accounting.payment-term :as pt]
-            [datahike-accounting.reconciliation :as recon]
-            [datahike-accounting.validation :as v]))
+            [kontor.core :as core]
+            [kontor.invoice :as inv]
+            [kontor.l10n-de.chart :as chart]
+            [kontor.l10n-de.invoice :as inv-de]
+            [kontor.payment-term :as pt]
+            [kontor.reconciliation :as recon]
+            [kontor.validation :as v]))
 
 (def jan-1  #inst "2026-01-01T00:00:00Z")
 (def jan-15 #inst "2026-01-15T00:00:00Z")

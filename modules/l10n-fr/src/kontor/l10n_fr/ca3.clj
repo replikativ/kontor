@@ -1,4 +1,4 @@
-(ns datahike-accounting.l10n-fr.ca3
+(ns kontor.l10n-fr.ca3
   "Déclaration TVA CA3 (Cerfa 3310-CA3) — French monthly VAT return.
 
    Field codes per official 3310-CA3 form. Load-bearing subset:
@@ -29,8 +29,8 @@
      entity via :tax/exigibility :on-payment | :on-invoice. The CA3
      computation is the same; only the timing of when a posting
      enters the report changes."
-  (:require [datahike-accounting.money :as money]
-            [datahike-accounting.report :as report]))
+  (:require [kontor.money :as money]
+            [kontor.report :as report]))
 
 (def report-definition
   {:report/name    "Déclaration de TVA CA3 2026 (France)"

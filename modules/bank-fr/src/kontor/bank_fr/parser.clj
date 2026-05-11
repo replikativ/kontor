@@ -1,7 +1,7 @@
-(ns datahike-accounting.bank-fr.parser
+(ns kontor.bank-fr.parser
   "French bank-statement CSV configs + categorizer.
 
-   Generic CSV engine lives in `datahike-accounting.bank-csv`.
+   Generic CSV engine lives in `kontor.bank-csv`.
 
    Supported:
      :n26              — N26 EUR account export (also serves AT/DE)
@@ -31,7 +31,7 @@
        Header: 'Date opération;Libellé opération;Montant'
        Date: dd/MM/yyyy  •  Signed amount, French numerals"
   (:require [clojure.string :as str]
-            [datahike-accounting.bank-csv :as csv-core]))
+            [kontor.bank-csv :as csv-core]))
 
 (def parse-german-amount csv-core/parse-german-amount)
 (def parse-english-amount csv-core/parse-english-amount)
