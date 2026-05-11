@@ -10,7 +10,8 @@
   (:require [datahike.api :as d]
             [kontor.ledger :as ledger]
             [kontor.schema :as schema]
-            [kontor.tax-provider :as tp]))
+            [kontor.tax-provider :as tp]
+            [kontor.valuation :as valuation]))
 
 ;; ============================================================================
 ;; Defaults
@@ -45,11 +46,13 @@
 
 (defn install-schema!
   "Transact the kernel schema into the connection AND bootstrap the
-   default primary ledger (ADR-021). Idempotent — safe to re-run on a
-   connection that already has the schema."
+   default primary ledger (ADR-021) + primary valuation book (ADR-027).
+   Idempotent — safe to re-run on a connection that already has the
+   schema."
   [conn]
   (schema/install! conn)
   (ledger/install-defaults! conn)
+  (valuation/install-defaults! conn)
   conn)
 
 (defn create-test-db
@@ -110,7 +113,9 @@
                       "ledger"
                       "country" "country-code" "country-group"
                       "state" "state-code"
-                      "attestation" "complemento"}
+                      "attestation" "complemento"
+                      "valuation-book"
+                      "valuation-layer" "layer-consumption" "layer-adjustment"}
                     (namespace k))))
          sort
          vec)))

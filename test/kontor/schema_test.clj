@@ -29,7 +29,9 @@
     "ledger"
     "country" "country-code" "country-group"
     "state" "state-code"
-    "attestation" "complemento"})
+    "attestation" "complemento"
+    "valuation-book"
+    "valuation-layer" "layer-consumption" "layer-adjustment"})
 
 (deftest schema-loads-into-fresh-db
   (testing "Kernel schema transacts cleanly into a fresh in-memory DB"

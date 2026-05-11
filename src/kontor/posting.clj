@@ -24,7 +24,9 @@
    to a db itself — the validations performed here are purely
    structural, not catalog-aware. Callers compose this with the
    db-aware checks in `validation.clj` (Phase 1)."
-  (:require [kontor.money :as money]))
+  (:require [kontor.costing-provider :as costing]
+            [kontor.money :as money]
+            [kontor.valuation :as valuation]))
 
 ;; ============================================================================
 ;; Validation predicates
@@ -375,3 +377,231 @@
      :cartesian (throw (ex-info "expand-distribution :cartesian not yet implemented"
                                 {:posting posting :plan-spec plan-spec}))
      (throw (ex-info "Unknown :strategy" {:strategy strategy})))))
+
+;; ============================================================================
+;; Stock-move posting builder — ADR-030
+;; ============================================================================
+
+(defn- ^java.math.BigDecimal money-amount [bd]
+  (.setScale ^java.math.BigDecimal bd 2 java.math.RoundingMode/HALF_EVEN))
+
+(defn- ledger-assoc
+  "Conditionally tag a posting map with :posting/ledger. Omits the key
+   when `ledger` is nil so the kernel defaults apply (ADR-021)."
+  [posting ledger]
+  (cond-> posting
+    ledger (assoc :posting/ledger ledger)))
+
+(defn- receipt-postings
+  "Build the GL postings for a receipt: Dr inventory / Cr GR-IR-clearing
+   (+ optional price-variance line for standard cost).
+
+   `account-fn` resolves accounts by role keyword."
+  [{:keys [tx-tempid commodity ledger qty unit-cost variance account-fn move]}]
+  (let [total      (money-amount (.multiply ^java.math.BigDecimal qty
+                                            ^java.math.BigDecimal unit-cost))
+        gr-ir-amt  (if variance
+                     (money-amount (.add total ^java.math.BigDecimal variance))
+                     total)
+        base       [(ledger-assoc
+                     {:posting/account     (account-fn move :inventory)
+                      :posting/amount      total
+                      :posting/commodity   commodity
+                      :posting/transaction tx-tempid}
+                     ledger)
+                    (ledger-assoc
+                     {:posting/account     (account-fn move :gr-ir-clearing)
+                      :posting/amount      (.negate ^java.math.BigDecimal gr-ir-amt)
+                      :posting/commodity   commodity
+                      :posting/transaction tx-tempid}
+                     ledger)]]
+    (if (and variance (not (zero? (.signum ^java.math.BigDecimal variance))))
+      (conj base
+            (ledger-assoc
+             {:posting/account     (account-fn move :price-variance)
+              :posting/amount      ^java.math.BigDecimal variance
+              :posting/commodity   commodity
+              :posting/transaction tx-tempid}
+             ledger))
+      base)))
+
+(defn- assert-balanced!
+  "Validate the assembled postings for a stock-move tx and throw if
+   they don't sum to zero per (ledger, commodity). Mirrors
+   `build-transaction`'s contract so `plan-stock-move` cannot emit
+   structurally-broken tx-data."
+  [tx-base posting-entities]
+  (let [report (validate {:transaction tx-base :postings posting-entities})]
+    (when-not (:ok? report)
+      (throw (ex-info "plan-stock-move: assembled tx is not balanced"
+                      {:report report
+                       :postings posting-entities})))))
+
+(defn- issue-postings
+  "Build the GL postings for an issue: Dr cogs / Cr inventory at
+   total consumption value."
+  [{:keys [tx-tempid commodity ledger consumptions account-fn move]}]
+  (let [total (reduce (fn [^java.math.BigDecimal acc {:keys [qty unit-cost]}]
+                        (.add acc (.multiply ^java.math.BigDecimal qty
+                                             ^java.math.BigDecimal unit-cost)))
+                      0M
+                      consumptions)
+        total (money-amount total)]
+    [(ledger-assoc
+      {:posting/account     (account-fn move :cogs)
+       :posting/amount      total
+       :posting/commodity   commodity
+       :posting/transaction tx-tempid}
+      ledger)
+     (ledger-assoc
+      {:posting/account     (account-fn move :inventory)
+       :posting/amount      (.negate total)
+       :posting/commodity   commodity
+       :posting/transaction tx-tempid}
+      ledger)]))
+
+(defn plan-stock-move
+  "Plan the kernel-level facts for a single stock movement. Pure
+   (db-read only; no transact). Returns tx-data ready for
+   `datahike.api/transact`.
+
+   Mandatory input keys:
+     :direction       :in | :out
+     :book            valuation-book eid or :valuation-book/code string
+     :item            ref (caller-defined item entity)
+     :qty             bigdec
+     :commodity       commodity ref
+     :journal         journal ref
+     :effective-date  #inst
+     :unit-cost       bigdec  — required for :in
+     :provider        CostingProvider impl — required
+     :account-fn      (fn [move role-kw] → account ref) — required
+
+   Optional keys:
+     :ledger     ledger ref (defaults to nil = primary ledger group)
+     :lot        lot ref
+     :narration  string
+     :transaction-state  :draft (default) | :posted
+     :note       string
+
+   ADR-030 — pure; no side effects; reads `db` for layer resolution
+   on issues. Hooks are external (the CostingProvider and account-fn
+   ARE the seams).
+
+   For an :in move:
+     - Resolve receipt via `(plan-receipt provider db request)` →
+       create one new :valuation-layer.
+     - Emit Dr inventory / Cr GR-IR-clearing postings (+ optional
+       :price-variance leg from standard-cost provider).
+
+   For an :out move:
+     - Resolve consumption via `(plan-consumption provider db request)`
+       → create N :layer-consumption entities pointing at drawn layers.
+     - Emit Dr COGS / Cr inventory postings at total consumption value.
+
+   Returns tx-data as a flat vector. Caller composes:
+     (d/transact conn (plan-stock-move db move-spec))"
+  [db {:keys [direction book item qty commodity lot journal effective-date
+              unit-cost ledger narration provider account-fn
+              transaction-state note]
+       :or   {transaction-state :draft}
+       :as   move-spec}]
+  (when-not provider
+    (throw (ex-info "plan-stock-move: :provider is required" {:move move-spec})))
+  (when-not account-fn
+    (throw (ex-info "plan-stock-move: :account-fn is required" {:move move-spec})))
+  (when-not (#{:in :out} direction)
+    (throw (ex-info "plan-stock-move: :direction must be :in or :out"
+                    {:move move-spec})))
+  (let [book-eid (valuation/resolve-book db book)
+        _ (when-not book-eid
+            (throw (ex-info "plan-stock-move: book not found"
+                            {:book book})))
+        tx-tempid -1
+        tx-base   (cond-> {:db/id                       tx-tempid
+                           :transaction/journal         journal
+                           :transaction/effective-date  effective-date
+                           :transaction/state           transaction-state}
+                    narration (assoc :transaction/narration narration))]
+    (case direction
+
+      :in
+      (let [receipt-req {:book      book-eid
+                         :item      item
+                         :qty       qty
+                         :unit-cost unit-cost
+                         :commodity commodity
+                         :lot       lot}
+            {:keys [layer-data variance]}
+            (costing/plan-receipt provider db receipt-req)
+            layer-tempid -200
+            layer-entity (cond-> {:db/id                              layer-tempid
+                                  :valuation-layer/book               book-eid
+                                  :valuation-layer/item               item
+                                  :valuation-layer/origin-transaction tx-tempid
+                                  :valuation-layer/qty-original       (:qty layer-data)
+                                  :valuation-layer/unit-cost-original (:unit-cost layer-data)
+                                  :valuation-layer/commodity          commodity
+                                  :valuation-layer/received-at        effective-date}
+                           lot  (assoc :valuation-layer/lot lot)
+                           note (assoc :valuation-layer/note note))
+            postings (receipt-postings
+                      {:tx-tempid tx-tempid
+                       :commodity commodity
+                       :ledger    ledger
+                       :qty       qty
+                       ;; Use the LAYER's unit-cost for the inventory leg.
+                       ;; For FIFO/AVG that's the user's unit-cost (no variance).
+                       ;; For Standard that's the standard cost; variance carries
+                       ;; the delta and lands on the variance leg.
+                       :unit-cost (:unit-cost layer-data)
+                       :variance  variance
+                       :account-fn account-fn
+                       :move      move-spec})
+            posting-entities
+            (mapv (fn [i p]
+                    (cond-> (assoc p :db/id (- -300 i))
+                      (nil? (:posting/display-type p))
+                      (assoc :posting/display-type :product)
+                      (nil? (:posting/valid-from p))
+                      (assoc :posting/valid-from effective-date)))
+                  (range)
+                  postings)
+            _ (assert-balanced! tx-base posting-entities)]
+        (into [tx-base layer-entity] posting-entities))
+
+      :out
+      (let [consumption-req {:book book-eid :item item :qty qty :lot lot}
+            {:keys [consumptions underflow]}
+            (costing/plan-consumption provider db consumption-req)]
+        (when (and underflow (pos? (.signum ^java.math.BigDecimal underflow)))
+          (throw (ex-info "plan-stock-move: insufficient stock to satisfy issue"
+                          {:requested qty :underflow underflow :item item :book book-eid})))
+        (let [postings (issue-postings
+                        {:tx-tempid tx-tempid
+                         :commodity commodity
+                         :ledger    ledger
+                         :consumptions consumptions
+                         :account-fn account-fn
+                         :move      move-spec})
+              consumption-entities
+              (mapv (fn [i {:keys [layer qty unit-cost]}]
+                      {:db/id                                       (- -400 i)
+                       :layer-consumption/layer                     layer
+                       :layer-consumption/qty                       qty
+                       :layer-consumption/unit-cost-at-consumption  unit-cost
+                       :layer-consumption/issue-transaction         tx-tempid
+                       :layer-consumption/issued-at                 effective-date})
+                    (range)
+                    consumptions)
+              posting-entities
+              (mapv (fn [i p]
+                      (cond-> (assoc p :db/id (- -300 i))
+                        (nil? (:posting/display-type p))
+                        (assoc :posting/display-type :product)
+                        (nil? (:posting/valid-from p))
+                        (assoc :posting/valid-from effective-date)))
+                    (range)
+                    postings)
+              _ (assert-balanced! tx-base posting-entities)]
+          (into (into [tx-base] posting-entities) consumption-entities))))))

@@ -1426,6 +1426,293 @@ Date: 2026-05-11.
 
 ---
 
+## ADR-027 — `:valuation-book` entity: parallel cost bases for inventory
+
+**Decision.** Introduce a first-class `:valuation-book` entity. A valuation book is an *orthogonal* lens on physical stock — it picks which cost basis (FIFO / LIFO / weighted-average / standard) applies and under which accounting framework (legal / group / tax-DE / IFRS / management). One physical inventory may carry several books in parallel; valuation queries always name the book. One `"primary"` book is bootstrapped at schema-install time.
+
+### Why now
+
+Five surveys (Odoo, SAP/NetSuite/Oracle/D365, Tryton, ERPNext, Frappe) converge on the same architectural shape: stock movements are immutable events, but the *cost basis* of each movement depends on which valuation book reads it. Without a first-class book, every consumer would invent its own per-method cost field on the move — exactly what SAP retired in S/4HANA when collapsing into the Material Ledger.
+
+The most stress-tested case is **SAP's Material Ledger**: up to three parallel valuation views (legal / group / profit-center) of the same material, each with its own cost method and currency. Oracle's Cost Books and D365's posting-layers play the same role. Without it, IFRS-16 vs ASC-842, US-GAAP vs local-GAAP, FIFO-for-tax vs Average-for-management, and consolidated-vs-statutory cost reporting all require schema duplication.
+
+### How competitors model this
+
+- **SAP Material Ledger** (mandatory in S/4HANA) — per material, up to 3 valuation views in up to multiple currencies; views are independent (different cost methods + different currencies + different ledger destinations).
+- **Oracle Fusion Cost Management** — per Cost Org, multiple Cost Books; each book points at a primary or secondary ledger. "Ledgerless" cost books supported for simulation.
+- **NetSuite Multi-Book** — per subsidiary, primary + up to 4 secondary books with book-specific cost methods.
+- **Microsoft D365** — multiple costing methods per ledger via Item Model Groups.
+- **Tryton** — single book per company; `product_cost_*` modules layer on optional cost-tracking variations.
+- **ERPNext / Odoo** — single book per company; cost method on the item, not on a separate book entity.
+
+### What kontor adopts
+
+The SAP/Oracle/NetSuite pattern (first-class entity, per-company), not the Odoo/ERPNext pattern (flag on the item). Reasoning: the design pillar that makes parallel ledgers work in kontor (ADR-021) carries directly to valuation books — same shape, orthogonal axis.
+
+### Schema
+
+```clojure
+:valuation-book/code         string :db.unique/identity   ; "primary" "ifrs" "tax-de"
+:valuation-book/name         string
+:valuation-book/framework    keyword                      ; :legal | :group | :ifrs
+                                                          ; | :tax-de | :management | …
+:valuation-book/cost-method  keyword                      ; :fifo | :lifo | :avg | :standard
+:valuation-book/commodity    ref → :commodity (optional)  ; accounting currency for this
+                                                          ; book (may differ from txn ccy)
+:valuation-book/active       boolean
+```
+
+### Bootstrap
+
+`kontor.core/install-schema!` transacts a single seed:
+```clojure
+{:valuation-book/code        "primary"
+ :valuation-book/name        "Primary valuation book"
+ :valuation-book/framework   :legal
+ :valuation-book/cost-method :fifo
+ :valuation-book/active      true}
+```
+
+Idempotent via `:db.unique/identity` on `:valuation-book/code`. Consumers add secondary books as data; the kernel ships only the primary.
+
+### Alternatives considered
+
+- *Cost-method as a field on `:product` (Odoo/ERPNext style).* Rejected: doesn't support parallel bases on the same item.
+- *Cost-method on `:ledger`.* Rejected: ledger is *which set of books reads this posting*; valuation book is *which cost basis this posting uses*. They're orthogonal. A posting may live in the IFRS ledger and the legal ledger but use FIFO under one book and average under another.
+- *Multi-entity / per-company-code books.* Deferred: kontor doesn't yet model multi-entity (cf. Q2 deferred-list). When that lands, `:valuation-book/entity` becomes a ref. For now books are tenant-scoped.
+
+### Implications
+
+- New schema: 6 attrs on `:valuation-book`. No change to existing entities.
+- `kontor.core/install-schema!` gains one more bootstrap call (mirrors `kontor.ledger/install-defaults!` from ADR-021).
+- `CostingProvider` (ADR-029) selects layers under a specific book; layers (ADR-028) reference their book.
+
+Date: 2026-05-11.
+
+---
+
+## ADR-028 — `:valuation-layer` + `:layer-consumption` + `:layer-adjustment`
+
+**Decision.** Inventory valuation lives in three immutable fact entities, mirroring the kernel's posting/transaction pattern:
+
+- `:valuation-layer` — created at receipt. One layer per `(book, receipt-event)` pair. Carries the *original* quantity and unit cost.
+- `:layer-consumption` — created at issue. References the layer that was drawn from. Carries the consumed quantity and the unit cost *as of the consumption time* (which may differ from the layer's original after adjustments).
+- `:layer-adjustment` — created at landed-cost arrival / revaluation. References the layer being adjusted. Signed monetary amount + reason keyword.
+
+All three are append-only. **Remaining quantity** and **current unit cost** are *views* derived per query:
+```
+qty-remaining(L) = L.qty-original − Σ consumption.qty WHERE consumption.layer = L
+current-cost(L)  = (L.qty-original × L.unit-cost + Σ adjustment.amount) / L.qty-original
+```
+
+### Why this shape
+
+Five surveys produced three competing layer-storage designs:
+
+| Design | Example | Trade-off |
+|---|---|---|
+| **No explicit layer** — replay from move log | Tryton | Pure; slow at scale |
+| **Per-event queue snapshot** on the move | ERPNext (`stock_queue` JSON on each SLE) | Fast lookup; mutable on repost; force-introduces a background-job repost system |
+| **Explicit layer entity** with mutable remaining-qty | SAP Material Ledger | Standard ERP pattern; layers are mutated under load |
+| **Explicit layer + immutable consumption events** (this ADR) | (none in the wild) | Append-only; views derived; no repost machinery |
+
+kontor adopts the fourth design because it's the only one consistent with both ADR-008 (bitemporal append-only) and the existing kernel posting model. Frappe's `amended_from` pattern (new doc with link to cancelled original) is the same idea: corrections are *new facts*, not mutations. ERPNext's `Repost Item Valuation` is the failure-mode catalogue of the third design — kontor avoids the entire category.
+
+### Schema
+
+```clojure
+;; Valuation layer — created at receipt
+:valuation-layer/book                ref → :valuation-book   ; required
+:valuation-layer/item                ref                      ; generic; the module
+                                                              ; that owns the inventory
+                                                              ; defines what an item is
+:valuation-layer/lot                 ref → :lot               ; optional
+:valuation-layer/origin-transaction  ref → :transaction       ; the receipt tx
+:valuation-layer/qty-original        bigdec                   ; received quantity
+:valuation-layer/unit-cost-original  bigdec                   ; per-unit cost at receipt
+:valuation-layer/commodity           ref → :commodity         ; cost currency
+:valuation-layer/received-at         instant
+:valuation-layer/note                string  (optional)
+
+;; Consumption event — created at issue
+:layer-consumption/layer                  ref → :valuation-layer  ; required
+:layer-consumption/qty                    bigdec                  ; consumed quantity
+:layer-consumption/unit-cost-at-consumption  bigdec               ; book value at issue
+:layer-consumption/issue-transaction      ref → :transaction      ; the issue tx
+:layer-consumption/issued-at              instant
+
+;; Adjustment event — created at landed cost / revaluation
+:layer-adjustment/layer                ref → :valuation-layer    ; required
+:layer-adjustment/amount               bigdec                    ; signed total amount
+                                                                 ; (not per-unit)
+:layer-adjustment/reason               keyword                   ; :landed-cost |
+                                                                 ; :revaluation |
+                                                                 ; :correction | …
+:layer-adjustment/origin-transaction   ref → :transaction
+:layer-adjustment/applied-at           instant
+:layer-adjustment/note                 string (optional)
+```
+
+### Period-close interaction (ADR-014 supplement)
+
+A layer's `origin-transaction` ties it to a fiscal period via `:transaction/effective-date` + the period model. When the period seals (per ADR-014), the layer's `qty-original` and `unit-cost-original` become immutable in fact-storage *by virtue of being immutable facts already*. The interesting question is **adjustments that arrive after the seal**: per the Frappe / ERPNext evidence, the safer stance is **reject late adjustments to sealed-period layers**; consumers post the adjustment to the next open period instead. Implementation lives in `kontor.posting`'s validator; this ADR documents the policy.
+
+### Why not include item entity in the kernel
+
+Five surveys all show item / product as a *consumer* concern — Odoo's `product.template` carries cost method + accounts + pricelist data, none of which the kernel needs. Kontor's `:valuation-layer/item` is a generic ref; the consumer-side inventory module defines the item entity and points the layer at it. This keeps the kernel scope honest (ADR-010).
+
+### Alternatives considered
+
+- *Mutate `qty-remaining` on the layer.* Rejected: ERPNext's repost machinery is the cost.
+- *Snapshot the FIFO queue inline on the issue posting.* Rejected: ERPNext-style; recomputing from facts via the bitemporal index is the kontor-native shape.
+- *Single `:movement` entity covering both layers and consumption.* Rejected: receipts and issues have different cardinalities (one layer can have N consumptions); separating them keeps datalog queries simple.
+
+### Implications
+
+- New schema: ~17 attrs across three entity namespaces.
+- `kontor.valuation` namespace ships view helpers: `qty-remaining`, `current-unit-cost`, `available-layers-for-item`.
+- Tests verify view correctness across receipt → multiple issues → adjustment scenarios.
+
+Date: 2026-05-11.
+
+---
+
+## ADR-029 — `CostingProvider` protocol: pluggable cost engines
+
+**Decision.** Add a `CostingProvider` protocol — direct sibling to `TaxProvider` (ADR-005) and `EInvoiceProvider` (ADR-017). The kernel ships impls for FIFO, LIFO, weighted average, and standard cost. Modules and consumers register additional impls (e.g. jurisdiction-specific Anglo-Saxon FIFO, Continental immediate-expense, lot-isolated FIFO). The posting-builder (ADR-030) takes a provider as a parameter.
+
+### Protocol
+
+```clojure
+(defprotocol CostingProvider
+  "Compute the cost basis of a stock movement."
+
+  (plan-consumption
+    [provider db request]
+    "For an outbound (issue) move: which layers to consume, in what
+     quantities, at what unit costs. Returns
+       {:consumptions [{:layer eid :qty bigdec :unit-cost bigdec} …]
+        :variance Money?            ; standard-cost only
+        :extra-postings [...]?}     ; rarely needed; e.g. price-variance
+     Reads `db` to find candidate layers; respects bitemporal context.")
+
+  (plan-receipt
+    [provider db request]
+    "For an inbound (receipt) move: what layer to create. Returns
+       {:layer-data {:qty bigdec :unit-cost bigdec
+                     :commodity eid :item eid :lot eid?}}
+     Most providers just echo the input; standard-cost adjusts unit
+     cost to the book's standard price and emits a price-variance
+     posting in :extra-postings."))
+```
+
+### Why two methods, not one
+
+Anglo-Saxon vs Continental accounting differs *specifically* in *when COGS is recognized*. Anglo-Saxon defers COGS until sale → the receipt creates a layer at supplier price; the issue triggers FIFO/AVG and posts to COGS. Continental recognizes the expense at issue regardless of method. Both methods are needed to express the bi-directional flow cleanly; a single function would couple receipt and issue logic awkwardly.
+
+### Why a protocol, not a multimethod
+
+Mirrors the existing kernel pattern (`TaxProvider`, `EInvoiceProvider`, `PacProvider`). Consumers can `extend-protocol` from outside the kernel without modifying kernel namespaces. Multimethods would be equivalent but inconsistent with the existing seams.
+
+### Kernel-shipped implementations
+
+- `FIFOCostingProvider` — picks oldest unconsumed layers first
+- `LIFOCostingProvider` — picks newest unconsumed layers first
+- `WeightedAverageProvider` — distributes across all available layers at their current weighted-average unit cost
+- `StandardCostProvider` — uses the book's `:valuation-book/standard-cost` (a sibling entity that this provider consults); generates `:variance` Money + a `:extra-postings` entry to a price-variance account when actual ≠ standard
+
+Anglo-Saxon and Continental variants are not separate impls — they're the same FIFO/AVG logic with different account-resolution rules at the posting-builder layer (ADR-030).
+
+### Alternatives considered
+
+- *Single function with a `:method` kw arg.* Rejected: protocol dispatch is more discoverable + extensible.
+- *Hard-code methods in `kontor.posting`.* Rejected: consumers need to plug in jurisdiction-specific or custom engines without forking the kernel.
+- *Async / streaming for very large layer scans.* Rejected as YAGNI: bitemporal datalog with indexes on `:valuation-layer/book + item` covers reasonable scale. Revisit when a real workload demands it.
+
+### Implications
+
+- New protocol in `kontor.costing-provider`.
+- Four concrete impls in same namespace.
+- Tests exercise each impl on a 3-receipt-2-issue scenario; standard-cost test verifies variance Money + extra posting.
+
+Date: 2026-05-11.
+
+---
+
+## ADR-030 — `plan-stock-move`: pure posting-builder for inventory transactions
+
+**Decision.** Add `kontor.posting/plan-stock-move` — a pure function (well, db-aware-pure: it reads a db value but does not transact) that takes a stock-move spec + a `CostingProvider` + an account-resolution callback and returns datahike tx-data ready for `d/transact`. Mirrors the existing `kontor.posting/build-transaction` but for inventory moves.
+
+Hooks live *outside* the function via the existing provider-protocol seam — the costing-provider and the account-resolver are the seams. The function itself stays pure.
+
+### Signature (high-level)
+
+```clojure
+(defn plan-stock-move
+  "Plan the kernel-level facts for a stock movement.
+
+   Input
+     db            — datahike db value
+     move-spec     — {:direction :in | :out
+                      :book      <:valuation-book ref or code>
+                      :item      <ref>
+                      :qty       <bigdec>
+                      :unit-cost <bigdec, only required for :in>
+                      :commodity <:commodity ref>
+                      :lot       <ref, optional>
+                      :journal   <:journal ref>
+                      :effective-date <#inst>
+                      :narration <string, optional>}
+     provider      — CostingProvider impl
+     account-fn    — fn taking the move-spec + a :role kw
+                     (`:inventory`, `:cogs`, `:variance`, `:in-transit`,
+                      `:scrap-expense`, …) and returning an account ref
+
+   Output  — tx-data vector (the kernel :transaction + :postings
+             + :valuation-layer or :layer-consumption + optional
+             :layer-adjustment entities, all stitched via tempids).
+   Pure: reads `db`, returns data. Does not transact."
+  [db move-spec provider account-fn])
+```
+
+### Why pure
+
+The kernel's existing posting builder is pure. Inventory shouldn't break that contract. Composition stays clean:
+```clojure
+(d/transact conn (plan-stock-move (d/db conn) move-spec provider account-fn))
+```
+
+The function reads `db` because it needs to resolve layer eids to plan consumption, but it never writes — same shape as datalog queries.
+
+### Hooks
+
+Per Frappe / Tryton evidence, hooks should live at the boundary (registered externally), not be parameters to the kernel function. The `CostingProvider` and `account-fn` ARE the hooks. Consumers wanting to mutate the planned tx-data wrap the function:
+```clojure
+(let [base (plan-stock-move db move-spec provider account-fn)
+      enriched (my-custom-pre-post-hook base move-spec)]
+  (d/transact conn enriched))
+```
+
+### Anglo-Saxon vs Continental
+
+Different `account-fn` implementations. Same `CostingProvider`. The account resolver knows which jurisdiction → which account roles fire on receipt vs issue:
+- Anglo-Saxon receipt: `:inventory` + `:gr-ir-clearing`
+- Anglo-Saxon issue (sale): `:cogs` + `:inventory`
+- Continental receipt: `:inventory` + `:gr-ir-clearing` (same)
+- Continental issue (consumption): `:material-expense` + `:inventory`
+
+The kernel doesn't model jurisdictions; the inventory module's account resolver does.
+
+### Implications
+
+- One new function in `kontor.posting`.
+- Tests exercise: simple receipt → balanced 2-line tx with a new layer; simple issue → balanced 2-line tx with N consumption events; standard-cost receipt with variance → balanced 3-line tx (inventory at standard, gr-ir at actual, variance for the delta).
+- Parallel-book test: same physical move under FIFO and Standard books emits different cost amounts and different variance lines — verifying ADR-027's orthogonality claim.
+
+Date: 2026-05-11.
+
+---
+
 ## Decisions deferred (open)
 
 The following choices are NOT yet locked. Update this section as we converge.

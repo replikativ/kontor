@@ -2039,6 +2039,176 @@
                      +infinity. ADR-026."}])
 
 ;; ============================================================================
+;; Valuation book — ADR-027.
+;;
+;; Orthogonal-to-:ledger lens picking which cost basis applies to a
+;; stock movement. One physical inventory may carry several books in
+;; parallel (FIFO + Standard + IFRS). One "primary" book is auto-
+;; installed by `kontor.valuation/install-defaults!`.
+;; ============================================================================
+
+(def ^:private valuation-book-attrs
+  [{:db/ident       :valuation-book/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Stable identifier (\"primary\", \"ifrs\",
+                     \"tax-de\", \"management\")."}
+
+   {:db/ident       :valuation-book/name
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :valuation-book/framework
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Accounting framework keyword.
+                     :legal | :group | :ifrs | :us-gaap | :hgb
+                     | :tax-de | :management | … free-form."}
+
+   {:db/ident       :valuation-book/cost-method
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":fifo | :lifo | :avg | :standard | :specific.
+                     CostingProvider impls dispatch on this."}
+
+   {:db/ident       :valuation-book/commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Accounting currency for this book when it differs
+                     from the transaction commodity. Optional."}
+
+   {:db/ident       :valuation-book/active
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one}])
+
+;; ============================================================================
+;; Valuation layer + consumption + adjustment — ADR-028.
+;;
+;; Three immutable fact entities. Layer = receipt event; consumption
+;; = issue event referencing a layer; adjustment = landed-cost /
+;; revaluation event referencing a layer. Remaining qty + current
+;; cost are *views* (kontor.valuation/qty-remaining + /current-cost).
+;; ============================================================================
+
+(def ^:private valuation-layer-attrs
+  [{:db/ident       :valuation-layer/book
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Required ref to :valuation-book."}
+
+   {:db/ident       :valuation-layer/item
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Generic ref. The kernel does not model 'item';
+                     the consumer-side inventory module defines what
+                     an item is and points the layer at it. (ADR-010
+                     scope honesty.)"}
+
+   {:db/ident       :valuation-layer/lot
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to :lot. Lot-isolated FIFO uses
+                     this to keep separate stacks per lot."}
+
+   {:db/ident       :valuation-layer/origin-transaction
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to the kernel :transaction that created
+                     this layer (the receipt event)."}
+
+   {:db/ident       :valuation-layer/qty-original
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Quantity received. Immutable. Remaining quantity
+                     is a derived view: qty-original − Σ consumption.qty."}
+
+   {:db/ident       :valuation-layer/unit-cost-original
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Per-unit cost at receipt. Immutable. Current cost
+                     is a derived view that folds in adjustments."}
+
+   {:db/ident       :valuation-layer/commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Cost currency."}
+
+   {:db/ident       :valuation-layer/received-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Valid time of the receipt. Used to order FIFO/LIFO
+                     stacks. Distinct from :origin-transaction's tx-time."}
+
+   {:db/ident       :valuation-layer/note
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}])
+
+(def ^:private layer-consumption-attrs
+  [{:db/ident       :layer-consumption/layer
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Required ref to :valuation-layer."}
+
+   {:db/ident       :layer-consumption/qty
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Quantity consumed FROM the referenced layer in
+                     this single event. One issue may produce multiple
+                     consumption rows (one per drawn layer)."}
+
+   {:db/ident       :layer-consumption/unit-cost-at-consumption
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Book value per unit at the moment of consumption.
+                     Folds in any :layer-adjustment that was applied
+                     before this event."}
+
+   {:db/ident       :layer-consumption/issue-transaction
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to the kernel :transaction that issued this
+                     consumption (the outbound move)."}
+
+   {:db/ident       :layer-consumption/issued-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Valid time of the issue."}])
+
+(def ^:private layer-adjustment-attrs
+  [{:db/ident       :layer-adjustment/layer
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Required ref to :valuation-layer."}
+
+   {:db/ident       :layer-adjustment/amount
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Signed TOTAL amount (not per-unit). Adds to the
+                     layer's total cost; positive for landed cost
+                     additions, negative for write-downs."}
+
+   {:db/ident       :layer-adjustment/reason
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":landed-cost | :revaluation | :correction
+                     | :write-down | :write-up | … free-form."}
+
+   {:db/ident       :layer-adjustment/origin-transaction
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to the kernel :transaction that booked this
+                     adjustment (the landed-cost voucher / revaluation)."}
+
+   {:db/ident       :layer-adjustment/applied-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :layer-adjustment/note
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}])
+
+;; ============================================================================
 ;; Aggregate
 ;; ============================================================================
 
@@ -2089,7 +2259,11 @@
     transaction-attestations-attrs       ; ADR-024
     complemento-attrs                    ; ADR-025
     transaction-complementos-attrs       ; ADR-025
-    tax-effective-window-attrs)))        ; ADR-026
+    tax-effective-window-attrs           ; ADR-026
+    valuation-book-attrs                 ; ADR-027
+    valuation-layer-attrs                ; ADR-028
+    layer-consumption-attrs              ; ADR-028
+    layer-adjustment-attrs)))            ; ADR-028
 
 (defn install!
   "Transact the kernel schema into a connection. Idempotent — re-running
