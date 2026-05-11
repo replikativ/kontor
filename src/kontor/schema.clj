@@ -185,7 +185,109 @@
     :db/cardinality :db.cardinality/many
     :db/doc         "Account-tag refs for report-time aggregation
                      (Odoo's account_account_tag M2M, used by the
-                     declarative report engine)."}])
+                     declarative report engine)."}
+
+   ;; ADR-019: regulator-specific external codes. The single
+   ;; :account/code above is the kernel-facing code (often = the
+   ;; dominant regulator's code, e.g. SKR04 in DE). When an account
+   ;; answers to multiple regulators (BR analytical → Plano
+   ;; Referencial → SPED Contábil; DE internal → SKR04 → DATEV; or
+   ;; management → IFRS group), the :account-code entities each
+   ;; carry one (regulator, code) pairing.
+   {:db/ident       :account/external-codes
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Many-ref to :account-code entities, one per
+                     (account, regulator) pair. See ADR-019."}])
+
+;; ============================================================================
+;; Document-type registry — ADR-020.
+;;
+;; First-class entity for the regulator-recognized kind of a fiscal
+;; document. Registered per-country at module install time; referenced
+;; by :transaction/document-type.
+;; ============================================================================
+
+(def ^:private document-type-attrs
+  [{:db/ident       :document-type/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Regulator's short code. BR: '55' (NF-e),
+                     '65' (NFC-e), '57' (CT-e), '58' (MDF-e), 'SE'
+                     (NFS-e). CN: '01' (special VAT fapiao), '02'
+                     (general fapiao), '10' (electronic general),
+                     '65' (fully-digital).  Not globally unique;
+                     identity is (code, jurisdiction)."}
+
+   {:db/ident       :document-type/jurisdiction
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "Tax authority that defines this code. Conventional:
+                     :br/sefaz, :cn/sta, :de/finanzamt, :ca/cra,
+                     :ar/afip, :cl/sii. Co-keys the identity with code."}
+
+   {:db/ident       :document-type/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:document-type/code :document-type/jurisdiction]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Composite identity (code, jurisdiction)."}
+
+   {:db/ident       :document-type/name
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Human-readable name, may include native-script:
+                     'Nota Fiscal Eletrônica — mercadorias' or
+                     '增值税专用发票 (Special VAT Fapiao)'."}
+
+   {:db/ident       :document-type/internal-type
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":invoice | :credit-note | :debit-note | :all.
+                     Drives credit/debit-note routing through the same
+                     document-type as the origin invoice."}
+
+   {:db/ident       :document-type/prefix
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Prefix for the clearance-token / access key
+                     when applicable ('NFe', 'NFCe')."}
+
+   {:db/ident       :document-type/active?
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one}])
+
+(def ^:private account-code-attrs
+  [{:db/ident       :account-code/account
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Back-ref to the account this code is for."}
+
+   {:db/ident       :account-code/regulator
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Identifies the regulator / mapping target.
+                     Conventions: :br/plano-referencial, :br/sped-contabil,
+                     :cn/asbe, :cn/assbe, :de/datev, :ifrs/group, etc."}
+
+   {:db/ident       :account-code/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The code in the regulator's system."}
+
+   {:db/ident       :account-code/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:account-code/account :account-code/regulator]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Composite identity. One (account, regulator)
+                     pairing exists at most once per DB."}
+
+   {:db/ident       :account-code/note
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional human-readable explanation."}])
 
 ;; ============================================================================
 ;; Account-tag — labels for report-time aggregation.
@@ -668,7 +770,62 @@
    {:db/ident       :transaction/state
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
-    :db/doc         ":draft | :posted | :cancelled. Lifecycle."}
+    :db/doc         ":draft | :pending-attestation | :posted | :cancelled.
+                     Lifecycle.
+
+                     :pending-attestation (ADR-018) is the in-flight state
+                     used by jurisdictions that require government
+                     attestation of the invoice before it becomes legally
+                     valid (BR NF-e via SEFAZ, CN fapiao via STA platform).
+                     Sealing does NOT fire in this state — the entry
+                     has not yet had legal effect. Transition to :posted
+                     happens when the EInvoiceProvider returns a
+                     successful clearance token. Peppol (JP/AU/DE) and
+                     paper jurisdictions (CA, US, AT, FR) bypass this
+                     state, going :draft → :posted directly."}
+
+   {:db/ident       :transaction/clearance-token
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "The government-issued legal identifier of this
+                     transaction's invoice, when one is required. For
+                     BR NF-e it's the 44-digit access key (chave de
+                     acesso). For CN fapiao it's the 8-digit fapiao
+                     number, the 18-digit combined code+number, or the
+                     20-digit fully-digital identifier. Set at transition
+                     :pending-attestation → :posted by the country
+                     module's EInvoiceProvider. Indexed because
+                     reconciliation and reporting routinely look up by
+                     token. nil for jurisdictions with no clearance
+                     step. ADR-018."}
+
+   ;; ADR-020: document-type registry + clearance-format dispatch.
+   {:db/ident       :transaction/document-type
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "Ref to a :document-type entity. The regulator-
+                     recognized kind of fiscal document this
+                     transaction represents (BR NF-e mod 55, NFC-e
+                     mod 65, CT-e mod 57, CN special-VAT fapiao 01,
+                     etc.). See ADR-020."}
+
+   {:db/ident       :transaction/clearance-format
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "Quick-lookup discriminator for the clearance-token
+                     format. Emitters + validators dispatch on this
+                     keyword (without walking back to :document-type).
+                     Conventional values:
+                       :br/nfe :br/nfc-e :br/cte :br/mdf-e :br/nfs-e
+                       :cn/fapiao-special-18 :cn/fapiao-general-20
+                       :cn/fapiao-digital-20
+                       :de/rechnung :de/factur-x
+                     Validation: a per-jurisdiction validator confirms
+                     the token matches the regex for this format
+                     (18-digit, 20-digit, 44-digit, etc.). ADR-020."}
 
    {:db/ident       :transaction/posted-at
     :db/valueType   :db.type/instant
@@ -889,7 +1046,87 @@
                      adjustment :adjustment-13 — this tag picks which
                      one the posting routes into. Defaults to :normal
                      (i.e. the period whose :period/tag is absent or
-                     :normal)."}])
+                     :normal)."}
+
+   ;; ADR-016 — Multi-tax breakdown. A product line subject to one
+   ;; or more taxes carries a many-ref to :tax-application entities,
+   ;; one per (line, tax) pairing. Brazil's 5-tax-stack invoice
+   ;; produces 5 applications; JP dual-rate produces 1 per posting;
+   ;; DE reverse-charge produces 1.
+   ;;
+   ;; This is parallel to :posting/taxes-applied (which still records
+   ;; "this line was taxed by these taxes" for simple uses) and to
+   ;; the auto-generated :tax-display-type postings (the ledger entries).
+   ;; The breakdown is intent + audit; the postings are bookkeeping.
+   {:db/ident       :posting/tax-breakdown
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Many-ref to :tax-application entities. ADR-016."}
+
+   ;; ADR-018 — clearance token mirror at the posting level. Set
+   ;; together with :transaction/clearance-token by the country
+   ;; module's EInvoiceProvider on transition :pending-attestation
+   ;; → :posted. Mirrored at the posting level so reports keyed off
+   ;; postings (rather than transactions) can find the token directly.
+   {:db/ident       :posting/clearance-token
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "Mirror of :transaction/clearance-token at the
+                     posting level for query ergonomics. Set together
+                     with the parent transaction's token. ADR-018."}])
+
+(def ^:private tax-application-attrs
+  "ADR-016 — per-posting per-tax computation record. Captures the
+   base, the resulting tax amount, and the compound-on lineage for
+   audit + report queries that need direct (not derived) per-tax
+   detail. One :tax-application entity per (product-line × tax) pair."
+  [{:db/ident       :tax-application/posting
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "Back-ref to the :product-display-type posting
+                     this application annotates."}
+
+   {:db/ident       :tax-application/tax
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The :tax entity that was applied."}
+
+   {:db/ident       :tax-application/base
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The base amount this tax was computed against.
+                     Differs from the posting's amount when other
+                     taxes compound into the base (BR ICMS-on-net+IPI
+                     case)."}
+
+   {:db/ident       :tax-application/amount
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The resulting tax amount."}
+
+   {:db/ident       :tax-application/tags
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Account-tag refs (typically inherited from the
+                     tax-repartition lines) used by reports."}
+
+   {:db/ident       :tax-application/compound-on
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Other :tax entities whose amounts were folded
+                     into this application's :base (i.e. taxes whose
+                     :tax/include-base-amount was true and which
+                     preceded this one in the chain)."}
+
+   {:db/ident       :tax-application/sequence
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Order within the compound chain. Lower numbers
+                     are computed first; later applications see them
+                     in their :compound-on. Required even with one
+                     tax for round-tripping."}])
 
 ;; ============================================================================
 ;; Payment terms — Net N + early-discount window. Reusable
@@ -1350,6 +1587,458 @@
                      queries and SR&ED-style project tracking."}])
 
 ;; ============================================================================
+;; Per-account required analytic plans — ADR-022.
+;;
+;; Postings against an account that names plans here must carry
+;; distributions in each named plan summing to 100%. Optional.
+;; ============================================================================
+
+(def ^:private account-analytic-attrs
+  [{:db/ident       :account/required-analytic-plans
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Set of :analytic-plan entities that postings
+                     against this account must populate. The posting
+                     validator enforces a sum-to-100 invariant per
+                     named plan. nil = no plan required."}])
+
+;; ============================================================================
+;; Ledgers — ADR-021.
+;;
+;; A first-class entity for parallel ledgers (IFRS / local GAAP / budget
+;; / statistical). One primary ledger is auto-installed by
+;; `kontor.ledger/install-defaults!`; consumers add secondary ledgers.
+;; Sum-to-zero in a transaction is enforced PER LEDGER.
+;; ============================================================================
+
+(def ^:private ledger-attrs
+  [{:db/ident       :ledger/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Stable identifier (\"primary\", \"ifrs\", \"hgb\",
+                     \"budget\", \"statistical\")."}
+
+   {:db/ident       :ledger/name
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :ledger/type
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":primary | :secondary | :adjustment
+                     | :budget | :statistical"}
+
+   {:db/ident       :ledger/framework
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Accounting framework keyword.
+                     :IFRS | :US-GAAP | :HGB | :ASBE | :NCRF | :ind-AS
+                     | :local | ... — free-form, l10n-defined."}
+
+   {:db/ident       :ledger/commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Accounting currency for this ledger when it
+                     differs from the transaction commodity."}
+
+   {:db/ident       :ledger/active
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one}])
+
+(def ^:private posting-ledger-attrs
+  [{:db/ident       :posting/ledger
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The ledger this posting lives in. Optional in
+                     schema; the posting-builder resolves to the
+                     bootstrapped primary ledger when absent. The
+                     sum-to-zero invariant runs PER LEDGER inside a
+                     transaction (ADR-021)."}])
+
+;; ============================================================================
+;; Country + state + place-of-supply — ADR-023.
+;;
+;; First-class country and state entities, composite-tuple identity on
+;; (country, code). External codes follow the ADR-019 pattern. Country
+;; groups (EU / EEA / NAFTA) are data, not flags. The kernel ships no
+;; geo data; l10n modules install the slice they need.
+;; ============================================================================
+
+(def ^:private country-attrs
+  [{:db/ident       :country/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "ISO 3166-1 alpha-2 (\"IN\", \"BR\", \"CA\")."}
+
+   {:db/ident       :country/code-iso3
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "ISO 3166-1 alpha-3 (\"IND\", \"BRA\", \"CAN\").
+                     Optional — only loaded by l10n modules that
+                     need it."}
+
+   {:db/ident       :country/name
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "English name. Localized display names belong in
+                     consumer apps."}
+
+   {:db/ident       :country/default-commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Default trading commodity (INR, BRL, CAD…).
+                     Hint only; does not constrain account commodity."}
+
+   {:db/ident       :country/external-codes
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Refs to :country-code entities — per-regulator
+                     aliases beyond ISO. Mirrors ADR-019."}
+
+   {:db/ident       :country/groups
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Refs to :country-group entities (EU, EEA, NAFTA…).
+                     Many-to-many; a country may belong to several."}
+
+   {:db/ident       :country/active
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one}])
+
+(def ^:private country-code-attrs
+  [{:db/ident       :country-code/country
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Back-ref to the country this external code is for."}
+
+   {:db/ident       :country-code/regulator
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Identifies the regulator / mapping target.
+                     Conventions: :iso-3166-1-numeric, :un/m49,
+                     :sap/land1, :in/customs, …"}
+
+   {:db/ident       :country-code/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The code in the regulator's system."}
+
+   {:db/ident       :country-code/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:country-code/country :country-code/regulator]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Composite identity. One (country, regulator)
+                     pairing exists at most once."}
+
+   {:db/ident       :country-code/note
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional human-readable explanation."}])
+
+(def ^:private country-group-attrs
+  [{:db/ident       :country-group/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Stable identifier (\"EU\", \"EEA\", \"NAFTA\",
+                     \"G7\", \"USMCA\")."}
+
+   {:db/ident       :country-group/name
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}])
+
+(def ^:private state-attrs
+  [{:db/ident       :state/country
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Parent country. Required."}
+
+   {:db/ident       :state/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "ISO 3166-2 suffix (\"MH\", \"QC\", \"SP\", \"JAL\").
+                     Just the local part — not the full \"IN-MH\"."}
+
+   {:db/ident       :state/name
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :state/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:state/country :state/code]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Composite identity. One (country, state-code)
+                     pairing exists at most once."}
+
+   {:db/ident       :state/external-codes
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Refs to :state-code entities — per-regulator
+                     codes beyond ISO 3166-2 (Indian GSTN, Brazilian
+                     IBGE, Canadian CRA province code, etc.)."}
+
+   {:db/ident       :state/active
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one}])
+
+(def ^:private state-code-attrs
+  [{:db/ident       :state-code/state
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Back-ref to the state this external code is for."}
+
+   {:db/ident       :state-code/regulator
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Identifies the regulator / mapping target.
+                     Conventions: :in/gst, :br/ibge, :ca/cra,
+                     :iso-3166-2, :sap/bland, :sat/c-estado, …"}
+
+   {:db/ident       :state-code/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The code in the regulator's system.
+                     E.g. \"27\" (GSTN for Maharashtra),
+                     \"35\" (IBGE for São Paulo),
+                     \"13\" (CRA for Quebec)."}
+
+   {:db/ident       :state-code/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:state-code/state :state-code/regulator]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Composite identity."}
+
+   {:db/ident       :state-code/note
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}])
+
+(def ^:private partner-state-attrs
+  [{:db/ident       :partner/state
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Partner's registered state — billing / address.
+                     Distinct from :transaction/place-of-supply.
+                     Optional (consumer-side bootstrap)."}])
+
+(def ^:private transaction-pos-attrs
+  [{:db/ident       :transaction/place-of-supply
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Place of supply (ADR-023). Ref to :state.
+
+                     India: drives the CGST+SGST (intra-state) vs
+                     IGST (inter-state) vs UTGST (union territory)
+                     dispatch — compare against the issuer's state.
+
+                     Other jurisdictions (Canada inter-provincial,
+                     Mexico) may set this when POS differs from the
+                     partner's registered state. Optional; absent
+                     means 'same as partner state' by convention."}])
+
+;; ============================================================================
+;; Multi-attestation — ADR-024.
+;;
+;; One transaction may carry zero or more government-issued artifacts
+;; (IRN, e-way bill, PAC stamp UUID, NF-e access key, fapiao number,
+;; ZATCA ICV, etc.) each with its own format, token, validity window,
+;; lifecycle state, and depends-on graph. Coexists with the legacy
+;; singular :transaction/clearance-token; the cardinality-many is
+;; authoritative when both are present.
+;; ============================================================================
+
+(def ^:private attestation-attrs
+  [{:db/ident       :attestation/transaction
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Back-ref to the transaction this attestation
+                     belongs to."}
+
+   {:db/ident       :attestation/format
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Format keyword. Conventions:
+                     :in/irn :in/ewb-part-a :in/ewb-part-b
+                     :br/nfe-44 :mx/cfdi-uuid :cn/fapiao-20
+                     :sa/zatca-icv :sa/zatca-pih :tr/efatura
+                     :kr/nts-chain :it/sdi-id"}
+
+   {:db/ident       :attestation/token
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The issued artifact identifier (IRN hash, UUID,
+                     access-key, …)."}
+
+   {:db/ident       :attestation/state
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":pending | :issued | :revoked | :expired
+                     | :superseded"}
+
+   {:db/ident       :attestation/issued-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "When the authority's response landed."}
+
+   {:db/ident       :attestation/valid-from
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional start of the legal validity window."}
+
+   {:db/ident       :attestation/valid-until
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional end of the legal validity window.
+                     E-way bills: 1 day per 200 km (regular) or
+                     1 day per 20 km (over-dimensional cargo)."}
+
+   {:db/ident       :attestation/depends-on
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Refs to other :attestation entities this one
+                     depends on. India: EWB Part A derives from the
+                     IRN, so the EWB attestation depends-on the IRN."}
+
+   {:db/ident       :attestation/payload
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Canonical bytes sent to / received from the
+                     authority. Required for cryptographic-stamp
+                     regimes (KSA ZATCA Phase 2, Turkey, Korea) where
+                     the bytes themselves are the legal record."}
+
+   {:db/ident       :attestation/payload-hash
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "SHA-256 of :attestation/payload, hex-encoded.
+                     PIH (previous-invoice-hash) chains reference
+                     this to link consecutive attestations."}
+
+   {:db/ident       :attestation/note
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :attestation/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:attestation/transaction :attestation/format]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "One (transaction, format) pair exists at most
+                     once. Re-issuing replaces."}])
+
+(def ^:private transaction-attestations-attrs
+  [{:db/ident       :transaction/attestations
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Refs to :attestation entities. ADR-024.
+
+                     Coexists with :transaction/clearance-token
+                     (singular string). When both present, the
+                     cardinality-many is authoritative.
+
+                     Multi-attestation jurisdictions (IN IRN+EWB,
+                     IT SdI synthetic-issuer, KR NTS chain) MUST use
+                     this; single-attestation jurisdictions MAY use
+                     either."}])
+
+;; ============================================================================
+;; Document composition — ADR-025.
+;;
+;; Mexico's CFDI is one envelope + N stacked complementos (Pagos,
+;; Carta Porte, Nómina, TFD). Each complemento is its own XSD;
+;; serialization splices them into the envelope's <Complemento>
+;; parent in :complemento/sequence order. The kernel stores opaque
+;; payload bytes; XSD validation lives in the l10n module that owns
+;; the namespace.
+;; ============================================================================
+
+(def ^:private complemento-attrs
+  [{:db/ident       :complemento/transaction
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Back-ref to the transaction this complemento
+                     attaches to."}
+
+   {:db/ident       :complemento/namespace
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Canonical XML namespace URI.
+                     E.g. \"http://www.sat.gob.mx/CartaPorte31\",
+                     \"http://www.sat.gob.mx/Pagos20\",
+                     \"http://www.sat.gob.mx/TimbreFiscalDigital\"."}
+
+   {:db/ident       :complemento/format
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Convenience identifier keyword.
+                     E.g. :mx/cfdi-pagos-2.0 :mx/cfdi-carta-porte-3.1
+                     :mx/cfdi-nomina-1.2 :mx/cfdi-tfd-1.1
+                     :ubl/factur-x-additional-doc."}
+
+   {:db/ident       :complemento/sequence
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ordering within the envelope. Some XSDs enforce
+                     a defined order; safe to default to insertion
+                     order (0, 100, 200, …)."}
+
+   {:db/ident       :complemento/payload
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The XML fragment as a string. The kernel does
+                     not validate against the XSD; the emitter in
+                     the l10n module does."}
+
+   {:db/ident       :complemento/active
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Soft-supersede flag. Set to false when a later
+                     complemento replaces this one (idempotency)."}
+
+   {:db/ident       :complemento/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:complemento/transaction :complemento/namespace]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "One fragment per (transaction, namespace)."}])
+
+(def ^:private transaction-complementos-attrs
+  [{:db/ident       :transaction/complementos
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Refs to :complemento entities. ADR-025."}])
+
+;; ============================================================================
+;; Effective-dated tax rates — ADR-026.
+;;
+;; Optional :tax/effective-from / :tax/effective-until on existing
+;; :tax entities. TaxProvider selects the tax record whose validity
+;; window contains the transaction's effective-date. Drives India
+;; GST 2.0 (pre-2025-09-22 vs current), Brazil IBS/CBS transition,
+;; Mexico IEPS annual cuotas, Germany 7%-vs-19% restaurant VAT.
+;; ============================================================================
+
+(def ^:private tax-effective-window-attrs
+  [{:db/ident       :tax/effective-from
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Start of the rate's legal validity window.
+                     Nil means -infinity (always-effective). ADR-026."}
+
+   {:db/ident       :tax/effective-until
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "End of the rate's legal validity window
+                     (open interval: this is the first instant the
+                     rate is no longer in effect). Nil means
+                     +infinity. ADR-026."}])
+
+;; ============================================================================
 ;; Aggregate
 ;; ============================================================================
 
@@ -1364,6 +2053,8 @@
     commodity-attrs
     lot-attrs
     account-attrs
+    account-code-attrs                   ; ADR-019
+    document-type-attrs                  ; ADR-020
     account-tag-attrs
     journal-attrs
     partner-attrs
@@ -1371,10 +2062,11 @@
     tax-attrs
     tax-rep-attrs
     tax-group-attrs
+    tax-application-attrs                ; ADR-016
     period-attrs
     balance-assertion-attrs
-    transaction-attrs
-    posting-attrs
+    transaction-attrs                    ; +pending-attestation + clearance-token (ADR-018)
+    posting-attrs                        ; +tax-breakdown + clearance-token
     payment-term-attrs
     invoice-attrs
     invoice-line-attrs
@@ -1382,7 +2074,22 @@
     analytic-plan-attrs
     analytic-account-attrs
     analytic-distribution-attrs
-    posting-analytic-attrs)))
+    posting-analytic-attrs
+    account-analytic-attrs               ; ADR-022
+    ledger-attrs                         ; ADR-021
+    posting-ledger-attrs                 ; ADR-021
+    country-attrs                        ; ADR-023
+    country-code-attrs                   ; ADR-023
+    country-group-attrs                  ; ADR-023
+    state-attrs                          ; ADR-023
+    state-code-attrs                     ; ADR-023
+    partner-state-attrs                  ; ADR-023
+    transaction-pos-attrs                ; ADR-023
+    attestation-attrs                    ; ADR-024
+    transaction-attestations-attrs       ; ADR-024
+    complemento-attrs                    ; ADR-025
+    transaction-complementos-attrs       ; ADR-025
+    tax-effective-window-attrs)))        ; ADR-026
 
 (defn install!
   "Transact the kernel schema into a connection. Idempotent — re-running

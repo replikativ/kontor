@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<xsd:schema 
+xmlns:olT661Parts2="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts2/1-0-0" 
+			xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+			xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+			xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+	targetNamespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts2/1-0-0" 
+	elementFormDefault="qualified" attributeFormDefault="unqualified" version="ols661/1-0-0">
+
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/> 
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/> 
+
+<xsd:element name="T661Part2Data" type="olT661Parts2:Part2DataType"/>
+	<xsd:complexType name="Part2DataType">
+		<xsd:sequence>
+			<xsd:element ref="olT661Parts2:Field200" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field202" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field204" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field206" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field208" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field210" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field218" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Part2TableData1" minOccurs="0" maxOccurs="200"/>
+			<xsd:element ref="olT661Parts2:Field253" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field254" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field255" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field256" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field257" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field258" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field259" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Part2TableData2" minOccurs="0" maxOccurs="200"/>
+			<xsd:element ref="olT661Parts2:Field265" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field266" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field267" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Part2TableData3" minOccurs="0" maxOccurs="200"/>
+			<xsd:element ref="olT661Parts2:Field270" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field271" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field272" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field273" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field274" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field275" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field276" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field277" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field278" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field279" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field280" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field281" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Field282" minOccurs="0" maxOccurs="1"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:element name="Field200" type="ccms:Name175CharacterType"/>
+	<xsd:element name="Field202" >
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="6"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="Field204" >
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="6"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="Field206" >
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:SimpleTextType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="Field208" type="ccms:OneCodeType"/>
+	<xsd:element name="Field210" type="ccms:OneCodeType"/>
+	<xsd:element name="Field218" type="ccms:OneTwoCodeType"/>
+	<xsd:element name="Field253" type="ccms:OneCodeType"/>
+	<xsd:element name="Field254" type="ccms:Name175CharacterType"/>
+	<xsd:element name="Field255" type="ccms:OneCodeType"/>
+	<xsd:element name="Field256" type="ccms:Name175CharacterType"/>
+	<xsd:element name="Field257" type="ccms:OneCodeType"/>
+	<xsd:element name="Field258" type="ccms:Name175CharacterType"/>
+	<xsd:element name="Field259" type="ccms:Name175CharacterType"/>
+	<xsd:element name="Field265" type="ccms:OneTwoCodeType"/>
+	<xsd:element name="Field266" type="ccms:OneTwoCodeType"/>
+	<xsd:element name="Field267" type="ccms:OneTwoCodeType"/>
+	<xsd:element name="Field270" type="ccms:OneCodeType"/>
+	<xsd:element name="Field271" type="ccms:OneCodeType"/>
+	<xsd:element name="Field272" type="ccms:OneCodeType"/>
+	<xsd:element name="Field273" type="ccms:OneCodeType"/>
+	<xsd:element name="Field274" type="ccms:OneCodeType"/>
+	<xsd:element name="Field275" type="ccms:OneCodeType"/>
+	<xsd:element name="Field276" type="ccms:OneCodeType"/>
+	<xsd:element name="Field277" type="ccms:OneCodeType"/>
+	<xsd:element name="Field278" type="ccms:OneCodeType"/>
+	<xsd:element name="Field279" type="ccms:OneCodeType"/>
+	<xsd:element name="Field280" type="ccms:OneCodeType"/>
+	<xsd:element name="Field281" type="ccms:OneCodeType"/>
+	<xsd:element name="Field282" type="ccms:Name175CharacterType"/>
+
+	<xsd:element name="Part2TableData1" type="olT661Parts2:Part2TableData1"/>	
+	<xsd:complexType name="Part2TableData1">
+		<xsd:annotation>
+			<xsd:documentation>
+				Table 1 for Part 2
+				Enter each Name of business and their BN for fields 220 and 221
+			</xsd:documentation>
+		</xsd:annotation>
+		<xsd:sequence>
+			<xsd:element ref="olT661Parts2:NamesOfTheBusinesses" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:BN" minOccurs="0" maxOccurs="1"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="NamesOfTheBusinesses" type="ccms:Name175CharacterType" />
+	<xsd:element name="BN" type="ccms:BN15Type" />
+	
+	<xsd:element name="Part2TableData2" type="olT661Parts2:Part2TableData2"/>	
+	<xsd:complexType name="Part2TableData2">
+		<xsd:annotation>
+			<xsd:documentation>
+				Table 2 for Part 2
+				Enter each name and their qualifications for field 260 and 261
+			</xsd:documentation>
+		</xsd:annotation>
+		<xsd:sequence>
+			<xsd:element ref="olT661Parts2:Names" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:Qualifications" minOccurs="0" maxOccurs="1"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="Names" type="ccms:Name175CharacterType" />
+	<xsd:element name="Qualifications" type="ccms:Character175TextType" />
+	
+	<xsd:element name="Part2TableData3" type="olT661Parts2:Part2TableData3"/>	
+	<xsd:complexType name="Part2TableData3">
+		<xsd:annotation>
+			<xsd:documentation>
+				Table 3 for Part 2
+				Enter the names of the individuals or companies and their corresponding BN for fields 268 and 269
+			</xsd:documentation>
+		</xsd:annotation>
+		<xsd:sequence>
+			<xsd:element ref="olT661Parts2:NamesOrCompanies" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts2:BNTable3" minOccurs="0" maxOccurs="1"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="NamesOrCompanies" type="ccms:Name175CharacterType" />
+	<xsd:element name="BNTable3" type="ccms:BN15Type" />
+	
+</xsd:schema> 

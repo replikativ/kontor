@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+<xsd:include schemaLocation="complex.xsd"/>
+	<xsd:element name="Submission" type="ReturnType" />
+	<xsd:complexType name="ReturnType">
+		<xsd:sequence>
+			<xsd:element name="T619" type="TransmitterType" />
+			<xsd:element name="FormVersion" minOccurs="0"/>
+			<xsd:element name="T244" type="T244Type" maxOccurs="unbounded" />
+		</xsd:sequence>
+	</xsd:complexType>
+
+	
+</xsd:schema>

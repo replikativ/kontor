@@ -3,8 +3,10 @@
    double-entry invariants:
 
      1. A transaction has 2+ postings.
-     2. Postings sum to zero per commodity (the double-entry rule —
-        multi-currency moves balance per currency independently).
+     2. Postings sum to zero **per ledger per commodity** (ADR-021 +
+        the double-entry rule — multi-currency moves balance per
+        currency independently, and parallel ledgers are each their
+        own self-balancing book).
      3. Each posting has the minimum required fields (account,
         amount, commodity).
      4. The transaction has the minimum required header fields
@@ -88,30 +90,55 @@
              :message "balance-affecting posting requires :posting/commodity"}))))
 
 ;; ============================================================================
-;; Sum-to-zero
+;; Sum-to-zero (per ledger, per commodity) — ADR-021
 ;; ============================================================================
 
-(defn balance-by-commodity
-  "Return {commodity => Money} of the balance-affecting postings'
-   net amount per commodity. A balanced transaction has every entry
-   zero."
-  [postings]
-  (-> postings
-      (->> (filter balance-affecting?)
-           (keep money/posting->money))
-      money/sum-by-commodity))
+(defn- ledger-key
+  "Grouping key for a posting's ledger membership. Returns the raw
+   :posting/ledger value (eid, lookup-ref like [:ledger/code \"ifrs\"],
+   or ident) so postings written with the same reference form group
+   together. Returns nil when :posting/ledger is absent —
+   build-transaction defaults missing ledgers to the primary-ledger
+   lookup-ref before validation, so well-formed inputs never group
+   under nil."
+  [posting]
+  (:posting/ledger posting))
 
-(defn unbalanced-commodities
-  "Return a map {commodity => Money} of commodities where the balance
-   is non-zero. Empty map iff the transaction balances per commodity.
+(defn balance-by-ledger-and-commodity
+  "Return {ledger-key => {commodity => Money}} of the balance-affecting
+   postings' net amount, grouped first by :posting/ledger then summed
+   per commodity within each ledger. A balanced transaction has every
+   inner Money zero.
 
-   Multi-currency rule: each commodity sums independently. A USD/EUR
-   payment with both sides recorded balances if and only if the USD
-   leg sums to zero AND the EUR leg sums to zero."
+   ledger-key is the raw :posting/ledger value as supplied; postings
+   missing :posting/ledger group under nil (see `ledger-key`)."
   [postings]
-  (->> (balance-by-commodity postings)
-       (remove (fn [[_c m]] (money/zero? m)))
-       (into {})))
+  (->> postings
+       (filter balance-affecting?)
+       (group-by ledger-key)
+       (reduce-kv
+        (fn [acc l ps]
+          (assoc acc l (->> ps
+                            (keep money/posting->money)
+                            money/sum-by-commodity)))
+        {})))
+
+(defn unbalanced-ledger-commodities
+  "Return {ledger-key => {commodity => Money}} retaining only entries
+   with non-zero balance. Empty outer map iff the transaction balances
+   per ledger per commodity.
+
+   Multi-currency rule (unchanged from single-ledger): each commodity
+   sums independently. Parallel-ledger rule (ADR-021): each ledger
+   sums independently — a 5 EUR debit on the IFRS ledger does NOT
+   net against a 5 EUR credit on the HGB ledger."
+  [postings]
+  (->> (balance-by-ledger-and-commodity postings)
+       (reduce-kv
+        (fn [acc l m]
+          (let [nz (into {} (remove (fn [[_ v]] (money/zero? v)) m))]
+            (if (seq nz) (assoc acc l nz) acc)))
+        {})))
 
 ;; ============================================================================
 ;; Transaction header validation
@@ -135,22 +162,29 @@
 
 (defn validate
   "Pure structural validation. Returns
-     {:ok? boolean
-      :postings [...]
-      :errors [...]
-      :balance {commodity => Money}
-      :unbalanced {commodity => Money}}
+     {:ok?         boolean
+      :postings    [...]
+      :errors      [...]
+      :balance     {ledger-key => {commodity => Money}}
+      :unbalanced  {ledger-key => {commodity => Money}}}   ; only non-zero
 
    No db access. Use this when you want to inspect a draft transaction
-   without committing it."
+   without committing it.
+
+   Per ADR-021 the sum-to-zero invariant is enforced per (ledger,
+   commodity) pair. Postings without :posting/ledger group under nil
+   — this nil-group conceptually IS the primary book, so readers
+   should treat it the same as a posting explicitly tagged with the
+   primary-ledger ref. The kernel does NOT auto-inject a lookup-ref
+   at build time because the invariant library's speculative-apply
+   uses an empty schema-only DB that cannot resolve unique-identity
+   refs to data entities."
   [{:keys [transaction postings] :as input}]
   (let [posting-errors (mapcat posting-validation-errors postings)
         header-errors (header-validation-errors input)
         all-errors (vec (concat header-errors posting-errors))
-        balance (balance-by-commodity postings)
-        unbalanced (->> balance
-                        (remove (fn [[_c m]] (money/zero? m)))
-                        (into {}))
+        balance (balance-by-ledger-and-commodity postings)
+        unbalanced (unbalanced-ledger-commodities postings)
         too-few? (< (count (filter balance-affecting? postings)) 2)
         all-errors (cond-> all-errors
                      too-few?
@@ -160,7 +194,7 @@
 
                      (seq unbalanced)
                      (conj {:error :unbalanced
-                            :message "postings do not sum to zero per commodity"
+                            :message "postings do not sum to zero per (ledger, commodity)"
                             :unbalanced unbalanced}))]
     {:ok?        (empty? all-errors)
      :transaction transaction
@@ -203,7 +237,13 @@
    exists/active, commodity matches account, period not locked,
    sealing, …) — those run at the validation/db boundary.
 
-   Use `validate` for non-throwing inspection."
+   Use `validate` for non-throwing inspection.
+
+   Per ADR-021 (revised), `:posting/ledger` is fully optional. A
+   posting without the attribute is conceptually in the *primary*
+   book; readers and validators treat the nil-keyed group as the
+   primary ledger. Multi-ledger users explicitly tag their postings
+   with a ledger ref or lookup-ref; everyone else pays nothing."
   [{:keys [transaction postings] :as input}]
   (let [report (validate input)]
     (when-not (:ok? report)
@@ -231,3 +271,107 @@
               (range)
               postings)]
     (into [tx-base] posting-entities)))
+
+;; ============================================================================
+;; Analytic-distribution expansion (ADR-022, split-line strategy)
+;; ============================================================================
+;;
+;; Per ADR-022 kontor stores analytic distributions on a single posting
+;; by default (Odoo-style — preserves the distribution as a queryable
+;; fact). `expand-distribution` is the opt-in helper for consumers who
+;; want the SAP / NetSuite "one posting per cost center" shape.
+;;
+;; Usage:
+;;   (-> {:transaction {...} :postings [posting]}
+;;       (update :postings #(into [] (mapcat (fn [p]
+;;                                              (expand-distribution
+;;                                               p [:analytic-plan/code "COST-CENTER"])))
+;;                                 %)))
+;;       (build-transaction))
+
+(defn- distribution-matches-plan?
+  "True iff a distribution map's :analytic-distribution/plan value
+   equals the supplied plan-spec. Plan-spec may be an eid, a
+   lookup-ref like [:analytic-plan/code \"COST-CENTER\"], or any
+   value that the caller used in the distribution entry."
+  [plan-spec dist]
+  (= plan-spec (:analytic-distribution/plan dist)))
+
+(defn- precision-for-amount
+  "At the build/expansion layer we don't have DB access to query
+   :commodity/precision, so derive precision from the Money's amount
+   scale (max 2 for fiat). Per ADR-013."
+  [^java.math.BigDecimal amt]
+  (max 2 (.scale amt)))
+
+(defn- expand-distribution--per-plan
+  "Split a posting's amount across the distribution entries that
+   match `plan-spec`. Other plans' distributions ride along on each
+   child unchanged. See `expand-distribution`."
+  [posting plan-spec]
+  (let [all-dists (:posting/analytic-distributions posting)
+        matching  (filterv (partial distribution-matches-plan? plan-spec) all-dists)
+        others    (filterv (complement (partial distribution-matches-plan? plan-spec))
+                           all-dists)]
+    (if (empty? matching)
+      [posting]
+      (let [parent-money (money/posting->money posting)
+            percents     (mapv :analytic-distribution/percent matching)
+            precision    (precision-for-amount (:amount parent-money))
+            splits       (money/split-by-percentages parent-money percents precision)]
+        (->> (map vector matching splits)
+             ;; Drop zero-percent children — no zero-amount postings.
+             (remove (fn [[d _]]
+                       (zero? (compare (bigdec (:analytic-distribution/percent d))
+                                       0M))))
+             (mapv (fn [[dist split-money]]
+                     (-> posting
+                         (assoc :posting/amount (:amount split-money))
+                         (assoc :posting/analytic-distributions
+                                (into [{:analytic-distribution/plan plan-spec
+                                        :analytic-distribution/account
+                                        (:analytic-distribution/account dist)
+                                        :analytic-distribution/percent 100M}]
+                                      others))))))))))
+
+(defn expand-distribution
+  "Expand a single posting that carries analytic distributions under
+   `plan-spec` into N postings, one per distribution entry, with the
+   amount split per percent (largest-remainder method — see
+   `kontor.money/split-by-percentages`).
+
+   `plan-spec` matches a distribution's :analytic-distribution/plan
+   value exactly (eid, lookup-ref, etc. — pass it in whatever form
+   the caller used to tag the distribution).
+
+   Each child posting inherits:
+     - :posting/account, :posting/commodity, :posting/ledger
+     - :posting/partner, :posting/narration
+     - :posting/display-type, :posting/valid-from, :posting/period-tag
+     - other plans' distributions (they ride along unchanged on each
+       child — the default semantic). Pass :strategy :cartesian to
+       split across all plans simultaneously (rare; not yet implemented).
+
+   Child amount = trunc(amount × percent / 100), with residue
+   redistributed by largest-remainder so the children sum bit-exact
+   to the parent.
+
+   Distributions with :analytic-distribution/percent = 0 produce no
+   child (we don't emit zero-amount postings).
+
+   If the posting carries no distributions for `plan-spec`, returns
+   `[posting]` unchanged (caller can fold this into a mapcat).
+
+   The expander does NOT validate the per-plan sum-to-100 invariant
+   itself — that's `kontor.posting/validate`'s job at posting time.
+   Callers that build by hand should validate before expanding.
+
+   Returns a sequence of posting maps."
+  ([posting plan-spec]
+   (expand-distribution posting plan-spec {}))
+  ([posting plan-spec {:keys [strategy] :or {strategy :per-plan}}]
+   (case strategy
+     :per-plan  (expand-distribution--per-plan posting plan-spec)
+     :cartesian (throw (ex-info "expand-distribution :cartesian not yet implemented"
+                                {:posting posting :plan-spec plan-spec}))
+     (throw (ex-info "Unknown :strategy" {:strategy strategy})))))

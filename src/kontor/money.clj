@@ -211,6 +211,104 @@
               (:commodity m)))))
 
 ;; ============================================================================
+;; Splitting (largest-remainder method)
+;; ============================================================================
+
+(defn split-by-percentages
+  "Split a Money into N children whose amounts sum exactly to the input.
+   `percents` is a sequence of BigDecimal-coercible values that must
+   sum to 100 (sub-cent tolerance: we re-normalize the input sum
+   modulo the rounding-mode chosen for the per-child computation).
+
+   Algorithm (Hare / largest-remainder, the standard apportionment):
+     1. For each percent, compute floor(amount × pct / 100) at the
+        target precision (default 2 for fiat).
+     2. Sum the children; the residue = input - sum is the count of
+        smallest-units we still owe to (or owe back from) the children.
+     3. Distribute the residue one unit at a time to the children
+        with the largest fractional remainders (or take it back from
+        the smallest, when residue is negative — possible only with
+        HALF_UP-ish rounding modes that round AWAY from zero; with
+        HALF_EVEN it's always non-negative).
+
+   Returns a vector of Monies in the same order as `percents`. The
+   sum is *bit-exact* to the input — no rounding noise.
+
+   Throws on:
+     - empty percent sequence
+     - any negative percent (use 0 for omitted slots)
+
+   Used by `kontor.posting/expand-distribution` (ADR-022)."
+  ([^Money m percents]
+   (split-by-percentages m percents 2 :half-even))
+  ([^Money m percents precision]
+   (split-by-percentages m percents precision :half-even))
+  ([^Money m percents precision mode]
+   (when (empty? percents)
+     (throw (ex-info "split-by-percentages: empty percent sequence"
+                     {:money m})))
+   (let [bd-percents (mapv coerce-amount percents)
+         _ (doseq [p bd-percents]
+             (when (neg? (.signum ^BigDecimal p))
+               (throw (ex-info "split-by-percentages: negative percent"
+                               {:money m :percent p}))))
+         rm (or (get rounding-modes mode)
+                (throw (ex-info "Unknown rounding mode" {:mode mode})))
+         amt ^BigDecimal (:amount m)
+         hundred (BigDecimal/valueOf 100)
+         ;; Step 1: trunc(amount × pct / 100) at target precision.
+         ;; RoundingMode/DOWN truncates toward zero, which is symmetric
+         ;; for both signs — a -33.333 entry rounds to -33.33, not -34.
+         floors (mapv (fn [^BigDecimal p]
+                        (-> amt
+                            (.multiply p)
+                            (.divide hundred (int precision) RoundingMode/DOWN)))
+                      bd-percents)
+         ;; Pre-rounding precision: the same multiplication done at
+         ;; higher precision tells us the exact fractional remainder
+         ;; we lost when flooring. Used as the ranking key for
+         ;; residue distribution.
+         exact (mapv (fn [^BigDecimal p]
+                       (-> amt
+                           (.multiply p)
+                           (.divide hundred (int (+ precision 4)) rm)))
+                     bd-percents)
+         remainders (mapv (fn [^BigDecimal e ^BigDecimal f]
+                            (.subtract e f))
+                          exact floors)
+         scaled-amt (.setScale amt (int precision) rm)
+         zero-at-p  (.setScale BigDecimal/ZERO (int precision))
+         floor-sum (reduce (fn [^BigDecimal acc ^BigDecimal x] (.add acc x))
+                           zero-at-p
+                           floors)
+         residue   (.subtract scaled-amt floor-sum)
+         ;; Smallest unit at the target precision (e.g. 0.01 for cents).
+         unit      (.movePointLeft BigDecimal/ONE (int precision))
+         ;; Number of units to distribute (rounded toward zero for safety).
+         unit-count (-> residue
+                        (.divide unit 0 RoundingMode/HALF_EVEN)
+                        .toBigInteger
+                        .longValue)
+         ;; Rank indexes by descending magnitude of remainder (the
+         ;; "biggest loss when truncated" slot gets bumped first).
+         ;; Using |remainder| keeps the ranking symmetric for both
+         ;; positive and negative input amounts. Ties break on lower
+         ;; index for determinism.
+         indexes (->> (range (count floors))
+                      (sort-by (fn [i] [(.negate (.abs ^BigDecimal (nth remainders i)))
+                                        i])))
+         to-bump (set (take (Math/abs unit-count) indexes))
+         signed-unit (if (neg? unit-count) (.negate unit) unit)
+         adjusted (vec
+                   (map-indexed
+                    (fn [i ^BigDecimal f]
+                      (if (contains? to-bump i)
+                        (.add f signed-unit)
+                        f))
+                    floors))]
+     (mapv #(->Money % (:commodity m)) adjusted))))
+
+;; ============================================================================
 ;; Display
 ;; ============================================================================
 

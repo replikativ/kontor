@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<xsd:schema 
+xmlns:olT661Parts4="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts4/1-0-0" 
+			xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+			xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+			xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+	targetNamespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts4/1-0-0" 
+	elementFormDefault="qualified" attributeFormDefault="unqualified" version="ols661/1-0-0">
+
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/> 
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/> 
+
+<xsd:element name="T661Part4Data" type="olT661Parts4:Part4DataType"/>
+	<xsd:complexType name="Part4DataType">
+		<xsd:sequence>
+			<xsd:element ref="olT661Parts4:Part4LineAmounts" minOccurs="0" maxOccurs="200"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+
+<xsd:element name="Part4LineAmounts" type="ccms:FieldCodeAmountType"/>
+	<xsd:annotation>
+		<xsd:documentation>
+			Total expenditures for SRED (from lines 380 and 390)   492
+			payment of prior years' unpaid amounts (other than salary or wages) (see note 5)   500
+			prescribed proxy amount (complete Part 5) (Enter "0" if you use the traditional method)   502
+			expenditures on shared-use equipment for property acquired before 2014      
+			qualified expenditures transferred to you (see note 3) (complete Form T1146**)   508
+			Subtotal (add lines 492 to 508)   511
+			provincial government assistance   513
+			other government assistance   515
+			non-government assistance and contract payments   517
+			current expenditures (other than salary or wages) not paid within 180 days of the tax year end (see note 5)   520
+			amounts paid in respect of an SRED contract to a person or partnership that is not a taxable supplier   528
+			20% of expenditures included on lines 340 and 370   529
+			prescribed expenditures not allowed by regulations (see guide)   530
+			other deductions (see guide)   533
+			assistance allocated to you (complete Form T1145*)   538
+			expenditures for non-arm's length SRED contracts (from line 345)   541
+			adjustments to purchases (limited to costs) of goods and services from non-arm's length suppliers (see guide)   542
+			qualified expenditures you transferred (complete Form T1146**)   544			
+			Qualified SRED expenditures (line 511 minus lines 513 to 544)        559
+			repayments of assistance and contract payments made in the year      560
+			Total qualified SRED expenditures for ITC purposes (add lines 559 and 560)      570
+		</xsd:documentation>
+	</xsd:annotation>
+
+
+</xsd:schema>

@@ -1,0 +1,170 @@
+;; J-GAAP-style chart of accounts for Japan.
+;;
+;; J-GAAP (Japanese Generally Accepted Accounting Principles) does not
+;; legally mandate a specific chart of accounts. The conventional
+;; numeric scheme is 6 digits with leading-digit semantics:
+;;   1xxxxx  assets       資産
+;;   2xxxxx  liabilities  負債
+;;   3xxxxx  net assets   純資産
+;;   4xxxxx  revenue      売上
+;;   5xxxxx  COGS         売上原価
+;;   6xxxxx  operating expenses  販管費
+;;   7xxxxx  non-operating items
+;;   8xxxxx  extraordinary items
+;;   9xxxxx  income tax
+;;
+;; This is a *skeleton* — the Odoo l10n_jp manifest correctly notes
+;; that users are expected to extend per their business. Names follow
+;; conventional kanji terminology (kanjō kamoku 勘定科目).
+;;
+;; Consumption tax (JCT, 消費税) split:
+;;   :ca-tag references map to the JCT return line. Per ADR-018, JP
+;;   does NOT use clearance-tokens — Peppol PINT JP is post-delivery
+;;   with no government clearance step. The Qualified Invoice
+;;   System (QIS, in force since 2023-10-01) requires the issuer's
+;;   T-prefix registration number on the invoice but no real-time
+;;   government call.
+[
+ ;; ---------- Assets (1xxxxx) ----------
+ {:code "110100" :path "Assets:Cash:OnHand"
+  :name "Cash on hand / 現金"
+  :type :asset :reconcilable? false
+  :tags [:jp-jct-out-of-scope]}
+ {:code "110200" :path "Assets:Cash:Bank"
+  :name "Bank deposits / 預金"
+  :type :asset :reconcilable? true
+  :tags [:jp-jct-out-of-scope]}
+ {:code "121000" :path "Assets:Receivable"
+  :name "Accounts receivable / 売掛金"
+  :type :asset :reconcilable? true
+  :tags [:jp-jct-out-of-scope]}
+ {:code "122000" :path "Assets:Receivable:Notes"
+  :name "Notes receivable / 受取手形"
+  :type :asset :reconcilable? true}
+ {:code "130000" :path "Assets:Inventory"
+  :name "Inventory / 棚卸資産"
+  :type :asset}
+ {:code "151000" :path "Assets:Fixed:Land"
+  :name "Land / 土地"
+  :type :asset}
+ {:code "152000" :path "Assets:Fixed:Buildings"
+  :name "Buildings / 建物"
+  :type :asset}
+ {:code "153000" :path "Assets:Fixed:Machinery"
+  :name "Machinery / 機械装置"
+  :type :asset}
+ {:code "155000" :path "Assets:Fixed:AccumDep"
+  :name "Accumulated depreciation / 減価償却累計額"
+  :type :asset}                          ;; contra-asset
+ {:code "180100" :path "Assets:Tax:InputJCT-10"
+  :name "Input consumption tax 10% / 仮払消費税 (10%)"
+  :type :asset :reconcilable? false
+  :tags [:jp-jct-line-input-10]}
+ {:code "180200" :path "Assets:Tax:InputJCT-8"
+  :name "Input consumption tax 8% / 仮払消費税 (8%)"
+  :type :asset
+  :tags [:jp-jct-line-input-8]}
+
+ ;; ---------- Liabilities (2xxxxx) ----------
+ {:code "211000" :path "Liabilities:Payable"
+  :name "Accounts payable / 買掛金"
+  :type :liability :reconcilable? true}
+ {:code "212000" :path "Liabilities:Payable:Notes"
+  :name "Notes payable / 支払手形"
+  :type :liability}
+ {:code "213000" :path "Liabilities:Loan:Short"
+  :name "Short-term loans payable / 短期借入金"
+  :type :liability}
+ {:code "214000" :path "Liabilities:Accrued"
+  :name "Accrued expenses / 未払金"
+  :type :liability}
+ {:code "215100" :path "Liabilities:Tax:OutputJCT-10"
+  :name "Output consumption tax 10% / 仮受消費税 (10%)"
+  :type :liability
+  :tags [:jp-jct-line-output-10]}
+ {:code "215200" :path "Liabilities:Tax:OutputJCT-8"
+  :name "Output consumption tax 8% / 仮受消費税 (8%)"
+  :type :liability
+  :tags [:jp-jct-line-output-8]}
+ {:code "220000" :path "Liabilities:Loan:Long"
+  :name "Long-term loans / 長期借入金"
+  :type :liability}
+
+ ;; ---------- Net assets (3xxxxx) ----------
+ {:code "310000" :path "Equity:Capital"
+  :name "Capital stock / 資本金"
+  :type :equity}
+ {:code "320000" :path "Equity:CapitalSurplus"
+  :name "Capital surplus / 資本剰余金"
+  :type :equity}
+ {:code "330000" :path "Equity:RetainedEarnings"
+  :name "Retained earnings / 利益剰余金"
+  :type :equity}
+
+ ;; ---------- Revenue (4xxxxx) ----------
+ {:code "411000" :path "Income:Sales:10pct"
+  :name "Sales — standard 10% / 売上高 (10%)"
+  :type :income
+  :tags [:jp-jct-line-sales-10]}
+ {:code "412000" :path "Income:Sales:8pct"
+  :name "Sales — reduced 8% / 軽減税率売上高"
+  :type :income
+  :tags [:jp-jct-line-sales-8]}
+ {:code "413000" :path "Income:Sales:Exempt"
+  :name "Sales — exempt / 非課税売上"
+  :type :income
+  :tags [:jp-jct-line-sales-exempt]}
+ {:code "414000" :path "Income:Sales:ZeroRated"
+  :name "Sales — zero-rated / export / 輸出売上"
+  :type :income
+  :tags [:jp-jct-line-sales-zero]}
+
+ ;; ---------- COGS (5xxxxx) ----------
+ {:code "511000" :path "Expense:COGS:Purchases-10"
+  :name "Purchases — standard 10% / 仕入 (10%)"
+  :type :expense
+  :tags [:jp-jct-line-purchases-10]}
+ {:code "512000" :path "Expense:COGS:Purchases-8"
+  :name "Purchases — reduced 8% / 軽減税率仕入"
+  :type :expense
+  :tags [:jp-jct-line-purchases-8]}
+
+ ;; ---------- Operating expenses (6xxxxx) ----------
+ {:code "610000" :path "Expense:Salaries"
+  :name "Salaries / 給料手当"
+  :type :expense}
+ {:code "620000" :path "Expense:Rent"
+  :name "Rent / 地代家賃"
+  :type :expense}
+ {:code "630000" :path "Expense:Communications"
+  :name "Communications / 通信費"
+  :type :expense}
+ {:code "640000" :path "Expense:Travel"
+  :name "Travel / 旅費交通費"
+  :type :expense}
+ {:code "650000" :path "Expense:Utilities"
+  :name "Utilities / 水道光熱費"
+  :type :expense}
+ {:code "660000" :path "Expense:Supplies"
+  :name "Office supplies / 消耗品費"
+  :type :expense}
+ {:code "670000" :path "Expense:Depreciation"
+  :name "Depreciation / 減価償却費"
+  :type :expense}
+ {:code "680000" :path "Expense:Other"
+  :name "Other operating expenses / その他販管費"
+  :type :expense}
+
+ ;; ---------- Non-operating (7xxxxx) ----------
+ {:code "710000" :path "Income:Interest"
+  :name "Interest income / 受取利息"
+  :type :income}
+ {:code "720000" :path "Expense:Interest"
+  :name "Interest expense / 支払利息"
+  :type :expense}
+
+ ;; ---------- Income tax (9xxxxx) ----------
+ {:code "900000" :path "Expense:IncomeTax"
+  :name "Corporate income tax / 法人税等"
+  :type :expense}
+ ]

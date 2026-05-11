@@ -8,6 +8,7 @@
    — all bitemporal-aware (ADR-008). Until then, exercise the kernel
    via raw datahike calls and the schema in `schema.clj`."
   (:require [datahike.api :as d]
+            [kontor.ledger :as ledger]
             [kontor.schema :as schema]
             [kontor.tax-provider :as tp]))
 
@@ -43,10 +44,13 @@
 ;; ============================================================================
 
 (defn install-schema!
-  "Transact the kernel schema into the connection. Idempotent — safe
-   to re-run on a connection that already has the schema."
+  "Transact the kernel schema into the connection AND bootstrap the
+   default primary ledger (ADR-021). Idempotent — safe to re-run on a
+   connection that already has the schema."
   [conn]
-  (schema/install! conn))
+  (schema/install! conn)
+  (ledger/install-defaults! conn)
+  conn)
 
 (defn create-test-db
   "Create an ephemeral in-memory accounting DB with the kernel schema
@@ -102,7 +106,11 @@
                       "tax" "tax-rep" "tax-group"
                       "period" "balance-assertion"
                       "transaction" "posting"
-                      "analytic-plan" "analytic-account" "analytic-distribution"}
+                      "analytic-plan" "analytic-account" "analytic-distribution"
+                      "ledger"
+                      "country" "country-code" "country-group"
+                      "state" "state-code"
+                      "attestation" "complemento"}
                     (namespace k))))
          sort
          vec)))

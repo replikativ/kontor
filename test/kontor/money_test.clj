@@ -195,3 +195,84 @@
 
 (deftest record-equality-different-commodity-false
   (is (not= (m/money "1.00" :EUR) (m/money "1.00" :USD))))
+
+;; ============================================================================
+;; split-by-percentages — largest-remainder apportionment
+;; ============================================================================
+
+(defn- sum-amounts [monies]
+  (reduce #(.add ^BigDecimal %1 ^BigDecimal %2)
+          BigDecimal/ZERO
+          (map :amount monies)))
+
+(deftest split-clean-50-50
+  (let [parts (m/split-by-percentages (m/money "100.00" :EUR) [50M 50M])]
+    (is (= 2 (count parts)))
+    (is (m/equiv? (m/money "50.00" :EUR) (nth parts 0)))
+    (is (m/equiv? (m/money "50.00" :EUR) (nth parts 1)))))
+
+(deftest split-clean-60-40
+  (let [parts (m/split-by-percentages (m/money "100.00" :EUR) [60M 40M])]
+    (is (m/equiv? (m/money "60.00" :EUR) (nth parts 0)))
+    (is (m/equiv? (m/money "40.00" :EUR) (nth parts 1)))))
+
+(deftest split-with-residue-100-eur-into-thirds
+  (testing "100.00 EUR / 3 → bit-exact total of 100.00; the residue
+            cent lands on the child with the largest fractional remainder"
+    (let [parts (m/split-by-percentages
+                 (m/money "100.00" :EUR)
+                 [33.333333M 33.333333M 33.333334M])]
+      (is (= 3 (count parts)))
+      (is (= 0 (.compareTo (bigdec "100.00") (sum-amounts parts)))
+          "Sum must be bit-exact")
+      ;; Slot 2 has the larger percent → its true value has the
+      ;; larger fractional remainder → it gets the residue cent.
+      (is (m/equiv? (m/money "33.34" :EUR) (nth parts 2))))))
+
+(deftest split-with-residue-100-eur-equal-thirds
+  (testing "100.00 EUR / 3 with EXACTLY equal 33.333333% percents (sum
+            99.999999) — sub-tolerance case still produces a bit-exact total"
+    (let [parts (m/split-by-percentages
+                 (m/money "100.00" :EUR)
+                 [33.333333M 33.333333M 33.333333M])]
+      (is (= 0 (.compareTo (bigdec "100.00") (sum-amounts parts)))))))
+
+(deftest split-zero-percent-children-get-zero
+  (let [parts (m/split-by-percentages
+               (m/money "100.00" :EUR)
+               [60M 0M 40M])]
+    (is (m/equiv? (m/money  "60.00" :EUR) (nth parts 0)))
+    (is (m/equiv? (m/money   "0.00" :EUR) (nth parts 1)))
+    (is (m/equiv? (m/money  "40.00" :EUR) (nth parts 2)))))
+
+(deftest split-rejects-negative-percent
+  (is (thrown-with-msg?
+       clojure.lang.ExceptionInfo #"negative percent"
+       (m/split-by-percentages (m/money "100.00" :EUR) [110M -10M]))))
+
+(deftest split-rejects-empty
+  (is (thrown-with-msg?
+       clojure.lang.ExceptionInfo #"empty percent sequence"
+       (m/split-by-percentages (m/money "100.00" :EUR) []))))
+
+(deftest split-negative-amount
+  (testing "Splitting a negative amount produces negative children
+            whose sum is bit-exact to the input — symmetric to the
+            positive case"
+    (let [parts (m/split-by-percentages
+                 (m/money "-100.00" :EUR)
+                 [33.333333M 33.333333M 33.333334M])]
+      (is (= 0 (.compareTo (bigdec "-100.00") (sum-amounts parts)))
+          "Sum must be bit-exact for negative input")
+      (is (m/equiv? (m/money "-33.34" :EUR) (nth parts 2))
+          "Residue cent lands on the largest-percent slot, with negative sign"))))
+
+(deftest split-large-residue-many-children
+  (testing "7 children @ 100/7 % — residue is several cents; must be
+            distributed across the largest-remainder slots so the sum
+            remains bit-exact"
+    (let [parts (m/split-by-percentages
+                 (m/money "100.00" :EUR)
+                 (vec (repeat 7 (.divide 100M 7M 10 java.math.RoundingMode/HALF_EVEN))))]
+      (is (= 0 (.compareTo (bigdec "100.00") (sum-amounts parts)))
+          "Sum must be bit-exact across 7-way split with residue"))))

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<xsd:schema 
+xmlns:olT661Parts5="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts5/1-0-0" 
+			xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+			xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+			xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+	targetNamespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts5/1-0-0" 
+	elementFormDefault="qualified" attributeFormDefault="unqualified" version="ols661/1-0-0">
+
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/> 
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/> 
+
+<xsd:element name="T661Part5Data" type="olT661Parts5:Part5DataType"/>
+	<xsd:complexType name="Part5DataType">
+		<xsd:sequence>
+			<xsd:element ref="olT661Parts5:Part5LineAmounts" minOccurs="0" maxOccurs="200"/>
+			<xsd:element ref="olT661Parts5:Part5TableData" minOccurs="0" maxOccurs="200"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:element name="Part5LineAmounts" type="ccms:FieldCodeAmountType"/>
+		<xsd:annotation>
+			<xsd:documentation>
+				Salary or wages of employees other than specified employees (from lines 300 and 307)   810
+				Bonuses, remuneration based on profits, and taxable benefits that were included on line 810   812
+				Subtotal (line 810 minus 812)   814
+				(Enter the total amount of column 6 on line 816)   816
+				Salary base (total of lines 814 and 816)   818
+				Enter 65% of the salary base (line 818) less 5% of the salary base for the number of 2013 calendar days in the tax year, and less 10% of the salary base for number of days after 2013 in the tax year (use the formula in the guide-line 820)   820
+			</xsd:documentation>
+		</xsd:annotation>
+		
+	<xsd:element name="Part5TableData" type="olT661Parts5:Part5TableData1"/>	
+	<xsd:complexType name="Part5TableData1">
+		<xsd:annotation>
+			<xsd:documentation>
+				Table data for Part 5
+				Enter each Name, Salaries, percentages, and calculations for fields 850 through 860
+			</xsd:documentation>
+		</xsd:annotation>
+		<xsd:sequence>
+			<xsd:element ref="olT661Parts5:EmployeeName" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts5:TotalSalary" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts5:PercentageOfTime" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts5:CalculationOne" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts5:CalculationTwo" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts5:CalculationThree" minOccurs="0" maxOccurs="1"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:element name="EmployeeName" type="ccms:Name175CharacterType" />
+	<xsd:element name="TotalSalary" type="sdt:AmountType" />
+	<xsd:element name="PercentageOfTime" type="sdt:PercentType" />
+	<xsd:element name="CalculationOne" type="sdt:AmountType" />
+	<xsd:element name="CalculationTwo" type="sdt:AmountType" />
+	<xsd:element name="CalculationThree" type="sdt:AmountType" />
+	
+</xsd:schema> 

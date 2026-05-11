@@ -16,6 +16,12 @@
          "modules/l10n-fr/src"     "modules/l10n-fr/resources"
          "modules/l10n-ca/src"     "modules/l10n-ca/resources"
          "modules/l10n-us/src"     "modules/l10n-us/resources"
+         "modules/l10n-jp/src"     "modules/l10n-jp/resources"
+         "modules/l10n-au/src"     "modules/l10n-au/resources"
+         "modules/l10n-cn/src"     "modules/l10n-cn/resources"
+         "modules/l10n-br/src"     "modules/l10n-br/resources"
+         "modules/l10n-in/src"     "modules/l10n-in/resources"
+         "modules/l10n-mx/src"     "modules/l10n-mx/resources"
          "modules/bank-de/src"     "modules/bank-de/resources"
          "modules/bank-at/src"     "modules/bank-at/resources"
          "modules/bank-fr/src"     "modules/bank-fr/resources"
@@ -35,6 +41,12 @@
   instaparse/instaparse            {:mvn/version "1.5.0"}
   ;; CSV parsing — used by modules/bank-de. EPL.
   org.clojure/data.csv             {:mvn/version "1.1.0"}
+  ;; XML generation — used by modules/l10n-ca/.../xml/ for CRA
+  ;; information-return XML (T4 / T5 / T5018) per ADR-015. EPL.
+  org.clojure/data.xml             {:mvn/version "0.2.0-alpha9"}
+  ;; JSON — used by modules/l10n-in/.../irn for the NIC IRP payload
+  ;; (ADR-024 multi-attestation). EPL.
+  org.clojure/data.json            {:mvn/version "2.5.0"}
   ;; Mustang — Factur-X / XRechnung / ZUGFeRD generation + embedding.
   ;; APL-2. Used by modules/einvoice-de. Heavy: pulls iText, Apache PDFBox,
   ;; XOM, etc., so kernel-only consumers can drop this entry from their
@@ -49,6 +61,10 @@
                  "modules/l10n-fr/test"      "modules/l10n-fr/test/resources"
                  "modules/l10n-ca/test"      "modules/l10n-ca/test/resources"
                  "modules/l10n-us/test"      "modules/l10n-us/test/resources"
+                 "modules/l10n-jp/test"      "modules/l10n-jp/test/resources"
+                 "modules/l10n-au/test"      "modules/l10n-au/test/resources"
+                 "modules/l10n-cn/test"      "modules/l10n-cn/test/resources"
+                 "modules/l10n-br/test"      "modules/l10n-br/test/resources"
                  "modules/bank-de/test"      "modules/bank-de/test/resources"
                  "modules/bank-at/test"      "modules/bank-at/test/resources"
                  "modules/bank-fr/test"      "modules/bank-fr/test/resources"
@@ -68,6 +84,10 @@
                  "modules/l10n-fr/test"      "modules/l10n-fr/test/resources"
                  "modules/l10n-ca/test"      "modules/l10n-ca/test/resources"
                  "modules/l10n-us/test"      "modules/l10n-us/test/resources"
+                 "modules/l10n-jp/test"      "modules/l10n-jp/test/resources"
+                 "modules/l10n-au/test"      "modules/l10n-au/test/resources"
+                 "modules/l10n-cn/test"      "modules/l10n-cn/test/resources"
+                 "modules/l10n-br/test"      "modules/l10n-br/test/resources"
                  "modules/bank-de/test"      "modules/bank-de/test/resources"
                  "modules/bank-at/test"      "modules/bank-at/test/resources"
                  "modules/bank-fr/test"      "modules/bank-fr/test/resources"

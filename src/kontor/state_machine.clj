@@ -3,6 +3,20 @@
    transitions follow
 
        draft  ──▶  posted  ──▶  cancelled
+              ↘   ↗
+          :pending-attestation  (ADR-018; BR NF-e + CN fapiao)
+
+   `:pending-attestation` is the in-flight state used by jurisdictions
+   that require government attestation of the invoice before legal
+   validity. The country module's EInvoiceProvider transitions
+   :draft → :pending-attestation when it submits, and either:
+     :pending-attestation → :posted   (attestation accepted; the
+                                       clearance-token is now set)
+     :pending-attestation → :draft    (rejected; fix and re-emit)
+     :pending-attestation → :cancelled (give up on this entry)
+
+   Sealing does NOT fire in :pending-attestation; only :posted
+   triggers sealing (the entry has had legal effect at that point).
 
    No skipping (draft → cancelled is rejected), no regression
    (posted → draft, cancelled → anything are rejected). Per ADR-007
@@ -27,10 +41,11 @@
 (def allowed-transitions
   "Map {from #{to ...}}. nil represents a brand-new entity (no prior
    state datom)."
-  {nil        #{:draft :posted}      ;; create-and-post in one tx is allowed
-   :draft     #{:posted :cancelled}
-   :posted    #{:cancelled}
-   :cancelled #{}})                  ;; terminal
+  {nil                  #{:draft :posted}      ;; create-and-post allowed
+   :draft               #{:pending-attestation :posted :cancelled}
+   :pending-attestation #{:posted :cancelled :draft}  ;; ADR-018
+   :posted              #{:cancelled}
+   :cancelled           #{}})                  ;; terminal
 
 (defn transition-allowed?
   "True iff `from` → `to` is permitted by the state machine."

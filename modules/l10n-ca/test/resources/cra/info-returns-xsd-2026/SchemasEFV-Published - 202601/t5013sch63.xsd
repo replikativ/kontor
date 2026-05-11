@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!--
+Description: Specialty Business Returns - Return of Fuel Charge Proceeds to Farmers Tax Credit (CRA Form T5013 SCH 63 E )
+Contact: CRA, ITB, Solutions, RASD, Business Suite Assessing System, Other Levies
+Date created: June 2022
+Users of this schema: Other Levies System
+-->
+<xsd:schema 
+xmlns:ols63="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/ols63/1-0-1" 
+xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+
+targetNamespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/ols63/1-0-1" 
+	elementFormDefault="qualified" attributeFormDefault="unqualified" version="ols63/1-0-1">
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/> 
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/> 	
+
+<!-- T5013Schedule63Data is also referenced by other schemas for importing purposes -->		
+	<xsd:element name="T5013Schedule63Data" type="ols63:Schedule63DataType"/>
+	<xsd:complexType name="Schedule63DataType">
+		<xsd:sequence>
+			<xsd:element ref="ols63:TotalFarmExpensesAmount"  minOccurs="0"  maxOccurs="1"/>
+			<xsd:element ref="ols63:MandatoryInventoryAdjustmentsAmount"  minOccurs="0"  maxOccurs="1"/>
+			<xsd:element ref="ols63:OptionalValueOfInventoryAmount"  minOccurs="0"  maxOccurs="1"/>
+			<xsd:element ref="ols63:NonArmsLengthTransactionsAmount"  minOccurs="0"  maxOccurs="1"/>
+			<xsd:element ref="ols63:GrossEligibleFarmingExpensesAmount"  minOccurs="0"  maxOccurs="1"/>
+		
+			<xsd:element ref="ols63:Schedule63CalculationOfCreditDetails" minOccurs="0"  maxOccurs="13"/>
+			<xsd:element ref="ols63:Schedule63DesignatedProvincesTotal" minOccurs="0"  maxOccurs="1"/>
+
+			<xsd:element ref="ols63:Schedule63TotalCreditAllocatedAmount" minOccurs="0"  maxOccurs="1"/>
+			<xsd:element ref="ols63:Schedule63TotalReturnOfuelChargeAmount" minOccurs="0"  maxOccurs="1"/>
+
+			<xsd:element ref="ols63:Schedule63AllocationOfCreditDetails" minOccurs="0"  maxOccurs="2000"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	
+	<xsd:complexType name="Schedule63CalculationOfCreditDetailsType">
+		<xsd:annotation>
+			<xsd:documentation>
+				Part 2 - Calculation of the credit by designated province
+				Part 3 - Total Return of Fuel Charge Proceeds to Farmers Tax Credit by designated province
+			</xsd:documentation>
+		</xsd:annotation>
+		<xsd:sequence>
+			<xsd:element ref="ols63:Schedule63CalculationOfCreditDesignatedProvinceCode" minOccurs="0" />
+			<xsd:element ref="ols63:Schedule63GrossRevenueAmount" minOccurs="0" />
+			<xsd:element ref="ols63:Schedule63TotalGrossRevenueAmount" minOccurs="0" />
+			<xsd:element ref="ols63:Schedule63SalariesAndWagesPaidAmount" minOccurs="0" />
+			<xsd:element ref="ols63:Schedule63TotalSalariesAndWagesPaidAmount" minOccurs="0" />
+			<xsd:element ref="ols63:Schedule63EligibleFarmingExpensesAmount" minOccurs="0" />
+			<xsd:element ref="ols63:Schedule63TaxCreditForYearWhichFiscalPeriodStartedAmount" minOccurs="0" />
+			<xsd:element ref="ols63:Schedule63TaxCreditForYearWhichFiscalPeriodEndedAmount" minOccurs="0" />
+			<xsd:element ref="ols63:Schedule63TotalAmount" minOccurs="0" />
+			<xsd:element ref="ols63:Schedule63PartnershipAllocationAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	
+
+	<xsd:complexType name="Schedule63AllocationOfCreditDetailsType">
+		<xsd:annotation>
+			<xsd:documentation>
+				Part 4 - Allocation of the credit to your members by designated province
+			</xsd:documentation>
+		</xsd:annotation>
+		<xsd:sequence>
+			<xsd:element ref="ols63:Schedule63MemberName" minOccurs="0" />
+			<xsd:element ref="ols63:Schedule63MemberAccountNumber" minOccurs="0" />
+			<xsd:element ref="ols63:Schedule63MemberProportionPercent" minOccurs="0" />
+			<xsd:element ref="ols63:Schedule63AllocationAmountDetails" minOccurs="0"  maxOccurs="13"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:complexType name="Schedule63AllocationAmountDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols63:Schedule63AllocationOfCreditDesignatedProvinceCode" minOccurs="0" />
+			<xsd:element ref="ols63:Schedule63AllocationAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+
+
+	<!--- Data Elements -->
+	
+	<!--- Part 1 - Gross eligible farming expenses -->
+
+	<xsd:element name="TotalFarmExpensesAmount" type="sdt:AmountType"/>
+	<xsd:element name="MandatoryInventoryAdjustmentsAmount" type="sdt:AmountType"/>
+	<xsd:element name="OptionalValueOfInventoryAmount" type="sdt:AmountType"/>
+	<xsd:element name="NonArmsLengthTransactionsAmount" type="sdt:AmountType"/>
+	<xsd:element name="GrossEligibleFarmingExpensesAmount" type="sdt:AmountType"/>
+
+	<!--- Part 2 - Calculation of the credit by designated province -->
+
+	<xsd:element name="Schedule63CalculationOfCreditDetails" type="ols63:Schedule63CalculationOfCreditDetailsType"/>
+	<xsd:element name="Schedule63CalculationOfCreditDesignatedProvinceCode" type="sdt:CodeType"/>
+	<xsd:element name="Schedule63GrossRevenueAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule63TotalGrossRevenueAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule63SalariesAndWagesPaidAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule63TotalSalariesAndWagesPaidAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule63EligibleFarmingExpensesAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule63TaxCreditForYearWhichFiscalPeriodStartedAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule63TaxCreditForYearWhichFiscalPeriodEndedAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule63TotalAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule63DesignatedProvincesTotal" type="sdt:AmountType"/>
+
+	<!--- Part 3 - Total Return of Fuel Charge Proceeds to Farmers Tax Credit by designated province -->
+
+	<xsd:element name="Schedule63PartnershipAllocationAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule63TotalCreditAllocatedAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule63TotalReturnOfuelChargeAmount" type="sdt:AmountType"/>
+
+	<!--- Part 4 -€“ Allocation of the credit to your members by designated province -->
+
+	<xsd:element name="Schedule63AllocationOfCreditDetails" type="ols63:Schedule63AllocationOfCreditDetailsType"/>
+	<xsd:element name="Schedule63MemberName" type="ccms:Name175CharacterType"/>
+	<xsd:element name="Schedule63MemberAccountNumber" >
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="Schedule63MemberProportionPercent" type="sdt:PercentType"/>
+	<xsd:element name="Schedule63AllocationAmountDetails" type="ols63:Schedule63AllocationAmountDetailsType"/>
+	<xsd:element name="Schedule63AllocationOfCreditDesignatedProvinceCode" type="sdt:CodeType"/>
+	<xsd:element name="Schedule63AllocationAmount" type="sdt:AmountType"/>
+
+</xsd:schema>

@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+	<xsd:complexType name="T244Type">
+		<xsd:sequence>
+			<!-- CRA registration number -->
+			<xsd:element name="CraRegistrationNumber" />
+			<!-- Plan Year End -->
+			<xsd:element name="PlanYearEnd" />
+			<!-- Plan Type -->
+			<xsd:element name="PlanType" type="PlanTypeTypeT244"/>
+			<!-- Number of months in this reporting period -->
+			<xsd:element name="NumberOfMonthsReporting" />
+			<!-- 1 Identification -->
+			<xsd:element name="Identification" type="IdentificationType" minOccurs="0"/>
+			<!-- 2 Financial data for the plan year -->
+			<xsd:element name="FinancialDataForPY" type="FinancialDataForPYType" minOccurs="0"/>
+			<!-- 3 Inactive -->
+			<xsd:element name="InactivePlan" type="InactivePlanType" />
+			<!-- 4 and 5 (for active plans) -->
+			<xsd:element name="ActivePlan" type="ActivePlanType" />
+			<!-- (for non-specified multi-employer and non-multi-employer plans) -->
+			<xsd:element name="EmployersParticipatedPYECount" minOccurs="0" />
+			<!-- 6 (participating members) -->
+			<xsd:element name="MemberParticipation" type="MemberParticipationType" minOccurs="0" />
+			<!-- 7 (connected persons joining or leaving the plan) -->
+			<xsd:element name="ConnectedPersonsJoinedInPlanYear" type="YesOrNoTypeT244" minOccurs="0" />
+			<!-- 8 (a person or group acquiring control of the corporation sponsoring the pension plan) -->
+			<xsd:element name="SponsorCorporationAcquisition" type="YesOrNoTypeT244" minOccurs="0" />
+			<!-- 9 (any plan members provided with post-1989 past-service benefits)-->
+			<xsd:element name="MembersPost1989PSBenefitsPY" type="YesOrNoTypeT244" minOccurs="0" />
+			<!-- 10 (any plan members who are connected persons provided with pre-1992 past-service benefit plans) -->
+			<xsd:element name="ConnectedPersonsPre1992PSBenefitsPY" type="YesOrNoTypeT244" minOccurs="0" />	
+			<!-- Certification -->
+			<xsd:element name="Certification" type="CertificationTypeT244" minOccurs="0"/>			
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="IdentificationType">
+		<xsd:sequence>
+			<xsd:element name="PlanName" />
+			<xsd:element name="PlanAdministratorName" />
+			<xsd:element name="Contact" minOccurs="0"/>
+			<xsd:element name="Address1" />
+			<xsd:element name="Address2" minOccurs="0" />
+			<xsd:element name="City" />
+			<xsd:element name="Province" />
+			<xsd:element name="PostalCode" />
+			<xsd:element name="Phone" />
+			<xsd:element name="BusinessNumber" minOccurs="0"/>
+			<xsd:element name="LocationOfBooks" type="LocationOfBooksType" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="LocationOfBooksType">
+		<xsd:choice>
+			<xsd:element name="SameAsAbove" minOccurs="0"/>
+			<xsd:element name="OtherAddress" minOccurs="0">
+				<xsd:complexType>
+					<xsd:sequence>
+						<xsd:element name="Address1" minOccurs="0"/>
+						<xsd:element name="Address2" minOccurs="0"/>
+						<xsd:element name="City" minOccurs="0"/>
+						<xsd:element name="Province" minOccurs="0"/>
+						<xsd:element name="PostalCode" />
+					</xsd:sequence>
+				</xsd:complexType>
+			</xsd:element>
+		</xsd:choice>
+	</xsd:complexType>
+	<xsd:complexType name="FinancialDataForPYType">
+		<xsd:sequence>
+			<xsd:element name="EmployerContributions" />
+			<xsd:element name="EmployeeContributions" />
+			<xsd:element name="TransferredAmounts" />
+			<xsd:element name="NetInvestments" />
+			<xsd:element name="PaymentOfBenefits" />
+			<xsd:element name="TransfersOfBenefitsToOtherPlans" />
+			<xsd:element name="MarketBookValueAtBeginningOfPY" />
+			<xsd:element name="MarketBookValueAtEndOfPY" />
+			<xsd:element name="ActuarialLiability" minOccurs="0"/>
+			<xsd:element name="DateOfActuarialLiabilityAssessment" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="MemberParticipationType"> 
+		<xsd:sequence>
+			<xsd:element name="RppDpspPlanSponsorParticipation" type="YesOrNoTypeT244" minOccurs="0"/>
+			<xsd:element name="RppDpspOtherSponsorParticipation" type="YesOrNoTypeT244" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="PlanTypeTypeT244">
+		<xsd:choice>
+			<xsd:element name="DefinedBenefit" minOccurs="0"/>
+			<xsd:element name="MoneyPurchase" minOccurs="0"/>
+			<xsd:element name="Combination" minOccurs="0"/>
+		</xsd:choice>
+	</xsd:complexType>
+	<xsd:complexType name="InactivePlanType"> 
+		<xsd:sequence>
+			<xsd:element name="PlanBecameInactive" type="YesDateOrNoType" />
+			<xsd:element name="TotalPlanFundsDisbursed" type="YesDateOrNoType" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="ActivePlanType"> 
+		<xsd:sequence>
+			<xsd:element name="EmployeesActivePYECount" />
+			<xsd:element name="ActiveMembersConnectePersonsCount" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="CertificationTypeT244"> 
+		<xsd:sequence>
+			<xsd:element name="AuthorizedRepresentativeName" />
+			<xsd:element name="Title" minOccurs="0"/>
+			<xsd:element name="Phone" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="YesOrNoTypeT244">
+		<xsd:choice>
+			<xsd:element name="Yes" minOccurs="0"/>
+			<xsd:element name="No" minOccurs="0"/>
+		</xsd:choice>
+	</xsd:complexType>
+	<xsd:complexType name="YesDateOrNoType">
+		<xsd:choice>
+			<xsd:element name="Yes" minOccurs="0">
+				<xsd:complexType>
+					<xsd:sequence>
+						<xsd:element name="Date" minOccurs="0"/>
+					</xsd:sequence>
+				</xsd:complexType>
+			</xsd:element>
+			<xsd:element name="No" minOccurs="0"/>
+		</xsd:choice>
+	</xsd:complexType> 
+</xsd:schema>

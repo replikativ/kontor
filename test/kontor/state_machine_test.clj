@@ -153,3 +153,50 @@
         _ (v/install-invariants! conn)
         cat (catalog! conn)]
     (is (some? (v/transact-with-validation conn (mk-tx cat :posted))))))
+
+;; ============================================================================
+;; ADR-018 — pending-attestation transitions
+;; ============================================================================
+
+(deftest pending-attestation-transitions
+  (testing "draft → pending-attestation is allowed (NF-e submitted, awaiting SEFAZ)"
+    (is (sm/transition-allowed? :draft :pending-attestation)))
+  (testing "pending-attestation → posted is allowed (SEFAZ accepted)"
+    (is (sm/transition-allowed? :pending-attestation :posted)))
+  (testing "pending-attestation → draft is allowed (SEFAZ rejected, fix + retry)"
+    (is (sm/transition-allowed? :pending-attestation :draft)))
+  (testing "pending-attestation → cancelled is allowed (give up on the entry)"
+    (is (sm/transition-allowed? :pending-attestation :cancelled)))
+  (testing "Cannot create directly into :pending-attestation"
+    (is (not (sm/transition-allowed? nil :pending-attestation))))
+  (testing "Cannot regress from :posted to :pending-attestation"
+    (is (not (sm/transition-allowed? :posted :pending-attestation)))))
+
+(deftest pending-attestation-end-to-end
+  (testing "Create :draft, transition :pending-attestation, then :posted
+            with posted-at and a clearance-token (BR NF-e shape)"
+    (let [conn (core/create-test-db)
+          _ (v/install-invariants! conn)
+          cat (catalog! conn)
+          _ (v/transact-with-validation conn (mk-tx cat :draft))
+          db (d/db conn)
+          eid (:db/id (d/entity db [:transaction/external-id "TX-draft"]))]
+      ;; :draft → :pending-attestation (no clearance token yet)
+      (is (some?
+           (v/transact-with-validation
+            conn
+            [{:db/id eid
+              :transaction/state :pending-attestation}])))
+      ;; :pending-attestation → :posted requires posted-at + sets token
+      (is (some?
+           (v/transact-with-validation
+            conn
+            [{:db/id eid
+              :transaction/state :posted
+              :transaction/posted-at some-date
+              :transaction/clearance-token "351234567890123456789012345678901234567890ZZZZZ"}])))
+      (let [db (d/db conn)
+            ent (d/entity db eid)]
+        (is (= :posted (:transaction/state ent)))
+        (is (= "351234567890123456789012345678901234567890ZZZZZ"
+               (:transaction/clearance-token ent)))))))

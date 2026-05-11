@@ -1,0 +1,171 @@
+;; Australian chart of accounts — conventional small-to-mid-business
+;; shape aligned with ATO BAS labels (G1/G2/G3/G10/G11/1A/1B/W1/W2).
+;;
+;; The ATO does NOT mandate a CoA. This is a starter; users extend
+;; per their business. Tags map each account to its BAS label so
+;; the BAS report engine aggregates correctly at filing time.
+;;
+;; AUD commodity is added by the chart loader (no fractional-cent
+;; subtleties — AUD precision = 2).
+[
+ ;; ---------- Assets (1xxxx) ----------
+ {:code "11100" :path "Assets:Bank:Main"
+  :name "Bank account"
+  :type :asset :reconcilable? true}
+ {:code "11200" :path "Assets:Receivable"
+  :name "Trade debtors / Accounts receivable"
+  :type :asset :reconcilable? true}
+ {:code "11250" :path "Assets:Receivable:Provision"
+  :name "Provision for doubtful debts"
+  :type :asset}                          ;; contra
+ {:code "11310" :path "Assets:Inventory:Raw"
+  :name "Inventory — raw materials"
+  :type :asset}
+ {:code "11320" :path "Assets:Inventory:WIP"
+  :name "Inventory — work in progress"
+  :type :asset}
+ {:code "11330" :path "Assets:Inventory:Finished"
+  :name "Inventory — finished goods"
+  :type :asset}
+ {:code "11500" :path "Assets:Prepayments"
+  :name "Prepayments"
+  :type :asset}
+ {:code "11700" :path "Assets:GSTReceivable"
+  :name "GST receivable (input tax credits)"
+  :type :asset
+  :tags [:au-bas-1b-itc]}
+ {:code "12100" :path "Assets:Fixed:OfficeEquipment"
+  :name "Office equipment (at cost)"
+  :type :asset}
+ {:code "12110" :path "Assets:Fixed:OfficeEquipment:AccumDep"
+  :name "Accumulated depreciation — office equipment"
+  :type :asset}                          ;; contra
+ {:code "12200" :path "Assets:Fixed:Vehicles"
+  :name "Vehicles (at cost)"
+  :type :asset}
+ {:code "12210" :path "Assets:Fixed:Vehicles:AccumDep"
+  :name "Accumulated depreciation — vehicles"
+  :type :asset}
+
+ ;; ---------- Liabilities (2xxxx) ----------
+ {:code "21100" :path "Liabilities:Payable"
+  :name "Trade creditors / Accounts payable"
+  :type :liability :reconcilable? true}
+ {:code "21300" :path "Liabilities:CreditCard"
+  :name "Credit card"
+  :type :liability :reconcilable? true}
+ {:code "21500" :path "Liabilities:GSTPayable"
+  :name "GST collected (payable)"
+  :type :liability
+  :tags [:au-bas-1a-gst]}
+ {:code "21700" :path "Liabilities:PAYG:Withheld"
+  :name "PAYG withholding payable"
+  :type :liability
+  :tags [:au-bas-w2-payg-w]}
+ {:code "21800" :path "Liabilities:PAYG:Instalment"
+  :name "PAYG instalment payable"
+  :type :liability}
+ {:code "21900" :path "Liabilities:Super:Payable"
+  :name "Superannuation payable"
+  :type :liability}
+ {:code "22100" :path "Liabilities:Loan:Short"
+  :name "Short-term loans"
+  :type :liability}
+ {:code "23100" :path "Liabilities:Loan:Long"
+  :name "Long-term loans"
+  :type :liability}
+
+ ;; ---------- Equity (3xxxx) ----------
+ {:code "31100" :path "Equity:OwnerContribution"
+  :name "Owner contribution / Issued capital"
+  :type :equity}
+ {:code "31200" :path "Equity:RetainedEarnings"
+  :name "Retained earnings"
+  :type :equity}
+ {:code "31300" :path "Equity:OwnerDrawings"
+  :name "Owner drawings"
+  :type :equity}
+
+ ;; ---------- Revenue (4xxxx) ----------
+ {:code "41100" :path "Income:Sales:Taxable"
+  :name "Sales — taxable supplies (GST 10%)"
+  :type :income
+  :tags [:au-bas-g1-total-sales :au-bas-g1-taxable]}
+ {:code "41200" :path "Income:Sales:GSTFree"
+  :name "Sales — GST-free"
+  :type :income
+  :tags [:au-bas-g1-total-sales :au-bas-g3-gst-free-sales]}
+ {:code "41300" :path "Income:Sales:Export"
+  :name "Sales — exports (zero-rated)"
+  :type :income
+  :tags [:au-bas-g1-total-sales :au-bas-g2-export-sales]}
+ {:code "41400" :path "Income:Sales:InputTaxed"
+  :name "Sales — input-taxed (e.g. financial supplies, residential rent)"
+  :type :income
+  :tags [:au-bas-g1-total-sales :au-bas-g4-input-taxed-sales]}
+ {:code "42100" :path "Income:Interest"
+  :name "Interest income"
+  :type :income}
+ {:code "42200" :path "Income:Other"
+  :name "Other income"
+  :type :income}
+
+ ;; ---------- COGS / direct (5xxxx) ----------
+ {:code "51100" :path "Expense:COGS:Purchases"
+  :name "Purchases — non-capital (input-taxed deductible)"
+  :type :expense
+  :tags [:au-bas-g11-non-capital-purchases]}
+ {:code "51200" :path "Expense:COGS:Capital"
+  :name "Purchases — capital"
+  :type :expense
+  :tags [:au-bas-g10-capital-purchases]}
+
+ ;; ---------- Operating expenses (6xxxx) ----------
+ {:code "61100" :path "Expense:Wages"
+  :name "Wages and salaries"
+  :type :expense
+  :tags [:au-bas-w1-total-wages]}
+ {:code "61200" :path "Expense:Super"
+  :name "Superannuation contributions (employer share)"
+  :type :expense}
+ {:code "61500" :path "Expense:Rent"
+  :name "Rent"
+  :type :expense
+  :tags [:au-bas-g11-non-capital-purchases]}
+ {:code "61600" :path "Expense:Utilities"
+  :name "Utilities"
+  :type :expense
+  :tags [:au-bas-g11-non-capital-purchases]}
+ {:code "61700" :path "Expense:Telecom"
+  :name "Telephone and internet"
+  :type :expense
+  :tags [:au-bas-g11-non-capital-purchases]}
+ {:code "61800" :path "Expense:Travel"
+  :name "Travel"
+  :type :expense
+  :tags [:au-bas-g11-non-capital-purchases]}
+ {:code "61900" :path "Expense:OfficeSupplies"
+  :name "Office supplies"
+  :type :expense
+  :tags [:au-bas-g11-non-capital-purchases]}
+ {:code "62100" :path "Expense:Depreciation"
+  :name "Depreciation"
+  :type :expense}
+ {:code "62200" :path "Expense:BadDebts"
+  :name "Bad debts"
+  :type :expense}
+ {:code "62500" :path "Expense:BankFees"
+  :name "Bank fees and charges"
+  :type :expense
+  :tags [:au-bas-g11-non-capital-purchases]}
+
+ ;; ---------- Non-operating ----------
+ {:code "71100" :path "Expense:Interest"
+  :name "Interest expense"
+  :type :expense}
+
+ ;; ---------- Tax ----------
+ {:code "91100" :path "Expense:IncomeTax"
+  :name "Income tax expense"
+  :type :expense}
+ ]

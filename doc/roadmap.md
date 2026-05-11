@@ -76,20 +76,103 @@ Separate artifact: `kontor-l10n-de` (GPLv3, sourced from Tryton `account_de_skr0
 
 **Acceptance**: existing beleg DB migrates without data loss; new invoices issued through the UI produce balanced journal entries; Phase 2 reports include both new and migrated bookings.
 
-## Phase 4-CA — Canada (3-5 weeks)
+## Phase 4-CA — Canada — breadth (DONE)
 
-Separate artifact: `kontor-l10n-ca` (EPL-1.0 — CRA facts are public).
+Module: `modules/l10n-ca` (EPL-1.0 — CRA facts are public).
 
-- [ ] `resources/ca-tax.edn` — GST + each HST province + each PST province + Quebec QST as `tax` + `tax-repartition-line` rows
-- [ ] `resources/ca-coa.edn` — QBO-style baseline CoA, optional Tryton-derived alt
-- [ ] `StaticTableProvider` config for CA: per-province routing, recoverable-vs-not flag
-- [ ] `kontor-export-cra-t4` (separate artifact): T4 information return XML generator (CRA published schema)
-- [ ] `kontor-export-cra-t5` (separate artifact): T5 information return XML generator
-- [ ] `kontor-export-cra-gst` (separate artifact): GST/HST NETFILE-ready figures
-- [ ] SR&ED project dimension on postings (analytical-account-style)
-- [ ] CAMT.053 / OFX import covers Canadian banks (most major CA banks publish ISO 20022)
+- [x] `resources/ca-coa.edn` — baseline CoA loaded by `chart.clj`
+- [x] CA chart of accounts + account tags + per-authority tag conventions
+- [x] GST/HST line generator (lines 101/103/108) in `returns.clj`
+- [x] QST + BC PST report scaffolds in `returns.clj`
+- [x] `bank-ca` CSV importer
+- [ ] *(superseded by Phase 4-CA-depth below)* SR&ED project dimension, full info-return XML — these become Phase 4-CA-depth items below.
 
-**Acceptance**: a fixture transaction in BC (5% GST + 7% PST split, both posted to correct accounts; PST as expense, GST as recoverable input tax credit); Quebec QST/GST split correct; CRA T4 XML validates against published schema.
+**Status**: breadth done; the kernel can post BC/ON/QC sales correctly and compute per-authority totals. What's missing for a *filable* CA tool is depth — see Phase 4-CA-depth.
+
+## Phase 4-CA-depth — Canada depth-first (per ADR-015)
+
+Goal: take CA from "models the books correctly" to "produces filable artifacts the user actually mails / uploads." Per ADR-015 the architecture is three rings (kernel / renderer / transmission); transmission is deferred.
+
+Order is the minimum that makes the BC + T4 + self-employed + GST/HST-registered filer profile filable end-to-end:
+
+- [x] **GST/HST filing-complete** (`gst_hst.clj`): all GST34-2 lines (101, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113A, 114, 115), period detection (quarterly + annual), transcription sheet ready for NETFILE web-form entry. Adjustment / instalment / rebate lines (104/107/110/111) are caller-supplied opts. Refund / payment / nil-return outcome detection. 14 tests, 51 assertions. Quick Method deferred.
+- [x] **T1 model layer** under `y2024/`: T1 jacket + federal tax (brackets), S9 (donations 15/29/33%), S11 (tuition); T2125 (gross/expenses/CCA with half-year rule), S8 (CPP base/enhanced/CPP2 across employment + SE); S3 (capital gains 50% inclusion), S4 (investment income with dividend gross-up + federal/BC DTC); BC428 (provincial tax with NRTCs + tiered donation credit). 49 tests / 147 assertions. **Deferred**: BC479 refundable credits (climate action, sales tax), S7 RRSP carryforward (post-NoA-ingestion), AMT (T691), spousal/dependant/disability credits.
+- [x] **NoA ingestion scaffolding** (`noa.clj`): carryforward fact schema (`:carryforward/*` namespace) + `from-manual-map` for hand-typed NoA data + `NoaParser` protocol with a stub PDF parser + `->t1-inputs` projection. 4 tests / 7 assertions. **Pending real CRA NoA PDF samples to implement the parser**; manual path works today.
+- [~] **PDF renderer** (`pdf.clj`): Apache PDFBox AcroForm fill (`fill-form`, `list-fields`, `validate-field-map`) — mechanics tested via synthetic AcroForm PDF round-trip. **Reframed 2026-05-10:** real CRA fillable PDFs (5000-R, 5010-C, T2125) are **XFA dynamic forms**, not AcroForm — PDFBox's classic API returns only one container field per file. `extract-xfa-xml` retrieves the 1.5-MB XFA XML stream for future XFA-fill work. Synthetic-PDF mechanics still pass 5 tests. **Real CRA-PDF fill requires the XFA path** (sketched in pdf.clj docstring); the XFA XML dumps for T1/BC428/T2125 are saved in `test/resources/cra/*.xfa.xml`.
+- [x] **Info-return XML** (`xml/`): T4, T5, T5018 generators using clojure.data.xml, with shared T619 transmittal envelope (`xml/t619.clj`). **Verified against CRA's published 2026V4 XSDs** (bundle in `test/resources/cra/info-returns-xsd-2026/`) via `xml/validation.clj` (JAXP, zero new deps). Every form's XSD-validity is asserted in tests. Submission shape per actual XSD: `Submission > T619 + Return > T4/T5/T5018 > Slip(s) + Summary`. All element names match the schemas. 13 tests across the three forms. **Generalizing-to-business deliverable** — non-cert path via IFT + WAC.
+
+**Acceptance**:
+- GST/HST: a quarter of fixture postings (BC sales + GST-bearing bills) produces all 15 GST34-2 line values correct against hand calculation; the transcription sheet is human-readable.
+- T1: a full BC fixture (one T4, one T2125 with CCA, one S3 capital gain, RRSP deduction, donation, tuition) produces taxable income, federal tax, provincial tax, and balance owing matching the Haskell `canadian-income-tax` oracle to the cent.
+- NoA: a sample 2023 NoA PDF parses to a carryforward fact-set that feeds the 2024 T1 correctly.
+- PDF: the filled T1 General + BC428 PDF opens in Acrobat with all fields populated and prints clean.
+- Info returns: a generated T4 XML validates against CRA's published XSD without errors.
+
+**Out of scope for this depth iteration (and ADR-015 documents why):**
+
+- Quebec TP1 / RL slips / ImpôtNet — a parallel-magnitude project.
+- NETFILE / EFILE / CIF certification — bounded later addition; isolated to a single transmission namespace.
+- T2 corporate income tax — mandatory e-filing means T2 is only useful with cert.
+- AFR (Auto-fill My Return) — cert-gated.
+- ReFILE — cert-gated.
+- Express NOA — cert-gated.
+
+## Phase 5-Multi-Country — Asia-Pacific + Latin America scaffolds
+
+Per ADRs 016–019 (multi-tax-breakdown + EInvoiceProvider + clearance-token
+lifecycle + account external-codes), four additional country modules
+scaffolded end-2026-05 to validate the design against the hardest
+cases (BR + CN). Each ships a starter chart, tax-stack model,
+e-invoicing format emitter, and verification against authoritative
+sources.
+
+- [x] **JP — kontor-l10n-jp**: J-GAAP-style chart (~40 accounts, JPY
+  precision 0); Consumption Tax (JCT) 10/8/exempt/zero-rated with the
+  three zero-tax categories (非課税 / 免税 / 不課税); QIS registration
+  number validator (T + 13 digits); Peppol PINT JP UBL emitter
+  (`urn:peppol:pint:billing-1@jp-1` + `urn:peppol:bis:billing`).
+  Verified against NTA + Digital Agency + Peppol docs; ProfileID
+  initially wrong (had European :3.0) — corrected. 17 tests.
+- [x] **AU — kontor-l10n-au**: ATO-aligned chart (~40 accounts, AUD
+  precision 2) tagged to BAS labels; GST 10% single-rate; BAS report
+  with Simpler-vs-Full mode (G1/1A/1B for <AUD 10M; full label set
+  above); Peppol PINT A-NZ UBL emitter (`urn:peppol:pint:billing-1@aunz-1`).
+  ABN validator. All values verified correct against ATO + Peppol; one
+  cosmetic G3 reword applied. 13 tests.
+- [x] **CN — kontor-l10n-cn**: ASBE/ASSBE-coded chart (~50 accounts,
+  CNY precision 2, external-codes attached per ADR-019); VAT rates
+  13/9/6/3/0% + surcharges (UMCT + edu + local-edu); fapiao number
+  validators (8-digit legacy / 18-digit special-VAT combined /
+  20-digit fully-digital); EInvoiceProvider draft-XML scaffold. STA
+  platform integration deferred to partner module
+  `kontor-l10n-cn-fapiao`. Verified against MOF/STA + China-Briefing;
+  fapiao number format corrected (was 8-digit-only, now 8/18/20).
+  11 tests.
+- [x] **BR — kontor-l10n-br**: Plano de Contas Referencial-aligned
+  chart (~60 accounts, BRL precision 2, ECF De/Para via external-codes);
+  legacy tax stack (ICMS state matrix + IPI + PIS + COFINS + ISS +
+  IRPJ + CSLL) + new CBS/IBS dual-VAT scaffold for 2026-33 reform;
+  interstate routing pattern (state sets as data, not embedded);
+  NF-e 4.0 XML emitter scaffold (kernel-side only); SPED EFD-ICMS/IPI
+  subset (records 0000/0001/C100/C170/9999 with pipe-delimited
+  framing). Signing + SEFAZ transmission = partner module
+  `kontor-l10n-br-nfe`. 22 tests.
+
+**Architectural validation (per user request):** the four ADRs
+(016-019) held up against BR and CN without retrofit. The schema
+changes for tax-breakdown collection, clearance-token lifecycle,
+external-codes mapping, and EInvoiceProvider protocol all integrated
+cleanly with the existing kernel; no existing tests broke. ADR-008
+bitemporal validated under the BR tax-reform parallel-rule scenario.
+
+## Phase 4-CA-cert — Canada certification (deferred)
+
+Trigger: when the time saved by NETFILE-transmitting an annual stack of personal/business filings exceeds the cert effort, **or** when a customer with multi-tenant needs surfaces. Cert flow per ADR-015:
+
+- [ ] Apply to CRA EFILE/NETFILE developer program (NDA, test scenario access).
+- [ ] Implement `kontor.l10n-ca.transmit` against the published-to-vendors protocol.
+- [ ] Pass the annual CRA test battery (mid-Nov → mid-Feb cycle).
+- [ ] Add AFR, ReFILE, Express NOA inside the transmission ring.
 
 ## Phase 5-US — United States (4-6 weeks)
 

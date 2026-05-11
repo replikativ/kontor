@@ -1,15 +1,5 @@
 (ns kontor.l10n-ca.returns
-  "Canadian tax returns — split per authority, per ADR-014's
-   `:tax/authority` design.
-
-   Three filings most CA SMBs hit:
-
-   * **CRA GST/HST** (federal) — combined report covering federal GST
-     5% and the harmonized HST in ON/NB/NL/PEI/NS. CRA form lines:
-       101 — Sales (incl. zero-rated, exempt)
-       103 — GST/HST collected
-       108 — GST/HST input tax credits (ITCs)
-       113 = 103 − 108 = net tax (positive = pay; negative = refund)
+  "Canadian per-authority preparatory reports for QST and BC PST.
 
    * **Revenu Québec QST** — Quebec only. Filed combined with GST in
      QC for GST-only-or-QC-resident filers. Form lines:
@@ -22,49 +12,13 @@
      PST PAID side hits expense (no input-tax credit). Single line:
        BC PST line A = total PST collected
 
+   GST/HST (CRA federal) lives in `kontor.l10n-ca.gst-hst` — see ADR-015
+   for the filing-module-per-authority pattern.
+
    The kernel filters on `:account-tag/name` (which embeds the
-   :ca-{authority}-{box} convention) and `:tax/authority` (when we
-   transact :tax entities later). Today the CA chart uses tags only —
-   no :tax entities yet because GST/HST/PST/QST are typically modeled
-   as direct postings rather than TaxProvider-derived ones for SMBs."
+   :ca-{authority}-{box} convention)."
   (:require [kontor.money :as money]
             [kontor.report :as report]))
-
-;; ============================================================================
-;; CRA GST/HST report
-;; ============================================================================
-
-(def cra-gst-hst-definition
-  {:report/name    "GST/HST Return (CRA)"
-   :report/country "CA"
-   :report/lines
-   [{:line/code "101"
-     :line/label "Total sales and other revenue"
-     :line/expression {:engine :tax-tags :tags [:ca-cra-line-101]
-                       :sign :inflow :commodity :CAD}}
-    {:line/code "103"
-     :line/label "GST/HST collected"
-     :line/expression {:engine :tax-tags :tags [:ca-cra-line-103]
-                       :sign :inflow :commodity :CAD}}
-    {:line/code "108"
-     :line/label "GST/HST input tax credits (ITCs)"
-     :line/expression {:engine :tax-tags :tags [:ca-cra-line-108]
-                       :sign :inflow :commodity :CAD}}]})
-
-(defn compute-gst-hst
-  [conn opts]
-  (let [r (report/compute-report conn cra-gst-hst-definition opts)
-        line (into {} (map (fn [l] [(:line/code l) (:line/value l)]))
-                   (:report/lines r))
-        collected (line "103")
-        itc       (line "108")
-        zero (money/zero (or (:commodity collected) :CAD))
-        net (-> zero
-                (cond-> collected (money/add collected))
-                (cond-> itc       (money/sub itc)))]
-    (assoc r
-           :gst-hst/net-tax net
-           :gst-hst/lines (into {} (map (fn [[k v]] [(keyword k) v])) line))))
 
 ;; ============================================================================
 ;; Revenu Québec QST report

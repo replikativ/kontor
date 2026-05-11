@@ -50,9 +50,12 @@
                      -99.00M))]
     (is (not (:ok? r)))
     (is (some #(= :unbalanced (:error %)) (:errors r)))
-    (is (= #{:EUR} (set (keys (:unbalanced r)))))
-    ;; The 1 EUR shortfall surfaces as the residual
-    (let [residual (get (:unbalanced r) :EUR)]
+    ;; Postings carry no :posting/ledger, so they group under nil.
+    ;; (build-transaction would default to [:ledger/code "primary"].)
+    (is (= #{nil} (set (keys (:unbalanced r)))))
+    (is (= #{:EUR} (set (keys (get (:unbalanced r) nil)))))
+    ;; The 1 EUR shortfall surfaces as the residual in the nil ledger group.
+    (let [residual (get-in (:unbalanced r) [nil :EUR])]
       (is (m/equiv? (m/money "1.00" :EUR) residual)))))
 
 (deftest validate-multi-currency-balanced
@@ -78,7 +81,9 @@
              {:posting/account :account/eur-bank :posting/amount 100.00M :posting/commodity :EUR}
              {:posting/account :account/eur-bank :posting/amount -99.00M :posting/commodity :EUR}]})]
     (is (not (:ok? r)))
-    (is (= #{:EUR} (set (keys (:unbalanced r)))))))
+    ;; Only EUR is unbalanced in the nil-ledger group; USD nets to zero.
+    (is (= #{nil} (set (keys (:unbalanced r)))))
+    (is (= #{:EUR} (set (keys (get (:unbalanced r) nil)))))))
 
 (deftest validate-too-few-postings
   (let [r (posting/validate
@@ -129,6 +134,193 @@
     (is (not (:ok? r)))
     (is (codes :missing-journal))
     (is (codes :missing-effective-date))))
+
+;; ============================================================================
+;; Parallel-ledger sum-to-zero (ADR-021)
+;; ============================================================================
+
+(deftest validate-balances-per-ledger
+  (testing "Each ledger is its own self-balancing book. A transaction
+            posting 100/-100 to IFRS and 100/-100 to HGB is valid; a
+            transaction posting 100/-100 to IFRS and 100/-99 to HGB
+            fails because HGB is unbalanced even though the aggregate
+            sums to zero."
+    (let [ifrs-ref [:ledger/code "ifrs"]
+          hgb-ref  [:ledger/code "hgb"]
+          ok (posting/validate
+              {:transaction (-> (balanced-sample) :transaction)
+               :postings
+               [{:posting/account :a :posting/amount  100.00M :posting/commodity :EUR :posting/ledger ifrs-ref}
+                {:posting/account :b :posting/amount -100.00M :posting/commodity :EUR :posting/ledger ifrs-ref}
+                {:posting/account :a :posting/amount  100.00M :posting/commodity :EUR :posting/ledger hgb-ref}
+                {:posting/account :b :posting/amount -100.00M :posting/commodity :EUR :posting/ledger hgb-ref}]})
+          bad (posting/validate
+               {:transaction (-> (balanced-sample) :transaction)
+                :postings
+                [{:posting/account :a :posting/amount  100.00M :posting/commodity :EUR :posting/ledger ifrs-ref}
+                 {:posting/account :b :posting/amount -100.00M :posting/commodity :EUR :posting/ledger ifrs-ref}
+                 {:posting/account :a :posting/amount  100.00M :posting/commodity :EUR :posting/ledger hgb-ref}
+                 {:posting/account :b :posting/amount  -99.00M :posting/commodity :EUR :posting/ledger hgb-ref}]})]
+      (is (:ok? ok))
+      (is (empty? (:unbalanced ok)))
+      (is (not (:ok? bad)))
+      (is (= #{hgb-ref} (set (keys (:unbalanced bad))))
+          "Only the HGB ledger is unbalanced; IFRS sums to zero cleanly")
+      (is (m/equiv? (m/money "1.00" :EUR)
+                    (get-in (:unbalanced bad) [hgb-ref :EUR]))))))
+
+(deftest validate-cross-ledger-cancellation-does-not-balance
+  (testing "Per ADR-021, a 5 EUR debit on IFRS does NOT net against
+            a 5 EUR credit on HGB — each ledger must self-balance."
+    (let [ifrs-ref [:ledger/code "ifrs"]
+          hgb-ref  [:ledger/code "hgb"]
+          r (posting/validate
+             {:transaction (-> (balanced-sample) :transaction)
+              :postings
+              [{:posting/account :a :posting/amount    5.00M :posting/commodity :EUR :posting/ledger ifrs-ref}
+               {:posting/account :b :posting/amount   -5.00M :posting/commodity :EUR :posting/ledger hgb-ref}]})]
+      (is (not (:ok? r)))
+      (is (= #{ifrs-ref hgb-ref} (set (keys (:unbalanced r))))
+          "Both ledgers must be flagged — neither one self-balances."))))
+
+(deftest build-transaction-leaves-ledger-absent-by-default
+  (testing "Per ADR-021 revised, :posting/ledger stays absent unless
+            the caller sets it. Absent means 'primary book' at read
+            time; we don't inject a lookup-ref because invariant
+            speculative-applies run against an empty schema-only DB
+            that cannot resolve unique-identity lookups for
+            non-schema entities."
+    (let [tx-data (posting/build-transaction (balanced-sample))
+          posting-entities (rest tx-data)]
+      (is (every? #(nil? (:posting/ledger %)) posting-entities)
+          "No :posting/ledger should be auto-injected"))))
+
+(deftest build-transaction-preserves-explicit-ledger
+  (testing "An explicitly-set :posting/ledger is not overwritten."
+    (let [tx-data (posting/build-transaction
+                   {:transaction (-> (balanced-sample) :transaction)
+                    :postings
+                    [{:posting/account :a :posting/amount  10.00M
+                      :posting/commodity :EUR :posting/ledger [:ledger/code "ifrs"]}
+                     {:posting/account :b :posting/amount -10.00M
+                      :posting/commodity :EUR :posting/ledger [:ledger/code "ifrs"]}]})
+          posting-entities (rest tx-data)]
+      (is (every? #(= [:ledger/code "ifrs"] (:posting/ledger %))
+                  posting-entities)))))
+
+;; ============================================================================
+;; expand-distribution (ADR-022 split-line strategy)
+;; ============================================================================
+
+(def ^:private cc-plan [:analytic-plan/code "COST-CENTER"])
+(def ^:private proj-plan [:analytic-plan/code "PROJECT"])
+
+(defn- cc [name pct]
+  {:analytic-distribution/plan    cc-plan
+   :analytic-distribution/account [:analytic-account/path (str "COST-CENTER:" name)]
+   :analytic-distribution/percent pct})
+
+(defn- proj [name pct]
+  {:analytic-distribution/plan    proj-plan
+   :analytic-distribution/account [:analytic-account/path (str "PROJECT:" name)]
+   :analytic-distribution/percent pct})
+
+(def ^:private one-posting-with-cc-60-40
+  {:posting/account   :account/cogs
+   :posting/amount    100.00M
+   :posting/commodity :EUR
+   :posting/analytic-distributions [(cc "Eng" 60M) (cc "Sales" 40M)]})
+
+(deftest expand-splits-amount-per-percent
+  (let [children (posting/expand-distribution one-posting-with-cc-60-40 cc-plan)]
+    (is (= 2 (count children)))
+    (is (= 60.00M (:posting/amount (nth children 0))))
+    (is (= 40.00M (:posting/amount (nth children 1))))))
+
+(deftest expand-preserves-inherited-fields
+  (let [parent (assoc one-posting-with-cc-60-40
+                      :posting/partner    :p/acme
+                      :posting/narration  "ACME services"
+                      :posting/ledger     [:ledger/code "ifrs"])
+        children (posting/expand-distribution parent cc-plan)]
+    (is (every? #(= :p/acme (:posting/partner %)) children))
+    (is (every? #(= "ACME services" (:posting/narration %)) children))
+    (is (every? #(= [:ledger/code "ifrs"] (:posting/ledger %)) children))
+    (is (every? #(= :account/cogs (:posting/account %)) children))))
+
+(deftest expand-each-child-carries-single-distribution-at-100
+  (let [children (posting/expand-distribution one-posting-with-cc-60-40 cc-plan)]
+    (doseq [c children]
+      (let [dists (:posting/analytic-distributions c)]
+        (is (= 1 (count dists)))
+        (is (= 100M (:analytic-distribution/percent (first dists))))
+        (is (= cc-plan (:analytic-distribution/plan (first dists))))))))
+
+(deftest expand-rides-other-plans-unchanged
+  (testing "Distributions in plans other than the expansion target
+            ride along on each child unchanged (per-plan default)."
+    (let [parent (assoc one-posting-with-cc-60-40
+                        :posting/analytic-distributions
+                        [(cc "Eng" 60M) (cc "Sales" 40M)
+                         (proj "Alpha" 70M) (proj "Beta" 30M)])
+          children (posting/expand-distribution parent cc-plan)]
+      (is (= 2 (count children)) "Only the cost-center plan splits")
+      (doseq [c children]
+        (let [proj-dists (filterv #(= proj-plan (:analytic-distribution/plan %))
+                                  (:posting/analytic-distributions c))]
+          (is (= 2 (count proj-dists)))
+          (is (= #{70M 30M}
+                 (set (map :analytic-distribution/percent proj-dists)))))))))
+
+(deftest expand-largest-remainder-on-thirds
+  (testing "100.00 EUR split 33.333333 / 33.333333 / 33.333334 → sum
+            bit-exact to 100.00"
+    (let [parent (assoc one-posting-with-cc-60-40
+                        :posting/analytic-distributions
+                        [(cc "A" 33.333333M) (cc "B" 33.333333M) (cc "C" 33.333334M)])
+          children (posting/expand-distribution parent cc-plan)
+          sum-bd (reduce #(.add ^java.math.BigDecimal %1 ^java.math.BigDecimal %2)
+                         java.math.BigDecimal/ZERO
+                         (map :posting/amount children))]
+      (is (= 3 (count children)))
+      (is (= 0 (.compareTo (bigdec "100.00") sum-bd))
+          "Sum of children must be bit-exact to parent"))))
+
+(deftest expand-drops-zero-percent
+  (let [parent (assoc one-posting-with-cc-60-40
+                      :posting/analytic-distributions
+                      [(cc "A" 60M) (cc "B" 0M) (cc "C" 40M)])
+        children (posting/expand-distribution parent cc-plan)]
+    (is (= 2 (count children))
+        "Zero-percent slot must not produce a zero-amount child")
+    (is (= #{60.00M 40.00M} (set (map :posting/amount children))))))
+
+(deftest expand-no-matching-plan-returns-input
+  (testing "Posting without distributions in the named plan is
+            returned unchanged as a single-element vector"
+    (let [parent (assoc one-posting-with-cc-60-40
+                        :posting/analytic-distributions
+                        [(proj "Alpha" 100M)])
+          children (posting/expand-distribution parent cc-plan)]
+      (is (= [parent] children)))))
+
+(deftest expand-negative-amount-symmetric
+  (testing "Negative parent amount splits symmetrically with bit-exact total"
+    (let [parent (assoc one-posting-with-cc-60-40
+                        :posting/amount -100.00M
+                        :posting/analytic-distributions
+                        [(cc "A" 33.333333M) (cc "B" 33.333333M) (cc "C" 33.333334M)])
+          children (posting/expand-distribution parent cc-plan)
+          sum-bd (reduce #(.add ^java.math.BigDecimal %1 ^java.math.BigDecimal %2)
+                         java.math.BigDecimal/ZERO
+                         (map :posting/amount children))]
+      (is (= 0 (.compareTo (bigdec "-100.00") sum-bd))))))
+
+(deftest expand-cartesian-not-yet-implemented
+  (is (thrown-with-msg?
+       clojure.lang.ExceptionInfo #"cartesian"
+       (posting/expand-distribution one-posting-with-cc-60-40 cc-plan
+                                    {:strategy :cartesian}))))
 
 ;; ============================================================================
 ;; build-transaction tx-data shape

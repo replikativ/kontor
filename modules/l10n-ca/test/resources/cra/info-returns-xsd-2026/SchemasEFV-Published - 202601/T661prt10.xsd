@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<xsd:schema 
+xmlns:olT661Parts10="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts10/1-0-0" 
+			xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+			xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+			xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+	targetNamespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts10/1-0-0" 
+	elementFormDefault="qualified" attributeFormDefault="unqualified" version="ols661/1-0-0">
+
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/> 
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/> 
+
+<xsd:element name="T661Part10Data" type="olT661Parts10:Part10DataType"/>
+	<xsd:complexType name="Part10DataType">
+		<xsd:sequence>
+			<xsd:element ref="olT661Parts10:Field165" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts10:Field170" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts10:Field175" minOccurs="0" maxOccurs="1"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:element name="Field165" type="ccms:Name175CharacterType"/>
+	<xsd:element name="Field170" type="sdt:DateType"/>
+	<xsd:element name="Field175" type="ccms:Name175CharacterType"/>
+
+</xsd:schema>

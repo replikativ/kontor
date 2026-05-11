@@ -1,14 +1,78 @@
 (ns kontor.ledger
-  "Ledger view: ordered postings against an account, bitemporal-aware.
+  "Two concerns share this namespace because both are 'ledger' in
+   standard accounting terminology:
 
-   Same axes as balance.clj (ADR-008). Each result row carries the
-   posting eid, transaction eid, valid-from, posted-at, narration,
-   amount, commodity, and the partner (if any). Default ordering is
-   by `:posting/valid-from` ascending; pass `:order :desc` for
-   reverse-chronological."
+   1. **Parallel-ledger entity helpers (ADR-021).** Bootstrapping the
+      primary ledger, resolving a ledger by code, etc. Postings carry
+      `:posting/ledger` to support IFRS-vs-local-GAAP-style parallel
+      books. Sum-to-zero in a transaction runs per ledger.
+
+   2. **Account-statement view.** Bitemporal-aware ordered postings
+      against a single account (`postings-against`, `running-balance`).
+      Same axes as balance.clj (ADR-008). Each row carries the
+      posting eid, transaction eid, valid-from, narration, amount,
+      commodity, partner. This is the per-account 'subsidiary
+      ledger' / 'ledger card' report — distinct from the
+      parallel-ledger entity above."
   (:require [datahike.api :as d]
             [kontor.money :as money])
   (:import [java.util Date]))
+
+;; ============================================================================
+;; Parallel-ledger entity (ADR-021)
+;; ============================================================================
+
+(def primary-code
+  "The bootstrap ledger's stable identifier. Posting-builders that
+   omit `:posting/ledger` resolve to this."
+  "primary")
+
+(def primary-seed
+  "Seed data for the primary ledger. Idempotent under
+   `:db.unique/identity` on `:ledger/code`."
+  {:ledger/code      primary-code
+   :ledger/name      "Primary ledger"
+   :ledger/type      :primary
+   :ledger/framework :local
+   :ledger/active    true})
+
+(defn install-defaults!
+  "Idempotently transact the primary ledger. Re-running on a DB that
+   already has it is a no-op (the unique-identity match collapses)."
+  [conn]
+  (d/transact conn [primary-seed]))
+
+(defn primary
+  "Resolve the primary ledger entity-id, or nil if not installed.
+   `db` is a datahike DB value."
+  [db]
+  (d/q '[:find ?e .
+         :in $ ?code
+         :where [?e :ledger/code ?code]]
+       db primary-code))
+
+(defn by-code
+  "Resolve a ledger entity-id by its `:ledger/code`. nil when missing."
+  [db code]
+  (d/q '[:find ?e .
+         :in $ ?code
+         :where [?e :ledger/code ?code]]
+       db code))
+
+(defn resolve-ledger
+  "Coerce `ledger-spec` to an entity-id. Accepts:
+     - nil           → primary ledger (or nil if not installed)
+     - a string      → looked up by `:ledger/code`
+     - a long / map  → returned as-is (assumed eid or lookup ref)"
+  [db ledger-spec]
+  (cond
+    (nil? ledger-spec)    (primary db)
+    (string? ledger-spec) (by-code db ledger-spec)
+    :else                 ledger-spec))
+
+;; ============================================================================
+;; Account-statement view (per-account history)
+;; ============================================================================
 
 (defn- now ^Date [] (Date.))
 

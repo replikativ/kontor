@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+
+<!--
+Description	Layout topologie - Common Record Layout
+Version#:	1.26 (version #.yy)
+-->
+
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+	xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0">
+	<xsd:include schemaLocation="simple.xsd"/>
+	<xsd:include schemaLocation="complex.xsd"/>
+	<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/>
+
+	<!-- @@@@    Common Record Layout     @@@@ -->
+	<xsd:element name="Submission" type="ReturnType"/>
+	<xsd:complexType name="ReturnType">
+		<xsd:sequence>
+			<xsd:element name="T619" type="TransmitterType"/>
+			<xsd:element name="Return" type="T2202ReturnChoiceType" minOccurs="0" maxOccurs="unbounded"/>
+
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T2202ReturnChoiceType">
+		<xsd:choice>
+			<xsd:sequence>
+				<xsd:element name="T2202" type="T2202ReturnType" minOccurs="0">
+					<xsd:key name="Unique_T2202BN_Name">
+						<xsd:selector xpath="T2202Summary"/>
+						<xsd:field xpath="FilerAccountNumber"/>
+					</xsd:key>
+					<xsd:keyref name="Slip_T2202BN_Not_Equal_Summary_BN" refer="Unique_T2202BN_Name">
+						<xsd:selector xpath="T2202Slip"/>
+						<xsd:field xpath="FilerAccountNumber"/>
+					</xsd:keyref>
+				</xsd:element>
+			</xsd:sequence>
+		</xsd:choice>
+	</xsd:complexType>
+</xsd:schema>

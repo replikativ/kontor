@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<xsd:schema 
+xmlns:olT661="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661/1-0-0" 
+xmlns:olT661Parts1="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts1/1-0-0" 
+xmlns:olT661Parts2="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts2/1-0-0" 
+xmlns:olT661Parts3="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts3/1-0-0" 
+xmlns:olT661Parts4="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts4/1-0-0" 
+xmlns:olT661Parts5="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts5/1-0-0" 
+xmlns:olT661Parts6="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts6/1-0-0" 
+xmlns:olT661Parts7="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts7/1-0-0" 
+xmlns:olT661Parts9="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts9/1-0-0" 
+xmlns:olT661Parts10="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts10/1-0-0" 
+xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+targetNamespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661/1-0-0" 
+	elementFormDefault="qualified" attributeFormDefault="unqualified" version="ols661/1-0-0">
+	<xsd:import namespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts1/1-0-0" schemaLocation="T661prt1.xsd"/>
+	<xsd:import namespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts2/1-0-0" schemaLocation="T661prt2.xsd"/>
+	<xsd:import namespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts3/1-0-0" schemaLocation="T661prt3.xsd"/>
+	<xsd:import namespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts4/1-0-0" schemaLocation="T661prt4.xsd"/>
+	<xsd:import namespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts5/1-0-0" schemaLocation="T661prt5.xsd"/>
+	<xsd:import namespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts6/1-0-0" schemaLocation="T661prt6.xsd"/>
+	<xsd:import namespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts7/1-0-0" schemaLocation="T661prt7.xsd"/>
+	<xsd:import namespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts9/1-0-0" schemaLocation="T661prt9.xsd"/>
+	<xsd:import namespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts10/1-0-0" schemaLocation="T661prt10.xsd"/>
+		
+	<xsd:element name="OLT661Data" type="olT661:OLT661DataType" />
+	<xsd:complexType name="OLT661DataType">
+		<xsd:sequence>
+			<xsd:element ref="olT661Parts1:T661Part1Data" minOccurs="0"/>
+			<xsd:element ref="olT661Parts2:T661Part2Data" minOccurs="0" maxOccurs ="200"/>
+			<xsd:element ref="olT661Parts3:T661Part3Data" minOccurs="0"/>
+			<xsd:element ref="olT661Parts4:T661Part4Data" minOccurs="0"/>
+			<xsd:element ref="olT661Parts5:T661Part5Data" minOccurs="0"/>
+			<xsd:element ref="olT661Parts6:T661Part6Data" minOccurs="0"/>
+			<xsd:element ref="olT661Parts7:T661Part7Data" minOccurs="0"/>
+			<xsd:element ref="olT661Parts9:T661Part9Data" minOccurs="0"/>
+			<xsd:element ref="olT661Parts10:T661Part10Data" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+</xsd:schema>

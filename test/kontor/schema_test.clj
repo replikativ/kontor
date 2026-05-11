@@ -25,7 +25,11 @@
     "tax" "tax-rep" "tax-group"
     "period" "balance-assertion"
     "transaction" "posting"
-    "analytic-plan" "analytic-account" "analytic-distribution"})
+    "analytic-plan" "analytic-account" "analytic-distribution"
+    "ledger"
+    "country" "country-code" "country-group"
+    "state" "state-code"
+    "attestation" "complemento"})
 
 (deftest schema-loads-into-fresh-db
   (testing "Kernel schema transacts cleanly into a fresh in-memory DB"

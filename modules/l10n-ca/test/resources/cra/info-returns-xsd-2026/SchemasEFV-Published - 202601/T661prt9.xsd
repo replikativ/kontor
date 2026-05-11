@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<xsd:schema 
+xmlns:olT661Parts9="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts9/1-0-0" 
+			xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+			xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+			xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+	targetNamespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts9/1-0-0" 
+	elementFormDefault="qualified" attributeFormDefault="unqualified" version="ols661/1-0-0">
+
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/> 
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/> 
+
+<xsd:element name="T661Part9Data" type="olT661Parts9:Part9DataType"/>
+	<xsd:complexType name="Part9DataType">
+		<xsd:sequence>
+		
+			<xsd:element ref="olT661Parts9:Field935" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts9:Part9TableData" minOccurs="0" maxOccurs="10"/>
+			<xsd:element ref="olT661Parts9:Field970" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts9:Field975" minOccurs="0" maxOccurs="1"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:element name="Part9TableData" type="olT661Parts9:Part9TableData1"/>	
+	<xsd:complexType name="Part9TableData1">
+		<xsd:annotation>
+			<xsd:documentation>
+				Table data for Part 9
+				Enter each Name, BN, billing arrangement, billing rate, total fees for fields 940 through 965
+			</xsd:documentation>
+		</xsd:annotation>
+		<xsd:sequence>
+			<xsd:element ref="olT661Parts9:ClaimPreparer" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts9:BN" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts9:BillingArrangmentCode" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts9:BillingRate" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts9:OtherBillingArrangment" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts9:TotalFee" minOccurs="0" maxOccurs="1"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:element name="ClaimPreparer" type="ccms:Name175CharacterType" />
+	<xsd:element name="BN" type="ccms:BN15Type" />
+	<xsd:element name="BillingArrangmentCode">
+		<xsd:simpleType>
+			<xsd:restriction base="xsd:string">
+				<xsd:enumeration value="1"/>
+				<xsd:enumeration value="2"/>
+				<xsd:enumeration value="3"/>
+				<xsd:enumeration value="4"/>
+				<xsd:enumeration value="5"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="BillingRate" type="sdt:AmountType" />
+	<xsd:element name="OtherBillingArrangment" type="ccms:Character175TextType" />
+	<xsd:element name="TotalFee" type="sdt:AmountType" />
+	
+	<xsd:element name="Field935" type="ccms:OneTwoCodeType"/>
+	<xsd:element name="Field970" type="ccms:Name175CharacterType"/>
+	<xsd:element name="Field975" type="sdt:DateType"/>
+	
+</xsd:schema> 

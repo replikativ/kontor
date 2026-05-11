@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Eclipse Platform Version: 3.4.2 Build id: M20090211-1700 
+Description: Speciality Business Returns 
+			 Schema to receive (from INFODEC) XML submissions for T5013FIN and T5013Schedules 
+			 
+Contact: CRA, ITB, Solutions, RASD, Business Suite Assessing System, Other Levies
+Date created: April 2013
+Updates: oltr/1-0-1 - November 2013 - added Min and Max for sequence elements 
+		 olsbr/1-0-0 updated reference to olsbr/1-0-1
+		 sdt/updated reference to sdt/2-2-0
+	*********   Notes to users of this schema **********
+	This schema presents elements and types that do NOT adhere to the: 
+			ITB guidelines for XML Data 
+	and the ITB Standards for XML Data.
+	Specifically for the shared data elements within the 'Transmitter Type'.  
+	These reflect elements from INFODEC schemas that existed prior to the creation of the 
+	ITB guidelines and standards for XML. 
+-->  
+
+<xsd:schema 
+xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" xmlns:p20="http://www.cra.gc.ca/pmr/p20/v1" version="3.0">
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/>		 		 
+<xsd:import namespace="http://www.cra.gc.ca/pmr/p20/v1" schemaLocation="PartXX_v3.0.xsd"/>		 		 
+	<xsd:element name="Submission" type="SubmissionType"/>
+	<xsd:complexType name="SubmissionType">
+		<xsd:sequence>
+			<xsd:element name="T619" type="TransmitterType"/>
+ 			<xsd:element ref="p20:Part_XX">
+					<xsd:annotation>
+						<xsd:documentation>The Part XX Body element contains the information on the Reporting Platform Operator, as well as on the Relevant Services performed by Reportable Sellers that give rise to the exchange.</xsd:documentation>
+					</xsd:annotation>
+			</xsd:element> 
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:complexType name="TransmitterType">
+		<xsd:all>
+			<xsd:element name="TransmitterAccountNumber" type="TransmitterAccountNumberType"/>
+			<xsd:element name="TransmitterRepID" type="TransmitterRepIDType" minOccurs="0"/>
+			<xsd:element name="sbmt_ref_id" type="char8Type" minOccurs="0"/>
+			<xsd:element name="summ_cnt" type="int6Type" minOccurs="0"/>
+			<xsd:element name="lang_cd" type="languageType" minOccurs="0"/>
+			<xsd:element name="TransmitterName" type="Line1Type" minOccurs="0"/>
+			<xsd:element name="TransmitterCountryCode" type="countryType"/>
+			<xsd:element name="CNTC" type="TransmitterContactType"/>
+		</xsd:all>
+	</xsd:complexType>
+	
+	<xsd:complexType name="TransmitterAccountNumberType">
+		<xsd:all>
+			<xsd:element name="nr4" type="nrType" minOccurs="0"/>
+			<xsd:element name="trust" type="trustType" minOccurs="0"/>
+			<xsd:element name="bn15" type="bnType" minOccurs="0"/>
+			<xsd:element name="bn9" type="bnRootType" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+
+	<xsd:complexType name="TransmitterRepIDType">
+		<xsd:all>
+			<xsd:element name="RepID" type="char7Type" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>		
+	
+	<xsd:complexType name="TransmitterContactType">
+		<xsd:all>
+			<xsd:element name="cntc_nm" type="char35Type"/>
+			<xsd:element name="cntc_area_cd" type="numeric3Type"/>
+			<xsd:element name="cntc_phn_nbr" type="phoneType"/>
+			<xsd:element name="cntc_extn_nbr" type="int12Type" minOccurs="0"/>
+			<xsd:element name="cntc_email_area" type="char60Type"/>
+			<xsd:element name="sec_cntc_email_area" type="char60Type" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	
+	<xsd:simpleType name="nrType">
+		<xsd:restriction base="xsd:string">
+			<xsd:pattern value="(\p{L}{3}[0-9]{6})"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	<xsd:simpleType name="bnType">
+		<xsd:annotation>
+			<xsd:documentation>Root = 999999999, Program ID = AA, Account # = 9999</xsd:documentation>
+		</xsd:annotation>
+		<xsd:restriction base="xsd:string">
+			<xsd:pattern value="\d{9}\p{L}{2}\d{4}"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	<xsd:simpleType name="bnRootType">
+		<xsd:restriction base="xsd:string">
+			<xsd:pattern value="\d{9}"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	<xsd:simpleType name="trustType">
+		<xsd:restriction base="xsd:string">
+			<xsd:pattern value="(\p{L}{1}[0-9]{8})"/>
+		</xsd:restriction>
+	</xsd:simpleType>	
+	<xsd:simpleType name="transNbrType">
+		<xsd:restriction base="sdt:NumberType">
+			<xsd:pattern value="(MM|mm)\d{6}"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	<xsd:simpleType name="char8Type">
+		<xsd:restriction base="sdt:NumberType">
+			<xsd:minLength value="1"/>
+			<xsd:maxLength value="8"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	<xsd:simpleType name="char7Type">
+		<xsd:restriction base="sdt:NumberType">
+			<xsd:minLength value="1"/>
+			<xsd:maxLength value="7"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	<xsd:simpleType name="numeric3Type">
+		<xsd:restriction base="xsd:string">
+			<xsd:pattern value="\d{3}"/>
+		</xsd:restriction>
+	</xsd:simpleType>	
+	<xsd:complexType name="Line1Type">
+		<xsd:all>
+			<xsd:element name="l1_nm" type="char35Type"/>
+		</xsd:all>
+	</xsd:complexType>	
+	<xsd:simpleType name="indicator1-6Type">
+		<xsd:restriction base="sdt:CodeType">
+			<xsd:pattern value="[1-6]{1}"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+
+	<xsd:simpleType name="int6Type">
+		<xsd:restriction base="sdt:NumberType">
+			<xsd:pattern value="\d{1,6}"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	<xsd:simpleType name="char35Type">
+		<xsd:restriction base="sdt:NumberType">
+			<xsd:minLength value="1"/> 
+			<xsd:maxLength value="35"/> 
+		</xsd:restriction>
+	</xsd:simpleType>
+	<xsd:simpleType name="char60Type">
+		<xsd:restriction base="sdt:NumberType">
+			<xsd:minLength value="1"/> 
+			<xsd:maxLength value="60"/> 
+		</xsd:restriction>
+	</xsd:simpleType>	
+	<xsd:simpleType name="pcType">
+		<xsd:restriction base="sdt:CodeType">
+			<xsd:minLength value="1"/>
+			<xsd:maxLength value="10"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	<xsd:simpleType name="countryType">
+		<xsd:restriction base="xsd:string">
+			<xsd:pattern value="\p{L}{3}"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	<xsd:simpleType name="phoneType">
+		<xsd:restriction base="xsd:string">
+			<xsd:pattern value="\d{3}-\d{4}"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	<xsd:simpleType name="int12Type">
+		<xsd:restriction base="xsd:string">
+			<xsd:pattern value="\d{1,12}"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+
+	<xsd:simpleType name="languageType">
+		<xsd:restriction base="sdt:CodeType">
+			<xsd:enumeration value="E"/>
+			<xsd:enumeration value="F"/>
+			<xsd:enumeration value="e"/>
+			<xsd:enumeration value="f"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	
+</xsd:schema>
