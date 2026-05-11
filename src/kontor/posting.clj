@@ -382,6 +382,40 @@
 ;; Stock-move posting builder — ADR-030
 ;; ============================================================================
 
+(def stock-move-roles
+  "Stable vocabulary of `account-fn` role keywords the stock-move
+   builder asks for. Consumers should switch on these and return a
+   resolved account ref for each.
+
+   ## Receipt + issue (in use today)
+
+     :inventory         — the stock asset account (Dr on receipt,
+                          Cr on issue / scrap)
+     :gr-ir-clearing    — Goods-Received / Invoice-Received clearing
+                          (Cr on receipt; flips to AP at invoice time)
+     :cogs              — Cost-of-Goods-Sold expense (Dr on issue
+                          for sale; Continental jurisdictions may
+                          redirect to a generic material-expense
+                          account via the account-fn)
+     :price-variance    — Purchase-Price-Variance / Material-Usage-
+                          Variance expense (standard-cost provider
+                          emits this leg when actual ≠ standard)
+
+   ## Adjustments (reserved; consumed by a future `plan-adjustment-move`)
+
+     :landed-cost-clearing — accrual account for landed-cost
+                             vouchers arriving after receipt
+     :revaluation-gain     — Cr leg of an upward revaluation
+     :revaluation-loss     — Dr leg of a downward revaluation
+     :write-down-expense   — Dr leg of an inventory write-down
+     :write-up-revenue     — Cr leg of an inventory write-up
+
+   New roles may be added; existing roles must remain spelled this
+   way (forward-compat surface — published once, never renamed)."
+  #{:inventory :gr-ir-clearing :cogs :price-variance
+    :landed-cost-clearing :revaluation-gain :revaluation-loss
+    :write-down-expense :write-up-revenue})
+
 (defn- ^java.math.BigDecimal money-amount [bd]
   (.setScale ^java.math.BigDecimal bd 2 java.math.RoundingMode/HALF_EVEN))
 
@@ -571,7 +605,12 @@
         (into [tx-base layer-entity] posting-entities))
 
       :out
-      (let [consumption-req {:book book-eid :item item :qty qty :lot lot}
+      (let [;; Thread the move's effective-date as the bitemporal
+            ;; cursor for layer + consumption visibility. A backdated
+            ;; issue sees only layers received at or before its
+            ;; effective-date and only consumptions already issued.
+            consumption-req {:book book-eid :item item :qty qty :lot lot
+                             :as-of-valid effective-date}
             {:keys [consumptions underflow]}
             (costing/plan-consumption provider db consumption-req)]
         (when (and underflow (pos? (.signum ^java.math.BigDecimal underflow)))

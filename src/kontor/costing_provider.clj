@@ -13,6 +13,18 @@
    the result and produces a balanced kernel transaction."
   (:require [kontor.valuation :as valuation]))
 
+(defn- view-opts
+  "Build the opts map passed to kontor.valuation view helpers from a
+   request. Currently extracts :as-of-valid + :include-states so the
+   layer queries honor the same bitemporal contract as
+   kontor.balance / kontor.trial (ADR-008)."
+  [request]
+  (cond-> {}
+    (contains? request :as-of-valid)
+    (assoc :as-of-valid (:as-of-valid request))
+    (contains? request :include-states)
+    (assoc :include-states (:include-states request))))
+
 ;; ============================================================================
 ;; Protocol
 ;; ============================================================================
@@ -31,11 +43,22 @@
     "Outbound: decide which layers to consume.
 
      `request` is a map containing at minimum:
-       :book      <ent>     valuation-book entity-id
-       :item      <ent>     item entity-id (generic ref)
-       :qty       <bigdec>  quantity being issued
-       :lot       <ent?>    optional lot restriction
-       :as-of-tx  <Date?>   bitemporal cursor (ignored if nil)
+       :book           <ent>     valuation-book entity-id
+       :item           <ent>     item entity-id (generic ref)
+       :qty            <bigdec>  quantity being issued
+       :lot            <ent?>    optional lot restriction
+       :as-of-valid    <Date?>   bitemporal valid-time cursor.
+                                  Layers received after this and
+                                  consumptions issued after this are
+                                  filtered out. Defaults to nil = no
+                                  upper bound.
+       :include-states <set?>    transaction-states that count as
+                                  'real'. Defaults to
+                                  `#{:posted :draft :pending-attestation}`
+                                  (everything except :cancelled).
+
+     For tx-time queries, pass `(d/as-of db instant)` as the `db`
+     argument — same convention as the rest of the kernel.
 
      Returns:
        {:consumptions [{:layer eid :qty bd :unit-cost bd} ...]
@@ -67,8 +90,9 @@
 (defrecord FIFOCostingProvider []
   CostingProvider
 
-  (plan-consumption [_ db {:keys [book item qty lot]}]
-    (let [layers (valuation/available-layers db book item lot)]
+  (plan-consumption [_ db {:keys [book item qty lot] :as request}]
+    (let [opts   (view-opts request)
+          layers (valuation/available-layers db book item lot opts)]
       (loop [remaining ^java.math.BigDecimal qty
              [layer & more] layers
              consumptions  []]
@@ -84,9 +108,9 @@
            :underflow    remaining}
 
           :else
-          (let [avail ^java.math.BigDecimal (valuation/qty-remaining db layer)
+          (let [avail ^java.math.BigDecimal (valuation/qty-remaining db layer opts)
                 take  (if (<= (.compareTo remaining avail) 0) remaining avail)
-                unit  ^java.math.BigDecimal (valuation/current-unit-cost db layer)]
+                unit  ^java.math.BigDecimal (valuation/current-unit-cost db layer opts)]
             (recur (.subtract remaining take)
                    more
                    (conj consumptions
@@ -111,8 +135,9 @@
 (defrecord LIFOCostingProvider []
   CostingProvider
 
-  (plan-consumption [_ db {:keys [book item qty lot]}]
-    (let [layers (reverse (valuation/available-layers db book item lot))]
+  (plan-consumption [_ db {:keys [book item qty lot] :as request}]
+    (let [opts   (view-opts request)
+          layers (reverse (valuation/available-layers db book item lot opts))]
       (loop [remaining ^java.math.BigDecimal qty
              [layer & more] layers
              consumptions  []]
@@ -124,9 +149,9 @@
           {:consumptions consumptions :underflow remaining}
 
           :else
-          (let [avail ^java.math.BigDecimal (valuation/qty-remaining db layer)
+          (let [avail ^java.math.BigDecimal (valuation/qty-remaining db layer opts)
                 take  (if (<= (.compareTo remaining avail) 0) remaining avail)
-                unit  ^java.math.BigDecimal (valuation/current-unit-cost db layer)]
+                unit  ^java.math.BigDecimal (valuation/current-unit-cost db layer opts)]
             (recur (.subtract remaining take)
                    more
                    (conj consumptions
@@ -148,16 +173,16 @@
 
 (defn- weighted-avg-unit-cost
   "Total value / total quantity across all available layers for
-   (book, item). Returns 0M when no layers."
-  ^java.math.BigDecimal [db book item]
-  (let [layers (valuation/available-layers db book item)]
+   (book, item) at the bitemporal cursor. Returns 0M when no layers."
+  ^java.math.BigDecimal [db book item opts]
+  (let [layers (valuation/available-layers db book item nil opts)]
     (if (empty? layers)
       0M
       (let [[total-qty total-val]
             (reduce
              (fn [[^java.math.BigDecimal q ^java.math.BigDecimal v] layer]
-               (let [lq ^java.math.BigDecimal (valuation/qty-remaining db layer)
-                     lc ^java.math.BigDecimal (valuation/current-unit-cost db layer)]
+               (let [lq ^java.math.BigDecimal (valuation/qty-remaining db layer opts)
+                     lc ^java.math.BigDecimal (valuation/current-unit-cost db layer opts)]
                  [(.add q lq)
                   (.add v (.multiply lq lc))]))
              [0M 0M]
@@ -170,17 +195,18 @@
 (defrecord WeightedAverageProvider []
   CostingProvider
 
-  (plan-consumption [_ db {:keys [book item qty lot]}]
+  (plan-consumption [_ db {:keys [book item qty lot] :as request}]
     ;; Weighted average distributes the consumption across all
     ;; available layers proportionally to their remaining quantity.
     ;; Each consumption row gets the SAME unit-cost (the weighted
     ;; average), regardless of which layer.
-    (let [unit-cost (weighted-avg-unit-cost db book item)
-          layers    (valuation/available-layers db book item lot)
+    (let [opts      (view-opts request)
+          unit-cost (weighted-avg-unit-cost db book item opts)
+          layers    (valuation/available-layers db book item lot opts)
           total-avail
           (reduce (fn [^java.math.BigDecimal acc layer]
                     (.add acc ^java.math.BigDecimal
-                          (valuation/qty-remaining db layer)))
+                          (valuation/qty-remaining db layer opts)))
                   0M
                   layers)]
       (cond
@@ -202,7 +228,7 @@
             {:consumptions consumptions :underflow remaining}
 
             :else
-            (let [avail ^java.math.BigDecimal (valuation/qty-remaining db layer)
+            (let [avail ^java.math.BigDecimal (valuation/qty-remaining db layer opts)
                   take  (if (<= (.compareTo remaining avail) 0) remaining avail)]
               (recur (.subtract remaining take)
                      more
@@ -238,14 +264,20 @@
 (defrecord StandardCostProvider [standard-cost-fn]
   CostingProvider
 
-  (plan-consumption [_ db {:keys [book item qty lot]}]
+  (plan-consumption [_ db {:keys [book item qty lot] :as request}]
     ;; Standard-cost issues always use the standard unit cost —
     ;; consumption from any layer carries the same value. Layers
     ;; still need to be drawn from (to keep on-hand correct), so we
     ;; pick FIFO order for the consumption events but stamp every
     ;; one with the standard cost.
-    (let [std-cost (standard-cost-fn db book item)
-          layers   (valuation/available-layers db book item lot)]
+    ;;
+    ;; Note: layer order is FIFO by `:received-at`. This matches SAP
+    ;; S/4HANA Material Ledger's standard-cost on-hand bookkeeping
+    ;; convention (layers are drained in receipt order even when each
+    ;; consumption is stamped at the standard cost).
+    (let [opts     (view-opts request)
+          std-cost (standard-cost-fn db book item)
+          layers   (valuation/available-layers db book item lot opts)]
       (loop [remaining ^java.math.BigDecimal qty
              [layer & more] layers
              consumptions  []]

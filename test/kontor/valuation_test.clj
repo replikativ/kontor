@@ -280,3 +280,132 @@
           db (d/db conn)]
       (is (= 0 (.compareTo (bigdec "850.0000")
                            (valuation/on-hand-value db (:book cat) (:item cat))))))))
+
+;; ============================================================================
+;; Bitemporal :as-of-valid filtering (#1 from review follow-up)
+;; ============================================================================
+
+(deftest available-layers-filters-by-as-of-valid
+  (testing "A layer received AFTER the as-of-valid cursor is excluded
+            from the FIFO stack — bitemporal correctness per ADR-008"
+    (let [conn (core/create-test-db)
+          cat  (setup-catalog! conn)
+          l1 (transact-receipt! conn
+                                (assoc cat :qty 100M :unit-cost 5.00M
+                                       :received-at #inst "2026-05-01"))
+          l2 (transact-receipt! conn
+                                (assoc cat :qty 50M :unit-cost 6.00M
+                                       :received-at #inst "2026-05-15"))
+          db (d/db conn)]
+      (testing "No cursor: both layers visible"
+        (is (= [l1 l2] (valuation/available-layers db (:book cat) (:item cat)))))
+      (testing "Cursor 2026-05-10: only the first receipt"
+        (is (= [l1]
+               (valuation/available-layers db (:book cat) (:item cat) nil
+                                           {:as-of-valid #inst "2026-05-10"}))))
+      (testing "Cursor 2026-04-01: nothing yet received"
+        (is (= []
+               (valuation/available-layers db (:book cat) (:item cat) nil
+                                           {:as-of-valid #inst "2026-04-01"})))))))
+
+(deftest qty-remaining-respects-as-of-valid-on-consumption
+  (testing "Backdated cursor sees pre-cursor consumption only"
+    (let [conn (core/create-test-db)
+          cat (setup-catalog! conn)
+          layer (transact-receipt! conn
+                                   (assoc cat :qty 100M :unit-cost 5.00M
+                                          :received-at #inst "2026-05-01"))
+          _ (transact-consumption! conn layer 30M 5.00M
+                                   #inst "2026-05-10" (:journal cat))
+          _ (transact-consumption! conn layer 20M 5.00M
+                                   #inst "2026-05-20" (:journal cat))
+          db (d/db conn)]
+      (is (= 100M (valuation/qty-remaining db layer
+                                           {:as-of-valid #inst "2026-05-05"}))
+          "Before any consumption — full qty visible")
+      (is (= 70M (valuation/qty-remaining db layer
+                                          {:as-of-valid #inst "2026-05-15"}))
+          "After first consumption only")
+      (is (= 50M (valuation/qty-remaining db layer
+                                          {:as-of-valid #inst "2026-05-25"}))
+          "After both consumptions")
+      (is (= 50M (valuation/qty-remaining db layer))
+          "Default opts (no cursor) = current state"))))
+
+(deftest current-unit-cost-respects-as-of-valid-on-adjustments
+  (testing "Adjustment applied after the cursor is invisible"
+    (let [conn (core/create-test-db)
+          cat (setup-catalog! conn)
+          layer (transact-receipt! conn
+                                   (assoc cat :qty 100M :unit-cost 5.00M
+                                          :received-at #inst "2026-05-01"))
+          _ (transact-adjustment! conn layer 50.00M :landed-cost
+                                  #inst "2026-05-20" (:journal cat))
+          db (d/db conn)]
+      (is (= 0 (.compareTo (bigdec "5.0000")
+                           (valuation/current-unit-cost db layer
+                                                        {:as-of-valid #inst "2026-05-10"})))
+          "Pre-adjustment cursor → original cost only")
+      (is (= 0 (.compareTo (bigdec "5.5000")
+                           (valuation/current-unit-cost db layer
+                                                        {:as-of-valid #inst "2026-05-25"})))
+          "Post-adjustment cursor → adjusted cost"))))
+
+;; ============================================================================
+;; Cancelled-transaction filter (#2 from review follow-up)
+;; ============================================================================
+
+(deftest cancelled-receipt-excluded-from-available-layers
+  (testing "A receipt whose origin transaction is :cancelled does
+            NOT appear in available-layers"
+    (let [conn (core/create-test-db)
+          cat  (setup-catalog! conn)
+          ;; Receipt 1 — kept active
+          l-keep (transact-receipt! conn
+                                    (assoc cat :qty 100M :unit-cost 5.00M
+                                           :received-at #inst "2026-05-01"))
+          ;; Receipt 2 — about to be cancelled
+          l-cancel (transact-receipt! conn
+                                      (assoc cat :qty 50M :unit-cost 6.00M
+                                             :received-at #inst "2026-05-10"))
+          db (d/db conn)
+          ;; Mark the second receipt's transaction as cancelled
+          cancel-tx (d/q '[:find ?tx . :in $ ?l :where
+                           [?l :valuation-layer/origin-transaction ?tx]]
+                         db l-cancel)
+          _ (d/transact conn [{:db/id cancel-tx
+                               :transaction/state :cancelled}])
+          db2 (d/db conn)]
+      (is (= [l-keep] (valuation/available-layers db2 (:book cat) (:item cat)))
+          "Only the non-cancelled receipt is visible by default")
+      (is (= 100M (valuation/on-hand-qty db2 (:book cat) (:item cat)))
+          "On-hand qty excludes cancelled receipt")
+      (testing "Caller can opt back IN to cancelled receipts via :include-states"
+        (let [layers (valuation/available-layers
+                      db2 (:book cat) (:item cat) nil
+                      {:include-states #{:posted :draft :pending-attestation :cancelled}})]
+          (is (= 2 (count layers))
+              "Both layers visible when :cancelled is in include-states"))))))
+
+(deftest cancelled-consumption-event-excluded
+  (testing "A consumption event whose issue transaction is :cancelled
+            does not deplete the layer's remaining qty"
+    (let [conn (core/create-test-db)
+          cat (setup-catalog! conn)
+          layer (transact-receipt! conn
+                                   (assoc cat :qty 100M :unit-cost 5.00M
+                                          :received-at #inst "2026-05-01"))
+          _ (transact-consumption! conn layer 30M 5.00M
+                                   #inst "2026-05-10" (:journal cat))
+          db (d/db conn)
+          ;; Cancel the issue transaction
+          issue-tx (d/q '[:find ?tx . :in $ ?l :where
+                          [?c :layer-consumption/layer ?l]
+                          [?c :layer-consumption/issue-transaction ?tx]]
+                        db layer)
+          _ (d/transact conn [{:db/id issue-tx :transaction/state :cancelled}])
+          db2 (d/db conn)]
+      (is (= 100M (valuation/qty-remaining db2 layer))
+          "Cancelled issue does not deplete the layer")
+      (is (= 0M (valuation/qty-consumed db2 layer))
+          "Cancelled consumption excluded from consumed sum"))))
