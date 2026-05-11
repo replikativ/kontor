@@ -2175,6 +2175,106 @@
     :db/cardinality :db.cardinality/one
     :db/doc         "Valid time of the issue."}])
 
+;; ============================================================================
+;; Entity / legal-entity / consolidation entity — ADR-031.
+;;
+;; First-class :entity for multi-entity / transnational deployments.
+;; Optional refs on :posting / :ledger / :valuation-book gate the
+;; per-(entity, ledger, commodity) sum-to-zero invariant extension
+;; in kontor.posting/validate. No kernel-level bootstrap — consumers
+;; install their entity tree as data.
+;; ============================================================================
+
+(def ^:private entity-attrs
+  [{:db/ident       :entity/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Stable identifier (\"acme-de\", \"acme-us\",
+                     \"acme-group\", \"acme-eliminations\")."}
+
+   {:db/ident       :entity/name
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :entity/country
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to :country. Synthetic entities
+                     (:elimination, :consolidation) may omit."}
+
+   {:db/ident       :entity/functional-commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Accounting currency for this entity's standalone
+                     books. Optional — synthetic entities may run in
+                     a group currency selected at consolidation time."}
+
+   {:db/ident       :entity/parent-entity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Group hierarchy. Self-reference; root entity has
+                     no parent. Matches Odoo's :parent_id pattern."}
+
+   {:db/ident       :entity/accounting-standard
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":hgb | :us-gaap | :br-gaap | :ifrs | :local
+                     | … free-form. Drives reporting + tax filing
+                     choices; consumed by l10n modules."}
+
+   {:db/ident       :entity/kind
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":operating (default) — a real legal entity
+                                that books real transactions.
+                     :elimination — a synthetic entity holding
+                                consolidation eliminations
+                                (NetSuite's Elimination Subsidiary).
+                     :consolidation — a synthetic entity representing
+                                the group view (the rollup target).
+
+                     Queries can scope reports by kind: \"operating
+                     only\" for statutory; \"operating + elimination\"
+                     for consolidated; \"consolidation\" for the
+                     group lens."}
+
+   {:db/ident       :entity/active
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one}])
+
+(def ^:private posting-entity-attrs
+  [{:db/ident       :posting/entity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to :entity (ADR-031). When any
+                     posting in a transaction carries this, the
+                     sum-to-zero invariant extends to
+                     per-(entity, ledger, commodity). Mixed-mode
+                     (some postings tagged, some not) is rejected.
+
+                     Placed on the line, not the transaction header
+                     — matches SAP ACDOCA.RBUKRS, Oracle
+                     XLA_AE_LINES.LEGAL_ENTITY_ID, NetSuite per-line
+                     subsidiary, D365 per-LE DataAreaId."}])
+
+(def ^:private ledger-entity-attrs
+  [{:db/ident       :ledger/entity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to :entity (ADR-031). Per-ERP
+                     consensus: ledger is per-entity. Synthetic
+                     consolidation entities have their own ledger.
+                     Schema-optional for single-entity tenants."}])
+
+(def ^:private valuation-book-entity-attrs
+  [{:db/ident       :valuation-book/entity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to :entity (ADR-031). Each entity
+                     has its own valuation books; one entity may
+                     run several books in parallel (ADR-027)."}])
+
 (def ^:private layer-adjustment-attrs
   [{:db/ident       :layer-adjustment/layer
     :db/valueType   :db.type/ref
@@ -2263,7 +2363,11 @@
     valuation-book-attrs                 ; ADR-027
     valuation-layer-attrs                ; ADR-028
     layer-consumption-attrs              ; ADR-028
-    layer-adjustment-attrs)))            ; ADR-028
+    layer-adjustment-attrs               ; ADR-028
+    entity-attrs                         ; ADR-031
+    posting-entity-attrs                 ; ADR-031
+    ledger-entity-attrs                  ; ADR-031
+    valuation-book-entity-attrs)))       ; ADR-031
 
 (defn install!
   "Transact the kernel schema into a connection. Idempotent — re-running

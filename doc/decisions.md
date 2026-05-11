@@ -1713,6 +1713,97 @@ Date: 2026-05-11.
 
 ---
 
+## ADR-031 — `:entity` entity: per-(entity, ledger, commodity) sum-to-zero for transnational books
+
+**Decision.** Introduce a first-class `:entity` entity representing a legal accounting unit (subsidiary, branch, consolidation parent, elimination subsidiary). Optional `:entity` refs on `:posting`, `:ledger`, `:valuation-book`. Sum-to-zero invariant extends to per-(entity, ledger, commodity) when any posting in a transaction carries `:posting/entity`; falls back to per-(ledger, commodity) otherwise. Backward-compatible with tenant-scoped (single-entity) deployments.
+
+### Why now
+
+The kernel covers double-entry postings (ADR-021), parallel ledgers (ADR-021), parallel valuation books (ADR-027), country/state geography (ADR-023), bitemporal queries (ADR-008). It does not represent the legal-entity dimension that every transnational deployment needs. A group with Acme-Germany-GmbH + Acme-US-Inc + Acme-Brazil-Ltda + Acme-Group-AG can be modeled today only by running four separate tenants — which makes cross-entity queries (intercompany matching, group consolidation) impossible from inside one kontor database.
+
+Per the four-ERP survey (SAP, Oracle Fusion, NetSuite, D365), the entity is a load-bearing dimension that attaches to the GL *line item* — `ACDOCA.RBUKRS` (SAP), `XLA_AE_LINES.LEGAL_ENTITY_ID` (Oracle), `Transaction.subsidiary` per line (NetSuite), `DataAreaId` per-LE on the voucher (D365). Cross-entity transactions are an enforced cross-cutting case in all four: **each entity's footprint in a multi-entity transaction must balance independently** (SAP `OBYA` clearing accounts, Oracle Intercompany Balancing Rules, NetSuite Advanced Intercompany Journal Entries, D365 posting profiles per intercompany combination).
+
+### How competitors model this
+
+- **SAP S/4HANA.** Company Code (`BUKRS`) — the canonical accounting unit with country, currency, chart of accounts, fiscal year variant, tax procedure. Company (one level above company code) groups codes for consolidation. Group Reporting and Universal Parallel Accounting layer on top. ACDOCA carries `RBUKRS` on every line; cross-company-code transactions auto-balance via OBYA clearing-account pairs.
+- **Oracle Fusion ERP Cloud.** Legal Entity is first-class. Primary Ledger defined by the four C's (chart, calendar, currency, convention). Each LE accounts for itself in a primary ledger; Business Units (operational) sit below. Intercompany Balancing Rules balance per-LE within a document.
+- **NetSuite OneWorld.** Subsidiary is the entity. Hierarchical via parent links. Each subsidiary has its own base currency, nexus, optionally per-subsidiary CoA. Elimination Subsidiaries hold consolidation eliminations and must share their parent's base currency + country.
+- **Microsoft D365 Finance.** Legal Entity = `DataAreaId`. Exactly one ledger per LE. Intercompany via posting profiles per LE-pair; consolidation runs into a dedicated consolidation legal entity.
+- **Odoo.** `res.company` with `parent_id` + `parent_path` for hierarchy; partner-delegated address/VAT. Accounts use `company_ids` M2M (shared CoA, per-company code overlay). `account.move` requires `company_id`.
+- **Tryton.** `company.company` with strict per-company FK on every accounting model. No parent hierarchy in core. `Move.consolidation_company` field marks elimination postings filtered out of subsidiary GL queries.
+
+### What kontor adopts
+
+The kernel-narrow path. From the convergent pattern across six reference systems:
+
+- `:entity` is a top-level entity, not nested under `:partner`. Partners stay global; entity scoping is independent.
+- Per-entity ledgers (one entity → many ledgers; never a ledger spanning entities). Consolidation is a *separate entity* with its own ledger, not a ledger that aggregates across entities.
+- Per-entity valuation books.
+- Entity ref lives on the GL *line item* (`:posting/entity`), not the document header. A multi-entity transaction has lines tagged with different entities; the document spans them.
+- Hierarchy via `:entity/parent-entity` (Odoo's pattern; Tryton lacks it but every transnational deployment needs it).
+- Mark synthetic entities (consolidation rollups, elimination subsidiaries) via `:entity/kind` — NetSuite's load-bearing pattern; prevents accidental real postings into a virtual entity.
+
+### Schema
+
+```clojure
+:entity/code                  string :db.unique/identity   ; "acme-de" "acme-us"
+                                                           ; "acme-group" "acme-elims"
+:entity/name                  string
+:entity/country               ref → :country  (optional)
+:entity/functional-commodity  ref → :commodity (optional;
+                                                nil for synthetic entities)
+:entity/parent-entity         ref → :entity   (optional; group hierarchy)
+:entity/accounting-standard   keyword         (optional; :hgb :us-gaap
+                                                :br-gaap :ifrs :local …)
+:entity/kind                  keyword                       ; :operating (default)
+                                                           ; | :elimination
+                                                           ; | :consolidation
+:entity/active                boolean
+
+;; Optional refs on existing kernel entities. Schema-optional;
+;; multi-entity-required (see Invariant below).
+:posting/entity         ref → :entity
+:ledger/entity          ref → :entity
+:valuation-book/entity  ref → :entity
+```
+
+### Invariant — per-(entity, ledger, commodity) sum-to-zero
+
+Mode is decided by the *postings*, not the transaction:
+
+- **Single-entity mode** (no posting carries `:posting/entity`): existing per-(ledger, commodity) invariant from ADR-021 holds unchanged. Backward-compatible.
+- **Multi-entity mode** (every posting carries `:posting/entity`): sum-to-zero must hold per-(entity, ledger, commodity) triple. A cross-entity intercompany document satisfies the invariant by carrying matching intercompany-clearing postings on each side.
+- **Mixed mode** (some postings have entity refs, some don't): **rejected** as a validation error. The ambiguity is real — defaulting one way or the other would mask data-quality bugs.
+
+The fallback / detection logic lives in `kontor.posting/validate`, sibling of the existing per-ledger grouping. No transaction-header flag needed; the postings' shape determines the mode.
+
+### Bootstrap
+
+No kernel-level bootstrap. Unlike `:ledger` (primary auto-installed via ADR-021) and `:valuation-book` (primary auto-installed via ADR-027), the kernel ships no default entity. Single-entity tenants opt out of the multi-entity dimension entirely by never assigning `:posting/entity` — and the invariant degrades to today's per-ledger shape. Multi-entity tenants install their own entity tree as data, typically alongside chart-of-accounts setup.
+
+### Alternatives considered
+
+- *`:transaction/entity` header ref.* Rejected per the four-ERP survey: ACDOCA places entity on the line, not the document. Header redundancy creates "does the header override the line?" ambiguity. Drop.
+- *`:partner/entity` to scope partners per-entity.* Rejected: every reference system keeps partners global with per-entity overlays. SAP's BP-general / FI-per-company-code split is the most elaborate, and even it is a partner-side overlay, not a scoping field. If a future workflow needs to associate a partner with an internal entity (intercompany counterparty), add then.
+- *`:ledger/entity` required at schema level.* Rejected: would force every existing tenant to seed an entity before running a single posting. Matches the `:posting/ledger` decision in ADR-021: schema-optional, semantic-required-for-multi-entity-use.
+- *Required `:functional-commodity`.* Rejected: synthetic entities (consolidation, elimination) may not have a functional currency — the consolidation view runs in a group currency, the elimination subsidiary inherits its parent's. Mark optional.
+- *`:entity/functional-calendar` for per-entity fiscal year variants.* Defer to ADR-032. SAP/NetSuite/D365 all support it; this needs to interact with the existing period model (ADR-014), and bundling makes the slice too big.
+- *Ship intercompany / consolidation / CTA generation in the kernel.* Out of scope: these are consumer-side workflows that compose kernel primitives. The `:entity/kind` distinction is enough kernel surface; the workflow lives in a future `kontor-consolidation` module.
+- *Multi-company chart of accounts via M2M (Odoo) vs strict per-company FK (Tryton).* Neither — kontor's existing `:account` is tenant-scoped and that's fine. Per-entity account *codes* live in `:account/external-codes` (ADR-019) keyed by regulator, which is more flexible than either approach. Consumers wanting a "global account, per-entity code" model use external-codes; consumers wanting "physically separate accounts per entity" install separate `:account` entities and link via external-codes.
+
+### Implications
+
+- New schema: 8 attrs on `:entity` + 3 optional refs = 11 attributes.
+- `kontor.entity` namespace ships with: `by-code`, `resolve-entity`, `descendants` (hierarchy traversal). No auto-bootstrap.
+- `kontor.posting/validate` extended for mixed-mode detection + per-entity balance check.
+- `kontor.posting/balance-by-ledger-and-commodity` becomes `balance-by-entity-ledger-and-commodity` when entity refs are present; preserves the old shape otherwise.
+- Tests cover: single-entity (unchanged), full multi-entity (intercompany balances per entity), mixed-mode rejection, hierarchy queries (descendants of a parent entity), `:entity/kind` enum coverage.
+- Forward-compat: `kontor-consolidation` (future module) can ship intercompany workflow, CTA computation, and group-consolidation reports without further kernel work.
+
+Date: 2026-05-11.
+
+---
+
 ## Decisions deferred (open)
 
 The following choices are NOT yet locked. Update this section as we converge.

@@ -115,7 +115,8 @@
                       "state" "state-code"
                       "attestation" "complemento"
                       "valuation-book"
-                      "valuation-layer" "layer-consumption" "layer-adjustment"}
+                      "valuation-layer" "layer-consumption" "layer-adjustment"
+                      "entity"}
                     (namespace k))))
          sort
          vec)))

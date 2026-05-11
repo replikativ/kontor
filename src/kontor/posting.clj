@@ -143,6 +143,68 @@
         {})))
 
 ;; ============================================================================
+;; Multi-entity sum-to-zero — ADR-031
+;; ============================================================================
+
+(defn- entity-key
+  "Grouping key for a posting's entity scope. Returns the raw
+   :posting/entity value (eid, lookup-ref like
+   [:entity/code \"acme-de\"], etc.). nil when the attribute is absent."
+  [posting]
+  (:posting/entity posting))
+
+(defn multi-entity-mode?
+  "True iff any balance-affecting posting in the collection carries
+   :posting/entity. Drives the choice between per-(ledger, commodity)
+   and per-(entity, ledger, commodity) sum-to-zero invariants."
+  [postings]
+  (boolean (some (every-pred balance-affecting? entity-key) postings)))
+
+(defn mixed-entity-mode?
+  "True iff SOME but not ALL balance-affecting postings carry
+   :posting/entity. Mixed mode is a validation error — the invariant
+   it implies is ambiguous (does the un-tagged posting belong to a
+   default entity? to no entity? to all of them?). Reject."
+  [postings]
+  (let [bafs (filter balance-affecting? postings)
+        with-entity (filter entity-key bafs)]
+    (and (seq with-entity)
+         (not= (count with-entity) (count bafs)))))
+
+(defn balance-by-entity-ledger-and-commodity
+  "Return {entity-key => {ledger-key => {commodity => Money}}} of the
+   balance-affecting postings' net amount. Used only in multi-entity
+   mode (every posting carries :posting/entity). The single-entity
+   case is handled by `balance-by-ledger-and-commodity`."
+  [postings]
+  (->> postings
+       (filter balance-affecting?)
+       (group-by entity-key)
+       (reduce-kv
+        (fn [acc e ps]
+          (assoc acc e (balance-by-ledger-and-commodity ps)))
+        {})))
+
+(defn unbalanced-entity-ledger-commodities
+  "Return {entity-key => {ledger-key => {commodity => Money}}}
+   retaining only the (entity, ledger, commodity) triples with
+   non-zero balance. Empty outer map iff the transaction balances
+   per (entity, ledger, commodity). Multi-entity mode only."
+  [postings]
+  (->> (balance-by-entity-ledger-and-commodity postings)
+       (reduce-kv
+        (fn [acc e ledgers]
+          (let [non-zero-ledgers
+                (reduce-kv
+                 (fn [acc2 l m]
+                   (let [nz (into {} (remove (fn [[_ v]] (money/zero? v)) m))]
+                     (if (seq nz) (assoc acc2 l nz) acc2)))
+                 {}
+                 ledgers)]
+            (if (seq non-zero-ledgers) (assoc acc e non-zero-ledgers) acc)))
+        {})))
+
+;; ============================================================================
 ;; Transaction header validation
 ;; ============================================================================
 
@@ -165,40 +227,59 @@
 (defn validate
   "Pure structural validation. Returns
      {:ok?         boolean
+      :mode        :single-entity | :multi-entity
       :postings    [...]
       :errors      [...]
-      :balance     {ledger-key => {commodity => Money}}
-      :unbalanced  {ledger-key => {commodity => Money}}}   ; only non-zero
+      :balance     <ledger-keyed (single-entity) OR entity-keyed (multi)>
+      :unbalanced  <same shape as :balance; only non-zero entries>}
 
    No db access. Use this when you want to inspect a draft transaction
    without committing it.
 
    Per ADR-021 the sum-to-zero invariant is enforced per (ledger,
-   commodity) pair. Postings without :posting/ledger group under nil
-   — this nil-group conceptually IS the primary book, so readers
-   should treat it the same as a posting explicitly tagged with the
-   primary-ledger ref. The kernel does NOT auto-inject a lookup-ref
-   at build time because the invariant library's speculative-apply
-   uses an empty schema-only DB that cannot resolve unique-identity
-   refs to data entities."
+   commodity) pair. Per ADR-031 this extends to per
+   (entity, ledger, commodity) when any posting carries
+   :posting/entity. Mixed-mode (some tagged, some not) is rejected.
+
+   Postings without :posting/ledger group under nil — this nil-group
+   conceptually IS the primary book, so readers should treat it the
+   same as a posting explicitly tagged with the primary-ledger ref.
+   The kernel does NOT auto-inject a lookup-ref at build time
+   because the invariant library's speculative-apply uses an empty
+   schema-only DB that cannot resolve unique-identity refs to data
+   entities."
   [{:keys [transaction postings] :as input}]
   (let [posting-errors (mapcat posting-validation-errors postings)
         header-errors (header-validation-errors input)
         all-errors (vec (concat header-errors posting-errors))
-        balance (balance-by-ledger-and-commodity postings)
-        unbalanced (unbalanced-ledger-commodities postings)
+        mixed?  (mixed-entity-mode? postings)
+        multi?  (and (not mixed?) (multi-entity-mode? postings))
+        mode    (if multi? :multi-entity :single-entity)
+        balance (if multi?
+                  (balance-by-entity-ledger-and-commodity postings)
+                  (balance-by-ledger-and-commodity postings))
+        unbalanced (if multi?
+                     (unbalanced-entity-ledger-commodities postings)
+                     (unbalanced-ledger-commodities postings))
         too-few? (< (count (filter balance-affecting? postings)) 2)
         all-errors (cond-> all-errors
+                     mixed?
+                     (conj {:error :mixed-entity-mode
+                            :message "transaction has SOME postings with :posting/entity and SOME without; multi-entity mode requires all balance-affecting postings to carry an entity ref"})
+
                      too-few?
                      (conj {:error :too-few-postings
                             :message "transaction needs at least 2
                                       balance-affecting postings"})
 
-                     (seq unbalanced)
+                     (and (not mixed?) (seq unbalanced))
                      (conj {:error :unbalanced
-                            :message "postings do not sum to zero per (ledger, commodity)"
+                            :message (if multi?
+                                       "postings do not sum to zero per (entity, ledger, commodity)"
+                                       "postings do not sum to zero per (ledger, commodity)")
                             :unbalanced unbalanced}))]
     {:ok?        (empty? all-errors)
+     :mode       mode
      :transaction transaction
      :postings   postings
      :errors     all-errors
