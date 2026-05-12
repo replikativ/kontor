@@ -134,4 +134,12 @@
   {:extra-paths ["dev"
                  "modules/l10n-de/test/resources"]
    :extra-deps  {org.replikativ/pg-datahike {:local/root "../pg-datahike"}}
-   :main-opts   ["-m" "kontor.dev.pg-experiment"]}}}
+   :main-opts   ["-m" "kontor.dev.pg-experiment"]}
+
+  ;; Clay notebooks: live multi-national use-case showcases under
+  ;; doc/showcases/. Used to drive cross-cutting user-story validation
+  ;; per CLAUDE.md (DE Factur-X, US multi-state, IN IRN+TDS). Heavy
+  ;; deps — not a runtime concern.
+  :notebooks
+  {:extra-paths ["doc/showcases"]
+   :extra-deps  {org.scicloj/clay {:mvn/version "2-beta24"}}}}}
