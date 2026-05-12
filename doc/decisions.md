@@ -2817,6 +2817,196 @@ Date: 2026-05-12.
 
 ---
 
+## ADR-037 — `kontor` as a business operating system: positioning, scope, non-goals
+
+**Decision.** `kontor` is a **business operating system kernel** — a Clojure / datahike library that ships the load-bearing primitives every business application needs (accounting, parties, orders, invoices, status machines, schedules, multi-entity, multi-currency, multi-jurisdiction), with opt-in companion modules that compose on the kernel without bloating it. Not an ERP suite, not a hosted SaaS, not a workflow engine. The target consumer is a senior engineer building an accounting / ERP / financial workflow as a product OR as internal infrastructure, who wants the substrate solved correctly so they can focus on their domain logic. Consumer apps (beleg, simmis, custom apps) wrap kontor with end-user-facing UX. License: EPL-1.0. Single runtime: JVM Clojure.
+
+This ADR consolidates the positioning that has been implicit across ADRs 001-036 and supersedes the strictest reading of ADR-010 ("no ERP modules forever"). ADR-010 was right about its narrow claim — kontor doesn't ship a Python-Odoo-style monolith with one install. ADR-010 was too narrow about its broader claim — kontor DOES ship opt-in ERP-shaped companion modules under `modules/<name>/`, and that's been clear since the partner / sales / invoice work landed under ADRs 033-036.
+
+### What "business operating system" means here
+
+A business operating system is the **set of primitives every business application needs at its core**, independent of the application's specific domain. A SaaS billing product, a marketplace, a B2B distributor, a freelancer platform, and a SOC2-audited internal accounting system all need:
+
+- A double-entry general ledger with bitemporal queries, multi-entity, multi-currency, multi-jurisdiction.
+- A party model (customer / supplier / employee / partner) with subtype attributes, role-based capabilities, temporal relationships.
+- Order/invoice/receipt aggregates with status machines, partial-fulfillment, partial-billing, and audit history.
+- Status machines + audit trail + approval policy that satisfy SOX / GDPR / ISO 27001 by construction.
+- Schedule / recurrence primitives that drive depreciation, revenue recognition, subscription billing, PTO accrual.
+- Inventory / valuation primitives with multi-method costing (FIFO / LIFO / weighted-average / standard).
+
+`kontor` ships exactly these primitives as a kernel, and provides a curated set of companion modules (`kontor-partner`, `kontor-sales`, `kontor-invoice`, future `kontor-procurement`, `kontor-revrec`, etc.) that extend the kernel with domain-specific machinery. **The crucial distinction**: every companion is opt-in via its own `install!` fn. A consumer who only needs accounting installs just the kernel. A consumer who needs the full business OS installs the kernel plus the companions they want.
+
+### Target consumer
+
+`kontor` is engineered for **senior software engineers** building:
+1. **Accounting / ERP as a product** — e.g. a B2B SaaS that needs real accounting as backend, a vertical SaaS replacing the customer's QuickBooks/Xero, an embedded financial workflow in a marketplace.
+2. **Internal financial infrastructure** — a growing company that has outgrown QuickBooks/Xero but doesn't want to pay SAP/NetSuite tax (~$100k+/yr) for licenses + implementation.
+3. **Domain-specific applications** that need accounting as backbone — an art-tracking platform, a non-profit grants-management system, a co-op cooperative ownership ledger, a property-management portal, a legal-services trust-accounting backend.
+
+`kontor` is NOT engineered for **bookkeepers / accountants / non-technical end users**. They're served by the consumer applications that wrap kontor (beleg for SMB invoice management, simmis for ERP-shaped workloads, custom apps for vertical needs). The kernel API is datalog + Clojure; the user-facing experience belongs to the consumer layer.
+
+### Differentiation vs existing options
+
+| System | License | Runtime | Differentiation cost |
+|---|---|---|---|
+| **Odoo** | LGPLv3 | Python | License contagion (LGPL "linking" rules in court-untested edge cases discourage commercial composition); Python monolith; FSF-translation risk for code reuse; UI-coupled architecture. |
+| **SAP S/4HANA** | Closed | ABAP/Java | $$$$ ; BP-migration pain (Datalark: 67% of S/4HANA migrations blow budget); vendor lock-in; multi-decade implementation cycles. |
+| **OFBiz** | Apache-2.0 | Java | Active community shrinking; Minilang XML business logic; coupled to Java/JDBC stack; no first-class bitemporal. **Useful as reference oracle**, not as runtime. |
+| **Tryton** | GPLv3 | Python | License contagion (GPL is stricter than LGPL); Python monolith; modular but unmaintained companion gaps. |
+| **Salesforce** | Closed | Apex | $$$$ ; CRM-shaped (accounting bolt-on via 3rd party); flow/process-builder lock-in; vendor-specific scripting language. |
+| **NetSuite** | Closed | JavaScript (SuiteScript) | $$$ ; OneWorld upsell for multi-entity (~$50k/yr+); SuiteFlow + SuiteGL plugins for customization; closed ecosystem. |
+| **ERPNext** | GPLv3 | Python (Frappe) | License contagion; web-coupled architecture; multiple open Customer/Supplier-unification issues; documented workflow bugs. |
+| **Stripe Billing** | Closed | (hosted) | Subscription-focused, not full accounting; hosted SaaS only; no multi-entity / multi-jurisdiction GL; pricing scales with volume. |
+| **QuickBooks / Xero** | Closed | (hosted) | SMB-only; flat ceiling on complexity; no programmability; multi-currency clumsy; no real audit chain. |
+| **Custom-built** | — | varies | The inevitable in-house accounting system every growing company builds and regrets — wrong abstraction, no double-entry rigor, lost in technical debt. kontor is the substrate that prevents the rebuild. |
+
+`kontor`'s position:
+- **Clojure on JVM** — single runtime; no Python/Java/JavaScript mix; immutable data; REPL-driven.
+- **Datahike bitemporal** — every read takes `:as-of-tx` + `:as-of-valid`; audit history is a query parameter, not a separate ETL pipeline. ADR-008.
+- **EPL-1.0** — permissive enough for commercial composition without LGPL/GPL contagion risk.
+- **Single dependency** (datahike) + optional Mustang for e-invoicing, instaparse for Beancount, etc. Minimal classpath surface.
+- **Multi-entity from kernel day one** (ADR-031) — no NetSuite OneWorld upsell; multi-currency / multi-ledger built into the posting model.
+- **Status-as-data** (ADR-034) — vocabulary changes are a tx, not a deploy. SAP/NetSuite/Sylius/Camunda all require code or config redeployment.
+- **Sealing by middleware** (ADR-007) — `posted = sealed against silent retract` is structural, not ACL.
+- **Companion modules opt-in** — kernel-only consumers stay minimal; full-stack consumers get the substrate.
+- **Curated reference-oracle stack** — Apache OFBiz (Apache-2.0) for procurement / sales / asset patterns; Sylius (MIT) for order state machines; KillBill (Apache-2.0) for subscription catalogue versioning. License-clean lifting of structural patterns.
+
+### Minimum coherent module set
+
+#### Kernel (always installed)
+
+Core attributes + helper namespaces in `src/kontor/`:
+
+- **Accounting kernel**: `:account`, `:transaction`, `:posting`, `:commodity`, `:lot`, `:journal`, `:partner` (basic), `:period`, `:balance-assertion`, `:fiscal-position`, `:tax`, `:tax-rep`, `:tax-group`, `:account-tag`, `:analytic-plan`, `:analytic-account`, `:analytic-distribution`, `:posting-analytic`. Helpers: `Money`, `posting/build-transaction`, `validation`, `sealing`, `audit`.
+- **Multi-entity** (ADR-031): `:entity`, `:posting/entity`, `:ledger-entity`. Helpers: `kontor.entity/{by-code, descendants, family}`.
+- **Multi-ledger** (ADR-021): `:ledger`, `:posting/ledger`. Helpers: `kontor.ledger/{primary, by-code, install-defaults!}`.
+- **Bitemporal** (ADR-008): `:transaction/effective-date`, `:posting/valid-from`. Helpers: `kontor.query/{as-of-tx, as-of-valid}`.
+- **Period** (ADR-014): `:period/locked-at`, `:period/sealed-at`, `:period/tag`. Helpers: `kontor.period/{open?, close!, seal!, assert-not-in-locked-period!}`.
+- **Status machine** (ADR-034): `:status-transition`, `:status-history`. Helpers: `kontor.status-machine/{legal-transition?, record-status-change!, record-status-change-tx-data, status-history-of}`.
+- **Schedule** (ADR-032): `:schedule`, `:schedule-occurrence`. Helpers: `kontor.schedule/{by-code, pending-occurrences, record-occurrence!}`.
+- **Inventory + valuation** (ADRs 027-030): `:valuation-book`, `:valuation-layer`, `:layer-consumption`, `:layer-adjustment`. Helpers: `kontor.valuation`, `kontor.costing-provider`, `kontor.posting/plan-stock-move`.
+- **Country + state** (ADR-023): `:country`, `:state`, `:country-group`, `:state-code`.
+- **Multi-attestation** (ADR-024): `:attestation`, `:transaction-attestations`. Helpers: `EInvoiceProvider` protocol.
+- **Complemento** (ADR-025): `:complemento`, `:transaction-complementos`. For Mexico CFDI extension; pattern reusable.
+- **Reconciliation**: `:bank-line`, `:invoice/transaction` bridge, `kontor.reconciliation` helpers.
+
+#### Companion modules (opt-in)
+
+Under `modules/<name>/`:
+
+- **Foundation companions** (Stage I + J shipped):
+  - `modules/partner/` — party-as-root + subtype entities + polymorphic contact-mech + roles + relationships (ADR-033).
+  - `modules/sales/` — order header + items + ship-group + adjustment + role + state machine (ADR-035).
+  - `modules/invoice/` — order→invoice bridge + invoice status machine + AcctgTrans posting (ADR-036).
+- **Cross-cutting primitive companions** (Stage J-2, next):
+  - Audit / governance (ADR-038 candidate) — reason vocabulary, supporting-doc slot, approval policy, SoD middleware.
+  - Master data (ADR-039 candidate) — partner-merge, bank-account, credit-limit, partner-tag, KYC/sanctions hooks.
+  - Jurisdiction primitives (ADR-040 candidate) — multi-tax-id junction, reverse-charge flag, tax-inclusive flag, recognition keyword, withholding-tax routing.
+  - Workflow extensions (ADR-041 candidate) — time-based transitions, side-effect intent rows, bulk transitions, inverse-pair role-direction documentation.
+- **Domain companions** (Stage K+):
+  - `kontor-procurement` — requirement, receipt, 3-way match, RTV.
+  - `kontor-asset` — fixed-asset register, depreciation schedules.
+  - `kontor-revrec` — performance-obligation, ASC 606 / IFRS 15.
+  - `kontor-subscription` — catalogue versioning, recurring billing.
+  - `kontor-project` — projects, tasks, timesheets (timesheet = analytic-line).
+  - `kontor-collections` — aging buckets, dunning, lockbox auto-match.
+  - `kontor-commerce-adapter` — UBL 2.1 / Peppol BIS interchange.
+  - `kontor-hr` + `kontor-payroll-<cc>-<vendor>` — :person + :employment + per-jurisdiction payroll providers.
+- **Per-jurisdiction l10n** (`modules/l10n-<cc>/`):
+  - `l10n-de` — DATEV SKR03/SKR04 charts, UStVA, EÜR, e-invoice provider.
+  - `l10n-us`, `-ca`, `-fr`, `-in`, `-mx`, `-jp`, `-au`, `-cn`, `-br`, `-at` — each ships a country chart + tax engine binding.
+- **Per-bank importers** (`modules/bank-<cc>/`):
+  - `bank-de`, `bank-us`, `bank-ca`, `bank-fr`, `bank-at` — CAMT.053 / NACHA / per-country CSV adapters.
+- **E-invoicing** (`modules/einvoice-<cc>/`):
+  - `einvoice-de` — Factur-X / XRechnung (Mustang APL-2 wrapper). Future: `einvoice-it` (SdI), `einvoice-mx` (CFDI), `einvoice-br` (NF-e), `einvoice-in` (IRN).
+
+### Architectural principles (locked, restated)
+
+These principles inform every ADR and every line of code:
+
+1. **Datahike-native.** No ORM. No JDBC mapping. Schema is data, queries are data, transitions are data.
+2. **Bitemporal by construction.** Every read takes `:as-of-tx` + `:as-of-valid`. Audit is a query parameter.
+3. **Immutable history.** Posted entries are sealed; corrections via reversal + new posting. `:db/purge` is itself a recorded commit.
+4. **Sum-to-zero per (entity, ledger, commodity).** Cannot persist an unbalanced posting. Cross-cutting invariant enforced by `validate`.
+5. **Status-as-data.** State machines are declarative `:status-transition` rows + auditable `:status-history` rows. Per-org overrides via composite identity.
+6. **Multi-entity from day one.** `:posting/entity` is on the line (SAP ACDOCA pattern). No company-code preflight.
+7. **Per-(jurisdiction, entity) overrides.** Tax rates, GL routing, status vocabularies all support per-org scope without forking code.
+8. **Vocabulary as keywords, content as data.** Role types, purpose types, status names, account types — all Clojure keywords. Per-locale labels and i18n live in the consumer layer.
+9. **Companion modules are opt-in.** Kernel-only consumers stay minimal. The `install!` pattern + composite-tuple `:db.unique/identity` ensures idempotent re-installation.
+10. **No UI in the kernel.** Consumer apps own user-facing experience. ADR-010.
+11. **No second runtime.** Pure Clojure + datahike. No Python helpers, no JS bridge, no shell-script glue. `bb` is the task runner; `clj-nrepl-eval` is the REPL interface.
+12. **License-friendly composition.** EPL-1.0 lets commercial consumers embed without LGPL/GPL contagion. Reference oracles (OFBiz Apache-2.0, Sylius MIT, KillBill Apache-2.0) are explicitly chosen for license cleanliness.
+
+### Non-goals (what we explicitly DON'T build)
+
+- **No UI** (ADR-010). Consumer apps (beleg HTMX, simmis Replicant, custom apps) ship the user-facing experience.
+- **No US sales-tax engine** (ADR-005, ADR-010). We provide the `TaxProvider` protocol; customers integrate Avalara / TaxJar / TaxCloud or a `StaticTableProvider` impl.
+- **No workflow engine** (ADR-034). The kernel is a state-of-record primitive. Camunda / Temporal / Step Functions compose on top if the consumer needs BPMN-style multi-actor processes.
+- **No BI / reporting tools.** Consumer apps run datalog queries directly OR plug in their own analytics layer.
+- **No hosted SaaS.** kontor is a library. Hosting is the consumer's choice. (A future `kontor-cloud` could expose the kernel as a managed service; explicitly out of scope for the kernel itself.)
+- **No DSL / visual modeler.** Datalog IS the DSL. SQL bridge via pg-datahike is a reference oracle, not a runtime target.
+- **No translation of Odoo / Tryton code** (ADR-001 + research note 01). FSF treats Python translation as derivative work; we write our own implementation using OFBiz / Sylius / KillBill as license-clean reference oracles.
+- **No bundled Avalara / TaxJar / TaxCloud API keys or rate data** (ADR-005). Customers hold their own.
+- **No CRM / marketing automation / fleet / field-service.** These are commodity SaaS that integrate via APIs; we don't reimplement.
+- **No ERP-suite feature parity for its own sake.** If a domain doesn't have a near-term consumer demand, we don't ship a companion for it. Manufacturing, helpdesk, CLM, marketing — deferred until concrete demand.
+
+### Consumer story
+
+`kontor` consumers compose the kernel + the companions they need into a domain-specific application. Two prototypical patterns:
+
+**Pattern A: "I'm building a B2B SaaS that needs real accounting."**
+- Install: kernel + `kontor-partner` + `kontor-sales` + `kontor-invoice` + `kontor-l10n-<cc>` + `kontor-einvoice-<cc>`.
+- Wire your own UI (HTMX / React / Replicant / custom).
+- Datalog queries for your domain reports.
+- Integrate Avalara / TaxJar for tax compute.
+- Your consumer namespace seeds journals, accounts, vocabularies; calls kontor helpers from your route handlers / queue workers.
+
+**Pattern B: "I'm building internal infrastructure for my growing company."**
+- Install: same as above plus `kontor-procurement` + `kontor-collections` + `kontor-hr` + `kontor-payroll-<cc>-<vendor>` as needs surface.
+- Run on a single JVM with datahike Postgres backend (via pg-datahike) or LMDB / RocksDB / file-store.
+- Consumer apps for each user role (sales, AP, AR, payroll, exec).
+- Replaces QuickBooks / Xero / Sage upgrade pressure without paying SAP / NetSuite tax.
+
+The reference consumer apps:
+- **`beleg`** (planned first consumer, ADR-002) — contractor invoice management. Wraps `kontor-partner` + `kontor-sales` + `kontor-invoice` + `kontor-einvoice-de`. HTMX UI.
+- **`simmis`** (planned later consumer) — distributed-scope ClojureScript ERP-shaped app on top of kontor + `spindel` reactive primitives.
+- **Custom apps** — vertical SaaS, internal tools, embedded financial workflows.
+
+### Roadmap implications
+
+Per [research note 13](research/13-stage-j-pain-and-followups.md), Stage J shipped the order / invoice / partner foundation. The systematic next move is **Stage J-2: cross-cutting primitives**, broken across 4 ADRs:
+
+- **ADR-038 (Audit + Governance primitives)** — `:status-history/reason` as keyword + `:reason-note` string + supporting-doc slot + `:approval-policy` companion. Resolves the SOX / GDPR / SoD gaps surfaced by all 5 research agents.
+- **ADR-039 (Master-data primitives)** — `:partner-merge` non-destructive link + `:bank-account` entity + `:partner-bank-account` junction + `:partner/credit-limit` + `:partner-tag`. Resolves the MDM gaps surfaced by the partner-pain agent.
+- **ADR-040 (Jurisdiction primitives)** — `:partner-tax-id` junction + `:invoice-line/reverse-charge?` + `:invoice/tax-inclusive?` + `:invoice-line/recognition` keyword + withholding-tax routing + `:pending-attestation` / `:rejected` invoice states. Resolves the multi-jurisdiction gaps surfaced by the invoicing-pain agent. Forward-compat for kontor-revrec.
+- **ADR-041 (Workflow extensions)** — time-based transitions via `:schedule` integration + side-effect intent rows + bulk-transition API + inverse-pair role-direction documentation. Resolves the workflow gaps surfaced by the status-machine-pain agent.
+
+Then **Stage K (kontor-procurement)** lands on the ADR-038-041 foundation. After that, faster cadence per the hybrid plan: Stage L (`kontor-asset`), M (`kontor-revrec`), N (`kontor-subscription`), etc.
+
+Each cross-cutting ADR is small (~50-150 LOC + schema + tests + docs) and lands as its own commit. The set hangs together coherently because each ADR addresses a category, not a punch-list-of-bugs.
+
+### Alternatives considered
+
+- **`kontor` as a hosted SaaS first.** Rejected: library-first lets every consumer choose their own deployment model. A managed-cloud offering (`kontor-cloud`) can come later, but the kernel must be standalone first.
+- **`kontor` as an Odoo competitor with bundled UI.** Rejected per ADR-010. UI is consumer-side.
+- **`kontor` as an ERP-suite with all modules built upfront.** Rejected: domain-specific companions are added on concrete demand; speculative completeness creates maintenance burden without consumer pull.
+- **`kontor` as a "lightweight QuickBooks alternative" only.** Rejected: deliberately narrow scope. The market for SMB accounting is saturated and price-sensitive; the market for "business OS substrate for senior engineers" is underserved and willing to pay for substrate quality.
+- **`kontor` as an SAP competitor at SMB price point.** Closer to the actual positioning but framed defensively. The forward framing is "we're the substrate; we don't compete on every SAP feature; we compete on architectural primitives that make composing your own substrate possible."
+- **Multi-language / multi-runtime (Python + Clojure bindings, JS bridge for browser-side).** Rejected: single-runtime discipline is a load-bearing simplification. Consumers can use any client they like (HTTP, WebSocket, language bindings to the JVM); the kernel stays JVM Clojure.
+
+### Implications
+
+- All current ADRs (001-036) and all current companions (partner, sales, invoice, l10n-de, einvoice-de, bank-de, l10n-* stubs) align with this positioning. Nothing changes structurally.
+- ADR-010's "no ERP modules forever" is **superseded** by this ADR. Specifically: ADR-010 still applies to (a) US sales-tax engines (we wrap), (b) UI (consumer-side), (c) translation of Odoo source (we write our own). But ADR-010 does NOT preclude opt-in companion modules under `modules/<name>/`, which have been the pattern since ADR-006.
+- Stage J-2 (cross-cutting primitives, ADR-038-041) is the next coherent body of work. Estimate: 4 ADRs × ~1-2 sessions each = 4-8 sessions before Stage K starts.
+- All cross-cutting primitive ADRs share a common quality bar: opt-in install, composite-tuple identity for idempotency, bitemporal-by-construction (no separate fact tables), pure-function tx-data helpers (for atomic composition), and explicit alternatives-considered + implications sections.
+- The 30+ market-pain items from research note 13 are not a punch list to tickle; they're a constraint set the cross-cutting ADRs are designed to resolve coherently.
+- Forward-compat for Stage K is baked into ADR-040 (jurisdiction + `:invoice-line/recognition`) and the debit/credit data table that ADR-038 introduces.
+
+Date: 2026-05-12.
+
+---
+
 ## Decisions deferred (open)
 
 The following choices are NOT yet locked. Update this section as we converge.
