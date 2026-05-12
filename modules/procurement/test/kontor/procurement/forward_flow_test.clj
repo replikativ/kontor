@@ -230,14 +230,12 @@
 ;; Bridge polymorphism on :order/type :purchase
 ;; ============================================================================
 
-(deftest bridge-routes-purchase-direct-to-inventory
+(deftest bridge-routes-purchase-direct-to-gr-ir-clearing
   (seed-base!)
   (seed-accounts!)
   (seed-gl-defaults!)
   (seed-journal!)
   (create-purchase-order! {})    ; :category :direct
-  ;; Invoice the PO directly (without receipt) — for v1 the bridge
-  ;; doesn't enforce receipt-first; that's posting-time policy.
   (inv/make-invoice-from-order! *conn* "PO-1"
                                 {:external-id "INV-PURCH-DIRECT"})
   (let [db (d/db *conn*)
@@ -245,8 +243,11 @@
         lines (inv/lines-of db "INV-PURCH-DIRECT")]
     (testing ":invoice/type defaults to :purchase when order is :purchase"
       (is (= :purchase (:invoice/type inv))))
-    (testing "product line routes to :inventory (direct category)"
-      (is (= :inventory (-> lines first :invoice-line/gl-account-type))))))
+    (testing "direct purchase line clears GR-IR (receipt Dr'd inventory)"
+      ;; Per ADR-042 receipt-first flow: inventory was debited at
+      ;; receipt time via post-receipt-with-inventory!; the invoice
+      ;; clears the GR-IR credit.
+      (is (= :gr-ir-clearing (-> lines first :invoice-line/gl-account-type))))))
 
 (deftest bridge-routes-purchase-indirect-to-expense
   (seed-base!)
@@ -312,6 +313,7 @@
                             :items [{:order-item item-eid
                                      :product-id "WIDGET-A"
                                      :quantity-accepted 10M}]})
+    (receipt/accept-receipt! *conn* "RCPT-MATCH")
     (inv/make-invoice-from-order! *conn* "PO-1"
                                   {:external-id "INV-MATCH"})
     (let [db (d/db *conn*)
@@ -329,6 +331,7 @@
                             :order order-eid
                             :items [{:order-item item-eid
                                      :quantity-accepted 7M}]})
+    (receipt/accept-receipt! *conn* "RCPT-PARTIAL")
     (inv/make-invoice-from-order! *conn* "PO-1"
                                   {:external-id "INV-EXCEPT-QTY"})
     (let [report (match/three-way-report (d/db *conn*)
@@ -356,6 +359,7 @@
                             :order order-eid
                             :items [{:order-item item-eid
                                      :quantity-accepted 11M}]})
+    (receipt/accept-receipt! *conn* "RCPT-OVER")
     (inv/make-invoice-from-order! *conn* "PO-1"
                                   {:external-id "INV-TOL"})
     ;; The invoice is for 10 (ordered qty); received is 11 → delta is -1
@@ -384,6 +388,7 @@
                             :order order-eid
                             :items [{:order-item item-eid
                                      :quantity-accepted 10M}]})
+    (receipt/accept-receipt! *conn* "RCPT-RECOMP")
     (inv/make-invoice-from-order! *conn* "PO-1"
                                   {:external-id "INV-RECOMP"})
     (let [verdict (match/recompute-match-status! *conn*

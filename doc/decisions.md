@@ -4159,7 +4159,9 @@ The bridge's `debit-credit-for` fn (rewrite per ADR-041) consults the table firs
 - `make-acceptance!` — create `:service-acceptance` for non-physical PO lines.
 - `acceptances-of-order` — query acceptances for a PO.
 
-#### `kontor.procurement.return` namespace
+#### `kontor.procurement.returns` namespace
+
+(Plural, not `return` — Clojure reserves `return` as nothing but the name reads more naturally as a verb in `(returns/make-return! ...)` and avoids any future-reserved-word risk.)
 
 - `make-return!` — create `:return` + `:return-item` rows.
 - `accept-return!` — `:requested → :accepted`.
@@ -4228,6 +4230,35 @@ Four coherent commits:
 4. **Drop-ship + cross-cutting** — `:order-item-assoc`, drop-ship-link helpers, drop-ship test (SO with linked PO; address-by-reference invariant).
 
 After all four land: review-after agents (code-review + market-pain delta against the implementation). Then user-story integration tests per the CLAUDE.md rhythm.
+
+Date: 2026-05-12.
+
+### Stage K-5 P0 fixes
+
+Both review-after agents (code-review + market-pain delta) converged on the same P0 cluster: schema + state machines landed cleanly; the *integration glue* between schema and the existing kernel substrate had gaps. Stage K-5 closes them.
+
+1. **`post-receipt-with-inventory!` shipped.** The helper this ADR promised but didn't deliver is now in `modules/procurement/src/kontor/procurement/receipt.clj`. It atomically transitions a `:pending` receipt to `:accepted`, calls `kontor.posting/plan-stock-move :direction :in` per `:receipt-item`, walks each invocation's tempid space to disjoint regions so N items cohabit in one tx, and writes the `:valuation-layer` rows. The GR/IR audit-as-data thesis is now real: receipt Dr's inventory + Cr's GR-IR-clearing; invoice Dr's GR-IR + Cr's AP; residual on `:gr-ir-clearing` per (PO-line, commodity) nets to zero.
+
+2. **`:requires-three-way-match-pass` rule wired.** Added the case to `kontor.status-machine/check-policy`: queries the entity's `:invoice/match-status`, accepts `nil` (sales invoices pass through), `:auto-matched`, `:manual-approved`, `:cleared`; rejects any `:exception-*` or `:disputed`. A tenant seeds the policy on `:invoice/status :draft → :sent` and posting through `post-to-ledger!` now structurally cannot proceed on a 3-way exception unless overridden first.
+
+3. **Credit/debit-memo GL polarity fixed.** `kontor.invoice.posting/default-direction-for` now flips the parent type's direction for `:credit-memo` and `:debit-memo`: a credit memo *reverses* a sale (Dr revenue, Cr AR), a debit memo *reverses* a purchase (Dr AP, Cr expense). Without the flip the memo was posting the same direction as the original, doubling rather than reversing. End-to-end posting test added.
+
+4. **3-way invariant filters by receipt status + nets returned qty.** `quantity-received-of-order-item` now joins on `:receipt/status :accepted` (excludes `:pending` and `:rejected`) and subtracts `:return-item` quantities where the parent `:return/type` is `:vendor` and the return is past `:accepted`. The invariant `(received − returned) = (invoiced − credited)` is now actually computable, not aspirational. `auto-promote-to-received!` reuses the same helper.
+
+5. **Four missing state transitions seeded.** `:exception-missing-receipt → :disputed`, `:exception-missing-po → :disputed`, `:disputed → :auto-matched` (vendor-corrected re-match path). The dispute paths from missing-receipt / missing-PO were the gap the audit flagged most prominently.
+
+6. **`:receipt-invoice-billing` junction live.** `kontor.invoice.bridge/make-invoice-from-order!` now FIFO-allocates an invoice line's `bill-qty` across the order-item's `:accepted` receipts (oldest first) and emits one `:receipt-invoice-billing` row per receipt that gets allocated. The third FK of the 3-way match is no longer dead substrate.
+
+7. **End-to-end procurement posting test.** `modules/procurement/test/kontor/procurement/posting_test.clj` covers: receipt posts Dr inventory / Cr GR-IR; invoice posts Dr GR-IR / Cr AP; GR/IR residual = 0; full P2P chain through `post-to-ledger!`; the match-pass policy blocks/allows transitions per match-status.
+
+#### Two collateral fixes the P0 cluster surfaced
+
+- **Bridge routes `:purchase + :direct` → `:gr-ir-clearing`** (was `:inventory`). Per the canonical receipt-first flow: receipt already debited inventory; invoice must clear GR-IR, not re-debit inventory. The `:direct + no-receipt` edge case (VMI / prepayment) requires explicit `:invoice-line/account` override; documented.
+- **Seed `[:purchase :gr-ir-clearing :debit]`** (was `:credit`). The kernel-seeded direction is for the INVOICE leg (the receipt leg hardcodes credit in `kontor.posting/receipt-postings`). The previous `:credit` was a thinko that would have made the invoice post the same direction as the receipt. Removed the misleading `[:sales :gr-ir-clearing]` mirror per review P2-3 and the dead `:vendor-credit-memo` seeds (the bridge now routes debit-memo lines via `:order-item/category` dispatch).
+
+#### Triaged for later
+
+Per the per-stage rhythm: P1s (tolerance pct-over semantics, drop-ship ship-to enforcement, partial-commitment multi-requirement allocation, withholding-tax + reverse-charge flag wiring, install-non-idempotent) are followups, not Stage K blockers. Stage L (kontor-collections) will reveal which actually bite consumers.
 
 Date: 2026-05-12.
 

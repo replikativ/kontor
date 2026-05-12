@@ -161,18 +161,44 @@
    gl-account-type. ADR-042: polymorphism for procurement invoices.
 
    Sales / credit-memo: always :sales-revenue (category ignored).
-   Purchase / debit-memo:
-     :direct   → :inventory       (goods for resale, raw materials)
-     :indirect → :purchase-expense (office supplies)
-     :services → :purchase-expense (consulting, legal)
-     :asset    → :asset-acquisition (CapEx)
-     nil       → :purchase-expense (legacy default)"
+
+   Purchase invoices:
+     :direct   → :gr-ir-clearing  (canonical receipt-first flow:
+                                   inventory was Dr'd at receipt;
+                                   invoice clears the GR-IR credit)
+     :indirect → :purchase-expense (no receipt → direct expense)
+     :services → :purchase-expense
+     :asset    → :asset-acquisition (CapEx; receipt-side handled
+                                     out-of-band)
+     nil       → :purchase-expense
+
+   Direct-purchase WITHOUT a prior receipt (e.g. vendor-managed
+   inventory, prepayment) must override via :invoice-line/account
+   to route to :inventory instead of clearing a non-existent GR-IR
+   credit.
+
+   Debit memos (vendor returns):
+     :direct   → :inventory       (credits inventory back; caller
+                                   typically also fires plan-stock-
+                                   move :out for valuation)
+     :asset    → :asset-acquisition
+     :indirect → :purchase-expense
+     :services → :purchase-expense
+     nil       → :purchase-expense"
   [invoice-type order-item]
   (case invoice-type
     (:sales :credit-memo)
     :sales-revenue
 
-    (:purchase :debit-memo)
+    :purchase
+    (case (:order-item/category order-item)
+      :direct   :gr-ir-clearing
+      :indirect :purchase-expense
+      :services :purchase-expense
+      :asset    :asset-acquisition
+      :purchase-expense)
+
+    :debit-memo
     (case (:order-item/category order-item)
       :direct   :inventory
       :indirect :purchase-expense
@@ -258,7 +284,50 @@
             line-amount (.multiply ^java.math.BigDecimal bill-qty
                                    ^java.math.BigDecimal unit-price)
             override-acct (when-let [a (:order-item/override-gl-account order-item)]
-                            (:db/id a))]
+                            (:db/id a))
+            ;; ADR-042 P0-6: FIFO-allocate the bill-qty across
+            ;; :accepted receipts of this order-item, emit one
+            ;; :receipt-invoice-billing junction per receipt that
+            ;; gets allocated. v1 simplification: doesn't subtract
+            ;; previously-billed receipt quantities — the composite
+            ;; identity [receipt, invoice-line] keeps the row unique
+            ;; per pair, and re-invoicing produces a new line-tempid.
+            receipts (->> (d/q '[:find ?r (sum ?q)
+                                 :with ?ri
+                                 :in $ ?oi
+                                 :where
+                                 [?ri :receipt-item/order-item ?oi]
+                                 [?ri :receipt-item/quantity-accepted ?q]
+                                 [?ri :receipt-item/receipt ?r]
+                                 [?r :receipt/status :accepted]
+                                 [?r :receipt/received-at ?when]]
+                               db order-item-eid)
+                          (sort-by (fn [[r _]]
+                                     (or (:receipt/received-at
+                                          (d/pull db [:receipt/received-at] r))
+                                         (java.util.Date. 0)))))
+            allocations (loop [remaining bill-qty
+                               receipts receipts
+                               out []]
+                          (if (or (empty? receipts)
+                                  (zero? (.signum
+                                          ^java.math.BigDecimal remaining)))
+                            out
+                            (let [[r-eid r-qty] (first receipts)
+                                  alloc (if (>= (.compareTo
+                                                 ^java.math.BigDecimal r-qty
+                                                 ^java.math.BigDecimal remaining) 0)
+                                          remaining
+                                          r-qty)]
+                              (recur (.subtract ^java.math.BigDecimal remaining
+                                                ^java.math.BigDecimal alloc)
+                                     (rest receipts)
+                                     (conj out [r-eid alloc])))))
+            ri-billings (mapv (fn [[r-eid alloc]]
+                                {:receipt-invoice-billing/receipt r-eid
+                                 :receipt-invoice-billing/invoice-line line-tempid
+                                 :receipt-invoice-billing/quantity alloc})
+                              allocations)]
         [(cond-> {:db/id line-tempid
                   :invoice-line/invoice invoice-tempid
                   :invoice-line/sequence sequence
@@ -270,9 +339,10 @@
                   :invoice-line/amount line-amount
                   :invoice-line/gl-account-type gl-type}
            override-acct (assoc :invoice-line/account override-acct))
-         {:order-item-billing/order-item order-item-eid
-          :order-item-billing/invoice-line line-tempid
-          :order-item-billing/quantity bill-qty}]))))
+         (cond-> {:order-item-billing/order-item order-item-eid
+                  :order-item-billing/invoice-line line-tempid
+                  :order-item-billing/quantity bill-qty})
+         ri-billings]))))
 
 (defn- make-invoice-line-from-adjustment
   "Build an :invoice-line for one :order-adjustment. The line is
@@ -374,6 +444,9 @@
                       items)
         item-line-rows (map first item-results)
         item-billings  (remove nil? (map second item-results))
+        ;; ADR-042 P0-6: per-(receipt, invoice-line) junctions for the
+        ;; 3-way match audit trail.
+        ri-billings    (mapcat #(nth % 2 nil) item-results)
         ;; P0-4 fix: also set the :invoice/lines forward-ref (kernel
         ;; maintains both forward + back-ref; consumers of
         ;; kontor.invoice/send! walk :invoice/lines).
@@ -411,5 +484,6 @@
         all-tx-data (concat [invoice-row]
                             item-line-rows
                             item-billings
+                            ri-billings
                             adj-line-rows)]
     (d/transact conn (vec all-tx-data))))

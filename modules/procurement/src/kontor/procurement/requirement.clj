@@ -7,6 +7,7 @@
    :approved → :ordered → :received (plus :rejected and :cancelled
    escapes)."
   (:require [datahike.api :as d]
+            [kontor.procurement.receipt :as receipt]
             [kontor.status-machine :as sm]))
 
 ;; ============================================================================
@@ -184,16 +185,11 @@
             fully-received? (every?
                              (fn [{:requirement-commitment/keys [order-item quantity]}]
                                (let [oi-eid (:db/id order-item)
-                                     received (or (d/q '[:find (sum ?q) .
-                                                         :with ?r
-                                                         :in $ ?oi
-                                                         :where
-                                                         [?ri :receipt-item/order-item ?oi]
-                                                         [?ri :receipt-item/quantity-accepted ?q]
-                                                         [?ri :receipt-item/receipt ?r]]
-                                                       db oi-eid)
-                                                  0M)]
-                                 (>= (compare received quantity) 0)))
+                                     received (receipt/quantity-received-of-order-item
+                                               db oi-eid)]
+                                 (>= (.compareTo ^java.math.BigDecimal received
+                                                 ^java.math.BigDecimal quantity)
+                                     0)))
                              commitments)]
         (when fully-received?
           (sm/record-status-change! conn

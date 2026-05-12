@@ -287,8 +287,10 @@
       (testing "seller = supplier, buyer = acme (supplier issues credit to us)"
         (is (= "SUPPLIER" (-> dm :invoice/seller :partner/external-id)))
         (is (= "ACME-ORG" (-> dm :invoice/buyer :partner/external-id))))
-      (testing "GL routes to :vendor-credit-memo"
-        (is (= :vendor-credit-memo (-> lines first :invoice-line/gl-account-type))))
+      (testing "GL routes to :inventory (PO line is :direct material)"
+        ;; debit-memo lines dispatch on :order-item/category — the
+        ;; reversal hits the same account the original purchase debited.
+        (is (= :inventory (-> lines first :invoice-line/gl-account-type))))
       (testing "amount derived from return-quantity × return-price"
         (is (= 24M (-> lines first :invoice-line/amount)))))))
 

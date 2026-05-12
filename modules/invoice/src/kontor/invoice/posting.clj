@@ -76,11 +76,20 @@
 ;; Debit/credit direction for (invoice-type, account-type)
 ;; ============================================================================
 
+(defn- flip [dir]
+  (case dir :debit :credit :credit :debit nil))
+
 (defn- default-direction-for
   "Built-in fallback debit/credit direction map. ADR-041 introduces
    the `:account-type-direction` kernel table for extension; this fn
    serves as the fallback when no row is seeded for an
-   (invoice-type, account-type) pair."
+   (invoice-type, account-type) pair.
+
+   Credit-memo and debit-memo invert their parent type's direction:
+   a credit-memo *reverses* a prior sale (Dr revenue, Cr AR), a debit-
+   memo *reverses* a prior purchase (Dr AP, Cr expense). Without the
+   flip, posting a memo would post in the same direction as the
+   original, doubling the original entry instead of reversing it."
   [invoice-type account-type]
   (let [sales-credit    #{:sales-revenue :sales-revenue-deferred
                           :sales-tax-payable :shipping-income
@@ -97,8 +106,8 @@
                           (contains? sales-debit  account-type) :debit)
       :purchase     (cond (contains? purchase-credit account-type) :credit
                           (contains? purchase-debit  account-type) :debit)
-      :credit-memo  (default-direction-for :sales account-type)
-      :debit-memo   (default-direction-for :purchase account-type)
+      :credit-memo  (flip (default-direction-for :sales account-type))
+      :debit-memo   (flip (default-direction-for :purchase account-type))
       nil)))
 
 (defn debit-credit-for

@@ -201,6 +201,23 @@
       {:rule rule
        :reason ":reason-note string is required on this transition"})
 
+    :requires-three-way-match-pass
+    ;; ADR-042 — gate :invoice/status transitions on the procurement
+    ;; 3-way match outcome. Allowed match-statuses for posting:
+    ;;   :auto-matched   — qty + price within tolerance
+    ;;   :manual-approved — exception explicitly overridden
+    ;;   :cleared        — already settled
+    ;; nil match-status is allowed (sales invoices have no match
+    ;; concept; rule passes through). Any :exception-* or :disputed
+    ;; rejects.
+    (let [match-status (:invoice/match-status
+                        (d/pull db [:invoice/match-status] entity))]
+      (when-not (or (nil? match-status)
+                    (#{:auto-matched :manual-approved :cleared} match-status))
+        {:rule rule
+         :reason "invoice match-status must be :auto-matched, :manual-approved, or :cleared"
+         :match-status match-status}))
+
     ;; Unknown rule: treat as a no-op (forward-compat for new rules
     ;; defined by future ADRs). A future linter can flag rule-typos.
     nil))

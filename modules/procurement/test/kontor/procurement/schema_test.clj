@@ -215,10 +215,11 @@
                         [?r :account-type-direction/direction ?dir]
                         [?r :account-type-direction/active true]]
                       db it at))]
-    (testing "GR/IR clearing posts credit on purchase receipt"
-      (is (= :credit (lookup :purchase :gr-ir-clearing))))
-    (testing "GR/IR clearing posts debit on sales receipt (mirror)"
-      (is (= :debit (lookup :sales :gr-ir-clearing))))
+    (testing "GR/IR clearing debits on a :purchase invoice line — the
+              invoice clears the receipt's credit at the same amount,
+              netting to zero on the GR/IR account per (PO-line,
+              commodity)"
+      (is (= :debit (lookup :purchase :gr-ir-clearing))))
     (testing "PPV / FX-variance / landed-cost / receive-reject post debit on purchase"
       (is (= :debit (lookup :purchase :price-variance)))
       (is (= :debit (lookup :purchase :exchange-variance)))
@@ -226,10 +227,7 @@
       (is (= :debit (lookup :purchase :receive-reject-loss))))
     (testing "Prepaid expense + asset acquisition post debit on purchase"
       (is (= :debit (lookup :purchase :prepaid-expense)))
-      (is (= :debit (lookup :purchase :asset-acquisition))))
-    (testing "Vendor credit memo direction"
-      (is (= :credit (lookup :credit-memo :vendor-credit-memo)))
-      (is (= :debit (lookup :debit-memo :vendor-credit-memo))))))
+      (is (= :debit (lookup :purchase :asset-acquisition))))))
 
 ;; ============================================================================
 ;; Seed counts (sanity)

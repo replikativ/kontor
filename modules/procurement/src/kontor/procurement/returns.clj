@@ -56,7 +56,8 @@
               db eid)
          (map #(d/pull db '[* {:return-item/order-item [:db/id
                                                          :order-item/seq-id
-                                                         :order-item/product-id]
+                                                         :order-item/product-id
+                                                         :order-item/category]
                                 :return-item/response [*]}] %))
          (sort-by :return-item/seq-id)
          vec)))
@@ -229,16 +230,15 @@
                        return-eid)
         return-type (:return/type return)
         invoice-type (credit-memo-invoice-type return-type)
-        ;; For :customer returns, we (the org) issue credit to the
-        ;; customer: invoice :seller = us, :buyer = customer.
-        ;; For :vendor returns, the supplier issues credit to us:
-        ;; invoice :seller = supplier, :buyer = us.
-        seller-eid (case return-type
-                     :customer (get-in return [:return/to-party :db/id])    ; us
-                     :vendor   (get-in return [:return/to-party :db/id]))    ; the supplier
-        buyer-eid (case return-type
-                    :customer (get-in return [:return/from-party :db/id])  ; customer
-                    :vendor   (get-in return [:return/from-party :db/id])) ; us
+        ;; The polarity is symmetric: :return/to-party is the issuer
+        ;; of the credit (= invoice :seller), :return/from-party is
+        ;; the recipient (= invoice :buyer). For :customer returns
+        ;; we (the org) issue credit to the customer. For :vendor
+        ;; returns the supplier issues credit to us (the kontor
+        ;; convention follows Odoo / Coupa, not SAP's buyer-issued
+        ;; debit-memo pattern).
+        seller-eid (get-in return [:return/to-party :db/id])
+        buyer-eid  (get-in return [:return/from-party :db/id])
         currency (get-in return [:return/order :order/currency :commodity/symbol])
         items (items-of db return-eid)
         invoice-tempid "credit-memo-1"
@@ -249,13 +249,30 @@
                                 price (or (:return-item/return-price item) 0M)
                                 amount (.multiply ^java.math.BigDecimal qty
                                                   ^java.math.BigDecimal price)
-                                ;; For :credit-memo (customer returns), GL routes
-                                ;; via :sales-revenue contra (the bridge handles).
-                                ;; For :debit-memo (vendor returns), route to
-                                ;; :vendor-credit-memo.
+                                ;; GL routing: credit-memo lines reverse a
+                                ;; prior sale, so they hit :sales-revenue
+                                ;; (the polarity flip in default-direction-
+                                ;; for makes the posting Dr revenue, Cr AR).
+                                ;; Debit-memo lines reverse a prior purchase
+                                ;; via :order-item/category dispatch — same
+                                ;; account-type the original purchase line
+                                ;; would have used. Direct-material RTVs
+                                ;; that need explicit inventory adjustment
+                                ;; should compose plan-stock-move :direction
+                                ;; :out separately and let the debit-memo
+                                ;; clear AP; the bridge here only models
+                                ;; the AP side.
+                                category (:order-item/category
+                                           (:return-item/order-item item))
                                 gl-type (case invoice-type
                                           :credit-memo :sales-revenue
-                                          :debit-memo  :vendor-credit-memo)]
+                                          :debit-memo
+                                          (case category
+                                            :direct   :inventory
+                                            :indirect :purchase-expense
+                                            :services :purchase-expense
+                                            :asset    :asset-acquisition
+                                            :purchase-expense))]
                             {:db/id line-tempid
                              :invoice-line/invoice invoice-tempid
                              :invoice-line/sequence (inc idx)

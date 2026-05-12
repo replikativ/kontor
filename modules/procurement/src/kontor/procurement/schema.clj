@@ -856,10 +856,28 @@
     :status-transition/name "Dispute Qty Exception"}
    {:status-transition/entity-type :invoice
     :status-transition/facet :invoice/match-status
+    :status-transition/from :exception-missing-receipt
+    :status-transition/to :disputed
+    :status-transition/active true
+    :status-transition/name "Dispute Missing-Receipt Exception"}
+   {:status-transition/entity-type :invoice
+    :status-transition/facet :invoice/match-status
+    :status-transition/from :exception-missing-po
+    :status-transition/to :disputed
+    :status-transition/active true
+    :status-transition/name "Dispute Missing-PO Exception"}
+   {:status-transition/entity-type :invoice
+    :status-transition/facet :invoice/match-status
     :status-transition/from :disputed
     :status-transition/to :manual-approved
     :status-transition/active true
     :status-transition/name "Resolve Dispute"}
+   {:status-transition/entity-type :invoice
+    :status-transition/facet :invoice/match-status
+    :status-transition/from :disputed
+    :status-transition/to :auto-matched
+    :status-transition/active true
+    :status-transition/name "Re-Match After Vendor Correction"}
    {:status-transition/entity-type :invoice
     :status-transition/facet :invoice/match-status
     :status-transition/from :auto-matched
@@ -920,12 +938,15 @@
 (def account-type-direction-seeds
   "Procurement-specific :account-type-direction rows (ADR-041
    table). Extends the default-direction-for fallback map in
-   kontor.invoice.posting."
+   kontor.invoice.posting.
+
+   GR/IR clearing direction note (P0-1 fix): a :purchase invoice line
+   on :gr-ir-clearing DEBITS the clearing account, reversing the
+   receipt's credit. The receipt itself hardcodes the credit direction
+   in kontor.posting/receipt-postings; the invoice-side direction is
+   what this table feeds. So both legs net to zero on the GR/IR
+   account once the invoice posts."
   [{:account-type-direction/invoice-type :purchase
-    :account-type-direction/account-type :gr-ir-clearing
-    :account-type-direction/direction :credit
-    :account-type-direction/active true}
-   {:account-type-direction/invoice-type :sales
     :account-type-direction/account-type :gr-ir-clearing
     :account-type-direction/direction :debit
     :account-type-direction/active true}
@@ -955,14 +976,6 @@
     :account-type-direction/active true}
    {:account-type-direction/invoice-type :purchase
     :account-type-direction/account-type :asset-acquisition
-    :account-type-direction/direction :debit
-    :account-type-direction/active true}
-   {:account-type-direction/invoice-type :credit-memo
-    :account-type-direction/account-type :vendor-credit-memo
-    :account-type-direction/direction :credit
-    :account-type-direction/active true}
-   {:account-type-direction/invoice-type :debit-memo
-    :account-type-direction/account-type :vendor-credit-memo
     :account-type-direction/direction :debit
     :account-type-direction/active true}])
 
