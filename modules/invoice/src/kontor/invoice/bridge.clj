@@ -156,18 +156,71 @@
 ;; Order → invoice bridge
 ;; ============================================================================
 
+(defn- gl-account-type-for-item-line
+  "Dispatch on (invoice-type, :order-item/category) → :invoice-line/
+   gl-account-type. ADR-042: polymorphism for procurement invoices.
+
+   Sales / credit-memo: always :sales-revenue (category ignored).
+   Purchase / debit-memo:
+     :direct   → :inventory       (goods for resale, raw materials)
+     :indirect → :purchase-expense (office supplies)
+     :services → :purchase-expense (consulting, legal)
+     :asset    → :asset-acquisition (CapEx)
+     nil       → :purchase-expense (legacy default)"
+  [invoice-type order-item]
+  (case invoice-type
+    (:sales :credit-memo)
+    :sales-revenue
+
+    (:purchase :debit-memo)
+    (case (:order-item/category order-item)
+      :direct   :inventory
+      :indirect :purchase-expense
+      :services :purchase-expense
+      :asset    :asset-acquisition
+      :purchase-expense)
+
+    :sales-revenue))
+
+(defn- gl-account-type-for-adjustment-line
+  "Dispatch on (invoice-type, :order-adjustment/type) → :invoice-line/
+   gl-account-type. ADR-042: polymorphism for procurement adjustments."
+  [invoice-type adj-type]
+  (case [invoice-type adj-type]
+    [:sales :tax]            :sales-tax-payable
+    [:sales :discount]       :discount-given
+    [:sales :shipping]       :shipping-income
+    [:credit-memo :tax]      :sales-tax-payable
+    [:credit-memo :discount] :discount-given
+    [:credit-memo :shipping] :shipping-income
+    [:purchase :tax]         :purchase-tax-recoverable
+    [:purchase :discount]    :purchase-discount
+    [:purchase :shipping]    :shipping-expense
+    [:debit-memo :tax]       :purchase-tax-recoverable
+    [:debit-memo :discount]  :purchase-discount
+    [:debit-memo :shipping]  :shipping-expense
+    ;; fallback per invoice-type
+    (case invoice-type
+      (:sales :credit-memo)    :sales-revenue
+      (:purchase :debit-memo)  :purchase-expense
+      :sales-revenue)))
+
 (defn- make-invoice-line-from-order-item
   "Build an :invoice-line + :order-item-billing junction for one
    order-item. The line's quantity is the remaining un-billed
-   quantity (subtract :order-item-billing/quantity totals)."
-  [db order-item invoice-tempid sequence line-tempid]
+   quantity (subtract :order-item-billing/quantity totals).
+
+   `invoice-type` (ADR-042) drives the GL routing via
+   `gl-account-type-for-item-line`."
+  [db invoice-type order-item invoice-tempid sequence line-tempid]
   (let [order-item-eid (:db/id order-item)
         ordered-qty (:order-item/quantity order-item)
         cancelled-qty (or (:order-item/cancel-quantity order-item) 0M)
         already-billed (partial-billed-quantity db order-item-eid)
         bill-qty (.subtract ^java.math.BigDecimal
                             (.subtract ^java.math.BigDecimal ordered-qty cancelled-qty)
-                            ^java.math.BigDecimal already-billed)]
+                            ^java.math.BigDecimal already-billed)
+        gl-type (gl-account-type-for-item-line invoice-type order-item)]
     (cond
       ;; Nothing left to bill (already fully invoiced) — emit a zero-
       ;; quantity line. Caller `make-invoice-from-order!` filters.
@@ -181,7 +234,7 @@
         :invoice-line/quantity 0M
         :invoice-line/unit-price (:order-item/unit-price order-item)
         :invoice-line/amount 0M
-        :invoice-line/gl-account-type :sales-revenue}
+        :invoice-line/gl-account-type gl-type}
        nil]
 
       ;; Negative remaining quantity = cancellation increased past
@@ -215,7 +268,7 @@
                   :invoice-line/quantity bill-qty
                   :invoice-line/unit-price unit-price
                   :invoice-line/amount line-amount
-                  :invoice-line/gl-account-type :sales-revenue}
+                  :invoice-line/gl-account-type gl-type}
            override-acct (assoc :invoice-line/account override-acct))
          {:order-item-billing/order-item order-item-eid
           :order-item-billing/invoice-line line-tempid
@@ -224,14 +277,15 @@
 (defn- make-invoice-line-from-adjustment
   "Build an :invoice-line for one :order-adjustment. The line is
    parented to the parent product line if the adjustment is
-   line-scoped, otherwise is header-level on the invoice."
-  [adjustment invoice-tempid sequence line-tempid parent-line-tempid]
+   line-scoped, otherwise is header-level on the invoice.
+
+   ADR-042: `invoice-type` drives the GL routing via
+   `gl-account-type-for-adjustment-line` (e.g. :purchase + :tax →
+   :purchase-tax-recoverable, mirror of :sales + :tax →
+   :sales-tax-payable)."
+  [invoice-type adjustment invoice-tempid sequence line-tempid parent-line-tempid]
   (let [adj-type (:order-adjustment/type adjustment)
-        gl-type (case adj-type
-                  :tax       :sales-tax-payable
-                  :discount  :discount-given
-                  :shipping  :shipping-income
-                  :sales-revenue)   ; default fallback
+        gl-type (gl-account-type-for-adjustment-line invoice-type adj-type)
         amount (:order-adjustment/amount adjustment)
         override-acct (when-let [a (:order-adjustment/override-gl-account adjustment)]
                         (:db/id a))
@@ -303,12 +357,18 @@
                               db order-eid)
                          (map #(d/pull db '[*] %)))
         invoice-tempid "inv-1"
-        invoice-type (or type :sales)
+        ;; ADR-042: default :invoice/type from :order/type (was hardcoded :sales).
+        invoice-type (or type
+                         (case (:order/type order)
+                           :purchase :purchase
+                           :sales))
         invoice-entity-eid (or entity (get-in order [:order/entity :db/id]))
-        ;; Build product lines + billing junctions
+        ;; Build product lines + billing junctions (ADR-042: invoice-type
+        ;; threads through to gl-account-type dispatch).
         item-results (map-indexed
                       (fn [idx item]
-                        (make-invoice-line-from-order-item db item invoice-tempid
+                        (make-invoice-line-from-order-item db invoice-type item
+                                                           invoice-tempid
                                                            (inc idx)
                                                            (str "line-" (inc idx))))
                       items)
@@ -323,14 +383,14 @@
                                     (map (fn [item line]
                                            [(:db/id item) (:db/id line)])
                                          items item-line-rows))
-        ;; Build adjustment lines
+        ;; Build adjustment lines (ADR-042: invoice-type threads through)
         adj-line-rows (map-indexed
                        (fn [idx adj]
                          (let [scope-eid (get-in adj [:order-adjustment/scope :db/id])
                                parent-tempid (get order-item-eid->tempid scope-eid)
                                adj-seq (+ (count items) (inc idx))]
                            (make-invoice-line-from-adjustment
-                            adj invoice-tempid adj-seq
+                            invoice-type adj invoice-tempid adj-seq
                             (str "adj-" (inc idx))
                             parent-tempid)))
                        adjustments)
