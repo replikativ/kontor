@@ -1,0 +1,264 @@
+(ns kontor.collections.p0-fixes-test
+  "Tests for ADR-043 P0 review fixes:
+     P0-3 — :dunning-event/identity drops :invoice (no nil-tuple trap)
+     P0-4 — credit-utilization numeric query
+     P0-5 — :dunning-pause helpers + plan-dunning-run gate
+     P1   — credit-hold :expires-at auto-release
+     P1   — frequency-cap uses :as-of (deterministic)"
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [datahike.api :as d]
+            [kontor.collections.case :as kcase]
+            [kontor.collections.credit-hold :as chold]
+            [kontor.collections.dunning :as kdunning]
+            [kontor.collections.pause :as kpause]
+            [kontor.collections.schema :as coll-schema]
+            [kontor.core :as core]
+            [kontor.invoice.bridge :as inv]
+            [kontor.invoice.schema :as inv-schema]
+            [kontor.payment-application :as papp]
+            [kontor.status-machine :as sm]))
+
+(def ^:dynamic *conn* nil)
+
+(defn- bootstrap [f]
+  (binding [*conn* (core/create-test-db)]
+    (inv-schema/install! *conn*)
+    (coll-schema/install! *conn*)
+    (d/transact *conn*
+                [{:commodity/symbol "EUR" :commodity/name "Euro"
+                  :commodity/precision 2 :commodity/iso-4217 "EUR"}
+                 {:entity/code "ACME-DE" :entity/name "Acme GmbH"
+                  :entity/kind :operating :entity/active true}
+                 {:partner/external-id "CUST"
+                  :partner/name "Customer"
+                  :partner/kind :customer
+                  :partner/credit-status :open
+                  :partner/credit-limit 10000M}
+                 {:partner/external-id "U-alice" :partner/name "Alice"}
+                 {:partner/external-id "U-bob"   :partner/name "Bob"}])
+    (f)))
+
+(use-fixtures :each bootstrap)
+
+(defn- partner [xid]
+  (d/q '[:find ?p . :in $ ?x :where [?p :partner/external-id ?x]]
+       (d/db *conn*) xid))
+
+(defn- entity [c]
+  (d/q '[:find ?e . :in $ ?c :where [?e :entity/code ?c]] (d/db *conn*) c))
+
+(defn- actor [u] (partner (str "U-" u)))
+
+(defn- make-invoice! [external-id gross]
+  (let [tempid "inv-1"
+        line "line-1"]
+    (d/transact *conn*
+                [{:db/id tempid
+                  :invoice/external-id external-id
+                  :invoice/type :sales
+                  :invoice/status :sent
+                  :invoice/issue-date #inst "2026-04-01"
+                  :invoice/buyer (partner "CUST")
+                  :invoice/entity (entity "ACME-DE")
+                  :invoice/currency "EUR"
+                  :invoice/total-gross gross
+                  :invoice/lines [line]}
+                 {:db/id line
+                  :invoice-line/invoice tempid
+                  :invoice-line/sequence 1
+                  :invoice-line/amount gross
+                  :invoice-line/quantity 1M
+                  :invoice-line/unit-price gross}])
+    (inv/by-external-id (d/db *conn*) external-id)))
+
+;; ============================================================================
+;; P0-3: :dunning-event/identity (case, level, scheduled-at) — no
+;;       nil-in-tuple trap
+;; ============================================================================
+
+(deftest dunning-event-identity-no-invoice-tuple-trap
+  (testing "Two case-level events (no :invoice) at same (case, level,
+            scheduled-at) are correctly rejected as duplicates by
+            the composite identity"
+    (kcase/open-case! *conn*
+                      {:code "CASE-DI"
+                       :partner (partner "CUST")
+                       :entity (entity "ACME-DE")
+                       :opened-by-uid (actor "alice")})
+    (let [case-eid (kcase/by-code (d/db *conn*) "CASE-DI")
+          scheduled #inst "2026-05-15"]
+      ;; First event — should succeed
+      (d/transact *conn*
+                  [{:dunning-event/case case-eid
+                    :dunning-event/level 1
+                    :dunning-event/scheduled-at scheduled
+                    :dunning-event/channel :email
+                    :dunning-event/locale "en-US"}])
+      ;; Re-transacting the same identity should upsert (one row)
+      (d/transact *conn*
+                  [{:dunning-event/case case-eid
+                    :dunning-event/level 1
+                    :dunning-event/scheduled-at scheduled
+                    :dunning-event/channel :email
+                    :dunning-event/locale "en-US"}])
+      (testing "Only one row exists (upsert worked)"
+        (is (= 1 (d/q '[:find (count ?e) .
+                        :in $ ?case
+                        :where [?e :dunning-event/case ?case]]
+                      (d/db *conn*) case-eid)))))))
+
+;; ============================================================================
+;; P0-4: credit-utilization numeric query
+;; ============================================================================
+
+(deftest credit-utilization-sums-open-amounts
+  (make-invoice! "INV-CU-1" 3000M)
+  (make-invoice! "INV-CU-2" 5000M)
+  (testing "Two open invoices sum to 8000"
+    (is (= 0 (.compareTo
+              8000M
+              (chold/credit-utilization
+               (d/db *conn*)
+               {:partner (partner "CUST")
+                :entity (entity "ACME-DE")})))))
+  ;; Partial-pay the first
+  (let [inv1 (inv/by-external-id (d/db *conn*) "INV-CU-1")
+        eur (d/q '[:find ?c . :where [?c :commodity/symbol "EUR"]] (d/db *conn*))
+        _ (d/transact *conn*
+                      [{:transaction/external-id "PAY-CU-1"
+                        :transaction/state :posted
+                        :transaction/effective-date #inst "2026-04-15"
+                        :transaction/partner (partner "CUST")}])
+        pay (d/q '[:find ?t . :where [?t :transaction/external-id "PAY-CU-1"]]
+                 (d/db *conn*))]
+    (papp/apply-payment! *conn*
+                         {:payment pay :invoice inv1 :amount 1000M
+                          :commodity eur :applied-by-uid (actor "alice")}))
+  (testing "After 1000 partial, utilization drops to 7000"
+    (is (= 0 (.compareTo
+              7000M
+              (chold/credit-utilization
+               (d/db *conn*)
+               {:partner (partner "CUST")
+                :entity (entity "ACME-DE")}))))))
+
+;; ============================================================================
+;; P0-5: :dunning-pause gates plan-dunning-run
+;; ============================================================================
+
+(deftest explicit-pause-suppresses-dunning
+  (kcase/open-case! *conn*
+                    {:code "CASE-PA"
+                     :partner (partner "CUST")
+                     :entity (entity "ACME-DE")
+                     :opened-by-uid (actor "alice")})
+  (let [case-eid (kcase/by-code (d/db *conn*) "CASE-PA")
+        inv (make-invoice! "INV-PA" 500M)]
+    (kpause/place-pause! *conn*
+                         {:case case-eid
+                          :reason-code :holiday-freeze
+                          :placed-by-uid (actor "alice")
+                          :notes "December holiday freeze"})
+    (testing "any-active-pause? true after place-pause!"
+      (is (kpause/any-active-pause? (d/db *conn*) case-eid)))
+    ;; Plan run should skip with :explicit-pause
+    (d/transact *conn*
+                [{:dunning-policy/code "P-PAUSE"
+                  :dunning-policy/name "Test"
+                  :dunning-policy/entity (entity "ACME-DE")
+                  :dunning-policy/applies-to-segment :default
+                  :dunning-policy/levels kdunning/default-policy-levels-edn
+                  :dunning-policy/frequency-cap-window-days 7
+                  :dunning-policy/frequency-cap-max-events 5
+                  :dunning-policy/pause-on-dispute? true
+                  :dunning-policy/pause-on-open-promise? true
+                  :dunning-policy/active true}])
+    (let [policy (d/pull (d/db *conn*) '[*]
+                         (d/q '[:find ?p . :where [?p :dunning-policy/code "P-PAUSE"]]
+                              (d/db *conn*)))
+          plan (kdunning/plan-dunning-run
+                (d/db *conn*)
+                {:as-of (java.util.Date.)
+                 :entity (entity "ACME-DE")
+                 :policy policy
+                 :cases [{:case-eid case-eid :invoice-eid inv :locale "en-US"}]})]
+      (testing "plan row :skipped? true with :explicit-pause"
+        (is (true? (:skipped? (first plan))))
+        (is (= :explicit-pause (:skip-reason (first plan))))))))
+
+(deftest expired-pause-no-longer-suppresses
+  (kcase/open-case! *conn*
+                    {:code "CASE-PE"
+                     :partner (partner "CUST")
+                     :entity (entity "ACME-DE")
+                     :opened-by-uid (actor "alice")})
+  (let [case-eid (kcase/by-code (d/db *conn*) "CASE-PE")]
+    ;; Direct transact to set an explicit :placed-at in the past
+    (d/transact *conn*
+                [{:dunning-pause/case case-eid
+                  :dunning-pause/reason-code :holiday-freeze
+                  :dunning-pause/placed-at #inst "2026-01-01"
+                  :dunning-pause/placed-by-uid (actor "alice")
+                  :dunning-pause/expires-at #inst "2026-01-15"}])
+    (testing "with :as-of-valid between :placed-at and :expires-at, pause active"
+      (is (kpause/any-active-pause? (d/db *conn*) case-eid
+                                    {:as-of-valid #inst "2026-01-10"})))
+    (testing "with :as-of-valid after :expires-at, pause not active"
+      (is (not (kpause/any-active-pause? (d/db *conn*) case-eid
+                                         {:as-of-valid #inst "2026-02-01"}))))))
+
+;; ============================================================================
+;; P1: credit-hold :expires-at auto-release
+;; ============================================================================
+
+(deftest credit-hold-expires-at-auto-releases
+  (chold/place-hold! *conn*
+                     {:partner (partner "CUST")
+                      :entity (entity "ACME-DE")
+                      :reason-code :manual
+                      :placed-by-uid (actor "alice")
+                      :expires-at #inst "2026-05-30"})
+  (testing "hold active before :expires-at"
+    (is (= :hold (chold/credit-status-for
+                  (d/db *conn*)
+                  {:partner (partner "CUST")
+                   :entity (entity "ACME-DE")
+                   :as-of-valid #inst "2026-05-20"}))))
+  (testing "hold inactive after :expires-at — scalar wins"
+    (is (= :open (chold/credit-status-for
+                  (d/db *conn*)
+                  {:partner (partner "CUST")
+                   :entity (entity "ACME-DE")
+                   :as-of-valid #inst "2026-06-15"})))))
+
+;; ============================================================================
+;; P1: frequency-cap is deterministic with :as-of
+;; ============================================================================
+
+(deftest frequency-cap-uses-as-of-not-system-clock
+  (kcase/open-case! *conn*
+                    {:code "CASE-FC2"
+                     :partner (partner "CUST")
+                     :entity (entity "ACME-DE")
+                     :opened-by-uid (actor "alice")})
+  (let [case-eid (kcase/by-code (d/db *conn*) "CASE-FC2")]
+    ;; Seed an event from 2026-01-01
+    (d/transact *conn*
+                [{:dunning-event/case case-eid
+                  :dunning-event/level 1
+                  :dunning-event/scheduled-at #inst "2026-01-01"
+                  :dunning-event/sent-at #inst "2026-01-01"
+                  :dunning-event/channel :email
+                  :dunning-event/locale "en-US"}])
+    (let [policy {:dunning-policy/frequency-cap-window-days 7
+                  :dunning-policy/frequency-cap-max-events 1}]
+      (testing "Within window (2026-01-05): cap violated"
+        (is (kdunning/frequency-cap-violated?
+             (d/db *conn*) case-eid policy #inst "2026-01-05")))
+      (testing "Outside window (2026-02-01): not violated"
+        (is (not (kdunning/frequency-cap-violated?
+                  (d/db *conn*) case-eid policy #inst "2026-02-01"))))
+      (testing "Default (no :as-of) uses now — also outside since
+                2026-01-01 is past"
+        (is (not (kdunning/frequency-cap-violated?
+                  (d/db *conn*) case-eid policy)))))))

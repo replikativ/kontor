@@ -174,6 +174,29 @@
           (testing "open = 500 (back to full gross)"
             (is (= 0 (.compareTo 500M (papp/open-amount-of-invoice db2 inv))))))))))
 
+(deftest reverse-only-partial-flips-partially-paid-to-sent
+  (testing "P0-2 fix: reversal of the ONLY partial on a :partially-
+            paid invoice flips status back to :sent"
+    (let [inv (make-invoice! "INV-RP1" 600M)
+          pay (make-payment! "PAY-RP1")]
+      (papp/apply-payment! *conn*
+                           {:payment pay :invoice inv :amount 200M
+                            :commodity (eur) :applied-by-uid (actor)})
+      (let [db (d/db *conn*)]
+        (is (= :partially-paid (sm/current-status db inv :invoice/status))))
+      (let [app-eid (-> (papp/applications-of (d/db *conn*) inv) first :db/id)]
+        (papp/reverse-application! *conn*
+                                   {:application-eid app-eid
+                                    :applied-by-uid (actor)
+                                    :reason :allocation-correction}))
+      (let [db (d/db *conn*)]
+        (testing ":partially-paid → :sent after last reversal"
+          (is (= :sent (sm/current-status db inv :invoice/status))))
+        (testing "net applied = 0"
+          (is (= 0 (.compareTo 0M (papp/applied-amount-of-invoice db inv)))))
+        (testing "open = 600 (back to full gross)"
+          (is (= 0 (.compareTo 600M (papp/open-amount-of-invoice db inv)))))))))
+
 (deftest reverse-partial-keeps-partially-paid-when-others-remain
   (testing "Reverse one of two partials → stays :partially-paid"
     (let [inv (make-invoice! "INV-D" 1000M)

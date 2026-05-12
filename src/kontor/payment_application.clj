@@ -312,6 +312,14 @@
                         :sent
                         :partially-paid)
 
+                      ;; Reversal of a :partially-paid invoice's
+                      ;; LAST remaining partial → :sent (back to
+                      ;; fully-open). P0-2 fix.
+                      (and (= current-status :partially-paid)
+                           (zero? (.compareTo ^java.math.BigDecimal
+                                              new-applied 0M)))
+                      :sent
+
                       ;; Reversal of a partial when more partials remain:
                       ;; stays :partially-paid.
                       (= current-status :partially-paid) :partially-paid

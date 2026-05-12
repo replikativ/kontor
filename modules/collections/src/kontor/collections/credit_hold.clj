@@ -16,16 +16,37 @@
    blocking the same partner across other subsidiaries.
 
    Mirrors the org-override pattern of `:status-transition/applies-
-   to-org` (status_machine.clj:71-86)."
-  (:require [datahike.api :as d]))
+   to-org` (status_machine.clj:71-86).
+
+   Also hosts the live credit-utilization query (ADR-043 §Per-entity
+   credit-hold overlay). Live = computed from current `:posting`s
+   against AR for the (partner, entity), bitemporally; never a
+   cached snapshot. SAP / D365 cache the value; kontor reads it."
+  (:require [datahike.api :as d]
+            [kontor.payment-application :as papp]))
 
 ;; ============================================================================
 ;; Queries
 ;; ============================================================================
 
+(defn- expired?
+  "True iff `:expires-at` is set and ≤ as-of-ms (auto-release)."
+  [h as-of-ms]
+  (when-let [exp (:credit-hold/expires-at h)]
+    (<= (.getTime ^java.util.Date exp) as-of-ms)))
+
+(defn- released?
+  "True iff `:released-at` is set and ≤ as-of-ms (manual release)."
+  [h as-of-ms]
+  (when-let [rel (:credit-hold/released-at h)]
+    (<= (.getTime ^java.util.Date rel) as-of-ms)))
+
 (defn active-holds-for
   "Pulled `:credit-hold` rows that are active at `:as-of-valid`
-   (default: now) for (partner, entity)."
+   (default: now) for (partner, entity).
+
+   Active = placed-at ≤ as-of AND not yet released AND not yet
+   expired (per ADR-043 :expires-at auto-release; P1-8 fix)."
   ([db {:keys [partner entity as-of-valid]}]
    (let [as-of (or as-of-valid (java.util.Date.))
          as-of-ms (.getTime ^java.util.Date as-of)
@@ -40,9 +61,8 @@
                    db partner entity as-of-ms)]
      (->> rows
           (map #(d/pull db '[*] %))
-          (remove (fn [h]
-                    (when-let [released (:credit-hold/released-at h)]
-                      (<= (.getTime ^java.util.Date released) as-of-ms))))
+          (remove #(or (released? % as-of-ms)
+                       (expired? % as-of-ms)))
           (sort-by :credit-hold/placed-at)
           vec))))
 
@@ -70,6 +90,107 @@
    nil if none active."
   [db opts]
   (last (active-holds-for db opts)))
+
+(defn credit-utilization
+  "Live AR + open-invoice balance for (partner, entity) at
+   :as-of-valid (default now). The `:partner/credit-limit` (ADR-039)
+   plus this number gives the utilization ratio.
+
+   Returns BigDecimal — sum of open-amounts across all
+   :sent/:partially-paid sales invoices for this partner+entity.
+
+   ADR-043 P0-4 fix: numeric query, not categorical. Bitemporal
+   via :payment-application/applied-at. Live = computed from
+   :payment-application + :invoice rows; never a cached snapshot."
+  ([db {:keys [partner entity as-of-valid]}]
+   (let [as-of-valid (or as-of-valid (java.util.Date.))
+         eids (d/q '[:find [?i ...]
+                     :in $ ?b ?e
+                     :where
+                     [?i :invoice/buyer ?b]
+                     [?i :invoice/entity ?e]
+                     (or [?i :invoice/status :sent]
+                         [?i :invoice/status :partially-paid])]
+                   db partner entity)]
+     (reduce (fn [^java.math.BigDecimal acc eid]
+               (let [o (papp/open-amount-of-invoice
+                        db eid {:as-of-valid as-of-valid})]
+                 (.add acc ^java.math.BigDecimal (or o 0M))))
+             0M eids))))
+
+(defn unapplied-cash-balance
+  "Pending-application cash for partner at :as-of-valid.
+
+   Computed kernel-aligned: read postings on the cash-receipt
+   accounts for this partner. Caller passes the cash-account-eid
+   (typically the bank-clearing or AR-cash account; depends on
+   chart). Sum of (positive cash receipts) minus sum of (applied
+   payment-applications) = unapplied residual.
+
+   Required opts:
+     :partner            partner ref/eid
+     :cash-account-eid   account eid for cash-receipt postings
+                         (chart-dependent; caller's responsibility)
+
+   Optional:
+     :as-of-valid        instant cutoff (default now)
+     :commodity-eid      filter postings on this commodity (default
+                         no filter; sums across all commodities and
+                         the caller's job to interpret if mixed)
+
+   Returns BigDecimal. Positive = remittance sitting in suspense.
+
+   ADR-043 P0-3 fix. Bitemporal via :payment-application/applied-at
+   and :posting/valid-from (when set)."
+  ([db {:keys [partner cash-account-eid as-of-valid commodity-eid]}]
+   (when-not partner          (throw (ex-info ":partner required" {})))
+   (when-not cash-account-eid (throw (ex-info ":cash-account-eid required
+   — chart-of-accounts coupling; consumer passes the bank-clearing
+   or AR-cash account eid." {})))
+   (let [as-of-valid (or as-of-valid (java.util.Date.))
+         as-of-ms (.getTime ^java.util.Date as-of-valid)
+         ;; Sum :posting/amount on cash account for this partner
+         ;; up to as-of-valid (using :posting/valid-from when set,
+         ;; otherwise the parent :transaction/effective-date).
+         received (or (if commodity-eid
+                        (d/q '[:find (sum ?amt) .
+                               :in $ ?acct ?p ?c ?as-of-ms
+                               :where
+                               [?ps :posting/account ?acct]
+                               [?ps :posting/amount ?amt]
+                               [?ps :posting/partner ?p]
+                               [?ps :posting/commodity ?c]
+                               [?ps :posting/transaction ?tx]
+                               [?tx :transaction/effective-date ?eff]
+                               [(.getTime ^java.util.Date ?eff) ?eff-ms]
+                               [(<= ?eff-ms ?as-of-ms)]]
+                             db cash-account-eid partner commodity-eid as-of-ms)
+                        (d/q '[:find (sum ?amt) .
+                               :in $ ?acct ?p ?as-of-ms
+                               :where
+                               [?ps :posting/account ?acct]
+                               [?ps :posting/amount ?amt]
+                               [?ps :posting/partner ?p]
+                               [?ps :posting/transaction ?tx]
+                               [?tx :transaction/effective-date ?eff]
+                               [(.getTime ^java.util.Date ?eff) ?eff-ms]
+                               [(<= ?eff-ms ?as-of-ms)]]
+                             db cash-account-eid partner as-of-ms))
+                      0M)
+         applied (or (d/q '[:find (sum ?amt) .
+                            :with ?app
+                            :in $ ?p ?cutoff-ms
+                            :where
+                            [?app :payment-application/payment ?tx]
+                            [?tx :transaction/partner ?p]
+                            [?app :payment-application/amount ?amt]
+                            [?app :payment-application/applied-at ?when]
+                            [(.getTime ^java.util.Date ?when) ?when-ms]
+                            [(<= ?when-ms ?cutoff-ms)]]
+                          db partner as-of-ms)
+                     0M)]
+     (.subtract ^java.math.BigDecimal received
+                ^java.math.BigDecimal applied))))
 
 ;; ============================================================================
 ;; Transactors

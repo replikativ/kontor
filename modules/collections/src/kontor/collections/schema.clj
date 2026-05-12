@@ -450,10 +450,17 @@
     :db/doc         "#{:frequency-cap :open-dispute :open-promise
                        :unapplied-cash-pending :credit-hold-released}"}
 
+   ;; Identity intentionally excludes :invoice — that attr is
+   ;; optional (case-level emissions), and datahike's composite-tuple
+   ;; identity does not upsert on nil-in-tuple. With (case, level,
+   ;; scheduled-at) the planner's duplicate-emit-prevention works
+   ;; uniformly for both invoice-scoped and case-level events.
+   ;; Tenants who need to distinguish multiple invoice-scoped events
+   ;; on the same (case, level, scheduled-at) tuple can vary
+   ;; :scheduled-at by sub-second offsets.
    {:db/ident       :dunning-event/identity
     :db/valueType   :db.type/tuple
     :db/tupleAttrs  [:dunning-event/case
-                     :dunning-event/invoice
                      :dunning-event/level
                      :dunning-event/scheduled-at]
     :db/cardinality :db.cardinality/one

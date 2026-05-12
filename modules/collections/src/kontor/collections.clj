@@ -9,6 +9,7 @@
             [kontor.collections.credit-hold :as chold]
             [kontor.collections.dispute :as kdispute]
             [kontor.collections.dunning :as kdunning]
+            [kontor.collections.pause :as kpause]
             [kontor.collections.promise :as kpromise]
             [kontor.collections.schema :as schema]
             [kontor.collections.writeoff :as kwo]))
@@ -41,12 +42,20 @@
 (def open-disputes-for-invoice   kdispute/open-disputes-for-invoice)
 (def any-open-dispute-for-invoice? kdispute/any-open-dispute-for-invoice?)
 
-;; --- Credit hold ---
-(def place-hold!         chold/place-hold!)
-(def release-hold!       chold/release-hold!)
-(def release-all-for!    chold/release-all-for!)
-(def credit-status-for   chold/credit-status-for)
-(def active-holds-for    chold/active-holds-for)
+;; --- Credit hold + utilization + unapplied-cash ---
+(def place-hold!             chold/place-hold!)
+(def release-hold!           chold/release-hold!)
+(def release-all-for!        chold/release-all-for!)
+(def credit-status-for       chold/credit-status-for)
+(def credit-utilization      chold/credit-utilization)
+(def unapplied-cash-balance  chold/unapplied-cash-balance)
+(def active-holds-for        chold/active-holds-for)
+
+;; --- Pause ---
+(def place-pause!            kpause/place-pause!)
+(def release-pause!          kpause/release-pause!)
+(def active-pauses-for-case  kpause/active-pauses-for-case)
+(def any-active-pause?       kpause/any-active-pause?)
 
 ;; --- Dunning ---
 (def DunningTemplateProvider     kdunning/DunningTemplateProvider)

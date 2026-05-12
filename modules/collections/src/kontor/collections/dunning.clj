@@ -14,6 +14,7 @@
   (:require [clojure.edn :as edn]
             [datahike.api :as d]
             [kontor.collections.dispute :as kdispute]
+            [kontor.collections.pause :as kpause]
             [kontor.collections.promise :as kpromise]))
 
 ;; ============================================================================
@@ -98,29 +99,37 @@
 
 (defn dunning-events-in-window
   "Count sent (non-skipped) `:dunning-event` rows for a case within
-   the last `window-days` days."
-  [db case-eid window-days]
-  (let [now-ms (System/currentTimeMillis)
-        cutoff-ms (- now-ms (* window-days 24 60 60 1000))]
-    (or (d/q '[:find (count ?e) .
-               :in $ ?case ?cutoff-ms
-               :where
-               [?e :dunning-event/case ?case]
-               [?e :dunning-event/sent-at ?when]
-               [(.getTime ^java.util.Date ?when) ?when-ms]
-               [(>= ?when-ms ?cutoff-ms)]
-               (not [?e :dunning-event/skipped? true])]
-             db case-eid cutoff-ms)
-        0)))
+   the last `window-days` days, relative to `:as-of` (default now).
+
+   P1 fix: previously read System/currentTimeMillis which made
+   `plan-dunning-run` non-deterministic across reruns at the same
+   :as-of."
+  ([db case-eid window-days] (dunning-events-in-window db case-eid window-days nil))
+  ([db case-eid window-days as-of]
+   (let [as-of-ms (.getTime ^java.util.Date (or as-of (java.util.Date.)))
+         cutoff-ms (- as-of-ms (* window-days 24 60 60 1000))]
+     (or (d/q '[:find (count ?e) .
+                :in $ ?case ?cutoff-ms
+                :where
+                [?e :dunning-event/case ?case]
+                [?e :dunning-event/sent-at ?when]
+                [(.getTime ^java.util.Date ?when) ?when-ms]
+                [(>= ?when-ms ?cutoff-ms)]
+                (not [?e :dunning-event/skipped? true])]
+              db case-eid cutoff-ms)
+         0))))
 
 (defn frequency-cap-violated?
   "True iff sending another event for this case would exceed the
-   policy's cap."
-  [db case-eid {:dunning-policy/keys [frequency-cap-window-days
-                                      frequency-cap-max-events]}]
-  (and frequency-cap-window-days frequency-cap-max-events
-       (>= (dunning-events-in-window db case-eid frequency-cap-window-days)
-           frequency-cap-max-events)))
+   policy's cap. `:as-of` defaults to now."
+  ([db case-eid policy] (frequency-cap-violated? db case-eid policy nil))
+  ([db case-eid
+    {:dunning-policy/keys [frequency-cap-window-days
+                           frequency-cap-max-events]}
+    as-of]
+   (and frequency-cap-window-days frequency-cap-max-events
+        (>= (dunning-events-in-window db case-eid frequency-cap-window-days as-of)
+            frequency-cap-max-events))))
 
 ;; ============================================================================
 ;; Planning (pure)
@@ -128,9 +137,21 @@
 
 (defn- case-skip-reason
   "Read pause gates against (case, invoice). Returns the first
-   matching skip-reason keyword or nil."
-  [db {:keys [case-eid invoice-eid policy unapplied-cash-fn]}]
+   matching skip-reason keyword or nil.
+
+   Order (most-specific → least):
+     1. :explicit-pause — an active :dunning-pause row (P0-5 fix)
+     2. :open-dispute   — any open dispute on the invoice
+     3. :open-promise   — any open PTP on the case
+     4. :unapplied-cash-pending — caller-supplied fn returns positive
+     5. :frequency-cap — Reg-F count over window"
+  [db {:keys [case-eid invoice-eid policy unapplied-cash-fn as-of]}]
   (cond
+    ;; P0-5 fix: explicit :dunning-pause row gates dunning regardless
+    ;; of dispute / promise / cash flags.
+    (kpause/any-active-pause? db case-eid {:as-of-valid as-of})
+    :explicit-pause
+
     (and (:dunning-policy/pause-on-dispute? policy)
          invoice-eid
          (kdispute/any-open-dispute-for-invoice? db invoice-eid))
@@ -147,7 +168,7 @@
            (and u (pos? (.signum ^java.math.BigDecimal u)))))
     :unapplied-cash-pending
 
-    (frequency-cap-violated? db case-eid policy)
+    (frequency-cap-violated? db case-eid policy as-of)
     :frequency-cap
 
     :else nil))
@@ -204,7 +225,8 @@
           (let [skip (case-skip-reason db {:case-eid case-eid
                                            :invoice-eid invoice-eid
                                            :policy policy
-                                           :unapplied-cash-fn unapplied-cash-fn})
+                                           :unapplied-cash-fn unapplied-cash-fn
+                                           :as-of as-of})
                 lvl (when-not skip (next-level-for db case-eid policy))
                 base {:case case-eid
                       :invoice invoice-eid
