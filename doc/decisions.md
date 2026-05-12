@@ -2242,6 +2242,383 @@ Date: 2026-05-12.
 
 ---
 
+## ADR-034 — `:status-transition` cross-cutting primitive for entity state machines
+
+**Decision.** Add a kernel-level `:status-transition` entity representing one legal state transition for one entity-type-and-facet (with optional per-org scope), and a `:status-history` entity recording each actual transition with audit metadata. Together they provide a declarative, queryable, bitemporal state-machine primitive that every workflow companion (sales, invoice, procurement, return, payment, requirement) uses without reinventing per-domain transition tables. The kernel ships zero seeds — consumers install their own vocabulary.
+
+### Why now, why kernel-level
+
+Five companion modules in the immediate pipeline (sales, invoice, procurement, return, payment) and at least three more in research (revrec, subscription, asset) need entity state machines. Without a shared primitive, each invents its own — six independent transition-table inventions, no cross-entity queries ("show me all entities currently in a `:rejected` state"), no shared idempotency story, no shared audit-history schema. Following the same reasoning as ADR-032 (`:schedule`), promote the abstraction to the kernel when six independent inventions would otherwise emerge.
+
+The OFBiz study (research note 12 expanded by the pass-2 state-machine study) revealed that OFBiz itself uses a **single generic `StatusValidChange` table** for OrderHeader, OrderItem, Invoice, Quote, Return, Shipment, Payment, CustRequest, and Requirement — eleven different entity types, one transition matrix. Sylius uses YAML config files per state graph. Both approaches encode "transitions are data, not code"; the OFBiz pattern is more flexible (per-tenant overrides, runtime queryable). Kontor's bitemporal datalog gives us a third path that beats both: per-org override + "what transitions were allowed last quarter?" for free.
+
+### What the new primitive provides
+
+**`:status-transition`** — the legal-transitions table. One row per allowed (entity-type, facet, from, to) combination. Optional org scope lets a tenant deviate from the default vocabulary.
+
+**`:status-history`** — the audit-trail entity. One row per actual transition: the entity that transitioned, which facet, from-state, to-state, when, by whom, why, with optional ref to the originating transaction. This is the OFBiz `OrderStatus` pattern, generalized.
+
+**`kontor.status-machine`** namespace — pure-function predicates over those entities:
+- `legal-transition?` — is `from → to` allowed for this entity-type+facet, considering org scope?
+- `legal-transitions-from` — what states is `from` allowed to move to?
+- `record-status-change!` — convenience transactor: writes the entity's facet attribute AND the history row in one tx, after checking legality.
+- `status-history-of` — pulled history rows for an entity, ordered oldest-first.
+- `current-status` — read the current facet value (typically equivalent to a one-attr pull).
+
+### Schema
+
+```clojure
+;; The transition table — one row per legal (entity-type, facet, from, to).
+:status-transition/entity-type    keyword          ; :order | :order-item | :invoice |
+                                                   ;   :requirement | :shipment | …
+:status-transition/facet          keyword          ; the attribute on the entity that
+                                                   ; carries this state — typically
+                                                   ; :order/status, :invoice/status,
+                                                   ; :order-item/status, etc.
+:status-transition/from           keyword          ; from-state. Use :*/nil sentinel
+                                                   ; for the "new entity" pseudo-state.
+:status-transition/to             keyword
+:status-transition/name           string           ; human-readable transition name
+                                                   ; ("Approve Order", "Mark Paid")
+:status-transition/applies-to-org ref → :entity    ; optional; nil = applies to all orgs
+:status-transition/active         boolean          ; soft-delete without dropping audit
+:status-transition/identity       tuple [entity-type, facet, from, to, applies-to-org]
+                                                   ; unique — one row per combination
+
+;; The audit-trail table — one row per actual transition.
+:status-history/entity            ref              ; the entity that transitioned
+:status-history/entity-type       keyword          ; denorm of the entity's type for
+                                                   ; cross-entity queries
+:status-history/facet             keyword
+:status-history/from              keyword          ; nil for entity creation
+:status-history/to                keyword
+:status-history/changed-at        instant          ; valid-time (when the transition
+                                                   ; occurred semantically, distinct
+                                                   ; from datahike's :db/txInstant)
+:status-history/changed-by-uid    ref → :create/uid
+:status-history/reason            string           ; free-text rationale
+:status-history/origin-transaction ref → :transaction ; optional — links to the
+                                                      ; kernel transaction that
+                                                      ; caused the change
+```
+
+### Vocabulary semantics
+
+- **`:status-transition/facet`** — every entity that participates in a state machine has at least one *facet*: the attribute carrying that state. `:order/status` is one facet of `:order`; `:order-item/status` is a facet of `:order-item`. One entity can have multiple facets — e.g., a future revenue-contract entity could have `:contract/lifecycle-status` AND `:contract/payment-status` AND `:contract/recognition-status` as three independent state machines on the same entity. This matches Sylius's four-facet decomposition while keeping the underlying table generic.
+
+- **`:status-transition/from`** — for the "new entity" pseudo-state (when an entity has no prior state datom), use the `:*/nil` keyword convention (e.g. `:order.status/nil`). Avoids datahike's awkward handling of `nil` as a tx value.
+
+- **`:status-transition/applies-to-org`** — when nil, the row applies tenant-wide. When set, the row scopes to that org (an `:entity` ref per ADR-031). The lookup is "match either the org-specific row OR the global default" — an org-specific override does not require deleting the global. This is the OFBiz `ProductStore.headerApprovedStatus` pattern, generalized over `:entity`.
+
+- **`:status-history/changed-at` vs `:db/txInstant`** — `changed-at` is the *valid-time* of the transition (when, semantically, the order moved to APPROVED — typically `now`, but can be backdated for migration). `:db/txInstant` is the kernel-managed tx-time (when, physically, the datom was committed). Per ADR-008 bitemporality, these are independent.
+
+- **No required `:transaction` link.** Some transitions happen without a kernel `:transaction` (e.g., setting an order to `:on-hold` while fraud-check runs). When a transition IS the result of a posting tx (e.g., `:invoice/status → :posted` happens because the AcctgTrans was created), the consumer should populate `:status-history/origin-transaction` for the audit chain.
+
+### Public surface
+
+```clojure
+(ns kontor.status-machine
+  (:require [datahike.api :as d]))
+
+(defn legal-transition?
+  "True iff the (entity-type, facet, from, to) transition is allowed
+   for the given org. Org is nil for tenant-wide queries; when set,
+   prefers an org-specific override but falls back to the global row."
+  ([db entity-type facet from to] (legal-transition? db entity-type facet from to nil))
+  ([db entity-type facet from to org] …))
+
+(defn legal-transitions-from
+  "Set of states `from` is allowed to move to for this entity-type+facet
+   (optionally scoped by org)."
+  [db entity-type facet from] …)
+
+(defn record-status-change!
+  "Convenience transactor. In one tx:
+     1. Verifies the transition is legal (throws if not).
+     2. Sets the entity's facet attribute to `to`.
+     3. Writes a :status-history row with the audit metadata.
+   Returns the tx-report."
+  [conn {:keys [entity entity-type facet from to changed-at
+                changed-by-uid reason origin-transaction]}] …)
+
+(defn status-history-of
+  "Pulled :status-history rows for `entity`, oldest first. Optionally
+   filtered by facet."
+  [db entity] …)
+```
+
+### Bootstrap
+
+Schema is installed by `kontor.core/install-schema!` (idempotent, runs once at kernel install). **No seed data.** Consumers install their own transition vocabulary:
+
+- kontor-sales seeds order + order-item transitions (Stage J, ADR-035).
+- kontor-invoice seeds invoice transitions (Stage J, ADR-036).
+- kontor-procurement seeds requirement + receipt transitions (Stage K).
+- Future companions seed their own.
+
+Multiple consumers can co-seed the same table without collision (composite identity tuple ensures idempotency).
+
+### Relationship to existing `kontor.state-machine`
+
+The kernel already ships `kontor.state-machine` (`src/kontor/state_machine.clj`), which encodes the `:transaction/state` lifecycle (`:draft → :pending-attestation? → :posted → :cancelled`) as a hardcoded Clojure map. That namespace ALSO enforces semantic guards specific to transactions: `:posted` requires `:posted-at` in the same tx (so sealing markers stay coherent per ADR-007), pending-attestation interacts with EInvoiceProvider workflow (ADR-018).
+
+The existing namespace stays as-is. Migrating `:transaction/state` to the generic `:status-transition` table would lose those domain-specific guards (or push them into a custom validator on top of the table, which is uglier). Future work could promote a "transition-with-guards" subprotocol that combines the table with a guard fn, but that's not in scope here.
+
+New companion entities (`:order/status`, `:invoice/status`, `:requirement/status`, etc.) use the new generic machinery. The kernel ships two state-machine mechanisms side by side: domain-specific (`kontor.state-machine` for transactions) and generic-table-driven (`kontor.status-machine` for everything else). Eventually one wins; for now both pay rent.
+
+### Alternatives considered
+
+- **Hardcoded per-entity Clojure transition maps.** This is what the existing `kontor.state-machine` does for transactions. Rejected as the general approach: doesn't scale to 11+ entity types, can't be queried at runtime, can't be per-org overridden without re-deploying, no shared audit-history schema.
+- **YAML / EDN config files per state graph (Sylius pattern).** Rejected: kontor already has a database, no reason to introduce a parallel config artifact. The "config is data, data is config" argument works in our favor — make it a datahike entity from the start.
+- **Database-level CHECK constraints for legal transitions.** Datahike doesn't have CHECK constraints in the relational sense, and even if it did, the "validate before transact" pattern (our `legal-transition?` predicate) is more composable: callers can dry-run a transition, branch on its legality, etc.
+- **`:status-history` as a partial datahike index of `:db/txInstant` over `:order/status` writes.** Tempting because datahike's tx-time history is "free". Rejected: tx-time captures *when the datom was written*, not the semantic "when the change applied" (valid-time), and lacks the audit fields (`changed-by-uid`, `reason`, `origin-transaction`). The history row is a domain concept, not an index artifact.
+- **Per-state guard fns registered at compile time.** Sylius's callbacks-on-transition pattern. Rejected for the kernel primitive; the table is dumb data. Domain-specific guards live in the consumer's transition-helper (e.g., `kontor.sales/approve-order!` checks reservation status before calling `record-status-change!`).
+- **Composite tuple identity `[entity-type, facet, from, to, applies-to-org]`** vs separate uniqueness assertions. Picked tuple for simplicity; the alternative (entity-type-and-facet level uniqueness with a separate org-scoping table) would split one entity into two and complicate queries.
+
+### Implications
+
+- 9 new attrs on `:status-transition` + 8 attrs on `:status-history` = 17 attrs total in the kernel schema.
+- New `kontor.status-machine` namespace with 5 public fns.
+- Test coverage: legal-transition? matrix queries, illegal-transition rejection, history append idempotency, org-scoped override semantics, bitemporal history queries (as-of-tx + valid-time on `:status-history/changed-at`).
+- Forward-compatible: future "cross-entity in-state-X dashboard" queries become a single datalog query on `:status-history`. Same with "transitions that historically occurred between dates X and Y."
+- The kontor-sales (ADR-035) and kontor-invoice (ADR-036) companions seed this table in their `install!` fn. Idempotent across multiple installs.
+- The existing `kontor.state-machine` for `:transaction/state` is untouched and continues to work. Future deprecation possible but deferred.
+
+Date: 2026-05-12.
+
+---
+
+## ADR-035 — `kontor-sales`: order machinery (header, items, ship groups, adjustments, roles)
+
+**Decision.** Land `kontor-sales` as the second foundation companion (under `modules/sales/`). Provide the order aggregate: `:order/*` header (with type discriminator `:sales | :purchase`), `:order-item/*` lines, the `:ship-group/*` + `:ship-group-assoc/*` + `:inv-reservation/*` fulfillment-plan triple, `:order-adjustment/*` (multi-level via single `:scope` ref, Sylius-pattern), and `:order-role/*` (partner role on order, per ADR-033 vocabulary). Reservation happens at order creation (not approval), with per-item opt-outs. State machine: two facets (`:order/status` and `:order-item/status`) driven by ADR-034's `:status-transition` table, seeded by the companion's `install!`.
+
+This companion **does not** handle the order→invoice bridge or the AcctgTrans posting — those land in `kontor-invoice` (ADR-036). It also **does not** handle the procurement-specific extensions (requirement entity, 3-way match, RTV) — those land in `kontor-procurement` (Stage K). It DOES introduce `:order/type :sales` AND `:order/type :purchase` as the discriminator, on the OFBiz pattern that one order model serves both; procurement just adds the requirement-and-receipt extensions on top.
+
+### Why now, why split from invoice
+
+The OFBiz study (research note 12 pass 2) confirmed that the order surface is substantial (12+ namespaces if you bundle the invoice bridge). The Sylius study reinforced this. Per the Stage J planning question (3-way matrix), splitting `kontor-sales` + `kontor-invoice` is justified because kontor-procurement (Stage K) will reuse the invoice machinery for vendor invoices — without the split, procurement either duplicates the bridge or imports unrelated sales code. The kernel already ships `:invoice/*` + `:invoice-line/*` (lines 1191-1370 in `src/kontor/schema.clj`); `kontor-invoice` will extend those with order-bridge fields, not reinvent the invoice entity.
+
+### Schema
+
+#### Order header
+
+```clojure
+:order/external-id    string :db.unique/identity   ; consumer-supplied opaque ID
+:order/type           keyword                       ; :sales | :purchase — discriminator
+                                                    ; (kontor-procurement adds the
+                                                    ; :purchase-only extensions)
+:order/status         keyword                       ; :order.status/{created,approved,
+                                                    ;   completed,cancelled,rejected,
+                                                    ;   hold} — facet driven by ADR-034
+:order/order-date     instant
+:order/entry-date     instant
+:order/currency       ref → :commodity              ; default currency for the order
+:order/bill-from-partner ref → :partner             ; vendor / seller
+                                                    ; (for :sales, the org; for
+                                                    ; :purchase, the supplier)
+:order/bill-to-partner   ref → :partner             ; customer / buyer
+:order/grand-total    bigdec                        ; denormalized; recomputed on
+                                                    ; adjustment changes
+:order/invoice-per-shipment? boolean                ; default false: one invoice on
+                                                    ; ORDER_COMPLETED. True: one
+                                                    ; invoice per shipment.
+:order/priority       long                          ; inventory-reservation priority;
+                                                    ; higher = grabs stock first
+:order/agreement-id   string                        ; optional reference to a contract
+:order/description    string
+:order/note           string
+```
+
+#### Order item
+
+```clojure
+:order-item/order        ref → :order               ; back-ref
+:order-item/seq-id       string                     ; sequence number in the order
+:order-item/identity     tuple [order, seq-id] unique
+:order-item/type         keyword                    ; :product | :service | :rental |
+                                                    ; :digital | … free-form
+:order-item/product-id   string                     ; consumer-supplied product ref
+                                                    ; (no :product entity in kernel)
+:order-item/description  string
+:order-item/quantity     bigdec
+:order-item/unit-price   bigdec                     ; price per unit, in :order/currency
+:order-item/unit-list-price bigdec                  ; MSRP for discount display
+:order-item/discount-rate bigdec                    ; line-level discount %
+:order-item/cancel-quantity bigdec                  ; partial-cancel quantity
+:order-item/status       keyword                    ; :order-item.status/{created,
+                                                    ;   approved,completed,cancelled,
+                                                    ;   rejected} facet (ADR-034)
+:order-item/auto-reserve? boolean                   ; default true; false skips
+                                                    ; reservation at creation
+:order-item/reserve-after-date instant              ; optional; defer reservation
+:order-item/estimated-ship-date instant
+:order-item/estimated-delivery-date instant
+:order-item/override-gl-account ref → :account      ; explicit GL override
+:order-item/cost-center  ref → :analytic-account    ; ADR-032 cost-center plan
+```
+
+#### Ship group
+
+```clojure
+:ship-group/order        ref → :order
+:ship-group/seq-id       string
+:ship-group/identity     tuple [order, seq-id] unique
+:ship-group/shipment-method-type keyword            ; :standard | :express | :overnight | …
+:ship-group/carrier-partner ref → :partner          ; carrier with :partner-role :carrier
+:ship-group/facility-id  string                     ; source warehouse (no :facility
+                                                    ; entity yet — consumer-supplied)
+:ship-group/contact-mech ref → :contact-mech        ; ship-to address from ADR-033
+:ship-group/tracking-number string
+:ship-group/shipping-instructions string
+:ship-group/gift-message string
+:ship-group/may-split?   boolean                    ; default true
+:ship-group/is-gift?     boolean
+:ship-group/ship-after-date instant
+:ship-group/ship-by-date instant
+:ship-group/estimated-ship-date instant
+:ship-group/estimated-delivery-date instant
+```
+
+#### Ship-group association (item ↔ destination)
+
+```clojure
+:ship-group-assoc/order ref → :order
+:ship-group-assoc/order-item ref → :order-item
+:ship-group-assoc/ship-group ref → :ship-group
+:ship-group-assoc/quantity bigdec
+:ship-group-assoc/cancel-quantity bigdec
+:ship-group-assoc/identity tuple [order-item, ship-group] unique
+```
+
+#### Inventory reservation (per-lot)
+
+```clojure
+:inv-reservation/order ref → :order
+:inv-reservation/order-item ref → :order-item
+:inv-reservation/ship-group ref → :ship-group
+:inv-reservation/lot ref → :lot                      ; existing kernel :lot
+:inv-reservation/quantity bigdec
+:inv-reservation/quantity-not-available bigdec       ; backorder tracking
+:inv-reservation/reserve-order-enum keyword          ; :fifo | :lifo | :priority
+:inv-reservation/reserved-datetime instant
+:inv-reservation/promised-datetime instant           ; original promise (immutable)
+:inv-reservation/current-promised-date instant       ; latest revised promise
+:inv-reservation/priority? boolean
+:inv-reservation/identity tuple [order-item, ship-group, lot] unique
+```
+
+#### Order adjustment
+
+```clojure
+:order-adjustment/order ref → :order                 ; always set
+:order-adjustment/scope ref                          ; ONE ref to :order, :order-item,
+                                                     ; or :ship-group — the "what
+                                                     ; this adjustment applies to"
+                                                     ; (Sylius polymorphic pattern,
+                                                     ; not OFBiz's three nullable FKs)
+:order-adjustment/type keyword                       ; :discount | :tax | :shipping |
+                                                     ; :surcharge | :promotion |
+                                                     ; :tax-vat-included | …
+:order-adjustment/amount bigdec
+:order-adjustment/recurring-amount bigdec            ; for subscription-style
+:order-adjustment/source-percentage bigdec           ; tax rate, when applicable
+:order-adjustment/tax-auth-party ref → :partner      ; jurisdiction (ADR-016)
+:order-adjustment/tax-auth-geo-id string             ; jurisdiction code
+:order-adjustment/override-gl-account ref → :account ; explicit GL routing
+:order-adjustment/include-in-tax? boolean            ; default true; controls
+                                                     ; whether THIS adjustment is
+                                                     ; in the BASE for OTHER tax
+                                                     ; calculations
+:order-adjustment/include-in-shipping? boolean       ; default true
+:order-adjustment/is-manual? boolean                 ; default false; manuals survive
+                                                     ; recalc passes
+:order-adjustment/neutral? boolean                   ; default false; if true, does
+                                                     ; NOT contribute to grand total
+                                                     ; (for included-VAT-style flags)
+:order-adjustment/origin-code string                 ; back-ref to source (promotion
+                                                     ; code, tax-rate code)
+:order-adjustment/note string
+```
+
+#### Order role (partner on order)
+
+```clojure
+:order-role/order ref → :order
+:order-role/partner ref → :partner
+:order-role/role-type keyword                        ; per ADR-033 vocabulary:
+                                                     ; :customer | :supplier |
+                                                     ; :bill-to | :ship-to |
+                                                     ; :end-user | :carrier | …
+:order-role/identity tuple [order, partner, role-type] unique
+```
+
+### State machines (seeded by `install!`)
+
+Order facet (`:order/status`):
+
+```
+:order.status/nil       → :order.status/created
+:order.status/created   → :order.status/approved | :order.status/hold |
+                          :order.status/rejected | :order.status/cancelled
+:order.status/hold      → :order.status/approved | :order.status/cancelled
+:order.status/approved  → :order.status/completed | :order.status/cancelled
+:order.status/completed → :order.status/approved              (re-open exception per OFBiz)
+:order.status/rejected  → ()                                   (terminal)
+:order.status/cancelled → ()                                   (terminal)
+```
+
+Item facet (`:order-item/status`):
+
+```
+:order-item.status/nil       → :order-item.status/created
+:order-item.status/created   → :order-item.status/approved | :order-item.status/cancelled |
+                               :order-item.status/rejected
+:order-item.status/approved  → :order-item.status/completed | :order-item.status/cancelled
+:order-item.status/completed → :order-item.status/approved   (re-open)
+```
+
+The companion's `install!` writes these as `:status-transition` rows. Multiple consumers sharing the table cohabit cleanly via the composite-tuple identity.
+
+### Public surface
+
+`kontor.sales` namespace ships:
+
+- **Builders**: `make-order`, `add-item`, `add-ship-group`, `allocate-to-ship-group`, `add-adjustment`, `assign-role`. Each returns tx-data; transact yourself or use `create-order!` to do it in one call.
+- **Reservation**: `reserve-order-inventory!` called by `create-order!` (unless `:order-item/auto-reserve?` is false). Per-item dispatch.
+- **Status transitions**: `approve-order!`, `cancel-order!`, `hold-order!`, `complete-order!`, `reject-order!`, `set-item-status!`. Each wraps `kontor.status-machine/record-status-change!` with order-specific side effects (e.g. release reservations on cancel).
+- **Promotion**: `check-and-promote-header!` — the OFBiz-pattern fn that scans items and promotes the header when all items reach a common terminal state.
+- **Recalc**: `recalculate-order!` — the CompositeOrderProcessor pipeline; clears + reapplies adjustments by ordered processor chain. Pure-function processors registered via `register-processor!`.
+- **Pulls / queries**: `pull-order`, `items-of`, `ship-groups-of`, `adjustments-of`, `reservations-of`, `roles-of`, `partner-on-order` (lookup by role-type).
+
+### Bootstrap
+
+The companion's `install!` does three things:
+1. Transacts the `kontor.sales.schema/all` schema.
+2. Seeds the order + order-item state machines into the kernel `:status-transition` table.
+3. Idempotent — composite identities ensure re-running adds no datoms.
+
+### Alternatives considered
+
+- **Combined sales + invoice + procurement.** Rejected per Stage J planning (the OFBiz study's own recommendation): would force kontor-procurement to either reach into kontor-sales for invoice bridge code, or duplicate it. Splitting now avoids that churn.
+- **OFBiz's three nullable FKs on OrderAdjustment** (`orderItemSeqId`, `shipGroupSeqId`). Rejected per Sylius study verdict: datahike's ref attributes don't care about target type, so a single `:scope` ref is cleaner. Queries on "all line-level adjustments" become `[?adj :order-adjustment/scope ?scope] [?scope :order-item/...]` — the join expresses the level.
+- **Reservation at approval, not creation.** Rejected per OFBiz pattern: holding stock during fraud-check prevents stockouts on legitimate sales. The `:order-item/auto-reserve?` opt-out covers consumers who want to defer.
+- **Four facets per Sylius (state + payment + shipping + checkout).** Rejected per the Stage J planning answer: payment-state and shipping-state are derived queries, not stored facets. Two facets (`:order/status` + `:order-item/status`) cover the load-bearing state-machine surface. Checkout state lives in the consumer's UI layer, not the accounting kernel.
+- **Hardcoded transition table in Clojure (per `kontor.state-machine` pattern).** Rejected: ADR-034 is the right primitive. Seeding the table costs ~12 tx ops and makes the vocabulary queryable + per-org overridable for free.
+- **Single `:adjustment` entity reused across order / invoice / quote.** Tempting (one schema for the multi-level discount/tax/shipping pattern), but the entity references differ (orders point at `:order`, invoices at `:invoice`, quotes at a future `:quote`). Picked separate `:order-adjustment` and let `kontor-invoice` introduce `:invoice-item-adjustment` similarly. If we ever do a `kontor-quote`, the same pattern applies. The schemas LOOK similar but each owns its own back-ref.
+
+### Implications
+
+- ~70 new attributes across 7 namespaces, all in `modules/sales/src/kontor/sales/schema.clj` (opt-in install).
+- Per-(order, partner, role-type) composite identity prevents duplicate role assignments.
+- Per-(order-item, ship-group) and per-(order-item, ship-group, lot) composite identities enforce the fulfillment-plan shape.
+- The recalc pipeline (CompositeOrderProcessor) is a sequence of pure-function processors; consumers register tax / promotion / shipping processors that compose. The kernel ships a no-op default; tax recalc lives in `kontor-l10n-*` per ADR-005.
+- Forward-compat: kontor-procurement (Stage K) adds `:requirement/*` + `:receipt/*` + the 3-way match on top, reusing `:order/*` with `:order/type :purchase`.
+- kontor-invoice (ADR-036) reads `:order-item-billing/*` to track per-(order-item, invoice) quantities for partial invoicing.
+
+Date: 2026-05-12.
+
+---
+
 ## Decisions deferred (open)
 
 The following choices are NOT yet locked. Update this section as we converge.

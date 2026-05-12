@@ -2,6 +2,7 @@
 {:tests [{:id :unit
           :test-paths ["test"
                        "modules/partner/test"
+                       "modules/sales/test"
                        "modules/l10n-de/test"
                        "modules/l10n-at/test"
                        "modules/l10n-fr/test"

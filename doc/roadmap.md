@@ -189,6 +189,26 @@ Separate artifact: `kontor-l10n-us` (EPL-1.0 kernel pieces; SST data file licens
 
 **Acceptance**: a fixture sale in California (SST non-member) with `AvalaraProvider` mocked returns correct rate; same sale in Tennessee (SST associate) routes through `SstCsvProvider`; 1099-NEC YTD aggregation matches against a fixture vendor.
 
+## Phase 6 — Business-OS companions (hybrid plan, post-Phase-2)
+
+Building on the kernel + first-jurisdiction stack, the project grew an explicit "business operating system" scope: companion modules under `modules/<name>/` that compose on the kernel without bloating it. This walks back the strictest reading of ADR-010 ("no ERP modules forever") — see ADRs 027-033 for the progressive scope walk and rationale. Companions are opt-in: kernel-only consumers ignore them.
+
+Hybrid build order (per research notes 09-12; the foundations get 3-4 weeks of depth each so the downstream cadence can be faster):
+
+- [x] **Stage H — ADR-032** — `:schedule` entity + `:cost-center` bootstrap (cross-cutting primitives every companion needs). Done 2026-05-12.
+- [x] **Stage I — kontor-partner** — party-as-root + person/org subtypes + polymorphic contact-mech + roles + relationships (ADR-033). Done 2026-05-12. 618 tests / 2094 assertions baseline.
+- [ ] **Stage J — kontor-sales** — order header + items + ship groups + adjustments + roles + status history. Foundation for invoice generation, procurement, revrec, subscription. (3-4 weeks; in progress.)
+- [ ] **CHECKPOINT** — validate kontor-partner + kontor-sales against a real customer use case OR independent code review before proceeding to faster cadence.
+- [ ] **Stage K — kontor-procurement** — `:order/type :purchase` shape + requirement (requisition) entity + 3-way match (PO ↔ receipt ↔ invoice). Builds on Stage J. (~2-3 weeks.)
+- [ ] **Stage L — kontor-asset** — fixed-asset register + depreciation schedule (consumes ADR-032 `:schedule`). (~2 weeks.)
+- [ ] **Stage M — kontor-revrec** — ASC 606 / IFRS 15 over-time revenue recognition (consumes Stage J + ADR-032). (~3 weeks.)
+- [ ] **Stage N — kontor-subscription** — recurring billing with catalog versioning (Kill Bill-pattern). (~2 weeks.)
+- [ ] **Stage O — kontor-project** — project + task + timesheet (timesheet = analytic-line per Odoo pattern, no new entity). (~2 weeks.)
+- [ ] **Stage P — kontor-commerce-adapter** — UBL 2.1 + Peppol BIS round-trip for B2B document interchange. (~1 week per integration.)
+- [ ] **Stage Q — kontor-hr + kontor-payroll-de-datev** — `:person` + `:employment` (effective-dated, multi-job per Workday pattern) + per-jurisdiction PayrollProvider adapter for DE (DATEV LODAS / Lohn und Gehalt).
+
+Deferred until concrete consumer demand: kontor-mfg, kontor-helpdesk, kontor-field-service, kontor-fleet, kontor-clm, kontor-marketing, kontor-crm. The "commodity SaaS" verdict from research note 10 §3: most of these have license-clean OSS or paid SaaS that we'd integrate with rather than reimplement.
+
 ## Cross-cutting: Track B (parallel, 1-2 weeks)
 
 Upstream PRs to `replikativ/datahike`:
@@ -243,5 +263,8 @@ Both produce **suggested** postings, never auto-posted. Reconciliation UI lives 
 | Phase 4-CA (CA-credible) | 12-18 |
 | Phase 5-US (US-credible with paid-provider scaffolds) | 16-24 |
 | Track B audit-chain (parallel, ships any time after week 2) | +1-2 |
+| Phase 6 stages H + I (schedule + cost-center + partner) | done |
+| Phase 6 stage J (sales — foundation, 3-4 weeks) | in progress |
+| Phase 6 stages K-Q (later companions, after checkpoint) | +12-16 |
 
 Plus per-country annual maintenance: low (DE) to moderate (US sales tax).

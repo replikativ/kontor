@@ -2441,6 +2441,137 @@
     :db/cardinality :db.cardinality/one}])
 
 ;; ============================================================================
+;; Status-transition + status-history (ADR-034)
+;;
+;; Cross-cutting state-machine primitive. Companions seed their own
+;; transition vocabulary; the kernel ships zero seed data. See
+;; `kontor.status-machine` for the public surface.
+;; ============================================================================
+
+(def ^:private status-transition-attrs
+  [{:db/ident       :status-transition/entity-type
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Discriminator: which entity type this transition
+                     applies to. :order, :order-item, :invoice,
+                     :requirement, :shipment, … Consumers extend."}
+
+   {:db/ident       :status-transition/facet
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The attribute on the entity carrying this state.
+                     Typically :order/status, :invoice/status, etc.
+                     One entity can have multiple facets — multiple
+                     concurrent state machines on the same row."}
+
+   {:db/ident       :status-transition/from
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "From-state keyword. Use a :*/nil sentinel keyword
+                     (e.g. :order.status/nil) for the 'new entity'
+                     pseudo-state — datahike's nil-handling is awkward
+                     for tx values."}
+
+   {:db/ident       :status-transition/to
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :status-transition/name
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Human-readable transition name (\"Approve Order\",
+                     \"Mark Paid\"). For UI / log rendering."}
+
+   {:db/ident       :status-transition/applies-to-org
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional :entity ref (ADR-031). When nil, the
+                     transition applies tenant-wide. When set, scopes
+                     to that org as an override that does NOT delete
+                     the global row — both can coexist; the predicate
+                     prefers the org-specific match."}
+
+   {:db/ident       :status-transition/active
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Soft-delete flag. Inactive transitions are
+                     ignored by `legal-transition?` but retained for
+                     audit-history queries."}
+
+   {:db/ident       :status-transition/note
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :status-transition/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:status-transition/entity-type
+                     :status-transition/facet
+                     :status-transition/from
+                     :status-transition/to
+                     :status-transition/applies-to-org]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Composite identity — one row per (entity-type,
+                     facet, from, to, applies-to-org) combination."}])
+
+(def ^:private status-history-attrs
+  [{:db/ident       :status-history/entity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The entity that transitioned. Generic ref —
+                     could be an order, invoice, requirement, etc."}
+
+   {:db/ident       :status-history/entity-type
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Denormalized copy of the entity's type so cross-
+                     entity queries don't need to dispatch on the
+                     ref's namespace."}
+
+   {:db/ident       :status-history/facet
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :status-history/from
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "From-state; nil-sentinel for entity creation."}
+
+   {:db/ident       :status-history/to
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :status-history/changed-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Valid-time of the transition: when, semantically,
+                     the change applied. Distinct from datahike's
+                     :db/txInstant which records when the datom was
+                     written. ADR-008 bitemporality."}
+
+   {:db/ident       :status-history/changed-by-uid
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "User who triggered the transition; ref to a
+                     :create/uid entity. Optional but recommended."}
+
+   {:db/ident       :status-history/reason
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Free-text rationale. Required by some auditors
+                     for sensitive transitions (e.g. order cancel
+                     with retention implications)."}
+
+   {:db/ident       :status-history/origin-transaction
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to the kernel :transaction that
+                     CAUSED this status change. E.g. an invoice's
+                     transition to :posted happens because an
+                     AcctgTrans was created — the AcctgTrans's
+                     :transaction goes here."}])
+
+;; ============================================================================
 ;; Aggregate
 ;; ============================================================================
 
@@ -2501,7 +2632,9 @@
     ledger-entity-attrs                  ; ADR-031
     valuation-book-entity-attrs          ; ADR-031
     schedule-attrs                       ; ADR-032
-    schedule-occurrence-attrs)))         ; ADR-032
+    schedule-occurrence-attrs            ; ADR-032
+    status-transition-attrs              ; ADR-034
+    status-history-attrs)))               ; ADR-034
 
 (defn install!
   "Transact the kernel schema into a connection. Idempotent — re-running

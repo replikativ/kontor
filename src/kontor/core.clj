@@ -129,7 +129,8 @@
                       "valuation-book"
                       "valuation-layer" "layer-consumption" "layer-adjustment"
                       "entity"
-                      "schedule" "schedule-occurrence"}
+                      "schedule" "schedule-occurrence"
+                      "status-transition" "status-history"}
                     (namespace k))))
          sort
          vec)))

@@ -12,6 +12,7 @@
 ;; into its own artifact without code changes — only deps.edn moves.
 {:paths ["src" "resources"
          "modules/partner/src"     "modules/partner/resources"
+         "modules/sales/src"       "modules/sales/resources"
          "modules/l10n-de/src"     "modules/l10n-de/resources"
          "modules/l10n-at/src"     "modules/l10n-at/resources"
          "modules/l10n-fr/src"     "modules/l10n-fr/resources"
@@ -58,6 +59,7 @@
  {:test
   {:extra-paths ["test" "test/resources"
                  "modules/partner/test"      "modules/partner/test/resources"
+                 "modules/sales/test"        "modules/sales/test/resources"
                  "modules/l10n-de/test"      "modules/l10n-de/test/resources"
                  "modules/l10n-at/test"      "modules/l10n-at/test/resources"
                  "modules/l10n-fr/test"      "modules/l10n-fr/test/resources"
@@ -82,6 +84,7 @@
   :dev
   {:extra-paths ["test" "test/resources" "dev"
                  "modules/partner/test"      "modules/partner/test/resources"
+                 "modules/sales/test"        "modules/sales/test/resources"
                  "modules/l10n-de/test"      "modules/l10n-de/test/resources"
                  "modules/l10n-at/test"      "modules/l10n-at/test/resources"
                  "modules/l10n-fr/test"      "modules/l10n-fr/test/resources"
