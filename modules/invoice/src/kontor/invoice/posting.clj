@@ -76,13 +76,11 @@
 ;; Debit/credit direction for (invoice-type, account-type)
 ;; ============================================================================
 
-(defn- debit-credit-for
-  "Compute debit/credit direction. Returns :debit or :credit.
-
-   This is a closed map today; will move to a data-driven registry
-   when kontor-procurement (Stage K) and kontor-revrec (later) need
-   extension points for :goods-receipt-accrual, :landed-cost,
-   :revenue-deferred, etc. Tracked in the post-Stage-J followups."
+(defn- default-direction-for
+  "Built-in fallback debit/credit direction map. ADR-041 introduces
+   the `:account-type-direction` kernel table for extension; this fn
+   serves as the fallback when no row is seeded for an
+   (invoice-type, account-type) pair."
   [invoice-type account-type]
   (let [sales-credit    #{:sales-revenue :sales-revenue-deferred
                           :sales-tax-payable :shipping-income
@@ -96,16 +94,38 @@
                           :withholding-tax-recoverable}]
     (case invoice-type
       :sales        (cond (contains? sales-credit account-type) :credit
-                          (contains? sales-debit  account-type) :debit
-                          :else (throw (ex-info "Unknown account-type for :sales invoice"
-                                                {:account-type account-type})))
+                          (contains? sales-debit  account-type) :debit)
       :purchase     (cond (contains? purchase-credit account-type) :credit
-                          (contains? purchase-debit  account-type) :debit
-                          :else (throw (ex-info "Unknown account-type for :purchase invoice"
-                                                {:account-type account-type})))
-      :credit-memo  (recur :sales account-type)
-      :debit-memo   (recur :purchase account-type)
-      (throw (ex-info "Unknown invoice-type" {:invoice-type invoice-type})))))
+                          (contains? purchase-debit  account-type) :debit)
+      :credit-memo  (default-direction-for :sales account-type)
+      :debit-memo   (default-direction-for :purchase account-type)
+      nil)))
+
+(defn debit-credit-for
+  "Look up debit/credit direction in the kernel :account-type-direction
+   table; fall back to the built-in default map (ADR-041 pattern).
+
+   Throws if neither table nor default knows the (invoice-type,
+   account-type) pair — consumers extending the vocabulary (e.g.
+   procurement adding :goods-receipt-accrual) must seed a row."
+  [db invoice-type account-type]
+  (or (d/q '[:find ?dir .
+             :in $ ?it ?at
+             :where
+             [?r :account-type-direction/invoice-type ?it]
+             [?r :account-type-direction/account-type ?at]
+             [?r :account-type-direction/direction ?dir]
+             [?r :account-type-direction/active true]]
+           db invoice-type account-type)
+      (default-direction-for invoice-type account-type)
+      (throw (ex-info "Unknown (invoice-type, account-type) for debit/credit"
+                      {:type :invoice/unknown-account-type-direction
+                       :invoice-type invoice-type
+                       :account-type account-type
+                       :remediation "Seed a :account-type-direction
+                                     row for this pair, or extend the
+                                     default map in kontor.invoice.
+                                     posting/default-direction-for."}))))
 
 ;; ============================================================================
 ;; Posting + transaction construction
@@ -168,7 +188,7 @@
                                     db {:override-account override
                                         :account-type account-type
                                         :entity entity-eid})
-                      direction    (debit-credit-for invoice-type account-type)
+                      direction    (debit-credit-for db invoice-type account-type)
                       signed-amt   (if (= direction :debit)
                                      amount
                                      (.negate ^java.math.BigDecimal amount))]

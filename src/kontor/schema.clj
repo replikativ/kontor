@@ -594,6 +594,92 @@
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
+(def ^:private side-effect-intent-attrs
+  ;; ADR-041: side-effect intent row pattern.
+  [{:db/ident       :side-effect-intent/key
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Idempotency key; convention is
+                     hash(entity-id, transition, attempt, payload).
+                     Worker dedupes on this."}
+
+   {:db/ident       :side-effect-intent/type
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":send-email | :send-edi | :send-peppol |
+                     :charge-card | :webhook | :notify-slack | …"}
+
+   {:db/ident       :side-effect-intent/payload
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "EDN or JSON blob the consumer interprets.
+                     Kernel doesn't parse."}
+
+   {:db/ident       :side-effect-intent/status
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":pending | :processing | :done | :failed | :abandoned"}
+
+   {:db/ident       :side-effect-intent/created-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :side-effect-intent/processing-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :side-effect-intent/processed-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :side-effect-intent/last-error
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :side-effect-intent/retry-count
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :side-effect-intent/max-retries
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :side-effect-intent/origin-history
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to :status-history row that produced this
+                     intent."}])
+
+(def ^:private account-type-direction-attrs
+  ;; ADR-041: debit/credit data table replacing hardcoded map.
+  [{:db/ident       :account-type-direction/invoice-type
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":sales | :purchase | :credit-memo | :debit-memo"}
+
+   {:db/ident       :account-type-direction/account-type
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "GL routing key; same vocabulary as
+                     :invoice-line/gl-account-type."}
+
+   {:db/ident       :account-type-direction/direction
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":debit | :credit"}
+
+   {:db/ident       :account-type-direction/active
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :account-type-direction/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:account-type-direction/invoice-type
+                     :account-type-direction/account-type]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity}])
+
 (def ^:private partner-tax-id-attrs
   ;; ADR-040: multi-tax-id-per-jurisdiction junction.
   [{:db/ident       :partner-tax-id/partner
@@ -2775,6 +2861,16 @@
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
+   ;; ADR-041: time-based transition extension.
+   {:db/ident       :status-transition/auto-after-millis
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Duration in milliseconds. When set, the
+                     kontor.status-machine/sweep-time-based! helper
+                     auto-applies this transition to entities that
+                     have been in the from-state longer than the
+                     duration. Nil = manual-only. ADR-041."}
+
    {:db/ident       :status-transition/identity
     :db/valueType   :db.type/tuple
     :db/tupleAttrs  [:status-transition/entity-type
@@ -3042,7 +3138,9 @@
     bank-account-attrs                    ; ADR-039
     partner-bank-account-attrs            ; ADR-039
     partner-tag-attrs                     ; ADR-039
-    partner-tax-id-attrs)))                ; ADR-040
+    partner-tax-id-attrs                  ; ADR-040
+    side-effect-intent-attrs              ; ADR-041
+    account-type-direction-attrs)))       ; ADR-041
 
 (defn install!
   "Transact the kernel schema into a connection. Idempotent — re-running

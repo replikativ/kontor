@@ -447,3 +447,74 @@
       (is (= 2 (count history)))
       (is (= ["first" "second"] (map :status-history/reason-note history))
           "history is oldest-first by changed-at"))))
+
+;; ============================================================================
+;; ADR-041 — Workflow extensions
+;; ============================================================================
+
+(deftest bulk-record-status-change
+  (install-ord-attr! *conn*)
+  (seed-ord-status-transitions! *conn*)
+  ;; Seed 5 entities in :created
+  (d/transact *conn*
+              (vec (for [i (range 5)]
+                     {:ord/code (str "O-BULK-" i)
+                      :ord/status :ord.status/created})))
+  (let [eids (d/q '[:find [?e ...]
+                    :where [?e :ord/status :ord.status/created]]
+                  (d/db *conn*))
+        change-specs (mapv (fn [eid]
+                             {:entity eid
+                              :entity-type :ord
+                              :facet :ord/status
+                              :to :ord.status/approved
+                              :reason :approved})
+                           eids)]
+    (sm/bulk-record-status-change! *conn* change-specs)
+    (let [db (d/db *conn*)
+          approved (d/q '[:find [?e ...]
+                          :where [?e :ord/status :ord.status/approved]]
+                        db)]
+      (testing "all 5 entities transitioned in one bulk call"
+        (is (= 5 (count approved))))
+      (testing "history rows written for each"
+        (let [all-history (d/q '[:find [?h ...]
+                                 :where
+                                 [?h :status-history/entity-type :ord]
+                                 [?h :status-history/to :ord.status/approved]]
+                               db)]
+          (is (= 5 (count all-history))))))))
+
+(deftest time-based-transition-sweep
+  (install-ord-attr! *conn*)
+  ;; Seed only the transition we need (don't call seed-ord-status-
+  ;; transitions! because it would seed the same (from, to) row
+  ;; without :auto-after-millis, and composite-tuple identity attrs
+  ;; can't be written-to directly to upsert).
+  (d/transact *conn*
+              [{:status-transition/entity-type :ord
+                :status-transition/facet :ord/status
+                :status-transition/from :ord.status/created
+                :status-transition/to :ord.status/cancelled
+                :status-transition/active true
+                :status-transition/auto-after-millis 1
+                :status-transition/name "Auto-cancel stale orders"}])
+  ;; Create an entity and a history row showing it entered :created
+  ;; well in the past
+  (d/transact *conn* [{:ord/code "O-STALE" :ord/status :ord.status/created}])
+  (let [eid (d/q '[:find ?e . :where [?e :ord/code "O-STALE"]] (d/db *conn*))]
+    (d/transact *conn*
+                [{:status-history/entity eid
+                  :status-history/entity-type :ord
+                  :status-history/facet :ord/status
+                  :status-history/to :ord.status/created
+                  :status-history/changed-at #inst "2025-01-01"}])
+    ;; Sleep briefly to ensure the threshold (now - 1ms) exceeds
+    ;; the history's wall-clock time
+    (Thread/sleep 10)
+    (let [result (sm/sweep-time-based! *conn*)
+          db (d/db *conn*)]
+      (testing "sweeper applied the auto-transition"
+        (is (= :ord.status/cancelled (sm/current-status db eid :ord/status))))
+      (testing "sweeper returned a summary"
+        (is (some #(contains? (:entities-applied %) eid) result))))))

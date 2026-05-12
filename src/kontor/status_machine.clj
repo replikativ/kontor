@@ -306,7 +306,9 @@
                            check.
      :changed-at         — instant, default now.
      :changed-by-uid     — ref to :create/uid; recommended.
-     :reason             — free-text rationale.
+     :reason             — keyword codified reason (ADR-038).
+     :reason-note        — free-text note alongside :reason (ADR-038).
+     :supporting-doc     — ref to :audit-doc (ADR-038).
      :origin-transaction — ref to kernel :transaction that caused
                            the change.
 
@@ -314,6 +316,93 @@
    use `record-status-change-tx-data` directly."
   [conn opts]
   (d/transact conn (record-status-change-tx-data (d/db conn) opts)))
+
+;; ============================================================================
+;; ADR-041 — Bulk transitions
+;; ============================================================================
+
+(defn bulk-record-status-change-tx-data
+  "Validate + build tx-data for N status changes in ONE tx. Returns a
+   single tx-data vector. If any change-spec fails validation, the
+   whole batch is rejected (no partial application).
+
+   Caller transacts the result, or composes with other tx-data (e.g.
+   downstream side-effect-intent rows)."
+  [db change-specs]
+  (vec (mapcat #(record-status-change-tx-data db %) change-specs)))
+
+(defn bulk-record-status-change!
+  "Thin wrapper that transacts what `bulk-record-status-change-tx-data`
+   returns."
+  [conn change-specs]
+  (d/transact conn (bulk-record-status-change-tx-data (d/db conn) change-specs)))
+
+;; ============================================================================
+;; ADR-041 — Time-based transition sweeper
+;; ============================================================================
+
+(defn- entities-eligible-for
+  "Find entities currently in `from-state` for the given (entity-type,
+   facet) where the most recent transition into from-state happened
+   more than `millis` ms ago.
+
+   Uses :status-history rows: the entity is in from-state iff its
+   latest history row to from-state is more recent than any later
+   transition out of from-state. Bitemporal: counts wall-clock time
+   from :status-history/changed-at, not datahike tx-time."
+  [db entity-type facet from-state millis]
+  (let [threshold (java.util.Date. (- (System/currentTimeMillis) millis))
+        rows (d/q '[:find ?entity ?from-when
+                    :in $ ?et ?facet ?from
+                    :where
+                    [?entity ?facet ?from]
+                    [?h :status-history/entity ?entity]
+                    [?h :status-history/entity-type ?et]
+                    [?h :status-history/facet ?facet]
+                    [?h :status-history/to ?from]
+                    [?h :status-history/changed-at ?from-when]]
+                  db entity-type facet from-state)]
+    (->> rows
+         (filter (fn [[_ from-when]] (.before from-when threshold)))
+         (map first)
+         set)))
+
+(defn sweep-time-based!
+  "Scan :status-transition rows with :auto-after-millis set. For each
+   such transition, find entities currently in from-state where the
+   most recent transition into from-state was longer than the duration
+   ago. Apply the transition with :reason :system-scheduled.
+
+   Returns a vector of {:transition ... :entities-applied #{...}}
+   maps for visibility."
+  [conn]
+  (let [db (d/db conn)
+        transitions (d/q '[:find ?t ?et ?facet ?from ?to ?millis
+                           :where
+                           [?t :status-transition/auto-after-millis ?millis]
+                           [?t :status-transition/active true]
+                           [?t :status-transition/entity-type ?et]
+                           [?t :status-transition/facet ?facet]
+                           [?t :status-transition/from ?from]
+                           [?t :status-transition/to ?to]]
+                         db)]
+    (mapv (fn [[_ et facet from to millis]]
+            (let [eligible (entities-eligible-for db et facet from millis)
+                  change-specs (mapv (fn [eid]
+                                       {:entity eid
+                                        :entity-type et
+                                        :facet facet
+                                        :to to
+                                        :reason :system-scheduled})
+                                     eligible)]
+              (when (seq change-specs)
+                (bulk-record-status-change! conn change-specs))
+              {:entity-type et
+               :facet facet
+               :from from
+               :to to
+               :entities-applied eligible}))
+          transitions)))
 
 ;; ============================================================================
 ;; Queries

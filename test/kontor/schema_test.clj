@@ -38,7 +38,8 @@
     "audit-doc" "approval-policy"
     "partner-merge" "bank-account"
     "partner-bank-account" "partner-tag"
-    "partner-tax-id"})
+    "partner-tax-id"
+    "side-effect-intent" "account-type-direction"})
 
 (deftest schema-loads-into-fresh-db
   (testing "Kernel schema transacts cleanly into a fresh in-memory DB"

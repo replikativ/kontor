@@ -3533,6 +3533,244 @@ Date: 2026-05-12.
 
 ---
 
+## ADR-041 — Workflow extensions: time-based transitions, side-effect intents, bulk API, account-type-direction table
+
+**Decision.** Land four workflow primitives that complete the Stage J-2 cross-cutting pass and pave the way for Stage K (kontor-procurement):
+
+1. **Time-based transitions** — `:status-transition/auto-after-millis` attr + `kontor.status-machine/sweep-time-based!` sweeper. Universal customer expectation (auto-cancel after 48h, auto-archive after 90d). Salesforce, Temporal, Camunda all ship; we were the only system without.
+2. **Side-effect intent rows** — `:side-effect-intent` kernel entity + `kontor.side-effect` dispatcher namespace. Caller writes status-history + intent row in the SAME tx; a worker drains intents and marks them done. Prevents double-emails / double-EDI-fires on retry. Idempotency by key.
+3. **Bulk transition API** — `kontor.status-machine/bulk-record-status-change-tx-data` returning composable tx-data for N entities in one tx. Bench-friendly, audit-correct (one history row per entity).
+4. **`:account-type-direction` data table** (kernel) — moves the debit/credit map from a hardcoded `case` in `kontor.invoice.posting` to a queryable kernel entity. Procurement (kontor-procurement, Stage K) extends with `:goods-receipt-accrual`, `:landed-cost`, `:price-variance`, `:exchange-variance`. Revrec extends with `:revenue-recognized`, `:revenue-allocated`. Each is a transact, not a code edit.
+
+This is the FOURTH and final Stage J-2 cross-cutting primitive ADR (per ADR-037). It resolves the workflow-extension + procurement-forward-compat gaps surfaced by the status-machine market-pain research + the local code review.
+
+### Why these four primitives belong in one ADR
+
+The four share a common theme: **make extensible what was hardcoded.** Time-based transitions extend the `:status-transition` table; intent rows extend `record-status-change-tx-data` composition; bulk API extends throughput; debit/credit table extends GL-routing semantics. Each addresses an extensibility gap that future companions (procurement, revrec, return, payment) need.
+
+### Schema
+
+#### Time-based transitions (kernel extension)
+
+Add one attribute to the existing `:status-transition` entity (ADR-034):
+
+```clojure
+:status-transition/auto-after-millis  long
+                                      ;; Duration in milliseconds.
+                                      ;; When set, the sweeper auto-
+                                      ;; applies this transition to
+                                      ;; entities that have been in
+                                      ;; the from-state longer than
+                                      ;; the duration. Nil = manual
+                                      ;; only.
+```
+
+The sweeper helper:
+
+```clojure
+(defn sweep-time-based!
+  "Scan all :status-transition rows that have :auto-after-millis set.
+   For each, find entities currently in the from-state and where
+   tx-time of the last status-history row (or entity creation if no
+   history) is older than `(now - auto-after-millis)`. Apply the
+   transition for each, with :reason :system-scheduled."
+  [conn]
+  ...)
+```
+
+Bitemporal-friendly: the sweeper queries by tx-time, not wall-clock — missed sweeps replay correctly. Consumer runs the sweeper on a schedule (datahike's `:keep-history?` makes this idempotent).
+
+#### Side-effect intent rows (kernel entity)
+
+```clojure
+:side-effect-intent/key            string :db.unique/identity
+                                  ;; Caller-supplied idempotency key.
+                                  ;; Convention: hash of (entity-id,
+                                  ;; transition, attempt-no, payload-
+                                  ;; hash). Worker dedupes on this.
+
+:side-effect-intent/type           keyword
+                                  ;; :send-email | :send-edi |
+                                  ;; :send-peppol | :charge-card |
+                                  ;; :webhook | :notify-slack | …
+
+:side-effect-intent/payload        string
+                                  ;; EDN or JSON blob the consumer
+                                  ;; interprets. Kernel doesn't parse.
+
+:side-effect-intent/status         keyword
+                                  ;; :pending | :processing | :done |
+                                  ;; :failed | :abandoned
+
+:side-effect-intent/created-at     instant
+:side-effect-intent/processing-at  instant     ; when worker claimed
+:side-effect-intent/processed-at   instant     ; when worker finished
+:side-effect-intent/last-error     string      ; for :failed
+:side-effect-intent/retry-count    long
+:side-effect-intent/max-retries    long
+:side-effect-intent/origin-history ref → :status-history
+                                  ;; The status-history row that
+                                  ;; produced this intent.
+```
+
+The dispatcher pattern (in `kontor.side-effect`):
+
+```clojure
+;; Caller composes (status-change tx-data + side-effect intent) in ONE tx:
+(d/transact conn
+            (concat (sm/record-status-change-tx-data db change-spec)
+                    [{:side-effect-intent/key (str entity-id "-" transition "-1")
+                      :side-effect-intent/type :send-email
+                      :side-effect-intent/payload (pr-str {:to ... :subject ...})
+                      :side-effect-intent/status :pending
+                      :side-effect-intent/created-at (java.util.Date.)
+                      :side-effect-intent/origin-history -1}]))
+
+;; Worker (consumer-side) drains:
+(let [intents (kontor.side-effect/pending db {:type :send-email})]
+  (doseq [intent intents]
+    (try
+      (do-the-email-thing intent)
+      (mark-done! conn intent))
+      (catch Exception e
+        (mark-failed! conn intent (.getMessage e))))))
+```
+
+The kernel ships only the entity + the dispatcher namespace (queries + state-machine for the intent itself). The actual side-effect executors (email senders, EDI clients, etc.) are consumer-side.
+
+#### Bulk transition API (helper, no schema)
+
+```clojure
+(defn bulk-record-status-change-tx-data
+  "Validate + build tx-data for N status changes in one tx. Each
+   change-spec is validated independently; if any fail, the whole
+   batch is rejected.
+
+   Returns a single tx-data vector — caller transacts it (or composes
+   with other tx-data, same as record-status-change-tx-data).
+
+   Optimization: applicable-policies is cached per (entity-type,
+   facet, from, to, org) tuple within the call."
+  [db change-specs]
+  ...)
+```
+
+#### `:account-type-direction` data table (kernel)
+
+```clojure
+:account-type-direction/invoice-type  keyword
+                                      ;; :sales | :purchase |
+                                      ;; :credit-memo | :debit-memo
+:account-type-direction/account-type  keyword
+                                      ;; :sales-revenue |
+                                      ;; :sales-tax-payable |
+                                      ;; :goods-receipt-accrual | …
+:account-type-direction/direction     keyword
+                                      ;; :debit | :credit
+:account-type-direction/active        boolean
+:account-type-direction/identity      tuple [invoice-type, account-type]
+                                      unique
+```
+
+`kontor.invoice.posting/debit-credit-for` rewrites to:
+
+```clojure
+(defn debit-credit-for
+  "Look up the (invoice-type, account-type) → :debit | :credit map
+   from the :account-type-direction kernel table. Falls back to the
+   built-in default map for un-seeded entries (so consumers don't
+   need to seed the canonical set just to post a vanilla invoice)."
+  [db invoice-type account-type]
+  (or (d/q '[:find ?dir .
+             :in $ ?it ?at
+             :where
+             [?r :account-type-direction/invoice-type ?it]
+             [?r :account-type-direction/account-type ?at]
+             [?r :account-type-direction/direction ?dir]
+             [?r :account-type-direction/active true]]
+           db invoice-type account-type)
+      (default-direction-for invoice-type account-type)))
+```
+
+`default-direction-for` is the existing hardcoded map (with the ADR-040 additions for `:sales-revenue-deferred`, `:withholding-tax-*`). It serves as the fallback when no row is seeded.
+
+This is the SAME pattern as `kontor.status-machine/legal-transition?` (ADR-034) + `kontor.invoice.posting/resolve-gl-account` (ADR-036): consult a queryable table first; fall back to a sensible default if not seeded. Composition with ADR-031 per-org overrides: consumers can seed per-org direction rules if a regional GAAP requires opposite-side posting (rare but real).
+
+### Inverse-pair role-direction (documentation only)
+
+The status-machine pain research flagged that `:bill-to` is ambiguous: on a sales order it means "the customer being billed"; on a purchase order it means "we are the bill-to (the buyer's accounting view)." kontor's choice (per ADR-035): **`:order-role/role-type` is always buyer-perspective**. On a sales order, `:customer` is the customer; on a purchase order, `:supplier` is the supplier. Both use `:bill-to` to mean "the party being charged from our books" (i.e., the customer for sales, ourselves for purchase).
+
+This convention is documented in:
+- ADR-033 vocabulary section (canonical role-types).
+- ADR-035 implications section.
+- `kontor.partner` namespace docstring.
+- `kontor.sales` namespace docstring.
+
+No schema change; just align documentation. kontor-procurement (Stage K) inherits without redefining.
+
+### Helpers
+
+#### `kontor.status-machine` (extends existing)
+
+- `sweep-time-based!` — scans and applies auto-transitions.
+- `bulk-record-status-change-tx-data` — composable batch variant.
+- `bulk-record-status-change!` — thin wrapper that transacts the bulk tx-data.
+
+#### `kontor.side-effect` (new namespace)
+
+- `by-key` / `resolve-intent`.
+- `pending` — list `:pending` intents, optionally filtered by `:type`.
+- `claim!` — atomic state transition `:pending → :processing`.
+- `mark-done!` — `:processing → :done` with `:processed-at`.
+- `mark-failed!` — `:processing → :failed` with `:last-error` + retry-count bump.
+- `mark-abandoned!` — terminal failure (no more retries).
+
+#### `kontor.invoice.posting` (refactor)
+
+- `debit-credit-for` rewritten as documented above.
+- `default-direction-for` private fn holding the fallback map.
+- Public surface unchanged; the rewrite is backward-compatible.
+
+### Bootstrap
+
+No seeds. Consumers transact their own time-based transitions, intent types, account-type-direction overrides.
+
+### Alternatives considered
+
+- **Time-based transitions as a cron-style ADR-032 `:schedule`.** Tempting (we already have schedules), but schedules drive `:schedule-occurrence` rows tied to a posting amount. Time-based transitions drive `:status-history` rows tied to a state change. Different shape; conflating would muddy both. Keep separate.
+- **Side-effects as datahike transactor middleware** (every transact triggers configured side-effect dispatchers). Rejected: defeats the bitemporal "tx-data is data" model. Intent rows are queryable + auditable; middleware fires-and-forgets.
+- **Side-effect intent state machine** with full ADR-034 status-transition rows. Rejected for v1: the intent's lifecycle is simple (`:pending → :processing → :done | :failed`); doesn't need the full table-driven machinery. If it grows complex (priorities, deadlines, fan-out), promote later.
+- **`:account-type-direction` as Clojure data (a registry of fns).** Rejected: ADR-037's whole "vocabulary as data" principle. Procurement needs per-tenant extension; can't be code.
+- **Bulk transitions as a separate `:bulk-status-change` entity** (one row per batch with N child rows). Rejected: existing `:status-history` rows already form an implicit batch (same tx-time). Datahike's tx-time + `:db/txInstant` query give us bulk-grouping for free.
+- **Inverse-pair role-direction as schema-level enum constraint.** Rejected: role vocabulary is an open keyword set (consumers extend). A constraint would block extensions. Documentation discipline is right.
+
+### Implications
+
+- 1 new kernel attr on `:status-transition` (`:auto-after-millis`).
+- 1 new kernel entity (`:side-effect-intent`, 10 attrs).
+- 1 new kernel entity (`:account-type-direction`, 5 attrs).
+- 1 new kernel namespace (`kontor.side-effect`).
+- Refactor of `kontor.invoice.posting/debit-credit-for` (backward-compatible).
+- ~3 new helpers in `kontor.status-machine` (`sweep-time-based!`, `bulk-record-status-change-tx-data`, `bulk-record-status-change!`).
+- Test coverage: time-based sweep fires the transition, idempotent on re-run; intent-row create + claim + mark-done round-trip; bulk-transition validates + writes N history rows in one tx; account-type-direction override beats the default.
+- Forward-compat: Stage K (kontor-procurement) seeds new `:account-type-direction` rows for `:goods-receipt-accrual`, `:landed-cost`, `:price-variance`, `:exchange-variance`. Stage M (kontor-revrec) seeds rows for revenue lifecycle.
+- Forward-compat: future `kontor-collections` (Stage L) seeds time-based transitions for auto-aging bucket promotion (`:order/status` → `:past-due-30 → :past-due-60` via `:auto-after-millis`).
+
+### Stage J-2 close-out
+
+This ADR completes the Stage J-2 cross-cutting primitive pass started by ADR-037. The four ADRs (038-041) collectively address the ~30 P1 items from research note 13:
+
+- ADR-038 audit + governance: codified reasons, supporting-docs, SoD policy.
+- ADR-039 master-data: merge, bank-account, credit, tags, KYC.
+- ADR-040 jurisdiction: multi-tax-id, reverse-charge, tax-inclusive, recognition, withholding, clearance lifecycle.
+- ADR-041 workflow: time-based, side-effect intents, bulk, account-type-direction.
+
+**Stage K (kontor-procurement)** can now start with the substrate it needs: `:account-type-direction` for procurement-specific GL routing, `:requirement` entity scaffolded on ADR-035 order shape, 3-way match using ADR-040 `:invoice-line/order-item` linkage. Per ADR-037 hybrid plan: Stage K ~2-3 weeks, then Stages L+ at faster cadence.
+
+Date: 2026-05-12.
+
+---
+
 ## Decisions deferred (open)
 
 The following choices are NOT yet locked. Update this section as we converge.
