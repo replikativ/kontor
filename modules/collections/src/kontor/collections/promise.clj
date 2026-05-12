@@ -1,0 +1,216 @@
+(ns kontor.collections.promise
+  "Payment-promise (PTP) lifecycle — ADR-043.
+
+   A `:payment-promise` is a first-class entity capturing a
+   customer's verbal/written commitment to pay. Distinguished from
+   `:payment-application` (which records what actually moved): the
+   promise is the *intent*; the application is the *fact*.
+
+   Suppresses dunning while `:status :open` (`kontor.collections.
+   dunning` consults this).
+
+   Sweeper: `sweep-broken-promises!` flips `:open → :broken` when
+   the `:promised-by-date` has passed without a matching
+   `:payment-application`."
+  (:require [datahike.api :as d]
+            [kontor.status-machine :as sm]))
+
+;; ============================================================================
+;; Resolution
+;; ============================================================================
+
+(defn by-external-id
+  [db external-id]
+  (d/q '[:find ?e .
+         :in $ ?xid
+         :where [?e :payment-promise/external-id ?xid]]
+       db external-id))
+
+(defn resolve-promise
+  [db spec]
+  (cond
+    (nil? spec)    nil
+    (string? spec) (by-external-id db spec)
+    :else          spec))
+
+(defn pull-promise
+  [db spec]
+  (when-let [eid (resolve-promise db spec)]
+    (d/pull db
+            '[* {:payment-promise/case [:collection-case/code]
+                 :payment-promise/invoice [:invoice/external-id]
+                 :payment-promise/commodity [:commodity/symbol]
+                 :payment-promise/captured-by-uid [:create/uid]
+                 :payment-promise/supporting-doc [:audit-doc/code]}]
+            eid)))
+
+;; ============================================================================
+;; Queries
+;; ============================================================================
+
+(defn open-promises-for-case
+  "All :open promises on a case. Used by dunning to suppress
+   emissions."
+  [db case-eid]
+  (->> (d/q '[:find [?p ...]
+              :in $ ?case
+              :where
+              [?p :payment-promise/case ?case]
+              [?p :payment-promise/status :open]]
+            db case-eid)
+       (map #(pull-promise db %))
+       vec))
+
+(defn open-promises-for-invoice
+  [db invoice-eid]
+  (->> (d/q '[:find [?p ...]
+              :in $ ?inv
+              :where
+              [?p :payment-promise/invoice ?inv]
+              [?p :payment-promise/status :open]]
+            db invoice-eid)
+       (map #(pull-promise db %))
+       vec))
+
+(defn any-open-promise-for-partner-invoice?
+  "True iff there's any :open promise (case-level OR invoice-level)
+   that would suppress dunning for the given invoice."
+  [db case-eid invoice-eid]
+  (or (seq (open-promises-for-case db case-eid))
+      (seq (open-promises-for-invoice db invoice-eid))))
+
+;; ============================================================================
+;; Transactors
+;; ============================================================================
+
+(defn record-promise!
+  "Capture a PTP. Required opts: :external-id, :case, :amount,
+   :commodity, :promised-by-date, :captured-by-uid.
+
+   Optional: :invoice (omit for case-level), :captured-via, :notes,
+   :supporting-doc."
+  [conn {:keys [external-id case invoice amount commodity
+                promised-by-date captured-by-uid captured-via notes
+                supporting-doc]}]
+  (when-not external-id      (throw (ex-info ":external-id required" {})))
+  (when-not case             (throw (ex-info ":case required" {})))
+  (when-not amount           (throw (ex-info ":amount required" {})))
+  (when-not commodity        (throw (ex-info ":commodity required" {})))
+  (when-not promised-by-date (throw (ex-info ":promised-by-date required" {})))
+  (when-not captured-by-uid  (throw (ex-info ":captured-by-uid required" {})))
+  (let [db (d/db conn)
+        recorded-at (java.util.Date.)
+        ptp-tempid "ptp-1"
+        row (cond-> {:db/id ptp-tempid
+                     :payment-promise/external-id external-id
+                     :payment-promise/case case
+                     :payment-promise/amount amount
+                     :payment-promise/commodity commodity
+                     :payment-promise/promised-by-date promised-by-date
+                     :payment-promise/captured-by-uid captured-by-uid
+                     :payment-promise/status :open
+                     :payment-promise/recorded-at recorded-at}
+              invoice        (assoc :payment-promise/invoice invoice)
+              captured-via   (assoc :payment-promise/captured-via captured-via)
+              notes          (assoc :payment-promise/notes notes)
+              supporting-doc (assoc :payment-promise/supporting-doc supporting-doc))
+        ;; Status-history nil → :open via the status machine
+        ;; (atomic).
+        status-tx (sm/record-status-change-tx-data
+                   db
+                   {:entity ptp-tempid
+                    :entity-type :payment-promise
+                    :facet :payment-promise/status
+                    :from :nil
+                    :to :open
+                    :changed-at recorded-at
+                    :changed-by-uid captured-by-uid
+                    :reason :promise-recorded})
+        all-tx (into [row] status-tx)]
+    (d/transact conn all-tx)))
+
+(defn mark-promise-kept!
+  "Promise → :kept (a :payment-application reduced the open balance
+   by enough). Caller passes the matching application eid via
+   :matching-application if available; we record it as a reference
+   for audit."
+  [conn {:keys [promise matching-application changed-by-uid reason
+                reason-note]}]
+  (let [eid (resolve-promise (d/db conn) promise)
+        _ (when-not eid (throw (ex-info "Promise not found" {:spec promise})))]
+    (sm/record-status-change! conn
+                              (cond-> {:entity eid
+                                       :entity-type :payment-promise
+                                       :facet :payment-promise/status
+                                       :to :kept
+                                       :changed-by-uid changed-by-uid}
+                                reason      (assoc :reason (or reason :promise-kept))
+                                reason-note (assoc :reason-note reason-note)))))
+
+(defn mark-promise-broken!
+  "Promise → :broken. Usually fired by `sweep-broken-promises!` when
+   :promised-by-date passes without a matching payment, but can be
+   called manually."
+  [conn {:keys [promise changed-by-uid reason reason-note]}]
+  (let [eid (resolve-promise (d/db conn) promise)
+        _ (when-not eid (throw (ex-info "Promise not found" {:spec promise})))]
+    (sm/record-status-change! conn
+                              (cond-> {:entity eid
+                                       :entity-type :payment-promise
+                                       :facet :payment-promise/status
+                                       :to :broken
+                                       :changed-by-uid changed-by-uid}
+                                reason      (assoc :reason (or reason :promise-broken))
+                                reason-note (assoc :reason-note reason-note)))))
+
+(defn renegotiate!
+  "Promise → :renegotiated (replaced by a new promise). Doesn't
+   write the new promise — caller composes both."
+  [conn {:keys [promise changed-by-uid reason reason-note]}]
+  (let [eid (resolve-promise (d/db conn) promise)
+        _ (when-not eid (throw (ex-info "Promise not found" {:spec promise})))]
+    (sm/record-status-change! conn
+                              (cond-> {:entity eid
+                                       :entity-type :payment-promise
+                                       :facet :payment-promise/status
+                                       :to :renegotiated
+                                       :changed-by-uid changed-by-uid}
+                                reason      (assoc :reason (or reason :renegotiated))
+                                reason-note (assoc :reason-note reason-note)))))
+
+;; ============================================================================
+;; Sweeper (per ADR-041 :auto-after-millis pattern, but date-driven)
+;; ============================================================================
+
+(defn sweep-broken-promises!
+  "Find all :open promises whose :promised-by-date is in the past
+   relative to `:now` (default today) and flip them to :broken.
+
+   Caller is responsible for the system-actor :changed-by-uid.
+
+   Real-world wiring: a daily cron or sweep job runs this; the
+   broken-promise transitions can in turn re-open the parent case
+   via :collection-case/state :promised → :open. This fn handles only
+   the promise side; case-side transition is a separate call."
+  [conn {:keys [now system-uid]
+         :or {now (java.util.Date.)}}]
+  (when-not system-uid
+    (throw (ex-info ":system-uid required for sweep audit-trail" {})))
+  (let [db (d/db conn)
+        now-ms (.getTime ^java.util.Date now)
+        open-eids (d/q '[:find [?p ...]
+                         :in $ ?now-ms
+                         :where
+                         [?p :payment-promise/status :open]
+                         [?p :payment-promise/promised-by-date ?by]
+                         [(.getTime ^java.util.Date ?by) ?by-ms]
+                         [(< ?by-ms ?now-ms)]]
+                       db now-ms)]
+    (doseq [eid open-eids]
+      (mark-promise-broken! conn
+                            {:promise eid
+                             :changed-by-uid system-uid
+                             :reason :system-scheduled
+                             :reason-note "Sweeper detected lapsed :promised-by-date"}))
+    {:swept (count open-eids)
+     :affected open-eids}))
