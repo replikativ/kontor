@@ -4264,6 +4264,387 @@ Date: 2026-05-12.
 
 ---
 
+## ADR-043 — `kontor-collections`: AR collections + dunning + partial-payment kernel primitive
+
+**Decision.** Land Stage L (`kontor-collections` companion under `modules/collections/`) covering AR collections workflow: aging + dunning policy + payment-promise + dispute lifecycle + credit-hold overlay + collector assignment + Reg-F-compliant frequency cap. Plus a kernel-level `:payment-application` primitive that closes the partial-payment scope-cut at `src/kontor/reconciliation.clj:38-47` (revrec, subscription, and any AR consumer needs this; collections is just the loudest customer).
+
+### Why now
+
+Three research-before agents (research note 15) converged: OFBiz has no collections module after ~20 years of OSS history — kontor designs into a vacuum where competitors carry the design vocabulary. kontor's substrate is unusually ready: `balance.clj` + `ledger.clj` + `reconciliation.clj` + `status_machine.clj` + `audit_doc.clj` + `side_effect.clj` + ADR-039 credit-limit primitives all compose. The 35-item market-pain list clusters on substrate-natural fixes — bitemporal dispute, sum-to-zero unapplied-cash gating, state-machine-as-data PTPs, replayable allocation, per-customer term-relative aging, frequency-cap as policy-predicate. The one hard kernel gap (partial-payment) is also the prerequisite for Stage M (revrec) and Stage N (subscription); shipping it here unblocks the whole O2C chain.
+
+### Roadmap repositioning
+
+Stage L was `kontor-asset` per `doc/roadmap.md:209` but `kontor-collections` per `doc/decisions.md` (ADR-037, ADR-039, ADR-041, ADR-042). The conflict resolves in favor of collections: it's the natural continuation of the Stage K P2P substrate into O2C, and Stage M revrec consumes the partial-payment primitive collections lands. `kontor-asset` becomes **Stage L′** (depreciation register + ADR-032 `:schedule` consumer; ~2 weeks). Roadmap updated.
+
+### Kernel-side: `:payment-application` (the prerequisite)
+
+`reconciliation.clj` currently flips invoices `:sent → :paid` only on full settlement; partial payments either match-and-disappear (lossy) or remain fully-open (inaccurate aging). Stage L adds a kernel primitive.
+
+#### Schema (kernel)
+
+```clojure
+:payment-application/payment       ref → :transaction (the cash receipt tx)
+:payment-application/invoice       ref → :invoice
+:payment-application/amount        bigdec (signed: + reduces buyer's open AR;
+                                            − for an allocation reversal)
+:payment-application/commodity     ref → :commodity
+:payment-application/applied-at    instant (when the application was recorded)
+:payment-application/applied-by-uid ref → :create/uid
+:payment-application/strategy      keyword: :fifo | :customer-instruction
+                                            | :proportional | :cherry-pick
+:payment-application/reversal-of   ref → :payment-application (optional;
+                                            null for forward allocations,
+                                            set for replayable undoes)
+:payment-application/identity      tuple [payment invoice applied-at]
+                                            unique
+```
+
+The composite identity tuple + datahike's tx-time = free allocation replay: to "undo" an application, transact a new row with `:reversal-of` pointing at the original and `:amount` negated. The bitemporal query "what allocations applied to invoice X as of date D" answers itself.
+
+#### Helpers (`src/kontor/payment_application.clj`)
+
+```clojure
+(apply-payment! conn {:payment :invoice :amount :strategy :applied-by-uid ...})
+(applications-of db invoice-eid {:as-of-tx :as-of-valid})
+(unapplied-cash-balance db partner-eid {:as-of-tx :as-of-valid})
+;; Replayable reversal of a prior application.
+(reverse-application! conn application-eid {:reason :reason-note :applied-by-uid})
+;; FIFO allocation across N open invoices for a payment.
+(allocate-fifo! conn {:payment :partner :total-amount :applied-by-uid
+                      :exclude-disputed? boolean})
+```
+
+#### Aging extension (`src/kontor/aging.clj`)
+
+Existing hardcoded `:transaction/due-date` becomes one of three aging methods:
+
+```clojure
+(aging-rows db {:method :due-date | :invoice-date | :statement-date
+                :buckets ...
+                :as-of-valid ...
+                :partner-payment-terms ; optional map (partner-eid → days)
+                                       ; for per-customer term-relative buckets
+                ...})
+```
+
+`open-amount` per invoice is now `(invoice/total-gross − sum of applied-amounts as-of)`. Closes the `reconciliation.clj:38-47` scope-cut. Bitemporal: aging at `:as-of-valid date-D` reads applications that were `:applied-at ≤ D`.
+
+#### Invoice status extension
+
+The kernel status machine grows one transition: `:sent → :partially-paid` (when an application reduces but doesn't close). `:partially-paid → :paid` on final application; `:partially-paid → :partially-paid` legal for additional applications. The existing `:sent → :paid` keeps working for full-payment flows.
+
+### Companion-side: `kontor-collections`
+
+#### Entities
+
+```
+:collection-case             — the workflow root, one open case per (partner, entity)
+  /code                      — string identity
+  /partner                   — ref → :partner
+  /entity                    — ref → :entity (ADR-031 scope)
+  /state                     — facet, ADR-034
+  /opened-at                 — instant
+  /closed-at                 — instant
+  /assigned-collector        — ref → :create/uid
+  /collections-segment       — keyword: :strategic | :standard | :small | …
+  /strategy                  — keyword: :reminder-only | :phone | :legal
+                                        | :external-agency
+  /total-overdue             — bigdec (denormed for fast filter; nightly sweep)
+  /oldest-invoice            — ref → :invoice (denormed)
+
+:payment-promise             — the PTP, first-class
+  /case                      — ref → :collection-case
+  /invoice                   — ref → :invoice (optional: case-level promises)
+  /amount                    — bigdec
+  /commodity                 — ref → :commodity
+  /promised-by-date          — instant
+  /captured-by-uid           — ref → :create/uid
+  /captured-via              — keyword: :phone | :email | :portal | :api
+  /status                    — facet, ADR-034
+                                #{:open :kept :broken :renegotiated :cancelled}
+
+:dispute                     — invoice (or line) dispute, first-class
+  /invoice                   — ref → :invoice
+  /scope                     — ref to invoice OR ref to :invoice-line
+                              (line-level dispute per market-pain #18)
+  /disputed-amount           — bigdec (subset of invoice total)
+  /reason-code               — keyword (extensible per l10n)
+                                #{:pricing :short-ship :damaged :duplicate-bill
+                                  :tax :credit-misapplied :unauthorized :other}
+  /opened-at                 — instant
+  /opened-by-uid             — ref → :create/uid
+  /sla-deadline              — instant (derived from segment + reason)
+  /resolved-at               — instant
+  /resolution                — keyword #{:credit-issued :customer-conceded
+                                         :written-off :no-action}
+  /state                     — facet, ADR-034
+                                #{:open :under-review :resolved :escalated}
+
+:credit-hold                 — per-entity overlay; default partner scalar stays
+  /partner                   — ref → :partner
+  /entity                    — ref → :entity (ADR-031 scope)
+  /reason-code               — keyword
+                                #{:overdue-threshold :dispute :insurer-decision
+                                  :manual :compliance :external-agency}
+  /placed-at                 — instant
+  /placed-by-uid             — ref → :create/uid
+  /released-at               — instant
+  /released-by-uid           — ref → :create/uid
+  /approver-uid              — ref → :create/uid (manager who signed off)
+  /expires-at                — instant (auto-release; nil = manual-only)
+  /supporting-doc            — ref → :audit-doc
+  /identity                  — tuple [partner entity placed-at]
+
+:dunning-policy              — per-(entity, segment) cadence config
+  /code                      — string identity
+  /entity                    — ref → :entity
+  /applies-to-segment        — keyword (matches :collection-case/segment)
+  /levels                    — vec of {:trigger-days N
+                                       :template-ref keyword
+                                       :late-fee-pct decimal?
+                                       :late-fee-fixed decimal?}
+  /frequency-cap-window-days — int (Reg-F default 7)
+  /frequency-cap-max-events  — int (Reg-F default 7)
+  /pause-on-dispute?         — boolean (default true)
+  /pause-on-open-promise?    — boolean (default true)
+  /active                    — boolean
+
+:dunning-event               — one row per emission attempt
+  /case                      — ref → :collection-case
+  /invoice                   — ref → :invoice (optional; case-level emissions)
+  /level                     — int (ordinal, no enum cap)
+  /scheduled-at              — instant
+  /sent-at                   — instant (nil = still pending)
+  /channel                   — keyword: :email | :letter | :phone | :portal
+  /template-ref              — keyword
+  /locale                    — string (BCP-47, e.g. "de-DE")
+  /audit-doc                 — ref → :audit-doc (the rendered letter PDF/HTML)
+  /side-effect-intent        — ref → :side-effect-intent
+                                (the outgoing-email queue entry)
+  /skipped?                  — boolean (true when frequency-cap or dispute pause)
+  /skip-reason               — keyword
+                                #{:frequency-cap :open-dispute :open-promise
+                                  :unapplied-cash-pending :credit-hold-released}
+  /identity                  — tuple [case invoice level scheduled-at]
+
+:dunning-pause               — explicit pause record with reason
+  /case                      — ref → :collection-case
+  /reason-code               — keyword
+                                #{:dispute :ptp-active :holiday-freeze
+                                  :key-account-exception :legal-hold}
+  /placed-at                 — instant
+  /placed-by-uid             — ref → :create/uid
+  /expires-at                — instant (auto-resume; nil = manual-only)
+  /supporting-doc            — ref → :audit-doc
+```
+
+#### State machines (ADR-034 seeds)
+
+`:collection-case/state`:
+```
+nil → :open
+:open → :dunning-l1 → :dunning-l2 → … (unbounded levels)
+:open → :promised (PTP accepted; pauses dunning)
+:open → :disputed (dispute opened; pauses dunning)
+:disputed → :resolved → :open (or :paid)
+:promised → :kept → :paid (or :open if broken)
+:open → :legal (external escalation; supporting-doc required)
+:legal → :written-off (supporting-doc required + :no-self-approval policy)
+:open → :paid (final application closed it)
+```
+
+`:payment-promise/status`:
+```
+nil → :open → :kept (matching :payment-application landed)
+:open → :broken (sweeper, past promised-by-date with no payment)
+:open → :renegotiated → :open (new promise on the same case)
+:open → :cancelled (collector or customer rescinds)
+```
+
+`:dispute/state`:
+```
+nil → :open → :under-review → :resolved
+:open → :escalated → :resolved (manager-only path)
+```
+
+#### Helpers (`modules/collections/src/kontor/collections/...`)
+
+```clojure
+;; case.clj
+(open-case! conn {:partner :entity :opened-by-uid ... :strategy ...})
+(close-case! conn case {:reason :reason-note :supporting-doc})
+(assign-collector! conn case {:collector-uid :assigned-by-uid})
+(case-of-partner db partner-eid entity-eid {:as-of-valid})
+
+;; promise.clj
+(record-promise! conn {:case :invoice :amount :promised-by-date
+                       :captured-by-uid :captured-via})
+(mark-promise-kept! conn promise {:matching-application})
+(mark-promise-broken! conn promise {:reason-note})
+(sweep-broken-promises! conn)   ; ADR-041 sweeper
+
+;; dispute.clj
+(raise-dispute! conn {:invoice :scope :disputed-amount :reason-code
+                      :opened-by-uid :supporting-doc})
+(resolve-dispute! conn dispute {:resolution :reason-note :resolved-by-uid})
+(open-disputes-for-invoice db invoice-eid {:as-of-valid})
+
+;; credit-hold.clj
+(place-hold! conn {:partner :entity :reason-code :placed-by-uid
+                   :approver-uid :supporting-doc :expires-at?})
+(release-hold! conn hold {:released-by-uid :reason-note})
+(credit-status-for db {:partner :entity :as-of-valid})
+  ;; Walks entity-specific :credit-hold rows → falls back to
+  ;; :partner/credit-status scalar (the ADR-039 default).
+(credit-utilization db {:partner :entity :as-of-valid})
+  ;; Live posting-based; never a cached snapshot.
+
+;; dunning.clj
+(plan-dunning-run conn {:as-of :entity :policy})
+  ;; Returns a vec of {:case :invoice :level :template-ref :locale
+  ;;                   :skipped? :skip-reason} — pure planning, no side effects.
+(emit-dunning-event! conn plan-row)
+  ;; Writes the :dunning-event + :audit-doc + :side-effect-intent
+  ;; atomically.
+(frequency-cap-violations db {:case :within-days :max-events})
+
+;; aging.clj (extends kernel aging.clj)
+(open-amount-of-invoice db invoice-eid {:as-of-tx :as-of-valid})
+(aging-rows-with-terms db {:method :buckets :as-of-valid
+                           :include-partial-paid? true
+                           :exclude-disputed? false})
+
+;; writeoff.clj
+(write-off-case! conn case {:account :amount :reason-note
+                            :approver-uid :supporting-doc})
+  ;; Composes kontor.posting/build-transaction Dr bad-debt-expense /
+  ;; Cr AR + status-history :written-off + audit-doc.
+```
+
+#### Approval-policy rules added
+
+The `:approval-policy/rule` vocabulary (ADR-038) extends with one new rule:
+
+- **`:requires-collections-segment-match`** — applicable at `:collection-case/state :open → :legal` (or any escalation path). Checks that the actor's `:create/uid → :user/permission` includes legal-action authority for the case's segment. Permission vocabulary documented per-l10n.
+
+The existing rules cover everything else:
+- `:no-self-approval` on credit-hold release + write-off
+- `:requires-supporting-doc` on `:legal` and `:written-off` transitions
+- `:requires-non-empty-reason-note` on dispute resolution + write-off
+
+#### Frequency cap (Reg-F)
+
+`plan-dunning-run` consults a count query: `:dunning-event` rows for the case where `:sent-at` is within `(now - frequency-cap-window-days)` and `:sent-at` is set. If count ≥ `:frequency-cap-max-events`, the planned row is marked `:skipped? true` with `:skip-reason :frequency-cap`. The cap is *predicate*, not *checklist*: it's enforced before emission, not as a post-hoc warning. US Reg-F defaults (7 calls in 7 days) seed via `kontor-l10n-us`.
+
+#### Dunning letters as typed `:audit-doc`
+
+Per user decision: no `:dunning-letter` entity. Each `:dunning-event` references:
+1. An `:audit-doc {:type :dunning-letter, :content-hash ..., :storage-uri ...}` for the rendered PDF/HTML.
+2. A `:side-effect-intent {:type :send-email, :payload {:template :dunning-letter-de-level-1 ...}}` for the outgoing channel work.
+
+The triple `(status-history-row, side-effect-intent, audit-doc)` is the canonical "letter L1 was sent on day D, the PDF is hashed Y, the email-send was attempted at T." This composes with ADR-038 audit-doc + ADR-041 side-effect-intent. l10n modules ship template-resolver implementations:
+
+```clojure
+(defprotocol DunningTemplateProvider
+  (resolve-template [this {:keys [level locale jurisdiction currency
+                                  template-ref segment]}]))
+```
+
+`kontor-l10n-de` ships templates with DE Mahnverfahren timers; `kontor-l10n-us` with Reg-F-compliant disclosures. Kernel ships a `StaticTableProvider` fallback that resolves to plain-EDN templates per `(level, locale)`.
+
+#### Per-entity credit-hold overlay
+
+Per user decision: keep ADR-039's `:partner/credit-status` scalar as the default. Add `:credit-hold` as an optional overlay: when a `:credit-hold` row exists for `(partner, entity)` and is `:placed-at` is non-null and `:released-at` is null (or set to a future date), that overrides the scalar.
+
+```clojure
+(credit-status-for db {:partner partner-eid :entity entity-eid :as-of-valid d})
+  ;; 1. Look for an active :credit-hold for (partner, entity) at as-of-valid.
+  ;; 2. If found and not yet released → returns :hold + the hold's reason-code.
+  ;; 3. Otherwise → returns :partner/credit-status scalar (ADR-039 default).
+```
+
+Single-entity tenants never write `:credit-hold` rows — the scalar suffices. Multi-entity tenants get correctness without breaking ADR-039.
+
+#### Dispute auto-suppresses dunning (market-pain #17)
+
+`plan-dunning-run` consults `(open-disputes-for-invoice db invoice-eid)`. If any open dispute exists for the invoice (or for a line on the invoice with `:scope` pointing at the line), the planned row is `:skipped? true, :skip-reason :open-dispute`. No manual pause needed; no auditor surprise when invoice was dunned mid-dispute. This is structurally exact in kontor because disputes ARE bitemporal entities; SAP FSCM and NetSuite require manual pause flags that drift.
+
+#### Unapplied-cash gates dunning (market-pain #23)
+
+`plan-dunning-run` also consults `(unapplied-cash-balance db partner-eid)`. If a partner has unapplied cash for the entity, the plan rows for that partner are `:skipped? true, :skip-reason :unapplied-cash-pending`. The cash-app team's job: route remittance. The collections team's job: don't dunn while AR doesn't know what the cash is for. The query is exact because payments are postings (ADR-021); no separate unapplied-cash table to drift.
+
+### `:invoice/collections-status` facet
+
+Procurement's `:invoice/match-status` (ADR-042) is purchase-side semantics. Collections adds an independent facet on the same entity per ADR-034's multi-facet allowance:
+
+```
+:invoice/collections-status — facet
+  #{:current        ; not yet due, or due within grace
+    :overdue        ; past grace, no case yet
+    :in-collection  ; an open :collection-case references it
+    :disputed       ; an open :dispute references it
+    :paid           ; closed via :payment-application
+    :written-off}   ; bad-debt journal posted
+```
+
+Sales / AR invoices flow through this facet; purchase invoices ignore it. The two facets coexist on the same `:invoice` entity without collision because ADR-034 explicitly supports multiple state machines per entity (`status_machine.clj:18-21`).
+
+### Public surface
+
+```clojure
+;; modules/collections/src/kontor/collections.clj — re-exports
+(open-case! ...)
+(close-case! ...)
+(assign-collector! ...)
+(record-promise! ...)
+(raise-dispute! ...)
+(resolve-dispute! ...)
+(place-hold! ...)
+(release-hold! ...)
+(plan-dunning-run ...)
+(emit-dunning-event! ...)
+(sweep-broken-promises! ...)
+(write-off-case! ...)
+(credit-status-for ...)
+(credit-utilization ...)
+(unapplied-cash-balance ...)  ; re-exported from kernel
+(aging-rows-with-terms ...)
+```
+
+### Implementation plan
+
+Five coherent commits:
+
+1. **ADR + research note + roadmap** (this commit). Documentation lands first; substrate readers can review the design before code.
+2. **Kernel `:payment-application` primitive** — schema + helpers + `aging.clj` extension + `reconciliation.clj` partial-payment fix + tests. Closes the `reconciliation.clj:38-47` scope-cut. The Stage M / Stage N prerequisite.
+3. **Companion schema + state machines + seeds** — `modules/collections/` directory; `:collection-case`, `:payment-promise`, `:dispute`, `:credit-hold`, `:dunning-policy`, `:dunning-event`, `:dunning-pause` schemas; ~30 status-transition seeds; ADR-038 approval-policy hooks.
+4. **Case + promise + dispute + credit-hold helpers** — case lifecycle, PTP capture/sweep, dispute lifecycle, credit-hold overlay + `credit-status-for` resolver. Tests for the dispute-suppresses-dunning and PTP-suppresses-dunning predicates.
+5. **Dunning policy + letters + frequency cap + enhanced aging** — `plan-dunning-run`, `emit-dunning-event!`, frequency-cap predicate, aging method extension, write-off flow. End-to-end test: open case → first letter → PTP captured → kept-then-broken → escalation → write-off.
+
+After all five land: review-after agents (code-review + market-pain delta against the implementation). Then user-story integration tests per the CLAUDE.md cross-stage validation pattern.
+
+### Alternatives considered
+
+- **Skip partial-payment for v1; let collections work with full-pay-only.** Rejected. Aging is the most-read AR query in any finance workflow; if `open-receivables-by-tx` is structurally lossy or inaccurate, every collections decision is built on sand. Better to pay the kernel cost once and let Stages M / N / O consume the primitive.
+- **First-class `:dunning-letter` entity.** Rejected per user decision. `(status-history, side-effect-intent, audit-doc)` covers the audit trail; first-class entity duplicates `:side-effect-intent` state. Promote only if analytics over letter-level distributions outgrows history-row scans.
+- **Predictive payment-date ML in v1.** Rejected. Different domain (model + features pipeline); ship the substrate, let sibling `kontor-ml` plug in.
+- **SMS / WhatsApp / voice channels in v1.** Rejected. Channel-specific compliance (TCPA, opt-in registries) is a deep rabbit hole. kontor emits `:side-effect-intent` events; channel adapters belong in consumer apps.
+- **Debt sale / external-agency placement workflow.** Rejected for v1. Different legal regime (FDCPA validation-notice formality, data-sharing contracts). Sibling `kontor-collections-placement` companion.
+- **Inline customer-portal UI.** Rejected per ADR-010. Portal lives in beleg/simmis.
+- **Country-specific late-fee rate tables in kernel.** Rejected. Mirrors `TaxProvider` (ADR-005): kernel ships the protocol, l10n modules supply rate tables.
+
+### Implications
+
+- **Stage M revrec** consumes `:payment-application` for cash-receipt-pattern recognition rules.
+- **Stage N subscription** consumes `:payment-application` for installment lineage. Recurring invoices set `:invoice/schedule` ref (ADR-032) so collections can detect them and apply subscription grace periods. Schema for `:invoice/schedule` lands here.
+- **`kontor-l10n-de`** ships DE Mahnverfahren dunning template + EU late-payment-directive rates (ECB ref + 8%).
+- **`kontor-l10n-us`** ships Reg-F frequency-cap defaults + state usury rate tables (or the protocol seam for them).
+- **`kontor-l10n-eu`** (if it lands) covers GDPR retention rules + cross-border B2B compliance.
+
+Date: 2026-05-12.
+
+---
+
 ## Decisions deferred (open)
 
 The following choices are NOT yet locked. Update this section as we converge.
