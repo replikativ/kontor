@@ -1940,6 +1940,308 @@ Date: 2026-05-12.
 
 ---
 
+## ADR-033 — `kontor-partner`: party-as-root model with polymorphic contact mechanisms
+
+**Decision.** Land `kontor-partner` as the first business-OS companion (under `modules/partner/`). Extend the kernel's existing `:partner/*` namespace with subtype entities (`:person`, `:org`), a polymorphic contact-mechanism root with typed subtypes (`:contact-mech` + `:postal-address` / `:telecom-number` / `:email-address`), a temporal junction (`:partner-contact-mech`), a multi-purpose routing junction (`:partner-contact-mech-purpose`), capability roles (`:partner-role`), and temporal multi-role relationships (`:partner-relationship`). Vocabularies for role / purpose / relationship type are documented Clojure keywords; consumers extend. The companion ships its own schema-install fn so kernel-only consumers stay minimal.
+
+### Why this companion, why now
+
+Six downstream companions (sales, procurement, asset, revrec, subscription, hr) reference parties as customers / suppliers / employees / sponsors / vendors. Without a unified party model, each invents its own, the kernel's `:posting/partner` ref points at a moving target, and intercompany scenarios under ADR-031 can't be expressed cleanly. The OFBiz/Tryton/Workday/SAP-BP convergent shape (research note 12) gives us a license-clean reference oracle in Apache-2.0 — we can read AND lift structure without translation. Per the hybrid-plan checkpoint, partner gets the 3-4 weeks of depth required before sales lands on top of it.
+
+### Why party-as-root with subtypes (not single entity, not no-root)
+
+The four-ERP survey converges on the same shape: a single root entity owns identity / status / audit / external-id, and Person / Organization subtypes carry their own attributes via FK to the root. OFBiz uses `partyTypeId` discriminator; Tryton uses `party.party` + subclasses; Workday models Person + Org as Worker subtype hierarchy; SAP's Business Partner extends to BP-Person / BP-Org. Odoo's single-table-with-flag model (`res.partner.is_company`) is the outlier — it makes per-type queries verbose (`[where is_company=true]` everywhere) and lets attributes drift across the typing boundary (a person can accidentally carry `ticker_symbol`).
+
+Concrete advantages of subtype entities for kontor:
+- Attribute domains stay separate at the schema layer (`:person/birth-date` cannot accidentally land on an org).
+- Datalog queries on type are direct (`[?p :person/partner ?party]`) rather than filtered by flag.
+- Sensitive PII (SSN, passport) lives on `:person` and can be encrypted or excluded from index dumps without touching `:org` traffic.
+- The Workday "Worker has many Employments" pattern lands naturally when kontor-hr extends `:person` later.
+
+### Why polymorphic contact-mech (not typed entities, not embedded scalars)
+
+OFBiz's ContactMech root + typed subtype (PostalAddress / TelecomNumber / etc.) is the canonical interchange shape for vCard 4.0 and Peppol Business Card. It supports:
+- Cross-type queries ("all contact mechs for partner X regardless of type").
+- Cross-type purpose routing ("the BILLING contact for partner X" — could be email OR postal).
+- Verification flags + temporal validity at the junction layer, independent of mechanism type.
+- vCard / Peppol round-trip: their canonical model is structurally identical, so import / export becomes a 1:1 mapping rather than a flattening / re-inflation.
+
+Embedded scalars on `:partner` (one address + one phone) would be simpler but break Peppol/vCard round-trip and forbid multi-purpose routing. Typed entities (separate `:postal-address` / `:phone` / `:email` without a shared root) would force every junction to use polymorphic refs and require schema-time enumeration of acceptable subtype targets — datahike can model this but at the cost of cross-type-aware queries.
+
+### Why role / purpose / relationship-type as keywords (not entities)
+
+OFBiz models RoleType, ContactMechPurposeType, and PartyRelationshipType as recursive enum tables — supporting i18n labels, parent-child hierarchy, and group filtering. For kontor v1 this is over-engineering: the canonical role / purpose / relationship vocabularies are small fixed sets that rarely change, and per-locale labels live in the consumer UI layer (not in the kernel data). We model them as documented Clojure keyword sets, with consumers free to extend their own keywords. If a future requirement surfaces (e.g. role grouping for permission inheritance, i18n at the data layer), promote to entities at that point — the keyword-to-entity migration is mechanical.
+
+The canonical vocabulary documented in this ADR:
+
+**Role types** (`:partner-role/role-type`):
+`:customer` `:supplier` `:employee` `:contractor` `:carrier` `:bill-to` `:ship-to` `:bill-from` `:ship-from` `:internal-organization` `:owner` `:agent` `:warranty-provider` `:beneficiary` `:guarantor` `:end-user`
+
+**Contact-mech purposes** (`:partner-contact-mech-purpose/purpose-type`):
+`:general-correspondence` `:billing-location` `:shipping-location` `:primary-location` `:primary-email` `:billing-email` `:order-email` `:primary-phone` `:billing-phone` `:fax-number` `:home-location` `:work-location` `:mobile-phone` `:emergency-contact`
+
+**Relationship types** (`:partner-relationship/relationship-type`):
+`:employment` `:contractor-engagement` `:subsidiary` `:branch` `:partnership` `:agent-representation` `:reseller-channel` `:franchise` `:family` `:vendor-customer` `:successor-predecessor` `:trust-beneficiary`
+
+### Schema (companion-installed)
+
+The companion installs the following attribute set on top of the kernel schema. The kernel's existing `:partner/*` attrs (external-id, name, kind, country-code, tax-id, state — already present, see ADR-002 and ADR-023) remain unchanged; new attributes extend the `:partner/*` namespace and add the new namespaces below.
+
+#### Root: partner extensions
+
+```clojure
+:partner/type            keyword          ; :person | :org — discriminator
+:partner/status          keyword          ; :enabled | :disabled | :archived
+:partner/preferred-commodity ref          ; :commodity ref (currency of choice)
+:partner/created-at      instant
+:partner/modified-at     instant
+:partner/description     string
+```
+
+#### Person subtype
+
+```clojure
+:person/partner          ref :db.unique/value  ; FK to :partner (1:1)
+:person/first-name       string
+:person/middle-name      string
+:person/last-name        string
+:person/salutation       string
+:person/suffix           string
+:person/nickname         string
+:person/first-name-local string           ; non-Latin script
+:person/last-name-local  string
+:person/gender           keyword          ; :male | :female | :nonbinary | :unspecified — free-form
+:person/birth-date       instant
+:person/deceased-date    instant
+:person/marital-status   keyword          ; :single | :married | :divorced | :widowed | :partnered | :unspecified
+:person/national-id-type keyword          ; :ssn | :passport | :national-id | :tin | etc.
+:person/national-id      string           ; encrypted at consumer layer if regulated
+```
+
+#### Organization subtype
+
+```clojure
+:org/partner             ref :db.unique/value  ; FK to :partner (1:1)
+:org/legal-name          string           ; the formal registered name
+:org/legal-form          keyword          ; :gmbh | :llc | :inc | :sa | :ltd | etc.
+:org/trading-name        string           ; "doing business as"
+:org/registration-number string           ; e.g. HRB, EIN, ABN
+:org/duns                string           ; D-U-N-S 9-digit identifier
+:org/lei                 string           ; Legal Entity Identifier (ISO 17442)
+:org/ticker-symbol       string
+:org/exchange            string           ; stock exchange where listed
+:org/annual-revenue      bigdec
+:org/revenue-commodity   ref → :commodity
+:org/num-employees       long
+:org/incorporation-date  instant
+:org/dissolution-date    instant
+```
+
+#### Polymorphic contact-mech root
+
+```clojure
+:contact-mech/code       string :db.unique/identity   ; opaque consumer-supplied code
+:contact-mech/type       keyword                       ; :postal | :telecom | :email | :web | :ftp
+:contact-mech/info-string string                       ; fallback untyped storage
+:contact-mech/created-at instant
+:contact-mech/modified-at instant
+```
+
+#### Postal address subtype
+
+```clojure
+:postal-address/contact-mech ref :db.unique/value      ; FK to :contact-mech (1:1)
+:postal-address/to-name      string
+:postal-address/attn-name    string
+:postal-address/address1     string
+:postal-address/address2     string
+:postal-address/house-number string
+:postal-address/house-number-ext string
+:postal-address/directions   string
+:postal-address/city         string
+:postal-address/postal-code  string
+:postal-address/postal-code-ext string
+:postal-address/county       string
+:postal-address/region       string                    ; state/province as free string
+:postal-address/state        ref → :state              ; structured state (ADR-023)
+:postal-address/country      ref → :country            ; structured country (ADR-023)
+:postal-address/latitude     bigdec
+:postal-address/longitude    bigdec
+```
+
+#### Telecom subtype
+
+```clojure
+:telecom-number/contact-mech     ref :db.unique/value  ; FK
+:telecom-number/country-code     string
+:telecom-number/area-code        string
+:telecom-number/contact-number   string
+:telecom-number/extension        string
+:telecom-number/ask-for-name     string                ; routing hint
+```
+
+#### Email subtype
+
+```clojure
+:email-address/contact-mech ref :db.unique/value       ; FK
+:email-address/address      string                     ; the email address itself
+:email-address/verified?    boolean
+:email-address/bounced?     boolean
+```
+
+#### Partner-contact-mech junction (temporal)
+
+```clojure
+:partner-contact-mech/partner      ref → :partner
+:partner-contact-mech/contact-mech ref → :contact-mech
+:partner-contact-mech/from-date    instant
+:partner-contact-mech/thru-date    instant
+:partner-contact-mech/role-type    keyword            ; optional role context
+:partner-contact-mech/allow-solicitation? boolean
+:partner-contact-mech/verified?    boolean
+:partner-contact-mech/comments     string
+:partner-contact-mech/identity     tuple [partner, contact-mech, from-date] unique
+```
+
+#### Partner-contact-mech-purpose junction (multi-purpose)
+
+```clojure
+:partner-contact-mech-purpose/partner      ref → :partner
+:partner-contact-mech-purpose/contact-mech ref → :contact-mech
+:partner-contact-mech-purpose/purpose-type keyword
+:partner-contact-mech-purpose/from-date    instant
+:partner-contact-mech-purpose/thru-date    instant
+:partner-contact-mech-purpose/identity     tuple [partner, contact-mech, purpose-type, from-date] unique
+```
+
+#### Partner-role (capability)
+
+```clojure
+:partner-role/partner    ref → :partner
+:partner-role/role-type  keyword
+:partner-role/from-date  instant
+:partner-role/thru-date  instant
+:partner-role/identity   tuple [partner, role-type, from-date] unique
+```
+
+#### Partner-relationship (temporal, multi-role)
+
+```clojure
+:partner-relationship/partner-from       ref → :partner
+:partner-relationship/partner-to         ref → :partner
+:partner-relationship/role-type-from     keyword
+:partner-relationship/role-type-to       keyword
+:partner-relationship/from-date          instant
+:partner-relationship/thru-date          instant
+:partner-relationship/relationship-type  keyword     ; :employment | :subsidiary | etc.
+:partner-relationship/status             keyword     ; :active | :inactive | :pending
+:partner-relationship/relationship-name  string      ; "Senior Engineer", "Wholly-owned"
+:partner-relationship/position-title     string
+:partner-relationship/priority           long
+:partner-relationship/comments           string
+:partner-relationship/identity           tuple [partner-from, role-type-from, partner-to, role-type-to, from-date] unique
+```
+
+### Composition model
+
+A typical partner setup:
+
+```clojure
+;; A person who is both customer and employee, working at an org
+{:partner/external-id "P-1001"
+ :partner/type        :person
+ :partner/status      :enabled}
+
+;; Subtype payload
+{:person/partner    [:partner/external-id "P-1001"]
+ :person/first-name "Jane"
+ :person/last-name  "Doe"
+ :person/birth-date #inst "1985-03-12"}
+
+;; Two roles, both currently active
+{:partner-role/partner   [:partner/external-id "P-1001"]
+ :partner-role/role-type :customer
+ :partner-role/from-date #inst "2024-01-15"}
+
+{:partner-role/partner   [:partner/external-id "P-1001"]
+ :partner-role/role-type :employee
+ :partner-role/from-date #inst "2025-06-01"}
+
+;; One email serving two purposes (billing + general)
+{:contact-mech/code "CM-jane-1"
+ :contact-mech/type :email}
+
+{:email-address/contact-mech [:contact-mech/code "CM-jane-1"]
+ :email-address/address      "jane@example.com"
+ :email-address/verified?    true}
+
+{:partner-contact-mech/partner      [:partner/external-id "P-1001"]
+ :partner-contact-mech/contact-mech [:contact-mech/code "CM-jane-1"]
+ :partner-contact-mech/from-date    #inst "2024-01-15"
+ :partner-contact-mech/verified?    true}
+
+{:partner-contact-mech-purpose/partner      [:partner/external-id "P-1001"]
+ :partner-contact-mech-purpose/contact-mech [:contact-mech/code "CM-jane-1"]
+ :partner-contact-mech-purpose/purpose-type :billing-email
+ :partner-contact-mech-purpose/from-date    #inst "2024-01-15"}
+
+;; Employment relationship to an org
+{:partner-relationship/partner-from      [:partner/external-id "P-1001"]
+ :partner-relationship/role-type-from    :employee
+ :partner-relationship/partner-to        [:partner/external-id "O-2001"]
+ :partner-relationship/role-type-to      :internal-organization
+ :partner-relationship/relationship-type :employment
+ :partner-relationship/from-date         #inst "2025-06-01"
+ :partner-relationship/position-title    "Senior Engineer"
+ :partner-relationship/status            :active}
+```
+
+### Bootstrap
+
+No bootstrap data. The companion ships only the schema-install fn — `(kontor.partner.schema/install! conn)` transacts the attrs above and returns the tx-report. Consumers call this once after `kontor.core/install-schema!` (in any order; idempotent via `:db/ident`).
+
+### Public surface
+
+The `kontor.partner` namespace ships:
+- Resolution: `by-external-id`, `resolve-partner` (string→eid, eid→eid, nil→nil)
+- Subtype access: `person`, `org` (pulled subtype map, or nil)
+- Role queries: `roles-of`, `has-role?`, `partners-with-role`, `partners-with-role-as-of` (bitemporal)
+- Contact-mech queries: `contact-mechs-of`, `contact-mech-by-purpose`, `primary-email`, `primary-postal-address`
+- Relationship traversal: `relationships-of`, `relationships-from`, `relationships-to`, `active-relationships-as-of`, `current-employer`, `current-employees`
+- Effective-date helpers: `active-as-of?` (junction-level predicate respecting from-date / thru-date)
+
+Bitemporal-aware (ADR-008): every query helper accepts an `:as-of-valid` parameter that filters junction validity. Default is `now`.
+
+### Alternatives considered
+
+- **Single `:partner` entity with conditional attrs** (Odoo `res.partner` shape). Rejected: cross-type drift, verbose flag-filtering queries, sensitive PII colocated with org marketing data. The keystroke savings don't compensate.
+- **Two top-level entities (`:person` + `:org`, no shared `:partner` root)**. Rejected: every kernel ref site (`:posting/partner`, future `:order/customer`, etc.) would need polymorphic refs across two targets, breaking simple datalog joins. Also breaks intercompany scenarios where the same entity is sometimes referred to as a customer and sometimes as a supplier.
+- **Heavy contact-mech (separate typed entities, no polymorphic root)**. Rejected: breaks the multi-purpose routing pattern (purpose junctions would need polymorphic refs across address/phone/email targets), and breaks vCard/Peppol round-trip cleanliness.
+- **Embedded simple contact on `:partner`** (one scalar address + one scalar phone). Rejected: forbids multi-purpose, breaks interchange, doesn't survive real-world tenants with billing-distinct-from-shipping setups. Pragmatic for an MVP but not for the foundational companion.
+- **Role / purpose / relationship-type as entities** (with parent-child + i18n labels). Deferred. v1 uses keyword vocabularies; promote later if needed.
+- **Versioned `:partner` snapshots via bitemporal valid-time on the root entity**. Rejected: OFBiz doesn't model this — root attributes are mutable, and history lives in datahike's tx-time axis (ADR-008). Junction-level temporal validity (`from-date`/`thru-date`) is enough; full bitemporal partner snapshots are a heavyweight pattern with no near-term consumer demand.
+- **Cardinality-many on the subtype FK** (allow one party to be both Person AND Org). Rejected: real-world partners are exclusively one OR the other; cardinality-one + `:db.unique/value` enforces the constraint at the schema layer. If a future regulatory hybrid case appears (sole proprietorship oddly modeled), it would warrant its own discriminator value.
+
+### Implications
+
+- ~95 new attributes across 11 namespaces, all isolated under their own keyword namespaces (zero collision with kernel attrs or other consumers).
+- The kernel's `:partner/*` namespace gains 6 attrs (type discriminator, status, preferred-commodity, created-at, modified-at, description) — these live in the companion schema and are additive, so existing kernel-only consumers see no breaking change.
+- `:posting/partner` references continue to point at `:partner` root — unchanged semantics.
+- The companion schema is opt-in: kernel-only consumers do not call `kontor.partner.schema/install!` and are unaffected.
+- Forward-compat with downstream companions:
+  - kontor-sales: `:order/customer` → `:partner` (via :partner-role :customer).
+  - kontor-procurement: `:requirement/vendor` → `:partner` (via :partner-role :supplier).
+  - kontor-asset: `:asset/owner-partner` → `:partner` (via :internal-organization role).
+  - kontor-hr: `:employment/person` → `:person`; `:employment/employer` → `:org` (via :partner-relationship :employment).
+
+### Vendor / customer rendering on existing posting flow
+
+Posting still references the root (`:posting/partner`). For UX, consumers fetch subtype data + active roles + primary contact mechs via the `kontor.partner` helpers. There's no breaking change to ADR-002 (cohabitation) or ADR-020 (multi-party / multi-role on transactions).
+
+Date: 2026-05-12.
+
+---
+
 ## Decisions deferred (open)
 
 The following choices are NOT yet locked. Update this section as we converge.
