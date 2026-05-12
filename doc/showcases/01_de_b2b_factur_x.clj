@@ -39,7 +39,6 @@
             [kontor.collections.schema :as coll-schema]
             [kontor.core :as core]
             [kontor.invoice.bridge :as inv]
-            [kontor.invoice.posting :as inv-post]
             [kontor.invoice.schema :as inv-schema]
             [kontor.partner.schema :as partner-schema]
             [kontor.payment-application :as papp]
