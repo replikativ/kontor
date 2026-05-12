@@ -3185,6 +3185,187 @@ Date: 2026-05-12.
 
 ---
 
+## ADR-039 — Master-data primitives: merge, bank-account, credit-limit, tags, KYC hooks
+
+**Decision.** Extend the `:partner` model (ADR-033) with four cross-cutting MDM primitives:
+
+1. **`:partner-merge`** — kernel-level non-destructive merge link entity. Marks `:partner B` as a duplicate-of `:partner A` without physical retraction. Resolution helper walks the chain.
+2. **`:bank-account` entity** + **`:partner-bank-account` temporal junction** — kernel-level. Banking is master-data; every supplier has N accounts each with IBAN/BIC/currency/validity. Without this, the invoice → payment workflow has no AP target.
+3. **`:partner/credit-limit` + `:partner/credit-commodity` + `:partner/credit-status`** — kernel-level partner extensions. Enables credit-hold automation.
+4. **`:partner-tag`** — kernel-level temporal-validity tag junction. Customer segmentation, channel tagging, marketing/credit/AR segment classification.
+5. **KYC hooks**: `:partner/kyc-status`, `:partner/kyc-checked-at`, `:partner/kyc-source` — kernel-level. Minimal scalar attrs on `:partner`. The actual sanctions-screening engine is a future `SanctionsProvider` companion (same pattern as `TaxProvider` / `EInvoiceProvider`).
+
+This is the SECOND of the four Stage J-2 cross-cutting primitive ADRs (per ADR-037). It resolves the MDM gaps surfaced by the partner / customer-master-data market-pain research (research note 13). The whole MDM industry (Profisee, Informatica, Tamr, Reltio) exists because every commercial ERP gets merge / banking / credit / KYC structurally wrong; kontor's bitemporal + opt-in companion model lets us ship the structurally-right primitives without the technical debt those incumbents carry.
+
+### Why these five primitives belong together
+
+The five are interdependent in enterprise practice:
+
+- **Merge** without **bank-account** support causes the worst data loss in NetSuite/Salesforce merges (banking fields silently drop, breaking payment processing).
+- **Credit-limit** without **tag**-based segment classification doesn't scale: a tenant with three customer tiers (gold/silver/bronze) wants different default credit limits per tier.
+- **KYC** without **bank-account** has no enforcement surface: KYC checks gate the ability to wire to a bank account, not just the partner record.
+- **Bank-account** without **temporal validity** breaks audit (when did this AP target become valid? when did we last verify the IBAN?).
+
+Splitting them across ADRs would force consumers to install three companions to get one coherent MDM story. Bundling them keeps the surface coherent.
+
+### Schema
+
+#### `:partner-merge` — non-destructive merge link (kernel)
+
+```clojure
+:partner-merge/duplicate-of  ref → :partner    ; the "good" record (canonical)
+:partner-merge/superseded    ref → :partner    ; the "bad" record (duplicate)
+:partner-merge/identity      tuple [duplicate-of, superseded] :db.unique/identity
+:partner-merge/merged-at     instant
+:partner-merge/merged-by-uid ref
+:partner-merge/reason        keyword             ; ADR-038 vocabulary
+:partner-merge/reason-note   string              ; free-text
+:partner-merge/supporting-doc ref → :audit-doc   ; ADR-038
+```
+
+**Critical semantic**: this is NOT physical retraction. The `:partner B` (`:superseded`) entity is preserved with all its history. The `:partner-merge` row encodes "logically, B = A from `:merged-at` onward; queries resolve B → A."
+
+A `kontor.partner/resolve-canonical-partner` helper walks the chain: if the partner has a `:partner-merge/superseded` ref pointing at it, follow to `:duplicate-of` (and recursively).
+
+`:posting/partner [eid → B]` continues to resolve to `B` at query time; consumers calling `resolve-canonical-partner` get `A`. This preserves the bitemporal audit chain — "what posting referenced what partner at what time" — while presenting the post-merge canonical view to UIs.
+
+Reversing a merge: retract the `:partner-merge` row. Audit chain records the retraction as its own tx-time event per ADR-007.
+
+#### `:bank-account` entity (kernel)
+
+```clojure
+:bank-account/code           string :db.unique/identity
+:bank-account/iban           string
+:bank-account/bic            string
+:bank-account/account-number string                 ; for non-IBAN banks (US ABA, etc.)
+:bank-account/routing-number string                 ; US ABA / GB sort code
+:bank-account/bank-name      string
+:bank-account/country        ref → :country
+:bank-account/commodity      ref → :commodity        ; the account's currency
+:bank-account/holder-name    string                  ; on-the-account legal name
+:bank-account/active         boolean
+:bank-account/note           string
+```
+
+A bank-account is its own entity (not just attrs on `:partner`) because:
+- Multiple partners can hold the same bank account (joint accounts in personal contexts; brand portfolios in commercial contexts where multiple `:partner` entries share an AP target).
+- Temporal validity belongs to the relationship (when this partner started using this account), not the account itself (the IBAN persists across the relationship lifecycle).
+- It can also be OUR OWN bank account (held by our `:internal-organization` partner) — same schema, used by payment-out flows.
+
+#### `:partner-bank-account` junction (kernel, temporal)
+
+```clojure
+:partner-bank-account/partner       ref → :partner
+:partner-bank-account/bank-account  ref → :bank-account
+:partner-bank-account/from-date     instant
+:partner-bank-account/thru-date     instant
+:partner-bank-account/purpose       keyword
+                                    ;; :disbursement — we pay TO this account
+                                    ;; :collection   — we collect FROM this account
+                                    ;; :both         — bidirectional
+:partner-bank-account/preferred?    boolean         ; preferred-for-purpose flag
+:partner-bank-account/verified?     boolean
+:partner-bank-account/verified-at   instant
+:partner-bank-account/identity      tuple [partner, bank-account, from-date] unique
+```
+
+Composite identity allows the same (partner, bank-account) pair across distinct time windows (e.g. supplier closes an account, opens it again later).
+
+#### `:partner` extensions (kernel additions, additive)
+
+```clojure
+:partner/credit-limit      bigdec                  ; nil = unlimited
+:partner/credit-commodity  ref → :commodity         ; currency of the limit
+:partner/credit-status     keyword
+                          ;; :open    — open for new orders
+                          ;; :hold    — credit hold; new orders blocked
+                          ;; :review  — manual review required before approval
+                          ;; :closed  — relationship closed; no new business
+:partner/kyc-status        keyword
+                          ;; :not-required — no KYC needed (low-risk SMB customer)
+                          ;; :pending      — KYC requested, not yet returned
+                          ;; :cleared      — KYC passed
+                          ;; :flagged      — needs human review
+                          ;; :blocked      — sanctions/PEP/AML match; forbid trade
+:partner/kyc-checked-at    instant
+:partner/kyc-source        string                   ; "LexisNexis" / "Refinitiv" /
+                                                    ; "ComplyAdvantage" / "Manual" / …
+```
+
+The `:credit-status` enum is opt-in: consumers that don't care about credit-hold automation leave the attribute nil. Same for `:kyc-status`.
+
+The KYC trio is deliberately minimal — three scalar attrs. Full sanctions-list screening (downloading + matching SDN lists, PEP databases, adverse-media feeds) belongs to a future `SanctionsProvider` protocol following the `TaxProvider` (ADR-005) pattern. Out of ADR-039 scope.
+
+#### `:partner-tag` junction (kernel)
+
+```clojure
+:partner-tag/partner    ref → :partner
+:partner-tag/tag-type   keyword
+                       ;; canonical starter vocabulary:
+                       ;; :vip | :high-volume | :strategic-account
+                       ;; :churn-risk | :do-not-contact | :test-account
+                       ;; :gold-tier | :silver-tier | :bronze-tier
+                       ;; … consumers extend per their segmentation
+:partner-tag/from-date  instant
+:partner-tag/thru-date  instant
+:partner-tag/identity   tuple [partner, tag-type, from-date] unique
+```
+
+Bitemporal segmentation: "what tier was this customer when we issued this invoice" is one query, not a CRM ETL pipeline.
+
+### Helpers
+
+#### `kontor.partner` (extends existing namespace)
+
+- `resolve-canonical-partner` — walks `:partner-merge` chain; returns the canonical eid.
+- `merge-partners!` — convenience transactor: writes `:partner-merge` + sets `:partner B/status :archived` in one tx with audit metadata.
+- `unmerge!` — retract a `:partner-merge` row (audit-chain records the retraction).
+- `bank-accounts-of` — pulled `:bank-account` rows for a partner via the junction (`:as-of` opt for temporal filter).
+- `primary-disbursement-account` / `primary-collection-account` — preferred-for-purpose lookup.
+- `credit-available` — `(- credit-limit open-AR open-orders pending-orders)`. Computed live; consumer's responsibility to define "open" / "pending" via their domain queries.
+- `tags-of` / `partners-with-tag` — segmentation queries (bitemporal).
+- `kyc-required?` — predicate based on `:partner/kyc-status` + tenant policy (extension point).
+
+#### `kontor.bank-account` (new namespace)
+
+- `by-code` / `resolve-bank-account`.
+- `validate-iban` — checksum validation (kontor doesn't ship the country-IBAN-format table; consumers can plug in libraries like `iban4j` if needed; the helper does mod-97 checksum which catches typos).
+
+### Bootstrap
+
+No seeds. Consumers transact their own partners, accounts, tags, credit limits, KYC source registrations.
+
+### Alternatives considered
+
+- **Destructive merge.** Rejected per partner-pain market research. NetSuite, Salesforce, Odoo all have destructive merge with documented data loss. Datahike's tx-time gives us reversible merge for free; ship it.
+- **Bank-account attrs directly on `:partner`** (cardinality-many strings for IBANs). Rejected: defeats verification flags, temporal validity, joint accounts, our-own-bank-accounts.
+- **`:partner-bank-account` as a `:db.unique/value` (1:1)** instead of junction. Rejected: forces a partner to have at most one bank account per kontor-tenant. Real B2B: many partners have N accounts (one per currency, one per regional bank, one per business unit).
+- **`:partner-tag` as cardinality-many keyword on `:partner` directly.** Rejected: loses temporal validity. A customer was `:gold-tier` from `2024-01-01` to `2025-06-15`, then downgraded — the junction encodes this; a scalar set doesn't.
+- **`:partner/credit-limit` as a separate entity `:credit-limit-policy`** with multiple tiers + history. Rejected for v1: most consumers want one scalar. Tiered limits can be encoded via the `:partner-tag` segmentation and a consumer-side lookup; promote to entity later if needed.
+- **`:partner/kyc-status` as a full state machine via ADR-034.** Rejected for v1: KYC isn't transitions in our system; KYC is the EXTERNAL SCREENING result. The status attr captures the latest result; full lifecycle (`:requested → :in-progress → :cleared|:flagged → :renewal-due`) can layer on ADR-034 in a future companion.
+- **Bake sanctions-list screening into kontor.** Rejected: regulated business, license-restricted data (Refinitiv, LexisNexis), customer-specific compliance regimes. Like Avalara (ADR-005), we provide the protocol + hooks; customer integrates the provider.
+- **`:partner-merge` as cardinality-many `:partner/duplicate-of` ref directly on partner.** Rejected: loses audit (who merged, when, why), loses the supporting-doc link, loses the bidirectional traversal.
+
+### Migration
+
+`:partner` extensions (credit-limit, credit-status, KYC trio) are additive — existing partners unaffected when the attrs are nil.
+
+`:partner-tag` / `:bank-account` / `:partner-bank-account` / `:partner-merge` are new entities. No migration needed.
+
+### Implications
+
+- 5 new kernel entities (`:partner-merge`, `:bank-account`, `:partner-bank-account`, `:partner-tag`, KYC trio on `:partner`).
+- ~10 new kernel attrs + temporal junctions.
+- Helpers added to existing `kontor.partner` namespace + new `kontor.bank-account` namespace.
+- Test coverage: merge round-trip + resolve-canonical, bank-account temporal validity, credit-limit query helper, partner-tag segmentation, KYC scalar attr round-trip.
+- Forward-compat for kontor-collections (Stage L): `:partner/credit-limit` + `:partner/credit-status` are exactly what collections needs.
+- Forward-compat for kontor-procurement (Stage K): `:bank-account/holder-name` + `:partner-bank-account :purpose :disbursement` are the AP target shape.
+- Cross-companion: `kontor-invoice.bridge/post-to-ledger!` can read `:partner/credit-status :hold` and refuse to post (or just warn — left as consumer policy).
+
+Date: 2026-05-12.
+
+---
+
 ## Decisions deferred (open)
 
 The following choices are NOT yet locked. Update this section as we converge.

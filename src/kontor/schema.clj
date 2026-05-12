@@ -399,7 +399,230 @@
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "VAT ID, EIN, GST number, etc. Format is country-
-                     specific; validation lives in l10n modules."}])
+                     specific; validation lives in l10n modules.
+                     ADR-040 adds :partner-tax-id junction for multi-
+                     jurisdiction partners; this scalar is the primary."}
+
+   ;; ADR-039: credit limit + status (extends :partner additive).
+   {:db/ident       :partner/credit-limit
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Credit limit amount in :partner/credit-commodity.
+                     Nil = unlimited. Consumer's responsibility to
+                     define 'open' / 'pending' for credit-available
+                     calculation (kontor.partner/credit-available)."}
+
+   {:db/ident       :partner/credit-commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Commodity (currency) of :partner/credit-limit."}
+
+   {:db/ident       :partner/credit-status
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":open | :hold | :review | :closed. ADR-039.
+                     Consumers enforce: post-to-ledger may refuse
+                     posting against a :hold partner; sales flows
+                     gate order approval on :review."}
+
+   ;; ADR-039: KYC hooks. The actual sanctions-screening engine is a
+   ;; future SanctionsProvider companion; these scalars capture the
+   ;; latest result.
+   {:db/ident       :partner/kyc-status
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":not-required | :pending | :cleared | :flagged |
+                     :blocked. Trade should be forbidden when
+                     :blocked (consumer enforces)."}
+
+   {:db/ident       :partner/kyc-checked-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :partner/kyc-source
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Provider name: LexisNexis, Refinitiv,
+                     ComplyAdvantage, Manual, …"}])
+
+;; ============================================================================
+;; ADR-039: master-data primitives — merge, bank-account, partner-bank-
+;; account junction, partner-tag.
+;; ============================================================================
+
+(def ^:private partner-merge-attrs
+  [{:db/ident       :partner-merge/duplicate-of
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Canonical (good) partner. After merge, queries
+                     via resolve-canonical-partner walk superseded ->
+                     duplicate-of."}
+
+   {:db/ident       :partner-merge/superseded
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Duplicate (bad) partner being merged INTO the
+                     canonical. Its history is preserved bitemporally;
+                     queries resolve it to :duplicate-of from the
+                     merge point forward."}
+
+   {:db/ident       :partner-merge/merged-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :partner-merge/merged-by-uid
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :partner-merge/reason
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "ADR-038 codified-reason vocabulary."}
+
+   {:db/ident       :partner-merge/reason-note
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :partner-merge/supporting-doc
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to :audit-doc (ADR-038)."}
+
+   {:db/ident       :partner-merge/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:partner-merge/duplicate-of :partner-merge/superseded]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity}])
+
+(def ^:private bank-account-attrs
+  [{:db/ident       :bank-account/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity}
+
+   {:db/ident       :bank-account/iban
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :bank-account/bic
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :bank-account/account-number
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "For non-IBAN banks (US, etc.)."}
+
+   {:db/ident       :bank-account/routing-number
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "US ABA, GB sort code, etc."}
+
+   {:db/ident       :bank-account/bank-name
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :bank-account/country
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to :country (ADR-023)."}
+
+   {:db/ident       :bank-account/commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The account's currency. Multi-currency partners
+                     have N bank accounts each pinned to one
+                     :commodity."}
+
+   {:db/ident       :bank-account/holder-name
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "On-the-account legal name (may differ from
+                     :partner/name when a partner uses a service
+                     intermediary)."}
+
+   {:db/ident       :bank-account/active
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :bank-account/note
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}])
+
+(def ^:private partner-bank-account-attrs
+  [{:db/ident       :partner-bank-account/partner
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :partner-bank-account/bank-account
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :partner-bank-account/from-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :partner-bank-account/thru-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :partner-bank-account/purpose
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":disbursement | :collection | :both."}
+
+   {:db/ident       :partner-bank-account/preferred?
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Preferred-for-purpose flag. When multiple
+                     accounts exist for the same partner+purpose,
+                     :preferred? disambiguates."}
+
+   {:db/ident       :partner-bank-account/verified?
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :partner-bank-account/verified-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :partner-bank-account/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:partner-bank-account/partner
+                     :partner-bank-account/bank-account
+                     :partner-bank-account/from-date]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity}])
+
+(def ^:private partner-tag-attrs
+  [{:db/ident       :partner-tag/partner
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :partner-tag/tag-type
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Canonical starter vocabulary:
+                     :vip | :high-volume | :strategic-account |
+                     :churn-risk | :do-not-contact | :test-account |
+                     :gold-tier | :silver-tier | :bronze-tier | …
+                     consumers extend."}
+
+   {:db/ident       :partner-tag/from-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :partner-tag/thru-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :partner-tag/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:partner-tag/partner
+                     :partner-tag/tag-type
+                     :partner-tag/from-date]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity}])
 
 ;; ============================================================================
 ;; Fiscal position — per-region tax/account remapping rules.
@@ -2764,7 +2987,11 @@
     status-transition-attrs              ; ADR-034
     status-history-attrs                  ; ADR-034
     audit-doc-attrs                       ; ADR-038
-    approval-policy-attrs)))              ; ADR-038
+    approval-policy-attrs                 ; ADR-038
+    partner-merge-attrs                   ; ADR-039
+    bank-account-attrs                    ; ADR-039
+    partner-bank-account-attrs            ; ADR-039
+    partner-tag-attrs)))                  ; ADR-039
 
 (defn install!
   "Transact the kernel schema into a connection. Idempotent — re-running

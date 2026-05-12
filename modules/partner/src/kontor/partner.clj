@@ -314,3 +314,165 @@
         (map #(get-in % [:partner-relationship/partner-from :db/id]))
         (remove nil?)
         set)))
+
+;; ============================================================================
+;; ADR-039 — Merge (non-destructive)
+;; ============================================================================
+
+(defn resolve-canonical-partner
+  "Walk :partner-merge chain. If `partner-eid` has been superseded
+   by a canonical, return the canonical eid. Otherwise return
+   partner-eid unchanged.
+
+   Recursive: A merged into B, then B merged into C → A resolves to C."
+  [db partner-eid]
+  (loop [eid partner-eid
+         visited #{}]
+    (if (contains? visited eid)
+      eid                                       ; cycle guard
+      (if-let [canonical (d/q '[:find ?c .
+                                :in $ ?super
+                                :where
+                                [?m :partner-merge/superseded ?super]
+                                [?m :partner-merge/duplicate-of ?c]]
+                              db eid)]
+        (recur canonical (conj visited eid))
+        eid))))
+
+(defn merge-partners!
+  "Mark `superseded-partner` as a duplicate of `canonical-partner`.
+   Both must resolve to :partner eids. Writes a :partner-merge row
+   atomically with archiving the superseded partner's status.
+
+   Required keys in opts: `:reason` (keyword, ADR-038 vocabulary).
+   Optional: `:reason-note`, `:supporting-doc`, `:merged-by-uid`,
+   `:merged-at` (default now)."
+  [conn canonical-partner superseded-partner {:keys [reason reason-note
+                                                     supporting-doc
+                                                     merged-by-uid
+                                                     merged-at]
+                                              :as _opts}]
+  (let [db (d/db conn)
+        canonical-eid (resolve-partner db canonical-partner)
+        superseded-eid (resolve-partner db superseded-partner)
+        _ (when-not canonical-eid
+            (throw (ex-info "Canonical partner not found"
+                            {:type :partner-merge/canonical-not-found
+                             :spec canonical-partner})))
+        _ (when-not superseded-eid
+            (throw (ex-info "Superseded partner not found"
+                            {:type :partner-merge/superseded-not-found
+                             :spec superseded-partner})))
+        _ (when (= canonical-eid superseded-eid)
+            (throw (ex-info "Cannot merge a partner with itself"
+                            {:type :partner-merge/self-merge
+                             :partner canonical-eid})))
+        _ (when-not reason
+            (throw (ex-info "merge-partners! requires :reason"
+                            {:type :partner-merge/missing-reason})))
+        merge-row (cond-> {:partner-merge/duplicate-of canonical-eid
+                           :partner-merge/superseded superseded-eid
+                           :partner-merge/merged-at (or merged-at (java.util.Date.))
+                           :partner-merge/reason reason}
+                    reason-note    (assoc :partner-merge/reason-note reason-note)
+                    supporting-doc (assoc :partner-merge/supporting-doc supporting-doc)
+                    merged-by-uid  (assoc :partner-merge/merged-by-uid merged-by-uid))
+        archive-row {:db/id superseded-eid
+                     :partner/status :archived}]
+    (d/transact conn [merge-row archive-row])))
+
+;; ============================================================================
+;; ADR-039 — Bank accounts
+;; ============================================================================
+
+(defn bank-accounts-of
+  "Pulled :bank-account rows for `partner`, filtered to active-as-of
+   the optional `:as-of` instant (default now). Filter further by
+   `:purpose` opt (`:disbursement | :collection | :both`)."
+  ([db partner] (bank-accounts-of db partner nil))
+  ([db partner opts]
+   (let [as-of (now-or (:as-of opts))
+         pid (resolve-partner db partner)
+         purpose (:purpose opts)
+         rows (d/q '[:find ?ba ?from ?thru ?purp
+                     :in $ ?p
+                     :where
+                     [?j :partner-bank-account/partner ?p]
+                     [?j :partner-bank-account/bank-account ?ba]
+                     [?j :partner-bank-account/from-date ?from]
+                     [?j :partner-bank-account/purpose ?purp]
+                     [(get-else $ ?j :partner-bank-account/thru-date :__none) ?thru]]
+                   db pid)]
+     (->> rows
+          (filter (fn [[_ from thru _]] (active-as-of? from thru as-of)))
+          (filter (fn [[_ _ _ purp]] (or (nil? purpose)
+                                          (= purp purpose)
+                                          (= purp :both))))
+          (map (fn [[ba _ _ _]] (d/pull db '[*] ba)))
+          vec))))
+
+(defn primary-disbursement-account
+  "The :bank-account preferred-for-disbursement for partner at
+   `:as-of`. Returns the pulled :bank-account map, or nil."
+  ([db partner] (primary-disbursement-account db partner nil))
+  ([db partner opts]
+   (let [as-of (now-or (:as-of opts))
+         pid (resolve-partner db partner)
+         rows (d/q '[:find ?ba ?from ?thru ?pref
+                     :in $ ?p
+                     :where
+                     [?j :partner-bank-account/partner ?p]
+                     [?j :partner-bank-account/bank-account ?ba]
+                     [?j :partner-bank-account/from-date ?from]
+                     [?j :partner-bank-account/purpose ?purp]
+                     [(get-else $ ?j :partner-bank-account/thru-date :__none) ?thru]
+                     [(get-else $ ?j :partner-bank-account/preferred? false) ?pref]
+                     [(contains? #{:disbursement :both} ?purp)]]
+                   db pid)
+         active (filter (fn [[_ from thru _]] (active-as-of? from thru as-of)) rows)
+         preferred (or (first (filter #(true? (nth % 3)) active))
+                       (first active))]
+     (when-let [[ba-eid _ _ _] preferred]
+       (d/pull db '[*] ba-eid)))))
+
+;; ============================================================================
+;; ADR-039 — Tag segmentation
+;; ============================================================================
+
+(defn tags-of
+  "Set of :partner-tag/tag-type keywords active for `partner` at
+   `:as-of`."
+  ([db partner] (tags-of db partner nil))
+  ([db partner opts]
+   (let [as-of (now-or (:as-of opts))
+         pid (resolve-partner db partner)
+         rows (d/q '[:find ?tag ?from ?thru
+                     :in $ ?p
+                     :where
+                     [?t :partner-tag/partner ?p]
+                     [?t :partner-tag/tag-type ?tag]
+                     [?t :partner-tag/from-date ?from]
+                     [(get-else $ ?t :partner-tag/thru-date :__none) ?thru]]
+                   db pid)]
+     (->> rows
+          (filter (fn [[_ from thru]] (active-as-of? from thru as-of)))
+          (map first)
+          set))))
+
+(defn partners-with-tag
+  "Partner eids holding `tag-type` active at `:as-of`."
+  ([db tag-type] (partners-with-tag db tag-type nil))
+  ([db tag-type opts]
+   (let [as-of (now-or (:as-of opts))
+         rows (d/q '[:find ?partner ?from ?thru
+                     :in $ ?tag
+                     :where
+                     [?t :partner-tag/tag-type ?tag]
+                     [?t :partner-tag/partner ?partner]
+                     [?t :partner-tag/from-date ?from]
+                     [(get-else $ ?t :partner-tag/thru-date :__none) ?thru]]
+                   db tag-type)]
+     (->> rows
+          (filter (fn [[_ from thru]] (active-as-of? from thru as-of)))
+          (map first)
+          set))))

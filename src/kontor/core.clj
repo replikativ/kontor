@@ -131,7 +131,9 @@
                       "entity"
                       "schedule" "schedule-occurrence"
                       "status-transition" "status-history"
-                      "audit-doc" "approval-policy"}
+                      "audit-doc" "approval-policy"
+                      "partner-merge" "bank-account"
+                      "partner-bank-account" "partner-tag"}
                     (namespace k))))
          sort
          vec)))

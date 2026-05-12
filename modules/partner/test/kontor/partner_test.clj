@@ -448,3 +448,120 @@
         subs (p/relationships-of-type db "O-parent" :subsidiary {:as-of jun-15})]
     (is (= 2 (count subs)))
     (is (every? #(= :subsidiary (:partner-relationship/relationship-type %)) subs))))
+
+;; ============================================================================
+;; ADR-039 — Master-data primitives
+;; ============================================================================
+
+(deftest merge-partners-resolves-canonical
+  (d/transact *conn*
+              [{:partner/external-id "P-CANONICAL"
+                :partner/type :person :partner/status :enabled
+                :partner/name "Canonical Customer"}
+               {:partner/external-id "P-DUPLICATE"
+                :partner/type :person :partner/status :enabled
+                :partner/name "Duplicate Customer"}])
+  (let [canonical (p/by-external-id (d/db *conn*) "P-CANONICAL")
+        duplicate (p/by-external-id (d/db *conn*) "P-DUPLICATE")]
+    (p/merge-partners! *conn* canonical duplicate
+                       {:reason :duplicate
+                        :reason-note "found duplicate during AR review"
+                        :merged-at #inst "2026-05-01"})
+    (let [db (d/db *conn*)]
+      (testing "resolve-canonical-partner walks the merge link"
+        (is (= canonical (p/resolve-canonical-partner db duplicate)))
+        (is (= canonical (p/resolve-canonical-partner db canonical))
+            "canonical resolves to itself"))
+      (testing "superseded partner is archived"
+        (is (= :archived (-> (d/pull db [:partner/status] duplicate)
+                             :partner/status))))
+      (testing "duplicate's history preserved (not retracted)"
+        (is (= "Duplicate Customer"
+               (-> (d/pull db [:partner/name] duplicate) :partner/name)))))))
+
+(deftest merge-rejects-self-merge
+  (d/transact *conn* [{:partner/external-id "P-SELF" :partner/type :person
+                       :partner/status :enabled :partner/name "Self"}])
+  (let [eid (p/by-external-id (d/db *conn*) "P-SELF")]
+    (is (thrown? Exception
+                 (p/merge-partners! *conn* eid eid {:reason :duplicate})))))
+
+(deftest bank-accounts-temporal-junction
+  (d/transact *conn*
+              [{:commodity/symbol "EUR" :commodity/name "Euro"
+                :commodity/precision 2 :commodity/iso-4217 "EUR"}
+               {:partner/external-id "P-SUPPLIER"
+                :partner/type :org :partner/status :enabled
+                :partner/name "Supplier Co"}
+               {:bank-account/code "ACCT-EUR-1"
+                :bank-account/iban "DE89370400440532013000"
+                :bank-account/bic "COBADEFFXXX"
+                :bank-account/bank-name "Commerzbank"
+                :bank-account/commodity [:commodity/symbol "EUR"]
+                :bank-account/holder-name "Supplier Co GmbH"
+                :bank-account/active true}
+               ;; Old account, thru-dated
+               {:partner-bank-account/partner [:partner/external-id "P-SUPPLIER"]
+                :partner-bank-account/bank-account [:bank-account/code "ACCT-EUR-1"]
+                :partner-bank-account/from-date #inst "2023-01-01"
+                :partner-bank-account/thru-date #inst "2025-01-01"
+                :partner-bank-account/purpose :disbursement
+                :partner-bank-account/preferred? false}
+               ;; New account, current
+               {:partner-bank-account/partner [:partner/external-id "P-SUPPLIER"]
+                :partner-bank-account/bank-account [:bank-account/code "ACCT-EUR-1"]
+                :partner-bank-account/from-date #inst "2025-06-01"
+                :partner-bank-account/purpose :disbursement
+                :partner-bank-account/preferred? true}])
+  (let [db (d/db *conn*)]
+    (testing "during the gap, no active bank account"
+      (let [accts (p/bank-accounts-of db "P-SUPPLIER" {:as-of #inst "2025-03-01"})]
+        (is (zero? (count accts)))))
+    (testing "during the older window, the un-preferred account is active"
+      (let [accts (p/bank-accounts-of db "P-SUPPLIER" {:as-of #inst "2024-06-01"})]
+        (is (= 1 (count accts)))))
+    (testing "after the new from-date, the preferred account is active"
+      (let [primary (p/primary-disbursement-account db "P-SUPPLIER"
+                                                    {:as-of #inst "2025-09-01"})]
+        (is (= "DE89370400440532013000" (:bank-account/iban primary)))))))
+
+(deftest partner-tags-temporal
+  (d/transact *conn*
+              [{:partner/external-id "P-TIER"
+                :partner/type :org :partner/status :enabled
+                :partner/name "Tier Customer"}
+               {:partner-tag/partner [:partner/external-id "P-TIER"]
+                :partner-tag/tag-type :gold-tier
+                :partner-tag/from-date #inst "2024-01-01"
+                :partner-tag/thru-date #inst "2025-06-15"}
+               {:partner-tag/partner [:partner/external-id "P-TIER"]
+                :partner-tag/tag-type :silver-tier
+                :partner-tag/from-date #inst "2025-06-15"}])
+  (let [db (d/db *conn*)]
+    (testing "tier as-of mid-2024 is gold"
+      (is (= #{:gold-tier} (p/tags-of db "P-TIER" {:as-of #inst "2024-06-15"}))))
+    (testing "tier post-downgrade is silver"
+      (is (= #{:silver-tier} (p/tags-of db "P-TIER" {:as-of #inst "2026-01-15"}))))
+    (testing "partners-with-tag :gold-tier as-of-2024 includes P-TIER"
+      (is (contains? (p/partners-with-tag db :gold-tier {:as-of #inst "2024-06-15"})
+                     (p/by-external-id db "P-TIER"))))))
+
+(deftest credit-limit-and-kyc-attrs-round-trip
+  (d/transact *conn*
+              [{:commodity/symbol "EUR" :commodity/name "Euro"
+                :commodity/precision 2 :commodity/iso-4217 "EUR"}
+               {:partner/external-id "P-CREDIT"
+                :partner/type :org :partner/status :enabled
+                :partner/name "Credit Customer"
+                :partner/credit-limit 50000M
+                :partner/credit-commodity [:commodity/symbol "EUR"]
+                :partner/credit-status :open
+                :partner/kyc-status :cleared
+                :partner/kyc-source "Manual"
+                :partner/kyc-checked-at #inst "2026-04-15"}])
+  (let [db (d/db *conn*)
+        p (d/pull db '[*] (p/by-external-id db "P-CREDIT"))]
+    (is (= 50000M (:partner/credit-limit p)))
+    (is (= :open (:partner/credit-status p)))
+    (is (= :cleared (:partner/kyc-status p)))
+    (is (= "Manual" (:partner/kyc-source p)))))
