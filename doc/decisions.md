@@ -3771,6 +3771,468 @@ Date: 2026-05-12.
 
 ---
 
+## ADR-042 — `kontor-procurement`: requisition + receipt + 3-way match + drop-ship + RTV
+
+**Decision.** Land Stage K (`kontor-procurement` companion under `modules/procurement/`) covering the full procure-to-pay cycle:
+
+- **Forward flow**: `:requirement` (requisition) → commit-to-PO via `:requirement-commitment` junction → `:order/type :purchase` (reuses ADR-035) → `:receipt` (physical goods) OR `:service-acceptance` (services) → kernel `:invoice/type :purchase` (reuses ADR-036) with **explicit GR/IR clearing per (PO-line, commodity)** via ADR-041's `:account-type-direction`.
+- **Reverse flow**: `:return` aggregate with `:return/type :customer | :vendor` discriminator (OFBiz `ReturnHeader.returnHeaderTypeId` pattern), `:return-item` lines, `:return-response` for what was done (replacement / credit / refund), `:return-item-billing` junction for credit memos.
+- **Drop-ship link**: `:order-item-assoc` generalized junction handling drop-ship + substitution + replacement + upgrade (OFBiz `OrderItemAssoc` pattern; one entity, four `:type` values).
+- **Tolerance policy**: `:match-tolerance` entity keyed `[entity, supplier?, product?]` with priority lookup (kontor improvement over OFBiz's lack of any tolerance config + SAP's per-company-code-only limitation).
+- **3-way match as state**: `:invoice/match-status ∈ {:auto-matched | :exception-* | :manual-approved | :disputed | :cleared}` driven by ADR-034's table; composes with ADR-038's `:approval-policy/rule :requires-three-way-match-pass` (new rule keyword) for posting gating.
+
+Three Stage K research-before agents (OFBiz deep dive, market-pain online, internal gap analysis — research note 14) converged on this shape. The substrate is unusually complete: ADR-030's `plan-stock-move` already handles `:direction :in` with GR/IR clearing callbacks; ADR-031's per-(entity, ledger, commodity) sum-to-zero structurally prevents GR/IR residuals from FX or partial-receipt mismatches; ADR-038's `:approval-policy` composes for SoD + tolerance-override; ADR-040's `:withholding-on-payment?` + `:invoice-line/reverse-charge?` flags cover IN TDS / MX ISR / US 1099 / EU intracommunity reverse-charge.
+
+This ADR is large because the user (per the project's "complete stages" rhythm) asked for v1 to cover the full P2P + reverse flow rather than ship a minimal foundation and defer half. The implementation lands in **four coherent commits** (schema + state machines; forward 3-way match; reverse flow + credit memos; drop-ship + bridge polymorphism).
+
+### Why full scope, not a foundation-only minimum
+
+The Stage K research surfaced six places where deferring half would create rework risk for the deferred half:
+
+1. **GR/IR clearing semantics depend on whether reverse-flow exists.** A receipt's `:gr-ir-clearing` credit nets against an invoice's debit; with RTV, a return-receipt's debit nets against a credit-memo's credit. Designing the GR/IR pattern without RTV in mind risks settling on a shape that doesn't extend cleanly.
+2. **3-way match invariants need the full data shape.** Match validates `(received-qty - returned-qty = invoiced-qty - credited-qty)`. Half-shipping creates a 2-way-match-only system that has to be retrofitted.
+3. **Status machine completeness.** Without RTV, `:order/status :completed` is the terminal end-state; with RTV, returns can extend the lifecycle. Better to seed all transitions in one pass.
+4. **`:order-item-assoc` enables three things at once.** Drop-ship + substitution + replacement-order — shipping the join entity without the workflows is cheap; deferring the entity forces a junction-shape revisit later.
+5. **`:account-type-direction` seeds for procurement.** All eight new account-types (`:gr-ir-clearing`, `:goods-receipt-accrual`, `:landed-cost-variance`, `:price-variance`, `:exchange-variance`, `:receive-reject-loss`, `:prepaid-expense`, `:vendor-credit-memo`) seed together; partial seeding leaves the bridge code branching on "is this account-type defined yet?"
+6. **Cross-companion bridge polymorphism is single-edit.** `kontor.invoice.bridge/make-invoice-from-order!` becomes polymorphic on `:order/type` once; doing it twice for forward then reverse flow is duplicate work.
+
+The trade-off accepted: the post-implement review-after pass will have a larger surface to audit (~12 entities + ~25 transitions + ~50 helpers vs ~5 entities for a foundation-only ship). Per ADR-037's "research-before / implement / review-after" rhythm, the review will find issues; that's the design intent.
+
+### Entity inventory
+
+**Forward flow (5 entities):**
+- `:requirement` — requisition root (OFBiz `Requirement` lines 2171-2215).
+- `:requirement-commitment` — many-to-many `:requirement ↔ :order-item` junction (OFBiz `OrderRequirementCommitment`).
+- `:receipt` — shipment-receipt header (OFBiz `ShipmentReceipt` partial; we collapse `Shipment` + `ShipmentReceipt` for v1; full shipment-lifecycle is a follow-up).
+- `:receipt-item` — per-PO-line receipt detail with `:quantity-accepted` + `:quantity-rejected` split.
+- `:receipt-invoice-billing` — `:receipt ↔ :invoice-line` junction (mirror of `:order-item-billing` from ADR-036).
+
+**Service procurement (1 entity):**
+- `:service-acceptance` — parallel to `:receipt` for non-physical PO lines (`:order-item/requires-receipt? false`). Single attestation event with `:accepted-by-uid`, `:accepted-at`, `:acceptance-evidence` (ref to `:audit-doc` per ADR-038).
+
+**Drop-ship + substitution + replacement (1 entity):**
+- `:order-item-assoc` — generalized `:order-item ↔ :order-item` junction with `:type ∈ {:drop-shipment | :substitute | :replacement | :upgrade}`. OFBiz `OrderItemAssoc` pattern lifted verbatim.
+
+**Match tolerance config (1 entity):**
+- `:match-tolerance` — keyed `[entity, supplier?, product?]` with `:qty-pct-over`, `:qty-abs-over`, `:price-pct-over`, `:price-abs-over` bands.
+
+**Reverse flow (4 entities):**
+- `:return` — root with `:return/type :customer | :vendor` discriminator (OFBiz `ReturnHeader.returnHeaderTypeId`).
+- `:return-item` — return lines with `:expected-disposition ∈ {:available | :defective | :scrap}`.
+- `:return-response` — what was done (`:replacement-order` ref / `:payment` ref / `:billing-account` credit / amount).
+- `:return-item-billing` — `:return-item ↔ :invoice-line` junction (for credit memos).
+
+**Cross-cutting attribute extensions** (additive to existing schemas):
+- `:order-item/requires-receipt?` (boolean, default true) — Stage K extension to ADR-035.
+- `:order-item/category` (keyword: `:direct | :indirect | :services | :asset`) — Stage K extension to ADR-035 for reporting + cost-center routing.
+- `:invoice/match-status` (keyword) — Stage K extension to ADR-036.
+
+Total: **12 new entities + 3 attr extensions = ~110 new schema attrs**.
+
+### Schema — Forward flow
+
+#### `:requirement` (companion-installed)
+
+```clojure
+:requirement/external-id   string :db.unique/identity
+:requirement/type          keyword          ; :product | :transfer | :production | :service | :asset-maint
+:requirement/status        keyword          ; :proposed | :approved | :ordered | :received |
+                                            ;   :rejected | :cancelled (state-machine driven)
+:requirement/product-id    string           ; consumer-supplied product ref
+:requirement/quantity      bigdec
+:requirement/uom           keyword          ; or ref to :commodity
+:requirement/facility-id   string           ; destination (consumer-supplied; no :facility entity yet)
+:requirement/facility-to-id string          ; for :transfer requirements
+:requirement/required-by-date instant
+:requirement/start-date    instant
+:requirement/estimated-budget bigdec
+:requirement/budget-commodity ref → :commodity
+:requirement/entity        ref → :entity    ; multi-entity scope (ADR-031)
+:requirement/cost-center   ref → :analytic-account ; ADR-032
+:requirement/justification string           ; replaces OFBiz `useCase` + `reason`
+:requirement/description   string
+:requirement/created-at    instant
+:requirement/created-by-uid ref
+```
+
+The `:type` discriminator follows OFBiz: `:product` is the bulk case (replenishment, buy-for-resale), `:transfer` is inter-facility, `:production` is manufacturing demand, `:service` is non-physical, `:asset-maint` is maintenance.
+
+#### `:requirement-commitment` junction (companion-installed)
+
+```clojure
+:requirement-commitment/requirement ref → :requirement
+:requirement-commitment/order-item  ref → :order-item
+:requirement-commitment/quantity    bigdec
+:requirement-commitment/committed-at instant
+:requirement-commitment/identity    tuple [requirement, order-item] unique
+```
+
+Many-to-many is load-bearing: one requirement for 100 widgets may aggregate with 50 other small requirements into a single PO line; conversely, a min-order-quantity constraint can split one requirement across multiple POs. Single-FK approach (`:requirement/order-item`) would force consolidation, breaking real workflows.
+
+#### `:receipt` (companion-installed)
+
+```clojure
+:receipt/external-id        string :db.unique/identity
+:receipt/order              ref → :order       ; the PO this receipt is against
+:receipt/ship-group         ref → :ship-group  ; optional, for multi-destination POs
+:receipt/status             keyword            ; :pending | :accepted | :rejected (state-machine)
+:receipt/received-at        instant
+:receipt/received-by-uid    ref
+:receipt/inspector-uid      ref
+:receipt/inspected-at       instant
+:receipt/packing-slip-ref   ref → :audit-doc   ; ADR-038
+:receipt/notes              string
+:receipt/facility-id        string             ; destination facility
+:receipt/carrier-partner    ref → :partner     ; :partner-role :carrier
+:receipt/tracking-number    string
+```
+
+#### `:receipt-item` (companion-installed)
+
+```clojure
+:receipt-item/receipt        ref → :receipt
+:receipt-item/order-item     ref → :order-item   ; the PO line received
+:receipt-item/product-id     string              ; denorm of :order-item/product-id
+:receipt-item/quantity-accepted bigdec
+:receipt-item/quantity-rejected bigdec           ; with reason; routes to :receive-reject-loss GL
+:receipt-item/rejection-reason keyword
+                                                  ;; :damaged | :wrong-item | :expired |
+                                                  ;; :quantity-mismatch | :quality-fail
+:receipt-item/lot            ref → :lot          ; ADR optional; per-:valuation-book/lot-required? policy
+:receipt-item/unit-cost      bigdec              ; actual cost at receipt; may differ from PO line
+:receipt-item/identity       tuple [receipt, order-item] unique
+```
+
+#### `:receipt-invoice-billing` junction (companion-installed)
+
+```clojure
+:receipt-invoice-billing/receipt      ref → :receipt
+:receipt-invoice-billing/invoice-line ref → :invoice-line
+:receipt-invoice-billing/quantity     bigdec
+:receipt-invoice-billing/identity     tuple [receipt, invoice-line] unique
+```
+
+This is the **third FK of the 3-way match**, mirroring `:order-item-billing` from ADR-036. The match invariant becomes a datalog query:
+
+```
+forall (:order-item ?oi)
+  (sum :receipt-item.quantity-accepted from receipts of ?oi)
+  - (sum :return-item.quantity from customer returns referencing ?oi)
+  =
+  (sum :invoice-line.quantity from billings of ?oi)
+  - (sum :return-item-billing.quantity from credit memos against ?oi)
+```
+
+Tolerance bands offset the equality check by `:match-tolerance` bands.
+
+### Schema — Service acceptance
+
+```clojure
+:service-acceptance/external-id      string :db.unique/identity
+:service-acceptance/order            ref → :order
+:service-acceptance/order-item       ref → :order-item
+:service-acceptance/quantity-accepted bigdec    ; e.g., hours, days, deliverable count
+:service-acceptance/accepted-at      instant
+:service-acceptance/accepted-by-uid  ref
+:service-acceptance/acceptance-evidence ref → :audit-doc  ; ADR-038
+:service-acceptance/notes            string
+:service-acceptance/identity         tuple [order-item, accepted-at] unique
+```
+
+3-way match degenerates cleanly: when `:order-item/requires-receipt? false`, the match query uses `:service-acceptance/quantity-accepted` instead of `:receipt-item/quantity-accepted`. Same invariant, different data source.
+
+### Schema — Order-item-assoc (drop-ship link + substitution + replacement)
+
+```clojure
+:order-item-assoc/from-order-item ref → :order-item    ; the source line
+:order-item-assoc/to-order-item   ref → :order-item    ; the linked line
+:order-item-assoc/type            keyword
+                                  ;; :drop-shipment   — SO line fulfilled by linked PO line
+                                  ;; :substitute      — alt product offered for unavailable original
+                                  ;; :replacement     — replacement-order line for customer return
+                                  ;; :upgrade         — upgrade to a higher SKU
+:order-item-assoc/quantity        bigdec
+:order-item-assoc/note            string
+:order-item-assoc/identity        tuple [from-order-item, to-order-item, type] unique
+```
+
+For drop-ship: SO line points to PO line via `:type :drop-shipment`. The PO's `:ship-group/contact-mech` references the SO's `:ship-group/contact-mech` (NOT a copy — bitemporal lookup answers "what was the address at PO time" for free). For substitution: SO line → another SO line (or PO line) with `:type :substitute`. For replacement: original SO line ← new SO line.
+
+### Schema — Match tolerance
+
+```clojure
+:match-tolerance/entity       ref → :entity     ; required; tenant scope
+:match-tolerance/supplier     ref → :partner    ; optional; supplier-specific
+:match-tolerance/product-id   string            ; optional; product-specific
+:match-tolerance/qty-pct-over bigdec            ; e.g., 0.05M = 5%
+:match-tolerance/qty-abs-over bigdec            ; absolute unit allowance
+:match-tolerance/price-pct-over bigdec
+:match-tolerance/price-abs-over bigdec
+:match-tolerance/price-abs-commodity ref → :commodity
+:match-tolerance/active       boolean
+:match-tolerance/identity     tuple [entity, supplier, product-id] unique
+```
+
+Lookup priority (mirrors `:gl-account-default` from ADR-036): `(entity, supplier, product)` → `(entity, supplier, nil)` → `(entity, nil, nil)` → kernel default (0% — strict match). Returns the first non-nil match.
+
+### Schema — Reverse flow (RTV / customer return)
+
+#### `:return` (companion-installed)
+
+```clojure
+:return/external-id    string :db.unique/identity
+:return/type           keyword          ; :customer | :vendor
+:return/status         keyword          ; :requested | :accepted | :received | :completed |
+                                        ;   :cancelled | :rejected (state-machine driven)
+:return/from-party     ref → :partner   ; for :customer → the customer; for :vendor → ourselves
+:return/to-party       ref → :partner   ; for :customer → ourselves; for :vendor → the supplier
+:return/order          ref → :order     ; the original SO (for :customer) or PO (for :vendor)
+:return/entity         ref → :entity    ; multi-entity scope
+:return/destination-facility-id string  ; where the returned goods land
+:return/supplier-rma   string           ; vendor's RMA number (for :vendor returns)
+:return/entry-date     instant
+:return/notes          string
+:return/supporting-doc ref → :audit-doc ; e.g., customer email request
+```
+
+#### `:return-item` (companion-installed)
+
+```clojure
+:return-item/return         ref → :return
+:return-item/order-item     ref → :order-item     ; the original line being returned
+:return-item/seq-id         string
+:return-item/identity       tuple [return, seq-id] unique
+:return-item/product-id     string                ; denorm
+:return-item/return-quantity bigdec
+:return-item/received-quantity bigdec             ; may differ from return-quantity
+:return-item/return-price   bigdec                ; price at return (may differ from invoice)
+:return-item/reason         keyword
+                            ;; :damaged | :defective | :wrong-item | :not-as-described |
+                            ;; :no-longer-needed | :late-delivery | :customer-request
+:return-item/return-type    keyword
+                            ;; :store-credit | :cash-refund | :exchange | :vendor-credit
+:return-item/expected-disposition keyword
+                            ;; :available | :defective | :scrap | :return-to-supplier
+:return-item/status         keyword
+:return-item/response       ref → :return-response
+```
+
+#### `:return-response` (companion-installed)
+
+```clojure
+:return-response/return-item ref → :return-item :db.unique/value  ; 1:1
+:return-response/type        keyword                              ; :replacement-order | :credit-memo |
+                                                                  ; :cash-refund | :billing-account-credit
+:return-response/replacement-order ref → :order                   ; new SO/PO created in response
+:return-response/credit-memo ref → :invoice                       ; the credit-memo invoice (kernel)
+:return-response/payment-ref string                               ; for refunds processed externally
+:return-response/amount      bigdec
+:return-response/amount-commodity ref → :commodity
+:return-response/created-at  instant
+```
+
+#### `:return-item-billing` junction (companion-installed)
+
+```clojure
+:return-item-billing/return-item     ref → :return-item
+:return-item-billing/invoice-line    ref → :invoice-line     ; the credit-memo line
+:return-item-billing/quantity        bigdec
+:return-item-billing/amount          bigdec
+:return-item-billing/identity        tuple [return-item, invoice-line] unique
+```
+
+Mirrors `:order-item-billing` from ADR-036 and `:receipt-invoice-billing` from this ADR. The trio of `:order-item-billing`, `:receipt-invoice-billing`, `:return-item-billing` closes the audit loop for every quantity flow.
+
+### Cross-cutting attribute extensions
+
+```clojure
+;; On :order-item (kontor-sales schema extension)
+:order-item/requires-receipt? boolean    ; default true; false for services
+:order-item/category          keyword    ; :direct | :indirect | :services | :asset
+
+;; On :invoice (kontor-invoice schema extension)
+:invoice/match-status         keyword
+                              ;; :auto-matched     — all qty/price match within tolerance
+                              ;; :exception-price  — price variance breach
+                              ;; :exception-qty    — qty variance breach
+                              ;; :exception-missing-receipt — invoice with no receipt
+                              ;; :exception-missing-po — invoice with no PO
+                              ;; :manual-approved  — exception resolved by override
+                              ;; :disputed         — held pending resolution
+                              ;; :cleared          — fully reconciled (post-payment)
+```
+
+### State machine seeds (~25 transitions)
+
+Requirement (`:requirement/status`):
+```
+:nil       → :proposed       (Create Requirement)
+:proposed  → :approved       (Approve)
+:proposed  → :rejected       (Reject)
+:proposed  → :cancelled      (Cancel)
+:approved  → :ordered        (Commit to PO — via :requirement-commitment)
+:approved  → :cancelled      (Cancel Approved)
+:ordered   → :received       (Auto-promoted when all linked POs received)
+:approved  → :proposed       (Revise back to draft — auditable)
+```
+
+Receipt (`:receipt/status`):
+```
+:nil       → :pending        (Create Receipt)
+:pending   → :accepted       (Inspection Pass)
+:pending   → :rejected       (Inspection Fail — full reject)
+:accepted  → :rejected       (Post-inspection reject — quality issue found later)
+```
+
+Match (`:invoice/match-status`):
+```
+:nil                 → :auto-matched               (within tolerance)
+:nil                 → :exception-price            (price variance breach)
+:nil                 → :exception-qty              (qty variance breach)
+:nil                 → :exception-missing-receipt  (invoice w/o receipt)
+:nil                 → :exception-missing-po       (invoice w/o PO)
+:exception-*         → :manual-approved            (override approved)
+:exception-*         → :disputed                   (held pending vendor response)
+:manual-approved     → :cleared                    (post-payment)
+:auto-matched        → :cleared                    (post-payment)
+:disputed            → :manual-approved            (resolution accepted)
+:disputed            → :auto-matched               (vendor corrected; re-matched)
+```
+
+Return (`:return/status`):
+```
+:nil        → :requested     (RMA requested)
+:requested  → :accepted      (RMA approved)
+:requested  → :rejected      (RMA denied)
+:requested  → :cancelled
+:accepted   → :received      (goods arrived back)
+:accepted   → :cancelled
+:received   → :completed     (refund/replacement issued)
+```
+
+### Account-type-direction seeds (~8 new)
+
+```clojure
+;; All for :purchase invoice-type (and mirror as needed for :credit-memo)
+[:gr-ir-clearing            :credit]   ; on receipt (paired with :inventory or :purchase-expense debit)
+[:gr-ir-clearing            :debit]    ; on invoice (paired with :ap credit) — same row reused via invoice-type discriminator
+[:goods-receipt-accrual     :credit]   ; period-end accrual when receipt without invoice
+[:landed-cost-variance      :debit]    ; freight/duty/insurance allocation
+[:price-variance            :debit]    ; PO unit-price vs invoice unit-price
+[:exchange-variance         :debit]    ; FX rate difference (receipt vs invoice timing)
+[:receive-reject-loss       :debit]    ; rejected-quantity write-off
+[:prepaid-expense           :debit]    ; advance payments to suppliers
+[:vendor-credit-memo        :credit]   ; credit-memo posting (mirror of customer-side)
+```
+
+The bridge's `debit-credit-for` fn (rewrite per ADR-041) consults the table first, falls back to `default-direction-for`. Stage K seeds the procurement extensions; the default map keeps existing behavior.
+
+### Public surface
+
+#### `kontor.procurement.requirement` namespace
+
+- `make-requirement!` — create a `:requirement` in `:proposed` state.
+- `approve-requirement!` — `:proposed → :approved` with `:approval-policy` rule consultation per ADR-038.
+- `commit-to-po!` — create `:requirement-commitment` rows linking requirement(s) to PO line(s); advances `:requirement/status :approved → :ordered` when fully committed.
+- `auto-promote-to-received!` — scheduled or event-driven; advances `:approved → :received` (OFBiz `checkItemStatus` analog for requirements).
+- `pending-of-supplier` — query requirements assigned via `:order-role :supplier` or unassigned.
+- `pull-requirement` — pulled requirement with commitments + linked POs.
+
+#### `kontor.procurement.receipt` namespace
+
+- `make-receipt!` — create `:receipt` + `:receipt-item` rows; status `:pending`.
+- `accept-receipt!` — `:pending → :accepted`; optionally fires `post-receipt-with-inventory!`.
+- `reject-receipt!` — `:pending → :rejected` with reason.
+- `post-receipt-with-inventory!` — composes (1) `:receipt` creation, (2) `kontor.posting/plan-stock-move :direction :in` via ADR-030 (producing GR/IR posting), (3) `:valuation-layer` write per ADR-028, all in ONE atomic tx.
+- `receipts-of-order` — query receipts for a PO.
+- `quantity-received-of-order-item` — sum of `:receipt-item/quantity-accepted` for a line.
+
+#### `kontor.procurement.match` namespace
+
+- `applicable-tolerance` — priority lookup `(entity, supplier, product) → :match-tolerance` row.
+- `three-way-report` — per `:order-item`, returns `{:ordered-qty :received-qty :invoiced-qty :ordered-price :invoiced-price :qty-variance :price-variance :verdict :match | :within-tolerance | :exception-qty | :exception-price | :exception-missing-receipt}`.
+- `match-status-of-invoice` — pull `:invoice/match-status` (denormalized).
+- `recompute-match-status!` — scan invoice lines, compute report, write `:match-status` via `record-status-change!`.
+
+#### `kontor.procurement.acceptance` namespace
+
+- `make-acceptance!` — create `:service-acceptance` for non-physical PO lines.
+- `acceptances-of-order` — query acceptances for a PO.
+
+#### `kontor.procurement.return` namespace
+
+- `make-return!` — create `:return` + `:return-item` rows.
+- `accept-return!` — `:requested → :accepted`.
+- `receive-return!` — `:accepted → :received`; fires `kontor.posting/plan-stock-move :direction :out` for customer returns into available stock; or `:in` for vendor returns back from the supplier (RTV mechanics inverted).
+- `complete-return!` — `:received → :completed`; creates `:return-response` + optionally fires credit-memo creation via `make-credit-memo-from-return!`.
+- `make-credit-memo-from-return!` — creates a kernel `:invoice/type :credit-memo` (for customer returns) or `:invoice/type :debit-memo` (for vendor returns); writes `:return-item-billing` junctions.
+
+#### Cross-companion edits to `kontor.invoice.bridge`
+
+- `make-invoice-from-order!` dispatches `:invoice-line/gl-account-type` on `(:order/type order, :order-item/category item)`:
+  - Sales × `*` → `:sales-revenue`
+  - Purchase × `:direct` → `:inventory` (or `:purchase-expense` if `:order-item/requires-receipt? false`)
+  - Purchase × `:indirect` → `:purchase-expense`
+  - Purchase × `:services` → `:purchase-expense`
+  - Purchase × `:asset` → `:asset-acquisition` (a new account-type-direction we seed)
+- `make-invoice-line-from-adjustment` dispatches on `(invoice-type, adjustment-type)`:
+  - Purchase × `:tax` → `:purchase-tax-recoverable`
+  - Purchase × `:discount` → `:purchase-discount`
+  - Purchase × `:shipping` → `:shipping-expense`
+  - Sales × `*` → existing mapping unchanged
+
+### Approval policy integration
+
+ADR-038's `:approval-policy/rule` keyword extends with one new value:
+- `:requires-three-way-match-pass` — applicable at `:invoice/match-status → :cleared` transition; checks `(kontor.procurement.match/match-status-of-invoice db invoice-eid)` is `:auto-matched` or `:manual-approved`. The override path is exactly the `:no-self-approval` + `:requires-supporting-doc` chain from ADR-038 — adding manual-approval requires an `:audit-doc` ref.
+
+The bridge's `kontor.invoice.bridge/post-to-ledger!` (modified) consults `:requires-three-way-match-pass` policy for `:purchase` invoices before committing the AP posting. Without the rule installed, posting proceeds (current behavior). With the rule installed, posting fails until `:match-status` is `:auto-matched` / `:manual-approved` / `:cleared`.
+
+### Bootstrap
+
+The companion's `install!`:
+1. Transacts the schema additions.
+2. Seeds the requirement + receipt + match-status + return state machines into `:status-transition`.
+3. Seeds the procurement `:account-type-direction` rows.
+4. Idempotent via composite-tuple identities.
+
+### Alternatives considered
+
+- **RTV as `:order/type :return-to-vendor` reusing order machinery.** Considered (internal gap analysis recommendation). Rejected per OFBiz pattern: returns have a genuinely different lifecycle (disposition flags, RMA numbers, replacement-linkage) that a unified `:order` shape obscures. The `:return` entity matches the OFBiz `ReturnHeader.returnHeaderTypeId` discriminator pattern; the codepaths are 95% identical with role inversion, exactly as OFBiz models it. Keeping forward and reverse aggregates separate also keeps the order state-machine clean.
+- **Tolerance config as scalar attrs on `:partner` (per-supplier only).** Rejected: real procurement needs per-(supplier, product) granularity. SAP supports it; customers commonly need it for high-volume + high-variability product categories.
+- **GR/IR via accrual-reversal pattern (NetSuite default for non-perpetual books)** instead of explicit per-PO-line clearing (SAP pattern). Rejected: explicit GR/IR per PO line makes residuals queryable + auditable; the accrual-reversal pattern hides residuals in journal entries that don't link to the originating receipt or PO.
+- **`:service-acceptance` as a `:receipt` with phantom `:quantity-accepted`.** Rejected: forces fake `:lot` refs, breaks valuation-layer invariants, confuses reports. Separate entity is cleaner.
+- **3-way match as a per-invoice attribute** (`:invoice/match-passed? boolean`). Rejected: not enough state for the exception path (which exception type, when override approved, by whom). State machine is right.
+- **`:order-item-assoc` per-type entities** (`:drop-ship-link`, `:substitution-link`, `:replacement-link`). Rejected: one entity with `:type` discriminator is what OFBiz does and what scales when new association types appear (kit-component, alternate-source).
+- **Auto-emission of drop-ship PO from SO via SECA.** Rejected for v1: too much workflow coupling. Stage K v1 ships the `:order-item-assoc/type :drop-shipment` slot; the consumer (beleg or custom app) decides whether to auto-emit. A future companion `kontor-drop-ship-orchestrator` could ship the auto-emission policy.
+- **Subcontracting / consignment / VMI in v1.** Rejected: each needs valuation-layer semantics that compose differently. Subcontracting belongs to manufacturing companion (Stage K+N); consignment + VMI belong to a sibling `kontor-consignment` companion.
+
+### Implications
+
+- ~110 new kernel + companion attrs across 12 new entities + 3 attr extensions.
+- ~25 new `:status-transition` seeds.
+- ~9 new `:account-type-direction` seeds.
+- 5 new namespaces under `kontor.procurement.*`.
+- 2 polymorphic edits in `kontor.invoice.bridge`.
+- 1 new `:approval-policy/rule` value (`:requires-three-way-match-pass`).
+- Test coverage target: ~25 new tests covering each major flow (forward, reverse, drop-ship, services, tolerance application, exception override, period-close accrual reversal).
+- Forward-compat: `kontor-collections` (Stage L) reads `:invoice/match-status` for AR collections workflow. `kontor-revrec` (Stage M) reads `:order-item/category :services` for revrec rules. `kontor-l10n-*` add per-country e-invoice clearance to the procurement invoice path (already supported via ADR-040 `:pending-attestation`).
+
+### Implementation plan
+
+Four coherent commits:
+
+1. **ADR doc + schema + state machines + seeds** (this commit). Documentation lands first; substrate readers can review the design before code.
+2. **Forward 3-way match** — `:requirement`, `:receipt`, `:service-acceptance`, match helper, bridge dispatch on `:order/type`. End-to-end test: PO → receipt → invoice → posted.
+3. **Reverse flow** — `:return`, `:return-item`, `:return-response`, `:return-item-billing`, credit-memo flow.
+4. **Drop-ship + cross-cutting** — `:order-item-assoc`, drop-ship-link helpers, drop-ship test (SO with linked PO; address-by-reference invariant).
+
+After all four land: review-after agents (code-review + market-pain delta against the implementation). Then user-story integration tests per the CLAUDE.md rhythm.
+
+Date: 2026-05-12.
+
+---
+
 ## Decisions deferred (open)
 
 The following choices are NOT yet locked. Update this section as we converge.

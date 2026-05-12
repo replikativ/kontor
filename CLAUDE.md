@@ -55,6 +55,47 @@ Add an ADR to `doc/decisions.md`. Number it sequentially. Link to it from any co
 
 Tick the checkbox in `doc/roadmap.md` AND make sure the per-phase acceptance criterion is genuinely met. Don't tick prematurely.
 
+### Per-stage rhythm (Stage I onward, codified by ADR-037)
+
+Each substantial stage (J, K, L, …) follows a three-step pattern. **Don't skip steps.**
+
+**1. Research-before.** Spawn 2-3 background agents in parallel:
+- **Reference study** — deep read of a license-clean reference implementation (OFBiz Apache-2.0, Sylius MIT, KillBill Apache-2.0) at file:line depth. Output: research note in `doc/research/`.
+- **Market-pain study** — online research (vendor docs, OSS issue trackers, RFP commentary, customer reviews on G2/Capterra/Trustpilot) on what real customers complain about in this domain. Output: pain-point list with severity + remediation hints in `doc/research/`.
+- **Internal gap analysis** (optional) — what does the current kontor substrate already provide, what's clearly missing, what's ambiguous and needs a design call.
+
+Synthesize the agent reports BEFORE writing any code. Use AskUserQuestion to surface design calls the research surfaces.
+
+**2. Implement.** Draft the stage's ADR(s) in `doc/decisions.md`. Schema → helpers → tests. Commit per coherent unit (one ADR per commit typically). Run `bb test` after each commit.
+
+**3. Review-after.** Spawn 1-2 background agents in parallel:
+- **Code-review agent** — independent audit of the new ADRs + schema + tests against the local code. Hunts for P0 ship-blockers, P1 issues, P2 followups with file:line citations.
+- **Market-pain review** — audit the implementation against the pain points from step 1. Catches gaps that purely-code review misses.
+
+Fix the P0s before the stage is "done." P1s and P2s get triaged into followups or rolled into later stages. Capture cross-cutting findings in a research note.
+
+**Token economics.** This rhythm is expensive (~5-10 agents per stage at ~$1-5 each, plus the implementation tokens). It pays for itself when the alternative is rework: per the project's culture, "sloppy initially → more churn / iterations later." Five hours of agent research up-front beats five days of refactoring out of bad design choices later.
+
+### Cross-stage user-story validation
+
+After 2-3 stages land, run **end-to-end user stories** through the substrate to find integration friction the per-stage rhythm can't see. Each user story is a concrete scenario:
+
+- DE GmbH B2B with Factur-X invoicing.
+- US LLC with multi-state sales tax (Avalara via `TaxProvider`).
+- Brazilian retailer with NF-e clearance.
+- Indian B2B with IRN + GSTR + TDS withholding.
+- Multi-entity intercompany (parent ↔ subsidiary in different currencies).
+- SaaS subscription with deferred revenue + monthly recognition.
+- Project-based services billing with timesheet-as-analytic-line.
+
+For each story:
+1. Write the smallest end-to-end integration test that exercises the substrate.
+2. Note every friction point (missing helper, wrong default, awkward API, undocumented invariant).
+3. Triage: which frictions deserve fixes vs documentation vs a new primitive.
+4. Smooth out the worst friction before the next stage.
+
+Friction discovered this way is the ground truth — the per-stage research informs design, but user stories reveal what actually works in practice.
+
 ## Conventions
 
 ### Namespacing
