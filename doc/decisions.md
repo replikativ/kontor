@@ -1804,6 +1804,142 @@ Date: 2026-05-11.
 
 ---
 
+## ADR-032 — `:schedule` entity for recurring postings + `:cost-center` analytic plan bootstrap
+
+**Decision.** Add a kernel-level `:schedule` entity representing a sequence of dates at which a recurring posting fires. Add a kernel-level `:cost-center` analytic plan, bootstrapped at install time (sibling of the `primary` ledger and `primary` valuation book). Both are *cross-cutting primitives* that surfaced in six independent companion-project research lines and would otherwise be reinvented per consumer.
+
+### Why these two together
+
+Both came out of the survey of business-OS companion projects (research note 10) and HR / personnel (research note 09). Bundling because:
+
+- They're tiny — together about 10 attrs + 1 new entity + 1 install-time data row.
+- They land BEFORE any companion ships, so the companions can rely on them without coordination.
+- They have no cross-dependencies; landing one without the other works.
+
+### `:schedule` — what surfaced
+
+Six unrelated companion projects all need *the same* primitive: a recurring schedule that emits a posting per period. Today, each would invent its own:
+
+| Companion | Use case |
+|---|---|
+| `kontor-asset` | Monthly depreciation — `Dr Depreciation Expense / Cr Accumulated Depreciation` per period |
+| `kontor-revrec` | Over-time revenue recognition (ASC 606 / IFRS 15) — `Dr Contract Asset / Cr Revenue` per period |
+| `kontor-subscription` | Recurring SaaS billing — `Dr AR / Cr Deferred Revenue` per recurrence |
+| `kontor-lease` (future) | IFRS 16 / ASC 842 lease-liability amortization per period |
+| `kontor-hr` | PTO accrual reversals (`Dr Wage Expense / Cr PTO Liability` per accrual cycle) |
+| `kontor-insurance` (future) | Insurance premium amortization (`Dr Insurance Expense / Cr Prepaid Insurance` monthly) |
+
+The convergent shape: an entity carrying a recurrence rule + a target template, with a side-table of *materialized occurrences* (one per fired posting). The kernel ships the entity + a `:schedule-occurrence` log; consumers ship the rule-evaluation engine appropriate to their domain.
+
+### `:schedule` schema
+
+```clojure
+:schedule/code             string :db.unique/identity
+:schedule/name             string
+:schedule/kind             keyword                       ; :depreciation
+                                                         ; | :revenue-recognition
+                                                         ; | :subscription-billing
+                                                         ; | :lease-amortization
+                                                         ; | :pto-accrual
+                                                         ; | :prepaid-amortization
+                                                         ; | … free-form
+:schedule/origin-entity    ref                            ; the asset / contract /
+                                                         ; subscription / etc. that
+                                                         ; this schedule belongs to
+                                                         ; (generic ref — consumer
+                                                         ; defines what an :asset is)
+:schedule/start-date       instant
+:schedule/end-date         instant                        ; optional; nil = indefinite
+:schedule/frequency        keyword                       ; :daily | :weekly | :monthly
+                                                         ; | :quarterly | :annual
+                                                         ; | :custom
+:schedule/total-amount     bigdec                        ; total to amortize (optional;
+                                                         ; for finite schedules)
+:schedule/total-commodity  ref → :commodity
+:schedule/state            keyword                       ; :active | :paused
+                                                         ; | :completed | :cancelled
+:schedule/active           boolean
+:schedule/note             string
+
+;; Each firing of the schedule produces one :schedule-occurrence,
+;; immutable and timestamped. The occurrence links to the
+;; kernel :transaction it produced.
+:schedule-occurrence/schedule        ref → :schedule
+:schedule-occurrence/sequence        long                 ; 1, 2, 3, …
+:schedule-occurrence/scheduled-date  instant
+:schedule-occurrence/transaction     ref → :transaction
+:schedule-occurrence/amount          bigdec               ; this period's amount
+:schedule-occurrence/commodity       ref → :commodity
+:schedule-occurrence/fired-at        instant              ; when the posting was made
+:schedule-occurrence/identity        tuple [schedule, sequence] unique
+                                                          ; idempotency: re-firing
+                                                          ; period 7 collapses to one
+                                                          ; record
+```
+
+### What the kernel does NOT model
+
+Out of scope (each consumer ships its own):
+
+- **The rule-evaluation engine** — how amounts per period are computed (straight-line vs declining-balance vs units-of-production depreciation; recurring vs over-time revrec; tiered vs flat subscription billing). The consumer computes the amount; the kernel records the occurrence.
+- **The trigger** — who runs the schedule (a cron job, a manual close-period step, an interactive UI). The kernel just records `:fired-at`.
+- **The posting shape** — the DR/CR accounts. The consumer's posting-builder decides. The kernel just stores the resulting `:transaction` ref.
+
+### `:cost-center` analytic plan
+
+Bootstrap at kernel install (sibling of primary ledger + primary valuation book):
+
+```clojure
+{:analytic-plan/code   "cost-center"
+ :analytic-plan/name   "Cost centers"
+ :analytic-plan/applicability :optional
+ :analytic-plan/active true}
+```
+
+Every companion will lean on this plan:
+- HR: cost-center on `:employment` (research note 09)
+- Project: cost-center on timesheet line (which is just an analytic-line per Odoo pattern)
+- Manufacturing: work-center on production order
+- Asset: cost-center on depreciation schedule
+- Fleet: vehicle as analytic dimension under cost-center
+
+Consumers seed the actual `:analytic-account` values (the specific cost centers); the plan is in place from kernel install.
+
+### Bootstrap
+
+`kontor.core/install-schema!` gains one more transact step:
+
+```clojure
+{:analytic-plan/code "cost-center"
+ :analytic-plan/name "Cost centers"
+ :analytic-plan/applicability :optional
+ :analytic-plan/active true}
+```
+
+Idempotent via `:db.unique/identity` on `:analytic-plan/code`.
+
+No bootstrap data for `:schedule` itself — schedules are entirely consumer-installed.
+
+### Alternatives considered
+
+- *No `:schedule` entity; let each companion define its own (e.g. `:depreciation-schedule`, `:revrec-schedule`).* Rejected: six independent inventions of the same shape; kernel queries can't ask "show me all schedules firing this period" across consumers; no shared idempotency story for re-firing a missed occurrence.
+- *Bake the rule-evaluation engine into the kernel.* Rejected: each domain has its own math (depreciation methods, ASC 606 input vs output method, subscription proration). The kernel doesn't know which method applies; consumers do. The `CostingProvider` analogue would be a `ScheduleProvider`, but most consumers use one well-known method per schedule-kind and don't need a runtime-pluggable engine.
+- *Make `:schedule-occurrence` an attribute on `:transaction` rather than a separate entity.* Rejected: a single occurrence may fail to fire (period closed) and need re-firing later; it's a first-class lifecycle entity, not a posting attribute.
+- *Tightly couple `:schedule` to a specific origin-entity type (e.g. require it to point at `:asset`).* Rejected: the same schedule shape covers six unrelated origin entities. Generic ref keeps the kernel scope-honest.
+
+### Implications
+
+- New schema: 9 attrs on `:schedule` + 8 attrs on `:schedule-occurrence` = 17 attrs total.
+- New install-time data: 1 row (the `cost-center` analytic plan).
+- `kontor.core/install-schema!` gains one transact.
+- `kontor.schedule` namespace ships with: `next-occurrence-date`, `pending-occurrences`, `fire-occurrence!` (records the occurrence + kernel transaction), `by-code`, idempotency helpers.
+- Each companion's posting-builder consumes the schedule for its domain math; the kernel just records what happened.
+- Forward-compat: a future cross-companion "schedule monitor" can show all pending occurrences across asset / revrec / subscription / lease in one view.
+
+Date: 2026-05-12.
+
+---
+
 ## Decisions deferred (open)
 
 The following choices are NOT yet locked. Update this section as we converge.

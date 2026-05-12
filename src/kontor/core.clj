@@ -44,15 +44,27 @@
 ;; DB lifecycle
 ;; ============================================================================
 
+(def cost-center-plan-seed
+  "Bootstrap seed for the kernel-level `cost-center` analytic plan
+   (ADR-032). Every companion project leans on this plan — HR cost-
+   center on `:employment`, project on timesheet, manufacturing
+   work-center, asset cost-center, fleet vehicle. Pre-installing
+   the plan removes cross-companion coordination overhead."
+  {:analytic-plan/code          "cost-center"
+   :analytic-plan/name          "Cost centers"
+   :analytic-plan/applicability :optional
+   :analytic-plan/active        true})
+
 (defn install-schema!
-  "Transact the kernel schema into the connection AND bootstrap the
-   default primary ledger (ADR-021) + primary valuation book (ADR-027).
-   Idempotent — safe to re-run on a connection that already has the
-   schema."
+  "Transact the kernel schema into the connection AND bootstrap
+   defaults: primary ledger (ADR-021), primary valuation book
+   (ADR-027), cost-center analytic plan (ADR-032). Idempotent —
+   safe to re-run on a connection that already has the schema."
   [conn]
   (schema/install! conn)
   (ledger/install-defaults! conn)
   (valuation/install-defaults! conn)
+  (d/transact conn [cost-center-plan-seed])
   conn)
 
 (defn create-test-db
@@ -116,7 +128,8 @@
                       "attestation" "complemento"
                       "valuation-book"
                       "valuation-layer" "layer-consumption" "layer-adjustment"
-                      "entity"}
+                      "entity"
+                      "schedule" "schedule-occurrence"}
                     (namespace k))))
          sort
          vec)))

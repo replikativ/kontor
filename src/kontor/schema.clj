@@ -2275,6 +2275,138 @@
                      has its own valuation books; one entity may
                      run several books in parallel (ADR-027)."}])
 
+;; ============================================================================
+;; Schedule entity + occurrence log — ADR-032.
+;;
+;; Cross-cutting primitive: a recurring posting sequence used by
+;; asset depreciation, revenue recognition, subscription billing,
+;; lease amortization, PTO accrual, prepaid amortization, etc. The
+;; kernel ships the entity + occurrence log; consumers ship the
+;; rule-evaluation engine that decides per-period amounts.
+;; ============================================================================
+
+(def ^:private schedule-attrs
+  [{:db/ident       :schedule/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Stable identifier (\"asset-1234-dep\",
+                     \"sub-acme-2026-q3-rev\", \"lease-bldg-01\")."}
+
+   {:db/ident       :schedule/name
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :schedule/kind
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":depreciation | :revenue-recognition
+                     | :subscription-billing | :lease-amortization
+                     | :pto-accrual | :prepaid-amortization
+                     | … free-form. Consumers extend."}
+
+   {:db/ident       :schedule/origin-entity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Generic ref — the asset / contract /
+                     subscription / lease this schedule belongs to.
+                     Consumer defines what that entity is."}
+
+   {:db/ident       :schedule/start-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "First scheduled occurrence (inclusive)."}
+
+   {:db/ident       :schedule/end-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Last scheduled occurrence (inclusive). Optional;
+                     nil = indefinite."}
+
+   {:db/ident       :schedule/frequency
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":daily | :weekly | :monthly | :quarterly |
+                     :annual | :custom. Consumers compute the next
+                     occurrence date using this."}
+
+   {:db/ident       :schedule/total-amount
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Total amount to be amortized over the schedule.
+                     Optional — only meaningful for finite schedules
+                     (depreciation, prepaid amortization). Schedules
+                     where per-period amount is computed elsewhere
+                     (subscription billing with variable usage) omit
+                     this."}
+
+   {:db/ident       :schedule/total-commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Commodity for :schedule/total-amount."}
+
+   {:db/ident       :schedule/state
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":active | :paused | :completed | :cancelled."}
+
+   {:db/ident       :schedule/active
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :schedule/note
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}])
+
+(def ^:private schedule-occurrence-attrs
+  [{:db/ident       :schedule-occurrence/schedule
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Required ref to :schedule. Back-pointer."}
+
+   {:db/ident       :schedule-occurrence/sequence
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "1, 2, 3, … The Nth firing of the schedule."}
+
+   {:db/ident       :schedule-occurrence/scheduled-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The valid-time date this occurrence is for.
+                     (E.g. \"depreciation for month 2026-05\".)"}
+
+   {:db/ident       :schedule-occurrence/transaction
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Required ref to the kernel :transaction that
+                     this occurrence produced."}
+
+   {:db/ident       :schedule-occurrence/amount
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "This period's amount. Consumer-computed."}
+
+   {:db/ident       :schedule-occurrence/commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :schedule-occurrence/fired-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Wall-clock time the occurrence was recorded.
+                     Distinct from :scheduled-date (the valid-time)
+                     and from the underlying datahike tx-time."}
+
+   {:db/ident       :schedule-occurrence/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:schedule-occurrence/schedule
+                     :schedule-occurrence/sequence]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Composite identity: one occurrence per
+                     (schedule, sequence) pair. Idempotent — re-
+                     firing period 7 collapses to the existing row."}])
+
 (def ^:private layer-adjustment-attrs
   [{:db/ident       :layer-adjustment/layer
     :db/valueType   :db.type/ref
@@ -2367,7 +2499,9 @@
     entity-attrs                         ; ADR-031
     posting-entity-attrs                 ; ADR-031
     ledger-entity-attrs                  ; ADR-031
-    valuation-book-entity-attrs)))       ; ADR-031
+    valuation-book-entity-attrs          ; ADR-031
+    schedule-attrs                       ; ADR-032
+    schedule-occurrence-attrs)))         ; ADR-032
 
 (defn install!
   "Transact the kernel schema into a connection. Idempotent — re-running

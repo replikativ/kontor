@@ -32,7 +32,8 @@
     "attestation" "complemento"
     "valuation-book"
     "valuation-layer" "layer-consumption" "layer-adjustment"
-    "entity"})
+    "entity"
+    "schedule" "schedule-occurrence"})
 
 (deftest schema-loads-into-fresh-db
   (testing "Kernel schema transacts cleanly into a fresh in-memory DB"
