@@ -37,7 +37,8 @@
     "status-transition" "status-history"
     "audit-doc" "approval-policy"
     "partner-merge" "bank-account"
-    "partner-bank-account" "partner-tag"})
+    "partner-bank-account" "partner-tag"
+    "partner-tax-id"})
 
 (deftest schema-loads-into-fresh-db
   (testing "Kernel schema transacts cleanly into a fresh in-memory DB"

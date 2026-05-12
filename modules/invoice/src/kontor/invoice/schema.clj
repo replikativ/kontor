@@ -56,7 +56,17 @@
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Multi-entity scope per ADR-031. Required for
-                     multi-entity tenants; optional for single-entity."}])
+                     multi-entity tenants; optional for single-entity."}
+
+   ;; ADR-040: jurisdiction primitives.
+   {:db/ident       :invoice/tax-inclusive?
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Default false. When true, line :unit-price is
+                     gross (tax-included); discount applies to gross
+                     then tax back-solved. When false, :unit-price is
+                     net; discount applies to net, tax computed on
+                     post-discount base. ADR-040."}])
 
 ;; ============================================================================
 ;; Invoice-line extensions
@@ -111,7 +121,34 @@
     :db/cardinality :db.cardinality/one
     :db/doc         "Line total. For goods lines: quantity × unit-price.
                      For adjustment lines: the adjustment amount itself
-                     (where quantity doesn't apply)."}])
+                     (where quantity doesn't apply)."}
+
+   ;; ADR-040: jurisdiction primitives.
+   {:db/ident       :invoice-line/reverse-charge?
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Default false. When true, bridge emits dual
+                     buyer-side postings (AP-tax-payable + AP-tax-
+                     recoverable, netting to zero) and the supplier-
+                     side invoice doesn't charge VAT. EU B2B
+                     intracommunity + ViDA 2028. ADR-040."}
+
+   {:db/ident       :invoice-line/recognition
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":direct | :deferred. Default :direct. :deferred
+                     credits :sales-revenue-deferred (a liability)
+                     instead of :sales-revenue; consumer (kontor-revrec
+                     when it lands) emits a :schedule (ADR-032) row
+                     to release over the obligation period. ADR-040."}
+
+   {:db/ident       :invoice-line/withholding-on-payment?
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Default false. When true, the withholding-tax
+                     credit-leg defers to payment time, not invoice
+                     posting time. IN TDS / MX ISR / US 1099 backup
+                     withholding. ADR-040."}])
 
 ;; ============================================================================
 ;; :order-item-billing junction
@@ -243,7 +280,41 @@
     :status-transition/from :paid
     :status-transition/to :cancelled
     :status-transition/active true
-    :status-transition/name "Refund"}])
+    :status-transition/name "Refund"}
+
+   ;; ADR-040: clearance lifecycle for e-invoicing jurisdictions
+   ;; (IT SdI, IN IRN, BR NF-e, ES Verifactu). Opt-in — non-clearance
+   ;; jurisdictions go :draft → :sent directly.
+   {:status-transition/entity-type :invoice
+    :status-transition/facet :invoice/status
+    :status-transition/from :draft
+    :status-transition/to :pending-attestation
+    :status-transition/active true
+    :status-transition/name "Submit for Clearance"}
+   {:status-transition/entity-type :invoice
+    :status-transition/facet :invoice/status
+    :status-transition/from :ready
+    :status-transition/to :pending-attestation
+    :status-transition/active true
+    :status-transition/name "Submit Finalized for Clearance"}
+   {:status-transition/entity-type :invoice
+    :status-transition/facet :invoice/status
+    :status-transition/from :pending-attestation
+    :status-transition/to :sent
+    :status-transition/active true
+    :status-transition/name "Cleared by Authority"}
+   {:status-transition/entity-type :invoice
+    :status-transition/facet :invoice/status
+    :status-transition/from :pending-attestation
+    :status-transition/to :rejected
+    :status-transition/active true
+    :status-transition/name "Rejected by Authority"}
+   {:status-transition/entity-type :invoice
+    :status-transition/facet :invoice/status
+    :status-transition/from :rejected
+    :status-transition/to :draft
+    :status-transition/active true
+    :status-transition/name "Revise and resubmit"}])
 
 (defn install!
   "Install the kontor-invoice companion schema + state-machine seeds.

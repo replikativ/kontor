@@ -3366,6 +3366,173 @@ Date: 2026-05-12.
 
 ---
 
+## ADR-040 — Jurisdiction primitives: multi-tax-id, reverse-charge, tax-inclusive, recognition, withholding
+
+**Decision.** Extend the kernel + the kontor-invoice companion with six jurisdiction-aware primitives that resolve multi-country / multi-VAT / e-invoicing-clearance / revrec-forward-compat gaps:
+
+1. **`:partner-tax-id` junction** (kernel) — multi-VAT-per-jurisdiction with effective-date validity. The kernel's existing `:partner/tax-id` scalar stays as the "primary"; this junction handles the multi-country case.
+2. **`:invoice-line/reverse-charge?` flag** (kontor-invoice) — EU B2B intracommunity services + future ViDA 2028 universal reverse-charge support.
+3. **`:invoice/tax-inclusive?` flag** (kontor-invoice) — pins the discount-then-tax computation order; prevents the Odoo issue #23125 / #66875 class of rounding bugs.
+4. **`:invoice-line/recognition`** keyword `:direct | :deferred` (kontor-invoice) — kontor-revrec forward-compat. When `:deferred`, the posting bridge credits a deferred-revenue account instead of revenue, and the consumer emits a `:schedule` (ADR-032) row that releases over the obligation period.
+5. **`:invoice-line/withholding-on-payment?` flag + `:withholding-tax-payable` / `:withholding-tax-recoverable` GL-account-types** (kontor-invoice) — IN TDS, MX ISR, US 1099 backup withholding. The credit-leg defers to payment time, not invoice time.
+6. **Two new invoice status states**: `:pending-attestation` and `:rejected` (kontor-invoice). For IT SdI, IN IRN, BR NF-e, ES Verifactu clearance lifecycles. Mirrors the kernel's existing `:transaction/state :pending-attestation` (ADR-018) at the invoice level.
+
+This is the THIRD of the four Stage J-2 cross-cutting primitive ADRs (per ADR-037). It resolves the multi-jurisdiction gaps surfaced by the invoicing market-pain research (research note 13). All gaps reduce to: model jurisdictional variation as **data** (per-line / per-junction attrs), not as **code** (hardcoded per-country branches in posting logic).
+
+### Why these six primitives belong together
+
+The six are interdependent for a transnational customer:
+
+- **Multi-tax-id** without **reverse-charge** is incomplete for intra-EU B2B: customer has DE + AT VAT IDs, but without the reverse-charge flag the bridge can't decide whether to apply VAT or zero-rate.
+- **Tax-inclusive** without **withholding** can't model jurisdictions that mix both (e.g. Mexico: IVA is often inclusive on consumer receipts but ISR withholding is exclusive).
+- **Recognition `:deferred`** without the **clearance lifecycle** (`:pending-attestation`) breaks Italy + India: deferred revenue scheduling can't fire until the invoice has cleared SdI / IRP.
+- **Withholding** without **multi-tax-id** misses the case where withholding applies in jurisdiction A (vendor's country) but the invoice is in jurisdiction B's VAT regime.
+
+Splitting them across ADRs would force the consumer to install three companions per transnational customer.
+
+### Schema
+
+#### `:partner-tax-id` junction (kernel)
+
+```clojure
+:partner-tax-id/partner       ref → :partner
+:partner-tax-id/country       ref → :country         ; jurisdiction (ADR-023)
+:partner-tax-id/tax-id-type   keyword
+                              ;; :vat-eu | :gst-au | :gst-in | :tin-us
+                              ;; | :rfc-mx | :cnpj-br | :cpf-br
+                              ;; | :pan-in | :abn-au | :kvk-nl
+                              ;; | :rsin-nl | :btw-nl | … consumers extend
+:partner-tax-id/tax-id        string                  ; the ID value
+:partner-tax-id/from-date     instant
+:partner-tax-id/thru-date     instant
+:partner-tax-id/verified?     boolean                 ; VIES, SAT, IRP, etc. checked
+:partner-tax-id/verified-at   instant
+:partner-tax-id/identity      tuple [partner, country, tax-id-type, from-date] unique
+```
+
+The kernel's `:partner/tax-id` scalar (per ADR-002) stays as the "primary" denormalization for ergonomics. The junction is the source of truth for multi-jurisdiction. The bridge resolves "VAT ID applicable for this country" via the junction at posting time.
+
+#### `:invoice` extensions (companion-installed)
+
+```clojure
+:invoice/tax-inclusive?  boolean
+                        ;; default false. When true, line :unit-price
+                        ;; is gross (tax-included); discount applies
+                        ;; to gross then tax is back-solved.
+                        ;; When false (default), :unit-price is net;
+                        ;; discount applies to net, tax computed on
+                        ;; post-discount base.
+```
+
+#### `:invoice-line` extensions (companion-installed)
+
+```clojure
+:invoice-line/reverse-charge?      boolean
+                                  ;; Default false. When true, the
+                                  ;; bridge emits dual postings: buyer-
+                                  ;; side AP-tax-payable + buyer-side
+                                  ;; AP-tax-recoverable, netting to zero
+                                  ;; in the line GL. The supplier-side
+                                  ;; invoice doesn't charge VAT.
+
+:invoice-line/recognition          keyword
+                                  ;; :direct | :deferred (default :direct).
+                                  ;; :direct  — bridge credits :sales-
+                                  ;;            revenue immediately.
+                                  ;; :deferred — bridge credits :sales-
+                                  ;;            revenue-deferred (a
+                                  ;;            liability); consumer
+                                  ;;            emits a :schedule row
+                                  ;;            (ADR-032) to release
+                                  ;;            over the obligation
+                                  ;;            period.
+
+:invoice-line/withholding-on-payment? boolean
+                                  ;; Default false. When true, the
+                                  ;; withholding-tax credit-leg fires
+                                  ;; at payment time (matching the
+                                  ;; cash event), not at invoice
+                                  ;; posting time. Captures the
+                                  ;; \"compute at booking OR payment,
+                                  ;; whichever is earlier\" rule for
+                                  ;; IN TDS / MX ISR.
+```
+
+The bridge's `debit-credit-for` map (currently in `kontor.invoice.posting`) extends with the new GL-account-types:
+
+- `:sales-revenue-deferred` — credit on `:deferred` recognition (liability account, not revenue).
+- `:withholding-tax-payable` — credit-leg deferred to payment time.
+- `:withholding-tax-recoverable` — debit-leg for the customer claiming TDS as a tax credit.
+
+Moving the map to a data table (per ADR-041) makes this extension a transact, not a code edit. For now the map gets four new entries.
+
+#### Invoice status machine extension (kontor-invoice seeds)
+
+Adds two new transitions to the seeded `:status-transition` table:
+
+```
+:draft → :pending-attestation      (Submit for Clearance — IT SdI, IN IRN, BR NF-e)
+:ready → :pending-attestation      (Submit for Clearance — finalized invoices)
+:pending-attestation → :sent        (Cleared by Authority)
+:pending-attestation → :rejected    (Rejected by Authority — needs revision)
+:rejected → :draft                  (Revise and resubmit)
+```
+
+The existing `:draft → :sent` and `:ready → :sent` transitions are preserved (for jurisdictions without clearance, the invoice goes straight to `:sent`). The new states are opt-in; consumers in non-clearance jurisdictions never traverse them.
+
+### Helpers
+
+#### `kontor.partner` (extends existing namespace)
+
+- `tax-ids-of` — pulled `:partner-tax-id` rows for a partner; filter by `:country` opt and `:as-of` opt.
+- `tax-id-for-country` — single lookup: `(tax-id-for-country db partner country-ref :as-of date)` returns the active tax-id string or nil.
+- `verify-tax-id!` — mark a tax-id verified at a timestamp (for consumers integrating VIES / SAT / IRP).
+
+#### `kontor.invoice.bridge` (extends existing namespace)
+
+- `make-invoice-from-order!` accepts `:tax-inclusive?` opt → sets `:invoice/tax-inclusive?` on the resulting invoice.
+- New `:invoice-line/recognition`, `:reverse-charge?`, `:withholding-on-payment?` flags pass through from order-adjustment metadata when present (the consumer's pricing layer determines which apply).
+
+#### `kontor.invoice.posting` (extends existing namespace)
+
+- `debit-credit-for` map adds `:sales-revenue-deferred → credit`, `:withholding-tax-payable → credit`, `:withholding-tax-recoverable → debit`.
+- New `withholding-postings` helper: for invoice lines with `:withholding-on-payment? true`, the bridge does NOT emit the withholding credit-leg at invoice-post time; the leg is deferred. Documented; full implementation lands when the first consumer requires it.
+
+### Bootstrap
+
+No seeds. Consumers seed their own `:partner-tax-id` rows, their own clearance state machine transitions (via `kontor-l10n-<cc>` modules), and their own GL-account-defaults for the new account-types.
+
+### Alternatives considered
+
+- **Multi-tax-id as cardinality-many scalar on `:partner`.** Rejected: loses country binding, validity window, verification timestamp. A `:partner/tax-ids #{"DE123..." "AT456..."}` set doesn't tell the bridge which one to use for a DE-invoiced order.
+- **Per-invoice `:invoice/reverse-charge?` flag rather than per-line.** Rejected: a single invoice can mix reverse-charge B2B services + standard-rated goods. Per-line is the correct granularity (the OFBiz `OrderAdjustment` per-line tax pattern, generalized).
+- **Recognition `:deferred` baked into kontor.invoice.posting's main flow** with the deferred-revenue account hardcoded. Rejected: the deferred-revenue account is per-tenant (DATEV SKR03 has 0990, SKR04 different, US GAAP different). Push to `:gl-account-default :sales-revenue-deferred` lookup.
+- **Skip the recognition flag — let kontor-revrec subclass the bridge.** Rejected: a single attr on `:invoice-line` is cheaper to migrate than a parallel bridge code path. Revrec adds the lifecycle (release schedule, performance obligations) on top of this primitive.
+- **Withholding tax as a dedicated entity** (`:withholding-event` with payment-time linkage). Rejected for v1: a boolean flag on `:invoice-line` plus a deferred-credit pattern is enough for IN TDS / MX ISR / US 1099. Full lifecycle (compute, accrue, remit) belongs to a future `kontor-tax-withholding` companion if a customer needs it.
+- **Embed Italy SdI / India IRN status states in the invoice schema** (e.g. `:invoice/sdi-status` keyword). Rejected: jurisdiction-specific bits belong in `kontor-l10n-it` / `kontor-l10n-in`. The invoice-state machine ships generic `:pending-attestation` + `:rejected`; per-jurisdiction code paths interpret what those mean.
+- **`:invoice/tax-inclusive?` as a per-line flag.** Rejected: tax-inclusive vs exclusive is an invoice-level convention (Stripe Tax, Shopify, ERPNext all treat it this way). Lines within one invoice share the convention.
+
+### Migration
+
+- `:partner-tax-id` is a new junction; no migration. Existing `:partner/tax-id` scalars remain. A future helper can backfill the junction from the scalar for tenants that adopt the multi-tax-id pattern later.
+- `:invoice/tax-inclusive?` defaults to false (matches existing behavior — `:unit-price` is net).
+- `:invoice-line/recognition` defaults to `:direct` (matches existing behavior — credit revenue immediately).
+- The new invoice status transitions are additive; existing direct `:draft → :sent` transitions are preserved.
+
+### Implications
+
+- 1 new kernel junction entity (`:partner-tax-id`).
+- 3 new attrs on `:invoice` / `:invoice-line` (companion-installed).
+- 4 new entries in the `debit-credit-for` map (`kontor-invoice.posting`).
+- 4 new `:status-transition` seeds for the invoice clearance lifecycle.
+- Helpers added to `kontor.partner` (3 fns) + `kontor.invoice.bridge` (passthrough).
+- Test coverage: multi-tax-id round-trip + per-country lookup + temporal validity, tax-inclusive flag, recognition :deferred routing to a different GL account, clearance state transitions.
+- Forward-compat: kontor-revrec consumes `:invoice-line/recognition :deferred` + `:schedule` (ADR-032). kontor-l10n-it / -in / -br consume the clearance state machine + per-jurisdiction `EInvoiceProvider` impl per ADR-018 + ADR-024.
+
+Date: 2026-05-12.
+
+---
+
 ## Decisions deferred (open)
 
 The following choices are NOT yet locked. Update this section as we converge.

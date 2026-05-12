@@ -84,11 +84,16 @@
    extension points for :goods-receipt-accrual, :landed-cost,
    :revenue-deferred, etc. Tracked in the post-Stage-J followups."
   [invoice-type account-type]
-  (let [sales-credit    #{:sales-revenue :sales-tax-payable :shipping-income}
-        sales-debit     #{:discount-given :ar :cogs}
-        purchase-credit #{:ap :purchase-discount}
+  (let [sales-credit    #{:sales-revenue :sales-revenue-deferred
+                          :sales-tax-payable :shipping-income
+                          :withholding-tax-payable}
+        sales-debit     #{:discount-given :ar :cogs
+                          :withholding-tax-recoverable}
+        purchase-credit #{:ap :purchase-discount
+                          :withholding-tax-payable}
         purchase-debit  #{:purchase-expense :purchase-tax-recoverable
-                          :shipping-expense :inventory}]
+                          :shipping-expense :inventory
+                          :withholding-tax-recoverable}]
     (case invoice-type
       :sales        (cond (contains? sales-credit account-type) :credit
                           (contains? sales-debit  account-type) :debit

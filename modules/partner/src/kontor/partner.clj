@@ -476,3 +476,52 @@
           (filter (fn [[_ from thru]] (active-as-of? from thru as-of)))
           (map first)
           set))))
+
+;; ============================================================================
+;; ADR-040 — Multi-tax-id-per-jurisdiction
+;; ============================================================================
+
+(defn tax-ids-of
+  "Pulled :partner-tax-id rows for `partner`, filtered to active
+   at `:as-of` (default now). Optionally filter by `:country` ref."
+  ([db partner] (tax-ids-of db partner nil))
+  ([db partner opts]
+   (let [as-of (now-or (:as-of opts))
+         country-eid (:country opts)
+         pid (resolve-partner db partner)
+         rows (d/q '[:find ?t ?from ?thru ?country
+                     :in $ ?p
+                     :where
+                     [?t :partner-tax-id/partner ?p]
+                     [?t :partner-tax-id/country ?country]
+                     [?t :partner-tax-id/from-date ?from]
+                     [(get-else $ ?t :partner-tax-id/thru-date :__none) ?thru]]
+                   db pid)]
+     (->> rows
+          (filter (fn [[_ from thru _]] (active-as-of? from thru as-of)))
+          (filter (fn [[_ _ _ c]] (or (nil? country-eid) (= c country-eid))))
+          (map (fn [[t _ _ _]] (d/pull db '[*] t)))
+          vec))))
+
+(defn tax-id-for-country
+  "Lookup the active tax-id string for `partner` in `country` (a ref
+   or :country/code string). Returns the string or nil.
+
+   When multiple tax-id-types apply in the same country (e.g. NL has
+   :kvk-nl + :rsin-nl + :btw-nl), pass `:tax-id-type` opt to
+   disambiguate. Otherwise returns the first match."
+  ([db partner country] (tax-id-for-country db partner country nil))
+  ([db partner country opts]
+   (let [as-of (now-or (:as-of opts))
+         country-eid (cond
+                       (string? country) (d/q '[:find ?c .
+                                                :in $ ?code
+                                                :where [?c :country/code ?code]]
+                                              db country)
+                       :else country)
+         tax-id-type (:tax-id-type opts)
+         hits (tax-ids-of db partner {:as-of as-of :country country-eid})
+         filtered (if tax-id-type
+                    (filter #(= tax-id-type (:partner-tax-id/tax-id-type %)) hits)
+                    hits)]
+     (some-> filtered first :partner-tax-id/tax-id))))

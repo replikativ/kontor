@@ -133,7 +133,8 @@
                       "status-transition" "status-history"
                       "audit-doc" "approval-policy"
                       "partner-merge" "bank-account"
-                      "partner-bank-account" "partner-tag"}
+                      "partner-bank-account" "partner-tag"
+                      "partner-tax-id"}
                     (namespace k))))
          sort
          vec)))

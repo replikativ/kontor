@@ -410,3 +410,80 @@
                        (inv/total-of (d/db *conn*) "INV-T-1")
                        250M))
       "10 × 25 = 250"))
+
+;; ============================================================================
+;; ADR-040 — Jurisdiction primitives
+;; ============================================================================
+
+(deftest tax-inclusive-flag-on-invoice
+  (let [_ (minimal-order!)]
+    (inv/make-invoice-from-order! *conn* "ORD-1"
+                                  {:external-id "INV-TI-1"})
+    ;; Default is false (kernel attr unset; bridge doesn't set it)
+    (testing "default :tax-inclusive? is nil/false"
+      (let [inv (inv/pull-invoice (d/db *conn*) "INV-TI-1")]
+        (is (or (nil? (:invoice/tax-inclusive? inv))
+                (false? (:invoice/tax-inclusive? inv))))))))
+
+(deftest invoice-line-recognition-deferred-routes-to-deferred-revenue
+  (let [_order-eid (minimal-order!)]
+    (seed-accounts!)
+    (seed-journal!)
+    ;; Add a deferred-revenue account + seed defaults
+    (d/transact *conn*
+                [{:account/code "2900"
+                  :account/name "Deferred Revenue"
+                  :account/path "2900"
+                  :account/type :liability}
+                 {:gl-account-default/account-type :sales-revenue
+                  :gl-account-default/account [:account/path "4000"]}
+                 {:gl-account-default/account-type :sales-revenue-deferred
+                  :gl-account-default/account [:account/path "2900"]}
+                 {:gl-account-default/account-type :ar
+                  :gl-account-default/account [:account/path "1500"]}])
+    (inv/make-invoice-from-order! *conn* "ORD-1"
+                                  {:external-id "INV-REC-1"})
+    ;; Mark the invoice line as :deferred (post-bridge)
+    (let [line-eid (d/q '[:find ?l . :in $ ?xid ?seq
+                          :where
+                          [?inv :invoice/external-id ?xid]
+                          [?l :invoice-line/invoice ?inv]
+                          [?l :invoice-line/sequence ?seq]]
+                        (d/db *conn*) "INV-REC-1" 1)]
+      (d/transact *conn*
+                  [{:db/id line-eid
+                    :invoice-line/gl-account-type :sales-revenue-deferred
+                    :invoice-line/recognition :deferred}])
+      ;; Post and verify the credit went to the deferred-revenue account
+      (inv/post-to-ledger! *conn* "INV-REC-1"
+                           {:journal-ref [:journal/code "SALES"]
+                            :posted-at #inst "2026-05-15"})
+      (let [db (d/db *conn*)
+            inv (inv/pull-invoice db "INV-REC-1")
+            tx-eid (get-in inv [:invoice/transaction :db/id])
+            postings (->> (d/q '[:find [?p ...]
+                                 :in $ ?tx
+                                 :where [?p :posting/transaction ?tx]]
+                               db tx-eid)
+                          (map #(d/pull db '[* {:posting/account [:account/path]}] %)))
+            credit-line (->> postings
+                             (filter #(neg? (.signum ^java.math.BigDecimal
+                                                     (:posting/amount %))))
+                             first)]
+        (testing "deferred-revenue line credits the liability account"
+          (is (= "2900" (-> credit-line :posting/account :account/path))))))))
+
+(deftest invoice-clearance-transitions-seeded
+  (let [db (d/db *conn*)]
+    (testing ":draft → :pending-attestation is legal"
+      (is (true? (sm/legal-transition? db :invoice :invoice/status
+                                       :draft :pending-attestation))))
+    (testing ":pending-attestation → :sent is legal"
+      (is (true? (sm/legal-transition? db :invoice :invoice/status
+                                       :pending-attestation :sent))))
+    (testing ":pending-attestation → :rejected is legal"
+      (is (true? (sm/legal-transition? db :invoice :invoice/status
+                                       :pending-attestation :rejected))))
+    (testing ":rejected → :draft (resubmit) is legal"
+      (is (true? (sm/legal-transition? db :invoice :invoice/status
+                                       :rejected :draft))))))

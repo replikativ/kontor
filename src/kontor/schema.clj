@@ -594,6 +594,56 @@
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
+(def ^:private partner-tax-id-attrs
+  ;; ADR-040: multi-tax-id-per-jurisdiction junction.
+  [{:db/ident       :partner-tax-id/partner
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :partner-tax-id/country
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Jurisdiction (ADR-023 :country)."}
+
+   {:db/ident       :partner-tax-id/tax-id-type
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":vat-eu | :gst-au | :gst-in | :tin-us | :rfc-mx |
+                     :cnpj-br | :cpf-br | :pan-in | :abn-au | :kvk-nl |
+                     :rsin-nl | :btw-nl | … consumers extend."}
+
+   {:db/ident       :partner-tax-id/tax-id
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The ID value. Format country-specific; validation
+                     in l10n modules."}
+
+   {:db/ident       :partner-tax-id/from-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :partner-tax-id/thru-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :partner-tax-id/verified?
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one
+    :db/doc         "VIES / SAT / IRP / consumer-side validated."}
+
+   {:db/ident       :partner-tax-id/verified-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :partner-tax-id/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:partner-tax-id/partner
+                     :partner-tax-id/country
+                     :partner-tax-id/tax-id-type
+                     :partner-tax-id/from-date]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity}])
+
 (def ^:private partner-tag-attrs
   [{:db/ident       :partner-tag/partner
     :db/valueType   :db.type/ref
@@ -2991,7 +3041,8 @@
     partner-merge-attrs                   ; ADR-039
     bank-account-attrs                    ; ADR-039
     partner-bank-account-attrs            ; ADR-039
-    partner-tag-attrs)))                  ; ADR-039
+    partner-tag-attrs                     ; ADR-039
+    partner-tax-id-attrs)))                ; ADR-040
 
 (defn install!
   "Transact the kernel schema into a connection. Idempotent — re-running

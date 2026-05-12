@@ -565,3 +565,43 @@
     (is (= :open (:partner/credit-status p)))
     (is (= :cleared (:partner/kyc-status p)))
     (is (= "Manual" (:partner/kyc-source p)))))
+
+;; ============================================================================
+;; ADR-040 — Multi-tax-id-per-jurisdiction
+;; ============================================================================
+
+(deftest partner-tax-id-multi-jurisdiction
+  (d/transact *conn*
+              [{:country/code "DE" :country/name "Germany"}
+               {:country/code "AT" :country/name "Austria"}
+               {:partner/external-id "P-MULTI-VAT"
+                :partner/type :org :partner/status :enabled
+                :partner/name "Multi-VAT Inc"
+                :partner/tax-id "DE123456789"}
+               ;; DE VAT
+               {:partner-tax-id/partner [:partner/external-id "P-MULTI-VAT"]
+                :partner-tax-id/country [:country/code "DE"]
+                :partner-tax-id/tax-id-type :vat-eu
+                :partner-tax-id/tax-id "DE123456789"
+                :partner-tax-id/from-date #inst "2024-01-01"
+                :partner-tax-id/verified? true}
+               ;; AT VAT — separate jurisdiction
+               {:partner-tax-id/partner [:partner/external-id "P-MULTI-VAT"]
+                :partner-tax-id/country [:country/code "AT"]
+                :partner-tax-id/tax-id-type :vat-eu
+                :partner-tax-id/tax-id "ATU12345678"
+                :partner-tax-id/from-date #inst "2024-06-01"
+                :partner-tax-id/verified? true}])
+  (let [db (d/db *conn*)]
+    (testing "tax-id-for-country DE returns DE VAT"
+      (is (= "DE123456789"
+             (p/tax-id-for-country db "P-MULTI-VAT" "DE"))))
+    (testing "tax-id-for-country AT returns AT VAT"
+      (is (= "ATU12345678"
+             (p/tax-id-for-country db "P-MULTI-VAT" "AT"))))
+    (testing "tax-id-for-country before AT from-date returns nil"
+      (is (nil? (p/tax-id-for-country db "P-MULTI-VAT" "AT"
+                                      {:as-of #inst "2024-03-01"}))))
+    (testing "tax-ids-of returns all active"
+      (let [hits (p/tax-ids-of db "P-MULTI-VAT" {:as-of #inst "2025-01-01"})]
+        (is (= 2 (count hits)))))))
