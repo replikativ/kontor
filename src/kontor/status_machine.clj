@@ -124,19 +124,135 @@
 ;; Transactor
 ;; ============================================================================
 
+;; ============================================================================
+;; Approval policy lookup + enforcement (ADR-038)
+;; ============================================================================
+
+(defn applicable-policies
+  "Return :approval-policy entities applicable to the
+   (entity-type, facet, from, to) transition, considering org scope
+   per the same semantics as legal-transition?: org-specific match
+   plus tenant-wide default. Only :active? = true policies are
+   returned."
+  ([db entity-type facet from to] (applicable-policies db entity-type facet from to nil))
+  ([db entity-type facet from to org]
+   (let [org-eid (cond
+                   (nil? org)     nil
+                   (string? org)  (d/q '[:find ?e .
+                                         :in $ ?code
+                                         :where [?e :entity/code ?code]]
+                                       db org)
+                   :else          org)
+         tenant-rows (d/q '[:find [?p ...]
+                            :in $ ?et ?f ?from ?to
+                            :where
+                            [?p :approval-policy/entity-type ?et]
+                            [?p :approval-policy/facet ?f]
+                            [?p :approval-policy/transition-from ?from]
+                            [?p :approval-policy/transition-to ?to]
+                            [?p :approval-policy/active true]
+                            [(missing? $ ?p :approval-policy/applies-to-org)]]
+                          db entity-type facet from to)
+         org-rows (when org-eid
+                    (d/q '[:find [?p ...]
+                           :in $ ?et ?f ?from ?to ?org
+                           :where
+                           [?p :approval-policy/entity-type ?et]
+                           [?p :approval-policy/facet ?f]
+                           [?p :approval-policy/transition-from ?from]
+                           [?p :approval-policy/transition-to ?to]
+                           [?p :approval-policy/applies-to-org ?org]
+                           [?p :approval-policy/active true]]
+                         db entity-type facet from to org-eid))]
+     (mapv #(d/pull db '[*] %) (concat tenant-rows org-rows)))))
+
+(defn- ->eid
+  "Normalize a value that may be an eid, a pull-result map {:db/id eid},
+   or nil. Returns the underlying eid, or nil."
+  [x]
+  (cond
+    (nil? x)    nil
+    (map? x)    (:db/id x)
+    :else       x))
+
+(defn- check-policy
+  "Apply one :approval-policy rule to a change-spec; return nil if ok,
+   {:rule ... :reason ...} if violated."
+  [db {:approval-policy/keys [rule]}
+   {:keys [entity changed-by-uid reason-note]
+    sup-doc :supporting-doc}]
+  (case rule
+    :no-self-approval
+    (let [creator (->eid (:create/uid (d/pull db [:create/uid] entity)))
+          actor   (->eid changed-by-uid)]
+      (when (and creator actor (= creator actor))
+        {:rule rule
+         :reason "transition actor must differ from entity creator"
+         :actor actor
+         :creator creator}))
+
+    :requires-supporting-doc
+    (when-not sup-doc
+      {:rule rule
+       :reason ":supporting-doc ref is required on this transition"})
+
+    :requires-non-empty-reason-note
+    (when (or (nil? reason-note) (= "" reason-note))
+      {:rule rule
+       :reason ":reason-note string is required on this transition"})
+
+    ;; Unknown rule: treat as a no-op (forward-compat for new rules
+    ;; defined by future ADRs). A future linter can flag rule-typos.
+    nil))
+
+(defn check-policies
+  "Throw :approval-policy/violation if any applicable policy rejects
+   the change-spec. Returns nil on success.
+
+   change-spec must include :entity, :entity-type, :facet, :from, :to,
+   and optionally :changed-by-uid, :reason-note, :supporting-doc,
+   :org."
+  [db change-spec]
+  (let [{:keys [entity-type facet from to org]} change-spec
+        policies (applicable-policies db entity-type facet from to org)
+        violations (->> policies
+                        (keep #(check-policy db % change-spec))
+                        vec)]
+    (when (seq violations)
+      (throw (ex-info "Approval-policy violation"
+                      {:type        :approval-policy/violation
+                       :entity      (:entity change-spec)
+                       :entity-type entity-type
+                       :facet       facet
+                       :from        from
+                       :to          to
+                       :violations  violations}))))
+  nil)
+
+;; ============================================================================
+;; Transactor
+;; ============================================================================
+
 (defn record-status-change-tx-data
   "Pure variant: validate the transition against `db` and return
    tx-data ready to `d/transact` (the facet update + the history row).
-   Throws ex-info :type :status-machine/illegal-transition if not.
+   Throws ex-info :type :status-machine/illegal-transition or
+   :approval-policy/violation if invalid.
 
    Use this when the status change must compose atomically with other
    tx-data (e.g. the invoice posting bridge composes posting tx-data
    + invoice update + status change in one tx).
 
-   See `record-status-change!` for opts."
+   See `record-status-change!` for opts. ADR-038 adds:
+     :reason          — keyword codified reason (was string)
+     :reason-note     — optional free-text human story
+     :supporting-doc  — optional ref to :audit-doc"
   [db {:keys [entity entity-type facet from to org changed-at
-              changed-by-uid reason origin-transaction]}]
-  (let [from (or from (get (d/pull db [facet] entity) facet))]
+              changed-by-uid reason reason-note supporting-doc
+              origin-transaction]
+       :as change-spec}]
+  (let [from (or from (get (d/pull db [facet] entity) facet))
+        change-spec (assoc change-spec :from from)]
     (when-not (legal-transition? db entity-type facet from to org)
       (throw (ex-info "Illegal status transition"
                       {:type        :status-machine/illegal-transition
@@ -147,6 +263,15 @@
                        :to          to
                        :org         org
                        :legal       (legal-transitions-from db entity-type facet from org)})))
+    ;; ADR-038: when :reason is :other, :reason-note must be non-empty.
+    (when (and (= reason :other)
+               (or (nil? reason-note) (= "" reason-note)))
+      (throw (ex-info ":reason :other requires a non-empty :reason-note"
+                      {:type :status-history/reason-note-required
+                       :entity entity
+                       :facet facet})))
+    ;; ADR-038: apply applicable approval-policy rules.
+    (check-policies db change-spec)
     (let [history (cond-> {:status-history/entity      entity
                            :status-history/entity-type entity-type
                            :status-history/facet       facet
@@ -155,6 +280,8 @@
                     from               (assoc :status-history/from from)
                     changed-by-uid     (assoc :status-history/changed-by-uid changed-by-uid)
                     reason             (assoc :status-history/reason reason)
+                    reason-note        (assoc :status-history/reason-note reason-note)
+                    supporting-doc     (assoc :status-history/supporting-doc supporting-doc)
                     origin-transaction (assoc :status-history/origin-transaction origin-transaction))]
       [[:db/add entity facet to]
        history])))

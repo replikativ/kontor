@@ -130,7 +130,8 @@
                       "valuation-layer" "layer-consumption" "layer-adjustment"
                       "entity"
                       "schedule" "schedule-occurrence"
-                      "status-transition" "status-history"}
+                      "status-transition" "status-history"
+                      "audit-doc" "approval-policy"}
                     (namespace k))))
          sort
          vec)))

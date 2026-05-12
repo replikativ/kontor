@@ -296,9 +296,11 @@
 
 (deftest order-status-lifecycle-happy-path
   (let [order-eid (minimal-order!)]
-    (sales/approve-order! *conn* order-eid {:reason "passes fraud check"})
+    (sales/approve-order! *conn* order-eid {:reason :approved
+                                            :reason-note "passes fraud check"})
     (is (= :order.status/approved (sm/current-status (d/db *conn*) order-eid :order/status)))
-    (sales/complete-order! *conn* order-eid {:reason "all items shipped"})
+    (sales/complete-order! *conn* order-eid {:reason :completed
+                                             :reason-note "all items shipped"})
     (is (= :order.status/completed (sm/current-status (d/db *conn*) order-eid :order/status)))
     (testing "status-history has two transitions"
       (let [hist (sm/status-history-of (d/db *conn*) order-eid :order/status)]
@@ -317,9 +319,11 @@
 
 (deftest order-hold-and-release
   (let [order-eid (minimal-order!)]
-    (sales/hold-order! *conn* order-eid {:reason "manual fraud review"})
+    (sales/hold-order! *conn* order-eid {:reason :fraud-detected
+                                         :reason-note "manual fraud review"})
     (is (= :order.status/hold (sm/current-status (d/db *conn*) order-eid :order/status)))
-    (sales/release-from-hold! *conn* order-eid {:reason "cleared"})
+    (sales/release-from-hold! *conn* order-eid {:reason :approved
+                                                :reason-note "cleared"})
     (is (= :order.status/approved (sm/current-status (d/db *conn*) order-eid :order/status)))))
 
 (deftest reopen-completed-order
@@ -336,7 +340,8 @@
                                :entity-type :order
                                :facet :order/status
                                :to :order.status/approved
-                               :reason "amended for credit memo"})
+                               :reason :credit-memo-issued
+                               :reason-note "amended for credit memo"})
     (is (= :order.status/approved (sm/current-status (d/db *conn*) order-eid :order/status)))))
 
 ;; ============================================================================

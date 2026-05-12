@@ -278,7 +278,7 @@
                                                :entity-type :order
                                                :facet       :order/status
                                                :to          to
-                                               :reason      "auto-promoted from item statuses"})
+                                               :reason      :auto-promoted})
                     to))]
     (cond
       (= statuses #{:order-item.status/cancelled}) (promote :order.status/cancelled)

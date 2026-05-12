@@ -316,7 +316,8 @@
         _ (inv/make-invoice-from-order! *conn* "ORD-1"
                                         {:external-id "INV-PAID-1"})]
     (inv/post-to-ledger! *conn* "INV-PAID-1" {:journal-ref [:journal/code "SALES"]})
-    (inv/mark-paid! *conn* "INV-PAID-1" {:reason "bank reconciled"})
+    (inv/mark-paid! *conn* "INV-PAID-1" {:reason :reconciliation-match
+                                          :reason-note "bank reconciled"})
     (let [db (d/db *conn*)
           inv (inv/pull-invoice db "INV-PAID-1")]
       (is (= :paid (:invoice/status inv))))))
@@ -393,7 +394,8 @@
   (let [_ (minimal-order!)
         _ (inv/make-invoice-from-order! *conn* "ORD-1"
                                         {:external-id "INV-CANCEL-1"})]
-    (inv/cancel! *conn* "INV-CANCEL-1" {:reason "customer abandoned"})
+    (inv/cancel! *conn* "INV-CANCEL-1" {:reason :customer-request
+                                         :reason-note "customer abandoned"})
     (is (= :cancelled
            (:invoice/status (inv/pull-invoice (d/db *conn*) "INV-CANCEL-1"))))))
 

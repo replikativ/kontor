@@ -2556,11 +2556,29 @@
                      :create/uid entity. Optional but recommended."}
 
    {:db/ident       :status-history/reason
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Codified reason code (ADR-038). Auditor-friendly
+                     vocabulary for compliance reports. Canonical
+                     starter set documented in kontor.status-machine
+                     ns; consumers extend with domain-specific codes."}
+
+   {:db/ident       :status-history/reason-note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
-    :db/doc         "Free-text rationale. Required by some auditors
-                     for sensitive transitions (e.g. order cancel
-                     with retention implications)."}
+    :db/doc         "Optional free-text human story alongside the
+                     codified :reason. Required when :reason is
+                     :other. Where :reason answers 'what kind,'
+                     :reason-note answers 'what specifically.'"}
+
+   {:db/ident       :status-history/supporting-doc
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to :audit-doc — the proof an
+                     auditor would ask for (customer email, credit
+                     memo PDF, regulator clearance token, manager
+                     override note). Kernel doesn't store bytes;
+                     consumer attaches whatever artifact."}
 
    {:db/ident       :status-history/origin-transaction
     :db/valueType   :db.type/ref
@@ -2570,6 +2588,116 @@
                      transition to :posted happens because an
                      AcctgTrans was created — the AcctgTrans's
                      :transaction goes here."}])
+
+;; ============================================================================
+;; Audit-doc + approval-policy (ADR-038)
+;;
+;; Minimal kernel entities to support codified-reason vocabularies +
+;; supporting docs + SoD enforcement. See ADR-038 for the design
+;; rationale and `kontor.status-machine` for the enforcement code.
+;; ============================================================================
+
+(def ^:private audit-doc-attrs
+  [{:db/ident       :audit-doc/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Consumer-supplied opaque identifier."}
+
+   {:db/ident       :audit-doc/type
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":credit-memo | :customer-email | :vendor-email |
+                     :uploaded-pdf | :wet-signature-pdf |
+                     :regulator-clearance | :manager-override |
+                     :compliance-attestation | … consumers extend."}
+
+   {:db/ident       :audit-doc/title
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Human-readable label for the artifact."}
+
+   {:db/ident       :audit-doc/description
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :audit-doc/content-hash
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "SHA-256 of the artifact for integrity
+                     verification. The kernel doesn't compute this;
+                     consumer derives it at upload time."}
+
+   {:db/ident       :audit-doc/storage-uri
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Where the consumer stores the artifact bytes
+                     ('s3://...', 'file://...', 'https://...',
+                     'ipfs://...'). Kernel is storage-agnostic."}
+
+   {:db/ident       :audit-doc/uploaded-by-uid
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :audit-doc/uploaded-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}])
+
+(def ^:private approval-policy-attrs
+  [{:db/ident       :approval-policy/entity-type
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Which entity type this policy applies to.
+                     Mirrors :status-transition/entity-type."}
+
+   {:db/ident       :approval-policy/facet
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :approval-policy/transition-from
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :approval-policy/transition-to
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :approval-policy/applies-to-org
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional per-org scope (per ADR-031). Tenant-
+                     wide when absent; org-specific overrides coexist
+                     with the global."}
+
+   {:db/ident       :approval-policy/rule
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":no-self-approval — recorded actor must differ
+                     from :create/uid of the entity.
+                     :requires-supporting-doc — :supporting-doc must
+                     be set in the change-spec.
+                     :requires-non-empty-reason-note — :reason-note
+                     required.
+                     … future rules extend the vocabulary."}
+
+   {:db/ident       :approval-policy/active
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :approval-policy/note
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :approval-policy/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:approval-policy/entity-type
+                     :approval-policy/facet
+                     :approval-policy/transition-from
+                     :approval-policy/transition-to
+                     :approval-policy/rule
+                     :approval-policy/applies-to-org]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity}])
 
 ;; ============================================================================
 ;; Aggregate
@@ -2634,7 +2762,9 @@
     schedule-attrs                       ; ADR-032
     schedule-occurrence-attrs            ; ADR-032
     status-transition-attrs              ; ADR-034
-    status-history-attrs)))               ; ADR-034
+    status-history-attrs                  ; ADR-034
+    audit-doc-attrs                       ; ADR-038
+    approval-policy-attrs)))              ; ADR-038
 
 (defn install!
   "Transact the kernel schema into a connection. Idempotent — re-running

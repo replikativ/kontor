@@ -245,14 +245,16 @@
                                :entity-type :ord
                                :facet       :ord/status
                                :to          :ord.status/approved
-                               :reason      "passed fraud check"})
+                               :reason      :approved
+                               :reason-note "passed fraud check"})
     (let [db (d/db *conn*)]
       (is (= :ord.status/approved (sm/current-status db eid :ord/status)))
       (let [history (sm/status-history-of db eid)]
         (is (= 1 (count history)))
         (is (= :ord.status/created (-> history first :status-history/from)))
         (is (= :ord.status/approved (-> history first :status-history/to)))
-        (is (= "passed fraud check" (-> history first :status-history/reason)))))))
+        (is (= :approved (-> history first :status-history/reason)))
+        (is (= "passed fraud check" (-> history first :status-history/reason-note)))))))
 
 (deftest record-status-change-rejects-illegal-transition
   (install-ord-attr! *conn*)
@@ -272,6 +274,151 @@
       (is (= :ord.status/created
              (sm/current-status (d/db *conn*) eid :ord/status))))))
 
+;; ============================================================================
+;; ADR-038 — Audit + governance primitives
+;; ============================================================================
+
+(deftest reason-as-keyword
+  (install-ord-attr! *conn*)
+  (seed-ord-status-transitions! *conn*)
+  (d/transact *conn* [{:ord/code "O-REASON" :ord/status :ord.status/created}])
+  (let [eid (d/q '[:find ?e . :where [?e :ord/code "O-REASON"]] (d/db *conn*))]
+    (sm/record-status-change! *conn*
+                              {:entity eid
+                               :entity-type :ord
+                               :facet :ord/status
+                               :to :ord.status/approved
+                               :reason :approved
+                               :reason-note "passes fraud check"})
+    (let [history (sm/status-history-of (d/db *conn*) eid)]
+      (testing "reason stored as keyword"
+        (is (= :approved (-> history first :status-history/reason))))
+      (testing "reason-note stored as separate string field"
+        (is (= "passes fraud check"
+               (-> history first :status-history/reason-note)))))))
+
+(deftest other-reason-requires-reason-note
+  (install-ord-attr! *conn*)
+  (seed-ord-status-transitions! *conn*)
+  (d/transact *conn* [{:ord/code "O-OTHER" :ord/status :ord.status/created}])
+  (let [eid (d/q '[:find ?e . :where [?e :ord/code "O-OTHER"]] (d/db *conn*))]
+    (testing ":reason :other without :reason-note is rejected"
+      (is (thrown? Exception
+                   (sm/record-status-change! *conn*
+                                             {:entity eid
+                                              :entity-type :ord
+                                              :facet :ord/status
+                                              :to :ord.status/approved
+                                              :reason :other}))))
+    (testing ":reason :other with empty :reason-note also rejected"
+      (is (thrown? Exception
+                   (sm/record-status-change! *conn*
+                                             {:entity eid
+                                              :entity-type :ord
+                                              :facet :ord/status
+                                              :to :ord.status/approved
+                                              :reason :other
+                                              :reason-note ""}))))
+    (testing ":reason :other with non-empty :reason-note succeeds"
+      (sm/record-status-change! *conn*
+                                {:entity eid
+                                 :entity-type :ord
+                                 :facet :ord/status
+                                 :to :ord.status/approved
+                                 :reason :other
+                                 :reason-note "an unusual case"}))))
+
+(deftest no-self-approval-policy
+  (install-ord-attr! *conn*)
+  (seed-ord-status-transitions! *conn*)
+  ;; Seed an :no-self-approval policy on :ord.status/created → :approved
+  (d/transact *conn*
+              [{:approval-policy/entity-type :ord
+                :approval-policy/facet :ord/status
+                :approval-policy/transition-from :ord.status/created
+                :approval-policy/transition-to :ord.status/approved
+                :approval-policy/rule :no-self-approval
+                :approval-policy/active true}])
+  ;; Seed two opaque user entities via partner records (which exist
+  ;; in the kernel schema with :partner/external-id identity).
+  (d/transact *conn*
+              [{:partner/external-id "U-alice" :partner/name "Alice"}
+               {:partner/external-id "U-bob"   :partner/name "Bob"}])
+  (let [alice (d/q '[:find ?u . :in $ ?id
+                     :where [?u :partner/external-id ?id]]
+                   (d/db *conn*) "U-alice")
+        bob (d/q '[:find ?u . :in $ ?id
+                   :where [?u :partner/external-id ?id]]
+                 (d/db *conn*) "U-bob")
+        _ (d/transact *conn* [{:ord/code "O-SELF"
+                               :ord/status :ord.status/created
+                               :create/uid alice}])
+        eid (d/q '[:find ?e . :where [?e :ord/code "O-SELF"]] (d/db *conn*))]
+    (testing "self-approval rejected"
+      (is (thrown-with-msg? Exception #"Approval-policy violation"
+                            (sm/record-status-change!
+                             *conn*
+                             {:entity eid
+                              :entity-type :ord
+                              :facet :ord/status
+                              :to :ord.status/approved
+                              :changed-by-uid alice
+                              :reason :approved}))))
+    (testing "different actor succeeds"
+      (sm/record-status-change!
+       *conn*
+       {:entity eid
+        :entity-type :ord
+        :facet :ord/status
+        :to :ord.status/approved
+        :changed-by-uid bob
+        :reason :approved}))))
+
+(deftest requires-supporting-doc-policy
+  (install-ord-attr! *conn*)
+  (seed-ord-status-transitions! *conn*)
+  ;; Seed a policy requiring :supporting-doc on cancel
+  (d/transact *conn*
+              [{:approval-policy/entity-type :ord
+                :approval-policy/facet :ord/status
+                :approval-policy/transition-from :ord.status/created
+                :approval-policy/transition-to :ord.status/cancelled
+                :approval-policy/rule :requires-supporting-doc
+                :approval-policy/active true}])
+  (d/transact *conn* [{:ord/code "O-DOC" :ord/status :ord.status/created}])
+  (let [eid (d/q '[:find ?e . :where [?e :ord/code "O-DOC"]] (d/db *conn*))]
+    (testing "transition without :supporting-doc is rejected"
+      (is (thrown-with-msg? Exception #"Approval-policy violation"
+                            (sm/record-status-change!
+                             *conn*
+                             {:entity eid
+                              :entity-type :ord
+                              :facet :ord/status
+                              :to :ord.status/cancelled
+                              :reason :customer-request}))))
+    (testing "with :supporting-doc succeeds"
+      ;; Seed an :audit-doc and reference it
+      (d/transact *conn*
+                  [{:audit-doc/code "DOC-1"
+                    :audit-doc/type :customer-email
+                    :audit-doc/storage-uri "s3://test-bucket/doc-1.eml"
+                    :audit-doc/uploaded-at #inst "2026-05-01"
+                    :audit-doc/title "Customer cancellation request"}])
+      (let [doc-eid (d/q '[:find ?d . :where [?d :audit-doc/code "DOC-1"]]
+                         (d/db *conn*))]
+        (sm/record-status-change!
+         *conn*
+         {:entity eid
+          :entity-type :ord
+          :facet :ord/status
+          :to :ord.status/cancelled
+          :reason :customer-request
+          :supporting-doc doc-eid})
+        (testing ":supporting-doc ref captured in history row"
+          (let [history (sm/status-history-of (d/db *conn*) eid)
+                last-row (last history)]
+            (is (= doc-eid (-> last-row :status-history/supporting-doc :db/id)))))))))
+
 (deftest record-status-change-history-respects-order
   (install-ord-attr! *conn*)
   (seed-ord-status-transitions! *conn*)
@@ -286,15 +433,17 @@
                                :facet       :ord/status
                                :to          :ord.status/approved
                                :changed-at  #inst "2026-01-01"
-                               :reason      "first"})
+                               :reason      :other
+                               :reason-note "first"})
     (sm/record-status-change! *conn*
                               {:entity      eid
                                :entity-type :ord
                                :facet       :ord/status
                                :to          :ord.status/completed
                                :changed-at  #inst "2026-02-01"
-                               :reason      "second"})
+                               :reason      :other
+                               :reason-note "second"})
     (let [history (sm/status-history-of (d/db *conn*) eid)]
       (is (= 2 (count history)))
-      (is (= ["first" "second"] (map :status-history/reason history))
+      (is (= ["first" "second"] (map :status-history/reason-note history))
           "history is oldest-first by changed-at"))))

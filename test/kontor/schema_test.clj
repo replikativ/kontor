@@ -34,7 +34,8 @@
     "valuation-layer" "layer-consumption" "layer-adjustment"
     "entity"
     "schedule" "schedule-occurrence"
-    "status-transition" "status-history"})
+    "status-transition" "status-history"
+    "audit-doc" "approval-policy"})
 
 (deftest schema-loads-into-fresh-db
   (testing "Kernel schema transacts cleanly into a fresh in-memory DB"

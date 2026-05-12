@@ -3007,6 +3007,184 @@ Date: 2026-05-12.
 
 ---
 
+## ADR-038 — Audit + governance primitives: codified reasons, supporting docs, segregation of duties
+
+**Decision.** Change kernel `:status-history/reason` from `:db.type/string` to `:db.type/keyword` (codified reason code, SOX-friendly). Add new `:status-history/reason-note` (string, free-text human story alongside the code). Add new `:status-history/supporting-doc` (ref to a generic `:audit-doc` entity that the consumer attaches whatever proof matters — uploaded PDF, email thread, regulator clearance token, manager-override approval). Add kernel-level `:audit-doc` entity (minimal: code identity, type discriminator, content-hash, storage-uri, audit metadata). Add kernel-level `:approval-policy` entity expressing "transition X requires this kind of approval" with optional per-org override. Add `:no-self-approval` as the default segregation-of-duties rule — `kontor.status-machine/record-status-change-tx-data` checks it when an applicable policy exists.
+
+This ADR is the FIRST of the four Stage J-2 cross-cutting primitive ADRs (per ADR-037). It addresses the audit / governance gaps surfaced consistently across all 5 research agents:
+- Status-machine pain agent: codified reasons (SafePaaS / ConductorOne), supporting-doc gap, SoD enforcement (SOX 404).
+- Invoicing pain agent: ASC 250 / PwC error-correction (supporting docs on reversals are auditor-mandatory), Stripe Billing pattern (cancel-then-reissue with credit-memo as supporting doc).
+- Partner pain agent: GDPR DSAR + retention compliance (every PII redaction must have a recorded reason + retention basis).
+- Order pain agent: amendment workflow approvals (Dynamics 365 BC, SAP S/4 Flexible Workflow).
+- Local code review: P1-7 invariants for cross-attribute consistency (we use this same kernel `:approval-policy` shape).
+
+The intent is to make every state change **auditor-ready by construction**, not as a post-hoc reporting concern.
+
+### Why these three primitives belong together
+
+The triple — codified reasons + supporting docs + SoD enforcement — is what an SOX auditor asks for on a sensitive transition: "Show me who, when, why (in a documented vocabulary), what supporting evidence backs the why, and what approval was required to make this change." These three answer those questions. Splitting them across separate ADRs would leave each one half-useful: a codified reason without a supporting doc is unverifiable; a supporting doc without an approval policy is just an attachment; an approval policy without codified reasons can't roll up to compliance reports.
+
+### Schema changes
+
+#### Modify: `:status-history/reason` (kernel)
+
+```clojure
+;; was
+:status-history/reason :db.type/string
+;; becomes
+:status-history/reason :db.type/keyword
+```
+
+Codified reason codes following auditor-friendly conventions. The kernel does NOT enforce a finite enum — consumers extend per their compliance regime. Canonical starter vocabulary, documented in `kontor.status-machine` namespace:
+
+- **Lifecycle codes**: `:created`, `:approved`, `:rejected`, `:cancelled`, `:completed`, `:reopened`.
+- **Correction codes**: `:correction`, `:duplicate`, `:data-entry-error`, `:fraud-detected`, `:auto-reversed`.
+- **Commercial codes**: `:customer-request`, `:vendor-request`, `:partial-shipment`, `:credit-memo-issued`, `:refund-issued`, `:write-off-uncollectible`.
+- **Regulatory codes**: `:tax-correction`, `:period-close`, `:gdpr-erasure`, `:retention-expired`, `:regulator-rejected` (e.g. SdI / SEFAZ / IRP rejection).
+- **Operational codes**: `:auto-promoted`, `:bulk-action`, `:reconciliation-match`, `:system-scheduled` (for time-based transitions per ADR-041).
+- **Catch-all**: `:other` (requires a non-empty `:reason-note`).
+
+Per the status-machine pain research, this approach is what SafePaaS / ConductorOne recommend: codified codes compress into compliance reports; free-form strings don't.
+
+#### Add: `:status-history/reason-note` (kernel)
+
+```clojure
+:status-history/reason-note :db.type/string
+```
+
+Optional free-text human story attached to the codified `:reason`. Where the code answers "what kind of reason," the note answers "what specifically happened." E.g.:
+- `:reason :customer-request` + `:reason-note "Customer Acme asked to defer to Q2"`.
+- `:reason :fraud-detected` + `:reason-note "AVS mismatch + 3DS challenge failed; flagged by Stripe Radar"`.
+- `:reason :other` + `:reason-note "..."` (note REQUIRED when reason is `:other`).
+
+#### Add: `:status-history/supporting-doc` (kernel)
+
+```clojure
+:status-history/supporting-doc :db.type/ref     ; → :audit-doc
+```
+
+Optional ref to an `:audit-doc` entity. When the auditor asks "where's the customer's email asking for the credit memo," this points at the artifact.
+
+#### Add: `:audit-doc` entity (kernel)
+
+```clojure
+:audit-doc/code            string :db.unique/identity   ; consumer-supplied opaque ID
+:audit-doc/type            keyword
+                          ;; :credit-memo | :customer-email | :vendor-email
+                          ;; | :uploaded-pdf | :wet-signature-pdf
+                          ;; | :regulator-clearance | :manager-override
+                          ;; | :compliance-attestation | … free-form
+:audit-doc/title           string                       ; human-readable label
+:audit-doc/description     string                       ; longer note
+:audit-doc/content-hash    string                       ; SHA-256 of the artifact for
+                                                        ;   integrity verification
+:audit-doc/storage-uri     string                       ; where the consumer stores
+                                                        ;   the bytes ("s3://", "file://",
+                                                        ;   "https://", "ipfs://", …)
+:audit-doc/uploaded-by-uid ref → :create/uid
+:audit-doc/uploaded-at     instant
+```
+
+The kernel does NOT store document bytes. Consumer attaches whatever artifact (uploaded PDF, email thread, downloaded clearance token, etc.) wherever they store it; the entity is just enough to point at it and verify integrity.
+
+#### Add: `:approval-policy` entity (kernel)
+
+```clojure
+:approval-policy/entity-type    keyword          ; :order | :invoice | :payment | …
+:approval-policy/facet          keyword          ; :order/status | :invoice/status | …
+:approval-policy/transition-from keyword         ; from-state
+:approval-policy/transition-to  keyword          ; to-state
+:approval-policy/applies-to-org ref → :entity    ; optional per-org scope (per ADR-031)
+:approval-policy/rule           keyword
+                                ;; :no-self-approval — recorded actor must differ
+                                ;;                     from :create/uid of the entity
+                                ;; :requires-supporting-doc — :supporting-doc must be set
+                                ;; :requires-non-empty-reason-note — :reason-note required
+                                ;; … future rules extend the vocabulary
+:approval-policy/active         boolean
+:approval-policy/note           string
+:approval-policy/identity       tuple [entity-type, facet, transition-from,
+                                        transition-to, rule, applies-to-org]
+                                unique
+```
+
+Composite identity ensures idempotent re-installation + multiple policies per transition (e.g. ALL OF `:no-self-approval` AND `:requires-supporting-doc`).
+
+### Enforcement
+
+`kontor.status-machine/record-status-change-tx-data` (the pure-function variant) gains a pre-flight check:
+
+1. Look up the applicable `:approval-policy` rows for `(entity-type, facet, from, to)` with org scope per ADR-034 semantics (org-specific OR tenant-wide).
+2. For each rule:
+   - `:no-self-approval`: require `:changed-by-uid ≠ (:create/uid (d/pull db [:create/uid] entity))`.
+   - `:requires-supporting-doc`: require `:supporting-doc` ref to be set in the change-spec.
+   - `:requires-non-empty-reason-note`: require `:reason-note` to be a non-empty string.
+3. On any rule violation, throw `ex-info :type :approval-policy/violation` with `{:policy ... :violations [...]}`.
+
+This is a **kernel-level enforcement**. Consumers who write `:status-history/...` directly via `d/transact` bypass it (same pattern as ADR-007 sealing — the middleware enforces; raw datahike can bypass). Consumers using `kontor.status-machine/record-status-change!` and helpers get the enforcement.
+
+### Vocabulary discipline
+
+Per the status-machine pain research: codified vocabularies are an audit asset, but they bit-rot if every companion invents its own. Two disciplines to enforce in code review:
+
+1. **Canonical kernel vocabularies are open-set**, not closed. Consumers extend by writing their own keywords. The kernel just provides the starter set.
+2. **Companion modules that introduce new domain-specific vocabularies must document them in the companion's ADR.** E.g. `kontor-collections` will introduce `:reason :credit-hold-applied`, `:reason :dunning-d7-sent`, etc.; those land in the collections ADR's vocabulary section.
+
+A future linter (`kontor.status-machine.lint`) can flag uses of `:other` without a `:reason-note`, or transitions that bypass a known policy. Out of ADR-038 scope.
+
+### Helpers
+
+`kontor.status-machine` namespace gains:
+
+- `applicable-policies` — `(db entity-type facet from to org) → vec of :approval-policy maps`. Public.
+- `check-policies` — `(db change-spec policies)` → `nil | (throws ex-info :approval-policy/violation)`. Internal.
+- The existing `record-status-change!` / `record-status-change-tx-data` now run `check-policies` after the legality check, before building the tx-data.
+
+A new `kontor.audit-doc` namespace ships:
+
+- `by-code` / `resolve-doc`.
+- `attach-supporting-doc!` — convenience that creates an `:audit-doc` + updates a target `:status-history` row's `:supporting-doc` ref in one tx.
+- `verify-content-hash` — pulls the doc, downloads from `:storage-uri`, recomputes SHA-256, compares with `:content-hash`. Consumer-driven; not auto-run.
+
+### Bootstrap
+
+Kernel `kontor.core/install-schema!` gains zero new defaults beyond schema. Consumers seed their own `:approval-policy` rows. The companion `modules/audit/` ships a small set of sensible policy defaults (e.g. "invoice `:sent → :cancelled` after posted requires `:supporting-doc`") that consumers opt into.
+
+### Alternatives considered
+
+- **Keep `:reason` as a string and add a `:reason-code` keyword alongside.** Rejected: backwards-compatible but creates redundancy; two attrs that say similar things drift over time. Migrate hard.
+- **Approval policy as Clojure data (a per-app registry of fns).** Rejected: ADR-034's whole point is "vocabulary is data." Policies belong in datahike, queryable + per-org overrideable + bitemporal.
+- **N-of-m approval workflow.** Deferred. The minimum viable SoD is `:no-self-approval` + `:requires-supporting-doc`; n-of-m (with `:approval-request` entity + multiple approvers + timeout) is its own ADR when a consumer needs it.
+- **Per-user override on policies.** Deferred. Same as above — the minimum is the policy itself; the override-with-justification flow is a future companion (`kontor-approval-override`).
+- **Store document bytes in datahike via `:db.type/bytes`.** Rejected: datahike isn't a document store; large blobs bloat the index. Consumer stores the bytes elsewhere; kernel stores the ref + hash.
+- **`:audit-doc/content-hash` as a Merkle root over multiple files.** Rejected: simple SHA-256 over a single file is what compliance auditors recognize. Composite hashes are out of scope.
+- **Embed `:audit-doc/storage-uri` semantics (e.g. S3-specific fields).** Rejected: opaque URI keeps the kernel storage-agnostic; consumers parse the URI scheme.
+
+### Migration
+
+`:status-history/reason` already lives in the kernel schema (added by ADR-034). The type change from string → keyword is a hard migration:
+
+1. **In-process tests**: all existing tests must update string `:reason "..."` to keyword + optional note (`:reason :customer-request :reason-note "..."`).
+2. **Existing data** (no production deployment yet, so no real data exists): seeded values in tests / fixtures get updated as part of this commit.
+3. **Going forward**: callers pass keywords; the schema rejects strings.
+
+If a future consumer DOES have production data, the migration path is: `(d/transact conn (mapv (fn [[eid old-str]] [:db/add eid :status-history/reason :other]) ...))` plus updating `:reason-note` to carry the old string. Trivial migration; documented in this ADR for future reference.
+
+### Implications
+
+- 1 kernel attr type change (`:status-history/reason`).
+- 4 new kernel attrs (`:status-history/reason-note`, `:status-history/supporting-doc`, `:audit-doc/*`, `:approval-policy/*`).
+- 2 new kernel entities (`:audit-doc`, `:approval-policy`).
+- ~50 LOC in `kontor.status-machine` for policy lookup + enforcement.
+- New namespace `kontor.audit-doc` (~30 LOC, optional).
+- Test coverage: `:reason :keyword` migration, `:no-self-approval` rejection, `:requires-supporting-doc` rejection, policy lookup with org scope, supporting-doc round-trip with content-hash verification.
+- Companion module `modules/audit/` (small) with default policy seeds + helper for attaching docs to history rows.
+- Forward-compat: ADR-039 master-data and ADR-040 jurisdiction can reference `:supporting-doc` for the cases that need it (e.g. credit memo's "this credit references customer email" link, GDPR erasure's "this PII redaction has a recorded request" link).
+
+Date: 2026-05-12.
+
+---
+
 ## Decisions deferred (open)
 
 The following choices are NOT yet locked. Update this section as we converge.
