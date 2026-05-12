@@ -124,6 +124,41 @@
 ;; Transactor
 ;; ============================================================================
 
+(defn record-status-change-tx-data
+  "Pure variant: validate the transition against `db` and return
+   tx-data ready to `d/transact` (the facet update + the history row).
+   Throws ex-info :type :status-machine/illegal-transition if not.
+
+   Use this when the status change must compose atomically with other
+   tx-data (e.g. the invoice posting bridge composes posting tx-data
+   + invoice update + status change in one tx).
+
+   See `record-status-change!` for opts."
+  [db {:keys [entity entity-type facet from to org changed-at
+              changed-by-uid reason origin-transaction]}]
+  (let [from (or from (get (d/pull db [facet] entity) facet))]
+    (when-not (legal-transition? db entity-type facet from to org)
+      (throw (ex-info "Illegal status transition"
+                      {:type        :status-machine/illegal-transition
+                       :entity      entity
+                       :entity-type entity-type
+                       :facet       facet
+                       :from        from
+                       :to          to
+                       :org         org
+                       :legal       (legal-transitions-from db entity-type facet from org)})))
+    (let [history (cond-> {:status-history/entity      entity
+                           :status-history/entity-type entity-type
+                           :status-history/facet       facet
+                           :status-history/to          to
+                           :status-history/changed-at  (or changed-at (java.util.Date.))}
+                    from               (assoc :status-history/from from)
+                    changed-by-uid     (assoc :status-history/changed-by-uid changed-by-uid)
+                    reason             (assoc :status-history/reason reason)
+                    origin-transaction (assoc :status-history/origin-transaction origin-transaction))]
+      [[:db/add entity facet to]
+       history])))
+
 (defn record-status-change!
   "Convenience transactor. In one tx:
      1. Checks legality (throws ex-info :type :status-machine/illegal-
@@ -148,32 +183,10 @@
      :origin-transaction — ref to kernel :transaction that caused
                            the change.
 
-   Returns the tx-report."
-  [conn {:keys [entity entity-type facet from to org changed-at
-                changed-by-uid reason origin-transaction]}]
-  (let [db   (d/db conn)
-        from (or from (get (d/pull db [facet] entity) facet))]
-    (when-not (legal-transition? db entity-type facet from to org)
-      (throw (ex-info "Illegal status transition"
-                      {:type        :status-machine/illegal-transition
-                       :entity      entity
-                       :entity-type entity-type
-                       :facet       facet
-                       :from        from
-                       :to          to
-                       :org         org
-                       :legal       (legal-transitions-from db entity-type facet from org)})))
-    (let [history (cond-> {:status-history/entity      entity
-                           :status-history/entity-type entity-type
-                           :status-history/facet       facet
-                           :status-history/to          to
-                           :status-history/changed-at  (or changed-at (java.util.Date.))}
-                    from               (assoc :status-history/from from)
-                    changed-by-uid     (assoc :status-history/changed-by-uid changed-by-uid)
-                    reason             (assoc :status-history/reason reason)
-                    origin-transaction (assoc :status-history/origin-transaction origin-transaction))]
-      (d/transact conn [[:db/add entity facet to]
-                        history]))))
+   Returns the tx-report. For atomic composition with other tx-data,
+   use `record-status-change-tx-data` directly."
+  [conn opts]
+  (d/transact conn (record-status-change-tx-data (d/db conn) opts)))
 
 ;; ============================================================================
 ;; Queries

@@ -2631,18 +2631,18 @@ A user asking "where does my customer invoice live?" gets one answer in kontor: 
 
 ### Status machine
 
-The kernel's existing `:invoice/status` attribute (currently a free `:db.type/keyword` with documented values `:draft | :sent | :paid | :cancelled`) gets a richer vocabulary, seeded as ADR-034 `:status-transition` rows by the companion's `install!`:
+The kernel's existing `:invoice/status` attribute (a free `:db.type/keyword` already documented in the kernel with values `:draft | :sent | :paid | :cancelled`) gets a `:ready` intermediate state. Vocabulary stays as **bare keywords** to avoid collision with the kernel's existing direct writers (e.g. `kontor.l10n-de.invoice/send!` writes `:invoice/status :sent` directly). Seeded as ADR-034 `:status-transition` rows by the companion's `install!`:
 
 ```
-:invoice.status/nil    → :invoice.status/draft       (Create Invoice)
-:invoice.status/draft  → :invoice.status/ready       (Finalize — locks edits)
-:invoice.status/draft  → :invoice.status/sent        (Post — direct, skips ready)
-:invoice.status/draft  → :invoice.status/cancelled   (Abandon Draft)
-:invoice.status/ready  → :invoice.status/sent        (Post)
-:invoice.status/ready  → :invoice.status/cancelled   (Cancel Ready)
-:invoice.status/sent   → :invoice.status/paid        (Settle)
-:invoice.status/sent   → :invoice.status/cancelled   (Void Posted Invoice → reversal tx)
-:invoice.status/paid   → :invoice.status/cancelled   (Refund flow)
+:nil    → :draft       (Create Invoice)
+:draft  → :ready       (Finalize — locks edits)
+:draft  → :sent        (Post — direct, skips ready)
+:draft  → :cancelled   (Abandon Draft)
+:ready  → :sent        (Post)
+:ready  → :cancelled   (Cancel Ready)
+:sent   → :paid        (Settle)
+:sent   → :cancelled   (Void Posted Invoice → reversal tx)
+:paid   → :cancelled   (Refund flow)
 ```
 
 **Semantics** (preserve existing kernel meaning):
@@ -2755,20 +2755,20 @@ This matches OFBiz's `UtilAccounting.getProductOrgGlAccountId` algorithm (per th
 
 ### Posting bridge
 
-`kontor.invoice.posting/post-to-ledger!` does the work:
+`kontor.invoice.posting/post-to-ledger!` runs as **one atomic transaction**:
 
-1. Verifies the invoice is in `:ready` state (or `:draft` if the consumer skips ready).
-2. For each `:invoice-line`, resolves the GL account via the three-tier algorithm.
-3. Builds a `:transaction` + per-line `:posting` entries (debit / credit per `:gl-account-type`):
-   - `:sales-revenue` → credit revenue account; debit AR (`:invoice/buyer` partner)
-   - `:sales-tax-payable` → credit tax-payable
-   - `:shipping-income` → credit shipping income
-   - `:discount-given` → debit discount-given (contra-revenue)
-   - Mirror inversions for `:purchase` invoice type.
-4. Sets `:invoice/transaction`, `:invoice/posted-at`, and transitions `:invoice/status :sent` via `kontor.status-machine/record-status-change!` (auditable).
-5. Returns the resulting tx-report.
+1. Resolves the invoice currency to a `:commodity` entity-id (throws `:invoice/unknown-commodity` if the kernel's `:invoice/currency` string doesn't match a seeded commodity).
+2. Requires a `:journal-ref` opt — the kernel posting invariant (ADR-021) rejects journal-less transactions. Consumers seed their own journal (e.g. `[:journal/code "SALES"]`).
+3. Defaults `:ledger-ref` to `kontor.ledger/primary` if not supplied. Multi-ledger tenants override per posting.
+4. Builds the input map for `kontor.posting/build-transaction`, with each `:posting` carrying `:posting/commodity`, `:posting/ledger`, `:posting/account`, `:posting/amount` (signed per `(invoice-type, gl-account-type)` debit/credit map), `:posting/partner`, and optionally `:posting/entity` (multi-entity scope per ADR-031). The contra-side (AR for sales, AP for purchase) is computed as `(- sum line-postings)` and added.
+5. Sets `:transaction/state :posted` and `:transaction/posted-at` together (ADR-007 sealing contract).
+6. Composes the kernel posting tx-data with the invoice update (`:invoice/transaction` + `:invoice/posted-at`) AND the status-history row for `:draft|:ready → :sent` (via `kontor.status-machine/record-status-change-tx-data`, the pure-function variant of `record-status-change!`) into ONE tx-data vector.
+7. Asserts the period isn't locked (`kontor.period/assert-not-in-locked-period!` on the full tx-data; ADR-014 enforcement — throws `:period/locked-period-violation` otherwise).
+8. Calls `d/transact` once. Sum-to-zero per ADR-021 + ADR-031 (per-(entity, ledger, commodity)) is enforced by `build-transaction`'s `validate` pass; if the bridge mis-builds postings, the kernel rejects before commit.
 
-Sum-to-zero per ADR-021 + ADR-031 (multi-entity, per-(entity, ledger, commodity)) is enforced at the kernel level — if the bridge mis-builds postings, the kernel rejects the transact.
+The atomicity matters: if any step fails (status-machine rejects, period locked, sum-to-zero violation, missing GL account), nothing is committed. There's no half-state where the transaction exists but `:invoice/transaction` is unset, or where the invoice is `:sent` but no AcctgTrans was created.
+
+The debit/credit direction map `(invoice-type, gl-account-type) → :debit | :credit` is closed today and lives in `kontor.invoice.posting/debit-credit-for`. Adding new account-types (e.g. `:revenue-deferred` for kontor-revrec, `:goods-receipt-accrual` for kontor-procurement) requires editing this map; moving it to a data table is a tracked P1 followup.
 
 ### Public surface
 

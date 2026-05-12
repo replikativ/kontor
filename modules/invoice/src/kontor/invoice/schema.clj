@@ -192,56 +192,56 @@
    permitted for batch flows."
   [{:status-transition/entity-type :invoice
     :status-transition/facet :invoice/status
-    :status-transition/from :invoice.status/nil
-    :status-transition/to :invoice.status/draft
+    :status-transition/from :nil
+    :status-transition/to :draft
     :status-transition/active true
     :status-transition/name "Create Invoice"}
    {:status-transition/entity-type :invoice
     :status-transition/facet :invoice/status
-    :status-transition/from :invoice.status/draft
-    :status-transition/to :invoice.status/ready
+    :status-transition/from :draft
+    :status-transition/to :ready
     :status-transition/active true
     :status-transition/name "Finalize (lock edits)"}
    {:status-transition/entity-type :invoice
     :status-transition/facet :invoice/status
-    :status-transition/from :invoice.status/draft
-    :status-transition/to :invoice.status/sent
+    :status-transition/from :draft
+    :status-transition/to :sent
     :status-transition/active true
     :status-transition/name "Post (skip-ready batch flow)"}
    {:status-transition/entity-type :invoice
     :status-transition/facet :invoice/status
-    :status-transition/from :invoice.status/draft
-    :status-transition/to :invoice.status/cancelled
+    :status-transition/from :draft
+    :status-transition/to :cancelled
     :status-transition/active true
     :status-transition/name "Abandon Draft"}
    {:status-transition/entity-type :invoice
     :status-transition/facet :invoice/status
-    :status-transition/from :invoice.status/ready
-    :status-transition/to :invoice.status/sent
+    :status-transition/from :ready
+    :status-transition/to :sent
     :status-transition/active true
     :status-transition/name "Post"}
    {:status-transition/entity-type :invoice
     :status-transition/facet :invoice/status
-    :status-transition/from :invoice.status/ready
-    :status-transition/to :invoice.status/cancelled
+    :status-transition/from :ready
+    :status-transition/to :cancelled
     :status-transition/active true
     :status-transition/name "Cancel Ready"}
    {:status-transition/entity-type :invoice
     :status-transition/facet :invoice/status
-    :status-transition/from :invoice.status/sent
-    :status-transition/to :invoice.status/paid
+    :status-transition/from :sent
+    :status-transition/to :paid
     :status-transition/active true
     :status-transition/name "Settle"}
    {:status-transition/entity-type :invoice
     :status-transition/facet :invoice/status
-    :status-transition/from :invoice.status/sent
-    :status-transition/to :invoice.status/cancelled
+    :status-transition/from :sent
+    :status-transition/to :cancelled
     :status-transition/active true
     :status-transition/name "Void (creates reversal tx)"}
    {:status-transition/entity-type :invoice
     :status-transition/facet :invoice/status
-    :status-transition/from :invoice.status/paid
-    :status-transition/to :invoice.status/cancelled
+    :status-transition/from :paid
+    :status-transition/to :cancelled
     :status-transition/active true
     :status-transition/name "Refund"}])
 

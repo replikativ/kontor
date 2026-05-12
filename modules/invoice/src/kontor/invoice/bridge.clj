@@ -115,7 +115,7 @@
                                (merge {:entity eid
                                        :entity-type :invoice
                                        :facet :invoice/status
-                                       :to :invoice.status/ready}
+                                       :to :ready}
                                       opts)))))
 
 (defn post-to-ledger!
@@ -135,7 +135,7 @@
                                (merge {:entity eid
                                        :entity-type :invoice
                                        :facet :invoice/status
-                                       :to :invoice.status/paid}
+                                       :to :paid}
                                       opts)))))
 
 (defn cancel!
@@ -149,7 +149,7 @@
                                (merge {:entity eid
                                        :entity-type :invoice
                                        :facet :invoice/status
-                                       :to :invoice.status/cancelled}
+                                       :to :cancelled}
                                       opts)))))
 
 ;; ============================================================================
@@ -166,27 +166,60 @@
         cancelled-qty (or (:order-item/cancel-quantity order-item) 0M)
         already-billed (partial-billed-quantity db order-item-eid)
         bill-qty (.subtract ^java.math.BigDecimal
-                           (.subtract ^java.math.BigDecimal ordered-qty cancelled-qty)
-                           ^java.math.BigDecimal already-billed)
-        unit-price (:order-item/unit-price order-item)
-        line-amount (.multiply ^java.math.BigDecimal bill-qty
-                              ^java.math.BigDecimal unit-price)
-        override-acct (when-let [a (:order-item/override-gl-account order-item)]
-                        (:db/id a))]
-    [(cond-> {:db/id line-tempid
-              :invoice-line/invoice invoice-tempid
-              :invoice-line/sequence sequence
-              :invoice-line/order-item order-item-eid
-              :invoice-line/name (or (:order-item/description order-item)
-                                     (:order-item/product-id order-item))
-              :invoice-line/quantity bill-qty
-              :invoice-line/unit-price unit-price
-              :invoice-line/amount line-amount
-              :invoice-line/gl-account-type :sales-revenue}
-       override-acct (assoc :invoice-line/account override-acct))
-     {:order-item-billing/order-item order-item-eid
-      :order-item-billing/invoice-line line-tempid
-      :order-item-billing/quantity bill-qty}]))
+                            (.subtract ^java.math.BigDecimal ordered-qty cancelled-qty)
+                            ^java.math.BigDecimal already-billed)]
+    (cond
+      ;; Nothing left to bill (already fully invoiced) — emit a zero-
+      ;; quantity line. Caller `make-invoice-from-order!` filters.
+      (zero? (.signum ^java.math.BigDecimal bill-qty))
+      [{:db/id line-tempid
+        :invoice-line/invoice invoice-tempid
+        :invoice-line/sequence sequence
+        :invoice-line/order-item order-item-eid
+        :invoice-line/name (or (:order-item/description order-item)
+                               (:order-item/product-id order-item))
+        :invoice-line/quantity 0M
+        :invoice-line/unit-price (:order-item/unit-price order-item)
+        :invoice-line/amount 0M
+        :invoice-line/gl-account-type :sales-revenue}
+       nil]
+
+      ;; Negative remaining quantity = cancellation increased past
+      ;; already-billed. Refuse — caller must issue a credit memo
+      ;; rather than try to net it on the next invoice.
+      (neg? (.signum ^java.math.BigDecimal bill-qty))
+      (throw (ex-info "Refusing to invoice negative quantity"
+                      {:type :invoice/over-billed-or-over-cancelled
+                       :order-item order-item-eid
+                       :ordered-qty ordered-qty
+                       :cancelled-qty cancelled-qty
+                       :already-billed already-billed
+                       :computed-bill-qty bill-qty
+                       :remediation "Issue a credit memo for the
+                                     already-billed quantity instead
+                                     of attempting to net on a new
+                                     invoice."}))
+
+      :else
+      (let [unit-price (:order-item/unit-price order-item)
+            line-amount (.multiply ^java.math.BigDecimal bill-qty
+                                   ^java.math.BigDecimal unit-price)
+            override-acct (when-let [a (:order-item/override-gl-account order-item)]
+                            (:db/id a))]
+        [(cond-> {:db/id line-tempid
+                  :invoice-line/invoice invoice-tempid
+                  :invoice-line/sequence sequence
+                  :invoice-line/order-item order-item-eid
+                  :invoice-line/name (or (:order-item/description order-item)
+                                         (:order-item/product-id order-item))
+                  :invoice-line/quantity bill-qty
+                  :invoice-line/unit-price unit-price
+                  :invoice-line/amount line-amount
+                  :invoice-line/gl-account-type :sales-revenue}
+           override-acct (assoc :invoice-line/account override-acct))
+         {:order-item-billing/order-item order-item-eid
+          :order-item-billing/invoice-line line-tempid
+          :order-item-billing/quantity bill-qty}]))))
 
 (defn- make-invoice-line-from-adjustment
   "Build an :invoice-line for one :order-adjustment. The line is
@@ -272,17 +305,6 @@
         invoice-tempid "inv-1"
         invoice-type (or type :sales)
         invoice-entity-eid (or entity (get-in order [:order/entity :db/id]))
-        invoice-row (cond-> {:db/id invoice-tempid
-                             :invoice/external-id external-id
-                             :invoice/issue-date (or issue-date (java.util.Date.))
-                             :invoice/type invoice-type
-                             :invoice/status :invoice.status/draft
-                             :invoice/order order-eid
-                             :invoice/seller (get-in order [:order/bill-from-partner :db/id])
-                             :invoice/buyer  (get-in order [:order/bill-to-partner :db/id])
-                             :invoice/currency (get-in order [:order/currency :commodity/symbol])}
-                      invoice-entity-eid (assoc :invoice/entity invoice-entity-eid)
-                      ship-group         (assoc :invoice/invoice-per-shipment-of ship-group))
         ;; Build product lines + billing junctions
         item-results (map-indexed
                       (fn [idx item]
@@ -290,14 +312,17 @@
                                                            (inc idx)
                                                            (str "line-" (inc idx))))
                       items)
-        item-line-rows (map (comp first) item-results)
-        item-billings (map (comp second) item-results)
+        item-line-rows (map first item-results)
+        item-billings  (remove nil? (map second item-results))
+        ;; P0-4 fix: also set the :invoice/lines forward-ref (kernel
+        ;; maintains both forward + back-ref; consumers of
+        ;; kontor.invoice/send! walk :invoice/lines).
         ;; Map :order-item eid → its line tempid (for line-scoped
         ;; adjustments)
         order-item-eid->tempid (into {}
-                                     (map (fn [item line]
-                                            [(:db/id item) (:db/id line)])
-                                          items item-line-rows))
+                                    (map (fn [item line]
+                                           [(:db/id item) (:db/id line)])
+                                         items item-line-rows))
         ;; Build adjustment lines
         adj-line-rows (map-indexed
                        (fn [idx adj]
@@ -309,6 +334,20 @@
                             (str "adj-" (inc idx))
                             parent-tempid)))
                        adjustments)
+        all-line-tempids (into (mapv :db/id item-line-rows)
+                               (map :db/id adj-line-rows))
+        invoice-row (cond-> {:db/id invoice-tempid
+                             :invoice/external-id external-id
+                             :invoice/issue-date (or issue-date (java.util.Date.))
+                             :invoice/type invoice-type
+                             :invoice/status :draft
+                             :invoice/order order-eid
+                             :invoice/seller (get-in order [:order/bill-from-partner :db/id])
+                             :invoice/buyer  (get-in order [:order/bill-to-partner :db/id])
+                             :invoice/currency (get-in order [:order/currency :commodity/symbol])
+                             :invoice/lines all-line-tempids}
+                      invoice-entity-eid (assoc :invoice/entity invoice-entity-eid)
+                      ship-group         (assoc :invoice/invoice-per-shipment-of ship-group))
         all-tx-data (concat [invoice-row]
                             item-line-rows
                             item-billings

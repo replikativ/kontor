@@ -75,6 +75,14 @@
                {:gl-account-default/account-type :sales-tax-payable
                 :gl-account-default/account [:account/path "3800"]}]))
 
+(defn- seed-journal!
+  "Seed a sales journal for posting."
+  []
+  (d/transact *conn*
+              [{:journal/code "SALES"
+                :journal/name "Sales Journal"
+                :journal/type :sale}]))
+
 (defn- minimal-order! []
   (seed-commodity!)
   (seed-partners!)
@@ -119,13 +127,13 @@
       (is (contains? idents a) (str "missing: " a)))
     (testing "invoice status transitions are seeded"
       (is (true? (sm/legal-transition? db :invoice :invoice/status
-                                       :invoice.status/draft :invoice.status/ready)))
+                                       :draft :ready)))
       (is (true? (sm/legal-transition? db :invoice :invoice/status
-                                       :invoice.status/ready :invoice.status/sent)))
+                                       :ready :sent)))
       (is (true? (sm/legal-transition? db :invoice :invoice/status
-                                       :invoice.status/draft :invoice.status/sent)))
+                                       :draft :sent)))
       (is (true? (sm/legal-transition? db :invoice :invoice/status
-                                       :invoice.status/sent :invoice.status/paid))))))
+                                       :sent :paid))))))
 
 ;; ============================================================================
 ;; Three-tier GL resolution
@@ -189,7 +197,7 @@
         (is (some? inv-eid))
         (is (= :sales (:invoice/type invoice)))
         (is (= "ORD-1" (-> invoice :invoice/order :order/external-id)))
-        (is (= :invoice.status/draft (:invoice/status invoice))))
+        (is (= :draft (:invoice/status invoice))))
       (testing "one line per order-item, with order-item ref + amount"
         (is (= 1 (count lines)))
         (let [line (first lines)
@@ -261,11 +269,13 @@
   (let [_order-eid (minimal-order!)]
     (seed-accounts!)
     (seed-gl-defaults!)
+    (seed-journal!)
     (inv/make-invoice-from-order! *conn* "ORD-1"
                                   {:external-id "INV-POST-1"})
     (let [{:keys [transaction-eid invoice-eid]}
           (inv/post-to-ledger! *conn* "INV-POST-1"
-                               {:posted-at #inst "2026-05-10"})
+                               {:posted-at #inst "2026-05-10"
+                                :journal-ref [:journal/code "SALES"]})
           db (d/db *conn*)
           postings (->> (d/q '[:find [?p ...]
                                :in $ ?tx
@@ -278,7 +288,7 @@
                       0M postings)]
       (testing "invoice transitioned to :sent + posted-at set"
         (let [inv (inv/pull-invoice db invoice-eid)]
-          (is (= :invoice.status/sent (:invoice/status inv)))
+          (is (= :sent (:invoice/status inv)))
           (is (= #inst "2026-05-10" (:invoice/posted-at inv)))
           (is (some? (:invoice/transaction inv)))))
       (testing "postings sum to zero (sum-to-zero invariant)"
@@ -290,31 +300,101 @@
   (let [_ (minimal-order!)
         _ (seed-accounts!)
         _ (seed-gl-defaults!)
+        _ (seed-journal!)
         _ (inv/make-invoice-from-order! *conn* "ORD-1"
                                         {:external-id "INV-POST-2"})]
-    (inv/post-to-ledger! *conn* "INV-POST-2")
+    (inv/post-to-ledger! *conn* "INV-POST-2" {:journal-ref [:journal/code "SALES"]})
     (testing "posting an already-:sent invoice throws"
       (is (thrown? Exception
-                   (inv/post-to-ledger! *conn* "INV-POST-2"))))))
+                   (inv/post-to-ledger! *conn* "INV-POST-2" {:journal-ref [:journal/code "SALES"]}))))))
 
 (deftest post-then-mark-paid
   (let [_ (minimal-order!)
         _ (seed-accounts!)
         _ (seed-gl-defaults!)
+        _ (seed-journal!)
         _ (inv/make-invoice-from-order! *conn* "ORD-1"
                                         {:external-id "INV-PAID-1"})]
-    (inv/post-to-ledger! *conn* "INV-PAID-1")
+    (inv/post-to-ledger! *conn* "INV-PAID-1" {:journal-ref [:journal/code "SALES"]})
     (inv/mark-paid! *conn* "INV-PAID-1" {:reason "bank reconciled"})
     (let [db (d/db *conn*)
           inv (inv/pull-invoice db "INV-PAID-1")]
-      (is (= :invoice.status/paid (:invoice/status inv))))))
+      (is (= :paid (:invoice/status inv))))))
+
+;; ============================================================================
+;; P0 regression tests
+;; ============================================================================
+
+(deftest p0-5-negative-bill-qty-after-cancel-throws
+  ;; Order 10, first invoice for 7. Then cancel 5 (more than the 3
+  ;; remaining-unbilled). Second-invoice attempt must throw rather
+  ;; than emit a negative-quantity line.
+  (let [order-eid (minimal-order!)
+        item-eid (d/q '[:find ?i . :in $ ?o
+                        :where [?i :order-item/order ?o]]
+                      (d/db *conn*) order-eid)]
+    ;; Manually create a billing junction for 7 (simulating a
+    ;; first partial invoice) — bypasses make-invoice-from-order!
+    ;; to keep the setup focused.
+    (d/transact *conn*
+                [{:invoice/external-id "INV-PRE-1"
+                  :invoice/status :sent
+                  :invoice/issue-date #inst "2026-04-15"
+                  :invoice/type :sales
+                  :db/id "inv-pre"}
+                 {:invoice-line/invoice "inv-pre"
+                  :invoice-line/sequence 1
+                  :invoice-line/order-item item-eid
+                  :invoice-line/quantity 7M
+                  :invoice-line/unit-price 25M
+                  :invoice-line/amount 175M
+                  :db/id "line-pre"}
+                 {:order-item-billing/order-item item-eid
+                  :order-item-billing/invoice-line "line-pre"
+                  :order-item-billing/quantity 7M}])
+    ;; Bump cancel-quantity past the remaining 3
+    (d/transact *conn*
+                [{:db/id item-eid
+                  :order-item/cancel-quantity 5M}])
+    (testing "negative bill-qty raises :invoice/over-billed-or-over-cancelled"
+      (is (thrown-with-msg? Exception #"negative quantity"
+                            (inv/make-invoice-from-order! *conn* "ORD-1"
+                                                          {:external-id "INV-NEG-1"}))))))
+
+(deftest p0-7-post-to-locked-period-rejected
+  ;; Per ADR-014 + the invoicing-pain research agent: posting into a
+  ;; locked period is "the cardinal sin." The bridge must reject.
+  (let [_ (minimal-order!)
+        _ (seed-accounts!)
+        _ (seed-gl-defaults!)
+        _ (seed-journal!)]
+    ;; Seed a locked period covering 2026-04-01 → 2026-05-01 (range is [start, end))
+    (d/transact *conn*
+                [{:period/name "2026-04"
+                  :period/start #inst "2026-04-01"
+                  :period/end #inst "2026-05-01"
+                  :period/locked-at #inst "2026-05-05"
+                  :period/tag :normal}])
+    (inv/make-invoice-from-order! *conn* "ORD-1"
+                                  {:external-id "INV-LOCKED-1"})
+    (testing "posting with :posted-at inside a locked period throws"
+      (is (thrown? Exception
+                   (inv/post-to-ledger! *conn* "INV-LOCKED-1"
+                                        {:posted-at #inst "2026-04-15"
+                                         :journal-ref [:journal/code "SALES"]}))))
+    (testing "posting after the locked period succeeds"
+      (let [{:keys [transaction-eid]}
+            (inv/post-to-ledger! *conn* "INV-LOCKED-1"
+                                 {:posted-at #inst "2026-05-15"
+                                  :journal-ref [:journal/code "SALES"]})]
+        (is (some? transaction-eid))))))
 
 (deftest cancel-draft-invoice
   (let [_ (minimal-order!)
         _ (inv/make-invoice-from-order! *conn* "ORD-1"
                                         {:external-id "INV-CANCEL-1"})]
     (inv/cancel! *conn* "INV-CANCEL-1" {:reason "customer abandoned"})
-    (is (= :invoice.status/cancelled
+    (is (= :cancelled
            (:invoice/status (inv/pull-invoice (d/db *conn*) "INV-CANCEL-1"))))))
 
 ;; ============================================================================

@@ -197,8 +197,8 @@ Hybrid build order (per research notes 09-12; the foundations get 3-4 weeks of d
 
 - [x] **Stage H — ADR-032** — `:schedule` entity + `:cost-center` bootstrap (cross-cutting primitives every companion needs). Done 2026-05-12.
 - [x] **Stage I — kontor-partner** — party-as-root + person/org subtypes + polymorphic contact-mech + roles + relationships (ADR-033). Done 2026-05-12. 618 tests / 2094 assertions baseline.
-- [ ] **Stage J — kontor-sales** — order header + items + ship groups + adjustments + roles + status history. Foundation for invoice generation, procurement, revrec, subscription. (3-4 weeks; in progress.)
-- [ ] **CHECKPOINT** — validate kontor-partner + kontor-sales against a real customer use case OR independent code review before proceeding to faster cadence.
+- [x] **Stage J — kontor-sales + kontor-invoice** — order header + items + ship groups + adjustments + roles + status history (ADR-035), AND extends kernel `:invoice/*` with order-bridge + status machine + three-tier GL resolution + AcctgTrans posting (ADR-036). State-machine table is a generic kernel primitive (ADR-034: `:status-transition` + `:status-history` + `kontor.status-machine`). Done 2026-05-12. 655 tests / 2275 assertions baseline.
+- [ ] **CHECKPOINT** — independent code-review pass on Stage J before proceeding to Stage K. In progress.
 - [ ] **Stage K — kontor-procurement** — `:order/type :purchase` shape + requirement (requisition) entity + 3-way match (PO ↔ receipt ↔ invoice). Builds on Stage J. (~2-3 weeks.)
 - [ ] **Stage L — kontor-asset** — fixed-asset register + depreciation schedule (consumes ADR-032 `:schedule`). (~2 weeks.)
 - [ ] **Stage M — kontor-revrec** — ASC 606 / IFRS 15 over-time revenue recognition (consumes Stage J + ADR-032). (~3 weeks.)
@@ -263,8 +263,7 @@ Both produce **suggested** postings, never auto-posted. Reconciliation UI lives 
 | Phase 4-CA (CA-credible) | 12-18 |
 | Phase 5-US (US-credible with paid-provider scaffolds) | 16-24 |
 | Track B audit-chain (parallel, ships any time after week 2) | +1-2 |
-| Phase 6 stages H + I (schedule + cost-center + partner) | done |
-| Phase 6 stage J (sales — foundation, 3-4 weeks) | in progress |
+| Phase 6 stages H + I + J (schedule + partner + sales + invoice + status-machine) | done |
 | Phase 6 stages K-Q (later companions, after checkpoint) | +12-16 |
 
 Plus per-country annual maintenance: low (DE) to moderate (US sales tax).
