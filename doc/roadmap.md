@@ -197,9 +197,17 @@ Hybrid build order (per research notes 09-12; the foundations get 3-4 weeks of d
 
 - [x] **Stage H — ADR-032** — `:schedule` entity + `:cost-center` bootstrap (cross-cutting primitives every companion needs). Done 2026-05-12.
 - [x] **Stage I — kontor-partner** — party-as-root + person/org subtypes + polymorphic contact-mech + roles + relationships (ADR-033). Done 2026-05-12. 618 tests / 2094 assertions baseline.
-- [x] **Stage J — kontor-sales + kontor-invoice** — order header + items + ship groups + adjustments + roles + status history (ADR-035), AND extends kernel `:invoice/*` with order-bridge + status machine + three-tier GL resolution + AcctgTrans posting (ADR-036). State-machine table is a generic kernel primitive (ADR-034: `:status-transition` + `:status-history` + `kontor.status-machine`). Done 2026-05-12. 655 tests / 2275 assertions baseline.
-- [ ] **CHECKPOINT** — independent code-review pass on Stage J before proceeding to Stage K. In progress.
-- [ ] **Stage K — kontor-procurement** — `:order/type :purchase` shape + requirement (requisition) entity + 3-way match (PO ↔ receipt ↔ invoice). Builds on Stage J. (~2-3 weeks.)
+- [x] **Stage J — kontor-sales + kontor-invoice** — order header + items + ship groups + adjustments + roles + status history (ADR-035), AND extends kernel `:invoice/*` with order-bridge + status machine + three-tier GL resolution + AcctgTrans posting (ADR-036). State-machine table is a generic kernel primitive (ADR-034: `:status-transition` + `:status-history` + `kontor.status-machine`). Done 2026-05-12. 657 tests / 2278 assertions baseline.
+- [x] **Stage J CHECKPOINT** — 1 independent code-review agent + 4 market-pain research agents (partner/MDM, order management, invoicing/AR, status-machine/workflow) audited the design. 6 P0 ship-blockers from local review + 1 P0 from market-pain (period-close enforcement) fixed in commit `8524e42`. Findings captured in [research note 13](research/13-stage-j-pain-and-followups.md). Architecture validated on 11 dimensions; remaining gaps are mostly content (vocabularies, account-types) not architecture.
+- [ ] **Stage J FOLLOWUPS** — quick-win P1s before Stage K extends the bridge (~4-6 engineering-days):
+  1. `cancel-order!` releases `:inv-reservation` rows; `cancel-invoice!` retracts `:order-item-billing` junctions.
+  2. `:status-history/reason` → keyword + optional `:reason-note` string (SOX-codified).
+  3. `:purchase` invoice end-to-end test (forces dispatch on `:order/type` in bridge).
+  4. debit/credit map `(invoice-type, gl-account-type) → :debit | :credit` → data table (kontor-procurement extension point).
+  5. `:invoice-line/recognition :direct | :deferred` keyword (kontor-revrec forward-compat).
+  6. `:partner-tax-id` junction (multi-VAT for EU/multi-jurisdiction customers).
+  7. Period-close cross-cut test (invoice post + lock + reopen flow).
+- [ ] **Stage K — kontor-procurement** — `:order/type :purchase` shape + requirement (requisition) entity + 3-way match (PO ↔ receipt ↔ invoice) + RTV flow. Builds on Stage J. (~2-3 weeks.) **Entry conditions**: Stage J followups 1-4 above must land first (cancel-order releases reservations, debit/credit data table, `:purchase` end-to-end test). Inverse-pair role-direction semantics decided in ADR-033 vocabulary.
 - [ ] **Stage L — kontor-asset** — fixed-asset register + depreciation schedule (consumes ADR-032 `:schedule`). (~2 weeks.)
 - [ ] **Stage M — kontor-revrec** — ASC 606 / IFRS 15 over-time revenue recognition (consumes Stage J + ADR-032). (~3 weeks.)
 - [ ] **Stage N — kontor-subscription** — recurring billing with catalog versioning (Kill Bill-pattern). (~2 weeks.)
