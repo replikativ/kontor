@@ -2619,6 +2619,204 @@ Date: 2026-05-12.
 
 ---
 
+## ADR-036 — `kontor-invoice`: order→invoice bridge, status machine, AcctgTrans posting
+
+**Decision.** Land `kontor-invoice` as the third Stage J companion (under `modules/invoice/`). Extend the kernel's existing `:invoice/*` + `:invoice-line/*` schema with: `:invoice/order` (back-ref to the originating order from kontor-sales), `:invoice/type` discriminator (`:sales | :purchase | :credit-memo | :debit-memo`), `:invoice/posted-at` sealing marker, `:invoice/entity` (multi-entity scope per ADR-031), `:invoice-line/parent-line` (self-ref for adjustment-of-line), `:invoice-line/order-item` (bridge for partial-invoicing math), `:invoice-line/gl-account-type` (keyword discriminator for posting), `:invoice-line/tax-auth-party` + `:invoice-line/tax-auth-geo-id` (per-line jurisdiction), `:invoice-line/amount` (line total). Introduce `:order-item-billing` junction (tracks invoiced-quantity per `:order-item` ↔ `:invoice-line` pair for partial-invoice arithmetic). Introduce `:gl-account-default` table (per-(account-type, entity) → `:account` lookup, two-tier OFBiz pattern). Seed the invoice status machine (`:draft → :ready → :sent → :paid` plus `:cancelled` escape) into the kernel's ADR-034 `:status-transition` table. Ship `kontor.invoice.posting/post-to-ledger!` — the order→invoice→AcctgTrans bridge with three-tier GL resolution (`:invoice-line/override-account` → product-specific → `:gl-account-default`).
+
+### Why a separate companion
+
+The OFBiz study (research note 12 pass 2) recommended splitting `kontor-sales` and `kontor-invoice` because `kontor-procurement` (Stage K, next stage) will reuse the invoice machinery for vendor invoices. Without the split, procurement either reaches into sales for invoice bridge code or duplicates it. The kernel already ships `:invoice/*` + `:invoice-line/*` (lines 1191-1363 in `src/kontor/schema.clj`) — `kontor-invoice` extends those with order-aware fields, not reinvents the entity.
+
+A user asking "where does my customer invoice live?" gets one answer in kontor: the kernel `:invoice` entity (uniform shape for B2B / B2G via Factur-X / XRechnung). Where does the order-link live, the posting bridge, the line-level GL routing? The `kontor-invoice` companion. Where does the sales-order shape live? `kontor-sales`. Where does the procurement requirement shape live? `kontor-procurement`. The split is along the lines that real-world customer scenarios already separate.
+
+### Status machine
+
+The kernel's existing `:invoice/status` attribute (currently a free `:db.type/keyword` with documented values `:draft | :sent | :paid | :cancelled`) gets a richer vocabulary, seeded as ADR-034 `:status-transition` rows by the companion's `install!`:
+
+```
+:invoice.status/nil    → :invoice.status/draft       (Create Invoice)
+:invoice.status/draft  → :invoice.status/ready       (Finalize — locks edits)
+:invoice.status/draft  → :invoice.status/sent        (Post — direct, skips ready)
+:invoice.status/draft  → :invoice.status/cancelled   (Abandon Draft)
+:invoice.status/ready  → :invoice.status/sent        (Post)
+:invoice.status/ready  → :invoice.status/cancelled   (Cancel Ready)
+:invoice.status/sent   → :invoice.status/paid        (Settle)
+:invoice.status/sent   → :invoice.status/cancelled   (Void Posted Invoice → reversal tx)
+:invoice.status/paid   → :invoice.status/cancelled   (Refund flow)
+```
+
+**Semantics** (preserve existing kernel meaning):
+- `:draft` — invoice under construction; no GL effect.
+- `:ready` (new) — invoice frozen for edits; awaiting GL posting. Optional intermediate; consumers that batch-process can skip it.
+- `:sent` — AcctgTrans created. The `:invoice/posted-at` and the kernel `:invoice/transaction` ref are populated. From the customer's perspective, the invoice is now "out the door." The kernel's existing `:invoice/sent-at` marker still applies.
+- `:paid` — settled (kernel's existing transition via reconciliation).
+- `:cancelled` — voided. If posted, requires a reversal `:transaction` per ADR-007 sealing.
+
+**No retroactive enforcement on existing kernel callers.** The l10n-de invoice flow (`modules/l10n-de/src/kontor/l10n_de/invoice.clj`) and any other direct writers continue to work — they bypass the status machine by writing the attribute directly. Only callers that use `kontor.invoice/*` helpers go through `kontor.status-machine/record-status-change!` and get the enforcement + audit history. This matches ADR-007's sealing pattern: middleware enforces; raw datahike calls can bypass.
+
+### Schema (companion-installed)
+
+#### Invoice extensions (additive to kernel)
+
+```clojure
+:invoice/type        keyword          ; :sales | :purchase | :credit-memo |
+                                      ; :debit-memo. Discriminator that
+                                      ; kontor-procurement uses to route
+                                      ; AP-side invoices.
+:invoice/order       ref → :order     ; Optional. Set when invoice is
+                                      ; created from a sales/purchase order.
+                                      ; Nil for standalone bills.
+:invoice/posted-at   instant          ; Sealing marker — when AcctgTrans
+                                      ; was created. Distinct from
+                                      ; :invoice/sent-at (which marks the
+                                      ; "out the door to customer" event,
+                                      ; per kernel doc).
+:invoice/entity      ref → :entity    ; Multi-entity scope per ADR-031.
+                                      ; Required for multi-entity tenants;
+                                      ; optional for single-entity.
+:invoice/invoice-per-shipment-of ref → :ship-group ; Optional. When set,
+                                      ; this invoice is for ONE specific
+                                      ; ship group of an order (the OFBiz
+                                      ; invoicePerShipment pattern).
+```
+
+#### Invoice-line extensions (additive to kernel)
+
+```clojure
+:invoice-line/parent-line   ref → :invoice-line  ; Self-ref. When set,
+                                                  ; this line is a derived
+                                                  ; line of its parent (e.g.
+                                                  ; a tax line attached to
+                                                  ; a product line).
+:invoice-line/order-item    ref → :order-item    ; The kontor-sales line
+                                                  ; this invoice line was
+                                                  ; created from. Set on
+                                                  ; the bridge call. Used
+                                                  ; for partial-invoice
+                                                  ; tracking (subtract
+                                                  ; already-billed quantity
+                                                  ; on next invoice).
+:invoice-line/order-adjustment ref → :order-adjustment ; The adjustment
+                                                  ; (discount / tax /
+                                                  ; surcharge) this line
+                                                  ; was derived from. Set
+                                                  ; for adjustment lines.
+:invoice-line/gl-account-type keyword            ; :sales-revenue |
+                                                  ; :sales-tax-payable |
+                                                  ; :shipping-income |
+                                                  ; :discount-given | …
+                                                  ; Posting-time discriminator
+                                                  ; for the GL account
+                                                  ; lookup.
+:invoice-line/tax-auth-party ref → :partner      ; Jurisdiction (ADR-016).
+:invoice-line/tax-auth-geo-id string             ; Tax authority code
+                                                  ; (e.g. "DE", "US-CA").
+:invoice-line/amount        bigdec               ; Line total (denorm of
+                                                  ; quantity × unit-price
+                                                  ; for goods lines; just
+                                                  ; "amount" for adjustment
+                                                  ; lines where quantity
+                                                  ; doesn't apply).
+```
+
+#### `:order-item-billing` junction (new entity)
+
+```clojure
+:order-item-billing/order-item   ref → :order-item
+:order-item-billing/invoice-line ref → :invoice-line
+:order-item-billing/quantity     bigdec             ; the quantity billed
+                                                    ; on this invoice line
+:order-item-billing/identity     tuple [order-item, invoice-line] unique
+```
+
+For an order item invoiced in two passes (e.g. 7 units now, 3 units later when the remaining stock arrives), there are two `:order-item-billing` rows pointing at two different `:invoice-line` rows. The partial-invoice query "how much of this order-item has been invoiced so far?" sums `:order-item-billing/quantity` across all rows for that order-item.
+
+#### `:gl-account-default` (new entity, OFBiz GlAccountTypeDefault pattern)
+
+```clojure
+:gl-account-default/account-type keyword             ; :sales-revenue |
+                                                     ; :cogs | :ar | :ap |
+                                                     ; :sales-tax-payable | …
+:gl-account-default/entity       ref → :entity       ; Optional. When nil,
+                                                     ; tenant-wide default;
+                                                     ; when set, scopes to
+                                                     ; that org.
+:gl-account-default/account      ref → :account
+:gl-account-default/identity     tuple [account-type, entity] unique
+```
+
+The three-tier GL resolution order at posting time:
+1. **Explicit override**: if `:invoice-line/account` (the kernel's existing field) is set, use it.
+2. **Entity-specific default**: query `:gl-account-default` with `(account-type, :invoice/entity)`.
+3. **Tenant-wide default**: query `:gl-account-default` with `(account-type, nil)`.
+4. **Fail** with a `:invoice/missing-gl-default` exception if all three miss.
+
+This matches OFBiz's `UtilAccounting.getProductOrgGlAccountId` algorithm (per the OFBiz study), simplified by dropping the per-product layer (kontor doesn't ship a product entity yet; consumers can add it later as a fourth tier).
+
+### Posting bridge
+
+`kontor.invoice.posting/post-to-ledger!` does the work:
+
+1. Verifies the invoice is in `:ready` state (or `:draft` if the consumer skips ready).
+2. For each `:invoice-line`, resolves the GL account via the three-tier algorithm.
+3. Builds a `:transaction` + per-line `:posting` entries (debit / credit per `:gl-account-type`):
+   - `:sales-revenue` → credit revenue account; debit AR (`:invoice/buyer` partner)
+   - `:sales-tax-payable` → credit tax-payable
+   - `:shipping-income` → credit shipping income
+   - `:discount-given` → debit discount-given (contra-revenue)
+   - Mirror inversions for `:purchase` invoice type.
+4. Sets `:invoice/transaction`, `:invoice/posted-at`, and transitions `:invoice/status :sent` via `kontor.status-machine/record-status-change!` (auditable).
+5. Returns the resulting tx-report.
+
+Sum-to-zero per ADR-021 + ADR-031 (multi-entity, per-(entity, ledger, commodity)) is enforced at the kernel level — if the bridge mis-builds postings, the kernel rejects the transact.
+
+### Public surface
+
+**Namespace naming note**: The kernel already ships a `kontor.invoice` namespace (`src/kontor/invoice.clj`) with `create!` / `send!` / `mark-paid!` / `cancel!` for non-order-aware flows (used by `kontor-l10n-de`'s SKR04 invoice flow, etc.). To avoid collision, the **companion's public surface lives at `kontor.invoice.bridge`**, not `kontor.invoice`. Schema and posting helpers live at `kontor.invoice.schema` and `kontor.invoice.posting` — no collision there. This split also clarifies semantic scope: the kernel ns handles raw invoice CRUD; the bridge handles order-aware lifecycles.
+
+`kontor.invoice.bridge` namespace:
+- `by-external-id`, `resolve-invoice` — lookup helpers.
+- `pull-invoice` — pulled invoice with lines + order ref + entity.
+- `lines-of` — pulled :invoice-line rows ordered by `:invoice-line/sequence`.
+- `total-of` — sum of `:invoice-line/amount` across lines (or kernel `:invoice/total-gross` if set).
+- `partial-billed-quantity` — sum of `:order-item-billing/quantity` for a given order-item.
+- Status: `make-ready!`, `post-to-ledger!`, `mark-paid!`, `cancel!`.
+- Bridge: `make-invoice-from-order!` — given an `:order` eid + optional `:ship-group`, build `:invoice` + `:invoice-line` rows + `:order-item-billing` junctions. Returns tx-data; transact in one call.
+
+`kontor.invoice.posting` namespace:
+- `resolve-gl-account` — the three-tier resolver.
+- `build-postings` — per-line debit/credit construction.
+- `post-to-ledger!` — the orchestrating transactor.
+
+### Bootstrap
+
+The companion's `install!`:
+1. Transacts the schema extensions.
+2. Seeds the invoice status machine into the `:status-transition` table.
+3. Optionally accepts a `:gl-defaults` seed map for tenant defaults (e.g. `{:sales-revenue [:account/path "4000"]}`); skip when caller seeds separately.
+
+### Alternatives considered
+
+- **No status machine; keep `:invoice/status` free-form.** Rejected: ADR-034's whole point is generic state machines; not using it for invoice would leave an obvious gap. The opt-in pattern (enforcement only via `kontor.invoice` helpers) means existing direct-writers aren't broken.
+- **Rename `:invoice/sent-at` → `:invoice/posted-at` and merge semantics.** Rejected: the kernel docs `:sent-at` as "sent to customer," distinct from "posted to GL." The two events COULD happen at different times (post to GL on Friday, email the customer Monday). Add `:posted-at` as a peer attribute, not a rename.
+- **Bake the GL-resolution into the kernel.** Rejected: GL account choices are per-tenant / per-jurisdiction (SKR04 numbering in DE, ACDOCA in SAP migrations, US GAAP charts). The `:gl-account-default` table lives in the companion (consumer seeds it).
+- **Generic `:adjustment` reused across order + invoice + quote.** Rejected per ADR-035: the back-refs differ. Each companion owns its own adjustment shape, even though they're similar.
+- **`:invoice-line/parent-line` as cardinality-many `:invoice-line/children`.** Rejected: self-ref child→parent is queryable both ways via datalog; parent→children would force every adjustment line to be back-referenced from the product line, doubling write cost. Pick the direction that minimizes writes.
+- **One AcctgTrans per invoice (one `:transaction` for the whole invoice).** Adopted, per OFBiz. The alternative (one `:transaction` per `:invoice-line`) breaks sum-to-zero per-line, since taxes and revenue offset each other across the invoice. The invoice is the unit of posting; the line is the unit of GL-account routing.
+
+### Implications
+
+- ~20 new attributes across the kernel's existing `:invoice/*` + `:invoice-line/*` namespaces, plus 2 new entity namespaces (`:order-item-billing/*`, `:gl-account-default/*`). All opt-in via `(kontor.invoice.schema/install! conn)`.
+- 9 new `:status-transition` rows seeded.
+- The kernel's existing `:invoice/status` semantics expand to include `:ready` (new intermediate state).
+- Forward-compat: kontor-procurement (Stage K) reuses everything by setting `:invoice/type :purchase`.
+- Forward-compat: future kontor-credit-memo / kontor-refund flows reuse by setting `:invoice/type :credit-memo`.
+- Test coverage: schema install, status-transition seeds, three-tier GL resolution (override / entity / tenant default / missing → throw), order→invoice bridge (full-shipment + partial-shipment + invoice-per-shipment), AcctgTrans posting (sum-to-zero balance, partner attribution, multi-currency basics), post-then-cancel reversal flow.
+
+Date: 2026-05-12.
+
+---
+
 ## Decisions deferred (open)
 
 The following choices are NOT yet locked. Update this section as we converge.
