@@ -651,6 +651,87 @@
     :db/doc         "Ref to :status-history row that produced this
                      intent."}])
 
+(def ^:private payment-application-attrs
+  ;; ADR-043: partial-payment primitive. Closes the scope-cut at
+  ;; reconciliation.clj:38-47 — :open-amount per invoice now equals
+  ;; (invoice gross − Σ application amounts). Bitemporal via datahike
+  ;; tx-time: query "what applications were known as of T?" reads
+  ;; rows with :applied-at ≤ T. Replayable: write a :reversal-of row
+  ;; with negated :amount.
+  [{:db/ident       :payment-application/payment
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to the :transaction that brought cash in
+                     (typically a bank-line settlement)."}
+
+   {:db/ident       :payment-application/invoice
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to the :invoice this application reduces."}
+
+   {:db/ident       :payment-application/amount
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Signed amount. Positive reduces the invoice's
+                     open balance; negative is an allocation reversal
+                     (see :reversal-of)."}
+
+   {:db/ident       :payment-application/commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Currency / commodity of :amount. Must match the
+                     invoice's currency."}
+
+   {:db/ident       :payment-application/applied-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Wall-clock instant the application was recorded.
+                     Bitemporal queries read applications with
+                     :applied-at ≤ :as-of-valid."}
+
+   {:db/ident       :payment-application/applied-by-uid
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to :create/uid of the actor who applied."}
+
+   {:db/ident       :payment-application/strategy
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":fifo | :customer-instruction | :proportional
+                     | :cherry-pick | :reversal"}
+
+   {:db/ident       :payment-application/reason
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional reason keyword (e.g. :remittance-
+                     received, :allocation-correction, :customer-
+                     dispute)."}
+
+   {:db/ident       :payment-application/reason-note
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :payment-application/reversal-of
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to the prior :payment-application
+                     this row reverses. Set on reversals; null on
+                     forward allocations."}
+
+   {:db/ident       :payment-application/supporting-doc
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to :audit-doc (e.g. remittance
+                     advice PDF)."}
+
+   {:db/ident       :payment-application/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:payment-application/payment
+                     :payment-application/invoice
+                     :payment-application/applied-at]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity}])
+
 (def ^:private account-type-direction-attrs
   ;; ADR-041: debit/credit data table replacing hardcoded map.
   [{:db/ident       :account-type-direction/invoice-type
@@ -3140,7 +3221,8 @@
     partner-tag-attrs                     ; ADR-039
     partner-tax-id-attrs                  ; ADR-040
     side-effect-intent-attrs              ; ADR-041
-    account-type-direction-attrs)))       ; ADR-041
+    account-type-direction-attrs          ; ADR-041
+    payment-application-attrs)))          ; ADR-043
 
 (defn install!
   "Transact the kernel schema into a connection. Idempotent — re-running

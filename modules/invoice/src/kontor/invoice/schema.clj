@@ -268,7 +268,44 @@
     :status-transition/from :sent
     :status-transition/to :paid
     :status-transition/active true
-    :status-transition/name "Settle"}
+    :status-transition/name "Settle (full)"}
+   ;; ADR-043: partial-payment lifecycle.
+   {:status-transition/entity-type :invoice
+    :status-transition/facet :invoice/status
+    :status-transition/from :sent
+    :status-transition/to :partially-paid
+    :status-transition/active true
+    :status-transition/name "First Partial Application"}
+   {:status-transition/entity-type :invoice
+    :status-transition/facet :invoice/status
+    :status-transition/from :partially-paid
+    :status-transition/to :partially-paid
+    :status-transition/active true
+    :status-transition/name "Additional Partial Application"}
+   {:status-transition/entity-type :invoice
+    :status-transition/facet :invoice/status
+    :status-transition/from :partially-paid
+    :status-transition/to :paid
+    :status-transition/active true
+    :status-transition/name "Final Application Closes the Invoice"}
+   {:status-transition/entity-type :invoice
+    :status-transition/facet :invoice/status
+    :status-transition/from :partially-paid
+    :status-transition/to :sent
+    :status-transition/active true
+    :status-transition/name "Allocation Reversal (back to fully-open)"}
+   {:status-transition/entity-type :invoice
+    :status-transition/facet :invoice/status
+    :status-transition/from :paid
+    :status-transition/to :sent
+    :status-transition/active true
+    :status-transition/name "Reversal of Final Application (full reopen)"}
+   {:status-transition/entity-type :invoice
+    :status-transition/facet :invoice/status
+    :status-transition/from :paid
+    :status-transition/to :partially-paid
+    :status-transition/active true
+    :status-transition/name "Reversal Leaves Partial Balance"}
    {:status-transition/entity-type :invoice
     :status-transition/facet :invoice/status
     :status-transition/from :sent
