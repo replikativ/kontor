@@ -19,6 +19,7 @@ These reports were produced during the design phase of `kontor`. They are point-
 | 13 | [Stage J cross-cutting pain + prioritized followups](13-stage-j-pain-and-followups.md) | 2026-05-12 | general-purpose (5 agents) | high (~115 pain points across 5 reports) |
 | 14 | [Stage K (procurement) research-before: three-agent synthesis](14-stage-k-procurement-research.md) | 2026-05-12 | general-purpose (3 agents) | high (OFBiz file:line citations + ~50 web sources) |
 | 15 | [Stage L (collections) research-before: three-agent synthesis](15-stage-l-collections-research.md) | 2026-05-12 | general-purpose (3 agents) | high (OFBiz negative finding + 35 market pains + internal gap with file:line) |
+| 16 | [Showcase feature-coverage audit](16-showcase-feature-coverage.md) | 2026-05-12 | direct | high (cross-references showcase 1-3 against kernel + companion + l10n primitives) |
 
 ## What each report answers
 
