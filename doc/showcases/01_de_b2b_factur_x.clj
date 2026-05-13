@@ -154,13 +154,20 @@
 ;; this is the `inv/make-invoice-from-order!` path; here we
 ;; construct directly to keep the notebook short.
 
+;; Step 1: create the invoice entity (status :draft) + line items.
+;; Step 2: drive status :draft → :sent through the status machine
+;; so the audit-history row exists. Production tenants typically use
+;; `inv/make-invoice-from-order!` (kontor.invoice.bridge) which
+;; composes both steps automatically; we split them here so the
+;; showcase reads inside-out.
+
 (def invoice-result
   (d/transact
    conn
    [{:db/id invoice-tempid
      :invoice/external-id "R-2026-0042"
      :invoice/type :sales
-     :invoice/status :sent
+     :invoice/status :draft
      :invoice/issue-date #inst "2026-04-01"
      :invoice/seller schcode-eid
      :invoice/buyer brezel-eid
@@ -193,8 +200,19 @@
 
 (def invoice-eid (inv/by-external-id (d/db conn) "R-2026-0042"))
 
-;; The kernel state-machine seed for `nil → :sent` is one of the
-;; canonical paths (ADR-036). Verify:
+;; Drive :draft → :sent via the status machine — writes a
+;; :status-history row with reason + actor (ADR-034 + ADR-038).
+;; This is what makes "when did the invoice transition" answerable
+;; from datalog rather than from a separate audit log.
+
+(sm/record-status-change! conn
+                          {:entity invoice-eid
+                           :entity-type :invoice
+                           :facet :invoice/status
+                           :from :draft
+                           :to :sent
+                           :changed-by-uid alice
+                           :reason :invoice-issued})
 
 (sm/current-status (d/db conn) invoice-eid :invoice/status)
 

@@ -442,3 +442,40 @@
         "Both postings resolve a valid-from via :tx/valid-from.")
     (is (every? #(= some-date (second %)) posting-rows)
         "valid-from must default to the transaction's effective-date.")))
+
+;; ============================================================================
+;; post-transaction! — build + seal in one move (P1-5 review fix)
+;; ============================================================================
+
+(deftest post-transaction-seals-parent-and-propagates-to-postings
+  (let [conn (core/create-test-db)
+        _ (seed-catalog! conn)
+        eur (:db/id (d/entity (d/db conn) [:commodity/symbol "EUR"]))
+        rec (:db/id (d/entity (d/db conn) [:account/path "Assets:Receivable"]))
+        rev (:db/id (d/entity (d/db conn) [:account/path "Income:Sales"]))
+        jnl (:db/id (d/entity (d/db conn) [:journal/code "INV"]))
+        posted-at #inst "2026-05-13T10:00:00Z"
+        _ (posting/post-transaction!
+           conn
+           {:transaction {:transaction/external-id     "INV-POST-1"
+                          :transaction/journal         jnl
+                          :transaction/effective-date  some-date
+                          :transaction/narration       "post-transaction! roundtrip"}
+            :postings    [{:posting/account rec :posting/amount  50.00M :posting/commodity eur}
+                          {:posting/account rev :posting/amount -50.00M :posting/commodity eur}]}
+           {:posted-at posted-at})
+        db (d/db conn)
+        tx-eid (:db/id (d/entity db [:transaction/external-id "INV-POST-1"]))
+        tx (d/pull db [:transaction/state :transaction/posted-at] tx-eid)
+        post-pa (d/q '[:find ?p ?pa
+                       :in $ ?tx
+                       :where
+                       [?p :posting/transaction ?tx]
+                       [?p :posting/posted-at ?pa]]
+                     db tx-eid)]
+    (is (= :posted (:transaction/state tx)))
+    (is (= posted-at (:transaction/posted-at tx)))
+    (is (= 2 (count post-pa))
+        "Both postings carry :posting/posted-at after post-transaction!")
+    (is (every? #(= posted-at (second %)) post-pa)
+        "Children inherit parent's :posted-at (sealing invariant).")))

@@ -24,7 +24,8 @@
    to a db itself — the validations performed here are purely
    structural, not catalog-aware. Callers compose this with the
    db-aware checks in `validation.clj` (Phase 1)."
-  (:require [kontor.bitemporal :as kbt]
+  (:require [datahike.api :as d]
+            [kontor.bitemporal :as kbt]
             [kontor.costing-provider :as costing]
             [kontor.money :as money]
             [kontor.valuation :as valuation]))
@@ -351,6 +352,47 @@
     (kbt/with-vt (into [tx-base] posting-entities)
                  (:transaction/effective-date transaction)
                  kbt/forever)))
+
+(defn post-transaction!
+  "Build + seal a balanced transaction atomically. Equivalent to:
+
+     (-> input
+         (assoc-in [:transaction :transaction/state] :posted)
+         (assoc-in [:transaction :transaction/posted-at] <now>)
+         (update :postings #(mapv (fn [p] (assoc p :posting/posted-at <now>)) %))
+         build-transaction
+         (kbt/with-vt vt-from vt-to)
+         (d/transact conn))
+
+   …with the propagation of `:posted-at` from parent to every child
+   posting (the invariant that the sealing middleware in
+   `kontor.sealing` enforces but does not stamp). Returns the tx-report.
+
+   Input shape mirrors `build-transaction`. Opts:
+     :posted-at  — sealing timestamp (default = now)
+     :vt-from    — valid-time start (default = :transaction/effective-date)
+     :vt-to      — valid-time end (default = kbt/forever)
+
+   This is the kernel-level kernel-pure way to build + seal in one
+   move. Companion modules with richer lifecycles (orders, invoices,
+   procurement) compose the status machine on top — see
+   `kontor.invoice.posting/post-to-ledger!` for the ADR-038-integrated
+   variant."
+  ([conn input] (post-transaction! conn input {}))
+  ([conn input {:keys [posted-at vt-from vt-to]}]
+   (let [pa (or posted-at (java.util.Date.))
+         input' (-> input
+                    (assoc-in [:transaction :transaction/state] :posted)
+                    (assoc-in [:transaction :transaction/posted-at] pa)
+                    (update :postings
+                            (fn [ps]
+                              (mapv #(if (:posting/posted-at %)
+                                       %
+                                       (assoc % :posting/posted-at pa))
+                                    ps))))
+         tx-data (build-transaction input')
+         vf (or vt-from (-> input :transaction :transaction/effective-date))]
+     (d/transact conn (kbt/with-vt tx-data vf (or vt-to kbt/forever))))))
 
 ;; ============================================================================
 ;; Analytic-distribution expansion (ADR-022, split-line strategy)
