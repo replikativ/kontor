@@ -315,8 +315,8 @@
         vt (or (:vt-to opts)   kbt/forever)
         all-tx (kbt/with-vt core-tx vf vt)
         ;; P0-7 (research-agent finding): assert no proposed posting
-        ;; falls in a closed period. period/find-violations walks the
-        ;; tx-data and extracts :posting/valid-from from each posting.
+        ;; falls in a closed period. period/find-violations reads
+        ;; :tx/valid-from from the tx-data's "datomic.tx" map.
         _ (period/assert-not-in-locked-period! db all-tx)
         tx-report (d/transact conn all-tx)
         transaction-eid (get-in tx-report [:tempids tx-tempid])]

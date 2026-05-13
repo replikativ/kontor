@@ -16,8 +16,8 @@
         Currently:
           - sealing (`sealing.clj`): no silent retract of
             :posting/posted-at-marked entities (ADR-007).
-          - period-locked (`period.clj`): no posting whose
-            :posting/valid-from falls inside a closed
+          - period-locked (`period.clj`): no posting whose tx's
+            :tx/valid-from (kontor.bitemporal) falls inside a closed
             :period/locked-at period.
         Planned:
           - state-machine: :transaction/state transitions follow

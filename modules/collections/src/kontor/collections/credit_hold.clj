@@ -141,7 +141,9 @@
    Returns BigDecimal. Positive = remittance sitting in suspense.
 
    ADR-043 P0-3 fix. Bitemporal via :payment-application/applied-at
-   and :posting/valid-from (when set)."
+   and :transaction/effective-date (per ADR-048 the kernel valid-time
+   anchor is :tx/valid-from on the writing tx, which equals
+   :transaction/effective-date for kernel builders)."
   ([db {:keys [partner cash-account-eid as-of-valid commodity-eid]}]
    (when-not partner          (throw (ex-info ":partner required" {})))
    (when-not cash-account-eid (throw (ex-info ":cash-account-eid required
@@ -149,9 +151,9 @@
    or AR-cash account eid." {})))
    (let [as-of-valid (or as-of-valid (java.util.Date.))
          as-of-ms (.getTime ^java.util.Date as-of-valid)
-         ;; Sum :posting/amount on cash account for this partner
-         ;; up to as-of-valid (using :posting/valid-from when set,
-         ;; otherwise the parent :transaction/effective-date).
+         ;; Sum :posting/amount on cash account for this partner up
+         ;; to as-of-valid, anchored on :transaction/effective-date
+         ;; (equal to the writing tx's :tx/valid-from per ADR-048).
          received (or (if commodity-eid
                         (d/q '[:find (sum ?amt) .
                                :in $ ?acct ?p ?c ?as-of-ms

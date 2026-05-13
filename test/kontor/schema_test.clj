@@ -70,32 +70,35 @@
         (is (contains? present ns)
             (str "Expected namespace " ns " not found in the loaded schema."))))))
 
-(deftest valid-from-attribute-defined
-  (testing "Per ADR-008 (revised), only :posting/valid-from is the
-            valid-time anchor. :posting/valid-to and the
+(deftest valid-time-lives-on-tx
+  (testing "Per ADR-048, valid-time lives on the writing tx via
+            kontor.bitemporal's :tx/valid-from. There is no per-
+            posting valid-from. :posting/valid-to and the
             :posting/temporal-key tuple were dropped per research
             note 08 — corrections use reverse-and-repost, not
             valid-time supersession."
     (let [conn (core/create-test-db)
           db (d/db conn)
-          attr (d/pull db
-                       [:db/ident :db/valueType :db/index]
-                       :posting/valid-from)]
-      (is (= :posting/valid-from (:db/ident attr)))
-      (is (= :db.type/instant (:db/valueType attr)))
-      (is (true? (:db/index attr))
-          "Indexed for as-of-valid filtering."))
-    (let [conn (core/create-test-db)
-          db (d/db conn)
           present (set (d/q '[:find [?ident ...]
                               :where [_ :db/ident ?ident]]
                             db))]
+      (is (not (contains? present :posting/valid-from))
+          "per-posting valid-from is removed (ADR-048 normalization).")
       (is (not (contains? present :posting/temporal-key))
           "temporal-key tuple should NOT be in the schema (ADR-008 revised).")
       (is (not (contains? present :posting/valid-to))
           "valid-to should NOT be in the schema (ADR-008 revised).")
-      (is (contains? present :posting/valid-from)
-          "valid-from is the kept anchor."))))
+      (is (contains? present :tx/valid-from)
+          "valid-from anchor lives on the tx via kontor.bitemporal."))
+    (let [conn (core/create-test-db)
+          db (d/db conn)
+          attr (d/pull db
+                       [:db/ident :db/valueType :db/index]
+                       :tx/valid-from)]
+      (is (= :tx/valid-from (:db/ident attr)))
+      (is (= :db.type/instant (:db/valueType attr)))
+      (is (true? (:db/index attr))
+          "Indexed for as-of-valid filtering."))))
 
 (deftest schema-install-is-idempotent
   (testing "Re-installing the schema on an existing DB does not throw

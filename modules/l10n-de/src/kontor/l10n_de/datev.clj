@@ -26,7 +26,8 @@
    fixture; if they drift, surface the diff. Round-trip stability
    isn't a goal here (DATEV parsers are not lossless)."
   (:require [clojure.string :as str]
-            [datahike.api :as d])
+            [datahike.api :as d]
+            [kontor.bitemporal :as kbt])
   (:import [java.io StringWriter Writer]
            [java.time LocalDate]
            [java.time.format DateTimeFormatter]
@@ -199,14 +200,12 @@
         pulled (mapv (fn [p]
                        (let [pe (d/pull db
                                         [:posting/amount
-                                         :posting/valid-from
                                          {:posting/account [:account/code :account/type]}
                                          {:posting/transaction
                                           [:db/id :transaction/effective-date :transaction/narration]}]
                                         p)
                              tx (:posting/transaction pe)
-                             vf (or (:posting/valid-from pe)
-                                    (:transaction/effective-date tx))]
+                             vf (kbt/posting-vf db p)]
                          {:posting-eid p
                           :amount (:posting/amount pe)
                           :valid-from vf

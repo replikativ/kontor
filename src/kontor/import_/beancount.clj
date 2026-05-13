@@ -25,7 +25,8 @@
      (modulo whitespace/comment normalization)."
   (:require [clojure.string :as str]
             [datahike.api :as d]
-            [instaparse.core :as insta])
+            [instaparse.core :as insta]
+            [kontor.bitemporal :as kbt])
   (:import [java.time LocalDate]
            [java.time.format DateTimeFormatter]
            [java.util Date TimeZone]))
@@ -234,7 +235,8 @@ eol        = #'[ \\t]*\\n'
 
 (defn- transaction-tx
   "Build the kernel tx-data for one Beancount transaction directive.
-   Uses :db/id tempids so commodity/account/journal refs resolve."
+   Uses :db/id tempids so commodity/account/journal refs resolve.
+   Valid-time is stamped on the tx via :tx/valid-from = date."
   [{:keys [date payee narration postings]}]
   (let [tx-id (str (gensym "txn-"))
         external-id (str date "/" payee "/" narration)
@@ -245,19 +247,20 @@ eol        = #'[ \\t]*\\n'
             :posting/account    [:account/path account]
             :posting/amount     amount
             :posting/commodity  [:commodity/symbol currency]
-            :posting/valid-from date
             :posting/posted-at  date
             :posting/transaction tx-id
             :posting/display-type :product})
          postings)]
-    (into [{:db/id                       tx-id
-            :transaction/external-id     external-id
-            :transaction/journal         [:journal/code "BEAN"]
-            :transaction/effective-date  date
-            :transaction/narration       (str payee " — " narration)
-            :transaction/state           :posted
-            :transaction/posted-at       date}]
-          posting-entities)))
+    (kbt/with-vt
+      (into [{:db/id                       tx-id
+              :transaction/external-id     external-id
+              :transaction/journal         [:journal/code "BEAN"]
+              :transaction/effective-date  date
+              :transaction/narration       (str payee " — " narration)
+              :transaction/state           :posted
+              :transaction/posted-at       date}]
+            posting-entities)
+      date kbt/forever)))
 
 (defn- balance-assertion-tx
   [{:keys [date account amount currency]}]

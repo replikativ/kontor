@@ -9,10 +9,11 @@
 
    Two lock states exist:
      - `:period/locked-at`  — SOFT close. `period/reopen!` allowed.
-                              Refuses new postings whose
-                              `:posting/valid-from` is in range AND
-                              whose `:posting/period-tag` matches the
-                              period's `:period/tag`.
+                              Refuses new postings whose inbound
+                              valid-time (`:tx/valid-from`, falling
+                              back to `:transaction/effective-date`)
+                              is in range AND whose `:posting/period-tag`
+                              matches the period's `:period/tag`.
      - `:period/sealed-at`  — HARD close. Monotone, irrevocable.
                               `period/reopen!` refuses. Sealing
                               middleware refuses any retract on a
@@ -28,6 +29,7 @@
    posting belongs to when multiple periods cover the same date.
    Default tag is `:normal`."
   (:require [datahike.api :as d]
+            [kontor.bitemporal :as kbt]
             [kontor.money :as money])
   (:import [java.util Date]))
 
@@ -41,8 +43,7 @@
   [tx-data]
   (filter (fn [tx]
             (and (map? tx)
-                 (or (contains? tx :posting/account)
-                     (contains? tx :posting/valid-from))))
+                 (contains? tx :posting/account)))
           tx-data))
 
 (defn- proposed-transactions
@@ -52,13 +53,6 @@
                  (or (contains? tx :transaction/journal)
                      (contains? tx :transaction/effective-date))))
           tx-data))
-
-(defn- posting-valid-from
-  ^Date [posting tx-by-id]
-  (or (:posting/valid-from posting)
-      (some-> (:posting/transaction posting)
-              tx-by-id
-              :transaction/effective-date)))
 
 (defn- posting-journal
   [posting tx-by-id]
@@ -116,23 +110,31 @@
 
 (defn find-violations
   "Return a vector of {:posting :valid-from :journal-eid :period-tag :periods}
-   for every proposed posting in `tx-data` whose effective date falls
-   in a (soft- or hard-)closed period matching its journal+tag."
+   for every proposed posting in `tx-data` whose valid-time falls in a
+   (soft- or hard-)closed period matching its journal+tag.
+
+   Valid-time is the tx-data's `:tx/valid-from` on its `\"datomic.tx\"`
+   map (kontor.bitemporal). All postings in one tx share that vf. If
+   the tx-data has no `:tx/valid-from`, no posting is in violation —
+   wrap your writes with `kbt/with-vt` (or use the kernel builders
+   which do that for you)."
   [db tx-data]
-  (let [tx-by-id (into {} (map (juxt :db/id identity)) (proposed-transactions tx-data))]
-    (vec
-     (keep (fn [posting]
-             (let [vf  (posting-valid-from posting tx-by-id)
-                   j   (posting-journal posting tx-by-id)
-                   tag (posting-period-tag posting)
-                   periods (when vf (closed-periods-for db vf j tag))]
-               (when (seq periods)
-                 {:posting     posting
-                  :valid-from  vf
-                  :journal-eid j
-                  :period-tag  tag
-                  :periods     periods})))
-           (proposed-postings tx-data)))))
+  (let [tx-by-id (into {} (map (juxt :db/id identity)) (proposed-transactions tx-data))
+        vf (kbt/tx-data-vf tx-data)]
+    (if (nil? vf)
+      []
+      (vec
+       (keep (fn [posting]
+               (let [j   (posting-journal posting tx-by-id)
+                     tag (posting-period-tag posting)
+                     periods (closed-periods-for db vf j tag)]
+                 (when (seq periods)
+                   {:posting     posting
+                    :valid-from  vf
+                    :journal-eid j
+                    :period-tag  tag
+                    :periods     periods})))
+             (proposed-postings tx-data))))))
 
 (defn assert-not-in-locked-period!
   "Throws ex-info :type :period/locked-period-violation if any new
@@ -201,13 +203,15 @@
 (defn- draft-postings-in-range
   [db {:keys [start end journal-eid tag]}]
   (let [base-q '{:find [?p]
-                 :in [$ ?start ?end]
+                 :in [$ % ?start ?end]
                  :where
                  [[?t :transaction/state :draft]
                   [?p :posting/transaction ?t]
-                  [?p :posting/valid-from ?vf]
-                  [(>= ?vf ?start)]
-                  [(< ?vf ?end)]]}
+                  (posting-vf ?p ?vf)
+                  [(.compareTo ^java.util.Date ?vf ?start) ?cmp-start]
+                  [(>= ?cmp-start 0)]
+                  [(.compareTo ^java.util.Date ?vf ?end) ?cmp-end]
+                  [(< ?cmp-end 0)]]}
         ;; Optionally constrain by journal and tag
         with-journal (if journal-eid
                        (-> base-q
@@ -220,7 +224,7 @@
                        (update :where conj '[(get-else $ ?p :posting/period-tag :normal) ?ptag]
                                '[(= ?ptag ?tag)]))
                    with-journal)
-        args (cond-> [db start end]
+        args (cond-> [db kbt/query-rules start end]
                journal-eid (conj journal-eid)
                (and tag (not= tag :normal)) (conj tag))]
     (apply d/q with-tag args)))
@@ -230,18 +234,20 @@
    in this period's range. Returns {commodity Money}."
   [db {:keys [start end journal-eid]}]
   (let [base-q '{:find [?p]
-                 :in [$ ?start ?end]
+                 :in [$ % ?start ?end]
                  :where
-                 [[?p :posting/valid-from ?vf]
-                  [(>= ?vf ?start)]
-                  [(< ?vf ?end)]]}
+                 [[?p :posting/transaction ?t]
+                  (posting-vf ?p ?vf)
+                  [(.compareTo ^java.util.Date ?vf ?start) ?cmp-start]
+                  [(>= ?cmp-start 0)]
+                  [(.compareTo ^java.util.Date ?vf ?end) ?cmp-end]
+                  [(< ?cmp-end 0)]]}
         with-journal (if journal-eid
                        (-> base-q
                            (update :in conj '?j)
-                           (update :where conj '[?p :posting/transaction ?t]
-                                   '[?t :transaction/journal ?j]))
+                           (update :where conj '[?t :transaction/journal ?j]))
                        base-q)
-        args (cond-> [db start end]
+        args (cond-> [db kbt/query-rules start end]
                journal-eid (conj journal-eid))
         eids (apply d/q with-journal args)]
     (->> eids

@@ -8,6 +8,7 @@
      - end-to-end transact against a fresh kernel DB."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
+            [kontor.bitemporal]
             [kontor.core :as core]
             [kontor.money :as m]
             [kontor.posting :as posting]))
@@ -191,7 +192,7 @@
             that cannot resolve unique-identity lookups for
             non-schema entities."
     (let [tx-data (posting/build-transaction (balanced-sample))
-          posting-entities (rest tx-data)]
+          posting-entities (filter :posting/account tx-data)]
       (is (every? #(nil? (:posting/ledger %)) posting-entities)
           "No :posting/ledger should be auto-injected"))))
 
@@ -204,7 +205,7 @@
                       :posting/commodity :EUR :posting/ledger [:ledger/code "ifrs"]}
                      {:posting/account :b :posting/amount -10.00M
                       :posting/commodity :EUR :posting/ledger [:ledger/code "ifrs"]}]})
-          posting-entities (rest tx-data)]
+          posting-entities (filter :posting/account tx-data)]
       (is (every? #(= [:ledger/code "ifrs"] (:posting/ledger %))
                   posting-entities)))))
 
@@ -329,15 +330,17 @@
 (deftest build-transaction-shape
   (let [tx-data (posting/build-transaction (balanced-sample))]
     (is (vector? tx-data))
-    (is (= 3 (count tx-data)))
-    (let [[txn p1 p2] tx-data]
+    ;; tx-data is [txn p1 p2 tx-meta] after kbt/with-vt appends the
+    ;; "datomic.tx" map carrying :tx/valid-from.
+    (is (= 4 (count tx-data)))
+    (let [[txn p1 p2 tx-meta] tx-data]
       (is (= -1 (:db/id txn)))
       (is (= :draft (:transaction/state txn))) ;; defaulted
       (is (= -1 (:posting/transaction p1)))
       (is (= -1 (:posting/transaction p2)))
       (is (= :product (:posting/display-type p1))) ;; defaulted
-      (is (= some-date (:posting/valid-from p1)))) ;; inherited from txn
-    ))
+      (is (= "datomic.tx" (:db/id tx-meta)))
+      (is (= some-date (:tx/valid-from tx-meta)))))) ;; from :transaction/effective-date
 
 (deftest build-transaction-throws-on-unbalanced
   (is (thrown-with-msg?
@@ -421,21 +424,21 @@
                    :transaction/effective-date some-date
                    :transaction/narration      "Defaults check"}
                   :postings
-                  ;; Note: no :posting/valid-from on either posting
                   [{:posting/account rec :posting/amount  50.00M :posting/commodity eur}
                    {:posting/account rev :posting/amount -50.00M :posting/commodity eur}]})
         _ (d/transact conn tx-data)
         db-after (d/db conn)
         tx-eid (:db/id (d/entity db-after [:transaction/external-id "INV-2026-0002"]))
-        ;; Pull per-posting so we count BOTH rows even when they share
-        ;; the same valid-from value. (`[:find [?vf ...]` would dedupe.)
+        ;; ADR-048: valid-from lives on the writing tx, not per-posting.
+        ;; Both postings derive their vf from the same :tx/valid-from
+        ;; via kontor.bitemporal's posting-vf helper.
         posting-rows (d/q '[:find ?p ?vf
-                            :in $ ?tx
+                            :in $ % ?tx
                             :where
                             [?p :posting/transaction ?tx]
-                            [?p :posting/valid-from ?vf]]
-                          db-after tx-eid)]
+                            (posting-vf ?p ?vf)]
+                          db-after kontor.bitemporal/query-rules tx-eid)]
     (is (= 2 (count posting-rows))
-        "Both postings must have a valid-from datom (ADR-008 default).")
+        "Both postings resolve a valid-from via :tx/valid-from.")
     (is (every? #(= some-date (second %)) posting-rows)
         "valid-from must default to the transaction's effective-date.")))

@@ -105,18 +105,27 @@
 ;; Write helpers
 ;; ============================================================================
 
+(defn- strip-tx-meta
+  "Remove any existing `{:db/id \"datomic.tx\" ...}` map(s) from
+   `tx-data`. Lets `with-vt` be idempotent — callers can wrap a
+   tx-data that already carries tx-meta and the new vf/vt wins."
+  [tx-data]
+  (vec (remove #(and (map? %) (= (:db/id %) "datomic.tx")) tx-data)))
+
 (defn with-vt
-  "Append a tx-meta entity to `tx-data` carrying `:tx/valid-from`
-   (and optionally `:tx/valid-to`).
+  "Append (or replace) a tx-meta entity on `tx-data` carrying
+   `:tx/valid-from` (and optionally `:tx/valid-to`). Idempotent: if
+   `tx-data` already has a `{:db/id \"datomic.tx\"}` map, it is
+   replaced — the caller's vf/vt wins.
 
        (d/transact conn (with-vt [{...}] vt-from))
        (d/transact conn (with-vt [{...}] vt-from vt-to))"
   ([tx-data vt-from]
-   (conj (vec tx-data)
+   (conj (strip-tx-meta tx-data)
          {:db/id "datomic.tx"
           :tx/valid-from vt-from}))
   ([tx-data vt-from vt-to]
-   (conj (vec tx-data)
+   (conj (strip-tx-meta tx-data)
          {:db/id "datomic.tx"
           :tx/valid-from vt-from
           :tx/valid-to vt-to})))
@@ -134,6 +143,56 @@
 
     :else
     (d/transact conn tx-data)))
+
+;; ============================================================================
+;; Reader helpers — derive valid-time from tx-meta
+;; ============================================================================
+
+(defn posting-vf
+  "Resolve a posting's valid-from via its creating tx's `:tx/valid-from`.
+   Falls back to the tx's `:db/txInstant` when valid-from is absent
+   (matches the resolver's default). Returns `java.util.Date` or nil
+   when the posting/tx isn't found."
+  ^Date [db posting-eid]
+  (d/q '[:find ?vf .
+         :in $ ?p
+         :where
+         [?p :posting/transaction _ ?tx]
+         [?tx :db/txInstant ?ti]
+         [(get-else $ ?tx :tx/valid-from ?ti) ?vf]]
+       db posting-eid))
+
+(def query-rules
+  "Datalog rules for using `:tx/valid-from` in queries. Pass as the
+   `%` arg of a query.
+
+   Example: filter postings by as-of-valid:
+
+       (d/q '[:find ?p ?vf
+              :in $ % ?acct ?as-of
+              :where
+              [?p :posting/account ?acct]
+              (posting-vf ?p ?vf)
+              [(.compareTo ^java.util.Date ?vf ?as-of) ?cmp]
+              [(<= ?cmp 0)]]
+            db query-rules acct as-of)"
+  '[[(posting-vf ?p ?vf)
+     [?p :posting/transaction _ ?tx]
+     [?tx :db/txInstant ?ti]
+     [(get-else $ ?tx :tx/valid-from ?ti) ?vf]]
+    [(tx-vf ?tx ?vf)
+     [?tx :db/txInstant ?ti]
+     [(get-else $ ?tx :tx/valid-from ?ti) ?vf]]])
+
+(defn tx-data-vf
+  "Pull the proposed `:tx/valid-from` out of inbound tx-data (used by
+   middleware that needs to know vf BEFORE the tx commits). Returns
+   the date or nil if no `\"datomic.tx\"` map is present in tx-data."
+  ^Date [tx-data]
+  (some (fn [e]
+          (when (and (map? e) (= (:db/id e) "datomic.tx"))
+            (:tx/valid-from e)))
+        tx-data))
 
 ;; ============================================================================
 ;; Resolver — core read primitive

@@ -4681,3 +4681,75 @@ The architectural validation slices are in (states, identifiers, tax-engine with
 - Bank-statement ingest: Banorte MT940 (reuse kernel parser) → Santander XML → Citibanamex CSV → BBVA CSV → SPEI CEP per-transfer matcher.
 
 Both modules currently include the architecturally-validating slices only. Each deferred slice is independent and ships incrementally without revisiting the ADRs.
+
+---
+
+## ADR-048 — Normalize valid-time to `:tx/valid-from` (drop `:posting/valid-from`)
+
+**Decision.** Valid-time for postings lives on the writing tx via
+`kontor.bitemporal`'s `:tx/valid-from` (cardinality-one, indexed,
+`:db.type/instant`). The per-posting `:posting/valid-from` attribute
+is removed. All postings written by one tx share that tx's
+`:tx/valid-from`. Kernel builders (`build-transaction`, the inventory
+helpers, the beancount importer) stamp it from
+`:transaction/effective-date` automatically; callers that need
+late-arriving valid-time (backdated corrections) pass `:vt-from` /
+`:vt-to` opts to the transactor, which override the default.
+
+**Why.** Before this change the kernel had two valid-time
+mechanisms: `:posting/valid-from` (per-posting, indexed) for hot-path
+balance/ledger/report queries, and `:tx/valid-from` (tx-meta) for
+status transitions on mutable entities. The split was a perf-driven
+denorm masquerading as a semantic distinction. Empirically:
+- No call site mixes valid-froms within one tx — every kernel
+  builder fills the per-posting attr from
+  `:transaction/effective-date`, identical for all postings.
+- `:tx/valid-from` is `:db/index true`, so AVET range scans on it are
+  comparable to AVET on the old per-posting attr; the only
+  performance gap is the extra `[?p :posting/transaction _ ?tx]`
+  join, a constant-factor difference, not categorical.
+- One mechanism is simpler than two. Documentation telling readers
+  which to reach for is a smell.
+
+**Shape after.**
+- Schema: `:posting/valid-from` removed. `:tx/valid-from` + `:tx/valid-to`
+  bundled in the kernel schema (`bitemporal-tx-attrs`).
+- Writers: `posting/build-transaction` wraps its return with
+  `(kbt/with-vt tx-data effective-date kbt/forever)`. `with-vt` is
+  idempotent — callers wrapping again with explicit `:vt-from` /
+  `:vt-to` override the default. Beancount importer + inventory
+  helpers (`plan-stock-move`) wrap similarly.
+- Readers: `balance.clj` / `ledger.clj` / `report.clj` /
+  `period.clj` / DATEV exporter resolve a posting's valid-from via
+  the `posting-vf` rule (`kontor.bitemporal/query-rules`) or the
+  `kbt/posting-vf` lookup fn. The rule pattern is
+  `[?p :posting/transaction _ ?tx][?tx :db/txInstant ?ti]
+  [(get-else $ ?tx :tx/valid-from ?ti) ?vf]` — falls back to
+  `:db/txInstant` when vf is absent (matches the resolver's default).
+- Period-locking: `period/find-violations` reads `:tx/valid-from`
+  off the inbound tx-data's `"datomic.tx"` map via
+  `kbt/tx-data-vf`. One vf per tx; applies uniformly to every
+  proposed posting in that tx. Tx-data without `:tx/valid-from`
+  cannot be period-checked — wrap writes with `kbt/with-vt` (the
+  kernel builders do).
+
+**Tradeoffs.**
+- *Lost*: ability to write postings within one tx with different
+  valid-froms. No call site exercised this, so no semantic
+  regression. If a future need arises (deferred-revenue split across
+  recognition months in one tx, say), it's expressible as N
+  transactions — bookkeeping-correct and audit-cleaner.
+- *Gained*: single source of truth, fewer attributes on every
+  posting row, no risk of `:posting/valid-from` and
+  `:transaction/effective-date` drifting on careless writes, and
+  late-arriving corrections (`:vt-from` / `:vt-to`) compose with the
+  same mechanism as status-transition corrections elsewhere.
+
+**Naming.** The "valid-from" name continues to mean "from when this
+fact holds." The resolver in `kontor.bitemporal` handles
+`:tx/valid-to` polygons for entities that need supersession (status
+flips on invoices, disputes, etc.). Postings don't supersede — they
+reverse-and-repost (ADR-008 revised) — so `:tx/valid-to` on a
+posting's tx is always `forever`.
+
+Date: 2026-05-13.

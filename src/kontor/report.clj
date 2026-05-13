@@ -54,6 +54,7 @@
   (:require [clojure.set]
             [clojure.string :as str]
             [datahike.api :as d]
+            [kontor.bitemporal :as kbt]
             [kontor.money :as money])
   (:import [java.util Date]))
 
@@ -70,13 +71,14 @@
 
 (defn- pull-posting
   "Pull the posting + its account's commodity/code/type/tags + tx state.
-   Returns a flat map suitable for predicate filtering."
+   Returns a flat map suitable for predicate filtering. Adds
+   `:valid-from` derived from the creating tx's `:tx/valid-from`
+   (kontor.bitemporal)."
   [db p]
   (let [pulled (d/pull db
                        [:db/id
                         :posting/amount
                         :posting/commodity
-                        :posting/valid-from
                         :posting/transaction
                         {:posting/account [:account/code
                                            :account/type
@@ -87,6 +89,7 @@
                          (#(d/pull db [:transaction/state] %))
                          :transaction/state)
         account (:posting/account pulled)
+        vf (kbt/posting-vf db p)
         ;; Account tags from the M2M; flatten to keywords
         acct-tag-names (->> (:account/tags account)
                             (map (fn [t]
@@ -102,6 +105,7 @@
                                (map keyword)
                                set)]
     (assoc pulled
+           :valid-from vf
            :tx-state tx-state
            :account-code (:account/code account)
            :account-type (:account/type account)
@@ -110,7 +114,7 @@
 (defn- in-window?
   "Check valid-from is in [from, to-exclusive)."
   [posting from to-exclusive]
-  (let [vf (:posting/valid-from posting)]
+  (let [vf (:valid-from posting)]
     (and (some? vf)
          (or (nil? from) (on-or-after? vf from))
          (or (nil? to-exclusive) (before-or-eq? vf (Date. (dec (.getTime ^Date to-exclusive)))))
@@ -214,8 +218,9 @@
       :report/computed-at Date}
 
    Options:
-     :from           — inclusive lower bound on :posting/valid-from
-                       (default: nil = beginning of time)
+     :from           — inclusive lower bound on the posting's valid-from
+                       (resolved via :tx/valid-from on the creating tx).
+                       Default: nil = beginning of time.
      :to             — exclusive upper bound (default: nil = today+1d)
      :as-of-tx       — datahike snapshot timestamp (default: now)
      :include-states — set of :transaction/state values to include

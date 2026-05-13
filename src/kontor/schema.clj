@@ -1090,10 +1090,11 @@
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "SOFT close (ADR-014). Reopen-able via period/reopen!.
-                     Refuses new postings whose :posting/valid-from falls
-                     in the range. Maps onto Odoo's period_lock_date /
-                     tax_lock_date / sale_lock_date / purchase_lock_date,
-                     NetSuite's 'Locked', Xero's 'Period Lock Date'."}
+                     Refuses new postings whose tx's :tx/valid-from
+                     falls in the range. Maps onto Odoo's
+                     period_lock_date / tax_lock_date / sale_lock_date /
+                     purchase_lock_date, NetSuite's 'Locked', Xero's
+                     'Period Lock Date'."}
 
    {:db/ident       :period/sealed-at
     :db/valueType   :db.type/instant
@@ -1420,22 +1421,12 @@
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   ;; Valid-time anchor (ADR-008 revised): :valid-from is sufficient
-   ;; for the SMB workflows we care about (backdated invoices, intra-
-   ;; period delayed entry). :valid-to and the temporal-key tuple were
-   ;; dropped per research note 08 — production accounting handles
-   ;; corrections via reverse-and-repost in the current open period,
-   ;; not preserve-the-as-filed-view-forever. Tx-time slicing remains
-   ;; available via datahike's `d/as-of`.
-   {:db/ident       :posting/valid-from
-    :db/valueType   :db.type/instant
-    :db/cardinality :db.cardinality/one
-    :db/index       true
-    :db/doc         "Valid-time of the posting. Defaults to the parent
-                     transaction's :transaction/effective-date if not
-                     set explicitly. Used for bitemporal-as-of-valid
-                     read filtering."}
-
+   ;; Valid-time lives on the tx via kontor.bitemporal's
+   ;; :tx/valid-from. ADR-048: all postings written by one tx share
+   ;; that tx's :tx/valid-from, which the kernel builders stamp from
+   ;; :transaction/effective-date. There is no per-posting valid-from
+   ;; attribute. :valid-to and the temporal-key tuple were dropped per
+   ;; research note 08 — corrections are reverse-and-repost.
    {:db/ident       :posting/display-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one

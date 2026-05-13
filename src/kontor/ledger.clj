@@ -15,6 +15,7 @@
       ledger' / 'ledger card' report — distinct from the
       parallel-ledger entity above."
   (:require [datahike.api :as d]
+            [kontor.bitemporal :as kbt]
             [kontor.money :as money])
   (:import [java.util Date]))
 
@@ -107,16 +108,17 @@
          db          (d/db conn)
          tx-snap     (if as-of-tx (d/as-of db as-of-tx) db)
          rows
-         (->> (d/q '[:find [?p ...]
-                     :in $ ?account
-                     :where [?p :posting/account ?account]]
-                   tx-snap account-eid)
-              (mapv (fn [p]
+         (->> (d/q '[:find ?p ?vf
+                     :in $ % ?account
+                     :where
+                     [?p :posting/account ?account]
+                     (posting-vf ?p ?vf)]
+                   tx-snap kbt/query-rules account-eid)
+              (mapv (fn [[p vf]]
                       (let [pulled (d/pull tx-snap
                                            [:db/id
                                             :posting/amount
                                             :posting/commodity
-                                            :posting/valid-from
                                             :posting/transaction
                                             :posting/narration
                                             :posting/partner]
@@ -128,7 +130,7 @@
                                       (d/pull tx-snap [:transaction/narration] tx-id))]
                         {:posting     (:db/id pulled)
                          :transaction tx-id
-                         :valid-from  (:posting/valid-from pulled)
+                         :valid-from  vf
                          :amount      (money/posting->money pulled)
                          :commodity   (let [c (:posting/commodity pulled)]
                                         (if (map? c) (:db/id c) c))

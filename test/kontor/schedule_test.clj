@@ -135,9 +135,13 @@
 
 (defn- dep-tx-data
   "Build a minimal depreciation journal entry. Tempid -1 is the
-   :transaction; `:schedule-occurrence/transaction` will point at it."
+   :transaction; `:schedule-occurrence/transaction` will point at it.
+   Valid-time anchored on the tx via :tx/valid-from = date."
   [{:keys [dep-expense accum-dep commodity journal]} amount date]
-  [{:db/id -1
+  [{:db/id "datomic.tx"
+    :tx/valid-from date
+    :tx/valid-to #inst "9999-12-31T23:59:59.999-00:00"}
+   {:db/id -1
     :transaction/journal journal
     :transaction/effective-date date
     :transaction/narration (str "Depreciation " (.toString ^java.util.Date date))
@@ -147,14 +151,12 @@
     :posting/amount amount
     :posting/commodity commodity
     :posting/transaction -1
-    :posting/valid-from date
     :posting/display-type :product}
    {:db/id -11
     :posting/account accum-dep
     :posting/amount (.negate ^java.math.BigDecimal amount)
     :posting/commodity commodity
     :posting/transaction -1
-    :posting/valid-from date
     :posting/display-type :product}])
 
 (deftest record-occurrence-creates-occurrence-and-transaction

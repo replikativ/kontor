@@ -24,7 +24,8 @@
    to a db itself — the validations performed here are purely
    structural, not catalog-aware. Callers compose this with the
    db-aware checks in `validation.clj` (Phase 1)."
-  (:require [kontor.costing-provider :as costing]
+  (:require [kontor.bitemporal :as kbt]
+            [kontor.costing-provider :as costing]
             [kontor.money :as money]
             [kontor.valuation :as valuation]))
 
@@ -302,9 +303,6 @@
                        :posting/amount           <bigdec>
                        :posting/commodity        <ref>
                        :posting/display-type     <kw>           ; defaults :product
-                       :posting/valid-from       <#inst>        ; optional, falls
-                                                                ;   back to txn's
-                                                                ;   effective-date
                        :posting/partner          <ref>          ; optional
                        :posting/narration        <string>       ; optional
                        :posting/taxes-applied    [<refs>]       ; optional
@@ -338,22 +336,21 @@
                     (nil? (:transaction/state transaction))
                     (assoc :transaction/state :draft))
         ;; Each posting becomes its own entity referencing the
-        ;; transaction. Default display-type :product. Default
-        ;; valid-from to the transaction's effective-date.
+        ;; transaction. Default display-type :product. Valid-time is
+        ;; carried on the tx via :tx/valid-from (kontor.bitemporal),
+        ;; defaulting to :transaction/effective-date.
         posting-entities
         (mapv (fn [i posting]
                 (cond-> (assoc posting
                                :db/id (- -100 i)
                                :posting/transaction tx-tempid)
                   (nil? (:posting/display-type posting))
-                  (assoc :posting/display-type :product)
-                  (and (balance-affecting? posting)
-                       (nil? (:posting/valid-from posting)))
-                  (assoc :posting/valid-from
-                         (:transaction/effective-date transaction))))
+                  (assoc :posting/display-type :product)))
               (range)
               postings)]
-    (into [tx-base] posting-entities)))
+    (kbt/with-vt (into [tx-base] posting-entities)
+                 (:transaction/effective-date transaction)
+                 kbt/forever)))
 
 ;; ============================================================================
 ;; Analytic-distribution expansion (ADR-022, split-line strategy)
@@ -430,7 +427,7 @@
    Each child posting inherits:
      - :posting/account, :posting/commodity, :posting/ledger
      - :posting/partner, :posting/narration
-     - :posting/display-type, :posting/valid-from, :posting/period-tag
+     - :posting/display-type, :posting/period-tag
      - other plans' distributions (they ride along unchanged on each
        child — the default semantic). Pass :strategy :cartesian to
        split across all plans simultaneously (rare; not yet implemented).
@@ -677,13 +674,12 @@
             (mapv (fn [i p]
                     (cond-> (assoc p :db/id (- -300 i))
                       (nil? (:posting/display-type p))
-                      (assoc :posting/display-type :product)
-                      (nil? (:posting/valid-from p))
-                      (assoc :posting/valid-from effective-date)))
+                      (assoc :posting/display-type :product)))
                   (range)
                   postings)
             _ (assert-balanced! tx-base posting-entities)]
-        (into [tx-base layer-entity] posting-entities))
+        (kbt/with-vt (into [tx-base layer-entity] posting-entities)
+                     effective-date kbt/forever))
 
       :out
       (let [;; Thread the move's effective-date as the bitemporal
@@ -718,10 +714,9 @@
               (mapv (fn [i p]
                       (cond-> (assoc p :db/id (- -300 i))
                         (nil? (:posting/display-type p))
-                        (assoc :posting/display-type :product)
-                        (nil? (:posting/valid-from p))
-                        (assoc :posting/valid-from effective-date)))
+                        (assoc :posting/display-type :product)))
                     (range)
                     postings)
               _ (assert-balanced! tx-base posting-entities)]
-          (into (into [tx-base] posting-entities) consumption-entities))))))
+          (kbt/with-vt (into (into [tx-base] posting-entities) consumption-entities)
+                       effective-date kbt/forever))))))
