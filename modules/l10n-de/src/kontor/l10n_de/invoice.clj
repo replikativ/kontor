@@ -14,8 +14,7 @@
        reverse-charge / EU: 4125 / 4120
 
    Pass `posting-builder` to invoice/send! to invoke."
-  (:require [datahike.api :as d]
-            [kontor.invoice :as inv]))
+  (:require [datahike.api :as d]))
 
 ;; ============================================================================
 ;; Account lookup

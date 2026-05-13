@@ -34,6 +34,7 @@
             [kontor.aging :as aging]
             [kontor.balance :as balance]
             [kontor.invoice :as invoice]
+            [kontor.invoice.schema :as inv-schema]
             [kontor.l10n-de.chart :as chart]
             [kontor.l10n-de.closing :as de-closing]
             [kontor.l10n-de.eur :as eur]
@@ -75,6 +76,7 @@
         (or 0M))))
 
 (defn- bootstrap! [conn]
+  (inv-schema/install! conn)   ; :invoice/status state-machine seeds (P0-4α)
   (chart/install! conn)
   (pt/install-standard-terms! conn)
   (d/transact conn

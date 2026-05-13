@@ -19,7 +19,8 @@
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
             [kontor.payment-term :as pt]
-            [kontor.posting :as posting])
+            [kontor.posting :as posting]
+            [kontor.status-machine :as sm])
   (:import [java.util Date]))
 
 ;; ============================================================================
@@ -142,17 +143,22 @@
    invoice-pulled)` to produce the accounting tx-data (country
    module's job — knows the chart conventions). Transacts the
    resulting transaction + sets :invoice/transaction backref +
-   moves status to :sent.
+   moves status :draft → :sent via the status machine (ADR-034 +
+   ADR-038).
 
    `posting-builder` returns a map with :transaction + :postings,
    the same shape posting/build-transaction accepts.
 
-   `opts`: optional `:vt-from` / `:vt-to` to stamp the status-
-   transition tx with kontor.bitemporal valid-time. Default
-   `:vt-from = now`."
+   `opts`:
+     :vt-from / :vt-to  — valid-time bounds (default :vt-from = now)
+     :changed-by-uid    — actor recorded on the :status-history row
+     :reason            — codified reason (ADR-038)
+     :reason-note       — free-text
+     :supporting-doc    — ref to :audit-doc"
   ([conn invoice-eid posting-builder]
    (send! conn invoice-eid posting-builder nil))
-  ([conn invoice-eid posting-builder {:keys [vt-from vt-to]}]
+  ([conn invoice-eid posting-builder {:keys [vt-from vt-to changed-by-uid
+                                              reason reason-note supporting-doc]}]
   (let [db (d/db conn)
         inv (d/pull db
                     [:db/id :invoice/external-id :invoice/status
@@ -196,12 +202,25 @@
                      (d/q '[:find ?t .
                             :in $ ?ext
                             :where [?t :transaction/external-id ?ext]]
-                          (d/db conn) ext-id))]
+                          (d/db conn) ext-id))
+          db-after (d/db conn)
+          status-tx (sm/record-status-change-tx-data
+                     db-after
+                     (cond-> {:entity invoice-eid
+                              :entity-type :invoice
+                              :facet :invoice/status
+                              :from :draft
+                              :to :sent
+                              :changed-at now
+                              :origin-transaction tx-eid}
+                       changed-by-uid (assoc :changed-by-uid changed-by-uid)
+                       reason         (assoc :reason reason)
+                       reason-note    (assoc :reason-note reason-note)
+                       supporting-doc (assoc :supporting-doc supporting-doc)))]
       (d/transact conn
                   (kbt/with-vt
-                    [{:db/id invoice-eid
-                      :invoice/status :sent
-                      :invoice/transaction tx-eid}]
+                    (into [{:db/id invoice-eid :invoice/transaction tx-eid}]
+                          status-tx)
                     (or vt-from now)
                     (or vt-to kbt/forever)))
       {:transaction-eid tx-eid}))))
@@ -211,34 +230,52 @@
 ;; ============================================================================
 
 (defn mark-paid!
-  "Flip a :sent invoice to :paid. Called by the reconciliation hook
+  "Flip a :sent (or :partially-paid) invoice to :paid via the status
+   machine (ADR-034 + ADR-038). Called by the reconciliation hook
    when a bank-line settles the invoice's transaction; can also be
    invoked directly when payment is recorded out-of-band.
 
-   `opts`: optional `:vt-from` / `:vt-to` to stamp the tx with
-   kontor.bitemporal valid-time. Default `:vt-from = now`."
+   `opts`:
+     :vt-from / :vt-to  — valid-time bounds (default :vt-from = now)
+     :changed-by-uid    — actor recorded on :status-history
+     :reason / :reason-note / :supporting-doc — ADR-038"
   ([conn invoice-eid]
    (mark-paid! conn invoice-eid nil))
-  ([conn invoice-eid {:keys [vt-from vt-to]}]
-   (let [now (Date.)]
+  ([conn invoice-eid {:keys [vt-from vt-to changed-by-uid
+                              reason reason-note supporting-doc]}]
+   (let [db (d/db conn)
+         now (Date.)
+         status-tx (sm/record-status-change-tx-data
+                    db
+                    (cond-> {:entity invoice-eid
+                             :entity-type :invoice
+                             :facet :invoice/status
+                             :to :paid
+                             :changed-at now}
+                      changed-by-uid (assoc :changed-by-uid changed-by-uid)
+                      reason         (assoc :reason reason)
+                      reason-note    (assoc :reason-note reason-note)
+                      supporting-doc (assoc :supporting-doc supporting-doc)))]
      (d/transact conn
-                 (kbt/with-vt
-                   [{:db/id invoice-eid :invoice/status :paid}]
-                   (or vt-from now)
-                   (or vt-to kbt/forever))))))
+                 (kbt/with-vt status-tx
+                              (or vt-from now)
+                              (or vt-to kbt/forever))))))
 
 (defn cancel!
-  "Cancel a :sent or :draft invoice. For :draft, just flips status.
+  "Cancel a :sent or :draft invoice via the status machine.
+   For :draft, just flips status :draft → :cancelled.
    For :sent, also creates a reversal transaction that negates each
    posting and points at the original via :transaction/reverses
    (kernel ADR-007: never edit posted entries; reverse + re-post).
 
-   `opts`: optional `:vt-from` / `:vt-to` to stamp both the reversal
-   tx and the status-flip tx with kontor.bitemporal valid-time.
-   Default `:vt-from = now`."
+   `opts`:
+     :vt-from / :vt-to  — valid-time bounds (default :vt-from = now)
+     :changed-by-uid    — actor recorded on :status-history
+     :reason / :reason-note / :supporting-doc — ADR-038"
   ([conn invoice-eid]
    (cancel! conn invoice-eid nil))
-  ([conn invoice-eid {:keys [vt-from vt-to]}]
+  ([conn invoice-eid {:keys [vt-from vt-to changed-by-uid
+                              reason reason-note supporting-doc]}]
   (let [db (d/db conn)
         inv (d/pull db [:invoice/status :invoice/external-id
                         {:invoice/transaction
@@ -247,12 +284,21 @@
                     invoice-eid)
         now (Date.)
         vf  (or vt-from now)
-        vt  (or vt-to kbt/forever)]
+        vt  (or vt-to kbt/forever)
+        status-change-opts (cond-> {:entity invoice-eid
+                                    :entity-type :invoice
+                                    :facet :invoice/status
+                                    :to :cancelled
+                                    :changed-at now}
+                             changed-by-uid (assoc :changed-by-uid changed-by-uid)
+                             reason         (assoc :reason reason)
+                             reason-note    (assoc :reason-note reason-note)
+                             supporting-doc (assoc :supporting-doc supporting-doc))]
     (case (:invoice/status inv)
       :draft
       (d/transact conn
                   (kbt/with-vt
-                    [{:db/id invoice-eid :invoice/status :cancelled}]
+                    (sm/record-status-change-tx-data db status-change-opts)
                     vf vt))
       :sent
       (let [original-tx (:invoice/transaction inv)
@@ -285,7 +331,7 @@
         (d/transact conn (kbt/with-vt reversal-tx vf vt))
         (d/transact conn
                     (kbt/with-vt
-                      [{:db/id invoice-eid :invoice/status :cancelled}]
+                      (sm/record-status-change-tx-data (d/db conn) status-change-opts)
                       vf vt)))
       (throw (ex-info "Cannot cancel invoice in current status"
                       {:invoice-eid invoice-eid
@@ -298,19 +344,22 @@
 (defn flip-paid-on-settlement
   "Call after a reconciliation/commit-match! that settled
    transactions which are linked to invoices. Walks each settled
-   transaction's `:invoice/_transaction` backref and marks any
-   referenced invoice :paid.
+   transaction's `:invoice/_transaction` backref and moves any
+   referenced invoice to :paid via the status machine.
 
-   Idempotent: marking an already-paid invoice is a no-op assertion.
+   Each invoice's :from is auto-detected (:sent or :partially-paid).
+   Already-:paid invoices are skipped (no-op).
 
-   Typically called from a wrapper around recon/commit-match!
-   See `(reconcile-and-mark-paid!)` below for the convenience form.
-
-   `opts`: optional `:vt-from` / `:vt-to` to stamp the tx with
-   kontor.bitemporal valid-time (e.g. bank-line's value-date)."
+   `opts`:
+     :vt-from / :vt-to  — valid-time bounds (default :vt-from = now;
+                          e.g. bank-line's value-date)
+     :changed-by-uid    — actor recorded on :status-history
+     :reason            — codified reason (default :reconciled)
+     :reason-note / :supporting-doc — ADR-038"
   ([conn settled-tx-eids]
    (flip-paid-on-settlement conn settled-tx-eids nil))
-  ([conn settled-tx-eids {:keys [vt-from vt-to]}]
+  ([conn settled-tx-eids {:keys [vt-from vt-to changed-by-uid
+                                  reason reason-note supporting-doc]}]
    (let [db (d/db conn)
          invoice-eids (d/q '[:find [?inv ...]
                              :in $ [?tx ...]
@@ -318,11 +367,26 @@
                            db settled-tx-eids)
          now (Date.)
          vf  (or vt-from now)
-         vt  (or vt-to kbt/forever)]
-     (when (seq invoice-eids)
-       (d/transact conn
-                   (kbt/with-vt
-                     (mapv (fn [eid]
-                             {:db/id eid :invoice/status :paid})
-                           invoice-eids)
-                     vf vt))))))
+         vt  (or vt-to kbt/forever)
+         ;; Compose all status-change tx-data in one tx. Skip invoices
+         ;; already :paid (idempotent).
+         pending (filter (fn [eid]
+                           (not= :paid
+                                 (:invoice/status (d/pull db [:invoice/status] eid))))
+                         invoice-eids)
+         all-status-tx (mapcat
+                        (fn [eid]
+                          (sm/record-status-change-tx-data
+                           db
+                           (cond-> {:entity eid
+                                    :entity-type :invoice
+                                    :facet :invoice/status
+                                    :to :paid
+                                    :changed-at now
+                                    :reason (or reason :reconciled)}
+                             changed-by-uid (assoc :changed-by-uid changed-by-uid)
+                             reason-note    (assoc :reason-note reason-note)
+                             supporting-doc (assoc :supporting-doc supporting-doc))))
+                        pending)]
+     (when (seq pending)
+       (d/transact conn (kbt/with-vt (vec all-status-tx) vf vt))))))

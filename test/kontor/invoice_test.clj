@@ -12,6 +12,7 @@
             [datahike.api :as d]
             [kontor.core :as core]
             [kontor.invoice :as inv]
+            [kontor.invoice.schema :as inv-schema]
             [kontor.l10n-de.chart :as chart]
             [kontor.l10n-de.invoice :as inv-de]
             [kontor.payment-term :as pt]
@@ -26,6 +27,7 @@
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
+    (inv-schema/install! conn)   ; modules/invoice schema + :invoice/status state-machine seeds (P0-4α)
     (chart/install! conn)
     (pt/install-standard-terms! conn)
     (d/transact conn
