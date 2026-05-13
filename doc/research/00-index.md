@@ -20,6 +20,9 @@ These reports were produced during the design phase of `kontor`. They are point-
 | 14 | [Stage K (procurement) research-before: three-agent synthesis](14-stage-k-procurement-research.md) | 2026-05-12 | general-purpose (3 agents) | high (OFBiz file:line citations + ~50 web sources) |
 | 15 | [Stage L (collections) research-before: three-agent synthesis](15-stage-l-collections-research.md) | 2026-05-12 | general-purpose (3 agents) | high (OFBiz negative finding + 35 market pains + internal gap with file:line) |
 | 16 | [Showcase feature-coverage audit](16-showcase-feature-coverage.md) | 2026-05-12 | direct | high (cross-references showcase 1-3 against kernel + companion + l10n primitives) |
+| 19 | [Probabilistic / numerical / simulation integration (simmis, stratum, raster, spindel, anglican)](19-probabilistic-numerical-integration.md) | 2026-05-13 | direct | medium (local repos + 2025-26 FP&A / probabilistic / RL / OR vendor and academic literature) |
+| 20 | [AI-native business-OS landscape — where kontor fits](20-ai-native-business-os.md) | 2026-05-13 | general-purpose | medium (web sources + 2025-26 AccountingBench / MCP / EU AI Act / tool-poisoning literature; flagged for re-research in 6 months) |
+| 21 | [Process / workflow modeling — should kontor grow a workflow primitive?](21-process-workflow-modeling.md) | 2026-05-13 | direct | high (Camunda / Temporal / Restate / DBOS / Celonis / OCEL 2.0 / XState / Erlang / Sylius / Clojure FSM-lib sources, all linked) |
 
 ## What each report answers
 

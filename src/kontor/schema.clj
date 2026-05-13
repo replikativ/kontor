@@ -8,12 +8,17 @@
    collision. That cohabitation is an architectural invariant — see
    ADR-002 in doc/decisions.md.
 
-   Bitemporal modeling per ADR-008:
+   Bitemporal modeling per ADR-048 (supersedes the original ADR-008
+   posting-attribute approach):
      - transaction time = :db/txInstant (datahike-supplied, free)
-     - valid time       = explicit :*/valid-from and (where applicable)
-                          :*/valid-to attributes on transactions and
-                          postings.
-     - the :posting/temporal-key tuple indexes the bitemporal axis.
+     - valid time       = :tx/valid-from on the writing tx
+                          (kontor.bitemporal). All postings written by
+                          one tx share that tx's valid-from. The kernel
+                          builders stamp it from
+                          :transaction/effective-date.
+     - the resolver in kontor.bitemporal answers per-attribute
+       polygons; postings are append-only so :tx/valid-to is always
+       forever for them.
 
    Sealing per ADR-007:
      - :posting/posted-at is the seal marker. Once set, the application
@@ -652,9 +657,11 @@
                      intent."}])
 
 (def ^:private bitemporal-tx-attrs
-  "Tx-meta attributes for experimental tx-level valid-time
-   (kontor.bitemporal). Match XTDB v2's bitemporal semantics on top
-   of stock datahike. See kontor.bitemporal for the resolver."
+  "Tx-meta attributes for tx-level valid-time (kontor.bitemporal,
+   ADR-048). The canonical valid-time anchor — postings carry no
+   per-posting valid-from after the ADR-048 normalization. Matches
+   XTDB v2's bitemporal semantics on top of stock datahike. See
+   kontor.bitemporal for the resolver."
   [{:db/ident :tx/valid-from
     :db/valueType :db.type/instant
     :db/cardinality :db.cardinality/one
@@ -3228,7 +3235,7 @@
     side-effect-intent-attrs              ; ADR-041
     account-type-direction-attrs          ; ADR-041
     payment-application-attrs             ; ADR-043
-    bitemporal-tx-attrs)))                ; ADR-044 (experimental)
+    bitemporal-tx-attrs)))                ; ADR-048 (kontor.bitemporal)
 
 (defn install!
   "Transact the kernel schema into a connection. Idempotent — re-running

@@ -1,6 +1,6 @@
 # Architecture
 
-A bird's-eye view of how `kontor` is laid out, why each layer exists, and how it composes with the surrounding stack (datahike, Mustang, beleg, simmis).
+A bird's-eye view of how `kontor` is laid out, why each layer exists, and how it composes with the surrounding stack (datahike, companion modules, partner adapters, consumer apps).
 
 For *why* each choice was made, see [decisions.md](decisions.md). This document describes the *what*.
 
@@ -18,243 +18,423 @@ For *why* each choice was made, see [decisions.md](decisions.md). This document 
                                 │  (pulls in as deps)
                                 │
 ┌──────────────────────────────────────────────────────────────────────┐
-│  Per-country localization modules                                    │
-│   kontor-l10n-de   (GPLv3, Tryton+GnuCash facts)       │
-│   kontor-l10n-ca   (EPL-1.0, CRA-published facts)      │
-│   kontor-l10n-us   (EPL-1.0 + SST CSVs)                │
+│  Partner adapters (NEVER bundle credentials, NEVER in the kernel)    │
+│   PAC providers (MX), IRP/EWB providers (IN), SEFAZ transmitters     │
+│   (BR), Peppol Access Points (JP/AU/DE), Avalara/TaxJar (US sales).  │
 └──────────────────────────────────────────────────────────────────────┘
                                 ▲
                                 │
 ┌──────────────────────────────────────────────────────────────────────┐
-│  Optional adapter modules                                            │
-│   kontor-einvoice-de  (Mustang APL2 wrapper)           │
-│   kontor-einvoice-eu  (phax/ph-ubl APL2)               │
-│   kontor-bank-camt053 (ISO 20022 CAMT.053 importer)    │
-│   kontor-bank-nacha   (US ACH NACHA importer)          │
-│   kontor-export-gobd  (DE tax-audit bundle)            │
-│   kontor-export-datev (DE accountant-handoff)          │
+│  Companion modules (separate Maven artifacts, live in modules/)      │
+│                                                                      │
+│   Kernel-adjacent                                                    │
+│    modules/partner       (ADR-033: party root + person/org)          │
+│    modules/sales         (ADR-035: order + items + ship-groups)      │
+│    modules/invoice       (ADR-036: order→invoice bridge + status)    │
+│    modules/procurement   (ADR-042: requisition + receipt + 3-way)    │
+│    modules/collections   (ADR-043: AR collections + dunning + …)     │
+│                                                                      │
+│   Per-country localizations                                          │
+│    modules/l10n-{de,fr,ca,us,au,jp,cn,in,br,mx,at}                  │
+│                                                                      │
+│   Per-country bank-statement importers                               │
+│    modules/bank-{de,fr,ca,us,at}                                     │
+│                                                                      │
+│   E-invoice emitters                                                 │
+│    modules/einvoice-de   (Factur-X / XRechnung / ZUGFeRD)            │
 └──────────────────────────────────────────────────────────────────────┘
                                 ▲
                                 │
 ┌──────────────────────────────────────────────────────────────────────┐
-│  THIS REPO — kontor                                     │
+│  kontor kernel — EPL-1.0, one dependency (datahike)                  │
 │                                                                      │
-│  ┌─ tax_provider ─┐  ┌── sealing ──┐  ┌── audit ──┐                 │
-│  │  TaxProvider   │  │ posted-at   │  │ commit    │                 │
-│  │  protocol      │  │ middleware  │  │ hash      │                 │
-│  │  StaticTable   │  │             │  │ wrapper   │                 │
-│  └────────────────┘  └─────────────┘  └───────────┘                 │
-│                                                                      │
-│  ┌──────────────────────────────────────────────────────────────┐    │
-│  │  KERNEL — schema + posting + balance + period                │    │
-│  │   account, journal, transaction, posting, commodity, lot,    │    │
-│  │   balance-assertion, period, partner, fiscal-position,       │    │
-│  │   tax, tax-repartition-line, account-tag, tax-group          │    │
-│  │                                                              │    │
-│  │   bitemporal: valid-from/to + :db/txInstant on every entity  │    │
-│  │   posting validator: postings sum to zero                    │    │
-│  │   query: trial balance, ledger view (datalog)                │    │
-│  │   import: beancount round-trip                               │    │
-│  └──────────────────────────────────────────────────────────────┘    │
+│   Schema + lifecycle                                                 │
+│   Balanced postings + multi-ledger + multi-entity                    │
+│   Time: periods + bitemporal valid-time                              │
+│   Sealing + audit-doc + approval-policy                              │
+│   Status machine (cross-cutting)                                     │
+│   Tax / Costing / E-invoice provider protocols                       │
+│   Money flow: payment-application, bank-account, payment-term        │
+│   Reporting: trial-balance, P&L, BS, declarative report engine       │
 └──────────────────────────────────────────────────────────────────────┘
                                 ▲
                                 │  (uses, never embeds)
                                 │
 ┌──────────────────────────────────────────────────────────────────────┐
-│  datahike (replikativ)                                               │
+│  datahike (replikativ) — EAV store with native bitemporality         │
 │   schema, transactions, query, history, branches, commits            │
-│                                                                      │
-│   Track-B upstream PR adds:                                          │
-│     • SHA-256 per-commit content hash                                │
-│     • commit signature hook                                          │
-│     • :crypto-hash? true documented for accounting use               │
+│   :crypto-hash? true → SHA-512 Merkle-tree over indices              │
 └──────────────────────────────────────────────────────────────────────┘
 ```
+
+The pattern is **kernel + companions + partner adapters**. The kernel knows nothing about a specific country or third-party API; a companion adds a chart of accounts, a tax stack, an e-invoice emitter, or a workflow surface. A partner adapter signs and submits the kernel's emitted artifact to the relevant authority. Each layer can be swapped without touching the kernel.
 
 ---
 
 ## Kernel: namespaces
 
+After Stage L the kernel is ~14k LOC across ~30 namespaces, organized by role:
+
 ```
 src/kontor/
-  schema.clj            ; the EDN schema for all kernel entities
-  core.clj              ; create-db, transact-with-validation, public surface
-  money.clj             ; Money type (BigDecimal + commodity), arithmetic, rounding
-  posting.clj           ; build a transaction from postings; validates sum-to-zero
-  balance.clj           ; account balance queries (as-of-tx, as-of-valid)
-  ledger.clj            ; ledger view (postings against an account, ordered)
-  trial.clj             ; trial balance over a date range
-  period.clj            ; open/close periods, fiscal-year handling
-  sealing.clj           ; :posting/posted-at + middleware refusing silent retract
-  audit.clj             ; commit-hash wrapper, signature interface (Track B integration)
-  tax_provider.clj      ; TaxProvider protocol + StaticTableProvider impl
-  tax.clj               ; apply tax to a posting (delegates to provider)
-  query.clj             ; convenience: bitemporal pairs, accounts-by-tag, etc.
-  import/
-    beancount.clj       ; Beancount parser + transactor + dumper (round-trip)
-  schema/
-    common.clj          ; shared bits (audit fields create_*/write_*, valid_*)
+  ; --- Schema + lifecycle ---
+  schema.clj                kernel attribute definitions (ADR-002)
+  core.clj                  create-test-db, install-schema!,
+                            provider registration
+
+  ; --- Money primitives ---
+  money.clj                 Money (BigDecimal + commodity), arithmetic (ADR-013)
+
+  ; --- Balanced postings (the heart of the kernel) ---
+  posting.clj               build-transaction, sum-to-zero,
+                            multi-ledger + multi-entity (ADR-021, ADR-031)
+  balance.clj               account-balance, bitemporal-aware
+  ledger.clj                postings-against-account (ADR-021)
+  trial.clj                 trial-balance over a date range
+  closing.clj               year-end close, retained-earnings rollup
+
+  ; --- Time ---
+  period.clj                open/close periods, soft/hard lock (ADR-014)
+  bitemporal.clj            :tx/valid-from + resolver (ADR-048)
+  query.clj                 bitemporal convenience helpers
+
+  ; --- Sealing + audit ---
+  sealing.clj               :posted-at + middleware (ADR-007)
+  audit.clj                 commit-hash wrapper (ADR-003)
+  audit_doc.clj             :audit-doc + :approval-policy (ADR-038)
+
+  ; --- State machine (cross-cutting) ---
+  status_machine.clj        :status-transition + :status-history +
+                            record-status-change! (ADR-034)
+  state_machine.clj         :transaction/state transitions (kernel-internal)
+  side_effect.clj           :side-effect-intent dispatcher (ADR-041)
+  schedule.clj              :schedule recurring postings (ADR-032)
+
+  ; --- Provider protocols ---
+  tax_provider.clj          TaxProvider protocol + impls (ADR-005)
+  tax.clj                   apply-tax to a posting
+  costing_provider.clj      CostingProvider protocol — FIFO/LIFO/Avg/Std (ADR-029)
+  valuation.clj             :valuation-book + :valuation-layer (ADR-027/028)
+  einvoice_provider.clj     EInvoiceProvider protocol + PureXmlProvider (ADR-017)
+
+  ; --- Money flow ---
+  payment_application.clj   partial-payment primitive (ADR-043)
+  reconciliation.clj        bank-line → transaction matching scaffold
+  bank_account.clj          :bank-account helpers (ADR-039)
+  bank_csv.clj              generic CSV importer
+  payment_term.clj          due-date computation
+  aging.clj                 AR aging snapshot
+
+  ; --- Identity + scope ---
+  entity.clj                :entity helpers (ADR-031)
+
+  ; --- Reporting ---
+  report.clj                declarative report engine
+  financial_statements.clj  BS / P&L generators
+
+  ; --- I/O ---
+  import_/beancount.clj     Beancount round-trip (ADR-009)
+
+  ; --- Validation ---
+  validation.clj            datopia/invariant middleware (ADR-011)
 ```
 
-A typical Phase-1 module is ~100-300 lines. Total Phase-1 kernel target: **<2000 LOC**.
+The Phase-1 target of <2k LOC reflected the Phase-1 surface; Stages H-L added entity scope, valuation, status machine, audit/governance, master-data, jurisdiction, and workflow primitives needed to compose the companions.
+
+---
 
 ## Schema namespaces
 
-To cohabit cleanly with beleg in one DB (ADR-002), we namespace every attribute under one of:
+Every attribute is namespaced so kontor can cohabit with companion modules and consumer apps in one datahike connection (ADR-002). The kernel namespace list, as of Stage L:
 
-- `:account/*` — chart-of-accounts entries
-- `:journal/*` — journals (sale/purchase/cash/bank/general)
-- `:transaction/*` — journal entry headers (Odoo's `account.move`)
-- `:posting/*` — individual debit/credit postings (Odoo's `account.move.line`)
-- `:commodity/*` — currencies and other tradeable units
-- `:lot/*` — specific acquisitions of a commodity (for cost-basis tracking)
-- `:tax/*` — tax definitions
-- `:tax-rep/*` — tax repartition lines (where tax postings land)
-- `:tax-group/*` — tax groupings (per-country VAT clearing accounts)
-- `:account-tag/*` — tags that link accounts/postings to report boxes
-- `:partner/*` — customers/vendors (referenced from postings)
-- `:fiscal-position/*` — per-region tax/account remapping
-- `:period/*` — open/closed accounting periods
-- `:balance-assertion/*` — pinned balance checkpoints
+```
+; Core double-entry (Phase 0/1)
+:account/*                charts of accounts
+:account-tag/*            report-time aggregation tags
+:journal/*                journals
+:transaction/*            headers
+:posting/*                individual postings
+:commodity/*              currencies + tradeable units
+:lot/*                    cost-basis lots
+:partner/*                customers / vendors / contacts
+                          (extended by partner companion)
+:fiscal-position/*        tax + account remapping
+:period/*                 open/close periods + sealing markers
+:balance-assertion/*      pinned balance checkpoints
 
-Beleg's existing namespaces (`:invoice/*`, `:customer/*`, `:offer/*`, `:line-item/*`, `:lead/*`, `:advisor/*`) coexist without collision.
+; Tax (Phase 1)
+:tax/*                    tax definitions
+:tax-rep/*                tax repartition lines
+:tax-group/*              per-country VAT clearing groupings
+:tax-application/*        per-(line, tax) computation record (ADR-016)
 
-The convention: a `:journal` reference from a beleg `:invoice/journal` is the integration point — beleg writes invoice headers, accounting writes the matching transaction + postings, all in one tx.
+; Geography (ADR-023)
+:country/*                ISO 3166 + external codes
+:country-code/*           regulator codes per country
+:country-group/*          trade blocs (EU, USMCA, …)
+:state/*                  ISO 3166-2 + external codes
+:state-code/*             regulator codes per state
+:partner-state/*          partner ↔ state junction
+
+; Analytic (ADR-012, ADR-022)
+:analytic-plan/*          dimension definitions
+:analytic-account/*       leaves
+:analytic-distribution/*  how a posting splits across leaves
+
+; Ledgers + entities (ADR-021, ADR-031)
+:ledger/*                 parallel-book definitions
+:posting-ledger/*         ledger ref on posting
+:entity/*                 legal-entity scope
+:posting-entity/*         entity ref on posting
+:ledger-entity/*          per-(ledger, entity) overrides
+:valuation-book-entity/*  per-(book, entity) overrides
+
+; Valuation (ADR-027/028)
+:valuation-book/*         parallel cost bases
+:valuation-layer/*        per-receipt cost layers
+:layer-consumption/*      FIFO/LIFO consumption
+:layer-adjustment/*       manual adjustments
+
+; Clearance + composition (ADR-024, ADR-025)
+:attestation/*            government artifacts (IRN, EWB, PAC stamp)
+:transaction-attestations/* junction
+:complemento/*            CFDI / NF-e nested fragments
+:transaction-complementos/* junction
+
+; Scheduling + state machine (ADR-032, ADR-034, ADR-041)
+:schedule/*               recurring postings
+:schedule-occurrence/*
+:status-transition/*      allowed transitions per (entity-type, facet)
+:status-history/*         recorded transitions per entity
+:side-effect-intent/*     cross-aggregate side-effect dispatcher
+:account-type-direction/* debit/credit data table
+
+; Audit + governance (ADR-038)
+:audit-doc/*              supporting docs
+:approval-policy/*        SoD enforcement rules
+
+; Master data (ADR-039)
+:partner-merge/*          non-destructive merge
+:bank-account/*           external bank-account entity
+:partner-bank-account/*   junction
+:partner-tag/*            segmentation
+
+; Jurisdiction (ADR-040)
+:partner-tax-id/*         multi-tax-id-per-jurisdiction junction
+
+; Money flow (ADR-043)
+:payment-application/*    partial-payment primitive
+
+; Bitemporal (ADR-048)
+:tx/valid-from            on every writing tx
+:tx/valid-to              (defaults to forever; postings never use)
+```
+
+Companion modules add their own namespaces (`:invoice/*`, `:order/*`, `:collection-case/*`, `:dispute/*`, …) without collision — that cohabitation is an architectural invariant (ADR-002).
+
+---
 
 ## The double-entry kernel
 
-A **transaction** is the atomic accounting unit. It has 2+ **postings**. The kernel enforces:
-
-```
-(reduce + 0 (map :posting/balance postings)) == 0
-;; balance is debit - credit, expressed in the transaction's currency
-;; per-currency; multi-currency moves balance per currency
-```
+A **transaction** is the atomic accounting unit. Within a transaction, postings sum to zero **per (entity, ledger, commodity)**. The single-entity / single-ledger case (the overwhelming default for SMBs) collapses to the familiar "debits = credits in this currency"; multi-ledger users add a `:posting/ledger` ref and the invariant holds per ledger; multi-entity users add `:posting/entity` and the invariant holds per (entity, ledger). ADR-021 + ADR-031.
 
 A **posting** carries:
 - `:posting/account` (which account is debited or credited)
 - `:posting/amount` (positive = debit, negative = credit, in transaction currency)
-- `:posting/amount-currency` (when in foreign currency, the original amount)
 - `:posting/commodity` (the unit of `amount`)
-- `:posting/valid-from` (the bitemporal valid-time of this posting)
 - `:posting/display-type` (`:product :tax :payment-term :rounding :section :note` — the Odoo discriminator)
-- `:posting/partner` (optional FK)
+- `:posting/partner` (optional override of the transaction's partner)
+- `:posting/ledger` (optional; absent ⇒ primary ledger group; ADR-021)
+- `:posting/entity` (optional; absent ⇒ unscoped; ADR-031)
 - `:posting/posted-at` (set when the parent transaction is posted; sealing trigger)
 
-A transaction carries the header (date, journal, partner, narration, totals — denormalized for query speed but always recomputable).
+The valid-time of a posting lives on its writing tx via `:tx/valid-from` (ADR-048). All postings written by one tx share one valid-from; the kernel builders stamp it from `:transaction/effective-date`.
 
 **Postings are immutable once posted** (ADR-007 sealing rule). Corrections create new transactions that *reverse* and *replace*, not in-place edits.
 
-## Bitemporal queries
-
-Every query takes two implicit dimensions (ADR-008):
-
-- **as-of-tx** — what the database knew at this transaction time. Wraps `(d/as-of db tx-time)`.
-- **as-of-valid** — what was true in the world as of this valid date. Filters `(<= :posting/valid-from valid-time)` and `(or (nil? :posting/valid-to) (> :posting/valid-to valid-time))`.
+**Multi-ledger example:**
 
 ```clojure
-;; Trial balance as of Dec 31 2024 as known on Mar 31 2025 (post-audit)
+;; One sale transaction posting to two ledgers simultaneously — primary
+;; (local GAAP) at €1000, IFRS at €1050 (different revenue recognition).
+(posting/build-transaction
+  {:transaction {...}
+   :postings
+   [{:posting/account [:account/code "1200"] :posting/amount  1000.00M
+     :posting/commodity eur :posting/ledger [:ledger/code "primary"]}
+    {:posting/account [:account/code "4400"] :posting/amount -1000.00M
+     :posting/commodity eur :posting/ledger [:ledger/code "primary"]}
+    {:posting/account [:account/code "1200"] :posting/amount  1050.00M
+     :posting/commodity eur :posting/ledger [:ledger/code "ifrs"]}
+    {:posting/account [:account/code "4400"] :posting/amount -1050.00M
+     :posting/commodity eur :posting/ledger [:ledger/code "ifrs"]}]})
+```
+
+Each ledger balances independently. The SAP `RLDNR`-on-line-item pattern, adapted to event-sourced storage. IFRS-16 vs ASC-842 lease accounting, GAAP-vs-tax book differences, and full IFRS / HGB parallel books all ride this single mechanism.
+
+---
+
+## Bitemporal queries (ADR-008, ADR-048)
+
+Every accounting query takes two implicit dimensions:
+
+- **tx-time** — what the database knew at this transaction time. Datahike supplies this for free via `(d/as-of db tx-or-instant)`.
+- **valid-time** — when the recorded fact was true in the world. kontor models this with one tx-meta attribute, `:tx/valid-from`, on the writing tx. Every datom in that tx inherits the valid-time. Readers resolve via `kontor.bitemporal/value-at` (single fact at a cutoff), `values-between` (a window), or `timeline` (full history of one (entity, attribute)).
+
+The two axes compose. `(kbt/as-of-bitemporal db {:tx t :vt v})` returns a HistoricalDB pinned at tx-time `t`; the resolver applied on top of it answers "what did we think the fact was at valid-time `v`, as known by tx-time `t`."
+
+Backdated corrections: wrap your tx-data with `(kbt/with-vt tx-data effective-date)`. The default `:vt-from` for postings is `:transaction/effective-date`; the default `:vt-to` is `forever`. Mid-flight corrections of a previous fact are *new writes at a past valid-time*, not in-place edits — append-only, audit-clean, ADR-007-compatible.
+
+```clojure
+;; Trial balance as of Dec 31 2024 as known on Mar 31 2025
 (trial-balance conn
                {:as-of-valid #inst "2024-12-31"
                 :as-of-tx    #inst "2025-03-31"})
+
+;; Historical fact for one entity:
+(kbt/value-at db invoice-eid :invoice/total-net #inst "2024-12-31")
 ```
 
-Helpers in `query.clj` make this ergonomic. The default is `now`/`now`.
+XTDB v2 calls this "polygon resolution"; kontor gets the same shape from a tx-meta attribute plus a small resolver. Helpers in `kontor.query` make this ergonomic. The default — when neither parameter is passed — is now/now.
 
-## Tax provider protocol
+---
+
+## Status machine and the audit story
+
+Every state-bearing entity (invoice, transaction, dispute, case, promise, receipt, requisition, payment-promise, …) carries a *facet* — a `:db.type/keyword` attribute like `:invoice/status` or `:dispute/state`. State changes go through `kontor.status-machine/record-status-change!` (or its `…-tx-data` sibling for atomic composition), which:
+
+1. Validates against `:status-transition` rows (per (entity-type, facet, from, to)).
+2. Writes a `:status-history` row with `:reason`, `:reason-note`, `:supporting-doc`, `:changed-by-uid`, `:changed-at`, `:origin-transaction`.
+3. Stamps the writing tx with `:tx/valid-from` (default: now; explicit `:vt-from` opt for backdated transitions, e.g. migration).
+4. Enforces governance — ADR-038's `:no-self-approval`, `:requires-supporting-doc`, `:requires-non-empty-reason-note` — per a per-facet `:approval-policy` row.
+
+"When did invoice X transition to `:paid`?" is a query over its `:status-history`, not a separate audit log. Restating the invoice's status at any past valid-time uses `(kbt/value-at db invoice :invoice/status cutoff)`. **The audit story is the same data as the operational data.**
+
+Per ADR-048 the status-transition timestamp denorms (`:invoice/sent-at`, `:dispute/opened-at`, …) have been removed in favour of the `:status-history` + `:tx/valid-from` resolution. A few legacy denorms remain on `collection-case`, `credit-hold`, `dunning-pause`, and `payment-promise`; these are tracked as follow-ups.
+
+---
+
+## Provider protocols
+
+kontor exposes three pluggable seams. Each lets a consumer plug in their own logic (or a partner adapter) without touching the kernel.
+
+### TaxProvider (ADR-005)
 
 ```clojure
 (defprotocol TaxProvider
   (resolve-taxes [this {:keys [partner posting context]}]
-    "Given a context (transaction date, partner country, fiscal position, etc.)
-     and a base posting, return a vector of additional postings that
-     materialize the applicable taxes — or [] if no taxes apply.
-     The returned postings include :posting/account, :posting/amount,
-     :posting/tax-repartition (the rep line that produced them), and
-     :posting/account-tags (for report-time aggregation).")
-  (provider-id [this]
-    "A keyword identifying this provider; useful for audit / debug."))
+    "Given a context (date, partner country, fiscal position, ...)
+     and a base posting, return [] or N additional postings that
+     materialize the applicable taxes.")
+  (provider-id [this]))
 ```
 
-Three Phase-1 implementations:
+Implementations: `StaticTableProvider` (per-country EDN, default), `SstCsvProvider` (US Streamlined Sales Tax), `AvalaraProvider` / `TaxJarProvider` (customer's API key — never bundled).
 
-1. **`StaticTableProvider`** — reads a per-country EDN definition (covers DE, CA, and any country whose tax surface fits a static table).
-2. **`SstCsvProvider`** (Phase 5-US) — reads quarterly Streamlined Sales Tax CSVs.
-3. **`AvalaraProvider` / `TaxJarProvider`** (Phase 5-US, scaffolded) — wraps the customer's API key.
+### CostingProvider (ADR-029)
 
-The provider is per-DB / per-tenant configuration. The kernel asks; the provider answers.
+Plug-in costing method for inventory valuation:
+
+```clojure
+(defprotocol CostingProvider
+  (plan-receipt [this db request])
+  (plan-consumption [this db request]))
+```
+
+Built-in impls: FIFO, LIFO, WeightedAverage, StandardCost. Drives `:valuation-layer` + `:layer-consumption` rows on inventory moves (`kontor.posting/plan-stock-move`).
+
+### EInvoiceProvider (ADR-017)
+
+Pure-data e-invoice generation. The kernel ships `PureXmlProvider` (UBL/Factur-X/NF-e shapes); signing and transmission happen in partner adapters that hold credentials.
+
+---
 
 ## Sealing
 
 ```clojure
-;; Phase 1 — application middleware
+;; Application middleware refuses silent retract of posted entries.
 (defn transact-with-sealing [conn tx-data]
   (let [forbidden (find-silent-retracts-of-posted tx-data (d/db conn))]
     (when (seq forbidden)
       (throw (ex-info "Refused: silent retract of posted entries"
                      {:posted-eids (mapv first forbidden)
-                      :remediation "Use [:db/purge ...] explicitly with :purge/reason"})))
+                      :remediation "Use [:db/purge ...] explicitly"})))
     (d/transact conn tx-data)))
 ```
 
-`:db/purge` of posted entries is allowed but recorded — datahike commits the purge as its own transaction, so the audit chain documents it. We require a `:purge/reason` annotation on the same tx.
+A posting becomes legally binding when `:posting/posted-at` is set (ADR-007). The sealing middleware refuses silent retracts after that. Explicit `:db/purge` is permitted — it is itself a recorded commit, so right-to-erasure obligations are satisfied without breaking the audit chain.
 
-## Audit hash chain (Track B integration)
+Posting transitions (draft → posted) propagate `:transaction/posted-at` to every child posting's `:posting/posted-at` — this is what the sealing middleware enforces.
 
-```
-[ Phase 1 today ]                    [ After Track B ]
-─────────────────                    ─────────────────
-:hash = clojure.core/hash            :hash = SHA-256(canonical-EAVT-of-tx)
-        summed (32-bit)                      stored in :meta
-                                             feeds create-commit-id
-commit-id =                          commit-id =
-  UUID-5(SHA-512([hash max-tx          UUID-5(SHA-512([sha256-hash
-         max-eid meta]))                       max-tx max-eid meta]))
-                                            ↓
-no commit signatures                 commit signature hook:
-                                       (sign-commit-fn commit-hash)
-                                     stored alongside commit
-                                     verifiable externally
-```
+---
 
-Phase 1 ships using today's datahike with `:crypto-hash? true` (which makes index nodes Merkle-addressed via SHA-512) and a documented gap on the leaf hash. When Track B lands, `audit.clj` cuts over to consume the new mechanism.
+## Audit + governance (ADR-038)
+
+The `:audit-doc` + `:approval-policy` primitives provide the structural backbone for audit-defensible state transitions:
+
+- **`:audit-doc`** — any supporting document attached to a `:status-history` row (engagement letter, board resolution, signed correction, vendor onboarding KYC, write-off justification). Carries a content hash + URI; the URI's storage is out of kernel scope.
+- **`:approval-policy`** — per-(entity-type, facet) rules enforced at status-change time. `:no-self-approval`, `:requires-supporting-doc`, `:requires-non-empty-reason-note`, `:approver-role`. Composable.
+
+Commit-level cryptographic integrity rides on datahike's `:crypto-hash? true` (SHA-512 Merkle-tree across EAV/AEVT/AVET). A planned upstream PR ("Track B") adds per-commit SHA-256 leaf hashes + commit signatures; `audit.clj` will cut over when it lands.
+
+---
 
 ## Beancount round-trip
 
-Beancount is the most-respected open-source double-entry implementation. We ship a parser and dumper to/from datahike representation. ADR-009 makes round-tripping a representative `.beancount` file a Phase-1 acceptance criterion: parse, transact, dump, byte-diff. This pins our semantics against a known-correct reference.
+Beancount is the most-respected open-source double-entry implementation. kontor ships a parser and dumper to/from the datahike representation. ADR-009 makes round-tripping a representative `.beancount` file a Phase-1 acceptance criterion: parse, transact, dump, byte-diff. This pins kontor's semantics against a known-correct reference. See `src/kontor/import_/beancount.clj` and `examples/example.beancount`.
 
-## Composition with beleg
+---
 
+## How modules compose
+
+Every companion module declares its own attribute namespaces (`:invoice/*`, `:order/*`, `:collection-case/*`, `:dispute/*`, …) and ships an `install!` function that transacts its schema atop the kernel's. A tenant's `(install-schema! conn)` call is composed:
+
+```clojure
+(defn install-all! [conn]
+  (kontor.core/install-schema! conn)
+  (kontor.partner.schema/install! conn)
+  (kontor.sales.schema/install! conn)
+  (kontor.invoice.schema/install! conn)
+  (kontor.procurement.schema/install! conn)
+  (kontor.collections.schema/install! conn))
 ```
-beleg.invoice ─────────┬─────► kontor.transaction
-   (issued)            │           (posted)
-                       │
-   :invoice/journal ───┴─► :journal entity in same DB
-   :invoice/lines     ───►  :posting entities (one per line + tax + receivable)
-```
 
-When beleg "issues" an invoice (status → :issued), one tx writes:
+The cohabitation invariant (ADR-002) means none of these collide. Consumers can pick any subset.
 
-1. `:invoice/status` change on the beleg side.
-2. A new `:transaction` entity on the accounting side (journal=sales, date=invoice date, partner=customer).
-3. N `:posting` entities: one per line item to revenue accounts, one per tax line to VAT clearing, one to the receivable account for the total.
+Writing an invoice through `kontor-invoice` produces one tx that:
 
-All atomic. Sum-to-zero validated. Bitemporally indexed.
+1. Sets `:invoice/status` `:draft → :sent` and writes a `:status-history` row.
+2. Builds the matching `:transaction` + `:posting`s via `kontor.posting/build-transaction`.
+3. Stamps `:tx/valid-from` from the invoice's effective date.
+4. (Per ADR-038) records `:reason`, `:reason-note`, `:supporting-doc`, `:changed-by-uid`.
 
-The reverse — voiding an issued invoice — emits a reversing transaction (not an in-place edit) per ADR-007.
+All atomic. Sum-to-zero validated. Bitemporally indexed. The reverse — voiding a sent invoice — emits a *reversing* transaction (not an in-place edit) per ADR-007.
 
-## What lives upstream vs here
+---
 
-| Concern | Where |
+## What lives where
+
+| Concern | Layer |
 |---|---|
-| Schema, postings, balance, period, taxes, sealing, audit | here |
-| Branches, commits, history, content addressing, hashing | datahike core |
-| SHA-256 leaf hash, commit signature hook | datahike core (Track B PR) |
-| Beancount parser | here, in `import/beancount.clj` |
-| SKR03/SKR04 facts | `kontor-l10n-de` |
-| Factur-X/XRechnung XML | Mustang (we wrap) |
-| UBL/Peppol | phax/ph-ubl (we wrap) |
-| KoSIT validation | KoSIT (Mustang invokes) |
-| CAMT.053 parser | phax/ph-camt or our own importer |
-| US sales tax data | SST CSVs / customer API key |
-| UI | not here |
+| Branches, commits, history, content addressing | datahike upstream |
+| SHA-256 leaf hash, commit signature hook | datahike upstream (planned PR) |
+| Schema, postings, balance, period, sealing, audit-doc, status machine, bitemporal resolver, provider protocols | kontor kernel |
+| Order / invoice / partner / procurement / collections workflows | companion modules (`modules/`) |
+| Per-country charts, tax rates, return computations | l10n companion modules |
+| Bank-statement parsers | bank companion modules |
+| E-invoice signing, PAC submission, SEFAZ transmission, Peppol AP delivery, Avalara/TaxJar | partner adapters (never bundle credentials) |
+| UI, routing, auth, PDF rendering | consumer apps (beleg, simmis, your app) |
+
+---
+
+## How the substrate evolves
+
+Each stage (J, K, L, M, …) follows a three-step pattern, codified by ADR-037:
+
+1. **Research-before.** Background agents study a license-clean reference implementation (OFBiz Apache-2.0, Sylius MIT, KillBill Apache-2.0) at file:line depth, plus market-pain research from G2/Capterra/Trustpilot/OSS issue trackers. Output: notes in `doc/research/`.
+2. **Implement.** Draft ADRs in `doc/decisions.md`. Schema → helpers → tests. One ADR per coherent commit; `bb test` after each.
+3. **Review-after.** Independent code-review + market-pain-review agents audit the result. P0s fixed before the stage closes; P1s/P2s triaged into followups.
+
+Cross-stage user stories (`doc/showcases/0[1-4]_*`) validate the substrate end-to-end and surface the integration friction that per-stage research cannot see.
+
+The kernel does not evolve by accretion — every ADR records a *why*. To extend the schema, write an ADR (numbered, in `doc/decisions.md`), reference it from the code, then ship. This is the contract that lets you build on `kontor` without forking the kernel.

@@ -1,5 +1,6 @@
 (ns kontor.bitemporal
-  "Tx-meta-based bitemporal helpers — experimental.
+  "Tx-meta-based bitemporal helpers — canonical valid-time anchor
+   per ADR-048.
 
    Datahike already gives us the transaction-time axis via
    `(d/history db)` + `(d/as-of db tx-or-instant)`. This namespace

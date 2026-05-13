@@ -124,6 +124,8 @@ Date: 2026-05-09.
 
 ## ADR-008 — Bitemporal modeling: lean, not full
 
+> **Superseded by [ADR-048](#adr-048--normalize-valid-time-to-txvalid-from-drop-postingvalid-from).** The per-posting valid-from anchor described below was removed; valid-time now lives on the writing tx via `kontor.bitemporal`'s `:tx/valid-from`. The semantics (lean over full bitemporality, reverse-and-repost over valid-time supersession) remain unchanged; only the storage location moved. Read this ADR for the rationale; refer to ADR-048 for the current implementation.
+
 **Decision (revised 2026-05-10 per [research note 08](research/08-bitemporality-evidence.md)).** Schema retains a single valid-time anchor per posting and a single transaction-time snapshot axis on reads — not a full bitemporal model.
 
 Specifically:

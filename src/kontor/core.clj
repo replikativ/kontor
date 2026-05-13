@@ -1,12 +1,28 @@
 (ns kontor.core
   "Public surface of the kernel.
 
-   Phase 0 (this commit): create-test-db, install-schema!, smoke
-   utilities for the REPL.
+   Lifecycle helpers (create-test-db, install-schema!) +
+   provider-registration glue. The real public API is reached via
+   the per-concern namespaces:
 
-   Phase 1 will add: post-transaction!, balance helpers, period control
-   — all bitemporal-aware (ADR-008). Until then, exercise the kernel
-   via raw datahike calls and the schema in `schema.clj`."
+     kontor.posting           build-transaction, sum-to-zero
+                              (ADR-021, ADR-031)
+     kontor.balance           account-balance (bitemporal-aware)
+     kontor.trial             trial-balance
+     kontor.ledger            postings-against-account
+     kontor.period            open/close/lock periods (ADR-014)
+     kontor.bitemporal        with-vt, value-at, as-of-bitemporal,
+                              timeline (ADR-048)
+     kontor.status-machine    record-status-change! (ADR-034)
+     kontor.payment-application apply-payment!, reverse-application!,
+                              allocate-fifo! (ADR-043)
+     kontor.sealing           seal-transaction! middleware (ADR-007)
+     kontor.audit             commit-hash wrapper (ADR-003)
+     kontor.tax-provider      TaxProvider protocol + impls (ADR-005)
+     kontor.import.beancount  round-trip importer (ADR-009)
+
+   See doc/architecture.md for the layer cake and how companions
+   compose."
   (:require [datahike.api :as d]
             [kontor.ledger :as ledger]
             [kontor.schema :as schema]
