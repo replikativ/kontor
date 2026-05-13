@@ -2,7 +2,7 @@
 
 A bird's-eye view of how `kontor` is laid out, why each layer exists, and how it composes with the surrounding stack (datahike, companion modules, partner adapters, consumer apps).
 
-For *why* each choice was made, see [decisions.md](decisions.md). This document describes the *what*.
+For *why* each choice was made, see [decisions.md](decisions.md). For coding/API conventions across the kernel and companions (transactor opts shape, status-machine writes, valid-time stamping, namespacing, money discipline), see [conventions.md](conventions.md). This document describes the *what*.
 
 ---
 
