@@ -651,6 +651,25 @@
     :db/doc         "Ref to :status-history row that produced this
                      intent."}])
 
+(def ^:private bitemporal-tx-attrs
+  "Tx-meta attributes for experimental tx-level valid-time
+   (kontor.bitemporal). Match XTDB v2's bitemporal semantics on top
+   of stock datahike. See kontor.bitemporal for the resolver."
+  [{:db/ident :tx/valid-from
+    :db/valueType :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/index true
+    :db/doc "Tx-meta — valid-time lower bound for every datom in
+             this tx. Half-open [vt-from, vt-to). Absent → defaults
+             to :db/txInstant."}
+
+   {:db/ident :tx/valid-to
+    :db/valueType :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/index true
+    :db/doc "Tx-meta — valid-time upper bound (exclusive). Absent →
+             treated as +∞."}])
+
 (def ^:private payment-application-attrs
   ;; ADR-043: partial-payment primitive. Closes the scope-cut at
   ;; reconciliation.clj:38-47 — :open-amount per invoice now equals
@@ -3222,7 +3241,8 @@
     partner-tax-id-attrs                  ; ADR-040
     side-effect-intent-attrs              ; ADR-041
     account-type-direction-attrs          ; ADR-041
-    payment-application-attrs)))          ; ADR-043
+    payment-application-attrs             ; ADR-043
+    bitemporal-tx-attrs)))                ; ADR-044 (experimental)
 
 (defn install!
   "Transact the kernel schema into a connection. Idempotent — re-running

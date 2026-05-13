@@ -22,8 +22,24 @@
                               valid`. Aging reads this.
 
    Lives in the kernel (not `kontor-collections`) because revrec
-   (Stage M) and subscription (Stage N) consume the same primitive."
+   (Stage M) and subscription (Stage N) consume the same primitive.
+
+   ## Bitemporal interop (experimental, see kontor.bitemporal)
+
+   The `:payment-application/applied-at` attribute IS the per-entity
+   valid-time for an application — when the cash hit the books in
+   the world. Classical `:as-of-valid` reads filter on it.
+
+   `apply-payment!` / `reverse-application!` additionally accept
+   `:vt-from` (and optional `:vt-to`) opts: when present the entire
+   tx is stamped with kontor.bitemporal's `:tx/valid-from`. This
+   propagates the same valid-time onto the status-history record(s)
+   the tx writes, so `(kbt/value-at db invoice :invoice/status vt)`
+   reproduces what `:invoice/status` was at any historical valid-
+   time. Defaults to `:applied-at` when `:vt-from` is omitted, so
+   existing callers keep their semantics."
   (:require [datahike.api :as d]
+            [kontor.bitemporal :as kbt]
             [kontor.status-machine :as sm]))
 
 ;; ============================================================================
@@ -114,6 +130,29 @@
 ;; postings on AR/cash accounts when it lands.
 
 ;; ============================================================================
+;; Bitemporal reads — invoice status at any valid-time
+;; ============================================================================
+
+(defn invoice-status-at
+  "Resolve `:invoice/status` at valid-time `cutoff` using kontor.
+   bitemporal. Requires the kontor.bitemporal schema to be installed
+   AND the txs that drove the status change to have been stamped
+   with `:tx/valid-from` (which `apply-payment!` /
+   `reverse-application!` do automatically when their `:applied-at`
+   is set or `:vt-from` is passed).
+
+   Composes with `(d/as-of db tx)` for full bitemporal time travel:
+
+       (invoice-status-at (d/as-of db tx-id)
+                          (resolve-invoice db inv)
+                          #inst \"2026-04-01\")
+
+   Returns the keyword status or nil if no assertion applies."
+  [db invoice-spec cutoff]
+  (when-let [eid (resolve-invoice db invoice-spec)]
+    (kbt/value-at db eid :invoice/status cutoff)))
+
+;; ============================================================================
 ;; Transactors
 ;; ============================================================================
 
@@ -157,17 +196,23 @@
      :applied-by-uid ref to :create/uid.
 
    Optional opts:
-     :applied-at        instant, default now.
+     :applied-at        instant, default now (also drives the tx's
+                        :tx/valid-from when :vt-from is omitted).
      :strategy          :fifo | :customer-instruction | :proportional
                         | :cherry-pick | :reversal (default
                         :cherry-pick).
      :reason            keyword.
      :reason-note       string.
      :supporting-doc    ref to :audit-doc.
+     :vt-from           instant — override tx-level valid-time
+                        (kontor.bitemporal). Default: `:applied-at`.
+     :vt-to             instant — optional upper bound for the tx's
+                        valid-time interval. Default: open-ended.
 
    Returns the tx-report."
   [conn {:keys [payment invoice amount commodity applied-by-uid
-                applied-at strategy reason reason-note supporting-doc]
+                applied-at strategy reason reason-note supporting-doc
+                vt-from vt-to]
          :or {strategy :cherry-pick}}]
   (when-not payment        (throw (ex-info ":payment required" {})))
   (when-not invoice        (throw (ex-info ":invoice required" {})))
@@ -234,8 +279,18 @@
         ;; carries the audit info. So even if next-status = :partially-
         ;; paid = current-status, we DON'T write a history row.
         all-tx (cond-> [app-row]
-                 status-tx (into status-tx))]
-    (d/transact conn all-tx)))
+                 status-tx (into status-tx))
+        ;; Bitemporal stamp on the tx: vt-from defaults to applied-at
+        ;; so the application's tx is consistent with the world-time
+        ;; of the cash receipt.
+        effective-vt-from (or vt-from applied-at)
+        final-tx (cond
+                   (and effective-vt-from vt-to)
+                   (kbt/with-vt all-tx effective-vt-from vt-to)
+                   effective-vt-from
+                   (kbt/with-vt all-tx effective-vt-from)
+                   :else all-tx)]
+    (d/transact conn final-tx)))
 
 (defn reverse-application!
   "Replayable reversal of a prior `:payment-application`. Writes a
@@ -254,9 +309,12 @@
      :applied-at      instant, default now.
      :reason          keyword.
      :reason-note     string.
-     :supporting-doc  ref to :audit-doc."
+     :supporting-doc  ref to :audit-doc.
+     :vt-from         instant — override tx-level valid-time
+                      (kontor.bitemporal). Default: `:applied-at`.
+     :vt-to           instant — optional upper bound."
   [conn {:keys [application-eid applied-by-uid applied-at reason
-                reason-note supporting-doc]}]
+                reason-note supporting-doc vt-from vt-to]}]
   (when-not application-eid (throw (ex-info ":application-eid required" {})))
   (when-not applied-by-uid  (throw (ex-info ":applied-by-uid required" {})))
   (let [db (d/db conn)
@@ -342,8 +400,15 @@
                        reason      (assoc :reason reason)
                        reason-note (assoc :reason-note reason-note))))
         all-tx (cond-> [rev-row]
-                 status-tx (into status-tx))]
-    (d/transact conn all-tx)))
+                 status-tx (into status-tx))
+        effective-vt-from (or vt-from applied-at)
+        final-tx (cond
+                   (and effective-vt-from vt-to)
+                   (kbt/with-vt all-tx effective-vt-from vt-to)
+                   effective-vt-from
+                   (kbt/with-vt all-tx effective-vt-from)
+                   :else all-tx)]
+    (d/transact conn final-tx)))
 
 ;; ============================================================================
 ;; FIFO bulk allocation

@@ -298,3 +298,30 @@
 ;; NOTE: unapplied-cash-balance query is deferred to the Stage L
 ;; companion (kontor-collections). The kernel does not derive cash-
 ;; received from postings without coupling to chart-of-accounts.
+
+;; ============================================================================
+;; Bitemporal interop (kontor.bitemporal)
+;; ============================================================================
+
+(deftest invoice-status-at-vt-tracks-backdated-applications
+  (testing "Backdated apply-payment! stamps :tx/valid-from on the
+            status-history; invoice-status-at resolves correctly"
+    (require '[kontor.bitemporal :as kbt])
+    ;; Install the bitemporal schema for this test
+    (datahike.api/transact *conn* @(resolve 'kbt/schema))
+    (let [inv (make-invoice! "INV-VT" 1000M)
+          pay (make-payment! "PAY-VT")]
+      ;; Apply 1000 backdated to 2026-03-15 — invoice should be :paid as of that vt
+      (papp/apply-payment! *conn*
+                           {:payment pay :invoice inv :amount 1000M
+                            :commodity (eur) :applied-by-uid (actor)
+                            :applied-at #inst "2026-03-15"})
+      (let [db (d/db *conn*)]
+        (testing "value-at before applied-at — nil (no assertion's vt covers Mar 14;
+                  invoice's :sent was real-time so vt-from = tx-time = today)"
+          (is (nil? (papp/invoice-status-at db inv #inst "2026-03-14"))))
+        (testing "value-at on / after applied-at — :paid (the backdated correction)"
+          (is (= :paid (papp/invoice-status-at db inv #inst "2026-03-15")))
+          (is (= :paid (papp/invoice-status-at db inv #inst "2026-04-01"))))
+        (testing "value-at far future — :paid (latest tx-time wins)"
+          (is (= :paid (papp/invoice-status-at db inv #inst "2030-01-01")))) ))))
