@@ -31,41 +31,41 @@ The smallest thing that is genuinely a working double-entry kernel with tax and 
 - [x] `validation.clj` middleware skeleton + first invariant (`account_active.edn`) — ADR-011
 - [x] commodity-match invariant (`commodity_match.edn`) and tests
 - [x] sealing.clj: refuse silent retract of `:posting/posted-at`-marked entities (ADR-007)
-- [ ] period.clj: refuse postings whose `:posting/valid-from` falls inside a closed `:period/locked-at` period
-- [ ] state-machine.clj: enforce :transaction/state lifecycle (draft → posted → cancelled)
-- [ ] Schema additions for analytic accounts (ADR-012): `:analytic-plan/*`, `:analytic-account/*`, `:analytic-distribution/*`, `:posting/analytic-distributions`
-- [ ] `tax/apply` — uses `TaxProvider` protocol to expand a base posting into base + tax postings
-- [ ] `StaticTableProvider` reading EDN tax definitions
-- [ ] `sealing/transact-with-sealing` — middleware refusing silent retract of `:posting/posted-at`-marked entities
-- [ ] `balance/account-balance` and `ledger/postings-against` — bitemporal-aware (as-of-tx, as-of-valid)
-- [ ] `trial/trial-balance` — date-range, bitemporal
-- [ ] `period/open?`, `period/close!`, `period/lock-tx`
-- [ ] `import/beancount` — parser + transactor + dumper; round-trip test against `examples/example.beancount`
-- [ ] Test coverage: schema invariants, sum-to-zero, sealing, bitemporal queries, Beancount round-trip
+- [x] period.clj: refuse postings whose tx's `:tx/valid-from` (kontor.bitemporal, ADR-048; was `:posting/valid-from` per ADR-008) falls inside a closed `:period/locked-at` period
+- [x] state-machine.clj: enforce :transaction/state lifecycle (draft → posted → cancelled)
+- [x] Schema additions for analytic accounts (ADR-012): `:analytic-plan/*`, `:analytic-account/*`, `:analytic-distribution/*`, `:posting/analytic-distributions`
+- [x] `tax/apply` — uses `TaxProvider` protocol to expand a base posting into base + tax postings
+- [x] `StaticTableProvider` reading EDN tax definitions
+- [x] `sealing/transact-with-sealing` — middleware refusing silent retract of `:posting/posted-at`-marked entities
+- [x] `balance/account-balance` and `ledger/postings-against` — bitemporal-aware (as-of-tx, as-of-valid via `kontor.bitemporal/posting-vf` per ADR-048)
+- [x] `trial/trial-balance` — date-range, bitemporal
+- [x] `period/open?`, `period/close!`, `period/lock-tx`
+- [x] `import_/beancount` — parser + transactor + dumper; round-trip test against `examples/example.beancount`
+- [x] Test coverage: schema invariants, sum-to-zero, sealing, bitemporal queries, Beancount round-trip
 
 **Acceptance**: a representative Beancount example file round-trips byte-clean (modulo whitespace), tax + sealing tests pass, trial balance computes correctly across a known fixture.
 
-## Phase 1.5 — Declarative report engine (1-2 weeks)
+## Phase 1.5 — Declarative report engine (DONE)
 
-- [ ] Schema: `report`, `report-line` (hierarchical), `report-expression`
-- [ ] Engines: `:account-codes`, `:tax-tags`, `:aggregation`, `:domain` (Datalog-shaped)
-- [ ] Compute: walk the report tree, evaluate expressions, materialize per-period values
-- [ ] First test reports: P&L, Balance Sheet (against the fixture from Phase 1)
+- [x] Schema: `report`, `report-line` (hierarchical), `report-expression`
+- [x] Engines: `:account-codes`, `:tax-tags`. Further engines (`:aggregation`, `:domain`) deferred until a real consumer needs them — per ADR-014 we don't build the broader Odoo shape until a second country forces it.
+- [x] Compute: walk the report tree, evaluate expressions, materialize per-period values
+- [x] First test reports: P&L, Balance Sheet (kontor.financial-statements)
 
-## Phase 2-DE — Germany (3-4 weeks)
+## Phase 2-DE — Germany (DONE — Stage L baseline)
 
-Separate artifact: `kontor-l10n-de` (GPLv3, sourced from Tryton `account_de_skr03` + GnuCash community SKR04 + Odoo cross-check).
+Lives in `modules/l10n-de/` (GPLv3, sourced from Tryton `account_de_skr04` + GnuCash community SKR04 + Odoo cross-check).
 
-- [ ] `resources/skr03.edn` and `resources/skr04.edn` — chart of accounts as data
-- [ ] `resources/vat-tags.edn` — VAT report tag definitions
-- [ ] `resources/vat-report-2026.edn` — Umsatzsteuer-Voranmeldung shape
-- [ ] `StaticTableProvider` config for DE (standard 19% + reduced 7% + zero + reverse charge + EU intra-community)
-- [ ] `kontor-einvoice-de` (separate artifact, EPL-1.0): Mustang wrapper for Factur-X read/write/validate
-- [ ] `kontor-export-gobd` (separate artifact): GoBD/GDPdU 14-file ASCII bundle generator
-- [ ] `kontor-import-datev` (separate artifact): DATEV CSV import (the SMB exchange format with their accountant)
-- [ ] CI: KoSIT validator gate on every Factur-X output
+- [x] SKR04 chart of accounts as data (`modules/l10n-de/.../chart.clj`); SKR03 deferred until a customer requests it
+- [x] VAT report tag definitions + UStVA Kennzahlen
+- [x] UStVA monthly return (`modules/l10n-de/.../ustva.clj`)
+- [x] `StaticTableProvider` config for DE (standard 19% + reduced 7% + zero + reverse charge + EU intra-community)
+- [x] DATEV EXTF exporter (`modules/l10n-de/.../datev.clj`)
+- [x] Year-end closing (`modules/l10n-de/.../closing.clj`)
+- [x] EÜR + BWA + P&L year-end (`modules/l10n-de/.../eur.clj`)
+- [x] `modules/einvoice-de/` — Factur-X / XRechnung / ZUGFeRD wrapper
 
-**Acceptance**: a generated Factur-X invoice passes KoSIT validation; SKR03/SKR04 charts load and pass schema validation; a small fixture invoice → posted journal entry → VAT report shows correct figures.
+**Acceptance met** — see `doc/showcases/01_de_b2b_factur_x.clj` (DE Mahnverfahren end-to-end).
 
 ## Phase 3 — Beleg integration (1-2 weeks)
 
@@ -207,13 +207,20 @@ Hybrid build order (per research notes 09-12; the foundations get 3-4 weeks of d
   - [x] **ADR-041 Workflow extensions** — time-based transitions via `:status-transition/auto-after-millis` + `sweep-time-based!` sweeper + `:side-effect-intent` kernel entity with `kontor.side-effect` dispatcher + `bulk-record-status-change-tx-data` + `:account-type-direction` data table replacing hardcoded debit/credit map.
 - [x] **Stage K — kontor-procurement** — Full P2P + reverse flow. ADR-042 design (`a08c239`) + 4 implementation commits: schema/seeds (`35fcf12`), forward 3-way match + bridge polymorphism (`16a7f4a`), reverse flow + credit-memo (`2e570d8`), drop-ship + `:order-item-assoc` (`1b69e06`). 708/2554 baseline.
 - [x] **Stage K-5 — review-after fixes** (commit `3eb8a0a`). 6 P0 from code-review + market-pain delta closed: `post-receipt-with-inventory!` shipped, `:requires-three-way-match-pass` rule wired, credit/debit-memo polarity flip, three-way invariant filters by receipt status + nets returns, 3 missing state transitions, `:receipt-invoice-billing` junction live, end-to-end P2P posting test. Bridge `:purchase + :direct → :gr-ir-clearing` (canonical receipt-first). 718/2576 baseline.
-- [ ] **Stage L — kontor-collections** — AR collections companion + kernel `:payment-application` partial-payment primitive. Five commits: ADR-043 doc + research note 15; kernel `:payment-application` (schema + helpers + aging extension); collections companion schema + state machines + seeds; case + promise + dispute + credit-hold helpers; dunning policy + letters + frequency-cap + enhanced aging. ADRs note `:invoice/collections-status` facet (distinct from procurement's `:invoice/match-status`), per-entity credit-hold overlay (default scalar + `:credit-hold` row), dunning letters as typed `:audit-doc`. (~4-5 weeks.)
+- [x] **Stage L — kontor-collections** — Done. AR collections companion + kernel `:payment-application` partial-payment primitive landed. Five commits per the original plan. Post-Stage-L review delivered ADR-048 (valid-time normalization to `:tx/valid-from`) and the six research notes (17-21) + Agent A code review. P0/P1 cleanup completed 2026-05-13: kernel `kontor.invoice` ported to status machine (P0-4α); `credit-hold` + `dunning-pause` ported to status machine (P0-5); four denorms dropped (P0-6); `:collection-case/{opened-at,closed-at}` + `:credit-hold/placed-at` deferred as tuple-identity-coupled.
 - [ ] **Stage L′ — kontor-asset** — fixed-asset register + depreciation schedule (consumes ADR-032 `:schedule`). (~2 weeks.) (Stage-L precedence flipped 2026-05-12 per ADR-043: collections is the natural P2P → O2C continuation; revrec / subscription consume the partial-payment primitive collections lands.)
-- [ ] **Stage M — kontor-revrec** — ASC 606 / IFRS 15 over-time revenue recognition (consumes Stage J + ADR-032 + Stage L `:payment-application`). (~3 weeks.)
-- [ ] **Stage N — kontor-subscription** — recurring billing with catalog versioning (Kill Bill-pattern). (~2 weeks.)
-- [ ] **Stage O — kontor-project** — project + task + timesheet (timesheet = analytic-line per Odoo pattern, no new entity). (~2 weeks.)
-- [ ] **Stage P — kontor-commerce-adapter** — UBL 2.1 + Peppol BIS round-trip for B2B document interchange. (~1 week per integration.)
-- [ ] **Stage Q — kontor-hr + kontor-payroll-de-datev** — `:person` + `:employment` (effective-dated, multi-job per Workday pattern) + per-jurisdiction PayrollProvider adapter for DE (DATEV LODAS / Lohn und Gehalt).
+- [ ] **Stage M — kontor-legal** — `:legal-hold` (kernel; extends ADR-007 purge middleware — Agent B's biggest structural lever) + `:retention-policy` (kernel shape + l10n data) + `:audit-doc/privilege` keyword (kernel). Heavy companions (`kontor-counsel`, `kontor-privacy`, `kontor-clm`) gated on user-story pull. (~2-3 weeks.) Research: `doc/research/17-vendor-legal-process.md`.
+- [ ] **Stage N — kontor-revrec** — ASC 606 / IFRS 15 over-time revenue recognition (consumes Stage J + ADR-032 + Stage L `:payment-application`). (~3 weeks.)
+- [ ] **Stage O — kontor-subscription** — recurring billing with catalog versioning (Kill Bill-pattern). (~2 weeks.)
+- [ ] **Stage P — kontor-project** — project + task + timesheet (timesheet = analytic-line per Odoo pattern, no new entity). (~2 weeks.)
+- [ ] **Stage Q — kontor-commerce-adapter** — UBL 2.1 + Peppol BIS round-trip for B2B document interchange. (~1 week per integration.)
+- [ ] **Stage R — kontor-hr + kontor-payroll-de-datev** — `:person` + `:employment` (effective-dated, multi-job per Workday pattern) + per-jurisdiction PayrollProvider adapter for DE (DATEV LODAS / Lohn und Gehalt).
+
+Candidate companions surfaced by the post-Stage-L research (each gated on a real consumer story):
+
+- **kontor-mcp** — Model Context Protocol server exposing read/reason/write tools over the kontor substrate. Bitemporal "what did the model see" replay is the killer feature. Companion artifact, not kernel. Research: `doc/research/20-ai-native-business-os.md`.
+- **kontor-forecast** — Probabilistic + numerical forecasting on top of `kontor` + `simmis` + `stratum` + `raster` + (anglican OR raster-native MCMC). Worked example: 12-month rolling cash-flow fan-chart. License posture deferred (Anglican is GPL-3.0; raster-native MCMC keeps the stack permissive). Research: `doc/research/19-probabilistic-numerical-integration.md`.
+- **kontor-workflow** — `:workflow-instance` correlation primitive (Agent F's Option B — ~7 attrs, back-refs on `:status-history` and `:side-effect-intent`) + OCEL-2.0 process-mining emit. ~4-6 weeks for the mining MVP. Research: `doc/research/21-process-workflow-modeling.md`.
 
 Deferred until concrete consumer demand: kontor-mfg, kontor-helpdesk, kontor-field-service, kontor-fleet, kontor-clm, kontor-marketing, kontor-crm. The "commodity SaaS" verdict from research note 10 §3: most of these have license-clean OSS or paid SaaS that we'd integrate with rather than reimplement.
 
@@ -231,12 +238,12 @@ Phase 1 ships before Track B lands. When Track B lands, `audit.clj` in this repo
 
 ## Cross-cutting: bank-statement importers
 
-Used by all phases:
+Per-country bank-statement parsers live under `modules/bank-<cc>/`. Each produces **suggested** postings via `kontor.reconciliation`, never auto-posted. Reconciliation UI lives in consumers (beleg).
 
-- [ ] `kontor-bank-camt053` (separate artifact): ISO 20022 CAMT.053 parser → unposted suggestions
-- [ ] `kontor-bank-nacha` (Phase 5-US, separate artifact): NACHA ACH import
+Shipped: `bank-at`, `bank-ca`, `bank-de`, `bank-fr`, `bank-us` (kernel-level CSV importer in `kontor.bank-csv` + per-bank format adapters).
 
-Both produce **suggested** postings, never auto-posted. Reconciliation UI lives in consumers (beleg).
+- [ ] CAMT.053 (ISO 20022) parser — pending; planned as a shared adapter once a second country needs it
+- [ ] NACHA ACH import — Phase 5-US, separate artifact
 
 ---
 
