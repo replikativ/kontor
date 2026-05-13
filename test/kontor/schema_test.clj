@@ -116,11 +116,22 @@
 
 (deftest core-schema-summary-returns-sorted-vector
   (testing "REPL helper schema-summary returns a sorted vector of idents
-            scoped to kernel namespaces"
+            that excludes datahike-internal and invariant scaffolding
+            namespaces (inverted allowlist → denylist per P1-9)"
     (let [conn (core/create-test-db)
-          summary (core/schema-summary conn)]
+          summary (core/schema-summary conn)
+          forbidden #{"db" "db.alter" "db.attr" "db.bootstrap"
+                      "db.cardinality" "db.entity" "db.excise" "db.fn"
+                      "db.install" "db.lang" "db.part" "db.sys"
+                      "db.type" "db.unique" "fressian" "invariant"}]
       (is (vector? summary))
       (is (= summary (sort summary)))
-      (is (every? (fn [k]
-                    (contains? expected-namespaces (namespace k)))
-                  summary)))))
+      (is (every? (fn [k] (not (contains? forbidden (namespace k))))
+                  summary)
+          "schema-summary should not surface datahike internals.")
+      ;; All previously-allow-listed kernel namespaces still appear.
+      ;; This guards against an over-eager denylist regression.
+      (is (every? (fn [ns]
+                    (some #(= ns (namespace %)) summary))
+                  expected-namespaces)
+          "All documented kernel namespaces remain present."))))

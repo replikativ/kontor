@@ -1,4 +1,10 @@
 (ns kontor.import-.beancount
+  ;; Directory is `import_` (trailing underscore) because `import` is
+  ;; a reserved special-form name in Clojure / a JVM-level keyword.
+  ;; Clojure's package-name-to-directory rule munges the underscore in
+  ;; the namespace to a hyphen — so `kontor.import-.beancount` lives
+  ;; in `src/kontor/import_/beancount.clj`. No work-around; this is
+  ;; the standard escape hatch. Don't try to rename the directory.
   "Beancount round-trip — Phase 1 acceptance test (ADR-009).
 
    Covers the load-bearing subset of Beancount syntax:

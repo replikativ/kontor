@@ -120,38 +120,30 @@
 ;; REPL conveniences
 ;; ============================================================================
 
+(def ^:private internal-namespaces
+  "Datahike-internal + datopia-invariant + provider attribute
+   namespaces that schema-summary excludes. Everything else is
+   considered a domain attribute and surfaced to the REPL user.
+   Inverted from a hard-coded allowlist 2026-05-13 (P1-9 review fix)
+   so newly-added kernel and companion namespaces appear without an
+   allowlist edit."
+  #{"db" "db.alter" "db.attr" "db.bootstrap" "db.cardinality" "db.entity"
+    "db.excise" "db.fn" "db.install" "db.lang" "db.part" "db.sys"
+    "db.type" "db.unique" "fressian"
+    ;; datopia/invariant scaffolding
+    "invariant"})
+
 (defn schema-summary
-  "Return a sorted list of all kernel attribute idents currently in
-   the database. Useful for poking at schema in the REPL."
+  "Return a sorted list of all attribute idents currently in the
+   database, excluding datahike-internal and invariant-scaffolding
+   namespaces. Useful for poking at the schema in the REPL —
+   surfaces every kernel + companion-module attribute installed in
+   the connection."
   [conn]
   (let [db (d/db conn)]
     (->> (d/q '[:find [?ident ...]
                 :where [_ :db/ident ?ident]]
               db)
-         (filter (fn [k]
-                   (contains?
-                    #{"create" "write"
-                      "commodity" "lot"
-                      "account" "account-tag"
-                      "journal" "partner" "fiscal-position"
-                      "tax" "tax-rep" "tax-group"
-                      "period" "balance-assertion"
-                      "transaction" "posting"
-                      "analytic-plan" "analytic-account" "analytic-distribution"
-                      "ledger"
-                      "country" "country-code" "country-group"
-                      "state" "state-code"
-                      "attestation" "complemento"
-                      "valuation-book"
-                      "valuation-layer" "layer-consumption" "layer-adjustment"
-                      "entity"
-                      "schedule" "schedule-occurrence"
-                      "status-transition" "status-history"
-                      "audit-doc" "approval-policy"
-                      "partner-merge" "bank-account"
-                      "partner-bank-account" "partner-tag"
-                      "partner-tax-id"
-                      "side-effect-intent" "account-type-direction"}
-                    (namespace k))))
+         (remove #(contains? internal-namespaces (namespace %)))
          sort
          vec)))
