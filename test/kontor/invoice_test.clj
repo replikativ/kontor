@@ -130,7 +130,7 @@
                   db transaction-eid)
         by-code (into {} (map (juxt first second) rows))]
     (is (= :sent (:invoice/status inv)))
-    (is (some? (:invoice/sent-at inv)))
+    ;; Transition timestamp now lives in :status-history via kbt
     (is (= transaction-eid (-> inv :invoice/transaction :db/id)))
     ;; Receivable +1891.50, Revenue -1589.50, USt -302.00
     (is (= 1891.50M (get by-code "1400")))
@@ -190,9 +190,8 @@
           settled-tx-eids (:transactions (:match best))
           _ (inv/flip-paid-on-settlement conn settled-tx-eids)
           db (d/db conn)
-          inv (d/pull db [:invoice/status :invoice/paid-at] inv-eid)]
-      (is (= :paid (:invoice/status inv)))
-      (is (some? (:invoice/paid-at inv))))))
+          inv (d/pull db [:invoice/status] inv-eid)]
+      (is (= :paid (:invoice/status inv))))))
 
 ;; ============================================================================
 ;; cancel!
@@ -206,9 +205,8 @@
                        :where [?e :invoice/external-id "INV-2026-0001"]]
                      db)]
     (inv/cancel! conn inv-eid)
-    (let [inv (d/pull (d/db conn) [:invoice/status :invoice/cancelled-at] inv-eid)]
-      (is (= :cancelled (:invoice/status inv)))
-      (is (some? (:invoice/cancelled-at inv))))))
+    (let [inv (d/pull (d/db conn) [:invoice/status] inv-eid)]
+      (is (= :cancelled (:invoice/status inv))))))
 
 (deftest cancel-sent-creates-reversal-transaction
   (let [conn (bootstrap)

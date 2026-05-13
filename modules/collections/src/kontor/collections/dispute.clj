@@ -9,6 +9,7 @@
    the dispute is line-level (the market-pain #18 fix vs SAP/NetSuite
    which only model invoice-level)."
   (:require [datahike.api :as d]
+            [kontor.bitemporal :as kbt]
             [kontor.status-machine :as sm]))
 
 ;; ============================================================================
@@ -93,9 +94,12 @@
      :scope          ref to :invoice-line for line-level scope
      :sla-deadline   instant
      :notes          string
-     :supporting-doc ref to :audit-doc"
+     :supporting-doc ref to :audit-doc
+     :vt-from        kontor.bitemporal vt-from (default: now)
+     :vt-to          kontor.bitemporal vt-to (default: open)"
   [conn {:keys [external-id invoice scope disputed-amount reason-code
-                opened-by-uid sla-deadline notes supporting-doc]}]
+                opened-by-uid sla-deadline notes supporting-doc
+                vt-from vt-to]}]
   (when-not external-id     (throw (ex-info ":external-id required" {})))
   (when-not invoice         (throw (ex-info ":invoice required" {})))
   (when-not disputed-amount (throw (ex-info ":disputed-amount required" {})))
@@ -109,7 +113,6 @@
                      :dispute/invoice invoice
                      :dispute/disputed-amount disputed-amount
                      :dispute/reason-code reason-code
-                     :dispute/opened-at opened-at
                      :dispute/opened-by-uid opened-by-uid
                      :dispute/state :open}
               scope          (assoc :dispute/scope scope)
@@ -126,35 +129,51 @@
                     :changed-at opened-at
                     :changed-by-uid opened-by-uid
                     :reason reason-code})
-        all-tx (into [row] status-tx)]
-    (d/transact conn all-tx)))
+        core-tx (into [row] status-tx)
+        vf (or vt-from opened-at)
+        vt (or vt-to   kbt/forever)]
+    (d/transact conn (kbt/with-vt core-tx vf vt))))
 
 (defn advance-state!
   "Drive a dispute through the state machine (:open → :under-review
-   → :resolved | :escalated). Caller passes :to."
+   → :resolved | :escalated). Caller passes :to.
+
+   Optional :vt-from / :vt-to stamp the tx with kontor.bitemporal
+   valid-time (default: now)."
   [conn {:keys [dispute to changed-by-uid reason reason-note
-                supporting-doc]}]
-  (let [eid (resolve-dispute (d/db conn) dispute)
-        _ (when-not eid (throw (ex-info "Dispute not found" {:spec dispute})))]
-    (sm/record-status-change! conn
-                              (cond-> {:entity eid
-                                       :entity-type :dispute
-                                       :facet :dispute/state
-                                       :to to
-                                       :changed-by-uid changed-by-uid}
-                                reason         (assoc :reason reason)
-                                reason-note    (assoc :reason-note reason-note)
-                                supporting-doc (assoc :supporting-doc supporting-doc)))))
+                supporting-doc vt-from vt-to]}]
+  (let [db (d/db conn)
+        eid (resolve-dispute db dispute)
+        _ (when-not eid (throw (ex-info "Dispute not found" {:spec dispute})))
+        now (java.util.Date.)
+        status-tx (sm/record-status-change-tx-data
+                   db
+                   (cond-> {:entity eid
+                            :entity-type :dispute
+                            :facet :dispute/state
+                            :to to
+                            :changed-at now
+                            :changed-by-uid changed-by-uid}
+                     reason         (assoc :reason reason)
+                     reason-note    (assoc :reason-note reason-note)
+                     supporting-doc (assoc :supporting-doc supporting-doc)))]
+    (d/transact conn (kbt/with-vt status-tx
+                                  (or vt-from now)
+                                  (or vt-to kbt/forever)))))
 
 (defn resolve-dispute!
   "Resolve a dispute. Atomically:
      1. Sets :dispute/state → :resolved via the status machine.
-     2. Writes :dispute/resolution, :resolved-at, :resolved-by-uid.
+     2. Writes :dispute/resolution, :resolved-by-uid.
+
+   :resolved-at is no longer denormalized — read it from
+   `:status-history` (the row that transitioned to :resolved) or
+   from the tx's `:tx/valid-from` via kontor.bitemporal.
 
    Required: :dispute, :resolution keyword, :resolved-by-uid.
-   Optional: :reason-note, :supporting-doc."
+   Optional: :reason-note, :supporting-doc, :vt-from, :vt-to."
   [conn {:keys [dispute resolution resolved-by-uid reason-note
-                supporting-doc]}]
+                supporting-doc vt-from vt-to]}]
   (when-not resolution      (throw (ex-info ":resolution required" {})))
   (when-not resolved-by-uid (throw (ex-info ":resolved-by-uid required" {})))
   (let [db (d/db conn)
@@ -174,8 +193,10 @@
                      supporting-doc (assoc :supporting-doc supporting-doc)))
         attrs-update (cond-> {:db/id eid
                               :dispute/resolution resolution
-                              :dispute/resolved-at resolved-at
                               :dispute/resolved-by-uid resolved-by-uid}
                        supporting-doc (assoc :dispute/supporting-doc
-                                             supporting-doc))]
-    (d/transact conn (into [attrs-update] status-tx))))
+                                             supporting-doc))
+        core-tx (into [attrs-update] status-tx)
+        vf (or vt-from resolved-at)
+        vt (or vt-to   kbt/forever)]
+    (d/transact conn (kbt/with-vt core-tx vf vt))))

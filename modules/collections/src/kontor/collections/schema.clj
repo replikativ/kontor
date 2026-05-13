@@ -202,9 +202,10 @@
                        :tax :credit-misapplied :unauthorized :other}.
                      Extensible per l10n."}
 
-   {:db/ident       :dispute/opened-at
-    :db/valueType   :db.type/instant
-    :db/cardinality :db.cardinality/one}
+   ;; NOTE: :dispute/opened-at / :resolved-at removed — resolvable
+   ;; via (kbt/timeline db dispute :dispute/state) — the first row's
+   ;; :status-history/changed-at is opened-at; the row that
+   ;; transitioned to :resolved carries resolved-at.
 
    {:db/ident       :dispute/opened-by-uid
     :db/valueType   :db.type/ref
@@ -214,10 +215,6 @@
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Derived from segment + reason. SLAs vary."}
-
-   {:db/ident       :dispute/resolved-at
-    :db/valueType   :db.type/instant
-    :db/cardinality :db.cardinality/one}
 
    {:db/ident       :dispute/resolved-by-uid
     :db/valueType   :db.type/ref

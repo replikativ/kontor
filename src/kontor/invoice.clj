@@ -17,6 +17,7 @@
    bring numbers from elsewhere (beleg's existing invoice schema,
    external billing system) avoids round-trip rounding mismatches."
   (:require [datahike.api :as d]
+            [kontor.bitemporal :as kbt]
             [kontor.payment-term :as pt]
             [kontor.posting :as posting])
   (:import [java.util Date]))
@@ -144,8 +145,14 @@
    moves status to :sent.
 
    `posting-builder` returns a map with :transaction + :postings,
-   the same shape posting/build-transaction accepts."
-  [conn invoice-eid posting-builder]
+   the same shape posting/build-transaction accepts.
+
+   `opts`: optional `:vt-from` / `:vt-to` to stamp the status-
+   transition tx with kontor.bitemporal valid-time. Default
+   `:vt-from = now`."
+  ([conn invoice-eid posting-builder]
+   (send! conn invoice-eid posting-builder nil))
+  ([conn invoice-eid posting-builder {:keys [vt-from vt-to]}]
   (let [db (d/db conn)
         inv (d/pull db
                     [:db/id :invoice/external-id :invoice/status
@@ -191,11 +198,13 @@
                             :where [?t :transaction/external-id ?ext]]
                           (d/db conn) ext-id))]
       (d/transact conn
-                  [{:db/id invoice-eid
-                    :invoice/status :sent
-                    :invoice/sent-at now
-                    :invoice/transaction tx-eid}])
-      {:transaction-eid tx-eid})))
+                  (kbt/with-vt
+                    [{:db/id invoice-eid
+                      :invoice/status :sent
+                      :invoice/transaction tx-eid}]
+                    (or vt-from now)
+                    (or vt-to kbt/forever)))
+      {:transaction-eid tx-eid}))))
 
 ;; ============================================================================
 ;; mark-paid! / cancel!
@@ -204,32 +213,47 @@
 (defn mark-paid!
   "Flip a :sent invoice to :paid. Called by the reconciliation hook
    when a bank-line settles the invoice's transaction; can also be
-   invoked directly when payment is recorded out-of-band."
-  [conn invoice-eid]
-  (d/transact conn
-              [{:db/id invoice-eid
-                :invoice/status :paid
-                :invoice/paid-at (Date.)}]))
+   invoked directly when payment is recorded out-of-band.
+
+   `opts`: optional `:vt-from` / `:vt-to` to stamp the tx with
+   kontor.bitemporal valid-time. Default `:vt-from = now`."
+  ([conn invoice-eid]
+   (mark-paid! conn invoice-eid nil))
+  ([conn invoice-eid {:keys [vt-from vt-to]}]
+   (let [now (Date.)]
+     (d/transact conn
+                 (kbt/with-vt
+                   [{:db/id invoice-eid :invoice/status :paid}]
+                   (or vt-from now)
+                   (or vt-to kbt/forever))))))
 
 (defn cancel!
   "Cancel a :sent or :draft invoice. For :draft, just flips status.
    For :sent, also creates a reversal transaction that negates each
    posting and points at the original via :transaction/reverses
-   (kernel ADR-007: never edit posted entries; reverse + re-post)."
-  [conn invoice-eid]
+   (kernel ADR-007: never edit posted entries; reverse + re-post).
+
+   `opts`: optional `:vt-from` / `:vt-to` to stamp both the reversal
+   tx and the status-flip tx with kontor.bitemporal valid-time.
+   Default `:vt-from = now`."
+  ([conn invoice-eid]
+   (cancel! conn invoice-eid nil))
+  ([conn invoice-eid {:keys [vt-from vt-to]}]
   (let [db (d/db conn)
         inv (d/pull db [:invoice/status :invoice/external-id
                         {:invoice/transaction
                          [:db/id :transaction/external-id
                           {:transaction/journal [:db/id]}]}]
                     invoice-eid)
-        now (Date.)]
+        now (Date.)
+        vf  (or vt-from now)
+        vt  (or vt-to kbt/forever)]
     (case (:invoice/status inv)
       :draft
       (d/transact conn
-                  [{:db/id invoice-eid
-                    :invoice/status :cancelled
-                    :invoice/cancelled-at now}])
+                  (kbt/with-vt
+                    [{:db/id invoice-eid :invoice/status :cancelled}]
+                    vf vt))
       :sent
       (let [original-tx (:invoice/transaction inv)
             original-tx-eid (:db/id original-tx)
@@ -258,14 +282,14 @@
                            :transaction/posted-at now
                            :transaction/reverses original-tx-eid}
                           :postings postings})]
-        (d/transact conn reversal-tx)
+        (d/transact conn (kbt/with-vt reversal-tx vf vt))
         (d/transact conn
-                    [{:db/id invoice-eid
-                      :invoice/status :cancelled
-                      :invoice/cancelled-at now}]))
+                    (kbt/with-vt
+                      [{:db/id invoice-eid :invoice/status :cancelled}]
+                      vf vt)))
       (throw (ex-info "Cannot cancel invoice in current status"
                       {:invoice-eid invoice-eid
-                       :status (:invoice/status inv)})))))
+                       :status (:invoice/status inv)}))))))
 
 ;; ============================================================================
 ;; Reconciliation hook
@@ -280,18 +304,25 @@
    Idempotent: marking an already-paid invoice is a no-op assertion.
 
    Typically called from a wrapper around recon/commit-match!
-   See `(reconcile-and-mark-paid!)` below for the convenience form."
-  [conn settled-tx-eids]
-  (let [db (d/db conn)
-        invoice-eids (d/q '[:find [?inv ...]
-                            :in $ [?tx ...]
-                            :where [?inv :invoice/transaction ?tx]]
-                          db settled-tx-eids)
-        now (Date.)]
-    (when (seq invoice-eids)
-      (d/transact conn
-                  (mapv (fn [eid]
-                          {:db/id eid
-                           :invoice/status :paid
-                           :invoice/paid-at now})
-                        invoice-eids)))))
+   See `(reconcile-and-mark-paid!)` below for the convenience form.
+
+   `opts`: optional `:vt-from` / `:vt-to` to stamp the tx with
+   kontor.bitemporal valid-time (e.g. bank-line's value-date)."
+  ([conn settled-tx-eids]
+   (flip-paid-on-settlement conn settled-tx-eids nil))
+  ([conn settled-tx-eids {:keys [vt-from vt-to]}]
+   (let [db (d/db conn)
+         invoice-eids (d/q '[:find [?inv ...]
+                             :in $ [?tx ...]
+                             :where [?inv :invoice/transaction ?tx]]
+                           db settled-tx-eids)
+         now (Date.)
+         vf  (or vt-from now)
+         vt  (or vt-to kbt/forever)]
+     (when (seq invoice-eids)
+       (d/transact conn
+                   (kbt/with-vt
+                     (mapv (fn [eid]
+                             {:db/id eid :invoice/status :paid})
+                           invoice-eids)
+                     vf vt))))))

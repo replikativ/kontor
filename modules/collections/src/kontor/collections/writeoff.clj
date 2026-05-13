@@ -13,6 +13,7 @@
    :gl-account-default three-tier pattern as the invoice bridge
    (ADR-036, ADR-041 :account-type-direction)."
   (:require [datahike.api :as d]
+            [kontor.bitemporal :as kbt]
             [kontor.collections.case :as kcase]
             [kontor.payment-application :as papp]
             [kontor.posting :as posting]
@@ -112,10 +113,12 @@
      :reason-note     free-text
      :ledger-ref      override the primary ledger
      :effective-date  instant (default now)
+     :vt-from         valid-time start (default :effective-date)
+     :vt-to           valid-time end (default :kbt/forever)
 
    Returns {:tx-report :transaction-eids :case-eid}."
   [conn {:keys [case written-off-by journal-ref reason supporting-doc
-                reason-note ledger-ref effective-date]}]
+                reason-note ledger-ref effective-date vt-from vt-to]}]
   (when-not case            (throw (ex-info ":case required" {})))
   (when-not written-off-by  (throw (ex-info ":written-off-by required" {})))
   (when-not journal-ref     (throw (ex-info ":journal-ref required" {})))
@@ -211,7 +214,9 @@
                      :collection-case/supporting-doc supporting-doc
                      :collection-case/closed-at effective-date}
         all-tx (vec (concat all-posting-tx [case-update] status-tx))
-        tx-report (d/transact conn all-tx)]
+        tx-report (d/transact conn (kbt/with-vt all-tx
+                                                (or vt-from effective-date)
+                                                (or vt-to kbt/forever)))]
     {:tx-report tx-report
      :case-eid case-eid
      :invoices-written-off (count opens)

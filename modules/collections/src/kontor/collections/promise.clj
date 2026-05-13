@@ -13,6 +13,7 @@
    the `:promised-by-date` has passed without a matching
    `:payment-application`."
   (:require [datahike.api :as d]
+            [kontor.bitemporal :as kbt]
             [kontor.status-machine :as sm]))
 
 ;; ============================================================================
@@ -91,7 +92,7 @@
    :supporting-doc."
   [conn {:keys [external-id case invoice amount commodity
                 promised-by-date captured-by-uid captured-via notes
-                supporting-doc]}]
+                supporting-doc vt-from vt-to]}]
   (when-not external-id      (throw (ex-info ":external-id required" {})))
   (when-not case             (throw (ex-info ":case required" {})))
   (when-not amount           (throw (ex-info ":amount required" {})))
@@ -126,8 +127,31 @@
                     :changed-at recorded-at
                     :changed-by-uid captured-by-uid
                     :reason :promise-recorded})
-        all-tx (into [row] status-tx)]
+        all-tx (kbt/with-vt (into [row] status-tx)
+                            (or vt-from recorded-at)
+                            (or vt-to kbt/forever))]
     (d/transact conn all-tx)))
+
+(defn- transition-promise! [conn {:keys [promise to changed-by-uid reason
+                                          reason-note vt-from vt-to]
+                                   :as opts}]
+  (let [db (d/db conn)
+        eid (resolve-promise db promise)
+        _ (when-not eid (throw (ex-info "Promise not found" {:spec promise})))
+        now (java.util.Date.)
+        status-tx (sm/record-status-change-tx-data
+                   db
+                   (cond-> {:entity eid
+                            :entity-type :payment-promise
+                            :facet :payment-promise/status
+                            :to to
+                            :changed-at now
+                            :changed-by-uid changed-by-uid}
+                     reason      (assoc :reason reason)
+                     reason-note (assoc :reason-note reason-note)))]
+    (d/transact conn (kbt/with-vt status-tx
+                                  (or vt-from now)
+                                  (or vt-to kbt/forever)))))
 
 (defn mark-promise-kept!
   "Promise → :kept (a :payment-application reduced the open balance
@@ -135,33 +159,26 @@
    :matching-application if available; we record it as a reference
    for audit."
   [conn {:keys [promise matching-application changed-by-uid reason
-                reason-note]}]
-  (let [eid (resolve-promise (d/db conn) promise)
-        _ (when-not eid (throw (ex-info "Promise not found" {:spec promise})))]
-    (sm/record-status-change! conn
-                              (cond-> {:entity eid
-                                       :entity-type :payment-promise
-                                       :facet :payment-promise/status
-                                       :to :kept
-                                       :changed-by-uid changed-by-uid}
-                                reason      (assoc :reason (or reason :promise-kept))
-                                reason-note (assoc :reason-note reason-note)))))
+                reason-note vt-from vt-to]}]
+  (transition-promise! conn {:promise promise
+                             :to :kept
+                             :changed-by-uid changed-by-uid
+                             :reason (or reason :promise-kept)
+                             :reason-note reason-note
+                             :vt-from vt-from :vt-to vt-to}))
 
 (defn mark-promise-broken!
   "Promise → :broken. Usually fired by `sweep-broken-promises!` when
    :promised-by-date passes without a matching payment, but can be
    called manually."
-  [conn {:keys [promise changed-by-uid reason reason-note]}]
-  (let [eid (resolve-promise (d/db conn) promise)
-        _ (when-not eid (throw (ex-info "Promise not found" {:spec promise})))]
-    (sm/record-status-change! conn
-                              (cond-> {:entity eid
-                                       :entity-type :payment-promise
-                                       :facet :payment-promise/status
-                                       :to :broken
-                                       :changed-by-uid changed-by-uid}
-                                reason      (assoc :reason (or reason :promise-broken))
-                                reason-note (assoc :reason-note reason-note)))))
+  [conn {:keys [promise changed-by-uid reason reason-note
+                vt-from vt-to]}]
+  (transition-promise! conn {:promise promise
+                             :to :broken
+                             :changed-by-uid changed-by-uid
+                             :reason (or reason :promise-broken)
+                             :reason-note reason-note
+                             :vt-from vt-from :vt-to vt-to}))
 
 (defn renegotiate!
   "Promise → :renegotiated (replaced by a new promise). Doesn't

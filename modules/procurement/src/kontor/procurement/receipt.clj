@@ -20,6 +20,7 @@
    invariant per ADR-042."
   (:require [clojure.walk :as walk]
             [datahike.api :as d]
+            [kontor.bitemporal :as kbt]
             [kontor.posting :as posting]
             [kontor.status-machine :as sm]
             [kontor.valuation :as valuation]))
@@ -212,9 +213,14 @@
      :account-fn   override role → account resolver. Default is three-
                    tier :gl-account-default lookup against the order's
                    entity then tenant-wide.
-     :effective-date  instant (default now).
+     :effective-date  instant (default now). Also drives the tx's
+                      `:tx/valid-from` for kontor.bitemporal when
+                      `:vt-from` is omitted.
      :changed-by-uid  ref to :create/uid for the status-history row.
      :reason          status-history :reason keyword.
+     :vt-from         kontor.bitemporal valid-from (default
+                      `:effective-date`).
+     :vt-to           kontor.bitemporal valid-to (default: open).
 
    Returns the d/transact report.
 
@@ -223,7 +229,7 @@
    item's tx-data is shifted by (i * 1000)."
   [conn receipt-spec {:keys [provider book journal-ref ledger-ref
                              account-fn effective-date changed-by-uid
-                             reason]}]
+                             reason vt-from vt-to]}]
   (when-not provider    (throw (ex-info ":provider required" {:type :receipt/missing-provider})))
   (when-not journal-ref (throw (ex-info ":journal-ref required" {:type :receipt/missing-journal})))
   (let [db (d/db conn)
@@ -297,7 +303,10 @@
                             :changed-at eff-date}
                      changed-by-uid (assoc :changed-by-uid changed-by-uid)
                      reason (assoc :reason reason)))
-        all-tx (vec (concat all-posting-tx status-tx))]
+        core-tx (vec (concat all-posting-tx status-tx))
+        all-tx (kbt/with-vt core-tx
+                            (or vt-from eff-date)
+                            (or vt-to kbt/forever))]
     (d/transact conn all-tx)))
 
 ;; ============================================================================

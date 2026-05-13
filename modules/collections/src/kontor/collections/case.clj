@@ -12,6 +12,7 @@
    *coordinates* over N invoices belonging to the same
    (partner, entity)."
   (:require [datahike.api :as d]
+            [kontor.bitemporal :as kbt]
             [kontor.status-machine :as sm]))
 
 ;; ============================================================================
@@ -104,7 +105,8 @@
    Throws if an open case for (partner, entity) already exists —
    tenants must close the current case before opening another."
   [conn {:keys [code partner entity opened-by-uid strategy segment
-                assigned-collector notes supporting-doc]}]
+                assigned-collector notes supporting-doc
+                vt-from vt-to]}]
   (when-not code           (throw (ex-info ":code required" {})))
   (when-not partner        (throw (ex-info ":partner required" {})))
   (when-not entity         (throw (ex-info ":entity required" {})))
@@ -142,7 +144,9 @@
                     :changed-at opened-at
                     :changed-by-uid opened-by-uid
                     :reason :case-opened})
-        all-tx (into [row] status-tx)]
+        all-tx (kbt/with-vt (into [row] status-tx)
+                            (or vt-from opened-at)
+                            (or vt-to kbt/forever))]
     (d/transact conn all-tx)))
 
 (defn advance-state!
@@ -152,18 +156,26 @@
 
    Required opts: :case, :to, :changed-by-uid.
    Optional: :reason, :reason-note, :supporting-doc."
-  [conn {:keys [case to changed-by-uid reason reason-note supporting-doc]}]
-  (let [eid (resolve-case (d/db conn) case)
-        _ (when-not eid (throw (ex-info "Case not found" {:spec case})))]
-    (sm/record-status-change! conn
-                              (cond-> {:entity eid
-                                       :entity-type :collection-case
-                                       :facet :collection-case/state
-                                       :to to
-                                       :changed-by-uid changed-by-uid}
-                                reason         (assoc :reason reason)
-                                reason-note    (assoc :reason-note reason-note)
-                                supporting-doc (assoc :supporting-doc supporting-doc)))))
+  [conn {:keys [case to changed-by-uid reason reason-note supporting-doc
+                vt-from vt-to]}]
+  (let [db (d/db conn)
+        eid (resolve-case db case)
+        _ (when-not eid (throw (ex-info "Case not found" {:spec case})))
+        now (java.util.Date.)
+        status-tx (sm/record-status-change-tx-data
+                   db
+                   (cond-> {:entity eid
+                            :entity-type :collection-case
+                            :facet :collection-case/state
+                            :to to
+                            :changed-at now
+                            :changed-by-uid changed-by-uid}
+                     reason         (assoc :reason reason)
+                     reason-note    (assoc :reason-note reason-note)
+                     supporting-doc (assoc :supporting-doc supporting-doc)))]
+    (d/transact conn (kbt/with-vt status-tx
+                                  (or vt-from now)
+                                  (or vt-to kbt/forever)))))
 
 (defn close-case!
   "Close a case (:closed-at set). The case's :state must already be
@@ -172,8 +184,9 @@
    `advance-state!`.
 
    Required opts: :case, :closed-by-uid.
-   Optional: :reason, :reason-note, :supporting-doc."
-  [conn {:keys [case closed-by-uid reason reason-note supporting-doc]}]
+   Optional: :reason, :reason-note, :supporting-doc, :vt-from, :vt-to."
+  [conn {:keys [case closed-by-uid reason reason-note supporting-doc
+                vt-from vt-to]}]
   (when-not closed-by-uid (throw (ex-info ":closed-by-uid required" {})))
   (let [db (d/db conn)
         eid (resolve-case db case)
@@ -183,7 +196,9 @@
                         :collection-case/closed-at closed-at}
                  supporting-doc (assoc :collection-case/supporting-doc
                                        supporting-doc))]
-    (d/transact conn [update])))
+    (d/transact conn (kbt/with-vt [update]
+                                  (or vt-from closed-at)
+                                  (or vt-to kbt/forever)))))
 
 (defn assign-collector!
   "Set or change the assigned collector. No state machine impact;

@@ -15,6 +15,7 @@
    the kernel sum-to-zero + period-locked + commodity-required
    invariants are all enforced."
   (:require [datahike.api :as d]
+            [kontor.bitemporal :as kbt]
             [kontor.ledger :as ledger]
             [kontor.period :as period]
             [kontor.posting :as posting]
@@ -249,7 +250,9 @@
      3. Builds a :transaction (state :posted, posted-at set) + per-
         line :posting entries via kontor.posting/build-transaction
         (commodity required, ledger explicit, sum-to-zero enforced).
-     4. Sets :invoice/transaction + :invoice/posted-at on the invoice.
+     4. Sets :invoice/transaction on the invoice (presence is the
+        canonical 'posted to GL' sentinel; the posted-at timestamp
+        lives in :status-history + :tx/valid-from).
      5. Writes a :status-history row for the :draft|:ready → :sent
         transition.
 
@@ -265,7 +268,10 @@
                          kernel's primary ledger.
      :posted-at          instant (default now).
      :changed-by-uid     optional ref to :create/uid.
-     :reason             optional rationale (status-history)."
+     :reason             optional rationale (status-history).
+     :vt-from            optional kontor.bitemporal valid-from for
+                         the tx. Default `:posted-at`.
+     :vt-to              optional valid-to."
   [conn invoice-spec & [opts]]
   (let [db (d/db conn)
         invoice-eid (cond
@@ -289,11 +295,11 @@
         ;; The transaction tempid is -1 by build-transaction convention.
         tx-tempid -1
         ;; Compose the bridge tx atomically: kernel posting tx-data +
-        ;; invoice update (transaction ref + posted-at) + status-
+        ;; invoice update (transaction ref; no :posted-at denorm —
+        ;; presence of :invoice/transaction is the sentinel) + status-
         ;; history row for :draft|:ready → :sent.
         invoice-update {:db/id invoice-eid
-                        :invoice/transaction tx-tempid
-                        :invoice/posted-at posted-at}
+                        :invoice/transaction tx-tempid}
         status-tx (sm/record-status-change-tx-data
                    db
                    (cond-> {:entity invoice-eid
@@ -304,7 +310,10 @@
                             :origin-transaction tx-tempid}
                      (:changed-by-uid opts) (assoc :changed-by-uid (:changed-by-uid opts))
                      (:reason opts) (assoc :reason (:reason opts))))
-        all-tx (vec (concat tx-data [invoice-update] status-tx))
+        core-tx (vec (concat tx-data [invoice-update] status-tx))
+        vf (or (:vt-from opts) posted-at)
+        vt (or (:vt-to opts)   kbt/forever)
+        all-tx (kbt/with-vt core-tx vf vt)
         ;; P0-7 (research-agent finding): assert no proposed posting
         ;; falls in a closed period. period/find-violations walks the
         ;; tx-data and extracts :posting/valid-from from each posting.

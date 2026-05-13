@@ -1722,17 +1722,12 @@
                        sent  → paid (set by reconciliation settle)
                        sent  → cancelled (creates reversal tx)"}
 
-   {:db/ident       :invoice/sent-at
-    :db/valueType   :db.type/instant
-    :db/cardinality :db.cardinality/one}
-
-   {:db/ident       :invoice/paid-at
-    :db/valueType   :db.type/instant
-    :db/cardinality :db.cardinality/one}
-
-   {:db/ident       :invoice/cancelled-at
-    :db/valueType   :db.type/instant
-    :db/cardinality :db.cardinality/one}
+   ;; NOTE: :invoice/sent-at / :paid-at / :cancelled-at / :posted-at
+   ;; (the status-transition timestamp denorms) were removed —
+   ;; resolvable from :status-history + :tx/valid-from via
+   ;; (kbt/assertion-at db inv :invoice/status now). The presence
+   ;; of :invoice/transaction is the canonical "posted to GL"
+   ;; sentinel; no separate :posted-at needed.
 
    {:db/ident       :invoice/transaction
     :db/valueType   :db.type/ref

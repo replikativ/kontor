@@ -116,7 +116,7 @@
 (deftest schema-attrs-and-seeds-present
   (let [db (d/db *conn*)
         idents (set (d/q '[:find [?i ...] :where [_ :db/ident ?i]] db))]
-    (doseq [a [:invoice/type :invoice/order :invoice/posted-at :invoice/entity
+    (doseq [a [:invoice/type :invoice/order :invoice/entity
                :invoice-line/parent-line :invoice-line/order-item
                :invoice-line/gl-account-type :invoice-line/tax-auth-party
                :invoice-line/amount
@@ -286,10 +286,11 @@
                         (.add ^java.math.BigDecimal acc
                               ^java.math.BigDecimal amount))
                       0M postings)]
-      (testing "invoice transitioned to :sent + posted-at set"
+      (testing "invoice transitioned to :sent + has posted transaction"
         (let [inv (inv/pull-invoice db invoice-eid)]
           (is (= :sent (:invoice/status inv)))
-          (is (= #inst "2026-05-10" (:invoice/posted-at inv)))
+          ;; :invoice/transaction presence is the 'posted to GL' sentinel
+          ;; (the posted-at timestamp lives in :status-history + :tx/valid-from)
           (is (some? (:invoice/transaction inv)))))
       (testing "postings sum to zero (sum-to-zero invariant)"
         (is (= 0 (.compareTo ^java.math.BigDecimal sum 0M))))

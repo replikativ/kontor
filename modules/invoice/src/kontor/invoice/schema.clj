@@ -45,12 +45,11 @@
                      :invoice/order is set, the invoice covers the
                      whole order."}
 
-   {:db/ident       :invoice/posted-at
-    :db/valueType   :db.type/instant
-    :db/cardinality :db.cardinality/one
-    :db/doc         "Sealing marker — when the AcctgTrans was created
-                     for this invoice. Distinct from :invoice/sent-at
-                     (which marks customer-notification)."}
+   ;; NOTE: :invoice/posted-at removed — the presence of
+   ;; :invoice/transaction is the canonical "posted to GL" sentinel.
+   ;; For the posted-at instant query, walk :status-history (the tx
+   ;; that wrote :invoice/transaction also drove :invoice/status →
+   ;; :sent) or read the :tx/valid-from on its tx.
 
    {:db/ident       :invoice/entity
     :db/valueType   :db.type/ref

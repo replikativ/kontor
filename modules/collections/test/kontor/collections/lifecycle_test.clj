@@ -294,9 +294,10 @@
           d (kdispute/pull-dispute db "DIS-1")]
       (testing "dispute :resolved"
         (is (= :resolved (:dispute/state d))))
-      (testing "resolution + resolved-at + resolved-by-uid populated"
-        (is (= :credit-issued (:dispute/resolution d)))
-        (is (some? (:dispute/resolved-at d))))
+      (testing "resolution + resolved-by-uid populated"
+        ;; :dispute/resolved-at was removed — read via :status-history
+        ;; or :tx/valid-from on the resolve tx (kontor.bitemporal).
+        (is (= :credit-issued (:dispute/resolution d))))
       (testing "no longer in open-disputes"
         (is (zero? (count (kdispute/open-disputes-for-invoice db inv))))))))
 
