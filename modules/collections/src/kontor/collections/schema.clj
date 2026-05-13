@@ -15,6 +15,8 @@
      :collection-case/state
      :payment-promise/status
      :dispute/state
+     :credit-hold/state           (P0-5 review fix, 2026-05-13)
+     :dunning-pause/state         (P0-5 review fix, 2026-05-13)
      :invoice/collections-status  (facet on the kernel :invoice)
 
    Idempotent: composite-tuple identities prevent duplicate seeds
@@ -156,10 +158,6 @@
     :db/doc         "ADR-034 facet.
                      #{:open :kept :broken :renegotiated :cancelled}"}
 
-   {:db/ident       :payment-promise/recorded-at
-    :db/valueType   :db.type/instant
-    :db/cardinality :db.cardinality/one}
-
    {:db/ident       :payment-promise/notes
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
@@ -270,17 +268,18 @@
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :credit-hold/released-at
-    :db/valueType   :db.type/instant
+   {:db/ident       :credit-hold/state
+    :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
-    :db/doc         "Set when an actor releases the hold. The row
-                     stays in the DB for audit; query filters on
-                     :released-at being null/future to determine
-                     'active'."}
-
-   {:db/ident       :credit-hold/released-by-uid
-    :db/valueType   :db.type/ref
-    :db/cardinality :db.cardinality/one}
+    :db/doc         "ADR-034 facet (introduced 2026-05-13 P0-5 review
+                     fix).
+                     #{:placed :released :expired}.
+                     Replaces the prior :released-at sentinel; release
+                     metadata (who, when, why) is recorded on the
+                     :status-history row driving the transition.
+                     :placed-at remains in the schema as part of the
+                     :credit-hold/identity tuple — deferred per
+                     ADR-048 follow-up."}
 
    {:db/ident       :credit-hold/approver-uid
     :db/valueType   :db.type/ref
@@ -478,9 +477,14 @@
     :db/doc         "#{:dispute :ptp-active :holiday-freeze
                        :key-account-exception :legal-hold}"}
 
-   {:db/ident       :dunning-pause/placed-at
-    :db/valueType   :db.type/instant
-    :db/cardinality :db.cardinality/one}
+   {:db/ident       :dunning-pause/state
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "ADR-034 facet (introduced 2026-05-13 P0-5 review
+                     fix). #{:placed :released :expired}. Visibility
+                     date (placed-at-equivalent) derives from the
+                     creating tx's :tx/valid-from per ADR-048; release
+                     metadata is recorded on :status-history."}
 
    {:db/ident       :dunning-pause/placed-by-uid
     :db/valueType   :db.type/ref
@@ -490,14 +494,6 @@
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Auto-resume. Null = manual-only resume."}
-
-   {:db/ident       :dunning-pause/released-at
-    :db/valueType   :db.type/instant
-    :db/cardinality :db.cardinality/one}
-
-   {:db/ident       :dunning-pause/released-by-uid
-    :db/valueType   :db.type/ref
-    :db/cardinality :db.cardinality/one}
 
    {:db/ident       :dunning-pause/notes
     :db/valueType   :db.type/string
@@ -812,7 +808,47 @@
     :status-transition/from :in-collection
     :status-transition/to :written-off
     :status-transition/active true
-    :status-transition/name "Written Off From Collections"}])
+    :status-transition/name "Written Off From Collections"}
+
+   ;; --- :credit-hold/state (P0-5 review fix, 2026-05-13) ------------
+   {:status-transition/entity-type :credit-hold
+    :status-transition/facet :credit-hold/state
+    :status-transition/from :nil
+    :status-transition/to :placed
+    :status-transition/active true
+    :status-transition/name "Place Credit Hold"}
+   {:status-transition/entity-type :credit-hold
+    :status-transition/facet :credit-hold/state
+    :status-transition/from :placed
+    :status-transition/to :released
+    :status-transition/active true
+    :status-transition/name "Release Credit Hold"}
+   {:status-transition/entity-type :credit-hold
+    :status-transition/facet :credit-hold/state
+    :status-transition/from :placed
+    :status-transition/to :expired
+    :status-transition/active true
+    :status-transition/name "Credit Hold Expired"}
+
+   ;; --- :dunning-pause/state (P0-5 review fix, 2026-05-13) ----------
+   {:status-transition/entity-type :dunning-pause
+    :status-transition/facet :dunning-pause/state
+    :status-transition/from :nil
+    :status-transition/to :placed
+    :status-transition/active true
+    :status-transition/name "Place Dunning Pause"}
+   {:status-transition/entity-type :dunning-pause
+    :status-transition/facet :dunning-pause/state
+    :status-transition/from :placed
+    :status-transition/to :released
+    :status-transition/active true
+    :status-transition/name "Release Dunning Pause"}
+   {:status-transition/entity-type :dunning-pause
+    :status-transition/facet :dunning-pause/state
+    :status-transition/from :placed
+    :status-transition/to :expired
+    :status-transition/active true
+    :status-transition/name "Dunning Pause Expired"}])
 
 ;; ============================================================================
 ;; Installer

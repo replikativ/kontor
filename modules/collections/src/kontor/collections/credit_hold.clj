@@ -1,12 +1,14 @@
 (ns kontor.collections.credit-hold
-  "Per-(partner, entity) credit-hold overlay — ADR-043.
+  "Per-(partner, entity) credit-hold overlay — ADR-043, ported to the
+   status machine per the 2026-05-13 P0-5 review fix.
 
    Composes with ADR-039's `:partner/credit-status` scalar as the
    default. The resolver `credit-status-for` walks:
 
      1. Any active `:credit-hold` row for (partner, entity) at
-        `:as-of-valid` — i.e. `:placed-at ≤ as-of` and (no
-        `:released-at` OR `:released-at > as-of`).
+        `:as-of-valid` — i.e. `:placed-at ≤ as-of` AND
+        `:credit-hold/state == :placed` (or unreleased) at as-of AND
+        not yet expired by `:expires-at`.
      2. Otherwise the partner's `:partner/credit-status` scalar
         (ADR-039 default — `:open | :hold | :review | :closed`).
 
@@ -15,15 +17,14 @@
    entity tenants can place a hold for one subsidiary without
    blocking the same partner across other subsidiaries.
 
-   Mirrors the org-override pattern of `:status-transition/applies-
-   to-org` (status_machine.clj:71-86).
-
    Also hosts the live credit-utilization query (ADR-043 §Per-entity
    credit-hold overlay). Live = computed from current `:posting`s
    against AR for the (partner, entity), bitemporally; never a
    cached snapshot. SAP / D365 cache the value; kontor reads it."
   (:require [datahike.api :as d]
-            [kontor.payment-application :as papp]))
+            [kontor.bitemporal :as kbt]
+            [kontor.payment-application :as papp]
+            [kontor.status-machine :as sm]))
 
 ;; ============================================================================
 ;; Queries
@@ -35,18 +36,21 @@
   (when-let [exp (:credit-hold/expires-at h)]
     (<= (.getTime ^java.util.Date exp) as-of-ms)))
 
-(defn- released?
-  "True iff `:released-at` is set and ≤ as-of-ms (manual release)."
-  [h as-of-ms]
-  (when-let [rel (:credit-hold/released-at h)]
-    (<= (.getTime ^java.util.Date rel) as-of-ms)))
+(defn- state-at
+  "Resolve `:credit-hold/state` at valid-time `as-of` via the
+   bitemporal resolver — answers 'what was the state, as known now,
+   at as-of-valid'. Returns the keyword or nil if the entity didn't
+   exist yet at as-of."
+  [db hold-eid ^java.util.Date as-of]
+  (kbt/value-at db hold-eid :credit-hold/state as-of))
 
 (defn active-holds-for
   "Pulled `:credit-hold` rows that are active at `:as-of-valid`
    (default: now) for (partner, entity).
 
-   Active = placed-at ≤ as-of AND not yet released AND not yet
-   expired (per ADR-043 :expires-at auto-release; P1-8 fix)."
+   Active = placed-at ≤ as-of AND `:credit-hold/state` at as-of-valid
+   is `:placed` AND not yet expired (per ADR-043 :expires-at auto-
+   release; P1-8 fix)."
   ([db {:keys [partner entity as-of-valid]}]
    (let [as-of (or as-of-valid (java.util.Date.))
          as-of-ms (.getTime ^java.util.Date as-of)
@@ -61,8 +65,8 @@
                    db partner entity as-of-ms)]
      (->> rows
           (map #(d/pull db '[*] %))
-          (remove #(or (released? % as-of-ms)
-                       (expired? % as-of-ms)))
+          (filter #(= :placed (state-at db (:db/id %) as-of)))
+          (remove #(expired? % as-of-ms))
           (sort-by :credit-hold/placed-at)
           vec))))
 
@@ -201,6 +205,10 @@
 (defn place-hold!
   "Place a per-(partner, entity) credit hold.
 
+   Status machine: nil → :placed. Writes a :status-history row +
+   stamps :tx/valid-from on the writing tx (default = now; override
+   via :vt-from for backdated placements).
+
    Required opts:
      :partner          ref/eid
      :entity           ref/eid
@@ -213,47 +221,85 @@
                       at the policy layer)
      :expires-at      instant (auto-release boundary; nil = manual)
      :notes           string
-     :supporting-doc  ref to :audit-doc"
+     :supporting-doc  ref to :audit-doc
+     :vt-from         valid-time start (default = now)
+     :vt-to           valid-time end (default = kbt/forever)"
   [conn {:keys [partner entity reason-code placed-by-uid approver-uid
-                expires-at notes supporting-doc]}]
+                expires-at notes supporting-doc vt-from vt-to]}]
   (when-not partner       (throw (ex-info ":partner required" {})))
   (when-not entity        (throw (ex-info ":entity required" {})))
   (when-not reason-code   (throw (ex-info ":reason-code required" {})))
   (when-not placed-by-uid (throw (ex-info ":placed-by-uid required" {})))
-  (let [placed-at (java.util.Date.)
-        row (cond-> {:credit-hold/partner partner
+  (let [db (d/db conn)
+        placed-at (java.util.Date.)
+        hold-tempid "hold-1"
+        row (cond-> {:db/id hold-tempid
+                     :credit-hold/partner partner
                      :credit-hold/entity entity
                      :credit-hold/reason-code reason-code
                      :credit-hold/placed-at placed-at
-                     :credit-hold/placed-by-uid placed-by-uid}
+                     :credit-hold/placed-by-uid placed-by-uid
+                     :credit-hold/state :placed}
               approver-uid   (assoc :credit-hold/approver-uid approver-uid)
               expires-at     (assoc :credit-hold/expires-at expires-at)
               notes          (assoc :credit-hold/notes notes)
-              supporting-doc (assoc :credit-hold/supporting-doc supporting-doc))]
-    (d/transact conn [row])))
+              supporting-doc (assoc :credit-hold/supporting-doc supporting-doc))
+        status-tx (sm/record-status-change-tx-data
+                   db
+                   (cond-> {:entity hold-tempid
+                            :entity-type :credit-hold
+                            :facet :credit-hold/state
+                            :from :nil
+                            :to :placed
+                            :changed-at placed-at
+                            :changed-by-uid placed-by-uid
+                            :reason reason-code}
+                     supporting-doc (assoc :supporting-doc supporting-doc)))]
+    (d/transact conn (kbt/with-vt (into [row] status-tx)
+                                  (or vt-from placed-at)
+                                  (or vt-to kbt/forever)))))
 
 (defn release-hold!
-  "Release a specific `:credit-hold` row. Records :released-at +
-   :released-by-uid; the row stays in the DB for audit.
+  "Release a specific `:credit-hold` row. Status machine: :placed →
+   :released. The row stays in the DB for audit; who/when/why is on
+   the :status-history row driving the transition.
 
    Required opts:
-     :hold-eid         the :credit-hold eid (resolve via
-                       `current-hold` or `active-holds-for`)
-     :released-by-uid  ref to :create/uid
+     :hold-eid          the :credit-hold eid (resolve via
+                        `current-hold` or `active-holds-for`)
+     :released-by-uid   ref to :create/uid (recorded as
+                        :status-history/changed-by-uid)
 
    Optional:
-     :notes            string
-     :supporting-doc   ref to :audit-doc"
-  [conn {:keys [hold-eid released-by-uid notes supporting-doc]}]
+     :reason           transition reason keyword (default :hold-released)
+     :reason-note      free-text
+     :notes            update the hold row's notes (denorm)
+     :supporting-doc   ref to :audit-doc
+     :vt-from / :vt-to valid-time bounds (default :vt-from = now)"
+  [conn {:keys [hold-eid released-by-uid reason reason-note notes
+                supporting-doc vt-from vt-to]}]
   (when-not hold-eid         (throw (ex-info ":hold-eid required" {})))
   (when-not released-by-uid  (throw (ex-info ":released-by-uid required" {})))
-  (let [update (cond-> {:db/id hold-eid
-                        :credit-hold/released-at (java.util.Date.)
-                        :credit-hold/released-by-uid released-by-uid}
+  (let [db (d/db conn)
+        now (java.util.Date.)
+        update (cond-> {:db/id hold-eid}
                  notes          (assoc :credit-hold/notes notes)
                  supporting-doc (assoc :credit-hold/supporting-doc
-                                       supporting-doc))]
-    (d/transact conn [update])))
+                                       supporting-doc))
+        status-tx (sm/record-status-change-tx-data
+                   db
+                   (cond-> {:entity hold-eid
+                            :entity-type :credit-hold
+                            :facet :credit-hold/state
+                            :to :released
+                            :changed-at now
+                            :changed-by-uid released-by-uid
+                            :reason (or reason :hold-released)}
+                     reason-note    (assoc :reason-note reason-note)
+                     supporting-doc (assoc :supporting-doc supporting-doc)))]
+    (d/transact conn (kbt/with-vt (into [update] status-tx)
+                                  (or vt-from now)
+                                  (or vt-to kbt/forever)))))
 
 (defn release-all-for!
   "Convenience: release every active hold for (partner, entity)."

@@ -109,8 +109,7 @@
                      :payment-promise/commodity commodity
                      :payment-promise/promised-by-date promised-by-date
                      :payment-promise/captured-by-uid captured-by-uid
-                     :payment-promise/status :open
-                     :payment-promise/recorded-at recorded-at}
+                     :payment-promise/status :open}
               invoice        (assoc :payment-promise/invoice invoice)
               captured-via   (assoc :payment-promise/captured-via captured-via)
               notes          (assoc :payment-promise/notes notes)

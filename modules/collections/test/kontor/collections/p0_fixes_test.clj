@@ -7,6 +7,7 @@
      P1   — frequency-cap uses :as-of (deterministic)"
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [datahike.api :as d]
+            [kontor.bitemporal :as kbt]
             [kontor.collections.case :as kcase]
             [kontor.collections.credit-hold :as chold]
             [kontor.collections.dunning :as kdunning]
@@ -193,14 +194,15 @@
                      :entity (entity "ACME-DE")
                      :opened-by-uid (actor "alice")})
   (let [case-eid (kcase/by-code (d/db *conn*) "CASE-PE")]
-    ;; Direct transact to set an explicit :placed-at in the past
-    (d/transact *conn*
-                [{:dunning-pause/case case-eid
-                  :dunning-pause/reason-code :holiday-freeze
-                  :dunning-pause/placed-at #inst "2026-01-01"
-                  :dunning-pause/placed-by-uid (actor "alice")
-                  :dunning-pause/expires-at #inst "2026-01-15"}])
-    (testing "with :as-of-valid between :placed-at and :expires-at, pause active"
+    ;; Backdated placement via kbt/with-vt — :tx/valid-from carries the
+    ;; placed-at-equivalent date (ADR-048).
+    (kpause/place-pause! *conn*
+                         {:case case-eid
+                          :reason-code :holiday-freeze
+                          :placed-by-uid (actor "alice")
+                          :expires-at #inst "2026-01-15"
+                          :vt-from #inst "2026-01-01"})
+    (testing "with :as-of-valid between placement and :expires-at, pause active"
       (is (kpause/any-active-pause? (d/db *conn*) case-eid
                                     {:as-of-valid #inst "2026-01-10"})))
     (testing "with :as-of-valid after :expires-at, pause not active"
