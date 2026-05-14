@@ -159,6 +159,15 @@
     :db/doc         "Buffer held back from available-to-promise
                      (ADR-058): ATP = Σ atp-diff − safety-stock."}
 
+   {:db/ident       :facility-product/negative-allowed?
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one
+    :db/doc         "ADR-059 negative-inventory policy. When true,
+                     `issue!` may over-issue — it creates an explicit
+                     negative-fill :valuation-layer. When false/absent
+                     (the default), an over-issue throws
+                     :inventory/negative-not-allowed."}
+
    {:db/ident       :facility-product/days-to-ship
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one}
@@ -292,7 +301,110 @@
     :db/doc         "Polymorphic ref — the entity that caused this
                      delta (a receipt, an :inv-reservation, an
                      :inventory-variance, an :inventory-transfer, …).
-                     Interpreted via :source-kind. Optional."}])
+                     Interpreted via :source-kind. Optional."}
+
+   {:db/ident       :inventory-detail/transaction
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "ADR-059 — ref to the kernel :transaction whose
+                     `plan-stock-move` GL entry this physical delta
+                     accompanies. Set by `receive!` / `issue!` so the
+                     physical and financial halves are linked. A pure
+                     quantity move (a transfer, a reservation) has
+                     none."}])
+
+;; ============================================================================
+;; :inventory-transfer — two-phase stock move between facilities (ADR-059)
+;; ============================================================================
+
+(def ^:private inventory-transfer-attrs
+  [{:db/ident       :inventory-transfer/inventory-item
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The SOURCE :inventory-item bucket."}
+
+   {:db/ident       :inventory-transfer/quantity
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :inventory-transfer/from-facility
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :inventory-transfer/from-location
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :inventory-transfer/to-facility
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :inventory-transfer/to-location
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :inventory-transfer/status
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "ADR-034 facet. #{:in-transit :complete :cancelled}.
+                     The in-transit BALANCE (the period-close cutoff
+                     exposure) is the Σ quantity of :in-transit rows."}
+
+   {:db/ident       :inventory-transfer/send-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :inventory-transfer/receive-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :inventory-transfer/note
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}])
+
+;; ============================================================================
+;; :negative-fill — the explicit estimated-cost layer for an over-issue (ADR-059)
+;; ============================================================================
+
+(def ^:private negative-fill-attrs
+  [{:db/ident       :negative-fill/inventory-item
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :negative-fill/valuation-layer
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The estimated-cost :valuation-layer `issue!`
+                     created so the over-issue had a layer to
+                     consume."}
+
+   {:db/ident       :negative-fill/shortfall-qty
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :negative-fill/estimated-unit-cost
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :negative-fill/commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :negative-fill/status
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "#{:open :trued-up}. `true-up-negative-fill!`
+                     moves it to :trued-up."}
+
+   {:db/ident       :negative-fill/true-up-adjustment
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Set on true-up — ref to the :layer-adjustment
+                     reconciling estimated cost to actual."}
+
+   {:db/ident       :negative-fill/created-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}])
 
 ;; ============================================================================
 ;; Aggregate
@@ -300,32 +412,44 @@
 
 (def all
   (vec (concat facility-attrs facility-location-attrs facility-product-attrs
-               inventory-item-attrs inventory-detail-attrs)))
+               inventory-item-attrs inventory-detail-attrs
+               inventory-transfer-attrs negative-fill-attrs)))
 
 ;; ============================================================================
 ;; Status-transition seeds (ADR-034) — :inventory-item/status
 ;; ============================================================================
 
 (def status-transition-seeds
-  "ADR-034 :status-transition rows for the :inventory-item/status
-   facet. The lifecycle is light — the :inventory-detail ledger does
-   the quantity work; :status governs whether a bucket's stock is
-   reservable (:available) or held out (:on-hold / :defective).
-   :consumed is terminal (a fully-issued serialized unit)."
+  "ADR-034 :status-transition rows. `:inventory-item/status` — the
+   lifecycle is light (the `:inventory-detail` ledger does the
+   quantity work; `:status` governs whether a bucket is reservable).
+   `:inventory-transfer/status` — the two-phase transfer lifecycle
+   (ADR-059)."
   (vec
-   (for [[from to name]
-         [[:nil       :available  "Stock available"]
-          [:available :on-hold    "Place on hold"]
-          [:on-hold   :available  "Release hold"]
-          [:available :defective  "Flag defective"]
-          [:defective :available  "Re-inspected OK"]
-          [:available :consumed   "Fully consumed"]]]
-     {:status-transition/entity-type :inventory-item
-      :status-transition/facet :inventory-item/status
-      :status-transition/from from
-      :status-transition/to to
-      :status-transition/active true
-      :status-transition/name name})))
+   (concat
+    (for [[from to name]
+          [[:nil       :available  "Stock available"]
+           [:available :on-hold    "Place on hold"]
+           [:on-hold   :available  "Release hold"]
+           [:available :defective  "Flag defective"]
+           [:defective :available  "Re-inspected OK"]
+           [:available :consumed   "Fully consumed"]]]
+      {:status-transition/entity-type :inventory-item
+       :status-transition/facet :inventory-item/status
+       :status-transition/from from
+       :status-transition/to to
+       :status-transition/active true
+       :status-transition/name name})
+    (for [[from to name]
+          [[:nil         :in-transit "Send transfer"]
+           [:in-transit  :complete   "Receive transfer"]
+           [:in-transit  :cancelled  "Cancel transfer"]]]
+      {:status-transition/entity-type :inventory-transfer
+       :status-transition/facet :inventory-transfer/status
+       :status-transition/from from
+       :status-transition/to to
+       :status-transition/active true
+       :status-transition/name name}))))
 
 ;; ============================================================================
 ;; Installer

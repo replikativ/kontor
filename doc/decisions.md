@@ -6093,3 +6093,99 @@ stock genuinely isn't there yet); no `:lot/expires-at` schema, so no
 - `modules/inventory/test/kontor/inventory/reservation_test.clj`.
 
 Date: 2026-05-14.
+
+## ADR-059 — `kontor-inventory`: receive / issue / transfer + GL integration
+
+**Decision.** ADR-059 ships the operations that move stock —
+`receive!`, `issue!`, the two-phase transfer — and the
+negative-inventory policy. Its defining guarantee: **`receive!` and
+`issue!` write both halves in ONE transaction** — the valuation
+layer + GL postings (via `kontor.posting/plan-stock-move`, ADR-030)
+*and* the physical `:inventory-detail` — linked by
+`:inventory-detail/transaction`. The physical and financial views
+cannot drift, because they are written together and the GL inventory
+account is *only* ever touched through `plan-stock-move` (research
+note 36 §2 — the discipline that makes the "my balance-sheet
+inventory number is wrong" complaint structurally hard).
+
+**`receive!`** — `plan-stock-move :direction :in` produces the
+`:valuation-layer` + the `Dr inventory / Cr GR-IR` postings;
+`receive!` find-or-creates the physical bucket and appends an
+`:inventory-detail` (`:qoh-diff +qty`, `:atp-diff +qty`,
+`:source-kind :receipt`, `:transaction` → the GL tx). One atomic
+transaction. (Procurement adopting `receive!` in place of its own
+valuation-half write is a follow-up — `receive!` is a standalone
+helper for now.)
+
+**`issue!`** — `plan-stock-move :direction :out` produces the
+`:layer-consumption` + the `Dr COGS / Cr inventory` postings;
+`issue!` appends the physical `:inventory-detail` (`:qoh-diff -qty`).
+The `:atp-diff` depends on whether a `:reservation` is being
+realized: realizing a reservation moves QOH only (`:atp-diff 0` —
+the reservation already dropped ATP in ADR-058) and **retracts** the
+`:inv-reservation` (it is spent, not cancelled — no ATP restored,
+unlike `release-reservation!`); a plain issue moves both
+(`:atp-diff -qty`). Scrap is `issue!` with a loss-routing
+`:account-fn` (no `:reservation`) — pure composition, no separate
+helper.
+
+**The negative-inventory policy** (maintainer-confirmed design
+call). `:facility-product/negative-allowed?` is a per-(facility,
+product) flag. `issue!` lets `plan-stock-move` be the authority on
+availability — it tries the move, and on the `plan-stock-move`
+underflow it consults the flag:
+- flag false/absent (default) → throw `:inventory/negative-not-allowed`
+  (Xero's "forbid" — but *opt-in*, not forced);
+- flag true → `create-negative-fill!` writes an explicit
+  **negative-fill `:valuation-layer`** for the shortfall at a
+  caller-supplied `:estimated-unit-cost` + a `:negative-fill` record,
+  *then* the issue retries and consumes it. The over-issue therefore
+  *has* a real layer — there is no silent invented cost (the
+  NetSuite/ERPNext failure mode, note 36 §1). This is the one place
+  `issue!` is two transactions (the negative-fill, then the issue);
+  each is a consistent state.
+
+**`true-up-negative-fill!`** reconciles an `:open` `:negative-fill`
+to actual cost: a `:layer-adjustment` on the negative-fill layer for
+`(actual − estimated) × shortfall-qty` + a balanced GL correction,
+linked back via `:negative-fill/true-up-adjustment`, marking it
+`:trued-up`. The correction's exact account routing is a
+simplification — a stricter consumer posts its own and stamps the
+adjustment.
+
+**Transfers are two-phase and GL-free.** `transfer!` creates an
+`:inventory-transfer` (`:status :in-transit`) and appends a
+`:qoh-diff -qty` detail on the source bucket — the stock is "on the
+truck", off the source, not yet at the destination, so the
+in-transit *balance* is the Σ quantity of `:in-transit` transfer
+rows (the period-close cutoff exposure, note 36 §8).
+`complete-transfer!` find-or-creates the destination bucket, appends
+`:qoh-diff +qty`, sets `:status :complete`. `cancel-transfer!`
+returns the qty to the source. A same-entity move is a *pure
+quantity event* — **no GL posting** (research note 36 §4 — only
+cross-entity / cross-book moves touch valuation; those, with a GL
+leg, are a documented follow-up).
+
+**Schema delta.** `:inventory-detail/transaction` (the GL link);
+`:facility-product/negative-allowed?`; `:inventory-transfer/*` (the
+two-phase document) + its `:status` status-transition seeds;
+`:negative-fill/*` (the explicit estimated-cost-layer record).
+
+**What ADR-059 does NOT do** (ADR-060): no cycle counts /
+`:physical-inventory` / `:inventory-variance`; no
+`inventory-roll-forward` / `valuation-tie-out` report helpers; no
+`:lot/expires-at` / FEFO; no kit / consignment helpers (deferred
+follow-ups per note 36 §7). Cross-entity transfers with a GL leg,
+and procurement adopting `receive!`, are documented follow-ups.
+
+**Shape after.**
+- `modules/inventory/src/kontor/inventory/schema.clj` — the ADR-059
+  schema delta + `:inventory-transfer/status` seeds.
+- `modules/inventory/src/kontor/inventory/core.clj` —
+  `define-facility-product!` gains `:negative-allowed?`.
+- `modules/inventory/src/kontor/inventory/ops.clj` — `receive!`,
+  `issue!`, `true-up-negative-fill!`, `transfer!` /
+  `complete-transfer!` / `cancel-transfer!`.
+- `modules/inventory/test/kontor/inventory/ops_test.clj`.
+
+Date: 2026-05-14.

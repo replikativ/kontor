@@ -95,10 +95,11 @@
    :facility-product policy row.
 
    Required: :facility (code or eid), :product (eid).
-   Optional: :min-stock, :reorder-qty, :safety-stock, :days-to-ship,
-             :replenish-method, :note."
+   Optional: :min-stock, :reorder-qty, :safety-stock,
+             :negative-allowed?, :days-to-ship, :replenish-method,
+             :note."
   [conn {:keys [facility product min-stock reorder-qty safety-stock
-                days-to-ship replenish-method note]}]
+                negative-allowed? days-to-ship replenish-method note]}]
   (when-not product (throw (ex-info ":product required" {})))
   (let [db (d/db conn)
         f (resolve-facility db facility)
@@ -108,6 +109,8 @@
               min-stock        (assoc :facility-product/min-stock min-stock)
               reorder-qty      (assoc :facility-product/reorder-qty reorder-qty)
               safety-stock     (assoc :facility-product/safety-stock safety-stock)
+              (some? negative-allowed?)
+              (assoc :facility-product/negative-allowed? negative-allowed?)
               days-to-ship     (assoc :facility-product/days-to-ship days-to-ship)
               replenish-method (assoc :facility-product/replenish-method
                                       replenish-method)
