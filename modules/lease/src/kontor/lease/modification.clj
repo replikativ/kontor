@@ -62,9 +62,41 @@
             [kontor.lease.lease-provider :as lp]
             [kontor.lease.liability :as liability]
             [kontor.lease.posting :as lposting]
+            [kontor.period :as period]
             [kontor.schedule :as schedule]
             [kontor.status-machine :as sm])
   (:import [java.math BigDecimal RoundingMode]))
+
+(defn- transact-checked!
+  "Refuse to post a GL adjustment into a soft-closed / sealed period
+   (`kontor.period`) — the same guard `run-lease!` applies to every
+   periodic payment. Returns the tx-report."
+  [conn tx-data]
+  (period/assert-not-in-locked-period! (d/db conn) tx-data)
+  (d/transact conn tx-data))
+
+(defn- assert-modifiable!
+  "Pre-flight check, run BEFORE a modification mutates the `:lease`
+   contract facts: refuse a modification dated into a soft-closed /
+   sealed period on ANY of the lease's liability-book ledgers. A
+   probe entry is built per book and checked against `kontor.period`;
+   nothing is transacted. Without this up-front gate a period-locked
+   `remeasure!` would still throw at the GL-posting site — but only
+   AFTER `record-modification!` had already updated `:lease`, leaving
+   an orphaned contract-fact change with no GL adjustment behind it."
+  [conn lease-eid date journal]
+  (let [db (d/db conn)]
+    (doseq [lb (liability/books-of db lease-eid)]
+      (let [pb (liability/pull-book db lb)
+            la (:db/id (:lease-liability/liability-account pb))
+            probe (lposting/plan-adjustment
+                   {:legs [{:account la :amount 1M}
+                           {:account la :amount -1M}]
+                    :commodity (:db/id (:lease-liability/commodity pb))
+                    :ledger (:db/id (:lease-liability/ledger pb))
+                    :journal journal :date date :posted-at date
+                    :narration "period-lock probe"})]
+        (period/assert-not-in-locked-period! db probe)))))
 
 (defn- bd ^BigDecimal [x] (or x 0M))
 (defn- bd- ^BigDecimal [^BigDecimal a ^BigDecimal b] (.subtract a b))
@@ -148,7 +180,7 @@
                (not (zero? (.signum pl-leg)))
                (conj {:account gain-loss-account :amount pl-leg}))
         ;; build-transaction places the :transaction at tempid -1.
-        tx-report (d/transact
+        tx-report (transact-checked!
                    conn (lposting/plan-adjustment
                          {:legs legs
                           :commodity commodity
@@ -269,6 +301,7 @@
         rate    (or new-discount-rate (:lease/discount-rate l))
         n       (lease/periods-for term freq)
         ;; Snapshot the OLD outstandings before the :lease facts move.
+        _ (assert-modifiable! conn lease-eid date journal)
         snapshot (pre-mod-snapshot db lease-eid)
         ;; Update the :lease contract facts + record the event shell.
         mod-eid (record-modification!
@@ -281,8 +314,8 @@
         (mapv
          (fn [{:keys [liability-book liability-schedule old-outstanding ledger]
                :as snap}]
-           (let [ofthr (count (schedule/fired-sequences (d/db conn)
-                                                        liability-schedule))
+           (let [ofthr (long (count (schedule/fired-sequences (d/db conn)
+                                                        liability-schedule)))
                  remaining-n (- n ofthr)
                  _ (when (<= remaining-n 0)
                      (throw (ex-info "remeasure!: revised term leaves no un-fired periods"
@@ -357,6 +390,7 @@
         term (or new-term-months (:lease/term-months l))
         rate (or new-discount-rate (:lease/discount-rate l))
         n    (lease/periods-for term freq)
+        _ (assert-modifiable! conn lease-eid date journal)
         snapshot (pre-mod-snapshot db lease-eid)
         mod-eid (record-modification!
                  conn lease-eid {:kind :partial-termination :date date
@@ -369,8 +403,8 @@
         (mapv
          (fn [{:keys [liability-book liability-schedule old-outstanding
                       rou-carrying ledger] :as snap}]
-           (let [ofthr (count (schedule/fired-sequences (d/db conn)
-                                                        liability-schedule))
+           (let [ofthr (long (count (schedule/fired-sequences (d/db conn)
+                                                        liability-schedule)))
                  remaining-n (- n ofthr)
                  _ (when (<= remaining-n 0)
                      (throw (ex-info "partial-terminate!: revised term leaves no un-fired periods"
@@ -452,6 +486,7 @@
             (throw (ex-info "terminate!: lease is not :active"
                             {:type :lease/not-active :lease lease-eid})))
         penalty* (bd penalty)
+        _ (assert-modifiable! conn lease-eid date journal)
         snapshot (pre-mod-snapshot db lease-eid)
         mod-eid (record-modification!
                  conn lease-eid {:kind :termination :date date
@@ -475,7 +510,7 @@
                  legs* (cond-> legs
                          (not (zero? (.signum balancing)))
                          (conj {:account gain-loss-account :amount balancing}))
-                 tx-report (d/transact
+                 tx-report (transact-checked!
                             conn (lposting/plan-adjustment
                                   {:legs legs* :commodity commodity :ledger ledger
                                    :journal journal :date date :posted-at date
@@ -553,6 +588,7 @@
         price (or purchase-price (:lease/purchase-option-price l))
         _ (when (nil? price)
             (throw (ex-info "purchase!: :purchase-price required (the lease has no :purchase-option-price)" {})))
+        _ (assert-modifiable! conn lease-eid date journal)
         snapshot (pre-mod-snapshot db lease-eid)
         mod-eid (record-modification!
                  conn lease-eid {:kind :purchase :date date
@@ -571,7 +607,7 @@
                  legs* (cond-> legs
                          (not (zero? (.signum balancing)))
                          (conj {:account gain-loss-account :amount balancing}))
-                 tx-report (d/transact
+                 tx-report (transact-checked!
                             conn (lposting/plan-adjustment
                                   {:legs legs* :commodity commodity :ledger ledger
                                    :journal journal :date date :posted-at date

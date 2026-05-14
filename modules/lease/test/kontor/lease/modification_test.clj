@@ -130,6 +130,30 @@
                 :rou-expense-account (acct db "6200")}]})
     conn))
 
+(defn- an-operating-lease!
+  "Define + commence an OPERATING lease on the IFRS ledger — the
+   interest leg and the ROU plug both route to the single
+   lease-expense account 7400."
+  [{:keys [code term payment]}]
+  (let [conn (bootstrap)
+        db   (d/db conn)]
+    (lease/define-lease! conn
+      {:code code :name code :lessor (p db "L-acme")
+       :asset-class (class-eid db) :commencement-date #inst "2026-01-01"
+       :term-months term :payment-amount payment :payment-frequency :monthly
+       :payment-timing :in-arrears :commodity (commodity db)
+       :discount-rate 0.06M :origin-document (adoc db)
+       :changed-by-uid (p db "U-cfo")})
+    (lrun/commence! conn
+      {:lease code :journal (journal db) :changed-by-uid (p db "U-cfo")
+       :rou-asset-account (acct db "0250")
+       :rou-accumulated-account (acct db "0259")
+       :books [{:ledger (ifrs db) :classification :operating
+                :liability-account (acct db "1750")
+                :interest-account (acct db "7400")
+                :rou-expense-account (acct db "7400")}]})
+    conn))
+
 (defn- run-through! [conn code as-of]
   (lrun/run-lease! conn
     {:lease code :ledger (ifrs (d/db conn)) :journal (journal (d/db conn))
@@ -311,3 +335,118 @@
         (is (= 4 (count (schedule/fired-sequences
                          (d/db conn)
                          (:db/id (:lease-liability/schedule b))))))))))
+
+;; ============================================================================
+;; Review-after coverage — operating-lease modification, term change,
+;; a modification into an already-modified book
+;; ============================================================================
+
+(deftest remeasure-on-an-operating-lease-still-unwinds
+  ;; The operating-lease ROU plug re-anchor path — heavily arithmetic,
+  ;; previously only probed by hand in review-after.
+  (let [conn (an-operating-lease! {:code "LSE-OPR" :term 24 :payment 1000.00M})
+        _ (run-through! conn "LSE-OPR" #inst "2026-07-15")  ; fire 6 months
+        db1 (d/db conn)
+        ifrs-eid (ifrs db1)
+        result (lmod/remeasure! conn
+                 {:lease "LSE-OPR" :date #inst "2026-07-20" :kind :index-reset
+                  :new-payment-amount 1150.00M :journal (journal db1)
+                  :changed-by-uid (p db1 "U-ctrl") :justification (adoc db1)
+                  :gain-loss-account (acct db1 "7400")})
+        db2 (d/db conn)]
+    (testing "the operating-lease remeasurement adjustment balances"
+      (is (some? (:modification result)))
+      (is (zero? (.signum (ledger-sum db2 ifrs-eid gl-codes)))))
+    (run-through! conn "LSE-OPR" #inst "2028-06-01")        ; fire to end of term
+    (let [db3 (d/db conn)]
+      (testing "the operating lease still unwinds the liability + ROU to zero"
+        (is (= 0.00M (ledger-balance db3 (acct db3 "1750") ifrs-eid)))
+        (is (= 0.00M (.add (ledger-balance db3 (acct db3 "0250") ifrs-eid)
+                           (ledger-balance db3 (acct db3 "0259") ifrs-eid)))))
+      (testing "the GL balances and the lease is :expired"
+        (is (zero? (.signum (ledger-sum db3 ifrs-eid gl-codes))))
+        (is (= :expired (:lease/status (lease/pull-lease db3 "LSE-OPR"))))))))
+
+(deftest remeasure-with-a-term-extension-reschedules-and-unwinds
+  (let [conn (a-finance-lease! {:code "LSE-TX" :term 12 :payment 500.00M})
+        _ (run-through! conn "LSE-TX" #inst "2026-05-15")   ; fire 4 months
+        db1 (d/db conn)
+        ifrs-eid (ifrs db1)
+        book (liability/book-for db1 "LSE-TX" ifrs-eid)
+        ;; extend the term 12 → 24 months at the same payment
+        result (lmod/remeasure! conn
+                 {:lease "LSE-TX" :date #inst "2026-05-20" :kind :term-change
+                  :new-term-months 24 :journal (journal db1)
+                  :changed-by-uid (p db1 "U-ctrl") :justification (adoc db1)
+                  :gain-loss-account (acct db1 "7400")})
+        db2 (d/db conn)]
+    (testing "the :lease term fact is updated"
+      (is (= 24 (:lease/term-months (lease/pull-lease db2 "LSE-TX")))))
+    (testing "the term extension raises the liability and the adjustment balances"
+      (is (pos? (.compareTo (:new-liability (first (:books result)))
+                            (:old-outstanding (first (:books result))))))
+      (is (zero? (.signum (ledger-sum db2 ifrs-eid gl-codes)))))
+    (run-through! conn "LSE-TX" #inst "2029-06-01")         ; fire all 24 months
+    (let [db3 (d/db conn)]
+      (testing "all 24 periods fire and the extended lease unwinds to zero"
+        (is (= 24 (count (schedule/fired-sequences
+                          db3 (:db/id (:lease-liability/schedule
+                                       (liability/pull-book db3 book)))))))
+        (is (= 0.00M (ledger-balance db3 (acct db3 "1750") ifrs-eid)))
+        (is (= 0.00M (.add (ledger-balance db3 (acct db3 "0250") ifrs-eid)
+                           (ledger-balance db3 (acct db3 "0259") ifrs-eid))))
+        (is (zero? (.signum (ledger-sum db3 ifrs-eid gl-codes))))))))
+
+(deftest terminate-after-a-remeasure-balances
+  ;; A modification into an already-re-anchored book.
+  (let [conn (a-finance-lease! {:code "LSE-RT" :term 24 :payment 1000.00M})
+        _ (run-through! conn "LSE-RT" #inst "2026-07-15")   ; fire 6 months
+        db1 (d/db conn)
+        _ (lmod/remeasure! conn
+            {:lease "LSE-RT" :date #inst "2026-07-20" :kind :index-reset
+             :new-payment-amount 1100.00M :journal (journal db1)
+             :changed-by-uid (p db1 "U-ctrl") :justification (adoc db1)
+             :gain-loss-account (acct db1 "7400")})
+        _ (run-through! conn "LSE-RT" #inst "2026-10-15")   ; fire 3 more months
+        db2 (d/db conn)
+        ifrs-eid (ifrs db2)
+        result (lmod/terminate! conn
+                 {:lease "LSE-RT" :date #inst "2026-10-20" :journal (journal db2)
+                  :changed-by-uid (p db2 "U-ctrl") :justification (adoc db2)
+                  :gain-loss-account (acct db2 "7400")})
+        db3 (d/db conn)]
+    (testing "terminating an already-modified lease derecognises cleanly"
+      (is (= :terminated (:lease/status (lease/pull-lease db3 "LSE-RT"))))
+      (is (= 0.00M (ledger-balance db3 (acct db3 "1750") ifrs-eid)))
+      (is (= 0.00M (.add (ledger-balance db3 (acct db3 "0250") ifrs-eid)
+                         (ledger-balance db3 (acct db3 "0259") ifrs-eid))))
+      (is (zero? (.signum (ledger-sum db3 ifrs-eid gl-codes))))
+      (is (pos? (.signum (:derecognised-liability (first (:books result)))))))))
+
+;; ============================================================================
+;; Review-after coverage — period-lock enforcement on modifications
+;; ============================================================================
+
+(deftest modifications-refuse-to-post-into-a-locked-period
+  (let [conn (a-finance-lease! {:code "LSE-LK" :term 24 :payment 1000.00M})
+        _ (run-through! conn "LSE-LK" #inst "2026-07-15")   ; fire 6 months
+        db1 (d/db conn)]
+    ;; Soft-close 2026 — a 2026-dated GL posting must now be refused.
+    (d/transact conn [{:period/start #inst "2026-01-01"
+                       :period/end #inst "2027-01-01"
+                       :period/locked-at #inst "2027-01-15"}])
+    (testing "remeasure! into the soft-closed period is refused"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"(?i)period"
+           (lmod/remeasure! conn
+             {:lease "LSE-LK" :date #inst "2026-08-01" :kind :index-reset
+              :new-payment-amount 1200.00M :journal (journal db1)
+              :changed-by-uid (p db1 "U-ctrl") :justification (adoc db1)
+              :gain-loss-account (acct db1 "7400")}))))
+    (testing "terminate! into the soft-closed period is refused"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"(?i)period"
+           (lmod/terminate! conn
+             {:lease "LSE-LK" :date #inst "2026-09-01" :journal (journal db1)
+              :changed-by-uid (p db1 "U-ctrl") :justification (adoc db1)
+              :gain-loss-account (acct db1 "7400")}))))))

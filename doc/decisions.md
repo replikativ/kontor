@@ -6820,4 +6820,45 @@ rate itself is. Documented in the `kontor.lease.modification` ns.
   computes its own (re-levelling, fired-aware) straight-line cost.
 - `modules/lease/test/kontor/lease/modification_test.clj` — new.
 
+This completes the `kontor-lease` companion: ADR-062 (the `:lease`
+contract + the ROU-asset-reuse decision) → ADR-063 (the
+`:lease-liability` book + `LeaseProvider` + the operating-lease ROU
+plug + `commence!` / `run-lease!`) → ADR-064 (modifications).
+
+**Review-after (research note 40).** Two independent agents audited
+ADR-062..064. **No P0s** — the code-review agent confirmed by REPL
+probe that the GL balances, the liability unwinds to exactly zero,
+the operating-lease ROU plug sums to the depreciable base, and
+modifications conserve money across multi-book parallel ledgers.
+Three P1s were fixed in the review-fix commit: (1) **period-lock
+enforcement** — `remeasure!` / `partial-terminate!` / `terminate!` /
+`purchase!` and `commence!` now refuse to post a sealed GL entry into
+a soft-closed / sealed period (`run-lease!` already did), and an
+`assert-modifiable!` pre-flight gate refuses the whole modification
+*before* `record-modification!` mutates `:lease`, so a period-locked
+modification cannot leave an orphaned contract-fact change; (2)
+**boundary validation** — `define-lease!` now rejects a non-positive
+`:term-months` (it previously blew up opaquely deep in
+`schedule/date-of-occurrence`), a non-positive `:payment-amount`, and
+a negative `:discount-rate`; (3) **the liability ↔ ROU lockstep
+invariant** — `run-lease!` now asserts the two schedules' fired-counts
+match before running, throwing a clear `:lease/lockstep-divergence`
+instead of a cryptic `…-misaligned` later. Cheap P2s (docstring
+honesty on the commencement-only `:straight-line-expense` and the
+per-book vs asset-level ROU cost, a `long`-coercion, an explicit
+throw on a missing ROU book) were also fixed, and four review-after
+coverage tests added (operating-lease `remeasure!`, a term-extension,
+a modification into an already-modified book, period-lock refusal).
+The market-pain agent found the hardest pains addressed and the
+module genuinely thin; its findings were all **deferred scope** the
+ADRs already flag — a mid-life portfolio-import / `catch-up!`
+transactor, persisting the remeasurement deltas on
+`:lease-modification` for a one-read liability roll-forward, a
+per-`(lease, ledger)` index-reset fork (ASC 842 expenses an index
+change, IFRS 16 remeasures it), a mandatory discount-rate
+justification ref, stepped/rent-free payment profiles, and an FX
+*transactor* (only the builder ships). These are captured as followup
+tasks, not silently dropped. `bb test`: 909 tests, 3322 assertions,
+0 failures.
+
 Date: 2026-05-14.

@@ -162,7 +162,14 @@
         rou-code (or rou-asset-code (str (:lease/code l) "-ROU"))
         ;; The :asset's single :acquisition-cost — the first (usually
         ;; primary) book's ROU cost; each :asset-depreciation book
-        ;; carries its own :depreciable-base.
+        ;; carries its OWN :depreciable-base, so when discount rates
+        ;; differ this scalar matches only the primary book. Nothing in
+        ;; kontor-lease reads it (the providers + the modification
+        ;; snapshot all read the per-book :depreciable-base) — but a
+        ;; consumer disposing a non-primary ROU book via
+        ;; `kontor.asset.asset/dispose!` must pass an explicit
+        ;; `:asset-account-cost`, since `plan-disposal` /
+        ;; `net-book-value` default to this asset-level figure.
         primary-rou-cost (:rou-cost (first book-calcs))]
     ;; 1. The Right-of-Use :asset.
     (asset/acquire! conn
@@ -224,22 +231,24 @@
                     :start-date sched-start
                     :frequency freq
                     :expense-account rou-expense-account})
-             ;; 4. The day-one recognition entry for this book.
-             (d/transact
-              conn (lposting/plan-lease-recognition
-                    (cond-> {:rou-asset-account rou-asset-account
-                             :liability-account liability-account
-                             :rou-cost rou-cost
-                             :pv pv
-                             :net-cash net-cash
-                             :commodity commodity
-                             :ledger ledger
-                             :journal journal
-                             :date commencement
-                             :posted-at commencement
-                             :narration (str "Lease recognition — "
-                                              (:lease/code l))}
-                      cash-account (assoc :cash-account cash-account))))
+             ;; 4. The day-one recognition entry for this book — refused
+             ;; if commencement falls in a soft-closed / sealed period.
+             (let [tx-data (lposting/plan-lease-recognition
+                            (cond-> {:rou-asset-account rou-asset-account
+                                     :liability-account liability-account
+                                     :rou-cost rou-cost
+                                     :pv pv
+                                     :net-cash net-cash
+                                     :commodity commodity
+                                     :ledger ledger
+                                     :journal journal
+                                     :date commencement
+                                     :posted-at commencement
+                                     :narration (str "Lease recognition — "
+                                                      (:lease/code l))}
+                              cash-account (assoc :cash-account cash-account)))]
+               (period/assert-not-in-locked-period! (d/db conn) tx-data)
+               (d/transact conn tx-data))
              {:ledger ledger
               :liability-book (liability/book-for (d/db conn) lease-eid ledger)
               :rou-dep-book (asset-dep/book-for (d/db conn) rou-asset-eid ledger)
@@ -325,6 +334,33 @@
                   liab-book)
         liability-account (:db/id (:lease-liability/liability-account b))
         interest-account  (:db/id (:lease-liability/interest-account b))
+        ;; The sibling ROU depreciation book — resolved up-front so the
+        ;; lockstep invariant can be checked before anything fires.
+        rou-asset (:db/id (:lease/rou-asset
+                           (d/pull db [{:lease/rou-asset [:db/id]}] lease-eid)))
+        _ (when-not rou-asset
+            (throw (ex-info "run-lease!: lease has no :rou-asset — not commenced?"
+                            {:type :lease/not-commenced :lease lease-eid})))
+        rou-dep-book (asset-dep/book-for db rou-asset ledger)
+        _ (when-not rou-dep-book
+            (throw (ex-info "run-lease!: no ROU :asset-depreciation book for this (lease, ledger) — commence the lease first"
+                            {:type :lease/no-rou-dep-book
+                             :lease lease-eid :ledger ledger})))
+        rou-dep-schedule (:db/id (:asset-depreciation/schedule
+                                  (d/pull db [{:asset-depreciation/schedule
+                                               [:db/id]}]
+                                          rou-dep-book)))
+        ;; Lockstep invariant: run-lease! fires the liability + the ROU
+        ;; schedules together, and the operating-lease ROU plug relies
+        ;; on the un-fired ROU periods matching the liability plan. If a
+        ;; prior partial failure left the two diverged, refuse to run.
+        _ (let [liab-fired (count (schedule/fired-sequences db schedule-eid))
+                rou-fired  (count (schedule/fired-sequences db rou-dep-schedule))]
+            (when-not (= liab-fired rou-fired)
+              (throw (ex-info "run-lease!: the liability schedule and the ROU depreciation schedule have diverged — they must be fired in lockstep (a prior run likely failed partway). Reconcile before running."
+                              {:type :lease/lockstep-divergence
+                               :lease lease-eid :ledger ledger
+                               :liability-fired liab-fired :rou-fired rou-fired}))))
         plan (lp/plan-for-book db liab-book)
         seq->period (into {} (map (juxt :sequence identity)) (:periods plan))
         pending (sort-by :sequence
@@ -370,21 +406,17 @@
                                 0M fired)
         total-principal (reduce (fn [^BigDecimal a m] (.add a ^BigDecimal (:principal m)))
                                 0M fired)
-        ;; The sibling ROU depreciation book.
-        rou-asset (:db/id (:lease/rou-asset
-                           (d/pull (d/db conn) [{:lease/rou-asset [:db/id]}]
-                                   lease-eid)))
-        rou-dep-book (when rou-asset
-                       (asset-dep/book-for (d/db conn) rou-asset ledger))
-        rou-result (when rou-dep-book
-                     (asset-runner/run-depreciation!
-                      conn rou-dep-book
-                      (cond-> {:journal journal
-                               :posted? posted?
-                               :provider (when (= classification :operating)
-                                           (rou/provider))
-                               :mark-fully-depreciated? false}
-                        as-of (assoc :as-of as-of))))
+        ;; Run the sibling ROU depreciation book — with the
+        ;; :lease-rou-plug provider for an operating book, the
+        ;; kontor-asset built-in for a finance book.
+        rou-result (asset-runner/run-depreciation!
+                    conn rou-dep-book
+                    (cond-> {:journal journal
+                             :posted? posted?
+                             :provider (when (= classification :operating)
+                                         (rou/provider))
+                             :mark-fully-depreciated? false}
+                      as-of (assoc :as-of as-of)))
         db' (d/db conn)
         completed? (>= (count (schedule/fired-sequences db' schedule-eid))
                        (:n-periods inputs))]

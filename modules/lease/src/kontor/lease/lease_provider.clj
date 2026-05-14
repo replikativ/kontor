@@ -112,9 +112,16 @@
 (defn- straight-line-expense
   "The single periodic lease cost an OPERATING lease recognises
    (ASC 842-20-25-6): `(total undiscounted payments + initial direct
-   costs + prepaid − incentives) / n`. Chosen so the operating-lease
-   ROU plug (`straight-line-expense − interest`) sums exactly to the
-   ROU asset's cost — see `kontor.lease.rou-provider`."
+   costs + prepaid − incentives) / n`.
+
+   This is the *as-originally-measured* (commencement) figure — it is
+   computed from the book's current `:payment-amount` × `n-periods`,
+   which is only the whole-term figure before any modification. After
+   an ADR-064 modification ASC 842 re-levels the single cost over the
+   remaining term; `kontor.lease.rou-provider` does that re-levelling
+   itself (it can — it sees the ROU book; this provider cannot) and
+   does NOT read this field. It is kept as a reporting convenience for
+   the un-modified case."
   ^BigDecimal [{:keys [payment-amount n-periods initial-direct-costs
                        prepaid-at-commencement incentives-received]}]
   (let [total-payments (.multiply ^BigDecimal payment-amount

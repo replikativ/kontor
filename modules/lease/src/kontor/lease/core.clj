@@ -132,7 +132,13 @@
   (when-not asset-class       (throw (ex-info ":asset-class required" {})))
   (when-not commencement-date (throw (ex-info ":commencement-date required" {})))
   (when-not term-months       (throw (ex-info ":term-months required" {})))
+  (when-not (and (integer? term-months) (pos? term-months))
+    (throw (ex-info ":term-months must be a positive integer — a 0/negative term has no schedule"
+                    {:term-months term-months})))
   (when (nil? payment-amount) (throw (ex-info ":payment-amount required" {})))
+  (when-not (pos? (.signum ^BigDecimal payment-amount))
+    (throw (ex-info ":payment-amount must be positive"
+                    {:payment-amount payment-amount})))
   (when-not (#{:monthly :quarterly :annual} payment-frequency)
     (throw (ex-info ":payment-frequency must be :monthly | :quarterly | :annual"
                     {:payment-frequency payment-frequency})))
@@ -141,6 +147,9 @@
                     {:payment-timing payment-timing})))
   (when-not commodity         (throw (ex-info ":commodity required" {})))
   (when (nil? discount-rate)  (throw (ex-info ":discount-rate required" {})))
+  (when (neg? (.signum ^BigDecimal discount-rate))
+    (throw (ex-info ":discount-rate must be non-negative"
+                    {:discount-rate discount-rate})))
   (let [db (d/db conn)
         lease-tempid "lease-1"
         row (cond-> {:db/id lease-tempid

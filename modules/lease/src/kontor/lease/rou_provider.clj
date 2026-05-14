@@ -158,7 +158,15 @@
    `kontor.asset.runner/run-depreciation!` as `:provider` for an
    operating-lease ROU book (the runner cannot resolve
    `:lease-rou-plug` from the kontor-asset built-in registry — it is
-   a kontor-lease provider). `kontor.lease.runner/run-lease!` wires
-   this automatically."
+   a kontor-lease provider).
+
+   PREFER `kontor.lease.runner/run-lease!` over calling
+   `run-depreciation!` on a ROU book directly. `plan-schedule` here
+   demands that the liability plan covers every UN-fired ROU period —
+   which holds only while the liability schedule and the ROU
+   depreciation schedule are fired in **lockstep**. `run-lease!` fires
+   both together AND guards the lockstep invariant up-front; firing a
+   ROU book on its own can desync the two and make this provider
+   throw `:lease/...-misaligned` on the next run."
   []
   (->LeaseRouPlugProvider))
