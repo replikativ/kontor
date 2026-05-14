@@ -5135,3 +5135,129 @@ bitemporal resolver (ADR-048) compose with no new mechanism.
   `filter-by-privilege` at render time.
 
 Date: 2026-05-14.
+
+---
+
+## ADR-052 — Data-subject-access requests + the bitemporal `collect` walk
+
+**Decision.** Stage M's fourth and final primitive: a `:dsar-request`
+kernel entity tracking a GDPR/CCPA/LGPD-style data-subject request
+through its lifecycle, plus `kontor.dsar/collect` — the bitemporal
+walk that answers *"everything we held about this subject as of the
+request date."* Research note 23 established this is genuinely hard
+for every other system because subject data is pervasive and lives
+across silos; in kontor it is one query because the substrate is one
+bitemporal datalog DB.
+
+**The companion-registered partner-attribute registry.** The hard
+part of `collect` is that partner references are pervasive AND many
+live in companion modules the kernel does not import. The answer is
+a registry: `kontor.dsar/*partner-attrs*` is an atom seeded with the
+kernel's own partner-referencing attributes; each companion calls
+`(kontor.dsar/register-partner-attr! :collection-case/partner)` etc.
+at load time. `collect` iterates the registry. Same dispatch pattern
+as the schema-loader registry — the kernel ships the mechanism, the
+companions extend it. The kernel seeds:
+`:transaction/partner`, `:posting/partner`, `:invoice/buyer`,
+`:invoice/seller`, `:partner-bank-account/partner`,
+`:partner-tax-id/partner`, `:partner-tag/partner`,
+`:partner-merge/duplicate-of`, `:partner-merge/superseded`.
+
+**`collect` returns a companion-agnostic structure.** Not a
+fixed-key map hardcoding `:transactions` / `:collection-cases` / …
+(the kernel cannot know companion entity types). Instead:
+`{:partner <pulled> :merged-from [<eids>] :references {<attr>
+[<pulled-entities>]} :legal-holds [<hold-eids>] :on-legal-hold?
+<bool>}`. The `:references` map is keyed by the registered
+partner-attr; the consumer interprets.
+
+**Privilege filtering is consumer-side.** `collect` returns the raw
+reference walk; it does not itself filter by privilege. When the
+consumer assembles the fulfillment bundle it runs any included
+`:audit-doc`s through `kontor.audit-doc/filter-by-privilege`
+(ADR-051) — privileged documents are NOT auto-included in a
+subject's package; they need counsel review (the
+`:awaiting-legal-review` state). This keeps `collect` a pure,
+companion-agnostic walk and puts the privilege policy where bundle
+assembly already lives — in the consumer.
+
+**Bitemporal axis.** `collect` takes `:as-of-tx` and snapshots the
+whole DB via `d/as-of` before walking. This is exactly the
+legally-relevant question — *"produce everything we KNEW about this
+subject as of date D"* — and `d/as-of` answers it precisely. A
+per-entity `:as-of-valid` filter is a documented follow-up; the
+tx-time snapshot is the load-bearing axis and ships in v1.
+
+**Status machine** (ADR-034 facet `:dsar-request/state`):
+`nil → :received`; `:received → {:verifying-identity, :withdrawn,
+:extended}`; `:verifying-identity → {:in-progress, :denied}`;
+`:extended → :in-progress`; `:in-progress → {:awaiting-legal-review,
+:fulfilled, :denied}`; `:awaiting-legal-review → {:fulfilled,
+:denied}`.
+
+**Approval policy** (ADR-038). Fulfillment and denial are the
+governed edges:
+- `* → :fulfilled` (`:in-progress` or `:awaiting-legal-review`):
+  `:no-self-approval` (the intake person cannot also be the
+  fulfiller) + `:requires-supporting-doc` (the produced bundle).
+- `* → :denied`: `:requires-supporting-doc` (the written denial
+  rationale) + `:requires-non-empty-reason-note`.
+
+**Composition with legal-hold (ADR-049) for erasure requests.** Held
+data must still appear in a DSAR *access* response — the subject's
+right of access is not waived by a hold. But held data cannot be
+*deleted* by an *erasure* request. The workflow: `collect` returns
+the held data alongside everything else (with `:on-legal-hold?` and
+the covering `:legal-holds`); the consumer's erasure-fulfillment
+bundles the access portion in full, purges/anonymizes only the
+unheld portion (the ADR-050 sweeper's `apply-expiry!` would itself
+refuse held data — the invariant is structural), and emits a
+denial-rationale `:audit-doc` for the held portion. The kernel ships
+the predicates; the partial-fulfillment workflow is consumer
+territory, documented here.
+
+**Why.** Research note 23: the EDPB's 2025 Coordinated Enforcement
+Action targets right-of-access and right-to-erasure across 32 DPAs;
+DSAR fulfillment cost runs ~$1,500/manual request (Gartner/DataGrail)
+because the data is scattered. kontor's one-DB substrate collapses
+the scatter. Research note 24 confirmed every needed primitive is
+already shipped — `:partner` + the merge chain (ADR-039), the
+bitemporal resolver (ADR-048), `legal-hold/entity-held?` (ADR-049),
+`audit-doc/filter-by-privilege` (ADR-051), the status machine +
+approval policy (ADR-034/038) — `collect` is a *composition*, not a
+new mechanism.
+
+**Shape after.**
+- New schema (`:dsar-request/*`, ~15 attrs) in `src/kontor/schema.clj`.
+- New namespace `src/kontor/dsar.clj`: `*partner-attrs*`
+  registry + `register-partner-attr!` + `partner-attrs`,
+  `install-seeds!`, `file-request!` (transactor; computes
+  `:deadline-at`), `advance-state!` (generic transition transactor;
+  merges `:fulfilled-at` / `:fulfilled-package` / `:denied-reason` /
+  `:identity-verified-at` per the target state), `collect` (the
+  bitemporal walk), `by-external-id`.
+- `install-seeds!` (status-transition + approval-policy seeds),
+  wired into `kontor.core/install-schema!`, idempotent-guarded.
+- `test/kontor/dsar_test.clj`: file → collect returns referencing
+  data; bitemporal collect (older `:as-of-tx` excludes later data);
+  privilege side-band; partner-merge inclusion; legal-hold +
+  erasure (held data in the bundle, not purged); fulfillment SoD;
+  denial governance.
+
+**What this does NOT do** (deferred):
+- No auto-overdue-flagging facet — the research sketch's
+  `:overdue-warning` / `:overdue` auto-after-millis transitions are
+  deferred; v1 ships `:deadline-at` for a consumer cron to check.
+- No per-entity `:as-of-valid` filter in `collect` — `:as-of-tx`
+  snapshot is the v1 bitemporal axis.
+- No privilege side-band in `collect` — privilege filtering happens
+  consumer-side during bundle assembly via
+  `audit-doc/filter-by-privilege` (ADR-051).
+- No fulfillment-bundle assembly — `collect` returns the data; the
+  consumer builds the PDF/JSON/portability artifact and attaches it
+  as `:fulfilled-package`.
+- No recursive merge-chain walk — `collect` walks one level of
+  `:partner-merge` (canonical → its merged-from duplicates); deeper
+  chains are a follow-up.
+
+Date: 2026-05-14.

@@ -687,6 +687,110 @@
                      effective-from without code collision."}])
 
 ;; ============================================================================
+;; :dsar-request  — ADR-052
+;; ============================================================================
+
+(def ^:private dsar-request-attrs
+  "Data-subject-access-request lifecycle. A `:dsar-request` tracks a
+   GDPR/CCPA/LGPD-style request: the subject, the kind (access /
+   erasure / portability / …), the statutory deadline, and the
+   status-machine state through to fulfillment or denial. The
+   `kontor.dsar/collect` helper does the bitemporal walk — 'all data
+   we held about this subject as of the request date' — which the
+   consumer assembles into the fulfillment bundle (referenced here
+   as `:fulfilled-package`)."
+  [{:db/ident       :dsar-request/external-id
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "External identifier for the request (intake
+                     ticket number, portal reference)."}
+
+   {:db/ident       :dsar-request/partner
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The data subject — a ref to :partner. collect
+                     walks every attribute referencing this partner."}
+
+   {:db/ident       :dsar-request/jurisdiction
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to :country — which regime governs
+                     (GDPR / CCPA / LGPD / …). Drives the deadline."}
+
+   {:db/ident       :dsar-request/kind
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "#{:access :portability :erasure :rectification
+                       :restriction :objection}."}
+
+   {:db/ident       :dsar-request/received-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "When the request was received — the statutory
+                     clock starts here (CCPA: receipt; GDPR: receipt)."}
+
+   {:db/ident       :dsar-request/deadline-days
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Statutory response window in days (GDPR 30,
+                     CCPA 45, LGPD 15, …). Jurisdiction-supplied."}
+
+   {:db/ident       :dsar-request/deadline-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Computed: received-at + deadline-days. Queryable
+                     so a consumer cron can flag approaching/overdue
+                     requests."}
+
+   {:db/ident       :dsar-request/state
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "ADR-034 facet. #{:received :verifying-identity
+                       :in-progress :awaiting-legal-review :extended
+                       :fulfilled :denied :withdrawn}."}
+
+   {:db/ident       :dsar-request/received-via
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "#{:email :portal :postal :api}."}
+
+   {:db/ident       :dsar-request/identity-verified-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "When the subject's identity was verified — set
+                     on :verifying-identity → :in-progress."}
+
+   {:db/ident       :dsar-request/fulfilled-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "When the request was fulfilled."}
+
+   {:db/ident       :dsar-request/fulfilled-package
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to :audit-doc — the produced bundle artifact
+                     (the data package handed to the subject)."}
+
+   {:db/ident       :dsar-request/denied-reason
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "#{:identity-not-verified :no-data
+                       :legal-hold-override :exempt-records
+                       :manifestly-unfounded}."}
+
+   {:db/ident       :dsar-request/supporting-doc
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to :audit-doc — the intake form / request
+                     correspondence."}
+
+   {:db/ident       :dsar-request/notes
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Free-text annotation."}])
+
+;; ============================================================================
 
 (def ^:private partner-merge-attrs
   [{:db/ident       :partner-merge/duplicate-of
@@ -3485,7 +3589,8 @@
     payment-application-attrs             ; ADR-043
     bitemporal-tx-attrs                   ; ADR-048 (kontor.bitemporal)
     legal-hold-attrs                      ; ADR-049 (kontor.legal-hold)
-    retention-policy-attrs)))             ; ADR-050 (kontor.retention)
+    retention-policy-attrs                ; ADR-050 (kontor.retention)
+    dsar-request-attrs)))                 ; ADR-052 (kontor.dsar)
 
 (defn install!
   "Transact the kernel schema into a connection. Idempotent — re-running

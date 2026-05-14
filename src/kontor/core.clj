@@ -25,6 +25,7 @@
    compose."
   (:require [datahike.api :as d]
             [kontor.audit-doc :as audit-doc]
+            [kontor.dsar :as dsar]
             [kontor.ledger :as ledger]
             [kontor.legal-hold :as legal-hold]
             [kontor.retention :as retention]
@@ -86,6 +87,7 @@
   (legal-hold/install-seeds! conn)   ; ADR-049 status-transition + approval-policy seeds
   (retention/install-seeds! conn)    ; ADR-050 status-transition + approval-policy seeds
   (audit-doc/install-seeds! conn)    ; ADR-051 :audit-doc/privilege transitions + policies
+  (dsar/install-seeds! conn)         ; ADR-052 :dsar-request transitions + policies
   (d/transact conn [cost-center-plan-seed])
   conn)
 
