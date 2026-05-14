@@ -5409,3 +5409,167 @@ schedule) reuses `:ledger` (ADR-021) and `:schedule` (ADR-032).
   — ADR-056.
 
 Date: 2026-05-14.
+
+## ADR-054 — `kontor-asset`: a depreciation area IS a `:ledger`
+
+**Decision.** A `kontor-asset` **depreciation book is per `(asset,
+ledger)`**. The "depreciation area" — SAP's term for "one physical
+asset, N regulatory depreciation schedules" (Handelsbilanz +
+Steuerbilanz, book + tax, IFRS + local GAAP) — is **a `:ledger`**
+(ADR-021), not a `:valuation-book` (ADR-027), not a new
+`:depreciation-area` concept. ADR-054 ships the `:asset-depreciation`
+book entity, the `:asset-method-params` provider-config entity, the
+GL posting builders (`kontor.asset.posting`), and book management
+(`kontor.asset.depreciation`). The `DepreciationProvider` protocol
+and the depreciation runner are ADR-055; the Jahresabschluss
+reports are ADR-056.
+
+**Why `:ledger`, not `:valuation-book` or a new concept** (research
+note 31 §2):
+- `:ledger` is the kernel's parallel-book primitive — sum-to-zero is
+  enforced *per ledger* (`kontor.posting`), and a `:ledger` carries
+  a `:ledger/framework` keyword (`:HGB`, `:IFRS`, `:tax-de`, …).
+  ADR-021 *explicitly named* the fixed-asset register as its
+  forward-compat target.
+- A `:valuation-book` (ADR-027) is a *cost-basis selector*
+  (FIFO/LIFO/…). A depreciation area is **not** a cost-basis
+  question — the acquisition cost is one known number; what differs
+  per book is the *method, life, convention* applied to that cost
+  and the resulting *journal entries*. That is the `:ledger` axis.
+- A new `:depreciation-area` entity would be a third parallel-book
+  primitive next to `:ledger` and `:valuation-book` — rejected by
+  the anti-accretion contract. SAP's "area ≠ ledger" split is a
+  legacy artifact its own S/4HANA New Asset Accounting *removed*;
+  kontor adopts the post-reconciliation model: **one depreciation
+  area per ledger.** A depreciation view that never posts to the GL
+  is a `:ledger/type :statistical` ledger — already provided.
+
+**The audit guarantee is free.** The HGB-book depreciation run
+posts `Dr Abschreibungsaufwand / Cr kumulierte Abschreibung` tagged
+`:posting/ledger "hgb"`; the Steuerbilanz run posts the (different)
+amount tagged `:posting/ledger "tax-de"`. Per-ledger sum-to-zero
+means each book balances independently and an HGB depreciation
+debit *cannot* net against a tax-book credit. "Handelsbilanz vs
+Steuerbilanz side by side" is a ledger-filtered `compute-statement`
+call (ADR-056 adds the filter).
+
+**`kontor-asset` stays framework-agnostic.** It only ever takes a
+`:ledger` ref. *Which* ledger is primary (HGB-primary for a DE
+customer, IFRS-primary for another) is an l10n install-time
+decision — `kontor-l10n-de` installs the `hgb` and `tax-de`
+ledgers. The companion ships no jurisdiction data.
+
+**Entities** (companion-owned):
+- **`:asset-depreciation`** — the per-`(asset, ledger)` book.
+  `:asset` + `:ledger` refs; `:identity` (`:db.unique/identity`
+  tuple `[asset ledger]` — one book per pair, no nil-in-tuple
+  caveat since both are always present); `:provider-id` (which
+  `DepreciationProvider` — ADR-055); `:method-params` (ref to
+  `:asset-method-params`, optional); `:useful-life-months` (this
+  book's life — an HGB life ≠ the AfA-Tabelle life is common);
+  `:convention` (`:full` | `:half-year` | `:mid-quarter` |
+  `:mid-month` | `:zeitanteilig`); `:depreciable-base` (usually
+  `acquisition-cost − salvage`; may differ per book — a tax bonus
+  reduces the tax base); `:commodity`; `:start-date` (the
+  depreciation clock start for this book — defaults to the asset's
+  `:in-service-date`); `:schedule` (ref to the ADR-032 `:schedule`
+  the runner fires); `:effective-rule` (ref to the l10n-owned
+  effective-dated rule row — ADR-055 §effective-dating; optional);
+  `:note`.
+- **`:asset-method-params`** — a small entity holding the
+  heterogeneous `DepreciationProvider` config (research note 31 Q1,
+  maintainer chose the small-entity option over EDN-as-string for
+  queryability). All attrs optional; a provider reads the ones it
+  needs: `:rate-multiple` (declining-balance: 1.5× / 2× / 2.5×),
+  `:ceiling-rate` (declining-balance absolute % ceiling),
+  `:switch-to-straight-line` (the DB→SL auto-switch),
+  `:total-units` (units-of-production lifetime count),
+  `:table-key` (a keyword an l10n table-driven provider — MACRS,
+  AfA — keys on), `:note`. It is a 1:1 component of a book (created
+  inline by `open-book!`), so it carries no unique identity.
+
+**`kontor.asset.depreciation`** — book management:
+- `open-book!` — create an `:asset-depreciation` book for an
+  `(asset, ledger)` pair *and* its `:schedule` (`:schedule/kind
+  :depreciation`, `:origin-entity` → the book, `:frequency`
+  defaults `:monthly`, `:start-date` = the book's start-date,
+  `:end-date` = start + `useful-life-months` so
+  `pending-occurrences` terminates, `:total-amount` =
+  `depreciable-base`) and its optional `:asset-method-params`, in
+  one tx. `:depreciable-base` defaults to `acquisition-cost −
+  salvage-value` pulled from the asset.
+- `book-for` / `books-of` / `pull-book` — resolvers.
+- `accumulated-depreciation` — `Σ :schedule-occurrence/amount` over
+  the book's schedule. Asset-local and ledger-aware *by
+  construction* (each book owns its own schedule → its own
+  occurrences) — it does **not** sum GL postings, because the GL
+  accounts (`:asset/accumulated-account`) are shared across assets
+  in a class and a posting carries no per-asset back-ref. The
+  subsystem's own `:schedule-occurrence` log is the source of truth
+  for the roll-forward; the GL postings are its *consequence*.
+- `net-book-value` — `acquisition-cost − accumulated-depreciation`
+  for a book. ADR-054's NBV reflects the depreciation schedule
+  only; impairment/revaluation/addition adjustments to NBV arrive
+  via re-planning (ADR-055's `plan-event`) and are folded in there.
+
+**`kontor.asset.posting`** — pure GL posting builders. Each returns
+tx-data ready for `datahike.api/transact` (built through
+`kontor.posting/build-transaction`, so sum-to-zero per
+`(ledger, commodity)` is enforced for free); none transacts.
+- `plan-capitalisation` — `Dr :asset-account / Cr <credit-account>`
+  (the credit side — AP, bank, an asset-clearing account — is
+  caller-supplied).
+- `plan-depreciation-charge` — `Dr :expense-account /
+  Cr :accumulated-account` for the period amount, tagged
+  `:posting/ledger` = the book's ledger. The runner (ADR-055)
+  calls this per pending occurrence.
+- `plan-disposal` — `Dr <proceeds-account> + Dr :accumulated-account
+  / Cr :asset-account` ± gain/loss. Gain/loss = `proceeds − NBV`;
+  a gain credits `<gain-account>`, a loss debits `<loss-account>`.
+  Because NBV differs per book (HGB NBV ≠ tax NBV), disposal is a
+  per-book posting.
+- `plan-impairment` — `Dr <impairment-expense-account> /
+  Cr :accumulated-account` (IAS 36 / HGB §253 außerplanmäßige
+  Abschreibung).
+- `plan-revaluation` — `Dr :asset-account /
+  Cr <revaluation-surplus-account>` for an upward revaluation
+  (the surplus is an OCI/equity line — ADR-056's equity statement
+  picks it up); reversed for a downward revaluation.
+
+Each builder takes a `:ledger` and threads it onto every posting,
+so a multi-book asset's disposal/impairment is N calls (one per
+book) — exactly the parallel-book shape.
+
+**Composition with ADR-053.** ADR-053's lifecycle transactors
+(`acquire!`, `dispose!`, `impair!`, `revalue!`) take an optional
+`:transaction` / `:origin-transaction` ref. The ADR-054 flow:
+build the GL tx-data with a `kontor.asset.posting` builder,
+`d/transact` it, then pass the resulting transaction eid into the
+ADR-053 transactor. The builders are the durable seam; fusing
+build+transact+link into one call is a consumer-app ergonomic
+choice, not a kernel concern.
+
+**Composition with `:schedule` (ADR-032).** Each book owns one
+`:schedule`. ADR-032 anticipated exactly this: *"Each companion's
+posting-builder consumes the schedule for its domain math; the
+kernel just records what happened."* `open-book!` creates the
+schedule; ADR-055's runner fires it.
+
+**What ADR-054 does NOT do** (ADR-055/056):
+- No `DepreciationProvider` protocol, no method math, no runner —
+  ADR-055.
+- No effective-dated rule *resolution* — the `:effective-rule` ref
+  is a slot ADR-055 + l10n fill.
+- No Jahresabschluss reports — ADR-056.
+
+**Shape after.**
+- `modules/asset/src/kontor/asset/schema.clj` — `:asset-depreciation/*`
+  + `:asset-method-params/*` attrs added; `install!` aggregate
+  extended.
+- `modules/asset/src/kontor/asset/depreciation.clj` — book
+  management.
+- `modules/asset/src/kontor/asset/posting.clj` — the pure GL
+  posting builders.
+- `modules/asset/test/kontor/asset/depreciation_book_test.clj`.
+
+Date: 2026-05-14.

@@ -1,7 +1,7 @@
 (ns kontor.asset.schema
-  "kontor-asset companion schema — ADR-053 (the register + lifecycle).
+  "kontor-asset companion schema — ADR-053 + ADR-054.
 
-   Entities (ADR-053 scope):
+   Entities (ADR-053 — the register + lifecycle):
      :asset         — one physical capitalised asset
      :asset-class   — the category (l10n ships the rows; e.g. a DE
                       class maps to an AfA-Tabelle row, a US class
@@ -10,13 +10,21 @@
                       impairment, revaluation, useful-life revision,
                       addition, transfer)
 
+   Entities (ADR-054 — the depreciation books):
+     :asset-depreciation   — the per-(asset, ledger) depreciation
+                             book; the 'depreciation area' IS a
+                             :ledger (ADR-021)
+     :asset-method-params  — the small heterogeneous DepreciationProvider
+                             config entity (1:1 component of a book)
+
    State machine (per ADR-034):
      :asset/status  — :planned → :in-service → :fully-depreciated
                       / :disposed / :transferred
 
-   GL-free: ADR-053 is the data model + lifecycle + governance. The
-   per-(asset, ledger) depreciation books, the depreciation runner,
-   and all GL postings are ADR-054.
+   ADR-053 is GL-free (the data model + lifecycle + governance).
+   ADR-054 adds the per-(asset, ledger) depreciation books, book
+   management, and the GL posting builders. The DepreciationProvider
+   protocol + the runner are ADR-055.
 
    Componentisation is `:asset/parent` self-reference — a component
    is just an :asset whose parent points at the whole (IAS 16); no
@@ -238,11 +246,145 @@
     :db/cardinality :db.cardinality/one}])
 
 ;; ============================================================================
+;; :asset-depreciation — the per-(asset, ledger) book (ADR-054)
+;; ============================================================================
+
+(def ^:private asset-depreciation-attrs
+  [{:db/ident       :asset-depreciation/asset
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The :asset this book depreciates."}
+
+   {:db/ident       :asset-depreciation/ledger
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The :ledger this book posts to (ADR-021). The
+                     'depreciation area' IS a ledger — the HGB book
+                     and the Steuerbilanz book are two ledgers."}
+
+   {:db/ident       :asset-depreciation/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:asset-depreciation/asset :asset-depreciation/ledger]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "One depreciation book per (asset, ledger). Both
+                     tuple members are always present, so no
+                     nil-in-tuple non-idempotency caveat."}
+
+   {:db/ident       :asset-depreciation/provider-id
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Which DepreciationProvider computes this book's
+                     schedule (:straight-line, :declining-balance,
+                     :sum-of-years-digits, :units-of-production,
+                     :macrs, :afa-degressive, …). ADR-055."}
+
+   {:db/ident       :asset-depreciation/method-params
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to an :asset-method-params entity
+                     carrying provider config (rate multiple, % ceiling,
+                     table key, …)."}
+
+   {:db/ident       :asset-depreciation/useful-life-months
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "This book's useful life in months. An HGB life
+                     and an AfA-Tabelle life commonly differ — that
+                     is the whole point of parallel books."}
+
+   {:db/ident       :asset-depreciation/convention
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":full | :half-year | :mid-quarter | :mid-month
+                     | :zeitanteilig — the first/last-period
+                     proration convention."}
+
+   {:db/ident       :asset-depreciation/depreciable-base
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The amount spread over the schedule — usually
+                     acquisition-cost − salvage-value, but may differ
+                     per book (a tax bonus reduces the tax base)."}
+
+   {:db/ident       :asset-depreciation/commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :asset-depreciation/start-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The depreciation clock start for this book.
+                     Defaults to the asset's :in-service-date."}
+
+   {:db/ident       :asset-depreciation/schedule
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to the ADR-032 :schedule the runner fires.
+                     :schedule/kind :depreciation, :origin-entity →
+                     this book."}
+
+   {:db/ident       :asset-depreciation/effective-rule
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to the l10n-owned effective-dated
+                     depreciation-rule row resolved at book creation
+                     (ADR-055 §effective-dating, ADR-026 pattern).
+                     l10n owns the rule rows; the companion only
+                     stores the pinned ref."}
+
+   {:db/ident       :asset-depreciation/note
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}])
+
+;; ============================================================================
+;; :asset-method-params — small heterogeneous provider-config entity (ADR-054)
+;; ============================================================================
+
+(def ^:private asset-method-params-attrs
+  [{:db/ident       :asset-method-params/rate-multiple
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Declining-balance: the rate multiple applied to
+                     the straight-line rate (1.5×, 2×, 2.5×)."}
+
+   {:db/ident       :asset-method-params/ceiling-rate
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Declining-balance: an absolute %-of-base ceiling
+                     on the annual rate (e.g. 0.25M for the DE
+                     2020-22 degressive-AfA window)."}
+
+   {:db/ident       :asset-method-params/switch-to-straight-line
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Declining-balance: switch to straight-line in
+                     the first year SL ≥ DB (the standard
+                     optimisation; §7 Abs. 2 EStG permits it)."}
+
+   {:db/ident       :asset-method-params/total-units
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Units-of-production: the asset's lifetime unit
+                     count (the denominator of the per-unit rate)."}
+
+   {:db/ident       :asset-method-params/table-key
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "A keyword a table-driven l10n provider (MACRS,
+                     AfA-Tabelle) keys its percentage table on."}
+
+   {:db/ident       :asset-method-params/note
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}])
+
+;; ============================================================================
 ;; Aggregate
 ;; ============================================================================
 
 (def all
-  (vec (concat asset-attrs asset-class-attrs asset-event-attrs)))
+  (vec (concat asset-attrs asset-class-attrs asset-event-attrs
+               asset-depreciation-attrs asset-method-params-attrs)))
 
 ;; ============================================================================
 ;; Status-transition + approval-policy seeds (ADR-034 / ADR-038)
