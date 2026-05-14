@@ -458,11 +458,11 @@
 ;; ============================================================================
 
 (def ^:private legal-hold-attrs
-  "Per-matter preservation orders. The hold-blocks-purge invariant
-   (kontor.legal-hold/assert-no-hold-violating-purges!) is enforced
-   in kontor.validation/validate-and-apply BEFORE sealing's no-
-   silent-retract check, so the more-specific 'purge blocked by
-   hold X' error wins.
+  "Per-matter preservation orders. The hold-blocks-destructive-write
+   invariant (kontor.legal-hold/assert-no-hold-violating-destructive-
+   writes!) is enforced in kontor.validation/validate-and-apply
+   BEFORE sealing's no-silent-retract check, so the more-specific
+   'blocked by hold X' error wins.
 
    Two scope shapes, evaluated together:
      :scope-eids   — explicit set; O(1) hot path
@@ -495,12 +495,12 @@
                      externally. May predate :placed-at if recording
                      lagged."}
 
-   {:db/ident       :legal-hold/placed-at
-    :db/valueType   :db.type/instant
-    :db/cardinality :db.cardinality/one
-    :db/doc         "When this hold was recorded in the system. The
-                     authoritative anchor for hold visibility; the
-                     hold blocks purges from this instant forward."}
+   ;; No :legal-hold/placed-at denorm (P1-3 review fix). The
+   ;; placement instant IS the :tx/valid-from of the placing tx and
+   ;; the :status-history/changed-at of the nil → :placed row.
+   ;; Resolve via (kbt/value-at db hold-eid :legal-hold/state at) or
+   ;; the status-history timeline. This matches the ADR-048
+   ;; valid-time normalization and the Stage-L denorm-removal pattern.
 
    {:db/ident       :legal-hold/expires-at
     :db/valueType   :db.type/instant

@@ -4778,10 +4778,31 @@ A legal hold has two scope shapes that combine:
   2025-Q2"). Optional `:legal-hold/scope-query-as-of` pins the
   query's valid-time anchor; defaults to now.
 
-Both checks run; either firing blocks the purge. A sweeper
-periodically refreshes `:scope-eids` with the query's current
-result-set so the hot path is purely eid-membership in the common
-case; the query branch only fires for sweep-lag corrections.
+Both checks run; either firing blocks the destructive write.
+
+**Destructive-write coverage.** The middleware blocks the full
+datahike data-destruction surface, not just `[:db/purge eid]`:
+whole-entity forms (`:db/purge`, `:db.fn/purge`, `:db/retractEntity`,
+`:db.fn/retractEntity`) and attribute-level forms
+(`:db/purgeAttribute`, `:db.purge/attribute`, `:db/retract`). This
+matters because the Zubulake / Pension Committee fact pattern is
+exactly the preservation of *non-posted* business records — a draft
+invoice, a partner row, a supporting-doc — which `:db/retractEntity`
+would silently discard. (Entity-map nil-retracts are not yet
+covered; the sealing middleware catches the posted-entity subset and
+a single-datom retract is a far narrower exposure — a follow-up can
+extend coverage if a real case surfaces.)
+
+**Sweeper.** The kernel ships `refresh-scope-eids!` as a sweeper
+*helper* — it re-evaluates a hold's `:scope-query` and additively
+extends `:scope-eids` (monotonic; never retracts without counsel
+re-attestation). The kernel does NOT ship a scheduler; the consumer
+schedules the helper on its own cadence (a `bb hold-sweep` cron, say)
+per ADR-010. The hot path doesn't depend on the sweeper running:
+because the middleware ALSO evaluates `:scope-query` live against
+the speculative `txdb` on every destructive write, sweep-lag never
+produces a missed hold — it only produces a slightly slower purge
+between sweeps.
 
 **State machine** (ADR-034 facet `:legal-hold/state`):
 
@@ -4832,12 +4853,23 @@ shape and the Datomic vocabulary.
   via `kontor.schema/install!`.
 - Single-line addition to `src/kontor/validation.clj:177-183`
   (`validate-and-apply`) calling
-  `legal-hold/assert-no-hold-violating-purges!` BEFORE
+  `legal-hold/assert-no-hold-violating-destructive-writes!` BEFORE
   `sealing/assert-no-silent-retracts!` so the more-specific error
-  wins on a purge-of-held-posted-entity.
-- `test/kontor/legal_hold_test.clj` (~250 LOC: eid-set hold, scope-
-  query hold, release-then-purge, expiry auto-release, bitemporal-
-  preview of the scope-query).
+  wins on a destructive-write-of-held-posted-entity.
+- `test/kontor/legal_hold_test.clj` (eid-set hold, scope-query hold,
+  release-then-purge, ADR-038 enforcement on placement + release,
+  destructive-form coverage (`:db/retractEntity`,
+  `:db/purgeAttribute`), multi-hold overlap, `:pending-review`
+  release SoD, bitemporal scope-query resolution).
+
+**No `:legal-hold/placed-at` denorm.** The placement instant IS the
+`:tx/valid-from` of the placing tx and the
+`:status-history/changed-at` of the nil → :placed row — resolve via
+`(kbt/value-at db hold-eid :legal-hold/state at)` or the
+status-history timeline. This follows the ADR-048 valid-time
+normalization and the Stage-L denorm-removal pattern; carrying a
+`:placed-at` scalar would be a third source of truth for the same
+instant.
 
 **Tradeoffs.**
 

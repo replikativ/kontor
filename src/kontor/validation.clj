@@ -176,10 +176,10 @@
 
    Order: cheap structural checks first; failures short-circuit."
   [txdb tx-data]
-  ;; ADR-049: hold-blocks-purge runs BEFORE sealing's no-silent-
-  ;; retract check so the more-specific 'purge blocked by hold X'
-  ;; error wins on purge-of-posted-held-entity.
-  (legal-hold/assert-no-hold-violating-purges! txdb tx-data)
+  ;; ADR-049: hold-blocks-destructive-write runs BEFORE sealing's
+  ;; no-silent-retract check so the more-specific 'blocked by hold X'
+  ;; error wins on destructive-write-of-posted-held-entity.
+  (legal-hold/assert-no-hold-violating-destructive-writes! txdb tx-data)
   (sealing/assert-no-silent-retracts! txdb tx-data)
   (period/assert-no-write-on-sealed! txdb tx-data)
   (period/assert-not-in-locked-period! txdb tx-data)
