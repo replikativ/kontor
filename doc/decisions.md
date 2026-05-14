@@ -5573,3 +5573,160 @@ schedule; ADR-055's runner fires it.
 - `modules/asset/test/kontor/asset/depreciation_book_test.clj`.
 
 Date: 2026-05-14.
+
+## ADR-055 — `kontor-asset`: the `DepreciationProvider` protocol + the runner
+
+**Decision.** `kontor-asset` ships a `DepreciationProvider` protocol
+— the `TaxProvider` (ADR-005) / `CostingProvider` (ADR-029) pattern
+applied to depreciation — plus four companion-shipped method
+built-ins and a thin `run-depreciation!` / `catch-up!` runner.
+l10n modules ship the jurisdiction-specific impls (MACRS,
+AfA-degressive, CCA, full-expensing) and register them the same way.
+
+**Why a provider protocol** (not a fixed method, not the kernel's
+job). ADR-032 deliberately left `:schedule` amount-agnostic: *"The
+kernel does NOT compute per-period amounts."* For depreciation the
+method is genuinely runtime-pluggable — a DE customer needs
+linear-HGB and degressive-tax *simultaneously* on the same asset,
+and an l10n module must be able to inject MACRS without forking the
+companion. So the seam is a provider protocol, exactly as ADR-032
+anticipated (*"The `CostingProvider` analogue would be a
+`ScheduleProvider`"*).
+
+**The protocol** (`kontor.asset.depreciation-provider`):
+```clojure
+(defprotocol DepreciationProvider
+  (provider-id   [provider])
+  (plan-schedule [provider db book]))
+```
+`plan-schedule` takes a `db` value + an `:asset-depreciation` book
+and returns the full forward plan: a `:periods` vector
+(`{:sequence :date :amount :method-used :basis-remaining :fired?}`),
+`:convention`, `:total`, `:provider-id`, and — for
+units-of-production — `:requires-units` + `:rate-per-unit`. It is
+**pure**: reads `db`, transacts nothing.
+
+**One `plan-schedule`, not `plan-schedule` + `plan-event`.** The
+research-note sketch (note 31 §3) had a separate `plan-event` method
+to re-plan the tail after a mid-life event. We collapsed it: a
+**`plan-schedule` that reads the book's `:schedule-occurrence`
+log** keeps every already-fired period's actual amount untouched
+(`:fired? true`) and re-plans *only the un-fired tail*. Because the
+runner re-plans on every call, a useful-life revision or a
+subsequent addition — applied to the book by
+`depreciation/revise-book!` — is picked up automatically on the next
+run, with fired periods never restated (IAS 16 estimate-changes are
+prospective by construction). A single event-aware `plan-schedule`
+is simpler and strictly subsumes the sketch's two methods.
+
+**`db` is a protocol parameter on purpose** (research note 31 Q7).
+The US MACRS mid-quarter convention is triggered by an *aggregate*
+property of all of the year's additions — `MacrsProvider` for one
+asset must query its siblings. Passing `db` lets an l10n provider
+do that; the built-ins simply ignore it beyond their own book.
+
+**Companion-shipped built-ins** (all `:full` convention, precisely):
+- **`StraightLineProvider`** — `(depreciable-base − accumulated) /
+  remaining-periods`, last period absorbs the rounding remainder.
+- **`DecliningBalanceProvider`** — `book-value × rate`, rate =
+  `:rate-multiple × (1/n)` capped by `:ceiling-rate`, with the
+  optional `:switch-to-straight-line` (switch the moment
+  SL-on-remaining ≥ DB; the standard §7 Abs. 2 EStG optimisation).
+  The final un-fired period drives book value exactly to salvage so
+  `Σ = depreciable-base`.
+- **`SumOfYearsDigitsProvider`** — accelerated; weights re-spread
+  over the remaining periods.
+- **`UnitsOfProductionProvider`** — the one method whose schedule is
+  *not* fully forward-computable. `plan-schedule` returns
+  `:rate-per-unit` + `:requires-units true`; the runner supplies the
+  per-period unit actuals (`:units` — a map or fn) at fire time.
+
+`provider-for` resolves a built-in by `:asset-depreciation/provider-id`;
+l10n impls are passed to the runner directly.
+
+**Conventions are l10n territory.** The built-ins implement `:full`
+precisely. `:convention` is *carried through* the plan so an l10n
+provider can read it, but exact first/last-period proration
+(half-year, mid-quarter, mid-month, zeitanteilig) is the l10n
+provider's job — MACRS GDS and the AfA-Tabellen bake the convention
+into their percentage tables. A built-in given a non-`:full`
+convention still computes `:full`.
+
+**The runner** (`kontor.asset.runner`). `run-depreciation!` is a
+convenience over the ADR-032 machinery: for each `:schedule`
+occurrence due but un-fired, ask the provider for the amount, build
+the `Dr expense / Cr accumulated` entry with
+`kontor.asset.posting/plan-depreciation-charge` (sealed by default —
+`:posted-at` = the occurrence date, so the charge shows in
+`:posted`-only statements), and `kontor.schedule/record-occurrence!`
+it (idempotent on `[schedule, sequence]` — a re-run double-posts
+nothing). On the last occurrence it drives `:asset/status` →
+`:fully-depreciated` (ungated — no approval policy). `catch-up!` is
+the named explicit-`as-of` variant for the missed-month case.
+
+**Trigger ownership** (ADR-032, research note 31 Q6): `kontor-asset`
+ships the runner *functions* but **not a scheduler**. Who calls them
+— a consumer-app cron, a manual close step, a workflow engine — is
+out of scope. The runner also does not enforce the
+run-before-close sequencing rule (research note 31 §5.2: fire the
+year's last occurrence before `close-fiscal-year!`); that is a
+documented caller-ordering convention.
+
+**`revise-book!`** (`kontor.asset.depreciation`) is the explicit
+"supersede the pending tail" operation: it updates a book's
+`:useful-life-months` / `:depreciable-base` and reschedules the
+`:schedule` `:end-date`, then the next `run-depreciation!` re-plans
+the un-fired tail. It is the per-book half of the cross-book
+`:asset-event` recorded by `asset/revise-useful-life!` /
+`record-addition!` — per-book because an HGB life ≠ an AfA-Tabelle
+life. It refuses a revision that implies fewer periods than have
+already fired.
+
+**Effective-dated jurisdiction rules — ADR-026 applied, one
+divergence.** *Which* rule governs an asset — the German
+degressive-AfA statute windows, the MACRS §168(k)/§179 windows — is
+an effective-dated-data problem, and it is **l10n's**, not the
+companion's. l10n-de ships a `:depreciation-rule` entity
+(l10n-owned namespace, l10n-de's own ADR per ADR-006) with
+`:effective-from` / `:effective-until` bounds. The **one deliberate
+divergence from ADR-026**: ADR-026 selects the rule whose window
+contains the *transaction's effective date*; depreciation selects
+on the asset's **`:asset/acquisition-date`** — the rule that governs
+an asset is fixed at acquisition for its whole life (a 2021 machine
+keeps the 2020-22 degressive window through 2031). The resolved row
+is pinned permanently as `:asset-depreciation/effective-rule` at
+`open-book!` time and never re-resolved — the valid-time-not-tx-time
+argument: a 2026 recomputation of a 2021 asset must use the rule
+legally in force on the 2021 acquisition date. The companion ships
+the *slot* (`:effective-rule`, ADR-054 schema) + the *pattern*; l10n
+ships the *rows* + the resolution helper; a built-in only ever reads
+`:asset-method-params` (which l10n populates from the resolved
+rule). The selection-by-window logic, the open-interval-on-the-right
+semantics, and the overlap tie-break all transfer verbatim from
+ADR-026 — so this is genuinely ADR-026, not a new effective-dating
+ADR.
+
+**Minor extension to ADR-054.** `kontor.asset.posting/build` gained
+a `:posted-at` header key: when present the entry is built sealed
+(`:transaction/state :posted` + `:posted-at` propagated to every
+posting — the `kontor.sealing` invariant). The runner passes it;
+every builder now optionally produces a sealed entry.
+
+**What ADR-055 does NOT do** (ADR-056): the Anlagengitter
+roll-forward report, `compute-cash-flow` / `compute-equity-changes`,
+the `:ledger` filter on `compute-statement`, the
+`:no-pending-depreciation` pre-close hook.
+
+**Shape after.**
+- `modules/asset/src/kontor/asset/depreciation_provider.clj` — the
+  protocol + four built-ins + `provider-for`.
+- `modules/asset/src/kontor/asset/runner.clj` — `run-depreciation!`
+  + `catch-up!`.
+- `modules/asset/src/kontor/asset/depreciation.clj` — gains
+  `book-plan-inputs` (the provider's input map) + `revise-book!`;
+  `periods-for` made public.
+- `modules/asset/src/kontor/asset/posting.clj` — `build` gains
+  `:posted-at`.
+- `modules/asset/test/kontor/asset/depreciation_run_test.clj`.
+
+Date: 2026-05-14.

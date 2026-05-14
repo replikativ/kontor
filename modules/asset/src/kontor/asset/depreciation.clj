@@ -120,10 +120,10 @@
                (accumulated-depreciation db eid))))
 
 ;; ============================================================================
-;; open-book!
+;; Plan inputs (ADR-055 — consumed by the DepreciationProvider impls)
 ;; ============================================================================
 
-(defn- periods-for
+(defn periods-for
   "Number of schedule occurrences over `useful-life-months` at
    `frequency` — used to derive the schedule's end-date."
   ^long [^long useful-life-months frequency]
@@ -134,6 +134,51 @@
     (throw (ex-info "open-book!: unsupported :frequency"
                     {:frequency frequency
                      :supported #{:monthly :quarterly :annual}}))))
+
+(defn book-plan-inputs
+  "Resolve everything a `DepreciationProvider` needs to plan a book's
+   schedule into one flat map (ADR-055). Pulls the book, its asset,
+   and its schedule.
+
+   Returns:
+     {:book :asset :schedule
+      :provider-id :convention
+      :acquisition-cost :salvage-value :depreciable-base
+      :useful-life-months :n-periods
+      :frequency :start-date :commodity
+      :method-params <map or nil>}"
+  [db book-spec]
+  (let [eid (resolve-book db book-spec)
+        _ (when-not eid (throw (ex-info "Depreciation book not found" {:spec book-spec})))
+        b (d/pull db
+                  '[:asset-depreciation/provider-id
+                    :asset-depreciation/convention
+                    :asset-depreciation/depreciable-base
+                    :asset-depreciation/useful-life-months
+                    {:asset-depreciation/asset [:db/id :asset/acquisition-cost
+                                                :asset/salvage-value]}
+                    {:asset-depreciation/commodity [:db/id]}
+                    {:asset-depreciation/method-params [*]}
+                    {:asset-depreciation/schedule [:db/id :schedule/frequency
+                                                   :schedule/start-date]}]
+                  eid)
+        asset (:asset-depreciation/asset b)
+        sched (:asset-depreciation/schedule b)
+        freq  (:schedule/frequency sched)]
+    {:book               eid
+     :asset              (:db/id asset)
+     :schedule           (:db/id sched)
+     :provider-id        (:asset-depreciation/provider-id b)
+     :convention         (:asset-depreciation/convention b)
+     :acquisition-cost   (:asset/acquisition-cost asset)
+     :salvage-value      (or (:asset/salvage-value asset) 0M)
+     :depreciable-base   (:asset-depreciation/depreciable-base b)
+     :useful-life-months (:asset-depreciation/useful-life-months b)
+     :n-periods          (periods-for (:asset-depreciation/useful-life-months b) freq)
+     :frequency          freq
+     :start-date         (:schedule/start-date sched)
+     :commodity          (:db/id (:asset-depreciation/commodity b))
+     :method-params      (:asset-depreciation/method-params b)}))
 
 (defn open-book!
   "Create an `:asset-depreciation` book for an (asset, ledger) pair —
@@ -229,3 +274,66 @@
                       note           (assoc :asset-depreciation/note note))]
     (d/transact conn (cond-> [book-entity schedule-entity]
                        mparams-entity (conj mparams-entity)))))
+
+;; ============================================================================
+;; revise-book! — the explicit "supersede the pending tail" operation (ADR-055)
+;; ============================================================================
+
+(defn revise-book!
+  "Apply a prospective change to a book — an IAS 16 useful-life
+   revision and/or a subsequent capitalised addition. Updates the
+   book's `:useful-life-months` / `:depreciable-base` and reschedules
+   the `:schedule` `:end-date` (+ `:total-amount`). Fired
+   `:schedule-occurrence`s are NEVER touched — the next
+   `run-depreciation!` re-plans only the un-fired tail (the
+   DepreciationProvider's `plan-schedule` reads the fired log).
+
+   This is the per-book half of the cross-book `:asset-event`
+   recorded by `kontor.asset.asset/revise-useful-life!` /
+   `record-addition!` — per-book because an HGB life and an
+   AfA-Tabelle life differ.
+
+   Required: :book (eid or [asset ledger])
+   At least one of:
+     :new-useful-life-months  long — the revised TOTAL useful life
+     :additional-base         bigdec — capitalised cost to add to
+                              :depreciable-base (a subsequent addition)
+   Optional:
+     :note                    string
+
+   Throws if the revised useful life implies fewer periods than have
+   already been fired."
+  [conn {:keys [book new-useful-life-months additional-base note]}]
+  (when-not (or new-useful-life-months additional-base)
+    (throw (ex-info "revise-book!: :new-useful-life-months or :additional-base required" {})))
+  (let [db (d/db conn)
+        eid (resolve-book db book)
+        _ (when-not eid (throw (ex-info "Depreciation book not found" {:spec book})))
+        b (d/pull db [:asset-depreciation/useful-life-months
+                      :asset-depreciation/depreciable-base
+                      :asset-depreciation/start-date
+                      {:asset-depreciation/schedule [:db/id :schedule/frequency]}]
+                  eid)
+        sched (:asset-depreciation/schedule b)
+        sched-eid (:db/id sched)
+        freq (:schedule/frequency sched)
+        life (or new-useful-life-months (:asset-depreciation/useful-life-months b))
+        base (cond-> (:asset-depreciation/depreciable-base b)
+               additional-base
+               (#(.add ^java.math.BigDecimal % ^java.math.BigDecimal additional-base)))
+        n-periods (periods-for life freq)
+        fired (count (schedule/fired-sequences db sched-eid))
+        _ (when (< n-periods fired)
+            (throw (ex-info "revise-book!: revised useful life implies fewer periods than already fired"
+                            {:type :asset/revision-below-fired
+                             :revised-periods n-periods :fired fired})))
+        end-date (schedule/date-of-occurrence (:asset-depreciation/start-date b)
+                                              freq n-periods)]
+    (d/transact conn
+                [(cond-> {:db/id eid
+                          :asset-depreciation/useful-life-months life
+                          :asset-depreciation/depreciable-base base}
+                   note (assoc :asset-depreciation/note note))
+                 {:db/id sched-eid
+                  :schedule/end-date end-date
+                  :schedule/total-amount base}])))

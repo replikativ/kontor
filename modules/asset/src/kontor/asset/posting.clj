@@ -78,19 +78,31 @@
 (defn- build
   "Assemble + build a transaction from a journal/date/narration header
    and a vector of posting maps. Drops zero-amount postings (no
-   zero-value journal lines)."
-  [{:keys [journal date narration external-id]} postings]
+   zero-value journal lines).
+
+   When the header carries `:posted-at`, the entry is built *sealed*:
+   `:transaction/state :posted` + `:transaction/posted-at`, and every
+   posting is stamped `:posting/posted-at` (the propagation the
+   `kontor.sealing` middleware enforces). Omit `:posted-at` for a
+   draft entry the caller seals later."
+  [{:keys [journal date narration external-id posted-at]} postings]
   (when-not journal (throw (ex-info ":journal required" {})))
   (when-not date    (throw (ex-info ":date required" {})))
-  (posting/build-transaction
-   {:transaction (cond-> {:transaction/journal journal
-                          :transaction/effective-date date}
-                   narration   (assoc :transaction/narration narration)
-                   external-id (assoc :transaction/external-id external-id))
-    :postings (filterv (fn [p]
-                         (not (zero? (.signum ^java.math.BigDecimal
-                                      (:posting/amount p)))))
-                       postings)}))
+  (let [nonzero (filterv (fn [p]
+                           (not (zero? (.signum ^java.math.BigDecimal
+                                        (:posting/amount p)))))
+                         postings)
+        nonzero (if posted-at
+                  (mapv #(assoc % :posting/posted-at posted-at) nonzero)
+                  nonzero)]
+    (posting/build-transaction
+     {:transaction (cond-> {:transaction/journal journal
+                            :transaction/effective-date date}
+                     narration   (assoc :transaction/narration narration)
+                     external-id (assoc :transaction/external-id external-id)
+                     posted-at   (assoc :transaction/state :posted
+                                        :transaction/posted-at posted-at))
+      :postings nonzero})))
 
 ;; ============================================================================
 ;; Capitalisation
@@ -107,7 +119,7 @@
              :commodity (default = the asset's :acquisition-commodity),
              :ledger (a nil ledger is the primary book — for a
              multi-book asset, call once per ledger that carries the
-             gross cost), :narration, :external-id"
+             gross cost), :narration, :external-id, :posted-at (seal the entry)"
   [db {:keys [asset credit-account amount commodity ledger] :as spec}]
   (when-not credit-account (throw (ex-info ":credit-account required" {})))
   (let [asset-eid (asset/resolve-asset db asset)
@@ -136,7 +148,7 @@
 
    Required: :book (eid or [asset ledger]), :amount, :journal, :date
    Optional: :commodity (default = the book's :commodity),
-             :narration, :external-id"
+             :narration, :external-id, :posted-at (seal the entry)"
   [db {:keys [book amount commodity] :as spec}]
   (when-not amount (throw (ex-info ":amount required" {})))
   (let [{:keys [ledger expense-account accumulated-account] book-com :commodity}
@@ -168,7 +180,7 @@
              :gain-account (required iff a gain results),
              :loss-account (required iff a loss results),
              :commodity (default = the book's :commodity),
-             :narration, :external-id
+             :narration, :external-id, :posted-at (seal the entry)
 
    `:asset-account-cost` is passed explicitly rather than re-pulled
    so the caller controls the gross figure (a partial disposal
@@ -220,7 +232,7 @@
 
    Required: :book, :amount (the impairment loss),
              :impairment-expense-account, :journal, :date
-   Optional: :commodity, :narration, :external-id"
+   Optional: :commodity, :narration, :external-id, :posted-at (seal the entry)"
   [db {:keys [book amount impairment-expense-account commodity] :as spec}]
   (when-not amount (throw (ex-info ":amount required" {})))
   (when-not impairment-expense-account
@@ -250,7 +262,7 @@
 
    Required: :book, :amount (signed — positive = upward),
              :revaluation-surplus-account, :journal, :date
-   Optional: :commodity, :narration, :external-id"
+   Optional: :commodity, :narration, :external-id, :posted-at (seal the entry)"
   [db {:keys [book amount revaluation-surplus-account commodity] :as spec}]
   (when-not amount (throw (ex-info ":amount required" {})))
   (when-not revaluation-surplus-account
