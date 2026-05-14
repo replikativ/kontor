@@ -5032,3 +5032,106 @@ managers describe the event that starts the retention clock
 ("retention triggered by case closure").
 
 Date: 2026-05-13.
+
+---
+
+## ADR-051 — Privilege classification on `:audit-doc`
+
+**Decision.** Stage M adds one attribute, `:audit-doc/privilege`, a
+keyword classifying a supporting document's legal-privilege status.
+Changes to it go through the status machine (ADR-034) so every
+re-classification carries who/why/supporting-doc; a privilege
+*waiver* (the consequential change — it exposes a previously-
+protected document) is governed by ADR-038 approval policy
+(`:no-self-approval` + `:requires-supporting-doc` +
+`:requires-non-empty-reason-note`).
+
+**Starter vocabulary** (open-set, consumers extend — matching
+ADR-038's open-vocabulary discipline):
+`:none` (default; nil is treated as `:none`), `:attorney-client`,
+`:work-product`, `:joint-defense`, `:settlement-communication`,
+`:trade-secret`, `:pii-sensitive`. A consumer companion can add its
+own (`:hipaa-phi`, `:ferpa-edu`, …) by transacting additional
+`:status-transition` + `:approval-policy` rows.
+
+**The kernel tags; the consumer enforces.** This is the load-bearing
+boundary. There is NO kernel-level ACL, RBAC, or user-role system —
+ADR-010 ("no UI, no auth") includes "no access control." The kernel
+ships `:audit-doc/privilege` as a *label* and two pure helpers
+(`visible-to?`, `filter-by-privilege`) that compute "would a viewer
+holding privilege-set P see this document"; the *enforcement* — who
+holds which privilege, how the URI is gated — lives entirely in the
+consumer's auth layer. The helpers take a `viewer-privilege` set,
+never a `requesting-uid`: the kernel does not know about users.
+(This is the explicit push-back on research note 17's
+`uri-for(doc, requesting-uid)` sketch — that signature would couple
+the kernel to a user concept it must not have.)
+
+**Privilege is a status-machine facet over a complete graph.** A
+classification can change to any other classification — a document
+determined `:work-product` can be re-determined `:attorney-client`,
+waived to `:none`, etc. So the `:status-transition` seeds are the
+*complete graph* over the starter vocabulary (every ordered pair,
+generated) rather than a constrained lifecycle. The status machine
+still earns its place: it gives every change a `:status-history`
+row with `:reason` / `:reason-note` / `:supporting-doc` /
+`:changed-by-uid`, and lets the approval policy fire on the waiver
+edges. `reclassify-privilege!` is the transactor; it normalizes a
+nil current value to `:none` for the `:from`.
+
+**Approval policy — the waiver rule.** Every `<privileged> → :none`
+edge carries `:no-self-approval` + `:requires-supporting-doc` +
+`:requires-non-empty-reason-note`. Waiving privilege is one of the
+most consequential acts in the kernel (it can expose attorney-client
+material); the person who classified a document cannot waive it
+alone, and the waiver determination must be documented. Upgrades
+(`:none → <privileged>`) and re-classifications between two
+privileged values are *not* approval-gated — over-classification is
+the safe direction.
+
+**Bitemporal composition (free).** Privilege tags change, and "what
+was the privilege classification at the filing date" is a real
+discovery question. It is answered with no new mechanism:
+`(kbt/value-at db doc-eid :audit-doc/privilege filing-date)`. A
+document upgraded from `:none` to `:attorney-client` after counsel
+review is correctly discoverable in both states along the tx-time
+and valid-time axes (ADR-048).
+
+**Why.** Research note 22 (reference study) recommended a flat
+keyword vocabulary over the W3C DPV tree — DPV models *what data
+is*, not *who may access it*; it's the wrong shape for a privilege
+*classification*. Research note 23 (market-pain) documented
+inadvertent-production and failure-to-log-waiver as the top
+privilege failure modes (FRE 502(b) "reasonable steps"; the
+common-interest M&A trap) — both are addressed by making every
+privilege change an audited, governed status transition rather than
+a silent attribute write. Research note 24 (internal gap) confirmed
+the substrate already carries the weight: `:audit-doc` (ADR-038),
+the status machine (ADR-034), approval policy (ADR-038), and the
+bitemporal resolver (ADR-048) compose with no new mechanism.
+
+**Shape after.**
+- One new attribute (`:audit-doc/privilege`) in `src/kontor/schema.clj`.
+- `kontor.audit-doc` gains: the `privilege-vocab` def,
+  `status-transition-seeds` + `approval-policy-seeds` (generated
+  complete graph + waiver rules), `install-seeds!` (called from
+  `kontor.core/install-schema!`, idempotent-guarded),
+  `reclassify-privilege!` (transactor), `visible-to?` +
+  `filter-by-privilege` (pure helpers).
+- `test/kontor/audit_doc_privilege_test.clj`: classify / re-classify
+  / waiver-requires-SoD / waiver-requires-supporting-doc / upgrade-
+  is-ungated / visible-to? rules / filter-by-privilege / bitemporal
+  value-at on the privilege facet.
+
+**What this does NOT do** (deferred, by design):
+- No DSAR-bundle privilege filtering yet — that is ADR-052's job;
+  `filter-by-privilege` is the helper ADR-052 will call.
+- No counsel-matter / counsel-engagement entity — research note 24
+  §7 explicitly defers `:counsel-matter` and `:legal-invoice`; the
+  privilege tag stands alone.
+- No automatic privilege inheritance (a privileged document
+  referenced by N status-history rows does not privilege those
+  rows). The kernel returns everything; the consumer applies
+  `filter-by-privilege` at render time.
+
+Date: 2026-05-14.

@@ -3336,7 +3336,22 @@
 
    {:db/ident       :audit-doc/uploaded-at
     :db/valueType   :db.type/instant
-    :db/cardinality :db.cardinality/one}])
+    :db/cardinality :db.cardinality/one}
+
+   ;; ADR-051 — legal-privilege classification. Open-set keyword:
+   ;; :none (default; nil treated as :none) | :attorney-client |
+   ;; :work-product | :joint-defense | :settlement-communication |
+   ;; :trade-secret | :pii-sensitive | <consumer extensions>.
+   ;; This is the status-machine facet :audit-doc/privilege —
+   ;; changes go through kontor.audit-doc/reclassify-privilege!
+   ;; (waivers are ADR-038 approval-gated). The kernel TAGS; the
+   ;; consumer's auth layer ENFORCES — there is no kernel ACL.
+   {:db/ident       :audit-doc/privilege
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Legal-privilege classification (ADR-051).
+                     Status-machine facet; nil = :none. Bitemporal:
+                     kbt/value-at answers 'privilege at filing date'."}])
 
 (def ^:private approval-policy-attrs
   [{:db/ident       :approval-policy/entity-type
