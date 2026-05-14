@@ -50,20 +50,21 @@
      :expense-account     (:db/id (:asset/expense-account a))}))
 
 (defn- book-context
-  "Resolve a book spec to {:book :asset :ledger :commodity + the
-   asset's three account eids}."
+  "Resolve a book spec to {:book :asset :ledger :commodity
+   :acquisition-cost + the asset's three account eids}."
   [db book-spec]
   (let [eid (depreciation/resolve-book db book-spec)
         _ (when-not eid (throw (ex-info "Depreciation book not found" {:spec book-spec})))
-        b (d/pull db [{:asset-depreciation/asset [:db/id]}
+        b (d/pull db [{:asset-depreciation/asset [:db/id :asset/acquisition-cost]}
                       {:asset-depreciation/ledger [:db/id]}
                       {:asset-depreciation/commodity [:db/id]}]
                   eid)
         asset-eid (:db/id (:asset-depreciation/asset b))]
-    (merge {:book      eid
-            :asset     asset-eid
-            :ledger    (:db/id (:asset-depreciation/ledger b))
-            :commodity (:db/id (:asset-depreciation/commodity b))}
+    (merge {:book             eid
+            :asset            asset-eid
+            :ledger           (:db/id (:asset-depreciation/ledger b))
+            :commodity        (:db/id (:asset-depreciation/commodity b))
+            :acquisition-cost (:asset/acquisition-cost (:asset-depreciation/asset b))}
            (asset-accounts db asset-eid))))
 
 (defn- posting*
@@ -173,26 +174,30 @@
    (HGB NBV ≠ tax NBV → disposal is a per-book posting). A gain
    credits `<gain-account>`; a loss debits `<loss-account>`.
 
-   Required: :book, :journal, :date, :asset-account-cost (the
-             asset's acquisition cost — see note below)
-   Optional: :proceeds (default 0M — a scrap/write-off),
+   Required: :book, :journal, :date
+   Optional: :asset-account-cost (default = the asset's
+             :acquisition-cost — see note below),
+             :proceeds (default 0M — a scrap/write-off),
              :proceeds-account (required iff :proceeds > 0),
              :gain-account (required iff a gain results),
              :loss-account (required iff a loss results),
              :commodity (default = the book's :commodity),
              :narration, :external-id, :posted-at (seal the entry)
 
-   `:asset-account-cost` is passed explicitly rather than re-pulled
-   so the caller controls the gross figure (a partial disposal
-   passes the disposed portion). Pass the asset's full
-   `:acquisition-cost` for a whole-asset disposal."
+   `:asset-account-cost` defaults to the asset's `:acquisition-cost`
+   (the whole-asset disposal — the common case, matching the cost
+   side of `net-book-value`). A partial disposal overrides it with
+   the disposed portion."
   [db {:keys [book proceeds proceeds-account gain-account loss-account
               commodity asset-account-cost]
        :or {proceeds 0M}
        :as spec}]
-  (when-not asset-account-cost (throw (ex-info ":asset-account-cost required" {})))
-  (let [{:keys [ledger asset-account accumulated-account] book-com :commodity}
+  (let [{:keys [ledger asset-account accumulated-account
+                acquisition-cost] book-com :commodity}
         (book-context db book)
+        asset-account-cost (or asset-account-cost acquisition-cost)
+        _ (when-not asset-account-cost
+            (throw (ex-info ":asset-account-cost required (the asset has no :acquisition-cost)" {})))
         com (or commodity book-com)
         accumulated (depreciation/accumulated-depreciation db book)
         nbv (.subtract ^java.math.BigDecimal asset-account-cost accumulated)

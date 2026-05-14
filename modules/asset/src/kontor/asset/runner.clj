@@ -25,9 +25,11 @@
             [kontor.asset.depreciation-provider :as dp]
             [kontor.asset.posting :as ap]
             [kontor.bitemporal :as kbt]
+            [kontor.period :as period]
             [kontor.schedule :as schedule]
             [kontor.status-machine :as sm])
-  (:import [java.math BigDecimal RoundingMode]))
+  (:import [java.math BigDecimal RoundingMode]
+           [java.util Date]))
 
 (defn- units-for
   "Resolve the per-occurrence unit actuals for a units-of-production
@@ -38,6 +40,22 @@
     (map? units) (get units sequence)
     (fn? units)  (units sequence)
     :else        nil))
+
+(defn- earliest-removal-date
+  "The earliest `:disposal` / `:transfer` `:asset-event` date for an
+   asset, or nil. The runner must not depreciate past a terminal
+   event (code-review P1-3)."
+  [db asset-eid]
+  (->> (d/q '[:find [?d ...]
+              :in $ ?asset
+              :where
+              [?e :asset-event/asset ?asset]
+              [?e :asset-event/kind ?k]
+              [(contains? #{:disposal :transfer} ?k)]
+              [?e :asset-event/date ?d]]
+            db asset-eid)
+       sort
+       first))
 
 (defn run-depreciation!
   "Fire every depreciation occurrence for `book-spec` that is due on
@@ -73,7 +91,19 @@
      :units                units-of-production books only — a map
                            {sequence → bigdec} or fn sequence → bigdec
      :changed-by-uid       attribute the :fully-depreciated transition
-     :mark-fully-depreciated?  default true"
+     :mark-fully-depreciated?  default true
+
+   Safety (review-after fixes):
+   - The runner STOPS at the earliest `:disposal` / `:transfer`
+     `:asset-event` — it never depreciates past a terminal event
+     (code-review P1-3). `:disposal-date` is returned when this
+     truncated the run.
+   - Each charge is checked against `kontor.period` — firing into a
+     soft-closed or sealed period throws
+     `:period/locked-period-violation`, surfaced to the caller
+     (research note 31 §5.3; market-pain P0-2). Occurrences already
+     fired earlier in the same run stay (they were in open periods);
+     `:fired-before-violation` carries the partial progress."
   ([conn book-spec] (run-depreciation! conn book-spec {}))
   ([conn book-spec {:keys [journal as-of provider posted? units
                            changed-by-uid mark-fully-depreciated?]
@@ -91,9 +121,14 @@
          seq->amount (into {} (map (juxt :sequence :amount)) (:periods plan))
          requires-units? (boolean (:requires-units plan))
          rate-per-unit (:rate-per-unit plan)
-         pending (sort-by :sequence
-                          (schedule/pending-occurrences
-                           db schedule-eid (or as-of (java.util.Date.))))
+         removal-date (earliest-removal-date db (:asset inputs))
+         pending (cond->> (sort-by :sequence
+                                   (schedule/pending-occurrences
+                                    db schedule-eid (or as-of (Date.))))
+                   ;; Never depreciate on or past a disposal/transfer.
+                   removal-date
+                   (filterv (fn [{:keys [^Date date]}]
+                              (neg? (.compareTo date ^Date removal-date)))))
          fired (reduce
                 (fn [acc {:keys [sequence date]}]
                   (let [amount
@@ -117,6 +152,19 @@
                                                :narration (str "Depreciation "
                                                                sequence)}
                                         posted? (assoc :posted-at date)))]
+                      ;; Refuse to post into a soft-closed / sealed
+                      ;; period — surface the typed violation, with
+                      ;; the partial progress, to the caller.
+                      (try
+                        (period/assert-not-in-locked-period! db tx-data)
+                        (catch clojure.lang.ExceptionInfo e
+                          (throw (ex-info (.getMessage e)
+                                          (assoc (ex-data e)
+                                                 :book book-eid
+                                                 :sequence sequence
+                                                 :fired-before-violation
+                                                 (mapv :sequence acc))
+                                          e))))
                       (schedule/record-occurrence! conn schedule-eid sequence
                                                    date amount commodity tx-data)
                       (conj acc {:sequence sequence :date date :amount amount}))))
@@ -143,11 +191,12 @@
                                      :reason :asset-fully-depreciated}
                               changed-by-uid (assoc :changed-by-uid changed-by-uid)))]
              (d/transact conn (kbt/with-vt status-tx last-date kbt/forever))))))
-     {:book book-eid
-      :fired (mapv :sequence fired)
-      :count (count fired)
-      :total total
-      :completed? completed?})))
+     (cond-> {:book book-eid
+              :fired (mapv :sequence fired)
+              :count (count fired)
+              :total total
+              :completed? completed?}
+       removal-date (assoc :disposal-date removal-date)))))
 
 (defn catch-up!
   "Fire every depreciation occurrence due on or before `as-of` that

@@ -269,3 +269,98 @@
            (runner/run-depreciation! conn book
                                      {:journal (journal (d/db conn))
                                       :as-of #inst "2026-06-01"}))))))
+
+;; ============================================================================
+;; Review-after fixes
+;; ============================================================================
+
+(deftest declining-balance-honours-explicit-depreciable-base
+  ;; Code-review P0-1: a tax book with a bonus-reduced base must
+  ;; depreciate exactly :depreciable-base, not acquisition-cost.
+  (let [conn (bootstrap)
+        _ (acquire-machine! conn "DB-BASE" 100000.00M)
+        _ (dep/open-book! conn {:asset "DB-BASE" :ledger (hgb (d/db conn))
+                                :provider-id :declining-balance
+                                :useful-life-months 60
+                                :depreciable-base 70000.00M
+                                :method-params {:asset-method-params/rate-multiple 2M}})
+        book (dep/book-for (d/db conn) "DB-BASE" (hgb (d/db conn)))
+        plan (dp/plan-schedule (dp/provider-for :declining-balance)
+                               (d/db conn) book)]
+    (is (= 70000.00M (:total plan))
+        "Σ = the explicit :depreciable-base, not the €100,000 cost")))
+
+(deftest declining-balance-ceiling-rate-caps-the-rate
+  (let [conn (bootstrap)
+        _ (acquire-machine! conn "DB-CAP" 100000.00M)
+        _ (acquire-machine! conn "DB-UNCAP" 100000.00M)
+        ;; 24-month life, 2.5× — uncapped per-period rate ≈ 0.104;
+        ;; an annual 0.25 ceiling → per-period cap ≈ 0.0208, which binds.
+        _ (dep/open-book! conn {:asset "DB-CAP" :ledger (hgb (d/db conn))
+                                :provider-id :declining-balance
+                                :useful-life-months 24
+                                :method-params {:asset-method-params/rate-multiple 2.5M
+                                                :asset-method-params/ceiling-rate 0.25M}})
+        _ (dep/open-book! conn {:asset "DB-UNCAP" :ledger (hgb (d/db conn))
+                                :provider-id :declining-balance
+                                :useful-life-months 24
+                                :method-params {:asset-method-params/rate-multiple 2.5M}})
+        p1 (fn [code]
+             (-> (dp/plan-schedule (dp/provider-for :declining-balance)
+                                   (d/db conn)
+                                   (dep/book-for (d/db conn) code (hgb (d/db conn))))
+                 :periods first :amount))]
+    (is (< (p1 "DB-CAP") (p1 "DB-UNCAP"))
+        "the annual ceiling caps the first period below the uncapped rate")))
+
+(deftest builtins-reject-non-full-convention
+  (let [conn (bootstrap)
+        _ (acquire-machine! conn "CONV-1" 120000.00M)
+        _ (dep/open-book! conn {:asset "CONV-1" :ledger (hgb (d/db conn))
+                                :provider-id :straight-line
+                                :useful-life-months 120
+                                :convention :half-year})
+        book (dep/book-for (d/db conn) "CONV-1" (hgb (d/db conn)))]
+    (testing "a built-in fails loud on a non-:full convention rather than silently computing :full"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"(?i):full convention only"
+           (dp/plan-schedule (dp/provider-for :straight-line)
+                             (d/db conn) book))))))
+
+(deftest runner-stops-at-disposal
+  (let [conn (bootstrap)
+        _ (acquire-machine! conn "RUN-DISP" 120000.00M)
+        _ (dep/open-book! conn {:asset "RUN-DISP" :ledger (hgb (d/db conn))
+                                :provider-id :straight-line
+                                :useful-life-months 120})
+        book (dep/book-for (d/db conn) "RUN-DISP" (hgb (d/db conn)))
+        ;; Record a disposal event 6 months in (raw transact — keeps
+        ;; the test off the approval machinery, exercised elsewhere).
+        _ (d/transact conn [{:asset-event/asset (asset/by-code (d/db conn) "RUN-DISP")
+                             :asset-event/kind :disposal
+                             :asset-event/date #inst "2026-07-15"}])
+        result (runner/run-depreciation! conn book
+                                         {:journal (journal (d/db conn))
+                                          :as-of far-future})]
+    (testing "the runner fires only the occurrences before the disposal date"
+      ;; 2026-01-15 … 2026-06-15 = 6 occurrences strictly before 2026-07-15.
+      (is (= 6 (:count result)))
+      (is (= #inst "2026-07-15" (:disposal-date result))))))
+
+(deftest runner-refuses-locked-period
+  (let [conn (bootstrap)
+        _ (acquire-machine! conn "RUN-LOCK" 120000.00M)
+        _ (dep/open-book! conn {:asset "RUN-LOCK" :ledger (hgb (d/db conn))
+                                :provider-id :straight-line
+                                :useful-life-months 120})
+        book (dep/book-for (d/db conn) "RUN-LOCK" (hgb (d/db conn)))
+        ;; A soft-closed period covering all of 2026, no journal scope.
+        _ (d/transact conn [{:period/start #inst "2026-01-01"
+                             :period/end #inst "2027-01-01"
+                             :period/locked-at #inst "2027-01-15"}])]
+    (testing "firing a depreciation charge into a soft-closed period throws"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"closed period"
+           (runner/run-depreciation! conn book
+                                     {:journal (journal (d/db conn))
+                                      :as-of far-future}))))))

@@ -288,3 +288,51 @@
                                 {:journal (journal (d/db conn))
                                  :as-of #inst "2026-07-01"})
       (is (empty? (areport/pending-depreciation-issues (d/db conn) period))))))
+
+;; ============================================================================
+;; Review-after: roll-forward folds impairment / revaluation / opening-accumulated
+;; ============================================================================
+
+(deftest roll-forward-folds-mid-life-events
+  ;; Market-pain P1-4: an impairment must show in the accumulated
+  ;; roll-forward (HGB §284), a revaluation in the cost roll-forward,
+  ;; and a mid-life import's :opening-accumulated must be opening
+  ;; accumulated depreciation.
+  (let [conn (bootstrap)
+        _ (acquire-machine! conn "EV-1" 100000.00M #inst "2026-02-01")
+        db (d/db conn)
+        ;; Mid-life import: €30,000 already depreciated before the book.
+        _ (dep/open-book! conn {:asset "EV-1" :ledger (ledger db "hgb")
+                                :provider-id :straight-line
+                                :useful-life-months 120
+                                :depreciable-base 100000.00M
+                                :opening-accumulated 30000.00M})
+        ;; An impairment and a revaluation, both within the window.
+        _ (d/transact conn [{:asset-event/asset (asset/by-code (d/db conn) "EV-1")
+                             :asset-event/kind :impairment
+                             :asset-event/date #inst "2026-06-01"
+                             :asset-event/amount 12000.00M}
+                            {:asset-event/asset (asset/by-code (d/db conn) "EV-1")
+                             :asset-event/kind :revaluation
+                             :asset-event/date #inst "2026-09-01"
+                             :asset-event/amount 5000.00M}])
+        window {:from #inst "2026-01-01" :to #inst "2027-01-01"
+                :ledger (ledger (d/db conn) "hgb")}
+        g (first (:groups (areport/asset-roll-forward (d/db conn) window)))]
+    (testing ":opening-accumulated is opening accumulated depreciation"
+      (is (= 30000.00M (:accum-opening g))))
+    (testing "the impairment folds into accum-period + the :impairments memo"
+      (is (= 12000.00M (:accum-period g)))
+      (is (= 12000.00M (:impairments g))))
+    (testing "the revaluation folds into cost-additions + the :revaluations memo"
+      ;; EV-1 entered in-window → cost-additions = 100,000 cost + 5,000 reval.
+      (is (= 105000.00M (:cost-additions g)))
+      (is (= 5000.00M (:revaluations g))))
+    (testing "the roll-forward identities still hold"
+      (is (= (:accum-closing g)
+             (.subtract (.add ^java.math.BigDecimal (:accum-opening g)
+                              ^java.math.BigDecimal (:accum-period g))
+                        ^java.math.BigDecimal (:accum-disposals g))))
+      (is (= (:nbv-closing g)
+             (.subtract ^java.math.BigDecimal (:cost-closing g)
+                        ^java.math.BigDecimal (:accum-closing g)))))))

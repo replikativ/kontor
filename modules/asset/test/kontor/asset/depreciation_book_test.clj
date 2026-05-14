@@ -407,3 +407,46 @@
         (is (tx-balanced? tx-data))
         (is (= #{-8000.00M 8000.00M}
                (set (map :posting/amount (posting-rows tx-data)))))))))
+
+;; ============================================================================
+;; Review-after fixes
+;; ============================================================================
+
+(deftest opening-accumulated-feeds-accumulated-and-nbv
+  ;; Market-pain P1-3: mid-life import — an asset already part-way
+  ;; through its life on day one.
+  (let [conn (bootstrap)
+        _ (acquire-machine! conn "IMPORT-1")
+        db (d/db conn)
+        ;; €120,000 asset, already €36,000 depreciated; €84,000 over
+        ;; the remaining 84 months.
+        _ (dep/open-book! conn {:asset "IMPORT-1" :ledger (ledger db "hgb")
+                                :provider-id :straight-line
+                                :useful-life-months 84
+                                :depreciable-base 84000.00M
+                                :opening-accumulated 36000.00M})
+        book (dep/book-for (d/db conn) "IMPORT-1" (ledger (d/db conn) "hgb"))]
+    (testing "accumulated-depreciation includes the pre-schedule opening figure"
+      (is (= 36000.00M (dep/accumulated-depreciation (d/db conn) book))))
+    (testing "net-book-value nets it against acquisition cost"
+      (is (= 84000.00M (dep/net-book-value (d/db conn) book))))))
+
+(deftest plan-disposal-defaults-asset-account-cost
+  (let [conn (bootstrap)
+        _ (acquire-machine! conn "DISP-DEFAULT")
+        db (d/db conn)
+        _ (dep/open-book! conn {:asset "DISP-DEFAULT" :ledger (ledger db "hgb")
+                                :provider-id :straight-line :useful-life-months 120})
+        book (dep/book-for (d/db conn) "DISP-DEFAULT" (ledger (d/db conn) "hgb"))
+        ;; No :asset-account-cost — defaults to the asset's €120,000.
+        tx-data (ap/plan-disposal
+                 (d/db conn)
+                 {:book book
+                  :loss-account (acct (d/db conn) "6900")
+                  :journal (journal (d/db conn))
+                  :date #inst "2027-01-01"})]
+    (testing "the asset-account is credited with the full acquisition cost"
+      (is (tx-balanced? tx-data))
+      ;; No occurrences, no proceeds → Dr loss 120,000 / Cr asset 120,000.
+      (is (contains? (set (map :posting/amount (posting-rows tx-data)))
+                     -120000.00M)))))

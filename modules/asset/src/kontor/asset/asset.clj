@@ -2,7 +2,7 @@
   "kontor-asset register + lifecycle transactors — ADR-053.
 
    GL-free: ADR-053 records the :asset register, the :asset-event
-   immutable mid-life facts, and drives the :asset/status lifecycle
+   append-only mid-life facts, and drives the :asset/status lifecycle
    status machine. ADR-054 adds the per-(asset, ledger) depreciation
    books, the depreciation runner, and the GL postings — in ADR-053
    the caller supplies :origin-transaction / event-transaction refs.
@@ -16,7 +16,17 @@
    status machine). `impair!` / `revalue!` keep the asset
    :in-service, so they use inline required-arg guards
    (:justification + :reason-note) — the same explicit-guard pattern
-   `legal-hold/place!` and `retention/define-policy!` use."
+   `legal-hold/place!` and `retention/define-policy!` use.
+
+   :asset-event entities are append-only BY CONVENTION — every
+   transactor here only ever creates one, never retracts or edits —
+   but this is not sealing-enforced (review-after market-pain P0-1).
+
+   `revise-useful-life!` / `record-addition!` record the cross-book
+   `:asset-event` only — they do NOT touch the per-(asset, ledger)
+   depreciation books. To APPLY a revision to a book's schedule, call
+   `kontor.asset.depreciation/revise-book!` per book (per-book because
+   an HGB life ≠ an AfA-Tabelle life)."
   (:require [clojure.string]
             [datahike.api :as d]
             [kontor.bitemporal :as kbt]
@@ -194,7 +204,7 @@
 
 (defn dispose!
   "Dispose of an asset — write-off, sale, or scrap. Records an
-   immutable `:asset-event :disposal` AND drives `:asset/status`
+   append-only `:asset-event :disposal` AND drives `:asset/status`
    :in-service → :disposed (or :fully-depreciated → :disposed), so
    the ADR-038 approval policy fires (`:requires-supporting-doc` +
    `:no-self-approval`).
@@ -363,8 +373,14 @@
 
 (defn revise-useful-life!
   "Record an IAS 16 useful-life revision (the annual review). The
-   asset stays :in-service; ADR-054's runner re-plans the remaining
-   schedule prospectively from `:new-useful-life-months`.
+   asset stays :in-service.
+
+   This records the cross-book `:asset-event` ONLY. It does NOT
+   touch any depreciation book — to apply the revision, call
+   `kontor.asset.depreciation/revise-book!` for each affected
+   (asset, ledger) book (per-book because an HGB life and an
+   AfA-Tabelle life differ); the next `run-depreciation!` then
+   re-plans the un-fired tail prospectively.
 
    Required opts: :asset, :date, :new-useful-life-months,
                   :changed-by-uid.
@@ -385,8 +401,12 @@
 (defn record-addition!
   "Record a subsequent capitalised addition (a major improvement
    that extends the asset's value/life — not a repair, which is
-   expensed). The asset stays :in-service; ADR-054's runner re-plans
-   the schedule with the increased base.
+   expensed). The asset stays :in-service.
+
+   Like `revise-useful-life!`, this records the cross-book
+   `:asset-event` ONLY. To fold the addition into a book's
+   depreciable base, call `kontor.asset.depreciation/revise-book!`
+   with `:additional-base` for each affected book.
 
    Required opts: :asset, :date, :amount, :commodity.
    Optional: :transaction, :justification, :reason-note,

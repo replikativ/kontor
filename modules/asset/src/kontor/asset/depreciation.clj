@@ -83,25 +83,32 @@
 ;; ============================================================================
 
 (defn accumulated-depreciation
-  "Σ `:schedule-occurrence/amount` over the book's schedule — the
-   accumulated depreciation charged so far for this (asset, ledger)
-   book. Returns a bigdec (0M when nothing has been charged)."
+  "Total accumulated depreciation for this (asset, ledger) book:
+   the book's `:opening-accumulated` (pre-schedule depreciation from
+   a mid-life import — usually absent) plus Σ `:schedule-occurrence/
+   amount` over the book's schedule. Returns a bigdec (0M when
+   nothing has been charged)."
   ^java.math.BigDecimal [db book-spec]
   (let [eid (resolve-book db book-spec)
-        sched (:db/id (:asset-depreciation/schedule
-                       (d/pull db [:asset-depreciation/schedule] eid)))]
-    (or (when sched
-          ;; `:with ?o` keeps each occurrence distinct in the
-          ;; relation — without it two €1,000 charges collapse to a
-          ;; single {€1,000} value-set and the sum is wrong.
-          (d/q '[:find (sum ?amt) .
-                 :with ?o
-                 :in $ ?s
-                 :where
-                 [?o :schedule-occurrence/schedule ?s]
-                 [?o :schedule-occurrence/amount ?amt]]
-               db sched))
-        0M)))
+        b (d/pull db [:asset-depreciation/schedule
+                      :asset-depreciation/opening-accumulated]
+                  eid)
+        sched (:db/id (:asset-depreciation/schedule b))
+        opening (or (:asset-depreciation/opening-accumulated b) 0M)
+        from-occurrences
+        (or (when sched
+              ;; `:with ?o` keeps each occurrence distinct in the
+              ;; relation — without it two €1,000 charges collapse to
+              ;; a single {€1,000} value-set and the sum is wrong.
+              (d/q '[:find (sum ?amt) .
+                     :with ?o
+                     :in $ ?s
+                     :where
+                     [?o :schedule-occurrence/schedule ?s]
+                     [?o :schedule-occurrence/amount ?amt]]
+                   db sched))
+            0M)]
+    (.add ^java.math.BigDecimal opening ^java.math.BigDecimal from-occurrences)))
 
 (defn net-book-value
   "Carrying amount of the asset in this book:
@@ -198,9 +205,14 @@
    Optional opts:
      :convention          keyword (default :full)
      :depreciable-base    bigdec (default = acquisition-cost −
-                          salvage-value, pulled from the asset)
+                          salvage-value, pulled from the asset). For a
+                          mid-life import pass the REMAINING base.
+     :opening-accumulated bigdec — depreciation accumulated before
+                          this book's schedule (the mid-life-import
+                          case). A reporting scalar — see
+                          `accumulated-depreciation`.
      :commodity           ref/eid (default = asset's
-                          :acquisition-commodity)
+                          :acquisition-commodity; must be resolvable)
      :start-date          instant (default = asset's :in-service-date;
                           required if the asset has none)
      :frequency           :monthly (default) | :quarterly | :annual
@@ -211,8 +223,8 @@
      :schedule-code       string (default = \"<asset-code>-dep-<ledger-code>\")
      :note                string"
   [conn {:keys [asset ledger provider-id useful-life-months convention
-                depreciable-base commodity start-date frequency
-                method-params effective-rule schedule-code note]
+                depreciable-base opening-accumulated commodity start-date
+                frequency method-params effective-rule schedule-code note]
          :or   {convention :full frequency :monthly}}]
   (when-not asset              (throw (ex-info ":asset required" {})))
   (when-not ledger             (throw (ex-info ":ledger required" {})))
@@ -230,6 +242,9 @@
                       :asset/in-service-date]
                   asset-eid)
         commodity* (or commodity (:db/id (:asset/acquisition-commodity a)))
+        _ (when-not commodity*
+            (throw (ex-info "open-book!: no :commodity and the asset has no :acquisition-commodity — pass :commodity"
+                            {:asset asset})))
         base (or depreciable-base
                  (.subtract ^java.math.BigDecimal (:asset/acquisition-cost a)
                             ^java.math.BigDecimal (or (:asset/salvage-value a) 0M)))
@@ -264,9 +279,11 @@
                              :asset-depreciation/useful-life-months useful-life-months
                              :asset-depreciation/convention convention
                              :asset-depreciation/depreciable-base base
+                             :asset-depreciation/commodity commodity*
                              :asset-depreciation/start-date start
                              :asset-depreciation/schedule sched-tempid}
-                      commodity*     (assoc :asset-depreciation/commodity commodity*)
+                      opening-accumulated
+                      (assoc :asset-depreciation/opening-accumulated opening-accumulated)
                       mparams-entity (assoc :asset-depreciation/method-params mparams-tempid)
                       (and method-params (not (map? method-params)))
                       (assoc :asset-depreciation/method-params method-params)

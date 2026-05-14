@@ -123,24 +123,47 @@
           tail (bd- total (reduce bd+ 0M head))]
       (conj head tail))))
 
+(defn- assert-full-convention!
+  "The companion built-ins implement the `:full` convention only. A
+   non-`:full` convention (half-year, mid-quarter, mid-month,
+   zeitanteilig) needs an l10n provider that bakes the proration into
+   its math — a built-in must NOT silently compute `:full` and return
+   a wrong schedule. Fail loud."
+  [{:keys [convention provider-id]}]
+  (when-not (= :full convention)
+    (throw (ex-info "Built-in DepreciationProvider supports the :full convention only — a non-:full convention needs an l10n provider"
+                    {:type        :asset/unsupported-convention
+                     :convention  convention
+                     :provider-id provider-id}))))
+
 (defn- assemble
-  "Build the `:periods` vector from `inputs` and a function
-   `unfired-amount` : (sequence, book-value-before) → amount-bigdec.
-   Threads `:basis-remaining` (book value) from `:acquisition-cost`
-   down. `fired` is the {seq → amount} map; fired periods use their
-   logged amount."
-  [{:keys [n-periods start-date frequency acquisition-cost]} fired method-used
-   unfired-amount]
+  "Build the `:periods` vector. `starting-book-value` is the carrying
+   amount depreciation starts from — `depreciable-base +
+   salvage-value`, so a fully-depreciated book lands exactly on
+   salvage whatever the book's base (a tax book with a bonus-reduced
+   base still threads correctly — code-review P0-1/P1-2).
+
+   `unfired-amount` is `(fn [sequence book-value state] → [amount
+   state'])`. `state` lets a method thread its own carry (e.g. the
+   declining-balance switch-to-SL flag) without a mutable cell. Fired
+   periods use their logged amount and pass `state` through
+   untouched."
+  [{:keys [n-periods start-date frequency]} starting-book-value fired
+   method-used unfired-amount]
   (loop [seq 1
-         book-value acquisition-cost
+         book-value starting-book-value
+         state nil
          acc []]
     (if (> seq n-periods)
       acc
       (let [fired? (contains? fired seq)
-            amount (if fired? (fired seq) (unfired-amount seq book-value))
+            [amount state'] (if fired?
+                              [(fired seq) state]
+                              (unfired-amount seq book-value state))
             book-value' (if amount (bd- book-value amount) book-value)]
         (recur (inc seq)
                book-value'
+               state'
                (conj acc {:sequence        seq
                           :date            (schedule/date-of-occurrence
                                             start-date frequency seq)
@@ -166,8 +189,9 @@
   DepreciationProvider
   (provider-id [_] :straight-line)
   (plan-schedule [_ db book]
-    (let [{:keys [schedule depreciable-base n-periods] :as inputs}
+    (let [{:keys [schedule depreciable-base salvage-value n-periods] :as inputs}
           (depreciation/book-plan-inputs db book)
+          _ (assert-full-convention! inputs)
           fired (fired-amounts db schedule)
           accumulated (reduce bd+ 0M (vals fired))
           unfired (vec (sort (remove fired (range 1 (inc n-periods)))))
@@ -175,8 +199,9 @@
           amts (equal-split remaining (count unfired))
           unfired->amt (zipmap unfired amts)]
       (plan-result inputs
-                   (assemble inputs fired :straight-line
-                             (fn [seq _bv] (unfired->amt seq)))))))
+                   (assemble inputs (bd+ depreciable-base salvage-value)
+                             fired :straight-line
+                             (fn [seq _bv state] [(unfired->amt seq) state]))))))
 
 ;; ============================================================================
 ;; Declining-balance (with optional switch to straight-line)
@@ -189,13 +214,18 @@
   DepreciationProvider
   (provider-id [_] :declining-balance)
   (plan-schedule [_ db book]
-    (let [{:keys [schedule n-periods frequency salvage-value method-params]
+    (let [{:keys [schedule depreciable-base salvage-value n-periods frequency
+                  method-params]
            :as inputs}
           (depreciation/book-plan-inputs db book)
+          _ (assert-full-convention! inputs)
           fired (fired-amounts db schedule)
           multiple (or (:asset-method-params/rate-multiple method-params) 2M)
           ceiling  (:asset-method-params/ceiling-rate method-params)
           switch?  (boolean (:asset-method-params/switch-to-straight-line method-params))
+          ;; sl-rate is per-period (1/n-periods); db-rate stays
+          ;; per-period; the annual :ceiling-rate is converted to a
+          ;; per-period cap — all three on the same time base.
           sl-rate  (.divide 1M (BigDecimal/valueOf n-periods) 12 RoundingMode/HALF_EVEN)
           db-rate  (let [r (.multiply ^BigDecimal multiple sl-rate)]
                      (if ceiling
@@ -205,35 +235,40 @@
                          (if (pos? (.compareTo r cap)) cap r))
                        r))
           unfired (vec (sort (remove fired (range 1 (inc n-periods)))))
-          last-unfired (last unfired)
-          ;; `switched` flips to true once SL-on-remaining ≥ DB; once
-          ;; switched it stays switched (a vol. atom over the reduce).
-          switched (volatile! false)]
+          last-unfired (last unfired)]
       (plan-result
        inputs
        (assemble
-        inputs fired :declining-balance
-        (fn [seq book-value]
+        ;; Book value threads from depreciable-base + salvage, so DB
+        ;; depreciates exactly :depreciable-base whatever the book's
+        ;; base (code-review P0-1).
+        inputs (bd+ depreciable-base salvage-value) fired :declining-balance
+        ;; `state` carries the switch-to-SL flag — once SL ≥ DB it
+        ;; stays switched. No mutable cell; the flag rides the
+        ;; `assemble` accumulator (code-review P2-1).
+        (fn [seq book-value switched?]
           (let [floor (bd- book-value salvage-value)]
             (cond
               ;; Final un-fired period drives book value exactly to
               ;; salvage — guarantees Σ = depreciable-base.
-              (= seq last-unfired) (if (pos? (.signum floor)) floor 0M)
+              (= seq last-unfired)
+              [(if (pos? (.signum floor)) floor 0M) switched?]
 
-              (not (pos? (.signum floor))) 0M
+              (not (pos? (.signum floor)))
+              [0M switched?]
 
               :else
-              (let [db-amt (round2 (.multiply book-value db-rate))
-                    db-amt (if (pos? (.compareTo db-amt floor)) floor db-amt)
+              (let [db-amt0 (round2 (.multiply book-value db-rate))
+                    db-amt  (if (pos? (.compareTo db-amt0 floor)) floor db-amt0)
                     ;; remaining un-fired periods from `seq` forward,
                     ;; inclusive — the SL denominator.
                     remaining-n (count (filter #(>= % seq) unfired))
                     sl-amt (round2 (.divide floor (BigDecimal/valueOf
                                                    (max 1 remaining-n))
-                                            12 RoundingMode/HALF_EVEN))]
-                (when (and switch? (>= (.compareTo sl-amt db-amt) 0))
-                  (vreset! switched true))
-                (if @switched sl-amt db-amt))))))))))
+                                            12 RoundingMode/HALF_EVEN))
+                    switched?' (or switched?
+                                   (and switch? (>= (.compareTo sl-amt db-amt) 0)))]
+                [(if switched?' sl-amt db-amt) switched?'])))))))))
 
 ;; ============================================================================
 ;; Sum-of-years'-digits
@@ -243,8 +278,9 @@
   DepreciationProvider
   (provider-id [_] :sum-of-years-digits)
   (plan-schedule [_ db book]
-    (let [{:keys [schedule depreciable-base n-periods] :as inputs}
+    (let [{:keys [schedule depreciable-base salvage-value n-periods] :as inputs}
           (depreciation/book-plan-inputs db book)
+          _ (assert-full-convention! inputs)
           fired (fired-amounts db schedule)
           accumulated (reduce bd+ 0M (vals fired))
           unfired (vec (sort (remove fired (range 1 (inc n-periods)))))
@@ -266,8 +302,9 @@
                        (bd- remaining (reduce bd+ 0M (butlast raw)))))
           unfired->amt (zipmap unfired amts)]
       (plan-result inputs
-                   (assemble inputs fired :sum-of-years-digits
-                             (fn [seq _bv] (unfired->amt seq)))))))
+                   (assemble inputs (bd+ depreciable-base salvage-value)
+                             fired :sum-of-years-digits
+                             (fn [seq _bv state] [(unfired->amt seq) state]))))))
 
 ;; ============================================================================
 ;; Units-of-production
@@ -287,6 +324,7 @@
                   method-params]
            :as inputs}
           (depreciation/book-plan-inputs db book)
+          _ (assert-full-convention! inputs)
           total-units (:asset-method-params/total-units method-params)
           _ (when-not (and total-units (pos? (.signum ^BigDecimal total-units)))
               (throw (ex-info "units-of-production needs :asset-method-params/total-units > 0"

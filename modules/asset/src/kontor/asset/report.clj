@@ -40,14 +40,41 @@
     (before? d to)   :in-window
     :else            :after))
 
+(defn- bd+ ^java.math.BigDecimal [^java.math.BigDecimal a ^java.math.BigDecimal b]
+  (.add a b))
+
+(defn- bd- ^java.math.BigDecimal [^java.math.BigDecimal a ^java.math.BigDecimal b]
+  (.subtract a b))
+
+(defn- split-by-window
+  "Split a seq of `[date amount]` pairs into the window buckets:
+   `{:before … :in-window … :before-to …}` (before-to = before +
+   in-window)."
+  [date-amount-pairs ^Date from ^Date to]
+  (reduce (fn [acc [d amt]]
+            (case (window-class d from to)
+              :before    (-> acc (update :before bd+ amt)
+                             (update :before-to bd+ amt))
+              :in-window (-> acc (update :in-window bd+ amt)
+                             (update :before-to bd+ amt))
+              :after     acc))
+          {:before 0M :in-window 0M :before-to 0M}
+          date-amount-pairs))
+
 (defn- asset-record
   "Gather one asset's roll-forward inputs: cost, entry-date, the
-   earliest disposal/transfer date (if any), and its book's fired
-   `:schedule-occurrence` (date, amount) pairs."
+   earliest disposal/transfer date (if any), the book's
+   `:opening-accumulated`, its fired `:schedule-occurrence`
+   `[date amount]` pairs, and its `:impairment` / `:revaluation`
+   `:asset-event` `[date amount]` pairs."
   [db asset book sched]
   (let [a (d/pull db [:asset/acquisition-cost :asset/in-service-date
                       :asset/acquisition-date {:asset/class [:db/id]}]
                   asset)
+        opening-accumulated (or (:asset-depreciation/opening-accumulated
+                                 (d/pull db [:asset-depreciation/opening-accumulated]
+                                         book))
+                                0M)
         occ (d/q '[:find ?d ?amt
                    :in $ ?s
                    :where
@@ -62,19 +89,43 @@
                              [?e :asset-event/kind ?kind]
                              [(contains? #{:disposal :transfer} ?kind)]
                              [?e :asset-event/date ?d]]
-                           db asset)]
-    {:asset        asset
-     :book         book
-     :class        (:db/id (:asset/class a))
-     :cost         (or (:asset/acquisition-cost a) 0M)
-     :entry-date   (or (:asset/in-service-date a) (:asset/acquisition-date a))
-     :removal-date (when (seq removal-dates) (first (sort removal-dates)))
-     :occ          occ}))
+                           db asset)
+        ;; [kind date amount] for the value-moving mid-life events.
+        kind-events (d/q '[:find ?kind ?d ?amt
+                           :in $ ?asset
+                           :where
+                           [?e :asset-event/asset ?asset]
+                           [?e :asset-event/kind ?kind]
+                           [(contains? #{:impairment :revaluation} ?kind)]
+                           [?e :asset-event/date ?d]
+                           [?e :asset-event/amount ?amt]]
+                         db asset)
+        by-kind (group-by first kind-events)
+        pairs   (fn [k] (mapv (fn [[_ d amt]] [d amt]) (get by-kind k)))]
+    {:asset               asset
+     :book                book
+     :class               (:db/id (:asset/class a))
+     :cost                (or (:asset/acquisition-cost a) 0M)
+     :entry-date          (or (:asset/in-service-date a) (:asset/acquisition-date a))
+     :removal-date        (when (seq removal-dates) (first (sort removal-dates)))
+     :opening-accumulated opening-accumulated
+     :occ                 occ
+     :impairments         (pairs :impairment)
+     :revaluations        (pairs :revaluation)}))
 
 (defn- record-contributions
   "Per-asset contributions to the roll-forward buckets over
-   `[from, to)`, or nil if the asset is outside the window entirely."
-  [{:keys [cost entry-date removal-date occ]} ^Date from ^Date to]
+   `[from, to)`, or nil if the asset is outside the window entirely.
+
+   Depreciation occurrences AND `:impairment` events flow into the
+   accumulated-depreciation roll-forward (HGB §284 Abs. 3 shows
+   außerplanmäßige Abschreibung). `:revaluation` events adjust the
+   gross-cost roll-forward (`plan-revaluation` posts `Dr asset-account`).
+   The book's `:opening-accumulated` (a mid-life import's pre-schedule
+   depreciation) is always opening accumulated."
+  [{:keys [cost entry-date removal-date opening-accumulated
+           occ impairments revaluations]}
+   ^Date from ^Date to]
   (let [entry-before-from? (and entry-date (before? entry-date from))
         entry-in-window?   (and entry-date
                                 (not (before? entry-date from))
@@ -90,24 +141,28 @@
       entry-after-to?      nil
       removed-before-from? nil
       :else
-      (let [by-class (group-by (fn [[d _]] (window-class d from to)) occ)
-            sum (fn [k] (reduce (fn [acc [_ amt]] (.add ^java.math.BigDecimal acc amt))
-                                0M (get by-class k)))
-            occ-before    (sum :before)
-            occ-in-window (sum :in-window)
-            occ-before-to (.add ^java.math.BigDecimal occ-before occ-in-window)]
-        {:cost-opening      (if entry-before-from? cost 0M)
-         :cost-additions    (if entry-in-window? cost 0M)
-         :cost-disposals    (if removed-in-window? cost 0M)
-         :accum-opening     occ-before
-         :accum-period      occ-in-window
-         :accum-disposals   (if removed-in-window? occ-before-to 0M)}))))
-
-(defn- bd+ ^java.math.BigDecimal [^java.math.BigDecimal a ^java.math.BigDecimal b]
-  (.add a b))
-
-(defn- bd- ^java.math.BigDecimal [^java.math.BigDecimal a ^java.math.BigDecimal b]
-  (.subtract a b))
+      (let [occ*    (split-by-window occ from to)
+            impair* (split-by-window impairments from to)
+            reval*  (split-by-window revaluations from to)
+            ;; accumulated = scheduled depreciation + impairments
+            ;;   (+ the book's pre-schedule opening-accumulated)
+            accum-opening   (bd+ opening-accumulated
+                                 (bd+ (:before occ*) (:before impair*)))
+            accum-period    (bd+ (:in-window occ*) (:in-window impair*))
+            accum-before-to (bd+ opening-accumulated
+                                 (bd+ (:before-to occ*) (:before-to impair*)))
+            ;; gross cost = acquisition cost + revaluations
+            cost-before     (bd+ cost (:before reval*))
+            cost-in-window  (:in-window reval*)
+            cost-before-to  (bd+ cost (:before-to reval*))]
+        {:cost-opening    (if entry-before-from? cost-before 0M)
+         :cost-additions  (bd+ (if entry-in-window? cost 0M) cost-in-window)
+         :cost-disposals  (if removed-in-window? cost-before-to 0M)
+         :accum-opening   accum-opening
+         :accum-period    accum-period
+         :accum-disposals (if removed-in-window? accum-before-to 0M)
+         :impairments     (:in-window impair*)
+         :revaluations    (:in-window reval*)}))))
 
 (defn- aggregate-group
   "Sum a group's per-asset contribution maps into the roll-forward
@@ -132,6 +187,10 @@
      :accum-period    accum-period
      :accum-disposals accum-disposals
      :accum-closing   accum-closing
+     ;; Memo lines — the in-window impairment / revaluation totals,
+     ;; already folded into accum-period / cost-additions above.
+     :impairments     (add-k :impairments)
+     :revaluations    (add-k :revaluations)
      :nbv-opening     (bd- cost-opening accum-opening)
      :nbv-closing     (bd- cost-closing accum-closing)}))
 
@@ -145,6 +204,7 @@
                 :asset-count n
                 :cost-opening   :cost-additions :cost-disposals :cost-closing
                 :accum-opening  :accum-period   :accum-disposals :accum-closing
+                :impairments    :revaluations   ; in-window memo totals
                 :nbv-opening    :nbv-closing} …]
       :totals {…same keys, summed across groups…}}
 
@@ -157,6 +217,15 @@
    assets with a `:disposal` OR `:transfer` `:asset-event` in the
    window (a transfer-out is a removal from this ledger's books — v1
    folds the two; a dedicated transfers column is a follow-up).
+
+   Mid-life events are folded in (review-after market-pain P1-4):
+   `:impairment` `:asset-event`s flow into the accumulated-depreciation
+   roll-forward (HGB §284 Abs. 3 shows außerplanmäßige Abschreibung);
+   `:revaluation` events adjust the gross-cost roll-forward; a book's
+   `:opening-accumulated` (a mid-life import's pre-schedule
+   depreciation) is opening accumulated. `:impairments` /
+   `:revaluations` are exposed as in-window memo totals (already
+   folded into `:accum-period` / `:cost-additions`).
 
    Required opts: `:from`, `:to`, `:ledger` (eid).
    Optional: `:group-by` — `:class` (default, group by `:asset/class`)

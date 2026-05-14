@@ -6,9 +6,17 @@
      :asset-class   — the category (l10n ships the rows; e.g. a DE
                       class maps to an AfA-Tabelle row, a US class
                       to a MACRS recovery class)
-     :asset-event   — an immutable mid-life-event fact (disposal,
+     :asset-event   — an append-only mid-life-event fact (disposal,
                       impairment, revaluation, useful-life revision,
-                      addition, transfer)
+                      addition, transfer). The lifecycle transactors
+                      only ever CREATE :asset-event entities — never
+                      retract or edit one — so the audit trail is
+                      append-only BY CONVENTION. It is not
+                      sealing-enforced (sealing, ADR-007, guards
+                      :posting entities; wiring a companion entity
+                      into kernel sealing would breach the kernel's
+                      anti-accretion contract). A consumer that needs
+                      a hard guarantee layers its own seal.
 
    Entities (ADR-054 — the depreciation books):
      :asset-depreciation   — the per-(asset, ledger) depreciation
@@ -200,9 +208,14 @@
    {:db/ident       :asset-event/kind
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
-    :db/doc         "#{:disposal :impairment :revaluation
-                       :partial-disposal :useful-life-revision
-                       :addition :transfer}."}
+    :db/doc         "Wired: #{:disposal :impairment :revaluation
+                       :useful-life-revision :addition :transfer}.
+                     RESERVED (no transactor / posting builder /
+                     re-plan path yet — a documented follow-up;
+                     review-after market-pain P1-1): :partial-disposal.
+                     The attr is an open keyword — a consumer may
+                     transact other kinds, but only the wired set is
+                     understood by the runner / roll-forward."}
 
    {:db/ident       :asset-event/date
     :db/valueType   :db.type/instant
@@ -305,7 +318,21 @@
     :db/cardinality :db.cardinality/one
     :db/doc         "The amount spread over the schedule — usually
                      acquisition-cost − salvage-value, but may differ
-                     per book (a tax bonus reduces the tax base)."}
+                     per book (a tax bonus reduces the tax base). For
+                     a mid-life import this is the REMAINING base."}
+
+   {:db/ident       :asset-depreciation/opening-accumulated
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Depreciation accumulated BEFORE this book's
+                     :schedule started — the mid-life-import case (an
+                     asset 3 years into its life on day one). A pure
+                     reporting scalar: `accumulated-depreciation` and
+                     `net-book-value` add it to the occurrence sum;
+                     the DepreciationProvider never sees it (it plans
+                     only the schedule's own occurrences against the
+                     REMAINING :depreciable-base). Optional; absent
+                     means a fresh book."}
 
    {:db/ident       :asset-depreciation/commodity
     :db/valueType   :db.type/ref

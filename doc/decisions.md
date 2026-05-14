@@ -5408,6 +5408,18 @@ schedule) reuses `:ledger` (ADR-021) and `:schedule` (ADR-032).
 - No `compute-cash-flow` / `compute-equity-changes` / Anlagengitter
   — ADR-056.
 
+**Review-after (research note 33).** `:asset-event` is append-only
+*by transactor convention* — the lifecycle transactors only ever
+create events — but this is **not** sealing-enforced; the earlier
+"immutable" wording overclaimed an enforced guarantee and has been
+corrected (wiring a companion entity into kernel sealing would
+breach the anti-accretion contract). `:partial-disposal` is a
+RESERVED `:asset-event/kind` — no transactor / posting builder /
+re-plan path yet; a documented follow-up. `revise-useful-life!` /
+`record-addition!` record the cross-book `:asset-event` only — the
+per-book apply step is `depreciation/revise-book!` (ADR-055), now
+stated explicitly in their docstrings.
+
 Date: 2026-05-14.
 
 ## ADR-054 — `kontor-asset`: a depreciation area IS a `:ledger`
@@ -5572,6 +5584,17 @@ schedule; ADR-055's runner fires it.
   posting builders.
 - `modules/asset/test/kontor/asset/depreciation_book_test.clj`.
 
+**Review-after (research note 33).** Three follow-ups landed here:
+(a) `:asset-depreciation/opening-accumulated` — a pure reporting
+scalar for the mid-life-import case (an asset already part-way
+through its life on day one); `accumulated-depreciation` /
+`net-book-value` add it to the occurrence sum, the provider never
+sees it (the caller passes the *remaining* `:depreciable-base`).
+(b) `open-book!` now throws if no `:commodity` is resolvable rather
+than letting nil propagate into the occurrence log. (c)
+`plan-disposal`'s `:asset-account-cost` is now optional, defaulting
+to the asset's `:acquisition-cost` — one canonical NBV cost source.
+
 Date: 2026-05-14.
 
 ## ADR-055 — `kontor-asset`: the `DepreciationProvider` protocol + the runner
@@ -5729,6 +5752,22 @@ the `:ledger` filter on `compute-statement`, the
   `:posted-at`.
 - `modules/asset/test/kontor/asset/depreciation_run_test.clj`.
 
+**Review-after (research note 33).** Four fixes landed here:
+(a) **P0** — `DecliningBalanceProvider` ignored
+`:depreciable-base` (it threaded book value from
+`:acquisition-cost`), silently over-depreciating bonus-base tax
+books; `assemble` now threads from `depreciable-base +
+salvage-value`, so all three built-ins depreciate exactly
+`:depreciable-base`. (b) the built-ins now **throw** on a
+non-`:full` convention instead of silently computing `:full` — a
+non-`:full` convention needs an l10n provider. (c) the runner now
+**stops at the earliest `:disposal` / `:transfer` event** (never
+depreciates past a terminal event) and **refuses to post into a
+soft-closed / sealed period** (`kontor.period/
+assert-not-in-locked-period!`, surfaced with the partial progress —
+research note 31 §5.3). (d) the declining-balance switch-to-SL flag
+now rides the `assemble` accumulator instead of a `volatile!`.
+
 Date: 2026-05-14.
 
 ## ADR-056 — Jahresabschluss extensions: Anlagengitter + cash-flow + equity-changes + the `:ledger` filter
@@ -5839,5 +5878,16 @@ kontor at all).
 This completes Stage L′ (`kontor-asset`): ADR-053 (register +
 lifecycle) → ADR-054 (depreciation books = `:ledger`) → ADR-055
 (provider protocol + runner) → ADR-056 (Jahresabschluss).
+
+**Review-after (research note 33).** `asset-roll-forward` now folds
+the value-moving mid-life events into the Anlagengitter:
+`:impairment` `:asset-event`s flow into the accumulated-depreciation
+roll-forward (HGB §284 Abs. 3 shows außerplanmäßige Abschreibung),
+`:revaluation` events adjust the gross-cost roll-forward, and a
+book's `:opening-accumulated` (a mid-life import's pre-schedule
+depreciation) is opening accumulated. `:impairments` /
+`:revaluations` are exposed as in-window memo totals. The closing
+identities (`accum-closing = accum-opening + accum-period −
+accum-disposals`, NBV = cost − accumulated) still hold.
 
 Date: 2026-05-14.
