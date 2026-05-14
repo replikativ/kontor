@@ -6526,3 +6526,165 @@ ADR-063.
 - `modules/lease/test/kontor/lease/lease_test.clj`.
 
 Date: 2026-05-14.
+
+---
+
+## ADR-063 — `kontor-lease`: the `:lease-liability` book, the `LeaseProvider`, the operating-lease ROU plug, `commence!` + `run-lease!`
+
+**Decision.** The substantive half of `kontor-lease` — balance-sheet
+recognition and the period close. ADR-062 laid the `:lease` contract;
+ADR-063 makes a `:draft` lease *live*: it opens the liability book,
+the ROU asset, posts the day-one entry, and runs the periodic GL.
+
+**`:lease-liability` is a per-`(lease, ledger)` book — the exact
+sibling of `:asset-depreciation`.** This is where the per-ledger
+classification confirmed in ADR-062 actually lives. One physical
+`:lease` has N `:lease-liability` books, one per `:ledger` (ADR-021):
+the same lease is `:finance` on the IFRS ledger and `:operating` on
+the US-GAAP ledger, and the two books carry *different*
+`:opening-liability` measurements when their discount rates differ.
+Each book owns one ADR-032 `:schedule` (`:schedule/kind
+:lease-liability`) the runner fires. Attrs: `:lease` + `:ledger`
+refs, `:identity` (`:db.unique/identity` tuple `[lease ledger]` —
+both members always present, no nil caveat), `:classification`
+(`:finance` | `:operating`), `:provider-id`, `:opening-liability`,
+`:discount-rate`, `:liability-account`, `:interest-account`,
+`:opening-fired-through` (0 at commencement; ADR-064's modifications
+move it forward and re-anchor `:opening-liability`), `:commodity`,
+`:schedule`, `:note`. A short-term / low-value **exempt** lease gets
+*no* `:lease-liability` book at all — the ADR-062 exemption path.
+
+**The `LeaseProvider` protocol — the sibling of
+`DepreciationProvider`.** `kontor-lease` ships the protocol +
+`EffectiveInterestProvider` (the built-in); an l10n module could ship
+a jurisdiction-specific impl and pass it to the runner directly.
+`plan-schedule` is *pure* — it reads a `db` value and returns the
+liability unwind: per period the cash `:payment`, its `:interest` /
+`:principal` split, the `:balance-remaining`, plus
+`:straight-line-expense`. The unwind is **fully deterministic** from
+the book's `:opening-liability` + `:discount-rate` + the lease's
+payment terms — so a re-plan mid-run reproduces every already-fired
+period bit-exact (the same prospective-replan property ADR-055's
+`DepreciationProvider` has). `EffectiveInterestProvider`: period rate
+= `discount-rate / periods-per-year`; each non-final payment splits
+into `interest = round2(balance × rate)` and `principal = payment −
+interest`; the **final period drives the balance exactly to zero**
+(`principal = balance`), absorbing the rounding drift into the last
+payment. `:in-advance` period 1 — the contract's first payment, made
+*at* commencement — carries zero interest.
+
+**The operating-lease ROU "plug" is one `DepreciationProvider`
+impl** (`:lease-rou-plug`, `kontor.lease.rou-provider`). This is the
+ASC 842 operating-lease subtlety. An operating lease recognises ONE
+straight-line lease cost per period, but the liability still unwinds
+at the effective-interest rate (interest is front-loaded). So the
+ROU asset's amortisation is the **plug** that keeps the total flat:
+
+```
+ROU amortisation(period) = straight-line-expense − interest(period)
+```
+
+with `straight-line-expense = (Σ undiscounted payments + initial
+direct costs + prepaid − incentives) / n`. That numerator is chosen
+precisely so the plug **sums exactly to the ROU asset's cost** over
+the term: `Σ plug = Σ(SL − interest) = n·SL − Σinterest = ROU-cost`
+(since `Σinterest = total-payments − PV` and `ROU-cost = PV + IDC +
+prepaid − incentives`). The consequence: an operating lease reuses
+the *entire* `kontor-asset` machinery — `:asset-depreciation` book,
+runner, GL builder — by routing its ROU book through this provider
+instead of a built-in, and `commence!` points both the interest leg
+*and* the ROU charge at the single lease-expense account via the
+**per-book `:asset-depreciation/expense-account` override** (the
+small ADR-063 `kontor-asset` touch). The P&L then shows exactly one
+straight-line lease-expense line — interest + plug meeting in one
+account — as ASC 842 requires. A `:finance` lease ignores all this:
+its ROU book just uses the `kontor-asset` `:straight-line` provider.
+
+**The `kontor-asset` touch.** ADR-063 adds *one optional attribute* —
+`:asset-depreciation/expense-account`, a per-book override of the
+asset's `:asset/expense-account`. Without it a multi-book ROU asset
+could not route depreciation to a different P&L account per ledger
+(depreciation-expense on the finance book, the single lease-expense
+account on the operating book). `kontor.asset.depreciation/open-book!`
+takes it as an optional key; `kontor.asset.posting/book-context`
+prefers it over the asset's account. Additive, backward-compatible,
+covered by the existing `kontor-asset` suite.
+
+**`commence!` — the balance-sheet recognition transactor.** Turns a
+`:draft` lease `:active`. For the lease (asserting it *is* `:draft`
+and has an `:origin-document`): (1) creates the **single** ROU
+`:asset` via `kontor.asset.asset/acquire!` (`:in-service`,
+`:asset/class` the lease's ROU class); (2) per ledger in `:books`,
+computes the per-book PV (`present-value` of the payments at that
+book's rate), opens the `:lease-liability` book + its schedule and
+the ROU `:asset-depreciation` book + its schedule, and posts the
+day-one entry `Dr ROU-asset / Cr lease-liability [/ Cr cash]` tagged
+with the `:ledger`; (3) sets `:lease/rou-asset`; (4) drives
+`:lease/status :draft → :active` (the `:requires-supporting-doc`
+policy met by the lease's `:origin-document`). ROU cost = `PV +
+initial-direct-costs + prepaid − incentives`; because PV is per-book,
+each `:asset-depreciation` book carries its own `:depreciable-base`
+and each `:lease-liability` book its own `:opening-liability` — the
+parallel-ledger shape. The liability schedule and the ROU
+depreciation schedule are given the **same start date** so occurrence
+`k` of each lines up (`:in-advance` → commencement; `:in-arrears` →
+the first period-end).
+
+**`run-lease!` — the period close for one `(lease, ledger)`.** Fires
+the liability schedule's due payment occurrences — `Dr interest +
+Dr lease-liability(principal) / Cr cash`, logging the occurrence with
+amount = the cash payment — then runs the sibling ROU
+`:asset-depreciation` book through `kontor.asset.runner/run-
+depreciation!` (with the `:lease-rou-plug` provider for an operating
+book, the `kontor-asset` built-in for a finance book). When the
+liability schedule completes it drives `:lease/status :active →
+:expired` (ungated, like the asset runner's `:fully-depreciated`).
+Each charge is period-lock-checked (`kontor.period`), and re-running
+a window is idempotent on `[schedule, sequence]`. Like the
+`kontor-asset` runner, `kontor-lease` ships the runner *functions*,
+not a scheduler — and `commence!` / `run-lease!` each do several
+`d/transact`s (acquire → open books → post per book), *not* one
+atomic tx, consistent with the rest of the codebase.
+
+**Why no `outstanding-liability` denorm.** The carrying amount of a
+liability book is *derived* — `lease-provider/outstanding-liability`
+runs the deterministic plan and reads the `:balance-remaining` of the
+highest fired occurrence (or `:opening-liability` when nothing has
+fired). The fired log says *which* periods ran; the provider says
+what the running balance is. No stored running total to drift.
+
+**Namespace layout** (`modules/lease/src/kontor/lease/`):
+`core.clj` (ADR-062 + `present-value` / `periods-for`),
+`liability.clj` (the `:lease-liability` book lifecycle +
+`book-plan-inputs` + `open-liability-book!` — no provider dep),
+`lease-provider.clj` (the protocol + `EffectiveInterestProvider` +
+`provider-for` + `plan-for-book` + `outstanding-liability`),
+`rou-provider.clj` (the `LeaseRouPlugProvider`), `posting.clj`
+(`plan-lease-recognition` + `plan-lease-payment`), `runner.clj`
+(`commence!` + `run-lease!`). Mirrors `kontor-asset`'s split
+(`depreciation` ↔ `depreciation-provider` ↔ `posting` ↔ `runner`).
+
+**Deferred to ADR-064.** `:lease-modification` (the append-only
+modification event), the remeasurement / partial-termination
+transactors, prospective re-planning via `:opening-fired-through`,
+variable / index-linked payments (an index reset = a remeasurement),
+and the FX rule (the liability is monetary — retranslated at the
+closing rate; the ROU asset is non-monetary — frozen at the
+historical rate). `EffectiveInterestProvider` already handles
+`:opening-fired-through > 0`; ADR-064 wires the transactors that
+move it.
+
+**Shape after.**
+- `modules/lease/src/kontor/lease/schema.clj` — `:lease-liability/*`
+  attrs added (the `:lease/*` attrs are ADR-062).
+- `modules/lease/src/kontor/lease/{liability,lease_provider,rou_provider,posting,runner}.clj`
+  — new.
+- `modules/lease/src/kontor/lease/core.clj` — `present-value` /
+  `periods-for` / `periods-per-year` added.
+- `modules/asset/src/kontor/asset/{schema,depreciation,posting}.clj`
+  — the `:asset-depreciation/expense-account` per-book override.
+- `modules/lease/test/kontor/lease/runner_test.clj` — new (PV, the
+  unwind, `commence!`, finance `run-lease!`, the operating-lease
+  single-cost result, multi-book parallel ledgers).
+
+Date: 2026-05-14.

@@ -313,6 +313,19 @@
                      | :zeitanteilig — the first/last-period
                      proration convention."}
 
+   {:db/ident       :asset-depreciation/expense-account
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional per-book override of the asset's
+                     `:asset/expense-account` — the P&L account the
+                     depreciation charge debits FOR THIS book. Added
+                     for kontor-lease (ADR-063): a Right-of-Use asset
+                     that is a *finance* lease under IFRS but an
+                     *operating* lease under US-GAAP debits
+                     depreciation-expense on the IFRS ledger and the
+                     single lease-expense account on the US-GAAP
+                     ledger. Absent ⇒ the asset's `:expense-account`."}
+
    {:db/ident       :asset-depreciation/depreciable-base
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one

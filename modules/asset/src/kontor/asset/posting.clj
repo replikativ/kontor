@@ -51,21 +51,29 @@
 
 (defn- book-context
   "Resolve a book spec to {:book :asset :ledger :commodity
-   :acquisition-cost + the asset's three account eids}."
+   :acquisition-cost + the asset's three account eids}. The
+   `:expense-account` is the book's per-book override
+   (`:asset-depreciation/expense-account`, ADR-063) when set, else
+   the asset's `:asset/expense-account`."
   [db book-spec]
   (let [eid (depreciation/resolve-book db book-spec)
         _ (when-not eid (throw (ex-info "Depreciation book not found" {:spec book-spec})))
         b (d/pull db [{:asset-depreciation/asset [:db/id :asset/acquisition-cost]}
                       {:asset-depreciation/ledger [:db/id]}
-                      {:asset-depreciation/commodity [:db/id]}]
+                      {:asset-depreciation/commodity [:db/id]}
+                      {:asset-depreciation/expense-account [:db/id]}]
                   eid)
-        asset-eid (:db/id (:asset-depreciation/asset b))]
+        asset-eid (:db/id (:asset-depreciation/asset b))
+        accts (asset-accounts db asset-eid)]
     (merge {:book             eid
             :asset            asset-eid
             :ledger           (:db/id (:asset-depreciation/ledger b))
             :commodity        (:db/id (:asset-depreciation/commodity b))
             :acquisition-cost (:asset/acquisition-cost (:asset-depreciation/asset b))}
-           (asset-accounts db asset-eid))))
+           accts
+           ;; Per-book :expense-account override (ADR-063) wins.
+           (when-let [ovr (:db/id (:asset-depreciation/expense-account b))]
+             {:expense-account ovr}))))
 
 (defn- posting*
   "Build one posting map, tagging :posting/ledger only when `ledger`

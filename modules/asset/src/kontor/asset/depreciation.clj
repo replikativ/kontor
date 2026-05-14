@@ -220,11 +220,16 @@
                           :asset-method-params entity) or an eid
      :effective-rule      eid of the l10n-owned effective-dated rule
                           row (ADR-055 §effective-dating)
+     :expense-account     per-book override of the asset's
+                          :asset/expense-account (ADR-063 — a ROU
+                          asset debits a different P&L account per
+                          ledger). Absent ⇒ the asset's account.
      :schedule-code       string (default = \"<asset-code>-dep-<ledger-code>\")
      :note                string"
   [conn {:keys [asset ledger provider-id useful-life-months convention
                 depreciable-base opening-accumulated commodity start-date
-                frequency method-params effective-rule schedule-code note]
+                frequency method-params effective-rule expense-account
+                schedule-code note]
          :or   {convention :full frequency :monthly}}]
   (when-not asset              (throw (ex-info ":asset required" {})))
   (when-not ledger             (throw (ex-info ":ledger required" {})))
@@ -288,6 +293,8 @@
                       (and method-params (not (map? method-params)))
                       (assoc :asset-depreciation/method-params method-params)
                       effective-rule (assoc :asset-depreciation/effective-rule effective-rule)
+                      expense-account (assoc :asset-depreciation/expense-account
+                                             expense-account)
                       note           (assoc :asset-depreciation/note note))]
     (d/transact conn (cond-> [book-entity schedule-entity]
                        mparams-entity (conj mparams-entity)))))

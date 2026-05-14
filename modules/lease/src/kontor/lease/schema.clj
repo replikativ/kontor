@@ -161,11 +161,114 @@
     :db/cardinality :db.cardinality/one}])
 
 ;; ============================================================================
+;; :lease-liability — the per-(lease, ledger) liability book (ADR-063)
+;; ============================================================================
+;;
+;; Sibling of :asset-depreciation. THIS carries the per-ledger
+;; classification — the same lease is :finance on the IFRS ledger and
+;; effectively off-balance on an HGB ledger, so classification is
+;; per-(lease, ledger), not per-:lease.
+
+(def ^:private lease-liability-attrs
+  [{:db/ident       :lease-liability/lease
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :lease-liability/ledger
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The framework book (ADR-021) this liability is
+                     measured on — :ledger \"ifrs\", \"us-gaap\", …"}
+
+   {:db/ident       :lease-liability/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:lease-liability/lease :lease-liability/ledger]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "One liability book per (lease, ledger). Both
+                     tuple members always present — no nil caveat."}
+
+   {:db/ident       :lease-liability/classification
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "#{:finance :operating}. PER-(lease, ledger): the
+                     same lease is :finance on the IFRS ledger and
+                     :operating on a US-GAAP ledger. A short-term /
+                     low-value exempt lease gets NO :lease-liability
+                     book at all (the exemption path)."}
+
+   {:db/ident       :lease-liability/provider-id
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Which LeaseProvider computes this book's
+                     amortization — :effective-interest (the
+                     built-in)."}
+
+   {:db/ident       :lease-liability/opening-liability
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The liability measurement this book unwinds from
+                     — the PV of the lease payments at commencement,
+                     or (post-modification, ADR-064) the remeasured
+                     balance. The IFRS book and a local-GAAP book CAN
+                     differ here."}
+
+   {:db/ident       :lease-liability/discount-rate
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The annual rate this book discounts at — usually
+                     the lease's, but a parallel book could differ.
+                     Re-discounted only on a :term-change / :rate-reset
+                     modification (ADR-064)."}
+
+   {:db/ident       :lease-liability/liability-account
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The BS lease-liability account this book posts
+                     against."}
+
+   {:db/ident       :lease-liability/interest-account
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The P&L account the interest leg of each payment
+                     debits. For a :finance book this is an
+                     interest-expense account; for an :operating book
+                     `commence!` sets it to the single
+                     lease-expense account, so the P&L shows one
+                     lease-expense line (interest + the ROU plug both
+                     land there = the straight-line expense)."}
+
+   {:db/ident       :lease-liability/opening-fired-through
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "How many schedule occurrences were already fired
+                     before this book's current `:opening-liability`
+                     applied — 0 at commencement; set by a
+                     modification's re-plan (ADR-064) or a mid-life
+                     import. The LeaseProvider computes the un-fired
+                     tail from period (opening-fired-through + 1)."}
+
+   {:db/ident       :lease-liability/commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :lease-liability/schedule
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to the ADR-032 :schedule the lease runner
+                     fires. :schedule/kind :lease-liability,
+                     :origin-entity → this book."}
+
+   {:db/ident       :lease-liability/note
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}])
+
+;; ============================================================================
 ;; Aggregate
 ;; ============================================================================
 
 (def all
-  (vec lease-attrs))
+  (vec (concat lease-attrs lease-liability-attrs)))
 
 ;; ============================================================================
 ;; Status-transition + approval-policy seeds (ADR-034 / ADR-038)

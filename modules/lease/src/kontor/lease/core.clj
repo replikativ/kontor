@@ -43,10 +43,61 @@
   [db spec]
   (when-let [eid (resolve-lease db spec)]
     (d/pull db
-            '[* {:lease/lessor [:partner/external-id :partner/name]
-                 :lease/rou-asset [:asset/code :asset/status]
-                 :lease/asset-class [:asset-class/code]}]
+            '[* {:lease/lessor [:db/id :partner/external-id :partner/name]
+                 :lease/rou-asset [:db/id :asset/code :asset/status]
+                 :lease/asset-class [:db/id :asset-class/code]}]
             eid)))
+
+;; ============================================================================
+;; present-value — the lease-liability PV at commencement (ADR-063)
+;; ============================================================================
+
+(defn periods-per-year ^long [frequency]
+  (case frequency :monthly 12 :quarterly 4 :annual 1
+        (throw (ex-info "unsupported :frequency" {:frequency frequency}))))
+
+(defn periods-for
+  "Number of payment periods over `term-months` at `frequency`."
+  ^long [^long term-months frequency]
+  (case frequency
+    :monthly   term-months
+    :quarterly (long (Math/ceil (/ term-months 3.0)))
+    :annual    (long (Math/ceil (/ term-months 12.0)))
+    (throw (ex-info "unsupported :frequency"
+                    {:frequency frequency
+                     :supported #{:monthly :quarterly :annual}}))))
+
+(defn present-value
+  "Present value of a level lease — `n` payments of `payment` at the
+   per-period rate `period-rate`, plus an optional `:final-value`
+   (a reasonably-certain purchase-option price) discounted from
+   period n. `:in-advance` (annuity-due — payment at the start of the
+   period) discounts each payment one period less than `:in-arrears`
+   (ordinary annuity). Returns a bigdec rounded to 2dp.
+
+   This is the liability measurement at commencement; `commence!`
+   stores it as `:lease-liability/opening-liability`."
+  ([payment period-rate n timing]
+   (present-value payment period-rate n timing {}))
+  ([^BigDecimal payment ^BigDecimal period-rate n timing {:keys [final-value]}]
+   (let [one-plus-r (.add 1M period-rate)
+         ;; df starts at (1+r)^0; after k divisions df = (1+r)^-k.
+         [pv-payments df-n]
+         (loop [k 1, df 1M, acc 0M]
+           (if (> (long k) (long n))
+             [acc df]
+             (let [df-after (.divide ^BigDecimal df one-plus-r
+                                     12 RoundingMode/HALF_EVEN)
+                   ;; in-arrears: payment k at time k → (1+r)^-k = df-after
+                   ;; in-advance: payment k at time k-1 → (1+r)^-(k-1) = df
+                   factor (if (= timing :in-advance) df df-after)]
+               (recur (inc k) df-after
+                      (.add ^BigDecimal acc (.multiply payment ^BigDecimal factor))))))
+         pv-final (if final-value
+                    (.multiply ^BigDecimal final-value ^BigDecimal df-n)
+                    0M)]
+     (.setScale (.add ^BigDecimal pv-payments ^BigDecimal pv-final)
+                2 RoundingMode/HALF_EVEN))))
 
 ;; ============================================================================
 ;; define-lease!
@@ -136,15 +187,6 @@
 ;; ============================================================================
 ;; The short-term / low-value exemption path — a plain :schedule
 ;; ============================================================================
-
-(defn- periods-for ^long [^long term-months frequency]
-  (case frequency
-    :monthly   term-months
-    :quarterly (long (Math/ceil (/ term-months 3.0)))
-    :annual    (long (Math/ceil (/ term-months 12.0)))
-    (throw (ex-info "unsupported :frequency"
-                    {:frequency frequency
-                     :supported #{:monthly :quarterly :annual}}))))
 
 (defn register-exempt-lease!
   "Register a short-term (≤12-month) or low-value lease — which has
