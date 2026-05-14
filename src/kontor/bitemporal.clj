@@ -106,10 +106,14 @@
 ;; Write helpers
 ;; ============================================================================
 
-(defn- strip-tx-meta
+(defn strip-tx-meta
   "Remove any existing `{:db/id \"datomic.tx\" ...}` map(s) from
    `tx-data`. Lets `with-vt` be idempotent — callers can wrap a
-   tx-data that already carries tx-meta and the new vf/vt wins."
+   tx-data that already carries tx-meta and the new vf/vt wins.
+
+   Public because `kontor.process` strips tx-meta off every step
+   fragment as it accumulates — `run-process` owns valid-time for
+   the whole process (ADR-067)."
   [tx-data]
   (vec (remove #(and (map? %) (= (:db/id %) "datomic.tx")) tx-data)))
 

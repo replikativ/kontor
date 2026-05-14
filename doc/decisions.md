@@ -7104,3 +7104,118 @@ end-to-end integration test wiring authz to real kontor entities;
 the SpiceDB-string parser.
 
 Date: 2026-05-14.
+
+## ADR-067 — `kontor.process`: multi-step transactional processes as pure step-lists
+
+**Decision.** Ship `src/kontor/process.clj` — a kernel facility that
+runs a *process* (a sequence of pure **step** fns) as **one atomic,
+validated transaction**. A step is `(db, ctx) -> result` where `db`
+is the speculative db reflecting every prior step's tx-data, and
+`result` is `nil` | a tx-data vector | `{:tx-data … :ctx … :steps …}`.
+`run-steps` threads the steps against a single start-snapshot,
+accumulating one tx-data vector; `{:steps …}` returns **splice in**
+(the monadic flatten — a step may return more steps). `run-process`
+applies one outer `with-vt`, then commits the assembled tx-data
+through the existing `kontor.validation/transact-with-validation`
+gate. It **serializes on `conn`**. The multi-`d/transact`
+orchestrators across the kernel and companions (`commence!`,
+`run-depreciation!`, `run-lease!`, the `modification.clj`
+transactors, `allocate-fifo!`, the inventory flows,
+`close-fiscal-year!`) migrate onto it — one atomic, gated commit
+instead of N unguarded ones. Research notes **42** (state/transaction
+analysis), **44** (transaction-composition prior art), **45**
+(read-set tracking feasibility) and **46** (the whole-tree
+implementation survey) are the research-before.
+
+**Why a process facility at all.** The companions grew ~110
+`d/transact` sites; the orchestrators among them call
+sub-transactors that *each* `d/transact` (note 46, problem A) — so a
+half-completed `commence!` or `run-lease!` leaves the ledger in an
+intermediate state, and the sub-transactor writes skip the kernel's
+`validate-and-apply` gate entirely (problem F). A process collapses
+the orchestrator to one transaction: atomic by construction, gated
+once, and the sub-transactors stop being "called" — they become
+pure step-lists that splice in. Notes 42/44 framed the model; note
+46 confirmed it is sound across every transactor in the tree (sagas
+and impure steps — problems C and D — simply do not exist here; B,
+the reentrant-`d/transact` deadlock, is a *consequence* of A and
+disappears with the leaf split).
+
+**Why assemble outside the writer, not a `:db.fn/call` chain.** The
+explored alternative — `run-process` emits `[:db.fn/call run-steps
+…]` and the chain emits its own follow-up `:db.fn/call`s inside the
+transactor (the "monadic flattening *as a transactor mechanism*"
+sketch) — was **rejected for v1** for three concrete reasons. (1) It
+cannot reuse the kernel's validation gate: `transact-with-validation`
+runs the datalog-invariant pass (`invariant.datahike/assert-
+invariants`) which needs `conn` + the *complete* tx-data from
+*outside* `d/transact` — inside the chain the complete tx-data does
+not exist until the transactor has already started applying it. The
+chain would have to reimplement validation in the transactor and
+either skip the datalog invariants or grow a new invariant-library
+arity. (2) It runs the step *reads* inside the single writer —
+note 46's expensive-read concern (`closing/close-period!`). (3)
+`:dry-run?` would need a separate code path. Assembling outside via
+`d/db-with`-threading reuses `transact-with-validation` wholesale,
+keeps the (sometimes heavy) step reads off the writer, and makes
+`:dry-run?` the *same* path minus the commit. The monadic
+programming model the maintainer wanted is **fully preserved** — a
+step may return `{:steps …}` and they splice in, sub-transactors are
+step-lists — only the *bind mechanism* is `d/db-with`-threading
+rather than `:db.fn/call`-emits-`:db.fn/call`. The transactor-chain
+variant is recorded here as a deliberate future option, the natural
+home for a *long* process one wants to run concurrently with other
+writers.
+
+**Why serialize.** Note 45's finding: cheap *precise* auto-capture
+of read-sets does not exist off-the-shelf for datahike (the query
+engine bypasses any wrappable seam; an upstream hook is the clean
+path, deferred). kontor's processes are short and its domain is
+serial by nature (the ledger is a total order), so `run-process`
+takes a lock on `conn` — the `(d/db conn)` snapshot, the step
+threading, and the commit are atomic w.r.t. other `run-process`
+calls. That is the structural guarantee against the
+snapshot-vs-commit race, with zero read-set bookkeeping.
+datahike's built-in `:db.fn/cas` remains the lock-free single-datom
+escape hatch; a hand-declared apply-time `:expect` predicate and
+auto-captured read-sets are documented in note 45 as deferred, not
+rejected.
+
+**`run-process` owns valid-time.** Kernel builders
+(`build-transaction`, the posting builders) already embed `with-vt`,
+and a transaction may carry only one `{:db/id "datomic.tx"}` map
+(note 46, problem E). So every step fragment is `strip-tx-meta`'d as
+it accumulates (`kontor.bitemporal/strip-tx-meta` made public for
+this) and `run-process` applies one outer `with-vt` for the whole
+process. Steps must not emit tx-meta — a rogue `{:db/id
+"datomic.tx"}` map is silently stripped.
+
+**The cross-step identity rule.** Steps reference cross-step
+entities by **string tempid**, never by an eid read off the
+speculative db. The speculative db resolves tempids so a later step
+*reads consistently*, but the final commit re-resolves them — an eid
+captured off the speculative db is an artifact. The speculative db
+is for reading *committed* data and prior-step *facts* ("has a book
+been opened?"); *identity* threads via string tempids, which resolve
+consistently across all fragments in the one final transaction.
+`run-steps`' speculative db is `(d/db-with db0 acc)` over the *whole*
+accumulated tx-data each step — faithful tempid resolution at
+O(steps²) `d/db-with` calls, which is negligible for kontor's short
+(O(periods)) processes.
+
+**Datahike-level purity.** `run-steps` is the reusable engine and
+touches only `d/db-with` + `strip-tx-meta` + ctx threading;
+`run-process`'s commit fn is injectable (`:commit`, defaulting to
+`transact-with-validation`). The facility could move upstream to
+datahike later (alongside the read-set hook of note 45 / task #75)
+with the kontor-specific gate left behind as the default injection.
+
+**Migration.** Per note 46: ship the facility (this ADR), then
+extract the ~10 leaf transactors into pure `*-tx-data` builders as
+one coherent commit, then migrate the orchestrators —
+`commence!` first as the proof-of-concept — deleting the
+now-redundant mitigations (`:fired-before-violation`,
+`assert-modifiable!`, the `run-lease!` lockstep guard, the
+`commence!` re-read) as each lands.
+
+Date: 2026-05-14.
