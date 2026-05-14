@@ -6002,3 +6002,94 @@ cycle counts, no reconciliation reports, no FEFO (ADR-060).
 - `modules/inventory/test/kontor/inventory/stock_ledger_test.clj`.
 
 Date: 2026-05-14.
+
+## ADR-058 — `kontor-inventory`: available-to-promise + the reservation bridge
+
+**Decision.** ADR-058 makes `:inventory-detail` answer the
+*can-I-sell-it* question and wires `kontor-sales`' long-orphaned
+`:inv-reservation` schema to a real availability engine.
+
+**ATP is `:atp-diff`, derived — not a reservation scan.** Every
+`:inventory-detail` row carries TWO signed deltas: `:qoh-diff`
+(physical) and `:atp-diff` (promiseable). A reservation appends a
+detail with `:qoh-diff 0, :atp-diff -take` — the stock is still
+physically present, just promised. So `atp-raw` = `Σ :atp-diff` is
+`on-hand − reservations` *by construction*, a pure derivation over
+the same ledger `on-hand-qty` reads (maintainer-confirmed: pure
+derivation, no stored cache). `available-to-promise` =
+`atp-raw − safety-stock`, where `:facility-product/safety-stock` is
+the v1 buffer. The v1 netting is `on-hand − reservations −
+safety-stock` (maintainer-confirmed); scheduled receipts (open POs)
+and in-transit transfers are a documented follow-up.
+
+**The `:inv-reservation` fix-up** (research note 35 §4 — "the
+load-bearing integration fix"). `kontor-sales` shipped
+`:inv-reservation` keyed on `[order-item ship-group lot]` because no
+`:inventory-item` entity existed yet. ADR-058 replaces
+`:inv-reservation/lot` with `:inv-reservation/inventory-item` and
+moves the identity tuple to `[order-item ship-group inventory-item]`
+— a reservation binds to a *physical bucket*, and a single order
+line fans out into one reservation per bucket it draws from (the
+OFBiz `OrderItemShipGrpInvRes` shape). The ref-attr is sales-owned;
+the `:inventory-item` it points at is kontor-inventory's. The sales
+test's standalone-reservation fixture is updated to the new shape
+(a bare stand-in entity — the *real* reservation behaviour is tested
+in kontor-inventory). `:inv-reservation/reserve-order-enum`'s doc is
+corrected: it is the *physical picking strategy* (which bucket to
+pull), explicitly distinct from `:valuation-book/cost-method` (the
+*costing* method) — they share names but answer different
+questions (note 35 §2.3).
+
+**`reserve!` lives in `kontor-inventory`, not `kontor-sales`**
+(research note 36 §3 — kontor-inventory owns the availability
+picture). `reserve!` walks the candidate `:inventory-item` buckets
+for a `(product, facility)`: `:available` + `:non-serial` buckets
+with `atp-raw > 0`, **`:pickloc` locations before `:bulk` before
+`:staging` before no-location**, then sorted by
+`:reserve-order-enum` — v1 supports `:fifo-rec` / `:lifo-rec` (by
+`:received-at`); the expiry-driven `:fifo-exp` / `:lifo-exp` need
+`:lot/expires-at`, which ADR-060 ships (an unknown enum throws
+`:inventory/unsupported-reserve-order` until then). It draws
+`take = min(remaining, bucket-atp)` from each, appending an
+`:atp-diff -take` `:inventory-detail` + an `:inv-reservation` row
+per draw — all in ONE transaction.
+
+**Back-order policy.** A shortfall, when `:require-inventory?` is
+false (default), is back-ordered: the last drawn reservation row
+carries `:quantity-not-available` and an extra negative-`:atp-diff`
+detail drives that bucket's ATP negative (the OFBiz "push the
+remainder onto the last item as negative ATP" rule — folded into
+the last row, not a new one, to avoid an
+`[order-item ship-group inventory-item]` tuple collision). When
+nothing could be drawn at all, one back-order reservation is created
+against a resolved bucket. With `:require-inventory? true`, a
+shortfall throws `:inventory/insufficient-atp` and writes nothing.
+
+**`release-reservation!`** (research note 13 P1 — the
+`cancel-order!` → release path). Appends a compensating
+`:atp-diff +(quantity + quantity-not-available)` detail (restoring
+the ATP a back-order consumed too) and retracts the reservation row.
+The `:inventory-detail` is the audit trail of the release;
+`:inv-reservation` is a transient allocation, not an audited posting
+— retracting it is correct.
+
+**What ADR-058 does NOT do** (ADR-059/060): no GL postings, no
+receive/issue/transfer operations, no negative-inventory cost policy
+(ADR-058's back-order moves *ATP*, never *quantity-on-hand* — the
+stock genuinely isn't there yet); no `:lot/expires-at` schema, so no
+`:fifo-exp` / `:lifo-exp` picking (ADR-060); no cycle counts.
+
+**Shape after.**
+- `modules/sales/src/kontor/sales/schema.clj` — `:inv-reservation`
+  fix-up (`:inventory-item` ref, retuple, dropped `:lot`,
+  corrected `:reserve-order-enum` doc).
+- `modules/inventory/src/kontor/inventory/schema.clj` —
+  `:facility-product/safety-stock` added.
+- `modules/inventory/src/kontor/inventory/core.clj` — `item-set`
+  promoted to public `resolve-scope`.
+- `modules/inventory/src/kontor/inventory/reservation.clj` —
+  `atp-raw`, `available-to-promise`, `reserve!`,
+  `release-reservation!`.
+- `modules/inventory/test/kontor/inventory/reservation_test.clj`.
+
+Date: 2026-05-14.

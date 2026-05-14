@@ -92,7 +92,7 @@
                :ship-group/carrier-partner :ship-group/contact-mech
                :ship-group-assoc/order-item :ship-group-assoc/ship-group
                :ship-group-assoc/quantity :ship-group-assoc/identity
-               :inv-reservation/order-item :inv-reservation/lot
+               :inv-reservation/order-item :inv-reservation/inventory-item
                :inv-reservation/quantity :inv-reservation/identity
                :order-adjustment/order :order-adjustment/scope
                :order-adjustment/type :order-adjustment/amount
@@ -176,19 +176,19 @@
                   :ship-group-assoc/ship-group [:ship-group/identity [order-eid "SG-001"]]
                   :ship-group-assoc/quantity 10M
                   :ship-group-assoc/cancel-quantity 0M}
-                 ;; Reservation against a lot
-                 {:db/id "lot-1"
-                  :lot/commodity [:commodity/symbol "EUR"]
-                  :lot/acquired-at #inst "2026-01-01"
-                  :lot/cost-basis 12M
-                  :lot/cost-commodity [:commodity/symbol "EUR"]
-                  :lot/label "Widget-A batch 1"}
+                 ;; Reservation against an :inventory-item bucket.
+                 ;; `kontor-inventory` is not installed in this sales-only
+                 ;; fixture, so `bucket-1` is a bare stand-in entity — the
+                 ;; ADR-058 reserve! walk (which creates real
+                 ;; inventory-item-backed reservations) is exercised in
+                 ;; the kontor-inventory tests.
+                 {:db/id "bucket-1" :lot/label "Widget-A batch 1"}
                  {:inv-reservation/order order-eid
                   :inv-reservation/order-item item-eid
                   :inv-reservation/ship-group [:ship-group/identity [order-eid "SG-001"]]
-                  :inv-reservation/lot "lot-1"
+                  :inv-reservation/inventory-item "bucket-1"
                   :inv-reservation/quantity 10M
-                  :inv-reservation/reserve-order-enum :fifo
+                  :inv-reservation/reserve-order-enum :fifo-rec
                   :inv-reservation/reserved-datetime #inst "2026-05-01"
                   :inv-reservation/promised-datetime #inst "2026-05-08"
                   :inv-reservation/current-promised-date #inst "2026-05-08"}])
@@ -199,7 +199,7 @@
       (is (= "WHSE-DE-1" (-> sgs first :ship-group/facility-id)))
       (is (= 1 (count res)))
       (is (= 10M (-> res first :inv-reservation/quantity)))
-      (is (= :fifo (-> res first :inv-reservation/reserve-order-enum))))))
+      (is (= :fifo-rec (-> res first :inv-reservation/reserve-order-enum))))))
 
 ;; ============================================================================
 ;; Adjustments at three levels

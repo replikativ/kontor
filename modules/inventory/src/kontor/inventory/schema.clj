@@ -153,6 +153,12 @@
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
+   {:db/ident       :facility-product/safety-stock
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Buffer held back from available-to-promise
+                     (ADR-058): ATP = Σ atp-diff − safety-stock."}
+
    {:db/ident       :facility-product/days-to-ship
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one}

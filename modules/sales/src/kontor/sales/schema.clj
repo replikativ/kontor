@@ -324,8 +324,15 @@
     :db/unique      :db.unique/identity}])
 
 ;; ============================================================================
-;; Inventory reservation (per-lot)
+;; Inventory reservation (per :inventory-item bucket)
 ;; ============================================================================
+;;
+;; ADR-058 fix-up: a reservation binds to a physical :inventory-item
+;; bucket (kontor-inventory), not a bare :lot. A single order line
+;; fans out into one :inv-reservation per bucket it draws from. The
+;; ref-attr is sales-owned; the :inventory-item it points at is
+;; created by kontor-inventory; kontor.inventory.reservation/reserve!
+;; is the writer.
 
 (def ^:private inv-reservation-attrs
   [{:db/ident       :inv-reservation/order
@@ -340,11 +347,13 @@
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :inv-reservation/lot
+   {:db/ident       :inv-reservation/inventory-item
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
-    :db/doc         "Ref to the kernel :lot entity holding the
-                     reserved units."}
+    :db/doc         "Ref to the kontor-inventory :inventory-item
+                     bucket the units are reserved against. The lot
+                     (if any) is reachable via :inventory-item/lot
+                     — ADR-058."}
 
    {:db/ident       :inv-reservation/quantity
     :db/valueType   :db.type/bigdec
@@ -359,8 +368,12 @@
    {:db/ident       :inv-reservation/reserve-order-enum
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
-    :db/doc         ":fifo | :lifo | :priority. Reservation
-                     algorithm used to pick this lot."}
+    :db/doc         "Physical picking strategy — which bucket to draw
+                     from. #{:fifo-rec :lifo-rec :fifo-exp :lifo-exp
+                     :greatest-cost :least-cost}. Distinct from
+                     :valuation-book/cost-method (the COSTING method)
+                     — picking strategy ≠ costing method (note 35
+                     §2.3)."}
 
    {:db/ident       :inv-reservation/reserved-datetime
     :db/valueType   :db.type/instant
@@ -386,7 +399,7 @@
     :db/valueType   :db.type/tuple
     :db/tupleAttrs  [:inv-reservation/order-item
                      :inv-reservation/ship-group
-                     :inv-reservation/lot]
+                     :inv-reservation/inventory-item]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
