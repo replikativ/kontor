@@ -63,49 +63,24 @@
 ;; Acquisition
 ;; ============================================================================
 
-(defn acquire!
-  "Create an :asset. Status nil → :planned (default) or nil →
-   :in-service when `:in-service?` is true. The acquirer is stamped
-   as `:create/uid` so the ADR-038 :no-self-approval rule can fire
-   on a later disposal.
-
-   Required opts:
-     :code                  string (unique)
-     :name                  string
-     :class                 ref/eid of :asset-class
-     :acquisition-cost      bigdec
-     :acquisition-commodity ref/eid of :commodity
-     :acquisition-date      instant
-
-   Optional opts:
-     :in-service?           boolean (default false → :planned)
-     :in-service-date       instant (default = :acquisition-date when
-                            :in-service? true)
-     :salvage-value         bigdec (default 0)
-     :asset-account / :accumulated-account / :expense-account
-                            ref/eid of :account (for ADR-054 postings)
-     :cost-center           ref/eid of :analytic-account
-     :entity                ref/eid of :entity (ADR-031 scope)
-     :parent                ref/eid of :asset (componentisation)
-     :origin-transaction    ref/eid of :transaction
-     :origin-document       ref/eid of :audit-doc
-     :serial-number / :location / :note  strings
-     :changed-by-uid        ref/eid of :create/uid
-     :vt-from / :vt-to      valid-time bounds (default :vt-from =
-                            :acquisition-date)"
-  [conn {:keys [code name class acquisition-cost acquisition-commodity
-                acquisition-date in-service? in-service-date salvage-value
-                asset-account accumulated-account expense-account
-                cost-center entity parent origin-transaction origin-document
-                serial-number location note changed-by-uid vt-from vt-to]}]
+(defn acquire-tx-data
+  "Pure tx-data builder for `acquire!` — the entity-map construction
+   without the `d/transact`/`with-vt` wrapper. Use as a
+   `kontor.process` step (ADR-067); `acquire!` is the standalone
+   wrapper. Takes the same opts as `acquire!` minus `:vt-from` /
+   `:vt-to` (valid-time is owned by the caller / `run-process`)."
+  [db {:keys [code name class acquisition-cost acquisition-commodity
+              acquisition-date in-service? in-service-date salvage-value
+              asset-account accumulated-account expense-account
+              cost-center entity parent origin-transaction origin-document
+              serial-number location note changed-by-uid]}]
   (when-not code                  (throw (ex-info ":code required" {})))
   (when-not name                  (throw (ex-info ":name required" {})))
   (when-not class                 (throw (ex-info ":class required" {})))
   (when-not acquisition-cost      (throw (ex-info ":acquisition-cost required" {})))
   (when-not acquisition-commodity (throw (ex-info ":acquisition-commodity required" {})))
   (when-not acquisition-date      (throw (ex-info ":acquisition-date required" {})))
-  (let [db (d/db conn)
-        target-state (if in-service? :in-service :planned)
+  (let [target-state (if in-service? :in-service :planned)
         isd (when in-service? (or in-service-date acquisition-date))
         asset-tempid "asset-1"
         row (cond-> {:db/id asset-tempid
@@ -143,9 +118,44 @@
                             :reason :asset-acquired}
                      changed-by-uid (assoc :changed-by-uid changed-by-uid)
                      origin-document (assoc :supporting-doc origin-document)))]
-    (d/transact conn (kbt/with-vt (into [row] status-tx)
-                       (or vt-from acquisition-date)
-                       (or vt-to kbt/forever)))))
+    (into [row] status-tx)))
+
+(defn acquire!
+  "Create an :asset. Status nil → :planned (default) or nil →
+   :in-service when `:in-service?` is true. The acquirer is stamped
+   as `:create/uid` so the ADR-038 :no-self-approval rule can fire
+   on a later disposal.
+
+   Required opts:
+     :code                  string (unique)
+     :name                  string
+     :class                 ref/eid of :asset-class
+     :acquisition-cost      bigdec
+     :acquisition-commodity ref/eid of :commodity
+     :acquisition-date      instant
+
+   Optional opts:
+     :in-service?           boolean (default false → :planned)
+     :in-service-date       instant (default = :acquisition-date when
+                            :in-service? true)
+     :salvage-value         bigdec (default 0)
+     :asset-account / :accumulated-account / :expense-account
+                            ref/eid of :account (for ADR-054 postings)
+     :cost-center           ref/eid of :analytic-account
+     :entity                ref/eid of :entity (ADR-031 scope)
+     :parent                ref/eid of :asset (componentisation)
+     :origin-transaction    ref/eid of :transaction
+     :origin-document       ref/eid of :audit-doc
+     :serial-number / :location / :note  strings
+     :changed-by-uid        ref/eid of :create/uid
+     :vt-from / :vt-to      valid-time bounds (default :vt-from =
+                            :acquisition-date)
+
+   The pure tx-data builder is `acquire-tx-data` (ADR-067)."
+  [conn {:keys [acquisition-date vt-from vt-to] :as opts}]
+  (d/transact conn (kbt/with-vt (acquire-tx-data (d/db conn) opts)
+                     (or vt-from acquisition-date)
+                     (or vt-to kbt/forever))))
 
 (defn place-in-service!
   "Transition a :planned asset to :in-service, stamping

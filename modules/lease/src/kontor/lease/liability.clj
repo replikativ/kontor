@@ -150,43 +150,16 @@
 ;; open-liability-book!
 ;; ============================================================================
 
-(defn open-liability-book!
-  "Create a `:lease-liability` book for a (lease, ledger) pair — plus
-   its ADR-032 `:schedule` (`:schedule/kind :lease-liability`) — in
-   one tx. Returns the tx-report.
-
-   The `:lease-liability/identity` tuple (`:db.unique/identity` on
-   `[lease ledger]`) means one book per (lease, ledger). ADR-063's
-   `commence!` is the orchestrator that calls this once per ledger;
-   it asserts the lease is `:draft` and that no book exists yet.
-
-   Required opts:
-     :lease              code or eid of :lease
-     :ledger             eid of :ledger
-     :classification     :finance | :operating
-     :opening-liability  bigdec — the PV at commencement
-     :discount-rate      bigdec — this book's annual rate
-     :liability-account  eid — the BS lease-liability account
-     :interest-account   eid — the P&L account the interest leg debits
-     :commodity          eid of :commodity
-     :start-date         instant — occurrence 1's date (for :in-arrears
-                         this is commencement + one period; for
-                         :in-advance it is commencement)
-     :n-periods          long — number of payment occurrences
-     :frequency          :monthly | :quarterly | :annual
-
-   Optional opts:
-     :provider-id        keyword (default :effective-interest)
-     :total-amount       bigdec — the schedule's informational total
-                         (default = payment-amount × n-periods, when
-                         resolvable)
-     :schedule-code      string (default \"<lease-code>-liab-<ledger-code>\")
-     :note               string"
-  [conn {:keys [lease ledger classification opening-liability discount-rate
-                liability-account interest-account commodity start-date
-                n-periods frequency provider-id total-amount schedule-code
-                note]
-         :or   {provider-id :effective-interest}}]
+(defn open-liability-book-tx-data
+  "Pure tx-data builder for `open-liability-book!` — the entity-map
+   construction without the `d/transact` wrapper. Use as a
+   `kontor.process` step (ADR-067); `open-liability-book!` is the
+   standalone wrapper. See `open-liability-book!` for the opts."
+  [db {:keys [lease ledger classification opening-liability discount-rate
+              liability-account interest-account commodity start-date
+              n-periods frequency provider-id total-amount schedule-code
+              note]
+       :or   {provider-id :effective-interest}}]
   (when-not lease             (throw (ex-info ":lease required" {})))
   (when-not ledger            (throw (ex-info ":ledger required" {})))
   (when-not (#{:finance :operating} classification)
@@ -200,8 +173,7 @@
   (when-not start-date        (throw (ex-info ":start-date required" {})))
   (when-not n-periods         (throw (ex-info ":n-periods required" {})))
   (when-not frequency         (throw (ex-info ":frequency required" {})))
-  (let [db (d/db conn)
-        lease-eid (lease/resolve-lease db lease)
+  (let [lease-eid (lease/resolve-lease db lease)
         _ (when-not lease-eid (throw (ex-info "Lease not found" {:spec lease})))
         _ (when (book-for db lease-eid ledger)
             (throw (ex-info "A lease-liability book already exists for this (lease, ledger) — one book per pair (ADR-063)"
@@ -243,11 +215,82 @@
                              :lease-liability/commodity commodity
                              :lease-liability/schedule sched-tempid}
                       note (assoc :lease-liability/note note))]
-    (d/transact conn [book-entity schedule-entity])))
+    [book-entity schedule-entity]))
+
+(defn open-liability-book!
+  "Create a `:lease-liability` book for a (lease, ledger) pair — plus
+   its ADR-032 `:schedule` (`:schedule/kind :lease-liability`) — in
+   one tx. Returns the tx-report.
+
+   The `:lease-liability/identity` tuple (`:db.unique/identity` on
+   `[lease ledger]`) means one book per (lease, ledger). ADR-063's
+   `commence!` is the orchestrator that calls this once per ledger;
+   it asserts the lease is `:draft` and that no book exists yet.
+
+   Required opts:
+     :lease              code or eid of :lease
+     :ledger             eid of :ledger
+     :classification     :finance | :operating
+     :opening-liability  bigdec — the PV at commencement
+     :discount-rate      bigdec — this book's annual rate
+     :liability-account  eid — the BS lease-liability account
+     :interest-account   eid — the P&L account the interest leg debits
+     :commodity          eid of :commodity
+     :start-date         instant — occurrence 1's date (for :in-arrears
+                         this is commencement + one period; for
+                         :in-advance it is commencement)
+     :n-periods          long — number of payment occurrences
+     :frequency          :monthly | :quarterly | :annual
+
+   Optional opts:
+     :provider-id        keyword (default :effective-interest)
+     :total-amount       bigdec — the schedule's informational total
+                         (default = payment-amount × n-periods, when
+                         resolvable)
+     :schedule-code      string (default \"<lease-code>-liab-<ledger-code>\")
+     :note               string
+
+   The pure tx-data builder is `open-liability-book-tx-data` (ADR-067)."
+  [conn opts]
+  (d/transact conn (open-liability-book-tx-data (d/db conn) opts)))
 
 ;; ============================================================================
 ;; revise-liability-book! — re-anchor after a modification (ADR-064)
 ;; ============================================================================
+
+(defn revise-liability-book-tx-data
+  "Pure tx-data builder for `revise-liability-book!` — the entity-map
+   construction without the `d/transact` wrapper. Use as a
+   `kontor.process` step (ADR-067); `revise-liability-book!` is the
+   standalone wrapper. See `revise-liability-book!` for the opts."
+  [db {:keys [book new-opening-liability new-discount-rate note]}]
+  (when (nil? new-opening-liability)
+    (throw (ex-info ":new-opening-liability required" {})))
+  (let [eid (resolve-book db book)
+        _ (when-not eid
+            (throw (ex-info "Lease-liability book not found" {:spec book})))
+        b (d/pull db [{:lease-liability/lease [:lease/term-months
+                                               :lease/payment-frequency]}
+                      {:lease-liability/schedule [:db/id :schedule/start-date]}]
+                  eid)
+        l (:lease-liability/lease b)
+        sched (:lease-liability/schedule b)
+        sched-eid (:db/id sched)
+        freq (:lease/payment-frequency l)
+        n (lease/periods-for (:lease/term-months l) freq)
+        fired (long (count (schedule/fired-sequences db sched-eid)))
+        _ (when (< n fired)
+            (throw (ex-info "revise-liability-book!: revised term implies fewer periods than already fired"
+                            {:type :lease/revision-below-fired
+                             :revised-periods n :fired fired})))
+        end-date (schedule/date-of-occurrence (:schedule/start-date sched) freq n)]
+    [(cond-> {:db/id eid
+              :lease-liability/opening-liability new-opening-liability
+              :lease-liability/opening-fired-through fired}
+       new-discount-rate
+       (assoc :lease-liability/discount-rate new-discount-rate)
+       note (assoc :lease-liability/note note))
+     {:db/id sched-eid :schedule/end-date end-date}]))
 
 (defn revise-liability-book!
   "Re-anchor a `:lease-liability` book after an ADR-064 modification:
@@ -266,34 +309,8 @@
    Required: :book (eid or [lease ledger]), :new-opening-liability
    Optional: :new-discount-rate, :note
    Throws if the revised term implies fewer periods than already
-   fired."
-  [conn {:keys [book new-opening-liability new-discount-rate note]}]
-  (when (nil? new-opening-liability)
-    (throw (ex-info ":new-opening-liability required" {})))
-  (let [db (d/db conn)
-        eid (resolve-book db book)
-        _ (when-not eid
-            (throw (ex-info "Lease-liability book not found" {:spec book})))
-        b (d/pull db [{:lease-liability/lease [:lease/term-months
-                                               :lease/payment-frequency]}
-                      {:lease-liability/schedule [:db/id :schedule/start-date]}]
-                  eid)
-        l (:lease-liability/lease b)
-        sched (:lease-liability/schedule b)
-        sched-eid (:db/id sched)
-        freq (:lease/payment-frequency l)
-        n (lease/periods-for (:lease/term-months l) freq)
-        fired (long (count (schedule/fired-sequences db sched-eid)))
-        _ (when (< n fired)
-            (throw (ex-info "revise-liability-book!: revised term implies fewer periods than already fired"
-                            {:type :lease/revision-below-fired
-                             :revised-periods n :fired fired})))
-        end-date (schedule/date-of-occurrence (:schedule/start-date sched) freq n)]
-    (d/transact conn
-                [(cond-> {:db/id eid
-                          :lease-liability/opening-liability new-opening-liability
-                          :lease-liability/opening-fired-through fired}
-                   new-discount-rate
-                   (assoc :lease-liability/discount-rate new-discount-rate)
-                   note (assoc :lease-liability/note note))
-                 {:db/id sched-eid :schedule/end-date end-date}])))
+   fired.
+
+   The pure tx-data builder is `revise-liability-book-tx-data` (ADR-067)."
+  [conn opts]
+  (d/transact conn (revise-liability-book-tx-data (d/db conn) opts)))

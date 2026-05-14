@@ -159,6 +159,25 @@
              (recur (inc seq)
                     (conj acc {:sequence seq :date d})))))))))
 
+(defn record-occurrence-tx-data
+  "Pure tx-data builder for `record-occurrence!` — appends the
+   `:schedule-occurrence` entity to `tx-data` without the
+   `d/transact` wrapper. Use as a `kontor.process` step (ADR-067);
+   `record-occurrence!` is the standalone wrapper."
+  [db schedule sequence scheduled-date amount commodity tx-data fired-at]
+  (let [schedule-eid (resolve-schedule db schedule)
+        _ (when-not schedule-eid
+            (throw (ex-info "record-occurrence!: schedule not found"
+                            {:schedule schedule})))
+        occurrence {:schedule-occurrence/schedule       schedule-eid
+                    :schedule-occurrence/sequence       sequence
+                    :schedule-occurrence/scheduled-date scheduled-date
+                    :schedule-occurrence/transaction    -1
+                    :schedule-occurrence/amount         amount
+                    :schedule-occurrence/commodity      commodity
+                    :schedule-occurrence/fired-at       fired-at}]
+    (conj (vec tx-data) occurrence)))
+
 (defn record-occurrence!
   "Idempotently record one occurrence of the schedule.
 
@@ -179,46 +198,42 @@
                     transaction at tempid -1
      fired-at     — optional; defaults to now
 
-   Returns the datahike tx-report."
+   Returns the datahike tx-report. The pure tx-data builder is
+   `record-occurrence-tx-data` (ADR-067)."
   ([conn schedule sequence scheduled-date amount commodity tx-data]
    (record-occurrence! conn schedule sequence scheduled-date amount
                        commodity tx-data (java.util.Date.)))
   ([conn schedule sequence scheduled-date amount commodity tx-data fired-at]
-   (let [db (d/db conn)
-         schedule-eid (resolve-schedule db schedule)
-         _ (when-not schedule-eid
-             (throw (ex-info "record-occurrence!: schedule not found"
-                             {:schedule schedule})))
-         occurrence {:schedule-occurrence/schedule       schedule-eid
-                     :schedule-occurrence/sequence       sequence
-                     :schedule-occurrence/scheduled-date scheduled-date
-                     :schedule-occurrence/transaction    -1
-                     :schedule-occurrence/amount         amount
-                     :schedule-occurrence/commodity      commodity
-                     :schedule-occurrence/fired-at       fired-at}]
-     (d/transact conn (conj (vec tx-data) occurrence)))))
+   (d/transact conn (record-occurrence-tx-data
+                     (d/db conn) schedule sequence scheduled-date amount
+                     commodity tx-data fired-at))))
 
 ;; ============================================================================
 ;; Lifecycle
 ;; ============================================================================
+
+(defn set-state-tx-data
+  "Pure tx-data builder for the schedule lifecycle transitions —
+   `mark-completed!` / `mark-paused!` / `mark-cancelled!` all reduce
+   to setting `:schedule/state`. Use as a `kontor.process` step
+   (ADR-067)."
+  [db schedule state]
+  [{:db/id (resolve-schedule db schedule) :schedule/state state}])
 
 (defn mark-completed!
   "Mark a schedule `:completed` (no further occurrences will fire).
    Typical use: when `last-fired-sequence` reaches the planned total
    count for a finite schedule."
   [conn schedule]
-  (let [eid (resolve-schedule (d/db conn) schedule)]
-    (d/transact conn [{:db/id eid :schedule/state :completed}])))
+  (d/transact conn (set-state-tx-data (d/db conn) schedule :completed)))
 
 (defn mark-paused!
   "Pause a schedule. `pending-occurrences` returns empty while paused."
   [conn schedule]
-  (let [eid (resolve-schedule (d/db conn) schedule)]
-    (d/transact conn [{:db/id eid :schedule/state :paused}])))
+  (d/transact conn (set-state-tx-data (d/db conn) schedule :paused)))
 
 (defn mark-cancelled!
   "Cancel a schedule. Irreversible by convention; existing
    occurrences remain in the log for audit."
   [conn schedule]
-  (let [eid (resolve-schedule (d/db conn) schedule)]
-    (d/transact conn [{:db/id eid :schedule/state :cancelled}])))
+  (d/transact conn (set-state-tx-data (d/db conn) schedule :cancelled)))

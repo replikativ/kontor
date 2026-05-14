@@ -187,56 +187,21 @@
      :commodity          (:db/id (:asset-depreciation/commodity b))
      :method-params      (:asset-depreciation/method-params b)}))
 
-(defn open-book!
-  "Create an `:asset-depreciation` book for an (asset, ledger) pair —
-   plus its ADR-032 `:schedule` and its optional `:asset-method-params`
-   — in one tx. Returns the tx-report.
-
-   The `:asset-depreciation/identity` tuple (`:db.unique/identity` on
-   `[asset ledger]`) means a second `open-book!` for the same pair
-   collides — one book per (asset, ledger).
-
-   Required opts:
-     :asset               code or eid of :asset
-     :ledger              eid of :ledger (the depreciation area)
-     :provider-id         keyword — which DepreciationProvider (ADR-055)
-     :useful-life-months  long — this book's useful life
-
-   Optional opts:
-     :convention          keyword (default :full)
-     :depreciable-base    bigdec (default = acquisition-cost −
-                          salvage-value, pulled from the asset). For a
-                          mid-life import pass the REMAINING base.
-     :opening-accumulated bigdec — depreciation accumulated before
-                          this book's schedule (the mid-life-import
-                          case). A reporting scalar — see
-                          `accumulated-depreciation`.
-     :commodity           ref/eid (default = asset's
-                          :acquisition-commodity; must be resolvable)
-     :start-date          instant (default = asset's :in-service-date;
-                          required if the asset has none)
-     :frequency           :monthly (default) | :quarterly | :annual
-     :method-params       a map (created inline as an
-                          :asset-method-params entity) or an eid
-     :effective-rule      eid of the l10n-owned effective-dated rule
-                          row (ADR-055 §effective-dating)
-     :expense-account     per-book override of the asset's
-                          :asset/expense-account (ADR-063 — a ROU
-                          asset debits a different P&L account per
-                          ledger). Absent ⇒ the asset's account.
-     :schedule-code       string (default = \"<asset-code>-dep-<ledger-code>\")
-     :note                string"
-  [conn {:keys [asset ledger provider-id useful-life-months convention
-                depreciable-base opening-accumulated commodity start-date
-                frequency method-params effective-rule expense-account
-                schedule-code note]
-         :or   {convention :full frequency :monthly}}]
+(defn open-book-tx-data
+  "Pure tx-data builder for `open-book!` — the entity-map
+   construction without the `d/transact` wrapper. Use as a
+   `kontor.process` step (ADR-067); `open-book!` is the standalone
+   wrapper. See `open-book!` for the opts."
+  [db {:keys [asset ledger provider-id useful-life-months convention
+              depreciable-base opening-accumulated commodity start-date
+              frequency method-params effective-rule expense-account
+              schedule-code note]
+       :or   {convention :full frequency :monthly}}]
   (when-not asset              (throw (ex-info ":asset required" {})))
   (when-not ledger             (throw (ex-info ":ledger required" {})))
   (when-not provider-id        (throw (ex-info ":provider-id required" {})))
   (when-not useful-life-months (throw (ex-info ":useful-life-months required" {})))
-  (let [db (d/db conn)
-        asset-eid (asset/resolve-asset db asset)
+  (let [asset-eid (asset/resolve-asset db asset)
         _ (when-not asset-eid (throw (ex-info "Asset not found" {:spec asset})))
         _ (when (book-for db asset-eid ledger)
             (throw (ex-info "A depreciation book already exists for this (asset, ledger) — one book per pair (ADR-054)"
@@ -296,12 +261,94 @@
                       expense-account (assoc :asset-depreciation/expense-account
                                              expense-account)
                       note           (assoc :asset-depreciation/note note))]
-    (d/transact conn (cond-> [book-entity schedule-entity]
-                       mparams-entity (conj mparams-entity)))))
+    (cond-> [book-entity schedule-entity]
+      mparams-entity (conj mparams-entity))))
+
+(defn open-book!
+  "Create an `:asset-depreciation` book for an (asset, ledger) pair —
+   plus its ADR-032 `:schedule` and its optional `:asset-method-params`
+   — in one tx. Returns the tx-report.
+
+   The `:asset-depreciation/identity` tuple (`:db.unique/identity` on
+   `[asset ledger]`) means a second `open-book!` for the same pair
+   collides — one book per (asset, ledger).
+
+   Required opts:
+     :asset               code or eid of :asset
+     :ledger              eid of :ledger (the depreciation area)
+     :provider-id         keyword — which DepreciationProvider (ADR-055)
+     :useful-life-months  long — this book's useful life
+
+   Optional opts:
+     :convention          keyword (default :full)
+     :depreciable-base    bigdec (default = acquisition-cost −
+                          salvage-value, pulled from the asset). For a
+                          mid-life import pass the REMAINING base.
+     :opening-accumulated bigdec — depreciation accumulated before
+                          this book's schedule (the mid-life-import
+                          case). A reporting scalar — see
+                          `accumulated-depreciation`.
+     :commodity           ref/eid (default = asset's
+                          :acquisition-commodity; must be resolvable)
+     :start-date          instant (default = asset's :in-service-date;
+                          required if the asset has none)
+     :frequency           :monthly (default) | :quarterly | :annual
+     :method-params       a map (created inline as an
+                          :asset-method-params entity) or an eid
+     :effective-rule      eid of the l10n-owned effective-dated rule
+                          row (ADR-055 §effective-dating)
+     :expense-account     per-book override of the asset's
+                          :asset/expense-account (ADR-063 — a ROU
+                          asset debits a different P&L account per
+                          ledger). Absent ⇒ the asset's account.
+     :schedule-code       string (default = \"<asset-code>-dep-<ledger-code>\")
+     :note                string
+
+   The pure tx-data builder is `open-book-tx-data` (ADR-067)."
+  [conn opts]
+  (d/transact conn (open-book-tx-data (d/db conn) opts)))
 
 ;; ============================================================================
 ;; revise-book! — the explicit "supersede the pending tail" operation (ADR-055)
 ;; ============================================================================
+
+(defn revise-book-tx-data
+  "Pure tx-data builder for `revise-book!` — the entity-map
+   construction without the `d/transact` wrapper. Use as a
+   `kontor.process` step (ADR-067); `revise-book!` is the standalone
+   wrapper. See `revise-book!` for the opts."
+  [db {:keys [book new-useful-life-months additional-base note]}]
+  (when-not (or new-useful-life-months additional-base)
+    (throw (ex-info "revise-book!: :new-useful-life-months or :additional-base required" {})))
+  (let [eid (resolve-book db book)
+        _ (when-not eid (throw (ex-info "Depreciation book not found" {:spec book})))
+        b (d/pull db [:asset-depreciation/useful-life-months
+                      :asset-depreciation/depreciable-base
+                      :asset-depreciation/start-date
+                      {:asset-depreciation/schedule [:db/id :schedule/frequency]}]
+                  eid)
+        sched (:asset-depreciation/schedule b)
+        sched-eid (:db/id sched)
+        freq (:schedule/frequency sched)
+        life (or new-useful-life-months (:asset-depreciation/useful-life-months b))
+        base (cond-> (:asset-depreciation/depreciable-base b)
+               additional-base
+               (#(.add ^java.math.BigDecimal % ^java.math.BigDecimal additional-base)))
+        n-periods (periods-for life freq)
+        fired (count (schedule/fired-sequences db sched-eid))
+        _ (when (< n-periods fired)
+            (throw (ex-info "revise-book!: revised useful life implies fewer periods than already fired"
+                            {:type :asset/revision-below-fired
+                             :revised-periods n-periods :fired fired})))
+        end-date (schedule/date-of-occurrence (:asset-depreciation/start-date b)
+                                              freq n-periods)]
+    [(cond-> {:db/id eid
+              :asset-depreciation/useful-life-months life
+              :asset-depreciation/depreciable-base base}
+       note (assoc :asset-depreciation/note note))
+     {:db/id sched-eid
+      :schedule/end-date end-date
+      :schedule/total-amount base}]))
 
 (defn revise-book!
   "Apply a prospective change to a book — an IAS 16 useful-life
@@ -326,38 +373,8 @@
      :note                    string
 
    Throws if the revised useful life implies fewer periods than have
-   already been fired."
-  [conn {:keys [book new-useful-life-months additional-base note]}]
-  (when-not (or new-useful-life-months additional-base)
-    (throw (ex-info "revise-book!: :new-useful-life-months or :additional-base required" {})))
-  (let [db (d/db conn)
-        eid (resolve-book db book)
-        _ (when-not eid (throw (ex-info "Depreciation book not found" {:spec book})))
-        b (d/pull db [:asset-depreciation/useful-life-months
-                      :asset-depreciation/depreciable-base
-                      :asset-depreciation/start-date
-                      {:asset-depreciation/schedule [:db/id :schedule/frequency]}]
-                  eid)
-        sched (:asset-depreciation/schedule b)
-        sched-eid (:db/id sched)
-        freq (:schedule/frequency sched)
-        life (or new-useful-life-months (:asset-depreciation/useful-life-months b))
-        base (cond-> (:asset-depreciation/depreciable-base b)
-               additional-base
-               (#(.add ^java.math.BigDecimal % ^java.math.BigDecimal additional-base)))
-        n-periods (periods-for life freq)
-        fired (count (schedule/fired-sequences db sched-eid))
-        _ (when (< n-periods fired)
-            (throw (ex-info "revise-book!: revised useful life implies fewer periods than already fired"
-                            {:type :asset/revision-below-fired
-                             :revised-periods n-periods :fired fired})))
-        end-date (schedule/date-of-occurrence (:asset-depreciation/start-date b)
-                                              freq n-periods)]
-    (d/transact conn
-                [(cond-> {:db/id eid
-                          :asset-depreciation/useful-life-months life
-                          :asset-depreciation/depreciable-base base}
-                   note (assoc :asset-depreciation/note note))
-                 {:db/id sched-eid
-                  :schedule/end-date end-date
-                  :schedule/total-amount base}])))
+   already been fired.
+
+   The pure tx-data builder is `revise-book-tx-data` (ADR-067)."
+  [conn opts]
+  (d/transact conn (revise-book-tx-data (d/db conn) opts)))
