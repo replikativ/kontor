@@ -5261,3 +5261,134 @@ new mechanism.
   chains are a follow-up.
 
 Date: 2026-05-14.
+
+---
+
+## ADR-053 — `kontor-asset`: the `:asset` register + lifecycle
+
+**Decision.** Stage L′ ships `kontor-asset` as a companion module
+(`modules/asset/`, cohabiting per ADR-002 like `kontor-invoice` /
+`kontor-collections`). ADR-053 lays the foundation: the `:asset`
+register, the `:asset-class` category, the `:asset-event` immutable
+mid-life-event entity, and the `:asset/status` lifecycle status
+machine — **GL-free**. The depreciation books, the depreciation
+runner, and all GL postings (capitalisation, depreciation runs,
+disposal/impairment/revaluation entries) are ADR-054's job;
+ADR-053 is the data model + lifecycle + governance.
+
+This split keeps each ADR independently shippable and testable:
+ADR-053 = "you can model assets and their lifecycle as audited
+state"; ADR-054 = "kontor builds the GL for you and runs
+depreciation."
+
+**Entities** (companion-owned `:asset/*` family — research note 31
+§4):
+- **`:asset`** — one physical capitalised asset. `:asset/code`
+  (unique identity), `:name`, `:class` (ref `:asset-class`),
+  `:acquisition-cost` + `:acquisition-commodity`,
+  `:acquisition-date` (the valid-time that drives effective-dated
+  rule resolution in ADR-055), `:in-service-date` (when the
+  depreciation clock starts — may differ from acquisition: DE
+  "Anschaffung" vs "betriebsbereit"; US/CA "placed in service"),
+  `:salvage-value`, the three GL account refs
+  (`:asset-account` / `:accumulated-account` / `:expense-account` —
+  carried for ADR-054's posting helpers), `:cost-center` (ref
+  `:analytic-account`), `:entity` (ADR-031 scope, optional),
+  **`:asset/parent`** (componentisation — a component is just an
+  `:asset` whose parent points at the whole; the lean reading, no
+  separate `:asset-component` entity), `:origin-transaction` +
+  `:origin-document`, `:status` (the lifecycle facet),
+  `:serial-number` / `:location` / `:note`.
+- **`:asset-class`** — the category. `:code` (unique identity),
+  `:name`, `:parent` (hierarchy), `:default-useful-life-months`,
+  `:note`. The companion ships the *entity*; l10n modules ship the
+  *rows* (a DE class maps to an AfA-Tabelle row, a US class to a
+  MACRS recovery class).
+- **`:asset-event`** — an immutable mid-life-event fact (kontor's
+  posting/layer immutability pattern). `:asset`, `:kind`
+  (`:disposal` | `:impairment` | `:revaluation` |
+  `:partial-disposal` | `:useful-life-revision` | `:addition` |
+  `:transfer`), `:date` (valid-time of the event), `:amount` +
+  `:commodity`, `:new-useful-life-months` (for
+  `:useful-life-revision`), `:transaction` (the GL entry the event
+  posts — populated by ADR-054's helpers, a ref the caller
+  supplies in ADR-053), `:justification` (ref `:audit-doc` —
+  required by approval policy on `:impairment` / `:disposal` /
+  `:revaluation`), `:note`.
+
+**Componentisation = `:asset/parent`.** IAS 16 components (a
+building's roof depreciates separately from its frame) are modeled
+as ordinary `:asset`s whose `:asset/parent` points at the whole.
+Independent depreciation books (ADR-054), shared identity for
+disposal. No separate `:asset-component` entity — that would
+duplicate most of `:asset`'s shape and violate the anti-accretion
+contract.
+
+**The `:asset/status` lifecycle** (ADR-034 facet):
+```
+nil → :planned → :in-service        (acquire, then place-in-service)
+nil → :in-service                   (acquire-in-service — the common case)
+:in-service → :in-service           (impair / revalue — recurring events)
+:in-service → :fully-depreciated    (the depreciation runner's last occurrence — ADR-054)
+:in-service → :disposed             (dispose / write-off / sell)
+:fully-depreciated → :disposed      (scrap a written-down asset)
+:in-service → :transferred          (transfer to another :entity)
+```
+`:planned` covers the DE §7g Investitionsabzugsbetrag case (a
+deduction *before* the asset exists) and the order-to-availability
+gap. `:fully-depreciated` is a long-lived state (a written-down
+machine still in use). `:disposed` and `:transferred` are terminal.
+
+**Governance** (ADR-038 approval policy). The consequential events
+are gated: `:in-service → :disposed` requires `:requires-supporting-
+doc` (the disposal authorisation) + `:no-self-approval`; the
+`:impairment` and `:revaluation` events require `:requires-
+supporting-doc` (the impairment-test memo / valuation report) +
+`:requires-non-empty-reason-note`. This is the same `:audit-doc` +
+`:approval-policy` backbone every other Stage-J-onward entity uses.
+
+**Transactors** (`modules/asset/src/kontor/asset/asset.clj`,
+GL-free): `acquire!` / `acquire-in-service!` (create the `:asset`
++ the nil → :planned / :in-service status row),
+`place-in-service!` (:planned → :in-service). The event
+transactors split by whether they change the lifecycle:
+- `dispose!` / `transfer!` change `:asset/status` — they write the
+  immutable `:asset-event` AND drive the status machine, so the
+  `:in-service → :disposed` approval policy fires (ADR-038).
+- `impair!` / `revalue!` / `revise-useful-life!` / `record-addition!`
+  keep the asset `:in-service` — they write the `:asset-event` with
+  inline required-arg guards (`:supporting-doc` for impair/revalue/
+  disposal, `:reason-note` for impair/revalue), matching the
+  explicit-guard pattern `legal-hold/place!` and `retention/
+  define-policy!` use for create-transactors. Per-event-kind
+  configurable approval policy is a documented follow-up.
+
+The `:asset-event/transaction` ref is supplied by the caller in
+ADR-053 (the caller posts the GL entry); ADR-054's
+`kontor.asset.posting` helpers will build those entries.
+
+**Why a companion, not kernel.** Per ADR-010 + ADR-037: the kernel
+is the double-entry substrate; fixed-asset accounting is a workload
+that *composes on* the substrate. `kontor-asset` is a thin
+companion — the heavy lifting (parallel valuation, the depreciation
+schedule) reuses `:ledger` (ADR-021) and `:schedule` (ADR-032).
+
+**Shape after.**
+- `modules/asset/` companion (deps.edn wired).
+- `modules/asset/src/kontor/asset/schema.clj` — the `:asset/*`,
+  `:asset-class/*`, `:asset-event/*` attrs + `:asset/status`
+  status-transition seeds + approval-policy seeds + `install!`.
+- `modules/asset/src/kontor/asset/asset.clj` — the lifecycle
+  transactors + resolvers (`by-code`, `pull-asset`).
+- `modules/asset/test/kontor/asset/lifecycle_test.clj`.
+
+**What ADR-053 does NOT do** (ADR-054/055/056):
+- No `:asset-depreciation` book, no `DepreciationProvider`, no
+  depreciation math — ADR-054 + ADR-055.
+- No GL postings — the caller supplies `:origin-transaction` /
+  `:asset-event/transaction` refs; ADR-054 ships the helpers that
+  build them.
+- No `compute-cash-flow` / `compute-equity-changes` / Anlagengitter
+  — ADR-056.
+
+Date: 2026-05-14.

@@ -6,6 +6,7 @@
                        "modules/invoice/test"
                        "modules/procurement/test"
                        "modules/collections/test"
+                       "modules/asset/test"
                        "modules/l10n-de/test"
                        "modules/l10n-at/test"
                        "modules/l10n-fr/test"
