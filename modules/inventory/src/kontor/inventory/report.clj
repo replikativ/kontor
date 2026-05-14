@@ -88,14 +88,20 @@
    Required: :book (valuation-book code/eid), :inventory-account
              (eid), :commodity (eid).
    Optional: :as-of-valid, :as-of-tx (the bitemporal cursor, applied
-             to both sides).
+             to BOTH sides — `:as-of-tx` snapshots the db the
+             subledger reduce runs against, so it cannot compare a
+             current subledger to a historical GL).
    Returns {:book eid :subledger bigdec :gl bigdec :difference bigdec
             :ok? boolean}."
   [conn {:keys [book inventory-account commodity as-of-valid as-of-tx]}]
   (when-not book               (throw (ex-info ":book required" {})))
   (when-not inventory-account  (throw (ex-info ":inventory-account required" {})))
   (when-not commodity          (throw (ex-info ":commodity required" {})))
-  (let [db       (d/db conn)
+  (let [;; :as-of-tx is honoured on the subledger side by snapshotting
+        ;; the db — valuation/on-hand-value only reads :as-of-valid
+        ;; from opts, so the tx-time axis must be applied to `db`
+        ;; itself (account-balance applies it on the GL side).
+        db       (cond-> (d/db conn) as-of-tx (d/as-of as-of-tx))
         book-eid (valuation/resolve-book db book)
         opts     (cond-> {}
                    as-of-valid (assoc :as-of-valid as-of-valid)
@@ -118,3 +124,34 @@
      :gl         gl
      :difference diff
      :ok?        (zero? (.signum diff))}))
+
+;; ============================================================================
+;; in-transit-balance
+;; ============================================================================
+
+(defn in-transit-balance
+  "The quantity currently in transit — `Σ :inventory-transfer/quantity`
+   over `:status :in-transit` transfer rows. This is the period-close
+   cutoff exposure (research note 36 §8): stock that has left a source
+   bucket but not yet landed at a destination. Optionally scoped to
+   transfers OUT OF `:from-facility` and/or INTO `:to-facility`
+   (codes or eids). Returns a bigdec."
+  ([db] (in-transit-balance db {}))
+  ([db {:keys [from-facility to-facility]}]
+   (let [ff (when from-facility (inv/resolve-facility db from-facility))
+         tf (when to-facility (inv/resolve-facility db to-facility))
+         rows (d/q '[:find ?t ?qty
+                     :where
+                     [?t :inventory-transfer/status :in-transit]
+                     [?t :inventory-transfer/quantity ?qty]]
+                   db)]
+     (->> rows
+          (filter (fn [[t _]]
+                    (let [tr (d/pull db [{:inventory-transfer/from-facility [:db/id]}
+                                         {:inventory-transfer/to-facility [:db/id]}]
+                                     t)]
+                      (and (or (nil? ff)
+                               (= ff (:db/id (:inventory-transfer/from-facility tr))))
+                           (or (nil? tf)
+                               (= tf (:db/id (:inventory-transfer/to-facility tr))))))))
+          (reduce (fn [^BigDecimal acc [_ qty]] (.add acc qty)) 0M)))))

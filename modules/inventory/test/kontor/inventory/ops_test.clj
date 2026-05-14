@@ -18,6 +18,7 @@
             [kontor.core :as core]
             [kontor.inventory.core :as inv]
             [kontor.inventory.ops :as ops]
+            [kontor.inventory.report :as report]
             [kontor.inventory.reservation :as res]
             [kontor.inventory.schema :as inv-schema]
             [kontor.partner.schema :as partner-schema]
@@ -197,10 +198,13 @@
     (testing "the issue proceeds; QOH goes negative; a :negative-fill is recorded"
       (is (= -30M (inv/on-hand-qty (d/db conn) inventory-item)))
       (is (some? negative-fill))
-      (let [nf (d/pull (d/db conn) '[*] negative-fill)]
+      (let [nf (d/pull (d/db conn) '[* {:negative-fill/origin-issue [:db/id]}]
+                       negative-fill)]
         (is (= :open (:negative-fill/status nf)))
         (is (= 30M (:negative-fill/shortfall-qty nf)))
-        (is (= 13.00M (:negative-fill/estimated-unit-cost nf)))))
+        (is (= 13.00M (:negative-fill/estimated-unit-cost nf)))
+        (is (some? (:db/id (:negative-fill/origin-issue nf)))
+            "the negative-fill links back to the originating issue tx")))
     (testing "true-up-negative-fill! reconciles estimate → actual"
       (ops/true-up-negative-fill!
        conn {:negative-fill negative-fill :actual-unit-cost 15.00M
@@ -233,11 +237,14 @@
     (testing "transfer! takes the qty off the source — it is in transit"
       (is (= 60M (inv/on-hand-qty (d/db conn) src)))
       (is (= :in-transit (:inventory-transfer/status
-                          (d/pull (d/db conn) [:inventory-transfer/status] transfer)))))
+                          (d/pull (d/db conn) [:inventory-transfer/status] transfer))))
+      (is (= 40M (report/in-transit-balance (d/db conn)))
+          "the in-transit balance is the cutoff exposure"))
     (testing "complete-transfer! lands it at the destination"
       (let [{dest :to-inventory-item} (ops/complete-transfer! conn {:transfer transfer})]
         (is (= 40M (inv/on-hand-qty (d/db conn) dest)))
         (is (= 60M (inv/on-hand-qty (d/db conn) src)))
+        (is (= 0M (report/in-transit-balance (d/db conn))) "nothing in transit now")
         (is (= :complete (:inventory-transfer/status
                           (d/pull (d/db conn) [:inventory-transfer/status]
                                   transfer))))))))

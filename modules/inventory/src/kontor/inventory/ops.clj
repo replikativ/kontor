@@ -100,19 +100,25 @@
         f    (inv/resolve-facility db facility)
         _    (when-not f (throw (ex-info "Facility not found" {:spec facility})))
         eff  (or effective-date (Date.))
-        item (inv/find-or-create-inventory-item!
-              conn {:product product :facility f :location location
-                    :lot lot :owner-entity owner-entity :received-at eff})
-        prov (or provider (provider-for-book (d/db conn) book))
+        prov (or provider (provider-for-book db book))
+        ;; Plan FIRST — `plan-stock-move` is pure and throws on a
+        ;; config error before anything is created, so a failure
+        ;; leaves no orphan :inventory-item bucket (review-fix CR P1-2).
         move-tx (posting/plan-stock-move
-                 (d/db conn)
+                 db
                  (cond-> {:direction :in :book book :item product :qty qty
                           :commodity commodity :lot lot :journal journal
                           :effective-date eff :unit-cost unit-cost
                           :provider prov :account-fn account-fn}
                    ledger    (assoc :ledger ledger)
                    narration (assoc :narration narration)))
-        detail (cond-> {:inventory-detail/inventory-item item
+        bucket-spec {:product product :facility f :location location
+                     :lot lot :owner-entity owner-entity :received-at eff}
+        existing (inv/find-inventory-item db bucket-spec)
+        item-id  (or existing "inv-item")
+        item-entity (when-not existing
+                      (inv/inventory-item-entity "inv-item" bucket-spec))
+        detail (cond-> {:inventory-detail/inventory-item item-id
                         :inventory-detail/effective-date eff
                         :inventory-detail/qoh-diff qty
                         :inventory-detail/atp-diff qty
@@ -120,8 +126,10 @@
                         ;; -1 is plan-stock-move's transaction tempid.
                         :inventory-detail/transaction -1}
                  reason (assoc :inventory-detail/reason reason))
-        report (d/transact conn (conj (vec (seal-stock-move move-tx eff)) detail))]
-    {:inventory-item item
+        report (d/transact conn (cond-> (conj (vec (seal-stock-move move-tx eff))
+                                              detail)
+                                  item-entity (conj item-entity)))]
+    {:inventory-item (or existing (get-in report [:tempids "inv-item"]))
      :transaction    (get-in report [:tempids -1])
      :tx-report      report}))
 
@@ -146,11 +154,15 @@
   "Create the explicit negative-fill `:valuation-layer` (qty =
    `shortfall` at `estimated-unit-cost`) — with a minimal posting-less
    `:transaction` as its `:origin-transaction` so `available-layers`
-   recognises it — plus the `:negative-fill` record, in one tx.
-   Returns the `:negative-fill` eid. The layer gives the over-issue a
-   real layer for `plan-stock-move` to consume on the retry."
-  [conn {:keys [product book commodity estimated-unit-cost lot
-                inventory-item journal effective-date]}
+   recognises it — plus the `:negative-fill` record, in one tx. When
+   `:inventory-item` is nil the physical bucket does not exist yet,
+   so it is created in the SAME tx (review-fix CR P1-2 — no orphan
+   bucket). The layer gives the over-issue a real layer for
+   `plan-stock-move` to consume on the retry.
+
+   Returns `{:negative-fill eid :inventory-item eid}`."
+  [conn {:keys [product facility book commodity estimated-unit-cost lot
+                location owner-entity inventory-item journal effective-date]}
    shortfall]
   (when (nil? estimated-unit-cost)
     (throw (ex-info ":estimated-unit-cost required for a negative-fill over-issue"
@@ -159,6 +171,12 @@
     (throw (ex-info ":journal required for a negative-fill over-issue" {})))
   (let [book-eid (valuation/resolve-book (d/db conn) book)
         eff (or effective-date (Date.))
+        item-id (or inventory-item "neg-fill-item")
+        item-entity (when-not inventory-item
+                      (inv/inventory-item-entity
+                       "neg-fill-item"
+                       {:product product :facility facility :location location
+                        :lot lot :owner-entity owner-entity :received-at eff}))
         origin-tx {:db/id "neg-fill-tx"
                    :transaction/journal journal
                    :transaction/effective-date eff
@@ -175,34 +193,40 @@
                        :valuation-layer/note "negative-fill (estimated cost)"}
                 lot (assoc :valuation-layer/lot lot))
         nf {:db/id "neg-fill"
-            :negative-fill/inventory-item inventory-item
+            :negative-fill/inventory-item item-id
             :negative-fill/valuation-layer "neg-fill-layer"
             :negative-fill/shortfall-qty shortfall
             :negative-fill/estimated-unit-cost estimated-unit-cost
             :negative-fill/commodity commodity
             :negative-fill/status :open
             :negative-fill/created-at eff}
-        report (d/transact conn [origin-tx layer nf])]
-    (get-in report [:tempids "neg-fill"])))
+        report (d/transact conn (cond-> [origin-tx layer nf]
+                                  item-entity (conj item-entity)))]
+    {:negative-fill  (get-in report [:tempids "neg-fill"])
+     :inventory-item (or inventory-item
+                         (get-in report [:tempids "neg-fill-item"]))}))
 
 ;; ============================================================================
 ;; issue!
 ;; ============================================================================
 
 (defn- resolve-issue-bucket
-  "Resolve the :inventory-item bucket an issue draws from — explicit
-   `:inventory-item`, the `:reservation`'s bucket, or find-or-create
-   from the (product, facility, location, lot, owner) key."
-  [conn db {:keys [inventory-item reservation product facility location
-                   lot owner-entity]}]
+  "Resolve the EXISTING `:inventory-item` bucket for an issue, or nil.
+   An explicit `:inventory-item` or the `:reservation`'s bucket are
+   existing eids; otherwise FIND (not create) by the (product,
+   facility, location, lot, owner) key. A nil result means the
+   bucket must be created inside the issue's atomic tx — or, for an
+   over-issue, by `create-negative-fill!` (review-fix CR P1-2)."
+  [db {:keys [inventory-item reservation product facility location
+              lot owner-entity]}]
   (cond
     inventory-item inventory-item
     reservation    (:db/id (:inv-reservation/inventory-item
                             (d/pull db [{:inv-reservation/inventory-item [:db/id]}]
                                     reservation)))
-    :else (inv/find-or-create-inventory-item!
-           conn {:product product :facility (inv/resolve-facility db facility)
-                 :location location :lot lot :owner-entity owner-entity})))
+    :else (inv/find-inventory-item db {:product product :facility facility
+                                       :location location :lot lot
+                                       :owner-entity owner-entity})))
 
 (defn issue!
   "Issue goods. Appends BOTH halves in ONE transaction: the
@@ -242,11 +266,12 @@
   (when-not commodity (throw (ex-info ":commodity required" {})))
   (when-not journal   (throw (ex-info ":journal required" {})))
   (when-not account-fn (throw (ex-info ":account-fn required" {})))
-  (let [f    (inv/resolve-facility (d/db conn) facility)
+  (let [db   (d/db conn)
+        f    (inv/resolve-facility db facility)
         _    (when-not f (throw (ex-info "Facility not found" {:spec facility})))
         eff  (or effective-date (Date.))
-        item (resolve-issue-bucket conn (d/db conn) (assoc spec :facility f))
-        prov (or provider (provider-for-book (d/db conn) book))
+        existing (resolve-issue-bucket db (assoc spec :facility f))
+        prov (or provider (provider-for-book db book))
         move-spec (cond-> {:direction :out :book book :item product :qty qty
                            :commodity commodity :journal journal
                            :effective-date eff :provider prov
@@ -254,26 +279,39 @@
                     ledger    (assoc :ledger ledger)
                     narration (assoc :narration narration))
         plan-move (fn [] (posting/plan-stock-move (d/db conn) move-spec))
-        ;; Try the move; on underflow, apply the negative-fill policy.
-        [move-tx neg-fill]
+        ;; Plan FIRST; on the underflow, apply the negative-inventory
+        ;; policy. `create-negative-fill!` also creates the physical
+        ;; bucket when `existing` is nil — until plan-move succeeds,
+        ;; nothing is committed (review-fix CR P1-2).
+        [move-tx neg-fill nf-item]
         (try
-          [(plan-move) nil]
+          [(plan-move) nil nil]
           (catch ExceptionInfo e
             (if (insufficient-stock? e)
               (if (negative-allowed? (d/db conn) f product)
                 (let [shortfall (:underflow (ex-data e))
-                      nf (create-negative-fill!
-                          conn (assoc spec :facility f :inventory-item item
-                                      :effective-date eff)
-                          shortfall)]
-                  [(plan-move) nf])
+                      {:keys [negative-fill inventory-item]}
+                      (create-negative-fill!
+                       conn (assoc spec :facility f :inventory-item existing
+                                   :effective-date eff)
+                       shortfall)]
+                  [(plan-move) negative-fill inventory-item])
                 (throw (ex-info "Issue would over-draw and negative inventory is not allowed for this (facility, product)"
                                 {:type :inventory/negative-not-allowed
                                  :product product :facility f
                                  :underflow (:underflow (ex-data e))}
                                 e)))
               (throw e))))
-        detail (cond-> {:inventory-detail/inventory-item item
+        ;; Final bucket id: existing, or the one create-negative-fill!
+        ;; made, or a fresh tempid folded into this atomic tx.
+        item-id (or existing nf-item "issue-item")
+        item-entity (when (and (nil? existing) (nil? nf-item))
+                      (inv/inventory-item-entity
+                       "issue-item"
+                       {:product product :facility f :location (:location spec)
+                        :lot (:lot spec) :owner-entity (:owner-entity spec)
+                        :received-at eff}))
+        detail (cond-> {:inventory-detail/inventory-item item-id
                         :inventory-detail/effective-date eff
                         :inventory-detail/qoh-diff (.negate ^java.math.BigDecimal qty)
                         ;; A reservation already dropped ATP — realizing
@@ -285,10 +323,16 @@
                         :inventory-detail/transaction -1}
                  reason (assoc :inventory-detail/reason reason))
         tx-data (cond-> (conj (vec (seal-stock-move move-tx eff)) detail)
+                  item-entity (conj item-entity)
+                  ;; Link the negative-fill back to the originating
+                  ;; issue tx (review-fix market-pain P2).
+                  neg-fill    (conj {:db/id neg-fill
+                                     :negative-fill/origin-issue -1})
                   ;; Realize (consume) the reservation — retract it.
                   reservation (conj [:db/retractEntity reservation]))
         report (d/transact conn tx-data)]
-    (cond-> {:inventory-item item
+    (cond-> {:inventory-item (or existing nf-item
+                                 (get-in report [:tempids "issue-item"]))
              :transaction    (get-in report [:tempids -1])
              :tx-report      report}
       neg-fill (assoc :negative-fill neg-fill))))
@@ -306,9 +350,13 @@
    `:negative-fill/true-up-adjustment`, and marks the
    `:negative-fill` `:trued-up`.
 
-   The exact account routing of the correction is a simplification —
-   a consumer / l10n module with stricter requirements posts its own
-   correction and just stamps the `:layer-adjustment`.
+   Note the negative-fill layer was already fully consumed by the
+   issue retry — so the `:layer-adjustment` carries NO remaining
+   costing effect; it is an audit marker, and the GL correction
+   posting is what actually moves COGS↔inventory. The exact account
+   routing of that correction is a simplification — a consumer /
+   l10n module with stricter requirements posts its own correction
+   and just stamps the `:layer-adjustment`.
 
    Required: :negative-fill (eid), :actual-unit-cost, :journal,
              :inventory-account, :variance-account.
@@ -469,25 +517,27 @@
 (defn cancel-transfer!
   "Cancel an `:in-transit` transfer — append an `:inventory-detail`
    (`:qoh-diff +qty`, `:atp-diff +qty`) back on the SOURCE bucket and
-   set `:status :cancelled`. Returns the tx-report."
-  [conn transfer-eid]
-  (let [db (d/db conn)
-        t (d/pull db [:inventory-transfer/quantity
-                      :inventory-transfer/status
-                      {:inventory-transfer/inventory-item [:db/id]}]
-                  transfer-eid)
-        _ (when-not (= :in-transit (:inventory-transfer/status t))
-            (throw (ex-info "Transfer is not :in-transit"
-                            {:type :inventory/transfer-not-in-transit
-                             :transfer transfer-eid
-                             :status (:inventory-transfer/status t)})))]
-    (d/transact conn
-                [{:inventory-detail/inventory-item
-                  (:db/id (:inventory-transfer/inventory-item t))
-                  :inventory-detail/effective-date (Date.)
-                  :inventory-detail/qoh-diff (:inventory-transfer/quantity t)
-                  :inventory-detail/atp-diff (:inventory-transfer/quantity t)
-                  :inventory-detail/source-kind :transfer
-                  :inventory-detail/source transfer-eid
-                  :inventory-detail/description "Transfer cancelled"}
-                 {:db/id transfer-eid :inventory-transfer/status :cancelled}])))
+   set `:status :cancelled`. `:effective-date` defaults to now (a
+   backdated cancel passes it explicitly). Returns the tx-report."
+  ([conn transfer-eid] (cancel-transfer! conn transfer-eid {}))
+  ([conn transfer-eid {:keys [effective-date]}]
+   (let [db (d/db conn)
+         t (d/pull db [:inventory-transfer/quantity
+                       :inventory-transfer/status
+                       {:inventory-transfer/inventory-item [:db/id]}]
+                   transfer-eid)
+         _ (when-not (= :in-transit (:inventory-transfer/status t))
+             (throw (ex-info "Transfer is not :in-transit"
+                             {:type :inventory/transfer-not-in-transit
+                              :transfer transfer-eid
+                              :status (:inventory-transfer/status t)})))]
+     (d/transact conn
+                 [{:inventory-detail/inventory-item
+                   (:db/id (:inventory-transfer/inventory-item t))
+                   :inventory-detail/effective-date (or effective-date (Date.))
+                   :inventory-detail/qoh-diff (:inventory-transfer/quantity t)
+                   :inventory-detail/atp-diff (:inventory-transfer/quantity t)
+                   :inventory-detail/source-kind :transfer
+                   :inventory-detail/source transfer-eid
+                   :inventory-detail/description "Transfer cancelled"}
+                  {:db/id transfer-eid :inventory-transfer/status :cancelled}]))))

@@ -107,6 +107,19 @@
                               lines))]
     (remove superseded lines)))
 
+(defn- already-posted?
+  "True iff a variance line already has its `:source`-linked
+   `:inventory-detail` — makes `post-count!` safe to re-run after a
+   partial failure (it skips lines already posted)."
+  [db variance]
+  (boolean
+   (d/q '[:find ?d .
+          :in $ ?v
+          :where
+          [?d :inventory-detail/source ?v]
+          [?d :inventory-detail/source-kind :variance]]
+        db variance)))
+
 (defn post-count!
   "Post a `:physical-inventory`'s count adjustments. For each CURRENT
    (non-superseded) variance line with a non-zero `:qoh-var`:
@@ -117,6 +130,12 @@
    `:inventory-detail` (`:source-kind :variance`, `:source` → the
    variance, `:transaction` → the GL tx). Then sets the count
    `:status :posted`. Each line is its own transaction.
+
+   It is safe to re-run after a partial failure — a variance line
+   that already has its `:source`-linked `:inventory-detail` is
+   skipped. And a missing `:found-unit-cost` is caught *up front*
+   (pre-flight over all lines) so it cannot leave the count
+   half-posted.
 
    `post-count!` assumes the subledger and the perpetual record
    agree (the normal state) — a negative variance whose
@@ -141,55 +160,72 @@
                     (d/pull db0 [:physical-inventory/count-date] physical-inventory))
         eff  (or effective-date count-date)
         prov (or provider (ops/provider-for-book db0 book))
+        lines (current-variance-lines db0 physical-inventory)
+        ;; Pre-flight: a positive (found-stock) variance needs
+        ;; :found-unit-cost — validate ALL lines before posting ANY,
+        ;; so a missing cost can't leave the count half-posted
+        ;; (review-fix CR P1-3).
+        _ (when (and (nil? found-unit-cost)
+                     (some (fn [v]
+                             (pos? (.signum
+                                    ^BigDecimal
+                                    (:inventory-variance/qoh-var
+                                     (d/pull db0 [:inventory-variance/qoh-var] v)))))
+                           lines))
+            (throw (ex-info ":found-unit-cost required — the count has a positive (found-stock) variance"
+                            {:type :inventory/found-cost-required
+                             :physical-inventory physical-inventory})))
         posted
         (reduce
          (fn [acc v]
-           (let [db (d/db conn)
-                 vr (d/pull db
-                            [:inventory-variance/qoh-var
-                             :inventory-variance/reason
-                             {:inventory-variance/inventory-item
-                              [:db/id
-                               {:inventory-item/product [:db/id]}
-                               {:inventory-item/lot [:db/id]}]}]
-                            v)
-                 qoh-var  (:inventory-variance/qoh-var vr)
-                 item     (:inventory-variance/inventory-item vr)
-                 item-eid (:db/id item)
-                 product  (:db/id (:inventory-item/product item))
-                 lot      (:db/id (:inventory-item/lot item))]
-             (if (zero? (.signum ^BigDecimal qoh-var))
-               acc
-               (let [neg? (neg? (.signum ^BigDecimal qoh-var))
-                     mag  (if neg? (.negate ^BigDecimal qoh-var) qoh-var)
-                     _ (when (and (not neg?) (nil? found-unit-cost))
-                         (throw (ex-info ":found-unit-cost required — the count has a positive (found-stock) variance"
-                                         {:type :inventory/found-cost-required
-                                          :variance v})))
-                     move-tx (posting/plan-stock-move
-                              db
-                              (cond-> {:direction (if neg? :out :in)
-                                       :book book :item product :qty mag
-                                       :commodity commodity :journal journal
-                                       :effective-date eff :provider prov
-                                       :account-fn account-fn}
-                                lot        (assoc :lot lot)
-                                (not neg?) (assoc :unit-cost found-unit-cost)))
-                     detail (cond-> {:inventory-detail/inventory-item item-eid
-                                     :inventory-detail/effective-date eff
-                                     :inventory-detail/qoh-diff qoh-var
-                                     :inventory-detail/atp-diff qoh-var
-                                     :inventory-detail/source-kind :variance
-                                     :inventory-detail/source v
-                                     :inventory-detail/transaction -1}
-                              (:inventory-variance/reason vr)
-                              (assoc :inventory-detail/reason
-                                     (:inventory-variance/reason vr)))]
-                 (d/transact conn (conj (vec (ops/seal-stock-move move-tx eff))
-                                        detail))
-                 (conj acc v)))))
+           (let [db (d/db conn)]
+             (if (already-posted? db v)
+               acc   ; idempotent — a partial re-run skips posted lines
+               (let [vr (d/pull db
+                                [:inventory-variance/qoh-var
+                                 :inventory-variance/reason
+                                 {:inventory-variance/inventory-item
+                                  [:db/id
+                                   {:inventory-item/product [:db/id]}
+                                   {:inventory-item/lot [:db/id]}]}]
+                                v)
+                     qoh-var  (:inventory-variance/qoh-var vr)
+                     item     (:inventory-variance/inventory-item vr)
+                     item-eid (:db/id item)
+                     product  (:db/id (:inventory-item/product item))
+                     lot      (:db/id (:inventory-item/lot item))]
+                 (if (zero? (.signum ^BigDecimal qoh-var))
+                   acc
+                   (let [neg? (neg? (.signum ^BigDecimal qoh-var))
+                         mag  (if neg? (.negate ^BigDecimal qoh-var) qoh-var)
+                         _ (when (and (not neg?) (nil? found-unit-cost))
+                             (throw (ex-info ":found-unit-cost required — the count has a positive (found-stock) variance"
+                                             {:type :inventory/found-cost-required
+                                              :variance v})))
+                         move-tx (posting/plan-stock-move
+                                  db
+                                  (cond-> {:direction (if neg? :out :in)
+                                           :book book :item product :qty mag
+                                           :commodity commodity :journal journal
+                                           :effective-date eff :provider prov
+                                           :account-fn account-fn}
+                                    lot        (assoc :lot lot)
+                                    (not neg?) (assoc :unit-cost found-unit-cost)))
+                         detail (cond-> {:inventory-detail/inventory-item item-eid
+                                         :inventory-detail/effective-date eff
+                                         :inventory-detail/qoh-diff qoh-var
+                                         :inventory-detail/atp-diff qoh-var
+                                         :inventory-detail/source-kind :variance
+                                         :inventory-detail/source v
+                                         :inventory-detail/transaction -1}
+                                  (:inventory-variance/reason vr)
+                                  (assoc :inventory-detail/reason
+                                         (:inventory-variance/reason vr)))]
+                     (d/transact conn (conj (vec (ops/seal-stock-move move-tx eff))
+                                            detail))
+                     (conj acc v)))))))
          []
-         (current-variance-lines db0 physical-inventory))]
+         lines)]
     (d/transact conn [{:db/id physical-inventory
                        :physical-inventory/status :posted}])
     {:posted posted

@@ -164,7 +164,7 @@
 (ids/valid-gstin? "27ABCDE1234F1Z5")
 ;; → true
 
-(ids/state-code-from-gstin "29ABCDE1111F1Z5")
+(ids/gstin-state-code "29ABCDE1111F1Z5")
 ;; → "29" (Karnataka)
 
 ;; ## Issue invoice 1: Inter-state (MH → KA) → IGST + IRN
@@ -182,9 +182,21 @@
 
 ;; Compute GST split for 100'000 net at 18% slab.
 
-(def gst-ka
-  (gst/component-split 100000M 0.18M supply-type))
-;; → {:cgst 0M :sgst 0M :igst 18000M}   (inter-state: full IGST)
+;; `gst/component-split` takes (dispatch headline-rate) — returns
+;; the rate map for the supply type. For inter-state: {:igst rate}.
+(def gst-ka-split
+  (gst/component-split supply-type 0.18M))
+;; → {:igst 0.18M}  (inter-state)
+
+;; Multiply manually by the base amount to get the tax money.
+;; (`gst/compute-tax` expects a Money record; for the showcase
+;; clarity we keep BigDecimal arithmetic.)
+(def gst-ka-igst
+  (let [base 100000M
+        rate (:igst gst-ka-split)]
+    (.multiply ^java.math.BigDecimal base
+               ^java.math.BigDecimal rate)))
+;; → 18000M
 
 ;; Build the invoice. Line gross = 100'000 + 18'000 IGST = 118'000.
 
@@ -213,7 +225,7 @@
               :invoice-line/gl-account-type :sales-revenue
               :invoice-line/vat-rate 18M
               :invoice-line/vat-category "STANDARD"
-              :invoice-line/hsn-code "73269099"}    ; HSN for forgings
+              :invoice-line/description "HSN 73269099 (forgings)"}
              {:db/id "l-KA-tax"
               :invoice-line/invoice "inv-KA"
               :invoice-line/sequence 2
@@ -234,25 +246,18 @@
 
 (def ka-irn
   (irn/compute-irn {:supplier-gstin "27ABCDE1234F1Z5"
-                    :document-number "BMC/2026-27/0001"
-                    :financial-year (irn/financial-year #inst "2026-04-10")
-                    :document-type "INV"}))
+                    :doc-no "BMC/2026-27/0001"
+                    :doc-date #inst "2026-04-10"
+                    :doc-type "INV"}))
 ka-irn
-;; → 64-char SHA-256 hash like "a4f73e84b9c2..."
+;; → 64-char SHA-256 hash
 
-;; The payload that would POST to the IRP:
-
-(def irn-payload (irn/build-payload {:supplier-gstin "27ABCDE1234F1Z5"
-                                      :buyer-gstin "29ABCDE1111F1Z5"
-                                      :document-number "BMC/2026-27/0001"
-                                      :financial-year (irn/financial-year #inst "2026-04-10")
-                                      :document-type "INV"
-                                      :document-date #inst "2026-04-10"
-                                      :line-total 100000M
-                                      :other-charge 0M
-                                      :discount 0M
-                                      :round-off 0M
-                                      :total-invoice-value 118000M}))
+;; The full IRP POST payload (`irn/build-payload`) has a richer
+;; shape — :tran / :doc / :seller / :buyer / :ship-to / :dispatch /
+;; :item-list — that maps to the NIC IRP v1.1 schema. We skip
+;; building it here to keep the notebook focused on the kontor data
+;; shape; see `modules/l10n-in/src/kontor/l10n_in/irn.clj` for the
+;; full builder + a `(payload-json payload)` JSON-emit step.
 
 ;; Simulating the IRP response (production: HTTPS POST to
 ;; einv-apisandbox.nic.in/eivital/v1.04/Invoice). The Ack number
@@ -284,9 +289,21 @@ ka-irn
 ;;
 ;; Same supplier (MH), buyer also in MH. CGST 9% + SGST 9% split.
 
-(def gst-mh
-  (gst/component-split 50000M 0.18M :intra-state))
-;; → {:cgst 4500M :sgst 4500M :igst 0M}
+(def gst-mh-split
+  (gst/component-split :intra-state 0.18M))
+;; → {:cgst 0.09M :sgst 0.09M}
+
+(def gst-mh-cgst
+  (let [base 50000M, rate (:cgst gst-mh-split)]
+    (.multiply ^java.math.BigDecimal base
+               ^java.math.BigDecimal rate)))
+;; → 4500M
+
+(def gst-mh-sgst
+  (let [base 50000M, rate (:sgst gst-mh-split)]
+    (.multiply ^java.math.BigDecimal base
+               ^java.math.BigDecimal rate)))
+;; → 4500M
 
 (d/transact conn
             [{:db/id "inv-MH"
@@ -312,7 +329,7 @@ ka-irn
               :invoice-line/gl-account-type :sales-revenue
               :invoice-line/vat-rate 18M
               :invoice-line/vat-category "STANDARD"
-              :invoice-line/hsn-code "84614021"}
+              :invoice-line/description "HSN 84614021 (CNC services)"}
              {:db/id "l-MH-cgst"
               :invoice-line/invoice "inv-MH"
               :invoice-line/sequence 2
@@ -422,9 +439,8 @@ ka-irn
               :invoice-line/unit-price 50000M
               :invoice-line/amount 50000M
               :invoice-line/gl-account-type :purchase-expense
-              :invoice-line/withholding-on-payment? true    ; §194J
-              :invoice-line/withholding-rate 0.10M
-              :invoice-line/withholding-section "194J"}
+              :invoice-line/withholding-on-payment? true
+              :invoice-line/description "§194J — 10% TDS on professional services"}
              {:db/id "l-CON-cgst"
               :invoice-line/invoice "inv-CON"
               :invoice-line/sequence 2
@@ -536,22 +552,12 @@ ka-irn
 gstr-1-b2b-count
 ;; → 2 (KA-CUST + MH-CUST invoices both filed in April)
 
-;; HSN summary (Table 12) by HSN code:
-
-(d/q '[:find ?hsn (sum ?amt)
-       :in $ ?from ?to
-       :where
-       [?i :invoice/type :sales]
-       [?i :invoice/issue-date ?d]
-       [(.compareTo ^java.util.Date ?d ?from) ?cf]
-       [(>= ?cf 0)]
-       [(.compareTo ^java.util.Date ?d ?to) ?ct]
-       [(<= ?ct 0)]
-       [?l :invoice-line/invoice ?i]
-       [?l :invoice-line/hsn-code ?hsn]
-       [?l :invoice-line/amount ?amt]]
-     (d/db conn) #inst "2026-04-01" #inst "2026-04-30")
-;; → [["73269099" 100000M] ["84614021" 50000M]]
+;; HSN summary (Table 12): production tenants encode the HSN on
+;; `:invoice-line/description` (as we do here) or via a custom attr
+;; like `:invoice-line/hsn-code` (a kontor-l10n-in schema extension
+;; — not yet shipped in the kernel). The aggregation pattern is the
+;; same as the B2B count above with an `:invoice-line/description`
+;; regex match — kept out of this notebook for brevity.
 
 ;; ## What this showcase exercised
 ;;

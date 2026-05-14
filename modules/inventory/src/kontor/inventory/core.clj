@@ -151,9 +151,12 @@
                       (= serial-number (:inventory-item/serial-number it)))))
              candidates))))
 
-(defn- inventory-item-entity
+(defn inventory-item-entity
   "Build the :inventory-item entity map for a bucket spec, at the
-   given `tempid`."
+   given `tempid`. Public so transactors that need the bucket
+   created INSIDE their own atomic tx (rather than a prior tx) can
+   inline it — see `kontor.inventory.ops/receive!` (ADR-059
+   review-fix: no orphan bucket on a plan-stock-move failure)."
   [tempid {:keys [product facility location lot owner-entity kind status
                   serial-number received-at note]
            :or {kind :non-serial status :available}}]

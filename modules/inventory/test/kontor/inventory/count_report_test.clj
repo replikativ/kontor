@@ -153,6 +153,36 @@
         (is (= :variance (:inventory-detail/source-kind det)))
         (is (some? (:inventory-detail/source det)))))))
 
+(deftest post-count-is-idempotent-on-re-run
+  (let [conn (bootstrap)
+        wh (warehouse! conn)
+        db (d/db conn)
+        widget (p db "P-widget")
+        {item :inventory-item}
+        (ops/receive! conn {:product widget :facility wh :book (book db)
+                            :qty 100M :unit-cost 10.00M :commodity (eur db)
+                            :journal (journal db) :account-fn (receive-account-fn db)
+                            :effective-date #inst "2026-03-01"})
+        {:keys [physical-inventory]}
+        (count/start-count! conn {:facility wh :count-date #inst "2026-03-20"})
+        _ (count/record-count-line! conn {:physical-inventory physical-inventory
+                                          :inventory-item item :counted-qty 92M
+                                          :reason :shrinkage})
+        first-run (count/post-count! conn {:physical-inventory physical-inventory
+                                           :book (book (d/db conn))
+                                           :journal (journal (d/db conn))
+                                           :account-fn (count-account-fn (d/db conn))
+                                           :commodity (eur (d/db conn))})
+        second-run (count/post-count! conn {:physical-inventory physical-inventory
+                                            :book (book (d/db conn))
+                                            :journal (journal (d/db conn))
+                                            :account-fn (count-account-fn (d/db conn))
+                                            :commodity (eur (d/db conn))})]
+    (testing "the first run posts the variance; a re-run posts nothing (idempotent)"
+      (is (= 1 (:count first-run)))
+      (is (= 0 (:count second-run)))
+      (is (= 92M (inv/on-hand-qty (d/db conn) item)) "QOH not double-adjusted"))))
+
 (deftest post-count-recount-supersedes-the-original
   (let [conn (bootstrap)
         wh (warehouse! conn)

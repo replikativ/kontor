@@ -105,11 +105,11 @@
              ;; (primary for US-SUB). Same posting often lives in both
              ;; via parallel-ledger.
              {:ledger/code "PRIMARY" :ledger/name "Primary group"
-              :ledger/role :primary}
+              :ledger/type :primary}
              {:ledger/code "GAAP-DE" :ledger/name "DE HGB"
-              :ledger/role :statutory}
+              :ledger/type :secondary :ledger/framework :HGB}
              {:ledger/code "GAAP-US" :ledger/name "US GAAP"
-              :ledger/role :statutory}
+              :ledger/type :secondary :ledger/framework :US-GAAP}
              ;; Accounts (simplified; production would import a full chart)
              {:account/code "1200" :account/path "1200"
               :account/name "Accounts Receivable" :account/type :asset}
@@ -242,9 +242,11 @@
   (d/transact
    conn
    (mapv (fn [p]
-           {:posting-analytic/posting p
-            :posting-analytic/analytic-account cc-mfg
-            :posting-analytic/distribution 1.0M})  ; 100%
+           {:analytic-distribution/posting p
+            :analytic-distribution/account cc-mfg
+            :analytic-distribution/percent 100M
+            :analytic-distribution/plan (d/q (quote [:find ?p . :where [?p :analytic-plan/code "DEFAULT"]])
+                                              (d/db conn))})  ; 100%
          postings)))
 
 ;; ## Step 2: US sub sells finished goods to Megacorp
@@ -285,9 +287,11 @@
   (d/transact
    conn
    (mapv (fn [p]
-           {:posting-analytic/posting p
-            :posting-analytic/analytic-account cc-sales
-            :posting-analytic/distribution 1.0M})
+           {:analytic-distribution/posting p
+            :analytic-distribution/account cc-sales
+            :analytic-distribution/percent 100M
+            :analytic-distribution/plan (d/q (quote [:find ?p . :where [?p :analytic-plan/code "DEFAULT"]])
+                                              (d/db conn))})
          postings)))
 
 ;; ## Step 3: Intercompany invoice (DE-PARENT charges US-SUB)
@@ -366,9 +370,11 @@
   (d/transact
    conn
    (mapv (fn [p]
-           {:posting-analytic/posting p
-            :posting-analytic/analytic-account cc-corp
-            :posting-analytic/distribution 1.0M})
+           {:analytic-distribution/posting p
+            :analytic-distribution/account cc-corp
+            :analytic-distribution/percent 100M
+            :analytic-distribution/plan (d/q (quote [:find ?p . :where [?p :analytic-plan/code "DEFAULT"]])
+                                              (d/db conn))})
          postings)))
 
 ;; ## Verify ADR-031 sum-to-zero per-entity
@@ -407,8 +413,8 @@
   (or (d/q '[:find (sum ?amt) .
              :in $ ?cc
              :where
-             [?pa :posting-analytic/analytic-account ?cc]
-             [?pa :posting-analytic/posting ?p]
+             [?pa :analytic-distribution/account ?cc]
+             [?pa :analytic-distribution/posting ?p]
              [?p :posting/amount ?amt]]
            (d/db conn) cc-eid)
       0M))
@@ -438,8 +444,8 @@
   (or (d/q '[:find (sum ?amt) .
              :in $ ?cc
              :where
-             [?pa :posting-analytic/analytic-account ?cc]
-             [?pa :posting-analytic/posting ?p]
+             [?pa :analytic-distribution/account ?cc]
+             [?pa :analytic-distribution/posting ?p]
              [?p :posting/amount ?amt]
              [(pos? ^java.math.BigDecimal ?amt)]]
            (d/db conn) cc-eid)

@@ -6001,6 +6001,16 @@ cycle counts, no reconciliation reports, no FEFO (ADR-060).
   `on-hand-qty`, queries.
 - `modules/inventory/test/kontor/inventory/stock_ledger_test.clj`.
 
+**Review-after (research note 37).** Two fixes touched ADR-057's
+surface: (a) `:inventory-item/kind :serialized` is now marked
+**RESERVED** in the schema doc — the value exists but the
+reservation walk skips serialized buckets and `issue!` has no
+serialized path yet (the serial-as-qty-1-lot ergonomics are a
+documented follow-up; use `:non-serial` until then). (b)
+`inventory-item-entity` is now public so transactors can build the
+bucket INSIDE their own atomic tx rather than a prior one — the fix
+for the `receive!` / `issue!` orphan-bucket-on-failure P1.
+
 Date: 2026-05-14.
 
 ## ADR-058 — `kontor-inventory`: available-to-promise + the reservation bridge
@@ -6188,6 +6198,39 @@ and procurement adopting `receive!`, are documented follow-ups.
   `complete-transfer!` / `cancel-transfer!`.
 - `modules/inventory/test/kontor/inventory/ops_test.clj`.
 
+**Deferred follow-ups** (research note 36 §7 + review-after note 37):
+kit / unbuild helpers, the consignment ownership flag, drop-ship as
+a non-inventory path; cross-entity transfers with a GL leg;
+procurement adopting `receive!`. Added to the deferral list by the
+review-after:
+- **Returns / RMA** — a return is mechanically a `receive!`, but the
+  hard part (which unit cost? the link to the original
+  `:layer-consumption`?) has no path; a `return!` helper that
+  defaults cost from the original consumption is the follow-up.
+- **In-transit ATP** — `transfer!` removes the qty from the source
+  ATP at send time and the destination only gains it at
+  `complete-transfer!`, so in-transit stock is promiseable at
+  neither facility during transit. v1-acceptable; the fix is a
+  virtual `:transit` facility the transfer moves *through*.
+- **`:account/system-managed?`** — research note 36 §2 wanted a
+  flag so only `plan-stock-move` may touch the inventory account
+  (the *preventive* control; `valuation-tie-out` is only
+  *detective*). Deliberately deferred: kontor ships no UI to
+  fat-finger a raw JE, so this is a consumer-app-layer concern; the
+  kernel flag + posting-middleware enforcement is a named follow-up.
+
+**Review-after (research note 37).** No P0s. `receive!` / `issue!`
+were restructured to plan the move FIRST (pure — throws before
+anything is committed) and build the `:inventory-item` bucket inline
+in the atomic tx, so a `plan-stock-move` failure leaves no orphan
+bucket (CR P1-2). `:negative-fill/origin-issue` added — the
+negative-fill now links back to the originating issue's
+`:transaction` (market-pain P2). `cancel-transfer!` /
+`release-reservation!` gained `:effective-date` opts (CR P2). The
+`true-up-negative-fill!` docstring was clarified — its
+`:layer-adjustment` is an audit marker (the layer is already
+consumed); the GL correction posting does the work.
+
 Date: 2026-05-14.
 
 ## ADR-060 — `kontor-inventory`: cycle counts + reconciliation + FEFO
@@ -6271,5 +6314,16 @@ reservation bridge) → ADR-059 (receive / issue / transfer + GL) →
 ADR-060 (cycle counts + reconciliation + FEFO). The #1 ERP
 functional gap (research note 34) is closed, with exactly two small
 kernel touches.
+
+**Review-after (research note 37).** Two fixes touched ADR-060's
+surface: `valuation-tie-out` now snapshots the db with `(d/as-of …)`
+before the subledger reduce so `:as-of-tx` applies to *both* sides
+(CR P1-1 — it was silently ignored on the subledger side, a
+spurious-difference false positive); and
+`kontor.inventory.report/in-transit-balance` was added — ADR-059
+defined the in-transit balance but shipped no query helper for it
+(market-pain P2). `post-count!` gained a pre-flight `:found-unit-cost`
+validation + idempotent re-run (CR P1-3 — a partial failure no
+longer leaves a count half-posted).
 
 Date: 2026-05-14.

@@ -220,9 +220,13 @@
    {:db/ident       :inventory-item/kind
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
-    :db/doc         "#{:non-serial :serialized}. A serialized bucket
-                     holds exactly one unit; QOH ∈ {0, 1} driven by
-                     :status."}
+    :db/doc         "Wired: :non-serial. RESERVED: :serialized — the
+                     attr value exists, but the reservation walk
+                     skips :serialized buckets and `issue!` has no
+                     serialized special-casing yet (review-after
+                     market-pain P1; the serial-as-qty-1-lot
+                     ergonomics are a documented follow-up). Use
+                     :non-serial until the serialized path ships."}
 
    {:db/ident       :inventory-item/status
     :db/valueType   :db.type/keyword
@@ -401,6 +405,14 @@
     :db/cardinality :db.cardinality/one
     :db/doc         "Set on true-up — ref to the :layer-adjustment
                      reconciling estimated cost to actual."}
+
+   {:db/ident       :negative-fill/origin-issue
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to the kernel :transaction of the `issue!`
+                     that triggered this negative-fill — so a
+                     corrected COGS figure traces back to the sale
+                     (review-after market-pain P2)."}
 
    {:db/ident       :negative-fill/created-at
     :db/valueType   :db.type/instant

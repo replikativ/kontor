@@ -274,25 +274,26 @@
    `:inventory-detail` (`:atp-diff` positive, restoring the ATP) and
    retract the reservation row. The restored quantity is
    `:quantity + :quantity-not-available` (a back-order consumed ATP
-   too). Returns the tx-report. The cancel-order! → release path
-   research note 13 flagged as a P1."
-  [conn reservation-eid]
-  (let [db (d/db conn)
-        r  (d/pull db [:inv-reservation/quantity
-                       :inv-reservation/quantity-not-available
-                       {:inv-reservation/inventory-item [:db/id]}]
-                   reservation-eid)
-        item (:db/id (:inv-reservation/inventory-item r))
-        _ (when-not item
-            (throw (ex-info "Reservation not found, or has no :inventory-item"
-                            {:reservation reservation-eid})))
-        released (.add ^BigDecimal (or (:inv-reservation/quantity r) 0M)
-                       ^BigDecimal (or (:inv-reservation/quantity-not-available r) 0M))]
-    (d/transact conn
-                [{:inventory-detail/inventory-item item
-                  :inventory-detail/effective-date (Date.)
-                  :inventory-detail/qoh-diff 0M
-                  :inventory-detail/atp-diff released
-                  :inventory-detail/source-kind :reservation
-                  :inventory-detail/description "Reservation released"}
-                 [:db/retractEntity reservation-eid]])))
+   too). `:effective-date` defaults to now. Returns the tx-report.
+   The cancel-order! → release path research note 13 flagged as a P1."
+  ([conn reservation-eid] (release-reservation! conn reservation-eid {}))
+  ([conn reservation-eid {:keys [effective-date]}]
+   (let [db (d/db conn)
+         r  (d/pull db [:inv-reservation/quantity
+                        :inv-reservation/quantity-not-available
+                        {:inv-reservation/inventory-item [:db/id]}]
+                    reservation-eid)
+         item (:db/id (:inv-reservation/inventory-item r))
+         _ (when-not item
+             (throw (ex-info "Reservation not found, or has no :inventory-item"
+                             {:reservation reservation-eid})))
+         released (.add ^BigDecimal (or (:inv-reservation/quantity r) 0M)
+                        ^BigDecimal (or (:inv-reservation/quantity-not-available r) 0M))]
+     (d/transact conn
+                 [{:inventory-detail/inventory-item item
+                   :inventory-detail/effective-date (or effective-date (Date.))
+                   :inventory-detail/qoh-diff 0M
+                   :inventory-detail/atp-diff released
+                   :inventory-detail/source-kind :reservation
+                   :inventory-detail/description "Reservation released"}
+                  [:db/retractEntity reservation-eid]]))))
