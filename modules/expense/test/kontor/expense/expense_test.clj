@@ -182,6 +182,50 @@
                         (expense/pull-report (d/db conn) "EXP-1")))))))
 
 ;; ============================================================================
+;; Lifecycle integrity — out-of-order calls must be refused (review-after P0)
+;; ============================================================================
+
+(deftest lifecycle-rejects-out-of-order-transitions
+  (let [conn (bootstrap)
+        _ (two-line-report! conn)]
+    (testing "approve! on a :draft report is refused — the submit gate is real"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"only approve a :submitted"
+           (expense/approve! conn {:expense-report "EXP-1"
+                                   :changed-by-uid (p (d/db conn) "M-bob")}))))
+    (testing "submit! on an already-:submitted report is refused"
+      (expense/submit! conn {:expense-report "EXP-1"
+                             :changed-by-uid (p (d/db conn) "E-alice")})
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"only submit a :draft"
+           (expense/submit! conn {:expense-report "EXP-1"
+                                  :changed-by-uid (p (d/db conn) "E-alice")}))))))
+
+(deftest reopen-a-rejected-report-and-resubmit
+  (let [conn (bootstrap)
+        _ (two-line-report! conn)
+        _ (expense/submit! conn {:expense-report "EXP-1"
+                                 :changed-by-uid (p (d/db conn) "E-alice")})
+        _ (expense/reject! conn {:expense-report "EXP-1"
+                                 :changed-by-uid (p (d/db conn) "M-bob")
+                                 :reason-note "Wrong cost center."})]
+    (testing "reopen! brings a :rejected report back to :draft"
+      (expense/reopen! conn {:expense-report "EXP-1"
+                             :changed-by-uid (p (d/db conn) "E-alice")})
+      (is (= :draft (:expense-report/status
+                     (expense/pull-report (d/db conn) "EXP-1")))))
+    (testing "the corrected report can be resubmitted"
+      (expense/submit! conn {:expense-report "EXP-1"
+                             :changed-by-uid (p (d/db conn) "E-alice")})
+      (is (= :submitted (:expense-report/status
+                         (expense/pull-report (d/db conn) "EXP-1")))))
+    (testing "reopen! only applies to a :rejected report"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"only reopen a :rejected"
+           (expense/reopen! conn {:expense-report "EXP-1"
+                                  :changed-by-uid (p (d/db conn) "E-alice")}))))))
+
+;; ============================================================================
 ;; post-report! / reimburse!
 ;; ============================================================================
 

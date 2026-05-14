@@ -57,8 +57,13 @@
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Cached convenience total — the truth is
-                     `Σ :expense-line/amount`. Maintained by
-                     `add-line!`."}
+                     `Σ :expense-line/amount`, maintained by
+                     `add-line!`. Meaningful only for a
+                     single-commodity report — it sums raw amounts
+                     across commodities, so a mixed-commodity
+                     report's total is a meaningless number; the GL
+                     entry `post-report!` builds is still correct
+                     (it groups credit legs per commodity)."}
 
    {:db/ident       :expense-report/transaction
     :db/valueType   :db.type/ref
@@ -159,6 +164,7 @@
           [:submitted  :approved    "Approve"]
           [:submitted  :rejected    "Reject (submitted)"]
           [:approved   :rejected    "Reject (approved)"]
+          [:rejected   :draft       "Reopen for correction"]
           [:approved   :posted      "Post to the GL"]
           [:posted     :reimbursed  "Reimburse (own-account)"]]]
      {:status-transition/entity-type :expense-report

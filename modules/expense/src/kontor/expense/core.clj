@@ -198,6 +198,14 @@
         report (resolve-report db expense-report)
         _ (when-not report (throw (ex-info "Expense report not found"
                                            {:spec expense-report})))
+        ;; Read the REAL current status — never trust a hard-coded
+        ;; `:from`, or the whole approval gate is bypassable by
+        ;; calling the transactors out of order (review-after P0).
+        status (:expense-report/status
+                (d/pull db [:expense-report/status] report))
+        _ (when-not (= :draft status)
+            (throw (ex-info "Can only submit a :draft report"
+                            {:type :expense/report-not-draft :status status})))
         lines (lines-of db report)
         _ (when (empty? lines)
             (throw (ex-info "Cannot submit a report with no lines"
@@ -206,7 +214,7 @@
                      (some #(nil? (:expense-line/supporting-doc %)) lines))
             (throw (ex-info "Every expense line needs a :supporting-doc (receipt) to submit — pass :require-receipts? false to override"
                             {:type :expense/missing-receipt :report report})))]
-    (change-status! conn report :draft :submitted
+    (change-status! conn report status :submitted
                     (assoc opts :reason :expense-report-submitted))))
 
 (defn approve!
@@ -219,10 +227,17 @@
    Optional: :reason-note, :supporting-doc, :vt-from, :vt-to."
   [conn {:keys [expense-report changed-by-uid] :as opts}]
   (when-not changed-by-uid (throw (ex-info ":changed-by-uid required" {})))
-  (let [report (resolve-report (d/db conn) expense-report)
+  (let [db (d/db conn)
+        report (resolve-report db expense-report)
         _ (when-not report (throw (ex-info "Expense report not found"
-                                           {:spec expense-report})))]
-    (change-status! conn report :submitted :approved
+                                           {:spec expense-report})))
+        ;; Read the REAL status (review-after P0 — no hard-coded :from).
+        status (:expense-report/status
+                (d/pull db [:expense-report/status] report))
+        _ (when-not (= :submitted status)
+            (throw (ex-info "Can only approve a :submitted report"
+                            {:type :expense/report-not-submitted :status status})))]
+    (change-status! conn report status :approved
                     (assoc opts :reason :expense-report-approved))))
 
 (defn reject!
@@ -243,6 +258,28 @@
               (d/pull db [:expense-report/status] report))]
     (change-status! conn report from :rejected
                     (assoc opts :reason :expense-report-rejected))))
+
+(defn reopen!
+  "Reopen a `:rejected` report back to `:draft` so the employee can
+   correct it and resubmit — the reset-to-draft path real expense
+   workflows need (Odoo `hr.expense` has it; research note 09 §5).
+   `add-line!` works again once the report is `:draft`.
+
+   Required: :expense-report, :changed-by-uid.
+   Optional: :reason-note, :vt-from, :vt-to."
+  [conn {:keys [expense-report changed-by-uid] :as opts}]
+  (when-not changed-by-uid (throw (ex-info ":changed-by-uid required" {})))
+  (let [db (d/db conn)
+        report (resolve-report db expense-report)
+        _ (when-not report (throw (ex-info "Expense report not found"
+                                           {:spec expense-report})))
+        status (:expense-report/status
+                (d/pull db [:expense-report/status] report))
+        _ (when-not (= :rejected status)
+            (throw (ex-info "Can only reopen a :rejected report"
+                            {:type :expense/report-not-rejected :status status})))]
+    (change-status! conn report :rejected :draft
+                    (assoc opts :reason :expense-report-reopened))))
 
 ;; ============================================================================
 ;; post-report! — the GL entry

@@ -6417,4 +6417,18 @@ limits — l10n / consumer data, not kernel.
   queries.
 - `modules/expense/test/kontor/expense/expense_test.clj`.
 
+**Review-after.** An independent code-review agent found GL
+correctness, atomicity, and sealing all solid, and **one P0**:
+`submit!` / `approve!` passed a *hard-coded* `:from` to the status
+machine, which trusts a non-nil `:from` — so `approve!` on a
+`:draft` report jumped straight to `:approved`, skipping the submit
+gate entirely (and a bogus `:approved` report would then post to
+the GL). **Fixed** — both now read the *real* `:expense-report/status`
+and assert the expected `:from` (a clear typed error), the same
+pattern `add-line!` / `post-report!` / `reimburse!` already used.
+Also added (P2): a `:rejected → :draft` transition + a `reopen!`
+transactor — the reset-to-draft path real expense workflows need so
+a rejected report can be corrected and resubmitted rather than
+re-created from scratch.
+
 Date: 2026-05-14.
