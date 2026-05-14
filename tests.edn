@@ -8,6 +8,7 @@
                        "modules/collections/test"
                        "modules/asset/test"
                        "modules/inventory/test"
+                       "modules/expense/test"
                        "modules/l10n-de/test"
                        "modules/l10n-at/test"
                        "modules/l10n-fr/test"

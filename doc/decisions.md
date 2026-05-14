@@ -6327,3 +6327,94 @@ validation + idempotent re-run (CR P1-3 — a partial failure no
 longer leaves a count half-posted).
 
 Date: 2026-05-14.
+
+## ADR-061 — `kontor-expense`: employee expense reports
+
+**Decision.** Ships `kontor-expense` as a companion module
+(`modules/expense/`, cohabiting per ADR-002). It is the "cheapest
+high-value win" of research note 34's ranked gap list — a month-1
+need for any employer, and the substrate is **already 100% there**.
+Research note 09 §5 is the research-before: it specs the canonical
+entity shape (Odoo's `hr.expense`) and the load-bearing
+`payment-mode` split.
+
+**Why almost no new machinery.** An expense report is a small
+approval-gated document that composes a GL entry. Every primitive
+it needs already exists: `:partner` is the employee; `:audit-doc`
+(ADR-038/051) is the receipt; the status machine (ADR-034) +
+approval policy (ADR-038) drive submit → approve → post; analytic
+distributions (ADR-012/022) carry the cost-center;
+`kontor.posting/build-transaction` composes the GL; the
+`:transaction/source` convention (`"expense-report:<id>"`, note 09
+§7) is the back-link. `kontor-expense` adds **two entities and a
+handful of transactors** — no kernel touch, no new primitive.
+
+**Entities** (companion-owned):
+- **`:expense-report`** — the submission header: `:code` (unique
+  identity), `:employee` (ref `:partner`), `:status` (the ADR-034
+  lifecycle facet), `:report-date`, `:commodity`, `:total` (a
+  cached convenience — the truth is `Σ :expense-line/amount`),
+  `:transaction` (the GL entry, set by `post-report!`),
+  `:reimbursement-transaction` (set by `reimburse!`), `:note`.
+- **`:expense-line`** — one expense: `:expense-report` (ref),
+  `:category` (a generic ref — the consumer's expense-category
+  entity; kontor ships the entity slot, not a vocabulary),
+  `:expense-date`, `:amount` + `:commodity`, `:payment-mode`
+  (`:own-account` | `:company-account` — *load-bearing*, see
+  below), `:expense-account` (the P&L account this line debits),
+  `:cost-center` (optional ref `:analytic-account`),
+  `:supporting-doc` (ref `:audit-doc` — the receipt),
+  `:description`.
+
+**The `:payment-mode` split** (note 09 §5 — load-bearing). It
+decides the *credit* leg of the GL entry:
+- `:own-account` — the employee paid; `post-report!` builds
+  `Dr :expense-account (per line, analytic) / Cr <employee-
+  reimbursement-payable>`. A later `reimburse!` settles
+  `Dr <reimbursement-payable> / Cr <cash>`.
+- `:company-account` — paid on a company card; `Dr :expense-account
+  / Cr <corporate-card-clearing>`. Bank-statement matching
+  (`kontor-bank-*`) closes the clearing — no `reimburse!` step.
+
+A report may mix modes across lines; `post-report!` groups the
+credit legs by `(payment-mode, commodity)`.
+
+**The `:expense-report/status` lifecycle** (ADR-034 facet):
+```
+nil → :draft → :submitted → :approved → :posted → :reimbursed
+                    │            │
+                    └── :rejected ┘   (:submitted / :approved → :rejected)
+```
+`:posted` is reached by `post-report!` (the GL entry); `:reimbursed`
+by `reimburse!` (own-account only — a company-account report is
+terminal at `:posted`). **Governance** (ADR-038): `:submitted →
+:approved` is gated by `:no-self-approval` (the employee cannot
+approve their own report) + `:requires-supporting-doc` overridable
+per-policy by the l10n/consumer; `:requires-non-empty-reason-note`
+on `:rejected`.
+
+**Transactors** (`modules/expense/src/kontor/expense/`):
+`create-report!` / `add-line!` (build the header + lines);
+`submit!` / `approve!` / `reject!` (drive the status machine);
+`post-report!` (build + transact the GL entry, group credit legs by
+payment-mode, stamp `:transaction/source`, set `:status :posted`);
+`reimburse!` (own-account settle, set `:status :reimbursed`);
+plus `report-total` / `lines-of` / `pull-report` queries.
+
+**Out of scope** (ADR-010 + note 09 §5): no UI (consumer apps —
+beleg); no OCR / receipt-scanning; no per-vendor importer in the
+kernel — an `ExpenseImporter` adapter protocol (SAP Concur,
+Expensify, Pleo, Ramp, …) is a documented future seam, the same
+shape as `TaxProvider`. Mileage rates, per-diem tables, policy
+limits — l10n / consumer data, not kernel.
+
+**Shape after.**
+- `deps.edn` / `tests.edn` — `modules/expense` wired.
+- `modules/expense/src/kontor/expense/schema.clj` — `:expense-report/*`
+  + `:expense-line/*` attrs + `:expense-report/status`
+  status-transition + approval-policy seeds + `install!`.
+- `modules/expense/src/kontor/expense/core.clj` — the transactors +
+  queries.
+- `modules/expense/test/kontor/expense/expense_test.clj`.
+
+Date: 2026-05-14.
