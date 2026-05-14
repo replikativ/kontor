@@ -1,0 +1,241 @@
+(ns kontor.lease.core
+  "kontor-lease — the :lease contract + lifecycle + the short-term /
+   low-value exemption path (ADR-062).
+
+   `define-lease!` records a :lease at `:draft` (framework-neutral
+   contract facts). ADR-063's `commence!` does the balance-sheet
+   recognition (the ROU :asset + the :lease-liability book + the
+   initial-recognition GL entry) and moves it `:draft → :active`.
+
+   The exemption path is deliberately separate: a short-term
+   (≤12-month) or low-value lease has no balance-sheet footprint —
+   it is a straight-line expense, so `register-exempt-lease!` just
+   creates a plain `:schedule` (`:schedule/kind :lease-expense`) and
+   `plan-exempt-lease-charge` builds the per-period expense posting.
+   No `:lease` entity is involved."
+  (:require [datahike.api :as d]
+            [kontor.bitemporal :as kbt]
+            [kontor.posting :as posting]
+            [kontor.schedule :as schedule]
+            [kontor.status-machine :as sm])
+  (:import [java.math BigDecimal RoundingMode]
+           [java.util Date]))
+
+;; ============================================================================
+;; Resolution / queries
+;; ============================================================================
+
+(defn by-code
+  "Resolve a :lease eid by :lease/code."
+  [db code]
+  (d/q '[:find ?e . :in $ ?c :where [?e :lease/code ?c]] db code))
+
+(defn resolve-lease
+  "Coerce `spec` to a :lease eid (string → by-code)."
+  [db spec]
+  (cond
+    (nil? spec)    nil
+    (string? spec) (by-code db spec)
+    :else          spec))
+
+(defn pull-lease
+  "Pull a :lease (by code or eid) with its lessor + ROU asset."
+  [db spec]
+  (when-let [eid (resolve-lease db spec)]
+    (d/pull db
+            '[* {:lease/lessor [:partner/external-id :partner/name]
+                 :lease/rou-asset [:asset/code :asset/status]
+                 :lease/asset-class [:asset-class/code]}]
+            eid)))
+
+;; ============================================================================
+;; define-lease!
+;; ============================================================================
+
+(defn define-lease!
+  "Record a :lease at `:draft` — the contract facts, before
+   balance-sheet recognition. ADR-063's `commence!` moves it
+   `:draft → :active`. The `:changed-by-uid` actor is stamped as
+   `:create/uid` so the ADR-038 `:no-self-approval` rule can fire on
+   a later termination. Returns the tx-report.
+
+   Required opts: :code, :name, :lessor, :asset-class,
+                  :commencement-date, :term-months, :payment-amount,
+                  :payment-frequency (#{:monthly :quarterly :annual}),
+                  :payment-timing (#{:in-advance :in-arrears}),
+                  :commodity, :discount-rate.
+   Optional: :underlying-asset-desc, :initial-direct-costs,
+             :prepaid-at-commencement, :incentives-received,
+             :purchase-option-price, :entity, :origin-document,
+             :note, :changed-by-uid, :vt-from / :vt-to (default
+             :vt-from = :commencement-date)."
+  [conn {:keys [code name lessor asset-class commencement-date term-months
+                payment-amount payment-frequency payment-timing commodity
+                discount-rate underlying-asset-desc initial-direct-costs
+                prepaid-at-commencement incentives-received
+                purchase-option-price entity origin-document note
+                changed-by-uid vt-from vt-to]}]
+  (when-not code              (throw (ex-info ":code required" {})))
+  (when-not name              (throw (ex-info ":name required" {})))
+  (when-not lessor            (throw (ex-info ":lessor required" {})))
+  (when-not asset-class       (throw (ex-info ":asset-class required" {})))
+  (when-not commencement-date (throw (ex-info ":commencement-date required" {})))
+  (when-not term-months       (throw (ex-info ":term-months required" {})))
+  (when (nil? payment-amount) (throw (ex-info ":payment-amount required" {})))
+  (when-not (#{:monthly :quarterly :annual} payment-frequency)
+    (throw (ex-info ":payment-frequency must be :monthly | :quarterly | :annual"
+                    {:payment-frequency payment-frequency})))
+  (when-not (#{:in-advance :in-arrears} payment-timing)
+    (throw (ex-info ":payment-timing must be :in-advance | :in-arrears"
+                    {:payment-timing payment-timing})))
+  (when-not commodity         (throw (ex-info ":commodity required" {})))
+  (when (nil? discount-rate)  (throw (ex-info ":discount-rate required" {})))
+  (let [db (d/db conn)
+        lease-tempid "lease-1"
+        row (cond-> {:db/id lease-tempid
+                     :lease/code code
+                     :lease/name name
+                     :lease/lessor lessor
+                     :lease/asset-class asset-class
+                     :lease/commencement-date commencement-date
+                     :lease/term-months term-months
+                     :lease/payment-amount payment-amount
+                     :lease/payment-frequency payment-frequency
+                     :lease/payment-timing payment-timing
+                     :lease/commodity commodity
+                     :lease/discount-rate discount-rate
+                     :lease/status :draft}
+              underlying-asset-desc   (assoc :lease/underlying-asset-desc
+                                             underlying-asset-desc)
+              initial-direct-costs    (assoc :lease/initial-direct-costs
+                                             initial-direct-costs)
+              prepaid-at-commencement (assoc :lease/prepaid-at-commencement
+                                             prepaid-at-commencement)
+              incentives-received     (assoc :lease/incentives-received
+                                             incentives-received)
+              purchase-option-price   (assoc :lease/purchase-option-price
+                                             purchase-option-price)
+              entity                  (assoc :lease/entity entity)
+              origin-document         (assoc :lease/origin-document origin-document)
+              note                    (assoc :lease/note note)
+              ;; The recording actor IS the creator — stamp :create/uid
+              ;; so ADR-038 :no-self-approval can fire on termination.
+              changed-by-uid          (assoc :create/uid changed-by-uid))
+        status-tx (sm/record-status-change-tx-data
+                   db (cond-> {:entity lease-tempid
+                               :entity-type :lease
+                               :facet :lease/status
+                               :from :nil :to :draft
+                               :changed-at (Date.)
+                               :reason :lease-recorded}
+                        changed-by-uid (assoc :changed-by-uid changed-by-uid)))]
+    (d/transact conn (kbt/with-vt (into [row] status-tx)
+                       (or vt-from commencement-date)
+                       (or vt-to kbt/forever)))))
+
+;; ============================================================================
+;; The short-term / low-value exemption path — a plain :schedule
+;; ============================================================================
+
+(defn- periods-for ^long [^long term-months frequency]
+  (case frequency
+    :monthly   term-months
+    :quarterly (long (Math/ceil (/ term-months 3.0)))
+    :annual    (long (Math/ceil (/ term-months 12.0)))
+    (throw (ex-info "unsupported :frequency"
+                    {:frequency frequency
+                     :supported #{:monthly :quarterly :annual}}))))
+
+(defn register-exempt-lease!
+  "Register a short-term (≤12-month) or low-value lease — which has
+   NO balance-sheet footprint, hence NO `:lease` entity. Creates a
+   plain `:schedule` (`:schedule/kind :lease-expense`) whose
+   `:schedule/total-amount` is the total undiscounted payments;
+   `plan-exempt-lease-charge` builds each period's straight-line
+   expense posting, fired by the generic `kontor.schedule`
+   mechanism. Returns the tx-report.
+
+   Required: :code (schedule code), :total-payments (the total
+             undiscounted amount over the term), :commodity,
+             :start-date, :term-months.
+   Optional: :frequency (default :monthly), :name, :note."
+  [conn {:keys [code total-payments commodity start-date term-months
+                frequency name note]
+         :or {frequency :monthly}}]
+  (when-not code           (throw (ex-info ":code required" {})))
+  (when (nil? total-payments) (throw (ex-info ":total-payments required" {})))
+  (when-not commodity      (throw (ex-info ":commodity required" {})))
+  (when-not start-date     (throw (ex-info ":start-date required" {})))
+  (when-not term-months    (throw (ex-info ":term-months required" {})))
+  (let [n (periods-for term-months frequency)
+        end-date (schedule/date-of-occurrence start-date frequency n)]
+    (d/transact conn
+                [(cond-> {:schedule/code code
+                          :schedule/kind :lease-expense
+                          :schedule/start-date start-date
+                          :schedule/end-date end-date
+                          :schedule/frequency frequency
+                          :schedule/total-amount total-payments
+                          :schedule/total-commodity commodity
+                          :schedule/state :active
+                          :schedule/active true}
+                   name (assoc :schedule/name name)
+                   note (assoc :schedule/note note))])))
+
+(defn exempt-lease-period-amount
+  "The straight-line per-period expense for an exempt lease's
+   `:schedule` — `:schedule/total-amount / n-periods`, the last
+   period absorbing the rounding remainder. `sequence` is 1-indexed.
+   Returns a bigdec."
+  ^BigDecimal [db schedule-spec ^long sequence]
+  (let [sched-eid (schedule/resolve-schedule db schedule-spec)
+        s (d/pull db [:schedule/total-amount :schedule/start-date
+                      :schedule/end-date :schedule/frequency]
+                  sched-eid)
+        total ^BigDecimal (:schedule/total-amount s)
+        freq (:schedule/frequency s)
+        ;; n-periods = how many occurrences from start to end inclusive.
+        n (loop [k 1]
+            (if (pos? (.compareTo (schedule/date-of-occurrence
+                                   (:schedule/start-date s) freq k)
+                                  (:schedule/end-date s)))
+              (dec k)
+              (recur (inc k))))
+        per (.setScale (.divide total (BigDecimal/valueOf n) 12 RoundingMode/HALF_EVEN)
+                       2 RoundingMode/HALF_EVEN)]
+    (if (= sequence n)
+      (.subtract total (.multiply per (BigDecimal/valueOf (dec n))))
+      per)))
+
+(defn plan-exempt-lease-charge
+  "Build one period's straight-line lease-expense posting for an
+   exempt lease: `Dr <lease-expense-account> / Cr <credit-account>`
+   (cash, or a payable). Returns sealed tx-data ready for
+   `kontor.schedule/record-occurrence!` — the GL transaction is at
+   tempid -1, so it composes with `record-occurrence!`'s back-ref.
+
+   Required: :amount, :commodity, :journal, :date,
+             :lease-expense-account, :credit-account.
+   Optional: :narration."
+  [{:keys [amount commodity journal date lease-expense-account
+           credit-account narration]}]
+  (when (nil? amount)           (throw (ex-info ":amount required" {})))
+  (when-not commodity           (throw (ex-info ":commodity required" {})))
+  (when-not journal             (throw (ex-info ":journal required" {})))
+  (when-not date                (throw (ex-info ":date required" {})))
+  (when-not lease-expense-account (throw (ex-info ":lease-expense-account required" {})))
+  (when-not credit-account      (throw (ex-info ":credit-account required" {})))
+  (posting/build-transaction
+   {:transaction (cond-> {:transaction/journal journal
+                          :transaction/effective-date date
+                          :transaction/state :posted
+                          :transaction/posted-at date}
+                   narration (assoc :transaction/narration narration))
+    :postings [{:posting/account lease-expense-account
+                :posting/amount amount
+                :posting/commodity commodity
+                :posting/posted-at date}
+               {:posting/account credit-account
+                :posting/amount (.negate ^BigDecimal amount)
+                :posting/commodity commodity
+                :posting/posted-at date}]}))

@@ -6432,3 +6432,97 @@ a rejected report can be corrected and resubmitted rather than
 re-created from scratch.
 
 Date: 2026-05-14.
+
+## ADR-062 — `kontor-lease`: the `:lease` contract + the ROU asset reuses `kontor-asset`
+
+**Decision.** Ships `kontor-lease` as a companion module
+(`modules/lease/`, cohabiting per ADR-002). Lessee-side lease
+accounting under IFRS 16 and ASC 842. Research notes 38 (reference)
++ 39 (market-pain) are the research-before; the four load-bearing
+design calls were maintainer-confirmed. `kontor-lease` is a **thin
+companion** — the substrate (ADR-021 parallel `:ledger`, ADR-032
+`:schedule`, ADR-031 multi-entity, and the whole `kontor-asset`
+depreciation machinery) was built for it.
+
+ADR-062 lays the foundation: the `:lease` contract entity, the
+`:lease/status` lifecycle, the **decision that the Right-of-Use
+asset IS an `:asset`** (not a new entity), and the short-term /
+low-value exemption path. The `:lease-liability` book +
+`LeaseProvider` + the operating-lease ROU plug + the full
+`commence!` transactor are ADR-063; modifications + remeasurements +
+variable payments + FX are ADR-064.
+
+**The ROU asset reuses `kontor-asset` whole** (maintainer-confirmed:
+one `:asset` per lease). A Right-of-Use asset is an `:asset` with
+`:asset/class` a ROU class, `:asset/origin-document` → the lease
+contract `:audit-doc`, depreciated by `kontor-asset`'s
+`:asset-depreciation` books and runner. For an IFRS-16 / ASC-842
+*finance* lease the existing `StraightLineProvider` drives ROU
+depreciation with **zero new code**; the ASC-842 *operating*-lease
+"plug" is one new `DepreciationProvider` impl (ADR-063). No
+`:rou-asset` entity — that would duplicate `:asset`'s shape and N×
+the lifecycle/disposal/impairment bookkeeping. The rare case where
+the ROU *cost* differs per framework is absorbed by the existing
+per-book `:asset-depreciation/depreciable-base` override.
+
+**`:lease` carries framework-NEUTRAL facts only.** Classification
+(`:finance` / `:operating` / exempt) is **per-`(lease, ledger)`**
+(maintainer-confirmed) — the same lease is `:finance` on the IFRS
+ledger and effectively off-balance on an HGB ledger — so it lives
+on the `:lease-liability` book (ADR-063), *not* on `:lease`.
+`:lease` carries: `:code` (unique identity), `:name`, `:lessor`
+(ref `:partner`), `:underlying-asset-desc`, `:asset-class` (the ROU
+class), `:commencement-date`, `:term-months` (the term *as
+assessed* — the renewal-option judgement already folded in by the
+consumer), `:payment-amount` + `:payment-frequency` +
+`:payment-timing` (`:in-advance` | `:in-arrears`), `:commodity`,
+`:discount-rate` (the IBR or implicit rate, pinned at commencement
+— *not* kernel-computed, a consumer input), `:initial-direct-costs`
+/ `:prepaid-at-commencement` / `:incentives-received` /
+`:purchase-option-price` (the ROU-cost + liability-PV inputs),
+`:rou-asset` (set by `commence!`), `:entity` (ADR-031 scope),
+`:origin-document`, `:status`, `:note`.
+
+**The `:lease/status` lifecycle** (ADR-034 facet):
+```
+nil → :draft → :active → :expired      (the lease runner's last occurrence)
+                       → :terminated   (early termination)
+                       → :purchased    (purchase option exercised)
+```
+`:draft` is the recorded-but-not-commenced state — `define-lease!`
+creates the `:lease` at `:draft`; ADR-063's `commence!` does the
+balance-sheet recognition and moves it `:draft → :active`. The
+three terminal states are reached in ADR-063/064.
+
+**Governance** (ADR-038). `:draft → :active` requires
+`:requires-supporting-doc` (the signed lease contract); `:active →
+:terminated` requires `:requires-supporting-doc` (the termination
+agreement) + `:no-self-approval`.
+
+**The exemption path needs NO `:lease` entity.** A short-term
+(≤12-month) or low-value lease has no balance-sheet footprint — it
+is a straight-line expense. `kontor-lease` ships
+`register-exempt-lease!` (creates a plain `:schedule`,
+`:schedule/kind :lease-expense`, with the straight-line per-period
+amount) + `plan-exempt-lease-charge` (the `Dr lease-expense /
+Cr cash-or-payable` posting builder). Modelling an exempt lease as
+a full `:lease` with a flag would be over-engineering — the whole
+point of the exemption is that it bypasses the ROU / liability
+machinery.
+
+**Transactors** (`modules/lease/src/kontor/lease/`): `define-lease!`
+(create the `:lease` at `:draft`); `register-exempt-lease!` +
+`plan-exempt-lease-charge` (the exemption path); `by-code` /
+`resolve-lease` / `pull-lease` queries. The full `commence!` is
+ADR-063.
+
+**Shape after.**
+- `deps.edn` / `tests.edn` — `modules/lease` wired.
+- `modules/lease/src/kontor/lease/schema.clj` — `:lease/*` attrs +
+  `:lease/status` status-transition + approval-policy seeds +
+  `install!`.
+- `modules/lease/src/kontor/lease/core.clj` — `define-lease!`,
+  the exemption helpers, queries.
+- `modules/lease/test/kontor/lease/lease_test.clj`.
+
+Date: 2026-05-14.

@@ -1,0 +1,169 @@
+(ns kontor.lease.lease-test
+  "ADR-062: kontor-lease — the :lease contract + lifecycle + the
+   short-term / low-value exemption path.
+
+   Covers:
+   - define-lease! records a :lease at :draft, stamps :create/uid,
+     validates :payment-frequency / :payment-timing.
+   - register-exempt-lease! creates a :schedule/kind :lease-expense
+     with no :lease entity; exempt-lease-period-amount straight-lines
+     (last period absorbs the remainder); plan-exempt-lease-charge
+     builds a balanced sealed posting."
+  (:require [clojure.test :refer [deftest is testing]]
+            [datahike.api :as d]
+            [kontor.asset.schema :as asset-schema]
+            [kontor.core :as core]
+            [kontor.lease.core :as lease]
+            [kontor.lease.schema :as lease-schema]
+            [kontor.posting :as kposting]
+            [kontor.schedule :as schedule]))
+
+;; ============================================================================
+;; Fixture
+;; ============================================================================
+
+(defn- bootstrap []
+  (let [conn (core/create-test-db)]
+    (asset-schema/install! conn)
+    (lease-schema/install! conn)
+    (d/transact conn
+                [{:db/id "eur" :commodity/symbol "EUR" :commodity/precision 2}
+                 {:partner/external-id "U-cfo"    :partner/name "CFO"}
+                 {:partner/external-id "L-acme"   :partner/name "Acme Properties"}
+                 {:db/id "class-rou"
+                  :asset-class/code "rou-property"
+                  :asset-class/name "Right-of-Use — Property"}
+                 {:db/id "doc-lease"
+                  :audit-doc/code "LEASE-CONTRACT-1"
+                  :audit-doc/type :lease-contract
+                  :audit-doc/storage-uri "s3://docs/lease-1"
+                  :audit-doc/uploaded-at #inst "2026-01-01"}
+                 {:db/id "acct-lease-exp" :account/code "6740"
+                  :account/name "Short-term Lease Expense"
+                  :account/type :expense :account/active true}
+                 {:db/id "acct-cash" :account/code "1800" :account/name "Bank"
+                  :account/type :asset :account/active true}
+                 {:db/id "journal-gen" :journal/code "GEN" :journal/name "General"
+                  :journal/type :general}])
+    conn))
+
+(defn- ref-eid [db a v]
+  (d/q '[:find ?e . :in $ ?a ?v :where [?e ?a ?v]] db a v))
+
+(defn- commodity [db] (ref-eid db :commodity/symbol "EUR"))
+(defn- p   [db code] (ref-eid db :partner/external-id code))
+(defn- acct [db code] (ref-eid db :account/code code))
+(defn- journal [db] (ref-eid db :journal/code "GEN"))
+(defn- class-eid [db] (ref-eid db :asset-class/code "rou-property"))
+(defn- adoc [db] (ref-eid db :audit-doc/code "LEASE-CONTRACT-1"))
+
+;; ============================================================================
+;; define-lease!
+;; ============================================================================
+
+(deftest define-lease-records-a-draft-lease
+  (let [conn (bootstrap)
+        db (d/db conn)
+        _ (lease/define-lease! conn
+            {:code "LSE-1" :name "Berlin office"
+             :lessor (p db "L-acme")
+             :asset-class (class-eid db)
+             :commencement-date #inst "2026-02-01"
+             :term-months 60
+             :payment-amount 5000.00M
+             :payment-frequency :monthly
+             :payment-timing :in-arrears
+             :commodity (commodity db)
+             :discount-rate 0.05M
+             :origin-document (adoc db)
+             :changed-by-uid (p db "U-cfo")})
+        l (lease/pull-lease (d/db conn) "LSE-1")]
+    (testing "the lease is recorded at :draft"
+      (is (= :draft (:lease/status l)))
+      (is (= 60 (:lease/term-months l)))
+      (is (= 0.05M (:lease/discount-rate l)))
+      (is (= :in-arrears (:lease/payment-timing l))))
+    (testing ":create/uid is stamped to the recording actor"
+      (is (= (p (d/db conn) "U-cfo")
+             (:db/id (:create/uid (d/pull (d/db conn) [:create/uid]
+                                          (lease/by-code (d/db conn) "LSE-1")))))))
+    (testing "a status-history row records nil → :draft"
+      (is (= 1 (count (d/q '[:find [?h ...]
+                             :in $ ?e
+                             :where
+                             [?h :status-history/entity ?e]
+                             [?h :status-history/facet :lease/status]]
+                           (d/db conn) (lease/by-code (d/db conn) "LSE-1"))))))))
+
+(deftest define-lease-validates-enums
+  (let [conn (bootstrap)
+        db (d/db conn)
+        base {:code "LSE-BAD" :name "x" :lessor (p db "L-acme")
+              :asset-class (class-eid db) :commencement-date #inst "2026-02-01"
+              :term-months 12 :payment-amount 100M :payment-timing :in-arrears
+              :commodity (commodity db) :discount-rate 0.05M}]
+    (testing "bad :payment-frequency is rejected"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #":payment-frequency must be"
+           (lease/define-lease! conn (assoc base :payment-frequency :weekly)))))
+    (testing "bad :payment-timing is rejected"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #":payment-timing must be"
+           (lease/define-lease! conn (assoc base :payment-frequency :monthly
+                                            :payment-timing :whenever)))))))
+
+;; ============================================================================
+;; The exemption path
+;; ============================================================================
+
+(deftest register-exempt-lease-is-a-plain-schedule
+  (let [conn (bootstrap)
+        db (d/db conn)
+        ;; A 9-month short-term lease, €900 total → €100/month.
+        _ (lease/register-exempt-lease! conn
+                                        {:code "EXEMPT-1" :name "Short-term storage"
+                                         :total-payments 900.00M
+                                         :commodity (commodity db)
+                                         :start-date #inst "2026-03-01"
+                                         :term-months 9})
+        sched (schedule/by-code (d/db conn) "EXEMPT-1")]
+    (testing "a :schedule/kind :lease-expense is created — no :lease entity"
+      (is (some? sched))
+      (is (= :lease-expense (:schedule/kind
+                             (d/pull (d/db conn) [:schedule/kind] sched))))
+      (is (nil? (lease/by-code (d/db conn) "EXEMPT-1"))
+          "the exemption path creates no :lease"))
+    (testing "exempt-lease-period-amount straight-lines, last period absorbs the remainder"
+      (is (= 100.00M (lease/exempt-lease-period-amount (d/db conn) sched 1)))
+      (is (= 100.00M (lease/exempt-lease-period-amount (d/db conn) sched 5)))
+      (is (= 100.00M (lease/exempt-lease-period-amount (d/db conn) sched 9))))
+    (testing "plan-exempt-lease-charge builds a balanced sealed posting"
+      (let [tx-data (lease/plan-exempt-lease-charge
+                     {:amount (lease/exempt-lease-period-amount (d/db conn) sched 1)
+                      :commodity (commodity (d/db conn))
+                      :journal (journal (d/db conn))
+                      :date #inst "2026-03-01"
+                      :lease-expense-account (acct (d/db conn) "6740")
+                      :credit-account (acct (d/db conn) "1800")})
+            tx (first (filter :transaction/journal tx-data))
+            postings (filter :posting/account tx-data)]
+        (is (:ok? (kposting/validate {:transaction tx :postings postings})))
+        (is (= #{100.00M -100.00M} (set (map :posting/amount postings))))
+        (is (every? #(some? (:posting/posted-at %)) postings) "sealed")))))
+
+(deftest exempt-lease-remainder-lands-on-the-last-period
+  (let [conn (bootstrap)
+        db (d/db conn)
+        ;; €1000 over 7 months → 1000/7 = 142.857… → 142.86 ×6, last = 142.84.
+        _ (lease/register-exempt-lease! conn
+                                        {:code "EXEMPT-2" :total-payments 1000.00M
+                                         :commodity (commodity db)
+                                         :start-date #inst "2026-03-01"
+                                         :term-months 7})
+        sched (schedule/by-code (d/db conn) "EXEMPT-2")
+        amts (mapv #(lease/exempt-lease-period-amount (d/db conn) sched %)
+                   (range 1 8))]
+    (testing "the 7 period amounts sum bit-exact to the total"
+      (is (= 1000.00M (reduce + 0M amts)))
+      (is (= 142.86M (first amts)))
+      (is (not= (last amts) (first amts)) "the last period carries the remainder"))))
