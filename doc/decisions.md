@@ -5730,3 +5730,114 @@ the `:ledger` filter on `compute-statement`, the
 - `modules/asset/test/kontor/asset/depreciation_run_test.clj`.
 
 Date: 2026-05-14.
+
+## ADR-056 — Jahresabschluss extensions: Anlagengitter + cash-flow + equity-changes + the `:ledger` filter
+
+**Decision.** Stage L′ closes the year-end story with four pieces —
+two kernel touches and two companion additions — keeping the
+"kernel does not evolve by accretion" contract intact (research note
+31 §6.4):
+
+1. **The `:ledger` filter on `compute-report` / `compute-statement`**
+   (kernel). The hard prerequisite for a HGB-vs-IFRS Jahresabschluss:
+   `compute-report` gains a `:ledger` option, `compute-statement`
+   forwards it. When set, only postings on that ledger are summed.
+   Per ADR-021 a posting with **no** `:posting/ledger` is
+   conceptually in the *primary* book — so when the requested ledger
+   is `:ledger/type :primary`, nil-ledger postings pass too. With the
+   filter, "Handelsbilanz vs Steuerbilanz side by side" is two
+   `compute-statement` calls.
+
+2. **`compute-cash-flow`** (kernel, `kontor.financial-statements`).
+   The indirect-method cash-flow statement (Kapitalflussrechnung /
+   DRS 21 / IAS 7) — depreciation is its canonical non-cash add-back.
+   The key realisation: **every line of an indirect cash-flow
+   statement is a window delta** — the change in any account over
+   `[from, to)` IS the sum of its postings in that window. Net
+   income, the depreciation add-back, every working-capital movement
+   — all window aggregations. So `compute-cash-flow` is
+   `compute-statement` specialised to *require* a window, plus an
+   optional `:reconcile-codes` check that computes the actual delta
+   on the cash / cash-equivalent accounts and asserts the indirect
+   statement reconciles to it. l10n supplies the definition; the
+   kernel runs it. The `:line/negate` knob (added to
+   `bucket-by-section`) gives l10n the per-line sign control
+   working-capital lines need (an increase in receivables *reduces*
+   cash).
+
+3. **`compute-equity-changes`** (kernel, `kontor.financial-statements`).
+   The statement of changes in equity (Eigenkapitalspiegel / DRS 22
+   / IAS 1) — needed because the IAS 16 revaluation surplus flows
+   through OCI/equity, not P&L. The definition is a
+   `:statement/components` vector; per component the kernel computes
+   the opening balance (point-in-time at `:from`), each movement (a
+   window aggregation), the closing balance (point-in-time at
+   `:to`), and `:component/reconciles?` — whether opening +
+   Σmovements = closing. If the l10n definition's movement lines
+   partition the component's window activity it reconciles; the
+   kernel runs it and checks.
+
+4. **`asset-roll-forward` — the Anlagengitter** (companion,
+   `kontor.asset.report`). The statutory asset-history sheet (HGB
+   §284 Abs. 3; US Form 4562; IAS 16.73) — the per-class gross-cost
+   and accumulated-depreciation roll-forward over a date window. It
+   is **not** a posting aggregation by account code — it is keyed on
+   `:asset` + `:asset-event` + `:schedule-occurrence` history, so it
+   stays correct even when many assets in a class share one GL
+   account (the per-asset-attribution problem a GL sum cannot
+   solve). The arithmetic is jurisdiction-free — every regime needs
+   an asset roll-forward; only the *column layout / class grouping*
+   is l10n. `cost-closing = cost-opening + cost-additions −
+   cost-disposals`; `accum-closing = accum-opening + accum-period −
+   accum-disposals`; NBV = cost − accumulated. The roll-forward is
+   per `(window, ledger)` — a depreciation book is per-(asset,
+   ledger), so the HGB Anlagengitter and the Steuerbilanz
+   Anlagengitter are two calls.
+
+   v1 folds `:transfer` events into disposals (a transfer-out IS a
+   removal from this ledger's books); a dedicated transfers column
+   is a documented follow-up.
+
+5. **The `:no-pending-depreciation` pre-close hook**
+   (`kontor.asset.report/pending-depreciation-issues`). A
+   `kontor.period/close!`-compatible `:pre-checks` fn that flags any
+   `:asset-depreciation` book with a `:schedule` occurrence due
+   within the period window but not yet fired — "you forgot to run
+   the depreciation runner." It is a *hook* the period already
+   exposes — **no code change to `kontor.period`** — composed by the
+   caller with `default-pre-close-checks`. The companion also
+   documents the sequencing rule (research note 31 §5.2): fire the
+   year's last depreciation occurrence *before*
+   `close-fiscal-year!`, so the last charge does not land after the
+   close.
+
+**Why the two statements are kernel, not companion.** The cash-flow
+and equity statements are *driven by* the asset subsystem (the
+depreciation add-back, the revaluation surplus) but are not *of* it
+— they are universal statements every accounting workload needs.
+They belong next to `compute-statement` in the kernel; the
+*definitions* (which line is which section) stay l10n. The
+Anlagengitter, by contrast, is genuinely asset-domain — it belongs
+in the companion.
+
+**What stays l10n.** All statement *line layouts* (HGB §266/§275,
+the cash-flow section mapping, the IFRS presentation); the
+Anlagengitter column layout + SKR04 class grouping; the
+Anhang/Lagebericht document assembly (arguably consumer-app, not
+kontor at all).
+
+**Shape after.**
+- `src/kontor/report.clj` — `compute-report` gains `:ledger`;
+  `pull-posting` pulls `:posting/ledger` → `:ledger-eid`.
+- `src/kontor/financial_statements.clj` — `compute-statement` gains
+  `:ledger`; `bucket-by-section` honours `:line/negate`;
+  `compute-cash-flow` + `compute-equity-changes` added.
+- `modules/asset/src/kontor/asset/report.clj` — `asset-roll-forward`
+  + `pending-depreciation-issues`.
+- `modules/asset/test/kontor/asset/jahresabschluss_test.clj`.
+
+This completes Stage L′ (`kontor-asset`): ADR-053 (register +
+lifecycle) → ADR-054 (depreciation books = `:ledger`) → ADR-055
+(provider protocol + runner) → ADR-056 (Jahresabschluss).
+
+Date: 2026-05-14.

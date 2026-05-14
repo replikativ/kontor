@@ -73,13 +73,15 @@
   "Pull the posting + its account's commodity/code/type/tags + tx state.
    Returns a flat map suitable for predicate filtering. Adds
    `:valid-from` derived from the creating tx's `:tx/valid-from`
-   (kontor.bitemporal)."
+   (kontor.bitemporal) and `:ledger-eid` for the optional :ledger
+   filter (ADR-021 — a nil :posting/ledger is the primary book)."
   [db p]
   (let [pulled (d/pull db
                        [:db/id
                         :posting/amount
                         :posting/commodity
                         :posting/transaction
+                        {:posting/ledger [:db/id]}
                         {:posting/account [:account/code
                                            :account/type
                                            :account/tags]}
@@ -107,6 +109,7 @@
     (assoc pulled
            :valid-from vf
            :tx-state tx-state
+           :ledger-eid (:db/id (:posting/ledger pulled))
            :account-code (:account/code account)
            :account-type (:account/type account)
            :all-tags (clojure.set/union acct-tag-names posting-tag-names))))
@@ -208,6 +211,25 @@
 ;; Top-level: compute-report
 ;; ============================================================================
 
+(defn- ledger-filter-pred
+  "Build a posting predicate for the optional `:ledger` report
+   filter. `ledger-spec` is an eid or lookup-ref. Per ADR-021 a
+   posting with no `:posting/ledger` is conceptually in the PRIMARY
+   book — so when the requested ledger is `:ledger/type :primary`,
+   nil-ledger postings pass too. Returns `(constantly true)` when no
+   ledger filter is requested."
+  [db ledger-spec]
+  (if (nil? ledger-spec)
+    (constantly true)
+    (let [{:keys [db/id ledger/type]} (d/pull db [:db/id :ledger/type] ledger-spec)]
+      (when-not id
+        (throw (ex-info "compute-report: :ledger not found" {:ledger ledger-spec})))
+      (let [primary? (= :primary type)]
+        (fn [p]
+          (let [le (:ledger-eid p)]
+            (or (= le id)
+                (and primary? (nil? le)))))))))
+
 (defn compute-report
   "Run a report definition against `conn` and return:
 
@@ -225,17 +247,24 @@
      :as-of-tx       — datahike snapshot timestamp (default: now)
      :include-states — set of :transaction/state values to include
                        (default: #{:posted}). Drafts excluded so the
-                       report reflects what's actually been posted."
+                       report reflects what's actually been posted.
+     :ledger         — optional ledger eid / lookup-ref. When set,
+                       only postings on that ledger are summed (ADR-021
+                       parallel books — the HGB-vs-IFRS Jahresabschluss
+                       prerequisite). A nil-ledger posting counts as
+                       the primary book."
   ([conn report] (compute-report conn report {}))
-  ([conn report {:keys [from to as-of-tx include-states]
+  ([conn report {:keys [from to as-of-tx include-states ledger]
                  :or   {include-states default-included-states}}]
    (let [as-of-tx (or as-of-tx (now))
          db (-> conn d/db (d/as-of as-of-tx))
+         ledger-pred (ledger-filter-pred db ledger)
          all-pids (d/q '[:find [?p ...] :where [?p :posting/account _]] db)
          pulled (mapv #(pull-posting db %) all-pids)
          filtered (filter (fn [p]
                             (and (in-window? p from to)
-                                 (contains? include-states (:tx-state p))))
+                                 (contains? include-states (:tx-state p))
+                                 (ledger-pred p)))
                           pulled)
          lines (mapv (fn [{:keys [:line/code :line/label :line/expression]}]
                        (let [{:keys [value postings]} (run-engine filtered expression {})]
