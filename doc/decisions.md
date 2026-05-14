@@ -6972,3 +6972,93 @@ guard; flagged for the `indexed` unit.
 - `modules/authz/test/kontor/authz/schema_test.clj`.
 
 Date: 2026-05-14.
+
+---
+
+## ADR-066 — `kontor-authz`: the permission-graph traversal + the client
+
+**Decision.** The substantial unit of kontor-authz — `can?`,
+`lookup-resources`, `lookup-subjects`, `count-resources`, the
+relationship-edge CRUD, and the `IAuthorization` client. A faithful,
+datahike-native port of EACL's `eacl.datomic.impl.indexed` +
+`eacl.lazy-merge-sort` + the relationship half of `eacl.datomic.impl`
++ `eacl.datomic.core` (research note 41 proved the algorithm runs on
+datahike; ADR-065 ported the model + schema; this ADR ports the
+engine).
+
+**How the traversal works.** Two walks:
+1. **schema walk** — `get-permission-paths` reads the
+   `:authz.relation/*` + `:authz.permission/*` *definitions* and
+   builds a tree of **paths**: every way `permission` on
+   `resource-type` can be granted (a direct relation, an arrow
+   through another relation or permission, a self-permission).
+   Cheap — schema is sparse.
+2. **data walk** — the `traverse-*` fns walk the
+   `:authz.relationship/*` *edges* along those paths via
+   `index-range` scans over the `forward` / `reverse` tuple indices.
+   Each scan is already sorted ascending by the trailing ref eid
+   (note 41); `kontor.authz.merge-sort` merges the parallel paths'
+   scans into one sorted, deduplicated lazy seq — parallel paths can
+   reach the same resource, and the dedup keeps the cursor correct.
+That eid order **is** the pagination cursor: `lookup-resources`
+resumes a scan at `[… cursor-eid]`. `can?` short-circuits on the
+first granting path; `lookup-*` enumerate.
+
+**Datahike adaptations from the EACL source** (all settled in note
+41): `d/index-range` is positional in Datomic, map-arg
+(`{:attrid :start :end}`) in datahike — a one-line `idx-range` helper
+bridges every call site; `d/entid` does not exist — an `entid`
+helper resolves eid / lookup-ref via `d/entity`; the relationship
+`:delete` emits `[:db/retractEntity …]`, not Datomic's
+`[:db.fn/retractEntity …]`; `d/transact` returns the report directly
+(no deref); the basis token is `(:max-tx db)`, not `d/basis-t`.
+
+**What was dropped from the EACL source.** Two dead functions
+(`traverse-single-path` — only self-recursive, never called; and
+`direct-match-datoms-in-relationship-index` — never called); the
+`clojure.tools.logging` dependency (the `log/warn` diagnostics for
+missing schema defs — the functions still return `[]` on a missing
+def, a soft failure); and the `clojure.core.cache` dependency (the
+LRU `permission-paths-cache`). The path cache is a **deferred perf
+optimisation**, not correctness — `get-permission-paths` calls
+`calc-permission-paths` directly; a plain `atom`-memoize (no new
+dep) can be re-added if profiling demands it. **Net: kontor-authz
+adds zero dependencies — datahike only**, like every other companion.
+
+**The client.** `kontor.authz.client/make-client` wraps a datahike
+`conn` in an `AuthzClient` reifying `IAuthorization`. Its job is **id
+coercion + dispatch**: the traversal + the edge CRUD speak datahike
+eids; a consumer speaks whatever external id it chose
+(`:authz/object-id` strings by default, or raw eids — configurable
+via `:entity->object-id` / `:object-id->ident`). The client coerces
+subjects, resources, cursors, and relationship filters at the
+boundary. `read-schema` / `write-schema!` / `expand-permission-tree`
+throw "ADR-066-deferred" — `write-schema!` wants the
+SpiceDB-schema-string parser (`kontor.authz.spice-parser`), a later
+convenience unit.
+
+**Known limitation (inherited from the EACL model, flagged in
+ADR-065).** `calc-permission-paths` and `traverse-permission-path`
+carry visited-sets for cycle detection, but
+`traverse-permission-path-reverse`'s `:self-permission` branch does
+not — a cyclic permission *schema* could loop `lookup-subjects`.
+kontor's authz schemas are authored, not user-generated, so this is
+low-risk; flagged for the kontor-authz review-after.
+
+**Shape after.**
+- `modules/authz/src/kontor/authz/merge-sort.clj` — the lazy
+  sorted-merge-with-dedup (`lazy-fold2-merge-dedupe-sorted-by`).
+- `modules/authz/src/kontor/authz/indexed.clj` — the traversal:
+  `get-permission-paths`, `can?`, `lookup-resources`,
+  `lookup-subjects`, `count-resources`, the `traverse-*` fns.
+- `modules/authz/src/kontor/authz/relationships.clj` — the
+  relationship-edge CRUD (`read-relationships`,
+  `tx-update-relationship`, `find-one-relationship-id`).
+- `modules/authz/src/kontor/authz/client.clj` — `make-client` +
+  the `AuthzClient` `IAuthorization` reification.
+- `modules/authz/test/kontor/authz/indexed_test.clj`.
+
+This + ADR-065 are the kontor-authz companion; the SpiceDB-string
+parser is the one deferred convenience.
+
+Date: 2026-05-14.
