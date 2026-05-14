@@ -26,6 +26,7 @@
   (:require [datahike.api :as d]
             [kontor.ledger :as ledger]
             [kontor.legal-hold :as legal-hold]
+            [kontor.retention :as retention]
             [kontor.schema :as schema]
             [kontor.tax-provider :as tp]
             [kontor.valuation :as valuation]))
@@ -82,6 +83,7 @@
   (ledger/install-defaults! conn)
   (valuation/install-defaults! conn)
   (legal-hold/install-seeds! conn)   ; ADR-049 status-transition + approval-policy seeds
+  (retention/install-seeds! conn)    ; ADR-050 status-transition + approval-policy seeds
   (d/transact conn [cost-center-plan-seed])
   conn)
 

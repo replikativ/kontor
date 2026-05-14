@@ -566,6 +566,127 @@
                      the :status-history rows + :audit-doc are)."}])
 
 ;; ============================================================================
+;; :retention-policy  — ADR-050
+;; ============================================================================
+
+(def ^:private retention-policy-attrs
+  "Effective-dated retention rules. A policy says: entities of type
+   T, in jurisdiction J, expire `duration-years` after their
+   `triggered-by` anchor date, via `expiry-action`. The kernel ships
+   only the SHAPE — per-jurisdiction policy data lives in l10n
+   companion modules (ADR-026 effective-dated pattern). The
+   kontor.retention sweeper walks candidate entities and produces
+   expiry work-items; entities under an active legal hold (ADR-049)
+   are reported but never expired (apply-expiry! routes through
+   validate-and-apply, so the hold-middleware fires structurally)."
+  [{:db/ident       :retention-policy/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "External identifier for the policy (e.g.
+                     'DE-HGB-257-ledger', 'US-SOX-103')."}
+
+   {:db/ident       :retention-policy/applies-to
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Entity-type discriminator keyword(s) this policy
+                     governs — #{:transaction :invoice :partner
+                     :audit-doc :status-history …}. Matches the bare-
+                     keyword entity-type convention used by
+                     :status-history/entity-type."}
+
+   {:db/ident       :retention-policy/jurisdiction
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to :country. nil = applies
+                     globally. policy-for prefers a jurisdiction-
+                     specific policy over a global one."}
+
+   {:db/ident       :retention-policy/duration-years
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Retention duration in whole years, measured from
+                     the entity's :triggered-by anchor date."}
+
+   {:db/ident       :retention-policy/triggered-by
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The clock-anchor attribute keyword. The
+                     retention clock starts at the value of this
+                     attribute ON the entity (v1: direct-attribute
+                     anchors only — e.g. :transaction/effective-date,
+                     :audit-doc/uploaded-at, :status-history/changed-
+                     at). Entities lacking the attribute are skipped
+                     by the sweeper."}
+
+   {:db/ident       :retention-policy/expiry-action
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "What the sweeper does to an expired entity.
+                     #{:purge :anonymize :archive-to-cold-storage}.
+                     :purge — :db/purge the whole entity.
+                     :anonymize — :db.purge/attribute each field in
+                       :anonymize-fields; the row survives, PII gone.
+                     :archive-to-cold-storage — deferred in v1
+                       (apply-expiry! throws 'not implemented')."}
+
+   {:db/ident       :retention-policy/anonymize-fields
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/many
+    :db/doc         "For :expiry-action :anonymize — the set of PII
+                     attribute keywords to purge. The policy carries
+                     the PII field list so the kernel needs no global
+                     PII registry; l10n companions ship pre-seeded
+                     policies with the standard per-jurisdiction PII
+                     set."}
+
+   {:db/ident       :retention-policy/legal-basis
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Free-text statute reference (e.g. 'HGB §257 /
+                     GoBD', 'SOX §103', 'GDPR Art. 5(1)(e)')."}
+
+   {:db/ident       :retention-policy/effective-from
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "ADR-026 effective-dating. A policy applies to
+                     entities whose anchor date falls in
+                     [effective-from, effective-until). Statutes
+                     change; an entity is evaluated against the
+                     policy in force when its anchor date occurred."}
+
+   {:db/ident       :retention-policy/effective-until
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Exclusive upper bound of the policy's effective
+                     window. nil = open-ended (still in force)."}
+
+   {:db/ident       :retention-policy/state
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "ADR-034 facet. #{:draft :active :superseded}.
+                     Only :active policies are consulted by the
+                     sweeper. :draft stages a policy without firing;
+                     :superseded is terminal."}
+
+   {:db/ident       :retention-policy/supporting-doc
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to :audit-doc — the records-retention
+                     schedule document or the legal memo justifying
+                     the policy. ADR-038 :requires-supporting-doc
+                     enforces presence on :draft → :active."}
+
+   {:db/ident       :retention-policy/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:retention-policy/code
+                     :retention-policy/effective-from]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "One policy row per (code, effective-from). Lets
+                     a policy be superseded by a new row with a later
+                     effective-from without code collision."}])
+
+;; ============================================================================
 
 (def ^:private partner-merge-attrs
   [{:db/ident       :partner-merge/duplicate-of
@@ -3348,7 +3469,8 @@
     account-type-direction-attrs          ; ADR-041
     payment-application-attrs             ; ADR-043
     bitemporal-tx-attrs                   ; ADR-048 (kontor.bitemporal)
-    legal-hold-attrs)))                   ; ADR-049 (kontor.legal-hold)
+    legal-hold-attrs                      ; ADR-049 (kontor.legal-hold)
+    retention-policy-attrs)))             ; ADR-050 (kontor.retention)
 
 (defn install!
   "Transact the kernel schema into a connection. Idempotent — re-running

@@ -269,11 +269,11 @@
                          :supporting-doc (adoc-eid db "DOC-PLACE-001")
                          :reason-note "Preserve."
                          :scope-eids [held]})]
-    (testing ":db/purgeAttribute of a held entity's attr is refused"
+    (testing ":db.purge/attribute of a held entity's attr is refused"
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo #"blocked by active legal hold"
            (d/transact conn [[:db.fn/call v/validate-and-apply
-                              [[:db/purgeAttribute held :partner/name]]]]))))))
+                              [[:db.purge/attribute held :partner/name]]]]))))))
 
 ;; ============================================================================
 ;; P1-1 review fix: :pending-review → :released still SoD-gated

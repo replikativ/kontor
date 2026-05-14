@@ -292,22 +292,23 @@
 
 (def ^:private destructive-ops
   "datahike tx-op keywords that destroy data on an *existing* entity.
-   Whole-entity forms (eid in slot 1):"
-  #{:db/purge :db.fn/purge :db/retractEntity :db.fn/retractEntity})
+   Whole-entity forms (eid in slot 1) — the actual datahike purge +
+   retract surface (see datahike.db.transaction `transact-tx-data`):"
+  #{:db/purge :db.purge/entity :db/retractEntity :db.fn/retractEntity})
 
 (def ^:private destructive-attr-ops
   "datahike tx-op keywords that destroy data on a specific attribute
    of an existing entity (eid in slot 1, attr in slot 2):"
-  #{:db/purgeAttribute :db.purge/attribute :db/retract})
+  #{:db.purge/attribute :db/retract})
 
 (defn- destructive-targets
   "Walk `tx-data`; return a seq of `{:tx :eid :form :attr}` for every
    form that destroys data on an existing entity — datahike's full
    purge + retract surface, not just `[:db/purge eid]` (P0-1).
 
-   Whole-entity forms (`:db/purge`, `:db.fn/purge`, `:db/retractEntity`,
-   `:db.fn/retractEntity`) carry no `:attr`. Attribute-level forms
-   (`:db/purgeAttribute`, `:db.purge/attribute`, `:db/retract`) carry
+   Whole-entity forms (`:db/purge`, `:db.purge/entity`,
+   `:db/retractEntity`, `:db.fn/retractEntity`) carry no `:attr`.
+   Attribute-level forms (`:db.purge/attribute`, `:db/retract`) carry
    the attr in slot 2.
 
    Entity-map nil-retracts (`{:db/id e :foo nil}`) are intentionally

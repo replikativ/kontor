@@ -4782,9 +4782,9 @@ Both checks run; either firing blocks the destructive write.
 
 **Destructive-write coverage.** The middleware blocks the full
 datahike data-destruction surface, not just `[:db/purge eid]`:
-whole-entity forms (`:db/purge`, `:db.fn/purge`, `:db/retractEntity`,
+whole-entity forms (`:db/purge`, `:db.purge/entity`, `:db/retractEntity`,
 `:db.fn/retractEntity`) and attribute-level forms
-(`:db/purgeAttribute`, `:db.purge/attribute`, `:db/retract`). This
+(`:db.purge/attribute`, `:db/retract`). This
 matters because the Zubulake / Pension Committee fact pattern is
 exactly the preservation of *non-posted* business records — a draft
 invoice, a partner row, a supporting-doc — which `:db/retractEntity`
@@ -4859,7 +4859,7 @@ shape and the Datomic vocabulary.
 - `test/kontor/legal_hold_test.clj` (eid-set hold, scope-query hold,
   release-then-purge, ADR-038 enforcement on placement + release,
   destructive-form coverage (`:db/retractEntity`,
-  `:db/purgeAttribute`), multi-hold overlap, `:pending-review`
+  `:db.purge/attribute`), multi-hold overlap, `:pending-review`
   release SoD, bitemporal scope-query resolution).
 
 **No `:legal-hold/placed-at` denorm.** The placement instant IS the
@@ -4893,5 +4893,142 @@ instant.
 FRCP 37(e)). We use it unchanged. `:legal-hold/code` is a string
 unique-identity following the existing pattern (`:audit-doc/code`,
 `:journal/code`).
+
+Date: 2026-05-13.
+
+---
+
+## ADR-050 — Retention policy + sweeper: effective-dated expiry that respects holds
+
+**Decision.** Stage M ships `:retention-policy/*` as a kernel entity
+(shape only — **no default policy data**) plus a `kontor.retention`
+namespace with a sweeper. A retention policy says "entities of type
+T, in jurisdiction J, expire `duration-years` after their
+`triggered-by` anchor date, via `expiry-action`." The sweeper walks
+candidate entities, computes each one's retention deadline, and —
+for entities past their deadline AND not under an active legal hold
+— produces an expiry work-item.
+
+Per-jurisdiction policy *data* lives in l10n companion modules
+(`kontor-l10n-de` ships HGB §257 / GoBD / AO §147; `kontor-l10n-us`
+ships SOX §103 / IRC §6001; etc.), exactly mirroring ADR-026's
+effective-dated tax-rate pattern. The kernel is jurisdiction-blind;
+it ships the mechanism, never the numbers.
+
+**Schema** (one ~13-attr entity in `src/kontor/schema.clj`):
+`:retention-policy/code` (unique identity), `:applies-to`
+(`:db.cardinality/many` keyword — entity-type discriminators),
+`:jurisdiction` (ref to `:country`, nil = global), `:duration-years`,
+`:triggered-by` (the *clock-anchor* attribute keyword — e.g.
+`:transaction/effective-date`, `:audit-doc/uploaded-at`,
+`:status-history/changed-at`), `:expiry-action`
+(`:purge` | `:anonymize` | `:archive-to-cold-storage`),
+`:anonymize-fields` (`:db.cardinality/many` keyword — the PII attrs
+for the `:anonymize` action), `:legal-basis` (free-text statute
+reference), `:effective-from`/`:effective-until` (ADR-026 pattern),
+`:state` (status-machine facet), `:supporting-doc`, and a
+`:retention-policy/identity` tuple `[code effective-from]`.
+
+**Status machine** (ADR-034 facet `:retention-policy/state`):
+`nil → :draft → :active → :superseded`. `:draft` lets a tenant
+stage a policy without it firing; `:superseded` is terminal — to
+"update" a policy you ship a new row with a later `:effective-from`
+and supersede the old. Approval policy (ADR-038): `:draft → :active`
+requires `:supporting-doc` + non-empty `:reason-note` — the auditor
+needs to know *why* a retention rule changed.
+
+**The hold-blocks-expiry invariant — composition with ADR-049.**
+This is the headline. `kontor.retention/apply-expiry!` does not call
+`d/transact` directly; it routes the purge/anonymize tx-data through
+`[:db.fn/call kontor.validation/validate-and-apply …]`. That means
+the ADR-049 hold-middleware (`assert-no-hold-violating-destructive-
+writes!`) fires on every expiry action — `:purge` is a `:db/purge`,
+`:anonymize` is N `:db.purge/attribute` ops, both of which the
+hold-middleware now recognizes (ADR-049 review fix P0-1). The
+sweeper *structurally cannot* expire data under hold; even a buggy
+consumer that called `apply-expiry!` on a held entity would get the
+`:legal-hold/purge-blocked` exception. `eligible?` *also* checks
+`legal-hold/entity-held?` — but that check is an optimization and a
+visibility feature (the sweeper reports "this entity would expire
+today but is on hold"), not the load-bearing guarantee. The
+guarantee is the middleware.
+
+**Why kernel ships the sweeper.** The sweeper *must* respect legal
+holds. If the sweeper lived in consumer-land, a consumer could write
+their own expiry loop that bypasses the hold check. By shipping
+`sweep!` + `apply-expiry!` in the kernel — and routing
+`apply-expiry!` through `validate-and-apply` — the hold check is
+unavoidable. The kernel does NOT ship a scheduler (per ADR-010);
+the consumer schedules `sweep-and-apply!` on its own cadence (a
+`bb retention-sweep` cron, daily/weekly).
+
+**Why.** Research note 23 (market-pain) documents the EDPB's 2025
+Coordinated Enforcement Action explicitly targeting right-to-erasure
+across 32 DPAs, and the Finnish DPA's €856k Verkkokauppa fine —
+levied not for keeping data too long but for *failing to define a
+retention policy at all*. Research note 22 (reference study)
+confirmed the OSS prior-art vacuum: no major open-source ERP ships a
+retention primitive; the closest analogues are Odoo's `data_recycle`
+(domain-filter + time-delta, no hold-awareness, anonymize-only
+`privacy_lookup` as a cautionary tale) and SAP ILM's residence-vs-
+retention-period model. The SOX-7y-vs-GDPR-erasure tension has an
+established industry compromise — "anonymize but keep" — which the
+`:anonymize` action + `:anonymize-fields` directly model.
+
+**v1 scope boundaries.**
+- `:purge` and `:anonymize` ship fully. `:anonymize` is implemented
+  as N `:db.purge/attribute` ops over `:anonymize-fields` — the row
+  survives, the PII fields are gone, and (because purgeAttribute
+  goes through the hold-middleware) anonymize-of-held-entity is
+  blocked just like purge.
+- `:archive-to-cold-storage` is deferred — it needs an external
+  archive store and a side-effect-intent round-trip. `apply-expiry!`
+  throws an explicit "not implemented in v1" for it.
+- Clock anchors are *direct-attribute* only in v1: `:triggered-by`
+  must be an attribute on the entity itself. Cross-entity anchors
+  (e.g. an `:invoice`'s deadline keyed off the underlying
+  `:transaction`'s `:effective-date`) are deferred — the entity is
+  simply skipped if it lacks the anchor attribute. A follow-up can
+  add an anchor-resolver registry.
+- The kernel ships ZERO default policies. A kontor install with no
+  l10n module has retention disabled by construction. This is the
+  reference-study agent's explicit recommendation: a wrong default
+  retention is worse than none.
+
+**Shape after.**
+- New schema (~13 attrs) in `src/kontor/schema.clj`.
+- New namespace `src/kontor/retention.clj` (~280 LOC):
+  `define-policy!` / `activate-policy!` / `supersede-policy!`
+  (transactors); `policy-for` / `retention-deadline` / `eligible?` /
+  `due-for-expiry` (queries); `sweep!` (dry-run-friendly planner) /
+  `apply-expiry!` / `sweep-and-apply!` (executors).
+- `install-seeds!` (status-transition + approval-policy seeds),
+  called from `kontor.core/install-schema!`, idempotent-guarded.
+- `test/kontor/retention_test.clj`: aged-past-deadline eligibility,
+  effective-dated policy resolution, `:anonymize` field-purge,
+  hold-blocks-expiry (place hold → sweep → blocked → release →
+  sweep → applied), dry-run, jurisdiction-specific-over-global.
+
+**Tradeoffs.**
+- *Gained*: a defensible retention story — every expiry is policy-
+  driven, effective-dated, hold-aware, and audit-logged. The
+  "failure to define retention" fine pattern is structurally
+  addressed (a tenant either has policies or has retention disabled;
+  there is no silent middle ground). "Anonymize but keep" is a
+  first-class action, not a workaround.
+- *Lost*: nothing structural. `:archive-to-cold-storage` and
+  cross-entity clock anchors are deferred, not designed-out — both
+  have clean extension points.
+- *Performance*: the sweeper is O(candidate-entities) per policy per
+  run. It's a batch job on a consumer-chosen cadence, never on the
+  write path. `eligible?` calls `legal-hold/entities-held?` (the
+  batched API added in the ADR-049 review fix) so the hold check is
+  one query for the whole batch, not one per entity.
+
+**Naming.** "Retention policy" / "retention schedule" is the
+industry term (records-management, SAP ILM, NetSuite). `:triggered-
+by` over `:clock-anchor` because "triggered by" is how records-
+managers describe the event that starts the retention clock
+("retention triggered by case closure").
 
 Date: 2026-05-13.
