@@ -188,6 +188,14 @@
          (.divide total-cost qty-original
                   4 java.math.RoundingMode/HALF_EVEN))))))
 
+(defn- layer-expires-at
+  "The `:lot/expires-at` of a layer's lot, or nil. Used by the
+   `:order-by :expires-at` (FEFO) layer ordering."
+  ^java.util.Date [db layer-eid]
+  (:lot/expires-at
+   (:valuation-layer/lot
+    (d/pull db [{:valuation-layer/lot [:lot/expires-at]}] layer-eid))))
+
 (defn available-layers
   "All layers with positive remaining quantity for the given
    (book, item) pair, scoped by opts. Returns entity-ids ordered by
@@ -204,13 +212,20 @@
    `:transaction/state` is NOT in `:include-states` are excluded.
    Default include-states excludes `:cancelled`.
 
+   Ordering: `:order-by` is `:received-at` (default — FIFO) or
+   `:expires-at` (FEFO — nearest lot expiry first, `:received-at`
+   then eid as the tie-break; layers with no lot expiry sort last).
+   The FEFO ordering is what a `FefoCostingProvider` and the
+   `:fifo-exp` reservation walk consume.
+
    Implementation: two datalog queries (candidate layers + consumed
    sums per layer), then a Clojure pass that applies the bitemporal
    + state filters. O(2) DB queries regardless of layer count."
   ([db book item] (available-layers db book item nil {}))
   ([db book item lot] (available-layers db book item lot {}))
-  ([db book item lot {:keys [as-of-valid include-states]
-                      :or {include-states default-include-states}}]
+  ([db book item lot {:keys [as-of-valid include-states order-by]
+                      :or {include-states default-include-states
+                           order-by :received-at}}]
    (let [candidate-rows
          (if (some? lot)
            (d/q '[:find ?l ?orig ?received ?tx
@@ -240,9 +255,17 @@
                           remaining (.subtract orig ^java.math.BigDecimal consumed)]
                       (when (pos? (.signum remaining))
                         [layer received])))))
-          ;; Sort by received-at ascending, with eid as deterministic
-          ;; tie-breaker for layers that share the same instant.
-          (sort-by (juxt second first))
+          ;; Default: received-at ascending, eid tie-break (FIFO).
+          ;; :expires-at: nearest lot expiry first (FEFO), received-at
+          ;; then eid tie-break; no-expiry layers sort last.
+          (sort-by (case order-by
+                     :expires-at
+                     (fn [[layer received]]
+                       (let [exp (layer-expires-at db layer)]
+                         [(if exp (.getTime ^java.util.Date exp) Long/MAX_VALUE)
+                          received layer]))
+                     ;; :received-at (default)
+                     (juxt second first)))
           (mapv first)))))
 
 (defn on-hand-qty

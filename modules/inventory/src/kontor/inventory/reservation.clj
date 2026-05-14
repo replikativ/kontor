@@ -102,9 +102,10 @@
    locations first, then by `reserve-order-enum`. Returns
    `[{:item eid :atp bigdec} …]`.
 
-   v1 supports `:fifo-rec` / `:lifo-rec` (by `:received-at`). The
-   expiry-driven `:fifo-exp` / `:lifo-exp` need `:lot/expires-at`,
-   which ADR-060 ships — an unknown enum throws until then."
+   `:reserve-order-enum`: `:fifo-rec` / `:lifo-rec` order by the
+   bucket's `:received-at`; `:fifo-exp` / `:lifo-exp` order by the
+   lot's `:lot/expires-at` (ADR-060 — perishables; buckets with no
+   lot expiry sort last)."
   [db product facility reserve-order-enum]
   (let [epoch (Date. 0)
         rows  (keep
@@ -112,7 +113,8 @@
                  (let [it (d/pull db
                                   '[:inventory-item/status :inventory-item/kind
                                     :inventory-item/received-at
-                                    {:inventory-item/location [:facility-location/type]}]
+                                    {:inventory-item/location [:facility-location/type]}
+                                    {:inventory-item/lot [:lot/expires-at]}]
                                   eid)]
                    (when (and (= :available (:inventory-item/status it))
                               (not= :serialized (:inventory-item/kind it)))
@@ -123,15 +125,23 @@
                           :loc-rank    (location-rank
                                         (:facility-location/type
                                          (:inventory-item/location it)))
-                          :received-at (or (:inventory-item/received-at it) epoch)})))))
+                          :received-at (or (:inventory-item/received-at it) epoch)
+                          :expires-at  (:lot/expires-at (:inventory-item/lot it))})))))
                (inv/items-of db product facility))
         key-fn (case reserve-order-enum
                  :fifo-rec (fn [r] [(:loc-rank r) (.getTime ^Date (:received-at r))])
                  :lifo-rec (fn [r] [(:loc-rank r)
                                     (- (.getTime ^Date (:received-at r)))])
-                 (throw (ex-info "Unsupported :reserve-order-enum — v1 supports :fifo-rec / :lifo-rec; :fifo-exp / :lifo-exp arrive with ADR-060"
+                 :fifo-exp (fn [r] [(:loc-rank r)
+                                    (if-let [e (:expires-at r)]
+                                      (.getTime ^Date e) Long/MAX_VALUE)])
+                 :lifo-exp (fn [r] [(:loc-rank r)
+                                    (if-let [e (:expires-at r)]
+                                      (- (.getTime ^Date e)) Long/MIN_VALUE)])
+                 (throw (ex-info "Unsupported :reserve-order-enum"
                                  {:type :inventory/unsupported-reserve-order
-                                  :reserve-order-enum reserve-order-enum})))]
+                                  :reserve-order-enum reserve-order-enum
+                                  :supported #{:fifo-rec :lifo-rec :fifo-exp :lifo-exp}})))]
     (sort-by key-fn rows)))
 
 (defn- walk-draws

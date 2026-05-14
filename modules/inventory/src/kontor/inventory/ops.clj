@@ -33,7 +33,7 @@
 ;; Internals
 ;; ============================================================================
 
-(defn- provider-for-book
+(defn provider-for-book
   "Resolve a `CostingProvider` from a valuation book's
    `:valuation-book/cost-method`. `:standard` books must pass
    `:provider` explicitly (it needs a standard-cost-fn)."
@@ -48,6 +48,24 @@
   [e]
   (and (instance? ExceptionInfo e)
        (re-find #"insufficient stock" (or (.getMessage ^ExceptionInfo e) ""))))
+
+(defn seal-stock-move
+  "Stamp a `plan-stock-move` tx-data vector as posted + sealed: the
+   transaction gets `:transaction/state :posted` + `:posted-at`, and
+   every posting gets `:posting/posted-at` — the propagation the
+   `kontor.sealing` model expects. A goods receipt / issue / count
+   adjustment is a real posted GL event, not a draft."
+  [tx-data ^Date posted-at]
+  (mapv (fn [m]
+          (cond
+            (not (map? m)) m
+            (contains? m :transaction/journal)
+            (assoc m :transaction/state :posted
+                   :transaction/posted-at posted-at)
+            (contains? m :posting/account)
+            (assoc m :posting/posted-at posted-at)
+            :else m))
+        tx-data))
 
 ;; ============================================================================
 ;; receive!
@@ -102,7 +120,7 @@
                         ;; -1 is plan-stock-move's transaction tempid.
                         :inventory-detail/transaction -1}
                  reason (assoc :inventory-detail/reason reason))
-        report (d/transact conn (conj (vec move-tx) detail))]
+        report (d/transact conn (conj (vec (seal-stock-move move-tx eff)) detail))]
     {:inventory-item item
      :transaction    (get-in report [:tempids -1])
      :tx-report      report}))
@@ -266,7 +284,7 @@
                         :inventory-detail/source-kind :issuance
                         :inventory-detail/transaction -1}
                  reason (assoc :inventory-detail/reason reason))
-        tx-data (cond-> (conj (vec move-tx) detail)
+        tx-data (cond-> (conj (vec (seal-stock-move move-tx eff)) detail)
                   ;; Realize (consume) the reservation — retract it.
                   reservation (conj [:db/retractEntity reservation]))
         report (d/transact conn tx-data)]

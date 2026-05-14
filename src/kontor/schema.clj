@@ -118,7 +118,15 @@
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional human label for specific-identification
-                     disposal (\"first batch\", \"Q3 raise\", etc.)."}])
+                     disposal (\"first batch\", \"Q3 raise\", etc.)."}
+
+   {:db/ident       :lot/expires-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional expiry / best-before date. Drives FEFO
+                     (first-expiry-first-out) consumption and the
+                     :fifo-exp / :lifo-exp reservation walk
+                     (kontor-inventory, ADR-060)."}])
 
 ;; ============================================================================
 ;; Account — chart-of-accounts entry.

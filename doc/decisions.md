@@ -6189,3 +6189,87 @@ and procurement adopting `receive!`, are documented follow-ups.
 - `modules/inventory/test/kontor/inventory/ops_test.clj`.
 
 Date: 2026-05-14.
+
+## ADR-060 — `kontor-inventory`: cycle counts + reconciliation + FEFO
+
+**Decision.** ADR-060 closes Stage N: cycle counts, the
+reconciliation reports, and the expiry-driven (FEFO) path.
+
+**Cycle counts.** `:physical-inventory` is a count event header;
+`:inventory-variance` is a counted line (`:expected-qty` vs
+`:counted-qty` vs `:qoh-var`, reason-coded, with a `:recount-of`
+self-ref for the recount-before-posting workflow). `start-count!` /
+`record-count-line!` / `post-count!`. **The freeze is a valid-time
+convention, not a DB lock** — `record-count-line!` snapshots the
+perpetual `on-hand-qty` AS-OF the count's `:count-date`, so
+concurrent picks at a later valid-time do not corrupt the count
+(research note 36 §6 — a structural advantage over systems that
+must literally freeze the warehouse). `post-count!` routes every
+non-zero variance through `kontor.posting/plan-stock-move` — a count
+adjustment **is** a GL event (shrinkage is an expense; found stock a
+gain), and routing it through `plan-stock-move` is what keeps the
+subledger and the GL from drifting — a negative variance is
+`:direction :out` (the loss leg routed by `:account-fn`), a positive
+variance `:direction :in` at `:found-unit-cost`. It also appends the
+physical `:inventory-detail` (`:source-kind :variance`, linked to
+both the `:inventory-variance` audit document and the GL
+`:transaction`). Each line is its own transaction.
+
+**Reconciliation reports** (`kontor.inventory.report`) — thin
+queries over facts that already exist:
+- `inventory-roll-forward` — `opening + Σ movements = closing`, the
+  movements bucketed by `:inventory-detail/source-kind`. The
+  append-only ledger *is* the roll-forward; reason codes and
+  immutability are structural (research note 36 §9 — the Xero "no
+  audit trail / no reason codes" complaint cannot occur here).
+- `valuation-tie-out` — asserts the inventory subledger
+  (`Σ valuation/on-hand-value` per book) equals the GL inventory
+  account balance, surfacing any delta. The detective control for
+  the "my balance-sheet inventory number is wrong" complaint
+  (research note 36 §2).
+
+**FEFO** (first-expiry-first-out). Two pieces:
+- `:lot/expires-at` — a small *kernel* schema addition to `:lot/*`
+  (the second and last kernel touch of Stage N, alongside the
+  `compute-statement` `:ledger` filter — both minimal).
+- `kontor.valuation/available-layers` gains `:order-by`
+  (`:received-at` default | `:expires-at` — nearest lot expiry
+  first, no-expiry layers last). `kontor.inventory.costing/FefoCostingProvider`
+  is a companion-shipped `CostingProvider` (ADR-029's protocol is
+  pluggable) — FIFO's draw loop over the FEFO-ordered layers.
+- The ADR-058 `reserve!` walk gains `:fifo-exp` / `:lifo-exp`
+  (deferred from ADR-058 precisely because `:lot/expires-at` did not
+  exist yet) — the picking side of FEFO.
+
+**Deferred follow-ups** (research note 36 §7, §10 — P2 /
+vertical-dependent): kit / unbuild helpers, the consignment
+ownership flag, drop-ship as a non-inventory path, the
+serial-as-qty-1-lot ergonomics, a materialised QOH/ATP snapshot if
+the derived-view linear scan proves slow at scale, and the
+`:lot/status` quarantine flag. Each composes from the primitives
+Stage N now ships — none needs a new primitive.
+
+**Shape after.**
+- `src/kontor/schema.clj` — `:lot/expires-at` added.
+- `src/kontor/valuation.clj` — `available-layers` gains `:order-by`.
+- `modules/inventory/src/kontor/inventory/schema.clj` —
+  `:physical-inventory/*` + `:inventory-variance/*` + their
+  `:status` seeds.
+- `modules/inventory/src/kontor/inventory/reservation.clj` —
+  `candidate-buckets` gains `:fifo-exp` / `:lifo-exp`.
+- `modules/inventory/src/kontor/inventory/costing.clj` —
+  `FefoCostingProvider`.
+- `modules/inventory/src/kontor/inventory/count.clj` —
+  `start-count!` / `record-count-line!` / `post-count!`.
+- `modules/inventory/src/kontor/inventory/report.clj` —
+  `inventory-roll-forward` / `valuation-tie-out`.
+- `modules/inventory/test/kontor/inventory/count_report_test.clj`.
+
+This completes Stage N (`kontor-inventory`): ADR-057 (facilities +
+the physical stock ledger) → ADR-058 (available-to-promise + the
+reservation bridge) → ADR-059 (receive / issue / transfer + GL) →
+ADR-060 (cycle counts + reconciliation + FEFO). The #1 ERP
+functional gap (research note 34) is closed, with exactly two small
+kernel touches.
+
+Date: 2026-05-14.

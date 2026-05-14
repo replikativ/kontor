@@ -407,13 +407,96 @@
     :db/cardinality :db.cardinality/one}])
 
 ;; ============================================================================
+;; :physical-inventory + :inventory-variance — cycle counts (ADR-060)
+;; ============================================================================
+
+(def ^:private physical-inventory-attrs
+  [{:db/ident       :physical-inventory/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "External identifier — 'CYCLE-2026-W12'."}
+
+   {:db/ident       :physical-inventory/facility
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The facility being counted."}
+
+   {:db/ident       :physical-inventory/count-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The valid-time the count is taken AS-OF. The
+                     freeze is a valid-time convention, not a DB lock
+                     — concurrent picks at a later valid-time do not
+                     corrupt the count (research note 36 §6)."}
+
+   {:db/ident       :physical-inventory/counted-by
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to :partner — who counted."}
+
+   {:db/ident       :physical-inventory/status
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "ADR-034 facet. #{:open :counting :review :posted}."}
+
+   {:db/ident       :physical-inventory/comments
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}])
+
+(def ^:private inventory-variance-attrs
+  [{:db/ident       :inventory-variance/physical-inventory
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :inventory-variance/inventory-item
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :inventory-variance/expected-qty
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The perpetual on-hand-qty at the count-date —
+                     snapshotted when the line was recorded."}
+
+   {:db/ident       :inventory-variance/counted-qty
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The physically counted quantity."}
+
+   {:db/ident       :inventory-variance/qoh-var
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "counted − expected. Posting the count emits an
+                     :inventory-detail carrying this as :qoh-diff."}
+
+   {:db/ident       :inventory-variance/reason
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "#{:shrinkage :damage :found :recount :uom
+                     :mispick}. Reason codes are an audit requirement
+                     (research note 36 §6/§9)."}
+
+   {:db/ident       :inventory-variance/recount-of
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Self-ref — the variance line this recount
+                     supersedes. An out-of-tolerance variance gets
+                     recounted before posting."}
+
+   {:db/ident       :inventory-variance/comments
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}])
+
+;; ============================================================================
 ;; Aggregate
 ;; ============================================================================
 
 (def all
   (vec (concat facility-attrs facility-location-attrs facility-product-attrs
                inventory-item-attrs inventory-detail-attrs
-               inventory-transfer-attrs negative-fill-attrs)))
+               inventory-transfer-attrs negative-fill-attrs
+               physical-inventory-attrs inventory-variance-attrs)))
 
 ;; ============================================================================
 ;; Status-transition seeds (ADR-034) — :inventory-item/status
@@ -446,6 +529,18 @@
            [:in-transit  :cancelled  "Cancel transfer"]]]
       {:status-transition/entity-type :inventory-transfer
        :status-transition/facet :inventory-transfer/status
+       :status-transition/from from
+       :status-transition/to to
+       :status-transition/active true
+       :status-transition/name name})
+    (for [[from to name]
+          [[:nil       :open      "Open count"]
+           [:open      :counting  "Begin counting"]
+           [:counting  :review    "Submit for review"]
+           [:review    :counting  "Send back for recount"]
+           [:review    :posted    "Post count adjustments"]]]
+      {:status-transition/entity-type :physical-inventory
+       :status-transition/facet :physical-inventory/status
        :status-transition/from from
        :status-transition/to to
        :status-transition/active true
