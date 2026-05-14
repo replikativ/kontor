@@ -6862,3 +6862,113 @@ tasks, not silently dropped. `bb test`: 909 tests, 3322 assertions,
 0 failures.
 
 Date: 2026-05-14.
+
+---
+
+## ADR-065 — `kontor-authz`: relationship-based access control (ReBAC), ported from EACL
+
+**Decision.** Ships `kontor-authz` as a companion module
+(`modules/authz/`, cohabiting per ADR-002) — a **relationship-based
+access-control (ReBAC)** layer. It is a faithful, datahike-native
+reimplementation of [EACL](https://github.com/theronic/eacl)'s
+SpiceDB-shaped model. Research notes 40-pre (#90 ReBAC research) +
+**41** (the hands-on EACL→datahike evaluation) are the
+research-before; the build/fork/wrap call was maintainer-confirmed.
+
+**Why ReBAC, why EACL's model.** kontor is multi-entity, multi-user
+from the kernel out; "who may see / post / approve *this* entity" is
+a real question consumers (beleg, simmis) will ask. ReBAC — SpiceDB's
+model — answers it by *relationships* (`account owner: user`;
+`server account: account`) and *derived permissions*
+(`server view = account->admin`), which composes far better than
+per-row ACLs or coarse roles. EACL already implements this model in
+Clojure, and research note 41 **proved EACL's actual hot-path code
+runs on datahike** — the tuple-attr `index-range` traversal, the
+cursor, the lazy merge — with only a ~40-line `datomic.api`-compat
+shim. So the model and the algorithm are validated; what remained was
+a packaging decision.
+
+**Why reimplement, not vendor or depend** (maintainer-confirmed).
+Three options were on the table — depend on EACL as a library,
+vendor its source behind the compat shim, or reimplement
+informed-by-EACL. Depending pulls `com.datomic/peer` transitively
+into a datahike companion (EACL's `deps.edn` pins it). Vendoring
+raises an EPL-1.0 ↔ EPL-2.0 mixing question (EACL is EPL-2.0; kontor
+EPL-1.0 — close kin, far friendlier than the LGPL/GPL cases ADR-001
+rules out, but still a call). **Reimplementing** keeps the dependency
+story clean (datahike-only, like every other companion), keeps the
+licence clean (EPL-1.0 throughout), and lets the schema use
+kontor's `:authz/*` namespaces (ADR-002) instead of EACL's
+`:eacl.*` — the project's established lift-the-pattern-write-our-own
+convention (ADR-001, research note 11). The datahike support is kept
+kontor-internal for now; no EACL-upstream engagement.
+
+**The model** (SpiceDB-shaped, ported verbatim in shape):
+- a **Relation** is a typed edge *definition* — `(Relation :account
+  :owner :user)` ≡ `account { relation owner: user }`.
+- a **Permission** is a derived check — a *direct relation*
+  (`{:relation :owner}`), an *arrow* through another relation or
+  permission (`{:arrow :account :permission :admin}` ≡
+  `account->admin`), or a *self* permission (`{:permission :other}`,
+  the implicit `:self` arrow). A permission name may have several
+  clauses — their union.
+- a **Relationship** is an actual *edge instance* — `(Relationship
+  (object-ref :user u) :owner (object-ref :account a))`.
+`can?` / `lookup-resources` / `lookup-subjects` walk that graph.
+
+**The schema — tuple indices are the whole performance story.**
+`:authz.relation/*`, `:authz.permission/*`, `:authz.relationship/*`
+component attributes, each backed by composite `:db/tupleAttrs`
+index attributes. The two that matter most: `:authz.relationship/
+forward` (subject-type, subject, relation, resource-type, resource —
+`:db.unique/identity`) and `:authz.relationship/reverse` (the same
+five, resource-first — `:db/index true`). Research note 41 proved
+datahike auto-maintains these, enforces tuple `:db.unique/identity`,
+and `index-range` over a tuple attr with full-arity `:start`/`:end`
+bounds returns datoms **ordered by the trailing component** — for
+the relationship tuples that trailing component is the
+subject/resource ref eid, so the scan yields results in stable eid
+order. **That eid order IS the pagination cursor** — no stored
+offset, no sort key. The `forward` tuple's `:db.unique/identity` both
+dedupes relationships and is the range-scan key; `reverse` only needs
+to be indexed (`forward` already enforces uniqueness).
+
+**`:authz/object-id`** — an optional `:db.unique/identity` string
+handle for subjects / resources / definitions. A consumer that
+exposes authz to an outside system coerces its IDs through it; a
+consumer that only ever passes datahike eids ignores it. The
+relationship `:subject` / `:resource` are plain `:db.type/ref`s —
+they point at *whatever* entity a consumer relates (a `:partner`, an
+`:account`, a consumer-defined `:user`), so kontor-authz has **no
+kernel-attr dependency** and `install!` may run any time.
+
+**Staged build.** ADR-065 lands the foundation — the `IAuthorization`
+protocol (`kontor.authz.core`, pure), the entity-map builders
+(`kontor.authz.base`, pure), the schema + `install!`
+(`kontor.authz.schema`). The substantial next units: `kontor.authz.
+indexed` (the permission-graph traversal — the port of EACL's
+`indexed.clj`, ~700 lines: `can?`, `lookup-resources`,
+`lookup-subjects`, `count-resources`, the cursor, the lazy
+sorted-merge), `kontor.authz.client` (the `Spiceomic`-equivalent
+`IAuthorization` reification + id coercion), and `kontor.authz.
+spice-parser` (the SpiceDB-schema-string parser — convenience).
+The EACL→datahike API gaps are settled (note 41): `index-range`
+positional→map, an `entid` helper, `:db/retractEntity` not
+`:db.fn/retractEntity`, `:max-tx` for the basis token.
+
+**Known limitation inherited from the model.** Neither EACL nor
+kontor-authz detects cycles in the permission *schema* (a permission
+that arrows back to itself). The traversal will need a depth/visited
+guard; flagged for the `indexed` unit.
+
+**Shape after (this ADR).**
+- `deps.edn` / `tests.edn` — `modules/authz` wired.
+- `modules/authz/src/kontor/authz/core.clj` — `IAuthorization` +
+  `Relationship` / `RelationshipUpdate` / `ObjectRef` + `object-ref`.
+- `modules/authz/src/kontor/authz/base.clj` — `Relation` /
+  `Permission` / `Relationship` builders + `Cursor`.
+- `modules/authz/src/kontor/authz/schema.clj` — the `:authz/*`
+  schema + `install!`.
+- `modules/authz/test/kontor/authz/schema_test.clj`.
+
+Date: 2026-05-14.
