@@ -5891,3 +5891,114 @@ identities (`accum-closing = accum-opening + accum-period −
 accum-disposals`, NBV = cost − accumulated) still hold.
 
 Date: 2026-05-14.
+
+## ADR-057 — `kontor-inventory`: facilities + the physical stock ledger
+
+**Decision.** Stage N ships `kontor-inventory` as a companion module
+(`modules/inventory/`, cohabiting per ADR-002). ADR-057 lays the
+foundation: the **physical/operational** inventory layer — facilities,
+locations, the `:inventory-item` stock bucket, and `:inventory-detail`,
+an append-only signed-quantity-delta ledger. The available-to-promise
+engine + reservation bridge are ADR-058; the receive/issue/transfer
+operations + GL integration are ADR-059; cycle counts + reconciliation
+reports are ADR-060.
+
+**Why a separate operational layer** (research notes 35 + 36;
+maintainer-confirmed design call). OFBiz conflates physical tracking
+and cost valuation in one `InventoryItem` row. kontor already split
+valuation out into `:valuation-*` (ADR-027–030). So `kontor-inventory`
+is the **physical half only** — it carries *no cost*. `:inventory-item`
+(where stock physically is) sits **alongside** `:valuation-layer`
+(what stock costs), the two joined by a shared `:lot`, many physical
+buckets to one valuation layer. This mirrors the kernel's own
+`:ledger` (financial) vs `:valuation-book` (costing) split — two
+parallel append-only logs answering two questions. A bin-to-bin move
+is a pure quantity event; only cross-entity / cross-book moves touch
+valuation (ADR-059).
+
+**Entities** (companion-owned):
+- **`:facility`** — a node in a self-referential warehouse tree:
+  `:code` (unique identity), `:name`, `:type` (`:warehouse` |
+  `:store` | `:plant` | `:transit` | `:virtual`), `:parent`,
+  `:owner-entity` (ref `:entity`, ADR-031 — *not* a `Party`),
+  `:default-days-to-ship`, `:opened-at` / `:closed-at`, `:note`.
+- **`:facility-location`** — a bin within a facility:
+  `:facility` + `:seq-id`, `:identity` (`:db.unique/identity` tuple
+  `[facility seq-id]`), `:type` (`:pickloc` | `:bulk` | `:staging` —
+  `:pickloc` is walked first by the ADR-058 reservation algorithm),
+  `:area` / `:aisle` / `:bin`, `:note`.
+- **`:facility-product`** — the per-`(facility, product)` policy row:
+  `:facility` + `:product`, `:identity` (`:db.unique/identity` tuple),
+  `:min-stock`, `:reorder-qty`, `:days-to-ship`, `:replenish-method`,
+  `:note`. ADR-058 adds `:safety-stock`; ADR-059 adds
+  `:negative-allowed?`.
+- **`:inventory-item`** — the physical stock bucket: one entity per
+  `(product, facility, location, lot, owner)` combination of stock.
+  `:product` (generic ref — the consumer's product entity),
+  `:facility`, `:location` (optional), `:lot` (optional — the SAME
+  `:lot` `:valuation-layer/lot` points at, the join between the
+  physical and financial halves), `:owner-entity` (optional),
+  `:kind` (`:non-serial` | `:serialized`), `:status` (an ADR-034
+  status-machine facet), `:serial-number` (serialized only),
+  `:received-at`, `:note`. **Carries no cost.** Buckets are resolved
+  by query (`find-or-create-inventory-item`), not a unique-identity
+  tuple — the natural key has nilable members (location/lot/owner),
+  and a composite tuple with nils is non-idempotent (the caveat that
+  bit Stages L′/M).
+- **`:inventory-detail`** — *the spine*. An append-only ledger of
+  **signed quantity deltas** against an `:inventory-item`:
+  `:inventory-item`, `:effective-date` (the valid-time of the
+  delta — a first-class queryable field, following
+  `:schedule-occurrence/scheduled-date`'s precedent, *not* the
+  `:tx/valid-from` tx-meta convention; a quantity-ledger row's
+  valid-time IS its effective-date), `:qoh-diff` (signed: a receipt
+  is `+`, an issue `−`, a variance `±`), `:atp-diff` (signed: a
+  reservation is `−`, a cancel `+`, every physical event moves it
+  too), `:reason` (a movement/variance reason keyword),
+  `:description`, and a polymorphic source pointer `:source` (a
+  generic ref) + `:source-kind` (`:opening` | `:receipt` |
+  `:issuance` | `:reservation` | `:variance` | `:transfer` |
+  `:adjustment`). ADR-059 adds `:transaction` (the GL link). Never
+  updated, only appended — append-only **by transactor convention**
+  (`record-detail!` is the only writer), not sealing-enforced
+  (wiring a companion entity into kernel sealing, ADR-007, would
+  breach the anti-accretion contract — same call as `:asset-event`).
+
+**Quantity is derived, never stored** (maintainer-confirmed design
+call). `on-hand-qty` is `Σ :inventory-detail/qoh-diff` — a bitemporal
+query over the detail ledger (`:as-of-valid` filters
+`:effective-date`; `:as-of-tx` is datahike's `d/as-of`). No
+denormalized QOH cache: the ledger is the single source of truth, and
+free bitemporal QOH falls out (the "what was on-hand at the cutoff"
+report is a parameter, not a Field-Audit-Trail upgrade tier). If the
+reservation walk's linear scan proves too slow at scale (research
+note 36 §10), a materialized as-of snapshot is its own future ADR —
+explicit, not silent.
+
+**Transactors / queries** (`modules/inventory/src/kontor/inventory/`):
+`define-facility!` / `define-location!` / `define-facility-product!`
+(config); `find-or-create-inventory-item` (bucket resolution);
+`record-detail!` (the low-level append — the single `:inventory-detail`
+writer); `place-opening-stock!` (the migration / initial-load
+convenience — a `:source-kind :opening` detail); `on-hand-qty`
+(bitemporal QOH, per item or per `(product, facility)`); `details-of`
+/ `items-at`. The atomic `receive!` / `issue!` (valuation + GL) are
+ADR-059.
+
+**What ADR-057 does NOT do** (ADR-058/059/060): no
+`available-to-promise`, no reservation bridge (ADR-058); no GL
+postings, no negative-inventory policy, no transfers (ADR-059); no
+cycle counts, no reconciliation reports, no FEFO (ADR-060).
+
+**Shape after.**
+- `deps.edn` / `tests.edn` — `modules/inventory` wired.
+- `modules/inventory/src/kontor/inventory/schema.clj` — the
+  `:facility/* :facility-location/* :facility-product/*
+  :inventory-item/* :inventory-detail/*` attrs + `:inventory-item/status`
+  status-transition seeds + `install!`.
+- `modules/inventory/src/kontor/inventory/core.clj` — facility config,
+  bucket resolution, `record-detail!`, `place-opening-stock!`,
+  `on-hand-qty`, queries.
+- `modules/inventory/test/kontor/inventory/stock_ledger_test.clj`.
+
+Date: 2026-05-14.
