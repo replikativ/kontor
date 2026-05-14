@@ -215,3 +215,138 @@
                                    c {:subject (object-ref :user (eid "user-1"))
                                       :permission :view
                                       :resource/type :server})))))))))
+
+;; ============================================================================
+;; Review-after regression coverage (ADR-066 review — research note 43)
+;; ============================================================================
+
+(deftest read-relationships-rejects-an-unresolvable-id
+  ;; P0 regression: a non-existent external id used to silently drop the
+  ;; filter and over-return EVERY relationship (a confused-deputy read).
+  (let [c (fresh-client)]
+    (testing "an unresolvable :subject/id throws — it does NOT over-return"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"does not resolve"
+           (authz/read-relationships c {:subject/id "ghost"
+                                        :resource/type :server}))))
+    (testing "an unresolvable :resource/id throws"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"does not resolve"
+           (authz/read-relationships c {:resource/id "ghost"}))))
+    (testing "a resolvable id still works"
+      (is (= 1 (count (authz/read-relationships c {:subject/id "user-1"})))))))
+
+(deftest cyclic-permission-schema-does-not-loop
+  ;; P1 regression: a cyclic permission schema (an authoring typo) used
+  ;; to StackOverflow can?/lookup-subjects. It must terminate (deny).
+  (let [cfg  {:store {:backend :memory :id (java.util.UUID/randomUUID)}
+              :schema-flexibility :write :keep-history? false}
+        _    (d/create-database cfg)
+        conn (d/connect cfg)
+        _    (schema/install! conn)
+        ;; :loop = :loop (self-cycle); + a valid relation so entities exist
+        _    (d/transact conn [(Relation :account :owner :user)
+                               (Permission :account :loop {:permission :loop})
+                               {:db/id "u" :authz/object-id "u"}
+                               {:db/id "a" :authz/object-id "a"}
+                               (base/Relationship (object-ref :user "u") :owner
+                                                  (object-ref :account "a"))])
+        c    (client/make-client conn)]
+    (testing "can? on a cyclic permission terminates and denies"
+      (is (false? (authz/can? c (->u "u") :loop (->a "a")))))
+    (testing "lookup-resources on a cyclic permission terminates"
+      (is (= [] (:data (authz/lookup-resources
+                        c {:subject (->u "u") :permission :loop
+                           :resource/type :account})))))
+    (testing "lookup-subjects on a cyclic permission terminates"
+      (is (= [] (:data (authz/lookup-subjects
+                        c {:resource (->a "a") :permission :loop
+                           :subject/type :user})))))))
+
+(deftest relation-rejects-out-of-range-subject-type
+  ;; P1 regression: a subject-type outside :a..:z is silently missed by
+  ;; the :a/:z range-scan — Relation now throws at definition time.
+  (testing ":zebra (sorts past :z) is rejected"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"sort within :a..:z"
+                          (Relation :account :owner :zebra))))
+  (testing ":Account (uppercase, sorts before :a) is rejected"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"sort within :a..:z"
+                          (Relation :account :owner :Account))))
+  (testing "an in-range subject-type is accepted"
+    (is (map? (Relation :account :owner :user)))))
+
+(deftest parallel-paths-to-one-resource-dedupe
+  ;; The case the merge-dedupe machinery exists for: a subject reaching
+  ;; one resource via TWO permission clauses (a union) must yield it
+  ;; ONCE — lookup over-count + cursor-skip if dedup is broken.
+  (let [cfg  {:store {:backend :memory :id (java.util.UUID/randomUUID)}
+              :schema-flexibility :write :keep-history? false}
+        _    (d/create-database cfg)
+        conn (d/connect cfg)
+        _    (schema/install! conn)
+        _    (d/transact
+              conn
+              [(Relation :doc :owner :user)
+               (Relation :doc :editor :user)
+               ;; view = owner + editor — two union clauses
+               (Permission :doc :view {:relation :owner})
+               (Permission :doc :view {:relation :editor})
+               {:db/id "u" :authz/object-id "u"}
+               {:db/id "d" :authz/object-id "d"}
+               ;; u is BOTH owner and editor of d — two parallel paths
+               (base/Relationship (object-ref :user "u") :owner
+                                  (object-ref :doc "d"))
+               (base/Relationship (object-ref :user "u") :editor
+                                  (object-ref :doc "d"))])
+        c    (client/make-client conn)]
+    (testing "can? grants via the union"
+      (is (true? (authz/can? c (->u "u") :view (object-ref :doc "d")))))
+    (testing "lookup-resources yields the doc exactly ONCE (dedup)"
+      (is (= ["d"] (map :id (:data (authz/lookup-resources
+                                    c {:subject (->u "u") :permission :view
+                                       :resource/type :doc}))))))
+    (testing "count-resources counts it ONCE"
+      (is (= 1 (:count (authz/count-resources
+                        c {:subject (->u "u") :permission :view
+                           :resource/type :doc})))))
+    (testing "lookup-subjects yields the user exactly once"
+      (is (= ["u"] (map :id (:data (authz/lookup-subjects
+                                    c {:resource (object-ref :doc "d")
+                                       :permission :view
+                                       :subject/type :user}))))))))
+
+(deftest arrow-to-relation-path
+  ;; Coverage gap: only arrow→permission was modelled by the main
+  ;; fixture; this exercises arrow→relation.
+  (let [cfg  {:store {:backend :memory :id (java.util.UUID/randomUUID)}
+              :schema-flexibility :write :keep-history? false}
+        _    (d/create-database cfg)
+        conn (d/connect cfg)
+        _    (schema/install! conn)
+        _    (d/transact
+              conn
+              [(Relation :account :owner :user)
+               (Relation :server  :account :account)
+               ;; server owner-view = account->owner  (arrow → relation)
+               (Permission :server :owner-view {:arrow :account
+                                                :relation :owner})
+               {:db/id "u" :authz/object-id "u"}
+               {:db/id "a" :authz/object-id "a"}
+               {:db/id "s" :authz/object-id "s"}
+               (base/Relationship (object-ref :user "u") :owner
+                                  (object-ref :account "a"))
+               (base/Relationship (object-ref :account "a") :account
+                                  (object-ref :server "s"))])
+        c    (client/make-client conn)]
+    (testing "can? resolves an arrow→relation path"
+      (is (true? (authz/can? c (->u "u") :owner-view (object-ref :server "s")))))
+    (testing "lookup-resources enumerates an arrow→relation path"
+      (is (= ["s"] (map :id (:data (authz/lookup-resources
+                                    c {:subject (->u "u")
+                                       :permission :owner-view
+                                       :resource/type :server}))))))
+    (testing "lookup-subjects reverses an arrow→relation path"
+      (is (= ["u"] (map :id (:data (authz/lookup-subjects
+                                    c {:resource (object-ref :server "s")
+                                       :permission :owner-view
+                                       :subject/type :user}))))))))

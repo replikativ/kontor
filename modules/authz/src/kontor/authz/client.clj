@@ -31,20 +31,12 @@
              :refer [IAuthorization object-ref ->Relationship
                      ->RelationshipUpdate]]
             [kontor.authz.indexed :as indexed]
-            [kontor.authz.relationships :as rels]))
+            [kontor.authz.relationships :as rels]
+            [kontor.authz.util :refer [entid]]))
 
 ;; ============================================================================
 ;; id coercion
 ;; ============================================================================
-
-(defn- entid
-  "Resolve an eid / lookup-ref to an eid via `d/entity` (datahike has
-   no `d/entid`)."
-  [db x]
-  (cond
-    (number? x) x
-    (nil? x)    nil
-    :else       (:db/id (d/entity db x))))
 
 (defn- coerce-object-in
   "External object → internal: replace `:id` with the datahike eid."
@@ -113,13 +105,26 @@
     {:data   (mapv #(coerce-object-out entid->object-id db %) data)
      :cursor (coerce-cursor-out entid->object-id db cursor)}))
 
+(defn- coerce-id-filter
+  "Coerce an id filter (`:subject/id` / `:resource/id`) to an eid. A
+   present-but-unresolvable id THROWS — silently dropping it would
+   leave the datalog var unbound and match *every* relationship (a
+   confused-deputy over-return on a security-sensitive read)."
+  [object-id->entid db filters k]
+  (if (contains? filters k)
+    (let [eid (object-id->entid db (get filters k))]
+      (when (nil? eid)
+        (throw (ex-info (str "read-relationships: " k " does not resolve to an entity")
+                        {:type :authz/unresolvable-filter
+                         :filter k :value (get filters k)})))
+      (assoc filters k eid))
+    filters))
+
 (defn- do-read-relationships
   [db {:keys [object-id->entid entid->object-id]} filters]
-  (let [internal (cond-> filters
-                   (:subject/id filters)
-                   (update :subject/id #(object-id->entid db %))
-                   (:resource/id filters)
-                   (update :resource/id #(object-id->entid db %)))]
+  (let [internal (->> :subject/id
+                      (coerce-id-filter object-id->entid db filters)
+                      (#(coerce-id-filter object-id->entid db % :resource/id)))]
     (->> (rels/read-relationships db internal)
          (map (fn [{:keys [subject relation resource]}]
                 (core/->Relationship

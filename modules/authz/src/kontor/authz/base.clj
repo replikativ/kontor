@@ -1,5 +1,5 @@
 (ns kontor.authz.base
-  "kontor-authz — the entity-map builders + the `Cursor` (ADR-065).
+  "kontor-authz — the entity-map builders (ADR-065).
 
    `Relation` / `Permission` / `Relationship` turn a value-level
    description into the datahike entity map kontor-authz transacts.
@@ -9,14 +9,9 @@
    The component attributes these emit auto-compute the tuple index
    attributes (`:authz.relation/identity`, `:authz.relationship/
    forward`, …) that `kontor.authz.indexed` range-scans — see
-   `kontor.authz.schema`."
+   `kontor.authz.schema`. (Pagination cursors flow as plain maps
+   `{:resource …}` / `{:subject …}` — no cursor record.)"
   (:require [clojure.core]))
-
-;; ============================================================================
-;; Cursor — the opaque pagination handle for lookup-resources
-;; ============================================================================
-
-(defrecord Cursor [path-index resource])
 
 ;; ============================================================================
 ;; Relation — a typed edge definition
@@ -36,13 +31,26 @@
 
    `:self` is reserved (it is the implicit source of a
    self-permission), so it may not be a resource-type or a
-   relation-name."
+   relation-name.
+
+   `subject-type` must sort within `:a`..`:z` — `kontor.authz.indexed`
+   range-scans subject-types with `:a` / `:z` keyword sentinels, so a
+   subject-type outside that range (`:Account` — uppercase sorts
+   before `:a`; `:zebra` — past `:z`; `:2fa-*` — digit-leading) would
+   be *silently missed* by `can?` / `lookup-*` (review-after P1).
+   This throws at definition time instead — a loud error beats a
+   silent wrong `false`."
   ([resource-type relation-name subject-type]
    {:pre [(keyword? resource-type)
           (keyword? relation-name)
           (keyword? subject-type)
           (not= resource-type :self)
           (not= relation-name :self)]}
+   (when-not (and (<= 0 (compare subject-type :a))
+                  (<= (compare subject-type :z) 0))
+     (throw (ex-info "Relation: :subject-type must sort within :a..:z — kontor.authz.indexed range-scans subject-types with :a/:z sentinels; a type outside that range is silently missed by can?/lookup-* (ADR-066 review-after P1). Rename the type."
+                     {:type :authz/subject-type-out-of-range
+                      :subject-type subject-type})))
    {:authz/object-id             (->relation-id resource-type relation-name
                                                 subject-type)
     :authz.relation/resource-type resource-type

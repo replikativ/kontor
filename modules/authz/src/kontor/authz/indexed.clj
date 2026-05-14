@@ -44,7 +44,8 @@
    review-after."
   (:require [datahike.api :as d]
             [kontor.authz.core :as core :refer [object-ref]]
-            [kontor.authz.merge-sort :as ms]))
+            [kontor.authz.merge-sort :as ms]
+            [kontor.authz.util :refer [entid]]))
 
 ;; ============================================================================
 ;; Datahike adaptation helpers
@@ -54,16 +55,6 @@
   "Datomic-positional `index-range` over datahike's map-arg form."
   [db attrid start end]
   (d/index-range db {:attrid attrid :start start :end end}))
-
-(defn- entid
-  "Resolve `x` (an eid or a lookup-ref) to an eid. datahike has no
-   `d/entid`; an eid passes through, anything else resolves via
-   `d/entity`."
-  [db x]
-  (cond
-    (number? x) x
-    (nil? x)    nil
-    :else       (:db/id (d/entity db x))))
 
 ;; ============================================================================
 ;; Tuple-datom unpackers
@@ -199,15 +190,29 @@
 (defn can?
   "True iff `subject` has `permission` on `resource`. `subject` /
    `resource` are `{:keys [type id]}` — `:id` an eid or lookup-ref.
-   Short-circuits on the first granting path."
-  [db subject permission resource]
-  (let [{subject-type :type subject-id :id}   subject
-        {resource-type :type resource-id :id} resource
-        subject-eid  (entid db subject-id)
-        resource-eid (entid db resource-id)
-        paths        (get-permission-paths db resource-type permission)]
-    (boolean
-     (and subject-eid resource-eid
+   Short-circuits on the first granting path.
+
+   `visited` guards permission-schema cycles — a `:self-permission`
+   or arrow→permission that recurses to a `[subject resource
+   permission]` triple already on the stack yields `false` rather
+   than looping (a cyclic permission *schema* is an authoring error;
+   this keeps a typo from `StackOverflow`-ing the hot path —
+   review-after P1)."
+  ([db subject permission resource]
+   (can? db subject permission resource #{}))
+  ([db subject permission resource visited]
+   (let [{subject-type :type subject-id :id}   subject
+         {resource-type :type resource-id :id} resource
+         subject-eid  (entid db subject-id)
+         resource-eid (entid db resource-id)
+         path-key     [subject-type subject-eid permission
+                       resource-type resource-eid]]
+     (if (or (nil? subject-eid) (nil? resource-eid)
+             (contains? visited path-key))
+       false
+       (let [visited' (conj visited path-key)
+             paths    (get-permission-paths db resource-type permission)]
+         (boolean
           (some
            (fn [path]
              (case (:type path)
@@ -218,7 +223,7 @@
                                  resource-type resource-eid])))
 
                :self-permission
-               (can? db subject (:target-permission path) resource)
+               (can? db subject (:target-permission path) resource visited')
 
                :arrow
                (let [via-relation      (:via path)
@@ -243,9 +248,10 @@
                    (let [target-permission (:target-permission path)]
                      (some (fn [intermediate-eid]
                              (can? db subject target-permission
-                                   (object-ref intermediate-type intermediate-eid)))
+                                   (object-ref intermediate-type intermediate-eid)
+                                   visited'))
                            intermediates))))))
-           paths)))))
+           paths)))))))
 
 ;; ============================================================================
 ;; lookup-resources — every resource a known subject can reach
@@ -325,7 +331,7 @@
                                            Long/MAX_VALUE])
                                (map extract-resource-id)
                                (filter (fn [rid]
-                                         (> rid (or cursor-eid 0)))))))) ]
+                                         (and rid (> rid (or cursor-eid 0))))))))) ]
           (if (seq resource-seqs)
             (ms/lazy-fold2-merge-dedupe-sorted-by identity resource-seqs)
             []))))))
@@ -467,35 +473,45 @@
 
 (defn traverse-permission-path-reverse
   "Walk one `path` backward from a known resource — a lazy seq of
-   subject eids that can reach it, sorted ascending."
-  [db resource-type resource-eid path subject-type cursor-eid]
-  (case (:type path)
-    :relation
-    (when (= subject-type (:subject-type path))
-      (->> (idx-range db :authz.relationship/reverse
-                      [resource-type resource-eid (:name path) subject-type 0]
-                      [resource-type resource-eid (:name path) subject-type
-                       Long/MAX_VALUE])
-           (map extract-subject-id)
-           (filter (fn [sid] (and sid (> sid (or cursor-eid 0)))))))
+   subject eids that can reach it, sorted ascending. `visited` guards
+   permission-schema cycles (review-after P1 — the EACL original had
+   no guard on the `:self-permission` reverse branch; a cyclic
+   schema looped `lookup-subjects`)."
+  ([db resource-type resource-eid path subject-type cursor-eid]
+   (traverse-permission-path-reverse db resource-type resource-eid path
+                                     subject-type cursor-eid #{}))
+  ([db resource-type resource-eid path subject-type cursor-eid visited]
+   (case (:type path)
+     :relation
+     (when (= subject-type (:subject-type path))
+       (->> (idx-range db :authz.relationship/reverse
+                       [resource-type resource-eid (:name path) subject-type 0]
+                       [resource-type resource-eid (:name path) subject-type
+                        Long/MAX_VALUE])
+            (map extract-subject-id)
+            (filter (fn [sid] (and sid (> sid (or cursor-eid 0)))))))
 
-    :self-permission
-    (let [target-permission (:target-permission path)
-          path-seqs
-          (->> (get-permission-paths db resource-type target-permission)
-               (map (fn [tp]
-                      (traverse-permission-path-reverse db resource-type
-                                                        resource-eid tp
-                                                        subject-type cursor-eid)))
-               (filter seq))]
-      (if (seq path-seqs)
-        (ms/lazy-fold2-merge-dedupe-sorted-by identity path-seqs)
-        []))
+     :self-permission
+     (let [target-permission (:target-permission path)
+           vkey [resource-type resource-eid target-permission]]
+       (if (contains? visited vkey)
+         []
+         (let [visited' (conj visited vkey)
+               path-seqs
+               (->> (get-permission-paths db resource-type target-permission)
+                    (map (fn [tp]
+                           (traverse-permission-path-reverse
+                            db resource-type resource-eid tp
+                            subject-type cursor-eid visited')))
+                    (filter seq))]
+           (if (seq path-seqs)
+             (ms/lazy-fold2-merge-dedupe-sorted-by identity path-seqs)
+             []))))
 
-    :arrow
-    (let [via-relation      (:via path)
-          intermediate-type (:target-type path)]
-      (if-let [target-relation (:target-relation path)]
+     :arrow
+     (let [via-relation      (:via path)
+           intermediate-type (:target-type path)]
+       (if-let [target-relation (:target-relation path)]
         ;; arrow → relation: intermediates connected to the resource
         ;; via via-relation, then subjects with target-relation to
         ;; each intermediate.
@@ -532,21 +548,28 @@
                    (map extract-subject-id))
               subject-seqs
               (map (fn [intermediate-eid]
-                     (let [sub-seqs
-                           (->> (get-permission-paths db intermediate-type
-                                                      target-permission)
-                                (map (fn [sub-path]
-                                       (traverse-permission-path-reverse
-                                        db intermediate-type intermediate-eid
-                                        sub-path subject-type cursor-eid)))
-                                (filter seq))]
-                       (if (seq sub-seqs)
-                         (ms/lazy-fold2-merge-dedupe-sorted-by identity sub-seqs)
-                         [])))
+                     (let [vkey [intermediate-type intermediate-eid
+                                 target-permission]]
+                       (if (contains? visited vkey)
+                         []
+                         (let [visited' (conj visited vkey)
+                               sub-seqs
+                               (->> (get-permission-paths db intermediate-type
+                                                          target-permission)
+                                    (map (fn [sub-path]
+                                           (traverse-permission-path-reverse
+                                            db intermediate-type intermediate-eid
+                                            sub-path subject-type cursor-eid
+                                            visited')))
+                                    (filter seq))]
+                           (if (seq sub-seqs)
+                             (ms/lazy-fold2-merge-dedupe-sorted-by identity
+                                                                   sub-seqs)
+                             [])))))
                    intermediate-eids)]
           (if (seq subject-seqs)
             (ms/lazy-fold2-merge-dedupe-sorted-by identity subject-seqs)
-            []))))))
+            [])))))))
 
 (defn- lazy-merged-lookup-subjects
   [db {:keys [resource permission subject/type cursor]}]

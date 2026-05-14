@@ -13,15 +13,8 @@
    `[:db.fn/retractEntity …]`."
   (:require [datahike.api :as d]
             [kontor.authz.base :as base]
-            [kontor.authz.core :as core :refer [map->Relationship]]))
-
-(defn- entid
-  "Resolve `x` (eid or lookup-ref) to an eid via `d/entity`."
-  [db x]
-  (cond
-    (number? x) x
-    (nil? x)    nil
-    :else       (:db/id (d/entity db x))))
+            [kontor.authz.core :as core :refer [map->Relationship]]
+            [kontor.authz.util :refer [entid]]))
 
 ;; ============================================================================
 ;; read-relationships
@@ -102,7 +95,15 @@
    relationship]}` into tx-data (or nil for a no-op `:delete`).
      :create — the edge entity map; throws if it already exists.
      :touch  — the edge entity map, upserted onto an existing edge.
-     :delete — `[:db/retractEntity eid]`, or nil if not found."
+     :delete — `[:db/retractEntity eid]`, or nil if not found.
+
+   The `:create` duplicate check is against the *pre-tx* `db`
+   snapshot — so two identical `:create`s in ONE
+   `write-relationships!` batch both pass here; the
+   `:authz.relationship/forward` `:db.unique/identity` tuple then
+   merges them into one edge at transact time. Data stays consistent
+   (one edge, not two); the only effect is that the in-batch
+   duplicate does not *throw*. A cross-batch duplicate is caught."
   [db {:keys [operation relationship]}]
   (let [{:keys [subject relation resource]} relationship]
     (case operation

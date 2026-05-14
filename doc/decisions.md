@@ -7061,4 +7061,46 @@ low-risk; flagged for the kontor-authz review-after.
 This + ADR-065 are the kontor-authz companion; the SpiceDB-string
 parser is the one deferred convenience.
 
+**Review-after (research note 43).** Two independent agents audited
+ADR-065/066. The traversal port is faithful and correct (REPL-
+confirmed across all four path types, the cursor, multi-clause
+dedup). **One P0 + three P1s, all REPL-confirmed, all fixed:** (1)
+P0 — `read-relationships` silently *over-returned* every edge when
+an external id did not resolve (the coerced `nil` dropped the
+datalog filter); `coerce-id-filter` now throws on an unresolvable
+id. (2) P1 — the permission-schema cycle guard was *narrower than
+this ADR documented*: `can?`'s `:self-permission` branch also
+recursed unguarded and `StackOverflow`-ed on a cyclic-schema typo;
+`can?` and `traverse-permission-path-reverse` now thread visited-sets
+like `traverse-permission-path` already did. (3) P1 — the `:a`/`:z`
+keyword-sentinel scan in `relation-datoms` *silently dropped*
+out-of-range subject-types (`:zebra`, uppercase `:Account`,
+digit-leading), yielding a wrong `false`; `base/Relation` now throws
+at definition time. Cheap P2s also fixed: the triplicated `entid`
+→ `kontor.authz.util`, the dead `Cursor` record dropped, a missing
+nil-guard added, the in-batch `:create`-duplicate semantics
+documented.
+
+**Notes the completeness review surfaced, recorded here as ADR
+intent:** the **kernel does NOT call authz** — it stays
+dependency-free; authorization is a *consumer* concern (a consumer
+decides whether to gate `post-transaction!` on a `can?`). Consumers
+**own their subject entity** — kontor ships no `:user`; a consumer
+(beleg) defines its own. A **kontor-native consumer should use the
+raw-eid client** (`{:object-id->ident identity :entity->object-id
+:db/id}`) — the `:authz/object-id` default mode is for consumers
+that expose authz to an external system. `object-ref`'s 3-arity
+(the subject-relation / userset) is **reserved** — no engine behind
+it yet; the `consistency` arg + `:authz/token` are accepted for
+EACL API-shape compatibility and are **no-ops** on single-DB
+datahike. The permission model is **union-only** (no `−`/`&`) — a
+known limitation, not just a parser deferral.
+
+**Deferred to a kontor-authz followup** (the consumer-readiness
+unit): a non-string `write-schema!` arity + a real `read-schema`;
+`write-schema!`-time schema validation (reject permissions
+referencing undefined relations, reject schema cycles); an
+end-to-end integration test wiring authz to real kontor entities;
+the SpiceDB-string parser.
+
 Date: 2026-05-14.
