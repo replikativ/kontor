@@ -133,3 +133,50 @@
           (posting* liability-account principal commodity ledger)
           (posting* cash-account (.negate ^java.math.BigDecimal payment)
                     commodity ledger)]))
+
+;; ============================================================================
+;; Modification adjustments (ADR-064)
+;; ============================================================================
+
+(defn plan-adjustment
+  "Build a general adjustment entry for ONE book — a vector of
+   `:legs`, each `{:account eid :amount signed-bigdec}`, all tagged
+   with `:ledger`. Zero-amount legs are dropped; sum-to-zero is
+   enforced by `build-transaction`. The ADR-064 modification
+   transactors (remeasurement, partial / full termination, purchase)
+   compute their legs and route through here.
+
+   Required: :legs, :commodity, :journal, :date
+   Optional: :ledger, :narration, :external-id, :posted-at"
+  [{:keys [legs commodity ledger] :as spec}]
+  (when-not (seq legs) (throw (ex-info ":legs required" {})))
+  (when-not commodity  (throw (ex-info ":commodity required" {})))
+  (build spec
+         (mapv (fn [{:keys [account amount]}]
+                 (when-not account   (throw (ex-info "leg :account required" {})))
+                 (when (nil? amount) (throw (ex-info "leg :amount required" {})))
+                 (posting* account amount commodity ledger))
+               legs)))
+
+(defn plan-fx-retranslation
+  "Build the period-end FX retranslation entry for ONE liability book
+   (ADR-064). The lease liability is a MONETARY item — retranslated to
+   the reporting currency at the closing rate; the ROU asset is
+   NON-MONETARY — frozen at the historical rate, so it does NOT move
+   here. `:gain-loss` is the signed retranslation difference the
+   consumer computes from the rates — kontor ships no FX-rate engine,
+   the closing rate is a consumer input like `:discount-rate`. A
+   POSITIVE `:gain-loss` is an FX LOSS (the liability grew in
+   reporting terms → debit P&L); a negative one an FX gain.
+
+   Required: :liability-account, :fx-account, :gain-loss, :commodity,
+             :journal, :date
+   Optional: :ledger, :narration, :external-id, :posted-at"
+  [{:keys [liability-account fx-account gain-loss] :as spec}]
+  (when-not liability-account (throw (ex-info ":liability-account required" {})))
+  (when-not fx-account        (throw (ex-info ":fx-account required" {})))
+  (when (nil? gain-loss)      (throw (ex-info ":gain-loss required" {})))
+  (plan-adjustment
+   (assoc spec :legs [{:account fx-account :amount gain-loss}
+                      {:account liability-account
+                       :amount (.negate ^java.math.BigDecimal gain-loss)}])))

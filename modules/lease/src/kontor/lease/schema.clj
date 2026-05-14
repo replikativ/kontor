@@ -264,11 +264,88 @@
     :db/cardinality :db.cardinality/one}])
 
 ;; ============================================================================
+;; :lease-modification — the append-only modification event (ADR-064)
+;; ============================================================================
+;;
+;; Sibling of :asset-event. A modification — an index reset, a term
+;; change, a rate reset, a partial or full termination, a purchase —
+;; is an append-only fact: the transactors here only ever CREATE one,
+;; never retract or edit. The :lease contract facts ARE mutated (a
+;; modification IS a change to the contract), but every change is
+;; documented by a :lease-modification.
+
+(def ^:private lease-modification-attrs
+  [{:db/ident       :lease-modification/lease
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :lease-modification/kind
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "#{:remeasurement :index-reset :term-change
+                     :rate-reset :partial-termination :termination
+                     :purchase}. :index-reset / :term-change /
+                     :rate-reset all route through `remeasure!` — the
+                     keyword records intent; the math is the same
+                     re-measure-and-adjust-ROU."}
+
+   {:db/ident       :lease-modification/date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Effective date of the modification — the
+                     valid-time anchor and the re-anchor point for the
+                     liability books."}
+
+   {:db/ident       :lease-modification/new-payment-amount
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The revised periodic payment. An index-linked
+                     payment change is just this — the consumer
+                     supplies the new amount from the new index."}
+
+   {:db/ident       :lease-modification/new-term-months
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The revised lease term."}
+
+   {:db/ident       :lease-modification/new-discount-rate
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The revised discount rate — IFRS 16 re-discounts
+                     on a term or scope change."}
+
+   {:db/ident       :lease-modification/scope-decrease-pct
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Partial termination only — the fraction of the
+                     right-of-use given up (0 < pct < 1). The
+                     liability + the ROU asset are reduced
+                     proportionally; the difference is a P&L
+                     gain/loss (the proportional approach)."}
+
+   {:db/ident       :lease-modification/justification
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to :audit-doc — the modification / termination
+                     agreement."}
+
+   {:db/ident       :lease-modification/transaction
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Refs to the GL adjustment :transaction(s) this
+                     modification produced — one per affected ledger
+                     book."}
+
+   {:db/ident       :lease-modification/note
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one}])
+
+;; ============================================================================
 ;; Aggregate
 ;; ============================================================================
 
 (def all
-  (vec (concat lease-attrs lease-liability-attrs)))
+  (vec (concat lease-attrs lease-liability-attrs lease-modification-attrs)))
 
 ;; ============================================================================
 ;; Status-transition + approval-policy seeds (ADR-034 / ADR-038)

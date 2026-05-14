@@ -13,11 +13,20 @@
 
        ROU amortisation(period) = straight-line-expense − interest(period)
 
-   Because `straight-line-expense` is chosen as `(total payments +
-   initial direct costs + prepaid − incentives) / n` (see
-   `kontor.lease.lease-provider`), the plug sums exactly to the ROU
-   asset's cost over the term — early periods amortise less (interest
-   is high), late periods more.
+   This provider computes `straight-line-expense` itself, over the
+   REMAINING term:
+
+       straight-line-expense = (remaining ROU + Σ un-fired interest)
+                               / count(un-fired periods)
+
+   so the un-fired plug sums exactly to the remaining ROU carrying
+   amount — early periods amortise less (interest is high), late
+   periods more. At commencement (nothing fired) this reduces to
+   `(total payments + initial direct costs + prepaid − incentives)
+   / n`; after an ADR-064 modification it correctly re-levels over the
+   remaining periods (ASC 842 recalculates the single cost on a
+   modification — and the `LeaseProvider`'s own `:straight-line-
+   expense` cannot, since it never sees the ROU book).
 
    So an operating lease reuses the *entire* kontor-asset depreciation
    machinery — the `:asset-depreciation` book, the runner, the GL
@@ -63,6 +72,19 @@
                        :lease lease-eid :ledger dep-ledger-eid})))
     liab))
 
+(defn- fired-amounts
+  "Map of `sequence → fired :schedule-occurrence/amount` for a ROU
+   depreciation schedule."
+  [db schedule-eid]
+  (into {}
+        (d/q '[:find ?seq ?amt
+               :in $ ?s
+               :where
+               [?o :schedule-occurrence/schedule ?s]
+               [?o :schedule-occurrence/sequence ?seq]
+               [?o :schedule-occurrence/amount ?amt]]
+             db schedule-eid)))
+
 (defrecord LeaseRouPlugProvider []
   adp/DepreciationProvider
   (provider-id [_] :lease-rou-plug)
@@ -74,33 +96,56 @@
           lease-plan (lp/plan-for-book db liab-book)
           seq->interest (into {} (map (juxt :sequence :interest))
                               (:periods lease-plan))
-          sl ^BigDecimal (:straight-line-expense lease-plan)
-          fired (set (schedule/fired-sequences db schedule))
-          ;; Plug = straight-line-expense − interest, per period; the
-          ;; final period absorbs the rounding drift so Σ = the ROU
-          ;; asset's depreciable base.
-          head (mapv (fn [seq]
-                       (let [i (get seq->interest seq)]
-                         (when-not i
-                           (throw (ex-info "rou-provider: liability plan has no interest for a ROU period — the liability + ROU schedules are misaligned"
-                                           {:book book :sequence seq})))
-                         (round2 (.subtract sl ^BigDecimal i))))
-                     (range 1 n-periods))
-          last-amt (.subtract ^BigDecimal depreciable-base
-                              ^BigDecimal (reduce (fn [^BigDecimal a ^BigDecimal x]
-                                                    (.add a x))
-                                                  0M head))
-          amts (conj head last-amt)
-          periods (mapv (fn [seq amt]
+          ;; Already-fired ROU periods keep their logged amount; the
+          ;; un-fired tail is re-planned (the liability plan covers
+          ;; exactly the un-fired periods — run-lease! fires the
+          ;; liability + ROU schedules in lockstep, so the fired
+          ;; counts always match).
+          fired (fired-amounts db schedule)
+          accumulated (reduce (fn [^BigDecimal a ^BigDecimal x] (.add a x))
+                              0M (vals fired))
+          unfired (vec (sort (remove fired (range 1 (inc n-periods)))))
+          interest-of (fn [seq]
+                        (or (get seq->interest seq)
+                            (throw (ex-info "rou-provider: liability plan has no interest for an un-fired ROU period — the liability + ROU schedules are misaligned"
+                                            {:book book :sequence seq}))))
+          remaining-rou (.subtract ^BigDecimal depreciable-base accumulated)
+          ;; The single straight-line cost, re-levelled over the
+          ;; REMAINING term: (remaining ROU + Σ un-fired interest) /
+          ;; count(un-fired). Correct at commencement AND after a
+          ;; modification.
+          unfired-interest (reduce (fn [^BigDecimal a seq]
+                                     (.add a ^BigDecimal (interest-of seq)))
+                                   0M unfired)
+          sl (if (seq unfired)
+               (round2 (.divide (.add remaining-rou unfired-interest)
+                                (BigDecimal/valueOf (count unfired))
+                                12 RoundingMode/HALF_EVEN))
+               0M)
+          ;; Plug = straight-line-expense − interest, per un-fired
+          ;; period; the LAST un-fired period absorbs the rounding
+          ;; drift so Σ (fired + un-fired) = the ROU depreciable base.
+          head (mapv (fn [seq] (round2 (.subtract sl ^BigDecimal (interest-of seq))))
+                     (butlast unfired))
+          last-unfired-amt (.subtract
+                            remaining-rou
+                            ^BigDecimal (reduce (fn [^BigDecimal a ^BigDecimal x]
+                                                  (.add a x))
+                                                0M head))
+          unfired->amt (zipmap unfired
+                               (if (seq unfired)
+                                 (conj head last-unfired-amt)
+                                 []))
+          periods (mapv (fn [seq]
                           {:sequence        seq
                            :date            (schedule/date-of-occurrence
                                              start-date frequency seq)
-                           :amount          amt
+                           :amount          (or (get fired seq)
+                                                 (get unfired->amt seq))
                            :method-used     :lease-rou-plug
                            :basis-remaining nil
                            :fired?          (contains? fired seq)})
-                        (range 1 (inc n-periods))
-                        amts)]
+                        (range 1 (inc n-periods)))]
       {:periods     periods
        :convention  convention
        :total       (reduce (fn [^BigDecimal a p]

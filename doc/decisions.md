@@ -6688,3 +6688,136 @@ move it.
   single-cost result, multi-book parallel ledgers).
 
 Date: 2026-05-14.
+
+---
+
+## ADR-064 — `kontor-lease`: modifications, remeasurements, terminations + FX
+
+**Decision.** The final piece of `kontor-lease` — what happens when a
+lease *changes*. ADR-062 was the contract, ADR-063 the recognition +
+the periodic run; ADR-064 is the IFRS 16.39-46 / ASC 842 modification
+machinery: index resets, term changes, rate resets, partial and full
+terminations, purchase-option exercises, and the FX rule.
+
+**`:lease-modification` — an append-only event, the sibling of
+`:asset-event`.** Every modification records one. Attrs: `:lease`
+ref, `:kind` (`:remeasurement` | `:index-reset` | `:term-change` |
+`:rate-reset` | `:partial-termination` | `:termination` |
+`:purchase`), `:date`, the revised terms (`:new-payment-amount` /
+`:new-term-months` / `:new-discount-rate`), `:scope-decrease-pct`
+(partial termination only), `:justification` (ref `:audit-doc`),
+`:transaction` (`:db.cardinality/many` — one GL entry per affected
+ledger book), `:note`. Append-only **by convention** — the
+transactors only ever create one. The `:lease` contract facts ARE
+mutated (a modification *is* a change to the contract), but every
+change is documented by its event, and bitemporally the old facts
+remain queryable (the mutation is `kbt/with-vt`-stamped from the
+modification date).
+
+**The re-anchor mechanism — `:opening-fired-through` finally earns
+its keep.** A modification never restates a fired period.
+`liability/revise-liability-book!` sets the book's new
+`:opening-liability` (the remeasured balance) and advances
+`:opening-fired-through` to the count of already-fired occurrences —
+so `EffectiveInterestProvider` re-plans **only the un-fired tail**,
+walking from the remeasured balance at period `opening-fired-through
++ 1`. ADR-063 built the provider event-aware for exactly this; ADR-064
+is the transactor side. The ROU `:asset-depreciation` book is
+re-anchored by `kontor.asset.depreciation/revise-book!` — the *same*
+prospective re-plan `kontor-asset` already does for an IAS 16
+useful-life revision. No new re-planning machinery: the modification
+transactors are pure orchestration over primitives that already
+existed.
+
+**`remeasure!`** — the general remeasurement (`:index-reset`,
+`:term-change`, `:rate-reset` all route through it; the keyword
+records intent, the math is identical). For each `:lease-liability`
+book: snapshot the *old* outstanding liability (before the `:lease`
+facts move), update the `:lease` contract facts, remeasure the
+liability at the PV of the revised remaining payments, and post the
+difference against the ROU `:asset` — `Dr/Cr ROU-asset /
+lease-liability` — with P&L absorbing the remainder **only** when the
+adjustment would drive the ROU carrying amount below zero (IFRS
+16.39). An index-linked payment change is just a `remeasure!` with a
+`:new-payment-amount` — no separate variable-payment machinery, as
+the research note 38 sketch anticipated.
+
+**`partial-terminate!`** — a scope decrease, the **proportional
+approach** (IFRS 16.46(b) — the load-bearing design call). Two effects
+folded into one GL entry per book: (1) the liability and the ROU are
+reduced in proportion to `:scope-decrease-pct`, the difference a P&L
+gain/loss; (2) the remaining liability is then remeasured for the
+revised payments, that delta adjusting the ROU. The alternative
+(16.46(a) — remeasure-only, the gain/loss falling out of the
+remeasurement) is the other permitted treatment; v1 commits to the
+proportional approach and documents it. The maths is exact: every
+test lease, after a partial termination, still unwinds to zero by end
+of term.
+
+**`terminate!`** — full early termination. Per book: derecognise the
+liability and the ROU asset, pay any `:penalty`, book the difference
+to P&L, cancel both schedules; then drive `:lease/status :active →
+:terminated` (ADR-038: `:requires-supporting-doc` + `:no-self-
+approval`). The ROU `:asset` *entity's* status is left untouched —
+kontor-lease terminates the lease *accounting*; disposing the ROU
+`:asset` from the fixed-asset register is a `kontor.asset.asset/
+dispose!` call the consumer makes if its process requires it. A
+deliberate, documented boundary, not an omission.
+
+**`purchase!`** — a purchase option is exercised. Per book: settle the
+remaining liability in cash, cancel both schedules; drive
+`:lease/status :active → :purchased`. The ROU `:asset` **continues**
+as an owned asset (IFRS 16.67 — no derecognition, the carrying amount
+carries over); kontor-lease does not presume the owned-asset useful
+life — the consumer opens a fresh `kontor.asset.depreciation/
+open-book!` over the remaining life.
+
+**The operating-lease ROU plug, post-modification.** ADR-063's
+`LeaseRouPlugProvider` originally read the `LeaseProvider`'s
+`:straight-line-expense`. But ASC 842 *recalculates* the single
+straight-line cost on a modification — and the `LeaseProvider` never
+sees the ROU book, so it cannot. ADR-064 moves the SL computation
+*into* the plug provider: `straight-line-expense = (remaining ROU +
+Σ un-fired interest) / count(un-fired)`. At commencement this reduces
+to ADR-063's `(payments + IDC + prepaid − incentives) / n`; after a
+modification it correctly re-levels over the remaining term. The plug
+provider is now also fired-aware (already-fired ROU periods keep their
+logged amount; only the un-fired tail is re-planned) — necessary
+because after a modification the liability plan covers only the
+un-fired periods.
+
+**FX — a rule + a thin builder, not an engine.** The lease liability
+is a **monetary** item — retranslated to the reporting currency at
+the closing rate; the ROU asset is **non-monetary** — frozen at the
+historical rate, so it does not move on retranslation.
+`posting/plan-fx-retranslation` builds the `Dr/Cr lease-liability /
+fx-gain-loss` entry from a caller-supplied signed `:gain-loss`.
+kontor ships **no FX-rate engine** — the closing rate is a consumer
+input, exactly as the discount rate is (consistent with ADR-005's "we
+ship the protocol, not the rate data"). Building an FX-rate
+subsystem into the accounting kernel would be the same category error
+as writing a US sales-tax engine.
+
+**v1 simplification — the remeasurement PV.** `remeasure!` discounts
+the revised *remaining* payments as an ordinary annuity (in-arrears)
+from the modification date. The post-modification unwind always
+treats the first un-fired period as accruing interest, so this is
+self-consistent; for an originally-`:in-advance` lease modified
+mid-term there is a minor sub-period timing approximation — the
+precise day-count is a consumer-level refinement, as the discount
+rate itself is. Documented in the `kontor.lease.modification` ns.
+
+**Shape after.**
+- `modules/lease/src/kontor/lease/schema.clj` —
+  `:lease-modification/*` attrs added.
+- `modules/lease/src/kontor/lease/modification.clj` — new
+  (`remeasure!`, `partial-terminate!`, `terminate!`, `purchase!`).
+- `modules/lease/src/kontor/lease/liability.clj` —
+  `revise-liability-book!` added.
+- `modules/lease/src/kontor/lease/posting.clj` — `plan-adjustment` +
+  `plan-fx-retranslation` added.
+- `modules/lease/src/kontor/lease/rou_provider.clj` — the plug now
+  computes its own (re-levelling, fired-aware) straight-line cost.
+- `modules/lease/test/kontor/lease/modification_test.clj` — new.
+
+Date: 2026-05-14.

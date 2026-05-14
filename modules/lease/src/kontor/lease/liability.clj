@@ -58,9 +58,12 @@
   [db spec]
   (when-let [eid (resolve-book db spec)]
     (d/pull db
-            '[* {:lease-liability/lease [:lease/code :lease/name
+            '[* {:lease-liability/lease [:db/id :lease/code :lease/name
                                          :lease/status]
-                 :lease-liability/ledger [:ledger/code :ledger/framework]
+                 :lease-liability/ledger [:db/id :ledger/code :ledger/framework]
+                 :lease-liability/commodity [:db/id]
+                 :lease-liability/liability-account [:db/id]
+                 :lease-liability/interest-account [:db/id]
                  :lease-liability/schedule [:db/id :schedule/code
                                             :schedule/kind :schedule/state
                                             :schedule/start-date
@@ -241,3 +244,56 @@
                              :lease-liability/schedule sched-tempid}
                       note (assoc :lease-liability/note note))]
     (d/transact conn [book-entity schedule-entity])))
+
+;; ============================================================================
+;; revise-liability-book! — re-anchor after a modification (ADR-064)
+;; ============================================================================
+
+(defn revise-liability-book!
+  "Re-anchor a `:lease-liability` book after an ADR-064 modification:
+   set the new `:opening-liability`, advance `:opening-fired-through`
+   to the count of already-fired occurrences, optionally update the
+   `:discount-rate`, and reschedule the `:schedule` end-date for the
+   period count implied by the lease's (possibly revised)
+   `:term-months`. Fired occurrences are NEVER touched — the
+   `LeaseProvider` re-plans only the un-fired tail from
+   `:opening-fired-through + 1`.
+
+   Call this AFTER the `:lease` contract facts (`:payment-amount` /
+   `:term-months`) have been updated — it reads them to derive the
+   new period count.
+
+   Required: :book (eid or [lease ledger]), :new-opening-liability
+   Optional: :new-discount-rate, :note
+   Throws if the revised term implies fewer periods than already
+   fired."
+  [conn {:keys [book new-opening-liability new-discount-rate note]}]
+  (when (nil? new-opening-liability)
+    (throw (ex-info ":new-opening-liability required" {})))
+  (let [db (d/db conn)
+        eid (resolve-book db book)
+        _ (when-not eid
+            (throw (ex-info "Lease-liability book not found" {:spec book})))
+        b (d/pull db [{:lease-liability/lease [:lease/term-months
+                                               :lease/payment-frequency]}
+                      {:lease-liability/schedule [:db/id :schedule/start-date]}]
+                  eid)
+        l (:lease-liability/lease b)
+        sched (:lease-liability/schedule b)
+        sched-eid (:db/id sched)
+        freq (:lease/payment-frequency l)
+        n (lease/periods-for (:lease/term-months l) freq)
+        fired (long (count (schedule/fired-sequences db sched-eid)))
+        _ (when (< n fired)
+            (throw (ex-info "revise-liability-book!: revised term implies fewer periods than already fired"
+                            {:type :lease/revision-below-fired
+                             :revised-periods n :fired fired})))
+        end-date (schedule/date-of-occurrence (:schedule/start-date sched) freq n)]
+    (d/transact conn
+                [(cond-> {:db/id eid
+                          :lease-liability/opening-liability new-opening-liability
+                          :lease-liability/opening-fired-through fired}
+                   new-discount-rate
+                   (assoc :lease-liability/discount-rate new-discount-rate)
+                   note (assoc :lease-liability/note note))
+                 {:db/id sched-eid :schedule/end-date end-date}])))
