@@ -285,6 +285,21 @@
             held  (reduce clojure.set/union #{} (vals scope))]
         (clojure.set/intersection (set eids) held)))))
 
+(defn holds-covering
+  "The inverse of `entities-held?` — return the vec of active-hold
+   eids whose scope (explicit `:scope-eids` ∪ `:scope-query`
+   expansion) includes `eid`. Lets callers that need *which holds*
+   (not just *whether held*) compose with legal-hold rather than
+   re-implementing scope-checking — e.g. `kontor.dsar/collect`'s
+   `:legal-holds`."
+  [db eid]
+  (let [holds (active-holds db)]
+    (if (empty? holds)
+      []
+      (let [scope (scoped-eids-by-hold db holds)]
+        (filterv (fn [hold-eid] (contains? (get scope hold-eid) eid))
+                 holds)))))
+
 (defn entity-held?
   "True iff `eid` is in any active hold's scope (eids OR query)."
   [db eid]

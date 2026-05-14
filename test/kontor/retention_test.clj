@@ -277,13 +277,23 @@
         (is (= 1 (count (:blocked r))))
         (is (some? (adoc-eid (d/db conn) "DOC-HELD")))))
     (testing "apply-expiry! is STRUCTURALLY refused even called directly on a held doc"
-      ;; The load-bearing guarantee: apply-expiry! routes through
-      ;; validate-and-apply, so the ADR-049 hold-middleware fires.
+      ;; The load-bearing guarantee: apply-expiry! runs the
+      ;; validators directly, so the ADR-049 hold-middleware fires.
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo #"blocked by active legal hold"
            (ret/apply-expiry! conn {:entity-eid held-doc
                                     :policy-eid (ret/by-code (d/db conn) "P-HOLD-TEST")
-                                    :action :purge}))))
+                                    :action :purge})))
+      ;; P1-1 (research note 32): the :type must be reachable on
+      ;; (ex-data e) directly — not buried in (.getCause e).
+      (is (= :legal-hold/purge-blocked
+             (try (ret/apply-expiry! conn {:entity-eid held-doc
+                                           :policy-eid (ret/by-code (d/db conn) "P-HOLD-TEST")
+                                           :action :purge})
+                  nil
+                  (catch clojure.lang.ExceptionInfo e
+                    (:type (ex-data e)))))
+          "exception :type is on (ex-data e), not double-wrapped"))
     (testing "after release, the next sweep applies the expiry"
       (lhold/release! conn
                       {:hold-eid (lhold/by-code (d/db conn) "HOLD-RET")
@@ -295,6 +305,39 @@
         (is (= 1 (count (:applied r))))
         (is (nil? (adoc-eid (d/db conn) "DOC-HELD"))
             "Released doc is now purged on the next sweep.")))))
+
+;; ============================================================================
+;; P1-2 — :applies-to cross-check guards against a cross-namespace anchor
+;; ============================================================================
+
+(deftest cross-namespace-anchor-does-not-sweep-unintended-types
+  ;; A policy :applies-to [:audit-doc] but :triggered-by an attribute
+  ;; in a DIFFERENT namespace (:status-history/changed-at). Without the
+  ;; :applies-to cross-check, candidate-eids would enumerate every
+  ;; :status-history row in the DB as a candidate. The guard filters
+  ;; them out — a :status-history row carries no :audit-doc/* attr.
+  (let [conn (bootstrap)
+        _ (ret/define-policy! conn
+                              {:code "P-CROSS-NS"
+                               :applies-to [:audit-doc]
+                               :duration-years 1
+                               :triggered-by :status-history/changed-at
+                               :expiry-action :purge
+                               :effective-from #inst "2000-01-01"
+                               :legal-basis "Cross-namespace anchor test"
+                               :changed-by-uid (uid (d/db conn) "records")})
+        policy-eid (ret/by-code (d/db conn) "P-CROSS-NS")
+        _ (ret/activate-policy! conn
+                                {:policy-eid policy-eid
+                                 :supporting-doc (adoc-eid (d/db conn) "RETENTION-SCHEDULE-2026")
+                                 :reason-note "Activate."
+                                 :changed-by-uid (uid (d/db conn) "records")})]
+    ;; The DB has :status-history rows (every define/activate wrote
+    ;; some), all well past a 1-year deadline relative to 2026 — but
+    ;; none is an :audit-doc, so none is a candidate.
+    (testing "the cross-namespace anchor sweeps zero entities"
+      (is (empty? (ret/sweep! (d/db conn) {:entity-type :audit-doc
+                                           :as-of #inst "2026-06-01"}))))))
 
 ;; ============================================================================
 ;; :anonymize action
@@ -338,12 +381,20 @@
 
 (deftest supersede-makes-policy-terminal
   (let [conn (bootstrap)
-        policy-eid (active-purge-policy! conn {:code "P-SUPERSEDE"})
-        _ (ret/supersede-policy! conn
-                                 {:policy-eid policy-eid
-                                  :changed-by-uid (uid (d/db conn) "records")
-                                  :reason-note "Replaced by 2027 schedule."})]
-    (testing "superseded policy is no longer resolved by policy-for"
+        policy-eid (active-purge-policy! conn {:code "P-SUPERSEDE"})]
+    (testing "supersede without :supporting-doc is rejected (ADR-038, P1-3 fix)"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #":supporting-doc required"
+           (ret/supersede-policy! conn
+                                  {:policy-eid policy-eid
+                                   :changed-by-uid (uid (d/db conn) "records")
+                                   :reason-note "no doc"}))))
+    (testing "supersede with both succeeds; policy becomes terminal"
+      (ret/supersede-policy! conn
+                             {:policy-eid policy-eid
+                              :changed-by-uid (uid (d/db conn) "records")
+                              :supporting-doc (adoc-eid (d/db conn) "RETENTION-SCHEDULE-2026")
+                              :reason-note "Replaced by 2027 schedule."})
       (is (= :superseded (:retention-policy/state
                           (d/pull (d/db conn) [:retention-policy/state] policy-eid))))
       (is (nil? (ret/policy-for (d/db conn) :audit-doc {}))))))

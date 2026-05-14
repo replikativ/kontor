@@ -108,6 +108,43 @@
       (is (empty? (:references (dsar/collect (d/db conn)
                                              (pe (d/db conn) "U-dpo") {})))))))
 
+(deftest collect-walks-indirect-transaction-refs
+  ;; P0-1 (research note 32): a great deal of subject data references
+  ;; a :transaction, not the :partner directly. collect's indirect
+  ;; axis walks from the subject's transactions outward.
+  (let [conn (bootstrap)
+        subject (pe (d/db conn) "SUBJECT")
+        ;; A transaction belonging to the subject…
+        _ (d/transact conn [{:db/id "subj-tx"
+                             :transaction/external-id "TX-SUBJ-1"
+                             :transaction/partner subject}
+                            ;; …and a :status-history row that references
+                            ;; that tx via :origin-transaction — it does
+                            ;; NOT reference the :partner directly.
+                            {:status-history/entity "subj-tx"
+                             :status-history/entity-type :transaction
+                             :status-history/facet :transaction/state
+                             :status-history/to :posted
+                             :status-history/changed-at #inst "2026-05-14"
+                             :status-history/origin-transaction "subj-tx"}])
+        result (dsar/collect (d/db conn) subject {})]
+    (testing "the transaction itself is in the direct :references"
+      (is (= 1 (count (get-in result [:references :transaction/partner])))))
+    (testing "the status-history row surfaces in :indirect-references"
+      (is (contains? (:indirect-references result)
+                     :status-history/origin-transaction))
+      (is (= 1 (count (get-in result [:indirect-references
+                                      :status-history/origin-transaction])))))
+    (testing "register-tx-attr! extends the indirect walk"
+      ;; :transaction/reverses is kernel-seeded; confirm a freshly-
+      ;; registered tx-attr is also walked.
+      (let [had? (contains? (dsar/tx-attrs) :asset-event/transaction)]
+        (is (not had?))
+        (dsar/register-tx-attr! :asset-event/transaction)
+        (is (contains? (dsar/tx-attrs) :asset-event/transaction))
+        ;; restore
+        (swap! dsar/tx-attrs-registry disj :asset-event/transaction)))))
+
 (deftest collect-is-bitemporal
   (let [conn (bootstrap)
         subject (pe (d/db conn) "SUBJECT")

@@ -70,9 +70,9 @@
   (atom kernel-partner-attrs))
 
 (defn register-partner-attr!
-  "Register a partner-referencing attribute so `collect` walks it.
-   A companion module calls this for each of its own
-   :partner-referencing attrs at load time."
+  "Register a partner-referencing attribute so `collect` walks it
+   (the direct axis). A companion module calls this for each of its
+   own :partner-referencing attrs at load time."
   [attr]
   (swap! partner-attrs-registry conj attr))
 
@@ -80,6 +80,40 @@
   "The current set of registered partner-referencing attributes."
   []
   @partner-attrs-registry)
+
+;; The indirect axis: a great deal of subject data does not reference
+;; the :partner directly — it references a :transaction that, in turn,
+;; references the subject. A :status-history row's
+;; :status-history/origin-transaction, a companion :payment-application's
+;; :payment-application/payment, … all point at a :transaction. `collect`
+;; walks BOTH axes: direct partner-refs, then — from the subject's
+;; transactions — every registered tx-referencing attribute. Same
+;; companion-extends-the-kernel-registry pattern (P0-1 review fix,
+;; research note 32).
+
+(def ^:private kernel-tx-attrs
+  "Transaction-referencing attributes the kernel ships. Companions
+   register their own (`:payment-application/payment`,
+   `:asset-event/transaction`, …) via `register-tx-attr!`."
+  #{:status-history/origin-transaction
+    :transaction/reverses})
+
+(defonce ^{:doc "Atom holding the set of attributes referencing
+   :transaction that `collect` walks on the indirect axis. Seeded
+   with the kernel attrs; companions conj their own at load time."}
+  tx-attrs-registry
+  (atom kernel-tx-attrs))
+
+(defn register-tx-attr!
+  "Register a :transaction-referencing attribute so `collect` walks
+   it on the indirect axis (from the subject's transactions outward)."
+  [attr]
+  (swap! tx-attrs-registry conj attr))
+
+(defn tx-attrs
+  "The current set of registered :transaction-referencing attributes."
+  []
+  @tx-attrs-registry)
 
 ;; ============================================================================
 ;; Status-transition + approval-policy seeds
@@ -221,18 +255,23 @@
          [?m :partner-merge/superseded ?dup]]
        db canonical-eid))
 
-(defn- holds-covering
-  "Active legal holds (ADR-049) whose scope includes `partner-eid` —
-   via the explicit :scope-eids set or a matching :scope-query."
-  [db partner-eid]
-  (filterv (fn [hold-eid]
-             (or (some? (d/q '[:find ?e .
-                               :in $ ?h ?e
-                               :where [?h :legal-hold/scope-eids ?e]]
-                             db hold-eid partner-eid))
-                 (contains? (legal-hold/expand-scope-query db hold-eid)
-                            partner-eid)))
-           (legal-hold/active-holds db)))
+(defn- refs-by-attr
+  "For each attr in `attrs`, find every entity `?e` where `[?e attr v]`
+   for any v in `vals`; pull each. Returns {attr [pulled-entity …]},
+   dropping attrs with no matches."
+  [db attrs vals]
+  (into {}
+        (keep (fn [attr]
+                (let [eids (->> vals
+                                (mapcat (fn [v]
+                                          (d/q '[:find [?e ...]
+                                                 :in $ ?attr ?v
+                                                 :where [?e ?attr ?v]]
+                                               db attr v)))
+                                distinct)]
+                  (when (seq eids)
+                    [attr (mapv #(d/pull db '[*] %) eids)]))))
+        attrs))
 
 (defn collect
   "Return everything the DB holds about `partner-eid`, snapshotted at
@@ -241,15 +280,29 @@
    over one bitemporal datalog DB.
 
    Returns:
-     {:partner        <pulled partner entity>
-      :merged-from    [<eid> …]      ; one-level :partner-merge chain
-      :references     {<partner-attr> [<pulled entity> …] …}
-      :legal-holds    [<hold-eid> …] ; active holds covering the subject
-      :on-legal-hold? <bool>}
+     {:partner             <pulled partner entity>
+      :merged-from         [<eid> …]   ; one-level :partner-merge chain
+      :references          {<partner-attr> [<pulled entity> …] …}
+      :indirect-references {<tx-attr> [<pulled entity> …] …}
+      :legal-holds         [<hold-eid> …]  ; active holds covering subject
+      :on-legal-hold?      <bool>}
 
-   `:references` is keyed by the registered partner-attr (the kernel
-   does not hardcode companion entity types — companions register
-   their own attrs via `register-partner-attr!`).
+   Two axes (research note 32 P0-1):
+   - `:references` — the DIRECT walk: entities referencing the
+     subject :partner via a registered `partner-attrs` attribute.
+   - `:indirect-references` — the INDIRECT walk: from the subject's
+     transactions (anything with `:transaction/partner` = subject),
+     every entity referencing those transactions via a registered
+     `tx-attrs` attribute (`:status-history/origin-transaction`, a
+     companion `:payment-application/payment`, …). A great deal of
+     subject data — payment applications, status-history of the
+     subject's invoices — references a `:transaction`, not the
+     `:partner` directly; omitting it ships an incomplete access
+     response.
+
+   Both maps are keyed by the registered attribute — the kernel does
+   not hardcode companion entity types; companions register their
+   own attrs via `register-partner-attr!` / `register-tx-attr!`.
 
    `:legal-holds` / `:on-legal-hold?` (ADR-049): held data still
    appears in a DSAR *access* response — the right of access is not
@@ -276,27 +329,26 @@
                       (vec (merged-from-partners db partner-eid))
                       [])
         subjects (cons partner-eid merged-from)
-        ;; For each registered partner-attr, find every entity that
-        ;; references any of the subject partners.
-        refs
-        (into {}
-              (keep (fn [attr]
-                      (let [eids (->> subjects
-                                      (mapcat (fn [subj]
-                                                (d/q '[:find [?e ...]
-                                                       :in $ ?attr ?p
-                                                       :where [?e ?attr ?p]]
-                                                     db attr subj)))
-                                      distinct)]
-                        (when (seq eids)
-                          [attr (mapv #(d/pull db '[*] %) eids)]))))
-              @partner-attrs-registry)
-        holds (holds-covering db partner-eid)]
-    {:partner        (d/pull db '[*] partner-eid)
-     :merged-from    merged-from
-     :references     refs
-     :legal-holds    holds
-     :on-legal-hold? (boolean (seq holds))}))
+        ;; Direct axis — entities referencing a subject :partner.
+        refs (refs-by-attr db @partner-attrs-registry subjects)
+        ;; Indirect axis — from the subject's transactions outward.
+        subject-txs (->> subjects
+                         (mapcat (fn [p]
+                                   (d/q '[:find [?t ...]
+                                          :in $ ?p
+                                          :where [?t :transaction/partner ?p]]
+                                        db p)))
+                         distinct)
+        indirect (if (seq subject-txs)
+                   (refs-by-attr db @tx-attrs-registry subject-txs)
+                   {})
+        holds (legal-hold/holds-covering db partner-eid)]
+    {:partner             (d/pull db '[*] partner-eid)
+     :merged-from         merged-from
+     :references          refs
+     :indirect-references indirect
+     :legal-holds         holds
+     :on-legal-hold?      (boolean (seq holds))}))
 
 ;; ============================================================================
 ;; Transactors

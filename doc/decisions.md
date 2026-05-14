@@ -5167,9 +5167,26 @@ companions extend it. The kernel seeds:
 fixed-key map hardcoding `:transactions` / `:collection-cases` / …
 (the kernel cannot know companion entity types). Instead:
 `{:partner <pulled> :merged-from [<eids>] :references {<attr>
+[<pulled-entities>]} :indirect-references {<tx-attr>
 [<pulled-entities>]} :legal-holds [<hold-eids>] :on-legal-hold?
-<bool>}`. The `:references` map is keyed by the registered
-partner-attr; the consumer interprets.
+<bool>}`. Both reference maps are keyed by the registered
+attribute; the consumer interprets.
+
+**Two axes — direct and indirect** (added in the research-note-32
+P1 review fix). `:references` is the *direct* walk: entities
+referencing the subject `:partner` via a registered `partner-attrs`
+attribute. `:indirect-references` is the *indirect* walk: from the
+subject's transactions (anything with `:transaction/partner` =
+subject), every entity referencing those transactions via a
+registered `tx-attrs` attribute. A great deal of subject data — a
+`:payment-application` pointing at the subject's payment tx, a
+`:status-history/origin-transaction` row — references a
+`:transaction`, not the `:partner` directly; the direct walk alone
+ships an incomplete access response. The `tx-attrs-registry` mirrors
+the partner-attrs registry: the kernel seeds it
+(`:status-history/origin-transaction`, `:transaction/reverses`),
+companions register their own (`:payment-application/payment`, …)
+via `register-tx-attr!`.
 
 **Privilege filtering is consumer-side.** `collect` returns the raw
 reference walk; it does not itself filter by privilege. When the

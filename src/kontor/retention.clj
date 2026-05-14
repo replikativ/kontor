@@ -80,21 +80,22 @@
     :status-transition/name "Supersede Retention Policy"}])
 
 (def approval-policy-seeds
-  "ADR-038 :approval-policy rows. Activating a retention policy is a
-   consequential, audit-visible change — the auditor needs to know
-   why a retention rule came into force."
-  [{:approval-policy/entity-type     :retention-policy
-    :approval-policy/facet           :retention-policy/state
-    :approval-policy/transition-from :draft
-    :approval-policy/transition-to   :active
-    :approval-policy/rule            :requires-supporting-doc
-    :approval-policy/active          true}
-   {:approval-policy/entity-type     :retention-policy
-    :approval-policy/facet           :retention-policy/state
-    :approval-policy/transition-from :draft
-    :approval-policy/transition-to   :active
-    :approval-policy/rule            :requires-non-empty-reason-note
-    :approval-policy/active          true}])
+  "ADR-038 :approval-policy rows. Both `:draft → :active` (a
+   retention rule coming into force) and `:active → :superseded`
+   (retiring the incumbent — which can SHORTEN retention and so
+   expand what the next sweep purges) are consequential, audit-
+   visible changes. Both are governed (research note 32 P1-3 —
+   the recurrence of note 27's unseeded-consequential-edge pattern)."
+  (vec
+   (for [to   [:active :superseded]
+         rule [:requires-supporting-doc
+               :requires-non-empty-reason-note]]
+     {:approval-policy/entity-type     :retention-policy
+      :approval-policy/facet           :retention-policy/state
+      :approval-policy/transition-from (if (= to :active) :draft :active)
+      :approval-policy/transition-to   to
+      :approval-policy/rule            rule
+      :approval-policy/active          true})))
 
 (defn install-seeds!
   "Idempotently transact the retention-policy status-transition +
@@ -157,10 +158,15 @@
                             (or (nil? juris)
                                 (= juris jurisdiction)))))
              ;; jurisdiction-specific beats global; then latest
-             ;; effective-from wins (ADR-026 tiebreaker).
-             (sort-by (fn [[_ from _ juris]]
+             ;; effective-from wins (ADR-026 tiebreaker); then lowest
+             ;; eid as the deterministic last-resort tiebreaker so
+             ;; resolution never depends on datalog set-iteration
+             ;; order when two policies share an :effective-from
+             ;; (research note 32 P2-1).
+             (sort-by (fn [[p from _ juris]]
                         [(if (= juris jurisdiction) 1 0)
-                         (.getTime ^Date from)])))]
+                         (.getTime ^Date from)
+                         (- p)])))]
     (first (last candidates))))
 
 ;; ============================================================================
@@ -211,21 +217,43 @@
 ;; Sweeper
 ;; ============================================================================
 
+(defn- entity-of-type?
+  "Heuristic entity-type check: true iff `eid` carries at least one
+   attribute whose namespace is in `applies-to` (a set of entity-type
+   keywords). Used to guard the sweeper against a cross-namespace
+   `:triggered-by` anchor (a policy `:applies-to [:audit-doc]` anchored
+   on `:status-history/changed-at` must NOT sweep `:status-history`
+   rows — research note 32 P1-2)."
+  [db eid applies-to]
+  (let [ns-strs (set (map name applies-to))]
+    (boolean (some #(contains? ns-strs (namespace %))
+                   (keys (d/pull db '[*] eid))))))
+
 (defn- candidate-eids
-  "All eids carrying the policy's `:triggered-by` anchor attribute —
-   the v1 enumeration key for the sweep."
-  [db policy-eid]
-  (let [{:retention-policy/keys [triggered-by]}
-        (d/pull db [:retention-policy/triggered-by] policy-eid)]
-    (d/q '[:find [?e ...]
-           :in $ ?attr
-           :where [?e ?attr _]]
-         db triggered-by)))
+  "Eids of entities subject to `policy-eid`'s sweep: those carrying
+   the policy's `:triggered-by` anchor attribute AND of one of the
+   policy's `:applies-to` entity-types. The `:applies-to` cross-check
+   guards against a cross-namespace anchor enumerating unintended
+   entity types. `limit` caps the candidate set (nil = unbounded) —
+   a simple cap, not a full cursor; chunked sweeps are a follow-up."
+  [db policy-eid limit]
+  (let [{:retention-policy/keys [triggered-by applies-to]}
+        (d/pull db [:retention-policy/triggered-by
+                    :retention-policy/applies-to]
+                policy-eid)
+        applies-to (set applies-to)
+        raw (d/q '[:find [?e ...]
+                   :in $ ?attr
+                   :where [?e ?attr _]]
+                 db triggered-by)
+        typed (filter #(entity-of-type? db % applies-to) raw)]
+    (if limit (take limit typed) typed)))
 
 (defn due-for-expiry
-  "Walk every entity carrying `policy-eid`'s `:triggered-by` anchor
-   and return a vec of work-items for those past their retention
-   deadline as of `:as-of` (default now):
+  "Walk `policy-eid`'s candidate entities (those carrying its
+   `:triggered-by` anchor AND of its `:applies-to` type) and return
+   a vec of work-items for those past their retention deadline as of
+   `:as-of` (default now):
 
      {:entity-eid     <eid>
       :policy-eid     <policy-eid>
@@ -236,12 +264,21 @@
    Items where `:blocked-by-hold?` is true are still returned — for
    the 'this would expire today but is on hold' visibility — but
    `sweep-and-apply!` will skip them. The held set is computed once
-   for the whole batch via `legal-hold/entities-held?`."
-  [db policy-eid {:keys [as-of]}]
+   for the whole batch via `legal-hold/entities-held?`.
+
+   NOTE — silent skip: an entity whose `:triggered-by` value is not
+   a `Date` (e.g. a bulk import left the anchor attribute null) has
+   no computable deadline and is silently omitted from the result.
+   Skipping (not expiring) is the safe direction; a `:skipped`
+   diagnostic in the return shape is a documented follow-up
+   (research note 32 P2-2).
+
+   `:limit` caps the candidate set (default nil = unbounded)."
+  [db policy-eid {:keys [as-of limit]}]
   (let [as-of (or as-of (Date.))
         {:retention-policy/keys [expiry-action]}
         (d/pull db [:retention-policy/expiry-action] policy-eid)
-        cands (candidate-eids db policy-eid)
+        cands (candidate-eids db policy-eid limit)
         past-deadline
         (keep (fn [eid]
                 (when-let [deadline (retention-deadline db eid policy-eid)]
@@ -263,22 +300,31 @@
    work-items from `due-for-expiry`. Pure read — produces no writes;
    compose with `apply-expiry!` or call `sweep-and-apply!`.
 
-   Opts: `:entity-type` (required), `:jurisdiction`, `:as-of`.
+   Opts: `:entity-type` (required), `:jurisdiction`, `:as-of`,
+   `:limit` (cap the candidate set; default unbounded).
    Returns `[]` when no active policy covers the entity-type
    (retention disabled for it)."
-  [db {:keys [entity-type jurisdiction as-of]}]
+  [db {:keys [entity-type jurisdiction as-of limit]}]
   (when-not entity-type (throw (ex-info ":entity-type required" {})))
   (if-let [policy-eid (policy-for db entity-type
                                   {:jurisdiction jurisdiction :as-of as-of})]
-    (due-for-expiry db policy-eid {:as-of as-of})
+    (due-for-expiry db policy-eid {:as-of as-of :limit limit})
     []))
 
 (defn apply-expiry!
-  "Execute one expiry work-item. Routes the destructive tx-data
-   through `[:db.fn/call kontor.validation/validate-and-apply …]` so
-   the ADR-049 hold-middleware (and sealing, period, …) fire — the
-   sweeper structurally cannot expire data under an active legal
-   hold.
+  "Execute one expiry work-item. The destructive tx-data is checked
+   through `kontor.validation/validate-and-apply` so the ADR-049
+   hold-middleware (and sealing, period, …) fire — the sweeper
+   structurally cannot expire data under an active legal hold.
+
+   The check runs *directly* (not via `[:db.fn/call …]`) so the
+   raised exception is the kernel's own `ex-info` with the
+   `:legal-hold/purge-blocked` `:type` reachable via `(ex-data e)` —
+   not double-wrapped by the transactor (research note 32 P1-1). The
+   plain tx-data is then transacted. The validate→transact split is
+   single-threaded-sweeper-safe; it mirrors `validation/
+   transact-with-validation`'s invariants-outside / structural-inside
+   shape.
 
    `:purge`     — `[:db/purge entity-eid]`.
    `:anonymize` — `[:db.purge/attribute entity-eid attr]` for each
@@ -309,7 +355,11 @@
 
           (throw (ex-info "Unknown :expiry-action"
                           {:action action :entity-eid entity-eid})))]
-    (d/transact conn [[:db.fn/call validation/validate-and-apply tx-data]])))
+    ;; Run the structural validators directly — this throws the
+    ;; kernel's own ex-info (e.g. :legal-hold/purge-blocked) with the
+    ;; :type on (ex-data e), not buried in (.getCause e).
+    (validation/validate-and-apply db tx-data)
+    (d/transact conn tx-data)))
 
 (defn sweep-and-apply!
   "Sweep `entity-type` and apply every non-held expiry work-item.
@@ -463,25 +513,41 @@
    a policy, `define-policy!` a new row with a later
    `:effective-from` and supersede the old one.
 
-   Required opts: :policy-eid, :changed-by-uid.
-   Optional: :reason (default :policy-superseded), :reason-note,
-             :supporting-doc, :vt-from, :vt-to."
+   Superseding is a consequential, data-affecting change — retiring
+   `P-OLD-5yr` in favour of `P-NEW-3yr` *shortens* retention, making
+   entities purge-eligible sooner. ADR-038 governs it
+   (`:requires-supporting-doc` + `:requires-non-empty-reason-note`,
+   via the `:active → :superseded` approval-policy seeds — research
+   note 32 P1-3).
+
+   Required opts:
+     :policy-eid
+     :changed-by-uid
+     :supporting-doc  ref to :audit-doc (the records-retention-
+                      schedule revision memo)
+     :reason-note     free-text justification
+
+   Optional: :reason (default :policy-superseded), :vt-from, :vt-to."
   [conn {:keys [policy-eid changed-by-uid reason reason-note
                 supporting-doc vt-from vt-to]}]
-  (when-not policy-eid (throw (ex-info ":policy-eid required" {})))
+  (when-not policy-eid     (throw (ex-info ":policy-eid required" {})))
+  (when-not changed-by-uid (throw (ex-info ":changed-by-uid required" {})))
+  (when-not supporting-doc (throw (ex-info ":supporting-doc required (ADR-038)" {})))
+  (when (clojure.string/blank? (or reason-note ""))
+    (throw (ex-info ":reason-note required (ADR-038)" {})))
   (let [db (d/db conn)
         now (Date.)
         status-tx (sm/record-status-change-tx-data
                    db
-                   (cond-> {:entity policy-eid
-                            :entity-type :retention-policy
-                            :facet :retention-policy/state
-                            :to :superseded
-                            :changed-at now
-                            :reason (or reason :policy-superseded)}
-                     changed-by-uid (assoc :changed-by-uid changed-by-uid)
-                     reason-note    (assoc :reason-note reason-note)
-                     supporting-doc (assoc :supporting-doc supporting-doc)))]
+                   {:entity policy-eid
+                    :entity-type :retention-policy
+                    :facet :retention-policy/state
+                    :to :superseded
+                    :changed-at now
+                    :changed-by-uid changed-by-uid
+                    :reason (or reason :policy-superseded)
+                    :reason-note reason-note
+                    :supporting-doc supporting-doc})]
     (d/transact conn (kbt/with-vt status-tx
                        (or vt-from now)
                        (or vt-to kbt/forever)))))

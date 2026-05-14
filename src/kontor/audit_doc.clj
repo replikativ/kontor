@@ -209,8 +209,20 @@
    status machine (ADR-034 + ADR-038). The :from is the doc's
    current privilege (nil normalized to :none). A waiver — `:to`
    :none from a privileged value — is approval-gated:
-   :no-self-approval (vs the doc's :uploaded-by-uid),
-   :requires-supporting-doc, :requires-non-empty-reason-note.
+   :no-self-approval, :requires-supporting-doc,
+   :requires-non-empty-reason-note.
+
+   SoD-ANCHOR CAVEAT (research note 32 P1-4): the kernel's
+   `:no-self-approval` rule compares `:changed-by-uid` against the
+   entity's `:create/uid` — which `create-doc!` stamps to the doc's
+   *uploader*. So the waiver SoD enforced here is uploader ≠ waiver-
+   actor, NOT classifier ≠ waiver-actor. The consequential act is
+   classification (counsel determining a doc privileged), and a
+   consumer that needs classifier-vs-waiver SoD must enforce it in
+   its own layer — the substrate records every classifier on the
+   `:audit-doc/privilege` :status-history rows. A
+   `:no-self-approval-vs-last-classifier` rule variant in
+   `kontor.status-machine` is a documented follow-up.
 
    Required opts:
      :doc            :audit-doc code or eid
