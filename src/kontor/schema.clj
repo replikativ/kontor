@@ -454,6 +454,118 @@
 ;; ADR-039: master-data primitives — merge, bank-account, partner-bank-
 ;; account junction, partner-tag.
 ;; ============================================================================
+;; :legal-hold  — ADR-049
+;; ============================================================================
+
+(def ^:private legal-hold-attrs
+  "Per-matter preservation orders. The hold-blocks-purge invariant
+   (kontor.legal-hold/assert-no-hold-violating-purges!) is enforced
+   in kontor.validation/validate-and-apply BEFORE sealing's no-
+   silent-retract check, so the more-specific 'purge blocked by
+   hold X' error wins.
+
+   Two scope shapes, evaluated together:
+     :scope-eids   — explicit set; O(1) hot path
+     :scope-query  — EDN-encoded datalog evaluated against the
+                     speculative txdb at write-time (catches new
+                     entities matching the matter between sweeps)"
+  [{:db/ident       :legal-hold/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "External identifier for the hold (e.g. matter
+                     docket number, court case ID)."}
+
+   {:db/ident       :legal-hold/matter-name
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Human-readable matter description, e.g. 'Acme
+                     v. Doe 24-CV-1234'."}
+
+   {:db/ident       :legal-hold/issued-by-uid
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to :create/uid of inside or outside counsel
+                     who issued the preservation order."}
+
+   {:db/ident       :legal-hold/issued-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "When the preservation order was issued
+                     externally. May predate :placed-at if recording
+                     lagged."}
+
+   {:db/ident       :legal-hold/placed-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "When this hold was recorded in the system. The
+                     authoritative anchor for hold visibility; the
+                     hold blocks purges from this instant forward."}
+
+   {:db/ident       :legal-hold/expires-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional auto-release boundary. Null = manual-
+                     only release. ADR-041 sweep-time-based! flips
+                     :placed → :expired when this passes."}
+
+   {:db/ident       :legal-hold/state
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "ADR-034 facet.
+                     #{:placed :pending-review :released :expired}.
+                     :placed and :pending-review are 'active' (block
+                     purges). :released and :expired are inactive."}
+
+   {:db/ident       :legal-hold/scope-eids
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Explicit entity-ID set. Fast-path membership
+                     check at write-time of :db/purge. Sweepers
+                     refresh from :scope-query results."}
+
+   {:db/ident       :legal-hold/scope-query
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "EDN-encoded datalog query (e.g.
+                     '[:find ?e :where [?e :invoice/buyer ?p]]') that
+                     selects entities under this hold. Evaluated
+                     against the speculative txdb at :db/purge time
+                     and by sweepers refreshing :scope-eids.
+                     Stored as a string for opacity; the EDN reader
+                     parses on read."}
+
+   {:db/ident       :legal-hold/scope-query-as-of
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional valid-time anchor for :scope-query
+                     evaluation. Defaults to query-evaluation time."}
+
+   {:db/ident       :legal-hold/supporting-doc
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to :audit-doc carrying the preservation
+                     order (PDF, signed letter). ADR-038
+                     :requires-supporting-doc enforces presence on
+                     placement and release."}
+
+   {:db/ident       :legal-hold/scope-preview
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to :audit-doc carrying the
+                     counsel-signed snapshot of the eid-set the
+                     scope-query expanded to at the time of
+                     placement. Provides an out-of-band attestation
+                     that 'this is what counsel signed off on';
+                     defends against scope-drift-mid-litigation."}
+
+   {:db/ident       :legal-hold/note
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Free-text annotation (not the canonical record;
+                     the :status-history rows + :audit-doc are)."}])
+
+;; ============================================================================
 
 (def ^:private partner-merge-attrs
   [{:db/ident       :partner-merge/duplicate-of
@@ -3235,7 +3347,8 @@
     side-effect-intent-attrs              ; ADR-041
     account-type-direction-attrs          ; ADR-041
     payment-application-attrs             ; ADR-043
-    bitemporal-tx-attrs)))                ; ADR-048 (kontor.bitemporal)
+    bitemporal-tx-attrs                   ; ADR-048 (kontor.bitemporal)
+    legal-hold-attrs)))                   ; ADR-049 (kontor.legal-hold)
 
 (defn install!
   "Transact the kernel schema into a connection. Idempotent — re-running

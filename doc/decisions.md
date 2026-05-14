@@ -4755,3 +4755,111 @@ reverse-and-repost (ADR-008 revised) — so `:tx/valid-to` on a
 posting's tx is always `forever`.
 
 Date: 2026-05-13.
+
+---
+
+## ADR-049 — Legal hold: write-time invariant blocking purge of held entities
+
+**Decision.** Stage M ships `:legal-hold/*` as a kernel entity that the
+`kontor.sealing` middleware consults at write-time. Any `:db/purge`
+against an entity in an open hold's scope is refused with a structured
+ex-info; the purge cannot succeed even by mistake. This makes "no
+purge while held" a **structural invariant**, not a policy enforced
+by a separate background job.
+
+A legal hold has two scope shapes that combine:
+- `:legal-hold/scope-eids` — explicit `:db.cardinality/many` ref set.
+  Fast path: O(1) check at the middleware. Best for narrow holds
+  (e.g. "preserve invoices #42, #51, #67 for Acme v. Doe").
+- `:legal-hold/scope-query` — EDN-encoded datalog expression
+  evaluated against the speculative `txdb` at purge time.
+  Expressive path: catches new entities that match a matter (e.g.
+  "all transactions with `:partner` = Doe between 2024-Q1 and
+  2025-Q2"). Optional `:legal-hold/scope-query-as-of` pins the
+  query's valid-time anchor; defaults to now.
+
+Both checks run; either firing blocks the purge. A sweeper
+periodically refreshes `:scope-eids` with the query's current
+result-set so the hot path is purely eid-membership in the common
+case; the query branch only fires for sweep-lag corrections.
+
+**State machine** (ADR-034 facet `:legal-hold/state`):
+
+```
+nil               → :placed
+:placed           → :pending-review     ; "do we still need this?"
+:pending-review   → :placed             ; reaffirmed
+:pending-review   → :released
+:placed           → :released
+:placed           → :expired            ; auto-fired by sweep-time-based!
+:expired          → :released           ; admin reaffirms the auto-expiry
+:released         → (terminal)
+```
+
+**Approval policies** (ADR-038): both placement and release require a
+`:supporting-doc` (the preservation order PDF, the release order) and
+a non-empty `:reason-note`. Release additionally requires `:no-self-
+approval` (the person placing the hold cannot release it alone).
+
+**Why.** Research note 23 (market-pain) catalogues 11 documented
+spoliation-sanction cases with multi-million-dollar consequences;
+5 of 11 are structurally preventable by a write-time hold-blocks-
+purge invariant. The remaining 6 are out of scope (chat / ephemeral
+data not in the accounting kernel). The most-quoted post-mortem
+finding across these cases is "the cron beat the hold" — a backup
+or sweep job ran during the gap between the hold being declared and
+being recorded in the system. A write-time middleware closes that
+gap by construction; no time window exists in which a purge can fire
+without first consulting the hold table.
+
+Research note 22 (reference study) confirmed that NO major open-
+source ERP (Apache OFBiz, ERPNext, KillBill, Compiere/iDempiere,
+Tryton) ships a legal-hold primitive. The closest references are
+JCR 2.0's `RetentionManager` (JSR-283 §20; verbs-standard, data-
+application-defined — kontor's hybrid scope is a strict superset)
+and Datomic's `:db.excise/*` vocabulary. We adopt the JCR verb
+shape and the Datomic vocabulary.
+
+**Shape after.**
+
+- New schema (one ~13-attr entity in `src/kontor/schema.clj` near
+  the existing `:partner-merge` slot).
+- New namespace `src/kontor/legal_hold.clj` (~150 LOC of helpers:
+  `place!`, `release!`, `find-hold-violating-purges`,
+  `assert-no-hold-violating-purges!`, `entity-held?`,
+  `expand-scope-query`).
+- New status-transition seeds + approval-policy seeds, installed
+  via `kontor.schema/install!`.
+- Single-line addition to `src/kontor/validation.clj:177-183`
+  (`validate-and-apply`) calling
+  `legal-hold/assert-no-hold-violating-purges!` BEFORE
+  `sealing/assert-no-silent-retracts!` so the more-specific error
+  wins on a purge-of-held-posted-entity.
+- `test/kontor/legal_hold_test.clj` (~250 LOC: eid-set hold, scope-
+  query hold, release-then-purge, expiry auto-release, bitemporal-
+  preview of the scope-query).
+
+**Tradeoffs.**
+
+- *Gained*: a write-time invariant the auditor sees in the chain.
+  An eDiscovery-defensibility claim ("no data was destroyed under
+  hold") that's mechanically true. Bitemporal "as of the subpoena
+  date" hold-scope queries via `kbt/value-at` on
+  `:legal-hold/scope-query`.
+
+- *Lost*: nothing structural. The implementation cost is one
+  middleware extension + one namespace; no other ADR retreats.
+
+- *Performance*: write-time evaluation of `:scope-query` adds one
+  datalog query per active hold per `:db/purge`. In practice purges
+  are rare (annual GDPR-erasure cycles, not hot path), so the cost
+  is negligible. The hot path (writes against held entities that
+  aren't purges) is unchanged — only `:db/purge` triggers the
+  check.
+
+**Naming.** "Legal hold" is the industry term (Sedona Conference,
+FRCP 37(e)). We use it unchanged. `:legal-hold/code` is a string
+unique-identity following the existing pattern (`:audit-doc/code`,
+`:journal/code`).
+
+Date: 2026-05-13.
