@@ -7321,6 +7321,18 @@ the builder's output and apply one outer `with-vt` per process).
 This is the same rule ADR-067 set for the orchestrators; ADR-068
 makes it universal.
 
+**Documented exception — `kontor.posting/build-transaction`** embeds
+its own `kbt/with-vt` mapping `:transaction/effective-date →
+:tx/valid-from` (since the kernel's per-transaction valid-time is
+always the effective-date when nothing else is specified). Builders
+that consume `build-transaction` (most posting orchestrators and the
+GL bridges) therefore emit fragments that already carry tx-meta;
+`kontor.process/run-steps` strips those via `strip-tx-meta`, and the
+process's outer `with-vt` wins, so composition works correctly. The
+exception is local to `build-transaction` and does not invalidate
+the universal rule for every other builder. (Originally surfaced as
+note 48 P1-5.)
+
 **Scope of "business write."** This ADR governs:
 
   - Every `defn` ending in `!` that does `d/transact` in `src/` or

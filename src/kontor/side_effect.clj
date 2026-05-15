@@ -11,7 +11,8 @@
    This namespace ships the intent state machine + dispatcher queries.
    Side-effect EXECUTORS (email senders, EDI clients, etc.) are
    consumer-side."
-  (:require [datahike.api :as d]))
+  (:require [datahike.api :as d]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Resolution
@@ -72,17 +73,19 @@
   "Atomic claim: transition :pending → :processing. Returns the
    tx-report. Worker calls this before doing the actual work."
   [conn intent-eid]
-  (d/transact conn [{:db/id intent-eid
-                     :side-effect-intent/status :processing
-                     :side-effect-intent/processing-at (java.util.Date.)}]))
+  (validation/transact-with-validation
+   conn [{:db/id intent-eid
+          :side-effect-intent/status :processing
+          :side-effect-intent/processing-at (java.util.Date.)}]))
 
 (defn mark-done!
   "Transition :processing → :done. Worker calls this after the side
    effect succeeded."
   [conn intent-eid]
-  (d/transact conn [{:db/id intent-eid
-                     :side-effect-intent/status :done
-                     :side-effect-intent/processed-at (java.util.Date.)}]))
+  (validation/transact-with-validation
+   conn [{:db/id intent-eid
+          :side-effect-intent/status :done
+          :side-effect-intent/processed-at (java.util.Date.)}]))
 
 (defn mark-failed!
   "Transition :processing → :failed with error message + retry-count
@@ -96,18 +99,19 @@
         retry (inc (or (:side-effect-intent/retry-count intent) 0))
         max-r (or (:side-effect-intent/max-retries intent) 5)
         terminal? (>= retry max-r)]
-    (d/transact conn
-                [{:db/id intent-eid
-                  :side-effect-intent/status (if terminal? :abandoned :failed)
-                  :side-effect-intent/retry-count retry
-                  :side-effect-intent/last-error (or error-message "(no message)")
-                  :side-effect-intent/processed-at (java.util.Date.)}])))
+    (validation/transact-with-validation
+     conn [{:db/id intent-eid
+            :side-effect-intent/status (if terminal? :abandoned :failed)
+            :side-effect-intent/retry-count retry
+            :side-effect-intent/last-error (or error-message "(no message)")
+            :side-effect-intent/processed-at (java.util.Date.)}])))
 
 (defn mark-abandoned!
   "Force-abandon an intent (no more retries). Use when an error is
    permanent (e.g. invalid recipient, customer deleted)."
   [conn intent-eid reason-string]
-  (d/transact conn [{:db/id intent-eid
-                     :side-effect-intent/status :abandoned
-                     :side-effect-intent/last-error reason-string
-                     :side-effect-intent/processed-at (java.util.Date.)}]))
+  (validation/transact-with-validation
+   conn [{:db/id intent-eid
+          :side-effect-intent/status :abandoned
+          :side-effect-intent/last-error reason-string
+          :side-effect-intent/processed-at (java.util.Date.)}]))

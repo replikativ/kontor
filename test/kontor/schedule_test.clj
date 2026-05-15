@@ -145,19 +145,25 @@
     :transaction/journal journal
     :transaction/effective-date date
     :transaction/narration (str "Depreciation " (.toString ^java.util.Date date))
-    :transaction/state :posted}
+    :transaction/state :posted
+    ;; :transaction/posted-at is required by the state-machine gate
+    ;; alongside :state :posted (matches the production builders'
+    ;; convention; was missing in this fixture pre-Stage-P).
+    :transaction/posted-at date}
    {:db/id -10
     :posting/account dep-expense
     :posting/amount amount
     :posting/commodity commodity
     :posting/transaction -1
-    :posting/display-type :product}
+    :posting/display-type :product
+    :posting/posted-at date}
    {:db/id -11
     :posting/account accum-dep
     :posting/amount (.negate ^java.math.BigDecimal amount)
     :posting/commodity commodity
     :posting/transaction -1
-    :posting/display-type :product}])
+    :posting/display-type :product
+    :posting/posted-at date}])
 
 (deftest record-occurrence-creates-occurrence-and-transaction
   (let [conn (core/create-test-db)

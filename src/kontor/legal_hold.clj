@@ -588,9 +588,9 @@
                                     hold-eid))))
         to-add (vec (clojure.set/difference new-eids existing))]
     (when (seq to-add)
-      (d/transact conn
-                  [{:db/id hold-eid
-                    :legal-hold/scope-eids to-add}]))
+      (transact-with-validation
+       conn [{:db/id hold-eid
+              :legal-hold/scope-eids to-add}]))
     {:hold-eid hold-eid
      :added-eids to-add
      :added-count (count to-add)}))

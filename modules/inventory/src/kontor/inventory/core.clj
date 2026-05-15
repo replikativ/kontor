@@ -284,7 +284,7 @@
                  description (assoc :inventory-detail/description description)
                  source      (assoc :inventory-detail/source source)
                  source-kind (assoc :inventory-detail/source-kind source-kind))]
-    (d/transact conn [detail])))
+    (validation/transact-with-validation conn [detail])))
 
 (defn place-opening-stock!
   "Initial-load / migration convenience: ensure the (product,

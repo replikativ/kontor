@@ -171,6 +171,40 @@
     (is (nil? (p/run-process conn {:steps [(fn [_ _] nil)]}))
         "a process of pure no-op steps commits nothing")))
 
+(deftest speculative-db-eid-round-trips-to-final-commit
+  ;; Regression guard for note 47 §"Composition" / note 48 P1-1:
+  ;; the inventory issue! merger relies on datahike's tempid resolver
+  ;; assigning the SAME numeric eid to a string tempid in BOTH the
+  ;; speculative `d/db-with db0 frag1` and the final
+  ;; `d/transact conn (frag1++frag2)`. If a future datahike upgrade
+  ;; changed the allocator (e.g. parallel db-with, reservation-pool
+  ;; reordering, randomized eids), the inventory subsystem would
+  ;; silently mis-link `:layer-consumption/layer` against a stale
+  ;; speculative eid. This test fails loudly if that invariant breaks.
+  (let [conn (core/create-test-db)
+        db0 (d/db conn)
+        frag1 [{:db/id "round-trip-x" :account/path "RT-X" :account/name "RT"
+                :account/type :asset}]
+        spec-db (d/db-with db0 frag1)
+        spec-eid (d/q '[:find ?e . :where [?e :account/path "RT-X"]] spec-db)
+        ;; Append a second fragment that references the speculative eid
+        ;; as a literal long — the inventory pattern. If the round-trip
+        ;; holds, the final commit's tempid "round-trip-x" resolves to
+        ;; the SAME spec-eid and the cross-fragment ref is consistent.
+        frag2 [{:db/id "round-trip-y" :account/path "RT-Y" :account/name "RT"
+                :account/type :asset :account/parent spec-eid}]
+        report (d/transact conn (into (vec frag1) frag2))
+        final-eid (get (:tempids report) "round-trip-x")
+        parent-of-y (d/q '[:find ?p . :where
+                           [?y :account/path "RT-Y"] [?y :account/parent ?p]]
+                         (:db-after report))]
+    (is (= spec-eid final-eid)
+        "string tempid in frag1 must round-trip to the SAME numeric eid
+         from `d/db-with` to `d/transact` of (frag1 ++ frag2) — note 47.")
+    (is (= spec-eid parent-of-y)
+        "the cross-fragment reference (frag2 → frag1 by literal eid)
+         resolves to the same entity the tempid commits as.")))
+
 (deftest commit-fn-is-overridable
   (testing ":commit lets a caller bypass the gate (e.g. for tests)"
     (let [conn (core/create-test-db)

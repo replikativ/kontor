@@ -26,7 +26,8 @@
            to log the occurrence with a back-ref to the transaction.
      3. The composite identity `[schedule, sequence]` makes
         re-firing idempotent."
-  (:require [datahike.api :as d])
+  (:require [datahike.api :as d]
+            [kontor.validation :as validation])
   (:import [java.time LocalDate ZoneOffset]
            [java.time.temporal ChronoUnit]))
 
@@ -204,9 +205,10 @@
    (record-occurrence! conn schedule sequence scheduled-date amount
                        commodity tx-data (java.util.Date.)))
   ([conn schedule sequence scheduled-date amount commodity tx-data fired-at]
-   (d/transact conn (record-occurrence-tx-data
-                     (d/db conn) schedule sequence scheduled-date amount
-                     commodity tx-data fired-at))))
+   (validation/transact-with-validation
+    conn (record-occurrence-tx-data
+          (d/db conn) schedule sequence scheduled-date amount
+          commodity tx-data fired-at))))
 
 ;; ============================================================================
 ;; Lifecycle
@@ -225,15 +227,18 @@
    Typical use: when `last-fired-sequence` reaches the planned total
    count for a finite schedule."
   [conn schedule]
-  (d/transact conn (set-state-tx-data (d/db conn) schedule :completed)))
+  (validation/transact-with-validation
+   conn (set-state-tx-data (d/db conn) schedule :completed)))
 
 (defn mark-paused!
   "Pause a schedule. `pending-occurrences` returns empty while paused."
   [conn schedule]
-  (d/transact conn (set-state-tx-data (d/db conn) schedule :paused)))
+  (validation/transact-with-validation
+   conn (set-state-tx-data (d/db conn) schedule :paused)))
 
 (defn mark-cancelled!
   "Cancel a schedule. Irreversible by convention; existing
    occurrences remain in the log for audit."
   [conn schedule]
-  (d/transact conn (set-state-tx-data (d/db conn) schedule :cancelled)))
+  (validation/transact-with-validation
+   conn (set-state-tx-data (d/db conn) schedule :cancelled)))
