@@ -226,7 +226,7 @@
                    effective-vt-from
                    (kbt/with-vt tx-data effective-vt-from)
                    :else tx-data)]
-    (d/transact conn final-tx)))
+    (validation/transact-with-validation conn final-tx)))
 
 (defn apply-payment-tx-data
   "Pure tx-data builder for `apply-payment!` — the

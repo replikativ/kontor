@@ -154,6 +154,13 @@
 
 (defn- do-write-relationships!
   [conn opts updates]
+  ;; Authz can run on its own minimal datahike db (without the
+  ;; kernel schema) — composing through `transact-with-validation`
+  ;; here would trip on missing kernel attrs in the standalone case.
+  ;; To compose authz writes with kernel writes atomically, callers
+  ;; use `write-relationships-tx-data` (above) inside a kontor.process
+  ;; step on a conn that has BOTH schemas installed; the consumer's
+  ;; process routes the combined tx-data through the gate.
   (let [report (d/transact conn (write-relationships-tx-data (d/db conn) opts updates))]
     {:tx-report   report
      :authz/token (str (:max-tx (:db-after report)))}))

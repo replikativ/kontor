@@ -37,6 +37,14 @@
    - `current-status` — read the current facet value."
   (:require [datahike.api :as d]))
 
+;; status-machine is used by kontor.legal-hold (which kontor.validation
+;; requires as a validator), so a static require of kontor.validation
+;; here would cycle. Resolve the gate lazily.
+(defn- transact-with-validation
+  [conn tx-data]
+  ((requiring-resolve 'kontor.validation/transact-with-validation)
+   conn tx-data))
+
 ;; ============================================================================
 ;; Predicate
 ;; ============================================================================
@@ -332,7 +340,8 @@
    Returns the tx-report. For atomic composition with other tx-data,
    use `record-status-change-tx-data` directly."
   [conn opts]
-  (d/transact conn (record-status-change-tx-data (d/db conn) opts)))
+  (transact-with-validation
+   conn (record-status-change-tx-data (d/db conn) opts)))
 
 ;; ============================================================================
 ;; ADR-041 — Bulk transitions
@@ -352,7 +361,8 @@
   "Thin wrapper that transacts what `bulk-record-status-change-tx-data`
    returns."
   [conn change-specs]
-  (d/transact conn (bulk-record-status-change-tx-data (d/db conn) change-specs)))
+  (transact-with-validation
+   conn (bulk-record-status-change-tx-data (d/db conn) change-specs)))
 
 ;; ============================================================================
 ;; ADR-041 — Time-based transition sweeper

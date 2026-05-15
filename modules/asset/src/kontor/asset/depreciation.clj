@@ -25,7 +25,8 @@
    ledger-aware by construction — each book owns its own schedule."
   (:require [datahike.api :as d]
             [kontor.asset.asset :as asset]
-            [kontor.schedule :as schedule]))
+            [kontor.schedule :as schedule]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Resolution
@@ -329,7 +330,8 @@
 
    The pure tx-data builder is `open-book-tx-data` (ADR-067)."
   [conn opts]
-  (d/transact conn (open-book-tx-data (d/db conn) opts)))
+  (validation/transact-with-validation
+   conn (open-book-tx-data (d/db conn) opts)))
 
 ;; ============================================================================
 ;; revise-book! — the explicit "supersede the pending tail" operation (ADR-055)
@@ -400,4 +402,5 @@
 
    The pure tx-data builder is `revise-book-tx-data` (ADR-067)."
   [conn opts]
-  (d/transact conn (revise-book-tx-data (d/db conn) opts)))
+  (validation/transact-with-validation
+   conn (revise-book-tx-data (d/db conn) opts)))

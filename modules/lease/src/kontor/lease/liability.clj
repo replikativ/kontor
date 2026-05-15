@@ -16,7 +16,8 @@
    `kontor.asset.depreciation-provider`)."
   (:require [datahike.api :as d]
             [kontor.lease.core :as lease]
-            [kontor.schedule :as schedule]))
+            [kontor.schedule :as schedule]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Resolution
@@ -255,7 +256,8 @@
 
    The pure tx-data builder is `open-liability-book-tx-data` (ADR-067)."
   [conn opts]
-  (d/transact conn (open-liability-book-tx-data (d/db conn) opts)))
+  (validation/transact-with-validation
+   conn (open-liability-book-tx-data (d/db conn) opts)))
 
 ;; ============================================================================
 ;; revise-liability-book! — re-anchor after a modification (ADR-064)
@@ -316,4 +318,5 @@
 
    The pure tx-data builder is `revise-liability-book-tx-data` (ADR-067)."
   [conn opts]
-  (d/transact conn (revise-liability-book-tx-data (d/db conn) opts)))
+  (validation/transact-with-validation
+   conn (revise-liability-book-tx-data (d/db conn) opts)))
