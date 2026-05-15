@@ -36,7 +36,8 @@
   (:require [datahike.api :as d]
             [kontor.balance :as balance]
             [kontor.period :as period]
-            [kontor.posting :as posting])
+            [kontor.posting :as posting]
+            [kontor.validation :as validation])
   (:import [java.util Date]))
 
 ;; ============================================================================
@@ -187,7 +188,13 @@
                 :transaction/closes-period period-eid}
                :postings postings}
               tx-data (posting/build-transaction tx-input)
-              {:keys [tempids]} (d/transact conn tx-data)
+              ;; Route through transact-with-validation so the closing
+              ;; entry picks up sealing / period / sum-to-zero /
+              ;; invariant checks (ADR-067 — the gate). Single transact,
+              ;; single business event, single :tx/valid-from already
+              ;; embedded by build-transaction.
+              {:keys [tempids]} (validation/transact-with-validation
+                                 conn tx-data)
               tx-eid (or (some (fn [[k v]]
                                  (when (and (string? k)
                                             (.startsWith ^String k ext))

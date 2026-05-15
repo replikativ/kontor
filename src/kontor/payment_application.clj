@@ -40,6 +40,7 @@
    existing callers keep their semantics."
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
+            [kontor.process :as process]
             [kontor.status-machine :as sm]))
 
 ;; ============================================================================
@@ -182,6 +183,8 @@
     ;; (caller should set this explicitly via reverse-application!).
     :else nil))
 
+(declare apply-payment-tx-data)
+
 (defn apply-payment!
   "Record a `:payment-application` row + drive the invoice's
    `:invoice/status` facet accordingly.
@@ -210,23 +213,47 @@
                         valid-time interval. Default: open-ended.
 
    Returns the tx-report."
-  [conn {:keys [payment invoice amount commodity applied-by-uid
-                applied-at strategy reason reason-note supporting-doc
-                vt-from vt-to]
-         :or {strategy :cherry-pick}}]
+  [conn opts]
+  (let [{:keys [vt-from vt-to applied-at]} opts
+        applied-at (or applied-at (java.util.Date.))
+        tx-data (apply-payment-tx-data
+                 (d/db conn) (assoc opts :applied-at applied-at))
+        effective-vt-from (or vt-from applied-at)
+        final-tx (cond
+                   (and effective-vt-from vt-to)
+                   (kbt/with-vt tx-data effective-vt-from vt-to)
+                   effective-vt-from
+                   (kbt/with-vt tx-data effective-vt-from)
+                   :else tx-data)]
+    (d/transact conn final-tx)))
+
+(defn apply-payment-tx-data
+  "Pure tx-data builder for `apply-payment!` — the
+   `:payment-application` row + the optional invoice-status change,
+   without the `with-vt` wrap (ADR-067). Use as a `kontor.process`
+   step (e.g. for `allocate-fifo!`); `apply-payment!` is the
+   standalone wrapper.
+
+   Optional `:tempid-suffix` — appended to the
+   `:payment-application` tempid (default `\"\"`); pass a distinct
+   suffix per application when several outputs compose into one
+   process tx-data."
+  [db {:keys [payment invoice amount commodity applied-by-uid
+              applied-at strategy reason reason-note supporting-doc
+              tempid-suffix]
+       :or {strategy :cherry-pick tempid-suffix ""}}]
   (when-not payment        (throw (ex-info ":payment required" {})))
   (when-not invoice        (throw (ex-info ":invoice required" {})))
   (when-not amount         (throw (ex-info ":amount required" {})))
   (when-not commodity      (throw (ex-info ":commodity required" {})))
   (when-not applied-by-uid (throw (ex-info ":applied-by-uid required" {})))
-  (let [db (d/db conn)
-        invoice-eid (resolve-invoice db invoice)
+  (let [invoice-eid (resolve-invoice db invoice)
         _ (when-not invoice-eid
             (throw (ex-info "Invoice not found" {:spec invoice})))
         inv (pull-invoice-min db invoice-eid)
         current-status (:invoice/status inv)
         applied-at (or applied-at (java.util.Date.))
-        app-tempid "pay-app-1"
+        app-tempid (str "pay-app" tempid-suffix)
         app-row (cond-> {:db/id app-tempid
                          :payment-application/payment payment
                          :payment-application/invoice invoice-eid
@@ -238,8 +265,6 @@
                   reason         (assoc :payment-application/reason reason)
                   reason-note    (assoc :payment-application/reason-note reason-note)
                   supporting-doc (assoc :payment-application/supporting-doc supporting-doc))
-        ;; Compute open-after by simulating: pre-existing applied +
-        ;; this amount; pull gross from invoice (or sum of lines).
         already-applied (applied-amount-of-invoice db invoice-eid nil)
         gross (or (:invoice/total-gross
                    (d/pull db [:invoice/total-gross] invoice-eid))
@@ -256,8 +281,6 @@
                               (.add ^java.math.BigDecimal already-applied
                                     ^java.math.BigDecimal amount))
         next-status (next-status-for-application current-status open-after)
-        ;; Status change is optional — only fire when next-status differs
-        ;; from current AND a legal transition exists.
         status-tx (when (and next-status
                              (not= next-status current-status)
                              (sm/legal-transition? db :invoice
@@ -273,24 +296,9 @@
                               :changed-at applied-at
                               :changed-by-uid applied-by-uid}
                        reason      (assoc :reason reason)
-                       reason-note (assoc :reason-note reason-note))))
-        ;; Self-loop on :partially-paid is legal but not interesting to
-        ;; write a status-history row for; the application row itself
-        ;; carries the audit info. So even if next-status = :partially-
-        ;; paid = current-status, we DON'T write a history row.
-        all-tx (cond-> [app-row]
-                 status-tx (into status-tx))
-        ;; Bitemporal stamp on the tx: vt-from defaults to applied-at
-        ;; so the application's tx is consistent with the world-time
-        ;; of the cash receipt.
-        effective-vt-from (or vt-from applied-at)
-        final-tx (cond
-                   (and effective-vt-from vt-to)
-                   (kbt/with-vt all-tx effective-vt-from vt-to)
-                   effective-vt-from
-                   (kbt/with-vt all-tx effective-vt-from)
-                   :else all-tx)]
-    (d/transact conn final-tx)))
+                       reason-note (assoc :reason-note reason-note))))]
+    (cond-> [app-row]
+      status-tx (into status-tx))))
 
 (defn reverse-application!
   "Replayable reversal of a prior `:payment-application`. Writes a
@@ -499,15 +507,29 @@
                                             ^java.math.BigDecimal alloc)
                                  (rest candidates)
                                  (conj out {:invoice-eid invoice-eid
-                                            :allocated alloc})))))]
-    (doseq [{:keys [invoice-eid allocated]} allocations]
-      (apply-payment! conn
-                      {:payment payment
-                       :invoice invoice-eid
-                       :amount allocated
-                       :commodity commodity
-                       :applied-by-uid applied-by-uid
-                       :applied-at applied-at
-                       :strategy :fifo
-                       :reason (or reason :fifo-allocation)}))
+                                            :allocated alloc})))))
+        ;; One atomic, gated process across all N applications (ADR-067).
+        ;; Each step calls apply-payment-tx-data with a distinct
+        ;; :tempid-suffix so the N :payment-application rows compose
+        ;; without collision. The speculative db threads each prior
+        ;; application's status change, so a multi-app-same-invoice run
+        ;; sees the latest open-amount + status from prior steps.
+        steps (when (seq allocations)
+                (vec
+                 (map-indexed
+                  (fn [i {:keys [invoice-eid allocated]}]
+                    (fn [sdb _ctx]
+                      (apply-payment-tx-data
+                       sdb {:payment payment
+                            :invoice invoice-eid
+                            :amount allocated
+                            :commodity commodity
+                            :applied-by-uid applied-by-uid
+                            :applied-at applied-at
+                            :strategy :fifo
+                            :reason (or reason :fifo-allocation)
+                            :tempid-suffix (str "-" i)})))
+                  allocations)))]
+    (when (seq steps)
+      (process/run-process conn {:steps steps :vt-from applied-at}))
     allocations))
