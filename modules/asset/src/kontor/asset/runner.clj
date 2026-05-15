@@ -25,7 +25,7 @@
             [kontor.asset.depreciation-provider :as dp]
             [kontor.asset.posting :as ap]
             [kontor.bitemporal :as kbt]
-            [kontor.period :as period]
+            [kontor.process :as process]
             [kontor.schedule :as schedule]
             [kontor.status-machine :as sm])
   (:import [java.math BigDecimal RoundingMode]
@@ -129,47 +129,61 @@
                    removal-date
                    (filterv (fn [{:keys [^Date date]}]
                               (neg? (.compareTo date ^Date removal-date)))))
-         fired (reduce
-                (fn [acc {:keys [sequence date]}]
-                  (let [amount
-                        (if requires-units?
-                          (let [u (units-for units sequence)]
-                            (when-not u
-                              (throw (ex-info "units-of-production book: no :units supplied for a pending occurrence"
-                                              {:book book-eid :sequence sequence})))
-                            (.setScale (.multiply ^BigDecimal rate-per-unit
-                                                  ^BigDecimal u)
-                                       2 RoundingMode/HALF_EVEN))
-                          (seq->amount sequence))]
-                    (when-not amount
-                      (throw (ex-info "runner: no planned amount for a pending occurrence"
-                                      {:book book-eid :sequence sequence})))
-                    (let [tx-data (ap/plan-depreciation-charge
-                                   db (cond-> {:book book-eid
-                                               :amount amount
-                                               :journal journal
-                                               :date date
-                                               :narration (str "Depreciation "
-                                                               sequence)}
-                                        posted? (assoc :posted-at date)))]
-                      ;; Refuse to post into a soft-closed / sealed
-                      ;; period — surface the typed violation, with
-                      ;; the partial progress, to the caller.
-                      (try
-                        (period/assert-not-in-locked-period! db tx-data)
-                        (catch clojure.lang.ExceptionInfo e
-                          (throw (ex-info (.getMessage e)
-                                          (assoc (ex-data e)
-                                                 :book book-eid
-                                                 :sequence sequence
-                                                 :fired-before-violation
-                                                 (mapv :sequence acc))
-                                          e))))
-                      (schedule/record-occurrence! conn schedule-eid sequence
-                                                   date amount commodity tx-data)
-                      (conj acc {:sequence sequence :date date :amount amount}))))
-                []
-                pending)
+         fired
+         (reduce
+          (fn [acc {:keys [sequence date]}]
+            (let [amount
+                  (if requires-units?
+                    (let [u (units-for units sequence)]
+                      (when-not u
+                        (throw (ex-info "units-of-production book: no :units supplied for a pending occurrence"
+                                        {:book book-eid :sequence sequence})))
+                      (.setScale (.multiply ^BigDecimal rate-per-unit
+                                            ^BigDecimal u)
+                                 2 RoundingMode/HALF_EVEN))
+                    (seq->amount sequence))]
+              (when-not amount
+                (throw (ex-info "runner: no planned amount for a pending occurrence"
+                                {:book book-eid :sequence sequence})))
+              ;; ONE atomic, gated process per period — each its own
+              ;; datahike-tx with its own :tx/valid-from = the period's
+              ;; effective-date (preserves per-period bitemporal
+              ;; valid-time for restated-history queries; ADR-067
+              ;; addendum). The hand-call to assert-not-in-locked-period!
+              ;; is gone — period (+ sealing + sum-to-zero + invariants)
+              ;; check runs in the gate.
+              (let [period-step
+                    (fn [sdb _ctx]
+                      (let [charge
+                            (ap/plan-depreciation-charge
+                             sdb (cond-> {:book book-eid
+                                          :amount amount
+                                          :journal journal
+                                          :date date
+                                          :narration (str "Depreciation " sequence)}
+                                   posted? (assoc :posted-at date)))]
+                        (schedule/record-occurrence-tx-data
+                         sdb schedule-eid sequence date amount commodity
+                         charge (Date.))))]
+                (try
+                  (process/run-process
+                   conn {:steps [period-step]
+                         :vt-from date
+                         :vt-to kbt/forever})
+                  (catch clojure.lang.ExceptionInfo e
+                    (let [data (ex-data e)]
+                      (if (= :period/locked-period-violation (:type data))
+                        (throw (ex-info (.getMessage e)
+                                        (assoc data
+                                               :book book-eid
+                                               :sequence sequence
+                                               :fired-before-violation
+                                               (mapv :sequence acc))
+                                        e))
+                        (throw e))))))
+              (conj acc {:sequence sequence :date date :amount amount})))
+          []
+          pending)
          total (reduce (fn [^BigDecimal a {:keys [amount]}] (.add a amount))
                        0M fired)
          db' (d/db conn)
@@ -180,17 +194,21 @@
              status (:asset/status (d/pull db' [:asset/status] asset-eid))]
          (when (= :in-service status)
            (let [last-date (:date (last fired))
-                 status-tx (sm/record-status-change-tx-data
-                            db'
-                            (cond-> {:entity asset-eid
-                                     :entity-type :asset
-                                     :facet :asset/status
-                                     :from :in-service
-                                     :to :fully-depreciated
-                                     :changed-at last-date
-                                     :reason :asset-fully-depreciated}
-                              changed-by-uid (assoc :changed-by-uid changed-by-uid)))]
-             (d/transact conn (kbt/with-vt status-tx last-date kbt/forever))))))
+                 status-step
+                 (fn [sdb _ctx]
+                   (sm/record-status-change-tx-data
+                    sdb (cond-> {:entity asset-eid
+                                 :entity-type :asset
+                                 :facet :asset/status
+                                 :from :in-service
+                                 :to :fully-depreciated
+                                 :changed-at last-date
+                                 :reason :asset-fully-depreciated}
+                          changed-by-uid (assoc :changed-by-uid changed-by-uid))))]
+             (process/run-process
+              conn {:steps [status-step]
+                    :vt-from last-date
+                    :vt-to kbt/forever})))))
      (cond-> {:book book-eid
               :fired (mapv :sequence fired)
               :count (count fired)

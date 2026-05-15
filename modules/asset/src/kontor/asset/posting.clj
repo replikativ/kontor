@@ -93,8 +93,12 @@
    `:transaction/state :posted` + `:transaction/posted-at`, and every
    posting is stamped `:posting/posted-at` (the propagation the
    `kontor.sealing` middleware enforces). Omit `:posted-at` for a
-   draft entry the caller seals later."
-  [{:keys [journal date narration external-id posted-at]} postings]
+   draft entry the caller seals later.
+
+   A header `:tx-tempid` (ADR-067) is threaded to
+   `kontor.posting/build-transaction` — pass a distinct string when
+   composing several entries into one `kontor.process` tx-data."
+  [{:keys [journal date narration external-id posted-at tx-tempid]} postings]
   (when-not journal (throw (ex-info ":journal required" {})))
   (when-not date    (throw (ex-info ":date required" {})))
   (let [nonzero (filterv (fn [p]
@@ -105,13 +109,14 @@
                   (mapv #(assoc % :posting/posted-at posted-at) nonzero)
                   nonzero)]
     (posting/build-transaction
-     {:transaction (cond-> {:transaction/journal journal
-                            :transaction/effective-date date}
-                     narration   (assoc :transaction/narration narration)
-                     external-id (assoc :transaction/external-id external-id)
-                     posted-at   (assoc :transaction/state :posted
-                                        :transaction/posted-at posted-at))
-      :postings nonzero})))
+     (cond-> {:transaction (cond-> {:transaction/journal journal
+                                    :transaction/effective-date date}
+                             narration   (assoc :transaction/narration narration)
+                             external-id (assoc :transaction/external-id external-id)
+                             posted-at   (assoc :transaction/state :posted
+                                                :transaction/posted-at posted-at))
+              :postings nonzero}
+       tx-tempid (assoc :tx-tempid tx-tempid)))))
 
 ;; ============================================================================
 ;; Capitalisation
@@ -157,7 +162,9 @@
 
    Required: :book (eid or [asset ledger]), :amount, :journal, :date
    Optional: :commodity (default = the book's :commodity),
-             :narration, :external-id, :posted-at (seal the entry)"
+             :narration, :external-id, :posted-at (seal the entry),
+             :tx-tempid (ADR-067 — distinct string per charge when
+             composing into one process tx-data)"
   [db {:keys [book amount commodity] :as spec}]
   (when-not amount (throw (ex-info ":amount required" {})))
   (let [{:keys [ledger expense-account accumulated-account] book-com :commodity}
