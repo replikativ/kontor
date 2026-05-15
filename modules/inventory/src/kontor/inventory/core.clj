@@ -14,7 +14,8 @@
    receive/issue/transfer operations + GL integration are ADR-059;
    cycle counts + reconciliation are ADR-060."
   (:require [datahike.api :as d]
-            [kontor.bitemporal :as kbt])
+            [kontor.bitemporal :as kbt]
+            [kontor.validation :as validation])
   (:import [java.util Date]))
 
 ;; ============================================================================
@@ -34,30 +35,37 @@
     (string? spec) (facility-by-code db spec)
     :else          spec))
 
+(defn define-facility-tx-data
+  "Pure tx-data builder for `define-facility!` (ADR-068)."
+  [db {:keys [code name type parent owner-entity default-days-to-ship
+              opened-at closed-at note]}]
+  (when-not code (throw (ex-info ":code required" {})))
+  (when-not name (throw (ex-info ":name required" {})))
+  (when-not type (throw (ex-info ":type required" {})))
+  [(cond-> {:facility/code code
+            :facility/name name
+            :facility/type type}
+     parent              (assoc :facility/parent (resolve-facility db parent))
+     owner-entity        (assoc :facility/owner-entity owner-entity)
+     default-days-to-ship (assoc :facility/default-days-to-ship
+                                 default-days-to-ship)
+     opened-at           (assoc :facility/opened-at opened-at)
+     closed-at           (assoc :facility/closed-at closed-at)
+     note                (assoc :facility/note note))])
+
 (defn define-facility!
-  "Create (or upsert by :code) a :facility. Returns the tx-report.
+  "Create (or upsert by :code) a :facility. Routes through the gate
+   (ADR-068). Returns the tx-report.
 
    Required: :code, :name, :type (#{:warehouse :store :plant :transit
              :virtual}).
    Optional: :parent (code or eid), :owner-entity, :default-days-to-ship,
-             :opened-at, :closed-at, :note."
-  [conn {:keys [code name type parent owner-entity default-days-to-ship
-                opened-at closed-at note]}]
-  (when-not code (throw (ex-info ":code required" {})))
-  (when-not name (throw (ex-info ":name required" {})))
-  (when-not type (throw (ex-info ":type required" {})))
-  (let [db (d/db conn)
-        row (cond-> {:facility/code code
-                     :facility/name name
-                     :facility/type type}
-              parent              (assoc :facility/parent (resolve-facility db parent))
-              owner-entity        (assoc :facility/owner-entity owner-entity)
-              default-days-to-ship (assoc :facility/default-days-to-ship
-                                          default-days-to-ship)
-              opened-at           (assoc :facility/opened-at opened-at)
-              closed-at           (assoc :facility/closed-at closed-at)
-              note                (assoc :facility/note note))]
-    (d/transact conn [row])))
+             :opened-at, :closed-at, :note.
+
+   The pure tx-data builder is `define-facility-tx-data`."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (define-facility-tx-data (d/db conn) opts)))
 
 (defn location-by
   "Resolve a :facility-location eid by (facility, seq-id)."
@@ -69,53 +77,66 @@
            [?e :facility-location/seq-id ?s]]
          db f seq-id)))
 
+(defn define-location-tx-data
+  "Pure tx-data builder for `define-location!` (ADR-068)."
+  [db {:keys [facility seq-id type area aisle bin note]}]
+  (when-not seq-id (throw (ex-info ":seq-id required" {})))
+  (when-not type   (throw (ex-info ":type required" {})))
+  (let [f (resolve-facility db facility)
+        _ (when-not f (throw (ex-info "Facility not found" {:spec facility})))]
+    [(cond-> {:facility-location/facility f
+              :facility-location/seq-id seq-id
+              :facility-location/type type}
+       area  (assoc :facility-location/area area)
+       aisle (assoc :facility-location/aisle aisle)
+       bin   (assoc :facility-location/bin bin)
+       note  (assoc :facility-location/note note))]))
+
 (defn define-location!
-  "Create a :facility-location (a bin) within a facility.
+  "Create a :facility-location (a bin) within a facility. Routes
+   through the gate (ADR-068).
 
    Required: :facility (code or eid), :seq-id, :type (#{:pickloc
              :bulk :staging}).
-   Optional: :area, :aisle, :bin, :note."
-  [conn {:keys [facility seq-id type area aisle bin note]}]
-  (when-not seq-id (throw (ex-info ":seq-id required" {})))
-  (when-not type   (throw (ex-info ":type required" {})))
-  (let [db (d/db conn)
-        f (resolve-facility db facility)
-        _ (when-not f (throw (ex-info "Facility not found" {:spec facility})))
-        row (cond-> {:facility-location/facility f
-                     :facility-location/seq-id seq-id
-                     :facility-location/type type}
-              area  (assoc :facility-location/area area)
-              aisle (assoc :facility-location/aisle aisle)
-              bin   (assoc :facility-location/bin bin)
-              note  (assoc :facility-location/note note))]
-    (d/transact conn [row])))
+   Optional: :area, :aisle, :bin, :note.
+
+   The pure tx-data builder is `define-location-tx-data`."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (define-location-tx-data (d/db conn) opts)))
+
+(defn define-facility-product-tx-data
+  "Pure tx-data builder for `define-facility-product!` (ADR-068)."
+  [db {:keys [facility product min-stock reorder-qty safety-stock
+              negative-allowed? days-to-ship replenish-method note]}]
+  (when-not product (throw (ex-info ":product required" {})))
+  (let [f (resolve-facility db facility)
+        _ (when-not f (throw (ex-info "Facility not found" {:spec facility})))]
+    [(cond-> {:facility-product/facility f
+              :facility-product/product product}
+       min-stock        (assoc :facility-product/min-stock min-stock)
+       reorder-qty      (assoc :facility-product/reorder-qty reorder-qty)
+       safety-stock     (assoc :facility-product/safety-stock safety-stock)
+       (some? negative-allowed?)
+       (assoc :facility-product/negative-allowed? negative-allowed?)
+       days-to-ship     (assoc :facility-product/days-to-ship days-to-ship)
+       replenish-method (assoc :facility-product/replenish-method
+                               replenish-method)
+       note             (assoc :facility-product/note note))]))
 
 (defn define-facility-product!
   "Create (or upsert by the (facility, product) identity tuple) a
-   :facility-product policy row.
+   :facility-product policy row. Routes through the gate (ADR-068).
 
    Required: :facility (code or eid), :product (eid).
    Optional: :min-stock, :reorder-qty, :safety-stock,
              :negative-allowed?, :days-to-ship, :replenish-method,
-             :note."
-  [conn {:keys [facility product min-stock reorder-qty safety-stock
-                negative-allowed? days-to-ship replenish-method note]}]
-  (when-not product (throw (ex-info ":product required" {})))
-  (let [db (d/db conn)
-        f (resolve-facility db facility)
-        _ (when-not f (throw (ex-info "Facility not found" {:spec facility})))
-        row (cond-> {:facility-product/facility f
-                     :facility-product/product product}
-              min-stock        (assoc :facility-product/min-stock min-stock)
-              reorder-qty      (assoc :facility-product/reorder-qty reorder-qty)
-              safety-stock     (assoc :facility-product/safety-stock safety-stock)
-              (some? negative-allowed?)
-              (assoc :facility-product/negative-allowed? negative-allowed?)
-              days-to-ship     (assoc :facility-product/days-to-ship days-to-ship)
-              replenish-method (assoc :facility-product/replenish-method
-                                      replenish-method)
-              note             (assoc :facility-product/note note))]
-    (d/transact conn [row])))
+             :note.
+
+   The pure tx-data builder is `define-facility-product-tx-data`."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (define-facility-product-tx-data (d/db conn) opts)))
 
 ;; ============================================================================
 ;; :inventory-item — bucket resolution

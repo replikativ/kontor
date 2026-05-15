@@ -26,11 +26,17 @@
    `:asset-event` only — they do NOT touch the per-(asset, ledger)
    depreciation books. To APPLY a revision to a book's schedule, call
    `kontor.asset.depreciation/revise-book!` per book (per-book because
-   an HGB life ≠ an AfA-Tabelle life)."
+   an HGB life ≠ an AfA-Tabelle life).
+
+   Every `!` business-write transactor in this file follows ADR-068:
+   a pure `xxx-tx-data [db opts]` builder returns the tx-data vector,
+   and the `xxx!` wrapper applies `kbt/with-vt` and routes through
+   `kontor.validation/transact-with-validation`."
   (:require [clojure.string]
             [datahike.api :as d]
             [kontor.bitemporal :as kbt]
-            [kontor.status-machine :as sm]))
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Resolution
@@ -71,12 +77,15 @@
    `:vt-to` (valid-time is owned by the caller / `run-process`),
    plus `:tempid` — the asset entity's tempid (default `\"asset-1\"`);
    pass a stable string when a later process step must reference the
-   asset (e.g. `commence!`'s ROU asset)."
+   asset (e.g. `commence!`'s ROU asset).
+
+   Optional `:changed-at` (default now) injects the timestamp so the
+   builder is deterministic from `(db, opts)`."
   [db {:keys [code name class acquisition-cost acquisition-commodity
               acquisition-date in-service? in-service-date salvage-value
               asset-account accumulated-account expense-account
               cost-center entity parent origin-transaction origin-document
-              serial-number location note changed-by-uid tempid]
+              serial-number location note changed-by-uid tempid changed-at]
        :or   {tempid "asset-1"}}]
   (when-not code                  (throw (ex-info ":code required" {})))
   (when-not name                  (throw (ex-info ":name required" {})))
@@ -118,7 +127,7 @@
                             :facet :asset/status
                             :from :nil
                             :to target-state
-                            :changed-at (java.util.Date.)
+                            :changed-at (or changed-at (java.util.Date.))
                             :reason :asset-acquired}
                      changed-by-uid (assoc :changed-by-uid changed-by-uid)
                      origin-document (assoc :supporting-doc origin-document)))]
@@ -155,11 +164,15 @@
      :vt-from / :vt-to      valid-time bounds (default :vt-from =
                             :acquisition-date)
 
-   The pure tx-data builder is `acquire-tx-data` (ADR-067)."
+   The pure tx-data builder is `acquire-tx-data` (ADR-067 / ADR-068)."
   [conn {:keys [acquisition-date vt-from vt-to] :as opts}]
-  (d/transact conn (kbt/with-vt (acquire-tx-data (d/db conn) opts)
-                     (or vt-from acquisition-date)
-                     (or vt-to kbt/forever))))
+  (let [now (java.util.Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (acquire-tx-data (d/db conn) (assoc opts :changed-at now))
+            (or vt-from acquisition-date)
+            (or vt-to kbt/forever)))))
+
+(declare place-in-service-tx-data)
 
 (defn place-in-service!
   "Transition a :planned asset to :in-service, stamping
@@ -168,15 +181,28 @@
 
    Required opts: :asset (code or eid), :in-service-date,
                   :changed-by-uid.
-   Optional: :reason-note, :supporting-doc, :vt-from, :vt-to."
-  [conn {:keys [asset in-service-date changed-by-uid reason-note
-                supporting-doc vt-from vt-to]}]
+   Optional: :reason-note, :supporting-doc, :vt-from, :vt-to.
+
+   The pure tx-data builder is `place-in-service-tx-data` (ADR-068)."
+  [conn {:keys [in-service-date vt-from vt-to] :as opts}]
+  (let [now (java.util.Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (place-in-service-tx-data (d/db conn)
+                                                 (assoc opts :changed-at now))
+            (or vt-from in-service-date)
+            (or vt-to kbt/forever)))))
+
+(defn place-in-service-tx-data
+  "Pure tx-data builder for `place-in-service!` (ADR-068). Returns the
+   tx-data vector (no `d/transact`, no `kbt/with-vt`). Use as a
+   `kontor.process` step. `:changed-at` (default now) feeds the
+   :status-history row."
+  [db {:keys [asset in-service-date changed-by-uid reason-note
+              supporting-doc changed-at]}]
   (when-not in-service-date (throw (ex-info ":in-service-date required" {})))
   (when-not changed-by-uid  (throw (ex-info ":changed-by-uid required" {})))
-  (let [db (d/db conn)
-        eid (resolve-asset db asset)
+  (let [eid (resolve-asset db asset)
         _ (when-not eid (throw (ex-info "Asset not found" {:spec asset})))
-        now (java.util.Date.)
         status-tx (sm/record-status-change-tx-data
                    db
                    (cond-> {:entity eid
@@ -184,37 +210,41 @@
                             :facet :asset/status
                             :from :planned
                             :to :in-service
-                            :changed-at now
+                            :changed-at (or changed-at (java.util.Date.))
                             :changed-by-uid changed-by-uid
                             :reason :asset-placed-in-service}
                      reason-note    (assoc :reason-note reason-note)
                      supporting-doc (assoc :supporting-doc supporting-doc)))]
-    (d/transact conn (kbt/with-vt (into [{:db/id eid
-                                          :asset/in-service-date in-service-date}]
-                                        status-tx)
-                       (or vt-from in-service-date)
-                       (or vt-to kbt/forever)))))
+    (into [{:db/id eid
+            :asset/in-service-date in-service-date}]
+          status-tx)))
 
 ;; ============================================================================
 ;; Lifecycle-changing events — dispose / transfer (drive :asset/status)
 ;; ============================================================================
 
-(defn- record-event-tx
-  "Build the :asset-event entity map (a tempid the caller can ignore —
-   the event is identified by its eid)."
-  [asset-eid {:keys [kind date amount commodity new-useful-life-months
-                     transaction justification note]}]
-  (cond-> {:db/id "asset-event-1"
-           :asset-event/asset asset-eid
-           :asset-event/kind kind
-           :asset-event/date date}
-    amount                 (assoc :asset-event/amount amount)
-    commodity              (assoc :asset-event/commodity commodity)
-    new-useful-life-months (assoc :asset-event/new-useful-life-months
-                                  new-useful-life-months)
-    transaction            (assoc :asset-event/transaction transaction)
-    justification          (assoc :asset-event/justification justification)
-    note                   (assoc :asset-event/note note)))
+(defn- record-event-tx-data
+  "Pure tx-data builder for a single :asset-event entity map (ADR-068).
+   Returns a one-element vector with the entity-map ready for transact.
+   No `d/transact`, no `kbt/with-vt`. Optional `:tempid` (default
+   `\"asset-event-1\"`) so callers can compose multiple event builders
+   without tempid collisions."
+  [_db asset-eid {:keys [kind date amount commodity new-useful-life-months
+                         transaction justification note tempid]
+                  :or   {tempid "asset-event-1"}}]
+  [(cond-> {:db/id tempid
+            :asset-event/asset asset-eid
+            :asset-event/kind kind
+            :asset-event/date date}
+     amount                 (assoc :asset-event/amount amount)
+     commodity              (assoc :asset-event/commodity commodity)
+     new-useful-life-months (assoc :asset-event/new-useful-life-months
+                                   new-useful-life-months)
+     transaction            (assoc :asset-event/transaction transaction)
+     justification          (assoc :asset-event/justification justification)
+     note                   (assoc :asset-event/note note))])
+
+(declare dispose-tx-data)
 
 (defn dispose!
   "Dispose of an asset — write-off, sale, or scrap. Records an
@@ -237,22 +267,38 @@
      :transaction     ref to :transaction (the GL reversal entry —
                       ADR-054's posting helper builds it)
      :reason-note     free-text
-     :vt-from / :vt-to  valid-time bounds (default :vt-from = :date)"
-  [conn {:keys [asset date changed-by-uid justification proceeds commodity
-                transaction reason-note vt-from vt-to]}]
+     :vt-from / :vt-to  valid-time bounds (default :vt-from = :date)
+
+   The pure tx-data builder is `dispose-tx-data` (ADR-068)."
+  [conn {:keys [date vt-from vt-to] :as opts}]
+  (validation/transact-with-validation
+   conn (kbt/with-vt (dispose-tx-data (d/db conn) opts)
+          (or vt-from date)
+          (or vt-to kbt/forever))))
+
+(defn dispose-tx-data
+  "Pure tx-data builder for `dispose!` (ADR-068). Returns the tx-data
+   vector (no `d/transact`, no `kbt/with-vt`). Reads the current
+   :asset/status from `db` to feed the status-machine `:from` slot.
+   Optional `:event-tempid` (default `\"asset-event-1\"`) for
+   composition."
+  [db {:keys [asset date changed-by-uid justification proceeds commodity
+              transaction reason-note event-tempid]
+       :or   {event-tempid "asset-event-1"}}]
   (when-not date           (throw (ex-info ":date required" {})))
   (when-not changed-by-uid (throw (ex-info ":changed-by-uid required" {})))
   (when-not justification  (throw (ex-info ":justification required (disposal authorisation)" {})))
-  (let [db (d/db conn)
-        eid (resolve-asset db asset)
+  (let [eid (resolve-asset db asset)
         _ (when-not eid (throw (ex-info "Asset not found" {:spec asset})))
         from (:asset/status (d/pull db [:asset/status] eid))
-        event (record-event-tx eid {:kind :disposal :date date
-                                    :amount (or proceeds 0M)
-                                    :commodity commodity
-                                    :transaction transaction
-                                    :justification justification
-                                    :note reason-note})
+        event-tx (record-event-tx-data db eid
+                                       {:kind :disposal :date date
+                                        :amount (or proceeds 0M)
+                                        :commodity commodity
+                                        :transaction transaction
+                                        :justification justification
+                                        :note reason-note
+                                        :tempid event-tempid})
         status-tx (sm/record-status-change-tx-data
                    db
                    (cond-> {:entity eid
@@ -265,9 +311,9 @@
                             :reason :asset-disposed
                             :supporting-doc justification}
                      reason-note (assoc :reason-note reason-note)))]
-    (d/transact conn (kbt/with-vt (into [event] status-tx)
-                       (or vt-from date)
-                       (or vt-to kbt/forever)))))
+    (into (vec event-tx) status-tx)))
+
+(declare transfer-tx-data)
 
 (defn transfer!
   "Transfer an asset to another legal entity (ADR-031). Records an
@@ -276,19 +322,33 @@
 
    Required opts: :asset, :date, :changed-by-uid, :to-entity.
    Optional: :justification, :reason-note, :transaction,
-             :vt-from, :vt-to."
-  [conn {:keys [asset date changed-by-uid to-entity justification
-                reason-note transaction vt-from vt-to]}]
+             :vt-from, :vt-to.
+
+   The pure tx-data builder is `transfer-tx-data` (ADR-068)."
+  [conn {:keys [date vt-from vt-to] :as opts}]
+  (validation/transact-with-validation
+   conn (kbt/with-vt (transfer-tx-data (d/db conn) opts)
+          (or vt-from date)
+          (or vt-to kbt/forever))))
+
+(defn transfer-tx-data
+  "Pure tx-data builder for `transfer!` (ADR-068). Returns the tx-data
+   vector (no `d/transact`, no `kbt/with-vt`). Optional
+   `:event-tempid` (default `\"asset-event-1\"`)."
+  [db {:keys [asset date changed-by-uid to-entity justification
+              reason-note transaction event-tempid]
+       :or   {event-tempid "asset-event-1"}}]
   (when-not date           (throw (ex-info ":date required" {})))
   (when-not changed-by-uid (throw (ex-info ":changed-by-uid required" {})))
   (when-not to-entity      (throw (ex-info ":to-entity required" {})))
-  (let [db (d/db conn)
-        eid (resolve-asset db asset)
+  (let [eid (resolve-asset db asset)
         _ (when-not eid (throw (ex-info "Asset not found" {:spec asset})))
-        event (record-event-tx eid {:kind :transfer :date date
-                                    :transaction transaction
-                                    :justification justification
-                                    :note reason-note})
+        event-tx (record-event-tx-data db eid
+                                       {:kind :transfer :date date
+                                        :transaction transaction
+                                        :justification justification
+                                        :note reason-note
+                                        :tempid event-tempid})
         status-tx (sm/record-status-change-tx-data
                    db
                    (cond-> {:entity eid
@@ -301,25 +361,16 @@
                             :reason :asset-transferred}
                      reason-note    (assoc :reason-note reason-note)
                      justification  (assoc :supporting-doc justification)))]
-    (d/transact conn (kbt/with-vt (into [event
-                                         {:db/id eid :asset/entity to-entity}]
-                                        status-tx)
-                       (or vt-from date)
-                       (or vt-to kbt/forever)))))
+    (into (conj (vec event-tx)
+                {:db/id eid :asset/entity to-entity})
+          status-tx)))
 
 ;; ============================================================================
 ;; In-service events — impair / revalue / revise-useful-life / addition
 ;; (no :asset/status change; inline required-arg guards)
 ;; ============================================================================
 
-(defn- record-event!
-  "Transact a single :asset-event, wrapped in kbt/with-vt. Returns
-   the tx-report. Used by the in-service event transactors that do
-   NOT change :asset/status."
-  [conn asset-eid {:keys [date vt-from vt-to] :as spec}]
-  (d/transact conn (kbt/with-vt [(record-event-tx asset-eid spec)]
-                     (or vt-from date)
-                     (or vt-to kbt/forever))))
+(declare impair-tx-data)
 
 (defn impair!
   "Record an impairment (IAS 36 / HGB §253 außerplanmäßige
@@ -336,22 +387,36 @@
      :reason-note   free-text
 
    Optional: :transaction (the GL write-down — ADR-054 builds it),
-             :vt-from, :vt-to."
-  [conn {:keys [asset date amount commodity justification reason-note
-                transaction vt-from vt-to]}]
+             :vt-from, :vt-to.
+
+   The pure tx-data builder is `impair-tx-data` (ADR-068)."
+  [conn {:keys [date vt-from vt-to] :as opts}]
+  (validation/transact-with-validation
+   conn (kbt/with-vt (impair-tx-data (d/db conn) opts)
+          (or vt-from date)
+          (or vt-to kbt/forever))))
+
+(defn impair-tx-data
+  "Pure tx-data builder for `impair!` (ADR-068). Returns the tx-data
+   vector (no `d/transact`, no `kbt/with-vt`). Optional
+   `:event-tempid` (default `\"asset-event-1\"`)."
+  [db {:keys [asset date amount commodity justification reason-note
+              transaction event-tempid]
+       :or   {event-tempid "asset-event-1"}}]
   (when-not date          (throw (ex-info ":date required" {})))
   (when-not amount        (throw (ex-info ":amount required" {})))
   (when-not commodity     (throw (ex-info ":commodity required" {})))
   (when-not justification (throw (ex-info ":justification required (impairment-test memo)" {})))
   (when (clojure.string/blank? (or reason-note ""))
     (throw (ex-info ":reason-note required" {})))
-  (let [db (d/db conn)
-        eid (resolve-asset db asset)
+  (let [eid (resolve-asset db asset)
         _ (when-not eid (throw (ex-info "Asset not found" {:spec asset})))]
-    (record-event! conn eid {:kind :impairment :date date :amount amount
-                             :commodity commodity :transaction transaction
-                             :justification justification :note reason-note
-                             :vt-from vt-from :vt-to vt-to})))
+    (record-event-tx-data db eid {:kind :impairment :date date :amount amount
+                                  :commodity commodity :transaction transaction
+                                  :justification justification :note reason-note
+                                  :tempid event-tempid})))
+
+(declare revalue-tx-data)
 
 (defn revalue!
   "Record a revaluation (IAS 16 revaluation model). The asset stays
@@ -368,22 +433,36 @@
      :justification ref to :audit-doc (valuation report)
      :reason-note   free-text
 
-   Optional: :transaction, :vt-from, :vt-to."
-  [conn {:keys [asset date amount commodity justification reason-note
-                transaction vt-from vt-to]}]
+   Optional: :transaction, :vt-from, :vt-to.
+
+   The pure tx-data builder is `revalue-tx-data` (ADR-068)."
+  [conn {:keys [date vt-from vt-to] :as opts}]
+  (validation/transact-with-validation
+   conn (kbt/with-vt (revalue-tx-data (d/db conn) opts)
+          (or vt-from date)
+          (or vt-to kbt/forever))))
+
+(defn revalue-tx-data
+  "Pure tx-data builder for `revalue!` (ADR-068). Returns the tx-data
+   vector (no `d/transact`, no `kbt/with-vt`). Optional
+   `:event-tempid` (default `\"asset-event-1\"`)."
+  [db {:keys [asset date amount commodity justification reason-note
+              transaction event-tempid]
+       :or   {event-tempid "asset-event-1"}}]
   (when-not date          (throw (ex-info ":date required" {})))
   (when-not amount        (throw (ex-info ":amount required" {})))
   (when-not commodity     (throw (ex-info ":commodity required" {})))
   (when-not justification (throw (ex-info ":justification required (valuation report)" {})))
   (when (clojure.string/blank? (or reason-note ""))
     (throw (ex-info ":reason-note required" {})))
-  (let [db (d/db conn)
-        eid (resolve-asset db asset)
+  (let [eid (resolve-asset db asset)
         _ (when-not eid (throw (ex-info "Asset not found" {:spec asset})))]
-    (record-event! conn eid {:kind :revaluation :date date :amount amount
-                             :commodity commodity :transaction transaction
-                             :justification justification :note reason-note
-                             :vt-from vt-from :vt-to vt-to})))
+    (record-event-tx-data db eid {:kind :revaluation :date date :amount amount
+                                  :commodity commodity :transaction transaction
+                                  :justification justification :note reason-note
+                                  :tempid event-tempid})))
+
+(declare revise-useful-life-tx-data)
 
 (defn revise-useful-life!
   "Record an IAS 16 useful-life revision (the annual review). The
@@ -398,19 +477,33 @@
 
    Required opts: :asset, :date, :new-useful-life-months,
                   :changed-by-uid.
-   Optional: :justification, :reason-note, :vt-from, :vt-to."
-  [conn {:keys [asset date new-useful-life-months changed-by-uid
-                justification reason-note vt-from vt-to]}]
+   Optional: :justification, :reason-note, :vt-from, :vt-to.
+
+   The pure tx-data builder is `revise-useful-life-tx-data` (ADR-068)."
+  [conn {:keys [date vt-from vt-to] :as opts}]
+  (validation/transact-with-validation
+   conn (kbt/with-vt (revise-useful-life-tx-data (d/db conn) opts)
+          (or vt-from date)
+          (or vt-to kbt/forever))))
+
+(defn revise-useful-life-tx-data
+  "Pure tx-data builder for `revise-useful-life!` (ADR-068). Returns
+   the tx-data vector (no `d/transact`, no `kbt/with-vt`). Optional
+   `:event-tempid` (default `\"asset-event-1\"`)."
+  [db {:keys [asset date new-useful-life-months changed-by-uid
+              justification reason-note event-tempid]
+       :or   {event-tempid "asset-event-1"}}]
   (when-not date                   (throw (ex-info ":date required" {})))
   (when-not new-useful-life-months (throw (ex-info ":new-useful-life-months required" {})))
   (when-not changed-by-uid         (throw (ex-info ":changed-by-uid required" {})))
-  (let [db (d/db conn)
-        eid (resolve-asset db asset)
+  (let [eid (resolve-asset db asset)
         _ (when-not eid (throw (ex-info "Asset not found" {:spec asset})))]
-    (record-event! conn eid {:kind :useful-life-revision :date date
-                             :new-useful-life-months new-useful-life-months
-                             :justification justification :note reason-note
-                             :vt-from vt-from :vt-to vt-to})))
+    (record-event-tx-data db eid {:kind :useful-life-revision :date date
+                                  :new-useful-life-months new-useful-life-months
+                                  :justification justification :note reason-note
+                                  :tempid event-tempid})))
+
+(declare record-addition-tx-data)
 
 (defn record-addition!
   "Record a subsequent capitalised addition (a major improvement
@@ -424,19 +517,31 @@
 
    Required opts: :asset, :date, :amount, :commodity.
    Optional: :transaction, :justification, :reason-note,
-             :vt-from, :vt-to."
-  [conn {:keys [asset date amount commodity transaction justification
-                reason-note vt-from vt-to]}]
+             :vt-from, :vt-to.
+
+   The pure tx-data builder is `record-addition-tx-data` (ADR-068)."
+  [conn {:keys [date vt-from vt-to] :as opts}]
+  (validation/transact-with-validation
+   conn (kbt/with-vt (record-addition-tx-data (d/db conn) opts)
+          (or vt-from date)
+          (or vt-to kbt/forever))))
+
+(defn record-addition-tx-data
+  "Pure tx-data builder for `record-addition!` (ADR-068). Returns the
+   tx-data vector (no `d/transact`, no `kbt/with-vt`). Optional
+   `:event-tempid` (default `\"asset-event-1\"`)."
+  [db {:keys [asset date amount commodity transaction justification
+              reason-note event-tempid]
+       :or   {event-tempid "asset-event-1"}}]
   (when-not date      (throw (ex-info ":date required" {})))
   (when-not amount    (throw (ex-info ":amount required" {})))
   (when-not commodity (throw (ex-info ":commodity required" {})))
-  (let [db (d/db conn)
-        eid (resolve-asset db asset)
+  (let [eid (resolve-asset db asset)
         _ (when-not eid (throw (ex-info "Asset not found" {:spec asset})))]
-    (record-event! conn eid {:kind :addition :date date :amount amount
-                             :commodity commodity :transaction transaction
-                             :justification justification :note reason-note
-                             :vt-from vt-from :vt-to vt-to})))
+    (record-event-tx-data db eid {:kind :addition :date date :amount amount
+                                  :commodity commodity :transaction transaction
+                                  :justification justification :note reason-note
+                                  :tempid event-tempid})))
 
 ;; ============================================================================
 ;; Queries

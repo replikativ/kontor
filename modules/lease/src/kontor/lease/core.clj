@@ -17,7 +17,8 @@
             [kontor.bitemporal :as kbt]
             [kontor.posting :as posting]
             [kontor.schedule :as schedule]
-            [kontor.status-machine :as sm])
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation])
   (:import [java.math BigDecimal RoundingMode]
            [java.util Date]))
 
@@ -103,6 +104,8 @@
 ;; define-lease!
 ;; ============================================================================
 
+(declare define-lease-tx-data register-exempt-lease-tx-data)
+
 (defn define-lease!
   "Record a :lease at `:draft` — the contract facts, before
    balance-sheet recognition. ADR-063's `commence!` moves it
@@ -120,12 +123,24 @@
              :purchase-option-price, :entity, :origin-document,
              :note, :changed-by-uid, :vt-from / :vt-to (default
              :vt-from = :commencement-date)."
-  [conn {:keys [code name lessor asset-class commencement-date term-months
-                payment-amount payment-frequency payment-timing commodity
-                discount-rate underlying-asset-desc initial-direct-costs
-                prepaid-at-commencement incentives-received
-                purchase-option-price entity origin-document note
-                changed-by-uid vt-from vt-to]}]
+  [conn {:keys [vt-from vt-to commencement-date] :as opts}]
+  (let [now (Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (define-lease-tx-data
+                         (d/db conn) (assoc opts :recorded-at now))
+                       (or vt-from commencement-date)
+                       (or vt-to kbt/forever)))))
+
+(defn define-lease-tx-data
+  "Pure tx-data builder for `define-lease!` (ADR-068). Optional
+   `:tempid` (default `\"lease-1\"`) and `:recorded-at` (default now)."
+  [_db {:keys [code name lessor asset-class commencement-date term-months
+               payment-amount payment-frequency payment-timing commodity
+               discount-rate underlying-asset-desc initial-direct-costs
+               prepaid-at-commencement incentives-received
+               purchase-option-price entity origin-document note
+               changed-by-uid tempid recorded-at]
+        :or {tempid "lease-1"}}]
   (when-not code              (throw (ex-info ":code required" {})))
   (when-not name              (throw (ex-info ":name required" {})))
   (when-not lessor            (throw (ex-info ":lessor required" {})))
@@ -150,9 +165,7 @@
   (when (neg? (.signum ^BigDecimal discount-rate))
     (throw (ex-info ":discount-rate must be non-negative"
                     {:discount-rate discount-rate})))
-  (let [db (d/db conn)
-        lease-tempid "lease-1"
-        row (cond-> {:db/id lease-tempid
+  (let [row (cond-> {:db/id tempid
                      :lease/code code
                      :lease/name name
                      :lease/lessor lessor
@@ -181,17 +194,20 @@
               ;; The recording actor IS the creator — stamp :create/uid
               ;; so ADR-038 :no-self-approval can fire on termination.
               changed-by-uid          (assoc :create/uid changed-by-uid))
+        ;; status-tx needs `db` for the legal-transition check; we
+        ;; pass nil because `:from :nil :to :draft` is the very first
+        ;; entry — record-status-change-tx-data tolerates this when
+        ;; the from is explicit. (See identical pattern in
+        ;; retention/define-policy-tx-data.)
         status-tx (sm/record-status-change-tx-data
-                   db (cond-> {:entity lease-tempid
-                               :entity-type :lease
-                               :facet :lease/status
-                               :from :nil :to :draft
-                               :changed-at (Date.)
-                               :reason :lease-recorded}
-                        changed-by-uid (assoc :changed-by-uid changed-by-uid)))]
-    (d/transact conn (kbt/with-vt (into [row] status-tx)
-                       (or vt-from commencement-date)
-                       (or vt-to kbt/forever)))))
+                   _db (cond-> {:entity tempid
+                                :entity-type :lease
+                                :facet :lease/status
+                                :from :nil :to :draft
+                                :changed-at (or recorded-at (Date.))
+                                :reason :lease-recorded}
+                         changed-by-uid (assoc :changed-by-uid changed-by-uid)))]
+    (into [row] status-tx)))
 
 ;; ============================================================================
 ;; The short-term / low-value exemption path — a plain :schedule
@@ -210,9 +226,15 @@
              undiscounted amount over the term), :commodity,
              :start-date, :term-months.
    Optional: :frequency (default :monthly), :name, :note."
-  [conn {:keys [code total-payments commodity start-date term-months
-                frequency name note]
-         :or {frequency :monthly}}]
+  [conn opts]
+  (validation/transact-with-validation
+   conn (register-exempt-lease-tx-data (d/db conn) opts)))
+
+(defn register-exempt-lease-tx-data
+  "Pure tx-data builder for `register-exempt-lease!` (ADR-068)."
+  [_db {:keys [code total-payments commodity start-date term-months
+               frequency name note]
+        :or {frequency :monthly}}]
   (when-not code           (throw (ex-info ":code required" {})))
   (when (nil? total-payments) (throw (ex-info ":total-payments required" {})))
   (when-not commodity      (throw (ex-info ":commodity required" {})))
@@ -220,18 +242,17 @@
   (when-not term-months    (throw (ex-info ":term-months required" {})))
   (let [n (periods-for term-months frequency)
         end-date (schedule/date-of-occurrence start-date frequency n)]
-    (d/transact conn
-                [(cond-> {:schedule/code code
-                          :schedule/kind :lease-expense
-                          :schedule/start-date start-date
-                          :schedule/end-date end-date
-                          :schedule/frequency frequency
-                          :schedule/total-amount total-payments
-                          :schedule/total-commodity commodity
-                          :schedule/state :active
-                          :schedule/active true}
-                   name (assoc :schedule/name name)
-                   note (assoc :schedule/note note))])))
+    [(cond-> {:schedule/code code
+              :schedule/kind :lease-expense
+              :schedule/start-date start-date
+              :schedule/end-date end-date
+              :schedule/frequency frequency
+              :schedule/total-amount total-payments
+              :schedule/total-commodity commodity
+              :schedule/state :active
+              :schedule/active true}
+       name (assoc :schedule/name name)
+       note (assoc :schedule/note note))]))
 
 (defn exempt-lease-period-amount
   "The straight-line per-period expense for an exempt lease's
