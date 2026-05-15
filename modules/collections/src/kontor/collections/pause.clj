@@ -13,7 +13,8 @@
    `:tx/valid-from` (kontor.bitemporal, ADR-048)."
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
-            [kontor.status-machine :as sm]))
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Predicates
@@ -64,6 +65,8 @@
 ;; Transactors
 ;; ============================================================================
 
+(declare place-pause-tx-data release-pause-tx-data)
+
 (defn place-pause!
   "Pause dunning on a case.
 
@@ -81,16 +84,28 @@
      :expires-at       instant (auto-resume). nil = manual-only.
      :notes            string
      :supporting-doc   ref to :audit-doc
-     :vt-from / :vt-to valid-time bounds (default :vt-from = now)"
-  [conn {:keys [case reason-code placed-by-uid expires-at notes supporting-doc
-                vt-from vt-to]}]
+     :vt-from / :vt-to valid-time bounds (default :vt-from = now)
+
+   The pure tx-data builder is `place-pause-tx-data`."
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [placed-at (java.util.Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (place-pause-tx-data
+                        (d/db conn) (assoc opts :placed-at placed-at))
+                       (or vt-from placed-at)
+                       (or vt-to kbt/forever)))))
+
+(defn place-pause-tx-data
+  "Pure tx-data builder for `place-pause!` (ADR-068). Optional
+   `:tempid` (default `\"pause-1\"`) and `:placed-at` (default now)."
+  [db {:keys [case reason-code placed-by-uid expires-at notes supporting-doc
+              tempid placed-at]
+       :or {tempid "pause-1"}}]
   (when-not case          (throw (ex-info ":case required" {})))
   (when-not reason-code   (throw (ex-info ":reason-code required" {})))
   (when-not placed-by-uid (throw (ex-info ":placed-by-uid required" {})))
-  (let [db (d/db conn)
-        placed-at (java.util.Date.)
-        pause-tempid "pause-1"
-        row (cond-> {:db/id pause-tempid
+  (let [placed-at (or placed-at (java.util.Date.))
+        row (cond-> {:db/id tempid
                      :dunning-pause/case case
                      :dunning-pause/reason-code reason-code
                      :dunning-pause/placed-by-uid placed-by-uid
@@ -100,7 +115,7 @@
               supporting-doc (assoc :dunning-pause/supporting-doc supporting-doc))
         status-tx (sm/record-status-change-tx-data
                    db
-                   (cond-> {:entity pause-tempid
+                   (cond-> {:entity tempid
                             :entity-type :dunning-pause
                             :facet :dunning-pause/state
                             :from :nil
@@ -109,22 +124,31 @@
                             :changed-by-uid placed-by-uid
                             :reason reason-code}
                      supporting-doc (assoc :supporting-doc supporting-doc)))]
-    (d/transact conn (kbt/with-vt (into [row] status-tx)
-                                  (or vt-from placed-at)
-                                  (or vt-to kbt/forever)))))
+    (into [row] status-tx)))
 
 (defn release-pause!
   "Release a specific pause row. Status machine: :placed → :released.
 
    Required: :pause-eid + :released-by-uid.
    Optional: :reason, :reason-note, :notes, :supporting-doc,
-             :vt-from, :vt-to."
-  [conn {:keys [pause-eid released-by-uid reason reason-note notes
-                supporting-doc vt-from vt-to]}]
+             :vt-from, :vt-to.
+
+   The pure tx-data builder is `release-pause-tx-data`."
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [now (java.util.Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (release-pause-tx-data
+                        (d/db conn) (assoc opts :released-at now))
+                       (or vt-from now)
+                       (or vt-to kbt/forever)))))
+
+(defn release-pause-tx-data
+  "Pure tx-data builder for `release-pause!` (ADR-068)."
+  [db {:keys [pause-eid released-by-uid reason reason-note notes
+              supporting-doc released-at]}]
   (when-not pause-eid        (throw (ex-info ":pause-eid required" {})))
   (when-not released-by-uid  (throw (ex-info ":released-by-uid required" {})))
-  (let [db (d/db conn)
-        now (java.util.Date.)
+  (let [now (or released-at (java.util.Date.))
         update (cond-> {:db/id pause-eid}
                  notes          (assoc :dunning-pause/notes notes)
                  supporting-doc (assoc :dunning-pause/supporting-doc supporting-doc))
@@ -139,6 +163,4 @@
                             :reason (or reason :pause-released)}
                      reason-note    (assoc :reason-note reason-note)
                      supporting-doc (assoc :supporting-doc supporting-doc)))]
-    (d/transact conn (kbt/with-vt (into [update] status-tx)
-                                  (or vt-from now)
-                                  (or vt-to kbt/forever)))))
+    (into [update] status-tx)))

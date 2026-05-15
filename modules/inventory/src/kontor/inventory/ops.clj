@@ -22,9 +22,11 @@
    GL-free — a same-entity move is a pure quantity event;
    cross-entity transfers with a GL leg are a documented follow-up."
   (:require [datahike.api :as d]
+            [kontor.bitemporal :as kbt]
             [kontor.costing-provider :as costing]
             [kontor.posting :as posting]
             [kontor.process :as process]
+            [kontor.validation :as validation]
             [kontor.valuation :as valuation]
             [kontor.inventory.core :as inv])
   (:import [clojure.lang ExceptionInfo]
@@ -72,23 +74,53 @@
 ;; receive!
 ;; ============================================================================
 
+(declare receive-tx-data)
+
 (defn receive!
   "Receive goods. Appends BOTH halves in ONE transaction: the
    valuation layer + GL postings (`plan-stock-move :direction :in`)
    AND the physical `:inventory-detail` against the
    `(product, facility, location, lot, owner)` bucket — linked by
-   `:inventory-detail/transaction`.
+   `:inventory-detail/transaction`. Routes through the gate (ADR-068).
 
    Required: :product, :facility, :book (valuation-book), :qty,
              :unit-cost, :commodity, :journal, :account-fn.
    Optional: :location, :lot, :owner-entity, :provider (default:
              resolved from the book's :cost-method), :effective-date
-             (default now), :ledger, :narration, :reason.
+             (default now), :ledger, :narration, :reason,
+             :vt-from / :vt-to (default :vt-from = :effective-date).
 
-   Returns {:inventory-item eid :transaction eid :tx-report report}."
-  [conn {:keys [product facility location lot owner-entity book qty
-                unit-cost commodity journal account-fn provider
-                effective-date ledger narration reason]}]
+   Returns {:inventory-item eid :transaction eid :tx-report report}.
+
+   The pure tx-data builder is `receive-tx-data` (ADR-068)."
+  [conn {:keys [effective-date vt-from vt-to] :as opts}]
+  (let [db  (d/db conn)
+        eff (or effective-date (Date.))
+        opts* (assoc opts :effective-date eff)
+        {:keys [tx-data existing-item-id]}
+        (receive-tx-data db opts*)
+        report (validation/transact-with-validation
+                conn (kbt/with-vt tx-data
+                       (or vt-from eff) (or vt-to kbt/forever)))]
+    {:inventory-item (or existing-item-id (get-in report [:tempids "inv-item"]))
+     :transaction    (get-in report [:tempids -1])
+     :tx-report      report}))
+
+(defn receive-tx-data
+  "Pure tx-data builder for `receive!` (ADR-068). Returns
+   `{:tx-data <vec> :existing-item-id <eid-or-nil>}` — `:existing-item-id`
+   is the resolved bucket eid when it pre-existed, nil when the
+   builder created it via tempid `\"inv-item\"`. The GL transaction
+   tempid is `-1` (`plan-stock-move`'s convention).
+
+   `:effective-date` (default `(Date.)`) is required by the builder
+   contract — the wrapper threads it for determinism. Optional
+   `:tempid` (default `\"inv-item\"`) overrides the bucket tempid for
+   composition."
+  [db {:keys [product facility location lot owner-entity book qty
+              unit-cost commodity journal account-fn provider
+              effective-date ledger narration reason tempid]
+       :or   {tempid "inv-item"}}]
   (when-not product   (throw (ex-info ":product required" {})))
   (when-not facility  (throw (ex-info ":facility required" {})))
   (when-not book      (throw (ex-info ":book required" {})))
@@ -97,8 +129,7 @@
   (when-not commodity (throw (ex-info ":commodity required" {})))
   (when-not journal   (throw (ex-info ":journal required" {})))
   (when-not account-fn (throw (ex-info ":account-fn required" {})))
-  (let [db   (d/db conn)
-        f    (inv/resolve-facility db facility)
+  (let [f    (inv/resolve-facility db facility)
         _    (when-not f (throw (ex-info "Facility not found" {:spec facility})))
         eff  (or effective-date (Date.))
         prov (or provider (provider-for-book db book))
@@ -116,9 +147,9 @@
         bucket-spec {:product product :facility f :location location
                      :lot lot :owner-entity owner-entity :received-at eff}
         existing (inv/find-inventory-item db bucket-spec)
-        item-id  (or existing "inv-item")
+        item-id  (or existing tempid)
         item-entity (when-not existing
-                      (inv/inventory-item-entity "inv-item" bucket-spec))
+                      (inv/inventory-item-entity tempid bucket-spec))
         detail (cond-> {:inventory-detail/inventory-item item-id
                         :inventory-detail/effective-date eff
                         :inventory-detail/qoh-diff qty
@@ -126,13 +157,10 @@
                         :inventory-detail/source-kind :receipt
                         ;; -1 is plan-stock-move's transaction tempid.
                         :inventory-detail/transaction -1}
-                 reason (assoc :inventory-detail/reason reason))
-        report (d/transact conn (cond-> (conj (vec (seal-stock-move move-tx eff))
-                                              detail)
-                                  item-entity (conj item-entity)))]
-    {:inventory-item (or existing (get-in report [:tempids "inv-item"]))
-     :transaction    (get-in report [:tempids -1])
-     :tx-report      report}))
+                 reason (assoc :inventory-detail/reason reason))]
+    {:tx-data (cond-> (conj (vec (seal-stock-move move-tx eff)) detail)
+                item-entity (conj item-entity))
+     :existing-item-id existing}))
 
 ;; ============================================================================
 ;; Negative-fill
@@ -373,6 +401,8 @@
 ;; true-up-negative-fill!
 ;; ============================================================================
 
+(declare true-up-negative-fill-tx-data)
+
 (defn true-up-negative-fill!
   "Reconcile an `:open` `:negative-fill` to actual cost. Emits a
    `:layer-adjustment` on the negative-fill layer for the cost delta
@@ -380,7 +410,7 @@
    (`Dr :variance-account / Cr :inventory-account` for a positive
    delta), links the adjustment back via
    `:negative-fill/true-up-adjustment`, and marks the
-   `:negative-fill` `:trued-up`.
+   `:negative-fill` `:trued-up`. Routes through the gate (ADR-068).
 
    Note the negative-fill layer was already fully consumed by the
    issue retry — so the `:layer-adjustment` carries NO remaining
@@ -392,17 +422,28 @@
 
    Required: :negative-fill (eid), :actual-unit-cost, :journal,
              :inventory-account, :variance-account.
-   Optional: :effective-date (default now).
-   Returns the tx-report."
-  [conn {:keys [negative-fill actual-unit-cost journal inventory-account
-                variance-account effective-date]}]
+   Optional: :effective-date (default now),
+             :vt-from / :vt-to (default :vt-from = :effective-date).
+   Returns the tx-report.
+
+   The pure tx-data builder is `true-up-negative-fill-tx-data` (ADR-068)."
+  [conn {:keys [effective-date vt-from vt-to] :as opts}]
+  (let [eff (or effective-date (Date.))]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (true-up-negative-fill-tx-data
+                        (d/db conn) (assoc opts :effective-date eff))
+                       (or vt-from eff) (or vt-to kbt/forever)))))
+
+(defn true-up-negative-fill-tx-data
+  "Pure tx-data builder for `true-up-negative-fill!` (ADR-068)."
+  [db {:keys [negative-fill actual-unit-cost journal inventory-account
+              variance-account effective-date]}]
   (when-not negative-fill   (throw (ex-info ":negative-fill required" {})))
   (when (nil? actual-unit-cost) (throw (ex-info ":actual-unit-cost required" {})))
   (when-not journal         (throw (ex-info ":journal required" {})))
   (when-not inventory-account (throw (ex-info ":inventory-account required" {})))
   (when-not variance-account  (throw (ex-info ":variance-account required" {})))
-  (let [db (d/db conn)
-        nf (d/pull db [:negative-fill/status
+  (let [nf (d/pull db [:negative-fill/status
                        :negative-fill/shortfall-qty
                        :negative-fill/estimated-unit-cost
                        {:negative-fill/commodity [:db/id]}
@@ -441,15 +482,17 @@
                     :layer-adjustment/origin-transaction -1
                     :layer-adjustment/applied-at eff
                     :layer-adjustment/note "Negative-fill estimate → actual"}]
-    (d/transact conn (into (vec gl)
-                           [adjustment
-                            {:db/id negative-fill
-                             :negative-fill/status :trued-up
-                             :negative-fill/true-up-adjustment "adj"}]))))
+    (into (vec gl)
+          [adjustment
+           {:db/id negative-fill
+            :negative-fill/status :trued-up
+            :negative-fill/true-up-adjustment "adj"}])))
 
 ;; ============================================================================
 ;; Transfers — two-phase, GL-free (same-entity quantity moves)
 ;; ============================================================================
+
+(declare transfer-tx-data)
 
 (defn transfer!
   "Begin a two-phase transfer — send `:quantity` of an
@@ -459,24 +502,40 @@
    SOURCE bucket: the stock is 'on the truck' — off the source, not
    yet at the destination. GL-free (a same-entity move is a pure
    quantity event; cross-entity transfers with a GL leg are a
-   documented follow-up).
+   documented follow-up). Routes through the gate (ADR-068).
 
    Required: :inventory-item, :quantity, :to-facility.
-   Optional: :to-location, :send-date (default now), :note.
-   Returns {:transfer eid :tx-report report}."
-  [conn {:keys [inventory-item quantity to-facility to-location send-date note]}]
+   Optional: :to-location, :send-date (default now), :note,
+             :vt-from / :vt-to (default :vt-from = :send-date).
+   Returns {:transfer eid :tx-report report}.
+
+   The pure tx-data builder is `transfer-tx-data` (ADR-068)."
+  [conn {:keys [send-date vt-from vt-to] :as opts}]
+  (let [sent (or send-date (Date.))
+        report (validation/transact-with-validation
+                conn (kbt/with-vt (transfer-tx-data
+                                   (d/db conn) (assoc opts :send-date sent))
+                                  (or vt-from sent) (or vt-to kbt/forever)))]
+    {:transfer (get-in report [:tempids "xfer"])
+     :tx-report report}))
+
+(defn transfer-tx-data
+  "Pure tx-data builder for `transfer!` (ADR-068). Emits the transfer
+   row at tempid `\"xfer\"` (override via `:tempid`)."
+  [db {:keys [inventory-item quantity to-facility to-location send-date note
+              tempid]
+       :or   {tempid "xfer"}}]
   (when-not inventory-item (throw (ex-info ":inventory-item required" {})))
   (when (nil? quantity)    (throw (ex-info ":quantity required" {})))
   (when-not to-facility    (throw (ex-info ":to-facility required" {})))
-  (let [db (d/db conn)
-        src (d/pull db [{:inventory-item/facility [:db/id]}
+  (let [src (d/pull db [{:inventory-item/facility [:db/id]}
                         {:inventory-item/location [:db/id]}]
                     inventory-item)
         to-f (inv/resolve-facility db to-facility)
         _ (when-not to-f (throw (ex-info "Destination facility not found"
                                          {:spec to-facility})))
         sent (or send-date (Date.))
-        transfer (cond-> {:db/id "xfer"
+        transfer (cond-> {:db/id tempid
                           :inventory-transfer/inventory-item inventory-item
                           :inventory-transfer/quantity quantity
                           :inventory-transfer/from-facility
@@ -494,10 +553,8 @@
                 :inventory-detail/qoh-diff (.negate ^java.math.BigDecimal quantity)
                 :inventory-detail/atp-diff (.negate ^java.math.BigDecimal quantity)
                 :inventory-detail/source-kind :transfer
-                :inventory-detail/source "xfer"}
-        report (d/transact conn [transfer detail])]
-    {:transfer (get-in report [:tempids "xfer"])
-     :tx-report report}))
+                :inventory-detail/source tempid}]
+    [transfer detail]))
 
 (defn complete-transfer!
   "Complete an `:in-transit` transfer — find-or-create the
@@ -562,30 +619,45 @@
     {:to-inventory-item (or (inv/find-inventory-item (d/db conn) dest-spec)
                             (get tempids "dest-item"))}))
 
+(declare cancel-transfer-tx-data)
+
 (defn cancel-transfer!
   "Cancel an `:in-transit` transfer — append an `:inventory-detail`
    (`:qoh-diff +qty`, `:atp-diff +qty`) back on the SOURCE bucket and
    set `:status :cancelled`. `:effective-date` defaults to now (a
-   backdated cancel passes it explicitly). Returns the tx-report."
+   backdated cancel passes it explicitly). Routes through the gate
+   (ADR-068). Returns the tx-report.
+
+   Optional: :vt-from / :vt-to (default :vt-from = :effective-date).
+
+   The pure tx-data builder is `cancel-transfer-tx-data` (ADR-068)."
   ([conn transfer-eid] (cancel-transfer! conn transfer-eid {}))
-  ([conn transfer-eid {:keys [effective-date]}]
-   (let [db (d/db conn)
-         t (d/pull db [:inventory-transfer/quantity
-                       :inventory-transfer/status
-                       {:inventory-transfer/inventory-item [:db/id]}]
-                   transfer-eid)
-         _ (when-not (= :in-transit (:inventory-transfer/status t))
-             (throw (ex-info "Transfer is not :in-transit"
-                             {:type :inventory/transfer-not-in-transit
-                              :transfer transfer-eid
-                              :status (:inventory-transfer/status t)})))]
-     (d/transact conn
-                 [{:inventory-detail/inventory-item
-                   (:db/id (:inventory-transfer/inventory-item t))
-                   :inventory-detail/effective-date (or effective-date (Date.))
-                   :inventory-detail/qoh-diff (:inventory-transfer/quantity t)
-                   :inventory-detail/atp-diff (:inventory-transfer/quantity t)
-                   :inventory-detail/source-kind :transfer
-                   :inventory-detail/source transfer-eid
-                   :inventory-detail/description "Transfer cancelled"}
-                  {:db/id transfer-eid :inventory-transfer/status :cancelled}]))))
+  ([conn transfer-eid {:keys [effective-date vt-from vt-to] :as opts}]
+   (let [eff (or effective-date (Date.))]
+     (validation/transact-with-validation
+      conn (kbt/with-vt (cancel-transfer-tx-data
+                         (d/db conn) transfer-eid
+                         (assoc opts :effective-date eff))
+                        (or vt-from eff) (or vt-to kbt/forever))))))
+
+(defn cancel-transfer-tx-data
+  "Pure tx-data builder for `cancel-transfer!` (ADR-068)."
+  [db transfer-eid {:keys [effective-date]}]
+  (let [t (d/pull db [:inventory-transfer/quantity
+                      :inventory-transfer/status
+                      {:inventory-transfer/inventory-item [:db/id]}]
+                  transfer-eid)
+        _ (when-not (= :in-transit (:inventory-transfer/status t))
+            (throw (ex-info "Transfer is not :in-transit"
+                            {:type :inventory/transfer-not-in-transit
+                             :transfer transfer-eid
+                             :status (:inventory-transfer/status t)})))]
+    [{:inventory-detail/inventory-item
+      (:db/id (:inventory-transfer/inventory-item t))
+      :inventory-detail/effective-date (or effective-date (Date.))
+      :inventory-detail/qoh-diff (:inventory-transfer/quantity t)
+      :inventory-detail/atp-diff (:inventory-transfer/quantity t)
+      :inventory-detail/source-kind :transfer
+      :inventory-detail/source transfer-eid
+      :inventory-detail/description "Transfer cancelled"}
+     {:db/id transfer-eid :inventory-transfer/status :cancelled}]))

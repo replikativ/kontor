@@ -19,7 +19,8 @@
             [kontor.ledger :as ledger]
             [kontor.period :as period]
             [kontor.posting :as posting]
-            [kontor.status-machine :as sm]))
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Three-tier GL resolution
@@ -239,8 +240,60 @@
 ;; Orchestrator
 ;; ============================================================================
 
+(declare post-to-ledger-tx-data)
+
+(defn post-to-ledger-tx-data
+  "Pure tx-data builder for `post-to-ledger!` (ADR-068). Returns a
+   map `{:tx-data … :invoice-eid …}` — the tx-data composes the
+   kernel posting tx + invoice update + status-history row for
+   :draft|:ready → :sent. The transaction tempid is -1 by
+   build-transaction convention; callers extract the eid from
+   `(:tempids report)` under that key."
+  [db invoice-spec {:keys [journal-ref ledger-ref posted-at changed-by-uid
+                           reason]}]
+  (let [invoice-eid (cond
+                      (string? invoice-spec)
+                      (d/q '[:find ?e . :in $ ?xid
+                             :where [?e :invoice/external-id ?xid]]
+                           db invoice-spec)
+                      :else invoice-spec)
+        _ (when-not invoice-eid
+            (throw (ex-info "Invoice not found" {:spec invoice-spec})))
+        _ (when-not journal-ref
+            (throw (ex-info "post-to-ledger! requires :journal-ref opt"
+                            {:type :invoice/missing-journal
+                             :remediation "Pass :journal-ref [:journal/code \"GL\"] (or your tenant's journal code) to post-to-ledger!. The kernel posting invariant rejects journal-less transactions per ADR-021."})))
+        pa (or posted-at (java.util.Date.))
+        input (build-input db invoice-eid
+                           {:journal-ref journal-ref
+                            :ledger-ref  ledger-ref
+                            :posted-at   pa})
+        tx-data (posting/build-transaction input)
+        ;; The transaction tempid is -1 by build-transaction convention.
+        tx-tempid -1
+        ;; Compose the bridge tx atomically: kernel posting tx-data +
+        ;; invoice update (transaction ref; no :posted-at denorm —
+        ;; presence of :invoice/transaction is the sentinel) + status-
+        ;; history row for :draft|:ready → :sent.
+        invoice-update {:db/id invoice-eid
+                        :invoice/transaction tx-tempid}
+        status-tx (sm/record-status-change-tx-data
+                   db
+                   (cond-> {:entity invoice-eid
+                            :entity-type :invoice
+                            :facet :invoice/status
+                            :to :sent
+                            :changed-at pa
+                            :origin-transaction tx-tempid}
+                     changed-by-uid (assoc :changed-by-uid changed-by-uid)
+                     reason         (assoc :reason reason)))]
+    {:tx-data (vec (concat tx-data [invoice-update] status-tx))
+     :invoice-eid invoice-eid
+     :posted-at pa}))
+
 (defn post-to-ledger!
-  "Post the invoice to the GL atomically.
+  "Post the invoice to the GL atomically. Routes through the gate
+   (ADR-068).
 
    In one tx:
      1. Verifies the invoice is :draft or :ready (status-machine
@@ -271,55 +324,22 @@
      :reason             optional rationale (status-history).
      :vt-from            optional kontor.bitemporal valid-from for
                          the tx. Default `:posted-at`.
-     :vt-to              optional valid-to."
+     :vt-to              optional valid-to.
+
+   The pure tx-data builder is `post-to-ledger-tx-data`."
   [conn invoice-spec & [opts]]
   (let [db (d/db conn)
-        invoice-eid (cond
-                      (string? invoice-spec)
-                      (d/q '[:find ?e . :in $ ?xid
-                             :where [?e :invoice/external-id ?xid]]
-                           db invoice-spec)
-                      :else invoice-spec)
-        _ (when-not invoice-eid
-            (throw (ex-info "Invoice not found" {:spec invoice-spec})))
-        _ (when-not (:journal-ref opts)
-            (throw (ex-info "post-to-ledger! requires :journal-ref opt"
-                            {:type :invoice/missing-journal
-                             :remediation "Pass :journal-ref [:journal/code \"GL\"] (or your tenant's journal code) to post-to-ledger!. The kernel posting invariant rejects journal-less transactions per ADR-021."})))
-        posted-at (or (:posted-at opts) (java.util.Date.))
-        input (build-input db invoice-eid
-                           {:journal-ref (:journal-ref opts)
-                            :ledger-ref  (:ledger-ref opts)
-                            :posted-at   posted-at})
-        tx-data (posting/build-transaction input)
-        ;; The transaction tempid is -1 by build-transaction convention.
-        tx-tempid -1
-        ;; Compose the bridge tx atomically: kernel posting tx-data +
-        ;; invoice update (transaction ref; no :posted-at denorm —
-        ;; presence of :invoice/transaction is the sentinel) + status-
-        ;; history row for :draft|:ready → :sent.
-        invoice-update {:db/id invoice-eid
-                        :invoice/transaction tx-tempid}
-        status-tx (sm/record-status-change-tx-data
-                   db
-                   (cond-> {:entity invoice-eid
-                            :entity-type :invoice
-                            :facet :invoice/status
-                            :to :sent
-                            :changed-at posted-at
-                            :origin-transaction tx-tempid}
-                     (:changed-by-uid opts) (assoc :changed-by-uid (:changed-by-uid opts))
-                     (:reason opts) (assoc :reason (:reason opts))))
-        core-tx (vec (concat tx-data [invoice-update] status-tx))
+        {:keys [tx-data invoice-eid posted-at]}
+        (post-to-ledger-tx-data db invoice-spec opts)
         vf (or (:vt-from opts) posted-at)
         vt (or (:vt-to opts)   kbt/forever)
-        all-tx (kbt/with-vt core-tx vf vt)
+        all-tx (kbt/with-vt tx-data vf vt)
         ;; P0-7 (research-agent finding): assert no proposed posting
         ;; falls in a closed period. period/find-violations reads
         ;; :tx/valid-from from the tx-data's "datomic.tx" map.
         _ (period/assert-not-in-locked-period! db all-tx)
-        tx-report (d/transact conn all-tx)
-        transaction-eid (get-in tx-report [:tempids tx-tempid])]
+        tx-report (validation/transact-with-validation conn all-tx)
+        transaction-eid (get-in tx-report [:tempids -1])]
     {:tx-report tx-report
      :transaction-eid transaction-eid
      :invoice-eid invoice-eid}))

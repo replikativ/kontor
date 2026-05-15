@@ -21,6 +21,7 @@
    in-transit transfers are a documented follow-up."
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
+            [kontor.validation :as validation]
             [kontor.inventory.core :as inv])
   (:import [java.math BigDecimal]
            [java.util Date]))
@@ -166,12 +167,15 @@
                (.subtract ^BigDecimal remaining ^BigDecimal take)
                (conj draws {:item item :take take}))))))
 
+(declare reserve-tx-data)
+
 (defn reserve!
   "Reserve `:quantity` of `:product` at `:facility` against an order
    line. Walks the candidate `:inventory-item` buckets (`:pickloc`
    first, sorted by `:reserve-order-enum`), drawing ATP from each;
    every draw appends an `:inventory-detail` (`:atp-diff` negative)
-   and an `:inv-reservation` row, all in ONE transaction.
+   and an `:inv-reservation` row, all in ONE transaction. Routes
+   through the gate (ADR-068).
 
    A shortfall — when `:require-inventory?` is false (the default) —
    is back-ordered: the last drawn reservation row carries
@@ -185,10 +189,45 @@
                   :order-item, :ship-group.
    Optional: :reserve-order-enum (default :fifo-rec),
              :require-inventory? (default false),
-             :promised-date, :reserved-at (default now), :priority?.
+             :promised-date, :reserved-at (default now), :priority?,
+             :vt-from / :vt-to (default :vt-from = :reserved-at).
 
    Returns {:reserved bigdec :backordered bigdec :draws [bigdec …]
-            :tx-report report}."
+            :tx-report report}.
+
+   The pure tx-data builder is `reserve-tx-data` (ADR-068).
+   Note: a pure back-order with NO existing bucket transparently
+   calls `inv/find-or-create-inventory-item!` as a separate
+   pre-transaction (also gated), keeping the main reserve commit
+   single-shot. Folding that bucket creation into the main process
+   is a future cleanup — option 1 from the ADR-068 reservation note."
+  [conn {:keys [reserved-at vt-from vt-to] :as opts}]
+  (let [reserved-at (or reserved-at (Date.))
+        opts* (assoc opts :reserved-at reserved-at)
+        {:keys [tx-data reserved backordered draws]}
+        (reserve-tx-data conn opts*)
+        report (when (seq tx-data)
+                 (validation/transact-with-validation
+                  conn (kbt/with-vt tx-data
+                         (or vt-from reserved-at)
+                         (or vt-to kbt/forever))))]
+    {:reserved    reserved
+     :backordered backordered
+     :draws       draws
+     :tx-report   report}))
+
+(defn reserve-tx-data
+  "Pure-ish tx-data builder for `reserve!` (ADR-068). Takes `conn`
+   (not just `db`) because a pure back-order whose target bucket
+   doesn't yet exist creates it via
+   `inv/find-or-create-inventory-item!` as a separate pre-transaction
+   — that helper is itself gated post-ADR-068, so the bucket-create
+   path is correctly validated. The MAIN reservation tx-data returned
+   here is then committed in one gated shot by the wrapper.
+
+   Returns {:tx-data <vec or nil> :reserved bigdec :backordered bigdec
+            :draws [bigdec …]}. `:tx-data` is nil iff there is nothing
+   to write (quantity 0M was satisfied with no shortfall)."
   [conn {:keys [product facility quantity order order-item ship-group
                 reserve-order-enum require-inventory? promised-date
                 reserved-at priority?]
@@ -212,7 +251,10 @@
                        :product   product :facility f
                        :requested quantity :shortfall shortfall})))
     (let [;; Where the back-order lands: the last drawn bucket, or —
-          ;; when nothing was drawn — a freshly resolved bucket.
+          ;; when nothing was drawn — a freshly resolved bucket. The
+          ;; find-or-create call below routes through the gate via
+          ;; the ADR-068 wrapper in core.clj, so it's a separate
+          ;; (but still gated) pre-transaction. See the docstring.
           bo-bucket (when backorder?
                       (or (:item (last draws))
                           (inv/find-or-create-inventory-item!
@@ -260,40 +302,55 @@
                     qna? (conj (atp-detail item shortfall res-tempid)))))
               (range)
               draws)))]
-      {:reserved    (.subtract ^BigDecimal quantity ^BigDecimal shortfall)
+      {:tx-data     tx-data
+       :reserved    (.subtract ^BigDecimal quantity ^BigDecimal shortfall)
        :backordered shortfall
-       :draws       (mapv :take draws)
-       :tx-report   (when (seq tx-data) (d/transact conn tx-data))})))
+       :draws       (mapv :take draws)})))
 
 ;; ============================================================================
 ;; release-reservation!
 ;; ============================================================================
+
+(declare release-reservation-tx-data)
 
 (defn release-reservation!
   "Release an `:inv-reservation` — append a compensating
    `:inventory-detail` (`:atp-diff` positive, restoring the ATP) and
    retract the reservation row. The restored quantity is
    `:quantity + :quantity-not-available` (a back-order consumed ATP
-   too). `:effective-date` defaults to now. Returns the tx-report.
+   too). `:effective-date` defaults to now. Routes through the gate
+   (ADR-068). Returns the tx-report.
+
+   Optional: :vt-from / :vt-to (default :vt-from = :effective-date).
+
+   The pure tx-data builder is `release-reservation-tx-data` (ADR-068).
    The cancel-order! → release path research note 13 flagged as a P1."
   ([conn reservation-eid] (release-reservation! conn reservation-eid {}))
-  ([conn reservation-eid {:keys [effective-date]}]
-   (let [db (d/db conn)
-         r  (d/pull db [:inv-reservation/quantity
-                        :inv-reservation/quantity-not-available
-                        {:inv-reservation/inventory-item [:db/id]}]
-                    reservation-eid)
-         item (:db/id (:inv-reservation/inventory-item r))
-         _ (when-not item
-             (throw (ex-info "Reservation not found, or has no :inventory-item"
-                             {:reservation reservation-eid})))
-         released (.add ^BigDecimal (or (:inv-reservation/quantity r) 0M)
-                        ^BigDecimal (or (:inv-reservation/quantity-not-available r) 0M))]
-     (d/transact conn
-                 [{:inventory-detail/inventory-item item
-                   :inventory-detail/effective-date (or effective-date (Date.))
-                   :inventory-detail/qoh-diff 0M
-                   :inventory-detail/atp-diff released
-                   :inventory-detail/source-kind :reservation
-                   :inventory-detail/description "Reservation released"}
-                  [:db/retractEntity reservation-eid]]))))
+  ([conn reservation-eid {:keys [effective-date vt-from vt-to] :as opts}]
+   (let [eff (or effective-date (Date.))]
+     (validation/transact-with-validation
+      conn (kbt/with-vt (release-reservation-tx-data
+                         (d/db conn) reservation-eid
+                         (assoc opts :effective-date eff))
+                        (or vt-from eff) (or vt-to kbt/forever))))))
+
+(defn release-reservation-tx-data
+  "Pure tx-data builder for `release-reservation!` (ADR-068)."
+  [db reservation-eid {:keys [effective-date]}]
+  (let [r  (d/pull db [:inv-reservation/quantity
+                       :inv-reservation/quantity-not-available
+                       {:inv-reservation/inventory-item [:db/id]}]
+                   reservation-eid)
+        item (:db/id (:inv-reservation/inventory-item r))
+        _ (when-not item
+            (throw (ex-info "Reservation not found, or has no :inventory-item"
+                            {:reservation reservation-eid})))
+        released (.add ^BigDecimal (or (:inv-reservation/quantity r) 0M)
+                       ^BigDecimal (or (:inv-reservation/quantity-not-available r) 0M))]
+    [{:inventory-detail/inventory-item item
+      :inventory-detail/effective-date (or effective-date (Date.))
+      :inventory-detail/qoh-diff 0M
+      :inventory-detail/atp-diff released
+      :inventory-detail/source-kind :reservation
+      :inventory-detail/description "Reservation released"}
+     [:db/retractEntity reservation-eid]]))

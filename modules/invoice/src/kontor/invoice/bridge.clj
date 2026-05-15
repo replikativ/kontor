@@ -23,7 +23,8 @@
         product line."
   (:require [datahike.api :as d]
             [kontor.invoice.posting :as posting]
-            [kontor.status-machine :as sm]))
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Resolution
@@ -376,29 +377,13 @@
       (:order-adjustment/tax-auth-geo-id adjustment)
       (assoc :invoice-line/tax-auth-geo-id (:order-adjustment/tax-auth-geo-id adjustment)))))
 
-(defn make-invoice-from-order!
-  "Build an :invoice + :invoice-line rows + :order-item-billing
-   junctions from the given :order. Returns the tx-report.
+(declare make-invoice-from-order-tx-data)
 
-   Args:
-     conn       — datahike connection
-     order-spec — :order eid or :order/external-id string
-     opts       — map with:
-       :external-id  — :invoice/external-id (required)
-       :issue-date   — :invoice/issue-date (default now)
-       :type         — :invoice/type, default :sales
-       :entity       — :invoice/entity (overrides :order/entity if set)
-       :ship-group   — optional :ship-group ref; when set, the invoice
-                       is only for items in that ship group (the OFBiz
-                       invoicePerShipment pattern). Currently a
-                       placeholder — full ship-group filtering is a
-                       follow-up.
-
-   The :invoice/status starts at :draft. Caller invokes
-   `(post-to-ledger! conn invoice)` to transition to :sent."
-  [conn order-spec {:keys [external-id issue-date type entity ship-group] :as _opts}]
-  (let [db (d/db conn)
-        order-eid (cond
+(defn make-invoice-from-order-tx-data
+  "Pure tx-data builder for `make-invoice-from-order!` (ADR-068).
+   Returns the vector ready to transact."
+  [db order-spec {:keys [external-id issue-date type entity ship-group]}]
+  (let [order-eid (cond
                     (string? order-spec)
                     (d/q '[:find ?e . :in $ ?xid
                            :where [?e :order/external-id ?xid]]
@@ -480,10 +465,36 @@
                              :invoice/currency (get-in order [:order/currency :commodity/symbol])
                              :invoice/lines all-line-tempids}
                       invoice-entity-eid (assoc :invoice/entity invoice-entity-eid)
-                      ship-group         (assoc :invoice/invoice-per-shipment-of ship-group))
-        all-tx-data (concat [invoice-row]
-                            item-line-rows
-                            item-billings
-                            ri-billings
-                            adj-line-rows)]
-    (d/transact conn (vec all-tx-data))))
+                      ship-group         (assoc :invoice/invoice-per-shipment-of ship-group))]
+    (vec (concat [invoice-row]
+                 item-line-rows
+                 item-billings
+                 ri-billings
+                 adj-line-rows))))
+
+(defn make-invoice-from-order!
+  "Build an :invoice + :invoice-line rows + :order-item-billing
+   junctions from the given :order. Returns the tx-report. Routes
+   through the gate (ADR-068).
+
+   Args:
+     conn       — datahike connection
+     order-spec — :order eid or :order/external-id string
+     opts       — map with:
+       :external-id  — :invoice/external-id (required)
+       :issue-date   — :invoice/issue-date (default now)
+       :type         — :invoice/type, default :sales
+       :entity       — :invoice/entity (overrides :order/entity if set)
+       :ship-group   — optional :ship-group ref; when set, the invoice
+                       is only for items in that ship group (the OFBiz
+                       invoicePerShipment pattern). Currently a
+                       placeholder — full ship-group filtering is a
+                       follow-up.
+
+   The :invoice/status starts at :draft. Caller invokes
+   `(post-to-ledger! conn invoice)` to transition to :sent.
+
+   The pure tx-data builder is `make-invoice-from-order-tx-data`."
+  [conn order-spec opts]
+  (validation/transact-with-validation
+   conn (make-invoice-from-order-tx-data (d/db conn) order-spec opts)))

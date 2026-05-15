@@ -14,7 +14,8 @@
    `:payment-application`."
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
-            [kontor.status-machine :as sm]))
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Resolution
@@ -84,25 +85,41 @@
 ;; Transactors
 ;; ============================================================================
 
+(declare record-promise-tx-data
+         transition-promise-tx-data
+         renegotiate-tx-data)
+
 (defn record-promise!
   "Capture a PTP. Required opts: :external-id, :case, :amount,
    :commodity, :promised-by-date, :captured-by-uid.
 
    Optional: :invoice (omit for case-level), :captured-via, :notes,
-   :supporting-doc."
-  [conn {:keys [external-id case invoice amount commodity
-                promised-by-date captured-by-uid captured-via notes
-                supporting-doc vt-from vt-to]}]
+   :supporting-doc.
+
+   The pure tx-data builder is `record-promise-tx-data`."
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [recorded-at (java.util.Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (record-promise-tx-data
+                        (d/db conn) (assoc opts :recorded-at recorded-at))
+                       (or vt-from recorded-at)
+                       (or vt-to kbt/forever)))))
+
+(defn record-promise-tx-data
+  "Pure tx-data builder for `record-promise!` (ADR-068). Optional
+   `:tempid` (default `\"ptp-1\"`) and `:recorded-at` (default now)."
+  [db {:keys [external-id case invoice amount commodity
+              promised-by-date captured-by-uid captured-via notes
+              supporting-doc tempid recorded-at]
+       :or {tempid "ptp-1"}}]
   (when-not external-id      (throw (ex-info ":external-id required" {})))
   (when-not case             (throw (ex-info ":case required" {})))
   (when-not amount           (throw (ex-info ":amount required" {})))
   (when-not commodity        (throw (ex-info ":commodity required" {})))
   (when-not promised-by-date (throw (ex-info ":promised-by-date required" {})))
   (when-not captured-by-uid  (throw (ex-info ":captured-by-uid required" {})))
-  (let [db (d/db conn)
-        recorded-at (java.util.Date.)
-        ptp-tempid "ptp-1"
-        row (cond-> {:db/id ptp-tempid
+  (let [recorded-at (or recorded-at (java.util.Date.))
+        row (cond-> {:db/id tempid
                      :payment-promise/external-id external-id
                      :payment-promise/case case
                      :payment-promise/amount amount
@@ -118,39 +135,41 @@
         ;; (atomic).
         status-tx (sm/record-status-change-tx-data
                    db
-                   {:entity ptp-tempid
+                   {:entity tempid
                     :entity-type :payment-promise
                     :facet :payment-promise/status
                     :from :nil
                     :to :open
                     :changed-at recorded-at
                     :changed-by-uid captured-by-uid
-                    :reason :promise-recorded})
-        all-tx (kbt/with-vt (into [row] status-tx)
-                            (or vt-from recorded-at)
-                            (or vt-to kbt/forever))]
-    (d/transact conn all-tx)))
+                    :reason :promise-recorded})]
+    (into [row] status-tx)))
 
-(defn- transition-promise! [conn {:keys [promise to changed-by-uid reason
-                                          reason-note vt-from vt-to]
-                                   :as opts}]
-  (let [db (d/db conn)
-        eid (resolve-promise db promise)
+(defn- transition-promise!
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [now (java.util.Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (transition-promise-tx-data
+                        (d/db conn) (assoc opts :changed-at now))
+                       (or vt-from now)
+                       (or vt-to kbt/forever)))))
+
+(defn transition-promise-tx-data
+  "Pure tx-data builder for `transition-promise!` (ADR-068)."
+  [db {:keys [promise to changed-by-uid reason reason-note changed-at]}]
+  (let [eid (resolve-promise db promise)
         _ (when-not eid (throw (ex-info "Promise not found" {:spec promise})))
-        now (java.util.Date.)
-        status-tx (sm/record-status-change-tx-data
-                   db
-                   (cond-> {:entity eid
-                            :entity-type :payment-promise
-                            :facet :payment-promise/status
-                            :to to
-                            :changed-at now
-                            :changed-by-uid changed-by-uid}
-                     reason      (assoc :reason reason)
-                     reason-note (assoc :reason-note reason-note)))]
-    (d/transact conn (kbt/with-vt status-tx
-                                  (or vt-from now)
-                                  (or vt-to kbt/forever)))))
+        now (or changed-at (java.util.Date.))]
+    (sm/record-status-change-tx-data
+     db
+     (cond-> {:entity eid
+              :entity-type :payment-promise
+              :facet :payment-promise/status
+              :to to
+              :changed-at now
+              :changed-by-uid changed-by-uid}
+       reason      (assoc :reason reason)
+       reason-note (assoc :reason-note reason-note)))))
 
 (defn mark-promise-kept!
   "Promise → :kept (a :payment-application reduced the open balance
@@ -181,18 +200,27 @@
 
 (defn renegotiate!
   "Promise → :renegotiated (replaced by a new promise). Doesn't
-   write the new promise — caller composes both."
-  [conn {:keys [promise changed-by-uid reason reason-note]}]
-  (let [eid (resolve-promise (d/db conn) promise)
+   write the new promise — caller composes both.
+
+   The pure tx-data builder is `renegotiate-tx-data`."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (renegotiate-tx-data (d/db conn) opts)))
+
+(defn renegotiate-tx-data
+  "Pure tx-data builder for `renegotiate!` (ADR-068)."
+  [db {:keys [promise changed-by-uid reason reason-note]}]
+  (let [eid (resolve-promise db promise)
         _ (when-not eid (throw (ex-info "Promise not found" {:spec promise})))]
-    (sm/record-status-change! conn
-                              (cond-> {:entity eid
-                                       :entity-type :payment-promise
-                                       :facet :payment-promise/status
-                                       :to :renegotiated
-                                       :changed-by-uid changed-by-uid}
-                                reason      (assoc :reason (or reason :renegotiated))
-                                reason-note (assoc :reason-note reason-note)))))
+    (sm/record-status-change-tx-data
+     db
+     (cond-> {:entity eid
+              :entity-type :payment-promise
+              :facet :payment-promise/status
+              :to :renegotiated
+              :changed-by-uid changed-by-uid}
+       reason      (assoc :reason (or reason :renegotiated))
+       reason-note (assoc :reason-note reason-note)))))
 
 ;; ============================================================================
 ;; Sweeper (per ADR-041 :auto-after-millis pattern, but date-driven)

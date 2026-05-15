@@ -15,7 +15,8 @@
             [datahike.api :as d]
             [kontor.collections.dispute :as kdispute]
             [kontor.collections.pause :as kpause]
-            [kontor.collections.promise :as kpromise]))
+            [kontor.collections.promise :as kpromise]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Template provider protocol
@@ -249,6 +250,8 @@
 ;; Emission (impure)
 ;; ============================================================================
 
+(declare emit-dunning-event-tx-data)
+
 (defn emit-dunning-event!
   "Materialize one planned row. In one tx:
      1. Write the :dunning-event row.
@@ -267,18 +270,31 @@
    Optional opts:
      :acting-uid  ref to :create/uid (audit field on the side-effect-
                   intent if your runtime uses it)
-     :now         instant (default now)"
-  [conn {:keys [plan-row channel provider acting-uid now]}]
+     :now         instant (default now)
+
+   The pure tx-data builder is `emit-dunning-event-tx-data`."
+  [conn {:keys [now] :as opts}]
+  (let [now (or now (java.util.Date.))]
+    (validation/transact-with-validation
+     conn (emit-dunning-event-tx-data
+           (d/db conn) (assoc opts :now now)))))
+
+(defn emit-dunning-event-tx-data
+  "Pure tx-data builder for `emit-dunning-event!` (ADR-068). Optional
+   `:tempid-suffix` (default `\"\"`) namespaces internal tempids so
+   multiple emissions compose in one process tx."
+  [_db {:keys [plan-row channel provider now tempid-suffix]
+        :or {tempid-suffix ""}}]
   (let [now (or now (java.util.Date.))
         sent? (not (:skipped? plan-row))
-        event-tempid "ev-1"
+        event-tempid (str "ev" tempid-suffix)
         rendered (when sent?
                    (resolve-template provider
                                      {:level (:level plan-row)
                                       :locale (:locale plan-row)
                                       :template-ref (:template-ref plan-row)}))
-        doc-tempid "ev-doc-1"
-        intent-tempid "ev-intent-1"
+        doc-tempid (str "ev-doc" tempid-suffix)
+        intent-tempid (str "ev-intent" tempid-suffix)
         event-row (cond-> {:db/id event-tempid
                            :dunning-event/case (:case plan-row)
                            :dunning-event/level (or (:level plan-row) 0)
@@ -325,9 +341,8 @@
                         :side-effect-intent/status :pending
                         :side-effect-intent/created-at now
                         :side-effect-intent/retry-count 0
-                        :side-effect-intent/max-retries 3}])
-        all-tx (vec (concat [event-row] doc-rows intent-rows))]
-    (d/transact conn all-tx)))
+                        :side-effect-intent/max-retries 3}])]
+    (vec (concat [event-row] doc-rows intent-rows))))
 
 ;; ============================================================================
 ;; Seeds — sensible defaults

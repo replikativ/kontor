@@ -193,20 +193,38 @@
     received-at   (assoc :inventory-item/received-at received-at)
     note          (assoc :inventory-item/note note)))
 
+(defn find-or-create-inventory-item-tx-data
+  "Pure builder for `find-or-create-inventory-item!` (ADR-068). Returns
+   `{:tx-data <[] or [entity]> :item-id <eid-or-tempid>}` — when the
+   bucket already exists, `:tx-data` is `[]` and `:item-id` is the
+   existing eid; otherwise `:tx-data` is `[(inventory-item-entity …)]`
+   with a tempid (default `\"inv-item\"`, override via `:tempid`) that
+   the caller routes through commit. Lets composing callers either
+   commit nothing (existing bucket) or fold the bucket entity into a
+   larger process tx-data."
+  [db {:keys [tempid] :or {tempid "inv-item"} :as spec}]
+  (when-not (:product spec)  (throw (ex-info ":product required" {})))
+  (when-not (:facility spec) (throw (ex-info ":facility required" {})))
+  (if-let [existing (find-inventory-item db spec)]
+    {:tx-data [] :item-id existing}
+    {:tx-data [(inventory-item-entity tempid spec)] :item-id tempid}))
+
 (defn find-or-create-inventory-item!
   "Resolve the :inventory-item bucket for `spec`, creating it if it
-   does not exist. Returns the eid.
+   does not exist. Returns the eid. Routes the create through the
+   gate (ADR-068) via the pure `find-or-create-inventory-item-tx-data`
+   builder.
 
    Required: :product, :facility. Optional: :location, :lot,
    :owner-entity, :kind (default :non-serial), :status (default
    :available), :serial-number, :received-at, :note."
   [conn spec]
-  (when-not (:product spec)  (throw (ex-info ":product required" {})))
-  (when-not (:facility spec) (throw (ex-info ":facility required" {})))
-  (let [db (d/db conn)]
-    (or (find-inventory-item db spec)
-        (get-in (d/transact conn [(inventory-item-entity "inv-item" spec)])
-                [:tempids "inv-item"]))))
+  (let [{:keys [tx-data item-id]}
+        (find-or-create-inventory-item-tx-data (d/db conn) spec)]
+    (if (empty? tx-data)
+      item-id
+      (get-in (validation/transact-with-validation conn tx-data)
+              [:tempids item-id]))))
 
 (defn pull-inventory-item
   "Pull an :inventory-item with its facility / location / lot."

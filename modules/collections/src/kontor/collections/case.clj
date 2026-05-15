@@ -13,7 +13,8 @@
    (partner, entity)."
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
-            [kontor.status-machine :as sm]))
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Resolution
@@ -85,6 +86,12 @@
 ;; Transactors
 ;; ============================================================================
 
+(declare open-case-tx-data
+         advance-state-tx-data
+         close-case-tx-data
+         assign-collector-tx-data
+         refresh-denorms-tx-data)
+
 (defn open-case!
   "Open a new :collection-case for (partner, entity).
 
@@ -103,24 +110,35 @@
      :supporting-doc     ref to :audit-doc
 
    Throws if an open case for (partner, entity) already exists —
-   tenants must close the current case before opening another."
-  [conn {:keys [code partner entity opened-by-uid strategy segment
-                assigned-collector notes supporting-doc
-                vt-from vt-to]}]
+   tenants must close the current case before opening another.
+
+   The pure tx-data builder is `open-case-tx-data`."
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [opened-at (java.util.Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (open-case-tx-data
+                        (d/db conn) (assoc opts :opened-at opened-at))
+                       (or vt-from opened-at)
+                       (or vt-to kbt/forever)))))
+
+(defn open-case-tx-data
+  "Pure tx-data builder for `open-case!` (ADR-068). Optional
+   `:tempid` (default `\"case-1\"`) and `:opened-at` (default now)."
+  [db {:keys [code partner entity opened-by-uid strategy segment
+              assigned-collector notes supporting-doc tempid opened-at]
+       :or {tempid "case-1"}}]
   (when-not code           (throw (ex-info ":code required" {})))
   (when-not partner        (throw (ex-info ":partner required" {})))
   (when-not entity         (throw (ex-info ":entity required" {})))
   (when-not opened-by-uid  (throw (ex-info ":opened-by-uid required" {})))
-  (let [db (d/db conn)
-        existing (open-case-for db partner entity)
+  (let [existing (open-case-for db partner entity)
         _ (when existing
             (throw (ex-info "Open case already exists for (partner, entity)"
                             {:type :collection-case/already-open
                              :existing existing
                              :partner partner :entity entity})))
-        opened-at (java.util.Date.)
-        case-tempid "case-1"
-        row (cond-> {:db/id case-tempid
+        opened-at (or opened-at (java.util.Date.))
+        row (cond-> {:db/id tempid
                      :collection-case/code code
                      :collection-case/partner partner
                      :collection-case/entity entity
@@ -136,18 +154,15 @@
         ;; status machine (atomic).
         status-tx (sm/record-status-change-tx-data
                    db
-                   {:entity case-tempid
+                   {:entity tempid
                     :entity-type :collection-case
                     :facet :collection-case/state
                     :from :nil
                     :to :open
                     :changed-at opened-at
                     :changed-by-uid opened-by-uid
-                    :reason :case-opened})
-        all-tx (kbt/with-vt (into [row] status-tx)
-                            (or vt-from opened-at)
-                            (or vt-to kbt/forever))]
-    (d/transact conn all-tx)))
+                    :reason :case-opened})]
+    (into [row] status-tx)))
 
 (defn advance-state!
   "Drive `:collection-case/state` through the status-machine. Generic
@@ -155,27 +170,35 @@
    / legal / paid / written-off transitions.
 
    Required opts: :case, :to, :changed-by-uid.
-   Optional: :reason, :reason-note, :supporting-doc."
-  [conn {:keys [case to changed-by-uid reason reason-note supporting-doc
-                vt-from vt-to]}]
-  (let [db (d/db conn)
-        eid (resolve-case db case)
+   Optional: :reason, :reason-note, :supporting-doc.
+
+   The pure tx-data builder is `advance-state-tx-data`."
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [now (java.util.Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (advance-state-tx-data
+                        (d/db conn) (assoc opts :changed-at now))
+                       (or vt-from now)
+                       (or vt-to kbt/forever)))))
+
+(defn advance-state-tx-data
+  "Pure tx-data builder for `advance-state!` (ADR-068)."
+  [db {:keys [case to changed-by-uid reason reason-note supporting-doc
+              changed-at]}]
+  (let [eid (resolve-case db case)
         _ (when-not eid (throw (ex-info "Case not found" {:spec case})))
-        now (java.util.Date.)
-        status-tx (sm/record-status-change-tx-data
-                   db
-                   (cond-> {:entity eid
-                            :entity-type :collection-case
-                            :facet :collection-case/state
-                            :to to
-                            :changed-at now
-                            :changed-by-uid changed-by-uid}
-                     reason         (assoc :reason reason)
-                     reason-note    (assoc :reason-note reason-note)
-                     supporting-doc (assoc :supporting-doc supporting-doc)))]
-    (d/transact conn (kbt/with-vt status-tx
-                                  (or vt-from now)
-                                  (or vt-to kbt/forever)))))
+        now (or changed-at (java.util.Date.))]
+    (sm/record-status-change-tx-data
+     db
+     (cond-> {:entity eid
+              :entity-type :collection-case
+              :facet :collection-case/state
+              :to to
+              :changed-at now
+              :changed-by-uid changed-by-uid}
+       reason         (assoc :reason reason)
+       reason-note    (assoc :reason-note reason-note)
+       supporting-doc (assoc :supporting-doc supporting-doc)))))
 
 (defn close-case!
   "Close a case (:closed-at set). The case's :state must already be
@@ -184,34 +207,48 @@
    `advance-state!`.
 
    Required opts: :case, :closed-by-uid.
-   Optional: :reason, :reason-note, :supporting-doc, :vt-from, :vt-to."
-  [conn {:keys [case closed-by-uid reason reason-note supporting-doc
-                vt-from vt-to]}]
+   Optional: :reason, :reason-note, :supporting-doc, :vt-from, :vt-to.
+
+   The pure tx-data builder is `close-case-tx-data`."
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [closed-at (java.util.Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (close-case-tx-data
+                        (d/db conn) (assoc opts :closed-at closed-at))
+                       (or vt-from closed-at)
+                       (or vt-to kbt/forever)))))
+
+(defn close-case-tx-data
+  "Pure tx-data builder for `close-case!` (ADR-068)."
+  [db {:keys [case closed-by-uid supporting-doc closed-at]}]
   (when-not closed-by-uid (throw (ex-info ":closed-by-uid required" {})))
-  (let [db (d/db conn)
-        eid (resolve-case db case)
+  (let [eid (resolve-case db case)
         _ (when-not eid (throw (ex-info "Case not found" {:spec case})))
-        closed-at (java.util.Date.)
+        closed-at (or closed-at (java.util.Date.))
         update (cond-> {:db/id eid
                         :collection-case/closed-at closed-at}
                  supporting-doc (assoc :collection-case/supporting-doc
                                        supporting-doc))]
-    (d/transact conn (kbt/with-vt [update]
-                                  (or vt-from closed-at)
-                                  (or vt-to kbt/forever)))))
+    [update]))
 
 (defn assign-collector!
   "Set or change the assigned collector. No state machine impact;
    purely a denorm change. Records the change via :status-history
    semantics only when status is concurrently moved — caller drives
-   status separately if desired."
-  [conn {:keys [case collector-uid changed-by-uid]}]
-  (let [db (d/db conn)
-        eid (resolve-case db case)
+   status separately if desired.
+
+   The pure tx-data builder is `assign-collector-tx-data`."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (assign-collector-tx-data (d/db conn) opts)))
+
+(defn assign-collector-tx-data
+  "Pure tx-data builder for `assign-collector!` (ADR-068)."
+  [db {:keys [case collector-uid]}]
+  (let [eid (resolve-case db case)
         _ (when-not eid (throw (ex-info "Case not found" {:spec case})))]
-    (d/transact conn
-                [{:db/id eid
-                  :collection-case/assigned-collector collector-uid}])))
+    [{:db/id eid
+      :collection-case/assigned-collector collector-uid}]))
 
 (defn refresh-denorms!
   "Update `:collection-case/total-overdue` and `:collection-case/
@@ -221,12 +258,18 @@
    invoice` + aging methods.
 
    Pure ADR-008 — bitemporal queries answer aging on the fly; the
-   denorm exists only for fast filter/sort in lists."
-  [conn {:keys [case total-overdue oldest-invoice]}]
-  (let [db (d/db conn)
-        eid (resolve-case db case)
+   denorm exists only for fast filter/sort in lists.
+
+   The pure tx-data builder is `refresh-denorms-tx-data`."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (refresh-denorms-tx-data (d/db conn) opts)))
+
+(defn refresh-denorms-tx-data
+  "Pure tx-data builder for `refresh-denorms!` (ADR-068)."
+  [db {:keys [case total-overdue oldest-invoice]}]
+  (let [eid (resolve-case db case)
         _ (when-not eid (throw (ex-info "Case not found" {:spec case})))]
-    (d/transact conn
-                [(cond-> {:db/id eid}
-                   total-overdue   (assoc :collection-case/total-overdue total-overdue)
-                   oldest-invoice  (assoc :collection-case/oldest-invoice oldest-invoice))])))
+    [(cond-> {:db/id eid}
+       total-overdue   (assoc :collection-case/total-overdue total-overdue)
+       oldest-invoice  (assoc :collection-case/oldest-invoice oldest-invoice))]))

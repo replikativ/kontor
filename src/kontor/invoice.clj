@@ -20,7 +20,8 @@
             [kontor.bitemporal :as kbt]
             [kontor.payment-term :as pt]
             [kontor.posting :as posting]
-            [kontor.status-machine :as sm])
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation])
   (:import [java.util Date]))
 
 ;; ============================================================================
@@ -55,47 +56,20 @@
 ;; create!
 ;; ============================================================================
 
-(defn create!
-  "Create a draft invoice + its line items. `invoice-map` shape:
+(declare create-tx-data send-tx-data mark-paid-tx-data cancel-tx-data
+         flip-paid-on-settlement-tx-data)
 
-     {:invoice/external-id   String  ; required
-      :invoice/issue-date    Date    ; required
-      :invoice/seller        eid     ; partner ref
-      :invoice/buyer         eid     ; partner ref
-      :invoice/payment-term  eid     ; payment-term ref (optional)
-      :invoice/currency      String  ; default \"EUR\"
-      :invoice/lines         [<line-map> …]  ; required, ≥1
-      :invoice/notes         [String]
-      :invoice/buyer-reference String}
-
-   Line maps:
-     {:invoice-line/sequence  long
-      :invoice-line/name      String
-      :invoice-line/description String
-      :invoice-line/quantity  bigdec
-      :invoice-line/unit-code String
-      :invoice-line/unit-price bigdec
-      :invoice-line/vat-rate  bigdec
-      :invoice-line/vat-category String
-      :invoice-line/account   eid (optional override)}
-
-   Auto-applies payment-term to compute :due-date + :discount-deadline
-   when :payment-term is set.
-
-   Auto-materializes :total-net / :total-vat / :total-gross from
-   line items when not supplied.
-
-   Returns the resulting tx-report; the new invoice's eid is in
-   `(:tempids report)` keyed by the issued tempid."
-  [conn invoice-map]
+(defn create-tx-data
+  "Pure tx-data builder for `create!` (ADR-068). Returns the vector
+   of [invoice-row line-row …] ready to transact."
+  [db invoice-map]
   (when-not (:invoice/external-id invoice-map)
     (throw (ex-info ":invoice/external-id is required" {:invoice invoice-map})))
   (when-not (:invoice/issue-date invoice-map)
     (throw (ex-info ":invoice/issue-date is required" {:invoice invoice-map})))
   (when-not (seq (:invoice/lines invoice-map))
     (throw (ex-info ":invoice/lines must be non-empty" {:invoice invoice-map})))
-  (let [db (d/db conn)
-        lines (:invoice/lines invoice-map)
+  (let [lines (:invoice/lines invoice-map)
         tempid (str "invoice-" (:invoice/external-id invoice-map))
         ;; Materialize totals from lines unless caller supplied them.
         totals (cond-> {}
@@ -132,35 +106,66 @@
                        (merge totals)
                        (merge term-frag)
                        (assoc :invoice/lines (mapv :db/id line-tx)))]
-    (d/transact conn (into [invoice-tx] line-tx))))
+    (into [invoice-tx] line-tx)))
+
+(defn create!
+  "Create a draft invoice + its line items. `invoice-map` shape:
+
+     {:invoice/external-id   String  ; required
+      :invoice/issue-date    Date    ; required
+      :invoice/seller        eid     ; partner ref
+      :invoice/buyer         eid     ; partner ref
+      :invoice/payment-term  eid     ; payment-term ref (optional)
+      :invoice/currency      String  ; default \"EUR\"
+      :invoice/lines         [<line-map> …]  ; required, ≥1
+      :invoice/notes         [String]
+      :invoice/buyer-reference String}
+
+   Line maps:
+     {:invoice-line/sequence  long
+      :invoice-line/name      String
+      :invoice-line/description String
+      :invoice-line/quantity  bigdec
+      :invoice-line/unit-code String
+      :invoice-line/unit-price bigdec
+      :invoice-line/vat-rate  bigdec
+      :invoice-line/vat-category String
+      :invoice-line/account   eid (optional override)}
+
+   Auto-applies payment-term to compute :due-date + :discount-deadline
+   when :payment-term is set.
+
+   Auto-materializes :total-net / :total-vat / :total-gross from
+   line items when not supplied.
+
+   Returns the resulting tx-report; the new invoice's eid is in
+   `(:tempids report)` keyed by the issued tempid.
+
+   The pure tx-data builder is `create-tx-data` (ADR-068)."
+  [conn invoice-map]
+  (validation/transact-with-validation
+   conn (create-tx-data (d/db conn) invoice-map)))
 
 ;; ============================================================================
 ;; send!
 ;; ============================================================================
 
-(defn send!
-  "Transition a :draft invoice to :sent. Calls `(posting-builder db
-   invoice-pulled)` to produce the accounting tx-data (country
-   module's job — knows the chart conventions). Transacts the
-   resulting transaction + sets :invoice/transaction backref +
-   moves status :draft → :sent via the status machine (ADR-034 +
-   ADR-038).
+(defn send-tx-data
+  "Pure tx-data builder for `send!` (ADR-068). Composes the posting
+   tx-data + the invoice update + the status-history row into ONE
+   atomic vector. The transaction tempid is `-1` (build-transaction
+   convention); callers extract the resulting eid from
+   `(:tempids report)` under that key.
 
-   `posting-builder` returns a map with :transaction + :postings,
-   the same shape posting/build-transaction accepts.
+   Required keys in opts:
+     :invoice-eid     — entity-id of the :draft invoice
+     :posting-builder — fn (db invoice-pulled) → posting-input map
 
-   `opts`:
-     :vt-from / :vt-to  — valid-time bounds (default :vt-from = now)
-     :changed-by-uid    — actor recorded on the :status-history row
-     :reason            — codified reason (ADR-038)
-     :reason-note       — free-text
-     :supporting-doc    — ref to :audit-doc"
-  ([conn invoice-eid posting-builder]
-   (send! conn invoice-eid posting-builder nil))
-  ([conn invoice-eid posting-builder {:keys [vt-from vt-to changed-by-uid
-                                              reason reason-note supporting-doc]}]
-  (let [db (d/db conn)
-        inv (d/pull db
+   Optional: :changed-by-uid, :reason, :reason-note, :supporting-doc,
+             :changed-at (default now)."
+  [db {:keys [invoice-eid posting-builder changed-by-uid reason reason-note
+              supporting-doc changed-at]}]
+  (let [inv (d/pull db
                     [:db/id :invoice/external-id :invoice/status
                      :invoice/issue-date :invoice/currency
                      :invoice/total-net :invoice/total-vat :invoice/total-gross
@@ -183,108 +188,139 @@
       (throw (ex-info "Only :draft invoices can be sent"
                       {:invoice-eid invoice-eid
                        :status (:invoice/status inv)})))
-    (let [now (Date.)
+    (let [now (or changed-at (Date.))
           ;; Country module supplies the posting tx-data.
           tx-input (posting-builder db inv)
           tx (posting/build-transaction tx-input)
-          ;; Resolve the resulting transaction's eid via its external-id
-          ;; (set by posting-builder; convention is to mirror
-          ;; :invoice/external-id).
-          ext-id (or (-> tx-input :transaction :transaction/external-id)
-                     (:invoice/external-id inv))
-          {:keys [tempids]} (d/transact conn tx)
-          tx-eid (or (->> tempids
-                          (some (fn [[k v]]
-                                  (when (and (string? k)
-                                             (re-find (re-pattern (str "^" ext-id)) k))
-                                    v))))
-                     ;; Fallback: query for the tx by its external-id
-                     (d/q '[:find ?t .
-                            :in $ ?ext
-                            :where [?t :transaction/external-id ?ext]]
-                          (d/db conn) ext-id))
-          db-after (d/db conn)
+          ;; `build-transaction` uses -1 for the transaction tempid.
+          tx-tempid -1
           status-tx (sm/record-status-change-tx-data
-                     db-after
+                     db
                      (cond-> {:entity invoice-eid
                               :entity-type :invoice
                               :facet :invoice/status
                               :from :draft
                               :to :sent
                               :changed-at now
-                              :origin-transaction tx-eid}
+                              :origin-transaction tx-tempid}
                        changed-by-uid (assoc :changed-by-uid changed-by-uid)
                        reason         (assoc :reason reason)
                        reason-note    (assoc :reason-note reason-note)
                        supporting-doc (assoc :supporting-doc supporting-doc)))]
-      (d/transact conn
-                  (kbt/with-vt
-                    (into [{:db/id invoice-eid :invoice/transaction tx-eid}]
-                          status-tx)
-                    (or vt-from now)
-                    (or vt-to kbt/forever)))
-      {:transaction-eid tx-eid}))))
+      (-> (vec tx)
+          (conj {:db/id invoice-eid :invoice/transaction tx-tempid})
+          (into status-tx)))))
+
+(defn send!
+  "Transition a :draft invoice to :sent. Calls `(posting-builder db
+   invoice-pulled)` to produce the accounting tx-data (country
+   module's job — knows the chart conventions). Transacts the
+   resulting transaction + sets :invoice/transaction backref +
+   moves status :draft → :sent via the status machine (ADR-034 +
+   ADR-038), all in ONE atomic tx through the gate (ADR-068).
+
+   `posting-builder` returns a map with :transaction + :postings,
+   the same shape posting/build-transaction accepts.
+
+   `opts`:
+     :vt-from / :vt-to  — valid-time bounds; default :vt-from is the
+                          posting's `:transaction/effective-date`
+                          (matching build-transaction's convention),
+                          fallback to `now`.
+     :changed-by-uid    — actor recorded on the :status-history row
+     :reason            — codified reason (ADR-038)
+     :reason-note       — free-text
+     :supporting-doc    — ref to :audit-doc
+
+   Returns `{:transaction-eid <eid>}`. The pure tx-data builder is
+   `send-tx-data` (ADR-068)."
+  ([conn invoice-eid posting-builder]
+   (send! conn invoice-eid posting-builder nil))
+  ([conn invoice-eid posting-builder {:keys [vt-from vt-to changed-by-uid
+                                              reason reason-note supporting-doc]}]
+   (let [now (Date.)
+         db (d/db conn)
+         tx-data (send-tx-data db
+                               {:invoice-eid invoice-eid
+                                :posting-builder posting-builder
+                                :changed-by-uid changed-by-uid
+                                :reason reason
+                                :reason-note reason-note
+                                :supporting-doc supporting-doc
+                                :changed-at now})
+         ;; Preserve build-transaction's vt-from convention: default
+         ;; to the posting's :transaction/effective-date. Find it by
+         ;; scanning the composed tx-data for the transaction row
+         ;; (the only entity carrying :transaction/effective-date).
+         eff-date (some :transaction/effective-date tx-data)
+         report (validation/transact-with-validation
+                 conn (kbt/with-vt tx-data
+                                   (or vt-from eff-date now)
+                                   (or vt-to kbt/forever)))]
+     {:transaction-eid (get-in report [:tempids -1])})))
 
 ;; ============================================================================
 ;; mark-paid! / cancel!
 ;; ============================================================================
 
+(defn mark-paid-tx-data
+  "Pure tx-data builder for `mark-paid!` (ADR-068)."
+  [db {:keys [invoice-eid changed-by-uid reason reason-note supporting-doc
+              changed-at]}]
+  (sm/record-status-change-tx-data
+   db
+   (cond-> {:entity invoice-eid
+            :entity-type :invoice
+            :facet :invoice/status
+            :to :paid
+            :changed-at (or changed-at (Date.))}
+     changed-by-uid (assoc :changed-by-uid changed-by-uid)
+     reason         (assoc :reason reason)
+     reason-note    (assoc :reason-note reason-note)
+     supporting-doc (assoc :supporting-doc supporting-doc))))
+
 (defn mark-paid!
   "Flip a :sent (or :partially-paid) invoice to :paid via the status
    machine (ADR-034 + ADR-038). Called by the reconciliation hook
    when a bank-line settles the invoice's transaction; can also be
-   invoked directly when payment is recorded out-of-band.
+   invoked directly when payment is recorded out-of-band. Routes
+   through the gate (ADR-068).
 
    `opts`:
      :vt-from / :vt-to  — valid-time bounds (default :vt-from = now)
      :changed-by-uid    — actor recorded on :status-history
-     :reason / :reason-note / :supporting-doc — ADR-038"
+     :reason / :reason-note / :supporting-doc — ADR-038
+
+   The pure tx-data builder is `mark-paid-tx-data`."
   ([conn invoice-eid]
    (mark-paid! conn invoice-eid nil))
   ([conn invoice-eid {:keys [vt-from vt-to changed-by-uid
                               reason reason-note supporting-doc]}]
-   (let [db (d/db conn)
-         now (Date.)
-         status-tx (sm/record-status-change-tx-data
-                    db
-                    (cond-> {:entity invoice-eid
-                             :entity-type :invoice
-                             :facet :invoice/status
-                             :to :paid
-                             :changed-at now}
-                      changed-by-uid (assoc :changed-by-uid changed-by-uid)
-                      reason         (assoc :reason reason)
-                      reason-note    (assoc :reason-note reason-note)
-                      supporting-doc (assoc :supporting-doc supporting-doc)))]
-     (d/transact conn
-                 (kbt/with-vt status-tx
-                              (or vt-from now)
-                              (or vt-to kbt/forever))))))
+   (let [now (Date.)]
+     (validation/transact-with-validation
+      conn (kbt/with-vt (mark-paid-tx-data
+                         (d/db conn)
+                         {:invoice-eid invoice-eid
+                          :changed-by-uid changed-by-uid
+                          :reason reason
+                          :reason-note reason-note
+                          :supporting-doc supporting-doc
+                          :changed-at now})
+                        (or vt-from now)
+                        (or vt-to kbt/forever))))))
 
-(defn cancel!
-  "Cancel a :sent or :draft invoice via the status machine.
-   For :draft, just flips status :draft → :cancelled.
-   For :sent, also creates a reversal transaction that negates each
-   posting and points at the original via :transaction/reverses
-   (kernel ADR-007: never edit posted entries; reverse + re-post).
-
-   `opts`:
-     :vt-from / :vt-to  — valid-time bounds (default :vt-from = now)
-     :changed-by-uid    — actor recorded on :status-history
-     :reason / :reason-note / :supporting-doc — ADR-038"
-  ([conn invoice-eid]
-   (cancel! conn invoice-eid nil))
-  ([conn invoice-eid {:keys [vt-from vt-to changed-by-uid
-                              reason reason-note supporting-doc]}]
-  (let [db (d/db conn)
-        inv (d/pull db [:invoice/status :invoice/external-id
+(defn cancel-tx-data
+  "Pure tx-data builder for `cancel!` (ADR-068). For :draft, returns
+   just the status-history rows. For :sent, returns the reversal
+   transaction + the status-history rows, all composed atomically."
+  [db {:keys [invoice-eid changed-by-uid reason reason-note supporting-doc
+              changed-at]}]
+  (let [inv (d/pull db [:invoice/status :invoice/external-id
                         {:invoice/transaction
                          [:db/id :transaction/external-id
                           {:transaction/journal [:db/id]}]}]
                     invoice-eid)
-        now (Date.)
-        vf  (or vt-from now)
-        vt  (or vt-to kbt/forever)
+        now (or changed-at (Date.))
         status-change-opts (cond-> {:entity invoice-eid
                                     :entity-type :invoice
                                     :facet :invoice/status
@@ -296,10 +332,7 @@
                              supporting-doc (assoc :supporting-doc supporting-doc))]
     (case (:invoice/status inv)
       :draft
-      (d/transact conn
-                  (kbt/with-vt
-                    (sm/record-status-change-tx-data db status-change-opts)
-                    vf vt))
+      (vec (sm/record-status-change-tx-data db status-change-opts))
       :sent
       (let [original-tx (:invoice/transaction inv)
             original-tx-eid (:db/id original-tx)
@@ -328,24 +361,85 @@
                            :transaction/posted-at now
                            :transaction/reverses original-tx-eid}
                           :postings postings})]
-        (d/transact conn (kbt/with-vt reversal-tx vf vt))
-        (d/transact conn
-                    (kbt/with-vt
-                      (sm/record-status-change-tx-data (d/db conn) status-change-opts)
-                      vf vt)))
+        (vec (concat reversal-tx
+                     (sm/record-status-change-tx-data db status-change-opts))))
       (throw (ex-info "Cannot cancel invoice in current status"
                       {:invoice-eid invoice-eid
-                       :status (:invoice/status inv)}))))))
+                       :status (:invoice/status inv)})))))
+
+(defn cancel!
+  "Cancel a :sent or :draft invoice via the status machine.
+   For :draft, just flips status :draft → :cancelled.
+   For :sent, also creates a reversal transaction that negates each
+   posting and points at the original via :transaction/reverses
+   (kernel ADR-007: never edit posted entries; reverse + re-post).
+   Routes through the gate (ADR-068).
+
+   `opts`:
+     :vt-from / :vt-to  — valid-time bounds (default :vt-from = now)
+     :changed-by-uid    — actor recorded on :status-history
+     :reason / :reason-note / :supporting-doc — ADR-038
+
+   The pure tx-data builder is `cancel-tx-data`."
+  ([conn invoice-eid]
+   (cancel! conn invoice-eid nil))
+  ([conn invoice-eid {:keys [vt-from vt-to changed-by-uid
+                              reason reason-note supporting-doc]}]
+   (let [now (Date.)]
+     (validation/transact-with-validation
+      conn (kbt/with-vt (cancel-tx-data
+                         (d/db conn)
+                         {:invoice-eid invoice-eid
+                          :changed-by-uid changed-by-uid
+                          :reason reason
+                          :reason-note reason-note
+                          :supporting-doc supporting-doc
+                          :changed-at now})
+                        (or vt-from now)
+                        (or vt-to kbt/forever))))))
 
 ;; ============================================================================
 ;; Reconciliation hook
 ;; ============================================================================
 
+(defn flip-paid-on-settlement-tx-data
+  "Pure tx-data builder for `flip-paid-on-settlement` (ADR-068).
+   Returns the status-change tx-data vector (possibly empty when all
+   referenced invoices are already :paid)."
+  [db {:keys [settled-tx-eids changed-by-uid reason reason-note supporting-doc
+              changed-at]}]
+  (let [invoice-eids (d/q '[:find [?inv ...]
+                            :in $ [?tx ...]
+                            :where [?inv :invoice/transaction ?tx]]
+                          db settled-tx-eids)
+        now (or changed-at (Date.))
+        ;; Compose all status-change tx-data in one tx. Skip invoices
+        ;; already :paid (idempotent).
+        pending (filter (fn [eid]
+                          (not= :paid
+                                (:invoice/status (d/pull db [:invoice/status] eid))))
+                        invoice-eids)]
+    (vec (mapcat
+          (fn [eid]
+            (sm/record-status-change-tx-data
+             db
+             (cond-> {:entity eid
+                      :entity-type :invoice
+                      :facet :invoice/status
+                      :to :paid
+                      :changed-at now
+                      :reason (or reason :reconciled)}
+               changed-by-uid (assoc :changed-by-uid changed-by-uid)
+               reason-note    (assoc :reason-note reason-note)
+               supporting-doc (assoc :supporting-doc supporting-doc))))
+          pending))))
+
 (defn flip-paid-on-settlement
   "Call after a reconciliation/commit-match! that settled
    transactions which are linked to invoices. Walks each settled
    transaction's `:invoice/_transaction` backref and moves any
-   referenced invoice to :paid via the status machine.
+   referenced invoice to :paid via the status machine. Routes through
+   the gate (ADR-068).
 
    Each invoice's :from is auto-detected (:sent or :partially-paid).
    Already-:paid invoices are skipped (no-op).
@@ -355,38 +449,24 @@
                           e.g. bank-line's value-date)
      :changed-by-uid    — actor recorded on :status-history
      :reason            — codified reason (default :reconciled)
-     :reason-note / :supporting-doc — ADR-038"
+     :reason-note / :supporting-doc — ADR-038
+
+   The pure tx-data builder is `flip-paid-on-settlement-tx-data`."
   ([conn settled-tx-eids]
    (flip-paid-on-settlement conn settled-tx-eids nil))
   ([conn settled-tx-eids {:keys [vt-from vt-to changed-by-uid
                                   reason reason-note supporting-doc]}]
-   (let [db (d/db conn)
-         invoice-eids (d/q '[:find [?inv ...]
-                             :in $ [?tx ...]
-                             :where [?inv :invoice/transaction ?tx]]
-                           db settled-tx-eids)
-         now (Date.)
-         vf  (or vt-from now)
-         vt  (or vt-to kbt/forever)
-         ;; Compose all status-change tx-data in one tx. Skip invoices
-         ;; already :paid (idempotent).
-         pending (filter (fn [eid]
-                           (not= :paid
-                                 (:invoice/status (d/pull db [:invoice/status] eid))))
-                         invoice-eids)
-         all-status-tx (mapcat
-                        (fn [eid]
-                          (sm/record-status-change-tx-data
-                           db
-                           (cond-> {:entity eid
-                                    :entity-type :invoice
-                                    :facet :invoice/status
-                                    :to :paid
-                                    :changed-at now
-                                    :reason (or reason :reconciled)}
-                             changed-by-uid (assoc :changed-by-uid changed-by-uid)
-                             reason-note    (assoc :reason-note reason-note)
-                             supporting-doc (assoc :supporting-doc supporting-doc))))
-                        pending)]
-     (when (seq pending)
-       (d/transact conn (kbt/with-vt (vec all-status-tx) vf vt))))))
+   (let [now (Date.)
+         tx-data (flip-paid-on-settlement-tx-data
+                  (d/db conn)
+                  {:settled-tx-eids settled-tx-eids
+                   :changed-by-uid changed-by-uid
+                   :reason reason
+                   :reason-note reason-note
+                   :supporting-doc supporting-doc
+                   :changed-at now})]
+     (when (seq tx-data)
+       (validation/transact-with-validation
+        conn (kbt/with-vt tx-data
+                          (or vt-from now)
+                          (or vt-to kbt/forever)))))))

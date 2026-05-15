@@ -8,7 +8,8 @@
    The 3-way match query (`kontor.procurement.match/three-way-report`)
    uses `:service-acceptance/quantity-accepted` for service lines
    instead of `:receipt-item/quantity-accepted`."
-  (:require [datahike.api :as d]))
+  (:require [datahike.api :as d]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Resolution
@@ -41,20 +42,12 @@
 ;; Transactors
 ;; ============================================================================
 
-(defn make-acceptance!
-  "Create a `:service-acceptance` row.
+(declare make-acceptance-tx-data)
 
-   Required:
-     :external-id, :order, :order-item, :quantity-accepted, :accepted-at.
-
-   Optional: :accepted-by-uid, :acceptance-evidence (ref to :audit-doc), :notes.
-
-   Returns the tx-report. The order-item should have
-   :order-item/requires-receipt? false; the bridge doesn't enforce
-   this but the match query routes service vs goods lines off the
-   flag."
-  [conn {:keys [external-id order order-item quantity-accepted
-                accepted-at accepted-by-uid acceptance-evidence notes]}]
+(defn make-acceptance-tx-data
+  "Pure tx-data builder for `make-acceptance!` (ADR-068)."
+  [_db {:keys [external-id order order-item quantity-accepted
+               accepted-at accepted-by-uid acceptance-evidence notes]}]
   (when-not external-id       (throw (ex-info ":external-id required" {})))
   (when-not order             (throw (ex-info ":order required" {})))
   (when-not order-item        (throw (ex-info ":order-item required" {})))
@@ -67,7 +60,26 @@
               accepted-by-uid     (assoc :service-acceptance/accepted-by-uid accepted-by-uid)
               acceptance-evidence (assoc :service-acceptance/acceptance-evidence acceptance-evidence)
               notes               (assoc :service-acceptance/notes notes))]
-    (d/transact conn [row])))
+    [row]))
+
+(defn make-acceptance!
+  "Create a `:service-acceptance` row. Routes through the gate
+   (ADR-068).
+
+   Required:
+     :external-id, :order, :order-item, :quantity-accepted, :accepted-at.
+
+   Optional: :accepted-by-uid, :acceptance-evidence (ref to :audit-doc), :notes.
+
+   Returns the tx-report. The order-item should have
+   :order-item/requires-receipt? false; the bridge doesn't enforce
+   this but the match query routes service vs goods lines off the
+   flag.
+
+   The pure tx-data builder is `make-acceptance-tx-data`."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (make-acceptance-tx-data (d/db conn) opts)))
 
 ;; ============================================================================
 ;; Queries

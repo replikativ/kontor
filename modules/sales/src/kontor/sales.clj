@@ -10,7 +10,8 @@
    and the state machines for :order/status + :order-item/status.
    The order→invoice bridge lives in kontor-invoice (ADR-036)."
   (:require [datahike.api :as d]
-            [kontor.status-machine :as sm]))
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Resolution
@@ -337,11 +338,12 @@
 (defn recalculate-order!
   "Run the recalc pipeline for the order. Each processor returns
    tx-data; processors run sequentially (each sees the prior's
-   committed state). Returns a vector of tx-reports."
+   committed state). Each non-empty tx-data is routed through the
+   gate (ADR-068). Returns a vector of tx-reports."
   [conn order]
   (let [oid (resolve-order (d/db conn) order)]
     (mapv (fn [{:keys [proc]}]
             (let [tx-data (proc conn oid)]
               (when (seq tx-data)
-                (d/transact conn tx-data))))
+                (validation/transact-with-validation conn tx-data))))
           (registered-processors))))

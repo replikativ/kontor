@@ -132,23 +132,29 @@
                  relation
                  (coerce-object-out entid->object-id db resource)))))))
 
+(defn write-relationships-tx-data
+  "Pure tx-data builder for authz relationship writes (ADR-068).
+   Translates the API-level `updates` (each a `{:operation :create/
+   :delete :touch :relationship {...}}`) into datahike tx-data via
+   `rels/tx-update-relationship`. Use this to compose authz writes
+   with kernel writes in one atomic `kontor.process` — e.g. create
+   an invoice + grant the buyer access to it in one tx."
+  [db opts updates]
+  (->> updates
+       (map (fn [{:keys [operation relationship]}]
+              (let [{:keys [subject relation resource]} relationship]
+                {:operation operation
+                 :relationship
+                 {:subject  (coerce-object-in (:object-id->entid opts) db subject)
+                  :relation relation
+                  :resource (coerce-object-in (:object-id->entid opts) db resource)}})))
+       (map #(rels/tx-update-relationship db %))
+       (remove nil?)
+       vec))
+
 (defn- do-write-relationships!
-  [conn {:keys [object-id->entid]} updates]
-  (let [db (d/db conn)
-        tx-data (->> updates
-                     (map (fn [{:keys [operation relationship]}]
-                            (let [{:keys [subject relation resource]} relationship]
-                              {:operation operation
-                               :relationship
-                               {:subject  (coerce-object-in object-id->entid db
-                                                            subject)
-                                :relation relation
-                                :resource (coerce-object-in object-id->entid db
-                                                            resource)}})))
-                     (map #(rels/tx-update-relationship db %))
-                     (remove nil?)
-                     vec)
-        report (d/transact conn tx-data)]
+  [conn opts updates]
+  (let [report (d/transact conn (write-relationships-tx-data (d/db conn) opts updates))]
     {:tx-report   report
      :authz/token (str (:max-tx (:db-after report)))}))
 

@@ -10,7 +10,8 @@
    which only model invoice-level)."
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
-            [kontor.status-machine :as sm]))
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Resolution
@@ -80,6 +81,8 @@
 ;; Transactors
 ;; ============================================================================
 
+(declare raise-dispute-tx-data advance-state-tx-data resolve-dispute-tx-data)
+
 (defn raise-dispute!
   "Open a `:dispute` for an invoice (or line on an invoice).
 
@@ -96,19 +99,31 @@
      :notes          string
      :supporting-doc ref to :audit-doc
      :vt-from        kontor.bitemporal vt-from (default: now)
-     :vt-to          kontor.bitemporal vt-to (default: open)"
-  [conn {:keys [external-id invoice scope disputed-amount reason-code
-                opened-by-uid sla-deadline notes supporting-doc
-                vt-from vt-to]}]
+     :vt-to          kontor.bitemporal vt-to (default: open)
+
+   The pure tx-data builder is `raise-dispute-tx-data`."
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [opened-at (java.util.Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (raise-dispute-tx-data
+                        (d/db conn) (assoc opts :opened-at opened-at))
+                       (or vt-from opened-at)
+                       (or vt-to kbt/forever)))))
+
+(defn raise-dispute-tx-data
+  "Pure tx-data builder for `raise-dispute!` (ADR-068). Optional
+   `:tempid` (default `\"disp-1\"`) and `:opened-at` (default now)."
+  [db {:keys [external-id invoice scope disputed-amount reason-code
+              opened-by-uid sla-deadline notes supporting-doc
+              tempid opened-at]
+       :or {tempid "disp-1"}}]
   (when-not external-id     (throw (ex-info ":external-id required" {})))
   (when-not invoice         (throw (ex-info ":invoice required" {})))
   (when-not disputed-amount (throw (ex-info ":disputed-amount required" {})))
   (when-not reason-code     (throw (ex-info ":reason-code required" {})))
   (when-not opened-by-uid   (throw (ex-info ":opened-by-uid required" {})))
-  (let [db (d/db conn)
-        opened-at (java.util.Date.)
-        disp-tempid "disp-1"
-        row (cond-> {:db/id disp-tempid
+  (let [opened-at (or opened-at (java.util.Date.))
+        row (cond-> {:db/id tempid
                      :dispute/external-id external-id
                      :dispute/invoice invoice
                      :dispute/disputed-amount disputed-amount
@@ -121,45 +136,50 @@
               supporting-doc (assoc :dispute/supporting-doc supporting-doc))
         status-tx (sm/record-status-change-tx-data
                    db
-                   {:entity disp-tempid
+                   {:entity tempid
                     :entity-type :dispute
                     :facet :dispute/state
                     :from :nil
                     :to :open
                     :changed-at opened-at
                     :changed-by-uid opened-by-uid
-                    :reason reason-code})
-        core-tx (into [row] status-tx)
-        vf (or vt-from opened-at)
-        vt (or vt-to   kbt/forever)]
-    (d/transact conn (kbt/with-vt core-tx vf vt))))
+                    :reason reason-code})]
+    (into [row] status-tx)))
 
 (defn advance-state!
   "Drive a dispute through the state machine (:open → :under-review
    → :resolved | :escalated). Caller passes :to.
 
    Optional :vt-from / :vt-to stamp the tx with kontor.bitemporal
-   valid-time (default: now)."
-  [conn {:keys [dispute to changed-by-uid reason reason-note
-                supporting-doc vt-from vt-to]}]
-  (let [db (d/db conn)
-        eid (resolve-dispute db dispute)
+   valid-time (default: now).
+
+   The pure tx-data builder is `advance-state-tx-data`."
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [now (java.util.Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (advance-state-tx-data
+                        (d/db conn) (assoc opts :changed-at now))
+                       (or vt-from now)
+                       (or vt-to kbt/forever)))))
+
+(defn advance-state-tx-data
+  "Pure tx-data builder for `advance-state!` (ADR-068)."
+  [db {:keys [dispute to changed-by-uid reason reason-note
+              supporting-doc changed-at]}]
+  (let [eid (resolve-dispute db dispute)
         _ (when-not eid (throw (ex-info "Dispute not found" {:spec dispute})))
-        now (java.util.Date.)
-        status-tx (sm/record-status-change-tx-data
-                   db
-                   (cond-> {:entity eid
-                            :entity-type :dispute
-                            :facet :dispute/state
-                            :to to
-                            :changed-at now
-                            :changed-by-uid changed-by-uid}
-                     reason         (assoc :reason reason)
-                     reason-note    (assoc :reason-note reason-note)
-                     supporting-doc (assoc :supporting-doc supporting-doc)))]
-    (d/transact conn (kbt/with-vt status-tx
-                                  (or vt-from now)
-                                  (or vt-to kbt/forever)))))
+        now (or changed-at (java.util.Date.))]
+    (sm/record-status-change-tx-data
+     db
+     (cond-> {:entity eid
+              :entity-type :dispute
+              :facet :dispute/state
+              :to to
+              :changed-at now
+              :changed-by-uid changed-by-uid}
+       reason         (assoc :reason reason)
+       reason-note    (assoc :reason-note reason-note)
+       supporting-doc (assoc :supporting-doc supporting-doc)))))
 
 (defn resolve-dispute!
   "Resolve a dispute. Atomically:
@@ -171,15 +191,26 @@
    from the tx's `:tx/valid-from` via kontor.bitemporal.
 
    Required: :dispute, :resolution keyword, :resolved-by-uid.
-   Optional: :reason-note, :supporting-doc, :vt-from, :vt-to."
-  [conn {:keys [dispute resolution resolved-by-uid reason-note
-                supporting-doc vt-from vt-to]}]
+   Optional: :reason-note, :supporting-doc, :vt-from, :vt-to.
+
+   The pure tx-data builder is `resolve-dispute-tx-data`."
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [resolved-at (java.util.Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (resolve-dispute-tx-data
+                        (d/db conn) (assoc opts :resolved-at resolved-at))
+                       (or vt-from resolved-at)
+                       (or vt-to kbt/forever)))))
+
+(defn resolve-dispute-tx-data
+  "Pure tx-data builder for `resolve-dispute!` (ADR-068)."
+  [db {:keys [dispute resolution resolved-by-uid reason-note
+              supporting-doc resolved-at]}]
   (when-not resolution      (throw (ex-info ":resolution required" {})))
   (when-not resolved-by-uid (throw (ex-info ":resolved-by-uid required" {})))
-  (let [db (d/db conn)
-        eid (resolve-dispute db dispute)
+  (let [eid (resolve-dispute db dispute)
         _ (when-not eid (throw (ex-info "Dispute not found" {:spec dispute})))
-        resolved-at (java.util.Date.)
+        resolved-at (or resolved-at (java.util.Date.))
         status-tx (sm/record-status-change-tx-data
                    db
                    (cond-> {:entity eid
@@ -195,8 +226,5 @@
                               :dispute/resolution resolution
                               :dispute/resolved-by-uid resolved-by-uid}
                        supporting-doc (assoc :dispute/supporting-doc
-                                             supporting-doc))
-        core-tx (into [attrs-update] status-tx)
-        vf (or vt-from resolved-at)
-        vt (or vt-to   kbt/forever)]
-    (d/transact conn (kbt/with-vt core-tx vf vt))))
+                                             supporting-doc))]
+    (into [attrs-update] status-tx)))

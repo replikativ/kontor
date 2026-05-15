@@ -16,7 +16,8 @@
    Namespace named `returns` (not `return`) to avoid the reserved
    word."
   (:require [datahike.api :as d]
-            [kontor.status-machine :as sm]))
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Resolution
@@ -66,29 +67,20 @@
 ;; Transactors
 ;; ============================================================================
 
-(defn make-return!
-  "Create a `:return` + `:return-item` rows in `:requested` state.
+(declare make-return-tx-data make-credit-memo-from-return-tx-data)
 
-   Required:
-     :external-id, :type (:customer | :vendor), :from-party, :to-party,
-     :order, :items (vec of return-item maps).
-
-   Each item map requires :order-item, :return-quantity, and
-   optionally :seq-id (auto-assigned if absent), :reason,
-   :return-type, :expected-disposition, :product-id, :return-price.
-
-   Optional return-level: :entity, :destination-facility-id,
-   :supplier-rma, :entry-date, :notes, :supporting-doc."
-  [conn {:keys [external-id type from-party to-party order entity
-                destination-facility-id supplier-rma entry-date notes
-                supporting-doc items]}]
+(defn make-return-tx-data
+  "Pure tx-data builder for `make-return!` (ADR-068)."
+  [_db {:keys [external-id type from-party to-party order entity
+               destination-facility-id supplier-rma entry-date notes
+               supporting-doc items tempid]
+        :or {tempid "return-1"}}]
   (when-not external-id (throw (ex-info ":external-id required" {})))
   (when-not type        (throw (ex-info ":type (:customer or :vendor) required" {})))
   (when-not from-party  (throw (ex-info ":from-party required" {})))
   (when-not to-party    (throw (ex-info ":to-party required" {})))
   (when-not (seq items) (throw (ex-info "non-empty :items required" {})))
-  (let [return-tempid "return-1"
-        return-row (cond-> {:db/id return-tempid
+  (let [return-row (cond-> {:db/id tempid
                             :return/external-id external-id
                             :return/type type
                             :return/status :requested
@@ -102,7 +94,7 @@
                      notes                   (assoc :return/notes notes)
                      supporting-doc          (assoc :return/supporting-doc supporting-doc))
         item-rows (mapv (fn [idx item]
-                          (cond-> {:return-item/return return-tempid
+                          (cond-> {:return-item/return tempid
                                    :return-item/order-item (:order-item item)
                                    :return-item/seq-id (or (:seq-id item)
                                                             (format "%05d" (inc idx)))
@@ -125,7 +117,27 @@
                                    (:expected-disposition item))))
                         (range)
                         items)]
-    (d/transact conn (vec (cons return-row item-rows)))))
+    (vec (cons return-row item-rows))))
+
+(defn make-return!
+  "Create a `:return` + `:return-item` rows in `:requested` state.
+   Routes through the gate (ADR-068).
+
+   Required:
+     :external-id, :type (:customer | :vendor), :from-party, :to-party,
+     :order, :items (vec of return-item maps).
+
+   Each item map requires :order-item, :return-quantity, and
+   optionally :seq-id (auto-assigned if absent), :reason,
+   :return-type, :expected-disposition, :product-id, :return-price.
+
+   Optional return-level: :entity, :destination-facility-id,
+   :supplier-rma, :entry-date, :notes, :supporting-doc.
+
+   The pure tx-data builder is `make-return-tx-data`."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (make-return-tx-data (d/db conn) opts)))
 
 (defn accept-return!
   "Transition :requested → :accepted (RMA approved)."
@@ -202,24 +214,12 @@
     :customer :credit-memo
     :vendor   :debit-memo))
 
-(defn make-credit-memo-from-return!
-  "Build a kernel :invoice (with :invoice/type :credit-memo or
-   :debit-memo per return-type) + :invoice-line rows + :return-item-
-   billing junctions atomically. Returns the tx-report.
-
-   Required opts:
-     :external-id — for the new invoice
-     :issue-date  — optional, default now
-
-   Reads each :return-item's :return-quantity (or :received-quantity
-   if set) and :return-price; produces one :invoice-line per
-   return-item. Junction rows link :return-item ↔ :invoice-line for
-   the credit-memo audit trail."
-  [conn return-spec {:keys [external-id issue-date]}]
+(defn make-credit-memo-from-return-tx-data
+  "Pure tx-data builder for `make-credit-memo-from-return!` (ADR-068)."
+  [db return-spec {:keys [external-id issue-date]}]
   (when-not external-id
     (throw (ex-info ":external-id required" {})))
-  (let [db (d/db conn)
-        return-eid (resolve-return db return-spec)
+  (let [return-eid (resolve-return db return-spec)
         _ (when-not return-eid
             (throw (ex-info "Return not found" {:spec return-spec})))
         return (d/pull db
@@ -311,4 +311,24 @@
                       currency (assoc :invoice/currency currency)
                       (get-in return [:return/entity :db/id])
                       (assoc :invoice/entity (get-in return [:return/entity :db/id])))]
-    (d/transact conn (vec (concat [invoice-row] line-rows billing-rows)))))
+    (vec (concat [invoice-row] line-rows billing-rows))))
+
+(defn make-credit-memo-from-return!
+  "Build a kernel :invoice (with :invoice/type :credit-memo or
+   :debit-memo per return-type) + :invoice-line rows + :return-item-
+   billing junctions atomically. Routes through the gate (ADR-068).
+   Returns the tx-report.
+
+   Required opts:
+     :external-id — for the new invoice
+     :issue-date  — optional, default now
+
+   Reads each :return-item's :return-quantity (or :received-quantity
+   if set) and :return-price; produces one :invoice-line per
+   return-item. Junction rows link :return-item ↔ :invoice-line for
+   the credit-memo audit trail.
+
+   The pure tx-data builder is `make-credit-memo-from-return-tx-data`."
+  [conn return-spec opts]
+  (validation/transact-with-validation
+   conn (make-credit-memo-from-return-tx-data (d/db conn) return-spec opts)))

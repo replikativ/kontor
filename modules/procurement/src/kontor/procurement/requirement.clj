@@ -8,7 +8,8 @@
    escapes)."
   (:require [datahike.api :as d]
             [kontor.procurement.receipt :as receipt]
-            [kontor.status-machine :as sm]))
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Resolution
@@ -57,23 +58,15 @@
 ;; Transactors
 ;; ============================================================================
 
-(defn make-requirement!
-  "Create a `:requirement` entity in `:proposed` state.
+(declare make-requirement-tx-data commit-to-po-tx-data)
 
-   Required keys in opts:
-     :external-id, :product-id, :quantity, :facility-id.
-
-   Optional:
-     :type (default :product), :uom, :facility-to-id, :required-by-date,
-     :start-date, :estimated-budget, :budget-commodity, :entity,
-     :cost-center, :justification, :description, :created-by-uid.
-
-   Returns the tx-report."
-  [conn {:keys [external-id type product-id quantity uom facility-id
-                facility-to-id required-by-date start-date
-                estimated-budget budget-commodity entity cost-center
-                justification description created-by-uid]
-         :or {type :product}}]
+(defn make-requirement-tx-data
+  "Pure tx-data builder for `make-requirement!` (ADR-068)."
+  [_db {:keys [external-id type product-id quantity uom facility-id
+               facility-to-id required-by-date start-date
+               estimated-budget budget-commodity entity cost-center
+               justification description created-by-uid created-at]
+        :or {type :product}}]
   (when-not external-id  (throw (ex-info ":external-id required" {})))
   (when-not product-id   (throw (ex-info ":product-id required" {})))
   (when-not quantity     (throw (ex-info ":quantity required" {})))
@@ -84,7 +77,7 @@
                      :requirement/product-id product-id
                      :requirement/quantity quantity
                      :requirement/facility-id facility-id
-                     :requirement/created-at (java.util.Date.)}
+                     :requirement/created-at (or created-at (java.util.Date.))}
               uom              (assoc :requirement/uom uom)
               facility-to-id   (assoc :requirement/facility-to-id facility-to-id)
               required-by-date (assoc :requirement/required-by-date required-by-date)
@@ -96,7 +89,27 @@
               justification    (assoc :requirement/justification justification)
               description      (assoc :requirement/description description)
               created-by-uid   (assoc :requirement/created-by-uid created-by-uid))]
-    (d/transact conn [row])))
+    [row]))
+
+(defn make-requirement!
+  "Create a `:requirement` entity in `:proposed` state. Routes through
+   the gate (ADR-068).
+
+   Required keys in opts:
+     :external-id, :product-id, :quantity, :facility-id.
+
+   Optional:
+     :type (default :product), :uom, :facility-to-id, :required-by-date,
+     :start-date, :estimated-budget, :budget-commodity, :entity,
+     :cost-center, :justification, :description, :created-by-uid.
+
+   Returns the tx-report.
+
+   The pure tx-data builder is `make-requirement-tx-data`."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (make-requirement-tx-data (d/db conn)
+                                  (assoc opts :created-at (java.util.Date.)))))
 
 (defn approve-requirement!
   "Transition :proposed → :approved. Runs ADR-038 :approval-policy
@@ -134,38 +147,48 @@
                                        :to :cancelled}
                                       opts)))))
 
+(defn commit-to-po-tx-data
+  "Pure tx-data builder for `commit-to-po!` (ADR-068)."
+  [db {:keys [requirement order-item quantity skip-status-advance?
+              committed-at]}]
+  (let [req-eid (resolve-requirement db requirement)
+        commitment {:requirement-commitment/requirement req-eid
+                    :requirement-commitment/order-item order-item
+                    :requirement-commitment/quantity quantity
+                    :requirement-commitment/committed-at
+                    (or committed-at (java.util.Date.))}]
+    (if (and (not skip-status-advance?)
+             (sm/legal-transition? db :requirement
+                                   :requirement/status
+                                   :approved :ordered))
+      (vec (concat [commitment]
+                   (sm/record-status-change-tx-data
+                    db
+                    {:entity req-eid
+                     :entity-type :requirement
+                     :facet :requirement/status
+                     :to :ordered
+                     :reason :auto-promoted})))
+      [commitment])))
+
 (defn commit-to-po!
   "Link a requirement to a PO line via :requirement-commitment, in
    the same tx advance :requirement/status :approved → :ordered.
    The composite identity tuple makes the junction idempotent.
+   Routes through the gate (ADR-068).
 
    Required: :requirement, :order-item, :quantity.
 
    The status transition only fires if it would be legal; for partial
    commitment (qty < requirement-quantity), caller can pass
    :skip-status-advance? true to defer the :approved → :ordered
-   promotion until full commitment via auto-promote-to-ordered!."
-  [conn {:keys [requirement order-item quantity skip-status-advance?]}]
-  (let [db (d/db conn)
-        req-eid (resolve-requirement db requirement)
-        commitment {:requirement-commitment/requirement req-eid
-                    :requirement-commitment/order-item order-item
-                    :requirement-commitment/quantity quantity
-                    :requirement-commitment/committed-at (java.util.Date.)}
-        all-tx (if (and (not skip-status-advance?)
-                        (sm/legal-transition? db :requirement
-                                              :requirement/status
-                                              :approved :ordered))
-                 (vec (concat [commitment]
-                              (sm/record-status-change-tx-data
-                               db
-                               {:entity req-eid
-                                :entity-type :requirement
-                                :facet :requirement/status
-                                :to :ordered
-                                :reason :auto-promoted})))
-                 [commitment])]
-    (d/transact conn all-tx)))
+   promotion until full commitment via auto-promote-to-ordered!.
+
+   The pure tx-data builder is `commit-to-po-tx-data`."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (commit-to-po-tx-data (d/db conn)
+                              (assoc opts :committed-at (java.util.Date.)))))
 
 (defn auto-promote-to-received!
   "When all linked POs for a requirement are fully received,

@@ -17,7 +17,8 @@
             [kontor.collections.case :as kcase]
             [kontor.payment-application :as papp]
             [kontor.posting :as posting]
-            [kontor.status-machine :as sm]))
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Helpers
@@ -88,6 +89,8 @@
 ;; Transactor
 ;; ============================================================================
 
+(declare write-off-case-tx-data)
+
 (defn write-off-case!
   "Write off the remaining open balance of every open invoice on a
    case. Atomically:
@@ -116,16 +119,38 @@
      :vt-from         valid-time start (default :effective-date)
      :vt-to           valid-time end (default :kbt/forever)
 
-   Returns {:tx-report :transaction-eids :case-eid}."
-  [conn {:keys [case written-off-by journal-ref reason supporting-doc
-                reason-note ledger-ref effective-date vt-from vt-to]}]
+   Returns {:tx-report :case-eid :invoices-written-off :total-written-off}.
+
+   The pure tx-data builder is `write-off-case-tx-data`."
+  [conn {:keys [vt-from vt-to effective-date case] :as opts}]
+  (let [effective-date (or effective-date (java.util.Date.))
+        opts' (assoc opts :effective-date effective-date)
+        db (d/db conn)
+        case-eid (kcase/resolve-case db case)
+        opens (when case-eid (open-invoices-for-case db case-eid))
+        tx-data (write-off-case-tx-data db opts')
+        tx-report (validation/transact-with-validation
+                   conn (kbt/with-vt tx-data
+                                     (or vt-from effective-date)
+                                     (or vt-to kbt/forever)))]
+    {:tx-report tx-report
+     :case-eid case-eid
+     :invoices-written-off (count opens)
+     :total-written-off (reduce (fn [^java.math.BigDecimal acc {:keys [open-amount]}]
+                                  (.add acc ^java.math.BigDecimal open-amount))
+                                0M opens)}))
+
+(defn write-off-case-tx-data
+  "Pure tx-data builder for `write-off-case!` (ADR-068). Optional
+   `:effective-date` (default now)."
+  [db {:keys [case written-off-by journal-ref reason supporting-doc
+              reason-note ledger-ref effective-date]}]
   (when-not case            (throw (ex-info ":case required" {})))
   (when-not written-off-by  (throw (ex-info ":written-off-by required" {})))
   (when-not journal-ref     (throw (ex-info ":journal-ref required" {})))
   (when-not reason          (throw (ex-info ":reason required" {})))
   (when-not supporting-doc  (throw (ex-info ":supporting-doc required" {})))
-  (let [db (d/db conn)
-        case-eid (kcase/resolve-case db case)
+  (let [case-eid (kcase/resolve-case db case)
         _ (when-not case-eid (throw (ex-info "Case not found" {:spec case})))
         c (d/pull db
                   '[* {:collection-case/partner [:db/id]
@@ -153,9 +178,6 @@
                                          :entity entity-eid})
                  bad-debt (resolve-account db {:account-type :bad-debt-expense
                                                :entity entity-eid})
-                 tx-tempid (- -100 (* idx 10))
-                 dr-tempid (- tx-tempid 1)
-                 cr-tempid (- tx-tempid 2)
                  input {:transaction (cond-> {:transaction/journal journal-ref
                                               :transaction/effective-date effective-date
                                               :transaction/state :posted
@@ -212,14 +234,5 @@
         ;; Also stamp the supporting-doc on the case + closed-at.
         case-update {:db/id case-eid
                      :collection-case/supporting-doc supporting-doc
-                     :collection-case/closed-at effective-date}
-        all-tx (vec (concat all-posting-tx [case-update] status-tx))
-        tx-report (d/transact conn (kbt/with-vt all-tx
-                                                (or vt-from effective-date)
-                                                (or vt-to kbt/forever)))]
-    {:tx-report tx-report
-     :case-eid case-eid
-     :invoices-written-off (count opens)
-     :total-written-off (reduce (fn [^java.math.BigDecimal acc {:keys [open-amount]}]
-                                  (.add acc ^java.math.BigDecimal open-amount))
-                                0M opens)}))
+                     :collection-case/closed-at effective-date}]
+    (vec (concat all-posting-tx [case-update] status-tx))))

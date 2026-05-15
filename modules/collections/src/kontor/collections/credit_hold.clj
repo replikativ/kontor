@@ -24,7 +24,8 @@
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
             [kontor.payment-application :as papp]
-            [kontor.status-machine :as sm]))
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Queries
@@ -202,6 +203,8 @@
 ;; Transactors
 ;; ============================================================================
 
+(declare place-hold-tx-data release-hold-tx-data)
+
 (defn place-hold!
   "Place a per-(partner, entity) credit hold.
 
@@ -223,17 +226,29 @@
      :notes           string
      :supporting-doc  ref to :audit-doc
      :vt-from         valid-time start (default = now)
-     :vt-to           valid-time end (default = kbt/forever)"
-  [conn {:keys [partner entity reason-code placed-by-uid approver-uid
-                expires-at notes supporting-doc vt-from vt-to]}]
+     :vt-to           valid-time end (default = kbt/forever)
+
+   The pure tx-data builder is `place-hold-tx-data`."
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [placed-at (java.util.Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (place-hold-tx-data
+                        (d/db conn) (assoc opts :placed-at placed-at))
+                       (or vt-from placed-at)
+                       (or vt-to kbt/forever)))))
+
+(defn place-hold-tx-data
+  "Pure tx-data builder for `place-hold!` (ADR-068). Optional
+   `:tempid` (default `\"hold-1\"`) and `:placed-at` (default now)."
+  [db {:keys [partner entity reason-code placed-by-uid approver-uid
+              expires-at notes supporting-doc tempid placed-at]
+       :or {tempid "hold-1"}}]
   (when-not partner       (throw (ex-info ":partner required" {})))
   (when-not entity        (throw (ex-info ":entity required" {})))
   (when-not reason-code   (throw (ex-info ":reason-code required" {})))
   (when-not placed-by-uid (throw (ex-info ":placed-by-uid required" {})))
-  (let [db (d/db conn)
-        placed-at (java.util.Date.)
-        hold-tempid "hold-1"
-        row (cond-> {:db/id hold-tempid
+  (let [placed-at (or placed-at (java.util.Date.))
+        row (cond-> {:db/id tempid
                      :credit-hold/partner partner
                      :credit-hold/entity entity
                      :credit-hold/reason-code reason-code
@@ -246,7 +261,7 @@
               supporting-doc (assoc :credit-hold/supporting-doc supporting-doc))
         status-tx (sm/record-status-change-tx-data
                    db
-                   (cond-> {:entity hold-tempid
+                   (cond-> {:entity tempid
                             :entity-type :credit-hold
                             :facet :credit-hold/state
                             :from :nil
@@ -255,9 +270,7 @@
                             :changed-by-uid placed-by-uid
                             :reason reason-code}
                      supporting-doc (assoc :supporting-doc supporting-doc)))]
-    (d/transact conn (kbt/with-vt (into [row] status-tx)
-                                  (or vt-from placed-at)
-                                  (or vt-to kbt/forever)))))
+    (into [row] status-tx)))
 
 (defn release-hold!
   "Release a specific `:credit-hold` row. Status machine: :placed →
@@ -275,13 +288,24 @@
      :reason-note      free-text
      :notes            update the hold row's notes (denorm)
      :supporting-doc   ref to :audit-doc
-     :vt-from / :vt-to valid-time bounds (default :vt-from = now)"
-  [conn {:keys [hold-eid released-by-uid reason reason-note notes
-                supporting-doc vt-from vt-to]}]
+     :vt-from / :vt-to valid-time bounds (default :vt-from = now)
+
+   The pure tx-data builder is `release-hold-tx-data`."
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [now (java.util.Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (release-hold-tx-data
+                        (d/db conn) (assoc opts :released-at now))
+                       (or vt-from now)
+                       (or vt-to kbt/forever)))))
+
+(defn release-hold-tx-data
+  "Pure tx-data builder for `release-hold!` (ADR-068)."
+  [db {:keys [hold-eid released-by-uid reason reason-note notes
+              supporting-doc released-at]}]
   (when-not hold-eid         (throw (ex-info ":hold-eid required" {})))
   (when-not released-by-uid  (throw (ex-info ":released-by-uid required" {})))
-  (let [db (d/db conn)
-        now (java.util.Date.)
+  (let [now (or released-at (java.util.Date.))
         update (cond-> {:db/id hold-eid}
                  notes          (assoc :credit-hold/notes notes)
                  supporting-doc (assoc :credit-hold/supporting-doc
@@ -297,9 +321,7 @@
                             :reason (or reason :hold-released)}
                      reason-note    (assoc :reason-note reason-note)
                      supporting-doc (assoc :supporting-doc supporting-doc)))]
-    (d/transact conn (kbt/with-vt (into [update] status-tx)
-                                  (or vt-from now)
-                                  (or vt-to kbt/forever)))))
+    (into [update] status-tx)))
 
 (defn release-all-for!
   "Convenience: release every active hold for (partner, entity)."

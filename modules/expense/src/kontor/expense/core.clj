@@ -17,7 +17,8 @@
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
             [kontor.posting :as posting]
-            [kontor.status-machine :as sm])
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation])
   (:import [java.math BigDecimal]
            [java.util Date]))
 
@@ -78,23 +79,18 @@
 ;; create-report! / add-line!
 ;; ============================================================================
 
-(defn create-report!
-  "Create an :expense-report in `:draft`. The employee is stamped as
-   `:create/uid` so the ADR-038 :no-self-approval rule fires on
-   approval. Returns the tx-report.
+(declare create-report-tx-data add-line-tx-data post-report-tx-data
+         reimburse-tx-data)
 
-   Required opts: :code, :employee (ref/eid of :partner),
-                  :report-date, :commodity.
-   Optional: :note, :vt-from / :vt-to (valid-time bounds, default
-             :vt-from = :report-date)."
-  [conn {:keys [code employee report-date commodity note vt-from vt-to]}]
+(defn create-report-tx-data
+  "Pure tx-data builder for `create-report!` (ADR-068)."
+  [db {:keys [code employee report-date commodity note tempid changed-at]
+       :or {tempid "expense-report-1"}}]
   (when-not code        (throw (ex-info ":code required" {})))
   (when-not employee    (throw (ex-info ":employee required" {})))
   (when-not report-date (throw (ex-info ":report-date required" {})))
   (when-not commodity   (throw (ex-info ":commodity required" {})))
-  (let [db (d/db conn)
-        report-tempid "expense-report-1"
-        row (cond-> {:db/id report-tempid
+  (let [row (cond-> {:db/id tempid
                      :expense-report/code code
                      :expense-report/employee employee
                      :expense-report/status :draft
@@ -106,28 +102,39 @@
                      :create/uid employee}
               note (assoc :expense-report/note note))
         status-tx (sm/record-status-change-tx-data
-                   db {:entity report-tempid
+                   db {:entity tempid
                        :entity-type :expense-report
                        :facet :expense-report/status
                        :from :nil :to :draft
-                       :changed-at (Date.)
+                       :changed-at (or changed-at (Date.))
                        :changed-by-uid employee
                        :reason :expense-report-created})]
-    (d/transact conn (kbt/with-vt (into [row] status-tx)
+    (into [row] status-tx)))
+
+(defn create-report!
+  "Create an :expense-report in `:draft`. The employee is stamped as
+   `:create/uid` so the ADR-038 :no-self-approval rule fires on
+   approval. Routes through the gate (ADR-068). Returns the tx-report.
+
+   Required opts: :code, :employee (ref/eid of :partner),
+                  :report-date, :commodity.
+   Optional: :note, :vt-from / :vt-to (valid-time bounds, default
+             :vt-from = :report-date).
+
+   The pure tx-data builder is `create-report-tx-data`."
+  [conn {:keys [report-date vt-from vt-to] :as opts}]
+  (let [now (Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (create-report-tx-data
+                        (d/db conn) (assoc opts :changed-at now))
                        (or vt-from report-date)
                        (or vt-to kbt/forever)))))
 
-(defn add-line!
-  "Add an :expense-line to a `:draft` report and bump the cached
-   `:expense-report/total`. Returns the tx-report.
-
-   Required opts: :expense-report (code/eid), :category (ref),
-                  :expense-date, :amount, :commodity, :payment-mode
-                  (#{:own-account :company-account}), :expense-account.
-   Optional: :cost-center, :supporting-doc, :description."
-  [conn {:keys [expense-report category expense-date amount commodity
-                payment-mode expense-account cost-center supporting-doc
-                description]}]
+(defn add-line-tx-data
+  "Pure tx-data builder for `add-line!` (ADR-068)."
+  [db {:keys [expense-report category expense-date amount commodity
+              payment-mode expense-account cost-center supporting-doc
+              description]}]
   (when-not category        (throw (ex-info ":category required" {})))
   (when-not expense-date    (throw (ex-info ":expense-date required" {})))
   (when (nil? amount)       (throw (ex-info ":amount required" {})))
@@ -136,8 +143,7 @@
     (throw (ex-info ":payment-mode must be :own-account or :company-account"
                     {:payment-mode payment-mode})))
   (when-not expense-account (throw (ex-info ":expense-account required" {})))
-  (let [db (d/db conn)
-        report (resolve-report db expense-report)
+  (let [report (resolve-report db expense-report)
         _ (when-not report (throw (ex-info "Expense report not found"
                                            {:spec expense-report})))
         status (:expense-report/status
@@ -156,31 +162,54 @@
                supporting-doc (assoc :expense-line/supporting-doc supporting-doc)
                description    (assoc :expense-line/description description))
         new-total (.add (report-total db report) ^BigDecimal amount)]
-    (d/transact conn [line
-                      {:db/id report :expense-report/total new-total}])))
+    [line
+     {:db/id report :expense-report/total new-total}]))
+
+(defn add-line!
+  "Add an :expense-line to a `:draft` report and bump the cached
+   `:expense-report/total`. Routes through the gate (ADR-068).
+   Returns the tx-report.
+
+   Required opts: :expense-report (code/eid), :category (ref),
+                  :expense-date, :amount, :commodity, :payment-mode
+                  (#{:own-account :company-account}), :expense-account.
+   Optional: :cost-center, :supporting-doc, :description.
+
+   The pure tx-data builder is `add-line-tx-data`."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (add-line-tx-data (d/db conn) opts)))
 
 ;; ============================================================================
 ;; Lifecycle — submit! / approve! / reject!
 ;; ============================================================================
 
+(defn- change-status-tx-data
+  "Pure tx-data builder for `change-status!` (ADR-068)."
+  [db report-eid from to {:keys [changed-by-uid reason reason-note
+                                  supporting-doc changed-at]}]
+  (sm/record-status-change-tx-data
+   db (cond-> {:entity report-eid
+               :entity-type :expense-report
+               :facet :expense-report/status
+               :from from :to to
+               :changed-at (or changed-at (Date.))}
+        changed-by-uid (assoc :changed-by-uid changed-by-uid)
+        reason         (assoc :reason reason)
+        reason-note    (assoc :reason-note reason-note)
+        supporting-doc (assoc :supporting-doc supporting-doc))))
+
 (defn- change-status!
   "Drive an :expense-report/status transition through the status
-   machine, wrapped in valid-time."
-  [conn report-eid from to {:keys [changed-by-uid reason reason-note
-                                   supporting-doc vt-from vt-to]}]
-  (let [db (d/db conn)
-        now (Date.)
-        status-tx (sm/record-status-change-tx-data
-                   db (cond-> {:entity report-eid
-                               :entity-type :expense-report
-                               :facet :expense-report/status
-                               :from from :to to
-                               :changed-at now}
-                        changed-by-uid (assoc :changed-by-uid changed-by-uid)
-                        reason         (assoc :reason reason)
-                        reason-note    (assoc :reason-note reason-note)
-                        supporting-doc (assoc :supporting-doc supporting-doc)))]
-    (d/transact conn (kbt/with-vt status-tx (or vt-from now) (or vt-to kbt/forever)))))
+   machine, wrapped in valid-time. Routes through the gate (ADR-068)."
+  [conn report-eid from to {:keys [vt-from vt-to] :as opts}]
+  (let [now (Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (change-status-tx-data
+                        (d/db conn) report-eid from to
+                        (assoc opts :changed-at now))
+                       (or vt-from now)
+                       (or vt-to kbt/forever)))))
 
 (defn submit!
   "Submit a `:draft` report for approval (`:draft → :submitted`).
@@ -295,33 +324,14 @@
                          (throw (ex-info ":card-clearing-account required — the report has :company-account lines"
                                          {:type :expense/account-required})))))
 
-(defn post-report!
-  "Post an `:approved` report to the GL (`:approved → :posted`).
-   Builds — in ONE transaction with the status change — a sealed
-   journal entry: each line debits its `:expense-account`; the
-   credit legs are grouped by `(payment-mode, commodity)` —
-   `:own-account` → `:reimbursement-payable-account`,
-   `:company-account` → `:card-clearing-account`. Stamps
-   `:transaction/source` = `\"expense-report:<code>\"` and links
-   `:expense-report/transaction`.
-
-   When `:cost-center-plan` is supplied, a line's `:cost-center` is
-   attached to its debit posting as a `:posting/analytic-distributions`
-   entry (100%); without it the cost-center stays recorded on the
-   line only (a documented follow-up).
-
-   Required: :expense-report, :journal. Plus, per the payment-modes
-   present: :reimbursement-payable-account and/or
-   :card-clearing-account.
-   Optional: :cost-center-plan, :posted-at (default now),
-             :changed-by-uid, :vt-from, :vt-to.
-   Returns the tx-report."
-  [conn {:keys [expense-report journal cost-center-plan posted-at
-                changed-by-uid vt-from vt-to]
-         :as opts}]
+(defn post-report-tx-data
+  "Pure tx-data builder for `post-report!` (ADR-068). Composes the
+   posting tx-data + status-history + report→transaction link."
+  [db {:keys [expense-report journal cost-center-plan posted-at
+              changed-by-uid]
+       :as opts}]
   (when-not journal (throw (ex-info ":journal required" {})))
-  (let [db (d/db conn)
-        report (resolve-report db expense-report)
+  (let [report (resolve-report db expense-report)
         _ (when-not report (throw (ex-info "Expense report not found"
                                            {:spec expense-report})))
         r (d/pull db [:expense-report/status :expense-report/code] report)
@@ -378,10 +388,39 @@
                                :changed-at pa
                                :reason :expense-report-posted}
                         changed-by-uid (assoc :changed-by-uid changed-by-uid)))]
-    (d/transact conn (kbt/with-vt (-> (vec tx-data)
-                                      (into status-tx)
-                                      (conj {:db/id report
-                                             :expense-report/transaction -1}))
+    (-> (vec tx-data)
+        (into status-tx)
+        (conj {:db/id report
+               :expense-report/transaction -1}))))
+
+(defn post-report!
+  "Post an `:approved` report to the GL (`:approved → :posted`).
+   Builds — in ONE transaction with the status change — a sealed
+   journal entry: each line debits its `:expense-account`; the
+   credit legs are grouped by `(payment-mode, commodity)` —
+   `:own-account` → `:reimbursement-payable-account`,
+   `:company-account` → `:card-clearing-account`. Stamps
+   `:transaction/source` = `\"expense-report:<code>\"` and links
+   `:expense-report/transaction`. Routes through the gate (ADR-068).
+
+   When `:cost-center-plan` is supplied, a line's `:cost-center` is
+   attached to its debit posting as a `:posting/analytic-distributions`
+   entry (100%); without it the cost-center stays recorded on the
+   line only (a documented follow-up).
+
+   Required: :expense-report, :journal. Plus, per the payment-modes
+   present: :reimbursement-payable-account and/or
+   :card-clearing-account.
+   Optional: :cost-center-plan, :posted-at (default now),
+             :changed-by-uid, :vt-from, :vt-to.
+   Returns the tx-report.
+
+   The pure tx-data builder is `post-report-tx-data`."
+  [conn {:keys [posted-at vt-from vt-to] :as opts}]
+  (let [pa (or posted-at (Date.))]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (post-report-tx-data
+                        (d/db conn) (assoc opts :posted-at pa))
                        (or vt-from pa)
                        (or vt-to kbt/forever)))))
 
@@ -389,29 +428,15 @@
 ;; reimburse! — settle an own-account report
 ;; ============================================================================
 
-(defn reimburse!
-  "Settle the `:own-account` portion of a `:posted` report
-   (`:posted → :reimbursed`): builds — in ONE transaction with the
-   status change — a sealed `Dr :reimbursement-payable-account /
-   Cr :cash-account` entry for the own-account total, and links
-   `:expense-report/reimbursement-transaction`. A report with no
-   `:own-account` lines is terminal at `:posted` — `reimburse!`
-   throws for it.
-
-   Required: :expense-report, :journal, :cash-account,
-             :reimbursement-payable-account.
-   Optional: :posted-at (default now), :changed-by-uid,
-             :vt-from, :vt-to.
-   Returns the tx-report."
-  [conn {:keys [expense-report journal cash-account
-                reimbursement-payable-account posted-at changed-by-uid
-                vt-from vt-to]}]
+(defn reimburse-tx-data
+  "Pure tx-data builder for `reimburse!` (ADR-068)."
+  [db {:keys [expense-report journal cash-account
+              reimbursement-payable-account posted-at changed-by-uid]}]
   (when-not journal (throw (ex-info ":journal required" {})))
   (when-not cash-account (throw (ex-info ":cash-account required" {})))
   (when-not reimbursement-payable-account
     (throw (ex-info ":reimbursement-payable-account required" {})))
-  (let [db (d/db conn)
-        report (resolve-report db expense-report)
+  (let [report (resolve-report db expense-report)
         _ (when-not report (throw (ex-info "Expense report not found"
                                            {:spec expense-report})))
         status (:expense-report/status
@@ -456,9 +481,31 @@
                                :changed-at pa
                                :reason :expense-report-reimbursed}
                         changed-by-uid (assoc :changed-by-uid changed-by-uid)))]
-    (d/transact conn (kbt/with-vt (-> (vec tx-data)
-                                      (into status-tx)
-                                      (conj {:db/id report
-                                             :expense-report/reimbursement-transaction -1}))
+    (-> (vec tx-data)
+        (into status-tx)
+        (conj {:db/id report
+               :expense-report/reimbursement-transaction -1}))))
+
+(defn reimburse!
+  "Settle the `:own-account` portion of a `:posted` report
+   (`:posted → :reimbursed`): builds — in ONE transaction with the
+   status change — a sealed `Dr :reimbursement-payable-account /
+   Cr :cash-account` entry for the own-account total, and links
+   `:expense-report/reimbursement-transaction`. A report with no
+   `:own-account` lines is terminal at `:posted` — `reimburse!`
+   throws for it. Routes through the gate (ADR-068).
+
+   Required: :expense-report, :journal, :cash-account,
+             :reimbursement-payable-account.
+   Optional: :posted-at (default now), :changed-by-uid,
+             :vt-from, :vt-to.
+   Returns the tx-report.
+
+   The pure tx-data builder is `reimburse-tx-data`."
+  [conn {:keys [posted-at vt-from vt-to] :as opts}]
+  (let [pa (or posted-at (Date.))]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (reimburse-tx-data
+                        (d/db conn) (assoc opts :posted-at pa))
                        (or vt-from pa)
                        (or vt-to kbt/forever)))))

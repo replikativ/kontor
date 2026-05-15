@@ -23,6 +23,7 @@
             [kontor.bitemporal :as kbt]
             [kontor.posting :as posting]
             [kontor.status-machine :as sm]
+            [kontor.validation :as validation]
             [kontor.valuation :as valuation]))
 
 ;; ============================================================================
@@ -70,25 +71,18 @@
 ;; Transactors
 ;; ============================================================================
 
-(defn make-receipt!
-  "Create a `:receipt` + `:receipt-item` rows in `:pending` state.
+(declare make-receipt-tx-data post-receipt-with-inventory-tx-data)
 
-   Required:
-     :external-id, :order, :received-at, :items (vec of receipt-item maps).
-
-   Each item map requires :order-item, :quantity-accepted (and may
-   include :quantity-rejected + :rejection-reason + :lot + :unit-cost).
-
-   Optional receipt-level: :ship-group, :received-by-uid, :facility-id,
-   :carrier-partner, :tracking-number, :packing-slip-ref, :notes."
-  [conn {:keys [external-id order items ship-group received-at
-                received-by-uid facility-id carrier-partner
-                tracking-number packing-slip-ref notes]}]
+(defn make-receipt-tx-data
+  "Pure tx-data builder for `make-receipt!` (ADR-068)."
+  [_db {:keys [external-id order items ship-group received-at
+               received-by-uid facility-id carrier-partner
+               tracking-number packing-slip-ref notes tempid]
+        :or {tempid "receipt-1"}}]
   (when-not external-id  (throw (ex-info ":external-id required" {})))
   (when-not order        (throw (ex-info ":order required" {})))
   (when-not (seq items)  (throw (ex-info "non-empty :items required" {})))
-  (let [receipt-tempid "receipt-1"
-        receipt-row (cond-> {:db/id receipt-tempid
+  (let [receipt-row (cond-> {:db/id tempid
                              :receipt/external-id external-id
                              :receipt/order order
                              :receipt/status :pending
@@ -103,7 +97,7 @@
         item-rows (mapv (fn [{:keys [order-item product-id quantity-accepted
                                      quantity-rejected rejection-reason
                                      lot unit-cost]}]
-                          (cond-> {:receipt-item/receipt receipt-tempid
+                          (cond-> {:receipt-item/receipt tempid
                                    :receipt-item/order-item order-item
                                    :receipt-item/quantity-accepted quantity-accepted}
                             product-id        (assoc :receipt-item/product-id product-id)
@@ -112,7 +106,25 @@
                             lot               (assoc :receipt-item/lot lot)
                             unit-cost         (assoc :receipt-item/unit-cost unit-cost)))
                         items)]
-    (d/transact conn (vec (cons receipt-row item-rows)))))
+    (vec (cons receipt-row item-rows))))
+
+(defn make-receipt!
+  "Create a `:receipt` + `:receipt-item` rows in `:pending` state.
+   Routes through the gate (ADR-068).
+
+   Required:
+     :external-id, :order, :received-at, :items (vec of receipt-item maps).
+
+   Each item map requires :order-item, :quantity-accepted (and may
+   include :quantity-rejected + :rejection-reason + :lot + :unit-cost).
+
+   Optional receipt-level: :ship-group, :received-by-uid, :facility-id,
+   :carrier-partner, :tracking-number, :packing-slip-ref, :notes.
+
+   The pure tx-data builder is `make-receipt-tx-data`."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (make-receipt-tx-data (d/db conn) opts)))
 
 (defn accept-receipt!
   "Transition :pending → :accepted (inspection pass)."
@@ -189,51 +201,16 @@
                                        cost). Or pass a custom :account-fn
                                        to post-receipt-with-inventory!."})))))
 
-(defn post-receipt-with-inventory!
-  "Atomically transition a :pending receipt → :accepted, write
-   :valuation-layer rows, and post Dr inventory / Cr gr-ir-clearing
-   per receipt-item via kontor.posting/plan-stock-move :direction :in.
-
-   The receipt must:
-     - be in :pending status,
-     - belong to an :order whose :order/currency resolves to a
-       :commodity,
-     - have :receipt-item rows with :unit-cost set (the actual cost
-       at receipt time; differences from PO unit-price land on
-       :price-variance if the CostingProvider is standard-cost).
-
-   Required opts:
-     :provider     CostingProvider impl (FIFO/LIFO/AVG/Standard).
-     :journal-ref  ref or lookup-ref to the :journal for these tx's.
-
-   Optional opts:
-     :book         valuation-book eid or :valuation-book/code (default:
-                   the primary book via valuation/primary).
-     :ledger-ref   posting ledger (default: kernel default).
-     :account-fn   override role → account resolver. Default is three-
-                   tier :gl-account-default lookup against the order's
-                   entity then tenant-wide.
-     :effective-date  instant (default now). Also drives the tx's
-                      `:tx/valid-from` for kontor.bitemporal when
-                      `:vt-from` is omitted.
-     :changed-by-uid  ref to :create/uid for the status-history row.
-     :reason          status-history :reason keyword.
-     :vt-from         kontor.bitemporal valid-from (default
-                      `:effective-date`).
-     :vt-to           kontor.bitemporal valid-to (default: open).
-
-   Returns the d/transact report.
-
-   The kernel uses :db/id -1 for the transaction tempid, -200 for the
-   layer, and -300- for postings. To compose N moves in one tx, each
-   item's tx-data is shifted by (i * 1000)."
-  [conn receipt-spec {:keys [provider book journal-ref ledger-ref
-                             account-fn effective-date changed-by-uid
-                             reason vt-from vt-to]}]
+(defn post-receipt-with-inventory-tx-data
+  "Pure tx-data builder for `post-receipt-with-inventory!` (ADR-068).
+   Returns the composed posting + valuation + status-history tx-data
+   vector (without `:vt-from`/`:vt-to` wrapping)."
+  [db receipt-spec {:keys [provider book journal-ref ledger-ref
+                           account-fn effective-date changed-by-uid
+                           reason]}]
   (when-not provider    (throw (ex-info ":provider required" {:type :receipt/missing-provider})))
   (when-not journal-ref (throw (ex-info ":journal-ref required" {:type :receipt/missing-journal})))
-  (let [db (d/db conn)
-        receipt-eid (resolve-receipt db receipt-spec)
+  (let [receipt-eid (resolve-receipt db receipt-spec)
         _ (when-not receipt-eid
             (throw (ex-info "Receipt not found" {:spec receipt-spec})))
         receipt (d/pull db
@@ -274,6 +251,14 @@
               (throw (ex-info ":receipt-item/unit-cost required for posting"
                               {:type :receipt/missing-unit-cost
                                :receipt-item (:db/id item)}))))
+        ;; The state-machine middleware requires :transaction/posted-at
+        ;; in the same tx as :transaction/state :posted. plan-stock-move
+        ;; sets state but not posted-at; stamp it here.
+        stamp-posted-at (fn [tx-row]
+                          (if (and (map? tx-row)
+                                   (= :posted (:transaction/state tx-row)))
+                            (assoc tx-row :transaction/posted-at eff-date)
+                            tx-row))
         per-item-tx
         (mapv (fn [idx item]
                 (let [move-spec {:direction :in
@@ -290,7 +275,8 @@
                                  :account-fn account-fn
                                  :transaction-state :posted}
                       raw-tx (posting/plan-stock-move db move-spec)]
-                  (offset-tempids raw-tx (* 1000 idx))))
+                  (mapv stamp-posted-at
+                        (offset-tempids raw-tx (* 1000 idx)))))
               (range)
               items)
         all-posting-tx (vec (mapcat identity per-item-tx))
@@ -302,12 +288,58 @@
                             :to :accepted
                             :changed-at eff-date}
                      changed-by-uid (assoc :changed-by-uid changed-by-uid)
-                     reason (assoc :reason reason)))
-        core-tx (vec (concat all-posting-tx status-tx))
-        all-tx (kbt/with-vt core-tx
-                            (or vt-from eff-date)
-                            (or vt-to kbt/forever))]
-    (d/transact conn all-tx)))
+                     reason (assoc :reason reason)))]
+    (vec (concat all-posting-tx status-tx))))
+
+(defn post-receipt-with-inventory!
+  "Atomically transition a :pending receipt → :accepted, write
+   :valuation-layer rows, and post Dr inventory / Cr gr-ir-clearing
+   per receipt-item via kontor.posting/plan-stock-move :direction :in.
+   Routes through the gate (ADR-068).
+
+   The receipt must:
+     - be in :pending status,
+     - belong to an :order whose :order/currency resolves to a
+       :commodity,
+     - have :receipt-item rows with :unit-cost set (the actual cost
+       at receipt time; differences from PO unit-price land on
+       :price-variance if the CostingProvider is standard-cost).
+
+   Required opts:
+     :provider     CostingProvider impl (FIFO/LIFO/AVG/Standard).
+     :journal-ref  ref or lookup-ref to the :journal for these tx's.
+
+   Optional opts:
+     :book         valuation-book eid or :valuation-book/code (default:
+                   the primary book via valuation/primary).
+     :ledger-ref   posting ledger (default: kernel default).
+     :account-fn   override role → account resolver. Default is three-
+                   tier :gl-account-default lookup against the order's
+                   entity then tenant-wide.
+     :effective-date  instant (default now). Also drives the tx's
+                      `:tx/valid-from` for kontor.bitemporal when
+                      `:vt-from` is omitted.
+     :changed-by-uid  ref to :create/uid for the status-history row.
+     :reason          status-history :reason keyword.
+     :vt-from         kontor.bitemporal valid-from (default
+                      `:effective-date`).
+     :vt-to           kontor.bitemporal valid-to (default: open).
+
+   Returns the d/transact report.
+
+   The kernel uses :db/id -1 for the transaction tempid, -200 for the
+   layer, and -300- for postings. To compose N moves in one tx, each
+   item's tx-data is shifted by (i * 1000).
+
+   The pure tx-data builder is `post-receipt-with-inventory-tx-data`."
+  [conn receipt-spec {:keys [effective-date vt-from vt-to] :as opts}]
+  (let [eff-date (or effective-date (java.util.Date.))]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (post-receipt-with-inventory-tx-data
+                        (d/db conn) receipt-spec
+                        (assoc opts :effective-date eff-date))
+                       (or vt-from eff-date)
+                       (or vt-to kbt/forever)))))
 
 ;; ============================================================================
 ;; Queries

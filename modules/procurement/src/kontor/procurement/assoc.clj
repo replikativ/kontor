@@ -20,7 +20,8 @@
    line.
 
    The upgrade pattern: customer-driven upgrade to a higher SKU."
-  (:require [datahike.api :as d]))
+  (:require [datahike.api :as d]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Pull helpers
@@ -80,16 +81,11 @@
 ;; Transactors
 ;; ============================================================================
 
-(defn link-orders!
-  "Create an `:order-item-assoc` row linking from-order-item →
-   to-order-item with the given `:type`.
+(declare link-orders-tx-data)
 
-   Required: :from-order-item, :to-order-item, :type, :quantity.
-   Optional: :note.
-
-   Idempotent via composite identity `[from-order-item, to-order-
-   item, type]` — re-linking the same triple is a no-op."
-  [conn {:keys [from-order-item to-order-item type quantity note]}]
+(defn link-orders-tx-data
+  "Pure tx-data builder for `link-orders!` (ADR-068)."
+  [_db {:keys [from-order-item to-order-item type quantity note]}]
   (when-not from-order-item (throw (ex-info ":from-order-item required" {})))
   (when-not to-order-item   (throw (ex-info ":to-order-item required" {})))
   (when-not type            (throw (ex-info ":type required" {})))
@@ -99,7 +95,23 @@
                      :order-item-assoc/type type
                      :order-item-assoc/quantity quantity}
               note (assoc :order-item-assoc/note note))]
-    (d/transact conn [row])))
+    [row]))
+
+(defn link-orders!
+  "Create an `:order-item-assoc` row linking from-order-item →
+   to-order-item with the given `:type`. Routes through the gate
+   (ADR-068).
+
+   Required: :from-order-item, :to-order-item, :type, :quantity.
+   Optional: :note.
+
+   Idempotent via composite identity `[from-order-item, to-order-
+   item, type]` — re-linking the same triple is a no-op.
+
+   The pure tx-data builder is `link-orders-tx-data`."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (link-orders-tx-data (d/db conn) opts)))
 
 (defn drop-ship-link!
   "Convenience for `:type :drop-shipment`. Links a sales-order-item
