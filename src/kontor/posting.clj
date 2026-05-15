@@ -325,14 +325,25 @@
    posting without the attribute is conceptually in the *primary*
    book; readers and validators treat the nil-keyed group as the
    primary ledger. Multi-ledger users explicitly tag their postings
-   with a ledger ref or lookup-ref; everyone else pays nothing."
-  [{:keys [transaction postings] :as input}]
+   with a ledger ref or lookup-ref; everyone else pays nothing.
+
+   Optional `:tx-tempid` (top-level key, ADR-067) — the tempid for
+   the transaction entity, default `-1`. Pass a **string** when
+   composing several `build-transaction` outputs into one tx-data
+   (a `kontor.process` step that posts N entries): each call needs a
+   distinct tempid or the transactions collide into one. With a
+   string `s`, postings get tempids `\"s-p0\"`, `\"s-p1\"`, …; the
+   default `-1` keeps the original `-100-i` posting tempids."
+  [{:keys [transaction postings tx-tempid] :as input}]
   (let [report (validate input)]
     (when-not (:ok? report)
       (throw (ex-info "build-transaction: input failed structural validation"
                       {:report report
                        :input input}))))
-  (let [tx-tempid -1
+  (let [tx-tempid (or tx-tempid -1)
+        posting-tempid (if (string? tx-tempid)
+                         (fn [i] (str tx-tempid "-p" i))
+                         (fn [i] (- -100 i)))
         tx-base   (cond-> (assoc transaction :db/id tx-tempid)
                     (nil? (:transaction/state transaction))
                     (assoc :transaction/state :draft))
@@ -343,7 +354,7 @@
         posting-entities
         (mapv (fn [i posting]
                 (cond-> (assoc posting
-                               :db/id (- -100 i)
+                               :db/id (posting-tempid i)
                                :posting/transaction tx-tempid)
                   (nil? (:posting/display-type posting))
                   (assoc :posting/display-type :product)))

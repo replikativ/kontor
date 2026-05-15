@@ -36,6 +36,7 @@
             [kontor.lease.posting :as lposting]
             [kontor.lease.rou-provider :as rou]
             [kontor.period :as period]
+            [kontor.process :as process]
             [kontor.schedule :as schedule]
             [kontor.status-machine :as sm])
   (:import [java.math BigDecimal RoundingMode]
@@ -97,7 +98,18 @@
      :as-of            instant valid-time (default = commencement-date)
 
    Returns {:lease eid :rou-asset eid :books [{:ledger :liability-book
-   :rou-dep-book :pv :rou-cost} …]}."
+   :rou-dep-book :pv :rou-cost} …]}.
+
+   Implemented as a `kontor.process` (ADR-067): the ROU `:asset`, the
+   per-ledger `:lease-liability` + ROU `:asset-depreciation` books +
+   their schedules, the day-one recognition entries and the
+   `:draft → :active` status change all commit as ONE atomic, gated
+   transaction. The ROU asset threads to its dependent books by the
+   `\"rou-asset\"` string tempid; the per-ledger builders take a
+   `:tempid-suffix` so N books compose without collision. The old
+   hand-call to `period/assert-not-in-locked-period!` is gone — the
+   process commits through `transact-with-validation`, so the period
+   / sealing / sum-to-zero / invariant gate covers the whole tx."
   [conn {:keys [lease journal changed-by-uid rou-asset-account
                 rou-accumulated-account books cash-account rou-asset-code
                 as-of]}]
@@ -160,6 +172,14 @@
                   (assoc bk :rate rate :pv pv :rou-cost rou-cost)))
               books)
         rou-code (or rou-asset-code (str (:lease/code l) "-ROU"))
+        ;; Ledger codes for the per-book schedule-code default — pulled
+        ;; up-front because `open-book-tx-data` in :asset-tempid mode
+        ;; does not pull the (not-yet-committed) asset.
+        ledger-codes (into {} (map (fn [bk]
+                                     [(:ledger bk)
+                                      (:ledger/code
+                                       (d/pull db [:ledger/code] (:ledger bk)))]))
+                           books)
         ;; The :asset's single :acquisition-cost — the first (usually
         ;; primary) book's ROU cost; each :asset-depreciation book
         ;; carries its OWN :depreciable-base, so when discount rates
@@ -170,109 +190,123 @@
         ;; `kontor.asset.asset/dispose!` must pass an explicit
         ;; `:asset-account-cost`, since `plan-disposal` /
         ;; `net-book-value` default to this asset-level figure.
-        primary-rou-cost (:rou-cost (first book-calcs))]
-    ;; 1. The Right-of-Use :asset.
-    (asset/acquire! conn
-                    {:code rou-code
-                     :name (str "ROU — " (:lease/name l))
-                     :class (:db/id (:lease/asset-class l))
-                     :acquisition-cost primary-rou-cost
-                     :acquisition-commodity commodity
-                     :acquisition-date commencement
-                     :in-service? true
-                     :in-service-date commencement
-                     :salvage-value 0M
-                     :asset-account rou-asset-account
-                     :accumulated-account rou-accumulated-account
-                     :expense-account (:rou-expense-account (first books))
-                     :origin-document (:db/id (:lease/origin-document l))
-                     :changed-by-uid changed-by-uid
-                     :vt-from (or as-of commencement)})
-    (let [rou-asset-eid (asset/by-code (d/db conn) rou-code)
-          book-results
-          (mapv
-           (fn [{:keys [ledger classification liability-account interest-account
-                        rou-expense-account liability-provider-id rate pv rou-cost]}]
-             (when-not ledger (throw (ex-info "book spec: :ledger required" {})))
-             (when-not (#{:finance :operating} classification)
-               (throw (ex-info "book spec: :classification must be :finance | :operating"
-                                {:classification classification})))
-             (when-not liability-account
-               (throw (ex-info "book spec: :liability-account required" {})))
-             (when-not interest-account
-               (throw (ex-info "book spec: :interest-account required" {})))
-             (when-not rou-expense-account
-               (throw (ex-info "book spec: :rou-expense-account required" {})))
-             ;; 2. The :lease-liability book + its schedule.
-             (liability/open-liability-book!
-              conn (cond-> {:lease lease-eid
-                            :ledger ledger
-                            :classification classification
-                            :opening-liability pv
-                            :discount-rate rate
-                            :liability-account liability-account
-                            :interest-account interest-account
-                            :commodity commodity
-                            :start-date sched-start
-                            :n-periods n-periods
-                            :frequency freq}
-                     liability-provider-id
-                     (assoc :provider-id liability-provider-id)))
-             ;; 3. The ROU :asset-depreciation book + its schedule.
-             (asset-dep/open-book!
-              conn {:asset rou-asset-eid
-                    :ledger ledger
-                    :provider-id (if (= classification :operating)
-                                   :lease-rou-plug
-                                   :straight-line)
-                    :useful-life-months (:lease/term-months l)
-                    :depreciable-base rou-cost
-                    :commodity commodity
-                    :start-date sched-start
-                    :frequency freq
-                    :expense-account rou-expense-account})
-             ;; 4. The day-one recognition entry for this book — refused
-             ;; if commencement falls in a soft-closed / sealed period.
-             (let [tx-data (lposting/plan-lease-recognition
-                            (cond-> {:rou-asset-account rou-asset-account
-                                     :liability-account liability-account
-                                     :rou-cost rou-cost
-                                     :pv pv
-                                     :net-cash net-cash
-                                     :commodity commodity
-                                     :ledger ledger
-                                     :journal journal
-                                     :date commencement
-                                     :posted-at commencement
-                                     :narration (str "Lease recognition — "
-                                                      (:lease/code l))}
-                              cash-account (assoc :cash-account cash-account)))]
-               (period/assert-not-in-locked-period! (d/db conn) tx-data)
-               (d/transact conn tx-data))
-             {:ledger ledger
-              :liability-book (liability/book-for (d/db conn) lease-eid ledger)
-              :rou-dep-book (asset-dep/book-for (d/db conn) rou-asset-eid ledger)
-              :pv pv
-              :rou-cost rou-cost})
-           book-calcs)
-          ;; 5. Link the ROU asset + drive :draft → :active.
-          db' (d/db conn)
-          status-tx (sm/record-status-change-tx-data
-                     db' {:entity lease-eid
-                          :entity-type :lease
-                          :facet :lease/status
-                          :from :draft :to :active
-                          :changed-at (Date.)
-                          :changed-by-uid changed-by-uid
-                          :supporting-doc (:db/id (:lease/origin-document l))
-                          :reason :lease-commenced})]
-      (d/transact conn (kbt/with-vt
-                         (into [{:db/id lease-eid :lease/rou-asset rou-asset-eid}]
-                               status-tx)
-                         (or as-of commencement) kbt/forever))
-      {:lease lease-eid
-       :rou-asset rou-asset-eid
-       :books book-results})))
+        primary-rou-cost (:rou-cost (first book-calcs))
+        rou-tempid "rou-asset"
+        ;; STEP 1 — the Right-of-Use :asset (threads by `rou-tempid`).
+        recognize-rou
+        (fn [sdb _ctx]
+          (asset/acquire-tx-data
+           sdb {:tempid rou-tempid
+                :code rou-code
+                :name (str "ROU — " (:lease/name l))
+                :class (:db/id (:lease/asset-class l))
+                :acquisition-cost primary-rou-cost
+                :acquisition-commodity commodity
+                :acquisition-date commencement
+                :in-service? true
+                :in-service-date commencement
+                :salvage-value 0M
+                :asset-account rou-asset-account
+                :accumulated-account rou-accumulated-account
+                :expense-account (:rou-expense-account (first books))
+                :origin-document (:db/id (:lease/origin-document l))
+                :changed-by-uid changed-by-uid}))
+        ;; STEPS 2..N+1 — one per ledger: the :lease-liability book + its
+        ;; schedule, the ROU :asset-depreciation book + its schedule, and
+        ;; the day-one recognition entry. `:tempid-suffix`/`:tx-tempid`
+        ;; keep the N books' tempids distinct in the one tx-data.
+        book-steps
+        (vec
+         (map-indexed
+          (fn [i {:keys [ledger classification liability-account interest-account
+                         rou-expense-account liability-provider-id rate pv rou-cost]}]
+            (when-not ledger (throw (ex-info "book spec: :ledger required" {})))
+            (when-not (#{:finance :operating} classification)
+              (throw (ex-info "book spec: :classification must be :finance | :operating"
+                              {:classification classification})))
+            (when-not liability-account
+              (throw (ex-info "book spec: :liability-account required" {})))
+            (when-not interest-account
+              (throw (ex-info "book spec: :interest-account required" {})))
+            (when-not rou-expense-account
+              (throw (ex-info "book spec: :rou-expense-account required" {})))
+            (let [suffix (str "-" i)]
+              (fn [sdb _ctx]
+                (-> []
+                    (into (liability/open-liability-book-tx-data
+                           sdb (cond-> {:lease lease-eid
+                                        :ledger ledger
+                                        :classification classification
+                                        :opening-liability pv
+                                        :discount-rate rate
+                                        :liability-account liability-account
+                                        :interest-account interest-account
+                                        :commodity commodity
+                                        :start-date sched-start
+                                        :n-periods n-periods
+                                        :frequency freq
+                                        :tempid-suffix suffix}
+                                 liability-provider-id
+                                 (assoc :provider-id liability-provider-id))))
+                    (into (asset-dep/open-book-tx-data
+                           sdb {:asset-tempid rou-tempid
+                                :ledger ledger
+                                :provider-id (if (= classification :operating)
+                                               :lease-rou-plug
+                                               :straight-line)
+                                :useful-life-months (:lease/term-months l)
+                                :depreciable-base rou-cost
+                                :commodity commodity
+                                :start-date sched-start
+                                :frequency freq
+                                :expense-account rou-expense-account
+                                :schedule-code (str rou-code "-dep-"
+                                                    (or (ledger-codes ledger) ledger))
+                                :tempid-suffix suffix}))
+                    (into (lposting/plan-lease-recognition
+                           (cond-> {:rou-asset-account rou-asset-account
+                                    :liability-account liability-account
+                                    :rou-cost rou-cost
+                                    :pv pv
+                                    :net-cash net-cash
+                                    :commodity commodity
+                                    :ledger ledger
+                                    :journal journal
+                                    :date commencement
+                                    :posted-at commencement
+                                    :tx-tempid (str "lease-recog" suffix)
+                                    :narration (str "Lease recognition — "
+                                                    (:lease/code l))}
+                             cash-account (assoc :cash-account cash-account))))))))
+          book-calcs))
+        ;; FINAL STEP — link the ROU asset + drive :draft → :active.
+        link-and-activate
+        (fn [sdb _ctx]
+          (into [{:db/id lease-eid :lease/rou-asset rou-tempid}]
+                (sm/record-status-change-tx-data
+                 sdb {:entity lease-eid
+                      :entity-type :lease
+                      :facet :lease/status
+                      :from :draft :to :active
+                      :changed-at (Date.)
+                      :changed-by-uid changed-by-uid
+                      :supporting-doc (:db/id (:lease/origin-document l))
+                      :reason :lease-commenced})))
+        report (process/run-process
+                conn {:steps (concat [recognize-rou] book-steps [link-and-activate])
+                      :vt-from (or as-of commencement)
+                      :vt-to kbt/forever})
+        tempids (:tempids report)]
+    {:lease lease-eid
+     :rou-asset (get tempids rou-tempid)
+     :books (mapv (fn [i {:keys [ledger pv rou-cost]}]
+                    {:ledger ledger
+                     :liability-book (get tempids (str "lease-liab-book-" i))
+                     :rou-dep-book (get tempids (str "asset-dep-book-" i))
+                     :pv pv
+                     :rou-cost rou-cost})
+                  (range)
+                  book-calcs)}))
 
 ;; ============================================================================
 ;; run-lease!

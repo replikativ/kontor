@@ -191,26 +191,48 @@
   "Pure tx-data builder for `open-book!` — the entity-map
    construction without the `d/transact` wrapper. Use as a
    `kontor.process` step (ADR-067); `open-book!` is the standalone
-   wrapper. See `open-book!` for the opts."
-  [db {:keys [asset ledger provider-id useful-life-months convention
-              depreciable-base opening-accumulated commodity start-date
-              frequency method-params effective-rule expense-account
-              schedule-code note]
-       :or   {convention :full frequency :monthly}}]
-  (when-not asset              (throw (ex-info ":asset required" {})))
+   wrapper. See `open-book!` for the opts, plus two composition knobs:
+
+     :asset-tempid   — use this verbatim as the `:asset-depreciation/
+                       asset` ref instead of resolving `:asset`. For
+                       when the ROU/asset entity is created by an
+                       earlier process step (`commence!`) and threads
+                       by string tempid. In this mode the asset is
+                       not pulled, so `:depreciable-base`,
+                       `:commodity`, `:start-date` and
+                       `:schedule-code` must all be passed explicitly.
+     :tempid-suffix  — appended to the book/schedule/method-params
+                       tempids (default \"\"); pass a distinct suffix
+                       per book when several `open-book-tx-data`
+                       outputs compose into one tx-data."
+  [db {:keys [asset asset-tempid ledger provider-id useful-life-months
+              convention depreciable-base opening-accumulated commodity
+              start-date frequency method-params effective-rule
+              expense-account schedule-code note tempid-suffix]
+       :or   {convention :full frequency :monthly tempid-suffix ""}}]
+  (when-not (or asset asset-tempid)
+    (throw (ex-info ":asset or :asset-tempid required" {})))
   (when-not ledger             (throw (ex-info ":ledger required" {})))
   (when-not provider-id        (throw (ex-info ":provider-id required" {})))
   (when-not useful-life-months (throw (ex-info ":useful-life-months required" {})))
-  (let [asset-eid (asset/resolve-asset db asset)
+  (when asset-tempid
+    (doseq [[k v] {:depreciable-base depreciable-base :commodity commodity
+                   :start-date start-date :schedule-code schedule-code}]
+      (when (nil? v)
+        (throw (ex-info (str "open-book-tx-data: " k
+                             " required when :asset-tempid is given (the asset is not pulled)")
+                        {:missing k})))))
+  (let [asset-eid (or asset-tempid (asset/resolve-asset db asset))
         _ (when-not asset-eid (throw (ex-info "Asset not found" {:spec asset})))
-        _ (when (book-for db asset-eid ledger)
+        _ (when (and asset (book-for db asset-eid ledger))
             (throw (ex-info "A depreciation book already exists for this (asset, ledger) — one book per pair (ADR-054)"
                             {:type :asset/duplicate-book
                              :asset asset :ledger ledger})))
-        a (d/pull db [:asset/code :asset/acquisition-cost
-                      :asset/acquisition-commodity :asset/salvage-value
-                      :asset/in-service-date]
-                  asset-eid)
+        a (when asset
+            (d/pull db [:asset/code :asset/acquisition-cost
+                        :asset/acquisition-commodity :asset/salvage-value
+                        :asset/in-service-date]
+                    asset-eid))
         commodity* (or commodity (:db/id (:asset/acquisition-commodity a)))
         _ (when-not commodity*
             (throw (ex-info "open-book!: no :commodity and the asset has no :acquisition-commodity — pass :commodity"
@@ -227,14 +249,15 @@
                        (str (:asset/code a) "-dep-" (or ledger-code ledger)))
         n-periods (periods-for useful-life-months frequency)
         end-date (schedule/date-of-occurrence start frequency n-periods)
-        sched-tempid "asset-dep-schedule"
-        mparams-tempid "asset-dep-method-params"
+        book-tempid (str "asset-dep-book" tempid-suffix)
+        sched-tempid (str "asset-dep-schedule" tempid-suffix)
+        mparams-tempid (str "asset-dep-method-params" tempid-suffix)
         mparams-entity (when (map? method-params)
                          (assoc method-params :db/id mparams-tempid))
         schedule-entity (cond-> {:db/id sched-tempid
                                  :schedule/code sched-code
                                  :schedule/kind :depreciation
-                                 :schedule/origin-entity "asset-dep-book"
+                                 :schedule/origin-entity book-tempid
                                  :schedule/start-date start
                                  :schedule/end-date end-date
                                  :schedule/frequency frequency
@@ -242,7 +265,7 @@
                                  :schedule/state :active
                                  :schedule/active true}
                           commodity* (assoc :schedule/total-commodity commodity*))
-        book-entity (cond-> {:db/id "asset-dep-book"
+        book-entity (cond-> {:db/id book-tempid
                              :asset-depreciation/asset asset-eid
                              :asset-depreciation/ledger ledger
                              :asset-depreciation/provider-id provider-id

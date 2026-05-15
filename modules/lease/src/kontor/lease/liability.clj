@@ -154,12 +154,15 @@
   "Pure tx-data builder for `open-liability-book!` — the entity-map
    construction without the `d/transact` wrapper. Use as a
    `kontor.process` step (ADR-067); `open-liability-book!` is the
-   standalone wrapper. See `open-liability-book!` for the opts."
+   standalone wrapper. See `open-liability-book!` for the opts, plus
+   `:tempid-suffix` — appended to the book/schedule tempids (default
+   \"\"); pass a distinct suffix per book when several
+   `open-liability-book-tx-data` outputs compose into one tx-data."
   [db {:keys [lease ledger classification opening-liability discount-rate
               liability-account interest-account commodity start-date
               n-periods frequency provider-id total-amount schedule-code
-              note]
-       :or   {provider-id :effective-interest}}]
+              note tempid-suffix]
+       :or   {provider-id :effective-interest tempid-suffix ""}}]
   (when-not lease             (throw (ex-info ":lease required" {})))
   (when-not ledger            (throw (ex-info ":ledger required" {})))
   (when-not (#{:finance :operating} classification)
@@ -189,8 +192,8 @@
                                  (d/pull db [:lease/payment-amount] lease-eid))
                                 (.multiply (java.math.BigDecimal/valueOf
                                             (long n-periods)))))
-        sched-tempid "lease-liab-sched"
-        book-tempid  "lease-liab-book"
+        sched-tempid (str "lease-liab-sched" tempid-suffix)
+        book-tempid  (str "lease-liab-book" tempid-suffix)
         schedule-entity (cond-> {:db/id sched-tempid
                                  :schedule/code sched-code
                                  :schedule/kind :lease-liability

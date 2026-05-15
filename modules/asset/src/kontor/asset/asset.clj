@@ -68,12 +68,16 @@
    without the `d/transact`/`with-vt` wrapper. Use as a
    `kontor.process` step (ADR-067); `acquire!` is the standalone
    wrapper. Takes the same opts as `acquire!` minus `:vt-from` /
-   `:vt-to` (valid-time is owned by the caller / `run-process`)."
+   `:vt-to` (valid-time is owned by the caller / `run-process`),
+   plus `:tempid` — the asset entity's tempid (default `\"asset-1\"`);
+   pass a stable string when a later process step must reference the
+   asset (e.g. `commence!`'s ROU asset)."
   [db {:keys [code name class acquisition-cost acquisition-commodity
               acquisition-date in-service? in-service-date salvage-value
               asset-account accumulated-account expense-account
               cost-center entity parent origin-transaction origin-document
-              serial-number location note changed-by-uid]}]
+              serial-number location note changed-by-uid tempid]
+       :or   {tempid "asset-1"}}]
   (when-not code                  (throw (ex-info ":code required" {})))
   (when-not name                  (throw (ex-info ":name required" {})))
   (when-not class                 (throw (ex-info ":class required" {})))
@@ -82,7 +86,7 @@
   (when-not acquisition-date      (throw (ex-info ":acquisition-date required" {})))
   (let [target-state (if in-service? :in-service :planned)
         isd (when in-service? (or in-service-date acquisition-date))
-        asset-tempid "asset-1"
+        asset-tempid tempid
         row (cond-> {:db/id asset-tempid
                      :asset/code code
                      :asset/name name

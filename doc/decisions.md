@@ -7218,4 +7218,47 @@ now-redundant mitigations (`:fired-before-violation`,
 `assert-modifiable!`, the `run-lease!` lockstep guard, the
 `commence!` re-read) as each lands.
 
+**Composable tempids — addendum from the `commence!` migration.**
+A builder used in a multi-entity / multi-call process step that
+hardcodes a tempid (`{:db/id "asset-dep-book"}`, `{:db/id -1}`)
+will *collide* with itself when N outputs accumulate into one
+tx-data — datahike merges entities sharing a tempid. Leaf builders
+that an orchestrator calls multiple times in one process therefore
+need a knob to namespace their tempids. The convention this ADR
+settles on:
+
+  - **`:tempid-suffix`** — a string appended to every internal
+    tempid the builder generates. `kontor.asset.depreciation/
+    open-book-tx-data`, `kontor.lease.liability/open-liability-
+    book-tx-data` carry this. Default `""` preserves the
+    standalone-`!` behavior.
+  - **`:tempid`** — explicit tempid for a builder's *one* primary
+    entity, when a later step must reference it.
+    `kontor.asset.asset/acquire-tx-data` carries this; `commence!`
+    threads its ROU asset to the dep-book step via
+    `:tempid "rou-asset"` + `:asset-tempid "rou-asset"`.
+  - **`:asset-tempid`** (and analogues) — a builder that normally
+    *resolves* a parent ref by code/eid (`open-book-tx-data`
+    resolves `:asset`) accepts a passthrough alternative for when
+    the parent is created by an earlier step. In passthrough mode
+    the builder skips resolution + the parent pull, so the
+    asset-derived defaults must be passed explicitly.
+  - **`:tx-tempid`** (kernel-wide) — `kontor.posting/build-
+    transaction` accepts an optional top-level `:tx-tempid` string.
+    When given, the transaction gets that `:db/id` and postings
+    derive as `"<:tx-tempid>-pN"`. Required when an orchestrator
+    posts several entries from one process (commence!, the
+    modification transactors, run-lease!, …); the default `-1`
+    preserves the original behavior. The lease `plan-lease-*` /
+    `plan-adjustment` builders thread `:tx-tempid` through.
+
+These knobs are the v1 cost of "pure builders compose into one
+atomic tx-data." They are small, local, and backward-compatible
+(defaults preserve standalone-`!` behavior). The deeper
+generalization — `run-steps` auto-namespacing tempids per step —
+was rejected because it cannot distinguish a tempid's *definition*
+(which should be renamed) from a *cross-step reference* (which
+must not), so the namespacing belongs in the builders, where the
+distinction is local and explicit.
+
 Date: 2026-05-14.

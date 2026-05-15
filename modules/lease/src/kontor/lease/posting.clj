@@ -40,8 +40,12 @@
 
    When the header carries `:posted-at`, the entry is built *sealed*:
    `:transaction/state :posted` + `:transaction/posted-at`, every
-   posting stamped `:posting/posted-at`."
-  [{:keys [journal date narration external-id posted-at]} postings]
+   posting stamped `:posting/posted-at`.
+
+   A header `:tx-tempid` (ADR-067) is threaded to
+   `kontor.posting/build-transaction` — pass a distinct string when
+   composing several entries into one `kontor.process` tx-data."
+  [{:keys [journal date narration external-id posted-at tx-tempid]} postings]
   (when-not journal (throw (ex-info ":journal required" {})))
   (when-not date    (throw (ex-info ":date required" {})))
   (let [nonzero (filterv (fn [p]
@@ -52,13 +56,14 @@
                   (mapv #(assoc % :posting/posted-at posted-at) nonzero)
                   nonzero)]
     (posting/build-transaction
-     {:transaction (cond-> {:transaction/journal journal
-                            :transaction/effective-date date}
-                     narration   (assoc :transaction/narration narration)
-                     external-id (assoc :transaction/external-id external-id)
-                     posted-at   (assoc :transaction/state :posted
-                                        :transaction/posted-at posted-at))
-      :postings nonzero})))
+     (cond-> {:transaction (cond-> {:transaction/journal journal
+                                    :transaction/effective-date date}
+                             narration   (assoc :transaction/narration narration)
+                             external-id (assoc :transaction/external-id external-id)
+                             posted-at   (assoc :transaction/state :posted
+                                                :transaction/posted-at posted-at))
+              :postings nonzero}
+       tx-tempid (assoc :tx-tempid tx-tempid)))))
 
 ;; ============================================================================
 ;; Initial recognition (commence!)
@@ -79,7 +84,9 @@
              :net-cash, :commodity, :journal, :date
    Optional: :cash-account (required iff :net-cash ≠ 0), :ledger
              (nil = primary book), :narration, :external-id,
-             :posted-at (seal the entry)"
+             :posted-at (seal the entry), :tx-tempid (ADR-067 —
+             distinct string per entry when composing into one
+             process tx-data)"
   [{:keys [rou-asset-account liability-account cash-account rou-cost pv
            net-cash commodity ledger] :as spec}]
   (when-not rou-asset-account (throw (ex-info ":rou-asset-account required" {})))
@@ -118,7 +125,8 @@
    Required: :interest-account, :liability-account, :cash-account,
              :interest, :principal, :payment, :commodity, :journal,
              :date
-   Optional: :ledger, :narration, :external-id, :posted-at"
+   Optional: :ledger, :narration, :external-id, :posted-at,
+             :tx-tempid (ADR-067)"
   [{:keys [interest-account liability-account cash-account interest principal
            payment commodity ledger] :as spec}]
   (when-not interest-account  (throw (ex-info ":interest-account required" {})))
@@ -147,7 +155,8 @@
    compute their legs and route through here.
 
    Required: :legs, :commodity, :journal, :date
-   Optional: :ledger, :narration, :external-id, :posted-at"
+   Optional: :ledger, :narration, :external-id, :posted-at,
+             :tx-tempid (ADR-067)"
   [{:keys [legs commodity ledger] :as spec}]
   (when-not (seq legs) (throw (ex-info ":legs required" {})))
   (when-not commodity  (throw (ex-info ":commodity required" {})))
