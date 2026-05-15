@@ -49,6 +49,15 @@
             [kontor.bitemporal :as kbt]
             [kontor.status-machine :as sm]))
 
+;; legal-hold is a validator INSIDE `kontor.validation`'s gate
+;; (`assert-no-hold-violating-destructive-writes!`), so we can't
+;; require `kontor.validation` statically (cycle). The `!` wrappers
+;; resolve the gate lazily — same call shape, no static dep.
+(defn- transact-with-validation
+  [conn tx-data]
+  ((requiring-resolve 'kontor.validation/transact-with-validation)
+   conn tx-data))
+
 ;; ============================================================================
 ;; Status-transition + approval-policy seeds
 ;; ============================================================================
@@ -409,10 +418,69 @@
 ;; Transactors
 ;; ============================================================================
 
+(defn place-tx-data
+  "Pure tx-data builder for `place!` — entity-map construction
+   without the `d/transact` / `with-vt` wrapper (ADR-068). Use as a
+   `kontor.process` step. Takes the same opts as `place!` minus the
+   `:vt-from` / `:vt-to` valid-time bounds (owned by the caller),
+   plus `:tempid` (default `\"hold-1\"`) and `:placed-at` (default
+   now)."
+  [db {:keys [code matter-name issued-by-uid issued-at supporting-doc
+              scope-eids scope-query scope-query-as-of scope-preview
+              expires-at note reason-note tempid placed-at]
+       :or   {tempid "hold-1"}}]
+  (when-not code           (throw (ex-info ":code required" {})))
+  (when-not matter-name    (throw (ex-info ":matter-name required" {})))
+  (when-not issued-by-uid  (throw (ex-info ":issued-by-uid required" {})))
+  (when-not issued-at      (throw (ex-info ":issued-at required" {})))
+  (when-not supporting-doc (throw (ex-info ":supporting-doc required (ADR-038)" {})))
+  (when (and (empty? scope-eids) (clojure.string/blank? (or scope-query "")))
+    (throw (ex-info ":scope-eids or :scope-query required" {})))
+  ;; P2-1: validate the scope-query at placement time — a malformed
+  ;; query throws here rather than at the first purge.
+  (parse-scope-query scope-query)
+  (let [placed-at (or placed-at (java.util.Date.))
+        row (cond-> {:db/id tempid
+                     :legal-hold/code code
+                     :legal-hold/matter-name matter-name
+                     :legal-hold/issued-by-uid issued-by-uid
+                     :legal-hold/issued-at issued-at
+                     :legal-hold/supporting-doc supporting-doc
+                     :legal-hold/state :placed
+                     ;; ADR-038 :no-self-approval compares
+                     ;; :changed-by-uid against :create/uid on the
+                     ;; entity. Stamp it so the release-side SoD check
+                     ;; can fire.
+                     :create/uid issued-by-uid}
+              (seq scope-eids)        (assoc :legal-hold/scope-eids (vec scope-eids))
+              scope-query             (assoc :legal-hold/scope-query scope-query)
+              scope-query-as-of       (assoc :legal-hold/scope-query-as-of scope-query-as-of)
+              scope-preview           (assoc :legal-hold/scope-preview scope-preview)
+              expires-at              (assoc :legal-hold/expires-at expires-at)
+              note                    (assoc :legal-hold/note note))
+        ;; P1-3: no :legal-hold/placed-at denorm — the placement
+        ;; instant is the :tx/valid-from of the wrapping tx and the
+        ;; :status-history/changed-at of the nil → :placed row.
+        ;; Resolve via kbt/value-at if needed.
+        status-tx (sm/record-status-change-tx-data
+                   db
+                   (cond-> {:entity tempid
+                            :entity-type :legal-hold
+                            :facet :legal-hold/state
+                            :from :nil
+                            :to :placed
+                            :changed-at placed-at
+                            :changed-by-uid issued-by-uid
+                            :reason :hold-placed
+                            :supporting-doc supporting-doc}
+                     reason-note (assoc :reason-note reason-note)))]
+    (into [row] status-tx)))
+
 (defn place!
   "Place a legal hold. Atomic: writes the :legal-hold entity, the
    nil → :placed status-history row (with approval-policy checks),
-   and stamps :tx/valid-from per ADR-048.
+   and stamps :tx/valid-from per ADR-048. Routes through the
+   `transact-with-validation` gate (ADR-068).
 
    Required opts:
      :code             string (unique identity)
@@ -433,65 +501,43 @@
      :expires-at       instant (sweep-time-based! auto-release)
      :note             string
      :reason-note      free-text (required by ADR-038 policy)
-     :vt-from / :vt-to valid-time bounds (default :vt-from = now)"
-  [conn {:keys [code matter-name issued-by-uid issued-at supporting-doc
-                scope-eids scope-query scope-query-as-of scope-preview
-                expires-at note reason-note vt-from vt-to]}]
-  (when-not code           (throw (ex-info ":code required" {})))
-  (when-not matter-name    (throw (ex-info ":matter-name required" {})))
-  (when-not issued-by-uid  (throw (ex-info ":issued-by-uid required" {})))
-  (when-not issued-at      (throw (ex-info ":issued-at required" {})))
-  (when-not supporting-doc (throw (ex-info ":supporting-doc required (ADR-038)" {})))
-  (when (and (empty? scope-eids) (clojure.string/blank? (or scope-query "")))
-    (throw (ex-info ":scope-eids or :scope-query required" {})))
-  ;; P2-1: validate the scope-query at placement time — a malformed
-  ;; query throws here rather than at the first purge.
-  (parse-scope-query scope-query)
-  (let [db (d/db conn)
-        placed-at (java.util.Date.)
-        hold-tempid "hold-1"
-        row (cond-> {:db/id hold-tempid
-                     :legal-hold/code code
-                     :legal-hold/matter-name matter-name
-                     :legal-hold/issued-by-uid issued-by-uid
-                     :legal-hold/issued-at issued-at
-                     :legal-hold/supporting-doc supporting-doc
-                     :legal-hold/state :placed
-                     ;; ADR-038 :no-self-approval compares
-                     ;; :changed-by-uid against :create/uid on the
-                     ;; entity. Stamp it so the release-side SoD check
-                     ;; can fire.
-                     :create/uid issued-by-uid}
-              (seq scope-eids)        (assoc :legal-hold/scope-eids (vec scope-eids))
-              scope-query             (assoc :legal-hold/scope-query scope-query)
-              scope-query-as-of       (assoc :legal-hold/scope-query-as-of scope-query-as-of)
-              scope-preview           (assoc :legal-hold/scope-preview scope-preview)
-              expires-at              (assoc :legal-hold/expires-at expires-at)
-              note                    (assoc :legal-hold/note note))
-        ;; P1-3: no :legal-hold/placed-at denorm — the placement
-        ;; instant is the :tx/valid-from of this tx (kbt/with-vt
-        ;; below) and the :status-history/changed-at of the
-        ;; nil → :placed row. Resolve via kbt/value-at if needed.
-        status-tx (sm/record-status-change-tx-data
-                   db
-                   (cond-> {:entity hold-tempid
-                            :entity-type :legal-hold
-                            :facet :legal-hold/state
-                            :from :nil
-                            :to :placed
-                            :changed-at placed-at
-                            :changed-by-uid issued-by-uid
-                            :reason :hold-placed
-                            :supporting-doc supporting-doc}
-                     reason-note (assoc :reason-note reason-note)))]
-    (d/transact conn (kbt/with-vt (into [row] status-tx)
-                                  (or vt-from placed-at)
-                                  (or vt-to kbt/forever)))))
+     :vt-from / :vt-to valid-time bounds (default :vt-from = now)
+
+   The pure tx-data builder is `place-tx-data` (ADR-068)."
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [placed-at (java.util.Date.)
+        opts (assoc opts :placed-at placed-at)]
+    (transact-with-validation
+     conn (kbt/with-vt (place-tx-data (d/db conn) opts)
+                       (or vt-from placed-at)
+                       (or vt-to kbt/forever)))))
+
+(defn release-tx-data
+  "Pure tx-data builder for `release!` (ADR-068). Use as a
+   `kontor.process` step; `release!` is the standalone wrapper."
+  [db {:keys [hold-eid released-by-uid supporting-doc reason
+              reason-note released-at]}]
+  (when-not hold-eid        (throw (ex-info ":hold-eid required" {})))
+  (when-not released-by-uid (throw (ex-info ":released-by-uid required" {})))
+  (when-not supporting-doc  (throw (ex-info ":supporting-doc required (ADR-038)" {})))
+  (when (clojure.string/blank? (or reason-note ""))
+    (throw (ex-info ":reason-note required (ADR-038)" {})))
+  (sm/record-status-change-tx-data
+   db
+   {:entity hold-eid
+    :entity-type :legal-hold
+    :facet :legal-hold/state
+    :to :released
+    :changed-at (or released-at (java.util.Date.))
+    :changed-by-uid released-by-uid
+    :reason (or reason :hold-released)
+    :reason-note reason-note
+    :supporting-doc supporting-doc}))
 
 (defn release!
   "Release a hold. Status :placed → :released; ADR-038 enforces
    :no-self-approval, :requires-supporting-doc, :requires-non-empty-
-   reason-note.
+   reason-note. Routes through the gate (ADR-068).
 
    Required opts:
      :hold-eid         the :legal-hold eid (or use :code lookup-ref)
@@ -502,30 +548,16 @@
      :reason           keyword (default :hold-released)
 
    Optional:
-     :vt-from / :vt-to valid-time bounds (default :vt-from = now)"
-  [conn {:keys [hold-eid released-by-uid supporting-doc reason
-                reason-note vt-from vt-to]}]
-  (when-not hold-eid        (throw (ex-info ":hold-eid required" {})))
-  (when-not released-by-uid (throw (ex-info ":released-by-uid required" {})))
-  (when-not supporting-doc  (throw (ex-info ":supporting-doc required (ADR-038)" {})))
-  (when (clojure.string/blank? (or reason-note ""))
-    (throw (ex-info ":reason-note required (ADR-038)" {})))
-  (let [db (d/db conn)
-        now (java.util.Date.)
-        status-tx (sm/record-status-change-tx-data
-                   db
-                   {:entity hold-eid
-                    :entity-type :legal-hold
-                    :facet :legal-hold/state
-                    :to :released
-                    :changed-at now
-                    :changed-by-uid released-by-uid
-                    :reason (or reason :hold-released)
-                    :reason-note reason-note
-                    :supporting-doc supporting-doc})]
-    (d/transact conn (kbt/with-vt status-tx
-                                  (or vt-from now)
-                                  (or vt-to kbt/forever)))))
+     :vt-from / :vt-to valid-time bounds (default :vt-from = now)
+
+   The pure tx-data builder is `release-tx-data` (ADR-068)."
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [now (java.util.Date.)
+        opts (assoc opts :released-at now)]
+    (transact-with-validation
+     conn (kbt/with-vt (release-tx-data (d/db conn) opts)
+                       (or vt-from now)
+                       (or vt-to kbt/forever)))))
 
 (defn by-code
   "Resolve a hold's eid by its :legal-hold/code."

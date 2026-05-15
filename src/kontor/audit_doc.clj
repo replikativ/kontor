@@ -26,7 +26,8 @@
    kernel ACL; the consumer's auth layer owns enforcement."
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
-            [kontor.status-machine :as sm]))
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Resolution
@@ -62,8 +63,33 @@
 ;; Transactors
 ;; ============================================================================
 
+(defn create-doc-tx-data
+  "Pure tx-data builder for `create-doc!` (ADR-068). Optional
+   `:tempid` (default `\"audit-doc-1\"`) for cross-step references."
+  [_db {:keys [code type title description content-hash storage-uri
+               uploaded-by-uid uploaded-at tempid]
+        :or {tempid "audit-doc-1"}}]
+  (when-not code     (throw (ex-info ":code required" {})))
+  (when-not type     (throw (ex-info ":type required" {})))
+  (when-not storage-uri (throw (ex-info ":storage-uri required" {})))
+  [(cond-> {:db/id tempid
+            :audit-doc/code code
+            :audit-doc/type type
+            :audit-doc/storage-uri storage-uri
+            :audit-doc/uploaded-at (or uploaded-at (java.util.Date.))}
+     title           (assoc :audit-doc/title title)
+     description     (assoc :audit-doc/description description)
+     content-hash    (assoc :audit-doc/content-hash content-hash)
+     ;; The uploader IS the creator — stamp :create/uid too
+     ;; so ADR-038 :no-self-approval can fire on privilege
+     ;; waivers (ADR-051): the doc creator can't waive its
+     ;; privilege alone.
+     uploaded-by-uid (assoc :audit-doc/uploaded-by-uid uploaded-by-uid
+                            :create/uid uploaded-by-uid))])
+
 (defn create-doc!
-  "Create an :audit-doc entity in one tx. Returns the tx-report.
+  "Create an :audit-doc entity in one tx. Routes through the gate
+   (ADR-068). Returns the tx-report.
 
    Required keys in spec:
      :code           — opaque consumer-supplied identifier
@@ -72,26 +98,23 @@
 
    Optional:
      :title, :description, :content-hash, :uploaded-by-uid,
-     :uploaded-at (default now)."
-  [conn {:keys [code type title description content-hash storage-uri
-                uploaded-by-uid uploaded-at]}]
-  (when-not code     (throw (ex-info ":code required" {})))
-  (when-not type     (throw (ex-info ":type required" {})))
-  (when-not storage-uri (throw (ex-info ":storage-uri required" {})))
-  (let [doc (cond-> {:audit-doc/code code
-                     :audit-doc/type type
-                     :audit-doc/storage-uri storage-uri
-                     :audit-doc/uploaded-at (or uploaded-at (java.util.Date.))}
-              title           (assoc :audit-doc/title title)
-              description     (assoc :audit-doc/description description)
-              content-hash    (assoc :audit-doc/content-hash content-hash)
-              ;; The uploader IS the creator — stamp :create/uid too
-              ;; so ADR-038 :no-self-approval can fire on privilege
-              ;; waivers (ADR-051): the doc creator can't waive its
-              ;; privilege alone.
-              uploaded-by-uid (assoc :audit-doc/uploaded-by-uid uploaded-by-uid
-                                     :create/uid uploaded-by-uid))]
-    (d/transact conn [doc])))
+     :uploaded-at (default now).
+
+   The pure tx-data builder is `create-doc-tx-data` (ADR-068)."
+  [conn spec]
+  (validation/transact-with-validation
+   conn (create-doc-tx-data (d/db conn) spec)))
+
+(defn attach-supporting-doc-tx-data
+  "Pure tx-data builder for `attach-supporting-doc!` (ADR-068)."
+  [db history-eid doc-spec]
+  (let [doc-eid (resolve-doc db doc-spec)]
+    (when-not doc-eid
+      (throw (ex-info "Audit-doc not found"
+                      {:type :audit-doc/not-found
+                       :spec doc-spec})))
+    [{:db/id history-eid
+      :status-history/supporting-doc doc-eid}]))
 
 (defn attach-supporting-doc!
   "Attach an :audit-doc to a specific :status-history row's
@@ -99,17 +122,12 @@
    transition was recorded (e.g. customer emails the credit memo
    request post-facto, accountant uploads the email thread as
    supporting doc for the already-recorded :cancelled transition).
+   Routes through the gate (ADR-068).
 
    Returns the tx-report."
   [conn history-eid doc-spec]
-  (let [db (d/db conn)
-        doc-eid (resolve-doc db doc-spec)]
-    (when-not doc-eid
-      (throw (ex-info "Audit-doc not found"
-                      {:type :audit-doc/not-found
-                       :spec doc-spec})))
-    (d/transact conn [{:db/id history-eid
-                       :status-history/supporting-doc doc-eid}])))
+  (validation/transact-with-validation
+   conn (attach-supporting-doc-tx-data (d/db conn) history-eid doc-spec)))
 
 ;; ============================================================================
 ;; Hashing helper
@@ -204,6 +222,8 @@
     (or (:audit-doc/privilege (d/pull db [:audit-doc/privilege] eid))
         :none)))
 
+(declare reclassify-privilege-tx-data)
+
 (defn reclassify-privilege!
   "Change an :audit-doc's privilege classification through the
    status machine (ADR-034 + ADR-038). The :from is the doc's
@@ -236,33 +256,38 @@
      :supporting-doc ref to :audit-doc (required by ADR-038 on
                      waivers — the waiver/classification memo)
      :vt-from / :vt-to  valid-time bounds (default :vt-from = now)"
-  [conn {:keys [doc to changed-by-uid reason reason-note supporting-doc
-                vt-from vt-to]}]
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [now (java.util.Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (reclassify-privilege-tx-data
+                        (d/db conn) (assoc opts :changed-at now))
+                       (or vt-from now)
+                       (or vt-to kbt/forever)))))
+
+(defn reclassify-privilege-tx-data
+  "Pure tx-data builder for `reclassify-privilege!` (ADR-068)."
+  [db {:keys [doc to changed-by-uid reason reason-note supporting-doc
+              changed-at]}]
   (when-not to             (throw (ex-info ":to required" {})))
   (when-not changed-by-uid (throw (ex-info ":changed-by-uid required" {})))
   (when-not reason         (throw (ex-info ":reason required" {})))
-  (let [db (d/db conn)
-        doc-eid (resolve-doc db doc)
+  (let [doc-eid (resolve-doc db doc)
         _ (when-not doc-eid
             (throw (ex-info "Audit-doc not found"
                             {:type :audit-doc/not-found :spec doc})))
-        from (privilege-of db doc-eid)
-        now (java.util.Date.)
-        status-tx (sm/record-status-change-tx-data
-                   db
-                   (cond-> {:entity doc-eid
-                            :entity-type :audit-doc
-                            :facet :audit-doc/privilege
-                            :from from
-                            :to to
-                            :changed-at now
-                            :changed-by-uid changed-by-uid
-                            :reason reason}
-                     reason-note    (assoc :reason-note reason-note)
-                     supporting-doc (assoc :supporting-doc supporting-doc)))]
-    (d/transact conn (kbt/with-vt status-tx
-                       (or vt-from now)
-                       (or vt-to kbt/forever)))))
+        from (privilege-of db doc-eid)]
+    (sm/record-status-change-tx-data
+     db
+     (cond-> {:entity doc-eid
+              :entity-type :audit-doc
+              :facet :audit-doc/privilege
+              :from from
+              :to to
+              :changed-at (or changed-at (java.util.Date.))
+              :changed-by-uid changed-by-uid
+              :reason reason}
+       reason-note    (assoc :reason-note reason-note)
+       supporting-doc (assoc :supporting-doc supporting-doc)))))
 
 (defn visible-to?
   "Pure label comparison: would a viewer holding the privilege set

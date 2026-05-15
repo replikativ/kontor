@@ -33,6 +33,15 @@
             [kontor.money :as money])
   (:import [java.util Date]))
 
+;; period is a validator INSIDE `kontor.validation`'s gate
+;; (`assert-not-in-locked-period!` / `assert-no-write-on-sealed!`),
+;; so we can't require `kontor.validation` statically (cycle). The
+;; `!` wrappers resolve the gate lazily.
+(defn- transact-with-validation
+  [conn tx-data]
+  ((requiring-resolve 'kontor.validation/transact-with-validation)
+   conn tx-data))
+
 (def ^:const default-period-tag :normal)
 
 ;; ============================================================================
@@ -303,8 +312,42 @@
             :else nil)]
     (some? (:period/sealed-at m))))
 
+(defn close-tx-data
+  "Pure tx-data builder for `close!`'s lock event (ADR-068). Runs
+   the pre-close checks against `db` and returns the lock-stamp.
+   The `:period/lock-tx` audit denorm is recorded by `close!` in a
+   follow-up tx because datahike does not resolve `:db/current-tx`
+   as a `:db.type/long` value; that denorm is metadata and stays
+   outside the gated lock event."
+  [db period-eid {:keys [at pre-checks]
+                  :or {at (Date.) pre-checks default-pre-close-checks}}]
+  (when-not (open? db period-eid)
+    (throw (ex-info "Period already closed"
+                    {:type :period/already-closed
+                     :period-eid period-eid})))
+  (let [period (d/pull db [:period/start :period/end :period/journal :period/tag]
+                       period-eid)
+        period* {:start (:period/start period)
+                 :end   (:period/end period)
+                 :journal-eid (-> period :period/journal :db/id)
+                 :tag (or (:period/tag period) default-period-tag)}
+        issues (pre-checks db period*)]
+    (when (seq issues)
+      (throw (ex-info "Period close blocked by pre-close checks"
+                      {:type :period/pre-close-failed
+                       :period-eid period-eid
+                       :issues issues
+                       :remediation
+                       "Resolve each issue (post drafts, reconcile,
+                           rebalance) and re-run close!. To bypass for
+                           triage, pass :pre-checks (constantly []) —
+                           not recommended in production."})))
+    [{:db/id period-eid :period/locked-at at}]))
+
 (defn close!
   "SOFT close: stamp :period/locked-at after running pre-close checks.
+   Routes the lock through the gate (ADR-068); records the
+   `:period/lock-tx` audit denorm in a follow-up tx.
 
    Options:
      :at        — Date to stamp (default now)
@@ -314,86 +357,70 @@
 
    Throws on:
      :type :period/already-closed   if already soft-closed or sealed
-     :type :period/pre-close-failed if any pre-check returns issues"
+     :type :period/pre-close-failed if any pre-check returns issues
+
+   The pure tx-data builder is `close-tx-data` (ADR-068)."
   ([conn period-eid] (close! conn period-eid {}))
-  ([conn period-eid {:keys [at pre-checks]
-                     :or {at (Date.) pre-checks default-pre-close-checks}}]
-   (let [db (d/db conn)]
-     (when-not (open? db period-eid)
-       (throw (ex-info "Period already closed"
-                       {:type :period/already-closed
-                        :period-eid period-eid})))
-     (let [period (d/pull db [:period/start :period/end :period/journal :period/tag]
-                          period-eid)
-           period* {:start (:period/start period)
-                    :end   (:period/end period)
-                    :journal-eid (-> period :period/journal :db/id)
-                    :tag (or (:period/tag period) default-period-tag)}
-           issues (pre-checks db period*)]
-       (when (seq issues)
-         (throw (ex-info "Period close blocked by pre-close checks"
-                         {:type :period/pre-close-failed
-                          :period-eid period-eid
-                          :issues issues
-                          :remediation
-                          "Resolve each issue (post drafts, reconcile,
-                           rebalance) and re-run close!. To bypass for
-                           triage, pass :pre-checks (constantly []) —
-                           not recommended in production."})))
-       (let [report (d/transact conn [{:db/id period-eid :period/locked-at at}])
-             tx-id (-> report :tempids (get :db/current-tx))]
-         (when tx-id
-           (d/transact conn [{:db/id period-eid :period/lock-tx tx-id}]))
-         report)))))
+  ([conn period-eid opts]
+   (let [report (transact-with-validation
+                 conn (close-tx-data (d/db conn) period-eid opts))
+         tx-id (-> report :tempids (get :db/current-tx))]
+     (when tx-id
+       (d/transact conn [{:db/id period-eid :period/lock-tx tx-id}]))
+     report)))
+
+(defn seal-tx-data
+  "Pure tx-data builder for `seal!` (ADR-068)."
+  [db period-eid {:keys [at sealed-by] :or {at (Date.)}}]
+  (let [this (d/pull db [:period/end :period/locked-at :period/sealed-at] period-eid)]
+    (when (some? (:period/sealed-at this))
+      (throw (ex-info "Period already sealed"
+                      {:type :period/already-sealed :period-eid period-eid})))
+    (when (nil? (:period/locked-at this))
+      (throw (ex-info "Period must be soft-closed before sealing"
+                      {:type :period/seal-of-open
+                       :period-eid period-eid
+                       :remediation
+                       "Call (period/close! conn eid) first; then seal!"})))
+    ;; Monotonicity check: no later period (by :period/end) may be sealed.
+    ;; If one is, sealing this one would create non-monotone sequence —
+    ;; refuse and ask the user to seal in date order.
+    (let [later-sealed
+          (d/q '[:find [?p ...]
+                 :in $ ?my-end
+                 :where
+                 [?p :period/sealed-at _]
+                 [?p :period/end ?e]
+                 [(< ?my-end ?e)]]
+               db (:period/end this))]
+      (when (seq later-sealed)
+        (throw (ex-info "Refusing to seal — a later period is already sealed"
+                        {:type :period/non-monotone-seal
+                         :period-eid period-eid
+                         :later-sealed later-sealed
+                         :remediation
+                         "Seal periods in date order (oldest first).
+                          Sealing earlier than an already-sealed period
+                          would produce a non-monotone sealing sequence."}))))
+    (cond-> [{:db/id period-eid :period/sealed-at at}]
+      sealed-by (conj {:db/id period-eid :period/sealed-by sealed-by}))))
 
 (defn seal!
   "HARD close: stamp :period/sealed-at. Monotone — refuses if any
    later period is already sealed (would create a non-monotone
-   sequence). Refuses to seal an unsoft-closed period."
-  ([conn period-eid] (seal! conn period-eid {}))
-  ([conn period-eid {:keys [at sealed-by]
-                     :or {at (Date.)}}]
-   (let [db (d/db conn)
-         this (d/pull db [:period/end :period/locked-at :period/sealed-at] period-eid)]
-     (when (some? (:period/sealed-at this))
-       (throw (ex-info "Period already sealed"
-                       {:type :period/already-sealed :period-eid period-eid})))
-     (when (nil? (:period/locked-at this))
-       (throw (ex-info "Period must be soft-closed before sealing"
-                       {:type :period/seal-of-open
-                        :period-eid period-eid
-                        :remediation
-                        "Call (period/close! conn eid) first; then seal!"})))
-     ;; Monotonicity check: no later period (by :period/end) may be sealed.
-     ;; If one is, sealing this one would create non-monotone sequence —
-     ;; refuse and ask the user to seal in date order.
-     (let [later-sealed
-           (d/q '[:find [?p ...]
-                  :in $ ?my-end
-                  :where
-                  [?p :period/sealed-at _]
-                  [?p :period/end ?e]
-                  [(< ?my-end ?e)]]
-                db (:period/end this))]
-       (when (seq later-sealed)
-         (throw (ex-info "Refusing to seal — a later period is already sealed"
-                         {:type :period/non-monotone-seal
-                          :period-eid period-eid
-                          :later-sealed later-sealed
-                          :remediation
-                          "Seal periods in date order (oldest first).
-                           Sealing earlier than an already-sealed period
-                           would produce a non-monotone sealing sequence."}))))
-     (d/transact conn (cond-> [{:db/id period-eid :period/sealed-at at}]
-                        sealed-by (conj {:db/id period-eid :period/sealed-by sealed-by}))))))
+   sequence). Refuses to seal an unsoft-closed period. Routes
+   through the gate (ADR-068).
 
-(defn reopen!
-  "Admin-only: clear `:period/locked-at` on a SOFT-closed period.
-   Refuses if the period is :period/sealed-at-marked. The reopen IS a
-   datahike commit, so the audit chain documents it."
-  [conn period-eid]
-  (let [db (d/db conn)
-        e (d/pull db [:period/locked-at :period/sealed-at] period-eid)]
+   The pure tx-data builder is `seal-tx-data`."
+  ([conn period-eid] (seal! conn period-eid {}))
+  ([conn period-eid opts]
+   (transact-with-validation
+    conn (seal-tx-data (d/db conn) period-eid opts))))
+
+(defn reopen-tx-data
+  "Pure tx-data builder for `reopen!` (ADR-068)."
+  [db period-eid]
+  (let [e (d/pull db [:period/locked-at :period/sealed-at] period-eid)]
     (when (some? (:period/sealed-at e))
       (throw (ex-info "Cannot reopen sealed period — it is irrevocable"
                       {:type :period/cannot-reopen-sealed
@@ -405,5 +432,15 @@
                         bucket like :adjustment-13."})))
     (when (nil? (:period/locked-at e))
       (throw (ex-info "Period already open" {:period-eid period-eid})))
-    (d/transact conn [[:db/retract period-eid :period/locked-at
-                       (:period/locked-at e)]])))
+    [[:db/retract period-eid :period/locked-at (:period/locked-at e)]]))
+
+(defn reopen!
+  "Admin-only: clear `:period/locked-at` on a SOFT-closed period.
+   Refuses if the period is :period/sealed-at-marked. Routes through
+   the gate (ADR-068). The reopen IS a datahike commit, so the audit
+   chain documents it.
+
+   The pure tx-data builder is `reopen-tx-data`."
+  [conn period-eid]
+  (transact-with-validation
+   conn (reopen-tx-data (d/db conn) period-eid)))

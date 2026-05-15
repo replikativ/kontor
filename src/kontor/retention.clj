@@ -389,10 +389,50 @@
 ;; Transactors — policy lifecycle
 ;; ============================================================================
 
+(defn define-policy-tx-data
+  "Pure tx-data builder for `define-policy!` (ADR-068)."
+  [db {:keys [code applies-to duration-years triggered-by expiry-action
+              effective-from legal-basis jurisdiction effective-until
+              anonymize-fields changed-by-uid drafted-at tempid]
+       :or {tempid "policy-1"}}]
+  (when-not code           (throw (ex-info ":code required" {})))
+  (when-not (seq applies-to) (throw (ex-info ":applies-to required" {})))
+  (when-not duration-years (throw (ex-info ":duration-years required" {})))
+  (when-not triggered-by   (throw (ex-info ":triggered-by required" {})))
+  (when-not expiry-action  (throw (ex-info ":expiry-action required" {})))
+  (when-not effective-from (throw (ex-info ":effective-from required" {})))
+  (when-not legal-basis    (throw (ex-info ":legal-basis required" {})))
+  (when (and (= expiry-action :anonymize) (empty? anonymize-fields))
+    (throw (ex-info ":anonymize expiry-action requires :anonymize-fields" {})))
+  (let [row (cond-> {:db/id tempid
+                     :retention-policy/code code
+                     :retention-policy/applies-to (vec applies-to)
+                     :retention-policy/duration-years duration-years
+                     :retention-policy/triggered-by triggered-by
+                     :retention-policy/expiry-action expiry-action
+                     :retention-policy/effective-from effective-from
+                     :retention-policy/legal-basis legal-basis
+                     :retention-policy/state :draft}
+              jurisdiction         (assoc :retention-policy/jurisdiction jurisdiction)
+              effective-until      (assoc :retention-policy/effective-until effective-until)
+              (seq anonymize-fields) (assoc :retention-policy/anonymize-fields
+                                            (vec anonymize-fields)))
+        status-tx (sm/record-status-change-tx-data
+                   db
+                   (cond-> {:entity tempid
+                            :entity-type :retention-policy
+                            :facet :retention-policy/state
+                            :from :nil
+                            :to :draft
+                            :changed-at (or drafted-at (Date.))
+                            :reason :policy-drafted}
+                     changed-by-uid (assoc :changed-by-uid changed-by-uid)))]
+    (into [row] status-tx)))
+
 (defn define-policy!
   "Create a retention policy in `:draft` state. Drafting is free
    (no approval-policy gates); `activate-policy!` is what ADR-038
-   governs.
+   governs. Routes through the gate (ADR-068).
 
    Required opts:
      :code             string
@@ -409,46 +449,14 @@
      :effective-until  instant (nil = open-ended)
      :anonymize-fields coll of attribute keywords (for :anonymize)
      :changed-by-uid   ref to :create/uid
-     :vt-from / :vt-to valid-time bounds (default :vt-from = now)"
-  [conn {:keys [code applies-to duration-years triggered-by expiry-action
-                effective-from legal-basis jurisdiction effective-until
-                anonymize-fields changed-by-uid vt-from vt-to]}]
-  (when-not code           (throw (ex-info ":code required" {})))
-  (when-not (seq applies-to) (throw (ex-info ":applies-to required" {})))
-  (when-not duration-years (throw (ex-info ":duration-years required" {})))
-  (when-not triggered-by   (throw (ex-info ":triggered-by required" {})))
-  (when-not expiry-action  (throw (ex-info ":expiry-action required" {})))
-  (when-not effective-from (throw (ex-info ":effective-from required" {})))
-  (when-not legal-basis    (throw (ex-info ":legal-basis required" {})))
-  (when (and (= expiry-action :anonymize) (empty? anonymize-fields))
-    (throw (ex-info ":anonymize expiry-action requires :anonymize-fields" {})))
-  (let [db (d/db conn)
-        now (Date.)
-        policy-tempid "policy-1"
-        row (cond-> {:db/id policy-tempid
-                     :retention-policy/code code
-                     :retention-policy/applies-to (vec applies-to)
-                     :retention-policy/duration-years duration-years
-                     :retention-policy/triggered-by triggered-by
-                     :retention-policy/expiry-action expiry-action
-                     :retention-policy/effective-from effective-from
-                     :retention-policy/legal-basis legal-basis
-                     :retention-policy/state :draft}
-              jurisdiction         (assoc :retention-policy/jurisdiction jurisdiction)
-              effective-until      (assoc :retention-policy/effective-until effective-until)
-              (seq anonymize-fields) (assoc :retention-policy/anonymize-fields
-                                            (vec anonymize-fields)))
-        status-tx (sm/record-status-change-tx-data
-                   db
-                   (cond-> {:entity policy-tempid
-                            :entity-type :retention-policy
-                            :facet :retention-policy/state
-                            :from :nil
-                            :to :draft
-                            :changed-at now
-                            :reason :policy-drafted}
-                     changed-by-uid (assoc :changed-by-uid changed-by-uid)))]
-    (d/transact conn (kbt/with-vt (into [row] status-tx)
+     :vt-from / :vt-to valid-time bounds (default :vt-from = now)
+
+   The pure tx-data builder is `define-policy-tx-data` (ADR-068)."
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [now (Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (define-policy-tx-data
+                         (d/db conn) (assoc opts :drafted-at now))
                        (or vt-from now)
                        (or vt-to kbt/forever)))))
 
@@ -467,87 +475,86 @@
        last
        first))
 
-(defn activate-policy!
-  "Transition a policy `:draft → :active`. ADR-038 enforces
-   `:requires-supporting-doc` + `:requires-non-empty-reason-note` —
-   the auditor needs to know why a retention rule came into force.
-
-   Required opts:
-     :policy-eid       the :retention-policy eid
-     :supporting-doc   ref to :audit-doc (the retention schedule /
-                       legal memo)
-     :reason-note      free-text justification
-     :changed-by-uid   ref to :create/uid
-
-   Optional: :reason (default :policy-activated), :vt-from, :vt-to."
-  [conn {:keys [policy-eid supporting-doc reason-note changed-by-uid
-                reason vt-from vt-to]}]
+(defn activate-policy-tx-data
+  "Pure tx-data builder for `activate-policy!` (ADR-068)."
+  [db {:keys [policy-eid supporting-doc reason-note changed-by-uid
+              reason changed-at]}]
   (when-not policy-eid     (throw (ex-info ":policy-eid required" {})))
   (when-not supporting-doc (throw (ex-info ":supporting-doc required (ADR-038)" {})))
   (when (clojure.string/blank? (or reason-note ""))
     (throw (ex-info ":reason-note required (ADR-038)" {})))
-  (let [db (d/db conn)
-        now (Date.)
-        status-tx (sm/record-status-change-tx-data
+  (let [status-tx (sm/record-status-change-tx-data
                    db
                    (cond-> {:entity policy-eid
                             :entity-type :retention-policy
                             :facet :retention-policy/state
                             :to :active
-                            :changed-at now
+                            :changed-at (or changed-at (Date.))
                             :reason (or reason :policy-activated)
                             :reason-note reason-note
                             :supporting-doc supporting-doc}
                      changed-by-uid (assoc :changed-by-uid changed-by-uid)))
-        ;; Also stamp the supporting-doc on the policy row for a
-        ;; direct ref (the status-history carries the canonical
-        ;; audit trail; this is the queryable denorm).
+        ;; Queryable denorm — canonical audit lives on status-history.
         update {:db/id policy-eid
                 :retention-policy/supporting-doc supporting-doc}]
-    (d/transact conn (kbt/with-vt (into [update] status-tx)
+    (into [update] status-tx)))
+
+(defn activate-policy!
+  "Transition a policy `:draft → :active`. ADR-038 enforces
+   `:requires-supporting-doc` + `:requires-non-empty-reason-note` —
+   the auditor needs to know why a retention rule came into force.
+   Routes through the gate (ADR-068).
+
+   Required opts: :policy-eid, :supporting-doc, :reason-note,
+                  :changed-by-uid
+   Optional: :reason (default :policy-activated), :vt-from, :vt-to.
+
+   The pure tx-data builder is `activate-policy-tx-data`."
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [now (Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (activate-policy-tx-data
+                        (d/db conn) (assoc opts :changed-at now))
                        (or vt-from now)
                        (or vt-to kbt/forever)))))
 
-(defn supersede-policy!
-  "Transition a policy `:active → :superseded`. Terminal. To 'update'
-   a policy, `define-policy!` a new row with a later
-   `:effective-from` and supersede the old one.
-
-   Superseding is a consequential, data-affecting change — retiring
-   `P-OLD-5yr` in favour of `P-NEW-3yr` *shortens* retention, making
-   entities purge-eligible sooner. ADR-038 governs it
-   (`:requires-supporting-doc` + `:requires-non-empty-reason-note`,
-   via the `:active → :superseded` approval-policy seeds — research
-   note 32 P1-3).
-
-   Required opts:
-     :policy-eid
-     :changed-by-uid
-     :supporting-doc  ref to :audit-doc (the records-retention-
-                      schedule revision memo)
-     :reason-note     free-text justification
-
-   Optional: :reason (default :policy-superseded), :vt-from, :vt-to."
-  [conn {:keys [policy-eid changed-by-uid reason reason-note
-                supporting-doc vt-from vt-to]}]
+(defn supersede-policy-tx-data
+  "Pure tx-data builder for `supersede-policy!` (ADR-068)."
+  [db {:keys [policy-eid changed-by-uid reason reason-note
+              supporting-doc changed-at]}]
   (when-not policy-eid     (throw (ex-info ":policy-eid required" {})))
   (when-not changed-by-uid (throw (ex-info ":changed-by-uid required" {})))
   (when-not supporting-doc (throw (ex-info ":supporting-doc required (ADR-038)" {})))
   (when (clojure.string/blank? (or reason-note ""))
     (throw (ex-info ":reason-note required (ADR-038)" {})))
-  (let [db (d/db conn)
-        now (Date.)
-        status-tx (sm/record-status-change-tx-data
-                   db
-                   {:entity policy-eid
-                    :entity-type :retention-policy
-                    :facet :retention-policy/state
-                    :to :superseded
-                    :changed-at now
-                    :changed-by-uid changed-by-uid
-                    :reason (or reason :policy-superseded)
-                    :reason-note reason-note
-                    :supporting-doc supporting-doc})]
-    (d/transact conn (kbt/with-vt status-tx
+  (sm/record-status-change-tx-data
+   db
+   {:entity policy-eid
+    :entity-type :retention-policy
+    :facet :retention-policy/state
+    :to :superseded
+    :changed-at (or changed-at (Date.))
+    :changed-by-uid changed-by-uid
+    :reason (or reason :policy-superseded)
+    :reason-note reason-note
+    :supporting-doc supporting-doc}))
+
+(defn supersede-policy!
+  "Transition a policy `:active → :superseded`. Terminal. Superseding
+   is a consequential, data-affecting change — retiring `P-OLD-5yr`
+   in favour of `P-NEW-3yr` *shortens* retention, making entities
+   purge-eligible sooner. ADR-038 governs it. Routes through the
+   gate (ADR-068).
+
+   Required opts: :policy-eid, :changed-by-uid, :supporting-doc,
+                  :reason-note
+   Optional: :reason (default :policy-superseded), :vt-from, :vt-to.
+
+   The pure tx-data builder is `supersede-policy-tx-data`."
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [now (Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (supersede-policy-tx-data
+                        (d/db conn) (assoc opts :changed-at now))
                        (or vt-from now)
                        (or vt-to kbt/forever)))))
