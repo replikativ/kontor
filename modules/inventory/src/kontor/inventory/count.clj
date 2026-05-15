@@ -18,6 +18,7 @@
    `:transaction`."
   (:require [datahike.api :as d]
             [kontor.posting :as posting]
+            [kontor.process :as process]
             [kontor.inventory.core :as inv]
             [kontor.inventory.ops :as ops])
   (:import [java.math BigDecimal]))
@@ -202,32 +203,45 @@
                              (throw (ex-info ":found-unit-cost required — the count has a positive (found-stock) variance"
                                              {:type :inventory/found-cost-required
                                               :variance v})))
-                         move-tx (posting/plan-stock-move
-                                  db
-                                  (cond-> {:direction (if neg? :out :in)
-                                           :book book :item product :qty mag
-                                           :commodity commodity :journal journal
-                                           :effective-date eff :provider prov
-                                           :account-fn account-fn}
-                                    lot        (assoc :lot lot)
-                                    (not neg?) (assoc :unit-cost found-unit-cost)))
-                         detail (cond-> {:inventory-detail/inventory-item item-eid
-                                         :inventory-detail/effective-date eff
-                                         :inventory-detail/qoh-diff qoh-var
-                                         :inventory-detail/atp-diff qoh-var
-                                         :inventory-detail/source-kind :variance
-                                         :inventory-detail/source v
-                                         :inventory-detail/transaction -1}
-                                  (:inventory-variance/reason vr)
-                                  (assoc :inventory-detail/reason
-                                         (:inventory-variance/reason vr)))]
-                     (d/transact conn (conj (vec (ops/seal-stock-move move-tx eff))
-                                            detail))
+                         ;; One atomic, gated process per variance line
+                         ;; (ADR-067): the GL move + the physical
+                         ;; :inventory-detail commit together,
+                         ;; routed through transact-with-validation.
+                         line-step
+                         (fn [sdb _ctx]
+                           (let [move-tx (posting/plan-stock-move
+                                          sdb
+                                          (cond-> {:direction (if neg? :out :in)
+                                                   :book book :item product
+                                                   :qty mag :commodity commodity
+                                                   :journal journal
+                                                   :effective-date eff
+                                                   :provider prov
+                                                   :account-fn account-fn}
+                                            lot        (assoc :lot lot)
+                                            (not neg?) (assoc :unit-cost
+                                                              found-unit-cost)))
+                                 detail (cond-> {:inventory-detail/inventory-item item-eid
+                                                 :inventory-detail/effective-date eff
+                                                 :inventory-detail/qoh-diff qoh-var
+                                                 :inventory-detail/atp-diff qoh-var
+                                                 :inventory-detail/source-kind :variance
+                                                 :inventory-detail/source v
+                                                 :inventory-detail/transaction -1}
+                                          (:inventory-variance/reason vr)
+                                          (assoc :inventory-detail/reason
+                                                 (:inventory-variance/reason vr)))]
+                             (conj (vec (ops/seal-stock-move move-tx eff)) detail)))]
+                     (process/run-process
+                      conn {:steps [line-step] :vt-from eff})
                      (conj acc v)))))))
          []
          lines)]
-    (d/transact conn [{:db/id physical-inventory
-                       :physical-inventory/status :posted}])
+    (process/run-process
+     conn {:steps [(fn [_sdb _ctx]
+                     [{:db/id physical-inventory
+                       :physical-inventory/status :posted}])]
+           :vt-from eff})
     {:posted posted
      :count (count posted)
      :physical-inventory physical-inventory}))

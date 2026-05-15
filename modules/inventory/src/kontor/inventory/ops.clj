@@ -24,6 +24,7 @@
   (:require [datahike.api :as d]
             [kontor.costing-provider :as costing]
             [kontor.posting :as posting]
+            [kontor.process :as process]
             [kontor.valuation :as valuation]
             [kontor.inventory.core :as inv])
   (:import [clojure.lang ExceptionInfo]
@@ -150,61 +151,65 @@
           [?fp :facility-product/negative-allowed? ?na]]
         db facility product)))
 
-(defn- create-negative-fill!
-  "Create the explicit negative-fill `:valuation-layer` (qty =
-   `shortfall` at `estimated-unit-cost`) — with a minimal posting-less
-   `:transaction` as its `:origin-transaction` so `available-layers`
-   recognises it — plus the `:negative-fill` record, in one tx. When
-   `:inventory-item` is nil the physical bucket does not exist yet,
-   so it is created in the SAME tx (review-fix CR P1-2 — no orphan
-   bucket). The layer gives the over-issue a real layer for
-   `plan-stock-move` to consume on the retry.
+(defn- negative-fill-tx-data
+  "Pure tx-data builder for the negative-fill fragment (ADR-067) —
+   the posting-less origin `:transaction`, the negative-fill
+   `:valuation-layer` (at `estimated-unit-cost`), and the
+   `:negative-fill` record. When `:inventory-item` is nil the
+   physical bucket does not exist yet, so its entity is included in
+   the SAME fragment (no orphan bucket). All tempids are strings so
+   the consuming step can reference the bucket by `\"nf-item\"`.
 
-   Returns `{:negative-fill eid :inventory-item eid}`."
-  [conn {:keys [product facility book commodity estimated-unit-cost lot
-                location owner-entity inventory-item journal effective-date]}
+   Tempids emitted: `\"nf-tx\"`, `\"nf-layer\"`, `\"nf\"`, and
+   `\"nf-item\"` when the bucket is created here.
+
+   The just-created layer's speculative-db eid is order-stable with
+   the final commit (datahike's tempid resolution is deterministic
+   from `max-eid + 1` in encounter order; research note 47), so
+   `plan-stock-move` reading the speculative db in the next step gets
+   the eid that the consumption fragment can reference safely."
+  [db {:keys [product facility book commodity estimated-unit-cost lot
+              location owner-entity inventory-item journal effective-date]}
    shortfall]
   (when (nil? estimated-unit-cost)
     (throw (ex-info ":estimated-unit-cost required for a negative-fill over-issue"
                     {:type :inventory/estimated-cost-required})))
   (when-not journal
     (throw (ex-info ":journal required for a negative-fill over-issue" {})))
-  (let [book-eid (valuation/resolve-book (d/db conn) book)
+  (let [book-eid (valuation/resolve-book db book)
         eff (or effective-date (Date.))
-        item-id (or inventory-item "neg-fill-item")
+        item-id (or inventory-item "nf-item")
         item-entity (when-not inventory-item
                       (inv/inventory-item-entity
-                       "neg-fill-item"
+                       "nf-item"
                        {:product product :facility facility :location location
                         :lot lot :owner-entity owner-entity :received-at eff}))
-        origin-tx {:db/id "neg-fill-tx"
+        origin-tx {:db/id "nf-tx"
                    :transaction/journal journal
                    :transaction/effective-date eff
                    :transaction/state :posted
+                   :transaction/posted-at eff
                    :transaction/narration "Negative-fill layer (estimated cost)"}
-        layer (cond-> {:db/id "neg-fill-layer"
+        layer (cond-> {:db/id "nf-layer"
                        :valuation-layer/book book-eid
                        :valuation-layer/item product
-                       :valuation-layer/origin-transaction "neg-fill-tx"
+                       :valuation-layer/origin-transaction "nf-tx"
                        :valuation-layer/qty-original shortfall
                        :valuation-layer/unit-cost-original estimated-unit-cost
                        :valuation-layer/commodity commodity
                        :valuation-layer/received-at eff
                        :valuation-layer/note "negative-fill (estimated cost)"}
                 lot (assoc :valuation-layer/lot lot))
-        nf {:db/id "neg-fill"
+        nf {:db/id "nf"
             :negative-fill/inventory-item item-id
-            :negative-fill/valuation-layer "neg-fill-layer"
+            :negative-fill/valuation-layer "nf-layer"
             :negative-fill/shortfall-qty shortfall
             :negative-fill/estimated-unit-cost estimated-unit-cost
             :negative-fill/commodity commodity
             :negative-fill/status :open
-            :negative-fill/created-at eff}
-        report (d/transact conn (cond-> [origin-tx layer nf]
-                                  item-entity (conj item-entity)))]
-    {:negative-fill  (get-in report [:tempids "neg-fill"])
-     :inventory-item (or inventory-item
-                         (get-in report [:tempids "neg-fill-item"]))}))
+            :negative-fill/created-at eff}]
+    (cond-> [origin-tx layer nf]
+      item-entity (conj item-entity))))
 
 ;; ============================================================================
 ;; issue!
@@ -278,64 +283,91 @@
                            :account-fn account-fn}
                     ledger    (assoc :ledger ledger)
                     narration (assoc :narration narration))
-        plan-move (fn [] (posting/plan-stock-move (d/db conn) move-spec))
-        ;; Plan FIRST; on the underflow, apply the negative-inventory
-        ;; policy. `create-negative-fill!` also creates the physical
-        ;; bucket when `existing` is nil — until plan-move succeeds,
-        ;; nothing is committed (review-fix CR P1-2).
-        [move-tx neg-fill nf-item]
-        (try
-          [(plan-move) nil nil]
-          (catch ExceptionInfo e
-            (if (insufficient-stock? e)
-              (if (negative-allowed? (d/db conn) f product)
-                (let [shortfall (:underflow (ex-data e))
-                      {:keys [negative-fill inventory-item]}
-                      (create-negative-fill!
-                       conn (assoc spec :facility f :inventory-item existing
-                                   :effective-date eff)
-                       shortfall)]
-                  [(plan-move) negative-fill inventory-item])
-                (throw (ex-info "Issue would over-draw and negative inventory is not allowed for this (facility, product)"
-                                {:type :inventory/negative-not-allowed
-                                 :product product :facility f
-                                 :underflow (:underflow (ex-data e))}
-                                e)))
-              (throw e))))
-        ;; Final bucket id: existing, or the one create-negative-fill!
-        ;; made, or a fresh tempid folded into this atomic tx.
-        item-id (or existing nf-item "issue-item")
-        item-entity (when (and (nil? existing) (nil? nf-item))
-                      (inv/inventory-item-entity
-                       "issue-item"
-                       {:product product :facility f :location (:location spec)
-                        :lot (:lot spec) :owner-entity (:owner-entity spec)
-                        :received-at eff}))
-        detail (cond-> {:inventory-detail/inventory-item item-id
-                        :inventory-detail/effective-date eff
-                        :inventory-detail/qoh-diff (.negate ^java.math.BigDecimal qty)
-                        ;; A reservation already dropped ATP — realizing
-                        ;; it moves QOH only. A plain issue moves both.
-                        :inventory-detail/atp-diff (if reservation
-                                                     0M
-                                                     (.negate ^java.math.BigDecimal qty))
-                        :inventory-detail/source-kind :issuance
-                        :inventory-detail/transaction -1}
-                 reason (assoc :inventory-detail/reason reason))
-        tx-data (cond-> (conj (vec (seal-stock-move move-tx eff)) detail)
-                  item-entity (conj item-entity)
-                  ;; Link the negative-fill back to the originating
-                  ;; issue tx (review-fix market-pain P2).
-                  neg-fill    (conj {:db/id neg-fill
-                                     :negative-fill/origin-issue -1})
-                  ;; Realize (consume) the reservation — retract it.
-                  reservation (conj [:db/retractEntity reservation]))
-        report (d/transact conn tx-data)]
-    (cond-> {:inventory-item (or existing nf-item
-                                 (get-in report [:tempids "issue-item"]))
-             :transaction    (get-in report [:tempids -1])
+        ;; Trial on db0: does plan-stock-move have enough committed
+        ;; stock? If not + policy allows, plan a negative-fill step.
+        underflow (try
+                    (posting/plan-stock-move db move-spec)
+                    nil
+                    (catch ExceptionInfo e
+                      (if (insufficient-stock? e)
+                        (:underflow (ex-data e))
+                        (throw e))))
+        need-neg-fill? (some? underflow)
+        _ (when need-neg-fill?
+            (when-not (negative-allowed? db f product)
+              (throw (ex-info "Issue would over-draw and negative inventory is not allowed for this (facility, product)"
+                              {:type :inventory/negative-not-allowed
+                               :product product :facility f
+                               :underflow underflow}))))
+        ;; Bucket-id: either existing eid, or the tempid of the entity
+        ;; we will create in the same process (nf-item in step 1 if
+        ;; need-neg-fill?, issue-item in step 2 otherwise).
+        item-id (cond
+                  existing existing
+                  need-neg-fill? "nf-item"
+                  :else "issue-item")
+        ;; Step 1 (conditional): the negative-fill fragment. The layer
+        ;; gets a stable speculative-db eid so step 2's
+        ;; plan-stock-move output references it correctly (research
+        ;; note 47).
+        neg-fill-step
+        (when need-neg-fill?
+          (fn [sdb _ctx]
+            (negative-fill-tx-data
+             sdb (assoc spec :facility f :inventory-item existing
+                        :effective-date eff)
+             underflow)))
+        ;; Step 2: plan-stock-move against the speculative db (which
+        ;; has step 1's frag applied) — for the underflow case
+        ;; plan-consumption now sees the negative-fill layer and
+        ;; consumes it. Emits the issue's :transaction (-1) +
+        ;; postings + consumption-entities, then we append the
+        ;; physical inventory-detail + optional new-bucket entity +
+        ;; back-ref to nf + reservation retraction.
+        issue-step
+        (fn [sdb _ctx]
+          (let [move-tx (posting/plan-stock-move sdb move-spec)
+                bucket-entity (when (and (nil? existing) (not need-neg-fill?))
+                                (inv/inventory-item-entity
+                                 "issue-item"
+                                 {:product product :facility f
+                                  :location (:location spec)
+                                  :lot (:lot spec)
+                                  :owner-entity (:owner-entity spec)
+                                  :received-at eff}))
+                detail (cond-> {:inventory-detail/inventory-item item-id
+                                :inventory-detail/effective-date eff
+                                :inventory-detail/qoh-diff
+                                (.negate ^java.math.BigDecimal qty)
+                                ;; A reservation already dropped ATP —
+                                ;; realizing it moves QOH only. A plain
+                                ;; issue moves both.
+                                :inventory-detail/atp-diff
+                                (if reservation 0M
+                                    (.negate ^java.math.BigDecimal qty))
+                                :inventory-detail/source-kind :issuance
+                                :inventory-detail/transaction -1}
+                         reason (assoc :inventory-detail/reason reason))]
+            (cond-> (conj (vec (seal-stock-move move-tx eff)) detail)
+              bucket-entity (conj bucket-entity)
+              ;; Link the negative-fill back to the originating issue tx.
+              need-neg-fill? (conj {:db/id "nf"
+                                    :negative-fill/origin-issue -1})
+              ;; Realize (consume) the reservation — retract it.
+              reservation (conj [:db/retractEntity reservation]))))
+        steps (cond-> []
+                neg-fill-step (conj neg-fill-step)
+                :always       (conj issue-step))
+        report (process/run-process conn
+                                    {:steps steps
+                                     :vt-from eff :vt-to nil})
+        tempids (:tempids report)]
+    (cond-> {:inventory-item (or existing
+                                 (get tempids "nf-item")
+                                 (get tempids "issue-item"))
+             :transaction    (get tempids -1)
              :tx-report      report}
-      neg-fill (assoc :negative-fill neg-fill))))
+      need-neg-fill? (assoc :negative-fill (get tempids "nf")))))
 
 ;; ============================================================================
 ;; true-up-negative-fill!
@@ -495,24 +527,40 @@
                              :status (:inventory-transfer/status t)})))
         src (:inventory-transfer/inventory-item t)
         rcv (or receive-date (Date.))
-        dest (inv/find-or-create-inventory-item!
-              conn {:product (:db/id (:inventory-item/product src))
-                    :facility (:db/id (:inventory-transfer/to-facility t))
-                    :location (:db/id (:inventory-transfer/to-location t))
-                    :lot (:db/id (:inventory-item/lot src))
-                    :owner-entity (:db/id (:inventory-item/owner-entity src))
-                    :received-at rcv})
-        detail {:inventory-detail/inventory-item dest
-                :inventory-detail/effective-date rcv
-                :inventory-detail/qoh-diff (:inventory-transfer/quantity t)
-                :inventory-detail/atp-diff (:inventory-transfer/quantity t)
-                :inventory-detail/source-kind :transfer
-                :inventory-detail/source transfer}]
-    (d/transact conn [detail
-                      {:db/id transfer
-                       :inventory-transfer/status :complete
-                       :inventory-transfer/receive-date rcv}])
-    {:to-inventory-item dest}))
+        dest-spec {:product (:db/id (:inventory-item/product src))
+                   :facility (:db/id (:inventory-transfer/to-facility t))
+                   :location (:db/id (:inventory-transfer/to-location t))
+                   :lot (:db/id (:inventory-item/lot src))
+                   :owner-entity (:db/id (:inventory-item/owner-entity src))
+                   :received-at rcv}
+        ;; ONE atomic, gated process (ADR-067). Find-or-create the
+        ;; destination bucket against the speculative db; if created,
+        ;; its tempid is "dest-item" and the detail references it by
+        ;; tempid (tempid resolution is order-stable so the
+        ;; speculative eid round-trips through the final commit).
+        step (fn [sdb _ctx]
+               (let [existing (inv/find-inventory-item sdb dest-spec)
+                     dest-id (or existing "dest-item")
+                     bucket-entity (when-not existing
+                                     (inv/inventory-item-entity
+                                      "dest-item" dest-spec))
+                     detail {:inventory-detail/inventory-item dest-id
+                             :inventory-detail/effective-date rcv
+                             :inventory-detail/qoh-diff
+                             (:inventory-transfer/quantity t)
+                             :inventory-detail/atp-diff
+                             (:inventory-transfer/quantity t)
+                             :inventory-detail/source-kind :transfer
+                             :inventory-detail/source transfer}]
+                 (cond-> [detail
+                          {:db/id transfer
+                           :inventory-transfer/status :complete
+                           :inventory-transfer/receive-date rcv}]
+                   bucket-entity (conj bucket-entity))))
+        report (process/run-process conn {:steps [step] :vt-from rcv})
+        tempids (:tempids report)]
+    {:to-inventory-item (or (inv/find-inventory-item (d/db conn) dest-spec)
+                            (get tempids "dest-item"))}))
 
 (defn cancel-transfer!
   "Cancel an `:in-transit` transfer — append an `:inventory-detail`
