@@ -231,13 +231,16 @@ audit-doc in one transaction" win) is structurally enforced.
 
 `bb test`: 939 tests / 3423 assertions / 0 failures.
 
-It is *not* yet 1.0 — two lease follow-up tasks (#123, #124) and a
-small datahike contribution (closing the `:period/lock-tx` self-ref
-carve-out, task #75) remain. The authz consumer-readiness gap (#127,
-the two `ADR-066-deferred` `AuthzClient` methods) was closed on
-2026-05-15 — `write-schema!` / `read-schema` now route through
-`kontor.authz.schema/{write-schema-tx-data,read-schema}` with
-structural validation; the SpiceDB-string parser stays deferred.
+It is *not* yet 1.0 — a small datahike contribution (closing the
+`:period/lock-tx` self-ref carve-out, task #75) remains. The
+2026-05-15 sweep closed the three end-of-Stage-P follow-ups: authz
+consumer-readiness (#127, two `ADR-066-deferred` methods); mid-life
+portfolio import (#123 — `kontor.lease.runner/import-lease!`,
+ADR-069); disclosure-support deltas + discount-rate audit-doc
+(#124, ADR-070). Note 40's "smaller items" checklist (per-(lease,
+ledger) index-reset fork, stepped-rent profiles, ASC 842 16.46(a)
+second partial-termination method, FX retranslation transactor)
+is documented in ADR-070 as deferred to a future lease stage.
 
 ## Contributing
 

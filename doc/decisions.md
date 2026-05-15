@@ -7443,3 +7443,179 @@ independent of that decision; the builders compose under any
 implementation of the facility.
 
 Date: 2026-05-14.
+
+## ADR-069 — `kontor-lease`: mid-life portfolio import via `import-lease!`
+
+**Decision.** Ship `kontor.lease.runner/import-lease!` for the
+mid-life onboarding case: a lease whose contractual commencement is
+in the *past* (it's already mid-term in a prior system) is brought
+into kontor by carrying forward the prior system's
+balance-sheet amounts rather than re-computing them from scratch
+the way `commence!` does. The transactor sets up the new system's
+records — the ROU `:asset`, the per-ledger `:lease-liability` book
++ ROU `:asset-depreciation` book + their schedules — and drives
+`:lease/status :draft → :active` with `:reason :lease-imported`.
+
+**Why the followup matters.** Note 40 ("kontor-lease review-after",
+2026-05-14) flagged this as the highest-real-world-severity gap
+in the kontor-lease v1: every adopting customer has a
+**portfolio** of mid-life leases to onboard from their prior
+system on the day kontor goes live; without `import-lease!` the
+only options are (a) re-execute `commence!` and accept
+recomputed PVs that disagree with the prior books, or (b)
+bypass the gate and write raw `:lease-liability` + `:asset-
+depreciation` rows, losing the validation guarantees. The first
+is incorrect; the second is unsafe.
+
+**No day-one GL entry.** Unlike `commence!`, `import-lease!` does
+**not** post a `Dr ROU / Cr lease-liability` recognition journal.
+The new system's BS is established by the **consumer's import-day
+balance-sheet bridge journal** (one journal that records the
+gross ROU + accumulated-amortisation + lease-liability + plug
+movements against the prior-system clearing/RE accounts). The
+bridge has to balance to whatever the prior system's books said;
+forcing `import-lease!` to also emit a GL entry would create a
+double-count. The trade-off is documented: the consumer owns the
+bridge, kontor owns the schedules-and-status from that point on.
+
+**Re-anchoring vs preservation.** The `:lease/commencement-date`
+and `:lease/term-months` re-anchor to the import: they describe
+the new system's recognition (the date the schedules start, the
+remaining term). The contractual history is **preserved** in the
+audit denorms `:lease/imported?` (true), `:lease/imported-as-of`,
+`:lease/imported-original-commencement-date`, and
+`:lease/imported-original-term-months`. Future-you can always
+reconstruct the *contract*-original recognition; future-you should
+not need to.
+
+Rationale: the schedules (and the `LeaseProvider` unwind that reads
+them) are simplest when the date-arithmetic starts at the
+re-anchored commencement. The alternative — keeping
+`:commencement-date` = original and threading
+`:opening-fired-through` through every period read — would either
+(a) require synthetic pre-import `:schedule-occurrence` rows
+(which `:schedule-occurrence/transaction` schema-requires a
+`:transaction` ref that does not exist for prior-system periods)
+or (b) require modifying `book-plan-inputs` and every
+`pending-occurrences` caller to filter on `opening-fired-through`.
+The re-anchor preserves the audit trail (in denorms) at the cost
+of one denorm read; the alternatives mutate more code paths.
+
+**`define-lease!` gained four audit-denorm opts** —
+`:imported?`, `:imported-as-of`,
+`:imported-original-commencement-date`,
+`:imported-original-term-months`. `import-lease!` validates all
+four are present (and `:imported?` is true) before it runs;
+calling `commence!` on an imported lease is fine (it just doesn't
+read the denorms), but most consumers will not need this combo.
+
+**Reporting scalar `:opening-accumulated`.** The `import-lease!`
+book spec accepts `:pre-import-accumulated` and threads it to the
+ROU `:asset-depreciation/opening-accumulated` field that ADR-054
+already supports for mid-life imports. This is a **reporting
+scalar** — `accumulated-depreciation` reads it as a starting
+balance, and the dep schedule fires forward from the carried
+NBV (`:remaining-rou-base`) for the remaining useful life. It is
+distinct from the GL `:asset/accumulated-account` movement,
+which the consumer posts in the bridge journal.
+
+**Atomicity.** `import-lease!` runs as ONE atomic `kontor.process`
+(ADR-067): the ROU `:asset`, the N per-ledger books + schedules,
+and the `:draft → :active` status change all commit through
+`transact-with-validation`. Period / sealing / sum-to-zero /
+state-machine / invariants run in the gate; a partial failure
+rolls back the whole import.
+
+**Tests.** `modules/lease/test/kontor/lease/runner_test.clj` —
+3 new tests (`import-lease-onboards-a-mid-life-lease`,
+`import-lease-rejects-a-non-imported-lease`,
+`imported-lease-runs-the-remaining-tail`). The third exercises
+`run-lease!` on an imported tail and verifies the schedule fires
+the remaining periods and auto-expires correctly.
+
+**Still deferred** (from note 40's "smaller items" checklist —
+rolled into the disclosure-support followup #124): the
+discount-rate justification audit-doc ref on
+`:lease-liability/discount-rate`; persisting the remeasurement
+deltas on `:lease-modification`; per-`(lease, ledger)` index-reset
+fork (ASC 842 expense vs IFRS 16 remeasurement); stepped-rent /
+rent-free cash-flow profiles; the second ASC 842 partial-
+termination method (16.46(a)); an FX retranslation transactor.
+
+Date: 2026-05-15.
+
+## ADR-070 — `kontor-lease`: disclosure-support deltas + discount-rate audit-doc
+
+**Decision.** Land three small but high-leverage schema additions
+that close the IFRS 16 / ASC 842 disclosure-roll-forward gap
+flagged by note 40 §2 + §4:
+
+1. **`:lease-modification/{liability-delta,rou-delta,pnl-delta}`** —
+   each a `:db.type/bigdec` carrying the *aggregated* movement the
+   modification caused across all affected per-(lease,ledger)
+   books. `remeasure!`, `partial-terminate!`, `terminate!`,
+   `purchase!` all compute these aggregations from their per-book
+   plan and persist them on the `:lease-modification` event.
+2. **`:lease-liability/rate-rationale`** — `:db.type/ref` to
+   `:audit-doc`, threaded through both `commence!` and
+   `import-lease!` per-book specs as the optional opt
+   `:rate-rationale`.
+
+**Why deltas matter.** Under IFRS 16 a lessee discloses a
+**lease-liability roll-forward** (opening balance → interest →
+payments → remeasurements → closing balance) plus a parallel
+**ROU asset roll-forward**. Without the deltas, a consumer has to
+JOIN every `:lease-modification` to its `:transaction(s)` to its
+`:posting`s and reduce per-account to recover the movement — a
+multi-source, expense-account-by-account query that is brittle
+under restatement. Persisting the deltas reduces the disclosure to
+a single `(d/q '[:find …] :where [?m :lease-modification/liability-
+delta ?d])` aggregation, and the data is **immediately bitemporally
+queryable** (a 2026-restatement of a 2025 modification picks up
+the corrected delta automatically).
+
+**Why a rate-rationale audit-doc.** ASC 842-20-30-3 and
+IFRS 16 §27 BOTH require the lessee to use the rate implicit in
+the lease where determinable; if it is not, the incremental
+borrowing rate (IBR). The IBR is a **judgment call** —
+typically supported by a treasury memo or appraiser report —
+and is the first thing an auditor asks about under the assertion
+that the lease liability is fairly measured. Carrying the
+justification ref on the book itself (rather than on the lease)
+means a per-(lease, ledger) audit trail: an IFRS book and an ASC
+842 book on the SAME lease may use different rationales (each
+book's own discount-rate already differs per ADR-063), and the
+trail captures that. Optional but encouraged — the schema does
+not enforce presence, mirroring `:asset/origin-document` (always
+encouraged, not always required by every transactor).
+
+**Sign convention for the deltas.**
+
+| transactor | `:liability-delta` | `:rou-delta` | `:pnl-delta` |
+|---|---|---|---|
+| `remeasure!` | new-PV − old-outstanding (signed) | same as liability-delta (BS-only) | 0 in the common case |
+| `partial-terminate!` | new-PV − old-outstanding (signed) | proportional ROU write-off + remeasurement adj | rou-delta − liability-delta (the IFRS 16.46(b) gain/loss) |
+| `terminate!` | −Σ outstanding | −Σ ROU-carrying | (liability-removed − cash-paid) − ROU-removed |
+| `purchase!` | −Σ outstanding | 0 (ROU continues per IFRS 16.67) | liability-settled − cash-paid |
+
+**What we did NOT do in this ADR.** The other items on note 40's
+"smaller items" checklist remain deferred: the per-(lease,
+ledger) index-reset fork (ASC 842 wants period expense, IFRS 16
+wants full remeasurement — currently `remeasure!` loops over all
+books identically); stepped-rent / rent-free cash-flow profiles
+(`:lease/payment-amount` is still a single scalar); ASC 842's
+second partial-termination method (16.46(a) — the
+remeasurement-only path, distinct from 46(b)'s proportional
+approach); an FX retranslation transactor (the builder exists,
+the orchestrator does not). Each of these is a substantive
+follow-up that ought to ship with its own ADR and dedicated
+tests; this ADR ships the bookkeeping-only pieces that the
+disclosure-shaped consumer needs immediately.
+
+**Tests.**
+`modules/lease/test/kontor/lease/modification_test.clj` —
+3 new tests: `remeasure-persists-liability-and-rou-deltas`,
+`terminate-persists-derecognition-deltas`,
+`rate-rationale-audit-doc-is-persisted-on-the-liability-book`.
+
+Date: 2026-05-15.

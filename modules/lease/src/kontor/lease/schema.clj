@@ -158,7 +158,50 @@
 
    {:db/ident       :lease/note
     :db/valueType   :db.type/string
-    :db/cardinality :db.cardinality/one}])
+    :db/cardinality :db.cardinality/one}
+
+   ;; ADR-069 mid-life-import audit denorms
+   {:db/ident       :lease/imported?
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one
+    :db/doc         "True iff this :lease entered :active via
+                     `kontor.lease.runner/import-lease!` rather than
+                     `commence!` — i.e. the lease was already mid-term
+                     in a prior system and is being onboarded with
+                     carried-forward balance-sheet amounts.
+
+                     ADR-069. The accompanying audit denorms
+                     :lease/imported-as-of,
+                     :lease/imported-original-commencement-date and
+                     :lease/imported-original-term-months document
+                     the contractual history that
+                     :lease/commencement-date + :lease/term-months
+                     do NOT carry (those re-anchor on the import
+                     date for the new system's schedules)."}
+
+   {:db/ident       :lease/imported-as-of
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The date `import-lease!` re-anchored this lease
+                     in the new system — equals
+                     :lease/commencement-date for an imported lease.
+                     ADR-069."}
+
+   {:db/ident       :lease/imported-original-commencement-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The lease's contractual commencement date,
+                     PRESERVED across the import — distinct from
+                     :lease/commencement-date which re-anchors on
+                     the import date. ADR-069."}
+
+   {:db/ident       :lease/imported-original-term-months
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The lease's contractual total term in months,
+                     PRESERVED across the import — distinct from
+                     :lease/term-months which re-anchors to the
+                     REMAINING term. ADR-069."}])
 
 ;; ============================================================================
 ;; :lease-liability — the per-(lease, ledger) liability book (ADR-063)
@@ -261,7 +304,19 @@
 
    {:db/ident       :lease-liability/note
     :db/valueType   :db.type/string
-    :db/cardinality :db.cardinality/one}])
+    :db/cardinality :db.cardinality/one}
+
+   ;; ADR-070 disclosure-support — discount-rate audit trail
+   {:db/ident       :lease-liability/rate-rationale
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to :audit-doc — the justification for this
+                     book's :discount-rate (an appraiser's IBR memo,
+                     a treasury rate-board record, etc.).
+                     Optional but encouraged on every book —
+                     under IFRS 16 §27 / ASC 842-20-30-3 the
+                     discount rate IS a key input and auditors will
+                     want to trace it. ADR-070 / note 40 §4."}])
 
 ;; ============================================================================
 ;; :lease-modification — the append-only modification event (ADR-064)
@@ -338,7 +393,43 @@
 
    {:db/ident       :lease-modification/note
     :db/valueType   :db.type/string
-    :db/cardinality :db.cardinality/one}])
+    :db/cardinality :db.cardinality/one}
+
+   ;; ADR-070 disclosure-support — persisted aggregated deltas
+   {:db/ident       :lease-modification/liability-delta
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Net change in :lease-liability/opening-liability
+                     this modification caused, AGGREGATED across all
+                     affected per-(lease,ledger) books. Positive =
+                     liability increased (e.g. term extension);
+                     negative = liability decreased (e.g. partial
+                     termination). Persisted as a convenience for
+                     the IFRS 16 / ASC 842 lease-liability
+                     roll-forward disclosure (note 40 §2). The data
+                     is derivable from the per-book before/after
+                     `:opening-liability` values; this denorm makes
+                     the disclosure a trivial read. ADR-070."}
+
+   {:db/ident       :lease-modification/rou-delta
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Net change in ROU :asset-depreciation/depreciable-
+                     base aggregated across all affected books. The
+                     ROU side counterpart to :liability-delta — paired
+                     with it for the IFRS 16 ROU roll-forward
+                     disclosure. ADR-070."}
+
+   {:db/ident       :lease-modification/pnl-delta
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Net P&L impact of this modification (the plug
+                     between :liability-delta and :rou-delta). For
+                     a partial termination this is the IFRS 16 §46(b)
+                     gain/loss; for a scope-decrease modification it
+                     is the proportional re-measurement gain. Zero
+                     for a remeasurement that flows entirely to BS.
+                     ADR-070."}])
 
 ;; ============================================================================
 ;; Aggregate

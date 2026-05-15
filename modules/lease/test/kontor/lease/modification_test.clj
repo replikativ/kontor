@@ -450,3 +450,107 @@
              {:lease "LSE-LK" :date #inst "2026-09-01" :journal (journal db1)
               :changed-by-uid (p db1 "U-ctrl") :justification (adoc db1)
               :gain-loss-account (acct db1 "7400")}))))))
+
+;; ============================================================================
+;; ADR-070 — disclosure-support deltas persisted on :lease-modification
+;; ============================================================================
+
+(deftest remeasure-persists-liability-and-rou-deltas
+  (let [conn (bootstrap)
+        db   (d/db conn)]
+    (lease/define-lease! conn
+      {:code "LSE-DR" :name "Office" :lessor (p db "L-acme")
+       :asset-class (class-eid db) :commencement-date #inst "2026-01-01"
+       :term-months 24 :payment-amount 1000.00M :payment-frequency :monthly
+       :payment-timing :in-arrears :commodity (commodity db)
+       :discount-rate 0.06M :origin-document (adoc db)
+       :changed-by-uid (p db "U-cfo")})
+    (lrun/commence! conn
+      {:lease "LSE-DR" :journal (journal db) :changed-by-uid (p db "U-cfo")
+       :rou-asset-account (acct db "0250") :rou-accumulated-account (acct db "0259")
+       :books [{:ledger (ifrs db) :classification :finance
+                :liability-account (acct db "1750")
+                :interest-account (acct db "7300")
+                :rou-expense-account (acct db "6200")}]})
+    (run-through! conn "LSE-DR" #inst "2026-07-15")
+    (let [db1 (d/db conn)
+          result (lmod/remeasure! conn
+                   {:lease "LSE-DR" :date #inst "2026-07-20" :kind :index-reset
+                    :new-payment-amount 1200.00M :journal (journal db1)
+                    :changed-by-uid (p db1 "U-ctrl") :justification (adoc db1)
+                    :gain-loss-account (acct db1 "7400")})
+          mod-eid (:modification result)
+          db2 (d/db conn)
+          m (d/pull db2 [:lease-modification/liability-delta
+                         :lease-modification/rou-delta
+                         :lease-modification/pnl-delta]
+                    mod-eid)]
+      (testing "the modification persists the aggregated liability + ROU delta"
+        (is (some? (:lease-modification/liability-delta m)))
+        (is (= (:lease-modification/liability-delta m)
+               (:lease-modification/rou-delta m))
+            "remeasure! flows BS-only so liability + ROU deltas match"))
+      (testing "remeasure!'s P&L delta is zero in the common case"
+        (is (= 0M (:lease-modification/pnl-delta m)))))))
+
+(deftest terminate-persists-derecognition-deltas
+  (let [conn (bootstrap)
+        db   (d/db conn)]
+    (lease/define-lease! conn
+      {:code "LSE-DT" :name "Office" :lessor (p db "L-acme")
+       :asset-class (class-eid db) :commencement-date #inst "2026-01-01"
+       :term-months 12 :payment-amount 500.00M :payment-frequency :monthly
+       :payment-timing :in-arrears :commodity (commodity db)
+       :discount-rate 0.06M :origin-document (adoc db)
+       :changed-by-uid (p db "U-cfo")})
+    (lrun/commence! conn
+      {:lease "LSE-DT" :journal (journal db) :changed-by-uid (p db "U-cfo")
+       :rou-asset-account (acct db "0250") :rou-accumulated-account (acct db "0259")
+       :books [{:ledger (ifrs db) :classification :finance
+                :liability-account (acct db "1750")
+                :interest-account (acct db "7300")
+                :rou-expense-account (acct db "6200")}]})
+    (run-through! conn "LSE-DT" #inst "2026-04-15")
+    (let [db1 (d/db conn)
+          result (lmod/terminate! conn
+                   {:lease "LSE-DT" :date #inst "2026-04-30" :journal (journal db1)
+                    :changed-by-uid (p db1 "U-ctrl") :justification (adoc db1)
+                    :gain-loss-account (acct db1 "7400")})
+          mod-eid (:modification result)
+          db2 (d/db conn)
+          m (d/pull db2 [:lease-modification/liability-delta
+                         :lease-modification/rou-delta
+                         :lease-modification/pnl-delta]
+                    mod-eid)]
+      (testing "termination derecognises the full outstanding liability"
+        (is (neg? (.signum ^java.math.BigDecimal
+                           (:lease-modification/liability-delta m)))))
+      (testing "termination derecognises the full ROU carrying amount"
+        (is (neg? (.signum ^java.math.BigDecimal
+                           (:lease-modification/rou-delta m))))))))
+
+(deftest rate-rationale-audit-doc-is-persisted-on-the-liability-book
+  (let [conn (bootstrap)
+        db   (d/db conn)]
+    (lease/define-lease! conn
+      {:code "LSE-RR" :name "Office" :lessor (p db "L-acme")
+       :asset-class (class-eid db) :commencement-date #inst "2026-01-01"
+       :term-months 12 :payment-amount 500.00M :payment-frequency :monthly
+       :payment-timing :in-arrears :commodity (commodity db)
+       :discount-rate 0.06M :origin-document (adoc db)
+       :changed-by-uid (p db "U-cfo")})
+    (lrun/commence! conn
+      {:lease "LSE-RR" :journal (journal db) :changed-by-uid (p db "U-cfo")
+       :rou-asset-account (acct db "0250") :rou-accumulated-account (acct db "0259")
+       :books [{:ledger (ifrs db) :classification :finance
+                :liability-account (acct db "1750")
+                :interest-account (acct db "7300")
+                :rou-expense-account (acct db "6200")
+                :rate-rationale (adoc db)}]})
+    (let [db1 (d/db conn)
+          ifrs-eid (ifrs db1)
+          book (liability/book-for db1 "LSE-RR" ifrs-eid)
+          b (d/pull db1 [{:lease-liability/rate-rationale [:audit-doc/code]}] book)]
+      (testing "the :rate-rationale audit-doc ref is persisted on the book"
+        (is (= "LEASE-CONTRACT-1"
+               (:audit-doc/code (:lease-liability/rate-rationale b))))))))

@@ -196,10 +196,15 @@
    tx-report's `:tempids`). When `:tx-tempids` is given (a vec of
    per-book adjustment tx-tempid strings), the event references them
    directly via `:lease-modification/transaction` — no follow-up
-   d/transact needed."
+   d/transact needed.
+
+   `:liability-delta`/`:rou-delta`/`:pnl-delta` are the per-modification
+   aggregated movements (ADR-070); when supplied they are persisted on
+   the event so the IFRS 16 / ASC 842 disclosure roll-forward is a
+   trivial read."
   [lease-eid {:keys [kind date new-payment-amount new-term-months
                      new-discount-rate scope-decrease-pct justification
-                     note tx-tempids]}]
+                     note tx-tempids liability-delta rou-delta pnl-delta]}]
   (let [event (cond-> {:db/id "lease-mod"
                        :lease-modification/lease lease-eid
                        :lease-modification/kind kind
@@ -216,7 +221,13 @@
                                            justification)
                 note                (assoc :lease-modification/note note)
                 (seq tx-tempids)    (assoc :lease-modification/transaction
-                                           (vec tx-tempids)))
+                                           (vec tx-tempids))
+                (some? liability-delta)
+                (assoc :lease-modification/liability-delta liability-delta)
+                (some? rou-delta)
+                (assoc :lease-modification/rou-delta rou-delta)
+                (some? pnl-delta)
+                (assoc :lease-modification/pnl-delta pnl-delta))
         lease-update (cond-> {:db/id lease-eid}
                        new-payment-amount (assoc :lease/payment-amount
                                                  new-payment-amount)
@@ -318,6 +329,14 @@
                     :journal journal :date date :kind kind :note note
                     :tempid-suffix (str "-" i)})))
           book-plans))
+        total-liab-delta (reduce (fn [^BigDecimal a m]
+                                   (.add a ^BigDecimal (:delta m)))
+                                 0M book-plans)
+        ;; remeasure! flows entirely to BS (delta goes to liability +
+        ;; ROU equally); no P&L unless a book is driven below zero, in
+        ;; which case apply-book-adjustment-tx-data plugs to gain-loss.
+        ;; That refinement is deferred — for now we record :pnl-delta 0M
+        ;; on the modification, which is correct for the common case.
         ;; Final step: the :lease-modification event + the :lease
         ;; contract-fact update; references the per-book adjustment
         ;; tx-tempids directly (no follow-up :transaction link tx).
@@ -330,7 +349,10 @@
                       :new-discount-rate new-discount-rate
                       :justification justification :note note
                       :tx-tempids (mapv #(str "mod-adj-" %)
-                                        (range (count book-plans)))}))
+                                        (range (count book-plans)))
+                      :liability-delta total-liab-delta
+                      :rou-delta total-liab-delta
+                      :pnl-delta 0M}))
         ;; mod-step FIRST so the per-book revise-liability/revise-book
         ;; steps see the updated :lease contract facts in the
         ;; speculative db (they derive the period count from
@@ -444,6 +466,15 @@
                     :kind :partial-termination :note note
                     :tempid-suffix (str "-" i)})))
           book-plans))
+        total-liab-delta (reduce (fn [^BigDecimal a m]
+                                   (.add a ^BigDecimal (:delta m)))
+                                 0M book-plans)
+        total-rou-delta  (reduce (fn [^BigDecimal a m]
+                                   (.add a ^BigDecimal (:rou-base-change m)))
+                                 0M book-plans)
+        ;; The P&L gain/loss is the residual — IFRS 16.46(b) sets it at
+        ;; the difference between the proportional liab + ROU reductions.
+        total-pnl-delta  (.subtract total-rou-delta total-liab-delta)
         mod-step
         (fn [_sdb _ctx]
           (record-modification-tx-data
@@ -454,7 +485,10 @@
                       :scope-decrease-pct scope-decrease-pct
                       :justification justification :note note
                       :tx-tempids (mapv #(str "mod-adj-" %)
-                                        (range (count book-plans)))}))
+                                        (range (count book-plans)))
+                      :liability-delta total-liab-delta
+                      :rou-delta total-rou-delta
+                      :pnl-delta total-pnl-delta}))
         report (process/run-process
                 conn {:steps (into [mod-step] book-steps)
                       :vt-from date :vt-to kbt/forever})
@@ -565,13 +599,32 @@
                     (into (schedule/set-state-tx-data
                            sdb rou-dep-schedule :cancelled))))))
           book-plans))
+        ;; ADR-070 disclosure deltas — termination derecognises BOTH
+        ;; the full liability AND the full ROU carrying amount; the P&L
+        ;; is the residual (the gain-loss-account leg, plus any
+        ;; penalty cash).
+        total-liab-delta (.negate (reduce (fn [^BigDecimal a m]
+                                            (.add a ^BigDecimal (:old-outstanding m)))
+                                          0M book-plans))
+        total-rou-delta  (.negate (reduce (fn [^BigDecimal a m]
+                                            (.add a ^BigDecimal (:rou-carrying m)))
+                                          0M book-plans))
+        ;; The P&L pickup = (-liab-delta - cash-paid) - (-rou-delta)
+        ;; — i.e. (liab-removed - cash - rou-removed). Per-book legs
+        ;; sum to zero, so per-book P&L is the same residual sign-wise.
+        total-pnl-delta (.subtract (.subtract (.negate total-liab-delta)
+                                              ^BigDecimal penalty*)
+                                   (.negate total-rou-delta))
         mod-step
         (fn [_sdb _ctx]
           (record-modification-tx-data
            lease-eid {:kind :termination :date date
                       :justification justification :note note
                       :tx-tempids (mapv #(str "mod-adj-" %)
-                                        (range (count book-plans)))}))
+                                        (range (count book-plans)))
+                      :liability-delta total-liab-delta
+                      :rou-delta total-rou-delta
+                      :pnl-delta total-pnl-delta}))
         status-step
         (fn [sdb _ctx]
           (sm/record-status-change-tx-data
@@ -666,13 +719,26 @@
                     (into (schedule/set-state-tx-data
                            sdb rou-dep-schedule :cancelled))))))
           snapshot))
+        ;; ADR-070 disclosure deltas — purchase settles the liability
+        ;; for cash; ROU continues (no derecognition under IFRS 16.67).
+        ;; :liability-delta = -Σ outstanding; :rou-delta = 0; :pnl-delta
+        ;; = settled-liability - cash-paid (the difference the plug
+        ;; covers — zero if the option price = the residual liability).
+        total-liab-delta (.negate (reduce (fn [^BigDecimal a m]
+                                            (.add a ^BigDecimal (:old-outstanding m)))
+                                          0M snapshot))
+        total-rou-delta 0M
+        total-pnl-delta (.subtract (.negate total-liab-delta) ^BigDecimal price)
         mod-step
         (fn [_sdb _ctx]
           (record-modification-tx-data
            lease-eid {:kind :purchase :date date
                       :justification justification :note note
                       :tx-tempids (mapv #(str "mod-adj-" %)
-                                        (range (count snapshot)))}))
+                                        (range (count snapshot)))
+                      :liability-delta total-liab-delta
+                      :rou-delta total-rou-delta
+                      :pnl-delta total-pnl-delta}))
         status-step
         (fn [sdb _ctx]
           (sm/record-status-change-tx-data

@@ -162,7 +162,7 @@
   [db {:keys [lease ledger classification opening-liability discount-rate
               liability-account interest-account commodity start-date
               n-periods frequency provider-id total-amount schedule-code
-              note tempid-suffix]
+              note rate-rationale tempid-suffix]
        :or   {provider-id :effective-interest tempid-suffix ""}}]
   (when-not lease             (throw (ex-info ":lease required" {})))
   (when-not ledger            (throw (ex-info ":ledger required" {})))
@@ -218,7 +218,9 @@
                              :lease-liability/opening-fired-through 0
                              :lease-liability/commodity commodity
                              :lease-liability/schedule sched-tempid}
-                      note (assoc :lease-liability/note note))]
+                      note (assoc :lease-liability/note note)
+                      rate-rationale (assoc :lease-liability/rate-rationale
+                                            rate-rationale))]
     [book-entity schedule-entity]))
 
 (defn open-liability-book!
@@ -253,6 +255,8 @@
                          resolvable)
      :schedule-code      string (default \"<lease-code>-liab-<ledger-code>\")
      :note               string
+     :rate-rationale     ref to :audit-doc — justification for this
+                         book's :discount-rate (ADR-070 disclosure)
 
    The pure tx-data builder is `open-liability-book-tx-data` (ADR-067)."
   [conn opts]

@@ -133,12 +133,20 @@
 
 (defn define-lease-tx-data
   "Pure tx-data builder for `define-lease!` (ADR-068). Optional
-   `:tempid` (default `\"lease-1\"`) and `:recorded-at` (default now)."
+   `:tempid` (default `\"lease-1\"`) and `:recorded-at` (default now).
+
+   For an imported (mid-life) lease, pass `:imported? true` plus the
+   ADR-069 audit denorms `:imported-as-of`,
+   `:imported-original-commencement-date`,
+   `:imported-original-term-months` — those are recorded on the
+   :lease so `import-lease!` (ADR-069) can validate them later."
   [_db {:keys [code name lessor asset-class commencement-date term-months
                payment-amount payment-frequency payment-timing commodity
                discount-rate underlying-asset-desc initial-direct-costs
                prepaid-at-commencement incentives-received
                purchase-option-price entity origin-document note
+               imported? imported-as-of imported-original-commencement-date
+               imported-original-term-months
                changed-by-uid tempid recorded-at]
         :or {tempid "lease-1"}}]
   (when-not code              (throw (ex-info ":code required" {})))
@@ -191,6 +199,14 @@
               entity                  (assoc :lease/entity entity)
               origin-document         (assoc :lease/origin-document origin-document)
               note                    (assoc :lease/note note)
+              imported?               (assoc :lease/imported? imported?)
+              imported-as-of          (assoc :lease/imported-as-of imported-as-of)
+              imported-original-commencement-date
+              (assoc :lease/imported-original-commencement-date
+                     imported-original-commencement-date)
+              imported-original-term-months
+              (assoc :lease/imported-original-term-months
+                     imported-original-term-months)
               ;; The recording actor IS the creator — stamp :create/uid
               ;; so ADR-038 :no-self-approval can fire on termination.
               changed-by-uid          (assoc :create/uid changed-by-uid))

@@ -218,7 +218,8 @@
         (vec
          (map-indexed
           (fn [i {:keys [ledger classification liability-account interest-account
-                         rou-expense-account liability-provider-id rate pv rou-cost]}]
+                         rou-expense-account liability-provider-id rate pv rou-cost
+                         rate-rationale]}]
             (when-not ledger (throw (ex-info "book spec: :ledger required" {})))
             (when-not (#{:finance :operating} classification)
               (throw (ex-info "book spec: :classification must be :finance | :operating"
@@ -246,7 +247,9 @@
                                         :frequency freq
                                         :tempid-suffix suffix}
                                  liability-provider-id
-                                 (assoc :provider-id liability-provider-id))))
+                                 (assoc :provider-id liability-provider-id)
+                                 rate-rationale
+                                 (assoc :rate-rationale rate-rationale))))
                     (into (asset-dep/open-book-tx-data
                            sdb {:asset-tempid rou-tempid
                                 :ledger ledger
@@ -306,6 +309,246 @@
                      :rou-cost rou-cost})
                   (range)
                   book-calcs)}))
+
+;; ============================================================================
+;; import-lease! — ADR-069 mid-life portfolio import
+;; ============================================================================
+
+(defn import-lease!
+  "Mid-life portfolio import for a `:draft` `:lease` (ADR-069).
+
+   Use to onboard a lease that is already mid-term in a prior system,
+   carrying forward the existing balance-sheet amounts rather than
+   re-computing them from scratch. Unlike `commence!`, this transactor
+   does NOT post a day-one GL recognition entry — the consumer is
+   responsible for the import-day balance-sheet bridge journal that
+   reconciles the prior system's books to the carried-forward amounts.
+   What `import-lease!` DOES is set up the new system's records:
+
+   - The single ROU `:asset` with `:in-service-date = :imported-as-of`
+     (re-anchored — the new system's depreciation schedule starts
+     here). The contractual original commencement date is preserved
+     on the `:lease` via `:lease/imported-original-commencement-date`
+     and the `:lease/imported?` flag.
+   - Per ledger: a `:lease-liability` book with `:opening-liability =
+     :remaining-pv` and a schedule that fires the REMAINING payment
+     occurrences from `:imported-as-of`; a ROU `:asset-depreciation`
+     book with `:depreciable-base = :remaining-rou-base`,
+     `:opening-accumulated = :pre-import-accumulated` (reporting
+     scalar), and `:useful-life-months = :remaining-useful-life-months`.
+   - `:lease/status :draft → :active` with `:reason :lease-imported`.
+
+   The `:lease` MUST be `:draft` and pre-populated by the consumer with
+   `:lease/commencement-date = :imported-as-of`,
+   `:lease/term-months = :remaining-term-months`,
+   `:lease/payment-amount`, `:lease/payment-frequency`,
+   `:lease/payment-timing`, `:lease/discount-rate`,
+   `:lease/origin-document`, plus the audit denorms
+   `:lease/imported?` (true), `:lease/imported-as-of`,
+   `:lease/imported-original-commencement-date`,
+   `:lease/imported-original-term-months`. The transactor verifies the
+   audit denorms are present.
+
+   Required opts (same shape as `commence!`):
+     :lease                   code or eid — must be `:draft` + imported?
+     :changed-by-uid          ref to :create/uid
+     :rou-asset-account       eid — ROU asset BS account
+     :rou-accumulated-account eid — ROU accumulated-amortisation account
+     :books                   non-empty vector of per-ledger specs:
+       {:ledger                eid                       (required)
+        :classification        :finance | :operating     (required)
+        :liability-account     eid                       (required)
+        :interest-account      eid                       (required)
+        :rou-expense-account   eid                       (required)
+        :remaining-pv          bigdec — opening liability PV
+                               at :imported-as-of        (required)
+        :remaining-rou-base    bigdec — REMAINING base
+                               for the dep schedule      (required)
+        :pre-import-accumulated bigdec — reporting scalar
+                                (default 0)
+        :remaining-useful-life-months long — defaults to
+                                :lease/term-months
+        :discount-rate         bigdec (default = :lease/discount-rate)
+        :liability-provider-id keyword (default :effective-interest)}
+
+   Optional opts:
+     :rou-asset-code  string (default \"<lease-code>-ROU\")
+
+   Returns the same shape as `commence!`:
+   {:lease eid :rou-asset eid :books [{…}]} — minus the day-one PV/
+   rou-cost rollup (the imported values are the per-book inputs).
+
+   Runs as one atomic `kontor.process` (ADR-067): the ROU asset, the
+   per-ledger books + schedules, the `:draft → :active` status change
+   all commit through the kernel validation gate."
+  [conn {:keys [lease changed-by-uid rou-asset-account rou-accumulated-account
+                books rou-asset-code]}]
+  (when-not lease          (throw (ex-info ":lease required" {})))
+  (when-not changed-by-uid (throw (ex-info ":changed-by-uid required" {})))
+  (when-not rou-asset-account (throw (ex-info ":rou-asset-account required" {})))
+  (when-not rou-accumulated-account
+    (throw (ex-info ":rou-accumulated-account required" {})))
+  (when-not (seq books)    (throw (ex-info ":books must be a non-empty vector" {})))
+  (let [db (d/db conn)
+        lease-eid (lease/resolve-lease db lease)
+        _ (when-not lease-eid (throw (ex-info "Lease not found" {:spec lease})))
+        l (d/pull db [:lease/code :lease/name :lease/status
+                      :lease/commencement-date :lease/term-months
+                      :lease/payment-amount :lease/payment-frequency
+                      :lease/payment-timing :lease/discount-rate
+                      :lease/imported? :lease/imported-as-of
+                      :lease/imported-original-commencement-date
+                      :lease/imported-original-term-months
+                      {:lease/asset-class [:db/id]}
+                      {:lease/commodity [:db/id]}
+                      {:lease/origin-document [:db/id]}]
+                  lease-eid)
+        _ (when-not (= :draft (:lease/status l))
+            (throw (ex-info "import-lease!: lease is not :draft"
+                            {:type :lease/not-draft
+                             :lease lease-eid :status (:lease/status l)})))
+        _ (when-not (:lease/origin-document l)
+            (throw (ex-info "import-lease!: lease has no :origin-document — required for :draft → :active"
+                            {:type :lease/missing-origin-document :lease lease-eid})))
+        _ (when-not (:lease/imported? l)
+            (throw (ex-info "import-lease!: :lease/imported? must be true (use commence! for non-imported leases)"
+                            {:type :lease/not-imported :lease lease-eid})))
+        _ (doseq [k [:lease/imported-as-of
+                     :lease/imported-original-commencement-date
+                     :lease/imported-original-term-months]]
+            (when (nil? (get l k))
+              (throw (ex-info (str "import-lease!: " k " required on an imported lease (audit denorm)")
+                              {:type :lease/missing-import-denorm
+                               :lease lease-eid :missing k}))))
+        imported-as-of (:lease/commencement-date l)
+        freq         (:lease/payment-frequency l)
+        timing       (:lease/payment-timing l)
+        remaining-n  (lease/periods-for (:lease/term-months l) freq)
+        commodity    (:db/id (:lease/commodity l))
+        rou-code     (or rou-asset-code (str (:lease/code l) "-ROU"))
+        sched-start  (if (= timing :in-advance)
+                       imported-as-of
+                       (schedule/date-of-occurrence imported-as-of freq 2))
+        ledger-codes (into {} (map (fn [bk]
+                                     [(:ledger bk)
+                                      (:ledger/code
+                                       (d/pull db [:ledger/code] (:ledger bk)))]))
+                           books)
+        primary-rou-cost (:remaining-rou-base (first books))
+        _ (doseq [bk books]
+            (when (nil? (:remaining-pv bk))
+              (throw (ex-info "book spec: :remaining-pv required" {:book bk})))
+            (when (nil? (:remaining-rou-base bk))
+              (throw (ex-info "book spec: :remaining-rou-base required" {:book bk}))))
+        rou-tempid "rou-asset"
+        ;; STEP 1 — the Right-of-Use :asset re-anchored at :imported-as-of.
+        recognize-rou
+        (fn [sdb _ctx]
+          (asset/acquire-tx-data
+           sdb {:tempid rou-tempid
+                :code rou-code
+                :name (str "ROU — " (:lease/name l))
+                :class (:db/id (:lease/asset-class l))
+                :acquisition-cost primary-rou-cost
+                :acquisition-commodity commodity
+                :acquisition-date imported-as-of
+                :in-service? true
+                :in-service-date imported-as-of
+                :salvage-value 0M
+                :asset-account rou-asset-account
+                :accumulated-account rou-accumulated-account
+                :expense-account (:rou-expense-account (first books))
+                :origin-document (:db/id (:lease/origin-document l))
+                :changed-by-uid changed-by-uid}))
+        ;; STEPS 2..N+1 — per-ledger books (no day-one GL entry).
+        book-steps
+        (vec
+         (map-indexed
+          (fn [i {:keys [ledger classification liability-account interest-account
+                         rou-expense-account liability-provider-id
+                         remaining-pv remaining-rou-base pre-import-accumulated
+                         remaining-useful-life-months discount-rate rate-rationale]}]
+            (when-not ledger (throw (ex-info "book spec: :ledger required" {})))
+            (when-not (#{:finance :operating} classification)
+              (throw (ex-info "book spec: :classification must be :finance | :operating"
+                              {:classification classification})))
+            (when-not liability-account
+              (throw (ex-info "book spec: :liability-account required" {})))
+            (when-not interest-account
+              (throw (ex-info "book spec: :interest-account required" {})))
+            (when-not rou-expense-account
+              (throw (ex-info "book spec: :rou-expense-account required" {})))
+            (let [suffix (str "-" i)
+                  rate (or discount-rate (:lease/discount-rate l))
+                  useful-months (or remaining-useful-life-months
+                                    (:lease/term-months l))
+                  pre-acc (or pre-import-accumulated 0M)]
+              (fn [sdb _ctx]
+                (-> []
+                    (into (liability/open-liability-book-tx-data
+                           sdb (cond-> {:lease lease-eid
+                                        :ledger ledger
+                                        :classification classification
+                                        :opening-liability remaining-pv
+                                        :discount-rate rate
+                                        :liability-account liability-account
+                                        :interest-account interest-account
+                                        :commodity commodity
+                                        :start-date sched-start
+                                        :n-periods remaining-n
+                                        :frequency freq
+                                        :tempid-suffix suffix}
+                                 liability-provider-id
+                                 (assoc :provider-id liability-provider-id)
+                                 rate-rationale
+                                 (assoc :rate-rationale rate-rationale))))
+                    (into (asset-dep/open-book-tx-data
+                           sdb {:asset-tempid rou-tempid
+                                :ledger ledger
+                                :provider-id (if (= classification :operating)
+                                               :lease-rou-plug
+                                               :straight-line)
+                                :useful-life-months useful-months
+                                :depreciable-base remaining-rou-base
+                                :opening-accumulated pre-acc
+                                :commodity commodity
+                                :start-date sched-start
+                                :frequency freq
+                                :expense-account rou-expense-account
+                                :schedule-code (str rou-code "-dep-"
+                                                    (or (ledger-codes ledger) ledger))
+                                :tempid-suffix suffix}))))))
+          books))
+        ;; FINAL STEP — link the ROU + drive :draft → :active.
+        link-and-activate
+        (fn [sdb _ctx]
+          (into [{:db/id lease-eid :lease/rou-asset rou-tempid}]
+                (sm/record-status-change-tx-data
+                 sdb {:entity lease-eid
+                      :entity-type :lease
+                      :facet :lease/status
+                      :from :draft :to :active
+                      :changed-at (Date.)
+                      :changed-by-uid changed-by-uid
+                      :supporting-doc (:db/id (:lease/origin-document l))
+                      :reason :lease-imported})))
+        report (process/run-process
+                conn {:steps (concat [recognize-rou] book-steps [link-and-activate])
+                      :vt-from imported-as-of
+                      :vt-to kbt/forever})
+        tempids (:tempids report)]
+    {:lease lease-eid
+     :rou-asset (get tempids rou-tempid)
+     :books (mapv (fn [i {:keys [ledger remaining-pv remaining-rou-base
+                                 pre-import-accumulated]}]
+                    {:ledger ledger
+                     :liability-book (get tempids (str "lease-liab-book-" i))
+                     :rou-dep-book (get tempids (str "asset-dep-book-" i))
+                     :remaining-pv remaining-pv
+                     :remaining-rou-base remaining-rou-base
+                     :pre-import-accumulated (or pre-import-accumulated 0M)})
+                  (range)
+                  books)}))
 
 ;; ============================================================================
 ;; run-lease!

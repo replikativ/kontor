@@ -423,3 +423,131 @@
                                     0M ["0250" "0259" "1750" "7300" "6200" "1800"]))))
         (is (zero? (.signum (reduce (fn [a code] (.add a (ledger-balance db'' (acct db'' code) usgaap)))
                                     0M ["0250" "0259" "1750" "6740" "1800"]))))))))
+
+;; ============================================================================
+;; import-lease! — ADR-069 mid-life portfolio import
+;; ============================================================================
+
+(deftest import-lease-onboards-a-mid-life-lease
+  (let [conn (bootstrap)
+        db   (d/db conn)
+        ;; Picture: a 36-month lease that started 2024-01-01, payment 1000
+        ;; in-arrears monthly at 6%. By 2026-05-01 the prior system has
+        ;; fired 28 payments; 8 remain. The remaining PV (at the original
+        ;; rate, period 29 onwards) ≈ 7891.86; the remaining ROU base ≈
+        ;; the original 32871.02 × (8/36) = 7304.67 (the prior system's
+        ;; carrying NBV for the ROU asset). For the test we pass these
+        ;; as opaque "carrying amounts" the import takes at face value.
+        _ (lease/define-lease! conn
+            {:code "LSE-IMP" :name "Mid-life imported office"
+             :lessor (p db "L-acme") :asset-class (class-eid db)
+             :commencement-date #inst "2026-05-01"   ; re-anchored
+             :term-months 8                         ; REMAINING months
+             :payment-amount 1000.00M :payment-frequency :monthly
+             :payment-timing :in-arrears :commodity (commodity db)
+             :discount-rate 0.06M :origin-document (adoc db)
+             :imported? true
+             :imported-as-of #inst "2026-05-01"
+             :imported-original-commencement-date #inst "2024-01-01"
+             :imported-original-term-months 36
+             :changed-by-uid (p db "U-cfo")})
+        result (lrun/import-lease! conn
+                 {:lease "LSE-IMP" :changed-by-uid (p db "U-cfo")
+                  :rou-asset-account (acct db "0250")
+                  :rou-accumulated-account (acct db "0259")
+                  :books [{:ledger (ledger db "ifrs") :classification :finance
+                           :liability-account (acct db "1750")
+                           :interest-account (acct db "7300")
+                           :rou-expense-account (acct db "6200")
+                           :remaining-pv 7891.86M
+                           :remaining-rou-base 7304.67M
+                           :pre-import-accumulated 25566.35M}]})
+        db' (d/db conn)
+        ifrs (ledger db' "ifrs")]
+    (testing "the lease moves :draft → :active via :lease-imported"
+      (is (= :active (:lease/status (lease/pull-lease db' "LSE-IMP")))))
+    (testing "the audit denorms are preserved on the lease"
+      (let [l (lease/pull-lease db' "LSE-IMP")]
+        (is (true? (:lease/imported? l)))
+        (is (= #inst "2024-01-01" (:lease/imported-original-commencement-date l)))
+        (is (= 36 (:lease/imported-original-term-months l)))))
+    (testing "a single Right-of-Use :asset is created and linked"
+      (is (some? (:rou-asset result)))
+      (is (= (:rou-asset result)
+             (:db/id (:lease/rou-asset (lease/pull-lease db' "LSE-IMP"))))))
+    (testing "one :lease-liability book + one ROU :asset-depreciation book"
+      (is (= 1 (count (liability/books-of db' "LSE-IMP"))))
+      (is (= 1 (count (asset-dep/books-of db' (:rou-asset result))))))
+    (testing "the liability book's :opening-liability IS the imported remaining PV"
+      (let [book (liability/book-for db' "LSE-IMP" ifrs)]
+        (is (= 7891.86M (:lease-liability/opening-liability
+                         (liability/pull-book db' book))))))
+    (testing "import-lease! posts NO day-one GL entry — the GL is the consumer's bridge"
+      (is (zero? (.signum (ledger-balance db' (acct db' "0250") ifrs))))
+      (is (zero? (.signum (ledger-balance db' (acct db' "1750") ifrs)))))))
+
+(deftest import-lease-rejects-a-non-imported-lease
+  (let [conn (bootstrap)
+        db   (d/db conn)
+        _ (lease/define-lease! conn
+            {:code "LSE-NORMAL" :name "Regular new lease"
+             :lessor (p db "L-acme") :asset-class (class-eid db)
+             :commencement-date #inst "2026-01-01"
+             :term-months 12 :payment-amount 500.00M :payment-frequency :monthly
+             :payment-timing :in-arrears :commodity (commodity db)
+             :discount-rate 0.06M :origin-document (adoc db)
+             :changed-by-uid (p db "U-cfo")})]
+    (testing "import-lease! refuses a lease without :imported? true"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #":lease/imported\?"
+           (lrun/import-lease! conn
+                               {:lease "LSE-NORMAL" :changed-by-uid (p db "U-cfo")
+                                :rou-asset-account (acct db "0250")
+                                :rou-accumulated-account (acct db "0259")
+                                :books [{:ledger (ledger db "ifrs")
+                                         :classification :finance
+                                         :liability-account (acct db "1750")
+                                         :interest-account (acct db "7300")
+                                         :rou-expense-account (acct db "6200")
+                                         :remaining-pv 1000M
+                                         :remaining-rou-base 1000M}]}))))))
+
+(deftest imported-lease-runs-the-remaining-tail
+  (let [conn (bootstrap)
+        db   (d/db conn)
+        _ (lease/define-lease! conn
+            {:code "LSE-IMP2" :name "Mid-life imported"
+             :lessor (p db "L-acme") :asset-class (class-eid db)
+             :commencement-date #inst "2026-05-01"
+             :term-months 3
+             :payment-amount 1000.00M :payment-frequency :monthly
+             :payment-timing :in-arrears :commodity (commodity db)
+             :discount-rate 0.06M :origin-document (adoc db)
+             :imported? true
+             :imported-as-of #inst "2026-05-01"
+             :imported-original-commencement-date #inst "2024-01-01"
+             :imported-original-term-months 36
+             :changed-by-uid (p db "U-cfo")})
+        _ (lrun/import-lease! conn
+            {:lease "LSE-IMP2" :changed-by-uid (p db "U-cfo")
+             :rou-asset-account (acct db "0250")
+             :rou-accumulated-account (acct db "0259")
+             :books [{:ledger (ledger db "ifrs") :classification :finance
+                      :liability-account (acct db "1750")
+                      :interest-account (acct db "7300")
+                      :rou-expense-account (acct db "6200")
+                      :remaining-pv 2970.40M
+                      :remaining-rou-base 2740.92M
+                      :pre-import-accumulated 30130.10M}]})
+        ifrs (ledger (d/db conn) "ifrs")
+        result (lrun/run-lease! conn
+                 {:lease "LSE-IMP2" :ledger ifrs :journal (journal (d/db conn))
+                  :cash-account (acct (d/db conn) "1800")
+                  :changed-by-uid (p (d/db conn) "U-cfo")
+                  :as-of #inst "2026-08-15"})]
+    (testing "the remaining three payments fire on the imported tail"
+      (is (= [1 2 3] (:fired (:liability result))))
+      (is (= [1 2 3] (:fired (:rou result)))))
+    (testing "the lease auto-expires at the last fired payment"
+      (is (true? (:completed? result)))
+      (is (= :expired (:lease/status (lease/pull-lease (d/db conn) "LSE-IMP2")))))))
