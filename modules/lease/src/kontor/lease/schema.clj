@@ -429,7 +429,12 @@
                      gain/loss; for a scope-decrease modification it
                      is the proportional re-measurement gain. Zero
                      for a remeasurement that flows entirely to BS.
-                     ADR-070."}])
+
+                     Sign convention (ADR-070 §sign-convention table):
+                     positive = the modification ADDS to net income
+                     (a derecognition gain, a scope-decrease pickup);
+                     negative = the modification REDUCES net income
+                     (a derecognition loss, an IFRS 16.39 floor plug)."}])
 
 ;; ============================================================================
 ;; Aggregate

@@ -307,9 +307,11 @@
      not `:self` and is not a defined Relation on the same
      resource-type;
    - a Permission whose `{:relation r}` references an undefined
-     Relation on the target type;
+     Relation on ANY subject-type the arrow points to (a multi-
+     subject-type relation like `relation member: user | group`
+     forks into one branch per subject-type — each must resolve);
    - a Permission whose `{:permission p}` references an undefined
-     Permission on the target type.
+     Permission on any branch.
 
    Cycle detection is NOT done here — that would require a graph
    walk and is documented as a known limitation (ADR-066 §note 43).
@@ -333,23 +335,24 @@
                                (not (contains? rels [rt arrow])))
                       (conj! errs {:permission p :error :undefined-arrow
                                    :arrow [rt arrow]}))
-                  ;; Find the target-type the arrow leads to (else self).
-                  target-type
+                  ;; The arrow leads to one or more target-types — a
+                  ;; multi-subject-type relation forks
+                  ;; (`relation member: user | group`); `:self` is the
+                  ;; single-target case. EVERY branch must resolve.
+                  target-types
                   (if (= arrow :self)
-                    rt
-                    (first (get rels [rt arrow] #{})))
-                  ;; The target itself must resolve.
-                  _ (cond
-                      (nil? target-type)
-                      nil  ; already flagged as :undefined-arrow above
-                      (= tt :relation)
-                      (when-not (contains? rels [target-type tn])
-                        (conj! errs {:permission p :error :undefined-relation
-                                     :ref [target-type tn]}))
-                      (= tt :permission)
-                      (when-not (contains? perms [target-type tn])
-                        (conj! errs {:permission p :error :undefined-permission
-                                     :ref [target-type tn]})))]
+                    #{rt}
+                    (get rels [rt arrow] #{}))
+                  _ (doseq [target-type target-types]
+                      (cond
+                        (= tt :relation)
+                        (when-not (contains? rels [target-type tn])
+                          (conj! errs {:permission p :error :undefined-relation
+                                       :ref [target-type tn]}))
+                        (= tt :permission)
+                        (when-not (contains? perms [target-type tn])
+                          (conj! errs {:permission p :error :undefined-permission
+                                       :ref [target-type tn]}))))]
               (persistent! errs)))
           (filter permission-map? defs)))]
     (when (seq errors)
@@ -393,9 +396,19 @@
   "Read the installed schema back as a `{:relations [Relation …]
    :permissions [Permission …]}` map. The entity maps round-trip
    through `write-schema!` modulo `:db/id`s. Useful for diffing,
-   exporting, or driving a schema editor."
+   exporting, or driving a schema editor — the result is **sorted
+   deterministically** (lex by the tuple key) so diffs are stable
+   regardless of the underlying datalog set-iteration order."
   [db]
-  (let [rels (->> (d/q '[:find ?rt ?rn ?st
+  (let [tuple-key (juxt :authz.relation/resource-type
+                        :authz.relation/relation-name
+                        :authz.relation/subject-type)
+        perm-key  (juxt :authz.permission/resource-type
+                        :authz.permission/permission-name
+                        :authz.permission/source-relation-name
+                        :authz.permission/target-type
+                        :authz.permission/target-name)
+        rels (->> (d/q '[:find ?rt ?rn ?st
                          :where
                          [?e :authz.relation/resource-type ?rt]
                          [?e :authz.relation/relation-name ?rn]
@@ -404,7 +417,9 @@
                   (mapv (fn [[rt rn st]]
                           {:authz.relation/resource-type rt
                            :authz.relation/relation-name rn
-                           :authz.relation/subject-type st})))
+                           :authz.relation/subject-type st}))
+                  (sort-by (comp str tuple-key))
+                  vec)
         perms (->> (d/q '[:find ?rt ?pn ?src ?tt ?tn
                           :where
                           [?e :authz.permission/resource-type ?rt]
@@ -418,5 +433,7 @@
                             :authz.permission/permission-name pn
                             :authz.permission/source-relation-name src
                             :authz.permission/target-type tt
-                            :authz.permission/target-name tn})))]
+                            :authz.permission/target-name tn}))
+                   (sort-by (comp str perm-key))
+                   vec)]
     {:relations rels :permissions perms}))

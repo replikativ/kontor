@@ -152,4 +152,65 @@
                     [(base/Permission :ghost :view {:relation :owner})]))))
     (testing "the tx-data installs cleanly via raw d/transact"
       (d/transact conn tx-data)
-      (is (= 1 (count (:relations (schema/read-schema (d/db conn)))))))))
+      (is (= 1 (count (:relations (schema/read-schema (d/db conn))))))))
+  (testing "an empty schema-defs is accepted and returns an empty tx-data"
+    ;; Locked: write-schema-tx-data on `[]` is the no-op write. Useful
+    ;; for migration tooling that bulk-builds schemas conditionally.
+    (let [conn (fresh-conn)
+          _ (schema/install! conn)]
+      (is (= [] (schema/write-schema-tx-data (d/db conn) []))))))
+
+;; ============================================================================
+;; Multi-subject-type validation (P1 from review-after — note 40-equivalent)
+;; ============================================================================
+
+(deftest validation-rejects-undefined-ref-on-multi-subject-type-branches
+  (let [conn (fresh-conn)
+        _ (schema/install! conn)
+        c (client/make-client conn {})
+        ;; `:doc :reader` forks two subject-types: :user AND :group.
+        ;; The Permission's `{:permission :admin}` resolves on :user
+        ;; (where we declared `:user :admin`) but NOT on :group — the
+        ;; validator must reject the :group branch.
+        defs [(base/Relation :doc :reader :user)
+              (base/Relation :doc :reader :group)
+              (base/Permission :user :admin {:relation :owner})
+              (base/Relation :user :owner :uid)
+              (base/Permission :doc :view {:arrow :reader :permission :admin})]
+        ex (try (authz/write-schema! c defs) nil
+                (catch clojure.lang.ExceptionInfo e e))
+        data (when ex (ex-data ex))]
+    (is (some? ex) "the :group branch's missing :admin permission must surface")
+    (is (= :authz/schema-invalid (:type data)))
+    (is (some (fn [e] (and (= :undefined-permission (:error e))
+                           (= [:group :admin] (:ref e))))
+              (:errors data)))))
+
+;; ============================================================================
+;; read-schema deterministic ordering (P1 from review-after)
+;; ============================================================================
+
+(deftest read-schema-returns-deterministically-ordered-results
+  (let [defs [(base/Relation :z :owner :user)
+              (base/Relation :a :owner :user)
+              (base/Relation :m :owner :user)
+              (base/Permission :z :admin {:relation :owner})
+              (base/Permission :a :admin {:relation :owner})
+              (base/Permission :m :admin {:relation :owner})]
+        ;; Install on two fresh conns — different :id, different
+        ;; hash-set iteration order. Both reads must agree.
+        read! (fn []
+                (let [conn (fresh-conn)
+                      _ (schema/install! conn)
+                      _ (schema/write-schema! conn defs)]
+                  (schema/read-schema (d/db conn))))
+        a (read!)
+        b (read!)]
+    (testing "the same schema reads back in the same order, regardless of conn"
+      (is (= (:relations a) (:relations b)))
+      (is (= (:permissions a) (:permissions b))))
+    (testing "the order is the lex-by-tuple-key order"
+      (is (= [:a :m :z]
+             (mapv :authz.relation/resource-type (:relations a))))
+      (is (= [:a :m :z]
+             (mapv :authz.permission/resource-type (:permissions a)))))))

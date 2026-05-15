@@ -128,6 +128,19 @@
 ;; Shared book-level adjustment
 ;; ============================================================================
 
+(defn- clamp-rou-base-change
+  "Apply IFRS 16.39's floor: a ROU adjustment cannot drive the ROU
+   carrying amount below zero — the excess lands in P&L. Pure;
+   shared by `apply-book-adjustment-tx-data` (writes the GL leg)
+   and the ADR-070 disclosure aggregations (`partial-terminate!`'s
+   `:rou-delta` must reflect the clamped movement, not the raw
+   requested change)."
+  ^BigDecimal [^BigDecimal rou-base-change ^BigDecimal rou-carrying]
+  (let [floor (.negate rou-carrying)]
+    (if (neg? (.compareTo rou-base-change floor))
+      floor
+      rou-base-change)))
+
 (defn- apply-book-adjustment-tx-data
   "Pure tx-data builder for ONE book's modification adjustment +
    re-anchor (ADR-067). Returns the concatenation of: the GL
@@ -136,18 +149,16 @@
    adjustment transaction takes `:tx-tempid (str \"mod-adj\"
    tempid-suffix)` so several books compose into one process tx-data.
 
-   `:rou-base-change` is clamped here so the ROU carrying amount
-   never goes below zero — the excess lands in P&L, IFRS 16.39."
+   `:rou-base-change` is clamped here via `clamp-rou-base-change` so
+   the ROU carrying amount never goes below zero — the excess lands
+   in P&L, IFRS 16.39."
   [db {:keys [snapshot new-liability rou-base-change new-discount-rate
               new-term-months gain-loss-account journal date kind note
               tempid-suffix]
        :or {tempid-suffix ""}}]
   (let [{:keys [liability-book liability-account rou-asset-account rou-dep-book
                 rou-carrying old-outstanding commodity ledger]} snapshot
-        rou-base-change* (let [floor (.negate ^BigDecimal rou-carrying)]
-                           (if (neg? (.compareTo ^BigDecimal rou-base-change floor))
-                             floor
-                             rou-base-change))
+        rou-base-change* (clamp-rou-base-change rou-base-change rou-carrying)
         liability-leg (bd- old-outstanding new-liability)
         rou-leg       rou-base-change*
         pl-leg        (.negate (bd+ liability-leg rou-leg))
@@ -469,8 +480,14 @@
         total-liab-delta (reduce (fn [^BigDecimal a m]
                                    (.add a ^BigDecimal (:delta m)))
                                  0M book-plans)
+        ;; ADR-070 §sign convention — :rou-delta is the CLAMPED movement
+        ;; (IFRS 16.39 floor: ROU never goes below zero). The disclosure
+        ;; must reflect what the GL actually booked, not the raw
+        ;; requested change. Mirror `apply-book-adjustment-tx-data`.
         total-rou-delta  (reduce (fn [^BigDecimal a m]
-                                   (.add a ^BigDecimal (:rou-base-change m)))
+                                   (.add a (clamp-rou-base-change
+                                            (:rou-base-change m)
+                                            (:rou-carrying m))))
                                  0M book-plans)
         ;; The P&L gain/loss is the residual — IFRS 16.46(b) sets it at
         ;; the difference between the proportional liab + ROU reductions.

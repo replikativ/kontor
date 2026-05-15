@@ -486,6 +486,50 @@
       (is (zero? (.signum (ledger-balance db' (acct db' "0250") ifrs))))
       (is (zero? (.signum (ledger-balance db' (acct db' "1750") ifrs)))))))
 
+(deftest import-lease-rejects-negative-carrying-amounts
+  (let [conn (bootstrap)
+        db   (d/db conn)
+        _ (lease/define-lease! conn
+            {:code "LSE-NEG" :name "Mis-signed import" :lessor (p db "L-acme")
+             :asset-class (class-eid db) :commencement-date #inst "2026-05-01"
+             :term-months 6 :payment-amount 1000.00M :payment-frequency :monthly
+             :payment-timing :in-arrears :commodity (commodity db)
+             :discount-rate 0.06M :origin-document (adoc db)
+             :imported? true
+             :imported-as-of #inst "2026-05-01"
+             :imported-original-commencement-date #inst "2024-01-01"
+             :imported-original-term-months 36
+             :changed-by-uid (p db "U-cfo")})
+        base-args {:lease "LSE-NEG" :changed-by-uid (p db "U-cfo")
+                   :rou-asset-account (acct db "0250")
+                   :rou-accumulated-account (acct db "0259")}
+        a-book {:ledger (ledger db "ifrs") :classification :finance
+                :liability-account (acct db "1750")
+                :interest-account (acct db "7300")
+                :rou-expense-account (acct db "6200")}]
+    (testing "import-lease! rejects a negative :remaining-pv (mis-signed export)"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #":remaining-pv"
+           (lrun/import-lease! conn
+                               (assoc base-args :books
+                                      [(assoc a-book :remaining-pv -100M
+                                              :remaining-rou-base 100M)])))))
+    (testing "import-lease! rejects a negative :remaining-rou-base"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #":remaining-rou-base"
+           (lrun/import-lease! conn
+                               (assoc base-args :books
+                                      [(assoc a-book :remaining-pv 100M
+                                              :remaining-rou-base -100M)])))))
+    (testing "import-lease! rejects a negative :pre-import-accumulated"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #":pre-import-accumulated"
+           (lrun/import-lease! conn
+                               (assoc base-args :books
+                                      [(assoc a-book :remaining-pv 100M
+                                              :remaining-rou-base 100M
+                                              :pre-import-accumulated -50M)])))))))
+
 (deftest import-lease-rejects-a-non-imported-lease
   (let [conn (bootstrap)
         db   (d/db conn)
@@ -540,11 +584,24 @@
                       :remaining-rou-base 2740.92M
                       :pre-import-accumulated 30130.10M}]})
         ifrs (ledger (d/db conn) "ifrs")
+        db1 (d/db conn)
+        rou-dep-book (asset-dep/book-for db1
+                                         (:db/id (:lease/rou-asset
+                                                  (lease/pull-lease db1 "LSE-IMP2")))
+                                         ifrs)
         result (lrun/run-lease! conn
                  {:lease "LSE-IMP2" :ledger ifrs :journal (journal (d/db conn))
                   :cash-account (acct (d/db conn) "1800")
                   :changed-by-uid (p (d/db conn) "U-cfo")
                   :as-of #inst "2026-08-15"})]
+    (testing "the ROU dep book carries the pre-import accumulated as a scalar"
+      (let [b (d/pull db1 [:asset-depreciation/opening-accumulated
+                           :asset-depreciation/depreciable-base
+                           :asset-depreciation/useful-life-months]
+                      rou-dep-book)]
+        (is (= 30130.10M (:asset-depreciation/opening-accumulated b)))
+        (is (= 2740.92M  (:asset-depreciation/depreciable-base b)))
+        (is (= 3 (:asset-depreciation/useful-life-months b)))))
     (testing "the remaining three payments fire on the imported tail"
       (is (= [1 2 3] (:fired (:liability result))))
       (is (= [1 2 3] (:fired (:rou result)))))

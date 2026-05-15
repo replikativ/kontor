@@ -434,12 +434,31 @@
                                       (:ledger/code
                                        (d/pull db [:ledger/code] (:ledger bk)))]))
                            books)
+        ;; Like commence! (see the comment at primary-rou-cost there),
+        ;; the :asset's single :acquisition-cost matches only the primary
+        ;; (first) book's :remaining-rou-base — a consumer disposing a
+        ;; non-primary ROU book via dispose! must pass an explicit
+        ;; :asset-account-cost; downstream callers read per-book
+        ;; :depreciable-base, not this asset-level figure.
         primary-rou-cost (:remaining-rou-base (first books))
         _ (doseq [bk books]
             (when (nil? (:remaining-pv bk))
               (throw (ex-info "book spec: :remaining-pv required" {:book bk})))
             (when (nil? (:remaining-rou-base bk))
-              (throw (ex-info "book spec: :remaining-rou-base required" {:book bk}))))
+              (throw (ex-info "book spec: :remaining-rou-base required" {:book bk})))
+            (when (neg? (.signum ^BigDecimal (:remaining-pv bk)))
+              (throw (ex-info "book spec: :remaining-pv must be non-negative — a negative imported PV would unwind to deeply negative balances"
+                              {:type :lease/invalid-import-amount
+                               :field :remaining-pv :value (:remaining-pv bk) :book bk})))
+            (when (neg? (.signum ^BigDecimal (:remaining-rou-base bk)))
+              (throw (ex-info "book spec: :remaining-rou-base must be non-negative — a negative imported ROU base would invert the dep schedule"
+                              {:type :lease/invalid-import-amount
+                               :field :remaining-rou-base :value (:remaining-rou-base bk) :book bk})))
+            (when (and (:pre-import-accumulated bk)
+                       (neg? (.signum ^BigDecimal (:pre-import-accumulated bk))))
+              (throw (ex-info "book spec: :pre-import-accumulated must be non-negative if supplied"
+                              {:type :lease/invalid-import-amount
+                               :field :pre-import-accumulated :value (:pre-import-accumulated bk) :book bk}))))
         rou-tempid "rou-asset"
         ;; STEP 1 — the Right-of-Use :asset re-anchored at :imported-as-of.
         recognize-rou
