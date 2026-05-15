@@ -135,19 +135,17 @@
           :tx/valid-from vt-from
           :tx/valid-to vt-to})))
 
-(defn transact-with-vt!
-  "Convenience wrapper around `d/transact` that attaches valid-time
-   metadata. `opts` accepts `:vt-from` and optionally `:vt-to`."
-  [conn tx-data {:keys [vt-from vt-to]}]
-  (cond
-    (and vt-from vt-to)
-    (d/transact conn (with-vt tx-data vt-from vt-to))
-
-    vt-from
-    (d/transact conn (with-vt tx-data vt-from))
-
-    :else
-    (d/transact conn tx-data)))
+;; `transact-with-vt!` was removed in Stage P — it was a gate-bypassing
+;; convenience wrapper with zero callers across kontor + every
+;; companion (verified via grep). Per ADR-068 every business write
+;; routes through `kontor.validation/transact-with-validation`; the
+;; standard pattern in the `!` wrappers is:
+;;
+;;     (validation/transact-with-validation
+;;      conn (kbt/with-vt (xxx-tx-data db opts) vt-from vt-to))
+;;
+;; If you find yourself reaching for a `transact-with-vt!`-shaped
+;; helper, you almost certainly want the gated pattern above.
 
 ;; ============================================================================
 ;; Reader helpers — derive valid-time from tx-meta

@@ -302,7 +302,15 @@ eol        = #'[ \\t]*\\n'
 
 (defn load-into!
   "Load a parsed Beancount directive list into `conn`. Returns a map
-   of {:tx-counts <map> :commodity-eids <map> :account-eids <map>}."
+   of {:tx-counts <map> :commodity-eids <map> :account-eids <map>}.
+
+   **Bootstrap-class per ADR-068**: this loader does raw `d/transact`
+   for every phase (schema, journal, commodities, accounts,
+   transactions) — it is a one-shot data-migration / import path,
+   not a business-write API. Callers who need the kernel gate
+   (sealing / period / sum-to-zero / invariants) on imported entries
+   should post each imported transaction via `posting/post-transaction!`
+   AFTER the catalog / commodity / account skeleton is loaded."
   [conn directives]
   (install-import-schema! conn)
   ;; Pre-create the catch-all journal once.

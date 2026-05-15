@@ -87,23 +87,24 @@ Then in a REPL (or via `clj-nrepl-eval -p <port> "..."`):
    {:journal/code "SALES" :journal/name "Customer invoices"
     :journal/type :sale :journal/active true}])
 
-;; Build and post a balanced sales entry. build-transaction checks
-;; sum-to-zero per ledger per commodity, defaults display-type to
-;; :product, and stamps :tx/valid-from from :effective-date so
-;; bitemporal reads work out of the box.
-(d/transact
+;; Build, gate, and post a balanced sealed sales entry.
+;; post-transaction! routes through transact-with-validation — the
+;; kernel gate enforces sealing / period / sum-to-zero / state-
+;; machine / invariants. build-transaction (the pure builder)
+;; defaults display-type to :product and stamps :tx/valid-from from
+;; :effective-date so bitemporal reads work out of the box.
+;; (Per ADR-068, every business-write `!` wrapper is gated like this.)
+(posting/post-transaction!
   conn
-  (posting/build-transaction
-    {:transaction {:transaction/journal        [:journal/code "SALES"]
-                   :transaction/effective-date #inst "2026-05-11"
-                   :transaction/narration      "INV-2026-0001"
-                   :transaction/state          :posted}
-     :postings    [{:posting/account   [:account/code "1200"]
-                    :posting/amount     1000.00M
-                    :posting/commodity [:commodity/symbol "EUR"]}
-                   {:posting/account   [:account/code "4400"]
-                    :posting/amount    -1000.00M
-                    :posting/commodity [:commodity/symbol "EUR"]}]}))
+  {:transaction {:transaction/journal        [:journal/code "SALES"]
+                 :transaction/effective-date #inst "2026-05-11"
+                 :transaction/narration      "INV-2026-0001"}
+   :postings    [{:posting/account   [:account/code "1200"]
+                  :posting/amount     1000.00M
+                  :posting/commodity [:commodity/symbol "EUR"]}
+                 {:posting/account   [:account/code "4400"]
+                  :posting/amount    -1000.00M
+                  :posting/commodity [:commodity/symbol "EUR"]}]})
 
 ;; Trial balance. The same call answers historical and current
 ;; questions — :as-of-valid restates, :as-of-tx is "as filed".
@@ -169,15 +170,37 @@ state.
 
 ## Where to next
 
+Two audience-specific docs, both worth bookmarking:
+
+- **[doc/value.md](doc/value.md)** — **for evaluators and business
+  stakeholders.** What kontor IS (a substrate, not an app), the
+  eight kernel concerns it solves that traditional ERPs make hard,
+  who it's for, who it isn't for. Plain English with accounting
+  terms defined inline.
+- **[doc/programming.md](doc/programming.md)** — **for Clojure
+  developers.** The three-axis programming model (bitemporal
+  substrate + status machines + the transact gate), the post-Stage-P
+  transact programming model (`*-tx-data` builders + `kontor.process`
+  + `transact-with-validation`), composition patterns, the
+  documented carve-outs, how to add a new transactor.
+
+And the deeper material:
+
 - **[doc/architecture.md](doc/architecture.md)** — layer cake,
   schema-as-source-of-truth, how companions compose without forking
-  the kernel, how bitemporal works in practice, the per-stage
-  rhythm. Start here if you're evaluating whether to build on it.
+  the kernel.
 - **[doc/decisions.md](doc/decisions.md)** — every architectural
-  choice with rationale (ADR-001 … ADR-048). Start here for any
-  non-trivial question about *why* the schema looks the way it does.
+  choice with rationale (ADR-001 … ADR-068, including ADR-067's
+  `kontor.process` facility and ADR-068's universal `*-tx-data`
+  builder convention). Start here for any non-trivial question
+  about *why* the schema looks the way it does.
 - **[doc/roadmap.md](doc/roadmap.md)** — phased plan with acceptance
   criteria.
+- **[doc/research/](doc/research/)** — 49 point-in-time research
+  notes spanning prior-art surveys (Odoo, Tryton, SAP, NetSuite,
+  Oracle, KillBill, OFBiz, SpiceDB, EACL, XTDB v2, Postgres SSI),
+  review-after audits, and design call analysis. Note 48 + 49 are
+  the Stage P review-after pair.
 - **[doc/showcases/](doc/showcases/)** — four end-to-end narrative
   notebooks (DE Mahnverfahren, US multi-state, IN B2B with IRN+TDS,
   multi-entity intercompany). Each tells a story on synthetic data
@@ -196,12 +219,21 @@ documents its license. Pull only the modules whose terms you accept.
 
 ## Status
 
-End of Stage L (Collections). Kernel + 48 ADRs landed.
+End of Stage P (universal `*-tx-data` builders + cross-module
+composition). Kernel + 68 ADRs landed.
 
 The kernel runs the four showcase notebooks end-to-end (DE / US /
-IN / multi-entity). It is *not* yet 1.0 — expect ADR additions and
-the occasional schema migration through Stage M (legal-hold +
-retention) and Stage N (revenue recognition).
+IN / multi-entity). Every business-write transactor across kernel +
+companions now exposes a pure `*-tx-data` builder + a thin `!`
+wrapper routing through the kernel validation gate — atomic
+cross-module composition (the "create invoice + grant access + log
+audit-doc in one transaction" win) is structurally enforced.
+
+`bb test`: 939 tests / 3423 assertions / 0 failures.
+
+It is *not* yet 1.0 — the lease and authz follow-up tasks (#123,
+#124, #127) and a small datahike contribution (closing the
+`:period/lock-tx` self-ref carve-out, task #75) remain.
 
 ## Contributing
 
