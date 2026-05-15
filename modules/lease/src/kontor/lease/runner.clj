@@ -35,7 +35,6 @@
             [kontor.lease.lease-provider :as lp]
             [kontor.lease.posting :as lposting]
             [kontor.lease.rou-provider :as rou]
-            [kontor.period :as period]
             [kontor.process :as process]
             [kontor.schedule :as schedule]
             [kontor.status-machine :as sm])
@@ -407,33 +406,51 @@
              (when (nil? payment)
                (throw (ex-info "run-lease!: liability plan has no period for a pending occurrence"
                                {:book liab-book :sequence sequence})))
-             (let [tx-data (lposting/plan-lease-payment
-                            (cond-> {:interest-account interest-account
-                                     :liability-account liability-account
-                                     :cash-account cash-account
-                                     :interest interest
-                                     :principal principal
-                                     :payment payment
-                                     :commodity commodity
-                                     :ledger ledger
-                                     :journal journal
-                                     :date date
-                                     :narration (str "Lease payment " sequence)}
-                              posted? (assoc :posted-at date)))]
+             ;; ONE atomic, gated process per period — each its own
+             ;; datahike-tx with :tx/valid-from = the payment date
+             ;; (ADR-067 addendum). Period / sealing / sum-to-zero /
+             ;; invariants run in the gate. The lockstep guard above
+             ;; stays — cross-half (payment ↔ ROU dep) atomicity is
+             ;; not structural under per-period vt, so a partial run
+             ;; can still diverge the two schedules.
+             (let [period-step
+                   (fn [sdb _ctx]
+                     (let [tx-data (lposting/plan-lease-payment
+                                    (cond-> {:interest-account interest-account
+                                             :liability-account liability-account
+                                             :cash-account cash-account
+                                             :interest interest
+                                             :principal principal
+                                             :payment payment
+                                             :commodity commodity
+                                             :ledger ledger
+                                             :journal journal
+                                             :date date
+                                             :narration (str "Lease payment "
+                                                             sequence)}
+                                      posted? (assoc :posted-at date)))]
+                       (schedule/record-occurrence-tx-data
+                        sdb schedule-eid sequence date payment commodity
+                        tx-data (Date.))))]
                (try
-                 (period/assert-not-in-locked-period! db tx-data)
+                 (process/run-process
+                  conn {:steps [period-step]
+                        :vt-from date
+                        :vt-to kbt/forever})
                  (catch clojure.lang.ExceptionInfo e
-                   (throw (ex-info (.getMessage e)
-                                   (assoc (ex-data e)
-                                          :book liab-book
-                                          :sequence sequence
-                                          :fired-before-violation (mapv :sequence acc))
-                                   e))))
-               (schedule/record-occurrence! conn schedule-eid sequence
-                                            date payment commodity tx-data)
-               (conj acc {:sequence sequence :date date
-                          :interest interest :principal principal
-                          :payment payment}))))
+                   (let [data (ex-data e)]
+                     (if (= :period/locked-period-violation (:type data))
+                       (throw (ex-info (.getMessage e)
+                                       (assoc data
+                                              :book liab-book
+                                              :sequence sequence
+                                              :fired-before-violation
+                                              (mapv :sequence acc))
+                                       e))
+                       (throw e))))))
+             (conj acc {:sequence sequence :date date
+                        :interest interest :principal principal
+                        :payment payment})))
          []
          pending)
         total-interest  (reduce (fn [^BigDecimal a m] (.add a ^BigDecimal (:interest m)))
@@ -458,16 +475,20 @@
       (let [status (:lease/status (d/pull db' [:lease/status] lease-eid))]
         (when (= :active status)
           (let [last-date (:date (last fired))
-                status-tx (sm/record-status-change-tx-data
-                           db'
-                           (cond-> {:entity lease-eid
-                                    :entity-type :lease
-                                    :facet :lease/status
-                                    :from :active :to :expired
-                                    :changed-at last-date
-                                    :reason :lease-expired}
-                             changed-by-uid (assoc :changed-by-uid changed-by-uid)))]
-            (d/transact conn (kbt/with-vt status-tx last-date kbt/forever))))))
+                status-step
+                (fn [sdb _ctx]
+                  (sm/record-status-change-tx-data
+                   sdb (cond-> {:entity lease-eid
+                                :entity-type :lease
+                                :facet :lease/status
+                                :from :active :to :expired
+                                :changed-at last-date
+                                :reason :lease-expired}
+                         changed-by-uid (assoc :changed-by-uid changed-by-uid))))]
+            (process/run-process
+             conn {:steps [status-step]
+                   :vt-from last-date
+                   :vt-to kbt/forever})))))
     {:lease lease-eid
      :ledger ledger
      :liability {:book liab-book
