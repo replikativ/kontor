@@ -138,7 +138,11 @@
    :delete :touch :relationship {...}}`) into datahike tx-data via
    `rels/tx-update-relationship`. Use this to compose authz writes
    with kernel writes in one atomic `kontor.process` — e.g. create
-   an invoice + grant the buyer access to it in one tx."
+   an invoice + grant the buyer access to it in one tx.
+
+   See `grant-tx-data` / `revoke-tx-data` for the ergonomic
+   convenience surface that mirrors `create-relationship!` /
+   `delete-relationship!`."
   [db opts updates]
   (->> updates
        (map (fn [{:keys [operation relationship]}]
@@ -151,6 +155,39 @@
        (map #(rels/tx-update-relationship db %))
        (remove nil?)
        vec))
+
+(defn grant-tx-data
+  "Convenience tx-data builder for ONE `:create` relationship —
+   ergonomic mirror of the `create-relationship!` protocol method,
+   composable into a `kontor.process` (ADR-068).
+
+   Two arities mirror `create-relationship!`:
+
+     (grant-tx-data db client subject relation resource)
+     (grant-tx-data db client {:subject … :relation … :resource …})
+
+   `client` is an `AuthzClient` (so the same `:object-id->entid` /
+   `:entid->object-id` coercion applies). Returns tx-data ready to
+   concat into a `kontor.process` step or hand to
+   `transact-with-validation` on a conn that has BOTH the kernel +
+   authz schemas installed."
+  ([db client subject relation resource]
+   (grant-tx-data db client {:subject subject :relation relation :resource resource}))
+  ([db client {:keys [subject relation resource]}]
+   (write-relationships-tx-data
+    db (.-opts client)
+    [(core/->RelationshipUpdate :create (core/->Relationship subject relation resource))])))
+
+(defn revoke-tx-data
+  "Convenience tx-data builder for ONE `:delete` relationship —
+   mirrors `delete-relationship!`. See `grant-tx-data` for the
+   compose-with-kernel rationale."
+  ([db client subject relation resource]
+   (revoke-tx-data db client {:subject subject :relation relation :resource resource}))
+  ([db client {:keys [subject relation resource]}]
+   (write-relationships-tx-data
+    db (.-opts client)
+    [(core/->RelationshipUpdate :delete (core/->Relationship subject relation resource))])))
 
 (defn- do-write-relationships!
   [conn opts updates]

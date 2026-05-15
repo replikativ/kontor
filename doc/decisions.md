@@ -7333,6 +7333,40 @@ exception is local to `build-transaction` and does not invalidate
 the universal rule for every other builder. (Originally surfaced as
 note 48 P1-5.)
 
+**Documented carve-outs from "every `!` routes through the gate":**
+
+  - **`kontor.authz` standalone path** — `kontor.authz.client/do-
+    write-relationships!` stays on raw `d/transact`. The authz
+    module is designed to run on its own minimal datahike conn
+    *without* the kernel schema; kernel-gate routing would crash on
+    missing kernel attrs. Composing authz writes with kernel writes
+    uses `kontor.authz.client/write-relationships-tx-data` (the pure
+    builder, public) inside a `kontor.process` step on a conn that
+    has BOTH schemas installed — the consumer's process gates the
+    combined tx-data.
+  - **`kontor.period/close!`'s `:period/lock-tx` denorm** — a
+    second raw `d/transact` records the gate's own tx-id as a
+    queryable backref. `:db/current-tx` doesn't resolve as a
+    `:db.type/long` *value* in datahike (only as a `:db/id`
+    tempid), so the lock-tx denorm cannot ride inside the gated
+    close tx itself. `close-fiscal-year!` consequently is not yet a
+    `run-process` (it would chain through the lock-tx denorm
+    write). A future revision could either generalize via a
+    `:db/current-tx`-self-ref in the gated tx (requires datahike
+    work — see task #75) or formalize the lock-tx denorm as a
+    permanent bootstrap-class exception.
+
+**Per-period replayers (`run-depreciation!` / `run-lease!`) deliberately
+preserve the partial-failure mitigations** (`:fired-before-violation`
+enrichment + `run-lease!`'s lockstep guard at
+`modules/lease/src/kontor/lease/runner.clj`:392-396) instead of
+deleting them as note 46 originally sketched. The trade-off: the
+hybrid per-period processes keep per-period `:tx/valid-from` (so
+bitemporal restated-history queries work across catch-ups) at the
+cost of cross-period non-atomicity. Both reviews (notes 48 + 49)
+flagged this; the mitigations stay because the bitemporal benefit
+is the reason for the hybrid in the first place.
+
 **Scope of "business write."** This ADR governs:
 
   - Every `defn` ending in `!` that does `d/transact` in `src/` or
