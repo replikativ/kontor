@@ -7262,3 +7262,100 @@ must not), so the namespacing belongs in the builders, where the
 distinction is local and explicit.
 
 Date: 2026-05-14.
+
+## ADR-068 — every business write exposes a `*-tx-data` builder
+
+**Decision.** ADR-067 introduced `kontor.process` for the
+*orchestrators*. ADR-068 generalizes the same pattern to *every*
+business-write transactor across the kernel and the companions —
+every `defn xxx! [conn opts]` that does `d/transact` splits into:
+
+  1. **`xxx-tx-data [db opts]`** — a pure function returning the
+     tx-data vector (no `d/transact`, no `kbt/with-vt`). All
+     entity-map construction, all validations that need only `db` +
+     `opts`, live here. Where multiple outputs of the same builder
+     can compose into one process tx-data, the builder accepts a
+     `:tempid-suffix` (or analogue per ADR-067's addendum) so the
+     internal tempids stay collision-free.
+  2. **`xxx! [conn opts]`** — a thin standalone wrapper that calls
+     the builder, wraps with `kbt/with-vt` (defaults per the
+     transactor's existing convention), and commits through
+     **`kontor.validation/transact-with-validation`** — i.e. the
+     same gate the orchestrators route through (`legal-hold` /
+     `sealing` / `period` / `state-machine` for transactions /
+     `sum-to-zero` / datalog invariants).
+
+This is the universal rule: **any business write to the kernel or
+to a companion goes through the gate, and every business write is
+expressible as a tx-data builder that composes into a
+`kontor.process`.**
+
+**Why universal, not just orchestrators.** Three concrete payoffs:
+
+  - **Cross-module atomic composition.** A consumer (beleg, simmis,
+    a future ERP shell) wants "create the invoice AND grant the
+    buyer read access AND record the audit-doc upload" as ONE
+    atomic event. ADR-067's process facility expresses it as a
+    sequence of step fns each calling a builder; under ADR-068 the
+    builders are universally available and the composition is
+    trivial.
+  - **Uniform gate routing.** Today a defensive subset of writes
+    (invoice posting, payment application's invoice-status drive,
+    legal-hold placements, modifications) skip the gate — the
+    validators only run when the caller specifically routes
+    through `transact-with-validation` or `post-transaction!`. Per-
+    file inspection of which writes are gated is a maintenance
+    burden; "every `!` is gated" is the rule that closes it.
+  - **One audit boundary.** Per ADR-007 every commit is the audit
+    chain; the gate is what makes "commit ⇒ validated commit" a
+    structural invariant. Universal gate routing removes the
+    "raw `d/transact` bypass" footgun without adding code paths.
+
+**The `with-vt` discipline.** Where the wrapper sets `:vt-from`, it
+follows the transactor's existing convention (e.g. `place-hold!`
+defaults to `:placed-at`; `acquire!` defaults to
+`:acquisition-date`; new entities default to a meaningful
+event-time, not `now`). The builder DOES NOT embed `with-vt` — that
+is the wrapper's job (so a `kontor.process` step can `strip-tx-meta`
+the builder's output and apply one outer `with-vt` per process).
+This is the same rule ADR-067 set for the orchestrators; ADR-068
+makes it universal.
+
+**Scope of "business write."** This ADR governs:
+
+  - Every `defn` ending in `!` that does `d/transact` in `src/` or
+    `modules/*/src/`, *except* the bootstrap layer (schema
+    installation in `*/schema.clj`, l10n chart-of-account
+    `define-chart!` seeders, `core.clj`'s test-db setup, the
+    invariant rule installer in `validation.clj`). The bootstrap
+    layer is one-time setup, not a business write — it does not
+    benefit from gating and the gate is not yet installed when
+    schema runs.
+  - The pure builders the bootstrap layer relies on (e.g.
+    `posting/build-transaction`, `record-status-change-tx-data`)
+    stay unchanged — they are already builders.
+
+**Test-suite implication.** Tests that today do raw `d/transact`
+of business tx-data are encouraged to either (a) use the new `!`
+wrappers (then the gate runs, matching production) or (b) compose
+several builders' tx-data into a single `run-process` (the
+headline "compositional write" pattern). Test FIXTURES that seed
+schemas, accounts, journals — bootstrap data — stay on raw
+`d/transact`. The litmus test: would a real consumer write this
+through a business API? If yes, use a builder + the gate.
+
+**Implementation.** Stage P. Sweep the ~40 source files with
+business-write `d/transact` calls, cluster by ownership
+(kernel → asset/lease/inventory leaves → companions → authz),
+mechanical per-file. One coherent integration test in
+`test/kontor/composition_test.clj` proves the cross-module
+composition story — typically invoice creation + an authz grant +
+an audit-doc link as a single `run-process`.
+
+**Open at write-time, deliberately:** whether the `kontor.process`
+facility itself moves upstream to datahike (task #75 territory —
+deferred). ADR-068's surface area in the kontor codebase is
+independent of that decision; the builders compose under any
+implementation of the facility.
+
+Date: 2026-05-14.
