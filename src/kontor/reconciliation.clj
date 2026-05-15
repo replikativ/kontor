@@ -47,7 +47,8 @@
    v2 layer can address them on top of the v1 schema."
   (:require [clojure.string :as str]
             [datahike.api :as d]
-            [kontor.posting :as posting])
+            [kontor.posting :as posting]
+            [kontor.validation :as validation])
   (:import [java.util Date]))
 
 ;; ============================================================================
@@ -97,9 +98,21 @@
       transaction-type (assoc :bank-line/transaction-type transaction-type)
       category         (assoc :bank-line/category category))))
 
+(defn ingest-statement-tx-data
+  "Pure tx-data builder for `ingest-statement!` (ADR-068)."
+  [_db candidates {:keys [source-account-eid commodity-eid] :as opts}]
+  (when-not source-account-eid
+    (throw (ex-info "ingest-statement! requires :source-account-eid"
+                    {:opts opts})))
+  (when-not commodity-eid
+    (throw (ex-info "ingest-statement! requires :commodity-eid"
+                    {:opts opts})))
+  (mapv #(candidate->bank-line-tx % opts) candidates))
+
 (defn ingest-statement!
   "Bulk-import a parsed bank statement (vec of candidate maps from
-   `bank-{cc}.parser/parse-statement`). Idempotent.
+   `bank-{cc}.parser/parse-statement`). Idempotent. Routes through
+   the gate (ADR-068).
 
    `opts`:
      :source-account-eid — the chart account (e.g. SKR04 1200) that
@@ -107,15 +120,11 @@
      :commodity-eid      — the commodity (e.g. EUR) the bank account
                            is denominated in. Required.
 
-   Returns the tx-report."
-  [conn candidates {:keys [source-account-eid commodity-eid] :as opts}]
-  (when-not source-account-eid
-    (throw (ex-info "ingest-statement! requires :source-account-eid"
-                    {:opts opts})))
-  (when-not commodity-eid
-    (throw (ex-info "ingest-statement! requires :commodity-eid"
-                    {:opts opts})))
-  (d/transact conn (mapv #(candidate->bank-line-tx % opts) candidates)))
+   Returns the tx-report. The pure tx-data builder is
+   `ingest-statement-tx-data`."
+  [conn candidates opts]
+  (validation/transact-with-validation
+   conn (ingest-statement-tx-data (d/db conn) candidates opts)))
 
 ;; ============================================================================
 ;; Open AR / AP discovery
@@ -441,6 +450,8 @@
                    [?a :account/code ?ar-code]]
                  db target-codes eids))))
 
+(declare commit-match-tx-data)
+
 (defn commit-match!
   "Apply a match decision:
      - construct a payment-receipt transaction with two postings
@@ -457,12 +468,28 @@
      :ar-codes / :ap-codes  — same as suggest-match
      :external-id-prefix    — string used to build the payment tx's
                               external-id; default \"PAY-<bank-line-id>\""
-  [conn bank-line-eid match journal-eid
+  [conn bank-line-eid match journal-eid opts]
+  (let [report (validation/transact-with-validation
+                conn (commit-match-tx-data
+                      (d/db conn) bank-line-eid match journal-eid opts))
+        tempids (:tempids report)]
+    {:payment-tx-eid (get tempids "pay-tx")
+     :bank-posting-eid (get tempids "pay-tx-p0")}))
+
+(defn commit-match-tx-data
+  "Pure tx-data builder for `commit-match!` (ADR-068). Both halves
+   — the payment transaction and the bank-line update referencing
+   the bank-side posting — compose into one tx-data via tempid
+   threading: the payment uses `:tx-tempid \"pay-tx\"`, the bank-
+   side posting is `\"pay-tx-p0\"` (first posting in the input
+   vec), and the bank-line's `:bank-line/posting` ref carries the
+   string `\"pay-tx-p0\"` so datahike resolves it consistently in
+   the one commit."
+  [db bank-line-eid match journal-eid
    {:keys [ar-codes ap-codes external-id-prefix]
     :or {ar-codes #{"1400"} ap-codes #{"3300"}
          external-id-prefix "PAY-"}}]
-  (let [db (d/db conn)
-        bl (d/pull db [:bank-line/external-id :bank-line/amount
+  (let [bl (d/pull db [:bank-line/external-id :bank-line/amount
                        :bank-line/source-account :bank-line/commodity
                        :bank-line/date :bank-line/counterparty]
                    bank-line-eid)
@@ -471,7 +498,6 @@
         commodity (:db/id (:bank-line/commodity bl))
         date (:bank-line/date bl)
         inflow? (pos? (.signum ^java.math.BigDecimal amount))
-        ;; Resolve contra account based on match kind
         contra (case (:kind match)
                  :settle    (ar-or-ap-account db (:transactions match)
                                               ar-codes ap-codes inflow?)
@@ -480,58 +506,35 @@
             (throw (ex-info "Cannot resolve contra account for match"
                             {:match match :inflow? inflow?})))
         pay-ext-id (str external-id-prefix (:bank-line/external-id bl))
-        ;; The bank-side leg gets the bank-line's signed amount; the
-        ;; contra leg gets the negation. Sum-to-zero invariant holds.
-        tx-data (-> (posting/build-transaction
-                     {:transaction
-                      (cond-> {:transaction/external-id    pay-ext-id
-                               :transaction/journal        journal-eid
-                               :transaction/effective-date date
-                               :transaction/narration      (str "Payment via bank: "
-                                                                (:bank-line/counterparty bl))
-                               :transaction/state          :posted
-                               :transaction/posted-at      date}
-                        (and (= :settle (:kind match))
-                             (seq (:transactions match)))
-                        (assoc :transaction/settles (vec (:transactions match))))
-                      :postings
-                      [{:posting/account bank-acct
-                        :posting/amount amount
-                        :posting/commodity commodity
-                        :posting/posted-at date}
-                       {:posting/account contra
-                        :posting/amount (.negate ^java.math.BigDecimal amount)
-                        :posting/commodity commodity
-                        :posting/posted-at date}]}))
-        report (d/transact conn tx-data)
-        ;; Find the bank-side posting (the one on bank-acct) — for the
-        ;; :bank-line/posting backref. We can't predict its eid, but
-        ;; we can pull it from the tx-report's tempids by finding the
-        ;; entity-map in tx-data with :posting/account = bank-acct.
-        payment-tx-eid (->> (:tempids report)
-                            vals
-                            (filter integer?)
-                            (some (fn [eid]
-                                    (let [pulled (d/pull (:db-after report)
-                                                         [:transaction/external-id]
-                                                         eid)]
-                                      (when (= pay-ext-id (:transaction/external-id pulled))
-                                        eid)))))
-        bank-posting-eid (when payment-tx-eid
-                           (ffirst (d/q '[:find ?p
-                                          :in $ ?tx ?bank-acct
-                                          :where
-                                          [?p :posting/transaction ?tx]
-                                          [?p :posting/account ?bank-acct]]
-                                        (:db-after report)
-                                        payment-tx-eid bank-acct)))]
-    (d/transact conn
-                [(cond-> {:db/id bank-line-eid
-                          :bank-line/status :reconciled
-                          :bank-line/reconciled-at (Date.)}
-                   bank-posting-eid (assoc :bank-line/posting bank-posting-eid))])
-    {:payment-tx-eid payment-tx-eid
-     :bank-posting-eid bank-posting-eid}))
+        payment-tx
+        (posting/build-transaction
+         {:tx-tempid "pay-tx"
+          :transaction
+          (cond-> {:transaction/external-id    pay-ext-id
+                   :transaction/journal        journal-eid
+                   :transaction/effective-date date
+                   :transaction/narration      (str "Payment via bank: "
+                                                    (:bank-line/counterparty bl))
+                   :transaction/state          :posted
+                   :transaction/posted-at      date}
+            (and (= :settle (:kind match))
+                 (seq (:transactions match)))
+            (assoc :transaction/settles (vec (:transactions match))))
+          ;; Bank-side leg FIRST → gets tempid "pay-tx-p0".
+          :postings
+          [{:posting/account bank-acct
+            :posting/amount amount
+            :posting/commodity commodity
+            :posting/posted-at date}
+           {:posting/account contra
+            :posting/amount (.negate ^java.math.BigDecimal amount)
+            :posting/commodity commodity
+            :posting/posted-at date}]})]
+    (conj (vec payment-tx)
+          {:db/id bank-line-eid
+           :bank-line/status :reconciled
+           :bank-line/reconciled-at (Date.)
+           :bank-line/posting "pay-tx-p0"})))
 
 (defn unmatched-queue
   "Return all `:bank-line` entities still in `:unmatched` status,

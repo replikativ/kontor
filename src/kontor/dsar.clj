@@ -39,7 +39,8 @@
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
             [kontor.legal-hold :as legal-hold]
-            [kontor.status-machine :as sm])
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation])
   (:import [java.time ZoneOffset]
            [java.util Date]))
 
@@ -354,6 +355,8 @@
 ;; Transactors
 ;; ============================================================================
 
+(declare file-request-tx-data advance-state-tx-data)
+
 (defn file-request!
   "File a new data-subject-access request. Status nil → :received;
    `:deadline-at` is computed from `:received-at` + `:deadline-days`.
@@ -372,18 +375,29 @@
      :notes          string
      :changed-by-uid ref to :create/uid
      :vt-from / :vt-to  valid-time bounds (default :vt-from = now)"
-  [conn {:keys [external-id partner kind received-at deadline-days
-                jurisdiction received-via supporting-doc notes
-                changed-by-uid vt-from vt-to]}]
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [now (Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (file-request-tx-data
+                        (d/db conn) (assoc opts :received-state-at now))
+                       (or vt-from now)
+                       (or vt-to kbt/forever)))))
+
+
+(defn file-request-tx-data
+  "Pure tx-data builder for `file-request!` (ADR-068). Optional
+   `:tempid` (default `\"dsar-1\"`) and `:received-state-at` (default
+   now) thread cross-step references + the status-history changed-at."
+  [db {:keys [external-id partner kind received-at deadline-days
+              jurisdiction received-via supporting-doc notes
+              changed-by-uid tempid received-state-at]
+       :or {tempid "dsar-1"}}]
   (when-not external-id   (throw (ex-info ":external-id required" {})))
   (when-not partner       (throw (ex-info ":partner required" {})))
   (when-not kind          (throw (ex-info ":kind required" {})))
   (when-not received-at   (throw (ex-info ":received-at required" {})))
   (when-not deadline-days (throw (ex-info ":deadline-days required" {})))
-  (let [db (d/db conn)
-        now (Date.)
-        req-tempid "dsar-1"
-        row (cond-> {:db/id req-tempid
+  (let [row (cond-> {:db/id tempid
                      :dsar-request/external-id external-id
                      :dsar-request/partner partner
                      :dsar-request/kind kind
@@ -401,17 +415,15 @@
               changed-by-uid (assoc :create/uid changed-by-uid))
         status-tx (sm/record-status-change-tx-data
                    db
-                   (cond-> {:entity req-tempid
+                   (cond-> {:entity tempid
                             :entity-type :dsar-request
                             :facet :dsar-request/state
                             :from :nil
                             :to :received
-                            :changed-at now
+                            :changed-at (or received-state-at (Date.))
                             :reason :dsar-received}
                      changed-by-uid (assoc :changed-by-uid changed-by-uid)))]
-    (d/transact conn (kbt/with-vt (into [row] status-tx)
-                       (or vt-from now)
-                       (or vt-to kbt/forever)))))
+    (into [row] status-tx)))
 
 (defn advance-state!
   "Drive a `:dsar-request` through the status machine. The generic
@@ -430,17 +442,27 @@
 
    On :to :in-progress from :verifying-identity, stamps
    :identity-verified-at. On :to :fulfilled, stamps :fulfilled-at."
-  [conn {:keys [request to changed-by-uid reason reason-note supporting-doc
-                fulfilled-package denied-reason vt-from vt-to]}]
+  [conn {:keys [vt-from vt-to] :as opts}]
+  (let [now (Date.)]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (advance-state-tx-data
+                        (d/db conn) (assoc opts :changed-at now))
+                       (or vt-from now)
+                       (or vt-to kbt/forever)))))
+
+
+(defn advance-state-tx-data
+  "Pure tx-data builder for `advance-state!` (ADR-068)."
+  [db {:keys [request to changed-by-uid reason reason-note supporting-doc
+              fulfilled-package denied-reason changed-at]}]
   (when-not request        (throw (ex-info ":request required" {})))
   (when-not to             (throw (ex-info ":to required" {})))
   (when-not changed-by-uid (throw (ex-info ":changed-by-uid required" {})))
-  (let [db (d/db conn)
-        req-eid (resolve-request db request)
+  (let [req-eid (resolve-request db request)
         _ (when-not req-eid
             (throw (ex-info "DSAR request not found" {:spec request})))
         from (:dsar-request/state (d/pull db [:dsar-request/state] req-eid))
-        now (Date.)
+        now (or changed-at (Date.))
         ;; Side-effect attrs that ride along with specific transitions.
         update (cond-> {:db/id req-eid}
                  (and (= to :in-progress) (= from :verifying-identity))
@@ -462,6 +484,4 @@
                      reason         (assoc :reason reason)
                      reason-note    (assoc :reason-note reason-note)
                      supporting-doc (assoc :supporting-doc supporting-doc)))]
-    (d/transact conn (kbt/with-vt (into [update] status-tx)
-                       (or vt-from now)
-                       (or vt-to kbt/forever)))))
+    (into [update] status-tx)))

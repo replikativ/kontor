@@ -41,7 +41,8 @@
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
             [kontor.process :as process]
-            [kontor.status-machine :as sm]))
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Resolution
@@ -300,6 +301,8 @@
     (cond-> [app-row]
       status-tx (into status-tx))))
 
+(declare reverse-application-tx-data)
+
 (defn reverse-application!
   "Replayable reversal of a prior `:payment-application`. Writes a
    new row with `:reversal-of` pointing at the original and the
@@ -321,12 +324,27 @@
      :vt-from         instant — override tx-level valid-time
                       (kontor.bitemporal). Default: `:applied-at`.
      :vt-to           instant — optional upper bound."
-  [conn {:keys [application-eid applied-by-uid applied-at reason
-                reason-note supporting-doc vt-from vt-to]}]
+  [conn {:keys [vt-from vt-to applied-at] :as opts}]
+  (let [applied-at (or applied-at (java.util.Date.))
+        opts (assoc opts :applied-at applied-at)
+        tx-data (reverse-application-tx-data (d/db conn) opts)
+        effective-vt-from (or vt-from applied-at)
+        final-tx (cond
+                   (and effective-vt-from vt-to)
+                   (kbt/with-vt tx-data effective-vt-from vt-to)
+                   effective-vt-from
+                   (kbt/with-vt tx-data effective-vt-from)
+                   :else tx-data)]
+    (validation/transact-with-validation conn final-tx)))
+
+(defn reverse-application-tx-data
+  "Pure tx-data builder for `reverse-application!` (ADR-068)."
+  [db {:keys [application-eid applied-by-uid applied-at reason
+              reason-note supporting-doc tempid-suffix]
+       :or {tempid-suffix ""}}]
   (when-not application-eid (throw (ex-info ":application-eid required" {})))
   (when-not applied-by-uid  (throw (ex-info ":applied-by-uid required" {})))
-  (let [db (d/db conn)
-        original (d/pull db '[* {:payment-application/invoice [:db/id :invoice/status]
+  (let [original (d/pull db '[* {:payment-application/invoice [:db/id :invoice/status]
                                  :payment-application/payment [:db/id]
                                  :payment-application/commodity [:db/id]}]
                          application-eid)
@@ -337,7 +355,7 @@
         original-amount (:payment-application/amount original)
         negated (.negate ^java.math.BigDecimal original-amount)
         applied-at (or applied-at (java.util.Date.))
-        rev-tempid "pay-app-rev-1"
+        rev-tempid (str "pay-app-rev" tempid-suffix)
         rev-row (cond-> {:db/id rev-tempid
                          :payment-application/payment
                          (get-in original [:payment-application/payment :db/id])
@@ -369,25 +387,17 @@
         open-after (.subtract ^java.math.BigDecimal gross
                               ^java.math.BigDecimal new-applied)
         next-status (cond
-                      ;; Reversal of the final application: :paid →
-                      ;; :sent (if open-after = full gross) or
-                      ;; :partially-paid (if a partial remains).
                       (and (= current-status :paid)
                            (pos? (.signum ^java.math.BigDecimal open-after)))
                       (if (zero? (.compareTo ^java.math.BigDecimal new-applied 0M))
                         :sent
                         :partially-paid)
 
-                      ;; Reversal of a :partially-paid invoice's
-                      ;; LAST remaining partial → :sent (back to
-                      ;; fully-open). P0-2 fix.
                       (and (= current-status :partially-paid)
                            (zero? (.compareTo ^java.math.BigDecimal
                                               new-applied 0M)))
                       :sent
 
-                      ;; Reversal of a partial when more partials remain:
-                      ;; stays :partially-paid.
                       (= current-status :partially-paid) :partially-paid
 
                       :else nil)
@@ -406,17 +416,9 @@
                               :changed-at applied-at
                               :changed-by-uid applied-by-uid}
                        reason      (assoc :reason reason)
-                       reason-note (assoc :reason-note reason-note))))
-        all-tx (cond-> [rev-row]
-                 status-tx (into status-tx))
-        effective-vt-from (or vt-from applied-at)
-        final-tx (cond
-                   (and effective-vt-from vt-to)
-                   (kbt/with-vt all-tx effective-vt-from vt-to)
-                   effective-vt-from
-                   (kbt/with-vt all-tx effective-vt-from)
-                   :else all-tx)]
-    (d/transact conn final-tx)))
+                       reason-note (assoc :reason-note reason-note))))]
+    (cond-> [rev-row]
+      status-tx (into status-tx))))
 
 ;; ============================================================================
 ;; FIFO bulk allocation

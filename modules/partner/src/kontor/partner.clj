@@ -14,7 +14,8 @@
    the desired transaction-time snapshot. Junction-time validity is
    layered on top via the `:as-of` opts parameter where applicable;
    default is `now`."
-  (:require [datahike.api :as d]))
+  (:require [datahike.api :as d]
+            [kontor.validation :as validation]))
 
 ;; ============================================================================
 ;; Resolution
@@ -339,21 +340,14 @@
         (recur canonical (conj visited eid))
         eid))))
 
-(defn merge-partners!
-  "Mark `superseded-partner` as a duplicate of `canonical-partner`.
-   Both must resolve to :partner eids. Writes a :partner-merge row
-   atomically with archiving the superseded partner's status.
-
-   Required keys in opts: `:reason` (keyword, ADR-038 vocabulary).
-   Optional: `:reason-note`, `:supporting-doc`, `:merged-by-uid`,
-   `:merged-at` (default now)."
-  [conn canonical-partner superseded-partner {:keys [reason reason-note
-                                                     supporting-doc
-                                                     merged-by-uid
-                                                     merged-at]
-                                              :as _opts}]
-  (let [db (d/db conn)
-        canonical-eid (resolve-partner db canonical-partner)
+(defn merge-partners-tx-data
+  "Pure tx-data builder for `merge-partners!` (ADR-068)."
+  [db canonical-partner superseded-partner {:keys [reason reason-note
+                                                   supporting-doc
+                                                   merged-by-uid
+                                                   merged-at]
+                                            :as _opts}]
+  (let [canonical-eid (resolve-partner db canonical-partner)
         superseded-eid (resolve-partner db superseded-partner)
         _ (when-not canonical-eid
             (throw (ex-info "Canonical partner not found"
@@ -379,7 +373,23 @@
                     merged-by-uid  (assoc :partner-merge/merged-by-uid merged-by-uid))
         archive-row {:db/id superseded-eid
                      :partner/status :archived}]
-    (d/transact conn [merge-row archive-row])))
+    [merge-row archive-row]))
+
+(defn merge-partners!
+  "Mark `superseded-partner` as a duplicate of `canonical-partner`.
+   Both must resolve to :partner eids. Writes a :partner-merge row
+   atomically with archiving the superseded partner's status. Routes
+   through the gate (ADR-068).
+
+   Required keys in opts: `:reason` (keyword, ADR-038 vocabulary).
+   Optional: `:reason-note`, `:supporting-doc`, `:merged-by-uid`,
+   `:merged-at` (default now).
+
+   The pure tx-data builder is `merge-partners-tx-data`."
+  [conn canonical-partner superseded-partner opts]
+  (validation/transact-with-validation
+   conn (merge-partners-tx-data (d/db conn) canonical-partner
+                                superseded-partner opts)))
 
 ;; ============================================================================
 ;; ADR-039 — Bank accounts

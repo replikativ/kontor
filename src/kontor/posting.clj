@@ -30,6 +30,14 @@
             [kontor.money :as money]
             [kontor.valuation :as valuation]))
 
+;; `kontor.posting` is required by some kernel namespaces that
+;; `kontor.validation` also imports indirectly; we resolve the gate
+;; lazily to avoid any chance of a load-order cycle.
+(defn- transact-with-validation*
+  [conn tx-data]
+  ((requiring-resolve 'kontor.validation/transact-with-validation)
+   conn tx-data))
+
 ;; ============================================================================
 ;; Validation predicates
 ;; ============================================================================
@@ -364,33 +372,14 @@
                  (:transaction/effective-date transaction)
                  kbt/forever)))
 
-(defn post-transaction!
-  "Build + seal a balanced transaction atomically. Equivalent to:
-
-     (-> input
-         (assoc-in [:transaction :transaction/state] :posted)
-         (assoc-in [:transaction :transaction/posted-at] <now>)
-         (update :postings #(mapv (fn [p] (assoc p :posting/posted-at <now>)) %))
-         build-transaction
-         (kbt/with-vt vt-from vt-to)
-         (d/transact conn))
-
-   …with the propagation of `:posted-at` from parent to every child
-   posting (the invariant that the sealing middleware in
-   `kontor.sealing` enforces but does not stamp). Returns the tx-report.
-
-   Input shape mirrors `build-transaction`. Opts:
-     :posted-at  — sealing timestamp (default = now)
-     :vt-from    — valid-time start (default = :transaction/effective-date)
-     :vt-to      — valid-time end (default = kbt/forever)
-
-   This is the kernel-level kernel-pure way to build + seal in one
-   move. Companion modules with richer lifecycles (orders, invoices,
-   procurement) compose the status machine on top — see
-   `kontor.invoice.posting/post-to-ledger!` for the ADR-038-integrated
-   variant."
-  ([conn input] (post-transaction! conn input {}))
-  ([conn input {:keys [posted-at vt-from vt-to]}]
+(defn post-transaction-tx-data
+  "Pure tx-data builder for `post-transaction!` (ADR-068). Stamps
+   `:transaction/state :posted` + `:posted-at` (default now),
+   propagates `:posted-at` onto each posting, builds via
+   `build-transaction`, and applies `kbt/with-vt` (vt-from defaults
+   to `:transaction/effective-date`)."
+  ([input] (post-transaction-tx-data input {}))
+  ([input {:keys [posted-at vt-from vt-to]}]
    (let [pa (or posted-at (java.util.Date.))
          input' (-> input
                     (assoc-in [:transaction :transaction/state] :posted)
@@ -403,7 +392,27 @@
                                     ps))))
          tx-data (build-transaction input')
          vf (or vt-from (-> input :transaction :transaction/effective-date))]
-     (d/transact conn (kbt/with-vt tx-data vf (or vt-to kbt/forever))))))
+     (kbt/with-vt tx-data vf (or vt-to kbt/forever)))))
+
+(defn post-transaction!
+  "Build + seal a balanced transaction atomically. Routes through
+   the gate (ADR-068).
+
+   Input shape mirrors `build-transaction`. Opts:
+     :posted-at  — sealing timestamp (default = now)
+     :vt-from    — valid-time start (default = :transaction/effective-date)
+     :vt-to      — valid-time end (default = kbt/forever)
+
+   This is the kernel-level kernel-pure way to build + seal in one
+   move. Companion modules with richer lifecycles (orders, invoices,
+   procurement) compose the status machine on top — see
+   `kontor.invoice.posting/post-to-ledger!` for the ADR-038-integrated
+   variant.
+
+   The pure tx-data builder is `post-transaction-tx-data`."
+  ([conn input] (post-transaction! conn input {}))
+  ([conn input opts]
+   (transact-with-validation* conn (post-transaction-tx-data input opts))))
 
 ;; ============================================================================
 ;; Analytic-distribution expansion (ADR-022, split-line strategy)
