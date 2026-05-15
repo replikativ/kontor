@@ -62,41 +62,20 @@
             [kontor.lease.lease-provider :as lp]
             [kontor.lease.liability :as liability]
             [kontor.lease.posting :as lposting]
-            [kontor.period :as period]
+            [kontor.process :as process]
             [kontor.schedule :as schedule]
             [kontor.status-machine :as sm])
   (:import [java.math BigDecimal RoundingMode]))
 
-(defn- transact-checked!
-  "Refuse to post a GL adjustment into a soft-closed / sealed period
-   (`kontor.period`) — the same guard `run-lease!` applies to every
-   periodic payment. Returns the tx-report."
-  [conn tx-data]
-  (period/assert-not-in-locked-period! (d/db conn) tx-data)
-  (d/transact conn tx-data))
-
-(defn- assert-modifiable!
-  "Pre-flight check, run BEFORE a modification mutates the `:lease`
-   contract facts: refuse a modification dated into a soft-closed /
-   sealed period on ANY of the lease's liability-book ledgers. A
-   probe entry is built per book and checked against `kontor.period`;
-   nothing is transacted. Without this up-front gate a period-locked
-   `remeasure!` would still throw at the GL-posting site — but only
-   AFTER `record-modification!` had already updated `:lease`, leaving
-   an orphaned contract-fact change with no GL adjustment behind it."
-  [conn lease-eid date journal]
-  (let [db (d/db conn)]
-    (doseq [lb (liability/books-of db lease-eid)]
-      (let [pb (liability/pull-book db lb)
-            la (:db/id (:lease-liability/liability-account pb))
-            probe (lposting/plan-adjustment
-                   {:legs [{:account la :amount 1M}
-                           {:account la :amount -1M}]
-                    :commodity (:db/id (:lease-liability/commodity pb))
-                    :ledger (:db/id (:lease-liability/ledger pb))
-                    :journal journal :date date :posted-at date
-                    :narration "period-lock probe"})]
-        (period/assert-not-in-locked-period! db probe)))))
+;; ADR-067: each modification commits as ONE atomic, gated
+;; `kontor.process` — the contract-fact update, the per-book
+;; remeasurement + adjustment GL entry + re-anchor, and (for
+;; terminate!/purchase!) the cancel-schedules + status change all land
+;; in one tx through `transact-with-validation`. The old
+;; `assert-modifiable!` up-front probe and the `transact-checked!`
+;; period guard are gone — period (+ sealing + sum-to-zero +
+;; invariant) check runs in the gate against the real tx-data, and
+;; atomicity removes the orphan-contract-fact concern entirely.
 
 (defn- bd ^BigDecimal [x] (or x 0M))
 (defn- bd- ^BigDecimal [^BigDecimal a ^BigDecimal b] (.subtract a b))
@@ -149,19 +128,20 @@
 ;; Shared book-level adjustment
 ;; ============================================================================
 
-(defn- apply-book-adjustment!
-  "Post ONE book's modification adjustment + re-anchor it. `new-
-   liability` is the book's remeasured liability; `rou-base-change`
-   is the intended change to the ROU `:asset-depreciation` book's
-   `:depreciable-base` (clamped here so the ROU carrying amount never
-   goes below zero — the excess lands in P&L, IFRS 16.39).
+(defn- apply-book-adjustment-tx-data
+  "Pure tx-data builder for ONE book's modification adjustment +
+   re-anchor (ADR-067). Returns the concatenation of: the GL
+   adjustment entry, the liability-book re-anchor, and (when the ROU
+   base moves or term changed) the ROU dep-book re-anchor. The
+   adjustment transaction takes `:tx-tempid (str \"mod-adj\"
+   tempid-suffix)` so several books compose into one process tx-data.
 
-   The single GL entry's legs: the lease-liability account moves from
-   `old-outstanding` to `new-liability`; the ROU-asset account moves
-   by the clamped `rou-base-change`; P&L absorbs the remainder.
-   Returns the adjustment transaction's eid."
-  [conn {:keys [snapshot new-liability rou-base-change new-discount-rate
-                new-term-months gain-loss-account journal date kind note]}]
+   `:rou-base-change` is clamped here so the ROU carrying amount
+   never goes below zero — the excess lands in P&L, IFRS 16.39."
+  [db {:keys [snapshot new-liability rou-base-change new-discount-rate
+              new-term-months gain-loss-account journal date kind note
+              tempid-suffix]
+       :or {tempid-suffix ""}}]
   (let [{:keys [liability-book liability-account rou-asset-account rou-dep-book
                 rou-carrying old-outstanding commodity ledger]} snapshot
         rou-base-change* (let [floor (.negate ^BigDecimal rou-carrying)]
@@ -179,41 +159,47 @@
                       {:account rou-asset-account :amount rou-leg}]
                (not (zero? (.signum pl-leg)))
                (conj {:account gain-loss-account :amount pl-leg}))
-        ;; build-transaction places the :transaction at tempid -1.
-        tx-report (transact-checked!
-                   conn (lposting/plan-adjustment
-                         {:legs legs
-                          :commodity commodity
-                          :ledger ledger
-                          :journal journal
-                          :date date
-                          :posted-at date
-                          :narration (str "Lease " (name kind))}))
-        tx-eid (get (:tempids tx-report) -1)]
-    ;; Re-anchor the liability book + the ROU depreciation book.
-    (liability/revise-liability-book!
-     conn (cond-> {:book liability-book
-                   :new-opening-liability new-liability}
-            new-discount-rate (assoc :new-discount-rate new-discount-rate)
-            note              (assoc :note note)))
-    (when (or (not (zero? (.signum rou-base-change*))) new-term-months)
-      (asset-dep/revise-book!
-       conn (cond-> {:book rou-dep-book :additional-base rou-base-change*}
-              new-term-months (assoc :new-useful-life-months new-term-months)
-              note            (assoc :note note))))
-    tx-eid))
+        adjustment (lposting/plan-adjustment
+                    {:legs legs
+                     :commodity commodity
+                     :ledger ledger
+                     :journal journal
+                     :date date
+                     :posted-at date
+                     :tx-tempid (str "mod-adj" tempid-suffix)
+                     :narration (str "Lease " (name kind))})
+        revise-liab (liability/revise-liability-book-tx-data
+                     db (cond-> {:book liability-book
+                                 :new-opening-liability new-liability}
+                          new-discount-rate (assoc :new-discount-rate new-discount-rate)
+                          note              (assoc :note note)))
+        revise-dep  (when (or (not (zero? (.signum ^BigDecimal rou-base-change*)))
+                              new-term-months)
+                      (asset-dep/revise-book-tx-data
+                       db (cond-> {:book rou-dep-book
+                                   :additional-base rou-base-change*}
+                            new-term-months (assoc :new-useful-life-months
+                                                   new-term-months)
+                            note            (assoc :note note))))]
+    (cond-> (into (vec adjustment) revise-liab)
+      revise-dep (into revise-dep))))
 
 ;; ============================================================================
 ;; The :lease-modification event
 ;; ============================================================================
 
-(defn- record-modification!
-  "Transact the append-only `:lease-modification` event + the updated
-   `:lease` contract facts, wrapped in `kbt/with-vt` from the
-   modification date. Returns the event eid."
-  [conn lease-eid {:keys [kind date new-payment-amount new-term-months
-                          new-discount-rate scope-decrease-pct justification
-                          note tx-eids]}]
+(defn- record-modification-tx-data
+  "Pure tx-data builder for the append-only `:lease-modification`
+   event + the updated `:lease` contract facts (ADR-067). No
+   `with-vt` — the process owns valid-time. The event takes the
+   `\"lease-mod\"` tempid (callers extract its eid from the process
+   tx-report's `:tempids`). When `:tx-tempids` is given (a vec of
+   per-book adjustment tx-tempid strings), the event references them
+   directly via `:lease-modification/transaction` — no follow-up
+   d/transact needed."
+  [lease-eid {:keys [kind date new-payment-amount new-term-months
+                     new-discount-rate scope-decrease-pct justification
+                     note tx-tempids]}]
   (let [event (cond-> {:db/id "lease-mod"
                        :lease-modification/lease lease-eid
                        :lease-modification/kind kind
@@ -229,17 +215,15 @@
                 justification       (assoc :lease-modification/justification
                                            justification)
                 note                (assoc :lease-modification/note note)
-                (seq tx-eids)       (assoc :lease-modification/transaction
-                                           (vec tx-eids)))
+                (seq tx-tempids)    (assoc :lease-modification/transaction
+                                           (vec tx-tempids)))
         lease-update (cond-> {:db/id lease-eid}
                        new-payment-amount (assoc :lease/payment-amount
                                                  new-payment-amount)
                        new-term-months    (assoc :lease/term-months new-term-months)
                        new-discount-rate  (assoc :lease/discount-rate
-                                                 new-discount-rate))
-        report (d/transact conn (kbt/with-vt [event lease-update]
-                                  date kbt/forever))]
-    (get-in report [:tempids "lease-mod"])))
+                                                 new-discount-rate))]
+    [event lease-update]))
 
 ;; ============================================================================
 ;; remeasure!
@@ -300,46 +284,71 @@
         term    (or new-term-months (:lease/term-months l))
         rate    (or new-discount-rate (:lease/discount-rate l))
         n       (lease/periods-for term freq)
-        ;; Snapshot the OLD outstandings before the :lease facts move.
-        _ (assert-modifiable! conn lease-eid date journal)
         snapshot (pre-mod-snapshot db lease-eid)
-        ;; Update the :lease contract facts + record the event shell.
-        mod-eid (record-modification!
-                 conn lease-eid {:kind kind :date date
-                                 :new-payment-amount new-payment-amount
-                                 :new-term-months new-term-months
-                                 :new-discount-rate new-discount-rate
-                                 :justification justification :note note})
-        results
-        (mapv
-         (fn [{:keys [liability-book liability-schedule old-outstanding ledger]
-               :as snap}]
-           (let [ofthr (long (count (schedule/fired-sequences (d/db conn)
-                                                        liability-schedule)))
-                 remaining-n (- n ofthr)
-                 _ (when (<= remaining-n 0)
-                     (throw (ex-info "remeasure!: revised term leaves no un-fired periods"
-                                     {:type :lease/no-remaining-periods
-                                      :book liability-book})))
-                 new-liability (remaining-pv payment rate freq remaining-n)
-                 delta (bd- new-liability old-outstanding)
-                 tx-eid (apply-book-adjustment!
-                         conn {:snapshot snap
-                               :new-liability new-liability
-                               :rou-base-change delta
-                               :new-discount-rate new-discount-rate
-                               :new-term-months new-term-months
-                               :gain-loss-account gain-loss-account
-                               :journal journal :date date :kind kind :note note})]
-             {:ledger ledger :liability-book liability-book
-              :old-outstanding old-outstanding :new-liability new-liability
-              :delta delta :transaction tx-eid}))
-         snapshot)]
-    (when (seq (keep :transaction results))
-      (d/transact conn [{:db/id mod-eid
-                         :lease-modification/transaction
-                         (vec (keep :transaction results))}]))
-    {:lease lease-eid :modification mod-eid :books results}))
+        ;; Precompute the per-book new-liability + delta. Done from the
+        ;; start-snapshot (db) — the modification is one event, all books
+        ;; see the same pre-mod state.
+        book-plans
+        (mapv (fn [{:keys [liability-book liability-schedule old-outstanding]
+                    :as snap}]
+                (let [ofthr (long (count (schedule/fired-sequences
+                                          db liability-schedule)))
+                      remaining-n (- n ofthr)
+                      _ (when (<= remaining-n 0)
+                          (throw (ex-info "remeasure!: revised term leaves no un-fired periods"
+                                          {:type :lease/no-remaining-periods
+                                           :book liability-book})))
+                      new-liability (remaining-pv payment rate freq remaining-n)
+                      delta (bd- new-liability old-outstanding)]
+                  (assoc snap :new-liability new-liability :delta delta)))
+              snapshot)
+        ;; Per-book step: adjustment GL + revise-liability + revise-dep
+        book-steps
+        (vec
+         (map-indexed
+          (fn [i {:keys [new-liability delta] :as snap}]
+            (fn [sdb _ctx]
+              (apply-book-adjustment-tx-data
+               sdb {:snapshot snap
+                    :new-liability new-liability
+                    :rou-base-change delta
+                    :new-discount-rate new-discount-rate
+                    :new-term-months new-term-months
+                    :gain-loss-account gain-loss-account
+                    :journal journal :date date :kind kind :note note
+                    :tempid-suffix (str "-" i)})))
+          book-plans))
+        ;; Final step: the :lease-modification event + the :lease
+        ;; contract-fact update; references the per-book adjustment
+        ;; tx-tempids directly (no follow-up :transaction link tx).
+        mod-step
+        (fn [_sdb _ctx]
+          (record-modification-tx-data
+           lease-eid {:kind kind :date date
+                      :new-payment-amount new-payment-amount
+                      :new-term-months new-term-months
+                      :new-discount-rate new-discount-rate
+                      :justification justification :note note
+                      :tx-tempids (mapv #(str "mod-adj-" %)
+                                        (range (count book-plans)))}))
+        ;; mod-step FIRST so the per-book revise-liability/revise-book
+        ;; steps see the updated :lease contract facts in the
+        ;; speculative db (they derive the period count from
+        ;; :lease/term-months).
+        report (process/run-process
+                conn {:steps (into [mod-step] book-steps)
+                      :vt-from date :vt-to kbt/forever})
+        tempids (:tempids report)]
+    {:lease lease-eid
+     :modification (get tempids "lease-mod")
+     :books (mapv (fn [i {:keys [ledger liability-book old-outstanding
+                                 new-liability delta]}]
+                    {:ledger ledger :liability-book liability-book
+                     :old-outstanding old-outstanding
+                     :new-liability new-liability
+                     :delta delta
+                     :transaction (get tempids (str "mod-adj-" i))})
+                  (range) book-plans)}))
 
 ;; ============================================================================
 ;; partial-terminate!
@@ -390,56 +399,75 @@
         term (or new-term-months (:lease/term-months l))
         rate (or new-discount-rate (:lease/discount-rate l))
         n    (lease/periods-for term freq)
-        _ (assert-modifiable! conn lease-eid date journal)
         snapshot (pre-mod-snapshot db lease-eid)
-        mod-eid (record-modification!
-                 conn lease-eid {:kind :partial-termination :date date
-                                 :new-payment-amount new-payment-amount
-                                 :new-term-months new-term-months
-                                 :new-discount-rate new-discount-rate
-                                 :scope-decrease-pct scope-decrease-pct
-                                 :justification justification :note note})
-        results
-        (mapv
-         (fn [{:keys [liability-book liability-schedule old-outstanding
-                      rou-carrying ledger] :as snap}]
-           (let [ofthr (long (count (schedule/fired-sequences (d/db conn)
-                                                        liability-schedule)))
-                 remaining-n (- n ofthr)
-                 _ (when (<= remaining-n 0)
-                     (throw (ex-info "partial-terminate!: revised term leaves no un-fired periods"
-                                     {:type :lease/no-remaining-periods
-                                      :book liability-book})))
-                 ;; Step 1 — proportional reduction.
-                 liab-reduction (round2 (.multiply ^BigDecimal old-outstanding
-                                                   ^BigDecimal scope-decrease-pct))
-                 rou-reduction  (round2 (.multiply ^BigDecimal rou-carrying
-                                                   ^BigDecimal scope-decrease-pct))
-                 ;; Step 2 — remeasure what remains.
-                 new-liability (remaining-pv new-payment-amount rate freq remaining-n)
-                 remeasure-delta (bd- new-liability
-                                      (bd- old-outstanding liab-reduction))
-                 ;; The total ROU base change = the proportional
-                 ;; write-off + the remeasurement adjustment.
-                 rou-base-change (bd+ (.negate rou-reduction) remeasure-delta)
-                 tx-eid (apply-book-adjustment!
-                         conn {:snapshot snap
-                               :new-liability new-liability
-                               :rou-base-change rou-base-change
-                               :new-discount-rate new-discount-rate
-                               :new-term-months new-term-months
-                               :gain-loss-account gain-loss-account
-                               :journal journal :date date
-                               :kind :partial-termination :note note})]
-             {:ledger ledger :liability-book liability-book
-              :old-outstanding old-outstanding :new-liability new-liability
-              :delta (bd- new-liability old-outstanding) :transaction tx-eid}))
-         snapshot)]
-    (when (seq (keep :transaction results))
-      (d/transact conn [{:db/id mod-eid
-                         :lease-modification/transaction
-                         (vec (keep :transaction results))}]))
-    {:lease lease-eid :modification mod-eid :books results}))
+        ;; Precompute per-book new-liability + total ROU base change.
+        book-plans
+        (mapv (fn [{:keys [liability-book liability-schedule old-outstanding
+                           rou-carrying] :as snap}]
+                (let [ofthr (long (count (schedule/fired-sequences
+                                          db liability-schedule)))
+                      remaining-n (- n ofthr)
+                      _ (when (<= remaining-n 0)
+                          (throw (ex-info "partial-terminate!: revised term leaves no un-fired periods"
+                                          {:type :lease/no-remaining-periods
+                                           :book liability-book})))
+                      ;; Step 1 — proportional reduction.
+                      liab-reduction (round2 (.multiply ^BigDecimal old-outstanding
+                                                        ^BigDecimal scope-decrease-pct))
+                      rou-reduction  (round2 (.multiply ^BigDecimal rou-carrying
+                                                        ^BigDecimal scope-decrease-pct))
+                      ;; Step 2 — remeasure what remains.
+                      new-liability (remaining-pv new-payment-amount rate freq
+                                                  remaining-n)
+                      remeasure-delta (bd- new-liability
+                                           (bd- old-outstanding liab-reduction))
+                      ;; The total ROU base change = the proportional
+                      ;; write-off + the remeasurement adjustment.
+                      rou-base-change (bd+ (.negate rou-reduction) remeasure-delta)]
+                  (assoc snap :new-liability new-liability
+                              :delta (bd- new-liability old-outstanding)
+                              :rou-base-change rou-base-change)))
+              snapshot)
+        book-steps
+        (vec
+         (map-indexed
+          (fn [i {:keys [new-liability rou-base-change] :as snap}]
+            (fn [sdb _ctx]
+              (apply-book-adjustment-tx-data
+               sdb {:snapshot snap
+                    :new-liability new-liability
+                    :rou-base-change rou-base-change
+                    :new-discount-rate new-discount-rate
+                    :new-term-months new-term-months
+                    :gain-loss-account gain-loss-account
+                    :journal journal :date date
+                    :kind :partial-termination :note note
+                    :tempid-suffix (str "-" i)})))
+          book-plans))
+        mod-step
+        (fn [_sdb _ctx]
+          (record-modification-tx-data
+           lease-eid {:kind :partial-termination :date date
+                      :new-payment-amount new-payment-amount
+                      :new-term-months new-term-months
+                      :new-discount-rate new-discount-rate
+                      :scope-decrease-pct scope-decrease-pct
+                      :justification justification :note note
+                      :tx-tempids (mapv #(str "mod-adj-" %)
+                                        (range (count book-plans)))}))
+        report (process/run-process
+                conn {:steps (into [mod-step] book-steps)
+                      :vt-from date :vt-to kbt/forever})
+        tempids (:tempids report)]
+    {:lease lease-eid
+     :modification (get tempids "lease-mod")
+     :books (mapv (fn [i {:keys [ledger liability-book old-outstanding
+                                 new-liability delta]}]
+                    {:ledger ledger :liability-book liability-book
+                     :old-outstanding old-outstanding
+                     :new-liability new-liability :delta delta
+                     :transaction (get tempids (str "mod-adj-" i))})
+                  (range) book-plans)}))
 
 ;; ============================================================================
 ;; terminate!
@@ -486,66 +514,84 @@
             (throw (ex-info "terminate!: lease is not :active"
                             {:type :lease/not-active :lease lease-eid})))
         penalty* (bd penalty)
-        _ (assert-modifiable! conn lease-eid date journal)
         snapshot (pre-mod-snapshot db lease-eid)
-        mod-eid (record-modification!
-                 conn lease-eid {:kind :termination :date date
-                                 :justification justification :note note})
-        results
-        (mapv
-         (fn [{:keys [liability-book liability-account rou-asset-account
-                      rou-dep-book liability-schedule rou-dep-schedule
-                      old-outstanding rou-carrying commodity ledger]}]
-           (let [;; Dr liability (remove it) / Cr ROU (remove it)
-                 ;; [/ Cr cash (penalty)] ± P&L (the balancing gain/loss).
-                 legs (cond-> [{:account liability-account :amount old-outstanding}
-                               {:account rou-asset-account
-                                :amount (.negate ^BigDecimal rou-carrying)}]
-                        (pos? (.signum penalty*))
-                        (conj {:account cash-account
-                               :amount (.negate penalty*)}))
-                 balancing (.negate (reduce (fn [^BigDecimal a leg]
-                                              (bd+ a (:amount leg)))
-                                            0M legs))
-                 legs* (cond-> legs
-                         (not (zero? (.signum balancing)))
-                         (conj {:account gain-loss-account :amount balancing}))
-                 tx-report (transact-checked!
-                            conn (lposting/plan-adjustment
-                                  {:legs legs* :commodity commodity :ledger ledger
-                                   :journal journal :date date :posted-at date
-                                   :narration "Lease termination"}))]
-             ;; Cancel both schedules; zero the liability book; write
-             ;; the ROU depreciable base down to its accumulated
-             ;; amount (carrying → 0).
-             (schedule/mark-cancelled! conn liability-schedule)
-             (schedule/mark-cancelled! conn rou-dep-schedule)
-             (let [rou-base (:asset-depreciation/depreciable-base
-                             (d/pull (d/db conn) [:asset-depreciation/depreciable-base]
-                                     rou-dep-book))]
-               (d/transact conn [{:db/id liability-book
-                                  :lease-liability/opening-liability 0M}
-                                 {:db/id rou-dep-book
-                                  :asset-depreciation/depreciable-base
-                                  (bd- rou-base rou-carrying)}]))
-             {:ledger ledger :liability-book liability-book
-              :derecognised-liability old-outstanding
-              :derecognised-rou rou-carrying
-              :transaction (get (:tempids tx-report) -1)}))
-         snapshot)
-        ;; Drive :active → :terminated (governance: doc + SoD).
-        db' (d/db conn)
-        status-tx (sm/record-status-change-tx-data
-                   db' {:entity lease-eid :entity-type :lease
-                        :facet :lease/status :from from :to :terminated
-                        :changed-at date :changed-by-uid changed-by-uid
-                        :supporting-doc justification :reason :lease-terminated})]
-    (d/transact conn (kbt/with-vt status-tx date kbt/forever))
-    (when (seq (keep :transaction results))
-      (d/transact conn [{:db/id mod-eid
-                         :lease-modification/transaction
-                         (vec (keep :transaction results))}]))
-    {:lease lease-eid :modification mod-eid :books results}))
+        ;; Pre-pull each book's ROU :depreciable-base (needed to write
+        ;; it down by rou-carrying → carrying-after = accumulated).
+        book-plans
+        (mapv (fn [{:keys [rou-dep-book] :as snap}]
+                (let [rou-base (:asset-depreciation/depreciable-base
+                                (d/pull db [:asset-depreciation/depreciable-base]
+                                        rou-dep-book))]
+                  (assoc snap :rou-base rou-base)))
+              snapshot)
+        book-steps
+        (vec
+         (map-indexed
+          (fn [i {:keys [liability-book liability-account rou-asset-account
+                         rou-dep-book liability-schedule rou-dep-schedule
+                         old-outstanding rou-carrying rou-base
+                         commodity ledger]}]
+            (fn [sdb _ctx]
+              (let [;; Dr liability (remove it) / Cr ROU (remove it)
+                    ;; [/ Cr cash (penalty)] ± P&L (the balancing).
+                    legs (cond-> [{:account liability-account
+                                   :amount old-outstanding}
+                                  {:account rou-asset-account
+                                   :amount (.negate ^BigDecimal rou-carrying)}]
+                           (pos? (.signum penalty*))
+                           (conj {:account cash-account
+                                  :amount (.negate penalty*)}))
+                    balancing (.negate (reduce (fn [^BigDecimal a leg]
+                                                 (bd+ a (:amount leg)))
+                                               0M legs))
+                    legs* (cond-> legs
+                            (not (zero? (.signum balancing)))
+                            (conj {:account gain-loss-account
+                                   :amount balancing}))
+                    adjustment (lposting/plan-adjustment
+                                {:legs legs* :commodity commodity
+                                 :ledger ledger :journal journal :date date
+                                 :posted-at date
+                                 :tx-tempid (str "mod-adj-" i)
+                                 :narration "Lease termination"})]
+                (-> (vec adjustment)
+                    (conj {:db/id liability-book
+                           :lease-liability/opening-liability 0M}
+                          {:db/id rou-dep-book
+                           :asset-depreciation/depreciable-base
+                           (bd- rou-base rou-carrying)})
+                    (into (schedule/set-state-tx-data
+                           sdb liability-schedule :cancelled))
+                    (into (schedule/set-state-tx-data
+                           sdb rou-dep-schedule :cancelled))))))
+          book-plans))
+        mod-step
+        (fn [_sdb _ctx]
+          (record-modification-tx-data
+           lease-eid {:kind :termination :date date
+                      :justification justification :note note
+                      :tx-tempids (mapv #(str "mod-adj-" %)
+                                        (range (count book-plans)))}))
+        status-step
+        (fn [sdb _ctx]
+          (sm/record-status-change-tx-data
+           sdb {:entity lease-eid :entity-type :lease
+                :facet :lease/status :from from :to :terminated
+                :changed-at date :changed-by-uid changed-by-uid
+                :supporting-doc justification :reason :lease-terminated}))
+        report (process/run-process
+                conn {:steps (-> [mod-step] (into book-steps) (conj status-step))
+                      :vt-from date :vt-to kbt/forever})
+        tempids (:tempids report)]
+    {:lease lease-eid
+     :modification (get tempids "lease-mod")
+     :books (mapv (fn [i {:keys [ledger liability-book old-outstanding
+                                 rou-carrying]}]
+                    {:ledger ledger :liability-book liability-book
+                     :derecognised-liability old-outstanding
+                     :derecognised-rou rou-carrying
+                     :transaction (get tempids (str "mod-adj-" i))})
+                  (range) book-plans)}))
 
 ;; ============================================================================
 ;; purchase!
@@ -588,48 +634,61 @@
         price (or purchase-price (:lease/purchase-option-price l))
         _ (when (nil? price)
             (throw (ex-info "purchase!: :purchase-price required (the lease has no :purchase-option-price)" {})))
-        _ (assert-modifiable! conn lease-eid date journal)
         snapshot (pre-mod-snapshot db lease-eid)
-        mod-eid (record-modification!
-                 conn lease-eid {:kind :purchase :date date
-                                 :justification justification :note note})
-        results
-        (mapv
-         (fn [{:keys [liability-book liability-account liability-schedule
-                      rou-dep-schedule old-outstanding commodity ledger]}]
-           (let [;; Dr liability (settle it) / Cr cash (the price) ± P&L.
-                 legs (cond-> [{:account liability-account :amount old-outstanding}
-                               {:account cash-account
-                                :amount (.negate ^BigDecimal price)}])
-                 balancing (.negate (reduce (fn [^BigDecimal a leg]
-                                              (bd+ a (:amount leg)))
-                                            0M legs))
-                 legs* (cond-> legs
-                         (not (zero? (.signum balancing)))
-                         (conj {:account gain-loss-account :amount balancing}))
-                 tx-report (transact-checked!
-                            conn (lposting/plan-adjustment
-                                  {:legs legs* :commodity commodity :ledger ledger
-                                   :journal journal :date date :posted-at date
-                                   :narration "Lease purchase-option exercise"}))]
-             (schedule/mark-cancelled! conn liability-schedule)
-             (schedule/mark-cancelled! conn rou-dep-schedule)
-             (d/transact conn [{:db/id liability-book
-                                :lease-liability/opening-liability 0M}])
-             {:ledger ledger :liability-book liability-book
-              :settled-liability old-outstanding
-              :transaction (get (:tempids tx-report) -1)}))
-         snapshot)
-        db' (d/db conn)
-        status-tx (sm/record-status-change-tx-data
-                   db' (cond-> {:entity lease-eid :entity-type :lease
-                                :facet :lease/status :from from :to :purchased
-                                :changed-at date :changed-by-uid changed-by-uid
-                                :reason :lease-purchased}
-                         justification (assoc :supporting-doc justification)))]
-    (d/transact conn (kbt/with-vt status-tx date kbt/forever))
-    (when (seq (keep :transaction results))
-      (d/transact conn [{:db/id mod-eid
-                         :lease-modification/transaction
-                         (vec (keep :transaction results))}]))
-    {:lease lease-eid :modification mod-eid :books results}))
+        book-steps
+        (vec
+         (map-indexed
+          (fn [i {:keys [liability-book liability-account liability-schedule
+                         rou-dep-schedule old-outstanding commodity ledger]}]
+            (fn [sdb _ctx]
+              (let [;; Dr liability (settle it) / Cr cash (price) ± P&L.
+                    legs [{:account liability-account :amount old-outstanding}
+                          {:account cash-account
+                           :amount (.negate ^BigDecimal price)}]
+                    balancing (.negate (reduce (fn [^BigDecimal a leg]
+                                                 (bd+ a (:amount leg)))
+                                               0M legs))
+                    legs* (cond-> legs
+                            (not (zero? (.signum balancing)))
+                            (conj {:account gain-loss-account
+                                   :amount balancing}))
+                    adjustment (lposting/plan-adjustment
+                                {:legs legs* :commodity commodity
+                                 :ledger ledger :journal journal :date date
+                                 :posted-at date
+                                 :tx-tempid (str "mod-adj-" i)
+                                 :narration "Lease purchase-option exercise"})]
+                (-> (vec adjustment)
+                    (conj {:db/id liability-book
+                           :lease-liability/opening-liability 0M})
+                    (into (schedule/set-state-tx-data
+                           sdb liability-schedule :cancelled))
+                    (into (schedule/set-state-tx-data
+                           sdb rou-dep-schedule :cancelled))))))
+          snapshot))
+        mod-step
+        (fn [_sdb _ctx]
+          (record-modification-tx-data
+           lease-eid {:kind :purchase :date date
+                      :justification justification :note note
+                      :tx-tempids (mapv #(str "mod-adj-" %)
+                                        (range (count snapshot)))}))
+        status-step
+        (fn [sdb _ctx]
+          (sm/record-status-change-tx-data
+           sdb (cond-> {:entity lease-eid :entity-type :lease
+                        :facet :lease/status :from from :to :purchased
+                        :changed-at date :changed-by-uid changed-by-uid
+                        :reason :lease-purchased}
+                 justification (assoc :supporting-doc justification))))
+        report (process/run-process
+                conn {:steps (-> [mod-step] (into book-steps) (conj status-step))
+                      :vt-from date :vt-to kbt/forever})
+        tempids (:tempids report)]
+    {:lease lease-eid
+     :modification (get tempids "lease-mod")
+     :books (mapv (fn [i {:keys [ledger liability-book old-outstanding]}]
+                    {:ledger ledger :liability-book liability-book
+                     :settled-liability old-outstanding
+                     :transaction (get tempids (str "mod-adj-" i))})
+                  (range) snapshot)}))
