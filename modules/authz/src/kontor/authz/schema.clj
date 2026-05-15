@@ -251,3 +251,172 @@
    `kontor.core/install-schema!`."
   [conn]
   (d/transact conn all))
+
+;; ============================================================================
+;; Schema definition write/read — the consumer-facing surface (#127)
+;; ============================================================================
+
+(defn- relation-map?
+  "True iff `m` is a Relation definition entity-map (produced by
+   `kontor.authz.base/Relation`)."
+  [m]
+  (and (map? m)
+       (contains? m :authz.relation/resource-type)
+       (contains? m :authz.relation/relation-name)
+       (contains? m :authz.relation/subject-type)))
+
+(defn- permission-map?
+  [m]
+  (and (map? m)
+       (contains? m :authz.permission/resource-type)
+       (contains? m :authz.permission/permission-name)
+       (contains? m :authz.permission/source-relation-name)
+       (contains? m :authz.permission/target-type)
+       (contains? m :authz.permission/target-name)))
+
+(defn- index-relations
+  "Build a lookup map keyed by [resource-type relation-name] → the set
+   of subject-types declared for that pair. Used by the validation
+   pass to resolve `:relation` and `:arrow` references."
+  [defs]
+  (reduce (fn [acc d]
+            (update acc
+                    [(:authz.relation/resource-type d)
+                     (:authz.relation/relation-name d)]
+                    (fnil conj #{})
+                    (:authz.relation/subject-type d)))
+          {} (filter relation-map? defs)))
+
+(defn- index-permissions
+  "Build a lookup map keyed by [resource-type permission-name] →
+   the permission map (the first one wins when several use the same
+   key, mirroring the upsert-by-tuple-identity semantics)."
+  [defs]
+  (reduce (fn [acc d]
+            (assoc acc
+                   [(:authz.permission/resource-type d)
+                    (:authz.permission/permission-name d)]
+                   d))
+          {} (filter permission-map? defs)))
+
+(defn- validate-schema
+  "Structural validation of a vector of Relation + Permission defs.
+   Throws `:authz/schema-invalid` ex-info on:
+
+   - a Permission whose `:source-relation-name` (the `:arrow`) is
+     not `:self` and is not a defined Relation on the same
+     resource-type;
+   - a Permission whose `{:relation r}` references an undefined
+     Relation on the target type;
+   - a Permission whose `{:permission p}` references an undefined
+     Permission on the target type.
+
+   Cycle detection is NOT done here — that would require a graph
+   walk and is documented as a known limitation (ADR-066 §note 43).
+   Cyclic schemas are caught at evaluation time by the runtime
+   `:visited` set in `can?` / `traverse-permission-path-*` (review-
+   after fix in commit `b265200`)."
+  [defs]
+  (let [rels (index-relations defs)
+        perms (index-permissions defs)
+        errors
+        (vec
+         (mapcat
+          (fn [p]
+            (let [rt (:authz.permission/resource-type p)
+                  arrow (:authz.permission/source-relation-name p)
+                  tt (:authz.permission/target-type p)
+                  tn (:authz.permission/target-name p)
+                  errs (transient [])
+                  ;; The arrow itself must resolve (unless self).
+                  _ (when (and (not= arrow :self)
+                               (not (contains? rels [rt arrow])))
+                      (conj! errs {:permission p :error :undefined-arrow
+                                   :arrow [rt arrow]}))
+                  ;; Find the target-type the arrow leads to (else self).
+                  target-type
+                  (if (= arrow :self)
+                    rt
+                    (first (get rels [rt arrow] #{})))
+                  ;; The target itself must resolve.
+                  _ (cond
+                      (nil? target-type)
+                      nil  ; already flagged as :undefined-arrow above
+                      (= tt :relation)
+                      (when-not (contains? rels [target-type tn])
+                        (conj! errs {:permission p :error :undefined-relation
+                                     :ref [target-type tn]}))
+                      (= tt :permission)
+                      (when-not (contains? perms [target-type tn])
+                        (conj! errs {:permission p :error :undefined-permission
+                                     :ref [target-type tn]})))]
+              (persistent! errs)))
+          (filter permission-map? defs)))]
+    (when (seq errors)
+      (throw (ex-info "authz schema validation failed — see :errors"
+                      {:type :authz/schema-invalid
+                       :errors errors})))))
+
+(defn write-schema-tx-data
+  "Pure tx-data builder (ADR-068) for installing a vector of
+   `Relation` + `Permission` entity maps (built via
+   `kontor.authz.base/Relation` and `Permission`). Validates the
+   schema structurally first — see `validate-schema` — and throws
+   on any unresolvable reference before returning tx-data.
+
+   Use as a `kontor.process` step on a conn that has the authz
+   schema installed; `write-schema!` is the standalone wrapper."
+  [_db schema-defs]
+  (when-not (and (sequential? schema-defs) (every? map? schema-defs))
+    (throw (ex-info "write-schema-tx-data: schema-defs must be a sequence of Relation / Permission entity maps"
+                    {:type :authz/bad-input :got schema-defs})))
+  (validate-schema schema-defs)
+  (vec schema-defs))
+
+(defn write-schema!
+  "Install a vector of `Relation` + `Permission` entity maps. The
+   tuple `:db.unique/identity` on `:authz.relation/identity` and
+   `:authz.permission/identity` makes the write idempotent — re-
+   declaring an identical Relation / Permission upserts onto the
+   same entity. Validates structurally first (`validate-schema`).
+
+   Raw `d/transact` (not gated) so authz can run on its own minimal
+   datahike conn without the kernel schema present, mirroring the
+   `kontor.authz.client/do-write-relationships!` carve-out
+   documented in ADR-068. Composers using a kernel+authz conn can
+   call `write-schema-tx-data` inside a `kontor.process` step
+   instead."
+  [conn schema-defs]
+  (d/transact conn (write-schema-tx-data (d/db conn) schema-defs)))
+
+(defn read-schema
+  "Read the installed schema back as a `{:relations [Relation …]
+   :permissions [Permission …]}` map. The entity maps round-trip
+   through `write-schema!` modulo `:db/id`s. Useful for diffing,
+   exporting, or driving a schema editor."
+  [db]
+  (let [rels (->> (d/q '[:find ?rt ?rn ?st
+                         :where
+                         [?e :authz.relation/resource-type ?rt]
+                         [?e :authz.relation/relation-name ?rn]
+                         [?e :authz.relation/subject-type ?st]]
+                       db)
+                  (mapv (fn [[rt rn st]]
+                          {:authz.relation/resource-type rt
+                           :authz.relation/relation-name rn
+                           :authz.relation/subject-type st})))
+        perms (->> (d/q '[:find ?rt ?pn ?src ?tt ?tn
+                          :where
+                          [?e :authz.permission/resource-type ?rt]
+                          [?e :authz.permission/permission-name ?pn]
+                          [?e :authz.permission/source-relation-name ?src]
+                          [?e :authz.permission/target-type ?tt]
+                          [?e :authz.permission/target-name ?tn]]
+                        db)
+                   (mapv (fn [[rt pn src tt tn]]
+                           {:authz.permission/resource-type rt
+                            :authz.permission/permission-name pn
+                            :authz.permission/source-relation-name src
+                            :authz.permission/target-type tt
+                            :authz.permission/target-name tn})))]
+    {:relations rels :permissions perms}))

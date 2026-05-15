@@ -355,14 +355,17 @@ Recipe for a typical kernel or companion transactor:
 Three places where the "every `!` routes through the gate" rule has
 an exception, each for a structural reason:
 
-1. **`kontor.authz.client/do-write-relationships!`** — the authz
-   module is designed to run on its OWN minimal datahike conn
-   without the kernel schema. Kernel-gate routing crashes on
-   missing kernel attrs. To compose authz with kernel writes, use
+1. **`kontor.authz.client/do-write-relationships!` and
+   `kontor.authz.schema/write-schema!`** — the authz module is
+   designed to run on its OWN minimal datahike conn without the
+   kernel schema. Kernel-gate routing crashes on missing kernel
+   attrs. To compose authz writes with kernel writes, use
    `kontor.authz.client/write-relationships-tx-data` (or
-   `grant-tx-data` / `revoke-tx-data`) inside a `kontor.process`
-   step on a conn with BOTH schemas installed; the consumer's
-   process gates the combined tx-data.
+   `grant-tx-data` / `revoke-tx-data`) for relationships, and
+   `kontor.authz.schema/write-schema-tx-data` for permission-schema
+   definitions, inside a `kontor.process` step on a conn with BOTH
+   schemas installed; the consumer's process gates the combined
+   tx-data.
 
 2. **`kontor.period/close!`'s `:period/lock-tx` denorm** — records
    the gate's own tx-id as an audit denorm. `:db/current-tx` does

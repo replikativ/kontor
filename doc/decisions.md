@@ -7105,6 +7105,44 @@ the SpiceDB-string parser.
 
 Date: 2026-05-14.
 
+**Consumer-readiness followup landed (2026-05-15).** The non-string
+`write-schema!` arity + a real `read-schema` are now wired into the
+`AuthzClient` (replacing the two `ADR-066-deferred` `ex-info`
+throws). Shape:
+
+- `kontor.authz.schema/write-schema-tx-data db schema-defs` — pure
+  builder (ADR-068) returning a tx-data vector. Takes a sequence of
+  `Relation` + `Permission` entity maps (the existing
+  `kontor.authz.base/Relation` and `Permission` defns produce them).
+  Validates structurally before returning; **throws**
+  `:authz/schema-invalid` on a Permission whose `:arrow` is not a
+  defined Relation, or whose `{:relation r}`/`{:permission p}`
+  target does not resolve on the target type.
+- `kontor.authz.schema/write-schema! conn schema-defs` — standalone
+  wrapper using raw `d/transact`. The carve-out from ADR-068
+  applies: authz commonly runs on a minimal datahike conn without
+  the kernel schema, so the wrapper does not route through
+  `kontor.validation/transact-with-validation`. Composers on a
+  kernel+authz conn drop `write-schema-tx-data` into a
+  `kontor.process` step instead.
+- `kontor.authz.schema/read-schema db` — reads `:authz.*` datoms
+  back as `{:relations [Relation …] :permissions [Permission …]}`.
+  Round-trips through `write-schema!` modulo `:db/id`s; idempotent
+  on re-write (tuple `:db.unique/identity`).
+- `kontor.authz.client/AuthzClient.write-schema!` and `read-schema`
+  delegate to the two functions above. Tests in
+  `modules/authz/test/kontor/authz/consumer_readiness_test.clj`
+  (7 tests, 21 assertions).
+
+**Still deferred** (not blocking consumer adoption): cycle detection
+on a Permission graph (the runtime `:visited` set in `can?` /
+`traverse-permission-path-*` already catches cyclic schemas at
+evaluation time, just not at write-time); the SpiceDB-schema-string
+parser (`kontor.authz.spice-parser`); an end-to-end integration
+test wiring authz into a real kontor `:invoice` flow (covered
+structurally by the cross-module composition test in
+`test/kontor/composition_test.clj`).
+
 ## ADR-067 — `kontor.process`: multi-step transactional processes as pure step-lists
 
 **Decision.** Ship `src/kontor/process.clj` — a kernel facility that

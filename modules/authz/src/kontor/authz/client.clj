@@ -32,6 +32,7 @@
                      ->RelationshipUpdate]]
             [kontor.authz.indexed :as indexed]
             [kontor.authz.relationships :as rels]
+            [kontor.authz.schema :as schema]
             [kontor.authz.util :refer [entid]]))
 
 ;; ============================================================================
@@ -216,9 +217,14 @@
     (do-can? (d/db conn) opts subject permission resource))
 
   (read-schema [_]
-    (throw (ex-info "read-schema not implemented (ADR-066-deferred)" {})))
-  (write-schema! [_ _schema]
-    (throw (ex-info "write-schema! not implemented (ADR-066-deferred — wants the spice-parser)" {})))
+    (schema/read-schema (d/db conn)))
+  (write-schema! [_ schema-defs]
+    ;; Authz runs on its own minimal datahike db (no kernel schema),
+    ;; so the schema write goes through raw `d/transact` like the
+    ;; relationship writes — the carve-out documented in ADR-068.
+    ;; Composers on a kernel+authz conn use `schema/write-schema-tx-data`
+    ;; inside a `kontor.process` step to route through the gate.
+    (schema/write-schema! conn schema-defs))
 
   (read-relationships [_ filters]
     (do-read-relationships (d/db conn) opts filters))

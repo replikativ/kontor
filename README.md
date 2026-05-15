@@ -231,9 +231,13 @@ audit-doc in one transaction" win) is structurally enforced.
 
 `bb test`: 939 tests / 3423 assertions / 0 failures.
 
-It is *not* yet 1.0 — the lease and authz follow-up tasks (#123,
-#124, #127) and a small datahike contribution (closing the
-`:period/lock-tx` self-ref carve-out, task #75) remain.
+It is *not* yet 1.0 — two lease follow-up tasks (#123, #124) and a
+small datahike contribution (closing the `:period/lock-tx` self-ref
+carve-out, task #75) remain. The authz consumer-readiness gap (#127,
+the two `ADR-066-deferred` `AuthzClient` methods) was closed on
+2026-05-15 — `write-schema!` / `read-schema` now route through
+`kontor.authz.schema/{write-schema-tx-data,read-schema}` with
+structural validation; the SpiceDB-string parser stays deferred.
 
 ## Contributing
 
