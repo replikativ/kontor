@@ -331,7 +331,7 @@
   (let [tx-data (posting/build-transaction (balanced-sample))]
     (is (vector? tx-data))
     ;; tx-data is [txn p1 p2 tx-meta] after kbt/with-vt appends the
-    ;; "datomic.tx" map carrying :tx/valid-from.
+    ;; "datomic.tx" map carrying :db.valid/from.
     (is (= 4 (count tx-data)))
     (let [[txn p1 p2 tx-meta] tx-data]
       (is (= -1 (:db/id txn)))
@@ -340,7 +340,7 @@
       (is (= -1 (:posting/transaction p2)))
       (is (= :product (:posting/display-type p1))) ;; defaulted
       (is (= "datomic.tx" (:db/id tx-meta)))
-      (is (= some-date (:tx/valid-from tx-meta)))))) ;; from :transaction/effective-date
+      (is (= some-date (:db.valid/from tx-meta)))))) ;; from :transaction/effective-date
 
 (deftest build-transaction-throws-on-unbalanced
   (is (thrown-with-msg?
@@ -430,16 +430,18 @@
         db-after (d/db conn)
         tx-eid (:db/id (d/entity db-after [:transaction/external-id "INV-2026-0002"]))
         ;; ADR-048: valid-from lives on the writing tx, not per-posting.
-        ;; Both postings derive their vf from the same :tx/valid-from
-        ;; via kontor.bitemporal's posting-vf helper.
+        ;; Both postings derive their vf from the same :db.valid/from
+        ;; (upstream datahike).
         posting-rows (d/q '[:find ?p ?vf
-                            :in $ % ?tx
+                            :in $ ?tx
                             :where
                             [?p :posting/transaction ?tx]
-                            (posting-vf ?p ?vf)]
-                          db-after kontor.bitemporal/query-rules tx-eid)]
+                            [?p :posting/transaction _ ?ptx]
+                            [?ptx :db/txInstant ?ti]
+                            [(get-else $ ?ptx :db.valid/from ?ti) ?vf]]
+                          db-after tx-eid)]
     (is (= 2 (count posting-rows))
-        "Both postings resolve a valid-from via :tx/valid-from.")
+        "Both postings resolve a valid-from via :db.valid/from.")
     (is (every? #(= some-date (second %)) posting-rows)
         "valid-from must default to the transaction's effective-date.")))
 

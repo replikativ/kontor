@@ -109,11 +109,13 @@
          tx-snap     (if as-of-tx (d/as-of db as-of-tx) db)
          rows
          (->> (d/q '[:find ?p ?vf
-                     :in $ % ?account
+                     :in $ ?account
                      :where
                      [?p :posting/account ?account]
-                     (posting-vf ?p ?vf)]
-                   tx-snap kbt/query-rules account-eid)
+                     [?p :posting/transaction _ ?tx]
+                     [?tx :db/txInstant ?ti]
+                     [(get-else $ ?tx :db.valid/from ?ti) ?vf]]
+                   tx-snap account-eid)
               (mapv (fn [[p vf]]
                       (let [pulled (d/pull tx-snap
                                            [:db/id

@@ -136,11 +136,11 @@
 (defn- dep-tx-data
   "Build a minimal depreciation journal entry. Tempid -1 is the
    :transaction; `:schedule-occurrence/transaction` will point at it.
-   Valid-time anchored on the tx via :tx/valid-from = date."
+   Valid-time anchored on the tx via :db.valid/from = date."
   [{:keys [dep-expense accum-dep commodity journal]} amount date]
   [{:db/id "datomic.tx"
-    :tx/valid-from date
-    :tx/valid-to #inst "9999-12-31T23:59:59.999-00:00"}
+    :db.valid/from date
+    :db.valid/to #inst "9999-12-31T23:59:59.999-00:00"}
    {:db/id -1
     :transaction/journal journal
     :transaction/effective-date date

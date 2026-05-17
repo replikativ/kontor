@@ -30,8 +30,9 @@
      preservation order PDF, the release order) and a non-empty
      `:reason-note`; release additionally requires `:no-self-
      approval`. Policies are installed by `install-seeds!`.
-   - **kontor.bitemporal (ADR-048):** the hold itself is bitemporal.
-     `(kbt/value-at db hold-eid :legal-hold/scope-query as-of)`
+   - **Bitemporal (ADR-048):** the hold itself is bitemporal via
+     upstream `:db.valid/from`/`:db.valid/to` on its writing tx.
+     `(:legal-hold/scope-query (d/pull (d/valid-at db as-of) [...] hold-eid))`
      answers 'what was the hold's scope on the subpoena date'.
 
    ## Performance
@@ -509,8 +510,8 @@
         opts (assoc opts :placed-at placed-at)]
     (transact-with-validation
      conn (kbt/with-vt (place-tx-data (d/db conn) opts)
-                       (or vt-from placed-at)
-                       (or vt-to kbt/forever)))))
+            (or vt-from placed-at)
+            (or vt-to kbt/forever)))))
 
 (defn release-tx-data
   "Pure tx-data builder for `release!` (ADR-068). Use as a
@@ -556,8 +557,8 @@
         opts (assoc opts :released-at now)]
     (transact-with-validation
      conn (kbt/with-vt (release-tx-data (d/db conn) opts)
-                       (or vt-from now)
-                       (or vt-to kbt/forever)))))
+            (or vt-from now)
+            (or vt-to kbt/forever)))))
 
 (defn by-code
   "Resolve a hold's eid by its :legal-hold/code."

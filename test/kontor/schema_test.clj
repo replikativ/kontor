@@ -72,7 +72,8 @@
 
 (deftest valid-time-lives-on-tx
   (testing "Per ADR-048, valid-time lives on the writing tx via
-            kontor.bitemporal's :tx/valid-from. There is no per-
+            upstream `:db.valid/from` / `:db.valid/to` (pre-installed
+            by datahike's feature/bitemporal-v1). There is no per-
             posting valid-from. :posting/valid-to and the
             :posting/temporal-key tuple were dropped per research
             note 08 — corrections use reverse-and-repost, not
@@ -88,17 +89,26 @@
           "temporal-key tuple should NOT be in the schema (ADR-008 revised).")
       (is (not (contains? present :posting/valid-to))
           "valid-to should NOT be in the schema (ADR-008 revised).")
-      (is (contains? present :tx/valid-from)
-          "valid-from anchor lives on the tx via kontor.bitemporal."))
-    (let [conn (core/create-test-db)
-          db (d/db conn)
-          attr (d/pull db
-                       [:db/ident :db/valueType :db/index]
-                       :tx/valid-from)]
-      (is (= :tx/valid-from (:db/ident attr)))
-      (is (= :db.type/instant (:db/valueType attr)))
-      (is (true? (:db/index attr))
-          "Indexed for as-of-valid filtering."))))
+      (testing "valid-from anchor :db.valid/from is upstream-implicit and usable"
+        ;; Datahike's :db.valid/from / :db.valid/to are pre-installed in the
+        ;; non-ref-implicit-schema (datahike feature/bitemporal-v1) — they
+        ;; don't materialize as :db/ident datoms unless something references
+        ;; them, but are immediately usable in tx-meta. Verify by writing
+        ;; one and reading it back.
+        (let [tx-report (d/transact conn
+                                    [{:db/id "datomic.tx"
+                                      :db.valid/from #inst "2024-06-15"
+                                      :db.valid/to   #inst "2024-09-15"}
+                                     {:db/id "e1" :account/name "vt-probe"
+                                      :account/path "VtProbe"
+                                      :account/type :asset}])
+              tx-eid (get-in tx-report [:tempids "datomic.tx"])
+              db2    (d/db conn)
+              pulled (d/pull db2 [:db.valid/from :db.valid/to] tx-eid)]
+          (is (= #inst "2024-06-15" (:db.valid/from pulled))
+              ":db.valid/from on the tx persists and is readable.")
+          (is (= #inst "2024-09-15" (:db.valid/to pulled))
+              ":db.valid/to on the tx persists and is readable."))))))
 
 (deftest schema-install-is-idempotent
   (testing "Re-installing the schema on an existing DB does not throw

@@ -205,7 +205,13 @@
                                           [:db/id :transaction/effective-date :transaction/narration]}]
                                         p)
                              tx (:posting/transaction pe)
-                             vf (kbt/posting-vf db p)]
+                             vf (d/q '[:find ?vf .
+                                       :in $ ?p
+                                       :where
+                                       [?p :posting/transaction _ ?tx]
+                                       [?tx :db/txInstant ?ti]
+                                       [(get-else $ ?tx :db.valid/from ?ti) ?vf]]
+                                     db p)]
                          {:posting-eid p
                           :amount (:posting/amount pe)
                           :valid-from vf

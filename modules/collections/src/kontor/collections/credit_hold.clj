@@ -43,7 +43,8 @@
    at as-of-valid'. Returns the keyword or nil if the entity didn't
    exist yet at as-of."
   [db hold-eid ^java.util.Date as-of]
-  (kbt/value-at db hold-eid :credit-hold/state as-of))
+  (:credit-hold/state
+   (d/pull (d/valid-at db as-of) [:credit-hold/state] hold-eid)))
 
 (defn active-holds-for
   "Pulled `:credit-hold` rows that are active at `:as-of-valid`

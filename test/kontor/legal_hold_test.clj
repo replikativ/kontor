@@ -230,9 +230,10 @@
                          :scope-query "[:find ?e :where [?e :partner/kind :customer]]"
                          :vt-from #inst "2026-05-13"})
         hold-eid (lhold/by-code (d/db conn) "HOLD-007")
-        original-query (kbt/value-at (d/db conn) hold-eid :legal-hold/scope-query
-                                     #inst "2026-05-14")]
-    (testing "kbt/value-at resolves the hold's scope-query at a past valid-time"
+        original-query (:legal-hold/scope-query
+                        (d/pull (d/valid-at (d/db conn) #inst "2026-05-14")
+                                [:legal-hold/scope-query] hold-eid))]
+    (testing "d/valid-at resolves the hold's scope-query at a past valid-time"
       (is (= "[:find ?e :where [?e :partner/kind :customer]]" original-query)))))
 
 ;; ============================================================================

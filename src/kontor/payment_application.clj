@@ -34,7 +34,7 @@
    `:vt-from` (and optional `:vt-to`) opts: when present the entire
    tx is stamped with kontor.bitemporal's `:tx/valid-from`. This
    propagates the same valid-time onto the status-history record(s)
-   the tx writes, so `(kbt/value-at db invoice :invoice/status vt)`
+   the tx writes, so `(:invoice/status (d/pull (d/valid-at db vt) [...] invoice))`
    reproduces what `:invoice/status` was at any historical valid-
    time. Defaults to `:applied-at` when `:vt-from` is omitted, so
    existing callers keep their semantics."
@@ -152,7 +152,7 @@
    Returns the keyword status or nil if no assertion applies."
   [db invoice-spec cutoff]
   (when-let [eid (resolve-invoice db invoice-spec)]
-    (kbt/value-at db eid :invoice/status cutoff)))
+    (:invoice/status (d/pull (d/valid-at db cutoff) [:invoice/status] eid))))
 
 ;; ============================================================================
 ;; Transactors
@@ -395,7 +395,7 @@
 
                       (and (= current-status :partially-paid)
                            (zero? (.compareTo ^java.math.BigDecimal
-                                              new-applied 0M)))
+                                   new-applied 0M)))
                       :sent
 
                       (= current-status :partially-paid) :partially-paid
@@ -492,8 +492,8 @@
   (let [db (d/db conn)
         applied-at (or applied-at (java.util.Date.))
         openers (open-invoices-for-partner db partner
-                                            {:exclude-disputed? exclude-disputed?
-                                             :as-of-valid applied-at})
+                                           {:exclude-disputed? exclude-disputed?
+                                            :as-of-valid applied-at})
         allocations (loop [remaining total-amount
                            candidates openers
                            out []]

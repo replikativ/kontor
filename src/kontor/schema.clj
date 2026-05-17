@@ -506,7 +506,7 @@
    ;; No :legal-hold/placed-at denorm (P1-3 review fix). The
    ;; placement instant IS the :tx/valid-from of the placing tx and
    ;; the :status-history/changed-at of the nil → :placed row.
-   ;; Resolve via (kbt/value-at db hold-eid :legal-hold/state at) or
+   ;; Resolve via (d/pull (d/valid-at db at) [:legal-hold/state] hold-eid) or
    ;; the status-history timeline. This matches the ADR-048
    ;; valid-time normalization and the Stage-L denorm-removal pattern.
 
@@ -1001,26 +1001,11 @@
     :db/doc         "Ref to :status-history row that produced this
                      intent."}])
 
-(def ^:private bitemporal-tx-attrs
-  "Tx-meta attributes for tx-level valid-time (kontor.bitemporal,
-   ADR-048). The canonical valid-time anchor — postings carry no
-   per-posting valid-from after the ADR-048 normalization. Matches
-   XTDB v2's bitemporal semantics on top of stock datahike. See
-   kontor.bitemporal for the resolver."
-  [{:db/ident :tx/valid-from
-    :db/valueType :db.type/instant
-    :db/cardinality :db.cardinality/one
-    :db/index true
-    :db/doc "Tx-meta — valid-time lower bound for every datom in
-             this tx. Half-open [vt-from, vt-to). Absent → defaults
-             to :db/txInstant."}
-
-   {:db/ident :tx/valid-to
-    :db/valueType :db.type/instant
-    :db/cardinality :db.cardinality/one
-    :db/index true
-    :db/doc "Tx-meta — valid-time upper bound (exclusive). Absent →
-             treated as +∞."}])
+;; Tx-level valid-time attributes (ADR-048) now live in datahike itself
+;; as :db.valid/from + :db.valid/to (system schema, pre-installed on
+;; every fresh DB by feature/bitemporal-v1). Kontor's old `:tx/valid-from`
+;; was a stopgap; the upstream attrs have identical semantics. See
+;; kontor.bitemporal for the resolver that delegates to d/valid-at.
 
 (def ^:private payment-application-attrs
   ;; ADR-043: partial-payment primitive. Closes the scope-cut at
@@ -2068,7 +2053,7 @@
    ;; NOTE: :invoice/sent-at / :paid-at / :cancelled-at / :posted-at
    ;; (the status-transition timestamp denorms) were removed —
    ;; resolvable from :status-history + :tx/valid-from via
-   ;; (kbt/assertion-at db inv :invoice/status now). The presence
+   ;; (d/pull (d/valid-at db now) [:invoice/status] inv). The presence
    ;; of :invoice/transaction is the canonical "posted to GL"
    ;; sentinel; no separate :posted-at needed.
 
@@ -3463,7 +3448,8 @@
     :db/cardinality :db.cardinality/one
     :db/doc         "Legal-privilege classification (ADR-051).
                      Status-machine facet; nil = :none. Bitemporal:
-                     kbt/value-at answers 'privilege at filing date'."}])
+                     (d/pull (d/valid-at db filing-date) [...] doc-eid)
+                     answers 'privilege at filing date'."}])
 
 (def ^:private approval-policy-attrs
   [{:db/ident       :approval-policy/entity-type
@@ -3595,7 +3581,8 @@
     side-effect-intent-attrs              ; ADR-041
     account-type-direction-attrs          ; ADR-041
     payment-application-attrs             ; ADR-043
-    bitemporal-tx-attrs                   ; ADR-048 (kontor.bitemporal)
+    ;; ADR-048 valid-time attrs are now upstream (:db.valid/from + :db.valid/to,
+    ;; pre-installed by datahike's feature/bitemporal-v1)
     legal-hold-attrs                      ; ADR-049 (kontor.legal-hold)
     retention-policy-attrs                ; ADR-050 (kontor.retention)
     dsar-request-attrs)))                 ; ADR-052 (kontor.dsar)

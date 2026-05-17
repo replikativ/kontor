@@ -5,8 +5,8 @@
      :as-of-tx    — what the database knew at this transaction time.
                     Wraps `(d/as-of db tx-time)`.
      :as-of-valid — what was true in the world as of this valid date.
-                    Filters `(<= :tx/valid-from valid-time)` on the
-                    tx that wrote each posting (via kontor.bitemporal).
+                    Filters `(<= :db.valid/from valid-time)` on the
+                    tx that wrote each posting (upstream datahike vt).
 
    Both default to `now`. Postings on cancelled / draft transactions
    are excluded by default; pass `:include-states #{:draft :posted
@@ -16,7 +16,6 @@
    in multiple commodities (multi-currency books). The map is empty
    when an account has no postings."
   (:require [datahike.api :as d]
-            [kontor.bitemporal :as kbt]
             [kontor.money :as money])
   (:import [java.util Date]))
 
@@ -48,7 +47,7 @@
    Per ADR-008 (revised): only :valid-from is checked. :valid-to was
    dropped — corrections are modeled as reverse-and-repost, not as
    superseding postings with an end-date. Valid-from lives on the tx
-   that wrote the posting (kontor.bitemporal `:tx/valid-from`)."
+   that wrote the posting (upstream `:db.valid/from`)."
   [as-of-valid included-states posting]
   (let [vf (:valid-from posting)
         st (:transaction/state posting)]
@@ -61,14 +60,16 @@
    tx-time-snapshotted by the caller). Each posting is a flat map
    suitable for include-posting? and money/posting->money — the
    `:valid-from` key is derived from the posting's creating tx via
-   `:tx/valid-from` (kontor.bitemporal)."
+   `:db.valid/from` (upstream datahike)."
   [db account-eid]
   (->> (d/q '[:find ?p ?vf
-              :in $ % ?account
+              :in $ ?account
               :where
               [?p :posting/account ?account]
-              (posting-vf ?p ?vf)]
-            db kbt/query-rules account-eid)
+              [?p :posting/transaction _ ?tx]
+              [?tx :db/txInstant ?ti]
+              [(get-else $ ?tx :db.valid/from ?ti) ?vf]]
+            db account-eid)
        (mapv (fn [[p vf]]
                (let [pulled (d/pull db
                                     [:posting/amount

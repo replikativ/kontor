@@ -198,7 +198,8 @@
                                  :changed-by-uid paralegal
                                  :reason :privilege-determined
                                  :vt-from #inst "2026-05-14"})
-    (testing "kbt/value-at resolves the privilege classification at a valid-time"
+    (testing "d/valid-at resolves the privilege classification at a valid-time"
       (is (= :attorney-client
-             (kbt/value-at (d/db conn) doc :audit-doc/privilege
-                           #inst "2026-05-20"))))))
+             (:audit-doc/privilege
+              (d/pull (d/valid-at (d/db conn) #inst "2026-05-20")
+                      [:audit-doc/privilege] doc)))))))

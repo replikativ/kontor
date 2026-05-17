@@ -25,29 +25,26 @@
     (<= (.getTime ^java.util.Date exp) as-of-ms)))
 
 (defn- state-at [db pause-eid ^java.util.Date as-of]
-  (kbt/value-at db pause-eid :dunning-pause/state as-of))
+  (:dunning-pause/state
+   (d/pull (d/valid-at db as-of) [:dunning-pause/state] pause-eid)))
 
 (defn active-pauses-for-case
   "Pulled `:dunning-pause` rows active at `:as-of-valid` for a case.
    Returns vec of pulled maps.
 
-   Active = pause's :tx/valid-from ≤ as-of-valid (visibility) AND its
+   Active = pause is visible at as-of-valid (via d/valid-at) AND its
    :dunning-pause/state at as-of-valid is :placed AND it isn't yet
    expired by :expires-at."
   ([db case-eid] (active-pauses-for-case db case-eid nil))
   ([db case-eid {:keys [as-of-valid]}]
    (let [as-of-valid (or as-of-valid (java.util.Date.))
          as-of-ms (.getTime ^java.util.Date as-of-valid)
+         vt-db (d/valid-at db as-of-valid)
          rows (d/q '[:find [?p ...]
-                     :in $ % ?case ?as-of-ms
+                     :in $ ?case
                      :where
-                     [?p :dunning-pause/case ?case]
-                     [?p :dunning-pause/case _ ?tx]
-                     [?tx :db/txInstant ?ti]
-                     [(get-else $ ?tx :tx/valid-from ?ti) ?placed]
-                     [(.getTime ^java.util.Date ?placed) ?placed-ms]
-                     [(<= ?placed-ms ?as-of-ms)]]
-                   db kbt/query-rules case-eid as-of-ms)]
+                     [?p :dunning-pause/case ?case]]
+                   vt-db case-eid)]
      (->> rows
           (map #(d/pull db '[*] %))
           (filter #(= :placed (state-at db (:db/id %) as-of-valid)))

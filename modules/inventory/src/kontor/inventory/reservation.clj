@@ -50,8 +50,7 @@
                   [?d :inventory-detail/inventory-item ?item]
                   [?d :inventory-detail/atp-diff ?diff]
                   [?d :inventory-detail/effective-date ?ed]
-                  [(.compareTo ^java.util.Date ?ed ?cutoff) ?cmp]
-                  [(<= ?cmp 0)]]
+                  [(<= ?ed ?cutoff)]]
                 db* items (or as-of-valid kbt/forever))
            0M)))))
 

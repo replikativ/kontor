@@ -280,11 +280,11 @@
           buyer   (d/q '[:find ?p . :where [?p :partner/external-id "ACME"]]
                        (d/db *conn*))]
       (let [allocs (papp/allocate-fifo! *conn*
-                                         {:payment pay
-                                          :partner buyer
-                                          :total-amount 600M
-                                          :commodity (eur)
-                                          :applied-by-uid (actor)})]
+                                        {:payment pay
+                                         :partner buyer
+                                         :total-amount 600M
+                                         :commodity (eur)
+                                         :applied-by-uid (actor)})]
         (testing "two allocations"
           (is (= 2 (count allocs))))
         (let [db (d/db *conn*)]
@@ -304,11 +304,10 @@
 ;; ============================================================================
 
 (deftest invoice-status-at-vt-tracks-backdated-applications
-  (testing "Backdated apply-payment! stamps :tx/valid-from on the
+  (testing "Backdated apply-payment! stamps :db.valid/from on the
             status-history; invoice-status-at resolves correctly"
-    (require '[kontor.bitemporal :as kbt])
-    ;; Install the bitemporal schema for this test
-    (datahike.api/transact *conn* @(resolve 'kbt/schema))
+    ;; :db.valid/{from,to} are pre-installed by datahike's
+    ;; feature/bitemporal-v1 — no schema install needed.
     (let [inv (make-invoice! "INV-VT" 1000M)
           pay (make-payment! "PAY-VT")]
       ;; Apply 1000 backdated to 2026-03-15 — invoice should be :paid as of that vt
@@ -324,4 +323,4 @@
           (is (= :paid (papp/invoice-status-at db inv #inst "2026-03-15")))
           (is (= :paid (papp/invoice-status-at db inv #inst "2026-04-01"))))
         (testing "value-at far future — :paid (latest tx-time wins)"
-          (is (= :paid (papp/invoice-status-at db inv #inst "2030-01-01")))) ))))
+          (is (= :paid (papp/invoice-status-at db inv #inst "2030-01-01"))))))))

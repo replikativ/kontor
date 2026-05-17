@@ -41,7 +41,9 @@
 
  :deps
  {org.clojure/clojure              {:mvn/version "1.12.4"}
-  org.replikativ/datahike          {:mvn/version "0.8.1681"}
+  ;; Local checkout while feature/bitemporal-v1 + DH-11 fixes land upstream.
+  ;; Revert to :mvn/version once the next datahike release ships PR #828.
+  org.replikativ/datahike          {:local/root "../datahike-bitemporal-v1"}
   ;; Declarative datalog invariants — see ADR-011 + research note 04.
   ;; Currently linked locally; switch to :git/url + :sha once we cut a
   ;; release of the bumped library.

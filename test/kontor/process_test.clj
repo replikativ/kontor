@@ -140,10 +140,10 @@
           step (fn [_ _] [{:db/id "a" :account/path "VT" :account/name "VT"
                            :account/type :asset}
                           ;; a rogue step trying to set its own valid-time
-                          {:db/id "datomic.tx" :tx/valid-from #inst "1999-01-01"}])
+                          {:db/id "datomic.tx" :db.valid/from #inst "1999-01-01"}])
           _    (p/run-process conn {:steps [step] :vt-from #inst "2020-06-01"})
           vf   (d/q '[:find ?vf . :where
-                      [?e :account/path "VT"] [?e _ _ ?tx] [?tx :tx/valid-from ?vf]]
+                      [?e :account/path "VT"] [?e _ _ ?tx] [?tx :db.valid/from ?vf]]
                     (d/db conn))]
       (is (= #inst "2020-06-01" vf)
           "the run-process :vt-from won; the step's tx-meta was stripped"))))

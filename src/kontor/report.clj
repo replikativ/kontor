@@ -91,7 +91,13 @@
                          (#(d/pull db [:transaction/state] %))
                          :transaction/state)
         account (:posting/account pulled)
-        vf (kbt/posting-vf db p)
+        vf (d/q '[:find ?vf .
+                  :in $ ?p
+                  :where
+                  [?p :posting/transaction _ ?tx]
+                  [?tx :db/txInstant ?ti]
+                  [(get-else $ ?tx :db.valid/from ?ti) ?vf]]
+                db p)
         ;; Account tags from the M2M; flatten to keywords
         acct-tag-names (->> (:account/tags account)
                             (map (fn [t]
