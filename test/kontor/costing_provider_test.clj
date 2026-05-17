@@ -67,7 +67,7 @@
     (let [{:keys [conn book item l-a]} (setup!)
           provider (costing/make-fifo-provider)
           plan (costing/plan-consumption provider (d/db conn)
-                                          {:book book :item item :qty 30M})]
+                                         {:book book :item item :qty 30M})]
       (is (= 1 (count (:consumptions plan))))
       (let [{:keys [layer qty unit-cost]} (first (:consumptions plan))]
         (is (= l-a layer))
@@ -79,7 +79,7 @@
     (let [{:keys [conn book item l-a l-b]} (setup!)
           provider (costing/make-fifo-provider)
           plan (costing/plan-consumption provider (d/db conn)
-                                          {:book book :item item :qty 120M})]
+                                         {:book book :item item :qty 120M})]
       (is (= 2 (count (:consumptions plan))))
       (is (= [l-a l-b] (mapv :layer (:consumptions plan))))
       (is (= [100M 20M] (mapv :qty (:consumptions plan))))
@@ -93,7 +93,7 @@
     (let [{:keys [conn book item]} (setup!)
           provider (costing/make-fifo-provider)
           plan (costing/plan-consumption provider (d/db conn)
-                                          {:book book :item item :qty 1000M})]
+                                         {:book book :item item :qty 1000M})]
       (is (some? (:underflow plan)))
       (is (= 0 (.compareTo (bigdec "775") (:underflow plan)))))))
 
@@ -116,7 +116,7 @@
     (let [{:keys [conn book item l-c]} (setup!)
           provider (costing/make-lifo-provider)
           plan (costing/plan-consumption provider (d/db conn)
-                                          {:book book :item item :qty 30M})]
+                                         {:book book :item item :qty 30M})]
       (is (= [l-c] (mapv :layer (:consumptions plan))))
       (is (= 0 (.compareTo (bigdec "8.0000")
                            (-> plan :consumptions first :unit-cost)))))))
@@ -126,7 +126,7 @@
     (let [{:keys [conn book item l-b l-c]} (setup!)
           provider (costing/make-lifo-provider)
           plan (costing/plan-consumption provider (d/db conn)
-                                          {:book book :item item :qty 100M})]
+                                         {:book book :item item :qty 100M})]
       (is (= [l-c l-b] (mapv :layer (:consumptions plan))))
       (is (= [75M 25M] (mapv :qty (:consumptions plan)))))))
 
@@ -140,7 +140,7 @@
     (let [{:keys [conn book item]} (setup!)
           provider (costing/make-weighted-average-provider)
           plan (costing/plan-consumption provider (d/db conn)
-                                          {:book book :item item :qty 50M})]
+                                         {:book book :item item :qty 50M})]
       (is (seq (:consumptions plan)))
       ;; Every consumption in this plan carries the SAME unit cost
       ;; (the weighted average).
@@ -160,7 +160,7 @@
           std-fn (fn [_db _book _item] 7.00M)
           provider (costing/make-standard-cost-provider std-fn)
           plan (costing/plan-consumption provider (d/db conn)
-                                          {:book book :item item :qty 30M})]
+                                         {:book book :item item :qty 30M})]
       (is (= [7.00M] (distinct (map :unit-cost (:consumptions plan))))
           "Standard-cost issues stamp every drawn layer at the standard"))))
 

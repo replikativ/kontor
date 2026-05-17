@@ -237,7 +237,7 @@
   ([conn invoice-eid posting-builder]
    (send! conn invoice-eid posting-builder nil))
   ([conn invoice-eid posting-builder {:keys [vt-from vt-to changed-by-uid
-                                              reason reason-note supporting-doc]}]
+                                             reason reason-note supporting-doc]}]
    (let [now (Date.)
          db (d/db conn)
          tx-data (send-tx-data db
@@ -255,8 +255,8 @@
          eff-date (some :transaction/effective-date tx-data)
          report (validation/transact-with-validation
                  conn (kbt/with-vt tx-data
-                                   (or vt-from eff-date now)
-                                   (or vt-to kbt/forever)))]
+                        (or vt-from eff-date now)
+                        (or vt-to kbt/forever)))]
      {:transaction-eid (get-in report [:tempids -1])})))
 
 ;; ============================================================================
@@ -295,7 +295,7 @@
   ([conn invoice-eid]
    (mark-paid! conn invoice-eid nil))
   ([conn invoice-eid {:keys [vt-from vt-to changed-by-uid
-                              reason reason-note supporting-doc]}]
+                             reason reason-note supporting-doc]}]
    (let [now (Date.)]
      (validation/transact-with-validation
       conn (kbt/with-vt (mark-paid-tx-data
@@ -306,8 +306,8 @@
                           :reason-note reason-note
                           :supporting-doc supporting-doc
                           :changed-at now})
-                        (or vt-from now)
-                        (or vt-to kbt/forever))))))
+             (or vt-from now)
+             (or vt-to kbt/forever))))))
 
 (defn cancel-tx-data
   "Pure tx-data builder for `cancel!` (ADR-068). For :draft, returns
@@ -384,7 +384,7 @@
   ([conn invoice-eid]
    (cancel! conn invoice-eid nil))
   ([conn invoice-eid {:keys [vt-from vt-to changed-by-uid
-                              reason reason-note supporting-doc]}]
+                             reason reason-note supporting-doc]}]
    (let [now (Date.)]
      (validation/transact-with-validation
       conn (kbt/with-vt (cancel-tx-data
@@ -395,8 +395,8 @@
                           :reason-note reason-note
                           :supporting-doc supporting-doc
                           :changed-at now})
-                        (or vt-from now)
-                        (or vt-to kbt/forever))))))
+             (or vt-from now)
+             (or vt-to kbt/forever))))))
 
 ;; ============================================================================
 ;; Reconciliation hook
@@ -455,7 +455,7 @@
   ([conn settled-tx-eids]
    (flip-paid-on-settlement conn settled-tx-eids nil))
   ([conn settled-tx-eids {:keys [vt-from vt-to changed-by-uid
-                                  reason reason-note supporting-doc]}]
+                                 reason reason-note supporting-doc]}]
    (let [now (Date.)
          tx-data (flip-paid-on-settlement-tx-data
                   (d/db conn)
@@ -468,5 +468,5 @@
      (when (seq tx-data)
        (validation/transact-with-validation
         conn (kbt/with-vt tx-data
-                          (or vt-from now)
-                          (or vt-to kbt/forever)))))))
+               (or vt-from now)
+               (or vt-to kbt/forever)))))))

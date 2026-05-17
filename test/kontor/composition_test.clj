@@ -216,7 +216,7 @@
                          :scope-eids [acme]
                          :reason-note "test"})
           combined (kbt/with-vt (into (vec doc-frag) hold-frag)
-                                #inst "2026-05-14" kbt/forever)
+                     #inst "2026-05-14" kbt/forever)
           report (v/transact-with-validation conn combined)
           tempids (:tempids report)
           db' (d/db conn)

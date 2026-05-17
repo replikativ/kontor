@@ -380,9 +380,8 @@
     (validation/transact-with-validation
      conn (kbt/with-vt (file-request-tx-data
                         (d/db conn) (assoc opts :received-state-at now))
-                       (or vt-from now)
-                       (or vt-to kbt/forever)))))
-
+            (or vt-from now)
+            (or vt-to kbt/forever)))))
 
 (defn file-request-tx-data
   "Pure tx-data builder for `file-request!` (ADR-068). Optional
@@ -447,9 +446,8 @@
     (validation/transact-with-validation
      conn (kbt/with-vt (advance-state-tx-data
                         (d/db conn) (assoc opts :changed-at now))
-                       (or vt-from now)
-                       (or vt-to kbt/forever)))))
-
+            (or vt-from now)
+            (or vt-to kbt/forever)))))
 
 (defn advance-state-tx-data
   "Pure tx-data builder for `advance-state!` (ADR-068)."

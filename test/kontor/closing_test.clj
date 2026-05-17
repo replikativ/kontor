@@ -139,13 +139,13 @@
           rev (ace db "4400")
           rent (ace db "6300")]
       (is (= -3000M (-> (balance/account-balance conn rev
-                                                  {:as-of-valid dec-31})
-                         (get eur)
-                         :amount)))
+                                                 {:as-of-valid dec-31})
+                        (get eur)
+                        :amount)))
       (is (= 600M (-> (balance/account-balance conn rent
-                                                {:as-of-valid dec-31})
-                       (get eur)
-                       :amount))))))
+                                               {:as-of-valid dec-31})
+                      (get eur)
+                      :amount))))))
 
 ;; ============================================================================
 ;; Kernel close-period!
@@ -175,17 +175,17 @@
       ;; Query at the new year's start (= the closing tx's valid-from
       ;; is the period's last instant, which is just before this).
       (let [rev-bal  (-> (balance/account-balance conn (ace db "4400")
-                                                   {:as-of-valid jan-1-26})
-                          (get eur))
+                                                  {:as-of-valid jan-1-26})
+                         (get eur))
             rent-bal (-> (balance/account-balance conn (ace db "6300")
-                                                   {:as-of-valid jan-1-26})
-                          (get eur))
+                                                  {:as-of-valid jan-1-26})
+                         (get eur))
             sw-bal   (-> (balance/account-balance conn (ace db "6815")
-                                                   {:as-of-valid jan-1-26})
-                          (get eur))
+                                                  {:as-of-valid jan-1-26})
+                         (get eur))
             ret-bal  (-> (balance/account-balance conn retained
-                                                   {:as-of-valid jan-1-26})
-                          (get eur))]
+                                                  {:as-of-valid jan-1-26})
+                         (get eur))]
         (is (= 0M (:amount rev-bal)))
         (is (= 0M (:amount rent-bal)))
         (is (= 0M (:amount sw-bal)))
@@ -215,10 +215,10 @@
                               :retained-earnings-eid retained
                               :journal-eid inv-jnl})
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"already has a closing"
-            (closing/close-period! conn
-                                   {:period-eid period-eid
-                                    :retained-earnings-eid retained
-                                    :journal-eid inv-jnl}))))))
+                            (closing/close-period! conn
+                                                   {:period-eid period-eid
+                                                    :retained-earnings-eid retained
+                                                    :journal-eid inv-jnl}))))))
 
 (deftest close-period-noop-when-no-pnl-activity
   (let [conn (bootstrap)
@@ -249,7 +249,7 @@
           eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
           ret-bal (-> (balance/account-balance conn retained
                                                {:as-of-valid jan-1-26})
-                       (get eur))
+                      (get eur))
           period (d/pull db [:period/locked-at] period-eid)]
       (is (some? (:transaction-eid close-result)))
       (is (= -2300M (:amount ret-bal)))

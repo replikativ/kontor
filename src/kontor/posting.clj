@@ -369,8 +369,8 @@
               (range)
               postings)]
     (kbt/with-vt (into [tx-base] posting-entities)
-                 (:transaction/effective-date transaction)
-                 kbt/forever)))
+      (:transaction/effective-date transaction)
+      kbt/forever)))
 
 (defn post-transaction-tx-data
   "Pure tx-data builder for `post-transaction!` (ADR-068). Stamps
@@ -741,7 +741,7 @@
                   postings)
             _ (assert-balanced! tx-base posting-entities)]
         (kbt/with-vt (into [tx-base layer-entity] posting-entities)
-                     effective-date kbt/forever))
+          effective-date kbt/forever))
 
       :out
       (let [;; Thread the move's effective-date as the bitemporal
@@ -781,4 +781,4 @@
                     postings)
               _ (assert-balanced! tx-base posting-entities)]
           (kbt/with-vt (into (into [tx-base] posting-entities) consumption-entities)
-                       effective-date kbt/forever))))))
+            effective-date kbt/forever))))))

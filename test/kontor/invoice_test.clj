@@ -52,31 +52,31 @@
         acme (:db/id (d/entity db [:partner/external-id "ACME"]))
         net30 (:db/id (pt/by-code db "NET30"))]
     (inv/create! conn
-      {:invoice/external-id "INV-2026-0001"
-       :invoice/issue-date  jan-1
-       :invoice/seller      own
-       :invoice/buyer       acme
-       :invoice/payment-term net30
-       :invoice/currency    "EUR"
-       :invoice/buyer-reference "PO-12345"
-       :invoice/notes       ["Zahlbar 30 Tage netto."]
-       :invoice/lines
-       [{:invoice-line/sequence 1
-         :invoice-line/name "Strategieberatung"
-         :invoice-line/description "10 h Beratung Q1 2026"
-         :invoice-line/quantity 10M
-         :invoice-line/unit-code "HUR"
-         :invoice-line/unit-price 150M
-         :invoice-line/vat-rate 19.0M
-         :invoice-line/vat-category "S"}
-        {:invoice-line/sequence 2
-         :invoice-line/name "Reisekosten"
-         :invoice-line/description "Bahnticket Berlin-München"
-         :invoice-line/quantity 1M
-         :invoice-line/unit-code "EA"
-         :invoice-line/unit-price 89.50M
-         :invoice-line/vat-rate 19.0M
-         :invoice-line/vat-category "S"}]})))
+                 {:invoice/external-id "INV-2026-0001"
+                  :invoice/issue-date  jan-1
+                  :invoice/seller      own
+                  :invoice/buyer       acme
+                  :invoice/payment-term net30
+                  :invoice/currency    "EUR"
+                  :invoice/buyer-reference "PO-12345"
+                  :invoice/notes       ["Zahlbar 30 Tage netto."]
+                  :invoice/lines
+                  [{:invoice-line/sequence 1
+                    :invoice-line/name "Strategieberatung"
+                    :invoice-line/description "10 h Beratung Q1 2026"
+                    :invoice-line/quantity 10M
+                    :invoice-line/unit-code "HUR"
+                    :invoice-line/unit-price 150M
+                    :invoice-line/vat-rate 19.0M
+                    :invoice-line/vat-category "S"}
+                   {:invoice-line/sequence 2
+                    :invoice-line/name "Reisekosten"
+                    :invoice-line/description "Bahnticket Berlin-München"
+                    :invoice-line/quantity 1M
+                    :invoice-line/unit-code "EA"
+                    :invoice-line/unit-price 89.50M
+                    :invoice-line/vat-rate 19.0M
+                    :invoice-line/vat-category "S"}]})))
 
 ;; ============================================================================
 ;; create!
@@ -140,8 +140,8 @@
     (is (= -302.00M (get by-code "3801")))
     ;; Sums to zero
     (is (zero? (.signum ^java.math.BigDecimal
-                        (reduce #(.add ^java.math.BigDecimal %1 %2)
-                                0M (vals by-code)))))))
+                (reduce #(.add ^java.math.BigDecimal %1 %2)
+                        0M (vals by-code)))))))
 
 (deftest send-rejects-non-draft-invoices
   (let [conn (bootstrap)

@@ -457,8 +457,8 @@
     (validation/transact-with-validation
      conn (kbt/with-vt (define-policy-tx-data
                          (d/db conn) (assoc opts :drafted-at now))
-                       (or vt-from now)
-                       (or vt-to kbt/forever)))))
+            (or vt-from now)
+            (or vt-to kbt/forever)))))
 
 (defn by-code
   "Resolve a policy's eid by its :retention-policy/code. When several
@@ -515,8 +515,8 @@
     (validation/transact-with-validation
      conn (kbt/with-vt (activate-policy-tx-data
                         (d/db conn) (assoc opts :changed-at now))
-                       (or vt-from now)
-                       (or vt-to kbt/forever)))))
+            (or vt-from now)
+            (or vt-to kbt/forever)))))
 
 (defn supersede-policy-tx-data
   "Pure tx-data builder for `supersede-policy!` (ADR-068)."
@@ -556,5 +556,5 @@
     (validation/transact-with-validation
      conn (kbt/with-vt (supersede-policy-tx-data
                         (d/db conn) (assoc opts :changed-at now))
-                       (or vt-from now)
-                       (or vt-to kbt/forever)))))
+            (or vt-from now)
+            (or vt-to kbt/forever)))))

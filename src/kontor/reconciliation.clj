@@ -93,7 +93,7 @@
       date             (assoc :bank-line/date date)
       value-date       (assoc :bank-line/value-date value-date)
       counterparty     (assoc :bank-line/counterparty counterparty)
-      counterparty-iban(assoc :bank-line/counterparty-iban counterparty-iban)
+      counterparty-iban (assoc :bank-line/counterparty-iban counterparty-iban)
       description      (assoc :bank-line/description description)
       transaction-type (assoc :bank-line/transaction-type transaction-type)
       category         (assoc :bank-line/category category))))

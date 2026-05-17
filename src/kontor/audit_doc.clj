@@ -261,8 +261,8 @@
     (validation/transact-with-validation
      conn (kbt/with-vt (reclassify-privilege-tx-data
                         (d/db conn) (assoc opts :changed-at now))
-                       (or vt-from now)
-                       (or vt-to kbt/forever)))))
+            (or vt-from now)
+            (or vt-to kbt/forever)))))
 
 (defn reclassify-privilege-tx-data
   "Pure tx-data builder for `reclassify-privilege!` (ADR-068)."
