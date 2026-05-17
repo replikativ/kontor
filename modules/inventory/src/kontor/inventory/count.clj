@@ -19,6 +19,7 @@
   (:require [datahike.api :as d]
             [kontor.posting :as posting]
             [kontor.process :as process]
+            [kontor.validation :as validation]
             [kontor.inventory.core :as inv]
             [kontor.inventory.ops :as ops])
   (:import [java.math BigDecimal]))
@@ -48,7 +49,7 @@
               code       (assoc :physical-inventory/code code)
               counted-by (assoc :physical-inventory/counted-by counted-by)
               comments   (assoc :physical-inventory/comments comments))
-        report (d/transact conn [row])]
+        report (validation/transact-with-validation conn [row])]
     {:physical-inventory (get-in report [:tempids "count"])
      :tx-report report}))
 
@@ -82,7 +83,7 @@
               reason     (assoc :inventory-variance/reason reason)
               recount-of (assoc :inventory-variance/recount-of recount-of)
               comments   (assoc :inventory-variance/comments comments))
-        report (d/transact conn [row])]
+        report (validation/transact-with-validation conn [row])]
     {:variance      (get-in report [:tempids "var"])
      :expected-qty  expected
      :counted-qty   counted-qty

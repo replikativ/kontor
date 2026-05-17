@@ -60,21 +60,36 @@
    tx-time-snapshotted by the caller). Each posting is a flat map
    suitable for include-posting? and money/posting->money — the
    `:valid-from` key is derived from the posting's creating tx via
-   `:db.valid/from` (upstream datahike)."
-  [db account-eid]
-  (->> (d/q '[:find ?p ?vf
-              :in $ ?account
-              :where
-              [?p :posting/account ?account]
-              [?p :posting/transaction _ ?tx]
-              [?tx :db/txInstant ?ti]
-              [(get-else $ ?tx :db.valid/from ?ti) ?vf]]
-            db account-eid)
+   `:db.valid/from` (upstream datahike).
+
+   When `entity-eid` is non-nil, restricts to postings whose
+   `:posting/entity` matches — supports multi-entity / trans-national
+   queries against per-entity sum-to-zero books (ADR-031)."
+  [db account-eid entity-eid]
+  (->> (if entity-eid
+         (d/q '[:find ?p ?vf
+                :in $ ?account ?entity
+                :where
+                [?p :posting/account ?account]
+                [?p :posting/entity ?entity]
+                [?p :posting/transaction _ ?tx]
+                [?tx :db/txInstant ?ti]
+                [(get-else $ ?tx :db.valid/from ?ti) ?vf]]
+              db account-eid entity-eid)
+         (d/q '[:find ?p ?vf
+                :in $ ?account
+                :where
+                [?p :posting/account ?account]
+                [?p :posting/transaction _ ?tx]
+                [?tx :db/txInstant ?ti]
+                [(get-else $ ?tx :db.valid/from ?ti) ?vf]]
+              db account-eid))
        (mapv (fn [[p vf]]
                (let [pulled (d/pull db
                                     [:posting/amount
                                      :posting/commodity
-                                     :posting/transaction]
+                                     :posting/transaction
+                                     :posting/entity]
                                     p)
                      tx-state (-> (d/pull db [:transaction/state]
                                           (-> pulled :posting/transaction :db/id))
@@ -92,26 +107,38 @@
    `:as-of-tx`). Returns a map `{commodity-eid Money}` — empty if no
    matching postings.
 
-   Options (all optional, all default to `now`/`now`/`#{:posted}`):
+   Options (all optional):
      :as-of-valid    — java.util.Date  (defaults to now)
      :as-of-tx       — java.util.Date  (defaults to now)
      :include-states — set of :transaction/state values to include
                        (defaults to #{:posted})
+     :entity         — restrict to postings of a given :posting/entity
+                       (eid or lookup-ref). Default: all entities. Per
+                       ADR-031 books are per-(entity, ledger, commodity)
+                       sum-to-zero, so entity-filtered balances are
+                       independently balanced and meaningful for trans-
+                       national reports.
 
    Example:
      (account-balance conn rec)
      ;; trial balance as of Q1 close, as known on Mar 31
      (account-balance conn rec
                       {:as-of-valid #inst \"2026-03-31\"
-                       :as-of-tx    #inst \"2026-03-31\"})"
+                       :as-of-tx    #inst \"2026-03-31\"})
+     ;; DE GmbH only
+     (account-balance conn rec {:entity [:entity/code \"DE-GMBH\"]})"
   ([conn account-eid] (account-balance conn account-eid {}))
-  ([conn account-eid {:keys [as-of-valid as-of-tx include-states]
+  ([conn account-eid {:keys [as-of-valid as-of-tx include-states entity]
                       :or   {include-states default-included-states}}]
    (let [as-of-valid (or as-of-valid (now))
          as-of-tx    (or as-of-tx (now))
          db          (d/db conn)
          tx-snap     (if as-of-tx (d/as-of db as-of-tx) db)
-         postings    (pull-postings-against tx-snap account-eid)
+         entity-eid  (when entity
+                       (or (:db/id (d/pull tx-snap [:db/id] entity))
+                           (throw (ex-info "account-balance: :entity not found"
+                                           {:entity entity}))))
+         postings    (pull-postings-against tx-snap account-eid entity-eid)
          included    (filter (partial include-posting? as-of-valid include-states)
                              postings)]
      (->> included

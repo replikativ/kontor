@@ -135,12 +135,16 @@
                               HGB-vs-IFRS Jahresabschluss prerequisite —
                               ADR-021). A nil-ledger posting counts as
                               the primary book.
+     :entity               — optional entity eid / lookup-ref (ADR-031);
+                              restrict the statement to a single legal
+                              entity. Trans-national groups produce
+                              per-entity statements before consolidation.
 
    Line specs may carry :line/negate true to flip a line's sign — the
    knob the indirect cash-flow + equity statements use for
    working-capital / dividend lines."
   ([conn statement] (compute-statement conn statement {}))
-  ([conn statement {:keys [from to as-of-tx include-states total-sign-map ledger]}]
+  ([conn statement {:keys [from to as-of-tx include-states total-sign-map ledger entity]}]
    (let [report-def (definition->report-def statement)
          computed (report/compute-report conn report-def
                                          (cond-> {}
@@ -148,7 +152,8 @@
                                            to             (assoc :to to)
                                            as-of-tx       (assoc :as-of-tx as-of-tx)
                                            include-states (assoc :include-states include-states)
-                                           ledger         (assoc :ledger ledger)))
+                                           ledger         (assoc :ledger ledger)
+                                           entity         (assoc :entity entity)))
          sections (bucket-by-section statement computed)
          currency (or (some-> sections first :section/subtotal :commodity)
                       :EUR)

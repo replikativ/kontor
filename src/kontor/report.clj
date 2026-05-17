@@ -82,6 +82,7 @@
                         :posting/commodity
                         :posting/transaction
                         {:posting/ledger [:db/id]}
+                        {:posting/entity [:db/id]}
                         {:posting/account [:account/code
                                            :account/type
                                            :account/tags]}
@@ -116,6 +117,7 @@
            :valid-from vf
            :tx-state tx-state
            :ledger-eid (:db/id (:posting/ledger pulled))
+           :entity-eid (:db/id (:posting/entity pulled))
            :account-code (:account/code account)
            :account-type (:account/type account)
            :all-tags (clojure.set/union acct-tag-names posting-tag-names))))
@@ -236,6 +238,22 @@
             (or (= le id)
                 (and primary? (nil? le)))))))))
 
+(defn- entity-filter-pred
+  "Build a posting predicate for the optional `:entity` report filter.
+   `entity-spec` is an eid or lookup-ref. Per ADR-031 every balance-
+   affecting posting in multi-entity mode carries `:posting/entity`; in
+   single-entity mode no posting does. A posting without an entity is
+   *not* matched by an entity filter (it represents the global single-
+   entity book, which doesn't belong to any specific entity). Returns
+   `(constantly true)` when no entity filter is requested."
+  [db entity-spec]
+  (if (nil? entity-spec)
+    (constantly true)
+    (let [{:keys [db/id]} (d/pull db [:db/id] entity-spec)]
+      (when-not id
+        (throw (ex-info "compute-report: :entity not found" {:entity entity-spec})))
+      (fn [p] (= id (:entity-eid p))))))
+
 (defn compute-report
   "Run a report definition against `conn` and return:
 
@@ -258,19 +276,24 @@
                        only postings on that ledger are summed (ADR-021
                        parallel books — the HGB-vs-IFRS Jahresabschluss
                        prerequisite). A nil-ledger posting counts as
-                       the primary book."
+                       the primary book.
+     :entity         — optional entity eid / lookup-ref (ADR-031). When
+                       set, only postings with that `:posting/entity`
+                       are summed — trans-national per-entity reports."
   ([conn report] (compute-report conn report {}))
-  ([conn report {:keys [from to as-of-tx include-states ledger]
+  ([conn report {:keys [from to as-of-tx include-states ledger entity]
                  :or   {include-states default-included-states}}]
    (let [as-of-tx (or as-of-tx (now))
          db (-> conn d/db (d/as-of as-of-tx))
          ledger-pred (ledger-filter-pred db ledger)
+         entity-pred (entity-filter-pred db entity)
          all-pids (d/q '[:find [?p ...] :where [?p :posting/account _]] db)
          pulled (mapv #(pull-posting db %) all-pids)
          filtered (filter (fn [p]
                             (and (in-window? p from to)
                                  (contains? include-states (:tx-state p))
-                                 (ledger-pred p)))
+                                 (ledger-pred p)
+                                 (entity-pred p)))
                           pulled)
          lines (mapv (fn [{:keys [:line/code :line/label :line/expression]}]
                        (let [{:keys [value postings]} (run-engine filtered expression {})]

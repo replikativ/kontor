@@ -313,7 +313,7 @@
                  reason (assoc :inventory-detail/reason reason))
         tx-data (cond-> [detail]
                   (not existing) (conj (inventory-item-entity "inv-item" spec)))
-        report (d/transact conn tx-data)]
+        report (validation/transact-with-validation conn tx-data)]
     {:inventory-item (or existing (get-in report [:tempids "inv-item"]))
      :tx-report report}))
 

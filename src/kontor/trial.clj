@@ -24,7 +24,10 @@
 
 (defn trial-balance
   "Compute the trial balance over the bitemporal window in `opts`.
-   Same options as balance/account-balance plus:
+   Same options as balance/account-balance — including `:entity` to
+   restrict to a single legal entity (ADR-031 per-(entity, ledger,
+   commodity) sum-to-zero, so an entity-filtered trial balance is
+   itself balanced) — plus:
      :accounts — restrict to a specific seq of account eids
      :include-zero? — if true, retain accounts/commodities that net
                       to zero (defaults false; results are smaller)

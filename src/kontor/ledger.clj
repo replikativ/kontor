@@ -98,24 +98,40 @@
      :as-of-valid    Date — default now
      :as-of-tx       Date — default now
      :include-states set  — default #{:posted}
+     :entity         eid or lookup-ref — restrict to a single
+                     `:posting/entity` (ADR-031 trans-national books).
      :order          :asc | :desc — default :asc on :valid-from"
   ([conn account-eid] (postings-against conn account-eid {}))
-  ([conn account-eid {:keys [as-of-valid as-of-tx include-states order]
+  ([conn account-eid {:keys [as-of-valid as-of-tx include-states entity order]
                       :or   {include-states default-included-states
                              order :asc}}]
    (let [as-of-valid (or as-of-valid (now))
          as-of-tx    (or as-of-tx (now))
          db          (d/db conn)
          tx-snap     (if as-of-tx (d/as-of db as-of-tx) db)
+         entity-eid  (when entity
+                       (or (:db/id (d/pull tx-snap [:db/id] entity))
+                           (throw (ex-info "postings-against: :entity not found"
+                                           {:entity entity}))))
          rows
-         (->> (d/q '[:find ?p ?vf
-                     :in $ ?account
-                     :where
-                     [?p :posting/account ?account]
-                     [?p :posting/transaction _ ?tx]
-                     [?tx :db/txInstant ?ti]
-                     [(get-else $ ?tx :db.valid/from ?ti) ?vf]]
-                   tx-snap account-eid)
+         (->> (if entity-eid
+                (d/q '[:find ?p ?vf
+                       :in $ ?account ?entity
+                       :where
+                       [?p :posting/account ?account]
+                       [?p :posting/entity ?entity]
+                       [?p :posting/transaction _ ?tx]
+                       [?tx :db/txInstant ?ti]
+                       [(get-else $ ?tx :db.valid/from ?ti) ?vf]]
+                     tx-snap account-eid entity-eid)
+                (d/q '[:find ?p ?vf
+                       :in $ ?account
+                       :where
+                       [?p :posting/account ?account]
+                       [?p :posting/transaction _ ?tx]
+                       [?tx :db/txInstant ?ti]
+                       [(get-else $ ?tx :db.valid/from ?ti) ?vf]]
+                     tx-snap account-eid))
               (mapv (fn [[p vf]]
                       (let [pulled (d/pull tx-snap
                                            [:db/id
