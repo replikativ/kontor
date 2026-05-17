@@ -75,16 +75,16 @@
                                    :or {duration-years 7
                                         effective-from #inst "2000-01-01"}}]
   (ret/define-policy! conn
-                      (cond-> {:code code
-                               :applies-to [:audit-doc]
-                               :duration-years duration-years
-                               :triggered-by :audit-doc/uploaded-at
-                               :expiry-action :purge
-                               :effective-from effective-from
-                               :legal-basis "Test policy"
-                               :changed-by-uid (uid (d/db conn) "records")}
-                        effective-until (assoc :effective-until effective-until)
-                        jurisdiction    (assoc :jurisdiction jurisdiction)))
+    (cond-> {:code code
+             :applies-to [:audit-doc]
+             :duration-years duration-years
+             :triggered-by :audit-doc/uploaded-at
+             :expiry-action :purge
+             :effective-from effective-from
+             :legal-basis "Test policy"
+             :changed-by-uid (uid (d/db conn) "records")}
+      effective-until (assoc :effective-until effective-until)
+      jurisdiction    (assoc :jurisdiction jurisdiction)))
   (let [policy-eid (ret/by-code (d/db conn) code)]
     (ret/activate-policy! conn
                           {:policy-eid policy-eid
@@ -100,14 +100,14 @@
 (deftest define-policy-writes-draft-and-status-history
   (let [conn (bootstrap)
         _ (ret/define-policy! conn
-                              {:code "DE-HGB-257"
-                               :applies-to [:audit-doc :transaction]
-                               :duration-years 10
-                               :triggered-by :audit-doc/uploaded-at
-                               :expiry-action :purge
-                               :effective-from #inst "2025-01-01"
-                               :legal-basis "HGB §257"
-                               :changed-by-uid (uid (d/db conn) "records")})
+            {:code "DE-HGB-257"
+             :applies-to [:audit-doc :transaction]
+             :duration-years 10
+             :triggered-by :audit-doc/uploaded-at
+             :expiry-action :purge
+             :effective-from #inst "2025-01-01"
+             :legal-basis "HGB §257"
+             :changed-by-uid (uid (d/db conn) "records")})
         db (d/db conn)
         policy-eid (ret/by-code db "DE-HGB-257")
         policy (d/pull db '[*] policy-eid)
@@ -125,14 +125,14 @@
 (deftest activate-requires-supporting-doc
   (let [conn (bootstrap)
         _ (ret/define-policy! conn
-                              {:code "P-NEEDS-DOC"
-                               :applies-to [:audit-doc]
-                               :duration-years 7
-                               :triggered-by :audit-doc/uploaded-at
-                               :expiry-action :purge
-                               :effective-from #inst "2025-01-01"
-                               :legal-basis "Test"
-                               :changed-by-uid (uid (d/db conn) "records")})
+            {:code "P-NEEDS-DOC"
+             :applies-to [:audit-doc]
+             :duration-years 7
+             :triggered-by :audit-doc/uploaded-at
+             :expiry-action :purge
+             :effective-from #inst "2025-01-01"
+             :legal-basis "Test"
+             :changed-by-uid (uid (d/db conn) "records")})
         policy-eid (ret/by-code (d/db conn) "P-NEEDS-DOC")]
     (testing "activate without :supporting-doc is rejected (ADR-038)"
       (is (thrown-with-msg?
@@ -318,14 +318,14 @@
   ;; them out — a :status-history row carries no :audit-doc/* attr.
   (let [conn (bootstrap)
         _ (ret/define-policy! conn
-                              {:code "P-CROSS-NS"
-                               :applies-to [:audit-doc]
-                               :duration-years 1
-                               :triggered-by :status-history/changed-at
-                               :expiry-action :purge
-                               :effective-from #inst "2000-01-01"
-                               :legal-basis "Cross-namespace anchor test"
-                               :changed-by-uid (uid (d/db conn) "records")})
+            {:code "P-CROSS-NS"
+             :applies-to [:audit-doc]
+             :duration-years 1
+             :triggered-by :status-history/changed-at
+             :expiry-action :purge
+             :effective-from #inst "2000-01-01"
+             :legal-basis "Cross-namespace anchor test"
+             :changed-by-uid (uid (d/db conn) "records")})
         policy-eid (ret/by-code (d/db conn) "P-CROSS-NS")
         _ (ret/activate-policy! conn
                                 {:policy-eid policy-eid
@@ -347,16 +347,16 @@
   (let [conn (bootstrap)
         ;; Anonymize policy: purge :title + :description, keep :code.
         _ (ret/define-policy! conn
-                              {:code "P-ANON"
-                               :applies-to [:audit-doc]
-                               :duration-years 3
-                               :triggered-by :audit-doc/uploaded-at
-                               :expiry-action :anonymize
-                               :anonymize-fields [:audit-doc/title
-                                                  :audit-doc/description]
-                               :effective-from #inst "2000-01-01"
-                               :legal-basis "GDPR Art. 5(1)(e) — anonymize but keep"
-                               :changed-by-uid (uid (d/db conn) "records")})
+            {:code "P-ANON"
+             :applies-to [:audit-doc]
+             :duration-years 3
+             :triggered-by :audit-doc/uploaded-at
+             :expiry-action :anonymize
+             :anonymize-fields [:audit-doc/title
+                                :audit-doc/description]
+             :effective-from #inst "2000-01-01"
+             :legal-basis "GDPR Art. 5(1)(e) — anonymize but keep"
+             :changed-by-uid (uid (d/db conn) "records")})
         policy-eid (ret/by-code (d/db conn) "P-ANON")
         _ (ret/activate-policy! conn
                                 {:policy-eid policy-eid
