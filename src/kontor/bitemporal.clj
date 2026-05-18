@@ -64,3 +64,52 @@
          {:db/id "datomic.tx"
           :db.valid/from vt-from
           :db.valid/to vt-to})))
+
+;; ============================================================================
+;; close-validity — retroactively close a prior tx's valid-time window.
+;;
+;; Datahike accepts `[:db/add prior-tx-eid :db.valid/to <date>]` as a
+;; first-class commit, with a transactor-level guard that the
+;; resulting window stays valid (vf < vt). The closing commit's hash
+;; includes the new datom; the prior tx's hash is unchanged. Auditors
+;; querying `audit/verify-chain` see both.
+;;
+;; We expose this as a `*-tx-data` builder + a side-effecting `!`
+;; wrapper per ADR-068. The builder makes the operation composable
+;; with `kontor.process` step lists; the wrapper is the convenience
+;; for one-shot use.
+;;
+;; This sits in kontor.bitemporal (next to `with-vt`) rather than in
+;; datahike itself — see datahike's `doc/valid_time.md` and kontor
+;; doc/research/77 §6 for the rationale (substrate stays
+;; primitives-first; consumers name + opinionate).
+;; ============================================================================
+
+(defn close-validity-tx-data
+  "Return tx-data that retroactively sets `:db.valid/to vt` on
+   `prior-tx-eid` — closing that tx's valid-time window so queries at
+   any vt ≥ `vt` no longer see the prior tx's datoms.
+
+   `prior-tx-eid` must be a tx-entity eid (returned in a prior
+   transact's `:tx-data`); pass a long, NOT a tempid or lookup-ref.
+
+   The datahike transactor enforces a cross-tx `vf < vt` check on the
+   resulting combined state — closing with a `vt` that would produce
+   `vf >= vt` raises `:transact/invalid-valid-times-cross-tx` at
+   commit time. Composable with [[with-vt]] for the outer transaction's
+   own valid-time stamp."
+  [prior-tx-eid vt]
+  [{:db/id prior-tx-eid :db.valid/to vt}])
+
+(defn close-validity!
+  "Side-effecting wrapper for [[close-validity-tx-data]]. Routes
+   through `kontor.validation/transact-with-validation` so kernel
+   invariants run alongside datahike's cross-tx vf<vt guard.
+
+   Returns the tx-report. Throws if datahike rejects the closure
+   (invalid vf<vt window, or the prior tx doesn't exist)."
+  [conn prior-tx-eid vt]
+  ;; require lazily — kontor.validation pulls in kontor.schema and we
+  ;; want this namespace to stay zero-dep on the rest of kontor.
+  (let [transact (requiring-resolve 'kontor.validation/transact-with-validation)]
+    (transact conn (close-validity-tx-data prior-tx-eid vt))))
