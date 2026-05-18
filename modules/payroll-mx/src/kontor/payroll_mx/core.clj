@@ -3,7 +3,7 @@
 
    This module composes three substrate layers:
 
-     1. **Compute provider** — protocol `PayrollComputeProvider` —
+     1. **Engine provider** — protocol `MxEngineProvider` —
         ingests a vendor file (CONTPAQi Nóminas XLSX/CSV, Aspel NOI
         CSV, Microsip, NominasOnline) and returns
         a vector of `:payroll-facts` per period: the canonical
@@ -12,19 +12,30 @@
         compute payroll — the consumer's payroll engine does, and
         we record + post + clear.
 
+        This is the **MX-private engine-ingest seam** (file → MX
+        rows). Distinct from the kernel's
+        `kontor.payroll-provider/PayrollComputeProvider`, which is
+        the cross-jurisdictional substrate protocol satisfied by the
+        bridge layer in `kontor.payroll-mx.adapter`.
+
      2. **Posting builder** — `posting-builder/build-tx-data` —
         translates `:payroll-facts` into a balanced
         `kontor.posting/build-transaction` payload routed through
         the SAT Código Agrupador-keyed account map. This is the
         GL recognition (Dr expense / Cr clearing).
 
-     3. **Emit provider** — `MxCfdiNominaEmitProvider` — assembles
-        the CFDI Nómina v1.2 XML envelope from
-        `:payroll-facts` + employer/employee identity. The XML is
-        UNSIGNED — a PAC (Proveedor Autorizado de Certificación)
-        stamps it with TFD (TimbreFiscalDigital) and returns a UUID
-        which the consumer records on
+     3. **CFDI emitter** — `MxCfdiEmitter` (impl
+        `MxCfdiNominaEmitProvider`) — assembles the CFDI Nómina v1.2
+        XML envelope from `:payroll-facts` + employer/employee
+        identity. The XML is UNSIGNED — a PAC (Proveedor Autorizado
+        de Certificación) stamps it with TFD (TimbreFiscalDigital)
+        and returns a UUID which the consumer records on
         `:audit-doc` (category `:payroll-filing`, language `:es-mx`).
+
+        The cross-jurisdictional kernel emit seam is
+        `kontor.payroll-provider/PayrollEmitProvider`, satisfied by
+        the bridge layer in `kontor.payroll-mx.adapter` which
+        delegates to a wrapped `MxCfdiEmitter`.
 
    ## Discipline (per task instructions + ADR-068 + ADR-082)
 
@@ -58,15 +69,26 @@
   (:require [datahike.api :as d]))
 
 ;; ============================================================================
-;; PayrollComputeProvider protocol
+;; MxEngineProvider protocol — MX-private engine-CSV ingestion seam
 ;;
-;; A compute provider parses a vendor-payroll export into the
-;; canonical :payroll-facts map. The provider is stateless — its
-;; only state is the configured vendor codes-to-wage-types mapping.
+;; Distinct from the kernel's
+;; kontor.payroll-provider/PayrollComputeProvider. An MxEngineProvider
+;; parses a vendor-payroll export into the MX-shaped :payroll-facts
+;; map (per-employee per-wage-type rows). The bridge layer in
+;; kontor.payroll-mx.adapter wraps an MxEngineProvider behind a
+;; kernel-protocol PayrollComputeProvider so run-payroll! can drive
+;; it like the DE / US / CA / FR / AU / BR / IN / JP / CN adapters.
+;;
+;; The provider is stateless — its only state is the configured
+;; vendor codes-to-wage-types mapping.
 ;; ============================================================================
 
-(defprotocol PayrollComputeProvider
-  "Parse a vendor-payroll export into canonical `:payroll-facts`."
+(defprotocol MxEngineProvider
+  "Parse a vendor-payroll export into MX-shaped `:payroll-facts`.
+
+   This is the MX-private engine-ingest seam. The kernel-substrate
+   PayrollComputeProvider counterpart is the bridge defrecord in
+   `kontor.payroll-mx.adapter` which wraps any MxEngineProvider."
   (vendor-id [this]
     "Short id for the underlying vendor, e.g. :contpaqi-nominas, :aspel-noi.")
   (parse-period [this source]
@@ -74,16 +96,24 @@
      Returns the :payroll-facts shape (see `make-payroll-facts`)."))
 
 ;; ============================================================================
-;; PayrollEmitProvider protocol
+;; MxCfdiEmitter protocol — MX-private CFDI Nómina XML emit seam
 ;;
-;; An emit provider serializes :payroll-facts to a country-specific
-;; clearance-shape XML/JSON. For MX this is the CFDI Nómina v1.2 XML.
+;; An MxCfdiEmitter serializes :payroll-facts to the MX-specific
+;; CFDI Nómina v1.2 XML envelope (per Anexo 20). The kernel's
+;; cross-jurisdictional PayrollEmitProvider counterpart is the bridge
+;; defrecord in `kontor.payroll-mx.adapter` which wraps any
+;; MxCfdiEmitter + projects its result to the canonical
+;; :audit-doc tx-data shape that run-payroll! expects.
 ;; ============================================================================
 
-(defprotocol PayrollEmitProvider
-  "Serialize `:payroll-facts` to a clearance-shape string + metadata.
+(defprotocol MxCfdiEmitter
+  "Serialize MX `:payroll-facts` to the CFDI Nómina 1.2 XML envelope.
    The emit is UNSIGNED — caller / PAC adds the cryptographic
-   stamp."
+   stamp.
+
+   This is the MX-private CFDI-XML seam. The kernel-substrate
+   PayrollEmitProvider counterpart is the bridge defrecord in
+   `kontor.payroll-mx.adapter` which wraps any MxCfdiEmitter."
   (emit-format [this]
     "Returns a keyword identifying the emit format, e.g.
      :mx/cfdi-nomina-1.2.")
