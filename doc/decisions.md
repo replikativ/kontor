@@ -8080,6 +8080,60 @@ Date: 2026-05-18.
 
 ---
 
+## ADR-087 — `kontor-payroll-ca` C4.1: Quebec RL-1 emit + TPZ-1015 remittance helper
+
+**Decision.** Extend the `modules/payroll-ca/` adapter (ADR-078) with the QC carve-out — Revenu Québec's parallel filing track that ADR-078 deferred. Four new src files in the existing module (no new module artifact) plus an `:employer-fss` wage type and four chart-of-account additions; eleven new src+test files / namespaces across ~1.4 kLoC.
+
+1. **`kontor.payroll-ca.rl1`** — RL-1 slip aggregator. Reduces a year of `PayrollFacts` for one (person × employer × tax-year × QC) into the box-A..-O catalog per the public RL-1.T-V form (clean-room derivation; see "License posture" below). Box-mapping covers all common kinds (earnings → A; commission → A+M; taxable benefits → A+L; QPP/QPP2/QPIP/EI/QC-ITX/RPP/union-dues/charitable-donations/insurable-earnings/pensionable-earnings → B/B.A/H/C/E/D/F/N/I/G respectively). Open-set extension via `:rl1-extras-map` for boxes J/K/P-W (consumer-specific income codes). XML element emission uses French element names from the public form (`<Releve1>`, `<Cases>`, `<CaseA>`...) — consumers using a certified RL-1 software may need to remap; the data shape is the load-bearing seam.
+
+2. **`kontor.payroll-ca.rl1-summary`** — RL-1 Summary (`RLZ-1.S` / "Sommaire 1") aggregator + submission envelope. Aggregates the slip vector into the seven Summary totals (Quebec ITX / QPP-employee / QPP2-employee / QPIP-employee / QPP-employer / QPIP-employer / FSS-contribution / slip count) and builds the `<Releves>` root containing `<Transmetteur>` + slip elements + `<Sommaire1>`. Employer FSS contribution + employer QPP/QPIP totals are consumer-supplied (substrate does NOT bundle rate tables; the FSS rate depends on the total-payroll-threshold bracket per Revenu Québec).
+
+3. **`kontor.payroll-ca.tpz1015`** — Monthly source-deduction remittance helper analogous to the existing PD7A helper but for Revenu Québec's four buckets (QC-ITX / QPP / QPIP / FSS). Four remitter types (`:annual :monthly :twice-monthly :weekly`) with the same due-date computation pattern as PD7A. Uses `kontor.payroll-ca.pd7a/sum-postings-by-tag` for the underlying datalog totals — same RP/NEQ-routing seam. Returns `:audit-doc/category :payroll-filing :audit-doc/language :fr` (RQ correspondence is French by convention).
+
+4. **`kontor.payroll-ca.qc-emit`** — `QcPayrollEmitProvider` that emits per-pay-period FR `:audit-doc` rows when QC payroll facts are detected; plus `build-rl1-submission!` that composes the three steps above into a full year-end submission element with the audit-doc tx-data fragment. The existing `CaPayrollEmitProvider`'s warning is suppressed via `:qc-emit-installed? true` opt — the warning now fires only when QC employees exist AND no QC emitter is wired.
+
+**Wage-types catalog addition.** One new component-kind `:employer-fss` (Fonds des services de santé / Quebec Health Services Fund) routed to `:ca-payroll-er-fss` expense + `:ca-payroll-fss` payable; engine-computed amount supplied by the consumer per the bracket-based rate table. Two new accounts in `coa_starter.edn` (`2532 RQ-FSS` liability + `5417 Employer-FSS` expense), plus the `:qc-rq-tpz1015` routing tag added to the four QC liability accounts (alongside the existing `:qc-rq-rl1`).
+
+**License posture (clean-room).** Revenu Québec's RL-1 / RLZ-1.S XSD bundle is **partner-only** (registration gate, unlike CRA's public T619 XSDs). Per CLAUDE.md + ADR-001 we therefore do NOT ship the XSD nor a validator against it. Box names + meanings come from the public forms (RL-1.T-V courtesy translation; RL-1.G-V filing guide; RLZ-1.S-G-V summary guide) — these are facts, not copyrightable. Element names are clean-room derivation from French source documentation ("Cases" for the box container, "Sommaire1" for the summary, "NEQ" / "NAS" for the Quebec NEQ / SIN identifiers). Consumers with the partner XSD plug `kontor.l10n-ca.xml.validation/validate!` against the file out-of-band. The same posture as ADR-076 (DATEV public spec) and ADR-077 (ADP GLI public spec): consume the public format documentation, never lift code.
+
+**Why FR-by-default for audit-docs.** The kernel attr `:audit-doc/language` (ADR-078) is open-set; nil treated as `:en`. The RL-1 + TPZ-1015 audit-docs default to `:fr` per Revenu Québec correspondence convention. Consumers with bilingual reporting wire `:language` per call site as needed (mirrors ADR-078's CRA `:en` default + Sophie/James bilingual e2e test).
+
+**Decision NOT to.** Not shipping CNESST emission (Commission des normes, de l'équité, de la santé et de la sécurité du travail — Quebec workers' comp + labour-standards). Per note 84 §8 + §10.4 #7: CNESST premiums are remitted quarterly via TPZ-1015's annexes; substrate-wise the `:employer-wsib`-equivalent component kind already exists (engines emit it); the dedicated quarterly emit-helper defers to a future C4.2 commit alongside the per-province EHT/WCB filing helpers.
+
+**Decision NOT to.** Not bundling QPP / QPP2 / QPIP / Quebec-ITX rate tables or FSS bracket-rate tables. Per ADR-005 / ADR-071 / ADR-075 the engine is authoritative for the math; kontor records the engine's outputs. The FSS rate-bracket calculation (sub-$1M / $1M-$7M / >$7M payroll thresholds with industry-sector reductions) is non-trivial and changes annually; the consumer's engine (Ceridian / ADP-CA / Wagepoint / a Steuerberater-equivalent) supplies the computed contribution.
+
+**Decision NOT to.** Not auto-filing or submitting to the Revenu Québec partner endpoint. The Revenu Québec online filing requires a transmitter number (NP-prefixed 8-character ID, partner-registered as of 2006); credential management lives in the consumer's deployment plane (mirrors ADR-005's "no bundled credentials"). kontor produces the XML; the consumer's ops uploads it.
+
+**Decision NOT to.** Not emitting RL-2 / RL-25 / RL-31 / RL-32 slips (the other RL series). RL-1 covers employment income; RL-2 covers retirement / annuities; RL-25 covers profit-sharing; RL-31 covers landlord-to-tenant; RL-32 covers tips / gratuities pooled. Each is a separate XSD family and a separate filing track; out of payroll-ca scope.
+
+**Test discipline.** 4 new test namespaces / **40 new tests** / ~120 new assertions in `modules/payroll-ca/test/kontor/payroll_ca/`:
+- `rl1_test` — payroll-facts → RL-1 slip mapping (12 deftest covering Box A/B/B.A/C/E/F/G/H/I/L/M/N aggregation, commission double-routing to A+M, taxable-benefit double-routing to A+L, QPP2 detection, missing-key validation, report-type code mapping R/A/D, zero-amount omission, QC filtering predicate, audit-doc default-FR-language, box-mapping catalog membership).
+- `rl1_summary_test` — Summary aggregation across slips + envelope XML (6 deftest covering box-21/22/22.1/23/27/28/30 totals across multi-slip vectors, zero-default for unsupplied employer contributions, missing-key validation, summary element emission with employer name + contact + amended report-type, full Releves envelope shape).
+- `tpz1015_test` — Four-bucket totals + remitter-type schedule (9 deftest covering remitter-type vocabulary, monthly/twice-monthly/annual due-date computation, unknown-type throw, four-bucket sum across pay runs, RP-routing filter isolation, audit-doc FR-default + language override).
+- `qc_emit_test` — QcPayrollEmitProvider + warn-suppression + build-rl1-submission! (10 deftest covering QC-only audit-doc emission, no-op when no QC, language override, warn-suppression when emitter installed, warn-fires-by-default, single-arity backward compat, full RL-1 submission build with QC filtering + slip-reference threading + Sommaire1 envelope, validation throws).
+- Plus 2 new deftest in `e2e_test` — `qc-no-warn-when-emitter-installed` + `qc-rl1-end-to-end` (the C4.1 acceptance criterion: TPZ-1015 four-bucket totals from real datahike postings + build-rl1-submission! against the bootstrapped CA inc, with QC filtering verified by SIN check).
+
+**Effort.** ~0.5 maintainer-day on top of C4: the four new namespaces reuse the C4 box-aggregator pattern + the existing PD7A `sum-postings-by-tag` helper; the chart-of-accounts addition is two rows of EDN; the wage-type addition is one map entry. The largest single artifact is `rl1.clj` (~280 lines) — comparable to `t4_builder.clj` (326 lines).
+
+**Open followups (P2 — land before C5).**
+- **P2** — CNESST quarterly remittance helper (parallel of TPZ-1015 + the per-province EHT/WCB story). Out of C4.1 scope per ADR-078 §"per-province".
+- **P2** — Statutory-holiday-aware TPZ-1015 due-date shift (parallel of the PD7A P2 from ADR-078).
+- **P2** — Partner-XSD validator pass: if/when the partner XSD becomes available out-of-band, surface a `kontor.payroll-ca.rl1/validate-against-partner-xsd!` shim that does the JAXP roundtrip (the existing `kontor.l10n-ca.xml.validation/validate!` is generic enough to reuse — the shim just locates the XSD file).
+- **P2** — RL-1 box-J (private health-services-plan employer contribution) wiring; consumer-extension `:taxable-benefit-private-health` recommended; route to `:j` via `:rl1-extras-map` until a substrate-wide pattern emerges.
+- **P2** — `run-payroll!` orchestrator should accept a `:qc-emit-provider` opt parallel to `:emit-provider` so the C4.1 wiring is first-class rather than consumer-composed (currently the QC emitter is wired alongside, not threaded). Same shape as the ADR-078 P1 backlog item "thread `:ledgers-map`".
+
+**Research backing.** ADR-078 §"QC carve-out" + note 84 §8 + the public Revenu Québec form documentation (URLs cited per-namespace in the docstrings + verified 2026-05-18):
+- RL-1 form (RL-1.T-V): https://www.revenuquebec.ca/en/online-services/forms-and-publications/current-details/rl-1-t/
+- RL-1 filing guide (RL-1.G-V): https://www.revenuquebec.ca/en/online-services/forms-and-publications/rl-1-g-v/guide-to-filing-the-rl-1-slip-employment-and-other-income/
+- RL-1 Summary guide (RLZ-1.S-G-V): https://www.revenuquebec.ca/en/online-services/forms-and-publications/rlz-1-s-g-v/guide-to-filing-the-rl-1-summary-summary-of-source-deductions-and-employer-contributions/
+- Sending RL Slips Online: https://www.revenuquebec.ca/en/businesses/rl-slips-and-summaries/sending-rl-slips-and-summaries/sending-rl-slips-and-summaries-to-revenu-quebec/online/
+- Amending RL Slips: https://www.revenuquebec.ca/en/businesses/rl-slips-and-summaries/amending-or-cancelling-rl-slips-or-summaries/amending-rl-slips/
+- TPZ-1015 (monthly variant TPZ-1015.R.14.1-V): https://www.revenuquebec.ca/en/online-services/forms-and-publications/current-details/tpz-1015-r-14-1-v/
+
+Date: 2026-05-18.
+
+---
+
 ## ADR-076 — `kontor-payroll-de-datev`: the DE-DATEV-LODAS adapter (Stage R C2)
 
 **Decision.** Land the first concrete `PayrollComputeProvider` / `PayrollPostingBuilder` / `PayrollEmitProvider` triple as `modules/payroll-de-datev/`, per the C2 plan in research notes [[79-hr-payroll-stage-r-plan]] §5.1 and [[82-de-datev-lodas-research-before]]. The adapter is a **clean-room connector around DATEV** — it consumes / produces DATEV's public file-format specifications (LODAS Importdatei + EXTF Buchungsstapel Schema 510 v21) and does **not** re-implement DE jurisdictional payroll math (EStG / SGB / ELStAM / DEÜV / GKV) which stays inside the DATEV appliance.
@@ -8132,5 +8186,159 @@ The test fixture (`resources/.../fixtures/buchungsbeleg-2025-11.csv`) is a synth
 **Research backing.** doc/research/82-de-datev-lodas-research-before.md (full spec source + the licence + accounting-pattern citations), 79 §5.1 (C2 plan), 81 §9.6 (compensation-component refactor C2 depends on), 72 §1.5 (Personio reference adapter shape).
 
 License posture (final). Format spec public; EXTF v21 column layout public; SKR04 / SKR03 numbering public; Personio / Sage / Lexware / sevDesk / Circula adapter shapes read from public vendor documentation for *pattern*, never their code. No bundled DATEV wage-type catalog; no bundled BBG / Beitragssatz table; no LODAS API credentials. Algorithm sketches (HGB §249 PTO formula, AG-SV Mittelstand 21 %) drawn from cited public sources (Haufe, hrworks, BuchhaltungsButler, rechnungswesen-info.de) and re-derived; no GPL-contaminated reference code lifted.
+
+Date: 2026-05-18.
+
+---
+
+## ADR-081 — `kontor-payroll-br`: BR eSocial payroll adapter (Stage R C7)
+
+**Context.** Brazil is the highest-complexity adapter in the Stage R wave (research note 79 §5.3 originally labeled it C10 because eSocial's 40+ event types make it the most painful per note 73 Theme C P2; we land it as C7 alongside the trans-national wave because a real BR consumer surfaced). The BR payroll engine landscape is fragmented across mid-market (RH Sistemas, Senior HCM, TOTVS Datasul) and SMB (Pluxee — formerly Sodexo Folha — ContaAzul Folha) tiers; all converge on a wage-type-per-row CSV / GL-export shape similar to the US ADP GLI + CA Ceridian Dayforce patterns. The mandatory event-bus is eSocial — a federal SOAP webservice that consolidates labor + tax + social-security data for ALL Brazilian employers since 2018 (rollout phased by company size).
+
+**Decision.** Land the BR-eSocial payroll adapter as `modules/payroll-br/` on top of the Stage R C1 substrate (ADR-075) + the already-shipped `modules/l10n-br/` chart + identifiers + NF-e / SPED Contábil emitters. Seven pieces, no new kernel ADRs:
+
+1. **`kontor.payroll-br.wage-types`** — BR-specific `:component-kind` open-set extension per ADR-075. Maps every BR pay-element kind (`:base-wage`, `:overtime-50`, `:overtime-100`, `:night-shift-addition`, `:hazard-addition`, `:unhealthy-addition`, `:thirteenth-salary`, `:vacation-pay-paid-out`, `:vacation-bonus-paid-out`, `:meal-voucher`, `:transport-voucher`, `:inss-employee`, `:irrf-employee`, `:union-dues`, `:inss-employer` / CPP, `:fgts-employer`, `:sat-rat`, `:outras-entidades`, the three CPC-33 accruals `:ferias-accrual` / `:thirteenth-salary-accrual` / `:severance-fgts-accrual`, the carry-only bases `:inss-base` / `:irrf-base` / `:fgts-base`, etc.) to an `:account-tag` keyword + an `:esocial-rubrica-hint` keyword. Consumer-extensible via an `:extras-map`. Plus `validate-catalog` — throws ex-info on failure per the canonical convention (note 86 §2.5 P2-86-5 — DE/kernel convention, not the US validate's nil-on-success outlier).
+
+2. **`kontor.payroll-br.compute`** — three `PayrollComputeProvider` impls:
+   - `RhSistemasGlProvider` — reference CSV adapter with configurable column mapping. The mid-market BR engines (RH Sistemas / Senior HCM / TOTVS Datasul) converge on the same column shape (Brazilian payroll engines follow the SEFIP / GFIP layout norms).
+   - `SeniorHcmGlProvider` — same parser shape with `:senior-hcm` provider-id for downstream provenance.
+   - `PluxeeCsvGlProvider` — position-based CSV layout (no headers; column position dictates meaning) using `;` as the BR-Excel default field separator. Handles BR-locale decimal commas (`1.234,56`) via the shared `coerce-bigdec` helper.
+
+3. **`kontor.payroll-br.posting-builder`** — `BrPayrollPostingBuilder` impl of `PayrollPostingBuilder`. Per-pay-period BR journal entry: DR wages-expense + DR per-employer-charge expense + DR per-CPC-33 accrual + CR per-statutory-payable bucket + CR Salários-a-pagar. Routes per-CNPJ via the `:cnpj-account-tag` opt that attaches an `:account-tag/name`-keyed `:posting/account-tags` ref to every posting (mirrors the CA-RP-routing pattern from ADR-078 §4 + note 84 §4.2).
+
+4. **`kontor.payroll-br.accrual`** — the three load-bearing BR CPC-33 / IAS-19 accruals as ADR-068 out-of-band tx-data builders. These are mandatory employer obligations under Brazilian labor law:
+   - **Férias + 1/3 adicional** — `(monthly-salary / 12) * (1 + 1/3)` (CLT art. 129+ + Constituição art. 7º XVII).
+   - **13º salário** — `monthly-salary / 12` (Lei 4.090/62 + Decreto 57.155/65).
+   - **Multa rescisória de 40% sobre FGTS** — `fgts-balance * 0.40` (Constituição art. 10 ADCT + Lei 8.036/90; involuntary-termination trigger).
+
+   All three follow the US-payroll convention from ADR-077 §"Parallel-ledger split for accruals": separate ns + `!` wrapper through `transact-with-validation`. Per note 86 §2.3 the substrate ALSO supports the CA-style "engine-emits-accrual-component" pattern when the BR engine reports the accrual inline (the `:ferias-accrual` / `:thirteenth-salary-accrual` / `:severance-fgts-accrual` component-kinds route through the posting-builder's employer-side leg-pair path).
+
+5. **`kontor.payroll-br.esocial`** — XML event builders for the load-bearing subset of the eSocial S-1.3 leiaute. V1 covers eleven events: S-1000 (Informações do Empregador), S-1005 (Tabela de Estabelecimentos), S-1010 (Tabela de Rubricas), S-1020 (Tabela de Lotações Tributárias), S-2200 (Cadastramento Inicial / Admissão), S-2299 (Desligamento), S-2300 / S-2399 (Trabalhador sem vínculo início/término), S-1200 (Remuneração de Trabalhador), S-1210 (Pagamentos), S-1299 (Fechamento dos Eventos Periódicos). All events use the gov.br/esocial S-1.3 leiaute as the schema source; the substrate emits the XML, the consumer's engine signs (ICP-Brasil) and transmits (SOAP webservice) — mirroring the ADR-017 NF-e separation.
+
+6. **`kontor.payroll-br.emit`** — `BrESocialEmitProvider` impl. Per pay-period emits S-1200 + S-1210 per employee + a single S-1299 fechamento. All audit-docs carry `:audit-doc/category :payroll-filing` (canonical vocabulary per note 86 P0-86-2) + `:audit-doc/language :pt-br` (ADR-078's language axis). Plus `terminate-employment-tx-data` (ADR-068) wrapping S-2299 + `hire-employee-tx-data` wrapping S-2200 + `build-table-event-audit-docs` for the on-setup S-1000/1005/1010/1020 events.
+
+7. **`kontor.payroll-br.core`** — installer (registers the three shared `:audit-doc/*` attrs `:audit-doc/inline-payload` / `:audit-doc/payroll-period` / `:audit-doc/payroll-entity` — same shape as `modules/payroll-de-datev/core.clj`; `d/transact` is idempotent so the DE + BR installers compose cleanly) + the payroll chart extension. Layers on top of `kontor.l10n-br.chart/install!`.
+
+**Scope discipline — what v1 ships vs defers.** Per the task brief + ADR-081 §6 the v1 events list deliberately omits:
+- **S-1280** BPO substitute employer
+- **S-2240** Condições Ambientais de Trabalho (SST events — Saúde e Segurança do Trabalho)
+- **S-2250** Aviso Prévio
+- **S-2298** Reintegração
+- **S-1202** Remuneração RPPS (public-sector regime)
+- **S-1207** Benefícios — Entes Públicos
+- **S-2205 / S-2206 / S-2210 / S-2220 / S-2230** — change events (alteração cadastral / contratual / CAT / monitoramento saúde / afastamento)
+- **S-3000** Exclusão de Evento
+- **S-5xxx** return events (kontor consumes; the engine receives the regulator's response payloads)
+
+These land in BR follow-ups when consumer demand surfaces.
+
+**License posture (same as ADR-005 / ADR-071 / ADR-075 / ADR-077 / ADR-078).** No code lifted from any BR engine. The eSocial XSDs + leiaute manuals at gov.br/esocial are public regulator publications — we read the schemas as facts and emit independent XML. CNPJ / CPF mod-11 checksum algorithms come from `kontor.l10n-br.identifiers` (independently derived from RFB Instrução Normativa publications). The BR Plano de Contas Referencial codes come from `kontor.l10n-br.chart` (already-shipped per ADR-019). The three CPC 33 accrual formulae (1/12 monthly, 1/3 constitutional, 40% severance) are statutory facts. NO bundled INSS / IRRF / FGTS / Salário-Família rate tables (these are regulator policy + change frequently; the engine is authoritative); NO bundled vendor API credentials (consumer holds OAuth / certificate / endpoint); NO bundled rubrica catalog (each company's eSocial S-1010 Tabela de Rubricas is unique to its payroll engine + Acordo Coletivo / Convenção Coletiva — consumer supplies the engine→kontor `:rubrica-codes` mapping at provider construction time).
+
+**What kontor does NOT do (scope discipline).**
+
+- **NO BR gross-to-net implementation.** INSS / IRRF / FGTS / Salário-Família / Salário-Maternidade / SAT-RAT / outras-entidades calculations — the engine (RH Sistemas / Senior / Pluxee / Datasul / ContaAzul) is authoritative. kontor consumes the result.
+- **NO ICP-Brasil signing.** Consumer holds the cert (A1 PFX or A3 token); signing happens in the consumer's engine OR a separate signing partner. Mirrors ADR-017's NF-e separation.
+- **NO eSocial WS transmission.** The consumer's engine handles SOAP, ack handling, and S-5001 / S-5011 consolidated-return reception.
+- **NO Reforma Tributária do Consumo (LC 214/2025) reflection on payroll.** CBS / IBS / IS are indirect-tax-side concerns (NF-e XML groups per note 80); payroll is unaffected.
+- **NO eSocial substitute-employer / BPO event handling.** S-1280 + S-1295 deferred to BR follow-ups.
+
+**Decision NOT to.** Not bundling vendor rubrica catalogs (the RH Sistemas / Senior / Pluxee code lookups). Consumer supplies `:rubrica-codes` map at provider construction time. The same posture as ADR-005 / ADR-071 / ADR-072 / ADR-075 / ADR-078 — consumer holds the engine.
+
+**Decision NOT to.** Not collapsing the four canonical BR statutory buckets (INSS-empregado / INSS-empregador / FGTS / IRRF). They MUST stay distinct because they have distinct DARF codes, distinct due dates, and distinct GFIP / eSocial S-1210 lines. Tests explicitly assert four DISTINCT accounts and exercise the leg routing.
+
+**Decision NOT to.** Not implementing a CBS/IBS-payroll bridge. The 2026 Reforma Tributária mandates affect indirect-tax NF-e XML groups; payroll is unaffected. When the IS — Imposto Seletivo lands a payroll-incidence rule (currently it doesn't), a future ADR addresses it.
+
+**Decision NOT to.** Not bundling INSS / IRRF / FGTS rate tables. These are regulator policy + change frequently; the engine is authoritative. Same posture as ADR-005.
+
+**Test discipline.** Six test namespaces under `modules/payroll-br/test/kontor/payroll_br/`:
+- `wage_types_test` — catalog membership + four-statutory-bucket distinctness + CPC-33 accrual-flag coverage + `validate-catalog` throw-on-failure convention + extras-map extension.
+- `compute_test` — RH Sistemas + Senior HCM + Pluxee CSV parsers + BR-locale comma decimal handling + provider-id assertions + per-employee fact assembly.
+- `posting_builder_test` — rubrica → CoA mapping + four-distinct-payable-buckets + CNPJ routing + CPC-33 accrual leg pairs + balanced-postings invariant + VR/VT routing.
+- `accrual_test` — three CPC-33 formula correctness + `:include-employer-charges?` toggle + `:turnover-fraction` for severance + tx-data balanced postings + HALF-EVEN rounding discipline.
+- `esocial_test` — eleven event-builder shapes + CNPJ / CPF validation throw-on-invalid + termination-cause keyword mapping + XML well-formedness round-trip through clojure.data.xml.
+- `emit_test` — `BrESocialEmitProvider` produces S-1200 + S-1210 per fact + 1 S-1299 fechamento per pay-period + table-event builders + termination + hire tx-data builders.
+- `e2e_test` — full BR pay-run through `run-payroll!` against an Acme do Brasil Ltda fixture with two employees; asserts the four statutory buckets land on distinct accounts, eSocial emit-docs are produced with `:payroll-filing` category + `:pt-br` language, payload XML contains the rubrica codes.
+
+The fixtures (`resources/.../fixtures/rh_sistemas_sample.csv` + `pluxee_sample.csv`) use valid mod-11 CPFs / CNPJs (`11144477735`, `12345678909`, `11.222.333/0001-81`) drawn from the existing `kontor.l10n-br.identifiers-test` corpus.
+
+**Effort.** ~2 maintainer-days for C7 (8 src namespaces + 6 test namespaces + 2 CSV fixtures + chart extension + this ADR). The BR adapter is more verbose than C4 (CA) because eSocial's eleven-event surface dwarfs the CRA T619 + PD7A scope, but most of the cognitive work was front-loaded — the parser pattern reuses the CA Ceridian shape, the posting builder reuses the CA leg-pair pattern, the emit-provider reuses the DE-LODAS audit-doc shape with `:audit-doc/category :payroll-filing` + `:pt-br`. The eSocial XML builders are the novel work (~600 LOC for the eleven event types).
+
+**Followups for review-after.**
+- **P1** — XSD validation: bundle the gov.br/esocial S-1.3 XSDs (public regulator publications, BR-government work) under `test/resources/esocial/xsd/` and add per-event XSD validation in `esocial_test.clj`. Current well-formedness round-trip is a P2 substitute.
+- **P1** — Live rubrica-binding fixture: the test fixtures use synthetic rubrica codes (R001 / R200 / R210 / R900 / R901). A real BR consumer surfaces engine-specific catalogs; sample a public engine reference (RH Sistemas / Pluxee customer docs) for a more realistic fixture set.
+- **P2** — S-1280 BPO + S-1295 substitution (a real BR consumer running a PEO / BPO arrangement).
+- **P2** — S-2240 SST (Saúde e Segurança do Trabalho) events; gates on a BR consumer with hazardous-work exposure.
+- **P2** — S-2250 Aviso Prévio + S-2298 Reintegração — these are termination-flow extensions; current code handles S-2299 only.
+- **P2** — Reforma Tributária IS — Imposto Seletivo if a payroll-incidence rule lands (currently no impact).
+- **P2** — DSAR collector for `:person` data tied to BR `:employment` rows; mirrors P1-86-5 carry-over from note 86.
+
+**Research backing.** doc/research/79 §5.3 (C-wave plan + the BR-as-most-complex framing); 73 Theme C (multi-country pain — BR cited as P2); gov.br/esocial S-1.3 leiaute manual (public regulator publication); ADR-081 derives the BR conventions from public sources only.
+
+Date: 2026-05-18.
+
+---
+
+## ADR-084 — `kontor-payroll-jp`: JP payroll adapter (Stage R C10)
+
+**Decision.** Land the JP payroll adapter as a new companion module `modules/payroll-jp/` on top of the Stage R C1 substrate (ADR-075) + the already-shipped `modules/l10n-jp/` (chart + 法人番号 / QIS identifiers + 消費税 / JCT machinery + invoice + closing). Six pieces, no new kernel ADRs — the `:audit-doc/language` slot ADR-078 added already covers `:ja`; the `:audit-doc/privilege :pii-sensitive` + `:audit-doc/category :hr-personnel` already exist for My Number discipline.
+
+1. **`kontor.payroll-jp.wage-types`** — JP-specific `:component-kind` open-set extension. Maps every JP pay-element kind to an `:account-tag` keyword and (where applicable) a `:gensen-box` keyword for the year-end 源泉徴収票. Covered: earnings (`:base-wage`, `:overtime`, `:bonus`, `:commuting-allowance`, `:housing-allowance`, `:family-allowance`, `:position-allowance`), 4-bucket statutory SI (`:employee-health-insurance` / `:employer-health-insurance` for 健康保険; `:employee-pension` / `:employer-pension` for 厚生年金; `:employee-employment-insurance` / `:employer-employment-insurance` for 雇用保険; `:employee-long-term-care` / `:employer-long-term-care` for 介護保険 — age-40-gated), tax withholding (`:income-tax-withheld` / `:resident-tax-withheld`), and voluntary deductions (`:zaikei-savings` for 財形貯蓄, `:union-dues` for 組合費, `:voluntary-deduction` catch-all). Carry-only kinds for Gensen inputs flagged `:posts? false`. Consumer-extensible via an `:extras-map`. Per ADR-084 §10.1.
+
+2. **`kontor.payroll-jp.compute`** — four `PayrollComputeProvider` impls:
+   - `FreeeProvider` — freee人事労務 CSV with the standard 区分 column (支給 / 控除 / 集計) and configurable column mapping. freee is the largest SaaS payroll engine in Japan by SMB share.
+   - `MoneyForwardProvider` — Money Forwardクラウド給与 CSV with English snake_case headers.
+   - `YayoiProvider` — 弥生給与 desktop CSV with Kanji column headers (similar pattern to freee).
+   - `PcaKyuyoApiProvider` — 給与奉行 cloud API skeleton (partner-program-gated; throws helpful error until consumer wires OAuth).
+   All four share the `:pay-element-codes` consumer-supplied mapping and `:column-mapping` configurable column names per ADR-084 §2. CSV parsing handles UTF-8 BOM (freee + MF emit with BOM) and CJK column header preservation.
+
+3. **`kontor.payroll-jp.posting-builder`** — `JpPayrollPostingBuilder` impl. Per-pay-period JP journal entry: DR 給料手当 (wages-expense) + DR 賞与 (bonus-expense, separate per J-GAAP convention) + DR 法定福利費 (employer SI expense rolled up) + CR per-bucket 預り金 (Azukari-kin / holding) for each of the 4 SI buckets + CR 預り金 — 所得税 + CR 預り金 — 住民税 + CR 未払金 (net wages). The 4 SI buckets stay distinct because each cash-payment cycle targets a different agency (年金事務所 / 健保組合 / 税務署 / 市区町村). JPY rounds HALF-EVEN to whole yen per leg (ADR-013 precision-0).
+
+4. **`kontor.payroll-jp.accrual`** — two accrual families:
+   - **`bonus-accrual-tx-data`** + `bonus-accrual-amount` helper — 賞与引当金 monthly delta toward the next semi-annual (夏季 / 冬季) payout. The Japanese matching principle requires accruing bonus expense over the 6 periods that earned it. Per ADR-084 §6.
+   - **Four per-bucket SI employer-side accrual primitives** — `health-insurance-accrual-tx-data` (健康保険), `pension-accrual-tx-data` (厚生年金), `employment-insurance-accrual-tx-data` (雇用保険), `long-term-care-accrual-tx-data` (介護保険). Each emits a DR 法定福利費 + CR 預り金 pair so per-bucket cash reconciliation is clean.
+
+5. **`kontor.payroll-jp.gensen`** — year-end 源泉徴収票 (Gensen Choshu Hyo / Annual Withholding Tax Statement) aggregator. Reduces a year of `PayrollFacts` for one (person × employer × tax-year) into a structured `:gensen/*` map carrying the load-bearing boxes: 支払金額 (payment-amount), 源泉徴収税額 (withholding-amount), 社会保険料等 (social-insurance-paid), plus opaque carry-only slots for engine-computed 給与所得控除後の金額 / 課税対象額 / 配偶者控除 / 扶養控除. Resident tax (住民税) is INTENTIONALLY OMITTED from the Gensen (it goes to municipalities via 給与支払報告書, NOT to NTA). Bonus components roll into 支払金額 alongside monthly earnings — engine handles the bracket math (賞与表 vs 月額表) inside `:income-tax-withheld`. Per ADR-084 §7.
+
+6. **`kontor.payroll-jp.emit`** — `JpPayrollEmitProvider` impl + `build-gensen-audit-doc-tx-data` + `record-my-number-attestation-tx-data` + `warn-if-my-number-leaked!` PII discipline helper. The provider emits one `:audit-doc/category :payroll-filing` row per payroll run with `:audit-doc/language :ja`. The Gensen audit-doc carries the same category + language for the year-end statement. The My Number attestation builder is the load-bearing PII helper (see below).
+
+**My Number (個人番号 / Kojin Bangō) discipline.** ADR-084 §1 documents the load-bearing PII story: kontor NEVER stores the 12-digit My Number value. The value lives in the consumer's privileged store (encrypted at rest, access-gated by the consumer's auth layer). kontor records ONLY the attestation metadata via `record-my-number-attestation-tx-data`, producing an `:audit-doc` row with `:audit-doc/category :hr-personnel` + `:audit-doc/privilege :pii-sensitive` + `:audit-doc/language :ja`. The kernel substrate already has these three facets (ADR-051 privilege; ADR-075 category; ADR-078 language); no new kernel attr added. Consumers gate downstream access via kontor-authz (ADR-065/066); retention follows kontor.retention (ADR-050) keyed on `:retention-policy/category :hr-personnel`. Two helper functions surface PII discipline violations: `pii-employees-in-facts` returns the set of employments whose `PayrollFacts` accidentally carry an inline `:my-number` or `:個人番号` slot, and `warn-if-my-number-leaked!` logs a loud `[ERROR]` to `*err*` for engine-configuration audits.
+
+**Decision NOT to.** Not bundling per-prefecture 健保 (Kenpo) SI rate tables — every prefecture has its own rate (e.g. 東京都 vs 大阪府 vs 北海道), and rates change annually each April. Per ADR-084 §2.5 the engine is authoritative for the math; the consumer supplies a configured engine with the current rates.
+
+**Decision NOT to.** Not bundling vendor pay-element catalogs (freee's 項目名 vocabulary, MF's `item_code` lookup, Yayoi's 支給控除項目). Consumer supplies `:pay-element-codes` map at provider construction time (mirrors the ADR-005 / ADR-071 / ADR-072 / ADR-075 / ADR-078 "consumer holds the engine" pattern).
+
+**Decision NOT to.** Not implementing 退職給付引当金 (Taishoku Kyufu Hikiatekin / retirement-benefit provision). ASBJ Statement No. 26 requires actuarial valuation (退職給付債務 / PBO equivalent + discount-rate selection). Out of substrate scope; deferred to a future `kontor-pension-actuary-jp` companion that would integrate the 退職給付に係る会計基準 actuarial tables. Per ADR-084 §7.
+
+**Decision NOT to.** Not implementing 給与支払報告書 (Kyuyo Shiharai Hokokusho / Year-end Salary Payment Report to municipalities). This is the per-municipality companion to the NTA-bound Gensen; same per-employee tape, different recipient. Deferred to a future v2 since each municipality has its own filing format and the engine (freee / MF / Yayoi) typically handles this directly. Per ADR-084 §7.4.
+
+**Decision NOT to.** Not implementing 法定調書合計表 (Hotei Chosho Goukei-hyo / Statutory Documents Summary). This is the NTA cover sheet that accompanies the Gensen submission tape. Deferred — the engine handles this for v1. Per ADR-084 §7.5.
+
+**Decision NOT to.** Not implementing real-time JP payroll clearance — Japan has no mandatory event-bus reporting regime equivalent to UK FPS / AU STP / BR eSocial. The Gensen is annual + paper-friendly; monthly SI payments via 日本年金機構 happen via the consumer's bank channel without kontor involvement. The `JpPayrollEmitProvider` produces an audit-doc summary for the audit chain but does not transmit anything to a regulator.
+
+**Decision NOT to.** Not implementing 年末調整 (Nenmatsu Chosei / year-end tax adjustment) brackets. The engine is authoritative — freee, MF, and Yayoi each ship calibrated bracket math for the 源泉徴収税額表 (月額表 + 賞与表) which updates each year. kontor consumes the engine's already-adjusted `:income-tax-withheld` for the December pay-period (which carries the full-year true-up).
+
+**Test discipline.** 64 tests / 223 assertions across six namespaces in `modules/payroll-jp/test/kontor/payroll_jp/`:
+- `wage_types_test` — catalog membership + employer-side flag + payable-tag routing + Gensen-box mapping + age-40-flag + carry-only kinds + Kanji labels + extras-map extension (9 tests / 70 assertions).
+- `compute_test` — freee + Money Forward + Yayoi CSV parsers + protocol invocation + unknown-pay-element rejection + PCA-API skeleton error (9 tests / 30 assertions).
+- `posting_builder_test` — pay-element → CoA mapping + bonus-separate-from-wages + 4-bucket SI routing + employer-side leg pairs + JPY rounding + ledger stamp + missing-tag-throws (11 tests / 23 assertions).
+- `accrual_test` — bonus-accrual-amount helper + bonus-accrual-tx-data balance + four per-bucket SI accruals + missing-key rejection + ledger stamp (11 tests / 22 assertions).
+- `gensen_test` — 12-month aggregation + resident-tax-NOT-on-Gensen + bonus-rolls-into-payment-amount + carry-only-from-jurisdiction-codes + whole-yen rounding + multi-employee submission + mandatory-key rejection (7 tests / 23 assertions).
+- `emit_test` — payroll-filing/ja audit-doc category+language + Gensen audit-doc shape + storage-uri + My Number attestation (PII-sensitive + hr-personnel + deterministic code) + My Number leak detection (14 tests / 35 assertions).
+- `e2e_test` — full `run-payroll!` for a 3-employee JP KK (junior/senior/Osaka profiles) + bonus accrual transact + 14-fact year-end Gensen aggregation (3 tests / 20 assertions).
+
+**Effort.** ~1.5 maintainer-day. Six src namespaces + six test namespaces + two CSV fixtures + the ADR + 75-line coa_starter.edn extending modules/l10n-jp/. Heavy reuse: the kontor-payroll-ca module supplied the per-fact assembly pattern + the payroll-run linkage seam, modules/l10n-jp/ supplied the JPY commodity + Corporate Number validators.
+
+**License posture (final).** No NTA / Nenkin Kiko form code lifted. CSV column shapes described from public vendor support docs (`support.freee.co.jp`, `biz.moneyforward.com/support`, `support.yayoi-kk.co.jp`). No vendor API keys / OAuth secrets bundled. No proprietary pay-element catalog bundled (consumer supplies via `:pay-element-codes`). No per-prefecture 健保 SI rate tables bundled (engine is authoritative). Kanji labels in the wage-type catalog are factual terminology from public NTA / 厚労省 references; not copyrightable. The Corporate-Number check-digit algorithm in `modules/l10n-jp/identifiers.clj` is mathematically derived from the NTA's published procedure (a fact, not protected expression).
+
+**Open followups for review-after.**
+- **P1** — Live freee / Money Forward / Yayoi CSV golden fixtures from a real consumer; current fixtures are synthetic. Compute providers all parse the format shape; field-level tolerance for engine quirks (mid-year transfers, retroactive adjustments, 中途入社) needs real samples.
+- **P1** — 賞与 (bonus) bracket math is engine-side — but the kontor side of the bonus-payout posting needs to handle the reversal of the prior accrual cleanly. Currently each bonus pay-period emits a `:bonus` component the posting builder routes to the 賞与 expense; the consumer's process needs a `bonus-payout-reversal-tx-data` companion that DR's the 賞与引当金 liability + CR's a clearing account against which the engine's payout posts. Deferred to a follow-up commit.
+- **P2** — 給与支払報告書 (per-municipality salary-payment report) emitter. The data is in the Gensen statement; routing per-employee to per-municipality is the missing piece (each municipality has its own filing format).
+- **P2** — 法定調書合計表 (NTA cover sheet for Gensen submissions). Aggregates totals across all Gensens submitted; deferred.
+- **P2** — 退職給付引当金 actuarial valuation companion (ASBJ Statement No. 26). Needs Heubeck-equivalent JP discount-rate + life-table tooling; out of scope for v1 substrate.
+- **P2** — PCA 給与奉行 cloud API live wiring (skeleton ships; full implementation gates on partner-program access).
+- **P2** — `kontor-l10n-jp-edinet` companion for XBRL-based 有価証券報告書 filings. Tangentially related — the EDINET payroll-expense lines could draw on `:account-tag/concept-iri` per research note 78.
+
+**Research backing.** doc/research/79 §5.3 (C-wave plan; JP positioned as C8 in §5.3, C10 in the current task framing), 82/83/84 (Stage R per-country research-before bundle — DE / US / CA established the per-country adapter shape), 86 (Stage R review-after; canonical `:audit-doc/category :payroll-filing` vocabulary). Public sources: NTA Corporate Number publication site (https://www.houjin-bangou.nta.go.jp/), NTA QIS guidance (https://www.nta.go.jp/taxes/shiraberu/zeimokubetsu/shohi/keigenzeiritsu/invoice.htm), 日本年金機構 (https://www.nenkin.go.jp/), 厚生労働省 health-insurance / employment-insurance rate guidance, freee / Money Forward / Yayoi public support documentation.
 
 Date: 2026-05-18.

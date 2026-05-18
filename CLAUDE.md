@@ -228,6 +228,7 @@ modules/       companion modules + l10n + bank importers (each a separate Maven 
 - **ADR-072** — `FxRateProvider` protocol + `:fx-rate/*` schema + `kontor.fx` Money-level translation. ECB attribution required; no rates bundled.
 - **ADR-073** — Consolidation primitive: `translate-trial-balance-tx-data` + `eliminate-intercompany-pair-tx-data` + `consolidate!` over `kontor.entity/family`.
 - **ADR-074** — `kontor.side-effect.cross`: cross-DB saga primitive via `CrossTxRouter` + content-hash `:cross-tx/step-id` idempotency.
+- **ADR-087** — `kontor-payroll-ca` C4.1: Quebec RL-1 + RL-1 Summary (`RLZ-1.S`) + TPZ-1015 monthly remittance + `QcPayrollEmitProvider` + `:employer-fss` wage type. Closes the C4 QC carve-out deferral from ADR-078; partner XSD NOT shipped (clean-room from public RL-1.T-V / RLZ-1.S-G-V forms).
 - **`:account-tag/concept-iri`** (no new ADR; commit `9a160aa`) — substrate seam for XBRL / filing taxonomies per research note 78.
 
 Research notes 50-78 land between 2026-05-15 and 2026-05-17 (28 new notes):

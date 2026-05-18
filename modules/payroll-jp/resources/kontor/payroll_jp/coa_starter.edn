@@ -1,0 +1,89 @@
+;; JP payroll-specific account starter — extends modules/l10n-jp/chart.edn
+;; per ADR-084 §4 (CoA extension). Consumer overrides as needed; the
+;; load-bearing identifier is :account-tag/name (e.g. "jp-payroll-pension"),
+;; NOT the numeric code.
+;;
+;; Account-number convention: J-GAAP doesn't mandate one, but the
+;; conventional 6-digit scheme (per modules/l10n-jp/chart.edn) puts
+;; expenses in 6xxxxx and liabilities in 2xxxxx. This starter follows
+;; that. Companies with their own scheme override `:code` while keeping
+;; the tag name.
+;;
+;; 預り金 (Azukari-kin / holding accounts) — JP convention groups
+;; all employee-withheld + employer-side-accrued statutory items as
+;; sub-accounts of 預り金, one per agency target (年金事務所 /
+;; 健保組合 / 税務署 / 市区町村). The starter uses one liability
+;; account per SI bucket so payment-day reconciliation is per-bucket
+;; (each agency's debit hits exactly one credit line).
+
+[;; ──────────────────────────────────────────────────────────────────
+ ;; EXPENSE SIDE (debit)
+ ;; ──────────────────────────────────────────────────────────────────
+ {:code "610000" :path "Expense:Salaries:Base"
+  :type :expense :name "Salaries and wages / 給料手当"
+  :tags [:jp-payroll-wages]}
+ {:code "611000" :path "Expense:Salaries:Bonus"
+  :type :expense :name "Bonuses / 賞与"
+  :tags [:jp-payroll-bonus]}
+ {:code "612000" :path "Expense:Salaries:StatutoryBenefits"
+  :type :expense :name "Statutory benefits (employer SI portion) / 法定福利費"
+  :tags [:jp-payroll-er-statutory-benefits]}
+ {:code "613000" :path "Expense:Salaries:Welfare"
+  :type :expense :name "Non-statutory welfare expense / 福利厚生費"
+  :tags [:jp-payroll-welfare]}
+
+ ;; ──────────────────────────────────────────────────────────────────
+ ;; LIABILITY SIDE — 預り金 (Azukari-kin / holding accounts)
+ ;; Four-bucket SI model + tax + resident-tax + voluntary deductions.
+ ;; ──────────────────────────────────────────────────────────────────
+ {:code "216100" :path "Liabilities:Payroll:HealthInsurance"
+  :type :liability :name "Health insurance payable / 預り金 — 健康保険料"
+  :tags [:jp-payroll-health-insurance :jp-payroll-azukari-kin]}
+ {:code "216200" :path "Liabilities:Payroll:Pension"
+  :type :liability :name "Employees' pension payable / 預り金 — 厚生年金"
+  :tags [:jp-payroll-pension :jp-payroll-azukari-kin]}
+ {:code "216300" :path "Liabilities:Payroll:EmploymentInsurance"
+  :type :liability :name "Employment insurance payable / 預り金 — 雇用保険"
+  :tags [:jp-payroll-employment-insurance :jp-payroll-azukari-kin]}
+ {:code "216400" :path "Liabilities:Payroll:LongTermCare"
+  :type :liability :name "Long-term care insurance payable / 預り金 — 介護保険"
+  :tags [:jp-payroll-long-term-care :jp-payroll-azukari-kin]}
+ {:code "216500" :path "Liabilities:Payroll:IncomeTax"
+  :type :liability :name "Income tax withheld / 預り金 — 所得税"
+  :tags [:jp-payroll-income-tax :jp-payroll-azukari-kin]}
+ {:code "216600" :path "Liabilities:Payroll:ResidentTax"
+  :type :liability :name "Resident tax (special collection) / 預り金 — 住民税"
+  :tags [:jp-payroll-resident-tax :jp-payroll-azukari-kin]}
+ {:code "216700" :path "Liabilities:Payroll:Zaikei"
+  :type :liability :name "Zaikei employee savings / 預り金 — 財形貯蓄"
+  :tags [:jp-payroll-zaikei]}
+ {:code "216800" :path "Liabilities:Payroll:UnionDues"
+  :type :liability :name "Union dues payable / 預り金 — 組合費"
+  :tags [:jp-payroll-union-dues]}
+ {:code "216900" :path "Liabilities:Payroll:OtherDeduction"
+  :type :liability :name "Other voluntary employee deductions / 預り金 — その他"
+  :tags [:jp-payroll-other-deduction]}
+
+ ;; ──────────────────────────────────────────────────────────────────
+ ;; NET WAGES PAYABLE — consumer typically pays from a designated
+ ;; salary bank account. Reconcilable.
+ ;; ──────────────────────────────────────────────────────────────────
+ {:code "214100" :path "Liabilities:Payroll:WagesPayableNet"
+  :type :liability :name "Wages payable (net to employees) / 未払金 — 給与"
+  :tags [:jp-payroll-net-wages]
+  :reconcilable? true}
+
+ ;; ──────────────────────────────────────────────────────────────────
+ ;; ACCRUALS — 賞与引当金 + (deferred to consumer) 退職給付引当金
+ ;; ──────────────────────────────────────────────────────────────────
+ ;; Bonus accrual: large (1-3x monthly) twice-yearly bonuses are
+ ;; accrued monthly per J-GAAP matching principle. The accrual helper
+ ;; (kontor.payroll-jp.accrual/bonus-accrual-tx-data) DR's an expense
+ ;; (614000) and CR's the liability (217000). At bonus-payout time,
+ ;; the booked bonus expense reverses against this liability.
+ {:code "614000" :path "Expense:Salaries:BonusAccrual"
+  :type :expense :name "Bonus accrual expense / 賞与引当金繰入額"
+  :tags [:jp-payroll-bonus-accrual-expense]}
+ {:code "217000" :path "Liabilities:Payroll:BonusAccrual"
+  :type :liability :name "Bonus accrual / 賞与引当金"
+  :tags [:jp-payroll-bonus-accrual-liability]}]
