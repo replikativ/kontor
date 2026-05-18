@@ -42,3 +42,4 @@ _site/
 
 # Clay temp directory
 .clay-temp/
+.claude/
