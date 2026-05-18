@@ -219,7 +219,7 @@ Hybrid build order (per research notes 09-12; the foundations get 3-4 weeks of d
 - [ ] **Stage O — kontor-subscription** — recurring billing with catalog versioning (Kill Bill-pattern). Not yet started.
 - [ ] **Stage P (project) — kontor-project** — project + task + timesheet (timesheet = analytic-line per Odoo pattern, no new entity). Not yet started; Stage P stage-letter was repurposed for `kontor.process` (ADR-067) so this becomes "Stage U" or similar.
 - [ ] **Stage Q — kontor-commerce-adapter** — UBL 2.1 + Peppol BIS round-trip for B2B document interchange. Not yet started; `modules/einvoice-de` ships Factur-X today.
-- [ ] **Stage R — kontor-hr + kontor-payroll-de-datev** — `:person` + `:employment` (effective-dated, multi-job per Workday pattern) + per-jurisdiction PayrollProvider adapter for DE. Research-before bundle DONE (notes 72 + 73 + 74); implementation gated on 5 design calls in note 74.
+- [ ] **Stage R — kontor-hr + per-country PayrollProvider adapters** — `:person` + `:employment` + `:compensation` + `:pay-period` + `:payroll-run` substrate landed (C1 — ADR-075). Per-country adapters compose on top: C2 DE-DATEV-LODAS (deferred), **C3 US-ADP-GLI landed (ADR-077)**, C4 CA-CRA-payroll (deferred). Research-before bundle DONE (notes 72-74 + 81-84); review-after note 85 closed C1 P0s. C3: `modules/payroll-us-adp` ships with AdpGliComputeProvider + UsPayrollPostingBuilder + ASC 710 + 401(k) match accrual + W-2 reconciliation; 38 tests / 457 assertions.
 
 Candidate companions surfaced by the post-Stage-L research (each gated on a real consumer story):
 
