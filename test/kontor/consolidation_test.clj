@@ -362,3 +362,133 @@
             "AP-IC at group entity: -100.00 EUR (translated US side)")
         (is (= 108M (-> (get elim-tb ap-ic) (get usd) :amount))
             "AP-IC at elimination entity: +108 USD (negation of US side)")))))
+
+;; ============================================================================
+;; P0 regression tests (note 76 review-after findings)
+;; ============================================================================
+
+(deftest p0-73-1-eliminate-skips-prior-consolidation-txs
+  (testing "Running consolidate! twice must NOT cascade — the second run's
+            elimination tx is suppressed by the elimination-exists? guard,
+            AND find-pair-postings now excludes prior consolidation txs.
+            (Without the fix, a 2nd run would re-elim the prior elim,
+            producing 8 postings instead of 4 on the elim tx.)"
+    (let [conn (bootstrap!)
+          _ (book-intercompany-pair! conn)
+          db0 (d/db conn)
+          group (:db/id (d/entity db0 [:entity/code "acme-group"]))
+          elim (:db/id (d/entity db0 [:entity/code "acme-elim"]))
+          cta (:db/id (d/entity db0 [:account/path "Equity:CTA"]))
+          jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
+          provider (fxp/make-static-table-provider conn)
+          input {:conn conn
+                 :group-root group
+                 :consolidation-entity group
+                 :elimination-entity elim
+                 :presentation-commodity "EUR"
+                 :fx-provider provider
+                 :at-date jan-2
+                 :journal jnl
+                 :cta-account cta}
+          _ (cons/consolidate! input)
+          ;; Count elimination postings after run 1
+          elim-postings-after-1
+          (d/q '[:find (count ?p) .
+                 :in $ ?elim
+                 :where
+                 [?t :transaction/consolidation-kind :elimination]
+                 [?p :posting/transaction ?t]
+                 [?p :posting/entity ?elim]]
+               (d/db conn) elim)
+          ;; Second run — should be a no-op for both translation + elimination
+          _ (cons/consolidate! input)
+          elim-postings-after-2
+          (d/q '[:find (count ?p) .
+                 :in $ ?elim
+                 :where
+                 [?t :transaction/consolidation-kind :elimination]
+                 [?p :posting/transaction ?t]
+                 [?p :posting/entity ?elim]]
+               (d/db conn) elim)]
+      (is (= 4 elim-postings-after-1) "first run emits 4 elim postings")
+      (is (= elim-postings-after-1 elim-postings-after-2)
+          "second run must NOT add elimination postings — idempotency"))))
+
+(deftest p0-73-2-consolidation-txs-carry-valid-time
+  (testing "Consolidation txs must carry :db.valid/from = at-date so
+            (d/valid-at db t) queries see them — matches the kernel's
+            post-transaction! contract (posting.clj:371-373)."
+    (let [conn (bootstrap!)
+          _ (book-intercompany-pair! conn)
+          db0 (d/db conn)
+          group (:db/id (d/entity db0 [:entity/code "acme-group"]))
+          elim (:db/id (d/entity db0 [:entity/code "acme-elim"]))
+          cta (:db/id (d/entity db0 [:account/path "Equity:CTA"]))
+          jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
+          provider (fxp/make-static-table-provider conn)
+          _ (cons/consolidate! {:conn conn
+                                :group-root group
+                                :consolidation-entity group
+                                :elimination-entity elim
+                                :presentation-commodity "EUR"
+                                :fx-provider provider
+                                :at-date jan-2
+                                :journal jnl
+                                :cta-account cta})
+          ;; Pull every tx with :transaction/consolidation-kind and
+          ;; check its creating tx carries :db.valid/from
+          db (d/db conn)
+          cons-txs (d/q '[:find [?tx ...]
+                          :where [?tx :transaction/consolidation-kind _]]
+                        db)
+          ;; :db.valid/from lives on the DATOMIC tx entity (the
+          ;; assertion source), not on the :transaction/* entity.
+          ;; Find the creating tx via the 5-position EAVT pattern.
+          vfs (mapv (fn [t]
+                      (d/q '[:find ?vf .
+                             :in $ ?t
+                             :where
+                             [?t :transaction/consolidation-kind _ ?dtx]
+                             [?dtx :db.valid/from ?vf]]
+                           db t))
+                    cons-txs)]
+      (is (seq cons-txs) "at least one consolidation tx exists")
+      (is (every? some? vfs)
+          "every consolidation tx's creating datomic-tx carries :db.valid/from")
+      (is (every? (fn [vf] (= jan-2 vf)) vfs)
+          "the :db.valid/from is at-date (jan-2)"))))
+
+(deftest p0-73-3-translation-idempotent-on-rerun
+  (testing "consolidate! must NOT spawn duplicate translation drafts on
+            re-run. The composer detects existing translation txs by
+            (source-entity, at-date) and skips."
+    (let [conn (bootstrap!)
+          _ (book-intercompany-pair! conn)
+          db0 (d/db conn)
+          group (:db/id (d/entity db0 [:entity/code "acme-group"]))
+          elim (:db/id (d/entity db0 [:entity/code "acme-elim"]))
+          cta (:db/id (d/entity db0 [:account/path "Equity:CTA"]))
+          jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
+          provider (fxp/make-static-table-provider conn)
+          input {:conn conn
+                 :group-root group
+                 :consolidation-entity group
+                 :elimination-entity elim
+                 :presentation-commodity "EUR"
+                 :fx-provider provider
+                 :at-date jan-2
+                 :journal jnl
+                 :cta-account cta}
+          _ (cons/consolidate! input)
+          translations-after-1
+          (d/q '[:find (count ?t) .
+                 :where [?t :transaction/consolidation-kind :translation]]
+               (d/db conn))
+          _ (cons/consolidate! input)
+          translations-after-2
+          (d/q '[:find (count ?t) .
+                 :where [?t :transaction/consolidation-kind :translation]]
+               (d/db conn))]
+      ;; Should be 2 translations (DE + US), same after 2nd run
+      (is (= translations-after-1 translations-after-2)
+          "translation tx count is stable across re-runs"))))

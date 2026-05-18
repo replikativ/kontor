@@ -50,6 +50,7 @@
    uses by default."
   (:require [datahike.api :as d]
             [kontor.balance :as balance]
+            [kontor.bitemporal :as kbt]
             [kontor.entity :as entity]
             [kontor.fx :as fx]
             [kontor.money :as money]
@@ -257,17 +258,24 @@
 ;; ============================================================================
 
 (defn- find-pair-postings
-  "Pull every posting from every tx tagged with the given
-   :transaction/intercompany-pair-id. Returns a sequence of pulled
-   posting maps with at least :db/id, :posting/account, :posting/amount,
-   :posting/commodity, :posting/entity."
+  "Pull every posting from every SOURCE tx tagged with the given
+   :transaction/intercompany-pair-id. **Excludes consolidation txs**
+   (those with a :transaction/consolidation-kind attr) — without this
+   exclusion a re-run of consolidate! would pick up the prior
+   elimination tx (which we tag with the same pair-id for audit) and
+   re-negate it, doubling the elimination on every cycle.
+
+   Returns a sequence of pulled posting maps with at least :db/id,
+   :posting/account, :posting/amount, :posting/commodity, :posting/entity."
   [db pair-id]
   (let [tx-eids (d/q '[:find [?t ...]
                        :in $ ?pid
-                       :where [?t :transaction/intercompany-pair-id ?pid]]
+                       :where
+                       [?t :transaction/intercompany-pair-id ?pid]
+                       [(missing? $ ?t :transaction/consolidation-kind)]]
                      db pair-id)]
     (when (empty? tx-eids)
-      (throw (ex-info "eliminate-intercompany-pair-tx-data: no transactions found with pair-id"
+      (throw (ex-info "eliminate-intercompany-pair-tx-data: no source transactions found with pair-id"
                       {:pair-id pair-id})))
     (->> (d/q '[:find [?p ...]
                 :in $ [?tx ...]
@@ -398,44 +406,81 @@
                                               (d/pull db [:entity/kind] e))
                                              :operating)))))
                        sort)
+        ;; P0-73-3: per (source-entity, at-date) idempotency — skip
+        ;; producing a new translation entry if one already exists for
+        ;; this date. Detects via :transaction/consolidation-kind
+        ;; :translation + :transaction/consolidation-source-entity +
+        ;; :transaction/effective-date.
+        translation-exists?
+        (fn [source-eid]
+          (boolean
+           (d/q '[:find ?t .
+                  :in $ ?src ?date
+                  :where
+                  [?t :transaction/consolidation-kind :translation]
+                  [?t :transaction/consolidation-source-entity ?src]
+                  [?t :transaction/effective-date ?date]]
+                db source-eid at-date)))
+        ;; Similarly for eliminations — one per (pair-id, at-date,
+        ;; elimination-entity). The elim tx also carries the pair-id;
+        ;; with the find-pair-postings fix excluding consolidation txs,
+        ;; we still want to skip emitting duplicates here so subsequent
+        ;; runs are no-ops at the composer level.
+        elimination-exists?
+        (fn [pair-id]
+          (boolean
+           (d/q '[:find ?t .
+                  :in $ ?pid ?date ?elim
+                  :where
+                  [?t :transaction/consolidation-kind :elimination]
+                  [?t :transaction/intercompany-pair-id ?pid]
+                  [?t :transaction/effective-date ?date]
+                  [?p :posting/transaction ?t]
+                  [?p :posting/entity ?elim]]
+                db pair-id at-date elimination-entity)))
         translations
         (vec
          (keep-indexed
           (fn [i e]
-            (let [tb (trial/trial-balance conn {:entity e})]
-              (when (seq tb)
-                (translate-trial-balance-tx-data
-                 {:db                        db
-                  :source-entity             e
-                  :consolidation-entity      consolidation-entity
-                  :presentation-commodity    presentation-commodity
-                  :fx-provider               fx-provider
-                  :at-date                   at-date
-                  :journal                   journal
-                  :cta-account               cta-account
-                  :rate-type-by-account-type rate-type-by-account-type
-                  :rate-type-by-account      rate-type-by-account
-                  :trial-balance             tb
-                  :tx-tempid                 (str "cons-trans-" i)}))))
+            (when-not (translation-exists? e)
+              (let [tb (trial/trial-balance conn {:entity e})]
+                (when (seq tb)
+                  (translate-trial-balance-tx-data
+                   {:db                        db
+                    :source-entity             e
+                    :consolidation-entity      consolidation-entity
+                    :presentation-commodity    presentation-commodity
+                    :fx-provider               fx-provider
+                    :at-date                   at-date
+                    :journal                   journal
+                    :cta-account               cta-account
+                    :rate-type-by-account-type rate-type-by-account-type
+                    :rate-type-by-account      rate-type-by-account
+                    :trial-balance             tb
+                    :tx-tempid                 (str "cons-trans-" i)})))))
           operating))
         pair-ids (->> (d/q '[:find [?pid ...]
                              :in $ [?e ...]
                              :where
                              [?p :posting/entity ?e]
                              [?p :posting/transaction ?tx]
-                             [?tx :transaction/intercompany-pair-id ?pid]]
+                             [?tx :transaction/intercompany-pair-id ?pid]
+                             [(missing? $ ?tx :transaction/consolidation-kind)]]
                            db (vec family))
                       sort)
         eliminations
-        (mapv (fn [i pid]
-                (eliminate-intercompany-pair-tx-data
-                 {:db                 db
-                  :pair-id            pid
-                  :elimination-entity elimination-entity
-                  :journal            journal
-                  :date               at-date
-                  :tx-tempid          (str "elim-" i)}))
-              (range) pair-ids)]
+        (vec
+         (keep-indexed
+          (fn [i pid]
+            (when-not (elimination-exists? pid)
+              (eliminate-intercompany-pair-tx-data
+               {:db                 db
+                :pair-id            pid
+                :elimination-entity elimination-entity
+                :journal            journal
+                :date               at-date
+                :tx-tempid          (str "elim-" i)})))
+          pair-ids))]
     (into translations eliminations)))
 
 (defn consolidate!
@@ -445,14 +490,21 @@
 
    Inputs mirror [[consolidate-tx-data]].
 
+   The cycle's bitemporal `:db.valid/from` is set to `:at-date`, with
+   `:db.valid/to` defaulting to `kontor.bitemporal/forever`. This means
+   `(d/valid-at db t)` queries at any `t >= at-date` see the
+   consolidation postings — matching the kernel's standard
+   `post-transaction!` semantics (`posting.clj:371-373`).
+
    Returns the `run-process` result map (per `kontor.process`).
    The consolidation transactions land with `:transaction/state :draft`
    by default; callers post them via subsequent
    `kontor.posting/post-transaction!` cycles."
-  [input]
-  (when-not (:conn input)
-    (throw (ex-info "consolidate!: :conn required" {})))
-  (let [conn (:conn input)
-        fragments (consolidate-tx-data input)
+  [{:keys [conn at-date] :as input}]
+  (when-not conn    (throw (ex-info "consolidate!: :conn required" {})))
+  (when-not at-date (throw (ex-info "consolidate!: :at-date required" {})))
+  (let [fragments (consolidate-tx-data input)
         steps (mapv (fn [frag] (constantly frag)) fragments)]
-    (process/run-process conn {:steps steps})))
+    (process/run-process conn {:steps    steps
+                               :vt-from  at-date
+                               :vt-to    kbt/forever})))

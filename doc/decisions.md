@@ -7766,3 +7766,90 @@ Customers override via `:rate-type-by-account-type` (per-type) or `:rate-type-by
 **Research backing.** doc/research/69-architecture-review-and-fp-model.md §4 Gap 4 + §7.6.
 
 Date: 2026-05-17.
+
+### Addendum 2026-05-17 — Review-after fixes (note 76)
+
+Three P0s from the independent review-after agent (note 76) addressed
+the same day this ADR landed:
+
+* **P0-73-1 (`consolidate!` non-idempotent — re-elim cascade).**
+  `eliminate-intercompany-pair-tx-data` stamps its own output tx with
+  `:transaction/intercompany-pair-id` (intentionally — useful for
+  audit drill-back from elim → source pair). On a second run,
+  `find-pair-postings` was matching that elim tx too and re-negating
+  it, doubling the elimination on every cycle. Fix:
+  `find-pair-postings` now filters
+  `[(missing? $ ?t :transaction/consolidation-kind)]`; `consolidate-tx-data`
+  gained an `elimination-exists?` guard that suppresses re-emission.
+
+* **P0-73-2 (consolidation txs without `:db.valid/from`).**
+  The pure tx-data builders did not stamp tx-meta; `consolidate!` did
+  not pass `:vt-from`/`:vt-to` to `run-process`. Consumers calling
+  `(d/valid-at db t)` saw zero consolidation postings regardless of
+  `t`. Fix: `consolidate!` now requires `:at-date` and threads it as
+  `(process/run-process conn {... :vt-from at-date :vt-to kbt/forever})`.
+
+* **P0-73-3 (translation tx duplication on re-run).**
+  Every `consolidate!` call spawned a new draft translation tx per
+  operating entity, even when one already existed for the same date.
+  Fix: `consolidate-tx-data` gained a `translation-exists?` guard
+  keyed on `(:transaction/consolidation-source-entity,
+  :transaction/effective-date)` that skips already-emitted entries.
+
+Three new regression tests in `test/kontor/consolidation_test.clj` —
+`p0-73-1-eliminate-skips-prior-consolidation-txs`,
+`p0-73-2-consolidation-txs-carry-valid-time`,
+`p0-73-3-translation-idempotent-on-rerun`.
+
+Plus **P1-72-1 from the same review** (silent inverse-rate staleness
+in ADR-072): `ingest-ecb-csv-rows!` now persists ONLY the forward
+EUR→ccy direction. The reverse is derived at lookup time by
+`StaticTableProvider`'s `:allow-inverse?` machinery (default `true`),
+so a customer correcting the forward rate via `save-rates!` no longer
+leaves a stale stored inverse. Regression test
+`p1-72-1-inverse-stays-fresh-after-forward-rate-correction` in
+`test/kontor/fx_test.clj`. Tightened `resolve-rate` to return `nil`
+(not `false`) when no via-triangulation path applies.
+
+Remaining P1s + P2s from note 76 deferred to follow-up.
+
+---
+
+## ADR-074 — `kontor.side-effect.cross`: cross-DB saga primitive
+
+**Decision.** Generalize `:side-effect-intent` (ADR-041) for the case where the side effect IS a tx-data commit against a *different* datahike conn (another kontor instance, a stratum secondary index, a scriptum / proximum / yggdrasil sub-system, or any datahike-connected target). Per research note 71 §5.2.
+
+Three components:
+
+1. **`:cross-tx/step-id` schema attr** — string, `:db.unique :db.unique/identity`. Bundled into `kontor.schema/all`. Written on the *target* tx by drain workers as the saga-step idempotency marker. Non-kontor target consumers install the same attr.
+
+2. **`kontor.side-effect.cross` namespace** (~250 LoC):
+   - **`CrossTxRouter`** protocol — `(resolve-conn [_ system-id])`. The consumer's system-id → conn mapping; typically a `(reify ...)` closing over live conns at boot.
+   - **`step-id`** — deterministic SHA-256 + Base64-URL of `(intent-key, canonical-edn target-tx-data)`, 43 chars. Pure; must agree across JVMs / restarts so re-claims converge.
+   - **`cross-tx-intent-tx-data`** — builds a `:side-effect-intent` map for a cross-tx-post, ready to stitch into the source tx alongside the upstream status change (per ADR-041's "intent commits atomically with the change").
+   - **`execute-one!`** — claim intent → resolve target → check target for the step-id → skip-or-transact-augmented → mark done (or failed). The check is what makes this crash-safe: if the worker crashed after target-commit but before mark-done, the next worker sees the step-id present and goes straight to mark-done without re-transacting.
+   - **`drain!`** — single-pass execution of every pending `:cross-tx-post` intent. Returns `{:processed N :done N :failed N :abandoned N}`. Caller schedules re-runs.
+
+3. **Reuses `:side-effect-intent/*` schema verbatim** (ADR-041). The intent `:type` is `:cross-tx-post`; the `:payload` is a `pr-str`'d EDN map with `:target/system-id`, `:target/tx-data`, `:step-id`.
+
+**Why a saga + content-hash idempotency, not 2PC.** Per the cross-DB design study (note 71 §1): the JVM industry walked away from XA / JTA over the last 15 years because of operational complexity. Sagas + per-step idempotency match the actual shapes kontor faces (kontor + stratum index; intercompany kontor↔kontor; kontor + scriptum audit log), and the konserve-shared-store atomic path already covers the genuinely same-store cases at the datahike layer (note 71 §5.3). What's left is exactly what `:side-effect-intent` was already designed for — a queue of intents that drain to side effects. Generalizing it to "the side effect is itself a tx-data commit" is the cleanest extension.
+
+**Why deterministic step-ids.** Without them, the crash-recovery story is "the worker's failure mode is the user's problem" — re-claims double-commit the target. The step-id moves the question from "did the source mark this done?" (a write-coordination problem) to "does the target already hold this step-id?" (a read-uniqueness problem). The latter has a single datahike index lookup.
+
+**Why canonical EDN.** Different JVMs hash differently if map iteration order differs. The `canonical-edn` helper sorts map keys + set elements so the hash converges. Sequential collections keep insertion order (they're semantically order-bearing); records stringify as-is.
+
+**Decision NOT to.** Not building a workflow engine on top. `kontor.process` is the single-DB orchestrator; `kontor.side-effect.cross` is the cross-DB orchestrator. Together they cover the project's needs; anything bigger (Temporal-style declarative workflows, Camunda-style BPMN) belongs in a consumer.
+
+**Decision NOT to.** Not coupling to non-datahike backends. The target conn MUST support `(datahike.api/transact conn …)` + `(datahike.api/db conn)`. Heterogeneous backends (Kafka topics, S3 PUTs, HTTP webhooks) are still served by ADR-041's parent dispatcher pattern: ship the intent, drain via a custom worker.
+
+**Test discipline.** 9 tests / 27 assertions in `test/kontor/side_effect/cross_test.clj` covering step-id determinism, canonical map-key ordering, intent-shape correctness, drain end-to-end against a target conn, idempotent re-run after simulated worker-crash, failed-intent error capture, target-schema assertion (skipped in-test because `kontor.schema/all` always ships the attr).
+
+**Implication 1.** The cross-DB primitive from research note 71 §5.2 is now substrate-shipped. The other note 71 proposals — `kontor.cross-tx` (yggdrasil adapter), `datahike.api/multi-transact!` (datahike-side promotion of `konserve/multi-assoc`), and the audit-chain bridge (`kontor.audit-chain/verify-workspace!`) — remain follow-up work; they require touching yggdrasil + datahike respectively.
+
+**Implication 2.** Consumers can now ship cross-DB writes with the same "write the intent in the same tx as the upstream change" pattern they already use for email / EDI / webhooks (ADR-041). The only new vocabulary is the `:cross-tx-post` type + the `CrossTxRouter` instance at boot.
+
+**License posture.** ADR-001 single-dep on datahike survives — no new deps. Pure-Clojure, no JCA / JTA / XA / external coordinator.
+
+**Research backing.** doc/research/71-cross-db-atomic-transact.md §5.2.
+
+Date: 2026-05-17.

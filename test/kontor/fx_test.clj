@@ -226,20 +226,60 @@
                                     :at-date jan-2})]
       (is (some? r) "should triangulate USD→EUR→GBP automatically"))))
 
-(deftest ecb-ingest-rows-populates-pair-and-inverse
-  (let [conn (-> (core/create-test-db)
-                 bootstrap-commodities!)]
-    (fxp/ingest-ecb-csv-rows!
-     conn [{:at-date jan-2
-            :rates {"USD" 1.08M "GBP" 0.85M "JPY" 160.5M}}])
-    (let [p (fxp/make-ecb-reference-rates-provider
-             conn {:fallback-on-or-before? false :allow-inverse? false})]
-      (is (= 1.08M (fxp/resolve-rate p {:from-commodity "EUR" :to-commodity "USD"
+(deftest ecb-ingest-rows-populates-forward-only
+  (testing "Per ADR-072 review P1-72-1, ingest stores ONLY the forward
+            EUR→ccy direction. The reverse comes from the provider's
+            :allow-inverse? machinery (default true) at lookup time —
+            so corrections to the forward rate don't leave the reverse
+            stale."
+    (let [conn (-> (core/create-test-db)
+                   bootstrap-commodities!)]
+      (fxp/ingest-ecb-csv-rows!
+       conn [{:at-date jan-2
+              :rates {"USD" 1.08M "GBP" 0.85M "JPY" 160.5M}}])
+      ;; With :allow-inverse? false, USD→EUR returns nil — the reverse
+      ;; direction is NOT persisted as its own sample anymore.
+      (let [p-strict (fxp/make-ecb-reference-rates-provider
+                     conn {:fallback-on-or-before? false :allow-inverse? false})]
+        (is (= 1.08M (fxp/resolve-rate p-strict {:from-commodity "EUR" :to-commodity "USD"
+                                                  :at-date jan-2}))
+            "EUR→USD forward direction is persisted")
+        (is (nil? (fxp/resolve-rate p-strict {:from-commodity "USD" :to-commodity "EUR"
+                                              :at-date jan-2}))
+            "USD→EUR is NOT persisted (came-via-inverse is opt-in)"))
+      ;; With :allow-inverse? true (the default), USD→EUR derives from
+      ;; the forward sample on demand.
+      (let [p (fxp/make-ecb-reference-rates-provider conn)]
+        (is (some? (fxp/resolve-rate p {:from-commodity "USD" :to-commodity "EUR"
                                         :at-date jan-2}))
-          "EUR→USD direct")
-      (is (some? (fxp/resolve-rate p {:from-commodity "USD" :to-commodity "EUR"
-                                      :at-date jan-2}))
-          "USD→EUR ingested as separate sample (the inverse)"))))
+            "USD→EUR derived via :allow-inverse? at lookup time")))))
+
+(deftest p1-72-1-inverse-stays-fresh-after-forward-rate-correction
+  (testing "Correcting the forward rate (via save-rates!) immediately
+            updates the inverse — the inverse is NOT a stored sample
+            that could go stale. Regression for ADR-072 review P1-72-1."
+    (let [conn (-> (core/create-test-db) bootstrap-commodities!)]
+      (fxp/ingest-ecb-csv-rows!
+       conn [{:at-date jan-2 :rates {"USD" 1.08M}}])
+      ;; First inverse — should be 1/1.08
+      (let [p (fxp/make-ecb-reference-rates-provider conn)
+            inv-before (fxp/resolve-rate p {:from-commodity "USD" :to-commodity "EUR"
+                                            :at-date jan-2})]
+        (is (= (.divide java.math.BigDecimal/ONE 1.08M 12
+                        java.math.RoundingMode/HALF_EVEN)
+               inv-before)
+            "initial inverse = 1/1.08"))
+      ;; Customer corrects the forward rate
+      (fxp/save-rates! conn [{:from "EUR" :to "USD" :at-date jan-2
+                              :rate 1.085M :source :corrected}])
+      ;; The inverse must reflect the correction immediately
+      (let [p (fxp/make-ecb-reference-rates-provider conn)
+            inv-after (fxp/resolve-rate p {:from-commodity "USD" :to-commodity "EUR"
+                                           :at-date jan-2})]
+        (is (= (.divide java.math.BigDecimal/ONE 1.085M 12
+                        java.math.RoundingMode/HALF_EVEN)
+               inv-after)
+            "after correction, inverse = 1/1.085 (was 1/1.08 before fix)")))))
 
 ;; ============================================================================
 ;; kontor.fx — Money-level operations

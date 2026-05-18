@@ -215,11 +215,11 @@
 
         :else
         (or (lookup-leg db from-eid to-eid at-date rate-type fallback? allow-inv?)
-            (and via-eid
-                 (not= via-eid from-eid)
-                 (not= via-eid to-eid)
-                 (triangulate db from-eid to-eid via-eid at-date rate-type
-                              fallback? allow-inv?))))))
+            (when (and via-eid
+                       (not= via-eid from-eid)
+                       (not= via-eid to-eid))
+              (triangulate db from-eid to-eid via-eid at-date rate-type
+                           fallback? allow-inv?))))))
 
   (resolve-period-rates [this {:keys [from-commodity to-commodity
                                       from-date to-date rate-type]}]
@@ -347,9 +347,14 @@
                 \"GBP\" 0.8512M
                 …}}
 
-   Produces 2 samples per (date, currency) pair — EUR→ccy and ccy→EUR
-   (the inverse), both tagged `:source :ecb` and `:rate-type :spot`.
-   Identity tuple means re-ingestion is a no-op.
+   Produces ONE sample per (date, currency) pair — only the forward
+   EUR→ccy direction. The reverse direction (ccy→EUR) is derived at
+   lookup time by [[StaticTableProvider]]'s `:allow-inverse?` machinery
+   (default `true`), so we don't risk inverse-staleness when a customer
+   later corrects the forward rate (per ADR-072 review P1-72-1: storing
+   both directions caused silent inverse drift when one was overridden).
+
+   Re-ingestion is a no-op via the `:fx-rate/by-tuple` upsert identity.
 
    We do NOT bundle a CSV parser; the caller produces rows. ECB's
    eurofxref-daily.xml is one parse call from clojure.data.xml, and
@@ -359,17 +364,12 @@
   (let [samples
         (vec (mapcat
               (fn [{:keys [at-date rates]}]
-                (mapcat
+                (mapv
                  (fn [[ccy r]]
                    (let [bd (if (instance? BigDecimal r) r (bigdec r))]
-                     [{:from "EUR" :to ccy   :at-date at-date :rate bd
-                       :rate-type :spot :source :ecb
-                       :source-doc "eurofxref-daily"}
-                      {:from ccy   :to "EUR" :at-date at-date
-                       :rate (.divide BigDecimal/ONE bd 12
-                                      java.math.RoundingMode/HALF_EVEN)
-                       :rate-type :spot :source :ecb
-                       :source-doc "eurofxref-daily (inverse)"}]))
+                     {:from "EUR" :to ccy :at-date at-date :rate bd
+                      :rate-type :spot :source :ecb
+                      :source-doc "eurofxref-daily"}))
                  rates))
               rows))]
     (save-rates! conn samples)))
