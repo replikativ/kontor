@@ -7954,3 +7954,55 @@ The orchestrator `kontor.hr.payroll/run-payroll!` composes the three providers t
 **Research backing.** doc/research/72-hr-payroll-reference-study.md (OFBiz `humanres` Apache-2.0 reference), 73 (12-theme market-pain catalog), 74 (substrate gap analysis + the 5 design calls), 79 (the 5-design-calls implementation plan + per-country sequencing), 81 (gold-standards study confirming 5/5 calls + recommending the §9.6 compensation-as-entity refactor + 3 minor §9.7 adds), 82 (DE-DATEV-LODAS), 83 (US-ADP-GLI), 84 (CA-CRA-payroll).
 
 Date: 2026-05-18.
+
+## ADR-078 — `kontor-payroll-ca`: CA-CRA payroll adapter (Stage R C4)
+
+**Decision.** Land the CA-CRA payroll adapter as a new companion module `modules/payroll-ca/` on top of the Stage R C1 substrate (ADR-075) + the already-shipped `modules/l10n-ca/xml/` T619 + T4 emitters. Five pieces, no new kernel ADRs beyond a single open-set kernel attribute add (`:audit-doc/language`):
+
+1. **`kontor.payroll-ca.wage-types`** — CA-specific `:component-kind` open-set extension. Maps every CA pay-element kind (`:base-wage`, `:income-tax-withheld`, `:employee-cpp`, `:employee-cpp2`, `:employee-ei`, `:employer-cpp`, `:employer-ei`, `:vacation-pay-accrual`, the QC carve-outs `:employee-qpp` / `:employee-qpip` / `:employee-qc-itx`, the carry-only T4 boxes `:ei-insurable-earnings` / `:cpp-pensionable-earnings` / `:pension-adjustment`, etc.) to an `:account-tag` keyword and (where applicable) a T4-box keyword. Consumer-extensible via an `:extras-map`. Per note 84 §10.2.
+
+2. **`kontor.payroll-ca.compute`** — three `PayrollComputeProvider` impls:
+   - `CeridianDayforceGlProvider` — reference CSV adapter with configurable column-mapping (per-customer-configurable Dayforce GL export; same shape works for Powerpay).
+   - `AdpCanadaProvider` — the ADP RUN / Workforce Now 10-column GLI shape with CA-mode pay-element codes. Reuses the (Stage R C3 US-ADP) parser pattern with the ADP "balancing row" net-zero invariant check (note 83 §1 trap; note 84 §10.4 #2 → its application here).
+   - `WagepointApiProvider` — partner-program-gated skeleton with a clearly-marked TODO docstring per note 84 §2.1 + §11 Q1.
+
+3. **`kontor.payroll-ca.posting-builder`** — `CaPayrollPostingBuilder` impl of `PayrollPostingBuilder`. Per-pay-period CA journal entry: DR wages-expense / employer expense rows + CR three CRA payable buckets (`:ca-payroll-itx`, `:ca-payroll-cpp`, `:ca-payroll-ei` — NEVER collapsed per note 84 §3.3 + §7.2) + CR Wages-payable. Supports per-RP routing via `:rp-account-tag` opt that attaches an `:account-tag/name`-keyed `:posting/account-tags` ref to every posting (note 84 §4.2). QC passthrough emits `:employee-qpp` / `:employee-qpip` / `:employee-qc-itx` to the Revenu Québec parallel accounts (note 84 §8).
+
+4. **`kontor.payroll-ca.t4-builder`** — payroll-facts → T4 slip aggregator + full T619+T4+T4-Summary submission builder. Group-by (person × RP × tax-year × province-of-employment) per note 84 §10.4 #2 (multi-province employees → multiple T4s). Box coverage spans 14/16/16A/17/17A/18/20/22/24/26/44/46/52/55/56 per note 84 §5.2 + the existing `kontor.l10n-ca.xml.t4` element list. Round-trip verified against the shipped 2026V4 `T619_T4.xsd`.
+
+5. **`kontor.payroll-ca.pd7a`** — remittance helper (NOT an emitter). Sums the three statutory CRA payables (ITX / CPP / EI) for a period, optionally filtered to one RP via `:rp-account-tag`. Computes the suggested next due date per the four CRA remitter types (quarterly / regular / accel-T1 / accel-T2 — note 84 §3.2). Returns a `pd7a-audit-doc-tx-data` ADR-068 builder; consumer transacts the `:audit-doc/category :payroll-filing` row. kontor does NOT emit a PD7A form because there isn't one — PD7A is CRA-to-employer correspondence (note 84 §3.1 + §3.4).
+
+6. **`kontor.payroll-ca.emit`** — `CaPayrollEmitProvider` impl + `terminate-employment-tx-data` (ADR-068) + `build-t4-audit-doc-tx-data`. Emits a single `:audit-doc/category :payroll` row per payroll run carrying the language flag; logs a warning on QC-employee detection that RL-1 emission deferred to C4.1. The termination helper emits a `:termination-event` audit-doc with the Block-15 data (insurable earnings rolling window, separation payments, Block-16 reason) the consumer's engine needs to file the ROE via Service Canada's ROE Web — kontor does NOT emit ROE itself (note 84 §6).
+
+**Bilingual via `:audit-doc/language` (new kernel attr).** A single open-set keyword attribute `:audit-doc/language :en | :fr | :bilingual | <consumer extension>` lands on the kernel's `:audit-doc/*` group. Per ADR-051's open-set pattern this is non-breaking; nil is treated as `:en` by emit code. Why a kernel-level slot rather than a tag-name convention: same filing TYPE (T4) can be EN or FR depending on employee-correspondence preference; CRA T619 takes `lang_cd E|F` per submission; Revenu Québec RL-1 is FR by convention. DSAR / retention rules don't differ by language — so language is orthogonal to `:audit-doc/category`, exactly like ADR-051's `:audit-doc/privilege` is orthogonal. The kernel schema doc-string for `:audit-doc/category` is the entry-point for the three-axis (privilege × category × language) auth-grid story.
+
+**Decision NOT to.** Not adding a kernel-level `:account-tag/program-account` attribute — the open question from note 84 §11 Q3 resolves to "stay with `:account-tag/name` convention" because the existing tag-name machinery handles per-RP routing cleanly (e.g. `:account-tag/name "ca-cra-rp-RP0001"` per posting via `:posting/account-tags`). The `:identifiers.clj` BN15 validator stays the gateway; no new typed slot needed.
+
+**Decision NOT to.** Not emitting PD7A (CRA-to-employer correspondence — there's no employer-filed PD7A form per note 84 §3.1). Not emitting ROE (Service Canada via the engine — note 84 §6). Not implementing CPP / CPP2 / EI / federal+provincial income-tax math (engine is authoritative per note 84 §2 + ADR-075 architectural commitment).
+
+**Decision NOT to.** Not shipping the QC carve-out emitter — RL-1 + RL-1 Summary + TPZ-1015 monthly remittance helper defer to C4.1. C4 ships passthrough: T4 boxes 17/17A/55/56 populate correctly if engine emits the QC components; an info-level warning logs that RL-1 emission isn't supported yet (note 84 §8.2 + §8.3).
+
+**Decision NOT to.** Not shipping per-province EHT (Ontario / BC / Manitoba / Newfoundland) or per-province WSIB / WCB premium emitters in C4. Accrual posting works via the `:employer-eht` / `:employer-wsib` component kinds + the starter chart's `:ca-payroll-er-eht` / `:ca-payroll-er-wsib` accounts; per-province rate tables + filing helpers defer to C4.2 (note 84 §10.4 #7-8 + §11 Q6).
+
+**Decision NOT to.** Not bundling vendor pay-element catalogs (the Ceridian / ADP / Wagepoint code lookups). Consumer supplies `:pay-element-codes` map at provider construction time (mirrors the ADR-005 / ADR-071 / ADR-072 / ADR-075 "consumer holds the engine" pattern).
+
+**Test discipline.** 38 tests / 159 assertions across six namespaces in `modules/payroll-ca/test/kontor/payroll_ca/`:
+- `wage_types_test` — catalog membership + T4-box mapping coverage + extras-map extension (3 tests / 28 assertions).
+- `compute_test` — Ceridian + ADP-CA CSV parsers + balancer-row invariant + Wagepoint skeleton (10 tests / 22 assertions).
+- `posting_builder_test` — pay-element → CoA mapping + RP routing + QC passthrough + vacation pay accrual + balanced-postings invariant (9 tests / 19 assertions).
+- `t4_builder_test` — payroll-facts → T4 slip aggregator + box catalog + multi-province + bilingual + **XSD validation against the shipped 2026V4 T619_T4.xsd** (7 tests / 26 assertions).
+- `pd7a_test` — remittance schedule + due-date per remitter type + three-bucket totals + RP-routing filter + audit-doc tx-data (7 tests / 25 assertions).
+- `e2e_test` — full bilingual run-payroll! through ON + QC employees, with PD7A totals + QC passthrough warning (2 tests / 13 assertions).
+
+**Effort.** ~1.5 maintainer-day for C4: 6 src namespaces + 6 test namespaces + 2 CSV fixtures + the ADR + one kernel attr add. Per the note 84 §11 acceptance criterion, C4 is "cheap follow-on" because half the work (T619 + T4 XML emitters + BN/RP validators + GST/HST infrastructure + CAD-defaulting chart) already shipped in `modules/l10n-ca/`.
+
+**Open followups for review-after.**
+- **P1** — Wagepoint live API wiring (skeleton ships; full implementation gates on partner-program access per note 84 §2.1).
+- **P1** — QC C4.1 (RL-1 XML emitter + RL-1 Summary + TPZ-1015 remittance — note 84 §8).
+- **P2** — Per-province EHT (Ontario priority) + WSIB / WCB per-province filing helpers (note 84 §10.4 #7-8).
+- **P2** — Statutory-holiday-aware PD7A due-date shift (note 84 §10.4 #11 — current naive impl uses calendar days only).
+- **P2** — T4 Box 40 ('Other Information' taxable-benefit subtotal) + Box 45 (dental coverage code) emit-side wiring; the aggregator carries the values but `xml/t4.clj` doesn't currently emit them (note 84 §11 Q4).
+
+**Research backing.** doc/research/84-ca-cra-payroll-research-before.md (~9k words, 12 enumerated gotchas, full T4 box catalog, RL-1 carve-out spec, PD7A schedule table, license-clean source list).
+
+Date: 2026-05-18.
