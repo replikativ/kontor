@@ -1088,6 +1088,24 @@
     :db/doc         "Ref to :status-history row that produced this
                      intent."}])
 
+;; ============================================================================
+;; Cross-DB side-effect — ADR-074. Idempotency marker written on the
+;; TARGET tx so a drain worker can deterministically detect whether a
+;; cross-tx post already landed. See [[kontor.side-effect.cross]].
+;; ============================================================================
+
+(def ^:private cross-tx-attrs
+  [{:db/ident       :cross-tx/step-id
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Saga-step idempotency key. Written as a tx-meta
+                     attribute on the TARGET tx by a kontor.side-effect.cross
+                     drain worker. Deterministically derived from
+                     (source-intent-key, target-tx-data) so a re-claimed
+                     intent can short-circuit when the worker crashed
+                     between target-commit and source-mark-done. ADR-074."}])
+
 ;; Tx-level valid-time attributes (ADR-048) now live in datahike itself
 ;; as :db.valid/from + :db.valid/to (system schema, pre-installed on
 ;; every fresh DB by feature/bitemporal-v1). Kontor's old `:tx/valid-from`
@@ -3701,6 +3719,7 @@
     partner-tag-attrs                     ; ADR-039
     partner-tax-id-attrs                  ; ADR-040
     side-effect-intent-attrs              ; ADR-041
+    cross-tx-attrs                        ; ADR-074
     account-type-direction-attrs          ; ADR-041
     payment-application-attrs             ; ADR-043
     ;; ADR-048 valid-time attrs are now upstream (:db.valid/from + :db.valid/to,
