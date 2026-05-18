@@ -30,7 +30,7 @@
             [kontor.payroll-mx.core :as core]))
 
 (defrecord MxCfdiNominaEmitProvider []
-  core/PayrollEmitProvider
+  core/MxCfdiEmitter
   (emit-format [_] :mx/cfdi-nomina-1.2)
   (emit-payroll [_ facts opts]
     (let [{:keys [employer employee tipo

@@ -126,7 +126,7 @@
 ;; ============================================================================
 
 (defrecord ContpaqiNominasProvider [code-map]
-  core/PayrollComputeProvider
+  core/MxEngineProvider
   (vendor-id [_] :contpaqi-nominas)
   (parse-period [_ source]
     (with-open [r (io/reader source)]
@@ -170,7 +170,7 @@
 ;; ============================================================================
 
 (defrecord AspelNoiProvider [code-map]
-  core/PayrollComputeProvider
+  core/MxEngineProvider
   (vendor-id [_] :aspel-noi)
   (parse-period [_ source]
     (with-open [r (io/reader source)]
