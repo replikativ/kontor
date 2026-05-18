@@ -3679,7 +3679,24 @@
                      nil = :none. Orthogonal to :audit-doc/privilege —
                      legal-doctrine and domain are independent axes.
                      The consumer's auth layer reads BOTH to make
-                     access decisions; the kernel tags only."}])
+                     access decisions; the kernel tags only."}
+
+   ;; ADR-078 — language/locale axis, orthogonal to category +
+   ;; privilege. Open-set keyword: nil (default; treated as :en in
+   ;; emit code) | :en | :fr | :bilingual | <consumer extensions>.
+   ;; The three-axis design (privilege × category × language) is what
+   ;; lets CRA T619 / Revenu Québec / pan-Canadian split-language
+   ;; workforces route correctly. Per ADR-051's open-set pattern,
+   ;; this is a non-breaking addition; DSAR / retention rules are
+   ;; per-category, NOT per-language, so language stays independent.
+   {:db/ident       :audit-doc/language
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Language / locale axis (ADR-078). Open-set;
+                     nil treated as :en by emit code. CRA T619 takes
+                     lang_cd E|F per submission; Revenu Québec RL-1
+                     is FR by convention. Consumer-facing PDF
+                     templates read this slot."}])
 
 (def ^:private approval-policy-attrs
   [{:db/ident       :approval-policy/entity-type
