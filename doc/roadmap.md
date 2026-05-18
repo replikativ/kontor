@@ -208,13 +208,18 @@ Hybrid build order (per research notes 09-12; the foundations get 3-4 weeks of d
 - [x] **Stage K — kontor-procurement** — Full P2P + reverse flow. ADR-042 design (`a08c239`) + 4 implementation commits: schema/seeds (`35fcf12`), forward 3-way match + bridge polymorphism (`16a7f4a`), reverse flow + credit-memo (`2e570d8`), drop-ship + `:order-item-assoc` (`1b69e06`). 708/2554 baseline.
 - [x] **Stage K-5 — review-after fixes** (commit `3eb8a0a`). 6 P0 from code-review + market-pain delta closed: `post-receipt-with-inventory!` shipped, `:requires-three-way-match-pass` rule wired, credit/debit-memo polarity flip, three-way invariant filters by receipt status + nets returns, 3 missing state transitions, `:receipt-invoice-billing` junction live, end-to-end P2P posting test. Bridge `:purchase + :direct → :gr-ir-clearing` (canonical receipt-first). 718/2576 baseline.
 - [x] **Stage L — kontor-collections** — Done. AR collections companion + kernel `:payment-application` partial-payment primitive landed. Five commits per the original plan. Post-Stage-L review delivered ADR-048 (valid-time normalization to `:tx/valid-from`) and the six research notes (17-21) + Agent A code review. P0/P1 cleanup completed 2026-05-13: kernel `kontor.invoice` ported to status machine (P0-4α); `credit-hold` + `dunning-pause` ported to status machine (P0-5); four denorms dropped (P0-6); `:collection-case/{opened-at,closed-at}` + `:credit-hold/placed-at` deferred as tuple-identity-coupled.
-- [ ] **Stage L′ — kontor-asset** — fixed-asset register + depreciation schedule (consumes ADR-032 `:schedule`). (~2 weeks.) (Stage-L precedence flipped 2026-05-12 per ADR-043: collections is the natural P2P → O2C continuation; revrec / subscription consume the partial-payment primitive collections lands.)
-- [ ] **Stage M — kontor-legal** — `:legal-hold` (kernel; extends ADR-007 purge middleware — Agent B's biggest structural lever) + `:retention-policy` (kernel shape + l10n data) + `:audit-doc/privilege` keyword (kernel). Heavy companions (`kontor-counsel`, `kontor-privacy`, `kontor-clm`) gated on user-story pull. (~2-3 weeks.) Research: `doc/research/17-vendor-legal-process.md`.
-- [ ] **Stage N — kontor-revrec** — ASC 606 / IFRS 15 over-time revenue recognition (consumes Stage J + ADR-032 + Stage L `:payment-application`). (~3 weeks.)
-- [ ] **Stage O — kontor-subscription** — recurring billing with catalog versioning (Kill Bill-pattern). (~2 weeks.)
-- [ ] **Stage P — kontor-project** — project + task + timesheet (timesheet = analytic-line per Odoo pattern, no new entity). (~2 weeks.)
-- [ ] **Stage Q — kontor-commerce-adapter** — UBL 2.1 + Peppol BIS round-trip for B2B document interchange. (~1 week per integration.)
-- [ ] **Stage R — kontor-hr + kontor-payroll-de-datev** — `:person` + `:employment` (effective-dated, multi-job per Workday pattern) + per-jurisdiction PayrollProvider adapter for DE (DATEV LODAS / Lohn und Gehalt).
+- [x] **Stage L′ — kontor-asset** — fixed-asset register + depreciation schedule (consumes ADR-032 `:schedule`). ADRs 053-056 landed; `modules/asset` ships the `:asset` register + `DepreciationProvider` protocol + Anlagengitter + cash-flow + equity-changes report engines + the per-`(asset, ledger)` parallel-book story (Handelsbilanz vs Steuerbilanz). Review-after note 33 closed all P0s.
+- [x] **Stage M — kontor-legal** — `:legal-hold` (kernel) + `:retention-policy` (kernel shape + l10n data) + `:audit-doc/privilege` keyword (kernel). ADRs 049-052 landed; review-after notes 27 + 32 closed all P0s. Heavy companions (`kontor-counsel`, `kontor-privacy`, `kontor-clm`) remain gated on user-story pull.
+- [x] **Stage N — kontor-inventory** — facilities + physical stock ledger + ATP/reservation + receive/issue/transfer/cycle-count/FEFO + GL integration. ADRs 057-060 landed; review-after note 37 closed P1s + cheap P2s. `modules/inventory` ships.
+- [x] **Stage N+ — kontor-expense** — employee expense reports. ADR-061; `modules/expense` ships.
+- [x] **Stage L (kontor-lease) — kontor-lease** — IFRS 16 / ASC 842 lessee-side. ADRs 062-064 + 069 (mid-life import) + 070 (disclosure-support deltas + discount-rate audit-doc) landed; review-after note 40 closed P1s. `modules/lease` ships.
+- [x] **kontor-authz** — ReBAC ported from EACL. ADRs 065-066 landed; review-after note 43 closed P0+P1s; consumer-readiness sweep (#127) closed the `ADR-066-deferred` methods. `modules/authz` ships.
+- [x] **Stage P — kontor.process + universal `*-tx-data` builders** — ADRs 067 + 068. Every business-write transactor across kernel + companions now exposes a pure `*-tx-data` builder + a thin `!` wrapper routing through the kernel validation gate. Review-after notes 48 + 49 closed P0s; remaining P1s tracked.
+- [ ] **Stage N (revrec) — kontor-revrec** — ASC 606 / IFRS 15 over-time revenue recognition (consumes Stage J + ADR-032 + Stage L `:payment-application`). Not yet started.
+- [ ] **Stage O — kontor-subscription** — recurring billing with catalog versioning (Kill Bill-pattern). Not yet started.
+- [ ] **Stage P (project) — kontor-project** — project + task + timesheet (timesheet = analytic-line per Odoo pattern, no new entity). Not yet started; Stage P stage-letter was repurposed for `kontor.process` (ADR-067) so this becomes "Stage U" or similar.
+- [ ] **Stage Q — kontor-commerce-adapter** — UBL 2.1 + Peppol BIS round-trip for B2B document interchange. Not yet started; `modules/einvoice-de` ships Factur-X today.
+- [ ] **Stage R — kontor-hr + kontor-payroll-de-datev** — `:person` + `:employment` (effective-dated, multi-job per Workday pattern) + per-jurisdiction PayrollProvider adapter for DE. Research-before bundle DONE (notes 72 + 73 + 74); implementation gated on 5 design calls in note 74.
 
 Candidate companions surfaced by the post-Stage-L research (each gated on a real consumer story):
 
@@ -247,15 +252,21 @@ Shipped: `bank-at`, `bank-ca`, `bank-de`, `bank-fr`, `bank-us` (kernel-level CSV
 
 ---
 
-## Trans-national substrate (ADR-071 / ADR-072 / ADR-073) — LANDED 2026-05-17
+## Trans-national substrate (ADR-071 / ADR-072 / ADR-073 / ADR-074) — LANDED 2026-05-17 / -18
 
-The kernel grew three coordinated substrate primitives that close the architecture review's §4 gaps (research note 69):
+The kernel grew four coordinated substrate primitives that close the architecture review's §4 gaps (research note 69) plus the cross-DB story from research note 71:
 
 - **ADR-071 — Tax abstraction redesign** (`TaxRateProvider` + `TaxFacts` + `TaxPostingBuilder`). 3-protocol split unblocks per-jurisdiction tax engines without the kernel knowing chart-of-accounts. Migration per-l10n-module + consumer-driven; the kernel ships the protocol skeletons.
-- **ADR-072 — `FxRateProvider` + `kontor.fx`**. Protocol + `:fx-rate/*` schema + `StaticTableProvider` + `EcbReferenceRatesProvider` + Money-level convert / translate-amounts-by-commodity / functional-currency rebase. ECB attribution required; no rates bundled.
+- **ADR-072 — `FxRateProvider` + `kontor.fx`**. Protocol + `:fx-rate/*` schema + `StaticTableProvider` + `EcbReferenceRatesProvider` + Money-level convert / translate-amounts-by-commodity / functional-currency rebase. ECB attribution required; no rates bundled. `kontor.report/compute-report` gained `:translate-to`; `kontor.lease.posting/plan-fx-retranslation` gained the IAS 21 provider mode.
 - **ADR-073 — Consolidation primitive** (`kontor.consolidation`). Per-IAS-21 translation + intercompany elimination + `consolidate!` orchestrator over `kontor.entity/family`. Substrate provides the mechanics; companion-tier (`kontor-consolidation`) layers ownership %, minority interest, IFRS 10 control on top.
+- **ADR-074 — `kontor.side-effect.cross`: cross-DB saga primitive**. `CrossTxRouter` protocol + `:cross-tx/step-id` content-hash idempotency + `drain!` worker over `:side-effect-intent` (ADR-041). Crash-safe, no XA/JTA. Enables kontor↔stratum / kontor↔kontor / kontor↔scriptum without coupling.
 
 Architecture review §4 Gaps 1 (`:entity` filter), 2 (FxRateProvider), 4 (consolidation) now closed at the substrate level. Gap 3 (HR/payroll) is research-before complete (notes 72/73/74); implementation gated on 5 design calls in note 74.
+
+Plus two smaller follow-ons:
+
+- **Cross-tx vf<vt guard + `kontor.bitemporal/close-validity{-tx-data,!}`** (commits `411d411` / `1655165`) — retroactive valid-time-window closure helpers, post-supersession-research (note 77).
+- **`:account-tag/concept-iri`** (commit `9a160aa`) — substrate seam for XBRL / filing taxonomies per research note 78. Substrate stores + indexes; verification is companion-tier.
 
 ## Out of scope for v1
 

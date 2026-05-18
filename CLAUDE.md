@@ -10,11 +10,13 @@ The library is **EPL-1.0**, **Clojure-only**, **single dependency** (datahike). 
 
 ## Where to start
 
-1. [doc/decisions.md](doc/decisions.md) — every architectural choice with rationale (ADR-001 .. ADR-010)
-2. [doc/architecture.md](doc/architecture.md) — the layer cake, namespace map, kernel module list
+1. [doc/decisions.md](doc/decisions.md) — every architectural choice with rationale (ADR-001 .. ADR-074, with ADR-067/068 codifying the `kontor.process` + `*-tx-data` builder convention, and ADR-071/072/073/074 the trans-national substrate)
+2. [doc/architecture.md](doc/architecture.md) — the layer cake, namespace map, kernel module list, provider-protocol surface
 3. [doc/roadmap.md](doc/roadmap.md) — phased plan with acceptance criteria per phase
-4. [doc/research/00-index.md](doc/research/00-index.md) — point-in-time research that informed the decisions
+4. [doc/research/00-index.md](doc/research/00-index.md) — point-in-time research that informed the decisions (78 entries as of 2026-05-18)
 5. [src/kontor/schema.clj](src/kontor/schema.clj) — kernel schema (the source of truth for entities and attributes)
+6. [doc/value.md](doc/value.md) — for evaluators / business stakeholders; [doc/programming.md](doc/programming.md) — for Clojure developers (transact gate + status machines + bitemporal substrate)
+7. [doc/showcases/](doc/showcases/) — four end-to-end notebooks: DE B2B Factur-X, US LLC multi-state, IN B2B IRN+TDS, multi-entity intercompany
 
 ## How to work in this repo
 
@@ -166,25 +168,72 @@ tests.edn                   kaocha config
 CLAUDE.md                   this file
 README.md                   short user-facing summary
 doc/
-  decisions.md              architectural decisions (ADRs)
-  architecture.md           layer cake + module map
+  decisions.md              architectural decisions (ADR-001 .. ADR-074)
+  architecture.md           layer cake + module map + provider protocols
+  conventions.md            transactor opts, status-machine writes, vt stamping, namespacing, money discipline
   roadmap.md                phased plan with acceptance criteria
-  research/                 point-in-time research reports
+  value.md                  evaluator-facing "what kontor IS"
+  programming.md            developer-facing transact-gate / status-machine / bitemporal model
+  research/                 78 point-in-time research notes (00-index.md is the table of contents)
+  showcases/                01-04 end-to-end Clay notebooks (DE / US / IN / multi-entity)
 src/kontor/    kernel
-  schema.clj                schema EDN
-  core.clj                  public surface
-  money.clj                 Money + arithmetic
-  posting.clj               build-transaction, sum-to-zero
-  tax_provider.clj          TaxProvider protocol + impls
+  schema.clj                schema EDN (kernel attrs across ~30 namespaces)
+  core.clj                  create-test-db + install-schema! + provider registration
+  money.clj                 Money + arithmetic (ADR-013)
+  posting.clj               build-transaction, sum-to-zero, multi-(entity, ledger, commodity)
+  balance.clj / ledger.clj  account-balance + postings-against-account, bitemporal-aware
+  trial.clj / closing.clj   trial-balance + year-end retained-earnings rollup
+  period.clj                open/close periods + soft/hard lock (ADR-014)
+  bitemporal.clj            :tx/valid-from + resolver + close-validity (ADR-048)
+  query.clj                 bitemporal convenience helpers
+  sealing.clj               :posted-at + middleware (ADR-007)
+  audit.clj                 commit-hash wrapper (ADR-003)
+  audit_doc.clj             :audit-doc + :approval-policy (ADR-038)
+  status_machine.clj        :status-transition + :status-history + record-status-change! (ADR-034)
+  state_machine.clj         :transaction/state lifecycle (kernel-internal)
+  side_effect.clj           :side-effect-intent dispatcher (ADR-041)
+  side_effect/cross.clj     :cross-tx/step-id + CrossTxRouter + drain! (ADR-074)
+  schedule.clj              :schedule recurring postings (ADR-032)
+  process.clj               kontor.process / run-process orchestrator (ADR-067)
+  tax_provider.clj          legacy TaxProvider (kept for back-compat; ADR-005 / superseded by ADR-071)
+  tax_rate_provider.clj     TaxRateProvider + TaxFacts (ADR-071)
   tax.clj                   apply-tax to a posting
-  sealing.clj               posted-at + middleware
-  audit.clj                 commit hash wrapper
-  balance.clj               account-balance bitemporal
-  ledger.clj                postings-against-account
-  trial.clj                 trial-balance
-  period.clj                open/close periods
-  query.clj                 bitemporal helpers
-  import/
-    beancount.clj           Beancount parser + dumper
+  fx_rate_provider.clj      FxRateProvider protocol + StaticTable / ECB / Chained (ADR-072)
+  fx.clj                    Money-level convert / translate / to-functional-currency
+  consolidation.clj         translate + eliminate + consolidate! (ADR-073)
+  costing_provider.clj      CostingProvider (ADR-029); valuation.clj for :valuation-book
+  einvoice_provider.clj     EInvoiceProvider + PureXmlProvider (ADR-017)
+  payment_application.clj   partial-payment primitive (ADR-043)
+  reconciliation.clj        bank-line → transaction scaffolding
+  bank_account.clj          :bank-account helpers (ADR-039)
+  bank_csv.clj              generic CSV importer
+  payment_term.clj / aging.clj  due-date + AR aging
+  entity.clj                :entity helpers + family walk (ADR-031)
+  report.clj                declarative report engine (+ :translate-to per ADR-072)
+  financial_statements.clj  BS / P&L generators
+  validation.clj            datopia/invariant middleware (ADR-011)
+  document/                 sub-namespace (e.g. document/invoice.clj after the namespace-collision rename)
+  import_/beancount.clj     Beancount round-trip (ADR-009)
 test/kontor/   tests, mirroring src
+modules/       companion modules + l10n + bank importers (each a separate Maven artifact)
 ```
+
+## Recent ADRs + research (since last refresh)
+
+- **ADR-067** — `kontor.process`: multi-step transactional processes as pure step-lists.
+- **ADR-068** — every business write exposes a `*-tx-data` builder; the `!` wrapper routes through `transact-with-validation`.
+- **ADR-069** — `kontor-lease`: mid-life portfolio import via `import-lease!`.
+- **ADR-070** — `kontor-lease`: disclosure-support deltas + discount-rate audit-doc.
+- **ADR-071** — Tax abstraction: `TaxRateProvider` + `TaxFacts` + `TaxPostingBuilder` (supersedes ADR-005's single `TaxProvider`).
+- **ADR-072** — `FxRateProvider` protocol + `:fx-rate/*` schema + `kontor.fx` Money-level translation. ECB attribution required; no rates bundled.
+- **ADR-073** — Consolidation primitive: `translate-trial-balance-tx-data` + `eliminate-intercompany-pair-tx-data` + `consolidate!` over `kontor.entity/family`.
+- **ADR-074** — `kontor.side-effect.cross`: cross-DB saga primitive via `CrossTxRouter` + content-hash `:cross-tx/step-id` idempotency.
+- **`:account-tag/concept-iri`** (no new ADR; commit `9a160aa`) — substrate seam for XBRL / filing taxonomies per research note 78.
+
+Research notes 50-78 land between 2026-05-15 and 2026-05-17 (28 new notes):
+
+- **50** banking-as-consumer; **51** tax-authority-as-consumer; **52** single- vs double-entry survey; **53** v2 consolidation recs (drove value/programming split); **54** simmis UI integration.
+- **55-63 + 66-68 + 77** the bitemporal substrate arc — XTDB v1/v2 comparison, datahike `feature/bitemporal-v1` upstream cut, stratum `feature/valid-time`, terminology recommendation, the kontor port from `:posting/valid-from` → `:tx/valid-from` → `:db.valid/from`, the supersession comparison driving `close-validity!`.
+- **69** architecture review + clean FP model (drove ADR-071/072/073); **70** tax abstraction design; **71** cross-DB atomic transact (drove ADR-074); **75** kontor+stratum integration plan; **76** review-after ADR-071/072/073 (all P0s closed same-day).
+- **72-74** HR / payroll research-before bundle (Stage R gating).
+- **78** XBRL + accounting taxonomies (drove `:account-tag/concept-iri`).

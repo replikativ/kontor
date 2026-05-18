@@ -108,11 +108,17 @@ src/kontor/
                             record-status-change! (ADR-034)
   state_machine.clj         :transaction/state transitions (kernel-internal)
   side_effect.clj           :side-effect-intent dispatcher (ADR-041)
+  side_effect/cross.clj     :cross-tx/step-id + CrossTxRouter + drain! (ADR-074)
   schedule.clj              :schedule recurring postings (ADR-032)
+  process.clj               kontor.process / run-process orchestrator (ADR-067)
 
   ; --- Provider protocols ---
-  tax_provider.clj          TaxProvider protocol + impls (ADR-005)
+  tax_provider.clj          legacy TaxProvider (ADR-005, superseded by ADR-071)
+  tax_rate_provider.clj     TaxRateProvider + TaxFacts (ADR-071)
   tax.clj                   apply-tax to a posting
+  fx_rate_provider.clj      FxRateProvider + StaticTable / ECB / Chained (ADR-072)
+  fx.clj                    Money-level convert / translate-* / to-functional-currency
+  consolidation.clj         translate + eliminate + consolidate! (ADR-073)
   costing_provider.clj      CostingProvider protocol — FIFO/LIFO/Avg/Std (ADR-029)
   valuation.clj             :valuation-book + :valuation-layer (ADR-027/028)
   einvoice_provider.clj     EInvoiceProvider protocol + PureXmlProvider (ADR-017)
@@ -316,7 +322,7 @@ Per ADR-048 the status-transition timestamp denorms (`:invoice/sent-at`, `:dispu
 
 ## Provider protocols
 
-kontor exposes five pluggable seams. Each lets a consumer plug in their own logic (or a partner adapter) without touching the kernel.
+kontor exposes seven pluggable seams. Each lets a consumer plug in their own logic (or a partner adapter) without touching the kernel.
 
 ### TaxProvider (ADR-005, superseded by ADR-071)
 
@@ -380,6 +386,21 @@ Pure-data e-invoice generation. The kernel ships `PureXmlProvider` (UBL/Factur-X
 ### DepreciationProvider (ADR-055)
 
 Per-asset depreciation method (straight-line, declining-balance, units-of-production). Plug per book — different books may depreciate the same asset on different schedules.
+
+### LeaseProvider (ADR-063)
+
+Per-lease classification + posting plug. The operating-lease ROU plug + `plan-fx-retranslation` provider mode let consumers compose IFRS 16 / ASC 842 lessee-side lease accounting at per-`(lease, ledger)` granularity. See `modules/lease/`.
+
+### CrossTxRouter (ADR-074)
+
+Cross-DB atomic-feel commits — `kontor.side-effect.cross` extends ADR-041's `:side-effect-intent` so the "side effect" can be a tx-data commit against a *different* datahike conn (another kontor instance, a stratum secondary index, a scriptum audit log). Saga + content-hash idempotency via a `:cross-tx/step-id` attribute (`:db.unique :db.unique/identity`), not XA / JTA.
+
+```clojure
+(defprotocol CrossTxRouter
+  (resolve-conn [_ system-id]))  ; consumer's system-id → conn mapping
+```
+
+A worker `drain!`'s pending `:cross-tx-post` intents: claim intent → resolve target conn → check target for the deterministic SHA-256-derived step-id → skip-or-transact-augmented → mark done (or failed). Crash-safe — if the worker dies after target-commit but before mark-done, the next worker sees the step-id present and goes straight to mark-done.
 
 ---
 

@@ -168,6 +168,78 @@ and e-invoice emitters; and bank-statement importers
 See `modules/` and [doc/roadmap.md](doc/roadmap.md) for the current
 state.
 
+## Country coverage
+
+The l10n modules vary in depth. The matrix below reflects what is
+actually shipped in `modules/l10n-*/` today (LoC is `src/`, excludes
+tests):
+
+| Country | LoC | Chart | Invoice | Tax | Filing | Bank importer | Status |
+|---|---:|---|---|---|---|---|---|
+| DE | 1072 | SKR04 | Factur-X / XRechnung / ZUGFeRD (`modules/einvoice-de`) | UStVA + reverse-charge + 19/7/0 | UStVA, BWA, EÜR, P&L, BS, DATEV EXTF, year-end close | `bank-de` (217 LoC, 11 bank CSV formats) | **complete-enough-to-build-on** (drives showcase 01) |
+| CA | 2500 | CA baseline | — | GST/HST + QST + BC PST | GST34-2 (15 lines), T1/T2125/S3/S4/S8/S9/S11, BC428, T4/T5/T5018 XML (CRA 2026V4 XSD-validated), T619 envelope, NoA scaffold, AcroForm PDF mechanics | `bank-ca` (161 LoC) | **complete-enough-to-build-on** (XFA-fill + cert deferred per Phase 4-CA-cert) |
+| BR | 1882 | Plano de Contas Referencial | NF-e 4.0 (kernel emitter; signing in partner) | ICMS state matrix + IPI + PIS + COFINS + ISS + IRPJ + CSLL + CBS/IBS dual-VAT scaffold | SPED EFD-ICMS/IPI subset, ECF De/Para | — | **scaffolded** (filable artifacts; SEFAZ transmission is partner) |
+| IN | 963 | — | NIC IRN clearance scaffold, EWB | GST + TDS withholding + reverse-charge | GSTR-1 export shape | — | **scaffolded** (drives showcase 03) |
+| JP | 563 | J-GAAP | Peppol PINT JP UBL | JCT 10/8/exempt/zero-rated + 3 zero-tax categories | QIS registration number validation | — | **scaffolded** |
+| CN | 489 | ASBE/ASSBE | fapiao (8/18/20-digit validators) + draft EInvoiceProvider XML | VAT 13/9/6/3/0 + surcharges (UMCT/edu) | — (STA platform deferred to `kontor-l10n-cn-fapiao`) | — | **scaffolded** |
+| AU | 458 | ATO-aligned (~40 accts) | Peppol PINT A-NZ UBL | GST 10% single-rate | BAS Simpler / Full | — | **scaffolded** |
+| MX | 472 | — (no chart shipped) | CFDI scaffold | — | RFC + CFDI identifier validators | — | **thin** (no chart, no tax stack) |
+| AT | 147 | AT baseline | — | — | UVA stub | `bank-at` (170 LoC) | **thin** (chart + bank importer only) |
+| FR | 136 | FR PCG baseline | — | — | CA3 stub | `bank-fr` (147 LoC) | **thin** (chart + CA3 stub + bank importer) |
+| US | 121 | — (no chart shipped) | — | sales-tax stub (`TaxProvider` seam — wrap Avalara/TaxJar/SST per ADR-005) | — | `bank-us` (162 LoC) | **thin** (drives showcase 02 against the substrate seams; full chart + 1099 series deferred to Phase 5-US) |
+
+The pattern: the substrate is country-agnostic; the depth of each
+l10n module reflects which user stories we've actually exercised
+end-to-end. DE / CA / BR / IN are deep enough to build a real consumer
+on; FR / AT / MX / US are scaffolds that prove the seams compose but
+need a real customer pull before they go further.
+
+## Showcases
+
+Four end-to-end Clay notebooks in [doc/showcases/](doc/showcases/),
+each tells a story on synthetic data with cited regulatory sources
+and doubles as an integration test:
+
+- [`01_de_b2b_factur_x.clj`](doc/showcases/01_de_b2b_factur_x.clj) —
+  German GmbH B2B SaaS with Factur-X invoicing + DE Mahnverfahren
+  collections.
+- [`02_us_llc_multi_state.clj`](doc/showcases/02_us_llc_multi_state.clj) —
+  US LLC selling SaaS across CA/NY/TX/WA with Regulation F-compliant
+  dunning.
+- [`03_in_b2b_irn_tds.clj`](doc/showcases/03_in_b2b_irn_tds.clj) —
+  Indian B2B manufacturer with NIC IRN e-invoice clearance + GSTR-1
+  export shape + TDS withholding + intercompany reverse-charge.
+- [`04_multi_entity_intercompany.clj`](doc/showcases/04_multi_entity_intercompany.clj) —
+  DE parent + US subsidiary end-to-end O2C + P2P with multi-entity
+  sum-to-zero (ADR-031), analytic cost-centers (ADR-022), Stage J
+  sales bridge, Stage K procurement, and `:no-self-approval`
+  enforcement (ADR-038).
+
+Render with `clojure -M:notebooks` then
+`(scicloj.clay.v2.api/make! {:source-path "doc/showcases/01_de_b2b_factur_x.clj"})`.
+
+## Substrate-tier seams
+
+`kontor` exposes pluggable seams so consumers can plug their own
+logic (or a partner adapter) without touching the kernel. As of the
+2026-05-17 trans-national substrate work, the public seams are:
+
+| Seam | ADR | Built-in impls | What it lets you plug |
+|---|---|---|---|
+| `TaxRateProvider` + `TaxFacts` + `TaxPostingBuilder` | ADR-071 (supersedes ADR-005) | `StaticTableProvider`; scaffolds for `AvalaraProvider` / `TaxJarProvider` / `SstCsvProvider`; per-l10n posting builders | Per-jurisdiction tax engines; rate-determination is pure data (`TaxFacts`) so per-country posting builders own the chart-of-accounts knowledge |
+| `FxRateProvider` | ADR-072 | `StaticTableProvider` (last-known + inverse + triangulation); `EcbReferenceRatesProvider` (CSV ingest, attribution required); `ChainedProvider`; scaffolds for `XeProvider` / `OandaProvider` / `FedH10Provider` | Foreign-exchange rates per IAS 21 / ASC 830 rate-types (`:spot :closing :average :opening :historical`). Consumed by `kontor.fx`, `kontor.report/compute-report` (`:translate-to`), `kontor.lease.posting/plan-fx-retranslation`, and `kontor.consolidation`. |
+| `EInvoiceProvider` | ADR-017 | `PureXmlProvider` (UBL / Factur-X / NF-e / Peppol PINT shapes) | Per-country e-invoice envelope generation. Signing + transmission live in partner adapters; the kernel emits the pure data. |
+| `CostingProvider` | ADR-029 | FIFO, LIFO, WeightedAverage, StandardCost | Inventory cost methods over `:valuation-layer` + `:layer-consumption`. |
+| `DepreciationProvider` | ADR-055 | straight-line, declining-balance, units-of-production | Per-(asset, ledger) depreciation method — different books may depreciate the same asset on different schedules (Handelsbilanz ≠ Steuerbilanz). |
+| `LeaseProvider` | ADR-063 | the operating-lease ROU plug; `plan-fx-retranslation` provider mode | IFRS 16 / ASC 842 lessee-side lease accounting; per-`(lease, ledger)` classification. |
+| `CrossTxRouter` | ADR-074 | content-hash `:cross-tx/step-id` idempotency + `drain!` worker over `:side-effect-intent` | Cross-DB atomic-feel commits (kontor↔stratum secondary index, intercompany kontor↔kontor, kontor↔scriptum audit log). Saga + content-hash, not XA/JTA. |
+
+Plus three primitives that compose with the seams above:
+
+- **`kontor.consolidation`** (ADR-073) — `translate-trial-balance-tx-data` + `eliminate-intercompany-pair-tx-data` + `consolidate!` orchestrator over `kontor.entity/family`. Closes the architecture-review §4 Gap 4 at the substrate level; companion-tier `kontor-consolidation` will layer ownership %, minority interest, IFRS 10 control on top.
+- **`kontor.side-effect.cross`** (ADR-074) — the cross-DB saga implementation that backs `CrossTxRouter`. ~250 LoC; reuses `:side-effect-intent/*` schema verbatim.
+- **`:account-tag/concept-iri`** (research note 78; commit `9a160aa`) — schema seam for XBRL / filing taxonomies (`{namespace-URI}#{local-name}`). Substrate stores + indexes; verification is companion-tier.
+
 ## Where to next
 
 Two audience-specific docs, both worth bookmarking:
@@ -190,17 +262,22 @@ And the deeper material:
   schema-as-source-of-truth, how companions compose without forking
   the kernel.
 - **[doc/decisions.md](doc/decisions.md)** — every architectural
-  choice with rationale (ADR-001 … ADR-068, including ADR-067's
-  `kontor.process` facility and ADR-068's universal `*-tx-data`
-  builder convention). Start here for any non-trivial question
-  about *why* the schema looks the way it does.
+  choice with rationale (ADR-001 … ADR-074, including ADR-067's
+  `kontor.process` facility, ADR-068's universal `*-tx-data` builder
+  convention, and the 2026-05-17 trans-national substrate quartet —
+  ADR-071 tax abstraction redesign, ADR-072 FxRateProvider, ADR-073
+  consolidation primitive, ADR-074 cross-DB saga). Start here for
+  any non-trivial question about *why* the schema looks the way it
+  does.
 - **[doc/roadmap.md](doc/roadmap.md)** — phased plan with acceptance
   criteria.
-- **[doc/research/](doc/research/)** — 49 point-in-time research
+- **[doc/research/](doc/research/)** — 78 point-in-time research
   notes spanning prior-art surveys (Odoo, Tryton, SAP, NetSuite,
-  Oracle, KillBill, OFBiz, SpiceDB, EACL, XTDB v2, Postgres SSI),
-  review-after audits, and design call analysis. Note 48 + 49 are
-  the Stage P review-after pair.
+  Oracle, KillBill, OFBiz, SpiceDB, EACL, XTDB v1/v2, Postgres SSI),
+  the bitemporal substrate arc (notes 55-68 + 77), the cross-DB
+  atomic-transact study (note 71), the trans-national review-after
+  (note 76), and the XBRL substrate-design input (note 78). See the
+  table of contents at [doc/research/00-index.md](doc/research/00-index.md).
 - **[doc/showcases/](doc/showcases/)** — four end-to-end narrative
   notebooks (DE Mahnverfahren, US multi-state, IN B2B with IRN+TDS,
   multi-entity intercompany). Each tells a story on synthetic data
@@ -219,28 +296,28 @@ documents its license. Pull only the modules whose terms you accept.
 
 ## Status
 
-End of Stage P (universal `*-tx-data` builders + cross-module
-composition). Kernel + 68 ADRs landed.
+Trans-national substrate landed 2026-05-17/-18 (ADRs 071-074).
+Kernel + 74 ADRs total.
 
 The kernel runs the four showcase notebooks end-to-end (DE / US /
 IN / multi-entity). Every business-write transactor across kernel +
-companions now exposes a pure `*-tx-data` builder + a thin `!`
-wrapper routing through the kernel validation gate — atomic
-cross-module composition (the "create invoice + grant access + log
-audit-doc in one transaction" win) is structurally enforced.
+companions exposes a pure `*-tx-data` builder + a thin `!` wrapper
+routing through the kernel validation gate — atomic cross-module
+composition (the "create invoice + grant access + log audit-doc in
+one transaction" win) is structurally enforced (ADR-067 / 068).
 
-`bb test`: 939 tests / 3423 assertions / 0 failures.
+Architecture-review §4 trans-national gaps now closed at the
+substrate level: per-entity sum-to-zero (ADR-031), `FxRateProvider`
++ Money translation (ADR-072), consolidation primitive (ADR-073),
+cross-DB saga primitive (ADR-074). HR/payroll remains
+research-before-complete (notes 72/73/74) and gated on 5 design
+calls in note 74.
 
 It is *not* yet 1.0 — a small datahike contribution (closing the
-`:period/lock-tx` self-ref carve-out, task #75) remains. The
-2026-05-15 sweep closed the three end-of-Stage-P follow-ups: authz
-consumer-readiness (#127, two `ADR-066-deferred` methods); mid-life
-portfolio import (#123 — `kontor.lease.runner/import-lease!`,
-ADR-069); disclosure-support deltas + discount-rate audit-doc
-(#124, ADR-070). Note 40's "smaller items" checklist (per-(lease,
-ledger) index-reset fork, stepped-rent profiles, ASC 842 16.46(a)
-second partial-termination method, FX retranslation transactor)
-is documented in ADR-070 as deferred to a future lease stage.
+`:period/lock-tx` self-ref carve-out, task #75) remains, the
+trans-national substrate's per-l10n migration to `TaxRateProvider`
++ `TaxPostingBuilder` (ADR-071) is per-module work, and the FX +
+consolidation surface still wants real-customer mileage.
 
 ## Contributing
 
