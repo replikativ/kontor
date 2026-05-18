@@ -7666,3 +7666,49 @@ Two existing components stay in place, orthogonal:
 **Research backing.** doc/research/70-tax-abstraction-design.md (10 open questions resolved as recommended; per-module survey of all 11 l10n modules; jurisdictional realities for US/BR/IN/CN/CA/DE/FR/AT/JP/MX/AU; reference systems Odoo/Avalara/TaxJar/SST).
 
 Date: 2026-05-17.
+
+---
+
+## ADR-072 — `FxRateProvider` protocol + `:fx-rate/*` schema + `kontor.fx` Money translation
+
+**Decision.** Ship a small, opt-in FX subsystem in three parts:
+
+1. **`:fx-rate/*` schema** (`schema.clj` immediately after `commodity-attrs`). One entity per (from-commodity, to-commodity, at-date, rate-type) sample. A composite `:fx-rate/by-tuple` (`:db/tupleAttrs` = the four identifying attrs, `:db/unique :db.unique/identity`) gives upsert semantics — re-transacting the same key replaces `:rate` / `:source` / `:source-doc`. Rate-type vocabulary follows IAS 21 / ASC 830: `:spot | :closing | :average | :opening | :historical`.
+
+2. **`kontor.fx-rate-provider/FxRateProvider`** protocol with two operations: `resolve-rate` (single point) and `resolve-period-rates` (window of samples, for IAS 21 average-rate computations). Identical *shape* to `TaxRateProvider` (ADR-071) and `TaxProvider` (ADR-005-superseded) so the substrate's pluggable-seam vocabulary stays one pattern. Built-in impls:
+   - **`StaticTableProvider`** — reads `:fx-rate/*` from the connected db. Defaults: `:fallback-on-or-before? true` (last-known sample wins when the asked date has no exact hit), `:allow-inverse? true` (USD→EUR derives from EUR→USD as 1/rate at 12-digit half-even precision), optional `:default-via` for triangulation through a base commodity.
+   - **`EcbReferenceRatesProvider`** — wraps `StaticTableProvider` with `:default-via "EUR"`; ships an `ingest-ecb-csv-rows!` helper that persists parsed eurofxref-daily rows + their inverses tagged `:source :ecb`. The ECB dataset itself is NOT bundled; the customer ingests it at runtime. ECB attribution string exported as a public var (`fxp/ecb-attribution`).
+   - **Scaffolds**: `XeProvider`, `OandaProvider`, `FedH10Provider`. Throw on `resolve-rate` with a hint pointing at this ADR. Same posture as ADR-005 / ADR-071: customer brings the credential or data file; we do not bundle.
+   - **`ChainedProvider`** + `chain` helper — try in order, first non-nil non-zero wins. Pattern matches `kontor.tax-provider/ChainedProvider`.
+
+3. **`kontor.fx`** — the Money-side of the story. Four operations:
+   - **`convert`** — translate a `Money` into the target commodity at the provider's rate; rounds to a configurable precision (default 2, `nil` to skip). Identity short-circuits; missing-rate raises rather than silently returning the input (silent FX coercion has bitten too many accounting systems).
+   - **`translate-money-seq`** — reduce a mixed-commodity sequence of Monies into ONE target commodity. Empty input returns `zero` in `:to`. Building block for IAS 21 P&L (`:rate-type :average`) and BS (`:closing`).
+   - **`translate-amounts-by-commodity`** — re-base a `{commodity → BigDecimal}` summary (e.g. what `kontor.balance/account-balance` returns when the account is multi-commodity) into ONE presentation commodity.
+   - **`to-functional-currency`** — translate a foreign-currency `Money` into the entity's `:entity/functional-commodity`. No-op when the entity hasn't opted in.
+
+**Composition.** `kontor.fx` requires `kontor.fx-rate-provider`; the kernel itself never *uses* either namespace. Consumers compose: `lease/posting/plan-fx-retranslation` can drop the "consumer supplies `:gain-loss`" requirement and call `kontor.fx/convert` against the configured provider (followup); `kontor.report` can grow an optional `:translate-to` opt (followup); the still-undelivered `kontor.consolidation/translate-currency!` will be one `translate-amounts-by-commodity` per entity per ledger.
+
+**Why a protocol (and not a plain lookup table).** Same reasoning as `TaxRateProvider`: different jurisdictions / books pin different sources (ECB for eurozone reporting, Fed H.10 for US, central-bank reference rates in BR / IN / CN). Paid feeds (XE, OANDA) require customer-owned API keys. In-DB + live-API composes via `ChainedProvider` exactly like `kontor.tax-provider/ChainedProvider`.
+
+**Why `:fx-rate/by-tuple` is upsert-y.** Re-transacting (EUR, USD, 2026-01-02, :spot) replaces the prior rate. Provenance changes (`:fx-rate/source :ecb` → `:source :corrected`) flow through; the bitemporal layer (`:db.valid/from`/`:db.valid/to` via ADR-048 + datahike `feature/bitemporal-v1`) records both the prior and current rates, so the audit chain survives the upsert. Operationally identical to how `:tax-application/by-tuple` works (ADR-016).
+
+**Why 12-digit half-even on inverse derivation.** Avoids cascading-rounding drift across triangulation. The result rounds to the target commodity's display precision at the `kontor.fx/convert` step, not at lookup.
+
+**License posture.** The ECB euro-reference-rates dataset is published under "freely usable for any purpose provided the source is acknowledged" — EPL-compatible. We ship the *adapter* (CSV→`:fx-rate/*` ingest call) + the attribution string. We do NOT ship a CSV snapshot. ECB attribution must be surfaced wherever an ECB-sourced rate is displayed (consumer's responsibility; provider-id `:ecb` + the exported attribution string is the contract).
+
+**Decision NOT to.** Not bundling a real-time-quote backend, hedge-accounting fair-value pricing (IFRS 9 / ASC 815), or central-bank XML poller. Those belong to `kontor-treasury` (deferred companion per research note 69 §4 Gap 6).
+
+**Test discipline.** 28 tests in `test/kontor/fx_test.clj` (44 assertions) cover: identity short-circuit, exact + fallback + inverse + triangulation, rate-type discrimination, period-rates window, upsert via identity tuple, unknown-commodity errors, `ChainedProvider` first-non-nil semantics, ECB ingest produces both directions, Money conversion + precision overrides, mixed-commodity translation, JPY 0-precision handling, functional-currency rebase + passthrough.
+
+**Gotcha documented.** Datalog with a composite-tuple attr: `[?e :fx-rate/by-tuple [?from ?to ?date ?type]]` does NOT do tuple-equality — datahike treats the position-vector as fresh per-slot bindings. Use `:in $ ?tuple` + `[?e :fx-rate/by-tuple ?tuple]` instead. The `query-exact` helper carries a comment to that effect.
+
+**Implication 1.** The kernel's "single-dep on datahike per ADR-001" posture survives — no new dep. The ECB adapter's `ingest-ecb-csv-rows!` accepts pre-parsed rows; the *parser* lives in consumer code (one `clojure.data.xml/parse` call + a flat data->map; ~50 LoC).
+
+**Implication 2.** The architecture review's §4 Gap 2 ("FX rate provider + currency translation, severity P1 for SMB / P0 for trans-national") is now closed at the substrate level. Wiring into `kontor.posting/build-transaction` (`:fx-provider` opt), `kontor.report/compute-report` (`:translate-to` opt), and `lease/posting/plan-fx-retranslation` (drop the `:gain-loss` consumer-input) is the follow-up.
+
+**Implication 3.** Unblocks Gap 4 (consolidation primitive). `kontor.consolidation/translate-currency!` becomes a one-screen function over `kontor.fx/translate-amounts-by-commodity`.
+
+**Research backing.** doc/research/69-architecture-review-and-fp-model.md §4 Gap 2 + §6 Item 6 + §8 Q4 (ECB license).
+
+Date: 2026-05-17.

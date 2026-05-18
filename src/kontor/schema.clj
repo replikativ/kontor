@@ -86,6 +86,93 @@
                      Set iff this is a fiat currency."}])
 
 ;; ============================================================================
+;; FX rate — exchange-rate sample for currency translation.
+;;
+;; ADR-072. One entity per (from-commodity, to-commodity, at-date,
+;; rate-type) sample. The `:fx-rate/by-tuple` composite gives upsert
+;; semantics — repeated transacts replace prior samples for the same
+;; key. `:fx-rate/source` carries provenance (`:ecb`, `:manual`, etc.);
+;; `:fx-rate/source-doc` is a free-form pointer to the underlying record
+;; (URL, CSV path, audit-doc eid as a string) so downstream auditors
+;; can chase the number to its origin.
+;;
+;; Rate-type vocabulary follows IAS 21 / ASC 830:
+;;   :spot       — point-in-time market rate (default)
+;;   :closing    — period-end spot used for monetary BS items
+;;   :average    — period-average used for P&L per IAS 21
+;;   :opening    — period-open spot (rarely needed; mirrors :closing)
+;;   :historical — frozen at acquisition; non-monetary items
+;;
+;; The kernel installs no rate data. `kontor.fx-rate-provider` impls
+;; either fill this table (via `kontor.fx-rate-provider/save-rates!`)
+;; or sit alongside it (Avalara/XE adapters fetch on demand). The
+;; schema is what makes `StaticTableProvider` work without an
+;; extra-DB cache.
+;; ============================================================================
+
+(def ^:private fx-rate-attrs
+  [{:db/ident       :fx-rate/from-commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to :commodity. The base commodity (the \"1 of
+                     this\" side of the quote)."}
+
+   {:db/ident       :fx-rate/to-commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to :commodity. The quote commodity (the
+                     \"= N of this\" side)."}
+
+   {:db/ident       :fx-rate/at-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Sample date — the as-of for which this rate is
+                     authoritative. The kernel never silently
+                     interpolates: a lookup at date D with no exact
+                     sample falls back per the provider's policy
+                     (typically: last sample on or before D)."}
+
+   {:db/ident       :fx-rate/rate
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Multiplier: amount-in-from-commodity × rate =
+                     amount-in-to-commodity. BigDecimal — never a
+                     double."}
+
+   {:db/ident       :fx-rate/rate-type
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":spot | :closing | :average | :opening |
+                     :historical — per IAS 21 / ASC 830."}
+
+   {:db/ident       :fx-rate/source
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Provenance: :ecb | :manual | :xe | :oanda |
+                     :fed-h10 | :customer-imported | … free-form
+                     keyword. Used in audit reports and to filter
+                     out non-authoritative samples."}
+
+   {:db/ident       :fx-rate/source-doc
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Free-form pointer to the underlying source —
+                     a URL, a CSV filename, an :audit-doc eid as a
+                     string. Optional."}
+
+   {:db/ident       :fx-rate/by-tuple
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:fx-rate/from-commodity
+                     :fx-rate/to-commodity
+                     :fx-rate/at-date
+                     :fx-rate/rate-type]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Composite identity. Re-transacting the same
+                     (from, to, date, type) replaces the prior
+                     :rate / :source / :source-doc."}])
+
+;; ============================================================================
 ;; Lot — a specific acquisition of a commodity (cost-basis tracking).
 ;;
 ;; PTA convention: a lot pins (date, cost-basis-per-unit, optional
@@ -3520,6 +3607,7 @@
    (concat
     audit-attrs
     commodity-attrs
+    fx-rate-attrs                        ; ADR-072
     lot-attrs
     account-attrs
     account-code-attrs                   ; ADR-019
