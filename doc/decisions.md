@@ -7712,3 +7712,57 @@ Date: 2026-05-17.
 **Research backing.** doc/research/69-architecture-review-and-fp-model.md §4 Gap 2 + §6 Item 6 + §8 Q4 (ECB license).
 
 Date: 2026-05-17.
+
+---
+
+## ADR-073 — Consolidation primitive: `translate-trial-balance-tx-data` + `eliminate-intercompany-pair-tx-data` + `consolidate!`
+
+**Decision.** Ship a multi-entity consolidation primitive in `kontor.consolidation` with three operations and one schema attr group:
+
+1. **`translate-trial-balance-tx-data`** — pure tx-data builder. Given an :operating entity's trial balance and the consolidation entity's presentation commodity, translate per-(account, commodity) amounts via the configured `FxRateProvider` (ADR-072) at IAS 21 / ASC 830 rate-types, sum per account, and emit ONE balanced consolidation transaction stamped with `:posting/entity = consolidation-entity`. The CTA (cumulative translation adjustment) is the plug posted to a designated CTA account when translated amounts don't net to zero.
+
+2. **`eliminate-intercompany-pair-tx-data`** — pure tx-data builder. Given a `:transaction/intercompany-pair-id` (a new schema attr — string, indexed, NOT unique) shared by N transactions across the family, emit one elimination tx whose postings exactly negate the postings of every paired transaction, stamped with `:posting/entity = elimination-entity`. Sum-to-zero per (entity, commodity) holds automatically because the source txs each balance and we just negate.
+
+3. **`consolidate-tx-data`** + **`consolidate!`** — composer + orchestrator. `consolidate-tx-data` walks `kontor.entity/family` from a group root, runs translation for every :operating entity that has a non-empty trial balance, runs elimination for every distinct pair-id touching the family, and returns the vector of tx-data fragments. `consolidate!` commits them via `kontor.process/run-process` so the whole cycle lands as one atomic, validation-gated commit — any sum-to-zero failure rolls the cycle back.
+
+**Schema additions** (`intercompany-pair-attrs` in `schema.clj`):
+- `:transaction/intercompany-pair-id` (string, indexed, not unique)
+- `:transaction/consolidation-source-entity` (ref) — provenance on translation txs
+- `:transaction/consolidation-kind` (keyword: `:translation | :elimination`)
+
+**IAS 21 default rate-type matrix** (`default-rate-type-by-account-type`):
+- `:asset → :closing`, `:liability → :closing` — monetary BS items
+- `:equity → :historical`
+- `:income → :average`, `:expense → :average`
+
+Customers override via `:rate-type-by-account-type` (per-type) or `:rate-type-by-account` (per-account, wins over per-type). The default lumps all assets as monetary; customers with material non-monetary holdings (PP&E, inventory at cost) should ship a per-account override for those — IAS 21 strictly requires historical rate for non-monetary items.
+
+**What this primitive is NOT** (intentionally):
+- Not IAS 27 / IFRS 10 / ASC 810 control + ownership. The maintainer passes the family; ownership %, minority interest, acquisition vs pooling are companion-tier (the future `kontor-consolidation` companion).
+- Not deferred tax / transfer pricing / Pillar 2 GloBE. Those are `kontor-tax-provision` (research note 69 §4 Gap 5/7).
+- Not the consolidation entity's post-translation period close. The entries land with `:transaction/state :draft`; callers post them via subsequent `post-transaction!` cycles when reviewed.
+
+**Atomicity.** `consolidate!` uses `kontor.process/run-process` (ADR-067) so the cycle is ONE transaction under the validation gate. If the US-LLC translation balances but the elimination fails sum-to-zero, the whole cycle rolls back. The per-fragment validation that `transact-with-validation` runs catches sum-to-zero per (entity, commodity) breakage at the gate, which is exactly the right granularity for consolidation work.
+
+**Why fragments-as-steps.** Each translation entry is a coherent transaction. The composer returns N fragments (one per entity + one per pair-id); the orchestrator wraps each as a `(constantly frag)` step. `run-process` accumulates them all and commits once. The alternative (`reduce into [] frags` into one mega-tx-data) would also work but loses the per-fragment audit-trail (multiple `:transaction/*` entities in one tx are fine, but the read path is cleaner with distinct txs per concern).
+
+**The pair-id design.** Most ERP systems use a transaction-level "intercompany document number" or a ref-link between two txs. We picked the string-id pattern because:
+- It generalizes to N-way pairs (rare but possible — three-leg intercompany loans).
+- It survives entity renames + tx purges (string IDs don't cascade-fail).
+- It plays nicely with import: an external feed (a parent ERP exporting txs) brings the IC ID as data, not as a relationship that has to be resolved post-hoc.
+
+**Test discipline.** 5 tests in `test/kontor/consolidation_test.clj` (17 assertions) covering: trivial identity translation (functional = presentation, no CTA), USD-functional translation to EUR (with CTA plug as needed), elimination negation correctness, composer fragment count, end-to-end `consolidate!` producing the expected per-entity trial balances. Full suite at 985 tests / 3524 assertions.
+
+**License posture.** ADR-001 single-dep on datahike survives. No new deps; only existing kontor namespaces. ADR-031 (per-entity sum-to-zero), ADR-067 (process orchestrator), ADR-068 (every business write is a `*-tx-data` builder), and ADR-072 (FxRateProvider) all compose naturally.
+
+**Decision NOT to.** Not building `kontor.consolidation/translate-currency!` as a separate transactor — `consolidate!` IS the public surface; `translate-trial-balance-tx-data` is the building block. The architecture review §6 Item names were illustrative; the actual API is simpler. Not adding the `:consolidate-from`/`:consolidate-to` opts to `kontor.report` — that's a presentation concern; ADR-072's `:translate-to` already covers single-entity multi-currency reporting, and the consolidation entries themselves are reportable via `kontor.report :entity = consolidation-entity`.
+
+**Implication 1.** The architecture review's §4 Gap 4 is now closed at the substrate level. The full `kontor-consolidation` companion (ownership %, minority interest, acquisition accounting, IFRS 3 goodwill, IAS 27 step acquisitions) layers on top.
+
+**Implication 2.** Cross-entity intercompany pair tracking via `:transaction/intercompany-pair-id` is now schema, so any business write can carry it — the invoice module, the procurement module, the lease module, the payment-application module can all tag intercompany operations and have them eliminate cleanly at consolidation time without further coupling.
+
+**Implication 3.** Combined with ADR-072, kontor's substrate now covers the full trans-national accounting story: per-entity books (ADR-031), per-jurisdiction tax (ADR-071), per-currency FX (ADR-072), per-family consolidation (this ADR). What remains is companion-shaped work (consolidation policy, tax-provision, treasury, HR/payroll).
+
+**Research backing.** doc/research/69-architecture-review-and-fp-model.md §4 Gap 4 + §7.6.
+
+Date: 2026-05-17.

@@ -3127,6 +3127,39 @@
                      XLA_AE_LINES.LEGAL_ENTITY_ID, NetSuite per-line
                      subsidiary, D365 per-LE DataAreaId."}])
 
+(def ^:private intercompany-pair-attrs
+  [{:db/ident       :transaction/intercompany-pair-id
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "Shared identifier across the two (or more)
+                     transactions that together form an intercompany
+                     event — e.g. a DE-GmbH AR booking + the matching
+                     US-LLC AP booking against each other. The
+                     consolidation engine
+                     (kontor.consolidation/eliminate-intercompany-pair-tx-data)
+                     finds the group by this id and emits offsetting
+                     postings on the consolidation/elimination entity.
+
+                     Not unique: the same pair-id by construction
+                     appears on each tx in the pair. ADR-073."}
+
+   {:db/ident       :transaction/consolidation-source-entity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Provenance ref on a consolidation tx: the
+                     operating entity whose trial-balance was
+                     translated to produce this entry. Set by
+                     kontor.consolidation/translate-trial-balance-tx-data;
+                     readable for audit + drill-back. ADR-073."}
+
+   {:db/ident       :transaction/consolidation-kind
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":translation | :elimination — tags the kind of
+                     consolidation tx so the audit reader can filter.
+                     ADR-073."}])
+
 (def ^:private ledger-entity-attrs
   [{:db/ident       :ledger/entity
     :db/valueType   :db.type/ref
@@ -3653,6 +3686,7 @@
     layer-adjustment-attrs               ; ADR-028
     entity-attrs                         ; ADR-031
     posting-entity-attrs                 ; ADR-031
+    intercompany-pair-attrs              ; ADR-073
     ledger-entity-attrs                  ; ADR-031
     valuation-book-entity-attrs          ; ADR-031
     schedule-attrs                       ; ADR-032
