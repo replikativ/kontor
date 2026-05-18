@@ -220,21 +220,44 @@ modules/       companion modules + l10n + bank importers (each a separate Maven 
 
 ## Recent ADRs + research (since last refresh)
 
+### Stage R substrate (ADR-067 .. ADR-087) — HR/payroll across 11 jurisdictions
+
 - **ADR-067** — `kontor.process`: multi-step transactional processes as pure step-lists.
 - **ADR-068** — every business write exposes a `*-tx-data` builder; the `!` wrapper routes through `transact-with-validation`.
-- **ADR-069** — `kontor-lease`: mid-life portfolio import via `import-lease!`.
-- **ADR-070** — `kontor-lease`: disclosure-support deltas + discount-rate audit-doc.
+- **ADR-069** / **ADR-070** — `kontor-lease`: mid-life portfolio import + disclosure-support deltas + discount-rate audit-doc.
 - **ADR-071** — Tax abstraction: `TaxRateProvider` + `TaxFacts` + `TaxPostingBuilder` (supersedes ADR-005's single `TaxProvider`).
-- **ADR-072** — `FxRateProvider` protocol + `:fx-rate/*` schema + `kontor.fx` Money-level translation. ECB attribution required; no rates bundled.
-- **ADR-073** — Consolidation primitive: `translate-trial-balance-tx-data` + `eliminate-intercompany-pair-tx-data` + `consolidate!` over `kontor.entity/family`.
-- **ADR-074** — `kontor.side-effect.cross`: cross-DB saga primitive via `CrossTxRouter` + content-hash `:cross-tx/step-id` idempotency.
-- **ADR-087** — `kontor-payroll-ca` C4.1: Quebec RL-1 + RL-1 Summary (`RLZ-1.S`) + TPZ-1015 monthly remittance + `QcPayrollEmitProvider` + `:employer-fss` wage type. Closes the C4 QC carve-out deferral from ADR-078; partner XSD NOT shipped (clean-room from public RL-1.T-V / RLZ-1.S-G-V forms).
-- **`:account-tag/concept-iri`** (no new ADR; commit `9a160aa`) — substrate seam for XBRL / filing taxonomies per research note 78.
+- **ADR-072** — `FxRateProvider` protocol + `:fx-rate/*` schema + `kontor.fx` Money-level translation.
+- **ADR-073** — Consolidation primitive over `kontor.entity/family`.
+- **ADR-074** — `kontor.side-effect.cross`: cross-DB saga primitive.
+- **ADR-075** — Stage R substrate: `kontor-hr` companion (`:person` / `:employment` / `:compensation` + multi-cardinality `:compensation-component` / `:pay-period` / `:payroll-run`) + `kontor.payroll-provider` protocol trio (`PayrollComputeProvider` + `PayrollPostingBuilder` + `PayrollEmitProvider`) + `kontor.hr.payroll/run-payroll!` orchestrator + two-axis `:audit-doc/category` (legal-doctrine × subject-matter) + `:retention-policy/category`.
+- **ADR-076** — `kontor-payroll-de-datev`: DATEV LODAS (ISO-8859-1 4-section file) + EXTF Buchungsbeleg parser + HGB §249 simplified PTO accrual.
+- **ADR-077** — `kontor-payroll-us-adp`: ADP GLI 10-column CSV + balancing-row trap + multi-state via `:analytic-account/state` (50 + DC + 5 territories) + ASC 710 PTO + 401(k) match accruals + W-2 reconciliation report.
+- **ADR-078** — `kontor-payroll-ca`: Ceridian Dayforce + ADP Canada + Wagepoint skeleton + T4 builder (reuses shipped `xml/t4.clj` + `xml/t619.clj`) + PD7A period-due helper + ROE termination event + `:audit-doc/language` kernel attr.
+- **ADR-079** — `kontor-payroll-fr`: Silae + Sage providers + DSN NEODES emit + PCG account routing.
+- **ADR-080** — `kontor-payroll-au`: Xero + MYOB providers + STP Phase 2 emit + SuperStream contributions + 8-jurisdiction `:analytic-account/state` allocation.
+- **ADR-081** — `kontor-payroll-br`: RH Sistemas + Senior HCM + Pluxee providers + eSocial S-1000..S-2399 event family + four-bucket statutory discipline + three CPC-33 accruals (férias + 13º + multa rescisória).
+- **ADR-082** — `kontor-payroll-mx`: CONTPAQi + Aspel NOI providers + CFDI Nómina v1.2 emit + SAT Código Agrupador routing + aguinaldo / prima-vacacional accruals.
+- **ADR-083** — `kontor-payroll-in`: Keka + GreytHR + ZenHR providers + Form 24Q quarterly TDS + EPFO monthly ECR + ESIC monthly + per-state PT routing + thin gratuity accrual (Ind AS 19 actuarial consumer-supplied).
+- **ADR-084** — `kontor-payroll-jp`: freee + Money Forward + Yayoi + PCA-Kyuyo providers + 4-bucket statutory SI + 賞与 separate from 給料手当 + Gensen Choshu Hyo annual + My Number PII discipline (kontor never stores; attestation-only audit-doc).
+- **ADR-085** — `kontor-payroll-cn`: Yonyou + Kingdee + Beisen providers + 应付职工薪酬 routing + 五险一金 (engine-authoritative IIT — no recomputation) + 34-province `:cn-province` analytic + 年终奖 special-method (single/combined per Cai Shui [2018] 164 → 2027).
+- **ADR-086** — `kontor-payroll-at`: BMD + RZL providers + ELDA mBGM XML + L16 annual Lohnzettel + RLG-1 chart + Urlaubsrückstellung + Sonderzahlungsrückstellung accruals.
+- **ADR-087** — `kontor-payroll-ca` C4.1: Quebec RL-1 + RL-1 Summary (`RLZ-1.S`) + TPZ-1015 monthly remittance + `QcPayrollEmitProvider`. Closes the C4 QC carve-out deferral; partner XSD NOT shipped (clean-room from public form documentation).
 
-Research notes 50-78 land between 2026-05-15 and 2026-05-17 (28 new notes):
+### McComb-aligned substrate seams (ADR-090 .. ADR-092)
 
-- **50** banking-as-consumer; **51** tax-authority-as-consumer; **52** single- vs double-entry survey; **53** v2 consolidation recs (drove value/programming split); **54** simmis UI integration.
-- **55-63 + 66-68 + 77** the bitemporal substrate arc — XTDB v1/v2 comparison, datahike `feature/bitemporal-v1` upstream cut, stratum `feature/valid-time`, terminology recommendation, the kontor port from `:posting/valid-from` → `:tx/valid-from` → `:db.valid/from`, the supersession comparison driving `close-validity!`.
-- **69** architecture review + clean FP model (drove ADR-071/072/073); **70** tax abstraction design; **71** cross-DB atomic transact (drove ADR-074); **75** kontor+stratum integration plan; **76** review-after ADR-071/072/073 (all P0s closed same-day).
-- **72-74** HR / payroll research-before bundle (Stage R gating).
-- **78** XBRL + accounting taxonomies (drove `:account-tag/concept-iri`).
+- **ADR-090** — generalized `:concept-iri` seam across substrate entities (`:account`, `:partner`, `:commodity`, `:tax`, `:document-type` join the original `:account-tag/concept-iri` per ADR-019 / note 78). Stable IRIs into XBRL / FIBO / gist / internal taxonomies.
+- **ADR-091** — `kontor.explain`: substrate "explain this number" graph walks (`explain-balance` / `explain-posting` / `entities-with-concept-iri`). Pure read-only datalog returning plain Clojure maps — McComb's "data outlives applications" framing.
+- **ADR-092** — `kontor.event-bus`: in-process pub-sub on commit; `register-handler!` / `commit-and-emit` / `:transaction/committed` event kind. ADR-001 single-dep preserved; consumers wanting Kafka/NATS write an adapter.
+
+### Research notes 79-89 — Stage R + McComb arc
+
+- **79** Stage R plan; **81** HR gold-standards validation (Workday/SF/Oracle/Gusto/etc.) — drove §9.6 `:compensation`-as-separate-entity refactor + §9.7 `:person/kind` / `:work-time-fraction` / `:work-relationship-kind`.
+- **82** DE-DATEV-LODAS research-before; **83** US-ADP-GLI; **84** CA-CRA-payroll.
+- **85** C1 review-after (2 P0s closed in `08a2e63`); **86** Stage R final review-after (2 P0s closed in `2b51ae8` + 5 P1s + 2 P2s closed in `b9b7229`).
+- **87** CN payroll research-before; **88** McComb substrate seams round 1 (the ADR-090/091/092 design rationale); **89** AT payroll research.
+- **80** McComb "Future of Accounting" survey (drove the substrate-seam direction, not a kernel rewrite).
+- **`:account-tag/concept-iri`** (commit `9a160aa`) — substrate seam for XBRL / filing taxonomies per research note 78.
+
+### Stage R bottom line
+
+11 active jurisdictions: DE (LODAS) / US (ADP) / CA + QC (CRA + RL-1) / FR (DSN) / AU (STP P2) / BR (eSocial) / MX (CFDI Nómina) / IN (TDS + PF + ESI + PT) / JP (Gensen) / CN (IIT + 五险一金) / AT (mBGM + L16). UK deferred per note 78 iXBRL gate.
