@@ -7954,3 +7954,72 @@ The orchestrator `kontor.hr.payroll/run-payroll!` composes the three providers t
 **Research backing.** doc/research/72-hr-payroll-reference-study.md (OFBiz `humanres` Apache-2.0 reference), 73 (12-theme market-pain catalog), 74 (substrate gap analysis + the 5 design calls), 79 (the 5-design-calls implementation plan + per-country sequencing), 81 (gold-standards study confirming 5/5 calls + recommending the §9.6 compensation-as-entity refactor + 3 minor §9.7 adds), 82 (DE-DATEV-LODAS), 83 (US-ADP-GLI), 84 (CA-CRA-payroll).
 
 Date: 2026-05-18.
+
+---
+
+## ADR-077 — `kontor-payroll-us-adp`: ADP General Ledger Interface adapter (Stage R C3)
+
+**Context.** Stage R C1 (ADR-075) landed the `PayrollProvider` trio + `kontor-hr` substrate; per-country adapters compose on top. The US is one of the three baseline jurisdictions Stage R targets (alongside DE and CA — see note 79 §5). The US payroll market is concentrated in five engines — ADP (RUN + Workforce Now + InfoLink), Gusto, Paychex Flex, OnPay, Rippling — all of which converge on a "one row per GL line" CSV export. We adopt ADP's General Ledger Interface (GLI) as the C3 reference vendor because (a) it's the largest by US payroll-engine market share, (b) its 10-column format is exhaustively documented in Microsoft's "Payroll Connect for Dynamics GP" public reference, and (c) the format is identical across ADP RUN, Workforce Now, and InfoLink. See note 83 for the full research-before bundle.
+
+**Decision.** Ship `modules/payroll-us-adp/` as a kontor companion module that:
+
+1. **Parses the ADP GLI 10-column CSV** into a vector of `PayrollFacts` maps via `AdpGliComputeProvider` (satisfies `PayrollComputeProvider`). The parser detects + handles ADP's "balancing row" file-format artifact (note 83 §2.3) and enforces the file's sum-to-zero invariant on parse.
+2. **Maps each parsed GLI row to a kontor wage-type role** via a consumer-supplied `description-rules` regex table. The reference fixture (`resources/kontor/payroll_us_adp/wage_type_map_reference.edn`) covers the canonical ADP vocabulary (~25 rules including the catch-all `.*` for unmapped descriptions) and per-row state extraction from regex capture groups (e.g. `^([A-Z]{2}) SUI$` → state = capture-1 → state-tax-payable analytic).
+3. **Materializes balanced GL postings** via `UsPayrollPostingBuilder` (satisfies `PayrollPostingBuilder`). Each component routes to a consumer-supplied `:account` based on the `:account-key` declared on the matching wage-type-map rule. Parallel-ledger split per ADR-021: components carry `:ledgers #{:us-gaap :us-tax}` (or just `#{:us-gaap}` for book-only items like ER 401(k) match accrual under IRC §404(a)(6)).
+4. **Records per-state wage allocation** via `:posting/analytic-distributions` on every wage-side posting — NOT `:posting/entity`. The substrate-installed `:analytic-plan/code "state"` plus per-state `:analytic-account` rows (50 states + DC + 5 territories, ISO-3166-2:US codes) constitute the per-state axis. See "Why analytic-distribution, not entity" below.
+5. **Provides ASC 710 PTO accrual + 401(k) employer-match accrual** primitives via `kontor.payroll-us-adp.accrual/*`. Both land on the book ledger (`:us-gaap`) per pay-period; tax-ledger recognition under IRC §461(h) (PTO) and IRC §404(a)(6) (401(k) match) is consumer-driven via a separate `tax-recognize-401k-match-tx-data` primitive.
+6. **Provides W-2 reconciliation** as a year-to-date per-employee report (`kontor.payroll-us-adp.w2-recon/ytd-by-employee`) — NOT a W-2 form generator. ADP files W-2s with SSA directly; kontor produces Box 1 / 3 / 5 / 12 / 16 / 17 / 19 totals from the posting log so the customer can cross-check against ADP's generated W-2 and resolve reconciliation deltas.
+
+**Why analytic-distribution, not `:posting/entity` for per-state.** A US LLC employing remote workers in 15 states is **one legal entity** — it files one Form 1120 (or 1065 for an LLC taxed as a partnership). Per-state wage allocation is a *reporting / analytic* concern, not a separate balanced-books entity. If we mapped per-state to `:posting/entity` we would:
+
+- force sum-to-zero per state (payroll debits wage-expense in one state and credits a single cash account at the corporate level — inherently cross-state, so 14 intercompany clearing pairs per payroll run),
+- collide with the `:entity/functional-commodity` (one currency per entity — 15 USD sub-entities are degenerate),
+- dilute the dedicated semantic of `:posting/entity` (the executive employed by Acme-DE-GmbH and seconded to Acme-US-LLC — the case `:posting/entity` was built for, per ADR-031).
+
+`:analytic-account/state` rides cleanly on ADR-022 + ADR-032 analytic-accounting machinery: per-plan sum-to-100 holds at the posting level, a single `wages-by-state` report runs across all postings + their analytic distributions, state-tax-withholding-payable can split into per-state sub-accounts (`2150-CA`, `2150-NY`) without any cross-entity clearing, and a new state hire requires only adding an `:analytic-account` row — no schema migration. See note 83 §4.
+
+**Why NOT extend the kernel schema with `:analytic-account/state`.** ADR-022 already provides the substrate (`:analytic-plan` + `:analytic-account` + `:posting/analytic-distributions`). We install the `:state` plan + 50 states + DC + 5 territories as a *companion-side data installation* under `kontor.payroll-us-adp.core/install!` — no new kernel attrs. States are a per-country thing; the kernel must stay country-agnostic.
+
+**License posture (same as ADR-005 / ADR-071 / ADR-075).** No code lifted from ADP. The wage-type vocabulary and the 10-column format are derived from **public spec / customer-doc material**: Microsoft's "Payroll Connect for Dynamics GP" admin reference, ADP's own admin-portal PDFs (`support.adp.com/.../GL_Download_Instructions.pdf`, `RUN_GL_Guide_QBO.pdf`), the GLI Update Account Mapping quick-reference, plus third-party integration manuals (Juris, Sage 50/100, Shoptech E2). No ADP API credentials, rate tables, or proprietary mapping tables are bundled — every customer supplies their own wage-type → CoA mapping at install time (the reference fixture is a starting point, NOT a default).
+
+**What kontor does NOT do (scope discipline per note 83 §1 + the task brief).**
+
+- **NO US gross-to-net implementation.** FICA, FUTA, SUTA, multi-state withholding, 401(k) caps, garnishment-priority patchwork, supplemental-wage withholding — ADP did the math. kontor consumes the result.
+- **NO W-2 / W-3 / Form 941 / Form 940 emission.** ADP files all federal + state payroll returns. The `PayrollEmitProvider` for US is the default `LocalfileEmitProvider` (no transmissions).
+- **NO nexus determination.** Whether a new-state hire triggers SUTA registration, state-income-tax-withholding registration, or workers'-comp registration is a tax / registration question the customer's auth layer resolves. kontor's contribution: the `wages-by-state` report surfaces the new state immediately; a scheduled `kontor.report/compute-report` (per ADR-032) can alert when a previously-zero state has a non-zero total. The substrate **records** the per-employment per-row allocation; it does not enforce nexus.
+- **NO convenience-of-the-employer rule enforcement** (note 83 §8.5). The NY convenience-rule, OH-IN reciprocity, PA-NJ reciprocity, and ~10 similar state-pair rules are the customer-side allocator's policy. kontor records the decision via `:analytic-account/state`.
+- **NO SUTA wage-base cap validation.** Each state has its own ($7K Florida → $66K Washington range, 2024 numbers); ADP enforces the cap math. Re-deriving would fail in edge cases (mid-year state transitions, multi-employer wage-base sharing — note 83 §9.4 gotcha #4).
+
+**Parallel-ledger split for accruals (ADR-021, note 83 §6).**
+
+ASC 710 PTO accrual:
+- Book ledger (`:us-gaap`): `Dr PTO Expense / Cr PTO Accrual` per pay-period as service is rendered. Conditions per FASB ASC 710-10-25-1 (vests OR accumulates AND probable AND reasonably estimable).
+- Tax ledger (`:us-tax`): NO accrual. IRC §461(h) economic-performance test blocks tax-side accrual until the absence is taken (or via the narrow "recurring item" exception when paid within 8.5 months of year-end).
+
+401(k) employer-match accrual:
+- Book ledger: `Dr 401(k) Match Expense / Cr 401(k) Match Payable` per pay-period as wages are earned.
+- Tax ledger: deferred to year-end (or beyond) per IRC §404(a)(6). The substrate provides `tax-recognize-401k-match-tx-data` as a primitive the consumer's process invokes when:
+  - the contribution is paid by the corporate-return due-date (+ extensions; ~8.5 months for Form 1120),
+  - the match is "on account of" deferrals from compensation earned during the tax year,
+  - the plan document treats it as a prior-year contribution.
+
+The substrate does NOT make the §404(a)(6) determination — that has plan-document-specific inputs (note 83 §10 item 3). The consumer's tax-prep engine answers; kontor records.
+
+**Test discipline.** 38 tests / 457 assertions in `modules/payroll-us-adp/test/kontor/payroll_us_adp/`:
+
+- `compute_test.clj` (9 tests / 71 assertions) — CSV round-trip, balancing-row trap, file-balance invariant rejection of corrupt files, wage-type regex matching with state capture groups, classify-row state resolution from capture / reference-3 fallback, PayrollFacts assembly aggregated by employee with gross/net matching `kontor.hr.payroll/check-facts`.
+- `wage_types_test.clj` (4 tests / 7 assertions) — reference-map loads, regex compilation, validate catches missing vendor / empty rules / no-catch-all.
+- `posting_builder_test.clj` (7 tests / 79 assertions) — wage-type → account routing via consumer-supplied `:accounts` map, missing-key explodes (no silent drop), multi-state allocation via `:posting/analytic-distributions` (NOT `:posting/entity`), hybrid 60/40 employee allocation via consumer override, parallel-ledger split (book-only ER 401(k) match), per-(ledger, commodity) sum-to-zero holds.
+- `accrual_test.clj` (7 tests / 21 assertions) — HALF-EVEN rounding, ASC 710 PTO tx-data structure (Dr expense / Cr liability, book-ledger-only), required-fields validation, `!` wrapper routes through `transact-with-validation`, 401(k) match book accrual (book ledger only), tax-ledger recognition lands on `:us-tax` per IRC §404(a)(6) consumer-driven, negative-amount reverses the accrual (over-estimate clawback).
+- `w2_recon_test.clj` (9 tests / 13 assertions) — Box 1 reduces by 401(k) + §125; Box 3 reduces by §125 only (not 401(k) traditional); Box 5 uncapped; Box 3 caps at SS wage base for high earners; Box 4 / 6 / 2 / 17 derive from posting log; Box 12 grouped by W-2 code; multi-pay-period YTD accumulation.
+- `e2e_test.clj` (1 test / 7 assertions) — full headline scenario: US LLC, 3 engineers in CA / NY / TX, monthly payroll, end-to-end through `kontor.hr.payroll/run-payroll!` → `kontor.process/run-process` → `transact-with-validation`. Asserts payroll-run row + control totals + balanced transaction + per-state analytic distributions.
+
+Fixtures cited as oracle sources: Microsoft Learn "Payroll Connect for Dynamics GP" (the 10-column GLI spec); ADP RUN General Ledger & QuickBooks Online guide; ADP General Ledger Documents API marketplace guide; ADP Multi-State Payroll how-to.
+
+**Decision NOT to.** NOT extending the kernel schema with state attrs; NOT bundling ADP API credentials; NOT bundling customer CoAs / state withholding rate tables / SUTA wage-base tables / W-2 box-mapping tables; NOT writing W-2 generation (ADP does that); NOT writing Form 941 / 940 / state filings (ADP does that); NOT re-implementing US gross-to-net math; NOT enforcing nexus / convenience-rule / reciprocity (consumer's allocator policy decides; kontor records via `:analytic-account/state`).
+
+**Effort.** ~1 maintainer-day for C3 (6 source files + 6 test namespaces + reference fixture + 3 CSV oracle fixtures + ADR + deps.edn / tests.edn wiring). Per the §1 bullet 4 strategic pitch, the same parser shape covers Gusto / Paychex / OnPay / Rippling with per-vendor column maps — those become small follow-on modules when consumer demand surfaces.
+
+**Research backing.** doc/research/79 (Stage R plan); doc/research/81 §9.6 + §9.7 (compensation-as-entity + Worker-subtype refinements); doc/research/83 (full US-ADP-GLI research-before); doc/research/73 Theme B (multi-state pain), Theme D (401(k) match book/tax delta), Theme F (W-2 multi-jurisdiction reconciliation).
+
+Date: 2026-05-18.

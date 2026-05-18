@@ -12,6 +12,7 @@
                        "modules/lease/test"
                        "modules/authz/test"
                        "modules/hr/test"
+                       "modules/payroll-us-adp/test"
                        "modules/l10n-de/test"
                        "modules/l10n-at/test"
                        "modules/l10n-fr/test"
