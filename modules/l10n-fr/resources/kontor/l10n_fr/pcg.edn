@@ -29,7 +29,38 @@
 ;; :on-invoice already covers this distinction; the chart below
 ;; doesn't pin it (set per-:tax entity at install-time).
 
-[;; Classe 2 — Immobilisations (fixed assets)
+[;; Classe 1 — Capitaux propres (equity / shareholder funds)
+ ;; Per PCG 2014 art.934-1, the equity hierarchy is:
+ ;;   10  — Capital et réserves
+ ;;   11  — Report à nouveau (retained earnings — credit balance =
+ ;;         cumulative undistributed profit; the close target).
+ ;;   12  — Résultat de l'exercice (current-year P&L; closed AT
+ ;;         year-end into 11x or distributed to shareholders per
+ ;;         the assemblée générale).
+ ;;   13  — Subventions d'investissement
+ ;;
+ ;; The kontor closing kernel rolls P&L into ONE retained-earnings
+ ;; account; FR convention is `110` (Report à nouveau créditeur).
+ ;; A separate `120` Résultat de l'exercice is conventional for
+ ;; the intermediate "before-AG-distribution" entry, but the
+ ;; kontor close goes straight to `110` for simplicity. SARLs / SAS
+ ;; that need the two-step PCG flow (close P&L → 120, then AG
+ ;; distributes 120 → 110/106/dividends) override `:retained-code`
+ ;; per close call.
+ {:code "101"  :path "Capitaux:Capital-social"
+  :type :equity :name "Capital social"}
+ {:code "106"  :path "Capitaux:Réserves"
+  :type :equity :name "Réserves"}
+ {:code "110"  :path "Capitaux:Report-à-nouveau"
+  :type :equity :name "Report à nouveau (solde créditeur)"}
+ {:code "119"  :path "Capitaux:Report-à-nouveau-débiteur"
+  :type :equity :name "Report à nouveau (solde débiteur)"}
+ {:code "120"  :path "Capitaux:Résultat-exercice-bénéfice"
+  :type :equity :name "Résultat de l'exercice (bénéfice)"}
+ {:code "129"  :path "Capitaux:Résultat-exercice-perte"
+  :type :equity :name "Résultat de l'exercice (perte)"}
+
+ ;; Classe 2 — Immobilisations (fixed assets)
  {:code "2154" :path "Immobilisations:Matériel-industriel"
   :type :asset :name "Matériel industriel"}
  {:code "2183" :path "Immobilisations:Matériel-bureau"
