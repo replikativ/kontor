@@ -28,7 +28,8 @@
                        "modules/bank-fr/test"
                        "modules/bank-ca/test"
                        "modules/bank-us/test"
-                       "modules/einvoice-de/test"]
+                       "modules/einvoice-de/test"
+                       "modules/payroll-de-datev/test"]
           :ns-patterns [".*-test$"]}]
  :color? true
  :randomize? false
