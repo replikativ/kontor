@@ -44,7 +44,7 @@
               :invoice/lines [{:invoice-line/quantity 1
                                :invoice-line/unit-price 10000M}]})
           r (ret/compute-return conn {:year 2026 :month 1
-                                       :compute-surcharges? false})]
+                                      :compute-surcharges? false})]
       (is (= "VAT-PRC-General" (:return/form r)))
       (is (= :general (:return/taxpayer-status r)))
       (let [lines (:return/lines r)]
@@ -77,7 +77,7 @@
                {:invoice-line/quantity 1 :invoice-line/unit-price 2000M
                 :invoice-line/rate 0.06M}]})
           r (ret/compute-return conn {:year 2026 :month 1
-                                       :compute-surcharges? false})]
+                                      :compute-surcharges? false})]
       (let [lines (:return/lines r)]
         (is (money/equiv? (cny "10000.00") (:1 lines)))
         (is (money/equiv? (cny "1040.00")  (:11 lines))))
@@ -104,7 +104,7 @@
                {:invoice-line/quantity 1 :invoice-line/unit-price 1000M
                 :invoice-line/tax-status :zero-rated}]})
           r (ret/compute-return conn {:year 2026 :month 1
-                                       :compute-surcharges? false})]
+                                      :compute-surcharges? false})]
       (let [lines (:return/lines r)]
         (is (money/equiv? (cny "5000.00") (:1 lines))
             "Line 1 = domestic standard-rate sales only")
@@ -116,7 +116,7 @@
   (testing "No postings → nil return"
     (let [conn (bootstrap)
           r (ret/compute-return conn {:year 2026 :month 1
-                                       :compute-surcharges? false})]
+                                      :compute-surcharges? false})]
       (is (= :nil-return (:return/outcome r)))
       (is (money/equiv? (cny "0.00") (:11 (:return/lines r)))))))
 
@@ -135,7 +135,7 @@
               :invoice/lines [{:invoice-line/quantity 1
                                :invoice-line/unit-price 10000M}]})
           r (ret/compute-return conn {:year 2026 :month 1
-                                       :location-tier :municipal})]
+                                      :location-tier :municipal})]
       (is (money/equiv? (cny "91.00")  (:return/umct-payable r)))
       (is (money/equiv? (cny "39.00")  (:return/edu-surcharge-payable r)))
       (is (money/equiv? (cny "26.00")  (:return/local-edu-surcharge-payable r)))
@@ -225,7 +225,7 @@
   (let [conn (bootstrap)]
     (is (thrown? clojure.lang.ExceptionInfo
                  (ret/compute-return conn {:year 2026 :month 1
-                                            :taxpayer-status :bogus})))))
+                                           :taxpayer-status :bogus})))))
 
 ;; ============================================================================
 ;; Period detection — monthly vs quarterly
@@ -235,9 +235,9 @@
   (testing "Monthly opts → :monthly period; quarterly → :quarterly"
     (let [conn (bootstrap)
           monthly (ret/compute-return conn {:year 2026 :month 1
-                                             :compute-surcharges? false})
+                                            :compute-surcharges? false})
           quarterly (ret/compute-return conn {:year 2026 :quarter 1
-                                                :taxpayer-status :small-scale
-                                                :compute-surcharges? false})]
+                                              :taxpayer-status :small-scale
+                                              :compute-surcharges? false})]
       (is (= :monthly   (:kind (:return/period monthly))))
       (is (= :quarterly (:kind (:return/period quarterly)))))))
