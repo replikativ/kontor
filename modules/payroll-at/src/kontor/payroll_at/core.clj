@@ -8,7 +8,39 @@
    The orchestration is intentionally thin — each step is a leaf
    `*-tx-data` builder (ADR-068); this file just wires them. Consumers
    that need a different sequence (e.g. defer the mBGM emit until
-   manual review) can call the leaves directly."
+   manual review) can call the leaves directly.
+
+   ## When to use `run-payroll-period!` vs the kernel orchestrator
+
+   The `run-payroll-period!` below is an AT-only convenience — it
+   parses → posts → accrues → emits the mBGM in one call but
+   bypasses `kontor.hr.payroll/run-payroll!` so it does NOT produce a
+   `:payroll-run` row + does NOT thread through the kernel's
+   PayrollProvider protocol trio.
+
+   For trans-national workflows + bitemporal correction (ADR-048,
+   ADR-067), prefer the kernel orchestrator wired with the bridge
+   records in `kontor.payroll-at.adapter`:
+
+     (require '[kontor.payroll-at.adapter :as adapter]
+              '[kontor.hr.payroll :as payroll])
+     (def providers (adapter/make-at-kontor-providers
+                     {:db (d/db conn) :commodity eur
+                      :dienstgeber-beitragskonto \"1234567\"
+                      :use-default-rlg-1? true}))
+     (payroll/run-payroll!
+      conn (merge providers
+                  {:pay-period pp-eid :entity ent
+                   :employments [emp-1 emp-2]
+                   :variable-inputs {:csv-source <BMD CSV>
+                                     :employment-by-vsnr <map>}
+                   :run-code \"...\" :tx-code \"...\"
+                   :journal journal :commodity eur
+                   :accounts {}}))
+
+   See `kontor.payroll-at.adapter` for the bridge that satisfies the
+   kernel PayrollComputeProvider / PayrollPostingBuilder /
+   PayrollEmitProvider protocols."
   (:require [datahike.api :as d]
             [kontor.payroll-at.accrual :as accrual]
             [kontor.payroll-at.compute :as compute]
@@ -48,6 +80,12 @@
      4. Optionally accrue Urlaubsrückstellung.
      5. Optionally accrue Sonderzahlung (12-month rollover).
      6. Emit + record the mBGM filing audit-doc.
+
+   AT-ONLY convenience — does NOT thread through the kernel
+   `kontor.hr.payroll/run-payroll!` PayrollProvider trio and does NOT
+   produce a `:payroll-run` row. For trans-national workflows + bitemporal
+   correction prefer the kernel orchestrator (see ns docstring +
+   `kontor.payroll-at.adapter/make-at-kontor-providers`).
 
    Required opts:
      :engine                  :bmd | :rzl
