@@ -407,20 +407,26 @@
     ;; NOT re-implement gross-to-net; ADP already did that.
     ;;
     ;; The consumer wires the CSV to the run via
-    ;;   :variable-inputs {:adp-gli-csv-source <path-or-reader-or-string>
+    ;;   :variable-inputs {:csv-source <path-or-reader-or-string>
     ;;                     :employee->employment {"E101" <eid> ...}}
+    ;;
+    ;; (`:adp-gli-csv-source` still accepted as a legacy alias for
+    ;;  back-compat per note 86 P2-86-4; canonical key is `:csv-source`
+    ;;  to match the rest of the kontor adapter family.)
     ;;
     ;; The provider returns ONE PayrollFacts per employee in the CSV
     ;; (keyed back to :employment eid via :employee->employment, which
     ;; the consumer supplies because ADP's reference-1 vocabulary is
     ;; opaque to kontor).
-    (let [{:keys [adp-gli-csv-source wage-type-map employee->employment]}
-          (or variable-inputs {})]
-      (when-not adp-gli-csv-source
-        (throw (ex-info "AdpGliComputeProvider needs :variable-inputs {:adp-gli-csv-source ...}"
+    (let [{:keys [csv-source adp-gli-csv-source wage-type-map
+                  employee->employment]}
+          (or variable-inputs {})
+          csv-source (or csv-source adp-gli-csv-source)]
+      (when-not csv-source
+        (throw (ex-info "AdpGliComputeProvider needs :variable-inputs {:csv-source ...}"
                         {})))
       (let [wtm (or wage-type-map (load-reference-map))
-            {:keys [classified]} (parse-and-classify adp-gli-csv-source wtm)
+            {:keys [classified]} (parse-and-classify csv-source wtm)
             raw-facts (payroll-facts-from-rows classified)
             ;; Rewrite :employment from the GLI's employee-ref-1 string
             ;; to the consumer-supplied eid.

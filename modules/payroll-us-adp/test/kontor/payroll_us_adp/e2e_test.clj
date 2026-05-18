@@ -168,7 +168,7 @@
                       :tx-code "TX-PAYROLL-US-2026-04"
                       :journal journal
                       :commodity usd
-                      :variable-inputs {:adp-gli-csv-source csv
+                      :variable-inputs {:csv-source csv
                                         :wage-type-map wtm
                                         :employee->employment
                                         {"E101" e101 "E102" e102 "E103" e103}
