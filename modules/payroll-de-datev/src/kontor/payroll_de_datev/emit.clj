@@ -350,9 +350,12 @@
       ;; :audit-doc/category :payroll-filing per note 86 P0-86-2
       ;; (canonical vocabulary; this is a periodic payroll-engine
       ;; emission to a regulator, NOT a tax-return-shaped filing).
+      ;; :audit-doc/language :de per note 86 P1-86-4 — LODAS files
+      ;; are German-language by format spec.
       [{:audit-doc/code (str (or uri-prefix "LODAS-") pay-period-code)
         :audit-doc/type :emit-payload
         :audit-doc/category :payroll-filing
+        :audit-doc/language :de
         :audit-doc/storage-uri (str (or uri-prefix "lodas://import/")
                                     pay-period-code ".txt")
         :audit-doc/uploaded-at (java.util.Date.)

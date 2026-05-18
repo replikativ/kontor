@@ -160,3 +160,39 @@
   [conn opts]
   (let [tx (terminate-tx-data (d/db conn) opts)]
     (validation/transact-with-validation conn tx)))
+
+;; ============================================================================
+;; sum-work-time-fraction — P1-86-7 over-allocation helper
+;; ============================================================================
+
+(defn sum-work-time-fraction
+  "Sum :employment/work-time-fraction across a person's concurrent
+   employments at `at-date` (default: now). Returns a BigDecimal.
+
+   The substrate INTENTIONALLY does NOT enforce sum ≤ 1.0 (see schema
+   docstring on :employment/work-time-fraction): secondment-with-
+   overlap is legitimate. This helper exists so a consumer's HR
+   policy can compose an over-allocation guard tailored to its rules
+   (e.g. 'sum > 1.5 requires approval', 'apprentice cannot stack
+   with another employment')."
+  (^java.math.BigDecimal [db person]
+   (sum-work-time-fraction db person (Date.)))
+  (^java.math.BigDecimal [db person ^Date at-date]
+   (let [person-eid (if (number? person)
+                      person
+                      (d/q '[:find ?p . :in $ ?x :where
+                             [?p :person/external-id ?x]]
+                           db person))]
+     (or (d/q '[:find (sum ?ft) .
+                :with ?e
+                :in $ ?p ?at
+                :where
+                [?e :employment/person ?p]
+                [?e :employment/work-time-fraction ?ft]
+                [?e :employment/start-date ?start]
+                [(<= ?start ?at)]
+                [(get-else $ ?e :employment/end-date
+                           #inst "9999-12-31") ?end]
+                [(< ?at ?end)]]
+              db person-eid at-date)
+         0M))))

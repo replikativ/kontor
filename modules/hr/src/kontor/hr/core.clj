@@ -25,15 +25,36 @@
    :audit-doc / :period / :status-transition / :approval-policy from
    the kernel)."
   (:require [datahike.api :as d]
+            [kontor.dsar :as dsar]
             [kontor.hr.schema :as schema]))
 
 (defn install!
   "Idempotent install — kernel attrs must be present (run
    kontor.core/install-schema! first). After this call, the
    :person / :employment / :compensation / etc. entities are usable
-   and their status-machine facets are registered."
+   and their status-machine facets are registered.
+
+   P1-86-5: registers an extension collector with `kontor.dsar` so
+   the kernel-canonical `kontor.dsar/collect` walk reaches the HR
+   side. The :partner/person link is partner→person (not
+   person→partner like the rest of the partner-attrs registry), so
+   it can't ride the standard partner-attrs mechanism; instead, HR
+   registers a collector fn that, given a partner eid, pulls the
+   linked :person (if any) and walks its employments + compensations
+   using `kontor.hr.dsar/collect-for-person`. The kernel walker
+   merges the result under :extensions :hr."
   [conn]
-  (schema/install! conn))
+  (schema/install! conn)
+  (dsar/register-extension-collector!
+   :hr
+   (fn [db partner-eid opts]
+     (when-let [person-eid (d/q '[:find ?p .
+                                  :in $ ?pa
+                                  :where [?pa :partner/person ?p]]
+                                db partner-eid)]
+       ((requiring-resolve 'kontor.hr.dsar/collect-for-person)
+        db person-eid
+        (select-keys opts [:as-of-tx]))))))
 
 ;; ============================================================================
 ;; Convenience resolvers

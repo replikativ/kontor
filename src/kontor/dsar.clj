@@ -117,6 +117,38 @@
   @tx-attrs-registry)
 
 ;; ============================================================================
+;; Extension collectors — companion-side walks the kernel can't express
+;; via the (entity → partner) registry (note 86 P1-86-5)
+;; ============================================================================
+;; Some companion data is reached via a partner-FROM link rather than a
+;; partner-TO ref. The canonical case is kontor-hr: `:partner/person`
+;; lives ON the partner pointing AT the person, so the partner-attrs
+;; registry (which matches `[?e ?attr <partner-eid>]`) can't see it.
+;; Extension collectors close the gap — each is a pure fn
+;; `(fn [db partner-eid opts])` returning a map of extension data; the
+;; kernel `collect` merges all results under `:extensions <key>`.
+
+(defonce ^{:doc "Atom holding companion extension collectors, keyed by
+   the companion module's keyword (e.g. :hr). Each collector is a
+   `(fn [db partner-eid opts])` returning a map (the companion's
+   contribution to the DSAR bundle) or nil. Companions register at
+   `install!` time."}
+  extension-collectors-registry
+  (atom {}))
+
+(defn register-extension-collector!
+  "Register a companion's DSAR extension collector. Idempotent: the
+   key replaces any prior collector under the same key (so re-running
+   `install!` keeps the latest impl)."
+  [k collector-fn]
+  (swap! extension-collectors-registry assoc k collector-fn))
+
+(defn extension-collectors
+  "The current map of registered extension collectors."
+  []
+  @extension-collectors-registry)
+
+;; ============================================================================
 ;; Status-transition + approval-policy seeds
 ;; ============================================================================
 
@@ -343,13 +375,23 @@
         indirect (if (seq subject-txs)
                    (refs-by-attr db @tx-attrs-registry subject-txs)
                    {})
+        ;; Note 86 P1-86-5 — fire each companion's extension collector
+        ;; (HR walks partner → :partner/person → :person → employments;
+        ;; future companions can add their own under their key).
+        extensions (into {}
+                         (keep (fn [[k collector-fn]]
+                                 (when-let [result (collector-fn db partner-eid
+                                                                 {:as-of-tx as-of-tx})]
+                                   [k result])))
+                         @extension-collectors-registry)
         holds (legal-hold/holds-covering db partner-eid)]
-    {:partner             (d/pull db '[*] partner-eid)
-     :merged-from         merged-from
-     :references          refs
-     :indirect-references indirect
-     :legal-holds         holds
-     :on-legal-hold?      (boolean (seq holds))}))
+    (cond-> {:partner             (d/pull db '[*] partner-eid)
+             :merged-from         merged-from
+             :references          refs
+             :indirect-references indirect
+             :legal-holds         holds
+             :on-legal-hold?      (boolean (seq holds))}
+      (seq extensions) (assoc :extensions extensions))))
 
 ;; ============================================================================
 ;; Transactors

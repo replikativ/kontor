@@ -494,3 +494,71 @@
       (is (= #{:payroll-filing} (set (map :audit-doc/category emit-docs))))
       (is (= #{"EMIT-A" "EMIT-B"}
              (set (map #(subs (:audit-doc/code %) 0 6) emit-docs)))))))
+
+;; ============================================================================
+;; Back-dated :compensation correction — P1-86-6 bitemporal exercise
+;; ============================================================================
+;; Note 86 P1-86-6: kontor's flagship value proposition is bitemporal
+;; correction. This test exercises the back-dated correction story
+;; through the HR substrate: an envelope set with effective-from
+;; 2026-01-01 at 5000M, the engine reports a corrected number for the
+;; same window months later (4500M). A NEW envelope written at vt
+;; 2026-01-01 represents "what we believe TODAY about 2026-01"; the
+;; bitemporal substrate retains both views for the audit chain.
+
+(deftest back-dated-compensation-correction
+  (let [conn (bootstrap)
+        _ (person/create-person! conn {:external-id "P-jane"
+                                       :given-name "Jane" :family-name "Doe"})
+        db (d/db conn)
+        jane (hr/person-by-external-id db "P-jane")
+        de (ref-eid db :entity/code "DE-GMBH")
+        eur (ref-eid db :commodity/symbol "EUR")
+        _ (employment/hire! conn {:code "EMP-DE-jane" :person jane :entity de
+                                  :start-date #inst "2026-01-01"})
+        emp-eid (hr/employment-by-code (d/db conn) "EMP-DE-jane")
+        ;; Initial transaction at #inst "2026-01-15" — wage 5000M.
+        _ (comp/set-compensation!
+           conn {:employment emp-eid
+                 :effective-from #inst "2026-01-01"
+                 :commodity eur
+                 :components [{:kind :base-wage :amount 5000M :period :monthly}]})
+        ;; Capture the tx that wrote the original envelope (the "as of
+        ;; when we BELIEVED" axis).
+        db-after-original (d/db conn)
+        ;; Months later (#inst "2026-04-30"), the engine reports that
+        ;; Jane's actual wage in 2026-01 should have been 4500M. A
+        ;; back-dated correction: supersede the original envelope with
+        ;; a new envelope at the same effective-from + the new amount.
+        _ (comp/supersede-compensation!
+           conn {:employment emp-eid
+                 :effective-from #inst "2026-01-01"  ; same effective date
+                 :commodity eur
+                 :components [{:kind :base-wage :amount 4500M :period :monthly}]})
+        db-current (d/db conn)]
+    (testing "TODAY's view: current wage at 2026-01-01 is the corrected 4500M"
+      (is (= 4500M (comp/employment-current-wage db-current emp-eid
+                                                 #inst "2026-01-15"))))
+    (testing "AS-OF the original tx, the wage was 5000M (the historical view)"
+      ;; d/as-of rewinds to the BELIEVED-IN-THE-PAST state. This is the
+      ;; "what did we know when we filed the original return?" axis that
+      ;; the substrate provides for audit-chain integrity.
+      (is (= 5000M (comp/employment-current-wage db-after-original emp-eid
+                                                 #inst "2026-01-15"))))
+    (testing "Both envelopes are queryable simultaneously"
+      ;; The corrected envelope is :active; the original is :superseded.
+      ;; Both rows EXIST in the current db — supersession sets the
+      ;; effective-to + state on the prior, doesn't retract it. The
+      ;; audit chain has both views.
+      (let [all-comps (d/q '[:find [?c ...]
+                             :in $ ?emp
+                             :where [?c :compensation/employment ?emp]]
+                           db-current emp-eid)
+            states (d/q '[:find [?st ...]
+                          :in $ ?emp
+                          :where
+                          [?c :compensation/employment ?emp]
+                          [?c :compensation/state ?st]]
+                        db-current emp-eid)]
+        (is (= 2 (count all-comps)) "both envelopes coexist")
+        (is (= #{:active :superseded} (set states)))))))

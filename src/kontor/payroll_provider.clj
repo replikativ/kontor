@@ -70,7 +70,39 @@
      - The consumer holds the engine credential; kontor consumes the
        engine's output.
 
-   See also: [[doc/research/79-hr-payroll-stage-r-plan]] §4.")
+   See also: [[doc/research/79-hr-payroll-stage-r-plan]] §4.
+
+   ## Per-adapter conventions (note 86 P2-86-2 — the canonical key
+   matrix for the three shipped adapters; future adapters reuse).
+
+   ### `:variable-inputs` keys consumed by `compute-payroll`
+
+     | Adapter                           | Required keys                                                               | Optional keys |
+     |-----------------------------------|-----------------------------------------------------------------------------|--------------- |
+     | `:datev-lodas`                    | one of `:buchungsbeleg-content` (String EXTF CSV) OR `:facts` (pre-parsed)  | `:pay-period-date` |
+     | `:adp-gli`                        | `:adp-gli-csv-source`, `:wage-type-map`, `:employee->employment`            | — |
+     | `:ceridian-dayforce`              | `:csv-source`, `:column-mapping`, `:pay-element-codes`, `:external-id->eid` | `:extras-map` |
+     | `:adp-canada`                     | `:csv-source`, `:pay-element-codes`, `:external-id->eid`                    | `:headerless?` |
+     | `:wagepoint-api` (skeleton)       | (partner-program-gated; OAuth credential + HTTP client)                     | — |
+
+   New adapters SHOULD pick `:csv-source` as the canonical CSV-source
+   key (matches CA Ceridian + ADP-CA); the US adapter's
+   `:adp-gli-csv-source` is the legacy outlier from independent
+   worktree work (P2-86-4 — defer rename to C5 prep).
+
+   ### Per-country accrual primitives — three correct patterns per
+   country accounting context (note 86 §2.3, P2-86-3):
+
+     | Adapter | Accrual surface                                                            | Standard                | Composition |
+     |---------|----------------------------------------------------------------------------|-------------------------|--------------|
+     | DE      | `urlaubsrueckstellung-amount` + `-tx-data` in `posting-builder` ns         | HGB §249                | Out-of-band — consumer composes outside `run-payroll!`; `:framework :hgb-handelsbilanz | :de-steuerbilanz` knob |
+     | US      | `asc-710-pto-accrual-tx-data` + `er-401k-match-accrual-tx-data` (sep. ns)  | ASC 710 + IRC §404(a)(6) | Out-of-band — `!` wrappers route through `transact-with-validation`; book-only via `:ledgers #{:us-gaap}` |
+     | CA      | `:vacation-pay-accrual` component-kind                                     | ESA (per-province rate) | In-band — engine emits the accrual component; posting-builder routes automatically |
+
+   The divergence is appropriate (per-country accounting standards
+   genuinely differ) but consumers wanting both should expect three
+   different APIs. The 'engine-emits-accrual ⇒ in-band; consumer-
+   computes-accrual ⇒ out-of-band' rule is the unifying principle.")
 
 ;; ============================================================================
 ;; PayrollFacts — the data shape between the three protocols

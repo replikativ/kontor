@@ -207,8 +207,23 @@
    {:db/ident       :employment/work-time-fraction
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
-    :db/doc         "Full-time-equivalent fraction (0.0–1.0). nil
-                     interpreted as 1.0 (full-time). Note 81 §9.7."}
+    :db/doc         "Full-time-equivalent fraction (typically 0.0–1.0
+                     for one employment). nil interpreted as 1.0
+                     (full-time). Note 81 §9.7.
+
+                     Note 86 P1-86-7: the substrate DOES NOT enforce
+                     Σ work-time-fraction ≤ 1.0 across a person's
+                     concurrent employments. Secondment-with-overlap
+                     is a real case (an executive on the DE-GmbH
+                     books at 0.60 and seconded to US-LLC at 0.40 is
+                     legitimately accounted at 1.00, while a similar
+                     setup with a CA secondment adding 0.20 reflects
+                     genuine over-allocation that the consumer's HR
+                     policy — not the kernel — must reconcile).
+                     Consumers wanting an over-allocation guard
+                     compose one via the
+                     `kontor.hr.employment/sum-work-time-fraction`
+                     helper + their own validator."}
 
    ;; Note 81 §9.7 — extends past the US FLSA exempt/non-exempt
    ;; binary. Open-set: :standard | :secondment | :board-position |
@@ -222,6 +237,41 @@
                      apprentice / working-student / intern need a
                      dedicated value (note 81 §9.7) so per-country
                      payroll providers can route correctly."}
+
+   ;; Note 86 P1-86-3 — substrate-level geographic / cadence attrs
+   ;; that CA's T4 + ROE emitters required. Promoted to substrate
+   ;; because US state-of-employment (W-2 box 15) + DE Bundesland
+   ;; (Lohnsteuerklasse routing) also need them.
+   {:db/ident       :employment/province-of-employment
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Geographic locus of the employment for tax /
+                     filing purposes. ISO-3166-2 subdivision code
+                     (e.g. 'CA-ON' Ontario, 'US-NY' New York, 'DE-BY'
+                     Bayern). When nil the consumer / per-country
+                     adapter falls back to (a) `:employment/entity`'s
+                     country default or (b) the employer's primary
+                     jurisdiction. Used by:
+                     - CA T4 box 10 (Province of Employment)
+                     - CA multi-province T4 split
+                     - US W-2 box 15 (State)
+                     - DE Bundesland-specific Steuernummer routing
+                     CA agent referenced this attr in t4_builder.clj
+                     before C5; note 86 P1-86-3 declared it here."}
+
+   {:db/ident       :employment/final-pay-period-end-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "End-date of the LAST :pay-period this employment
+                     was paid in. Set by `kontor.hr.payroll/run-payroll!`
+                     on the per-employment paths it touches; used by
+                     CA ROE block 6 + DE Lohnsteuerbescheinigung
+                     final-pay-period reporting + US final-pay date
+                     state filings on termination. Distinct from
+                     `:employment/end-date` (the employment-relationship
+                     end) — the final pay-period typically ends after
+                     the termination date because trailing accruals
+                     run through to the period close."}
 
    {:db/ident       :employment/contract-doc
     :db/valueType   :db.type/ref

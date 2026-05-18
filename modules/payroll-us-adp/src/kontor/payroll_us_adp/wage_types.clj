@@ -69,7 +69,12 @@
 (defn validate
   "Lightweight structural validation. Returns a vector of error maps
    or `nil` if the map looks good. NOT a full schema — just a sanity
-   check for the common mistakes."
+   check for the common mistakes.
+
+   This is the inspection-friendly form. For the canonical
+   throw-on-failure convention (matches DE's
+   `kontor.payroll-de-datev.wage-types/validate-catalog`), use
+   `assert-valid!` per note 86 P2-86-5."
   [wtm]
   (let [errs (cond-> []
                (nil? (:vendor wtm))
@@ -86,3 +91,17 @@
                (conj {:error :no-catch-all-rule
                       :hint "Last rule should match #\".*\" to a :unmapped suspense account so the parser never drops a row silently."}))]
     (when (seq errs) errs)))
+
+(defn assert-valid!
+  "Throws ex-info with `:errors` set to the validate output if the
+   map fails validation; returns the map unchanged on success.
+   Canonical entry-point matching DE's
+   `validate-catalog` convention (P2-86-5 — across-adapter
+   consistency). Use this at install time so a misconfigured
+   wage-type map fails loud rather than silently dropping rows."
+  [wtm]
+  (when-let [errs (validate wtm)]
+    (throw (ex-info "kontor.payroll-us-adp wage-type map invalid"
+                    {:type :wage-type-map/invalid
+                     :errors errs})))
+  wtm)

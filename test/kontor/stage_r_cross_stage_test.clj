@@ -31,6 +31,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
             [kontor.core :as core]
+            [kontor.dsar :as dsar]
             [kontor.hr.compensation :as comp]
             [kontor.hr.core :as hr]
             [kontor.hr.dsar :as hr-dsar]
@@ -282,7 +283,12 @@
                       (d/db conn) jane)]
         (is (= 3 (count emps)))))
 
-    (testing "Each employment carries its own FTE summing to 1.2 (total commitment)"
+    (testing "Each employment carries its own FTE; sum 1.20 (substrate allows over-allocation by design)"
+      ;; Note 86 P1-86-7: the substrate does NOT enforce
+      ;; Σ work-time-fraction ≤ 1.0 — secondment-with-overlap is
+      ;; legitimate (note 79 §2.2). The `kontor.hr.employment/
+      ;; sum-work-time-fraction` helper exposes the sum so consumer
+      ;; policy can compose an over-allocation guard.
       (let [ftes (d/q '[:find [?ft ...]
                         :in $ ?p
                         :where
@@ -292,7 +298,9 @@
         (is (= 3 (count ftes)))
         (is (= 1.20M (reduce (fn [a v] (.add ^java.math.BigDecimal a
                                              ^java.math.BigDecimal v))
-                             0M ftes)))))
+                             0M ftes)))
+        (is (= 1.20M (employment/sum-work-time-fraction (d/db conn) jane))
+            "the helper exposes the same sum without requiring the consumer to roll their own datalog")))
 
     (testing "Each compensation is in a different currency"
       (let [comp-currencies
@@ -342,13 +350,30 @@
 
     (testing "DSAR walk from Jane's :person reaches all 3 employments + 3 compensations"
       ;; collect-for-person walks :employment + :compensation directly
-      ;; (kontor.hr.dsar/collect-for-person). Cross-stage friction check:
-      ;; the kernel DSAR walker is partner-keyed; HR side needs the
-      ;; person-keyed helper to surface employment data. Confirm the
-      ;; helper reaches everything.
+      ;; (kontor.hr.dsar/collect-for-person). The HR helper stays as the
+      ;; structured entry-point for HR-bundle consumers.
       (let [bundle (hr-dsar/collect-for-person (d/db conn) jane)]
         (is (= 3 (count (:employments bundle))))
         (is (= 3 (count (:compensations bundle))))))
+
+    (testing "Kernel-canonical kontor.dsar/collect reaches HR via the extension collector (P1-86-5)"
+      ;; Jane has a :person but no :partner row yet — wire one up so the
+      ;; kernel walker has a subject to start from. Per the hybrid
+      ;; model (note 79 §2.3), the partner side stays kernel-side; the
+      ;; person side stays HR-side; the extension collector bridges.
+      (d/transact conn [{:db/id "p-jane"
+                         :partner/external-id "PARTNER-jane"
+                         :partner/name "Jane Doe (employee)"
+                         :partner/kind :employee
+                         :partner/person jane}])
+      (let [partner-eid (d/q '[:find ?p . :in $ ?x :where
+                               [?p :partner/external-id ?x]]
+                             (d/db conn) "PARTNER-jane")
+            kernel-bundle (dsar/collect (d/db conn) partner-eid {})
+            hr-ext (get-in kernel-bundle [:extensions :hr])]
+        (is (some? hr-ext) ":extensions :hr is populated by the HR extension collector")
+        (is (= 3 (count (:employments hr-ext))))
+        (is (= 3 (count (:compensations hr-ext))))))
 
     (testing "Per-country wage-expense totals reconcile to the engine output"
       (let [account-totals (fn [account-eid]

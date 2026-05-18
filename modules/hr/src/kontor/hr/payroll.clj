@@ -119,22 +119,42 @@
      :tx-code          — string for the :transaction/code
 
    Optional opts:
-     :emit-provider    — satisfies PayrollEmitProvider
-                         (default: LocalfileEmitProvider — no emit)
-     :variable-inputs  — map employment-eid → engine-specific overrides
-     :ledger           — target :ledger (ADR-021); default kernel main
-     :fx-provider      — FxRateProvider (ADR-072) for currency
-                         translation when employee currency ≠ entity
-                         functional currency
-     :journal          — ref to :journal for the GL entry
-     :commodity        — fallback :commodity for the :transaction
-     :vt-from / :vt-to — bitemporal bounds applied to the run
+     :emit-provider     — satisfies PayrollEmitProvider
+                          (default: LocalfileEmitProvider — no emit)
+     :variable-inputs   — map employment-eid → engine-specific overrides
+                          (opaque per ADR-075; each adapter's expected
+                          shape is in its own docstring + the protocol
+                          docstring lists each shipped adapter's keys)
+     :ledger            — target :ledger (ADR-021); default kernel
+                          main. For single-ledger consumers.
+     :ledgers-map       — map ledger-keyword → :ledger eid for the
+                          parallel-ledger / book-vs-tax split per
+                          ADR-021. Threaded to build-postings.
+                          P1-86-1: required by US ASC 710 PTO + 401(k)
+                          match accruals to land on :us-gaap book
+                          ledger only (the IRC §404(a)(6) timing
+                          difference); the DE Urlaubsrückstellung also
+                          uses it for HGB-vs-Steuerbilanz routing.
+                          When both :ledger and :ledgers-map are set,
+                          the posting-builder honors :ledgers-map.
+     :state-allocations — map employment-eid → vec of {:state STR,
+                          :fraction BIGDEC} (typical case: 60% NY /
+                          40% NJ for a single employee). Threaded to
+                          build-postings; the US adapter consumes it
+                          to route per-state analytic-distributions
+                          per ADR-077. P1-86-2.
+     :fx-provider       — FxRateProvider (ADR-072) for currency
+                          translation when employee currency ≠ entity
+                          functional currency
+     :journal           — ref to :journal for the GL entry
+     :commodity         — fallback :commodity for the :transaction
+     :vt-from / :vt-to  — bitemporal bounds applied to the run
 
    Returns the tx-report from transact-with-validation."
   [conn {:keys [pay-period entity employments compute-provider
                 posting-builder emit-provider accounts run-code tx-code
-                variable-inputs ledger fx-provider journal commodity
-                vt-from vt-to]
+                variable-inputs ledger ledgers-map state-allocations
+                fx-provider journal commodity vt-from vt-to]
          :or {emit-provider (pp/->LocalfileEmitProvider {})}}]
   (when-not pay-period       (throw (ex-info ":pay-period required" {})))
   (when-not entity           (throw (ex-info ":entity required" {})))
@@ -155,10 +175,14 @@
                                                 :employment-eids employments
                                                 :variable-inputs variable-inputs})
                            (mapv check-facts))
-                postings (pp/build-postings posting-builder facts
-                                            {:accounts accounts
-                                             :ledger ledger
-                                             :fx-provider fx-provider})
+                postings (pp/build-postings
+                          posting-builder facts
+                          (cond-> {:accounts accounts
+                                   :ledger ledger
+                                   :fx-provider fx-provider}
+                            ledgers-map        (assoc :ledgers-map ledgers-map)
+                            state-allocations  (assoc :state-allocations
+                                                      state-allocations)))
                 tx-input (cond-> {:tx-tempid "payroll-tx-1"
                                   :transaction
                                   (cond-> {:transaction/external-id tx-code
