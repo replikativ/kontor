@@ -1,0 +1,320 @@
+(ns kontor.l10n-au.invoice
+  "Australian invoice posting builder — translates an issued invoice
+   into kernel transaction + posting tx-data.
+
+   Sits between `kontor.l10n-au.tax/compute-tax` (rate logic) and
+   `kontor.posting/build-transaction` (structural validation +
+   sum-to-zero). Accepts an AU-shaped invoice and emits the GST
+   posting plus revenue + receivable / cash legs:
+
+     Dr  AR (or cash)         gross
+     Cr  Sales revenue        net
+     Cr  GST payable          gst         (10% taxable lines only)
+
+   AU is single-level federal — there is no state / territory sales
+   tax, so the credit side is at most two lines (revenue + GST).
+   Multi-rate or multi-authority routing (the CA-shaped multi-line
+   credit cluster) does not apply here.
+
+   ## Tax-invoice vs adjustment-note
+
+   The ATO distinguishes:
+     - **Tax invoice** — the standard outbound invoice posting.
+     - **Adjustment note** — a credit / debit adjustment that reverses
+       (in part or full) a previously-issued tax invoice (price drop,
+       returned goods, allowance). Mechanically an adjustment note is
+       just a negated invoice with a different document title and a
+       reference to the original invoice number.
+
+   This builder accepts both via `:invoice/kind`:
+     :tax-invoice (default) — posts the four standard legs above.
+     :adjustment-note       — posts the same legs with signs negated.
+                              The caller's net amounts may be negative
+                              (refund / partial reversal); the builder
+                              propagates the sign without overriding it.
+
+   ## Tax-status routing
+
+   - `:taxable` (default) — 10% GST; revenue → '41100' (taxable sales)
+   - `:gst-free`           — 0% GST; revenue → '41200' (GST-free sales)
+   - `:input-taxed`        — 0% GST; revenue → '41400' (input-taxed sales)
+
+   The 41200 / 41400 routing maps to BAS labels G3 / G4 through the
+   chart-installed tags. Callers can override per-line via
+   `:invoice-line/account`.
+
+   ## Cross-border exports
+
+   AU treats exports as GST-free (zero-rated; supplier may claim
+   ITCs). A line with `:invoice-line/tax-status :gst-free` and a
+   `:invoice-line/account` override of '41300' (Sales — exports)
+   gives the BAS-G2 routing for export sales specifically. The
+   builder does not auto-detect 'this is an export' — that's a
+   consumer-side determination based on shipment / customer data
+   the builder doesn't see.
+
+   ## ADR-068 — tx-data builder + side-effecting wrapper
+
+   - **`plan-au-invoice-tx-data`** (pure) — takes a DB value + invoice
+     map, returns the tx-data vector ready for the gate.
+   - **`post-au-invoice!`** (side-effecting) — wraps the builder and
+     routes through `kontor.validation/transact-with-validation`.
+
+   Consumers composing several writes into one process (invoice +
+   audit doc + Peppol PINT e-invoice generation) call the pure
+   builder from a `kontor.process` step."
+  (:require [clojure.string :as str]
+            [datahike.api :as d]
+            [kontor.l10n-au.tax :as tax]
+            [kontor.posting :as posting]
+            [kontor.validation :as validation]))
+
+;; ============================================================================
+;; Default account codes (overridable per call)
+;; ============================================================================
+
+(def ^:const default-ar-code "11200")
+(def ^:const default-cash-code "11100")
+(def ^:const default-sales-taxable-code "41100")
+(def ^:const default-sales-gst-free-code "41200")
+(def ^:const default-sales-input-taxed-code "41400")
+(def ^:const default-gst-payable-code "21500")
+(def ^:const default-journal-code "INV")
+(def ^:const default-commodity "AUD")
+
+;; ============================================================================
+;; DB lookup helpers
+;; ============================================================================
+
+(defn- account-by-code [db code]
+  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+
+(defn- require-account [db code]
+  (or (account-by-code db code)
+      (throw (ex-info (str "Account " code " not found — install l10n-au chart first")
+                      {:type :l10n-au/missing-account
+                       :code code}))))
+
+(defn- journal-by-code [db code]
+  (:db/id (d/entity db [:journal/code code])))
+
+(defn- commodity-by-symbol [db sym]
+  (:db/id (d/entity db [:commodity/symbol sym])))
+
+;; ============================================================================
+;; Per-line revenue routing
+;; ============================================================================
+
+(defn- revenue-code-for-status
+  "Choose the revenue account based on the line's tax-status.
+   Callers can pin a different account via :invoice-line/account."
+  [status codes]
+  (case status
+    :gst-free    (:sales-gst-free-code codes default-sales-gst-free-code)
+    :input-taxed (:sales-input-taxed-code codes default-sales-input-taxed-code)
+    (:sales-taxable-code codes default-sales-taxable-code)))
+
+;; ============================================================================
+;; Tx-data builder (ADR-068 pure form)
+;; ============================================================================
+
+(defn- line-net
+  "Per-line net amount = qty × unit-price, rounded HALF-EVEN to 2dp.
+   Tolerates :invoice-line/line-total when caller pre-computed it.
+   Negative net is preserved (e.g. adjustment-note line items)."
+  ^java.math.BigDecimal [{:invoice-line/keys [quantity unit-price line-total]}]
+  (cond
+    line-total (bigdec line-total)
+    (and quantity unit-price)
+    (.setScale (.multiply (bigdec quantity) (bigdec unit-price))
+               2 java.math.RoundingMode/HALF_EVEN)
+    :else
+    (throw (ex-info "Invoice line needs either :invoice-line/line-total or both :invoice-line/quantity + :invoice-line/unit-price"
+                    {:line (select-keys
+                            {:invoice-line/quantity quantity
+                             :invoice-line/unit-price unit-price}
+                            [:invoice-line/quantity :invoice-line/unit-price])}))))
+
+(defn- sign-multiplier
+  "Adjustment notes negate every leg. Tax-invoice (default) leaves
+   signs as-is."
+  ^java.math.BigDecimal [kind]
+  (if (= :adjustment-note kind) -1M 1M))
+
+(defn- nonzero? [^java.math.BigDecimal x]
+  (not (zero? (.compareTo x 0M))))
+
+(defn- revenue-postings
+  "Per-line revenue credit postings. Groups by (revenue-account,
+   tax-status) so two lines of the same status produce one summed
+   posting, keeping the tx compact. Sign convention: revenue is
+   credited on a tax-invoice (negative posting amount) and debited
+   on an adjustment-note (positive posting amount via sign-mult)."
+  [db lines codes commodity-eid date kind]
+  (let [sm (sign-multiplier kind)
+        grouped (group-by
+                 (fn [line]
+                   (let [status (or (:invoice-line/tax-status line) :taxable)
+                         override (:invoice-line/account line)]
+                     [(or override (revenue-code-for-status status codes))
+                      status]))
+                 lines)]
+    (vec
+     (for [[[acct-code _status] ls] grouped
+           :let [net (reduce (fn [^java.math.BigDecimal acc l]
+                               (.add acc (line-net l)))
+                             0M ls)
+                 acct (require-account db acct-code)
+                 ;; Sign convention: revenue accrues as a CREDIT
+                 ;; (negative). An adjustment note flips the sign.
+                 amt (.multiply (.negate ^java.math.BigDecimal net) sm)]
+           :when (nonzero? amt)]
+       {:posting/account acct
+        :posting/amount amt
+        :posting/commodity commodity-eid
+        :posting/posted-at date}))))
+
+(defn- tax-posting
+  "Build the single GST credit posting (or nil if amount is zero).
+   AU is single-level federal — only one tax-side leg per invoice."
+  [db code ^java.math.BigDecimal amount commodity-eid date kind]
+  (when (and code (nonzero? amount))
+    (let [sm (sign-multiplier kind)
+          amt (.multiply (.negate amount) sm)]
+      {:posting/account (require-account db code)
+       :posting/amount amt
+       :posting/commodity commodity-eid
+       :posting/posted-at date})))
+
+(defn plan-au-invoice-tx-data
+  "Pure tx-data builder for an Australian sales invoice (ADR-068).
+
+   Required input:
+     {:invoice/external-id    <string>
+      :invoice/issue-date     <java.util.Date>
+      :invoice/lines          [<invoice-line>]
+      ...}
+
+   Each invoice-line:
+     {:invoice-line/quantity    <number-or-bigdec>      ; OR
+      :invoice-line/unit-price  <number-or-bigdec>      ; OR pre-computed:
+      :invoice-line/line-total  <bigdec>                ; net per line
+      :invoice-line/tax-status  <keyword>               ; default :taxable
+      :invoice-line/account     <code>                  ; optional code override
+      ...}
+
+   Optional top-level fields:
+     :invoice/kind          :tax-invoice (default) | :adjustment-note
+                            Adjustment-note flips the sign of every
+                            posting to reverse a prior tax-invoice.
+     :invoice/cash-sale?    when true, post Dr cash (11100 default)
+                            instead of AR (11200 default).
+     :invoice/cash-code     account-code override for the cash leg.
+     :invoice/buyer         partner ref (kernel :transaction/partner).
+     :invoice/journal       journal code override (default INV).
+     :invoice/narration     :transaction/narration override.
+
+   Opts:
+     :codes        — map of code overrides (`:ar-code`, `:cash-code`,
+                     `:sales-taxable-code`, `:sales-gst-free-code`,
+                     `:sales-input-taxed-code`, `:gst-payable-code`).
+     :commodity    — commodity symbol (default \"AUD\").
+     :journal-code — journal code (default \"INV\").
+
+   Returns a tx-data vector ready for
+   `kontor.validation/transact-with-validation`.
+
+   The builder enforces sum-to-zero per the kernel rules (via
+   `kontor.posting/build-transaction`)."
+  [db invoice {:keys [codes commodity journal-code]
+               :or {codes {} commodity default-commodity
+                    journal-code default-journal-code}}]
+  (let [{:invoice/keys [external-id issue-date lines buyer cash-sale?
+                        journal kind]} invoice
+        kind (or kind :tax-invoice)
+        _ (when-not external-id
+            (throw (ex-info "Invoice missing :invoice/external-id" {:invoice invoice})))
+        _ (when-not issue-date
+            (throw (ex-info "Invoice missing :invoice/issue-date" {:invoice invoice})))
+        _ (when (empty? lines)
+            (throw (ex-info "Invoice has no :invoice/lines" {:invoice invoice})))
+        _ (when-not (contains? #{:tax-invoice :adjustment-note} kind)
+            (throw (ex-info "Invalid :invoice/kind — must be :tax-invoice or :adjustment-note"
+                            {:value kind})))
+        commodity-eid (or (commodity-by-symbol db commodity)
+                          (throw (ex-info (str "Commodity " commodity " not found")
+                                          {:commodity commodity})))
+        jnl-code (or journal journal-code)
+        jnl (or (journal-by-code db jnl-code)
+                (throw (ex-info (str "Journal " jnl-code " not found — create it before posting")
+                                {:code jnl-code})))
+        ;; Compute tax via the rate-table fn, line by line.
+        compute-input
+        {:lines (mapv (fn [l]
+                        {:line (line-net l)
+                         :tax-status (or (:invoice-line/tax-status l) :taxable)})
+                      lines)}
+        tax-r (tax/compute-invoice-tax compute-input)
+        gross (:total-gross tax-r)
+        gst   (:gst tax-r)
+        sm (sign-multiplier kind)
+        debit-code (if cash-sale?
+                     (get codes :cash-code default-cash-code)
+                     (get codes :ar-code default-ar-code))
+        debit-acct (require-account db debit-code)
+        rev-posts (revenue-postings db lines codes commodity-eid issue-date kind)
+        gst-code (get codes :gst-payable-code default-gst-payable-code)
+        tax-post (tax-posting db gst-code (:amount gst) commodity-eid issue-date kind)
+        debit-amt (.multiply ^java.math.BigDecimal (:amount gross) sm)
+        debit-post (when (nonzero? debit-amt)
+                     {:posting/account debit-acct
+                      :posting/amount debit-amt
+                      :posting/commodity commodity-eid
+                      :posting/posted-at issue-date})
+        tx-base (cond-> {:transaction/external-id external-id
+                         :transaction/journal jnl
+                         :transaction/effective-date issue-date
+                         :transaction/narration (or (:invoice/narration invoice)
+                                                    external-id)
+                         :transaction/state :posted
+                         :transaction/posted-at issue-date}
+                  buyer (assoc :transaction/partner buyer))
+        postings (cond-> []
+                   debit-post (conj debit-post)
+                   :always (into rev-posts)
+                   tax-post (conj tax-post))
+        input {:transaction tx-base
+               :postings postings}]
+    (posting/build-transaction input)))
+
+(defn post-au-invoice!
+  "Side-effecting wrapper around `plan-au-invoice-tx-data` (ADR-068).
+   Routes the tx-data through `kontor.validation/transact-with-
+   validation` so the kernel gate (sealing / period / sum-to-zero /
+   invariants) applies.
+
+   See `plan-au-invoice-tx-data` for the input shape + options."
+  ([conn invoice] (post-au-invoice! conn invoice {}))
+  ([conn invoice opts]
+   (let [tx-data (plan-au-invoice-tx-data (d/db conn) invoice opts)]
+     (validation/transact-with-validation conn tx-data))))
+
+;; ============================================================================
+;; Validation helpers (caller-side)
+;; ============================================================================
+
+(defn validate-invoice
+  "Return a vector of complaints; empty when ready to post.
+   Used by consumers to surface input issues *before* hitting the
+   gate."
+  [invoice]
+  (let [{:invoice/keys [external-id issue-date lines kind]} invoice]
+    (cond-> []
+      (or (nil? external-id) (and (string? external-id) (str/blank? external-id)))
+      (conj {:field :invoice/external-id :issue :missing-or-blank})
+      (nil? issue-date)
+      (conj {:field :invoice/issue-date :issue :missing})
+      (empty? lines)
+      (conj {:field :invoice/lines :issue :empty})
+      (and kind (not (contains? #{:tax-invoice :adjustment-note} kind)))
+      (conj {:field :invoice/kind :issue :invalid}))))
