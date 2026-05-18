@@ -1,0 +1,356 @@
+;; Indian chart of accounts — Schedule III (Companies Act 2013) +
+;; Ind AS aligned starter set.
+;;
+;; India has NO single statutory chart-of-accounts with mandatory
+;; numeric codes (unlike DE SKR04 / FR PCG / AT EKR). The closest
+;; thing is:
+;;
+;;   * Schedule III of the Companies Act 2013 — defines required
+;;     line-items + classification for the Balance Sheet and the
+;;     Statement of Profit & Loss for non-financial companies.
+;;     Reorganised by Notification G.S.R. 207(E) (2016) to align with
+;;     Ind AS (Division II) while keeping the legacy Indian-GAAP
+;;     layout (Division I).
+;;
+;;   * Ind AS (Indian Accounting Standards) — IFRS-converged
+;;     standards mandatory for listed entities, banks/NBFCs/insurers
+;;     above thresholds, and any company opting in voluntarily.
+;;     Schedule III Division II is the Ind AS-aligned form.
+;;
+;; Convention used here: 6-digit codes mirroring Schedule III
+;; hierarchy:
+;;
+;;   1xxxxx  Assets               (Non-current + Current)
+;;   2xxxxx  Equity               (Share Capital + Reserves)
+;;   3xxxxx  Liabilities          (Non-current + Current)
+;;   4xxxxx  Revenue              (Operations + Other income)
+;;   5xxxxx  Expenses             (Materials, Employee, Finance,
+;;                                Depreciation, Other)
+;;
+;; Inside each class the second + third digits group by Schedule III
+;; line-item; remaining digits leave room for sub-accounts the
+;; customer adds.
+;;
+;; Tax-account convention (CGST/SGST/IGST/UTGST/Cess/RCM/TDS):
+;;   * Output tax (collected from buyers, owed to govt) →
+;;     LIABILITY class (3xxxxx)
+;;   * Input tax credit (paid to vendors, recoverable) →
+;;     ASSET class (1xxxxx) — symmetric to DE Vorsteuer.
+;;   * Reverse Charge Mechanism (RCM) — buyer is liable: a separate
+;;     pair of accounts so the dual-side movement is visible:
+;;       liability  3xxx30+  "RCM payable"  (the buyer owes govt)
+;;       ITC asset  1xxx40+  "RCM ITC"      (the buyer recovers it,
+;;                                          self-invoiced)
+;;   * TDS — Tax Deducted at Source under the Income-tax Act 1961.
+;;     TDS payable: buyer-side, withheld and remitted to govt.
+;;     TDS receivable: supplier-side, recovered against own income
+;;     tax liability. TDS is NOT an invoice-time concept (lives on
+;;     the *payment voucher*) but the chart needs the accounts so
+;;     the payment-side posting builder can land them.
+;;
+;; Tag conventions (`:in-gstr1-...`, `:in-gstr3b-...`, `:in-tds-...`)
+;; let the GSTR report engines aggregate per-line without hard-coded
+;; account-code lookups.
+;;
+;; Schema fields per account:
+;;   :code            — 6-digit string
+;;   :path            — hierarchical PTA-notation path
+;;   :type            — :asset | :liability | :equity | :income | :expense
+;;   :name            — human-readable label (Indian English)
+;;   :reconcilable?   — true for AR/AP/Bank/Cash
+;;   :tax-recoverable?— true for Input Tax Credit (ITC) accounts
+;;   :tax-payable?    — true for Output GST + RCM payable accounts
+;;   :tags            — vector of tag keywords for report aggregation
+
+[;; ============================================================================
+ ;; 1xxxxx — ASSETS
+ ;;   11xxxx — Non-current
+ ;;   12xxxx — Current (Inventories, Trade Receivables, Bank, Cash)
+ ;;   13xxxx — Tax-recoverable (Input Tax Credit accounts)
+ ;; ============================================================================
+ ;; --- Non-current assets ---
+ {:code "110000" :path "Assets:Non-Current:PPE"
+  :type :asset :name "Property, Plant and Equipment (Gross)"}
+ {:code "110100" :path "Assets:Non-Current:PPE:Land"
+  :type :asset :name "Land"}
+ {:code "110200" :path "Assets:Non-Current:PPE:Buildings"
+  :type :asset :name "Buildings"}
+ {:code "110300" :path "Assets:Non-Current:PPE:Plant-and-Machinery"
+  :type :asset :name "Plant and Machinery"}
+ {:code "110400" :path "Assets:Non-Current:PPE:Furniture-and-Fixtures"
+  :type :asset :name "Furniture and Fixtures"}
+ {:code "110500" :path "Assets:Non-Current:PPE:Vehicles"
+  :type :asset :name "Vehicles"}
+ {:code "110600" :path "Assets:Non-Current:PPE:Office-Equipment"
+  :type :asset :name "Office Equipment"}
+ {:code "110900" :path "Assets:Non-Current:PPE:Accumulated-Depreciation"
+  :type :asset :name "Accumulated Depreciation (contra-asset)"}
+ {:code "111000" :path "Assets:Non-Current:Intangible-Assets"
+  :type :asset :name "Intangible Assets (Goodwill / Software / Licences)"}
+ {:code "115000" :path "Assets:Non-Current:Investments"
+  :type :asset :name "Non-current Investments"}
+ {:code "116000" :path "Assets:Non-Current:Loans-and-Advances"
+  :type :asset :name "Long-term Loans and Advances"}
+
+ ;; --- Current assets ---
+ {:code "120000" :path "Assets:Current:Inventories"
+  :type :asset :name "Inventories (Raw materials + WIP + Finished goods)"}
+ {:code "120100" :path "Assets:Current:Inventories:Raw-Materials"
+  :type :asset :name "Inventories — Raw materials"}
+ {:code "120200" :path "Assets:Current:Inventories:WIP"
+  :type :asset :name "Inventories — Work-in-Progress"}
+ {:code "120300" :path "Assets:Current:Inventories:Finished-Goods"
+  :type :asset :name "Inventories — Finished goods"}
+
+ {:code "121000" :path "Assets:Current:Trade-Receivables"
+  :type :asset :name "Trade Receivables (Sundry Debtors)"
+  :reconcilable? true}
+ {:code "121100" :path "Assets:Current:Trade-Receivables:Domestic"
+  :type :asset :name "Trade Receivables — Domestic"
+  :reconcilable? true}
+ {:code "121200" :path "Assets:Current:Trade-Receivables:Export"
+  :type :asset :name "Trade Receivables — Export"
+  :reconcilable? true}
+
+ {:code "122000" :path "Assets:Current:Cash-and-Equivalents"
+  :type :asset :name "Cash and Cash Equivalents"
+  :reconcilable? true}
+ {:code "122100" :path "Assets:Current:Cash-and-Equivalents:Cash"
+  :type :asset :name "Cash in Hand"
+  :reconcilable? true}
+ {:code "122200" :path "Assets:Current:Cash-and-Equivalents:Bank"
+  :type :asset :name "Bank — Current account"
+  :reconcilable? true}
+ {:code "122300" :path "Assets:Current:Cash-and-Equivalents:Bank-OD"
+  :type :asset :name "Bank — Cash Credit / Overdraft (contra when negative)"
+  :reconcilable? true}
+
+ {:code "123000" :path "Assets:Current:Loans-and-Advances"
+  :type :asset :name "Short-term Loans and Advances"}
+ {:code "123100" :path "Assets:Current:Advance-to-Suppliers"
+  :type :asset :name "Advances to Suppliers"
+  :reconcilable? true}
+ {:code "124000" :path "Assets:Current:Other-Current-Assets"
+  :type :asset :name "Other Current Assets"}
+
+ ;; --- Tax-recoverable: Input Tax Credit (GST ITC) ---
+ {:code "131100" :path "Assets:ITC:CGST"
+  :type :asset :name "Input CGST credit (ITC)"
+  :tax-recoverable? true :tags [:in-gstr3b-itc-cgst]}
+ {:code "131200" :path "Assets:ITC:SGST"
+  :type :asset :name "Input SGST credit (ITC)"
+  :tax-recoverable? true :tags [:in-gstr3b-itc-sgst]}
+ {:code "131300" :path "Assets:ITC:IGST"
+  :type :asset :name "Input IGST credit (ITC)"
+  :tax-recoverable? true :tags [:in-gstr3b-itc-igst]}
+ {:code "131400" :path "Assets:ITC:UTGST"
+  :type :asset :name "Input UTGST credit (ITC)"
+  :tax-recoverable? true :tags [:in-gstr3b-itc-utgst]}
+ {:code "131500" :path "Assets:ITC:Cess"
+  :type :asset :name "Input Compensation Cess credit (ITC)"
+  :tax-recoverable? true :tags [:in-gstr3b-itc-cess]}
+
+ ;; --- RCM ITC side (buyer's recovery against self-invoiced RCM) ---
+ {:code "131600" :path "Assets:ITC:RCM-CGST"
+  :type :asset :name "Input CGST credit — Reverse Charge"
+  :tax-recoverable? true :tags [:in-gstr3b-itc-rcm-cgst]}
+ {:code "131700" :path "Assets:ITC:RCM-SGST"
+  :type :asset :name "Input SGST credit — Reverse Charge"
+  :tax-recoverable? true :tags [:in-gstr3b-itc-rcm-sgst]}
+ {:code "131800" :path "Assets:ITC:RCM-IGST"
+  :type :asset :name "Input IGST credit — Reverse Charge"
+  :tax-recoverable? true :tags [:in-gstr3b-itc-rcm-igst]}
+
+ ;; --- TDS receivable (supplier-side: tax withheld by customer, recoverable) ---
+ {:code "132100" :path "Assets:TDS-Receivable:194C"
+  :type :asset :name "TDS Receivable — Sec 194C (Contracts)"
+  :tax-recoverable? true :tags [:in-tds-receivable]}
+ {:code "132200" :path "Assets:TDS-Receivable:194J"
+  :type :asset :name "TDS Receivable — Sec 194J (Professional fees)"
+  :tax-recoverable? true :tags [:in-tds-receivable]}
+ {:code "132300" :path "Assets:TDS-Receivable:194I"
+  :type :asset :name "TDS Receivable — Sec 194I (Rent)"
+  :tax-recoverable? true :tags [:in-tds-receivable]}
+ {:code "132900" :path "Assets:TDS-Receivable:Other"
+  :type :asset :name "TDS Receivable — Other sections"
+  :tax-recoverable? true :tags [:in-tds-receivable]}
+
+ ;; ============================================================================
+ ;; 2xxxxx — EQUITY
+ ;; ============================================================================
+ {:code "210000" :path "Equity:Share-Capital"
+  :type :equity :name "Share Capital — Issued and paid-up"}
+ {:code "210100" :path "Equity:Share-Capital:Equity-Shares"
+  :type :equity :name "Equity Share Capital"}
+ {:code "210200" :path "Equity:Share-Capital:Preference-Shares"
+  :type :equity :name "Preference Share Capital"}
+
+ {:code "220000" :path "Equity:Reserves-and-Surplus"
+  :type :equity :name "Reserves and Surplus"}
+ {:code "220100" :path "Equity:Reserves-and-Surplus:Securities-Premium"
+  :type :equity :name "Securities Premium Account"}
+ {:code "220200" :path "Equity:Reserves-and-Surplus:General-Reserve"
+  :type :equity :name "General Reserve"}
+ {:code "220900" :path "Equity:Reserves-and-Surplus:Retained-Earnings"
+  :type :equity :name "Retained Earnings (Surplus / P&L balance)"}
+
+ ;; ============================================================================
+ ;; 3xxxxx — LIABILITIES
+ ;;   31xxxx — Non-current
+ ;;   32xxxx — Current — Trade payables + provisions
+ ;;   33xxxx — Statutory (GST, TDS, RCM, Cess)
+ ;; ============================================================================
+ ;; --- Non-current liabilities ---
+ {:code "310000" :path "Liabilities:Non-Current:Borrowings"
+  :type :liability :name "Long-term Borrowings"}
+ {:code "310100" :path "Liabilities:Non-Current:Borrowings:Term-Loan"
+  :type :liability :name "Long-term Borrowings — Term Loans"
+  :reconcilable? true}
+ {:code "311000" :path "Liabilities:Non-Current:Provisions"
+  :type :liability :name "Long-term Provisions"}
+
+ ;; --- Current liabilities ---
+ {:code "320000" :path "Liabilities:Current:Trade-Payables"
+  :type :liability :name "Trade Payables (Sundry Creditors)"
+  :reconcilable? true}
+ {:code "320100" :path "Liabilities:Current:Trade-Payables:Domestic"
+  :type :liability :name "Trade Payables — Domestic"
+  :reconcilable? true}
+ {:code "320200" :path "Liabilities:Current:Trade-Payables:Import"
+  :type :liability :name "Trade Payables — Import"
+  :reconcilable? true}
+ {:code "321000" :path "Liabilities:Current:Advance-from-Customers"
+  :type :liability :name "Advance from Customers"
+  :reconcilable? true}
+ {:code "322000" :path "Liabilities:Current:Short-term-Borrowings"
+  :type :liability :name "Short-term Borrowings"
+  :reconcilable? true}
+ {:code "323000" :path "Liabilities:Current:Other-Current-Liabilities"
+  :type :liability :name "Other Current Liabilities"}
+ {:code "324000" :path "Liabilities:Current:Provisions"
+  :type :liability :name "Short-term Provisions"}
+
+ ;; --- Statutory: Output GST (collected from buyers, owed to govt) ---
+ {:code "331100" :path "Liabilities:Output-GST:CGST"
+  :type :liability :name "Output CGST payable"
+  :tax-payable? true :tags [:in-gstr3b-output-cgst :in-gstr1-cgst]}
+ {:code "331200" :path "Liabilities:Output-GST:SGST"
+  :type :liability :name "Output SGST payable"
+  :tax-payable? true :tags [:in-gstr3b-output-sgst :in-gstr1-sgst]}
+ {:code "331300" :path "Liabilities:Output-GST:IGST"
+  :type :liability :name "Output IGST payable"
+  :tax-payable? true :tags [:in-gstr3b-output-igst :in-gstr1-igst]}
+ {:code "331400" :path "Liabilities:Output-GST:UTGST"
+  :type :liability :name "Output UTGST payable"
+  :tax-payable? true :tags [:in-gstr3b-output-utgst :in-gstr1-utgst]}
+ {:code "331500" :path "Liabilities:Output-GST:Cess"
+  :type :liability :name "Output Compensation Cess payable"
+  :tax-payable? true :tags [:in-gstr3b-output-cess :in-gstr1-cess]}
+
+ ;; --- Statutory: RCM payable (buyer-as-payer side) ---
+ {:code "332100" :path "Liabilities:RCM:CGST"
+  :type :liability :name "RCM CGST payable (Reverse Charge)"
+  :tax-payable? true :tags [:in-gstr3b-rcm-cgst]}
+ {:code "332200" :path "Liabilities:RCM:SGST"
+  :type :liability :name "RCM SGST payable (Reverse Charge)"
+  :tax-payable? true :tags [:in-gstr3b-rcm-sgst]}
+ {:code "332300" :path "Liabilities:RCM:IGST"
+  :type :liability :name "RCM IGST payable (Reverse Charge)"
+  :tax-payable? true :tags [:in-gstr3b-rcm-igst]}
+
+ ;; --- Statutory: TDS payable (buyer-side: withheld and remitted) ---
+ {:code "333100" :path "Liabilities:TDS-Payable:194C"
+  :type :liability :name "TDS Payable — Sec 194C (Contracts)"
+  :tax-payable? true :tags [:in-tds-payable]}
+ {:code "333200" :path "Liabilities:TDS-Payable:194J"
+  :type :liability :name "TDS Payable — Sec 194J (Professional fees)"
+  :tax-payable? true :tags [:in-tds-payable]}
+ {:code "333300" :path "Liabilities:TDS-Payable:194I"
+  :type :liability :name "TDS Payable — Sec 194I (Rent)"
+  :tax-payable? true :tags [:in-tds-payable]}
+ {:code "333900" :path "Liabilities:TDS-Payable:Other"
+  :type :liability :name "TDS Payable — Other sections"
+  :tax-payable? true :tags [:in-tds-payable]}
+
+ ;; ============================================================================
+ ;; 4xxxxx — REVENUE
+ ;;   41xxxx — Revenue from operations
+ ;;   42xxxx — Other income
+ ;; ============================================================================
+ {:code "410000" :path "Revenue:Operations:Sales"
+  :type :income :name "Revenue from Operations — Sales (domestic taxable)"
+  :tags [:in-gstr1-b2b-sales :in-gstr3b-outward-taxable]}
+ {:code "410100" :path "Revenue:Operations:Sales:B2C"
+  :type :income :name "Sales — B2C (Consumer)"
+  :tags [:in-gstr1-b2c-sales :in-gstr3b-outward-taxable]}
+ {:code "410200" :path "Revenue:Operations:Sales:Export"
+  :type :income :name "Sales — Exports (zero-rated)"
+  :tags [:in-gstr1-exports :in-gstr3b-outward-zero-rated]}
+ {:code "410300" :path "Revenue:Operations:Sales:Exempt"
+  :type :income :name "Sales — Exempt / Nil-rated"
+  :tags [:in-gstr1-exempt :in-gstr3b-outward-exempt]}
+ {:code "410900" :path "Revenue:Operations:Services"
+  :type :income :name "Revenue from Operations — Services"
+  :tags [:in-gstr1-b2b-services :in-gstr3b-outward-taxable]}
+
+ {:code "420000" :path "Revenue:Other-Income"
+  :type :income :name "Other Income"}
+ {:code "420100" :path "Revenue:Other-Income:Interest"
+  :type :income :name "Interest Income"}
+ {:code "420200" :path "Revenue:Other-Income:FX-Gain"
+  :type :income :name "Foreign Exchange Gain"}
+
+ ;; ============================================================================
+ ;; 5xxxxx — EXPENSES
+ ;;   51xxxx — Cost of materials / purchases
+ ;;   52xxxx — Employee benefits
+ ;;   53xxxx — Finance costs
+ ;;   54xxxx — Depreciation + Amortization
+ ;;   55xxxx — Other expenses
+ ;; ============================================================================
+ {:code "510000" :path "Expenses:Cost-of-Materials:Purchases"
+  :type :expense :name "Cost of Materials Consumed (Purchases)"}
+ {:code "510100" :path "Expenses:Cost-of-Materials:Purchases:Domestic"
+  :type :expense :name "Purchases — Domestic"}
+ {:code "510200" :path "Expenses:Cost-of-Materials:Purchases:Import"
+  :type :expense :name "Purchases — Import"}
+ {:code "511000" :path "Expenses:Cost-of-Materials:Changes-in-Inventory"
+  :type :expense :name "Changes in Inventories of FG / WIP / Stock-in-Trade"}
+
+ {:code "520000" :path "Expenses:Employee-Benefits:Salaries"
+  :type :expense :name "Employee Benefits — Salaries and Wages"}
+ {:code "520100" :path "Expenses:Employee-Benefits:PF"
+  :type :expense :name "Employee Benefits — Provident Fund contribution"}
+ {:code "520200" :path "Expenses:Employee-Benefits:ESI"
+  :type :expense :name "Employee Benefits — ESI / Welfare"}
+ {:code "520300" :path "Expenses:Employee-Benefits:Gratuity"
+  :type :expense :name "Employee Benefits — Gratuity"}
+
+ {:code "530000" :path "Expenses:Finance-Costs:Interest"
+  :type :expense :name "Finance Costs — Interest expense"}
+ {:code "530100" :path "Expenses:Finance-Costs:Bank-Charges"
+  :type :expense :name "Finance Costs — Bank charges"}
+
+ {:code "540000" :path "Expenses:Depreciation-and-Amortization"
+  :type :expense :name "Depreciation and Amortization expense"}
+
+ {:code "550000" :path "Expenses:Other-Expenses"
+  :type :expense :name "Other Expenses"}
+ {:code "550100" :path "Expenses:Other-Expenses:Rent"
+  :type :expense :name "Rent"}
+ {:code "550200" :path "Expenses:Other-Expenses:Power-and-Fuel"
+  :type :expense :name "Power and Fuel"}
+ {:code "550300" :path "Expenses:Other-Expenses:Repairs-and-Maintenance"
+  :type :expense :name "Repairs and Maintenance"}
+ {:code "550400" :path "Expenses:Other-Expenses:Insurance"
+  :type :expense :name "Insurance"}
+ {:code "550500" :path "Expenses:Other-Expenses:Rates-and-Taxes"
+  :type :expense :name "Rates and Taxes (other than GST)"}
+ {:code "550600" :path "Expenses:Other-Expenses:Travel"
+  :type :expense :name "Travelling expenses"}
+ {:code "550700" :path "Expenses:Other-Expenses:Professional-Fees"
+  :type :expense :name "Legal and Professional fees"}
+ {:code "550800" :path "Expenses:Other-Expenses:Office"
+  :type :expense :name "Office expenses"}
+ {:code "550900" :path "Expenses:Other-Expenses:Communication"
+  :type :expense :name "Communication / Telephone / Internet"}]
