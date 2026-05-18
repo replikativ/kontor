@@ -8134,3 +8134,73 @@ The test fixture (`resources/.../fixtures/buchungsbeleg-2025-11.csv`) is a synth
 License posture (final). Format spec public; EXTF v21 column layout public; SKR04 / SKR03 numbering public; Personio / Sage / Lexware / sevDesk / Circula adapter shapes read from public vendor documentation for *pattern*, never their code. No bundled DATEV wage-type catalog; no bundled BBG / Beitragssatz table; no LODAS API credentials. Algorithm sketches (HGB §249 PTO formula, AG-SV Mittelstand 21 %) drawn from cited public sources (Haufe, hrworks, BuchhaltungsButler, rechnungswesen-info.de) and re-derived; no GPL-contaminated reference code lifted.
 
 Date: 2026-05-18.
+
+---
+
+## ADR-080 — `kontor-payroll-au`: AU-STP-Phase-2 payroll adapter (Stage R C6)
+
+**Context.** Stage R C1 substrate (ADR-075) + C2 DE-DATEV-LODAS (ADR-076) + C3 US-ADP-GLI (ADR-077) + C4 CA-CRA (ADR-078) all landed. The AU adapter slots into the same per-country C-slice pattern (research note 79 §5.3, item C7). Australia is unusual among the trio in that STP Phase 2 — Single Touch Payroll Phase 2 — has been mandatory for ALL employers since 2022-01-01 per the ATO; every Australian pay-run requires a structured XML pay-event submitted to the ATO on or before pay-day. The market for AU SMB payroll is concentrated: Xero (dominant SMB), MYOB (mid-market), with Reckon / ADP Australia as longer-tail players. All four expose a CSV GL export the kontor adapter consumes.
+
+**Decision.** Ship `modules/payroll-au/` as a kontor companion module that:
+
+1. **Parses Xero / MYOB GL CSV exports** into `PayrollFacts` via `XeroGlComputeProvider` + `MyobGlComputeProvider` (both satisfy `PayrollComputeProvider`). The two share a parametric column-mapping parser; the column-header convention differs between vendors but the underlying balanced-journal shape is identical. Per-employee net-zero invariant enforced at parse time. `:csv-source` is the canonical key per note 86 P2-86-4 recommendation (CA pattern, not US legacy).
+
+2. **Ships a substrate-canonical wage-type catalog** (`kontor.payroll-au.wage-types/standard-component-kinds`) keyed by component-kind keyword. Mirrors the CA pattern (catalog + extras-map extension); the US regex-driven map was vendor-specific to ADP's description vocabulary and doesn't generalize to AU's pay-element-code convention. Each kind carries an `:account-tag` + an `:stp2-income-type` slot driving the STP Phase 2 income-type disaggregation (SAW / OTE / Overtime / Bonus & Commission / Lump Sums A-E / Salary Sacrifice S+O / PAYGW / Super / RFBA per the ATO BIG). `assert-valid!` is the canonical entry point per P2-86-5 (throws on failure — DE/kernel convention).
+
+3. **Materializes balanced GL postings** via `AuPayrollPostingBuilder` (satisfies `PayrollPostingBuilder`). Per-pay-period journal: DR wages + employer-super expense + employer state-payroll-tax expense + workers-comp expense / CR PAYGW payable + Super payable + salary-sacrifice clearing + state-payroll-tax payable + workers-comp payable + Wages payable (net). Each component routes via consumer-supplied `:accounts` map keyed by `:account-tag` keyword. Missing tags throw — no silent drop.
+
+4. **Records per-state wage allocation** via `:posting/analytic-distributions` on every wage-side posting — NOT `:posting/entity`. Mirrors ADR-077's US-LLC rationale: an Australian Pty Ltd employing remote workers in 5 states is ONE legal entity (one ABN, one BAS, one PAYGW summary). Per-state lives on the `:analytic-plan/code "state"` plan + ISO-3166-2:AU `:analytic-account` rows (6 states + 2 territories = 8 jurisdictions); the C6 install layers this plan idempotently. Per-employee state allocation override via `:state-allocations` opt for hybrid employees (e.g. 60 % VIC / 40 % NSW).
+
+5. **Emits STP Phase 2 pay-events** as `:audit-doc/category :payroll-filing` rows via `AuStpEmitProvider` (satisfies `PayrollEmitProvider`). Structured payload (per-payee period + YTD disaggregation, aggregate envelope with total-gross + total-PAYGW) shaped per the ATO MIG `PAYEVNT.PAYEVNTEMP` family. The actual SBR2 / AS4 transmission to the ATO is the consumer's engine's job; kontor records the structured payload as an `:audit-doc` so the audit chain has a row and the consumer's SBR adapter / clearing-house uploads. `:audit-doc/language :en` per the new kernel attr (ADR-078 — same three-axis pattern as CA, though AU is single-locale in practice).
+
+6. **Provides SuperStream contribution-message helpers** (`kontor.payroll-au.super`). Super-guarantee contributions are remitted per the ATO SuperStream Alternative File Format; the helper builds the contribution-line + contribution-message-payload structures and produces an `:audit-doc/category :payroll-filing` audit-doc per ADR-068. Transmission via the consumer's clearing-house (ATO Small Business Superannuation Clearing House for ≤19-employee businesses; commercial CH otherwise) is out of kontor's scope. The SG rate (11.5 % from 2024-07-01, rising to 12.0 % from 2025-07-01) is NOT bundled — the engine computes; kontor records.
+
+7. **Provides termination-event audit-doc helper** (`kontor.payroll-au.emit/terminate-employment-tx-data`). Records the cessation event including the ATO `CessationTypeCode` (V / I / D / R / F / C / T / O per the BIG) the consumer's engine surfaces to the next STP pay-event's cessation block. kontor does NOT generate the Employment Separation Certificate (Centrelink form) — that's engine-driven.
+
+8. **Provides TFN structural validator** (`kontor.payroll-au.stp/valid-tfn?` + `assert-tfn!`). 9-digit weighted mod-11 check per the public ATO TFN algorithm. Algorithmically derived; the ATO test TFN "123 456 782" is the canonical positive case.
+
+**Why per-state via analytic-distribution, not `:posting/entity`.** Same rationale as ADR-077 §4. An Australian Pty Ltd with workers in 5 states files ONE annual income-tax return (one TFN, one ABN, one Form C). Per-state payroll-tax — which Australia uniquely has 8 separate jurisdiction-level regimes for (threshold $700K–$1.5M depending on state, rate 4.75 %–6.85 %) — is a *reporting* / *analytic* concern. `:analytic-account/state` rides on ADR-022 + ADR-032; per-state-tax-payable can split into per-state sub-accounts (`2585-NSW`, `2585-VIC`) without cross-entity clearing.
+
+**Why NOT a parallel-ledger (us-gaap vs us-tax) split for AU accruals.** Unlike the US (ASC 710 + IRC §461(h) PTO timing difference; IRC §404(a)(6) 401(k) match deferred-deduction window) or DE (HGB §249 vs Steuerbilanz Urlaubsrückstellung framework split), Australian AASB does not impose a comparable book-vs-tax timing-difference regime on payroll accruals. Annual leave + LSL (Long Service Leave) accruals follow AASB 119 employee benefits — a single book treatment that ATO accepts for tax. Fringe-benefits tax (FBT) is a separate quarterly cycle, not a parallel-ledger artifact. The adapter ships single-ledger output by default; consumers wanting a parallel split for their own internal reporting cadence can pass `:ledgers-map` per the substrate's standard mechanism (P1-86-1 threads it through `kontor.hr.payroll/run-payroll!`).
+
+**License posture (same as ADR-005 / ADR-071 / ADR-075 / ADR-076 / ADR-077 / ADR-078).** No code lifted from Xero, MYOB, Reckon, or any vendor. The STP Phase 2 message format + SuperStream AFF + TFN algorithm + ABN algorithm + ACN algorithm are all *public* ATO + ASIC specifications (algorithms are facts, not copyrightable). Working from softwaredevelopers.ato.gov.au (accessed 2026-05-18), the ATO Software Developers Business Implementation Guide, the Standard Business Reporting (SBR2) MIG, and the SuperStream AFF Schedule 6. No vendor API keys, OAuth credentials, BMS-ID values, customer CoAs, super-fund USI lookup tables, state-payroll-tax rate tables, workers-comp premium rate tables, or SG rate tables bundled — every customer supplies their own.
+
+**What kontor does NOT do (scope discipline).**
+
+- **NO AU gross-to-net math.** PAYG-withholding tables, super-guarantee calculation, salary-sacrifice OTE-base maintenance, lump-sum averaging, ETP withholding — the engine (Xero / MYOB / Reckon / ADP-AU) did the math. kontor consumes the result.
+- **NO SBR2 ebMS3 / AS4 envelope generation.** SBR2 transport-layer auth (Cloud Software Authentication + Authorisation, CSAA) is consumer-held.
+- **NO ATO TFN-declaration form filing.** TFN declarations are per-employee paperwork the engine handles.
+- **NO BAS / IAS submission.** Those are GST-side returns (`modules/l10n-au/bas.clj` covers them).
+- **NO Employment Separation Certificate generation.** Centrelink form is engine-driven.
+- **NO FBT quarterly cycle.** Out of scope; a future `kontor-fbt-au` companion if a consumer surfaces.
+- **NO workers-comp rate tables.** Per-state premium rates are deferred to a follow-up; the substrate ships the accrual hook (`:workers-comp-employer` component kind + `:au-payroll-er-workers-comp` account tag), the consumer's engine provides the rate.
+- **NO state-payroll-tax threshold / rate logic.** Threshold + rate are consumer-policy; the substrate records the engine's pre-computed accrual.
+
+**Decision NOT to.** NOT extending the kernel schema with AU-specific attrs. NOT bundling vendor API credentials. NOT bundling customer CoAs / state-payroll-tax rate tables / SG rate / SuperStream USI registry. NOT writing the STP SBR transport-layer wiring (consumer's engine handles). NOT writing FBT / IAS / TFN-declaration forms. NOT bundling a super-fund USI registry.
+
+**Test discipline.** 33 tests / ~170 assertions across six namespaces in `modules/payroll-au/test/kontor/payroll_au/`:
+
+- `wage_types_test` (8 tests / ~40 assertions) — catalog membership + STP income-type mapping + employer-side invariants + carry-only kinds + extras-map + validate/assert-valid! convention.
+- `compute_test` (9 tests / ~30 assertions) — Xero + MYOB CSV parsers + per-employee net-zero invariant rejection + unknown-pay-element-code rejection + provider-id + Reckon skeleton throw.
+- `posting_builder_test` (7 tests / ~30 assertions) — wage-type → account routing + missing-tag throw + balanced posting set + per-state analytic distribution (NOT `:posting/entity`) + hybrid-state override + protocol satisfaction + commodity-required constructor.
+- `stp_test` (8 tests / ~40 assertions) — payee-payload income-type disaggregation + YTD carry + pay-event aggregate totals + missing-key throws + update-event flag + summary-string + facts->payees walk + TFN mod-11 validator.
+- `super_test` (5 tests / ~15 assertions) — contribution-line per-employee builder + bad-USI rejection + contribution-message-payload assembly + empty-lines rejection + audit-doc tx-data builder.
+- `e2e_test` (3 tests / ~15 assertions) — full headline scenario: AU Pty Ltd, 3 employees in NSW/VIC/QLD, monthly run, end-to-end through `kontor.hr.payroll/run-payroll!` → `kontor.process/run-process` → `transact-with-validation`; SuperStream message composes standalone; termination-event audit-doc emits cessation-code.
+
+**Fixture sources.** `xero_3_employees_3_states.csv` synthesizes a Xero AU Payroll GL Journal export shape (3 employees, monthly pay-event, NSW / VIC / QLD). `myob_single_employee.csv` synthesizes the MYOB AccountRight column-header convention with one employee in VIC. `xero_corrupt_unbalanced.csv` is a deliberately-broken file with a non-zero per-employee sum to exercise the parser's invariant rejection. All fixtures are synthetic — no real-customer data.
+
+**Effort.** ~1 maintainer-day for C6 (7 source files + 6 test namespaces + 3 CSV fixtures + starter chart + ADR). Heavy reuse of the existing CA + US adapter shapes; the AU-specific work is the STP Phase 2 income-type disaggregation + the SuperStream AFF shape + the AU state vocabulary + the TFN/ABN/ACN validators (last two already shipped in `modules/l10n-au/identifiers.clj`).
+
+**Open followups for review-after.**
+- **P1** — Reckon One live wiring (skeleton ships; the column-mapping for Reckon One's GL export is documented at developer.reckon.com but the consumer-demand-gated wiring lands when surfaced).
+- **P1** — ADP Australia: the ADP RUN AU export shape is similar to the US 10-column GLI but with AU pay-element codes. The current `XeroGlComputeProvider` with a custom column-mapping covers the bulk; a dedicated `AdpAuComputeProvider` (mirroring the US C3 + CA C4 `AdpCanadaProvider` shape) is a small follow-on.
+- **P2** — Per-state workers-comp premium rate tables (8 jurisdictions × rate-category lookup). Currently the substrate ships the `:workers-comp-employer` accrual hook; engine-driven rate. A future `kontor-workers-comp-au` companion table would let consumers compute the accrual without an engine.
+- **P2** — Per-state payroll-tax threshold + rate tables (8 jurisdictions). Same story — substrate hook in place, rates are consumer/engine policy.
+- **P2** — FBT quarterly cycle. Out of scope for C6; future companion.
+- **P2** — STP transport-layer adapter (SBR2 ebMS3 / AS4 envelope + CSAA auth). Out of substrate scope; consumer's SBR adapter handles. A future commercial `kontor-sbr-au` companion could ship the envelope generation.
+- **P2** — RL-1-equivalent QC carve-out (none in AU — Australia is a unitary federation for payroll-tax purposes despite per-state rates).
+- **P2** — Stammdaten / employee-master delta emit. Currently the STP pay-event carries only per-pay-period payee data; a future enhancement could emit a separate `:audit-doc` for new-hire / salary-change / termination events that surface in the next STP submission.
+
+**Research backing.** doc/research/79 §5.3 (Stage R per-country sequencing, AU = C7); doc/research/82 (DE adapter template); doc/research/83 (US adapter template); doc/research/84 (CA adapter template); doc/research/86 (final review-after — the cross-cutting consistency findings driving the canonical-key + validation conventions adopted here); ATO Software Developers Business Implementation Guide STP Phase 2 + SuperStream AFF (accessed 2026-05-18 from softwaredevelopers.ato.gov.au); ATO TFN algorithm public reference; ATO MIG `PAYEVNT.PAYEVNTEMP` schema family.
+
+Date: 2026-05-18.

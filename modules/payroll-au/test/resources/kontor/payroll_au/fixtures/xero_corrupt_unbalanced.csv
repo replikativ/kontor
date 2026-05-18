@@ -1,0 +1,4 @@
+employee-external-id,pay-element-code,debit,credit,state
+E101,OTE,6500.00,,NSW
+E101,PAYGW,,1200.00,NSW
+E101,NET,,4000.00,NSW
