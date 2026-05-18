@@ -8524,5 +8524,61 @@ Fixtures cited as oracle sources: NSDL e-TDS RPU 4.x documentation (Protean webs
 **Research backing.** doc/research/79-hr-payroll-stage-r-plan.md §5.3 (the C9 plan + scope-discipline section), CLAUDE.md `:audit-doc/category :payroll-filing` + `:audit-doc/language :en-in` conventions, modules/l10n-in (existing chart + 37-state-code installer + PAN/GSTIN identifiers), modules/payroll-us-adp + modules/payroll-ca structural templates (ADR-077 + ADR-078).
 
 License posture (final). NSDL e-TDS FVU spec public; EPFO ECR format public; ESIC monthly contribution format public; Schedule III + Ind AS framework public statutes; Keka + GreytHR + Saral / SumoPayroll / ZenHR CSV column shapes drawn from public vendor help-center documentation for *pattern*, never their code. No bundled vendor API keys / OAuth secrets; no bundled TDS slabs / PT rate tables / PF wage ceiling / ESI threshold (regulators update annually); no bundled UAN / TAN / PAN data (per-customer / per-employee secrets); no bundled FVU.exe Java runtime; no GPL-contaminated reference code lifted. PT-applicability set + PF-applicability defaults for `:special-allowance` documented with citation to Surya Roshni Ltd v. RPFC SC 2019 (public Supreme Court decision).
+## ADR-085 — `kontor-payroll-cn`: CN payroll adapter (Stage R C11)
+
+**Decision.** Ship the CN payroll adapter as `modules/payroll-cn/` — the fourth concrete `PayrollProvider` triple after DE (ADR-076), US (ADR-077), and CA (ADR-078). The adapter is a **clean-room connector around the dominant CN payroll engines** (用友 Yonyou NC / NCC / U8+, 金蝶 Kingdee K/3 + Cloud, 北森 Beisen, 薪人薪事 Salaryman): it consumes their per-period CSV export, classifies wage-type rows against a consumer-supplied mapping, produces balanced ASBE-aligned GL postings on the 应付职工薪酬 (2211) sub-tree, and emits the 个税申报 (IIT filing) audit-doc.
+
+Per ADR-005 / ADR-071 / ADR-075 / ADR-076 / ADR-077 / ADR-078 posture: **kontor does NOT re-implement CN jurisdictional payroll math.** The IIT cumulative-method withholding, the per-city 五险一金 rate/base lookup, the 年终奖 separate-vs-combined election — all run inside the engine. kontor consumes the engine's gross-to-net output and produces the GL leg + the audit-doc.
+
+Five module files (~0.9 kLoC + tests):
+
+1. **`wage_types.clj`** — consumer-extensible component-kind catalog with 12 standard CN kinds + 3 carry-only (per note 87 §3): `:base-wage / :performance-bonus / :overtime / :annual-bonus / :allowance / :taxable-benefit / :iit-withheld / :ee-pension / :ee-medical / :ee-unemployment / :ee-housing-fund / :er-pension / :er-medical / :er-unemployment / :er-work-injury / :er-maternity / :er-housing-fund / :annual-bonus-accrual` plus the carry-only `:si-base / :hf-base / :cumulative-taxable-ytd`. Each maps to an `:account-tag` keyword (the consumer's chart-of-accounts lookup key) and optionally an `:asbe-sub-account` (`:wages | :si | :hf | :welfare`) for 应付职工薪酬 routing. Mirrors CA's `kontor.payroll-ca.wage-types` shape.
+
+2. **`compute.clj`** — `YonyouCsvComputeProvider` / `KingdeeCsvComputeProvider` / `BeisenCsvComputeProvider` parsers. Per-customer column variation handled via a `:column-mapping` config map (mirrors CA's CeridianDayforce pattern); per-engine `provider-id` for audit logs. Consumer-supplied `:pay-element-codes` (engine wage-element code → kontor `:component-kind`) keeps the substrate engine-agnostic. The same `parse-cn-csv` core handles all three engines with different column maps.
+
+3. **`posting_builder.clj`** — `CnPayrollPostingBuilder` materializes the per-period GL posting set:
+   - DR 6602/5603 (or department-specific) wage expense for the gross
+   - CR 2211.01 应付职工薪酬-工资 for the net (the cash-out leg)
+   - CR 2221.01-个人所得税 for the IIT withholding
+   - CR 2211.03 应付职工薪酬-社保 for the employee SI contributions
+   - CR 2211.04 应付职工薪酬-公积金 for the employee HF
+   - DR 5603/admin wage-expense + CR 2211.03 / 2211.04 for the employer SI + HF
+   Routing is via `:account-tag/*` (per CA's pattern) so consumers can re-key without code change.
+
+4. **`accrual.clj`** — `annual-bonus-accrual-tx-data` for monthly 1/12 accrual toward a year-end 年终奖. DR 6601/5602/5603 (department wage expense) / CR 2211.01 应付职工薪酬-工资. Mirrors the US ASC-710 PTO accrual + CA vacation-pay-accrual primitives.
+
+5. **`emit.clj`** — `CnIitMonthlyEmitProvider` produces one `:audit-doc/category :payroll-filing` per pay-period with `:audit-doc/language :zh-cn`. The payload is a structured CSV with per-employee per-component breakout (column headers in zh-cn + en); the consumer's 自然人电子税务局 importer (or third-party convertor) bridges to the regulator's XML schema. v1 ships the CSV; the regulator's full XML schema (申报表 2024-04) is a consumer convertor step.
+
+6. **`core.clj`** — installer (idempotent `install!` that lays down the `:account-tag` vocabulary for the 应付职工薪酬 sub-tree + the IIT payable + employer SI/HF expense; the consumer's `kontor.l10n-cn.chart` is the source of base accounts) + re-exports of the three `make-*-provider` constructors and the accrual helper.
+
+**Why public-spec, not lifted code.** State Taxation Administration (国家税务总局) + Ministry of Finance (财政部) regulations on IIT, the 综合所得汇算清缴 reform, and the CAS 9 Employee Compensation standard (财会〔2014〕8号) are **public regulator publications** (政府信息公开 — Government Information Disclosure regulation). ASBE 4-digit account numbers + sub-account decomposition for 2211 / 2221 are factual data not copyrightable. The CSV column-mapping pattern reads from public vendor docs (Yonyou / Kingdee API guides) — no proprietary code lifted, no bundled per-city SI rate table, no bundled IIT bracket schedule, no 自然人电子税务局 credentials. The consumer holds the engine + the rate tables + the credentials.
+
+**Why config-driven CSV parser, not three separate parsers.** Per note 87 §5: Yonyou, Kingdee, and Beisen all export per-period payroll runs as CSV (or XLSX-exported-as-CSV) with per-customer column variation. A single config-driven parser (the CA Ceridian pattern) is cheaper than three near-duplicate impls. The same `parse-cn-csv` accepts a `:column-mapping` and `:pay-element-codes` opts pair; the three provider records configure `provider-id` for audit log purposes + supply different default `:column-mapping` defaults.
+
+**Why per-province (not per-city) for v1.** Per the task brief + note 87 §2.2: the 五险一金 rates vary per-city (200+ cities), not per-province. **However**, the substrate-level `:employment/province-of-employment` attr (ISO-3166-2:CN codes like `CN-BJ` / `CN-SH` / `CN-SZ`) is what kontor stores for the analytic split. Per-city allocation is **a follow-up** — consumers needing it tag postings via `:posting/analytic-distributions` with a city-axis analytic plan they install themselves. v1's posting-builder honours `:employment/province-of-employment` to attach a `:province` analytic-distribution; per-city follow-up runs through the same machinery.
+
+**Why year-end bonus as a separate component-kind.** Per 财税〔2018〕164号 (extended to 2027) the 年终奖 has a **special election** between the separate-tax (单独计税) and the combined-tax (并入综合所得) methods. By tagging the bonus as `:component-kind :annual-bonus` (distinct from `:performance-bonus`), the audit-doc can break out the bonus and record the chosen method in `:jurisdiction-specific-codes {:cn/annual-bonus-method :single | :combined}` so the IIT engine and the consumer's 综合所得汇算清缴 reconciliation have unambiguous data.
+
+**Decision NOT to.** Not implementing 企业年金 (enterprise annuity) detailed accounting — the vesting + asset-management complexity is out of v1 scope (note 87 §2.3). The component-kind set is open per ADR-075 so a consumer adding `:ee-enterprise-annuity` / `:er-enterprise-annuity` only needs to extend the catalog.
+
+**Decision NOT to.** Not implementing 残保金 (disability employment guarantee fund — annual, formula-based), 工会经费 (trade union fund — 2% of wages), or 职工教育经费 (worker education fund — 1.5–2.5% of wages). All three are out of v1 scope per note 87 §7; consumers compute via their own annual close primitive and post to 5603 (Admin) / 2211.05 + 2211.06 with the kontor.l10n-cn chart already in place.
+
+**Decision NOT to.** Not auto-emitting to 自然人电子税务局. The XML schema (申报表 2024-04) is public but is a consumer-side convertor step from kontor's CSV payload. v1 emits a `:audit-doc/category :payroll-filing` with `:audit-doc/language :zh-cn` and the structured CSV; the regulator-side upload + XML conversion is a consumer-held automation.
+
+**Decision NOT to.** Not bundling per-city SI/HF rate tables. 200+ cities, the rate tables change ~annually (typically June or July re-basing), and the base-cap / base-floor are tied to local 城镇职工社平工资 announcements. The engine holds them; kontor consumes the engine output.
+
+**Decision NOT to.** Not bundling IIT bracket tables. The 综合所得 brackets + quick-deductions are public regulation but regulator-versioned (last touched 2024). The engine applies the cumulative method; kontor consumes the result.
+
+**Test discipline.** **Tests under `modules/payroll-cn/test/`** mirror the CA structure:
+- `wage_types_test.clj` — component-kind catalog vocabulary, employer-side flag, posts? semantics, account-tag resolution.
+- `compute_test.clj` — CSV parsing for Yonyou / Kingdee / Beisen fixtures, the per-engine column-mapping config, employee → eid resolution, the IIT-withheld + SI/HF deduction routing.
+- `posting_builder_test.clj` — per-component routing to 2211 sub-accounts + IIT payable; sum-to-zero per (ledger, commodity); `:employment/province-of-employment` analytic.
+- `accrual_test.clj` — `annual-bonus-accrual-tx-data` shape + balanced posting pair.
+- `emit_test.clj` — `CnIitMonthlyEmitProvider` payload shape + `:audit-doc/category :payroll-filing` + `:audit-doc/language :zh-cn`.
+- `e2e_test.clj` — 3 employees in BJ / SH / SZ, monthly payroll path + a 年终奖 path running through `kontor.hr.payroll/run-payroll!` per the ADR-075 orchestrator.
+
+**Research backing.** doc/research/87-cn-payroll-research-before.md (full spec source + the licence + accounting-pattern citations), 79 §5.3 (C11 plan), 82 (DE pattern reference), 83 (US pattern reference), 84 (CA pattern reference).
+
+**License posture (final).** STA + MoF specs public; ASBE 2211 / 2221 sub-account decomposition public (CAS 9 / 财会〔2014〕8号 / Cai Kuai [2016] No. 22); USCC (GB 32100-2015) public — already used in `kontor.l10n-cn.identifiers`. No bundled per-city SI rate table; no bundled IIT brackets; no 自然人电子税务局 credentials; no proprietary code from Yonyou / Kingdee / Beisen lifted. Component-kind catalog + account-tag map drawn from CAS 9 + the four references in §9 of note 87; the per-engine CSV column-mapping defaults are derived from public vendor API documentation.
 
 Date: 2026-05-18.
