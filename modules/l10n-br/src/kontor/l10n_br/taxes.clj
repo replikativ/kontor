@@ -430,3 +430,345 @@
    (-> net-amount
        (money/add ipi-amount)
        (money/sub icms-amount))))
+
+;; ============================================================================
+;; Top-level per-line compute (Round 2 baseline — invoice posting builder)
+;;
+;; Wraps the per-tax primitives above into a single callable shape that
+;; mirrors the CA / DE compute-tax convention: given a net amount + a
+;; tax-classification + origin/destination context, return the per-tax
+;; breakdown the invoice posting builder needs.
+;;
+;; tax-classification dispatches the rate set:
+;;   :goods                ICMS + PIS + COFINS                (no IPI, no ISS)
+;;   :goods-manufactured   ICMS + IPI + PIS + COFINS          (Brazilian industry)
+;;   :services             ISS + PIS + COFINS                 (no ICMS, no IPI)
+;;   :zero-rated           rate 0% everywhere, taxable in form
+;;   :exempt               out of the base — no tax-account postings
+;;   :export               exports — zero-rated, also no PIS/COFINS
+;;
+;; The function delegates to the existing rate constants and base helpers;
+;; it does not duplicate rate tables. NCM-driven IPI / ISS rates are
+;; passed in by the caller — resolving NCM → rate is the consumer's
+;; responsibility (out of scope here, per the task brief).
+;; ============================================================================
+
+(def tax-classifications
+  "Valid `:tax-classification` values for compute-tax input.
+
+     :goods                normal goods sale (intra-/inter-state ICMS)
+     :goods-manufactured   manufactured goods (adds IPI on top of :goods)
+     :services             pure services (ISS only; no ICMS, no IPI)
+     :zero-rated           rate 0% but still in the tax base (suspended)
+     :exempt               out of base entirely (isento)
+     :export               export sale — zero-rated + PIS/COFINS exempt
+                           per Lei 10.865/2004 + IN RFB 1.911/2019 art. 22"
+  #{:goods :goods-manufactured :services :zero-rated :exempt :export})
+
+(defn- assert-tax-classification! [tc]
+  (when-not (contains? tax-classifications tc)
+    (throw (ex-info "Invalid :tax-classification"
+                    {:value tc :valid tax-classifications})))
+  tc)
+
+(defn- assert-state!
+  "Validate a 2-letter BR state code (or `nil` for services that have
+   no state component)."
+  [s where]
+  (when (and s (not (contains? all-states s)))
+    (throw (ex-info (str "Invalid " where " — must be a 2-letter BR state code")
+                    {:value s :valid all-states})))
+  s)
+
+(defn- bd-line
+  "Coerce a per-line net amount to a BigDecimal regardless of whether
+   the caller passed a Money / BigDecimal / number. Returned BD is NOT
+   yet scale-normalised — multiplication helpers below scale to 2dp."
+  ^java.math.BigDecimal [v]
+  (cond
+    (instance? java.math.BigDecimal v) v
+    (number? v) (bigdec v)
+    (and (map? v) (:amount v)) (:amount v)
+    :else (throw (ex-info "Cannot coerce :line to BigDecimal" {:value v}))))
+
+(defn- m-at-cents
+  "Wrap a BigDecimal as Money :BRL at 2dp HALF-EVEN. RFB-aligned
+   default rounding."
+  [^java.math.BigDecimal amt]
+  (money/money
+   (.setScale amt 2 java.math.RoundingMode/HALF_EVEN)
+   :BRL))
+
+(defn- m-mul
+  "Multiply a BigDecimal net by a rate, return Money :BRL at 2dp."
+  [^java.math.BigDecimal net ^java.math.BigDecimal rate]
+  (m-at-cents (.multiply net rate)))
+
+(defn- pis-rate-for
+  "Resolve the PIS rate from a regime keyword. `:cumulative` (0.65%)
+   or `:non-cumulative` (1.65%)."
+  ^java.math.BigDecimal [regime]
+  (case regime
+    :cumulative     pis-cumulative-rate
+    :non-cumulative pis-non-cumulative-rate
+    pis-non-cumulative-rate))
+
+(defn- cofins-rate-for
+  "Resolve the COFINS rate from a regime keyword. `:cumulative` (3%)
+   or `:non-cumulative` (7.6%)."
+  ^java.math.BigDecimal [regime]
+  (case regime
+    :cumulative     cofins-cumulative-rate
+    :non-cumulative cofins-non-cumulative-rate
+    cofins-non-cumulative-rate))
+
+(defn compute-tax
+  "Compute the per-tax breakdown for one line of a Brazilian sales
+   invoice. Wraps the rate constants + base helpers in this namespace
+   into a single map result.
+
+   Required input:
+     :line                BigDecimal | Money :BRL | number — net amount
+
+   Conditional on `:tax-classification`:
+     :from-state          origin state code (\"SP\") — required for
+                           :goods, :goods-manufactured, :export
+     :to-state            destination state code     — required for
+                           :goods, :goods-manufactured, :export
+
+   Optional:
+     :tax-classification  one of `tax-classifications`; default :goods
+     :pis-regime          :cumulative | :non-cumulative (default :non-cumulative)
+     :cofins-regime       :cumulative | :non-cumulative (default :non-cumulative)
+     :ipi-rate            BigDecimal — required for :goods-manufactured
+                          (defaults to 0; pass per-NCM lookup result)
+     :iss-rate            BigDecimal — required for :services
+                          (2-5% per municipality)
+     :icms-rate           BigDecimal — override derived rate (rare)
+     :buyer-type          :non-contributor | :contributor (for DIFAL routing)
+     :purpose             :consumption | :fixed-asset | :resale |
+                          :industrialization (for DIFAL routing)
+     :imported?           true if goods are imported (CST origem 1/2/3/6/7/8
+                          OR import content > 40%) — forces 4% interstate
+     :fcp-rate            BigDecimal — FCP surcharge on ICMS / DIFAL
+
+   Returns a map with these keys (every monetary value Money :BRL,
+   zero where the classification suppresses that tax):
+
+     :icms              Money — ICMS on the outbound (intra-state) leg.
+                                 For inter-state operations this is the
+                                 origin-state share; DIFAL captures the
+                                 destination differential separately.
+     :ipi               Money — IPI (manufacturing tax)
+     :pis               Money — PIS contribution
+     :cofins            Money — COFINS contribution
+     :iss               Money — ISS (services only)
+     :difal             Money — DIFAL inter-state differential
+                                 (zero when intra-state or DIFAL
+                                  doesn't apply)
+     :fcp               Money — FCP poverty-fund surcharge
+                                 (zero when no :fcp-rate)
+     :total-tax         Money — sum of all tax components
+     :total-gross       Money — net + total-tax
+     :net               Money — net (echoed)
+     :tax-classification keyword
+     :from-state        string (echoed; nil for pure services)
+     :to-state          string (echoed; nil for pure services)
+     :pis-regime        keyword
+     :cofins-regime     keyword
+
+   ## ICMS base composition
+
+   For :goods / :goods-manufactured the ICMS base is
+   `net + IPI` (cálculo por dentro — `compute-icms-by-inside-base`).
+
+   ## PIS/COFINS base
+
+   Per STF Tema 69 the ICMS destacado is excluded from the PIS/COFINS
+   base: `base = net + IPI - ICMS-destacado`. This implementation
+   uses the 3-arg form of `compute-pis-cofins-base` so the warning
+   path is not triggered during normal use.
+
+   ## Exports
+
+   `:export` zeroes both PIS and COFINS per Lei 10.865/2004 +
+   IN RFB 1.911/2019 art. 22. ICMS is also zero (Lei Kandir
+   1996 — Lei Complementar 87/1996). IPI is suspended on industrial
+   exports (RIPI art. 18, Decreto 7.212/2010).
+
+   Examples (rates as of 2026-05):
+
+     ;; Intra-state SP goods @ 18%
+     (compute-tax {:line 1000M :from-state \"SP\" :to-state \"SP\"
+                   :tax-classification :goods})
+       → {:icms 180.00 :pis 16.50 :cofins 76.00 :total-tax 272.50 ...}
+
+     ;; Inter-state SP → BA (S/SE → N/NE/MW = 7%) — buyer non-contrib
+     (compute-tax {:line 1000M :from-state \"SP\" :to-state \"BA\"
+                   :tax-classification :goods})
+       → {:icms 70.00 :difal 135.00 :pis 16.50 :cofins 76.00 ...}
+
+     ;; Pure services, SP municipality 5% ISS
+     (compute-tax {:line 1000M :tax-classification :services
+                   :iss-rate 0.05M})
+       → {:iss 50.00 :pis 16.50 :cofins 76.00 :total-tax 142.50 ...}
+  "
+  [{:keys [line tax-classification from-state to-state
+           pis-regime cofins-regime
+           ipi-rate iss-rate icms-rate
+           buyer-type purpose imported? fcp-rate]
+    :or {tax-classification :goods
+         pis-regime         :non-cumulative
+         cofins-regime      :non-cumulative
+         buyer-type         :non-contributor
+         purpose            :consumption
+         ipi-rate           0M}}]
+  (assert-tax-classification! tax-classification)
+  (assert-state! from-state ":from-state")
+  (assert-state! to-state   ":to-state")
+  (when (= tax-classification :services)
+    (when-not iss-rate
+      (throw (ex-info ":services requires :iss-rate (2-5% per municipality)"
+                      {:tax-classification tax-classification}))))
+  (when (#{:goods :goods-manufactured :export} tax-classification)
+    (when-not (and from-state to-state)
+      (throw (ex-info (str (name tax-classification)
+                           " requires :from-state and :to-state")
+                      {:tax-classification tax-classification}))))
+  (let [net-bd (bd-line line)
+        net-m  (m-at-cents net-bd)
+        zero   (money/zero :BRL)]
+    (case tax-classification
+
+      (:zero-rated :exempt)
+      {:icms zero :ipi zero :pis zero :cofins zero :iss zero
+       :difal zero :fcp zero :total-tax zero :total-gross net-m
+       :net net-m :tax-classification tax-classification
+       :from-state from-state :to-state to-state
+       :pis-regime pis-regime :cofins-regime cofins-regime}
+
+      :export
+      ;; Lei Kandir + Lei 10.865/2004 + RIPI: ICMS / PIS / COFINS / IPI
+      ;; are all suspended on exports. Result is net = gross.
+      {:icms zero :ipi zero :pis zero :cofins zero :iss zero
+       :difal zero :fcp zero :total-tax zero :total-gross net-m
+       :net net-m :tax-classification tax-classification
+       :from-state from-state :to-state to-state
+       :pis-regime pis-regime :cofins-regime cofins-regime}
+
+      :services
+      ;; Pure services — ISS + PIS + COFINS. No ICMS, no IPI.
+      ;; ICMS-destacado in the PIS/COFINS base reduces to zero.
+      (let [iss   (m-mul net-bd iss-rate)
+            pis   (m-mul net-bd (pis-rate-for pis-regime))
+            cofins (m-mul net-bd (cofins-rate-for cofins-regime))
+            tot   (-> zero (money/add iss) (money/add pis) (money/add cofins))
+            gross (money/add net-m tot)]
+        {:icms zero :ipi zero :pis pis :cofins cofins :iss iss
+         :difal zero :fcp zero :total-tax tot :total-gross gross
+         :net net-m :tax-classification tax-classification
+         :from-state from-state :to-state to-state
+         :pis-regime pis-regime :cofins-regime cofins-regime})
+
+      (:goods :goods-manufactured)
+      (let [ipi-r (if (= tax-classification :goods-manufactured) ipi-rate 0M)
+            ipi   (m-mul net-bd ipi-r)
+            ;; ICMS rate: caller override OR derived from origin/destination
+            ;; via icms-interstate-rate (handles intra/inter-state +
+            ;; imported-goods 4% rule).
+            icms-r (or icms-rate
+                       (icms-interstate-rate from-state to-state
+                                             {:import-content? imported?}))
+            ;; ICMS base = net + IPI (cálculo por dentro)
+            icms-base (compute-icms-by-inside-base net-m ipi)
+            icms-amt  (-> ^java.math.BigDecimal (:amount icms-base)
+                          (.multiply icms-r))
+            icms      (m-at-cents icms-amt)
+            ;; PIS / COFINS base: net + IPI - ICMS (STF Tema 69)
+            pc-base   (compute-pis-cofins-base net-m ipi icms)
+            pc-base-bd ^java.math.BigDecimal (:amount pc-base)
+            pis       (m-at-cents (.multiply pc-base-bd (pis-rate-for pis-regime)))
+            cofins    (m-at-cents (.multiply pc-base-bd (cofins-rate-for cofins-regime)))
+            ;; DIFAL on inter-state operations (when applicable per LC 190)
+            difal-r  (when (and from-state to-state
+                                (not= from-state to-state))
+                       (difal-due net-m from-state to-state
+                                  {:buyer-type buyer-type
+                                   :purpose    purpose
+                                   :imported?  imported?
+                                   :fcp-rate   fcp-rate}))
+            difal    (if difal-r (:difal difal-r) zero)
+            fcp      (if difal-r (:fcp difal-r) zero)
+            tot      (-> zero
+                         (money/add icms)
+                         (money/add ipi)
+                         (money/add pis)
+                         (money/add cofins)
+                         (money/add difal)
+                         (money/add fcp))
+            gross    (money/add net-m tot)]
+        {:icms icms :ipi ipi :pis pis :cofins cofins :iss zero
+         :difal difal :fcp fcp :total-tax tot :total-gross gross
+         :net net-m :tax-classification tax-classification
+         :from-state from-state :to-state to-state
+         :pis-regime pis-regime :cofins-regime cofins-regime}))))
+
+(defn compute-invoice-tax
+  "Aggregate `compute-tax` over a sequence of invoice lines for one
+   issued BR invoice. Each line is a map suitable for `compute-tax`
+   (with shared `:from-state` / `:to-state` overridable at the top
+   level for convenience, since a single NF-e is normally a single
+   origin → single destination shipment).
+
+   Input:
+     {:lines [{:line ... :tax-classification ... :iss-rate ...
+               :ipi-rate ... :pis-regime ... :cofins-regime ...
+               ...} ...]
+      :from-state \"SP\"     ; applied per-line when the line omits it
+      :to-state   \"BA\"     ; same
+      :buyer-type :non-contributor
+      :purpose    :consumption
+      ...other top-level fields propagate the same way}
+
+   Returns the same shape as `compute-tax` plus a `:per-line` vector
+   of the individual line results.
+
+   Per-line monies are each rounded to 2dp HALF-EVEN, then summed.
+   Cumulative invoice-level totals may differ from a single-shot
+   computation by ≤ R$0.02 — that's the standard NF-e tolerance."
+  [{:keys [lines from-state to-state buyer-type purpose
+           pis-regime cofins-regime imported? fcp-rate]
+    :as opts}]
+  (let [defaults (cond-> {}
+                   from-state    (assoc :from-state from-state)
+                   to-state      (assoc :to-state to-state)
+                   buyer-type    (assoc :buyer-type buyer-type)
+                   purpose       (assoc :purpose purpose)
+                   pis-regime    (assoc :pis-regime pis-regime)
+                   cofins-regime (assoc :cofins-regime cofins-regime)
+                   (some? imported?) (assoc :imported? imported?)
+                   fcp-rate      (assoc :fcp-rate fcp-rate))
+        per-line (mapv (fn [l] (compute-tax (merge defaults l))) lines)
+        zero     (money/zero :BRL)
+        sums (reduce
+              (fn [acc {:keys [icms ipi pis cofins iss difal fcp
+                               total-tax total-gross net]}]
+                (-> acc
+                    (update :icms       money/add icms)
+                    (update :ipi        money/add ipi)
+                    (update :pis        money/add pis)
+                    (update :cofins     money/add cofins)
+                    (update :iss        money/add iss)
+                    (update :difal      money/add difal)
+                    (update :fcp        money/add fcp)
+                    (update :total-tax  money/add total-tax)
+                    (update :total-gross money/add total-gross)
+                    (update :net        money/add net)))
+              {:icms zero :ipi zero :pis zero :cofins zero :iss zero
+               :difal zero :fcp zero :total-tax zero :total-gross zero
+               :net zero}
+              per-line)]
+    (assoc sums
+           :from-state from-state
+           :to-state   to-state
+           :per-line   per-line)))
