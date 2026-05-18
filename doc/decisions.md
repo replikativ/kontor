@@ -7903,3 +7903,54 @@ Three components:
 **Research backing.** doc/research/71-cross-db-atomic-transact.md §5.2.
 
 Date: 2026-05-17.
+
+---
+
+## ADR-075 — Stage R substrate: `kontor-hr` + `PayrollProvider` trio + two-axis `:audit-doc/category`
+
+**Decision.** Land the HR / payroll substrate as planned by research notes 79 + 81. Three pieces:
+
+1. **Two new kernel attrs.** `:audit-doc/category` (open-set keyword, nil = `:none`) is the subject-matter axis orthogonal to ADR-051's `:audit-doc/privilege` (legal-doctrine axis). `:retention-policy/category` (open-set keyword) lets the ADR-050 sweeper match per-category retention floors (payroll PII vs financial records have different statutory retention under GDPR Art. 17 + DE §28f SGB IV + HGB §257). These are the **only** kernel additions in Stage R; every other entity lives in the companion.
+
+2. **New companion module `kontor-hr`** with seven entities under three discriminator-namespace groups:
+   - `:person/*` — human-identity root; bears PII (`:person/birth-date`, `:person/citizenship`, `:person/national-id` → `:audit-doc`). `:person/state` lifecycle facet (`:active` → `:deceased` | `:purged`).
+   - `:partner/person` — single ref linking a `:partner` (kernel) to a `:person` (companion). Set when `:partner/kind :employee` (open-set extension per ADR-039).
+   - `:employment/*` — Workday-style multi-employment per person (one row per `(person, entity)` per note 79 Call 2), with the lifecycle facet `:applicant → :offered → :hired → :active → :on-leave → :terminated → :rehired` + new `:employment/work-time-fraction` (BigDecimal FTE) + `:employment/work-relationship-kind` (open-set keyword: `:standard` | `:secondment` | `:apprentice` | `:civil-servant` | `:intern` | …) from note 81 §9.7.
+   - `:department/*` — recursive per-entity org tree; `:department/manager` refs an `:employment` (not a `:person`).
+   - `:compensation/*` + `:compensation-component/*` — per note 81 §9.6 refactor. Compensation is its own entity with multi-cardinality components (base wage + bonus + employer SI + VWL + housing allowance + RSU vest as DISTINCT rows). Effective-dated via `:compensation/effective-from` / `effective-to`. The Workday / SuccessFactors / Oracle Fusion / Gusto / Frappe HR shape; the alternative (wage scalars on `:employment`) collapses on DE C2's Weihnachtsgeld + employer SI + VWL = different SKR04 accounts case.
+   - `:pay-period/*` — per-entity (DE-monthly + US-biweekly coexist within a group); refs the kernel `:period` (ADR-014) so period-lock middleware refuses payroll into a locked fiscal period.
+   - `:payroll-run/*` — one (pay-period × entity) execution. Carries `:payroll-run/control-total-gross/-net` for reconciliation against the engine's totals and refs the produced `:transaction` + emitted `:audit-doc`s.
+
+3. **New kernel namespace `kontor.payroll-provider`** — mirrors the ADR-071 three-protocol shape with a fourth `PayrollEmitProvider` for jurisdictional event-bus emissions:
+   - **`PayrollComputeProvider`** — pure gross-to-net wrapper around the engine (DATEV LODAS / ADP GLI / Wagepoint / etc.). Returns a vector of `PayrollFacts` maps. kontor never re-implements jurisdictional payroll math.
+   - **`PayrollFacts`** data shape — per-employment + per-component, carrying `:gross`, `:net`, `:components [{:kind :amount :employer-side? :jurisdiction-codes}]`, and a `:jurisdiction-specific-codes` opaque slot.
+   - **`PayrollPostingBuilder`** — materializes GL postings from `PayrollFacts`. Consumes a consumer-supplied `:accounts` map (component-kind → `:account` ref); kontor never bundles a chart.
+   - **`PayrollEmitProvider`** — returns `:audit-doc` rows for required jurisdictional emissions (DE LODAS Lohnimport, UK FPS XML, AU STP Phase 2). Default `LocalfileEmitProvider` returns `[]` — adequate for US (no clearance regime).
+
+The orchestrator `kontor.hr.payroll/run-payroll!` composes the three providers through `kontor.process/run-process` (ADR-067) so the kernel gate stack (legal-hold + period-lock + state-machine + datalog invariants) fires once atomically. It validates each fact's sum invariant (`gross = Σ positive employee-side components`; `net = gross + Σ negative deductions`) before producing tx-data — bad facts throw before they reach the gate.
+
+**Why companion-tier (not kernel) for the entities.** Per note 79 §2.1: `:partner` is on the hot path of every posting and was promoted to the kernel for that reason; `:person` is one indirection off the hot path (posting → partner → person). Half the kernel's consumers (single-founder accounting, SaaS using external HR, embedded fintech) never need HR; loading them into the kernel costs schema-doc noise for zero gain. The shape matches `kontor-sales` / `kontor-procurement` / `kontor-lease` / `kontor-expense` (every other ADR-002 companion).
+
+**Why multi-employment (Workday) not single-employment (ADP/Tryton).** Per note 79 §2.2 + note 81 §8 table: every enterprise-tier system (Workday, SAP SuccessFactors, Oracle Fusion HCM, Deel, Gusto, OFBiz) supports it; only flat-shaped SMB tools (BambooHR, OrangeHRM, Tryton, NetSuite, Rippling base) collapse it. The trans-national pitch (note 79 §2.2 — an executive employed by Acme-DE-GmbH AND seconded to Acme-US-LLC) requires it. Substrate cost is zero (one ref attr); retrofitting later is high blast radius (synthetic splits, ambiguous wage joins, downstream report re-disambiguation).
+
+**Why hybrid `:person` + `:partner/kind :employee` linker (not pure `:partner` reuse, not pure separate `:person`).** Per note 79 §2.3: every identity-hub pattern in the gold-standard set (OFBiz Party+Person, Workday Worker, Oracle Person, SuccessFactors PerPerson, Rippling Employee Graph) separates "the human" from "the business-relationship party." A `:partner` may pre-date employment (was a vendor first) and post-date it (continues as customer); a `:person` is born once, dies once, GDPR-erasable per ADR-050. The privacy + lifecycle axes argue for the hybrid; OFBiz solves the same tension the same way.
+
+**Why compensation-as-its-own-entity (note 81 §9.6 refactor).** Per note 81 §8 table + §9.6: Workday `Compensation` + `Pay Components`, SuccessFactors `EmpCompensation` + `EmpPayCompRecurring`, Oracle Fusion `PAY_*`, Gusto `Compensation per Job`, Frappe HR `Salary Structure Assignment`, OFBiz `PayHistory` — all model comp as separate, multi-cardinality, effective-dated. Only the flat-shaped SMB tools keep it scalar. The single-attr collapse on `:employment` cannot represent N simultaneously-active components (DE C2 Weihnachtsgeld + employer pension + VWL + base wage = 4 distinct SKR04 accounts; a single `:employment/wage` scalar forces the consumer to choose between (a) multiple `:employment` rows — wrong, they're all attributes of one employment — or (b) per-pay-period variable inputs — wrong, components are standing comp structure). The refactor saves ~3 days of migration debt at the cost of ~3 hours pre-C1 schema work.
+
+**Why two-axis `(privilege, category)` not single-axis enum.** Per note 79 §2.5: `:audit-doc/privilege` is legal-doctrine classification (attorney-client, work-product, trade-secret); `:audit-doc/category` is subject-matter (payroll, hr-personnel, hr-medical, tax-filing). The auth grid needs both axes — "HR role can access category `:payroll` regardless of privilege" and "tax-prep contractor can access category `:tax-filing` UNLESS privilege `:attorney-client`". Conflating them destroys the grid. GDPR Art. 30 records-of-processing organize by "category of personal data" — the regulatory schema *is* two-axis. `:retention-policy/category` mirrors the attr so the ADR-050 sweeper can carry per-category floors.
+
+**Decision NOT to.** Not shipping `:position` + `:position-fulfillment` (Workday Position Management vs Job Management). Workday supports BOTH staffing models within one tenant and explicitly treats Position Management as optional; Oracle Fusion has two-tier (no position layer) vs three-tier. Per note 81 §9.5 the deferral is right; consumers needing headcount budgeting can add the layer in C5+.
+
+**Decision NOT to.** Not shipping recruitment (`:job-requisition` / `:job-interview` / `:employment-application`). Commodity SaaS (Greenhouse, Lever, Workable) covers this and we have no accounting-side stake.
+
+**Decision NOT to.** Not shipping benefits + time-off entities (`:benefit-enrollment`, `:absence`, `:absence-allocation`). Deferred to C4+ per note 79 §3; SuccessFactors `EmpTimeAccount` + `EmpTimeOffCalendar` is the structural template for when we do land it.
+
+**Decision NOT to.** Not bundling per-country wage-type catalogs (DE SKR04 wage accounts, US W-2 box mappings), engine API credentials, or proprietary mapping tables. Mirrors ADR-005 / ADR-071 / ADR-072 — the consumer holds the engine credential; kontor consumes engine output.
+
+**Test discipline.** 9 tests / 34 assertions in `modules/hr/test/kontor/hr/hr_test.clj` covering install idempotency, schema-attrs-present round-trip, create-person + hire + multi-employment, compensation set + supersede + bitemporal wage query, check-facts sum invariant accept/reject, and full run-payroll! end-to-end with a hand-written mock provider trio (one fact per employment with employer-side SI, balanced postings via build-transaction, control totals + transaction link on the `:payroll-run`).
+
+**Effort.** ~1 maintainer-day for the C1 substrate (2 kernel attrs + 8 companion files + protocol trio + tests + this ADR + status-machine seeds). Per-country adapters (C2 DE-DATEV-LODAS, C3 US-ADP-GLI, C4 CA-CRA-payroll) plan into ~6+6+4 days respectively; see notes 82 + 83 + 84 for the per-country research-before output.
+
+**Research backing.** doc/research/72-hr-payroll-reference-study.md (OFBiz `humanres` Apache-2.0 reference), 73 (12-theme market-pain catalog), 74 (substrate gap analysis + the 5 design calls), 79 (the 5-design-calls implementation plan + per-country sequencing), 81 (gold-standards study confirming 5/5 calls + recommending the §9.6 compensation-as-entity refactor + 3 minor §9.7 adds), 82 (DE-DATEV-LODAS), 83 (US-ADP-GLI), 84 (CA-CRA-payroll).
+
+Date: 2026-05-18.

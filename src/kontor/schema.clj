@@ -741,6 +741,25 @@
                      keyword entity-type convention used by
                      :status-history/entity-type."}
 
+   ;; ADR-075 — subject-matter category gate. Open-set keyword that
+   ;; mirrors :audit-doc/category; nil = applies regardless of
+   ;; category. When non-nil, the policy ONLY applies to entities
+   ;; whose own :audit-doc/category (or, for non-audit-doc entities,
+   ;; the consumer's category inference) matches. Per-jurisdiction
+   ;; retention floors differ by category — payroll PII retention
+   ;; (GDPR Art. 17 + DE Sozialversicherung §28f SGB IV) is NOT the
+   ;; same as financial-records retention (HGB §257); the category
+   ;; axis is the dimension that lets one :retention-policy table
+   ;; carry both.
+   {:db/ident       :retention-policy/category
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Subject-matter category gate (ADR-075). nil =
+                     applies regardless of category. When non-nil the
+                     sweeper matches against :audit-doc/category (or
+                     consumer-derived category for other entity types).
+                     Per-jurisdiction floors differ by category."}
+
    {:db/ident       :retention-policy/jurisdiction
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
@@ -3639,7 +3658,28 @@
     :db/doc         "Legal-privilege classification (ADR-051).
                      Status-machine facet; nil = :none. Bitemporal:
                      (d/pull (d/valid-at db filing-date) [...] doc-eid)
-                     answers 'privilege at filing date'."}])
+                     answers 'privilege at filing date'."}
+
+   ;; ADR-075 — subject-matter category, orthogonal to :audit-doc/
+   ;; privilege. Open-set keyword: :none (default; nil treated as
+   ;; :none) | :financial | :payroll | :hr-personnel | :hr-medical |
+   ;; :hr-immigration | :tax-filing | :legal-proceeding |
+   ;; :compliance-attestation | <consumer extensions>.
+   ;; The two-axis design (privilege × category) is what lets a
+   ;; consumer's auth layer express "HR role can access category
+   ;; :payroll regardless of privilege" or "tax-prep contractor can
+   ;; access category :tax-filing UNLESS privilege :attorney-client".
+   ;; GDPR Art. 30 records-of-processing organize by subject-matter
+   ;; "category of personal data" — this attr is the regulatory
+   ;; schema's reflection in kontor.
+   {:db/ident       :audit-doc/category
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Subject-matter category (ADR-075). Open-set;
+                     nil = :none. Orthogonal to :audit-doc/privilege —
+                     legal-doctrine and domain are independent axes.
+                     The consumer's auth layer reads BOTH to make
+                     access decisions; the kernel tags only."}])
 
 (def ^:private approval-policy-attrs
   [{:db/ident       :approval-policy/entity-type
