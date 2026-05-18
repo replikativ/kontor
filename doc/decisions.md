@@ -788,6 +788,40 @@ This ADR specifically does *not* introduce a `:company/*` namespace (multi-entit
 
 Date: 2026-05-10.
 
+### Addendum 2026-05-18 — `:account-tag/concept-iri` substrate seam for XBRL / filing taxonomies
+
+A second axis of "this account / tag maps to an external standard's identifier" surfaced during the research pass on XBRL and accounting taxonomies (`doc/research/78-xbrl-and-accounting-taxonomies.md`). XBRL concept IRIs (e.g. `http://xbrl.ifrs.org/taxonomy/2024-03-27/ifrs-full#Revenue`) name a filing-taxonomy entry the same way `:account-code/regulator + :account-code/code` names a regulator's code.
+
+**Decision (minimal seam, not full taxonomy ingest).** Add ONE optional schema attr on `:account-tag` rather than re-shaping `:account/external-codes`:
+
+```clojure
+:account-tag/concept-iri  string one indexed   ; optional XBRL / filing-taxonomy
+                                                ;   concept IRI
+```
+
+Consumers who want their tags to map to XBRL concepts (the IFRS Foundation taxonomy, FASB US-GAAP, UK FRC, DE E-Bilanz / HGB-Taxonomie, JP-EDINET, …) carry the IRI here. Consumers who don't care leave it blank; the rest of the report engine continues to operate on tag names (`:account-tag/name`).
+
+**Why on `:account-tag` and not on `:account/external-codes`.** The two mechanisms are *complementary*, not overlapping:
+- `:account/external-codes` records "which code does this account get in this regulator's chart-of-accounts." That's about chart-mapping at the bookkeeping layer.
+- `:account-tag/concept-iri` records "which financial-reporting concept does this tag identify." Tags can attach to accounts, postings, or tax-rep lines; that's the granularity XBRL reporting needs.
+
+Both can be present simultaneously: a single posting can hit an account with a SKR04 code (via `:account/external-codes`) tagged with a tag that has an IFRS concept IRI (via `:account-tag/concept-iri`). The bookkeeping code goes to DATEV; the concept IRI is what an iXBRL emitter would tag the fact with.
+
+**Bitemporal interaction.** XBRL concept IRIs typically encode a taxonomy version (`.../2024-03-27/...`). When taxonomy catalogs are themselves ingested into kontor as data (a future companion module — see note 78 §8 Direction B/C), the concept-iri here doubles as a foreign key into that catalog, and `kontor`'s bitemporal axis makes the version-resolution time-correct ("which IRI did this tag point at on the filing date?"). The substrate-tier change today does NOT require that catalog to exist; consumers can dereference the IRI manually against any source they like.
+
+**What this addendum does NOT do** (deliberately deferred per the "ship the seam, defer the rest" call in this conversation's context):
+- No `:taxonomy/*` / `:concept/*` / `:concept-arc/*` schema for full taxonomy catalogs (deferred to Direction B in note 78, gated on first consumer pull or simmis filing-readiness sim).
+- No `kontor.taxonomy/install-from-data!` ingest helper.
+- No calc-linkbase verification primitive.
+- No iXBRL emission (companion-tier, multi-month per jurisdiction).
+- No substrate-level validation of the IRI format. Consumers pick the format their taxonomy source uses; verification belongs in a companion.
+
+**Reversibility.** Trivial — drop the attr if the design call is reversed. No existing data depends on it.
+
+**Research backing.** `doc/research/78-xbrl-and-accounting-taxonomies.md` (4-direction analysis, file:line citations for Odoo + Tryton XBRL footprint, Arelle code survey at `/home/christian-weilbach/Development/arelle`).
+
+Date: 2026-05-18.
+
 ---
 
 ## ADR-020 — Document-type registry (kernel-level)

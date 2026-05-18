@@ -438,7 +438,40 @@
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "One of: :account :tax. Indicates which kind of
-                     entity this tag attaches to."}])
+                     entity this tag attaches to."}
+
+   ;; ADR-019 addendum (research note 78): substrate seam for XBRL /
+   ;; filing-taxonomy concept identifiers. Optional. Consumers who
+   ;; want to map their account-tags to XBRL concepts (IFRS, US-GAAP,
+   ;; UK FRC, DE E-Bilanz / HGB-Taxonomie, JP-EDINET, ...) carry the
+   ;; concept's IRI here. Consumers who don't care leave it blank —
+   ;; the rest of the report engine continues to operate on tag names.
+   ;;
+   ;; Format: an absolute IRI uniquely identifying the concept within
+   ;; its taxonomy. Convention follows XBRL's qname-to-IRI rule:
+   ;;   {namespace-URI}#{local-name}
+   ;; e.g. "http://xbrl.ifrs.org/taxonomy/2024-03-27/ifrs-full#Revenue"
+   ;;
+   ;; Bitemporal: the IRI typically encodes a taxonomy version
+   ;; (e.g. .../2024-03-27/...). When taxonomies are themselves
+   ;; ingested into kontor as data (a future companion module), the
+   ;; concept-iri here doubles as a foreign key into that catalog,
+   ;; and the bitemporal axis makes the version answer time-correct
+   ;; (\"which IRI did this tag point at on the filing date?\").
+   ;;
+   ;; Substrate does no validation beyond schema-typing the field.
+   ;; Verification of (concept-iri, taxonomy, calculation-linkbase)
+   ;; consistency is companion-tier — see research note 78 §7-9 for
+   ;; the design space. ADR-019 carries the rationale.
+   {:db/ident       :account-tag/concept-iri
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "Optional XBRL / filing-taxonomy concept IRI.
+                     Format: {namespace-URI}#{local-name}. The substrate
+                     stores + indexes; verification against an actual
+                     taxonomy is companion-tier (research note 78).
+                     ADR-019 addendum."}])
 
 ;; ============================================================================
 ;; Journal — categorization of journal entries.
