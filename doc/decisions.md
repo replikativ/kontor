@@ -8580,5 +8580,134 @@ Five module files (~0.9 kLoC + tests):
 **Research backing.** doc/research/87-cn-payroll-research-before.md (full spec source + the licence + accounting-pattern citations), 79 §5.3 (C11 plan), 82 (DE pattern reference), 83 (US pattern reference), 84 (CA pattern reference).
 
 **License posture (final).** STA + MoF specs public; ASBE 2211 / 2221 sub-account decomposition public (CAS 9 / 财会〔2014〕8号 / Cai Kuai [2016] No. 22); USCC (GB 32100-2015) public — already used in `kontor.l10n-cn.identifiers`. No bundled per-city SI rate table; no bundled IIT brackets; no 自然人电子税务局 credentials; no proprietary code from Yonyou / Kingdee / Beisen lifted. Component-kind catalog + account-tag map drawn from CAS 9 + the four references in §9 of note 87; the per-engine CSV column-mapping defaults are derived from public vendor API documentation.
+## ADR-090 — `:concept-iri` seam generalized across substrate entities
+
+**Decision.** Add an optional `:concept-iri` attribute (string, cardinality-one, indexed, no constraint) to six substrate entity groups: `:account-tag`, `:account`, `:partner`, `:commodity`, `:tax`, `:document-type`. The attribute carries an IRI that binds a kontor entity to an external concept vocabulary (XBRL, FIBO, gist, regulator namespace, internal taxonomies). The kernel stores and indexes; verification + dereference is consumer-tier.
+
+**Why.** Research note 80 ("McComb's *Future of Accounting* vs. kontor", 2026-05-18) surveyed Dave McComb's data-centric framework against kontor's substrate. The note concluded kontor is McComb-compatible at the substrate level but not McComb-conformant at the modeling level, and recommended URI-keyed external-concept seams as the cheapest aligned move (§7.1, §6.3). Research note 78 ("XBRL and accounting taxonomies", 2026-05-15) had already shipped the first such seam — `:account-tag/concept-iri` for filing-taxonomy bindings. ADR-090 generalizes that precedent to the five additional entity types where consumers want external-system concept identity.
+
+**Substrate posture.** The kernel does NOT take a position on which vocabulary to use, how to dereference, or how to enforce ontology-level constraints. The attribute is a *transport slot* — a consumer with an IRI walks it forward via `kontor.explain/entities-with-concept-iri` (ADR-091) or backward via a custom datalog query. ADR-001's single-dep stance survives untouched; ADR-002's namespace cohabitation is honored (each entity type's `:<ns>/concept-iri` lives in its own namespace).
+
+**Distinct from `:account/external-codes` (ADR-019).** `:account/external-codes` carries *regulator-specific reporting codes* (SKR04 numeric, DATEV, BR Plano Referencial) as many-cardinality refs to `:account-code` entities, each (account, regulator) pair distinct. `:account/concept-iri` carries *one cross-system concept identity* (XBRL line item, FIBO Account class) as a single IRI. Both can coexist on one account; neither is required. The split mirrors McComb's framing: regulator codes are *filing inputs*; concept IRIs are *cross-enterprise semantic identity*.
+
+**Cardinality choice.** Single-cardinality. McComb's framing is that one entity has *one* canonical concept identity in an external vocabulary; multiple bindings to different vocabularies (e.g., one account is both `fibo-fbc:Receivable` AND `gist:Commitment`) suggests the consumer should use multiple `:account-tag` entities (each carrying its own `concept-iri`) rather than overloading the account's single slot. The decision is reversible — a future ADR could swap to many-cardinality if a real consumer use case emerges; the substrate-tier `:account-tag` workaround is the documented escape hatch.
+
+**Index choice.** All six attrs are `:db/index true`. Inverse lookup (IRI → kontor entity) is the dominant query — `kontor.explain/entities-with-concept-iri` walks all six attrs by query, not by walking the substrate.
+
+**Test discipline.** No new test ADR — the seams are tested via `kontor.explain-test` (ADR-091), specifically the `entities-with-concept-iri-finds-*` tests that round-trip a write through each of the six attrs.
+
+**What this does NOT do.**
+
+- Does NOT switch kontor to RDF/SPARQL (§5.4 of note 80 — divergence defensible). The substrate is still EAV + datalog; `:concept-iri` is an additive seam, not a substrate replacement.
+- Does NOT commit kontor to a specific ontology (gist / FIBO / OntoREA). Consumers pick.
+- Does NOT add resolution semantics. `:concept-iri` is opaque to the kernel; consumers verifying the IRI dereferences (HTTP 200, RDF parse, concept exists in vocabulary) build their own validator.
+
+**Out of scope, deferred to future ADRs.**
+
+- `:posting/concept-iri` — McComb's REA framing has no `gist:Posting` class; the closest mapping is `gist:Event + gist:hasMagnitude`. Per note 80 §9 Q4, the maintainer hasn't committed to that mapping work; defer until a real consumer pulls.
+- `:transaction/concept-iri` — same reasoning. The transaction is the kontor projection of a business event; the *source event* mapping lives in consumer namespaces (beleg's `:invoice/*`, etc.).
+- `:entity/concept-iri` — defer to multi-entity / consolidation rework.
+
+**Implication.** Six +1-attribute schema additions; no behavior changes; no migration required (the attribute is optional). LoC: +6 attrs × ~8 lines = ~48 LoC in `src/kontor/schema.clj`. McComb-compatibility at the substrate level lifts from "one seam (XBRL tags)" to "six seams covering chart, partner, commodity, tax, document-type, account-tag" — every load-bearing kernel entity now has an optional external-identity slot.
+
+**Research backing.** doc/research/80-mccomb-future-of-accounting-vs-kontor.md (§§5.1, 6.3, 7.1); doc/research/78-xbrl-and-accounting-taxonomies.md (the seam precedent on `:account-tag`); doc/research/87-mccomb-substrate-seams-round-1.md (this round's implementation rationale).
+
+Date: 2026-05-18.
+
+## ADR-091 — `kontor.explain`: substrate "explain this number" graph walks
+
+**Decision.** Introduce `kontor.explain` as a substrate-tier read-only namespace exposing three helpers:
+
+1. **`explain-balance`** — `(conn, account-eid, opts) → {:account :balance :postings :as-of-valid :as-of-tx}`. Returns the account-balance plus the ordered contributing postings (bitemporal-aware, `:as-of-valid` / `:as-of-tx`). Composes `kontor.balance/account-balance` + `kontor.ledger/postings-against` into one pull.
+
+2. **`explain-posting`** — `(conn, posting-eid, opts) → {:posting :transaction :status-history :audit-docs :legal-holds :retention :origin-transaction-targets :as-of-tx}`. Walks from one posting back through the lifecycle stack: the originating transaction, the status-history rows on that transaction, the supporting audit-docs referenced from those history rows, the active legal-holds covering posting / transaction / caused entities, and the retention policy + deadline + eligibility for the posting.
+
+3. **`entities-with-concept-iri`** — `(db, iri) → {:account :account-tag :partner :commodity :tax :document-type}`. Reverse-lookup: given an IRI from any of the ADR-090 seams, return the eids of all kontor entities binding to that concept. The McComb-aligned dereference: a semantic-web consumer with `ifrs-full:Revenue` walks back to the kontor accounts grounding it.
+
+**Why.** Research note 80 §7 identified "the McComb killer feature" as: any computed number should be able to *explain itself* by walking the graph back through its sources. kontor already has the substrate (postings → transaction → status-history → audit-doc → legal-hold → retention); what's missing is the canonical walk. The note recommended `kontor.explain` as one of the highest value-to-effort McComb-aligned moves (§7.4 implicit, brief explicit).
+
+**Substrate posture.** Pure read-only datalog over `d/db` snapshots — no transactors, no writes, no protocol surface. All shapes are plain Clojure maps with eids and keyword fields; consumers format and serialize. The maps are deliberately *data*, not Clojure records, matching McComb's "data outlives applications" framing.
+
+**Bitemporal discipline.** `explain-balance` takes `:as-of-valid` + `:as-of-tx` (per ADR-008). `explain-posting` takes `:as-of-tx` but NOT `:as-of-valid` — explain is answering "where did this *recorded* fact come from?"; the valid-time of the underlying postings/transactions lives on `:db.valid/from` on the originating tx, which the result already carries via the pull pattern.
+
+**Return-shape stability.** The three fns return data with stable keys (`:posting :transaction :status-history :audit-docs :legal-holds :retention :origin-transaction-targets :as-of-tx`); they OMIT keys when no data exists (no empty `[]` for sections with no rows). Consumers `(get r :audit-docs [])` to default. The omission-vs-empty discipline keeps the result terse for the common case (a posting with no holds and no audit docs).
+
+**What this composes with.**
+
+- `kontor.balance/account-balance` + `kontor.ledger/postings-against` (the per-account walks).
+- `kontor.status-machine/status-history-of` (per-entity lifecycle).
+- `kontor.audit-doc/pull-doc` (per-doc detail; explain pulls a summary).
+- `kontor.legal-hold/holds-covering` + `kontor.retention/policy-for` (lifecycle gates).
+
+**What this does NOT do.**
+
+- Does NOT walk *across* postings on different transactions (an explain for posting P returns P's transaction only; it does not transitively explain *that transaction's other postings*). Consumers wanting transitive walks (e.g., "explain the trial-balance line for Receivable by walking each invoice's source event") compose `explain-balance` + `explain-posting` themselves.
+- Does NOT format / render — no pretty-printing, no HTML / Markdown / JSON / RDF emission. The shape is data; consumers serialize.
+- Does NOT understand REA / commitment-shaped reasoning. Per note 80 §7.2, a `kontor-commitment` companion (not landed in this round) is where commitment → fulfillment-event walks would live. `explain-posting` walks the audit-trail substrate; commitment walks are upstream of the audit trail.
+- Does NOT emit events. Bus-style notification is `kontor.event-bus` (ADR-092).
+
+**Test discipline.** `test/kontor/explain_test.clj`. 10 deftests / 41 assertions. Tests cover balance composition, bitemporal `:as-of-valid` filtering, transaction shape, status-history walking, audit-doc resolution via support-doc, the IRI reverse-lookup across all six ADR-090 seams (account / partner / commodity / and the empty case), and the "unknown eid returns nil" robustness case.
+
+**Implication.** +1 namespace (`src/kontor/explain.clj`, ~280 LoC), +1 test namespace, no behavior changes elsewhere, no schema changes. Pure addition. McComb's "explain the number" loop is now substrate-tier — any consumer can build a "drill-down" UI in their own ergonomics on top of the data shape.
+
+**Research backing.** doc/research/80-mccomb-future-of-accounting-vs-kontor.md (§7 — substrate-tier graph walk recommendation); doc/research/87-mccomb-substrate-seams-round-1.md (this round's rationale + design calls).
+
+Date: 2026-05-18.
+
+## ADR-092 — `kontor.event-bus`: in-process pub-sub for kontor transactions
+
+**Decision.** Introduce `kontor.event-bus` as a substrate-tier in-process publish/subscribe facility for committed transactions. The public surface:
+
+- **`register-handler!` / `unregister-handler!`** — subscribe / unsubscribe a handler `(fn [event] …)` with optional `:filter` and `:tag`. Returns a handler-id.
+- **`dispatch`** — synchronously invoke every passing-`:filter` handler with one event map. Returns `{:invoked count}` with handler exceptions captured in metadata.
+- **`commit-and-emit`** — a `:commit` fn for `kontor.process/run-process` (or any other path) that runs `kontor.validation/transact-with-validation` and then dispatches the bus event.
+- **`->event`** — pure constructor for the event map shape; exposed so consumers with their own commit path can fire the bus directly.
+
+Event shape (`{:event/kind :event/conn :event/tx-report :event/transactions :event/at}`). Currently only one `:event/kind`: `:transaction/committed`. Future kinds compose orthogonally; consumers filter on `:event/kind`.
+
+**Why.** Research note 80 §2.3 + §4.2 identified event-driven storage as a defining McComb position. kontor's substrate IS event-shaped at the storage tier (every datom is a fact; every commit is an event), but a *consumer reacting to a commit* (refreshing a cache, mirroring to an external system, notifying a UI) has no canonical hook today. They have to poll the tx-log, mount their own `:tx-wrap`, or build the integration inside a `kontor.process` orchestrator. ADR-092 closes that gap with the smallest possible primitive.
+
+**Substrate posture.** In-process pub-sub only. The bus is NOT Kafka / NATS / Redis Streams / RabbitMQ. A consumer wanting persistent / cross-process / cross-machine delivery writes an adapter on top — kontor explicitly stays in-process to honor ADR-001 (single-dep on datahike) and the single-runtime ADR-010 stance (no JS, no Python, no shell scripts).
+
+**Failure isolation.** Handlers run AFTER `d/transact` returns. A handler crashing does NOT roll back the commit — the datahike commit is the durable event, the bus is the convenience. `dispatch` catches handler exceptions and accumulates them under `:errors` metadata on the return value; the writer's thread never sees a handler exception.
+
+**Ordering.** Handler dispatch order is unspecified across handlers. A consumer needing ordering chains handlers internally (their `:filter` matches all events, their handler invokes their own subscriber list in deterministic order). The bus deliberately stays simple.
+
+**Synchronicity.** Handlers run synchronously on the writer's thread by default. A consumer wanting async dispatch wraps their handler in a `future` or routes through their own work queue. The kernel offers no async facility because it would require a thread pool / lifecycle the single-dep constraint can't sustain.
+
+**Process-local registry.** `kontor.event-bus/handlers` is a `defonce`'d atom. The registry survives ns reload and is shared across all connections — a single handler registered once fires for every conn's commits. Consumers wanting per-conn dispatch carry conn equality in their handler:
+
+```clojure
+(register-handler! (fn [ev]
+                     (when (= my-conn (:event/conn ev))
+                       …)))
+```
+
+Per-conn registries were considered (and rejected) for v1: most consumers run one conn per process, and the equality check is trivial for the multi-conn case. Adding a per-conn registry would couple the bus's lifecycle to conn lifecycle, and conn shutdown is a tricky cleanup signal datahike doesn't surface uniformly.
+
+**What this composes with.**
+
+- `kontor.process/run-process` — pass `:commit bus/commit-and-emit` to publish every process's commit.
+- `kontor.validation/transact-with-validation` — same composition path (`commit-and-emit` calls it directly).
+- A consumer's own commit path — call `(dispatch (->event conn tx-report))` after their own `d/transact`.
+
+**What this does NOT do.**
+
+- Does NOT publish *every* datahike write. Only writes routed through `commit-and-emit` (or where the consumer explicitly calls `dispatch`). Bare `d/transact` calls outside the gate bypass the bus deliberately — the substrate isn't a global tracer.
+- Does NOT publish on transactor-side commits (pg-datahike SQL writes through `:tx-wrap`). Those go through `validation/validate-and-apply` inside the writer; the bus is outside-the-writer. A separate ADR can add that path if a consumer asks.
+- Does NOT carry datom-level diff. The event carries the tx-report (with `:tx-data` as datoms) + a pulled summary of touched `:transaction` entities. Consumers wanting per-datom callbacks unpack `(:tx-data tx-report)` themselves.
+
+**Test discipline.** `test/kontor/event_bus_test.clj`. 9 deftests / 27 assertions. Tests cover register / unregister round-trip, filter semantics, exception isolation, the `commit-and-emit` integration with `kontor.process/run-process`, the handler-crash-doesn't-block-commit invariant, and the no-handlers-no-emission base case.
+
+**Implication.** +1 namespace (`src/kontor/event_bus.clj`, ~210 LoC), +1 test namespace, no behavior change for existing callers (the bus only fires on opt-in routing through `commit-and-emit`). A consumer wanting "every kontor write publishes" wires their app's commit fn to `commit-and-emit` once.
+
+**Future extensions (deferred).**
+
+- Additional `:event/kind`s: `:status-history/changed`, `:audit-doc/created`, `:posting/posted`. Each is a small constructor + filter contract; ship per-need.
+- Adapter to Kafka / NATS — write outside the kernel; the adapter subscribes to the bus and forwards.
+- Per-conn registries — defer until multi-conn deployment friction emerges.
+- Async dispatch — defer until a real handler is slow enough to motivate it.
+
+**Research backing.** doc/research/80-mccomb-future-of-accounting-vs-kontor.md (§2.3 + §4.2 — event-driven storage); doc/research/87-mccomb-substrate-seams-round-1.md (round 1 implementation rationale).
 
 Date: 2026-05-18.

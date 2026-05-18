@@ -83,7 +83,20 @@
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "ISO-4217 alphabetic currency code, when applicable.
-                     Set iff this is a fiat currency."}])
+                     Set iff this is a fiat currency."}
+
+   ;; ADR-090: data-centric concept-iri seam. FIBO publishes currency
+   ;; classes (https://www.omg.org/spec/EDMC-FIBO/...); ISO publishes
+   ;; canonical IRIs for ISO-4217 codes. Substrate carries the IRI so a
+   ;; consumer can RDF-export or align with FIBO without redoing the
+   ;; mapping at every consumer.
+   {:db/ident       :commodity/concept-iri
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "Optional IRI identifying this commodity in an
+                     external taxonomy (FIBO currency class, ISO IRI,
+                     internal gist URI). ADR-090."}])
 
 ;; ============================================================================
 ;; FX rate — exchange-rate sample for currency translation.
@@ -317,7 +330,25 @@
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Many-ref to :account-code entities, one per
-                     (account, regulator) pair. See ADR-019."}])
+                     (account, regulator) pair. See ADR-019."}
+
+   ;; ADR-090: data-centric concept-iri seam — generalized from
+   ;; :account-tag/concept-iri. Lets an account carry one IRI from an
+   ;; external concept vocabulary (XBRL line item, FIBO Account class,
+   ;; internal gist URI, etc.). Distinct from :account/external-codes
+   ;; (which carries regulator short-codes via M2M :account-code refs)
+   ;; — concept-iri is the *cross-system concept identity* a McComb-style
+   ;; consumer dereferences; external-codes are the *per-regulator
+   ;; reporting codes* a country module routes to. Both can coexist on
+   ;; one account; neither is required.
+   {:db/ident       :account/concept-iri
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "Optional IRI binding this account to an external
+                     concept (XBRL line item, FIBO class, internal
+                     gist URI). Substrate carries; consumer dereferences.
+                     ADR-090."}])
 
 ;; ============================================================================
 ;; Document-type registry — ADR-020.
@@ -375,7 +406,21 @@
 
    {:db/ident       :document-type/active?
     :db/valueType   :db.type/boolean
-    :db/cardinality :db.cardinality/one}])
+    :db/cardinality :db.cardinality/one}
+
+   ;; ADR-090: data-centric concept-iri seam. Fiscal document types are
+   ;; named differently by every regulator (NF-e, fapiao, Rechnung,
+   ;; Invoice, etc.) but most map to a small number of cross-system
+   ;; concepts (UBL InvoiceTypeCode, UN/EDIFACT document codes, XBRL
+   ;; concepts). Substrate carries the IRI so a consumer can cross-walk
+   ;; to UBL / Peppol / iXBRL without re-doing the mapping.
+   {:db/ident       :document-type/concept-iri
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "Optional IRI identifying this document type in an
+                     external taxonomy (UBL, Peppol, FIBO, regulator
+                     namespace). ADR-090."}])
 
 (def ^:private account-code-attrs
   [{:db/ident       :account-code/account
@@ -447,22 +492,20 @@
    ;; concept's IRI here. Consumers who don't care leave it blank —
    ;; the rest of the report engine continues to operate on tag names.
    ;;
+   ;; ADR-090 (note 88) generalizes this seam to :account, :partner,
+   ;; :commodity, :tax, :document-type — all use the same single-
+   ;; cardinality indexed string convention.
+   ;;
    ;; Format: an absolute IRI uniquely identifying the concept within
    ;; its taxonomy. Convention follows XBRL's qname-to-IRI rule:
    ;;   {namespace-URI}#{local-name}
    ;; e.g. "http://xbrl.ifrs.org/taxonomy/2024-03-27/ifrs-full#Revenue"
    ;;
-   ;; Bitemporal: the IRI typically encodes a taxonomy version
-   ;; (e.g. .../2024-03-27/...). When taxonomies are themselves
-   ;; ingested into kontor as data (a future companion module), the
-   ;; concept-iri here doubles as a foreign key into that catalog,
-   ;; and the bitemporal axis makes the version answer time-correct
-   ;; (\"which IRI did this tag point at on the filing date?\").
-   ;;
    ;; Substrate does no validation beyond schema-typing the field.
    ;; Verification of (concept-iri, taxonomy, calculation-linkbase)
-   ;; consistency is companion-tier — see research note 78 §7-9 for
-   ;; the design space. ADR-019 carries the rationale.
+   ;; consistency is companion-tier — see research note 78 §7-9 +
+   ;; note 88 for the design space. ADR-019 + ADR-090 carry the
+   ;; rationale.
    {:db/ident       :account-tag/concept-iri
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
@@ -471,7 +514,7 @@
                      Format: {namespace-URI}#{local-name}. The substrate
                      stores + indexes; verification against an actual
                      taxonomy is companion-tier (research note 78).
-                     ADR-019 addendum."}])
+                     ADR-019 addendum + ADR-090 generalization."}])
 
 ;; ============================================================================
 ;; Journal — categorization of journal entries.
@@ -595,7 +638,21 @@
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Provider name: LexisNexis, Refinitiv,
-                     ComplyAdvantage, Manual, …"}])
+                     ComplyAdvantage, Manual, …"}
+
+   ;; ADR-090: data-centric concept-iri seam. FIBO publishes a
+   ;; comprehensive party / counterparty ontology (fibo-be:Organization,
+   ;; fibo-be:CounterpartyRole); gist publishes gist:Person /
+   ;; gist:Organization. LEI codes have canonical IRIs at gleif.org. The
+   ;; substrate stores the IRI so a consumer can align with an external
+   ;; party graph without re-doing the mapping at every consumer.
+   {:db/ident       :partner/concept-iri
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "Optional IRI identifying this partner in an
+                     external taxonomy (FIBO Organization / Person,
+                     gist URI, LEI gleif IRI). ADR-090."}])
 
 ;; ============================================================================
 ;; ADR-039: master-data primitives — merge, bank-account, partner-bank-
@@ -1500,7 +1557,19 @@
                      Comptroller). Filing reports group by this
                      attribute. Required from CA / US localizations
                      forward; optional for single-authority
-                     localizations like DE / AT."}])
+                     localizations like DE / AT."}
+
+   ;; ADR-090: data-centric concept-iri seam. Tax categories can be
+   ;; mapped to filing-taxonomy concepts (XBRL VAT line items, FIBO
+   ;; TaxIdentifier, GST/HST authority IRIs). Substrate carries; consumer
+   ;; aligns at filing time.
+   {:db/ident       :tax/concept-iri
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "Optional IRI identifying this tax in an external
+                     taxonomy (XBRL, FIBO, regulator namespace).
+                     ADR-090."}])
 
 (def ^:private tax-rep-attrs
   [{:db/ident       :tax-rep/tax
