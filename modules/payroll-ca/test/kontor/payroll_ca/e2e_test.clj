@@ -258,9 +258,10 @@
         ;;   Sophie employee 82 + employer 114.80 = 196.80
         ;;   Total = 473.90
         (is (= 473.90M (:amount (:ei summary))))))
-    (testing "Emit provider produced one audit-doc with :payroll category"
+    (testing "Emit provider produced one audit-doc with :payroll-filing category"
+      ;; Note 86 P0-86-2 — canonical vocabulary; was :payroll.
       (let [docs (d/q '[:find [?e ...]
-                        :where [?e :audit-doc/category :payroll]]
+                        :where [?e :audit-doc/category :payroll-filing]]
                       db)]
         (is (>= (count docs) 1))))))
 

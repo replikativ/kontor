@@ -76,11 +76,15 @@
     (warn-if-qc-detected! payroll-facts)
     (let [language (or (:language opts) :en)
           per-fact-count (count payroll-facts)]
+      ;; :audit-doc/category :payroll-filing per note 86 P0-86-2
+      ;; (canonical vocabulary; this is the periodic payroll-engine
+      ;; summary audit-doc and aligns with the DE LODAS Importdatei +
+      ;; CA PD7A audit-doc both classed :payroll-filing).
       [{:audit-doc/code (str "PAYROLL-EVENT-" entity-eid "-" pay-period-eid)
         :audit-doc/type :payroll-run-summary
         :audit-doc/title (format "Payroll run (%d facts) for pay-period %d, entity %d"
                                  per-fact-count pay-period-eid entity-eid)
-        :audit-doc/category :payroll
+        :audit-doc/category :payroll-filing
         :audit-doc/language language
         :audit-doc/uploaded-at (java.util.Date.)}])))
 

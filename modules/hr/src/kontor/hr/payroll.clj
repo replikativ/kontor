@@ -170,22 +170,48 @@
                                     journal (assoc :transaction/journal journal))
                                   :postings postings})
                 tx-frag (posting/build-transaction tx-input)
-                emit-docs (pp/emit-payroll-events emit-provider facts
-                                                  {:pay-period-eid pp-eid
-                                                   :entity-eid entity})
+                ;; P0-86-1 fix — give every emit-doc a tempid so the
+                ;; payroll-run row can reference them via
+                ;; :payroll-run/emit-docs. The substrate guarantees:
+                ;; if the emit-provider produced N audit-docs for this
+                ;; pay-period, all N are reachable from the run row.
+                ;; Providers that pre-assign :db/id keep it; those that
+                ;; don't get "payroll-emit-<i>" assigned here.
+                emit-docs-raw (pp/emit-payroll-events emit-provider facts
+                                                      {:pay-period-eid pp-eid
+                                                       :entity-eid entity})
+                emit-docs (mapv (fn [i doc]
+                                  (if (:db/id doc)
+                                    doc
+                                    (assoc doc :db/id (str "payroll-emit-" i))))
+                                (range)
+                                emit-docs-raw)
+                emit-tempids (mapv :db/id emit-docs)
                 run-frag (create-payroll-run-tx-data
                           db {:code run-code
                               :pay-period pp-eid
                               :provider-id (pp/provider-id compute-provider)
                               :facts facts
-                              :tempid "payroll-run-1"})]
+                              :tempid "payroll-run-1"})
+                run-frag (if (seq emit-tempids)
+                           ;; The single-row map produced by
+                           ;; create-payroll-run-tx-data — augment with
+                           ;; :payroll-run/emit-docs (cardinality/many).
+                           (mapv (fn [row]
+                                   (if (and (map? row)
+                                            (= "payroll-run-1" (:db/id row)))
+                                     (assoc row :payroll-run/emit-docs emit-tempids)
+                                     row))
+                                 run-frag)
+                           run-frag)]
             {:tx-data (vec (concat tx-frag
                                    emit-docs
                                    run-frag
                                    ;; link the run to the transaction
                                    [{:db/id "payroll-run-1"
                                      :payroll-run/payroll-transaction "payroll-tx-1"}]))
-             :ctx {:facts facts :run-tempid "payroll-run-1"}}))]
+             :ctx {:facts facts :run-tempid "payroll-run-1"
+                   :emit-tempids emit-tempids}}))]
     (process/run-process
      conn (cond-> {:steps [pp-step]}
             vt-from (assoc :vt-from vt-from)

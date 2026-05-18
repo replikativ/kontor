@@ -163,7 +163,7 @@
                                       :entity-eid "ent-1"})]
     (is (= 1 (count docs)))
     (let [doc (first docs)]
-      (is (= :tax-filing (:audit-doc/category doc)))
+      (is (= :payroll-filing (:audit-doc/category doc)))
       (is (= :emit-payload (:audit-doc/type doc)))
       (is (= "LODAS-DE-2025-11" (:audit-doc/code doc)))
       (is (str/includes? (:audit-doc/inline-payload doc) "[Allgemein]"))

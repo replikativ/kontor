@@ -425,3 +425,72 @@
         (is (= "TX-PAYROLL-DE-2026-05" (:transaction/external-id tx)))
         (is (= 2 (count postings)))
         (is (zero? (.compareTo ^java.math.BigDecimal sum 0M)))))))
+
+;; ============================================================================
+;; run-payroll! links emit-docs via :payroll-run/emit-docs (P0-86-1)
+;; ============================================================================
+;; Note 86 P0-86-1: the substrate orchestrator must populate
+;; :payroll-run/emit-docs with every doc the EmitProvider produced.
+;; Two-doc provider exercises the cardinality/many path.
+
+(defrecord TwoDocEmit [opts]
+  ppro/PayrollEmitProvider
+  (emit-payroll-events [_ _facts {:keys [pay-period-eid]}]
+    [{:audit-doc/code (str "EMIT-A-" pay-period-eid)
+      :audit-doc/type :emit-payload
+      :audit-doc/category :payroll-filing
+      :audit-doc/storage-uri "file:///tmp/a.txt"
+      :audit-doc/uploaded-at (java.util.Date.)}
+     {:audit-doc/code (str "EMIT-B-" pay-period-eid)
+      :audit-doc/type :emit-payload
+      :audit-doc/category :payroll-filing
+      :audit-doc/storage-uri "file:///tmp/b.txt"
+      :audit-doc/uploaded-at (java.util.Date.)}]))
+
+(deftest run-payroll-links-emit-docs
+  (let [conn (bootstrap)
+        _ (person/create-person! conn {:external-id "P-jane"
+                                       :given-name "Jane" :family-name "Doe"})
+        db (d/db conn)
+        jane (hr/person-by-external-id db "P-jane")
+        de (ref-eid db :entity/code "DE-GMBH")
+        eur (ref-eid db :commodity/symbol "EUR")
+        period (ref-eid db :period/name "2026-05")
+        journal (ref-eid db :journal/code "PAY-DE")
+        wages-exp (ref-eid db :account/code "4120")
+        wages-pay (ref-eid db :account/code "1741")
+        _ (employment/hire! conn {:code "EMP-DE-jane" :person jane :entity de
+                                  :start-date #inst "2026-05-01"})
+        emp-eid (hr/employment-by-code (d/db conn) "EMP-DE-jane")
+        _ (pp/create-pay-period! conn {:code "DE-2026-05" :entity de
+                                       :start-date #inst "2026-05-01"
+                                       :end-date #inst "2026-05-31"
+                                       :frequency :monthly
+                                       :fiscal-period period})
+        pp-eid (hr/pay-period-by-code (d/db conn) "DE-2026-05")
+        report (payroll/run-payroll!
+                conn {:pay-period pp-eid
+                      :entity de
+                      :employments [emp-eid]
+                      :compute-provider (->MockCompute {})
+                      :posting-builder (->MockPostingBuilder {:eur-eid eur})
+                      :emit-provider (->TwoDocEmit {})
+                      :accounts {:wages-expense wages-exp
+                                 :wages-payable wages-pay}
+                      :run-code "RUN-EMIT-001"
+                      :tx-code "TX-EMIT-001"
+                      :journal journal
+                      :commodity eur})
+        db (:db-after report)
+        run-eid (d/q '[:find ?r . :in $ ?c
+                       :where [?r :payroll-run/code ?c]]
+                     db "RUN-EMIT-001")
+        run (d/pull db [{:payroll-run/emit-docs [:audit-doc/code
+                                                 :audit-doc/category]}]
+                    run-eid)
+        emit-docs (:payroll-run/emit-docs run)]
+    (testing ":payroll-run/emit-docs has both emit-provider outputs"
+      (is (= 2 (count emit-docs)))
+      (is (= #{:payroll-filing} (set (map :audit-doc/category emit-docs))))
+      (is (= #{"EMIT-A" "EMIT-B"}
+             (set (map #(subs (:audit-doc/code %) 0 6) emit-docs)))))))

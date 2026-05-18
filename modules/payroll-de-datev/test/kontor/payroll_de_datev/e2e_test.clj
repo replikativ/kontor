@@ -182,15 +182,15 @@
                            [:posting/amount
                             {:posting/account [:account/code]}]}]}]
                     run-eid)
-        ;; The substrate orchestrator transacts emit-docs but does
-        ;; not link them via :payroll-run/emit-docs (note 82 P2
-        ;; followup — see ADR-076). Query the audit-doc directly
-        ;; by the period-eid attr the emitter writes.
-        emit-doc-eid (d/q '[:find ?d .
-                            :in $ ?pp
-                            :where [?d :audit-doc/payroll-period ?pp]]
-                          db pp-eid)
-        emit-doc (when emit-doc-eid (d/pull db '[*] emit-doc-eid))]
+        ;; Note 86 P0-86-1 fix: substrate orchestrator now links
+        ;; emit-docs via :payroll-run/emit-docs. Query through the
+        ;; run row's reverse-walk; verify the substrate contract.
+        emit-doc-eids (mapv :db/id
+                            (:payroll-run/emit-docs
+                             (d/pull db [{:payroll-run/emit-docs [:db/id]}]
+                                     run-eid)))
+        emit-doc (when (seq emit-doc-eids)
+                   (d/pull db '[*] (first emit-doc-eids)))]
     (testing "payroll-run row + control totals"
       (is (= 4000.00M (:payroll-run/control-total-gross run)))
       (is (= 2500.00M (:payroll-run/control-total-net   run)))
@@ -224,7 +224,7 @@
               (is (zero? (.compareTo ^java.math.BigDecimal v 0M))))))))
     (testing "EmitProvider produced one LODAS Importdatei audit-doc"
       (is (some? emit-doc))
-      (is (= :tax-filing (:audit-doc/category emit-doc)))
+      (is (= :payroll-filing (:audit-doc/category emit-doc)))
       (is (= "LODAS-DE-2025-11" (:audit-doc/code emit-doc)))
       (is (str/includes? (:audit-doc/inline-payload emit-doc) "[Allgemein]"))
       (is (str/includes? (:audit-doc/inline-payload emit-doc) "Ziel=LODAS"))
