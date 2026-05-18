@@ -19,7 +19,9 @@
    The ROU asset's *depreciation* entry is NOT here — it is built by
    `kontor.asset.posting/plan-depreciation-charge`, since the ROU
    asset is an `:asset` and reuses the kontor-asset machinery whole."
-  (:require [kontor.posting :as posting]))
+  (:require [kontor.fx :as fx]
+            [kontor.money :as money]
+            [kontor.posting :as posting]))
 
 ;; ============================================================================
 ;; Internals (mirrors kontor.asset.posting)
@@ -172,20 +174,64 @@
    (ADR-064). The lease liability is a MONETARY item — retranslated to
    the reporting currency at the closing rate; the ROU asset is
    NON-MONETARY — frozen at the historical rate, so it does NOT move
-   here. `:gain-loss` is the signed retranslation difference the
-   consumer computes from the rates — kontor ships no FX-rate engine,
-   the closing rate is a consumer input like `:discount-rate`. A
-   POSITIVE `:gain-loss` is an FX LOSS (the liability grew in
-   reporting terms → debit P&L); a negative one an FX gain.
+   here.
 
-   Required: :liability-account, :fx-account, :gain-loss, :commodity,
-             :journal, :date
-   Optional: :ledger, :narration, :external-id, :posted-at"
-  [{:keys [liability-account fx-account gain-loss] :as spec}]
+   `:gain-loss` is the signed retranslation difference, a POSITIVE
+   value being an FX LOSS (the liability grew in reporting terms →
+   debit P&L), a negative one an FX gain.
+
+   Two modes:
+
+     1. Consumer-supplied (legacy, pre-ADR-072):
+        Pass `:gain-loss` directly. The kernel does no FX-rate math.
+
+     2. Provider-driven (ADR-072):
+        Pass `:fx-provider` + `:book-balance` (the liability balance
+        in the lease's book commodity) + `:prior-rc-carrying` (the
+        previously-translated carrying amount in the reporting
+        commodity) + `:rc-commodity` (the reporting commodity).
+        :gain-loss is computed as
+          new-rc - prior-rc-carrying
+        where new-rc = book-balance × closing-rate (book→reporting).
+        :rate-type defaults to :closing per IAS 21 for monetary items.
+
+   Required: :liability-account, :fx-account, :commodity, :journal,
+             :date, AND either :gain-loss OR
+             (:fx-provider + :book-balance + :prior-rc-carrying +
+              :rc-commodity)
+   Optional: :ledger, :narration, :external-id, :posted-at,
+             :rate-type (default :closing)"
+  [{:keys [liability-account fx-account gain-loss
+           fx-provider book-balance prior-rc-carrying rc-commodity
+           rate-type date]
+    :or {rate-type :closing}
+    :as spec}]
   (when-not liability-account (throw (ex-info ":liability-account required" {})))
   (when-not fx-account        (throw (ex-info ":fx-account required" {})))
-  (when (nil? gain-loss)      (throw (ex-info ":gain-loss required" {})))
-  (plan-adjustment
-   (assoc spec :legs [{:account fx-account :amount gain-loss}
-                      {:account liability-account
-                       :amount (.negate ^java.math.BigDecimal gain-loss)}])))
+  (let [g-l (cond
+              (some? gain-loss)
+              gain-loss
+
+              (and fx-provider book-balance prior-rc-carrying rc-commodity)
+              (let [book-commodity (:commodity spec)
+                    _ (when-not book-commodity
+                        (throw (ex-info "plan-fx-retranslation: :commodity required for provider mode"
+                                        {})))
+                    _ (when-not date
+                        (throw (ex-info "plan-fx-retranslation: :date required for provider mode"
+                                        {})))
+                    book-money (money/money book-balance book-commodity)
+                    new-rc-money (fx/convert book-money fx-provider
+                                             {:to rc-commodity
+                                              :at-date date
+                                              :rate-type rate-type})]
+                (.subtract ^java.math.BigDecimal (:amount new-rc-money)
+                           ^java.math.BigDecimal prior-rc-carrying))
+
+              :else
+              (throw (ex-info ":gain-loss OR (:fx-provider + :book-balance + :prior-rc-carrying + :rc-commodity) required"
+                              {:got (-> spec keys set)})))]
+    (plan-adjustment
+     (assoc spec :legs [{:account fx-account :amount g-l}
+                        {:account liability-account
+                         :amount (.negate ^java.math.BigDecimal g-l)}]))))

@@ -55,6 +55,7 @@
             [clojure.string :as str]
             [datahike.api :as d]
             [kontor.bitemporal :as kbt]
+            [kontor.fx :as fx]
             [kontor.money :as money])
   (:import [java.util Date]))
 
@@ -279,10 +280,33 @@
                        the primary book.
      :entity         — optional entity eid / lookup-ref (ADR-031). When
                        set, only postings with that `:posting/entity`
-                       are summed — trans-national per-entity reports."
+                       are summed — trans-national per-entity reports.
+     :translate-to   — optional ISO-4217 string (e.g. \"EUR\"). When
+                       set, each line's `:line/value` Money is
+                       translated into this commodity via the
+                       FxRateProvider supplied as `:fx-provider`,
+                       using `:rate-type` (default `:closing` —
+                       conservative IAS 21 default for mixed BS/PL
+                       reports; pass `:average` for pure-P&L reports).
+                       The translated value is added as
+                       `:line/value-translated`; the original
+                       per-commodity `:line/value` is preserved for
+                       audit. The `at-date` for the translation
+                       defaults to the report's `:to` (or `now` if
+                       no `:to` is supplied). Requires `:fx-provider`
+                       when `:translate-to` is set.
+     :fx-provider    — an FxRateProvider (ADR-072). Required when
+                       `:translate-to` is set; ignored otherwise.
+     :rate-type      — IAS 21 rate-type keyword for translation
+                       (default `:closing`)."
   ([conn report] (compute-report conn report {}))
-  ([conn report {:keys [from to as-of-tx include-states ledger entity]
-                 :or   {include-states default-included-states}}]
+  ([conn report {:keys [from to as-of-tx include-states ledger entity
+                        translate-to fx-provider rate-type]
+                 :or   {include-states default-included-states
+                        rate-type :closing}}]
+   (when (and translate-to (nil? fx-provider))
+     (throw (ex-info "compute-report: :translate-to requires :fx-provider"
+                     {:translate-to translate-to})))
    (let [as-of-tx (or as-of-tx (now))
          db (-> conn d/db (d/as-of as-of-tx))
          ledger-pred (ledger-filter-pred db ledger)
@@ -295,17 +319,26 @@
                                  (ledger-pred p)
                                  (entity-pred p)))
                           pulled)
+         translate-at (or to (now))
          lines (mapv (fn [{:keys [:line/code :line/label :line/expression]}]
-                       (let [{:keys [value postings]} (run-engine filtered expression {})]
-                         {:line/code code
-                          :line/label label
-                          :line/value value
-                          :line/postings postings}))
+                       (let [{:keys [value postings]} (run-engine filtered expression {})
+                             line {:line/code code
+                                   :line/label label
+                                   :line/value value
+                                   :line/postings postings}]
+                         (if translate-to
+                           (assoc line :line/value-translated
+                                  (fx/convert value fx-provider
+                                              {:to translate-to
+                                               :at-date translate-at
+                                               :rate-type rate-type}))
+                           line)))
                      (:report/lines report))]
      {:report/name (:report/name report)
       :report/country (:report/country report)
       :report/window {:from from :to to}
       :report/lines lines
+      :report/translated-to translate-to
       :report/computed-at (now)})))
 
 (defn line-value
