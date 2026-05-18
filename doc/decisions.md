@@ -8711,3 +8711,74 @@ Per-conn registries were considered (and rejected) for v1: most consumers run on
 **Research backing.** doc/research/80-mccomb-future-of-accounting-vs-kontor.md (§2.3 + §4.2 — event-driven storage); doc/research/87-mccomb-substrate-seams-round-1.md (round 1 implementation rationale).
 
 Date: 2026-05-18.
+
+## ADR-082 — `kontor-payroll-mx`: CFDI Nómina 1.2 emit + Código Agrupador GL routing
+
+**Status.** Accepted. Stage R C8.
+
+**Context.** Mexico mandates electronic payroll (CFDI Nómina) for every payslip. The payslip XML is a CFDI 4.0 envelope (`TipoDeComprobante='N'`) carrying a `<nomina12:Nomina>` complemento, stamped by a PAC (Proveedor Autorizado de Certificación). Without a CFDI Nómina the worker's pay is not deductible for ISR and the worker cannot prove income. The kernel must therefore (a) produce the unsigned CFDI Nómina XML payload from canonical payroll facts, (b) route per-employee wage rows into the SAT Código Agrupador chart of accounts (the same chart the DPI / IVA returns lean on, shipped by `kontor.l10n-mx`), and (c) record the timbre / PAC stamp returned by the partner as an `:audit-doc` so the audit chain documents the filing.
+
+The dominant mid-market MX payroll engines are CONTPAQi Nóminas, Aspel NOI, Microsip, NominasOnline. None of them compute payroll on the kontor side; they export a per-period file we *ingest*. The kernel therefore takes the same shape as `kontor-payroll-ca` (and the upcoming `kontor-payroll-de-datev`) — a Compute provider parses vendor output, a Posting builder routes the canonical facts to the GL, and an Emit provider produces the country-specific clearance XML.
+
+**Decision.** Ship `kontor-payroll-mx` as a single companion module composing three protocols.
+
+1. **`PayrollComputeProvider`** — vendor-export parsers. v1.0 ships `ContpaqiNominasProvider` and `AspelNoiProvider` (CSV; the XLSX export shares the column shape and is a consumer concern). Each parser projects rows into the canonical `:payroll-facts` map. The provider carries a configurable `code-map` from vendor concept code → kontor wage-type, so per-customer custom catalogs do not require provider subclasses.
+
+2. **`PayrollEmitProvider`** — country-specific clearance-shape XML. v1.0 ships `MxCfdiNominaEmitProvider`, which assembles the `<nomina12:Nomina>` complemento + the CFDI 4.0 envelope. The XML is **unsigned**; the PAC stamp is partner-side. The provider returns a map carrying the load-bearing `:audit-doc/category :payroll-filing` and `:audit-doc/language :es-mx` tags per the task spec — the consumer hashes the XML and persists the `:audit-doc` via `kontor.audit-doc/create-doc!`.
+
+3. **`posting-builder/build-period-tx-data`** — aggregates per-employee wage rows across an entire period and routes the totals through the SAT Código Agrupador. The chart-of-accounts entries are looked up by `:account/code` (the SAT 601.01 / 601.02 / 206.01 / 206.04 / 206.05 / 206.06 / 601.05 / 601.06 / 601.84 strings). One balanced journal records the period. Sum-to-zero is enforced by `kontor.posting/build-transaction`'s structural validator.
+
+**Wage-type vocabulary.** The module ships a 14-entry registry covering the task spec: `:sueldo`, `:hora-extra-doble`, `:hora-extra-triple`, `:aguinaldo`, `:prima-vacacional`, `:vales-de-despensa`, `:fondo-de-ahorro`, `:isr-retencion`, `:imss-trabajador`, `:imss-patron`, `:infonavit-trabajador`, `:infonavit-patron`, `:rcv-patron`, `:subsidio-al-empleo`. Each entry binds the kontor keyword to (a) the SAT catálogo code (`c_TipoPercepcion` / `c_TipoDeduccion` / `c_TipoOtroPago`) per Anexo 20, (b) the `:percepcion | :deduccion | :otro-pago` partition that drives the CFDI block placement, (c) the SAT Código Agrupador account it routes to, and (d) whether the row is `:employer-only?` (IMSS patrón, INFONAVIT patrón, RCV patrón — these go to the GL but NOT to the worker-side CFDI). Consumers extend with custom wage-types by registering against the same shape; the kernel does not enumerate.
+
+**GL routing (Código Agrupador):**
+
+```
+Dr 601.01 Sueldos y Salarios          (sueldo + horas extra)
+Dr 601.02 Aguinaldo + Prima vacacional
+Dr 601.05 IMSS patronales              (employer-only)
+Dr 601.06 INFONAVIT patronales         (employer-only)
+Dr 601.84 Otras prestaciones           (vales / fondo ahorro / non-taxable)
+
+Cr 206.01 Sueldos por pagar (neto)
+Cr 206.04 ISR retenido − subsidio al empleo
+Cr 206.05 IMSS por pagar (trabajador + patrón + RCV-patron)
+Cr 206.06 INFONAVIT por pagar (trabajador + patrón)
+```
+
+The provision aguinaldo accrual posts `Dr 601.02 / Cr 206.07`; the 206.07 code is the conventional Provisión Aguinaldo sub-account, overridable via `:provision-code` opt because not every chart installs it.
+
+**Accruals.** `kontor.payroll-mx.accrual/aguinaldo-monthly-accrual` recognizes 1/12 of the legal entitlement each month (LFT Art. 87, minimum 15 days of salary by December 20). `prima-vacacional` computes the 25% surcharge on vacation pay (LFT Art. 80). The post-2023 LFT reform (Vacaciones Dignas) is encoded in `vacation-days-by-year` and the `vacation-days` function (12/14/16/18/20 + 2 every five years).
+
+**Out of v1.0 (documented, not shipped):**
+- **SUA** (Sistema Único de Autodeterminación) — the IMSS/INFONAVIT/RCV monthly remittance file. Fixed-width binary format, separate clearance shape, lives in a follow-up `kontor.payroll-mx.sua` namespace once the IMSS spec is captured.
+- **PTU** (Participación de Trabajadores en Utilidades) — 10% of taxable profit, distributed annually by May 30. Needs the corporate ISR base; deferred to Stage R+ corporate-tax substrate.
+- **DIOT** (Declaración Informativa de Operaciones con Terceros) — vendor reporting, lives in `kontor.l10n-mx`, not here.
+- **PAC integration** — submitting the unsigned XML to a PAC and receiving the TFD UUID is partner-side (`kontor-l10n-mx-pac-*` adapters). The kernel records the returned UUID on `:audit-doc` per ADR-051; no PAC API keys are bundled.
+
+**Schema additions.**
+- `:audit-doc/category :db.type/keyword` — open-set keyword (`:payroll-filing`, `:tax-filing`, `:regulator-clearance`, …). Module-extensible.
+- `:audit-doc/language :db.type/keyword` — BCP-47 tag (`:es-mx`, `:de-de`, …). Used downstream for localized rendering.
+
+Both are kernel attrs (added to `src/kontor/schema.clj` under the `audit-doc-attrs` block) so other modules (DPI, e-invoice, lease disclosures, …) can reuse them.
+
+**Discipline (per CLAUDE.md + ADR-068):**
+- BigDecimal HALF-EVEN throughout; no doubles.
+- Every business write exposes a `*-tx-data` pure builder (`build-period-tx-data`, `build-aguinaldo-accrual-tx-data`).
+- No bundled SAT / IMSS / INFONAVIT rate tables. The consumer's payroll engine has them.
+- No PAC credentials. No partner code in the kernel.
+- Spanish (`:es-mx`) descriptions live in the wage-type registry — they appear in CFDI `Concepto` attributes and in `:audit-doc/description`, both legitimately localized by the regulator's spec.
+
+**Trade-offs.**
+
+*Aggregation-per-period journal vs per-employee journal.* We aggregate by SAT Código Agrupador across all employees in one period → one balanced journal. This matches how CONTPAQi and Aspel customers reconcile (per-period totals to a per-month bank reconciliation). The per-employee detail lives in `:payroll-facts` and in the per-employee CFDI Nómina XML; consumers wanting per-employee GL rows extend by emitting one `build-period-tx-data` per employee. We do not split because the kernel cannot infer payroll-cost-center routing without an analytic-plan mapping — that's a Stage R+ concern, deferred for the same reason as PTU.
+
+*Employer-only rows in `:percepcion` partition.* IMSS patrón / INFONAVIT patrón / RCV patrón are recorded as `:percepcion` in our registry (they are employer expense) but flagged `:employer-only? true`. The CFDI Nómina filters them out on the worker-side block (`wt/employee-side`); the GL records them as `Dr 601.05/06`. This is the cleanest mapping: the registry partition follows GL direction (Dr expense = `:percepcion`), and the CFDI-vs-GL distinction is a separate label. Alternative was to add a `:employer-expense` kind, which would have leaked GL-direction concerns into the SAT-catálogo partition.
+
+*Compute provider is CSV-only.* The vendors all also export XLSX. Adding `dk.ative/docjure` (Apache POI wrapper) for XLSX would bloat the kernel deps for a format that consumers can convert at ingest time. Decision: ship CSV, document XLSX-to-CSV as a one-liner in the module README, defer XLSX support to a consumer-side adapter.
+
+**Tests.** `clojure -M:test --focus kontor.payroll-mx.*` exercises wage-types vocabulary, CONTPAQi+Aspel CSV parsing, accrual math, posting-builder balance + Código Agrupador routing, CFDI Nómina XML shape (TipoNomina O/E, Emisor/Receptor, Percepciones/Deducciones/OtrosPagos, totals roll-up, employer-only filter), and the full e2e (CSV → posting → CFDI → audit-doc). The XML round-trip test re-parses the emitted complemento and recovers TotalPercepciones, TotalDeducciones, TotalOtrosPagos.
+
+**Acceptance.** `clojure -M:test --focus kontor.payroll-mx.*` clean.
+
+Date: 2026-05-18.
+

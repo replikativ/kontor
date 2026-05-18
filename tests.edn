@@ -30,6 +30,7 @@
                        "modules/payroll-fr/test"
                        "modules/payroll-au/test"
                        "modules/payroll-in/test"
+                       "modules/payroll-mx/test"
                        "modules/bank-de/test"
                        "modules/bank-at/test"
                        "modules/bank-fr/test"
