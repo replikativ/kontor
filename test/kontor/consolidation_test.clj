@@ -458,6 +458,49 @@
       (is (every? (fn [vf] (= jan-2 vf)) vfs)
           "the :db.valid/from is at-date (jan-2)"))))
 
+(deftest p2-73-2-builders-accept-vt-from-vt-to
+  (testing "Per ADR-068, the pure tx-data builders accept :vt-from /
+            :vt-to so direct callers (using d/transact rather than
+            consolidate!) can compose bitemporal stamping themselves."
+    (let [conn (bootstrap!)
+          _ (book-intercompany-pair! conn)
+          db (d/db conn)
+          de (:db/id (d/entity db [:entity/code "acme-de"]))
+          group (:db/id (d/entity db [:entity/code "acme-group"]))
+          elim (:db/id (d/entity db [:entity/code "acme-elim"]))
+          cta (:db/id (d/entity db [:account/path "Equity:CTA"]))
+          jnl (:db/id (d/entity db [:journal/code "GEN"]))
+          provider (fxp/make-static-table-provider conn)
+          tb (trial/trial-balance conn {:entity de})
+          ;; vt-from-only path
+          tx1 (cons/translate-trial-balance-tx-data
+               {:db db :source-entity de :consolidation-entity group
+                :presentation-commodity "EUR" :fx-provider provider
+                :at-date jan-2 :journal jnl :cta-account cta
+                :trial-balance tb :vt-from jan-2})
+          tx-meta1 (some #(when (and (map? %) (= "datomic.tx" (:db/id %))) %)
+                         tx1)
+          ;; vt-from + vt-to path
+          tx2 (cons/eliminate-intercompany-pair-tx-data
+               {:db db :pair-id "P-001" :elimination-entity elim
+                :journal jnl :date jan-2
+                :vt-from jan-2 :vt-to jan-3})
+          tx-meta2 (some #(when (and (map? %) (= "datomic.tx" (:db/id %))) %)
+                         tx2)
+          ;; default (no vt opts) — no tx-meta map
+          tx3 (cons/eliminate-intercompany-pair-tx-data
+               {:db db :pair-id "P-001" :elimination-entity elim
+                :journal jnl :date jan-2})
+          tx-meta3 (some #(when (and (map? %) (= "datomic.tx" (:db/id %))) %)
+                         tx3)]
+      (is (= jan-2 (:db.valid/from tx-meta1)))
+      (is (nil? (:db.valid/to tx-meta1))
+          "vt-from-only path leaves :db.valid/to open-ended")
+      (is (= jan-2 (:db.valid/from tx-meta2)))
+      (is (= jan-3 (:db.valid/to tx-meta2)))
+      (is (nil? tx-meta3)
+          "no vt opts → no tx-meta map (caller-controlled)"))))
+
 (deftest p1-73-1-account-monetary-flag-flips-rate-type
   (testing "An :asset account with :account/monetary? false (e.g.
             PP&E or inventory at cost) translates at :historical rate

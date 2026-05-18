@@ -7667,6 +7667,22 @@ Two existing components stay in place, orthogonal:
 
 Date: 2026-05-17.
 
+### Addendum 2026-05-17 — Review note 76 design-polish clarifications
+
+Five items from the independent design audit (note 76 ADR-071 section) that don't change the substrate decisions but clarify the contract for the still-pending implementation:
+
+* **P1-71-1 — `TaxPostingBuilder` ↔ FX seam.** `TaxFacts` carries a `:line-base` Money + `:commodity`. When the tax authority's reporting commodity differs from the GL's commodity (e.g. a BR invoice in BRL but the authority files in USD-equivalent for some line items, or a CN special VAT fapiao that requires both CNY + USD reporting amounts), the `TaxPostingBuilder` is responsible for calling `kontor.fx/convert` against the configured `FxRateProvider` (ADR-072) BEFORE emitting GL postings. The base-commodity translation is NOT the kernel's job: each per-country builder knows its own jurisdiction's rules. Where the builder needs an FX rate, it takes an `:fx-provider` option of its own (mirroring `kontor.lease.posting/plan-fx-retranslation`'s pattern); the substrate does not push translation up to the kernel.
+
+* **P1-71-2 — Reverse-charge contract enforcement.** ADR-071 documents that `:component/kind :reverse-charge` MEANS DIFFERENT THINGS by `:tax-use` (seller-side `:sale` → reporting-tag only; buyer-side `:purchase` → both-sides VAT postings). The contract is enforced at the `TaxPostingBuilder` level via per-`:tax-use` dispatch — the builder receives the `:tax-use` and the per-component `:kind`, and dispatches. The kernel does not enforce this in the protocol because the seam is per-jurisdiction (a BR-style reverse charge looks different from a DE-style one). Per-country builder docstrings + golden-fixture tests document the dispatch.
+
+* **P2-71-1 — Effective-dated rates.** The existing `:tax/effective-from`/`-until` schema (schema.clj:2809-2818) is the source of truth for time-bounded rate changes. `TaxRateProvider`'s `StaticTableProvider` impl MUST respect these when ranking candidate rates for a given `(jurisdiction, kind, at-date)` triple. The contract: never return a `:tax-fact` whose backing `:tax` entity's window doesn't cover `at-date`. This is an implementation note for the static-table impl, not a protocol-level concern.
+
+* **P2-71-2 — `:jurisdiction-specific-codes` opacity.** The slot is opaque by design — the kernel does not interpret its contents. Per-country golden-fixture tests (per ADR-037 rhythm) document the expected shape per jurisdiction: `{:br/icms-cst "60"}`, `{:in/gst-state-code "27" :in/place-of-supply "27-MH"}`, `{:cn/fapiao-type "01"}`, etc. Consumers downstream (einvoice envelope emitters, clearance providers) consume the slot directly.
+
+* **P2-71-3 — US implementation cost.** ADR-071's "AU +120 LoC → US +1500 LoC" range stays — but the deeper structural point is that US Avalara/SST/nexus is not a single-protocol port but a multi-protocol integration: `TaxRateProvider` calls Avalara per-line; `TaxPostingBuilder` knows the per-state / per-jurisdiction account routing; the einvoice provider is not involved (US has no clearance regime). Expect a `kontor-l10n-us` companion to be its own multi-week sub-project; the substrate ADR enables it, doesn't deliver it.
+
+Implementation work remains future. The clarifications above guide the per-l10n migration; no code changes in this addendum.
+
 ---
 
 ## ADR-072 — `FxRateProvider` protocol + `:fx-rate/*` schema + `kontor.fx` Money translation
