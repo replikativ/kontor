@@ -65,9 +65,14 @@
 
 (defn create-doc-tx-data
   "Pure tx-data builder for `create-doc!` (ADR-068). Optional
-   `:tempid` (default `\"audit-doc-1\"`) for cross-step references."
+   `:tempid` (default `\"audit-doc-1\"`) for cross-step references.
+
+   Optional `:category` / `:language` set the corresponding
+   `:audit-doc/category` (ADR-075) + `:audit-doc/language` (ADR-078)
+   facets in one builder call — matches the substrate canonical
+   vocabulary so callers don't reach for the raw attr names."
   [_db {:keys [code type title description content-hash storage-uri
-               uploaded-by-uid uploaded-at tempid]
+               uploaded-by-uid uploaded-at tempid category language]
         :or {tempid "audit-doc-1"}}]
   (when-not code     (throw (ex-info ":code required" {})))
   (when-not type     (throw (ex-info ":type required" {})))
@@ -80,6 +85,8 @@
      title           (assoc :audit-doc/title title)
      description     (assoc :audit-doc/description description)
      content-hash    (assoc :audit-doc/content-hash content-hash)
+     category        (assoc :audit-doc/category category)
+     language        (assoc :audit-doc/language language)
      ;; The uploader IS the creator — stamp :create/uid too
      ;; so ADR-038 :no-self-approval can fire on privilege
      ;; waivers (ADR-051): the doc creator can't waive its

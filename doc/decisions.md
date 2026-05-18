@@ -8782,3 +8782,49 @@ Both are kernel attrs (added to `src/kontor/schema.clj` under the `audit-doc-att
 
 Date: 2026-05-18.
 
+## ADR-086 — `kontor-payroll-at`: the Austrian payroll adapter (engine-CSV in, GL + mBGM + L16 out)
+
+**Status.** Accepted.
+
+**Context.** Stage R adds per-country payroll adapters. Austria is the second jurisdiction (after Germany) — small market, but the kontor user base has an Austrian GmbH and the substrate must demonstrate that a second country lands as a thin adapter rather than a refactor of the kernel. Austrian Personalverrechnung has its own regulators (ÖGK, BMF, Gemeinde) and file formats (ELDA mBGM, FinanzOnline L16, BMD-CSV from the dominant local engine) — close to but disjoint from the German equivalents (DEÜV, ELStAM, DATEV LODAS).
+
+**Decision.** A new module `modules/payroll-at/` (namespace root `kontor.payroll-at.*`) that:
+
+1. Defines the **wage-type vocabulary** for Austria: `:grundgehalt`, `:überstunden`, `:urlaubsremuneration` (13th), `:weihnachtsremuneration` (14th), `:sachbezüge`, `:lohnsteuer`, `:sv-arbeitnehmer`, `:sv-arbeitgeber`, `:dienstgeberbeitrag-fond` (DB 4.1%), `:zuschlag-zum-db` (DZ ~0.32–0.40%), `:kommunalsteuer` (3%).
+2. Defines the **default wage-type → RLG-1 account-code map** (6000, 6100, 6400, 6410, 6500, 6510, 6520, 6530, 6800, 3500, 3540, 3550, 3560, 3590, 3700). The map is data, overridable per consumer.
+3. Ships **two engine adapters** as `compute-engine` defrecords: `BmdGlProvider` (BMD-NTCS Buchungsexport CSV, ISO-8859-15, semicolon-separated) and `RzlGlProvider` (RZL Lohn FibuExport CSV, same separator, smaller schema). Both produce the same normalized `:payroll-result` map.
+4. Ships a **posting-builder** that consumes the normalized `:payroll-result` and produces ONE balanced kernel transaction per payroll period using the default account map (per ADR-068, the leaf is a pure `*-tx-data` builder with the `!` wrapper routing through `transact-with-validation`).
+5. Ships **two accrual builders** — Urlaubsrückstellung (UGB §198 Abs.8) and Sonderzahlung-Rückstellung (13./14. monthly accrual). Both are leaf tx-data builders; both compose with `kontor.process` for a coherent month-end run.
+6. Ships **two emit functions** — `emit-mbgm` (monthly ÖGK mBGM XML — Dachverband XSD shape) and `emit-l16` (annual BMF L16 XML — FinanzOnline Lohnzettel shape). Each computes the artifact bytes + a SHA-256 + transacts an `:audit-doc` row (`:audit-doc/category :payroll-filing`, `:audit-doc/language :de`).
+7. Ships an **`AtPayrollEmitProvider`** record that composes both emit functions, mirroring `kontor.einvoice-provider/EInvoiceProvider`'s shape.
+
+**Kernel additions.** Two new optional schema attrs:
+
+- `:audit-doc/category` — open-set keyword (`:payroll-filing`, `:vat-filing`, `:income-tax-filing`, …); indexed; used by consumers to bucket emitted artifacts.
+- `:audit-doc/language` — ISO-639-1 keyword (`:de`, `:en`, `:fr`, …); the natural-language code of the artifact's content.
+
+Both are accepted by `kontor.audit-doc/create-doc-tx-data` (optional keys). Neither is gated by the kernel — pure descriptive metadata. Without these, per-country adapters would have to invent their own attrs (cohabitation hazard).
+
+**No bundled rates / no credentials.** The module ships NO LSt tariff table, NO SV-rate table, NO Kommunalsteuer-Befreiungsliste, NO ÖGK API keys. The rates are annually-updated regulator data; the consumer or a `kontor-l10n-at-rates-<year>` partner artifact supplies them. The two engine adapters read the engine's CSV output — the engine computed the per-employee LSt + SV already; the adapter is in the IO-and-mapping business, not the rate-engine business.
+
+**Reuse opportunity vs duplication.** AT payroll structurally shares a LOT with DE — both have CSV-from-engine ingest, both have wage-type → CoA maps, both have monthly accrual under §198/§249, both have monthly + annual regulator artifacts. We considered factoring a `kontor.payroll.de-at-common` shared layer (or even a kernel-level `kontor.payroll-provider` protocol). **Decision: keep modules independent.** Per the project culture of "each country adapter ships separately" (note 86 of CLAUDE.md's referenced research), and the existing `l10n-de` ↔ `l10n-at` precedent — they share German-language resource keys but the implementation is independently maintained. The duplication is minimal; a leaky shared abstraction would cost more.
+
+If a third German-language country lands (a Swiss-DACH adapter or a Liechtenstein extension), revisit and factor. Today's call: copy patterns by hand from DE, write the AT code fresh.
+
+**Scope discipline (v1).** In: gross-to-net mapping; the monthly GL transaction; the two accruals (Urlaubsrückstellung + 13./14. Sonderzahlung); mBGM XML emit; L16 XML emit; the emit-provider record. **Out:** Abfertigung-Alt actuarial (pre-2003 employees; requires actuarial model + Sterbetafel — a separate `kontor-l10n-at-abfertigung` artifact), BV / SVS post-2003 4.5% employer contributions (kept consumer-driven), BUAK (construction-industry sectoral fund), Reisekostenabrechnung (belongs in `kontor-expense`, not payroll).
+
+**Composition over orchestration.** All write-side fns expose a pure `*-tx-data` leaf (ADR-068); a `!` wrapper routes through `kontor.validation/transact-with-validation`. A month-end `run-payroll-period!` orchestrator in `kontor.payroll-at.core` composes [compute → post-gl-tx → accrue-urlaub → accrue-sonderzahlung → emit-mbgm → maybe-emit-l16] as a `kontor.process` step-list. Per ADR-067, every step is pure-data; the orchestrator is what reads inputs from db and produces tx-data.
+
+**Per-employee detail in mBGM.** The mBGM is per-employee; the GL transaction is the period summary. The two diverge — the mBGM needs VSNR + Beitragsgruppe per employee, the GL line aggregates them. The compute step produces both views: the normalized `:payroll-result` carries `:employees [{VSNR base lst sv ...} ...]` AND the period totals.
+
+**Bitemporal.** Per-employee aggregates are stamped `:tx/valid-from <period-end>` so the mBGM-as-of-filing-date query is bitemporally well-defined. An amendment (correction posting in a later period) writes a new mBGM with the correction flag; the prior mBGM stays queryable as-of-its-filing-date.
+
+**Per-country naming.** Namespace root is `kontor.payroll-at.*` (hyphen-separated, mirrors `kontor.l10n-at.*`). Directory `modules/payroll-at/`. Wire format keywords are `:at/mbgm`, `:at/l16` (the same convention as `kontor.einvoice-provider/envelope-format`).
+
+**Why now.** Substrate audit-doc + status-machine + bitemporal + `*-tx-data` builder convention are in place. The AT adapter is a credibility marker that the substrate can host a second country; if it goes well, the (similar but harder) DE-payroll adapter follows.
+
+**Implication.** Adds 2 schema attrs (1 indexed), 1 module (~8 source files + tests), 1 research note (80). Zero kernel API breakage.
+
+**Research backing.** `doc/research/80-payroll-at-research.md`.
+
+Date: 2026-05-18.
