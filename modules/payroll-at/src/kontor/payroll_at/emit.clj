@@ -1,6 +1,6 @@
 (ns kontor.payroll-at.emit
   "Annual L16 Lohnzettel (BMF FinanzOnline XML) + the
-   AtPayrollEmitProvider composing record (ADR-072).
+   AtMbgmL16Emitter composing record (ADR-072).
 
    The L16 is the annual wage statement an employer pushes to
    FinanzOnline for each employee. The official BMF XML format
@@ -202,15 +202,24 @@
     (assoc result :tx-report tx-report)))
 
 ;; ============================================================================
-;; AtPayrollEmitProvider — composes mBGM (monthly) + L16 (annual)
+;; AtMbgmL16Emitter — composes mBGM (monthly) + L16 (annual)
 ;; ============================================================================
 
-(defprotocol PayrollEmitProvider
-  "Per-jurisdiction payroll-filing emitter (ADR-072).
+(defprotocol AtFilingEmitProvider
+  "AT-specific filing emitter (intentionally distinct from the kernel
+   `kontor.payroll-provider/PayrollEmitProvider`; THIS one returns
+   side-effecting `!` calls that write the mBGM/L16 audit-doc rows
+   directly. The kernel protocol returns pure :audit-doc tx-data
+   fragments. The `kontor.payroll-at.adapter` namespace bridges).
 
    Mirrors the shape of `kontor.einvoice-provider/EInvoiceProvider`.
    Implementations produce wire-format bytes and records :audit-doc
-   for the audit chain."
+   for the audit chain.
+
+   Renamed from `PayrollEmitProvider` once the kernel
+   `kontor.payroll-provider/PayrollEmitProvider` landed in Stage R;
+   the AT side keeps the file-bytes-+-`!` shape for direct use by
+   AT-only consumers."
 
   (envelope-format [this]
     "Identifying keyword (e.g. :at/mbgm, :at/l16, :de/lohnsteuer-anm).")
@@ -226,8 +235,8 @@
      Some jurisdictions have no annual artifact — those impls return
      {:emit-annual!/skipped? true}."))
 
-(defrecord AtPayrollEmitProvider []
-  PayrollEmitProvider
+(defrecord AtMbgmL16Emitter []
+  AtFilingEmitProvider
   (envelope-format [_] :at/payroll-filing)
   (emit-monthly! [_ conn opts] (mbgm/emit-mbgm! conn opts))
   (emit-annual! [_ conn opts] (emit-l16! conn opts)))
@@ -235,4 +244,4 @@
 (defn make-at-emit-provider
   "Construct the default AT emit-provider record. Pure — no state."
   []
-  (->AtPayrollEmitProvider))
+  (->AtMbgmL16Emitter))

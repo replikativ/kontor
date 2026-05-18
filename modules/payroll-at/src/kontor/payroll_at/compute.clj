@@ -45,13 +45,24 @@
 ;; Protocol
 ;; ============================================================================
 
-(defprotocol PayrollEngineProvider
-  "Pluggable payroll-engine ingestion. The kernel ships two impls
-   (BMD + RZL); consumers extend the protocol for additional engines.
+(defprotocol AtEngineProvider
+  "Pluggable AT-payroll-engine CSV ingestion (intentionally distinct
+   from the kernel `kontor.payroll-provider/PayrollComputeProvider`
+   protocol — this one operates at the BMD/RZL CSV layer; the
+   kernel protocol operates at the `PayrollFacts` layer. The
+   `kontor.payroll-at.adapter` namespace bridges the two).
+
+   The kernel ships two impls (BMD + RZL); consumers extend the
+   protocol for additional Austrian engines.
 
    ADR-072 — implementations consume raw bytes (from `:source-uri`)
    and emit the normalized `:payroll-result`. No kernel side effects
-   here — the result feeds `posting-builder/build-tx-data`."
+   here — the result feeds `posting-builder/build-tx-data`.
+
+   Renamed from `PayrollEngineProvider` once the kernel
+   `kontor.payroll-provider` PayrollProvider trio landed in Stage R;
+   the AT engine-CSV layer is a legitimate level above the kernel
+   protocol but the name collision was confusing."
 
   (engine-name [this]
     "Identifying keyword for this engine (`:bmd`, `:rzl`, …).")
@@ -304,7 +315,7 @@
        :to   (.getTime cal-to)})))
 
 (defrecord BmdGlProvider [source-uri]
-  PayrollEngineProvider
+  AtEngineProvider
   (engine-name [_] :bmd)
   (parse-export [_ source]
     (let [parsed   (parse-bmd-csv source)
@@ -365,7 +376,7 @@
       parsed)))
 
 (defrecord RzlGlProvider [source-uri]
-  PayrollEngineProvider
+  AtEngineProvider
   (engine-name [_] :rzl)
   (parse-export [_ source]
     (let [parsed (parse-rzl-csv source)
