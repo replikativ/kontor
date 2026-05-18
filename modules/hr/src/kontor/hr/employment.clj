@@ -14,9 +14,16 @@
         passed)
 
    The transactors honor the kernel gate stack (legal-hold +
-   period-lock + state-machine) via transact-with-validation."
+   period-lock + state-machine) via transact-with-validation. The
+   load-bearing state-changing transitions (`terminate!`,
+   `start-leave!`, `return-from-leave!`) route through
+   `kontor.status-machine/record-status-change-tx-data` so the
+   approval-policy gate (`:requires-supporting-doc` on termination)
+   actually fires — note 85 P0-85-1."
   (:require [datahike.api :as d]
-            [kontor.validation :as validation]))
+            [kontor.status-machine :as sm]
+            [kontor.validation :as validation])
+  (:import [java.util Date]))
 
 ;; ============================================================================
 ;; hire
@@ -90,28 +97,66 @@
 ;; ============================================================================
 ;; terminate
 ;; ============================================================================
+;; Routes through kontor.status-machine/record-status-change-tx-data so
+;; the ADR-038 approval-policy gate (:requires-supporting-doc on
+;; :active|:on-leave → :terminated, seeded in schema.clj) actually
+;; fires. Note 85 P0-85-1: the prior flat-facet write bypassed the
+;; gate, leaving the approval-policy seed dead.
 
 (defn terminate-tx-data
-  "Pure tx-data builder for `terminate!`. Sets :employment/end-date,
-   :employment/state :terminated, and :employment/termination-reason.
-   The state transition is approval-policy-gated
-   (:requires-supporting-doc — termination letter; see schema seeds)."
-  [db {:keys [employment end-date reason]}]
-  (when-not employment (throw (ex-info ":employment required" {})))
-  (when-not end-date   (throw (ex-info ":end-date required" {})))
-  (when-not reason     (throw (ex-info ":reason required" {})))
+  "Pure tx-data builder for `terminate!`. Returns tx-data that:
+     - drives :employment/state to :terminated via the status machine
+       (legality check + history row + facet update)
+     - sets :employment/end-date + :employment/termination-reason on
+       the same entity in the same transaction
+
+   Required opts:
+     :employment       — eid or :employment/code
+     :end-date         — instant
+     :reason           — keyword (open-set per jurisdiction)
+     :supporting-doc   — ref to :audit-doc (the termination letter /
+                         wrongful-dismissal-review memo / mutual-
+                         agreement record). ADR-038 :requires-
+                         supporting-doc fires; the gate REJECTS the
+                         tx if absent. Pass an audit-doc eid or a
+                         lookup-ref.
+     :changed-by-uid   — ref to :create/uid stamping the operator
+
+   Optional:
+     :changed-at       — instant; defaults to (Date.)
+     :reason-note      — free-text companion to :reason"
+  [db {:keys [employment end-date reason supporting-doc
+              changed-by-uid changed-at reason-note]}]
+  (when-not employment     (throw (ex-info ":employment required" {})))
+  (when-not end-date       (throw (ex-info ":end-date required" {})))
+  (when-not reason         (throw (ex-info ":reason required" {})))
+  (when-not supporting-doc (throw (ex-info ":supporting-doc required (termination letter) — note 85 P0-85-1 + schema.clj :requires-supporting-doc approval policy"
+                                           {:type :hr/termination-supporting-doc-required})))
   (let [eid (if (number? employment)
               employment
               (d/q '[:find ?e . :in $ ?c :where [?e :employment/code ?c]]
                    db employment))]
     (when-not eid (throw (ex-info "unknown :employment" {:employment employment})))
-    [{:db/id eid
-      :employment/end-date end-date
-      :employment/state :terminated
-      :employment/termination-reason reason}]))
+    (let [status-tx (sm/record-status-change-tx-data
+                     db (cond-> {:entity      eid
+                                 :entity-type :employment
+                                 :facet       :employment/state
+                                 :to          :terminated
+                                 :changed-at  (or changed-at (Date.))
+                                 :supporting-doc supporting-doc}
+                          changed-by-uid (assoc :changed-by-uid changed-by-uid)
+                          reason         (assoc :reason reason)
+                          reason-note    (assoc :reason-note reason-note)))]
+      (into status-tx
+            [{:db/id eid
+              :employment/end-date end-date
+              :employment/termination-reason reason}]))))
 
 (defn terminate!
-  "Transact a termination."
+  "Transact a termination. The approval-policy gate
+   (:requires-supporting-doc on :active|:on-leave → :terminated)
+   fires inside transact-with-validation; calls without :supporting-doc
+   are rejected before any data is written."
   [conn opts]
   (let [tx (terminate-tx-data (d/db conn) opts)]
     (validation/transact-with-validation conn tx)))

@@ -133,38 +133,62 @@
    Returns the policy eid, or nil when no active policy covers the
    combination (retention is then disabled for that entity-type).
 
-   Opts: `:jurisdiction` (a :country eid; nil = global only),
-   `:as-of` (instant; default now)."
-  [db entity-type {:keys [jurisdiction as-of]}]
+   Opts:
+     `:jurisdiction` — a :country eid; nil = global only.
+     `:as-of`        — instant; default now.
+     `:category`     — ADR-075 subject-matter keyword
+                       (:payroll | :hr-personnel | :financial | …).
+                       When supplied, candidate policies match if
+                       either the policy's :retention-policy/category
+                       is nil (applies to any category) OR equals the
+                       supplied category. The category-matched-non-nil
+                       branch wins the tiebreaker — per-jurisdiction
+                       payroll-PII retention floors (GDPR Art. 17 +
+                       DE §28f SGB IV) take precedence over generic
+                       per-jurisdiction floors when both are seeded.
+                       When nil, only category-nil policies match
+                       (so callers who haven't classified their data
+                       see the legacy generic-floor behavior)."
+  [db entity-type {:keys [jurisdiction as-of category]}]
   (let [as-of (or as-of (Date.))
         ;; get-else rejects a nil default, so use sentinels and
         ;; normalize them back to nil after the query.
         candidates
-        (->> (d/q '[:find ?p ?from ?until ?juris
+        (->> (d/q '[:find ?p ?from ?until ?juris ?cat
                     :in $ ?etype
                     :where
                     [?p :retention-policy/applies-to ?etype]
                     [?p :retention-policy/state :active]
                     [?p :retention-policy/effective-from ?from]
                     [(get-else $ ?p :retention-policy/effective-until :__none) ?until]
-                    [(get-else $ ?p :retention-policy/jurisdiction :__none) ?juris]]
+                    [(get-else $ ?p :retention-policy/jurisdiction :__none) ?juris]
+                    [(get-else $ ?p :retention-policy/category :__none) ?cat]]
                   db entity-type)
-             (map (fn [[p from until juris]]
+             (map (fn [[p from until juris cat]]
                     [p from
                      (when-not (= until :__none) until)
-                     (when-not (= juris :__none) juris)]))
-             (filter (fn [[_ from until juris]]
+                     (when-not (= juris :__none) juris)
+                     (when-not (= cat   :__none) cat)]))
+             (filter (fn [[_ from until juris cat]]
                        (and (in-effect? as-of from until)
                             (or (nil? juris)
-                                (= juris jurisdiction)))))
-             ;; jurisdiction-specific beats global; then latest
-             ;; effective-from wins (ADR-026 tiebreaker); then lowest
-             ;; eid as the deterministic last-resort tiebreaker so
-             ;; resolution never depends on datalog set-iteration
-             ;; order when two policies share an :effective-from
+                                (= juris jurisdiction))
+                            ;; ADR-075 category gate. nil policy-cat
+                            ;; matches anything; non-nil policy-cat
+                            ;; requires the caller to have classified
+                            ;; the entity and supplied a matching
+                            ;; :category opt.
+                            (or (nil? cat)
+                                (= cat category)))))
+             ;; (1) category-matched-non-nil wins over category-nil
+             ;; (per-category floors are MORE specific than generic);
+             ;; (2) jurisdiction-specific beats global;
+             ;; (3) latest :effective-from wins (ADR-026 tiebreaker);
+             ;; (4) lowest eid as deterministic last-resort tiebreaker
              ;; (research note 32 P2-1).
-             (sort-by (fn [[p from _ juris]]
-                        [(if (= juris jurisdiction) 1 0)
+             (sort-by (fn [[p from _ juris cat]]
+                        [(if (and category (= cat category)) 1 0)
+                         (if (= juris jurisdiction) 1 0)
                          (.getTime ^Date from)
                          (- p)])))]
     (first (last candidates))))
@@ -300,14 +324,27 @@
    work-items from `due-for-expiry`. Pure read — produces no writes;
    compose with `apply-expiry!` or call `sweep-and-apply!`.
 
-   Opts: `:entity-type` (required), `:jurisdiction`, `:as-of`,
-   `:limit` (cap the candidate set; default unbounded).
-   Returns `[]` when no active policy covers the entity-type
+   Opts:
+     `:entity-type`   — required.
+     `:jurisdiction`  — optional :country eid.
+     `:as-of`         — instant; default now.
+     `:category`      — ADR-075 subject-matter keyword forwarded to
+                        `policy-for`. When supplied the resolver
+                        prefers a category-specific :retention-policy
+                        over a generic one (per-category floors:
+                        payroll-PII retention vs financial-records).
+                        Callers that haven't classified their data
+                        omit it and get the legacy behavior.
+     `:limit`         — cap the candidate set (default unbounded).
+
+   Returns `[]` when no active policy covers the combination
    (retention disabled for it)."
-  [db {:keys [entity-type jurisdiction as-of limit]}]
+  [db {:keys [entity-type jurisdiction as-of category limit]}]
   (when-not entity-type (throw (ex-info ":entity-type required" {})))
   (if-let [policy-eid (policy-for db entity-type
-                                  {:jurisdiction jurisdiction :as-of as-of})]
+                                  {:jurisdiction jurisdiction
+                                   :as-of as-of
+                                   :category category})]
     (due-for-expiry db policy-eid {:as-of as-of :limit limit})
     []))
 
@@ -368,14 +405,16 @@
    `{:applied [<item> …] :blocked [<item> …]}`.
 
    Opts: `:entity-type` (required), `:jurisdiction`, `:as-of`,
+   `:category` (ADR-075 subject-matter keyword forwarded to `sweep!`),
    `:dry-run?` (when true, applies nothing — returns the same shape
    with `:applied` empty and every eligible item under `:blocked`-
    shaped `:would-apply`)."
-  [conn {:keys [entity-type jurisdiction as-of dry-run?]}]
+  [conn {:keys [entity-type jurisdiction as-of category dry-run?]}]
   (let [items (sweep! (d/db conn)
                       {:entity-type entity-type
                        :jurisdiction jurisdiction
-                       :as-of as-of})
+                       :as-of as-of
+                       :category category})
         {blocked true unblocked false} (group-by :blocked-by-hold? items)]
     (if dry-run?
       {:applied [] :blocked (vec blocked) :would-apply (vec unblocked)}
@@ -393,7 +432,7 @@
   "Pure tx-data builder for `define-policy!` (ADR-068)."
   [db {:keys [code applies-to duration-years triggered-by expiry-action
               effective-from legal-basis jurisdiction effective-until
-              anonymize-fields changed-by-uid drafted-at tempid]
+              anonymize-fields category changed-by-uid drafted-at tempid]
        :or {tempid "policy-1"}}]
   (when-not code           (throw (ex-info ":code required" {})))
   (when-not (seq applies-to) (throw (ex-info ":applies-to required" {})))
@@ -415,6 +454,7 @@
                      :retention-policy/state :draft}
               jurisdiction         (assoc :retention-policy/jurisdiction jurisdiction)
               effective-until      (assoc :retention-policy/effective-until effective-until)
+              category             (assoc :retention-policy/category category)
               (seq anonymize-fields) (assoc :retention-policy/anonymize-fields
                                             (vec anonymize-fields)))
         status-tx (sm/record-status-change-tx-data
@@ -447,6 +487,11 @@
    Optional:
      :jurisdiction     ref to :country (nil = global)
      :effective-until  instant (nil = open-ended)
+     :category         ADR-075 subject-matter keyword (:payroll |
+                       :hr-personnel | :financial | …). When set,
+                       this policy ONLY applies to entities whose
+                       sweep-time :category opt matches; nil = the
+                       policy applies regardless of category (legacy).
      :anonymize-fields coll of attribute keywords (for :anonymize)
      :changed-by-uid   ref to :create/uid
      :vt-from / :vt-to valid-time bounds (default :vt-from = now)

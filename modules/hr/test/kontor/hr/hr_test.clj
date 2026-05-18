@@ -237,6 +237,76 @@
 ;; check-facts sum invariant
 ;; ============================================================================
 
+;; ============================================================================
+;; terminate! routes through the status machine (P0-85-1 regression)
+;; ============================================================================
+
+(deftest terminate-rejects-missing-supporting-doc
+  (let [conn (bootstrap)
+        _ (person/create-person! conn {:external-id "P-bob"
+                                       :given-name "Bob" :family-name "Smith"})
+        db (d/db conn)
+        bob (hr/person-by-external-id db "P-bob")
+        de (ref-eid db :entity/code "DE-GMBH")
+        _ (employment/hire! conn {:code "EMP-bob" :person bob :entity de
+                                  :start-date #inst "2026-05-01"})
+        emp-eid (hr/employment-by-code (d/db conn) "EMP-bob")
+        ;; Move :hired → :active so termination is a legal transition.
+        _ (d/transact conn [[:db/add emp-eid :employment/state :active]])]
+    (testing "terminate! without :supporting-doc throws before any write"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"supporting-doc required"
+           (employment/terminate! conn {:employment emp-eid
+                                        :end-date #inst "2026-06-30"
+                                        :reason :voluntary
+                                        :changed-by-uid bob})))
+      (is (= :active (:employment/state
+                      (d/pull (d/db conn) [:employment/state] emp-eid)))
+          ":employment/state stays :active when termination is rejected"))))
+
+(deftest terminate-with-supporting-doc-writes-status-history
+  (let [conn (bootstrap)
+        _ (person/create-person! conn {:external-id "P-carol"
+                                       :given-name "Carol" :family-name "Jones"})
+        db (d/db conn)
+        carol (hr/person-by-external-id db "P-carol")
+        de (ref-eid db :entity/code "DE-GMBH")
+        contract (ref-eid db :audit-doc/code "CONTRACT-jane")
+        _ (employment/hire! conn {:code "EMP-carol" :person carol :entity de
+                                  :start-date #inst "2026-05-01"})
+        emp-eid (hr/employment-by-code (d/db conn) "EMP-carol")
+        _ (d/transact conn [[:db/add emp-eid :employment/state :active]])
+        ;; Carol can't approve her own termination.
+        approver (d/q '[:find ?p . :in $ ?x :where
+                        [?p :person/external-id ?x]]
+                      (d/db conn) "P-bob")
+        _ (when-not approver
+            (person/create-person! conn {:external-id "P-mgr"
+                                         :given-name "Mgr" :family-name "X"}))
+        mgr (or approver (hr/person-by-external-id (d/db conn) "P-mgr"))
+        _ (employment/terminate! conn {:employment emp-eid
+                                       :end-date #inst "2026-06-30"
+                                       :reason :voluntary
+                                       :supporting-doc contract
+                                       :changed-by-uid mgr})]
+    (testing ":employment/state is :terminated + :end-date written"
+      (let [emp (d/pull (d/db conn) [:employment/state
+                                     :employment/end-date
+                                     :employment/termination-reason]
+                        emp-eid)]
+        (is (= :terminated (:employment/state emp)))
+        (is (= #inst "2026-06-30" (:employment/end-date emp)))
+        (is (= :voluntary (:employment/termination-reason emp)))))
+    (testing ":status-history row written by the status machine"
+      (let [history (d/q '[:find [?h ...]
+                           :in $ ?e
+                           :where
+                           [?h :status-history/entity ?e]
+                           [?h :status-history/to :terminated]]
+                         (d/db conn) emp-eid)]
+        (is (= 1 (count history))
+            "exactly one :terminated history row per employment")))))
+
 (deftest check-facts-passes-balanced-fact
   (let [fact {:employment "x"
               :gross 5000M

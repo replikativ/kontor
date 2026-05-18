@@ -71,7 +71,7 @@
 ;; Define + activate a :purge policy on :audit-doc, anchored on
 ;; :audit-doc/uploaded-at.
 (defn- active-purge-policy! [conn {:keys [code duration-years effective-from
-                                          effective-until jurisdiction]
+                                          effective-until jurisdiction category]
                                    :or {duration-years 7
                                         effective-from #inst "2000-01-01"}}]
   (ret/define-policy! conn
@@ -84,7 +84,8 @@
              :legal-basis "Test policy"
              :changed-by-uid (uid (d/db conn) "records")}
       effective-until (assoc :effective-until effective-until)
-      jurisdiction    (assoc :jurisdiction jurisdiction)))
+      jurisdiction    (assoc :jurisdiction jurisdiction)
+      category        (assoc :category category)))
   (let [policy-eid (ret/by-code (d/db conn) code)]
     (ret/activate-policy! conn
                           {:policy-eid policy-eid
@@ -198,6 +199,43 @@
     (testing "with no jurisdiction, the global policy resolves"
       (is (= (ret/by-code (d/db conn) "P-GLOBAL-J")
              (ret/policy-for (d/db conn) :audit-doc {}))))))
+
+;; ADR-075 P0-85-2 — category gate. The sweeper must read
+;; :retention-policy/category so per-jurisdiction floors can differ
+;; by subject-matter (DE GDPR Art. 17 + §28f SGB IV payroll-PII
+;; retention vs HGB §257 financial-records retention).
+
+(deftest category-specific-beats-category-nil
+  (let [conn (bootstrap)
+        ;; Generic policy (no category) — covers any audit-doc, 10y.
+        _ (active-purge-policy! conn {:code "P-GENERIC"
+                                      :duration-years 10})
+        ;; Category-specific policy — covers ONLY :payroll docs, 7y.
+        payroll-eid (active-purge-policy! conn {:code "P-PAYROLL"
+                                                :duration-years 7
+                                                :category :payroll})]
+    (testing "with :category :payroll, the category-specific policy wins"
+      (is (= payroll-eid (ret/policy-for (d/db conn) :audit-doc
+                                         {:category :payroll}))))
+    (testing "with :category nil (no classification), only the generic resolves"
+      (is (= (ret/by-code (d/db conn) "P-GENERIC")
+             (ret/policy-for (d/db conn) :audit-doc {}))))
+    (testing "with :category :financial (no specific policy seeded), the generic resolves"
+      (is (= (ret/by-code (d/db conn) "P-GENERIC")
+             (ret/policy-for (d/db conn) :audit-doc {:category :financial}))))))
+
+(deftest category-only-policies-don-not-leak-when-category-omitted
+  ;; A policy that ONLY covers :payroll must NOT match when the
+  ;; sweeper calls without :category — the substrate must protect
+  ;; against accidental over-broad expiry.
+  (let [conn (bootstrap)
+        _ (active-purge-policy! conn {:code "P-PAYROLL-ONLY"
+                                      :duration-years 7
+                                      :category :payroll})]
+    (testing "policy-for returns nil when only category-specific policies exist + no category given"
+      (is (nil? (ret/policy-for (d/db conn) :audit-doc {}))))
+    (testing "policy-for returns the policy when category matches"
+      (is (some? (ret/policy-for (d/db conn) :audit-doc {:category :payroll}))))))
 
 (deftest deadline-and-eligibility
   (let [conn (bootstrap)
