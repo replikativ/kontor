@@ -167,6 +167,17 @@
                                      and this builder is pure-on-db.
      :tx-tempid                   — optional string tempid (default
                                      \"cons-trans-tx\").
+     :vt-from / :vt-to            — optional bitemporal stamps for
+                                     direct-caller use (per ADR-068:
+                                     every business-write tx-data
+                                     builder composes with bitemporal
+                                     stamping). When set, the builder
+                                     appends a `{:db/id \"datomic.tx\"
+                                     :db.valid/from ... :db.valid/to ...}`
+                                     map. The `consolidate!` orchestrator
+                                     ignores these (it does its own
+                                     `:vt-from` plumbing through
+                                     `kontor.process/run-process`).
 
    Returns: tx-data (vector of maps) that, when transacted, creates
    one :transaction (kind :translation) and N :postings.
@@ -177,7 +188,7 @@
   [{:keys [db source-entity consolidation-entity presentation-commodity
            fx-provider at-date journal cta-account
            rate-type-by-account-type rate-type-by-account
-           trial-balance tx-tempid]
+           trial-balance tx-tempid vt-from vt-to]
     :or   {rate-type-by-account-type default-rate-type-by-account-type
            rate-type-by-account      {}
            tx-tempid                 "cons-trans-tx"}}]
@@ -254,18 +265,25 @@
     (when (empty? line-postings)
       (throw (ex-info "translate-trial-balance-tx-data: empty trial balance — nothing to translate"
                       {:source-entity source-entity})))
-    (into [{:db/id                                    tx-tempid
-            :transaction/journal                      journal
-            :transaction/effective-date               at-date
-            :transaction/consolidation-source-entity  source-entity
-            :transaction/consolidation-kind           :translation
-            :transaction/state                        :draft
-            :transaction/narration
-            (str "Consolidation translation — source entity "
-                 (or (:entity/code (d/pull db [:entity/code] source-entity))
-                     source-entity))}]
-          (cond-> line-postings
-            plug-posting (conj plug-posting)))))
+    (let [base (into [{:db/id                                    tx-tempid
+                       :transaction/journal                      journal
+                       :transaction/effective-date               at-date
+                       :transaction/consolidation-source-entity  source-entity
+                       :transaction/consolidation-kind           :translation
+                       :transaction/state                        :draft
+                       :transaction/narration
+                       (str "Consolidation translation — source entity "
+                            (or (:entity/code (d/pull db [:entity/code] source-entity))
+                                source-entity))}]
+                     (cond-> line-postings
+                       plug-posting (conj plug-posting)))]
+      (cond
+        (and vt-from vt-to) (conj base {:db/id "datomic.tx"
+                                        :db.valid/from vt-from
+                                        :db.valid/to vt-to})
+        vt-from             (conj base {:db/id "datomic.tx"
+                                        :db.valid/from vt-from})
+        :else               base))))
 
 ;; ============================================================================
 ;; eliminate-intercompany-pair-tx-data
@@ -326,8 +344,13 @@
      :elimination-entity  — :db/id of the elimination entity
      :journal             — :db/id of the journal to post to
      :date                — effective date for the elimination tx
-     :tx-tempid           — optional string tempid (default \"elim-tx\")"
-  [{:keys [db pair-id elimination-entity journal date tx-tempid]
+     :tx-tempid           — optional string tempid (default \"elim-tx\")
+     :vt-from / :vt-to    — optional bitemporal stamps for direct
+                            callers (ADR-068). `consolidate!` does
+                            its own valid-time plumbing via
+                            `kontor.process/run-process` and does NOT
+                            consume these."
+  [{:keys [db pair-id elimination-entity journal date tx-tempid vt-from vt-to]
     :or   {tx-tempid "elim-tx"}}]
   (when-not db                  (throw (ex-info ":db required" {})))
   (when-not pair-id             (throw (ex-info ":pair-id required" {})))
@@ -348,14 +371,21 @@
                  :posting/display-type :product})
               (range)
               pair-postings)]
-    (into [{:db/id                              tx-tempid
-            :transaction/journal                journal
-            :transaction/effective-date         date
-            :transaction/intercompany-pair-id   pair-id
-            :transaction/consolidation-kind     :elimination
-            :transaction/state                  :draft
-            :transaction/narration              (str "Intercompany elimination (pair " pair-id ")")}]
-          elim-postings)))
+    (let [base (into [{:db/id                              tx-tempid
+                       :transaction/journal                journal
+                       :transaction/effective-date         date
+                       :transaction/intercompany-pair-id   pair-id
+                       :transaction/consolidation-kind     :elimination
+                       :transaction/state                  :draft
+                       :transaction/narration              (str "Intercompany elimination (pair " pair-id ")")}]
+                     elim-postings)]
+      (cond
+        (and vt-from vt-to) (conj base {:db/id "datomic.tx"
+                                        :db.valid/from vt-from
+                                        :db.valid/to vt-to})
+        vt-from             (conj base {:db/id "datomic.tx"
+                                        :db.valid/from vt-from})
+        :else               base))))
 
 ;; ============================================================================
 ;; consolidate-tx-data + consolidate!

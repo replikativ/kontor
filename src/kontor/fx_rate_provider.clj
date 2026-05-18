@@ -459,6 +459,19 @@
    serves the rest, or when a paid-API provider sits in front of an
    in-DB cache.
 
-   Returns the first non-nil, non-zero BigDecimal from `resolve-rate`."
+   Returns the first non-nil, non-zero BigDecimal from `resolve-rate`.
+
+   ## Asymmetry with scaffold providers
+
+   The credentialed scaffolds ([[XeProvider]], [[OandaProvider]],
+   [[FedH10Provider]]) THROW on `resolve-rate` rather than returning
+   nil — they're scaffolds, not stubs, and failing loud is the
+   intended posture (ADR-072). Consequently `ChainedProvider` does NOT
+   wrap each provider in try/catch: a chain with a not-yet-implemented
+   scaffold ahead of a real provider will explode rather than degrade.
+
+   Either implement the scaffold (it's the customer's adapter) or
+   omit it from the chain. The exception's :hint guides the
+   maintainer to ADR-072 + the credential-source documentation."
   [& providers]
   (->ChainedProvider (vec providers)))
