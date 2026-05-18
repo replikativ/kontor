@@ -20,25 +20,122 @@
 ;; Tags route postings to per-state filing reports:
 ;;   :us-{state}-{box} — e.g. :us-tx-line-1 (Texas state sales tax)
 ;;
-;; This is the minimum viable chart; serious customers extend with
-;; per-product GL accounts, location/class dimensions (we have
-;; analytic accounts for that), 1099-NEC-tracked vendor accounts.
+;; The chart is QBO/Xero-aligned for SMBs and 1099-NEC contractors,
+;; with extension hooks for the typical pain points: per-class fixed
+;; assets with accumulated depreciation contras, prepaid expenses,
+;; deferred revenue, payroll-liability sub-accounts, and the
+;; non-operating 7xxx range for interest / FX / gain-loss postings.
 
-[;; Assets
+[;; ============================================================================
+ ;; 1xxxx — ASSETS
+ ;;   10xx — Cash and bank
+ ;;   11xx — Bank accounts
+ ;;   12xx — Receivables + allowance
+ ;;   13xx — Prepaid + other current
+ ;;   14xx — Inventory + raw materials
+ ;;   15xx — Fixed assets (PP&E gross + accumulated depreciation)
+ ;;   16xx — Intangibles + other non-current
+ ;; ============================================================================
+ ;; --- Cash and bank ---
  {:code "1000" :path "Assets:Cash"
   :type :asset :name "Cash on hand" :reconcilable? true}
  {:code "1100" :path "Assets:Bank:Checking"
   :type :asset :name "Bank — Checking" :reconcilable? true}
  {:code "1110" :path "Assets:Bank:Savings"
   :type :asset :name "Bank — Savings" :reconcilable? true}
+ {:code "1120" :path "Assets:Bank:Merchant"
+  :type :asset :name "Bank — Merchant / Payment-processor clearing"
+  :reconcilable? true}
+ {:code "1130" :path "Assets:Bank:Petty-Cash"
+  :type :asset :name "Petty cash" :reconcilable? true}
+
+ ;; --- Receivables ---
  {:code "1200" :path "Assets:Receivable"
   :type :asset :name "Accounts receivable" :reconcilable? true}
+ {:code "1210" :path "Assets:Receivable:Allowance-Doubtful"
+  :type :asset :name "Allowance for doubtful accounts (contra-AR)"}
+ {:code "1220" :path "Assets:Receivable:Employee-Advances"
+  :type :asset :name "Employee advances and travel-card receivables"
+  :reconcilable? true}
+ {:code "1230" :path "Assets:Receivable:Notes"
+  :type :asset :name "Notes receivable (short-term)"}
+
+ ;; --- Prepaid + other current assets ---
+ {:code "1300" :path "Assets:Prepaid:Insurance"
+  :type :asset :name "Prepaid insurance"}
+ {:code "1310" :path "Assets:Prepaid:Rent"
+  :type :asset :name "Prepaid rent"}
+ {:code "1320" :path "Assets:Prepaid:Other"
+  :type :asset :name "Prepaid expenses — other"}
+ {:code "1390" :path "Assets:Deposit:Vendor"
+  :type :asset :name "Vendor deposits and refundable holds"}
+
+ ;; --- Inventory ---
  {:code "1500" :path "Assets:Inventory"
   :type :asset :name "Inventory"}
+ {:code "1510" :path "Assets:Inventory:Raw-Materials"
+  :type :asset :name "Inventory — Raw materials"}
+ {:code "1520" :path "Assets:Inventory:Work-in-Process"
+  :type :asset :name "Inventory — Work in process"}
+ {:code "1530" :path "Assets:Inventory:Finished-Goods"
+  :type :asset :name "Inventory — Finished goods"}
 
- ;; Liabilities
+ ;; --- Fixed assets (PP&E) ---
+ {:code "1550" :path "Assets:Fixed:Land"
+  :type :asset :name "Land"}
+ {:code "1560" :path "Assets:Fixed:Buildings"
+  :type :asset :name "Buildings and leasehold improvements"}
+ {:code "1565" :path "Assets:Fixed:Buildings:Accumulated-Depreciation"
+  :type :asset :name "Accumulated depreciation — Buildings (contra)"}
+ {:code "1570" :path "Assets:Fixed:Vehicles"
+  :type :asset :name "Vehicles"}
+ {:code "1575" :path "Assets:Fixed:Vehicles:Accumulated-Depreciation"
+  :type :asset :name "Accumulated depreciation — Vehicles (contra)"}
+ {:code "1580" :path "Assets:Fixed:Furniture-Equipment"
+  :type :asset :name "Furniture and equipment"}
+ {:code "1585" :path "Assets:Fixed:Furniture-Equipment:Accumulated-Depreciation"
+  :type :asset :name "Accumulated depreciation — Furniture/Equipment (contra)"}
+ {:code "1590" :path "Assets:Fixed:Computer-Equipment"
+  :type :asset :name "Computer hardware and software (capitalized)"}
+ {:code "1595" :path "Assets:Fixed:Computer-Equipment:Accumulated-Depreciation"
+  :type :asset :name "Accumulated depreciation — Computer Equipment (contra)"}
+
+ ;; --- Intangibles + other non-current ---
+ {:code "1600" :path "Assets:Intangibles:Software"
+  :type :asset :name "Internally-developed software (capitalized)"}
+ {:code "1610" :path "Assets:Intangibles:Goodwill"
+  :type :asset :name "Goodwill (purchase accounting)"}
+ {:code "1700" :path "Assets:Deposit:Security"
+  :type :asset :name "Security deposits (long-term)"}
+
+ ;; ============================================================================
+ ;; 2xxxx — LIABILITIES
+ ;;   20xx — Trade payables + accrued
+ ;;   21xx — Other current liabilities (credit card, customer deposits)
+ ;;   22xx — Sales-tax payable per state
+ ;;   23xx — Payroll liabilities
+ ;;   24xx — Federal payroll / 1099 accruals
+ ;;   25xx — Income tax payable
+ ;;   26xx — Notes payable + lines of credit (short-term)
+ ;;   27xx — Long-term liabilities
+ ;; ============================================================================
  {:code "2000" :path "Liabilities:Payable"
   :type :liability :name "Accounts payable" :reconcilable? true}
+ {:code "2010" :path "Liabilities:Accrued-Expenses"
+  :type :liability :name "Accrued expenses"}
+ {:code "2020" :path "Liabilities:Accrued:Interest"
+  :type :liability :name "Accrued interest payable"}
+
+ {:code "2100" :path "Liabilities:Credit-Card"
+  :type :liability :name "Credit card payable (corporate cards)"
+  :reconcilable? true}
+ {:code "2110" :path "Liabilities:Customer-Deposits"
+  :type :liability :name "Customer deposits / advance payments"
+  :reconcilable? true}
+ {:code "2120" :path "Liabilities:Deferred-Revenue"
+  :type :liability :name "Deferred revenue (unearned income)"}
+ {:code "2130" :path "Liabilities:Gift-Cards"
+  :type :liability :name "Gift card / store credit liability"}
 
  ;; Sales tax payable per state — one liability account per state we
  ;; collect from. Tags reference the per-state filing-report box.
@@ -64,31 +161,109 @@
   :type :liability :name "Denver, CO sales tax payable (home-rule city)"
   :tax-payable? true :tags [:us-co-denver-line-1]}
 
- ;; Federal payroll / 1099 accruals
+ ;; --- Payroll liabilities ---
+ {:code "2300" :path "Liabilities:Payroll:Wages-Salaries"
+  :type :liability :name "Wages and salaries payable"}
+ {:code "2310" :path "Liabilities:Payroll:State-Withholding"
+  :type :liability :name "State income tax withheld"}
+ {:code "2320" :path "Liabilities:Payroll:FUTA"
+  :type :liability :name "FUTA — Federal unemployment tax payable"}
+ {:code "2330" :path "Liabilities:Payroll:SUTA"
+  :type :liability :name "SUTA — State unemployment tax payable"}
+ {:code "2340" :path "Liabilities:Payroll:Workers-Comp"
+  :type :liability :name "Workers compensation premiums payable"}
+ {:code "2350" :path "Liabilities:Payroll:Benefits"
+  :type :liability :name "Employee benefit deductions payable (insurance / 401k)"}
+
+ ;; --- Federal payroll / 1099 accruals (existing) ---
  {:code "2400" :path "Liabilities:Payroll:Federal-Withholding"
   :type :liability :name "Federal income tax withheld (Form 941)"}
  {:code "2410" :path "Liabilities:Payroll:FICA"
   :type :liability :name "FICA payable (Social Security + Medicare)"}
+ {:code "2420" :path "Liabilities:1099-Withholding"
+  :type :liability :name "Backup withholding payable (Form 945)"}
 
- ;; Equity
+ ;; --- Income tax payable ---
+ {:code "2500" :path "Liabilities:Income-Tax:Federal"
+  :type :liability :name "Federal income tax payable (corporate)"}
+ {:code "2510" :path "Liabilities:Income-Tax:State"
+  :type :liability :name "State income tax payable (corporate / franchise)"}
+
+ ;; --- Short-term debt ---
+ {:code "2600" :path "Liabilities:Short-term-Debt:Line-of-Credit"
+  :type :liability :name "Line of credit — current portion"
+  :reconcilable? true}
+ {:code "2610" :path "Liabilities:Short-term-Debt:Notes"
+  :type :liability :name "Notes payable — current portion"
+  :reconcilable? true}
+
+ ;; --- Long-term debt ---
+ {:code "2700" :path "Liabilities:Long-term-Debt:Notes"
+  :type :liability :name "Notes payable — long-term"
+  :reconcilable? true}
+ {:code "2710" :path "Liabilities:Long-term-Debt:Mortgage"
+  :type :liability :name "Mortgage payable — long-term"
+  :reconcilable? true}
+
+ ;; ============================================================================
+ ;; 3xxx — EQUITY
+ ;;   30xx — Owner / member contributions + distributions
+ ;;   31xx — Retained earnings + dividends
+ ;;   32xx — Common stock + paid-in capital (C-Corp shape)
+ ;; ============================================================================
  {:code "3000" :path "Equity:Owner"
   :type :equity :name "Owner's equity"}
+ {:code "3010" :path "Equity:Owner-Contributions"
+  :type :equity :name "Owner contributions"}
+ {:code "3020" :path "Equity:Owner-Distributions"
+  :type :equity :name "Owner distributions / draws"}
  {:code "3100" :path "Equity:Retained-Earnings"
   :type :equity :name "Retained earnings"}
+ {:code "3110" :path "Equity:Dividends-Paid"
+  :type :equity :name "Dividends paid (C-Corp)"}
+ {:code "3200" :path "Equity:Common-Stock"
+  :type :equity :name "Common stock (C-Corp par value)"}
+ {:code "3210" :path "Equity:Additional-Paid-In-Capital"
+  :type :equity :name "Additional paid-in capital (C-Corp)"}
 
- ;; Income (revenue)
+ ;; ============================================================================
+ ;; 4xxx — INCOME (revenue)
+ ;;   40xx — Operating revenue
+ ;;   42xx — Service revenue
+ ;;   45xx — Other revenue carve-outs
+ ;; ============================================================================
  {:code "4000" :path "Income:Sales"
   :type :income :name "Product sales"}
+ {:code "4010" :path "Income:Sales:Returns-and-Allowances"
+  :type :income :name "Sales returns and allowances (contra-revenue)"}
+ {:code "4020" :path "Income:Sales:Discounts"
+  :type :income :name "Sales discounts (contra-revenue)"}
  {:code "4100" :path "Income:Services"
   :type :income :name "Service revenue"}
  {:code "4200" :path "Income:Sales:Out-Of-State"
   :type :income :name "Out-of-state sales (no nexus)"}
+ {:code "4300" :path "Income:Shipping"
+  :type :income :name "Shipping and handling income"}
+ {:code "4400" :path "Income:Subscription"
+  :type :income :name "Subscription / recurring revenue"}
 
- ;; COGS
+ ;; ============================================================================
+ ;; 5xxx — COGS
+ ;; ============================================================================
  {:code "5000" :path "Expenses:COGS"
   :type :expense :name "Cost of goods sold"}
+ {:code "5010" :path "Expenses:COGS:Materials"
+  :type :expense :name "COGS — Materials"}
+ {:code "5020" :path "Expenses:COGS:Labor"
+  :type :expense :name "COGS — Direct labor"}
+ {:code "5030" :path "Expenses:COGS:Freight-In"
+  :type :expense :name "COGS — Freight in / inbound shipping"}
+ {:code "5040" :path "Expenses:COGS:Subcontractors"
+  :type :expense :name "COGS — Subcontractor services"}
 
- ;; Operating expenses
+ ;; ============================================================================
+ ;; 6xxx — Operating expenses
+ ;; ============================================================================
  {:code "6000" :path "Expenses:Office"
   :type :expense :name "Office supplies"}
  {:code "6100" :path "Expenses:Rent"
@@ -108,4 +283,43 @@
  {:code "6800" :path "Expenses:Meals-Entertainment"
   :type :expense :name "Meals & entertainment"}
  {:code "6900" :path "Expenses:1099-Contractors"
-  :type :expense :name "Contractor payments (1099-NEC tracked)"}]
+  :type :expense :name "Contractor payments (1099-NEC tracked)"}
+
+ ;; --- Payroll expenses (employer side) ---
+ {:code "6110" :path "Expenses:Payroll:Wages"
+  :type :expense :name "Salaries and wages (employer-side gross)"}
+ {:code "6120" :path "Expenses:Payroll:Employer-Tax"
+  :type :expense :name "Employer payroll taxes (employer FICA + FUTA + SUTA)"}
+ {:code "6130" :path "Expenses:Payroll:Benefits"
+  :type :expense :name "Employee benefits expense (insurance / 401k match)"}
+
+ ;; --- Asset-related operating expense ---
+ {:code "6950" :path "Expenses:Depreciation"
+  :type :expense :name "Depreciation expense"}
+ {:code "6960" :path "Expenses:Amortization"
+  :type :expense :name "Amortization expense (intangibles)"}
+ {:code "6970" :path "Expenses:Bank-Fees"
+  :type :expense :name "Bank fees and merchant-processor charges"}
+ {:code "6980" :path "Expenses:Bad-Debt"
+  :type :expense :name "Bad debt expense"}
+ {:code "6990" :path "Expenses:Software-Subscriptions"
+  :type :expense :name "Software subscriptions and SaaS"}
+
+ ;; ============================================================================
+ ;; 7xxx — Other income / non-operating
+ ;; ============================================================================
+ {:code "7000" :path "Other-Income:Interest"
+  :type :income :name "Interest income"}
+ {:code "7100" :path "Other-Income:Investment"
+  :type :income :name "Investment income (dividends / capital gains realized)"}
+ {:code "7200" :path "Other-Income:FX-Gain"
+  :type :income :name "Foreign exchange gain"}
+
+ {:code "7500" :path "Other-Expense:Interest"
+  :type :expense :name "Interest expense"}
+ {:code "7600" :path "Other-Expense:FX-Loss"
+  :type :expense :name "Foreign exchange loss"}
+ {:code "7700" :path "Other-Expense:Tax-Penalties"
+  :type :expense :name "Tax penalties and late fees (non-deductible)"}
+ {:code "7800" :path "Other-Expense:Asset-Disposal-Loss"
+  :type :expense :name "Loss on disposal of fixed assets"}]
