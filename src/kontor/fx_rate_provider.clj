@@ -59,7 +59,7 @@
      Examples: :static-table :ecb :xe :oanda :fed-h10 :chained.")
 
   (resolve-rate [this query]
-    "Given a query map, return a BigDecimal rate such that
+    "Given a query map, return a non-zero BigDecimal rate such that
      amount-in-from × rate = amount-in-to, or nil if the provider has
      no opinion.
 
@@ -70,9 +70,14 @@
                           rate should be evaluated.
        :rate-type       — one of :spot :closing :average :opening
                           :historical. Defaults to :spot if omitted.
+       :via             — optional commodity (eid / lookup-ref /
+                          symbol). May be ignored by impls. The default
+                          [[StaticTableProvider]] uses this as the
+                          triangulation pivot when from→to is missing
+                          but from→via and via→to both exist.
 
      Returns:
-       BigDecimal or nil.
+       BigDecimal (non-zero) or nil.
 
      Semantics:
        - from = to → 1M (every provider must short-circuit identity).
@@ -82,7 +87,12 @@
          by default.
        - Triangulation through a base currency (typical: EUR for ECB
          feed) is the provider's call. The default StaticTable impl
-         supports an explicit `:via` option below.")
+         supports an explicit `:via` option.
+       - Zero-rate policy: a stored 0M rate is treated as `nil` (\"no
+           rate available\") across ALL builtin impls. Per ADR-072
+           review P1-72-3 the substrate picks one policy across direct
+           and chained lookups: zero is a sentinel for unavailability,
+           never \"the rate is literally zero\".")
 
   (resolve-period-rates [this query]
     "Optional bulk-fetch for period-aware reporting (IAS 21 average
@@ -124,6 +134,14 @@
 ;; StaticTableProvider — reads :fx-rate/* from the connected db
 ;; ============================================================================
 
+(defn- non-zero
+  "Treat 0M as nil (no rate). Per ADR-072 review P1-72-3 zero is the
+   substrate-wide sentinel for \"rate unavailable\" — never \"the rate
+   is literally zero\" — so direct and chained lookups behave the same."
+  [^BigDecimal r]
+  (when (and r (not (zero? (.signum r))))
+    r))
+
 (defn- query-exact
   "Direct lookup by composite tuple. Returns BigDecimal or nil.
 
@@ -132,12 +150,13 @@
    equality — datahike treats the position-vector as a fresh binding
    for each slot."
   [db from-eid to-eid ^Date at-date rate-type]
-  (d/q '[:find ?r .
-         :in $ ?tuple
-         :where
-         [?e :fx-rate/by-tuple ?tuple]
-         [?e :fx-rate/rate ?r]]
-       db [from-eid to-eid at-date rate-type]))
+  (non-zero
+   (d/q '[:find ?r .
+          :in $ ?tuple
+          :where
+          [?e :fx-rate/by-tuple ?tuple]
+          [?e :fx-rate/rate ?r]]
+        db [from-eid to-eid at-date rate-type])))
 
 (defn- query-last-on-or-before
   "Fallback: most recent sample with date ≤ at-date.
@@ -154,10 +173,11 @@
                     [(<= ?date ?cutoff)]]
                   db from-eid to-eid at-date rate-type)]
     (when (seq hits)
-      (->> hits
-           (sort-by first #(compare %2 %1))   ; descending by date
-           first
-           second))))
+      (non-zero
+       (->> hits
+            (sort-by first #(compare %2 %1))   ; descending by date
+            first
+            second)))))
 
 (defn- query-inverse
   "If from→to is missing, try to→from and invert."
@@ -319,24 +339,26 @@
    report surface that displays an ECB-sourced rate."
   "Exchange rates: European Central Bank (https://www.ecb.europa.eu/stats/exchange/eurofxref).")
 
-(defrecord EcbReferenceRatesProvider [conn opts]
+(defrecord EcbReferenceRatesProvider [conn opts inner]
   FxRateProvider
   (provider-id [_] :ecb)
-  (resolve-rate [_ q]
-    (resolve-rate (make-static-table-provider
-                   conn
-                   (merge {:default-via "EUR"} opts))
-                  q))
-  (resolve-period-rates [_ q]
-    (resolve-period-rates (make-static-table-provider conn opts) q)))
+  (resolve-rate [_ q] (resolve-rate inner q))
+  (resolve-period-rates [_ q] (resolve-period-rates inner q)))
 
 (defn make-ecb-reference-rates-provider
   "Construct an ECB-flavoured StaticTableProvider — sets EUR as the
    default triangulation pivot. Options are forwarded to the underlying
-   StaticTableProvider; pass `:default-via false` (or :default-via nil)
-   to disable triangulation explicitly."
+   StaticTableProvider; pass `:default-via nil` (or any falsy value)
+   to disable triangulation explicitly.
+
+   The wrapped StaticTableProvider is built once at construction time
+   per ADR-072 review P2-72-4 — avoids allocating a fresh record on
+   every lookup."
   ([conn] (make-ecb-reference-rates-provider conn {}))
-  ([conn opts] (->EcbReferenceRatesProvider conn opts)))
+  ([conn opts]
+   (let [merged (merge {:default-via "EUR"} opts)
+         inner (make-static-table-provider conn merged)]
+     (->EcbReferenceRatesProvider conn merged inner))))
 
 (defn ingest-ecb-csv-rows!
   "Persist a sequence of parsed ECB CSV rows into the :fx-rate/* table.

@@ -287,6 +287,25 @@
                      (Odoo's account_account_tag M2M, used by the
                      declarative report engine)."}
 
+   ;; ADR-073 review P1-73-1: monetary vs non-monetary classification
+   ;; for IAS 21 / ASC 830 currency translation. Monetary items (cash,
+   ;; AR, AP, loans) translate at the closing rate; non-monetary items
+   ;; (PP&E, inventory at cost, prepaid expenses, equity) translate at
+   ;; the historical rate from acquisition. Default for asset/liability
+   ;; is monetary; equity is non-monetary; income/expense translates
+   ;; at the average rate so :monetary? is don't-care.
+   {:db/ident       :account/monetary?
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one
+    :db/doc         "IAS 21 / ASC 830 monetary classification. Default
+                     when absent: monetary for :asset/:liability,
+                     non-monetary for :equity, irrelevant for
+                     :income/:expense (those translate at :average).
+                     Customers with non-monetary asset holdings
+                     (PP&E, inventory-at-cost, prepaid expenses) set
+                     this to `false` so kontor.consolidation
+                     translates them at :historical rate per ADR-073."}
+
    ;; ADR-019: regulator-specific external codes. The single
    ;; :account/code above is the kernel-facing code (often = the
    ;; dominant regulator's code, e.g. SKR04 in DE). When an account

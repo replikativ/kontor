@@ -8,6 +8,15 @@
    while preserving the kernel's BigDecimal-always, no-silent-coercion
    posture from [[kontor.money]].
 
+   ## Precision policy
+
+   `convert` defaults to 2-digit fractional precision (typical fiat).
+   That is NOT auto-derived from the target commodity's
+   `:commodity/precision` — this namespace is pure-on-`Money` and has
+   no db handle. JPY (precision 0) and BTC (precision 8) consumers
+   must pass `:precision` explicitly. Pass `:precision nil` to skip
+   rounding entirely and keep the full-precision product.
+
    Two operations cover today's needs:
 
      [[convert]]

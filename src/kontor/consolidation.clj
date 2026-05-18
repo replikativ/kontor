@@ -66,22 +66,20 @@
 ;; ============================================================================
 
 (def default-rate-type-by-account-type
-  "Default IAS 21 / ASC 830 rate-type for each :account/type.
+  "Default IAS 21 / ASC 830 rate-type by :account/type for MONETARY
+   accounts (the substrate consults `:account/monetary?` per-account
+   first; this map is the fallback when the attr is absent).
 
      :asset      → :closing   (monetary BS items — cash, AR, AP)
      :liability  → :closing
      :equity     → :historical
      :income     → :average   (P&L over the period)
      :expense    → :average
-     :other      → :closing   (conservative default)
 
-   NOTE: this lumps all assets as monetary by default. Real IAS 21
-   distinguishes monetary assets (cash, AR, loans) from non-monetary
-   (inventory at cost, PP&E, prepaid expenses) — non-monetary should
-   use the historical rate at acquisition. Customers with material
-   non-monetary holdings should ship a per-account override map
-   instead of this default; see [[translate-trial-balance-tx-data]]
-   :rate-type-by-account opt."
+   For NON-MONETARY asset/liability (per `:account/monetary? false`),
+   `pick-rate-type` overrides this default and returns `:historical` —
+   the IAS-21-correct treatment for PP&E, inventory-at-cost, prepaid
+   expenses, etc. Per ADR-073 review P1-73-1."
   {:asset     :closing
    :liability :closing
    :equity    :historical
@@ -101,17 +99,30 @@
 ;; translate-trial-balance-tx-data
 ;; ============================================================================
 
-(defn- account-type-of
+(defn- account-info
+  "Pull both :account/type and :account/monetary? in one shot."
   [db account-eid]
-  (or (:account/type (d/pull db [:account/type] account-eid))
-      :other))
+  (d/pull db [:account/type :account/monetary?] account-eid))
 
 (defn- pick-rate-type
-  "Resolve the rate-type for an (account-eid, account-type) given the
-   :rate-type-by-account override map + :rate-type-by-account-type
-   fallback."
-  [rate-type-by-account rate-type-by-account-type account-eid account-type]
+  "Resolve the rate-type for an (account-eid, account-type) given:
+
+     1. The :rate-type-by-account override map (per-account-eid wins).
+     2. The account's :account/monetary? — if explicitly `false` on an
+        :asset or :liability, return :historical (IAS 21 non-monetary).
+        If explicitly `true` or absent on those types, fall through
+        to the type-default.
+     3. The :rate-type-by-account-type override map.
+     4. The kernel default-rate-type-by-account-type."
+  [rate-type-by-account rate-type-by-account-type
+   account-eid account-type monetary?]
   (or (get rate-type-by-account account-eid)
+      ;; ADR-073 P1-73-1: explicit non-monetary asset/liability →
+      ;; historical rate. We treat false (explicit) differently from
+      ;; nil (absent); only explicit false flips the type-default.
+      (when (and (false? monetary?)
+                 (#{:asset :liability} account-type))
+        :historical)
       (get rate-type-by-account-type account-type)
       (get default-rate-type-by-account-type account-type)
       :closing))
@@ -195,11 +206,14 @@
         per-account-translated
         (into {}
               (for [[acct cmap] tb
-                    :let [acct-type (account-type-of db acct)
+                    :let [{acct-type :account/type
+                           monetary? :account/monetary?} (account-info db acct)
+                          acct-type (or acct-type :other)
                           rt (pick-rate-type rate-type-by-account
                                              rate-type-by-account-type
                                              acct
-                                             acct-type)
+                                             acct-type
+                                             monetary?)
                           translated (->> cmap
                                           (mapv (fn [[_c m]]
                                                   (fx/convert m fx-provider
@@ -258,12 +272,16 @@
 ;; ============================================================================
 
 (defn- find-pair-postings
-  "Pull every posting from every SOURCE tx tagged with the given
+  "Pull every posting from every POSTED SOURCE tx tagged with the given
    :transaction/intercompany-pair-id. **Excludes consolidation txs**
    (those with a :transaction/consolidation-kind attr) — without this
    exclusion a re-run of consolidate! would pick up the prior
    elimination tx (which we tag with the same pair-id for audit) and
    re-negate it, doubling the elimination on every cycle.
+
+   Per ADR-073 review P1-73-3 we also filter `:transaction/state :posted`
+   — drafts can still be edited (ADR-007 sealing story), and silently
+   eliminating an in-flight draft would surprise the consumer.
 
    Returns a sequence of pulled posting maps with at least :db/id,
    :posting/account, :posting/amount, :posting/commodity, :posting/entity."
@@ -272,10 +290,11 @@
                        :in $ ?pid
                        :where
                        [?t :transaction/intercompany-pair-id ?pid]
+                       [?t :transaction/state :posted]
                        [(missing? $ ?t :transaction/consolidation-kind)]]
                      db pair-id)]
     (when (empty? tx-eids)
-      (throw (ex-info "eliminate-intercompany-pair-tx-data: no source transactions found with pair-id"
+      (throw (ex-info "eliminate-intercompany-pair-tx-data: no POSTED source transactions found with pair-id"
                       {:pair-id pair-id})))
     (->> (d/q '[:find [?p ...]
                 :in $ [?tx ...]
@@ -394,6 +413,25 @@
   (when-not at-date                (throw (ex-info ":at-date required" {})))
   (when-not journal                (throw (ex-info ":journal required" {})))
   (when-not cta-account            (throw (ex-info ":cta-account required" {})))
+  ;; Per ADR-073 review P2-73-1: defensive — the consolidation +
+  ;; elimination entities MUST be synthetic (:consolidation /
+  ;; :elimination), not :operating. A misconfigured family where the
+  ;; group entity is left as :operating would silently include itself
+  ;; in the translation loop, cascading duplicate postings.
+  (let [db (d/db conn)
+        kind-of (fn [e]
+                  (:entity/kind (d/pull db [:entity/kind] e)))
+        cons-kind (kind-of consolidation-entity)
+        elim-kind (kind-of elimination-entity)]
+    (when (or (= :operating cons-kind) (nil? cons-kind))
+      (throw (ex-info "consolidate-tx-data: :consolidation-entity must be :consolidation or :elimination kind"
+                      {:consolidation-entity consolidation-entity
+                       :found-kind cons-kind})))
+    (when (and (not= consolidation-entity elimination-entity)
+               (or (= :operating elim-kind) (nil? elim-kind)))
+      (throw (ex-info "consolidate-tx-data: :elimination-entity must be :elimination kind (or = :consolidation-entity)"
+                      {:elimination-entity elimination-entity
+                       :found-kind elim-kind}))))
   (let [db (d/db conn)
         family (entity/family db group-root)
         ;; Find :operating entities (skip consolidation + elimination).
