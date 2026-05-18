@@ -67,21 +67,24 @@ Date: 2026-05-09.
 
 ---
 
-## ADR-005 — `tax-provider` protocol from day 1
+## ADR-005 — `tax-provider` protocol from day 1 — **SUPERSEDED by ADR-071 (2026-05-17)**
 
-**Decision.** The kernel defines `kontor.tax-provider/TaxProvider` protocol as a first-class abstraction. It accepts (transaction context, partner, line items) and returns the tax postings to attach. Three implementations ship:
+**Original decision (2026-05-09).** The kernel defines `kontor.tax-provider/TaxProvider` protocol as a first-class abstraction. It accepts (transaction context, partner, line items) and returns the tax postings to attach. Three implementations ship: static-table, SST-CSV feeder, external-API adapter shape.
 
-1. **Static-table provider** — for DE, CA, and any country whose tax rules fit a finite EDN table. The default and most common case.
-2. **CSV-feeder provider** — quarterly-refreshed Streamlined Sales Tax (SST) CSVs for the 24 SST member US states. Free public data.
-3. **External-API adapter shape** — a thin contract that customer-supplied Avalara/TaxJar/TaxCloud API keys plug into. We ship the contract; customers ship the keys.
+**Why superseded.** Research note 70 found:
+- `StaticTableProvider/resolve-taxes` returned literal `[]`; **zero callers anywhere** in `src/` or `test/`. The protocol was dead code throughout.
+- The pattern that actually ran in production: `posting-builder` — a per-country function the kernel invoked from `kontor.document.invoice/send!`. Only `l10n-de` implemented it; every other l10n module's invoices produced no tax postings.
+- The original signature `(resolve-taxes context → vector-of-postings)` conflated *rate determination* with *posting expansion* — two concerns with different consumers (Avalara knows rates, not charts of accounts), different lifecycles (rate tables change weekly; chart-of-accounts rarely), and different test strategies.
 
-**Why.** US sales tax is uniquely uncapturable in static data (~11,000 jurisdictions, weekly rate changes, product-taxability matrices). Other countries' tax engines fit in a few KB of EDN. A single abstraction lets the kernel handle both regimes without an internal switch on country.
+**Two preserved invariants from the original ADR still hold:**
+1. **We do not bundle anyone's API key, ToS-restricted data, or rate tables we lack the right to redistribute.** Avalara/TaxJar adapters remain scaffolding; customers register themselves. (Research note 03.)
+2. **Recoverable vs non-recoverable** stays a tax-level property (`:tax/recoverable?` boolean), not a provider concern. VAT/HST/QST/GST = recoverable. PST/RST/US sales tax = non-recoverable. The repartition machinery posts both correctly.
 
-**Implication.** **We do not bundle anyone's API key, ToS-restricted data, or rate tables that we lack the right to redistribute.** Avalara/TaxJar adapters are scaffolding; customers register themselves. (Research note 03 flags the redistribution restriction explicitly.)
+**The `:tax/* :tax-rep/* :tax-group/*` schema attrs (`schema.clj:1244-1393`) are preserved** — they back the static-table impl of the new `TaxRateProvider` (ADR-071).
 
-**Implication 2.** **Recoverable vs non-recoverable** is a kernel-level property of a tax (`:tax/recoverable?` boolean), not a provider concern. VAT/HST/QST/GST = recoverable. PST/RST/US sales tax = non-recoverable. The repartition machinery posts both correctly.
+See ADR-071 for the replacement design.
 
-Date: 2026-05-09.
+Date: 2026-05-09 (superseded 2026-05-17).
 
 ---
 
@@ -7619,3 +7622,47 @@ disclosure-shaped consumer needs immediately.
 `rate-rationale-audit-doc-is-persisted-on-the-liability-book`.
 
 Date: 2026-05-15.
+
+---
+
+## ADR-071 — Tax abstraction: `TaxRateProvider` + `TaxFacts` + `TaxPostingBuilder`
+
+**Decision.** Replace the dead `kontor.tax-provider/TaxProvider` (ADR-005, superseded) with a three-protocol-plus-data-shape design:
+
+1. **`TaxRateProvider`** — determines rates. Pure: given a transaction context (line items, partner, jurisdiction, date, `:tax-use`), return a vector of `TaxFacts` — one per line that is subject to tax. Implementations: `StaticTableProvider` (DE/CA/CN-shaped), `AvalaraProvider` / `TaxJarProvider` (scaffolds, customer keys), `SstCsvProvider` (24 US SST states), and per-l10n providers that wrap the static `:tax/*` schema.
+2. **`TaxFacts`** — pure data, the inter-protocol contract. Carries the line-base + commodity, jurisdiction (country + subdivision + place-of-supply), per-component rate items with `:component/kind` enum (`:output-vat | :input-vat | :sales-tax | :reverse-charge | :withholding | :pre-collection | :surcharge | :cess | :duty | :fee`), per-component `:provenance` (provider-id, rate-source, statute citation when available), and a `:jurisdiction-specific-codes` opaque slot (e.g., `{:br/icms-cst "60"}`) that downstream emitters consume.
+3. **`TaxPostingBuilder`** — materializes GL postings from a `TaxFacts`. Per-country (SKR04, NCM-CST, GSTN account routing live here). The existing l10n `posting-builder` functions are ~90% of the impl; the refactor splits them into rate→facts + facts→postings with a thin adapter.
+
+Two existing components stay in place, orthogonal:
+- **Tax reporting / aggregation** is already done by `kontor.report` with `:engine :tax-tags`. No `defprotocol` needed; the tag-on-account model works.
+- **Clearance / attestation** (NF-e, IRN, e-fapiao, CFDI) is already factored out via `:attestation/*` (ADR-018, ADR-024). It consumes `TaxFacts` on the way to per-country clearance envelopes — refactor enables sharing what each currently re-derives.
+
+**Composition.** A new `kontor.tax-pipeline` namespace wires `TaxRateProvider` → `TaxFacts` → `TaxPostingBuilder`. It depends on both protocols; the protocols themselves stay pure-data. Existing `kontor.document.invoice/send!` calls a thin adapter that preserves today's `(send! conn invoice-eid posting-builder)` shape.
+
+**Audit / freezing.** A `:posting/tax-fact-id` ref points to a separate `:tax-fact/*` entity with the full `TaxFacts` snapshot at posting time. Purchased rates (what Avalara returned for *this* transaction) are stored alongside the postings rather than re-derived. Aligns with how `:attestation/*` handles clearance evidence.
+
+**Reverse charge: explicit asymmetry.** `:component/kind :reverse-charge` MEANS DIFFERENT THINGS based on `:tax-use`. Seller-side (`:sale`): reporting-tag-only marker; no postings beyond AR/revenue. Buyer-side (`:purchase`): materializes two postings (input-VAT receivable + output-VAT payable, both-sides pattern). The protocol docstring documents this; the posting-builder contract enforces it via per-`:tax-use` dispatch.
+
+**Withholding** (TDS, retención, US backup-withholding) stays in `TaxRateProvider` with `:tax-use :purchase` returning input-side facts + the withholding the buyer is obligated to perform. A separate `WithholdingProvider` was considered (Q5 in research note 70) but rejected as premature; the `:tax-use` discriminator covers the asymmetry. Revisit if buyer-side withholding workflows grow seller-side rate-provider can't naturally express.
+
+**Multi-jurisdiction transactions.** A `TaxFacts` carries one `:jurisdiction` at the line level, but per-component `:jurisdiction {:authority :subdivision}` slots let one TaxFacts route components to different authorities. Necessary for US (origin / destination / intermediate) and BR (DIFAL across origin and destination states).
+
+**Cross-line rounding.** `:rounding-strategy` opt on the posting-builder construction. EU rules permit per-document reconciliation but don't require it; US is generally per-line. Kernel allows but never requires the reconciliation pass. Per-country builders choose.
+
+**Effective-dated rates.** Schema partially supports `:tax/effective-from`/`-until` (`schema.clj:2809-2818`); ADR-026 referenced this for IN. Static-table provider must respect these; follow-up: confirm + complete the schema attrs if gaps.
+
+**Test discipline.** Per-country golden-fixture tests (`test/kontor/l10n_*/posting_builder_test.clj`). Round-trip on totals (sum of generated postings = expected); account-routing (SKR04 vs NCM-CST) tested via fixtures, not derivable from TaxFacts alone. Per ADR-037 rhythm.
+
+**Alignment with `kontor.einvoice-provider`.** Both protocols are output-side per-country contracts. The relationship: e-invoicing consumes `TaxFacts` (per-component `:jurisdiction-specific-codes` is the slot) on the way to the clearance envelope. The two providers may share a country's data feed (e.g., BR `MvaProvider` at `l10n-br/taxes.clj:328-345` is precedent). Full integration deferred; flag here for future.
+
+**Why.** The current `TaxProvider` single-protocol design conflated rate-determination with posting-expansion, with the consequence that the abstraction was unused (l10n modules each hardcoded their own pattern). The three-protocol split separates concerns by consumer (rate providers don't need chart-of-accounts; posting builders don't need rate-lookup tables). The `TaxFacts` data shape carries enough structure (BR cascade, IN component-split, MX retenciones, AU GST, DE reverse-charge) without leaking jurisdictional logic into the kernel.
+
+**Implication.** Per-country migration cost ranges from AU +120 LoC (trivial single-rate) through US +1500 LoC (Avalara/SST/nexus needs real work). Multi-week multi-module project; pilot per-module as consumer demand drives. The DE posting-builder is the natural first port (smallest refactor — already has the logic, just splits the function).
+
+**Implication 2.** Existing `:tax/* :tax-rep/* :tax-group/*` schema (`schema.clj:1244-1393`) is preserved unchanged — backs the static-table impl of `TaxRateProvider`. The `kontor.tax-provider/TaxProvider` defrecord scaffolds (the old `StaticTableProvider`, `AvalaraProvider`, etc.) are dropped; their *names* migrate to `kontor.tax-rate-provider/` for the new protocol impls.
+
+**Implication 3.** ADR-005's two invariants survive verbatim: no bundled API keys / ToS-restricted data; recoverable-vs-non-recoverable stays `:tax/recoverable?`.
+
+**Research backing.** doc/research/70-tax-abstraction-design.md (10 open questions resolved as recommended; per-module survey of all 11 l10n modules; jurisdictional realities for US/BR/IN/CN/CA/DE/FR/AT/JP/MX/AU; reference systems Odoo/Avalara/TaxJar/SST).
+
+Date: 2026-05-17.
