@@ -11,7 +11,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
             [kontor.core :as core]
-            [kontor.invoice :as inv]
+            [kontor.document.invoice :as inv]
             [kontor.invoice.schema :as inv-schema]
             [kontor.l10n-de.chart :as chart]
             [kontor.l10n-de.invoice :as inv-de]

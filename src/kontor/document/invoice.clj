@@ -1,5 +1,17 @@
-(ns kontor.invoice
-  "Kernel-side invoice lifecycle.
+(ns kontor.document.invoice
+  "Kernel-side **invoice-as-document** — lifecycle (create / send /
+   mark-paid / cancel) + the per-doc status machine. The business
+   workflow (GL posting, dispatch, recurring) lives in the companion
+   `modules/invoice/` under the `kontor.invoice.*` prefix.
+
+   The namespace split (doc/research/69 §6 #1) closed a prior collision:
+     - this ns (kernel)    : the document + lifecycle
+     - kontor.invoice.posting (companion): GL posting builder
+     - kontor.invoice.bridge  (companion): external dispatch
+     - kontor.invoice.schema  (companion): workflow-specific attrs
+
+   Pre-2026-05 history: this was `kontor.invoice`; the rename frees the
+   `kontor.invoice` prefix for the companion's workflow surface.
 
    Workflow:
      create!     — :draft state, no accounting impact

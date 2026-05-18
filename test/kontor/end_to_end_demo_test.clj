@@ -33,7 +33,7 @@
             [datahike.api :as d]
             [kontor.aging :as aging]
             [kontor.balance :as balance]
-            [kontor.invoice :as invoice]
+            [kontor.document.invoice :as invoice]
             [kontor.invoice.schema :as inv-schema]
             [kontor.l10n-de.chart :as chart]
             [kontor.l10n-de.closing :as de-closing]

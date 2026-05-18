@@ -35,3 +35,10 @@ local.edn
 # (SOUL.md, MEMORY.md, daily memory files, transcripts) with our
 # deliverables.
 openclaw/
+
+# Clay notebook output (deployed to gh-pages, not in main branch)
+docs/
+_site/
+
+# Clay temp directory
+.clay-temp/
