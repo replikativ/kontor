@@ -87,15 +87,20 @@
   :tags [:ca-payroll-wsib]}
 
  ;; ──────────────────────────────────────────────────────────────────
- ;; QC carve-out (Revenu Québec) — C4.1 emit, C4 passthrough
- ;; Accounts present so QC employees can post; RL-1 emission deferred.
+ ;; QC carve-out (Revenu Québec) — C4.1 emit (ADR-087)
  ;; ──────────────────────────────────────────────────────────────────
  {:code "2521" :path "Liabilities:Payroll:RQ-QPP"
   :type :liability :name "Revenu Québec — QPP / QPP2"
-  :tags [:ca-payroll-qpp :qc-rq-rl1]}
+  :tags [:ca-payroll-qpp :qc-rq-tpz1015 :qc-rq-rl1]}
  {:code "2531" :path "Liabilities:Payroll:RQ-QPIP"
   :type :liability :name "Revenu Québec — QPIP"
-  :tags [:ca-payroll-qpip :qc-rq-rl1]}
+  :tags [:ca-payroll-qpip :qc-rq-tpz1015 :qc-rq-rl1]}
  {:code "2511" :path "Liabilities:Payroll:RQ-Income-Tax"
   :type :liability :name "Revenu Québec — Provincial income tax"
-  :tags [:ca-payroll-qc-itx :qc-rq-rl1]}]
+  :tags [:ca-payroll-qc-itx :qc-rq-tpz1015 :qc-rq-rl1]}
+ {:code "2532" :path "Liabilities:Payroll:RQ-FSS"
+  :type :liability :name "Revenu Québec — Fonds des services de santé (FSS)"
+  :tags [:ca-payroll-fss :qc-rq-tpz1015 :qc-rq-rl1]}
+ {:code "5417" :path "Expenses:Payroll:Employer-FSS"
+  :type :expense :name "Employer FSS (Quebec Health Services Fund)"
+  :tags [:ca-payroll-er-fss]}]

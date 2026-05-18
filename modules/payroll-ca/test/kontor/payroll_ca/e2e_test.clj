@@ -1,23 +1,28 @@
 (ns kontor.payroll-ca.e2e-test
   "End-to-end bilingual flow per note 84 §10.3 (the C4 acceptance
-   criterion). One Acme Canada Inc. with two hires:
+   criterion) + ADR-087 (C4.1 RL-1 emission). One Acme Canada Inc.
+   with two hires:
 
      - James MacDonald — ON, EN correspondence
-     - Sophie Lavoie   — QC, FR correspondence (QC passthrough)
+     - Sophie Lavoie   — QC, FR correspondence
 
    Run a payroll cycle through compute → posting → audit-doc.
 
-   Per note 84 §11 Q5 the acceptance criterion is:
+   Per ADR-087 the C4.1 acceptance criterion extends the C4 one:
      - A CA Inc with N employees posts a payroll via the Ceridian
        CSV adapter through `run-payroll!`.
-     - PD7A monthly helper returns correct three-bucket totals.
-     - QC employee's T4 boxes 17/17A/55/56 populate; warning logs
-       'RL-1 emission deferred to C4.1'.
+     - PD7A monthly helper returns correct three-bucket CRA totals.
+     - TPZ-1015 monthly helper returns correct four-bucket Revenu
+       Québec totals (QC-ITX / QPP / QPIP / FSS).
+     - QC employee's T4 boxes 17/17A/55/56 populate.
+     - QC employee's RL-1 slip + RL-1 Summary builds without warning
+       (warning fires only when the QC emitter is NOT installed).
      - Year-end T619+T4+T4-Summary validates against 2026V4 XSD.
 
    This file exercises the substrate; the multi-period accrual side
    is exercised in `t4_builder_test/full-submission-validates-against-xsd`."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.data.xml :as xml]
+            [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
             [kontor.core :as core]
             [kontor.hr.compensation :as comp]
@@ -27,10 +32,13 @@
             [kontor.hr.payroll :as payroll]
             [kontor.hr.person :as person]
             [kontor.l10n-ca.chart :as ca-chart]
+            [kontor.money :as money]
             [kontor.payroll-ca.chart :as pca-chart]
             [kontor.payroll-ca.emit :as emit]
             [kontor.payroll-ca.pd7a :as pd7a]
             [kontor.payroll-ca.posting-builder :as pb]
+            [kontor.payroll-ca.qc-emit :as qc-emit]
+            [kontor.payroll-ca.tpz1015 :as tpz1015]
             [kontor.payroll-provider :as ppro])
   (:import [java.math BigDecimal]))
 
@@ -91,6 +99,7 @@
                               {:kind :employee-ei        :amount -82M    :employer-side? false}
                               {:kind :employer-qpp       :amount 353M    :employer-side? true}
                               {:kind :employer-qpip      :amount 75M     :employer-side? true}
+                              {:kind :employer-fss       :amount 215M    :employer-side? true}
                               {:kind :employer-ei        :amount 114.80M :employer-side? true}]
                  :jurisdiction-specific-codes
                  {:engine :mock-ca :province-of-employment "QC"
@@ -179,7 +188,9 @@
                   :ca-payroll-net-wages          (get-account-eid db "2550")
                   :ca-payroll-qpp                (get-account-eid db "2521")
                   :ca-payroll-qpip               (get-account-eid db "2531")
-                  :ca-payroll-qc-itx             (get-account-eid db "2511")}
+                  :ca-payroll-qc-itx             (get-account-eid db "2511")
+                  :ca-payroll-fss                (get-account-eid db "2532")
+                  :ca-payroll-er-fss             (get-account-eid db "5417")}
         compute-provider (->MockCaCompute
                           {:per-emp {james-emp {:province "ON"}
                                      sophie-emp {:province "QC"}}})
@@ -266,10 +277,10 @@
         (is (>= (count docs) 1))))))
 
 ;; ============================================================================
-;; QC warning
+;; QC detection — passthrough vs. emitter-installed
 ;; ============================================================================
 
-(deftest qc-passthrough-warns
+(deftest qc-passthrough-warns-without-emitter
   (let [facts [{:employment :emp/sophie
                 :gross 5500M :net 3800M
                 :components [{:kind :base-wage    :amount 5500M  :employer-side? false}
@@ -278,3 +289,184 @@
         qc-set (emit/warn-if-qc-detected! facts)]
     (testing "Sophie was detected as QC"
       (is (= #{:emp/sophie} qc-set)))))
+
+(deftest qc-no-warn-when-emitter-installed
+  (let [facts [{:employment :emp/sophie
+                :gross 5500M :net 3800M
+                :components [{:kind :base-wage    :amount 5500M  :employer-side? false}
+                             {:kind :employee-qpp :amount -353M  :employer-side? false}]
+                :jurisdiction-specific-codes {}}]
+        sw (java.io.StringWriter.)
+        qc-set (binding [*err* sw]
+                 (emit/warn-if-qc-detected! facts
+                                            {:qc-emit-installed? true}))]
+    (testing "QC still detected"
+      (is (= #{:emp/sophie} qc-set)))
+    (testing "But no warning printed"
+      (is (empty? (str sw))))))
+
+;; ============================================================================
+;; QC RL-1 end-to-end — TPZ-1015 totals + RL-1 submission build (ADR-087)
+;; ============================================================================
+
+(deftest qc-rl1-end-to-end
+  ;; Bootstrap a CA inc with Sophie (QC) + James (ON), run a payroll
+  ;; cycle posting both, then verify:
+  ;;   (1) TPZ-1015 helper sums the four RQ buckets correctly
+  ;;   (2) The QC emit-provider produces FR audit-doc rows
+  ;;   (3) build-rl1-submission! generates a valid XML envelope
+  ;;       containing only Sophie's slip + a Sommaire1.
+  (let [conn (bootstrap)
+        db (d/db conn)
+        cad (d/q '[:find ?e . :where [?e :commodity/symbol "CAD"]] db)
+        ent (d/q '[:find ?e . :where [?e :entity/code "ACME-CA"]] db)
+        journal (d/q '[:find ?e . :where [?e :journal/code "PAY-CA"]] db)
+        period (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)
+        _ (person/create-person!
+           conn {:external-id "P-james"
+                 :given-name "James" :family-name "MacDonald"})
+        _ (person/create-person!
+           conn {:external-id "P-sophie"
+                 :given-name "Sophie" :family-name "Lavoie"})
+        db (d/db conn)
+        james (hr/person-by-external-id db "P-james")
+        sophie (hr/person-by-external-id db "P-sophie")
+        _ (employment/hire! conn {:code "EMP-james"
+                                  :person james :entity ent
+                                  :start-date #inst "2026-01-15"
+                                  :job-title "Senior Eng"})
+        _ (employment/hire! conn {:code "EMP-sophie"
+                                  :person sophie :entity ent
+                                  :start-date #inst "2026-01-15"
+                                  :job-title "Designer"})
+        db (d/db conn)
+        james-emp (hr/employment-by-code db "EMP-james")
+        sophie-emp (hr/employment-by-code db "EMP-sophie")
+        _ (comp/set-compensation!
+           conn {:employment james-emp
+                 :effective-from #inst "2026-01-15"
+                 :commodity cad
+                 :components [{:kind :base-wage :amount 85000M :period :annual}]})
+        _ (comp/set-compensation!
+           conn {:employment sophie-emp
+                 :effective-from #inst "2026-01-15"
+                 :commodity cad
+                 :components [{:kind :base-wage :amount 66000M :period :annual}]})
+        _ (pp/create-pay-period!
+           conn {:code "ACME-2026-05-QC" :entity ent
+                 :start-date #inst "2026-05-01"
+                 :end-date #inst "2026-05-31"
+                 :frequency :monthly
+                 :fiscal-period period})
+        pp-eid (hr/pay-period-by-code (d/db conn) "ACME-2026-05-QC")
+        db (d/db conn)
+        accounts {:ca-payroll-wages              (get-account-eid db "5400")
+                  :ca-payroll-er-cpp             (get-account-eid db "5410")
+                  :ca-payroll-er-ei              (get-account-eid db "5411")
+                  :ca-payroll-vacation-accrual   (get-account-eid db "5412")
+                  :ca-payroll-er-rpp             (get-account-eid db "5413")
+                  :ca-payroll-itx                (get-account-eid db "2510")
+                  :ca-payroll-cpp                (get-account-eid db "2520")
+                  :ca-payroll-ei                 (get-account-eid db "2530")
+                  :ca-payroll-rpp                (get-account-eid db "2560")
+                  :ca-payroll-vacation-liability (get-account-eid db "2540")
+                  :ca-payroll-net-wages          (get-account-eid db "2550")
+                  :ca-payroll-qpp                (get-account-eid db "2521")
+                  :ca-payroll-qpip               (get-account-eid db "2531")
+                  :ca-payroll-qc-itx             (get-account-eid db "2511")
+                  :ca-payroll-fss                (get-account-eid db "2532")
+                  :ca-payroll-er-fss             (get-account-eid db "5417")}
+        compute-provider (->MockCaCompute
+                          {:per-emp {james-emp {:province "ON"}
+                                     sophie-emp {:province "QC"}}})
+        posting-builder (pb/->CaPayrollPostingBuilder
+                         {:commodity cad :rp-account-tag nil})
+        ;; Pass :qc-emit-installed? so the warning is suppressed
+        emit-provider (emit/->CaPayrollEmitProvider
+                       {:language :en :qc-emit-installed? true})
+        sw (java.io.StringWriter.)
+        report (binding [*err* sw]
+                 (payroll/run-payroll!
+                  conn {:pay-period pp-eid
+                        :entity ent
+                        :employments [james-emp sophie-emp]
+                        :compute-provider compute-provider
+                        :posting-builder posting-builder
+                        :emit-provider emit-provider
+                        :accounts accounts
+                        :run-code "ACME-2026-05-QC-001"
+                        :tx-code "TX-ACME-2026-05-QC"
+                        :journal journal
+                        :commodity cad}))]
+    (testing "Payroll run completed without QC warning (emitter installed)"
+      (is (not (re-find #"QC employments detected" (str sw)))))
+    (testing "TPZ-1015 helper sums the four Revenu Québec buckets"
+      (let [summary (tpz1015/tpz1015-period-due
+                     conn {:period-start #inst "2026-05-01"
+                           :period-end #inst "2026-06-01"
+                           :remitter-type :monthly})]
+        ;; Sophie's QC-ITX = 260
+        (is (= 260M (:amount (:qc-itx summary))))
+        ;; QPP = Sophie employee 353 + employer 353 = 706
+        (is (= 706M (:amount (:qpp summary))))
+        ;; QPIP = Sophie employee 53 + employer 75 = 128
+        (is (= 128M (:amount (:qpip summary))))
+        ;; FSS = employer 215
+        (is (= 215M (:amount (:fss summary))))
+        ;; Total = 1309
+        (is (= 1309M (:amount (:total summary))))
+        (is (some? (:due-date summary)))))
+    (testing "QC emit-provider emits FR audit-doc row when invoked"
+      ;; Inline call — not threaded through run-payroll! since
+      ;; PayrollEmitProvider only takes one emit-provider slot today.
+      ;; The wiring shape under ADR-087 is consumer-composed.
+      (let [qc-prov (qc-emit/->QcPayrollEmitProvider {:language :fr})
+            facts (ppro/compute-payroll
+                   compute-provider {:employment-eids [sophie-emp]})
+            events (ppro/emit-payroll-events
+                    qc-prov facts {:pay-period-eid pp-eid :entity-eid ent})]
+        (is (= 1 (count events)))
+        (is (= :payroll-filing (:audit-doc/category (first events))))
+        (is (= :fr (:audit-doc/language (first events))))))
+    (testing "build-rl1-submission! generates valid XML envelope"
+      (let [;; Build a synthetic full-year facts list (12 × monthly) so
+            ;; the RL-1 + Sommaire1 totals make sense.
+            year-facts (vec
+                        (concat
+                         (mapcat (fn [_]
+                                   (ppro/compute-payroll
+                                    compute-provider
+                                    {:employment-eids [sophie-emp james-emp]}))
+                                 (range 12))))
+            persons-by-emp {sophie-emp {:given-name "Sophie"
+                                        :family-name "Lavoie"
+                                        :national-id-sin "123456782"
+                                        :address {:line-1 "100 rue Sainte-Catherine"
+                                                  :city "Montréal" :province "QC"
+                                                  :country "CAN" :postal-code "H2X1A1"}}
+                            james-emp {:given-name "James"
+                                       :family-name "MacDonald"
+                                       :national-id-sin "123456790"}}
+            result (qc-emit/build-rl1-submission!
+                    {:db (d/db conn)
+                     :facts year-facts
+                     :employer-neq "1234567890"
+                     :employer-id-number "NP000001"
+                     :employer-name "Acme Canada Inc."
+                     :tax-year 2026
+                     :transmitter {:transmetteur/np-number "NP000001"
+                                   :transmetteur/neq "1234567890"
+                                   :transmetteur/name "Acme Canada Inc."
+                                   :transmetteur/contact
+                                   {:name "A. Payroll"
+                                    :phone "514-555-0100"
+                                    :email "payroll@acme.ca"}}
+                     :persons-by-emp persons-by-emp
+                     :fss-contribution (money/money 2580M :CAD)})
+            xml-str (xml/emit-str (:submission result))]
+        (is (= 1 (count (:slips result))) "Only Sophie (QC) gets a slip")
+        (is (re-find #"<NAS>123456782</NAS>" xml-str))
+        (is (not (re-find #"<NAS>123456790</NAS>" xml-str)) "James (ON) excluded")
+        (is (re-find #"<Sommaire1>" xml-str))
+        (is (re-find #"<Case30>2580\.00</Case30>" xml-str) "FSS present in summary")
+        (is (= :fr (:audit-doc/language (first (:audit-doc-tx-data result)))))))))

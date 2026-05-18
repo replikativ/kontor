@@ -139,6 +139,15 @@
    :employer-wsib          {:account-tag :ca-payroll-er-wsib
                             :employer-side? true
                             :payable-tag :ca-payroll-wsib}
+   ;; QC FSS (Fonds des services de santé / Health Services Fund) — employer
+   ;; contribution remitted via TPZ-1015 and summarized on the RL-1 Summary.
+   ;; C4.1 ships the wage-type + chart-of-accounts hook; the engine supplies
+   ;; the computed rate (consumer-configured per total-payroll-threshold
+   ;; bracket). See ADR-087 §3 and note 84 §8.1.
+   :employer-fss           {:account-tag :ca-payroll-er-fss
+                            :employer-side? true
+                            :requires-qc? true
+                            :payable-tag :ca-payroll-fss}
 
    ;; ──────────────────────────────────────────────────────────────
    ;; ACCRUALS — debit accrual expense, credit accrual liability.

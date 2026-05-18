@@ -832,10 +832,15 @@ Per note-85, all 5 calls land correctly. Promoted updates here:
 - **No PD7A emission (CRA-to-employer correspondence)** — ✓
   `pd7a.clj:1-13` narrates the deferral; the helper produces
   totals + audit-doc, not a form.
-- **QC passthrough; RL-1 deferred to C4.1** — ✓ `emit.clj:31-63`
-  surfaces the warning; the wage-types catalog has
-  `:requires-qc?` flags but no emitter for QC. P1 per ADR-078
-  followups.
+- **QC RL-1 emit (C4.1)** — ✓ closed by ADR-087 (2026-05-18).
+  `modules/payroll-ca/src/kontor/payroll_ca/rl1.clj` +
+  `rl1_summary.clj` + `tpz1015.clj` + `qc_emit.clj` ship the slip /
+  Summary / monthly-remittance / per-pay-period emitter quartet;
+  `emit.clj:warn-if-qc-detected!` suppresses the warning when
+  `:qc-emit-installed?` is wired. Wage-types catalog adds
+  `:employer-fss`; chart adds `2532 RQ-FSS` + `5417 Employer-FSS`.
+  No partner XSD shipped (Revenu Québec gate); element shape is
+  clean-room from the public RL-1.T-V / RLZ-1.S-G-V forms.
 - **Wagepoint live API deferred** — ✓ `compute.clj:401-416`
   throws on `compute-payroll` with a clear partner-program-
   reference message.

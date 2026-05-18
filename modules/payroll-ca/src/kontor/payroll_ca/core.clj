@@ -1,5 +1,6 @@
 (ns kontor.payroll-ca.core
-  "kontor-payroll-ca — CA-CRA payroll adapter (Stage R C4, ADR-078).
+  "kontor-payroll-ca — CA-CRA payroll adapter (Stage R C4, ADR-078;
+   QC RL-1 extension Stage R C4.1, ADR-087).
 
    This namespace is the consumer-facing entry point. Composes:
      - the existing kontor.l10n-ca base chart + identifiers + T4 / T619
@@ -9,7 +10,10 @@
      - the C4-shipped pieces: wage-types catalog, payroll-extension
        chart, Ceridian + ADP CSV compute providers, posting builder,
        PD7A remittance helper, T4 year-end aggregator, ROE termination
-       audit-doc helper, bilingual support.
+       audit-doc helper, bilingual support,
+     - the C4.1-shipped pieces (ADR-087): RL-1 slip + RL-1 Summary
+       (RLZ-1.S) builders, TPZ-1015 monthly remittance helper, QC
+       emit-provider.
 
    ## Quickstart
 
@@ -66,6 +70,10 @@
            'kontor.payroll-ca.posting-builder
            'kontor.payroll-ca.t4-builder
            'kontor.payroll-ca.pd7a
-           'kontor.payroll-ca.emit))
+           'kontor.payroll-ca.emit
+           'kontor.payroll-ca.rl1
+           'kontor.payroll-ca.rl1-summary
+           'kontor.payroll-ca.tpz1015
+           'kontor.payroll-ca.qc-emit))
 
 (-load-symbols)

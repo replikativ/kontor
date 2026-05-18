@@ -45,22 +45,31 @@
        set))
 
 (defn warn-if-qc-detected!
-  "If any fact carries QC component-kinds, log a warning per note 84
-   §8.3 that RL-1 emission deferred to C4.1. Returns the set of QC
-   employments detected (possibly empty)."
-  [facts]
-  (let [qc (qc-employees-in-facts facts)]
-    (when (seq qc)
-      (binding [*out* *err*]
-        (println
-         (format
-          (str "[kontor.payroll-ca.emit] WARN: RL-1 filing not yet "
-               "supported in this version (C4.1 roadmap). QC employments "
-               "detected: %s. T4 boxes 17/17A/55/56 will be populated "
-               "correctly; the Revenu Québec RL-1 emit + TPZ-1015 "
-               "remittance helper land in C4.1.")
-          qc))))
-    qc))
+  "If any fact carries QC component-kinds AND no QC emitter is
+   installed, log a warning per note 84 §8.3. Returns the set of QC
+   employments detected (possibly empty).
+
+   Per ADR-087 (C4.1 RL-1 emission ships), the warning is suppressed
+   when `:qc-emit-installed?` is truthy — the consumer is expected to
+   wire `kontor.payroll-ca.qc-emit/QcPayrollEmitProvider` alongside the
+   federal `CaPayrollEmitProvider` for QC employees, and the year-end
+   RL-1 submission is built via
+   `kontor.payroll-ca.qc-emit/build-rl1-submission!`."
+  ([facts] (warn-if-qc-detected! facts {:qc-emit-installed? false}))
+  ([facts {:keys [qc-emit-installed?]}]
+   (let [qc (qc-employees-in-facts facts)]
+     (when (and (seq qc) (not qc-emit-installed?))
+       (binding [*out* *err*]
+         (println
+          (format
+           (str "[kontor.payroll-ca.emit] WARN: QC employments detected "
+                "(%s) but no QC emitter installed. Wire "
+                "kontor.payroll-ca.qc-emit/QcPayrollEmitProvider for the "
+                "RL-1 + TPZ-1015 audit-chain coverage (ADR-087). T4 "
+                "boxes 17/17A/55/56 populate independently via the "
+                "federal emitter.")
+           qc))))
+     qc)))
 
 ;; ============================================================================
 ;; CaPayrollEmitProvider — PayrollEmitProvider impl
@@ -73,7 +82,11 @@
     ;; Per note 84 §6: no ROE emission (Service Canada via engine).
     ;; What we emit per pay-period is an audit-doc summary so the
     ;; audit chain has a row for the run + QC warning if applicable.
-    (warn-if-qc-detected! payroll-facts)
+    ;; Per ADR-087, when :qc-emit-installed? is set in opts the warning
+    ;; is suppressed (the QcPayrollEmitProvider handles the QC side).
+    (warn-if-qc-detected! payroll-facts
+                          {:qc-emit-installed?
+                           (boolean (:qc-emit-installed? opts))})
     (let [language (or (:language opts) :en)
           per-fact-count (count payroll-facts)]
       ;; :audit-doc/category :payroll-filing per note 86 P0-86-2
