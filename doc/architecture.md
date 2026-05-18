@@ -316,20 +316,50 @@ Per ADR-048 the status-transition timestamp denorms (`:invoice/sent-at`, `:dispu
 
 ## Provider protocols
 
-kontor exposes three pluggable seams. Each lets a consumer plug in their own logic (or a partner adapter) without touching the kernel.
+kontor exposes five pluggable seams. Each lets a consumer plug in their own logic (or a partner adapter) without touching the kernel.
 
-### TaxProvider (ADR-005)
+### TaxProvider (ADR-005, superseded by ADR-071)
+
+The original single-protocol shape (kept for back-compat in `kontor.tax-provider`):
 
 ```clojure
 (defprotocol TaxProvider
-  (resolve-taxes [this {:keys [partner posting context]}]
-    "Given a context (date, partner country, fiscal position, ...)
-     and a base posting, return [] or N additional postings that
-     materialize the applicable taxes.")
+  (resolve-taxes [this {:keys [partner posting context]}])
   (provider-id [this]))
 ```
 
-Implementations: `StaticTableProvider` (per-country EDN, default), `SstCsvProvider` (US Streamlined Sales Tax), `AvalaraProvider` / `TaxJarProvider` (customer's API key — never bundled).
+ADR-071 redesigns this into three protocols that separate rate-determination from posting-expansion (the older shape conflated both, with the consequence that the abstraction sat unused — every l10n module rolled its own posting builder):
+
+```clojure
+(defprotocol TaxRateProvider     ; rate determination — pure
+  (resolve-taxes [this context])) ;  → vector of TaxFacts (data records)
+
+;; TaxFacts is a pure-data shape with line-base + commodity,
+;; jurisdiction, per-component rate items keyed by :component/kind
+;; (:output-vat :input-vat :sales-tax :reverse-charge :withholding
+;;  :pre-collection :surcharge :cess :duty :fee), per-component
+;; :provenance, and a :jurisdiction-specific-codes opaque slot.
+
+(defprotocol TaxPostingBuilder    ; per-country posting materialization
+  (materialize-postings [this tax-facts {:keys [chart]}]))
+```
+
+Implementations (current — old-shape): `StaticTableProvider`, `SstCsvProvider`, `AvalaraProvider`, `TaxJarProvider`, `ChainedProvider`. Migration to the new shape is per-l10n-module + consumer-driven (Phase 5 in the country localizations); the kernel ships the new protocol skeletons alongside the existing one.
+
+### FxRateProvider (ADR-072)
+
+Foreign-exchange rate lookup, IAS 21 / ASC 830 vocabulary:
+
+```clojure
+(defprotocol FxRateProvider
+  (resolve-rate [this {:keys [from-commodity to-commodity at-date rate-type]}])
+  (resolve-period-rates [this {:keys [from-commodity to-commodity from-date to-date rate-type]}])
+  (provider-id [this]))
+```
+
+Rate-types: `:spot :closing :average :opening :historical`. Built-ins: `StaticTableProvider` (reads `:fx-rate/*` from the connected db with last-on-or-before fallback + inverse derivation + optional triangulation via a base commodity), `EcbReferenceRatesProvider` (StaticTable + EUR pivot + `ingest-ecb-csv-rows!` helper; ECB attribution string exported), `ChainedProvider`. Customer-credentialed scaffolds for `XeProvider`, `OandaProvider`, `FedH10Provider` — no API keys bundled.
+
+`kontor.fx` wraps the provider with Money-level operations: `convert` (single Money), `translate-money-seq`, `translate-amounts-by-commodity`, `to-functional-currency`. `kontor.report/compute-report` grew a `:translate-to` + `:fx-provider` + `:rate-type` opt that adds `:line/value-translated` alongside each per-commodity `:line/value`. `kontor.lease.posting/plan-fx-retranslation` accepts an alternative `:fx-provider + :book-balance + :prior-rc-carrying` mode that computes the IAS 21 retranslation delta itself.
 
 ### CostingProvider (ADR-029)
 
@@ -346,6 +376,22 @@ Built-in impls: FIFO, LIFO, WeightedAverage, StandardCost. Drives `:valuation-la
 ### EInvoiceProvider (ADR-017)
 
 Pure-data e-invoice generation. The kernel ships `PureXmlProvider` (UBL/Factur-X/NF-e shapes); signing and transmission happen in partner adapters that hold credentials.
+
+### DepreciationProvider (ADR-055)
+
+Per-asset depreciation method (straight-line, declining-balance, units-of-production). Plug per book — different books may depreciate the same asset on different schedules.
+
+---
+
+## Multi-entity consolidation (ADR-073)
+
+`kontor.consolidation` provides the substrate primitive for translating + eliminating across a multi-entity family:
+
+- **`translate-trial-balance-tx-data`** — per IAS 21 / ASC 830 rate-types, translate one operating entity's trial balance into the consolidation entity's presentation commodity. CTA plug posts the translation residual to a designated account.
+- **`eliminate-intercompany-pair-tx-data`** — given a `:transaction/intercompany-pair-id` shared across N source txs, emit one elimination tx whose postings exactly negate every paired posting, stamped with `:posting/entity = elimination-entity`.
+- **`consolidate-tx-data` + `consolidate!`** — walks `kontor.entity/family`, runs translation per :operating entity + elimination per pair-id, commits all fragments as `kontor.process/run-process` steps under one validation gate.
+
+This is the substrate; companion tier (the future `kontor-consolidation` companion) layers ownership %, minority interest, IFRS 10 control, IFRS 3 goodwill, IAS 27 step-acquisitions on top.
 
 ---
 

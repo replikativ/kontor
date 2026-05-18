@@ -247,15 +247,23 @@ Shipped: `bank-at`, `bank-ca`, `bank-de`, `bank-fr`, `bank-us` (kernel-level CSV
 
 ---
 
+## Trans-national substrate (ADR-071 / ADR-072 / ADR-073) — LANDED 2026-05-17
+
+The kernel grew three coordinated substrate primitives that close the architecture review's §4 gaps (research note 69):
+
+- **ADR-071 — Tax abstraction redesign** (`TaxRateProvider` + `TaxFacts` + `TaxPostingBuilder`). 3-protocol split unblocks per-jurisdiction tax engines without the kernel knowing chart-of-accounts. Migration per-l10n-module + consumer-driven; the kernel ships the protocol skeletons.
+- **ADR-072 — `FxRateProvider` + `kontor.fx`**. Protocol + `:fx-rate/*` schema + `StaticTableProvider` + `EcbReferenceRatesProvider` + Money-level convert / translate-amounts-by-commodity / functional-currency rebase. ECB attribution required; no rates bundled.
+- **ADR-073 — Consolidation primitive** (`kontor.consolidation`). Per-IAS-21 translation + intercompany elimination + `consolidate!` orchestrator over `kontor.entity/family`. Substrate provides the mechanics; companion-tier (`kontor-consolidation`) layers ownership %, minority interest, IFRS 10 control on top.
+
+Architecture review §4 Gaps 1 (`:entity` filter), 2 (FxRateProvider), 4 (consolidation) now closed at the substrate level. Gap 3 (HR/payroll) is research-before complete (notes 72/73/74); implementation gated on 5 design calls in note 74.
+
 ## Out of scope for v1
 
 - Peppol Access Point (deferred until a customer needs network delivery)
 - Multi-tenant / multi-company in one DB (use one DB per tenant)
 - Cost accounting / management accounting beyond the analytic-dimension model
-- Inventory valuation (FIFO/LIFO/weighted-average) — defer to a separate `inventory` module
-- Payroll — own beast, separate library
-- Asset depreciation schedules — Phase 6 candidate
-- Consolidations across multiple entities
+- Payroll — own beast, separate library (research-before bundle in notes 72/73/74)
+- Consolidation policy (ownership %, minority interest, IFRS 10) — substrate primitives ship (ADR-073); policy is the future `kontor-consolidation` companion
 
 ## Out of scope forever (per ADR-010)
 
