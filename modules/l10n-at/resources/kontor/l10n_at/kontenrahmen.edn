@@ -85,6 +85,9 @@
  {:code "4200" :path "Erträge:Erlöse:Steuerfrei"
   :type :income :name "Steuerfreie Umsätze §6"
   :tags [:uva-021]}
+ {:code "4300" :path "Erträge:Erlöse:Reverse-Charge"
+  :type :income :name "Erlöse Reverse-Charge (Leistungsempfänger schuldet USt)"
+  :tags [:uva-021]}
 
  ;; Klasse 5/6/7 — Aufwendungen
  {:code "5000" :path "Aufwendungen:Wareneinkauf"
@@ -108,4 +111,15 @@
  {:code "7700" :path "Aufwendungen:Beratung"
   :type :expense :name "Rechts- und Beratungsaufwand"}
  {:code "7800" :path "Aufwendungen:Sonstige"
-  :type :expense :name "Sonstige Aufwendungen"}]
+  :type :expense :name "Sonstige Aufwendungen"}
+
+ ;; Klasse 9 — Eigenkapital + Eröffnungs-/Abschlussbuchungen
+ ;; Per Einheitskontenrahmen-Konvention; UGB §224 Bilanzgliederung.
+ {:code "9000" :path "Eigenkapital:Stammkapital"
+  :type :equity :name "Nennkapital / Stammkapital"}
+ {:code "9100" :path "Eigenkapital:Kapitalruecklage"
+  :type :equity :name "Kapitalrücklage"}
+ {:code "9200" :path "Eigenkapital:Gewinnruecklage"
+  :type :equity :name "Gewinnrücklagen"}
+ {:code "9460" :path "Eigenkapital:Bilanzgewinn"
+  :type :equity :name "Bilanzgewinn / Bilanzverlust (UGB §224)"}]
