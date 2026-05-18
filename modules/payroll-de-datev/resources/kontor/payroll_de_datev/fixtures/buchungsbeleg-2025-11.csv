@@ -1,0 +1,7 @@
+EXTF;510;21;Buchungsstapel;7;20251130120000000;;HC;Acme GmbH;;12345;1;20251101;4;20251101;20251130;Buchungen;;1;0;1;EUR;;;;
+"Umsatz (ohne Soll/Haben-Kz)";"Soll/Haben-Kennzeichen";"WKZ Umsatz";"Kurs";"Basis-Umsatz";"WKZ Basis-Umsatz";"Konto";"Gegenkonto (ohne BU-Schluessel)";"BU-Schluessel";"Belegdatum";"Belegfeld 1";"Belegfeld 2";"Skonto";"Buchungstext"
+4000,00;S;EUR;;;;6020;3790;;3011;3011;11/2025;;Bruttogehalt Mueller 11/2025
+2500,00;S;EUR;;;;3790;3720;;3011;3011;11/2025;;Nettoauszahlung Mueller 11/2025
+700,00;S;EUR;;;;3790;3730;;3011;3011;11/2025;;LSt+KiSt+Soli Mueller 11/2025
+800,00;S;EUR;;;;3790;3740;;3011;3011;11/2025;;SV AN-Anteil Mueller 11/2025
+800,00;S;EUR;;;;6110;3740;;3011;3011;11/2025;;SV AG-Anteil Mueller 11/2025
