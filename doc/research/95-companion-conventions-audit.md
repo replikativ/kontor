@@ -145,6 +145,40 @@ Irregularities flagged:
   the pure builder.
 - **Module has NO README until 2026-05-18.**
 
+### kontor-invoice
+
+**Read 2026-05-18. README written 2026-05-18.**
+
+Irregularities flagged:
+
+- **`kontor.invoice.bridge` is the canonical entry, not
+  `kontor.invoice.core`.** The reason is justified (kernel already
+  owns `kontor.invoice`), but the deviation from the §1 convention
+  is real. The module also has NO `core.clj`. Suggested: either
+  rename kernel `kontor.invoice` to `kontor.invoice.kernel` (big
+  rename) or accept the divergence and note it as the kernel-
+  collision case in §3.
+- **`install!` in `kontor.invoice.schema`** — same divergence as
+  kontor-asset / kontor-lease / kontor-inventory. 4 of 4 so far put
+  install! in schema.clj, not core.clj — the convention as written
+  in §1 is consistently broken; either §1 is wrong or every module
+  needs a refactor.
+- **Most status wrappers in `bridge.clj` lack a paired `*-tx-data`
+  builder** — `make-ready!`, `mark-paid!`, `cancel!` all just call
+  `sm/record-status-change!` directly (ADR-068 violation). Only
+  `make-invoice-from-order!` and `post-to-ledger!` follow the
+  `*-tx-data` pattern. The kernel's `kontor.status-machine` exposes
+  `record-status-change-tx-data`, so the fix is mechanical: thread
+  it through.
+- **Only ONE test file (`bridge_test.clj`)** for a module with two
+  source files of business logic (`bridge.clj` + `posting.clj`).
+  Posting code-paths are exercised transitively via the bridge
+  test, but there is no dedicated `posting_test.clj` covering
+  `resolve-gl-account` resolution order, `debit-credit-for` per-
+  type dispatch, or the `:gl-account-default` lookup chain. Worth
+  splitting.
+- **Module has NO README until 2026-05-18.**
+
 (More modules to be appended as their READMEs land.)
 
 ## §3 — Cross-cutting patterns worth canonicalizing
