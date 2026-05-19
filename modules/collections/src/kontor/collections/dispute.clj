@@ -81,7 +81,7 @@
 ;; Transactors
 ;; ============================================================================
 
-(declare raise-dispute-tx-data advance-state-tx-data resolve-dispute-tx-data)
+(declare raise-dispute-tx-data advance-dispute-state-tx-data resolve-dispute-tx-data)
 
 (defn raise-dispute!
   "Open a `:dispute` for an invoice (or line on an invoice).
@@ -146,24 +146,24 @@
                     :reason reason-code})]
     (into [row] status-tx)))
 
-(defn advance-state!
+(defn advance-dispute-state!
   "Drive a dispute through the state machine (:open → :under-review
    → :resolved | :escalated). Caller passes :to.
 
    Optional :vt-from / :vt-to stamp the tx with kontor.bitemporal
    valid-time (default: now).
 
-   The pure tx-data builder is `advance-state-tx-data`."
+   The pure tx-data builder is `advance-dispute-state-tx-data`."
   [conn {:keys [vt-from vt-to] :as opts}]
   (let [now (java.util.Date.)]
     (validation/transact-with-validation
-     conn (kbt/with-vt (advance-state-tx-data
+     conn (kbt/with-vt (advance-dispute-state-tx-data
                         (d/db conn) (assoc opts :changed-at now))
                        (or vt-from now)
                        (or vt-to kbt/forever)))))
 
-(defn advance-state-tx-data
-  "Pure tx-data builder for `advance-state!` (ADR-068)."
+(defn advance-dispute-state-tx-data
+  "Pure tx-data builder for `advance-dispute-state!` (ADR-068)."
   [db {:keys [dispute to changed-by-uid reason reason-note
               supporting-doc changed-at]}]
   (let [eid (resolve-dispute db dispute)

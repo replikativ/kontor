@@ -87,16 +87,16 @@
          (d/db *conn*) external-id)))
 
 (defn- drive-case-to-legal! [case-code]
-  (kcase/advance-state! *conn*
+  (kcase/advance-case-state! *conn*
                        {:case case-code :to :dunning-l1
                         :changed-by-uid (actor "alice")})
-  (kcase/advance-state! *conn*
+  (kcase/advance-case-state! *conn*
                        {:case case-code :to :dunning-l2
                         :changed-by-uid (actor "alice")})
-  (kcase/advance-state! *conn*
+  (kcase/advance-case-state! *conn*
                        {:case case-code :to :final-notice
                         :changed-by-uid (actor "alice")})
-  (kcase/advance-state! *conn*
+  (kcase/advance-case-state! *conn*
                        {:case case-code :to :legal
                         :changed-by-uid (actor "alice")
                         :reason :legal-escalation}))
@@ -191,19 +191,19 @@
                       :entity (entity "ACME-DE")
                       :opened-by-uid (actor "alice")
                       :strategy :reminder-only})
-    (kcase/advance-state! *conn*
+    (kcase/advance-case-state! *conn*
                          {:case "CASE-E2E" :to :dunning-l1
                           :changed-by-uid (actor "alice")
                           :reason :dunning-l1-sent})
-    (kcase/advance-state! *conn*
+    (kcase/advance-case-state! *conn*
                          {:case "CASE-E2E" :to :dunning-l2
                           :changed-by-uid (actor "alice")
                           :reason :dunning-l2-sent})
-    (kcase/advance-state! *conn*
+    (kcase/advance-case-state! *conn*
                          {:case "CASE-E2E" :to :final-notice
                           :changed-by-uid (actor "alice")
                           :reason :final-notice-sent})
-    (kcase/advance-state! *conn*
+    (kcase/advance-case-state! *conn*
                          {:case "CASE-E2E" :to :legal
                           :changed-by-uid (actor "alice")
                           :reason :legal-escalation})

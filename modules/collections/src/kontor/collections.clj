@@ -19,7 +19,8 @@
 ;; --- Case ---
 (def open-case!         kcase/open-case!)
 (def close-case!        kcase/close-case!)
-(def advance-case-state! kcase/advance-state!)
+(def advance-case-state!         kcase/advance-case-state!)
+(def advance-case-state-tx-data  kcase/advance-case-state-tx-data)
 (def assign-collector!  kcase/assign-collector!)
 (def pull-case          kcase/pull-case)
 (def open-case-for      kcase/open-case-for)
@@ -38,7 +39,8 @@
 ;; --- Dispute ---
 (def raise-dispute!              kdispute/raise-dispute!)
 (def resolve-dispute!            kdispute/resolve-dispute!)
-(def advance-dispute-state!      kdispute/advance-state!)
+(def advance-dispute-state!         kdispute/advance-dispute-state!)
+(def advance-dispute-state-tx-data  kdispute/advance-dispute-state-tx-data)
 (def open-disputes-for-invoice   kdispute/open-disputes-for-invoice)
 (def any-open-dispute-for-invoice? kdispute/any-open-dispute-for-invoice?)
 

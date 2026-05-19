@@ -122,7 +122,7 @@ balance / period semantics:
 | [`asset`](modules/asset/README.md) | `:asset` register + per-(asset, ledger) depreciation books (ADR-053/054/055) |
 | [`lease`](modules/lease/README.md) | IFRS 16 / ASC 842 lessee-side + modifications + FX retranslation (ADR-063/064) |
 | [`inventory`](modules/inventory/README.md) | FIFO / LIFO / WeightedAverage / StandardCost + valuation layers (ADR-029) |
-| [`expense`](modules/expense/README.md) | Expense report + reimbursement + per-diem |
+| [`expense`](modules/expense/README.md) | Expense report + reimbursement + multi-currency lines |
 
 **Order-to-cash + procure-to-pay**:
 

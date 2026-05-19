@@ -66,28 +66,27 @@
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :person/birth-date
-    :db/valueType   :db.type/instant
-    :db/cardinality :db.cardinality/one
-    :db/doc         "PII (typical category :hr-personnel under the
-                     :audit-doc/category axis). DSAR collector walks
-                     this attr; per-jurisdiction :retention-policy
-                     governs erasure."}
+   ;; :person/birth-date is owned by the kernel schema (audit note 95).
+   ;; The HR-side audit-doc-backed storage for national-ID material lives
+   ;; under :hr-person/national-id-doc (refs to :audit-doc); the kernel's
+   ;; :person/national-id is the simpler plaintext scalar (partner's
+   ;; historic shape). Consumers needing both can write both.
+
+   {:db/ident       :hr-person/national-id-doc
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Refs to :audit-doc — storage for SSN / AHV /
+                     SV-Nummer / SIN / national-ID scans when the
+                     consumer wants :audit-doc/privilege +
+                     :audit-doc/category machinery to apply. The
+                     kernel's plaintext :person/national-id stays
+                     available for the simpler scalar case."}
 
    {:db/ident       :person/citizenship
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/many
     :db/doc         "ISO-3166 alpha-2 country codes. Many — a person
                      may hold multiple citizenships."}
-
-   {:db/ident       :person/national-id
-    :db/valueType   :db.type/ref
-    :db/cardinality :db.cardinality/many
-    :db/doc         "Ref to :audit-doc — the storage shape for
-                     SSN / AHV / SV-Nummer / SIN / national-ID
-                     scans. PII-bearing; lives behind :audit-doc so
-                     the existing :audit-doc/privilege +
-                     :audit-doc/category machinery applies."}
 
    ;; Note 81 §9.7 — Worker subtype enum (Workday/Deel pattern).
    ;; Open-set: :employee | :contingent | :applicant | :retiree |

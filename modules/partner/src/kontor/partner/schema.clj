@@ -119,9 +119,10 @@
     :db/doc         ":male | :female | :nonbinary | :unspecified.
                      Free-form keyword; consumers may extend."}
 
-   {:db/ident       :person/birth-date
-    :db/valueType   :db.type/instant
-    :db/cardinality :db.cardinality/one}
+   ;; :person/birth-date and :person/national-id are owned by the kernel
+   ;; schema (audit note 95 — was duplicate-defined here + in kontor-hr
+   ;; with diverging shapes, causing silent install-order-dependent
+   ;; overwrite). Reach them via kernel install + the same idents.
 
    {:db/ident       :person/deceased-date
     :db/valueType   :db.type/instant
@@ -137,13 +138,7 @@
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":ssn | :passport | :national-id | :tin | …
-                     consumers extend per jurisdiction."}
-
-   {:db/ident       :person/national-id
-    :db/valueType   :db.type/string
-    :db/cardinality :db.cardinality/one
-    :db/doc         "Sensitive — encrypt at the consumer layer if
-                     under GDPR / HIPAA / similar."}])
+                     consumers extend per jurisdiction."}])
 
 ;; ============================================================================
 ;; Organization subtype

@@ -159,7 +159,11 @@ Irregularities flagged:
   impl (FEFO) in `kontor.inventory.costing` — single-word file
   name. The protocol itself lives in `kontor.costing-provider`
   (kernel); convention is fine for impls but worth canonicalizing
-  the impl-file naming too.
+  the impl-file naming too. **CLOSED 2026-05-18:** renamed
+  `kontor.inventory.costing` →
+  `kontor.inventory.fefo-costing-provider`; the rename is via
+  `git mv` to preserve history. The one external call site
+  (`count_report_test.clj`) updated.
 - **`receive!` and friends are NOT split into `*-tx-data` builders
   consistently.** Most ops DO have a paired `*-tx-data` (receive-
   tx-data, transfer-tx-data, cancel-transfer-tx-data, reserve-tx-
@@ -235,7 +239,11 @@ Irregularities flagged:
   `advance-dispute-state!`) or both should be the canonical name
   in a hypothetical `core.clj`. Same-name-different-ns is fine in
   Clojure but confusing in this codebase's grep-driven
-  navigation.
+  navigation. **CLOSED 2026-05-18:** renamed to
+  `advance-case-state!` / `advance-case-state-tx-data` and
+  `advance-dispute-state!` / `advance-dispute-state-tx-data`;
+  `kontor.collections.clj` re-exports updated; call sites in
+  `lifecycle_test.clj` + `writeoff_test.clj` updated.
 - **Some thin status wrappers are still bare `record-status-
   change!` calls** without paired `*-tx-data` (e.g.
   `mark-promise-kept!`, `mark-promise-broken!`, `release-all-
@@ -246,6 +254,12 @@ Irregularities flagged:
   provider`.** §1 convention says protocol files are
   `<module>.<provider-name>-provider.clj`. The dunning logic +
   provider are bundled together — not wrong but inconsistent.
+  **DECIDED 2026-05-18:** keep bundled. The protocol is ~25 lines
+  in a 360-line file dominated by `plan-dunning-run` and friends.
+  Extracting it to a sibling `*_provider.clj` would split the
+  domain logic from the protocol it implements; the impl-file
+  naming convention is documented as "settled where the impl IS
+  the whole module, bundled where domain logic dominates."
 - **Module has NO README until 2026-05-18.**
 
 ### kontor-partner
@@ -263,6 +277,16 @@ Irregularities flagged:
   invoice — but it means the module has BOTH `kontor.partner.clj`
   AND `kontor/partner/schema.clj`, and the test file is
   `kontor/partner_test.clj` (not nested). Worth canonicalising.
+- **`:person/*` overlap with kontor-hr resolved 2026-05-18** —
+  cross-reference under kontor-hr entry for full closure
+  details: shared `:person/birth-date` + `:person/national-id`
+  hoisted to kernel schema, with partner's `string/one` shape
+  for the latter. Removed the local duplicates from
+  `modules/partner/src/kontor/partner/schema.clj`. Partner's
+  module-private `:person/*` attrs (`:person/first-name`,
+  `:person/last-name`, `:person/gender`, `:person/marital-status`,
+  `:person/national-id-type`, etc.) remain as before — no
+  collision with HR's sibling set.
 - **`install!` in `kontor.partner.schema`** — 6/6 modules so far.
   The pattern is universal.
 - **All transactor logic lives in ONE file (`kontor.partner.clj`).**
@@ -315,7 +339,11 @@ Irregularities flagged:
   per-diem support.** Worth either implementing it (with a
   per-jurisdiction rate table — necessarily an l10n concern) or
   removing it from the parent README table to set realistic
-  expectations.
+  expectations. **CLOSED 2026-05-18:** removed the "per-diem"
+  claim from the parent `README.md` module table; the
+  module-level README already documented the gap. Implementing
+  per-diem with a rate table is a future l10n module
+  (`kontor-l10n-de/per-diem`, etc.).
 - **Module has NO README until 2026-05-18.**
 
 ### kontor-authz
@@ -377,7 +405,24 @@ Irregularities flagged:
   actually NS-disjoint (`:person/given-name` is HR; `:person/
   first-name` is partner), but the partial overlap is
   problematic. Worth a rename pass — e.g. `:hr-person/*` for HR
-  and keep `:person/*` for partner (or vice versa).
+  and keep `:person/*` for partner (or vice versa). **CLOSED
+  2026-05-18:** worse than partial overlap — REPL verified that
+  partner + HR both defined `:person/birth-date` (compatible
+  duplicate) AND `:person/national-id` with INCOMPATIBLE shapes
+  (partner: string/one; HR: ref/many → :audit-doc). Installing
+  both schemas against the same conn silently overwrote whichever
+  shipped second — install-order-dependent data corruption.
+  Resolution: hoisted the truly-shared `:person/birth-date` and
+  `:person/national-id` (with partner's simpler string/one shape)
+  to the KERNEL schema (`src/kontor/schema.clj` → `person-attrs`).
+  HR-side audit-doc-backed national-ID storage is now
+  `:hr-person/national-id-doc` (ref/many → :audit-doc). Module-
+  private attrs (`:person/given-name` / `:person/first-name` /
+  etc.) remain in their respective modules — no collision, just a
+  documented naming-divergence between HR + partner. The
+  qualified `:kontor.person/*` namespace prefix discussed in the
+  audit session is deferred (user call: keep readable for new
+  users).
 - **`run-payroll!` lives in `kontor.hr.payroll`, not
   `kontor.hr.core`.** This is the canonical `run-<verb>!`
   orchestrator the §1 convention names; finding it requires
@@ -458,6 +503,8 @@ Irregularities flagged:
   invariants (sum-to-zero, period-lock) don't apply. But ADR-068
   expects either a gate-route or an explicit carve-out comment;
   here there's no explicit carve-out comment. Worth adding.
+  **CLOSED 2026-05-18:** added explicit ADR-068 carve-out comment
+  blocks at both `d/transact` sites in `import-gleif/core.clj`.
 - **`row->level-1-tx` is private (`defn-`).** Per-row transform
   is the natural unit of reuse / testing for a CSV importer;
   hiding it means a consumer wanting per-row inspection has to
@@ -493,7 +540,11 @@ Irregularities flagged:
 - **`ingest-facts!` doesn't use `kontor.validation/transact-
   with-validation`** — same gate-bypass as import-gleif. The
   rationale is fine (mass-import of master data), but again no
-  explicit ADR-068 carve-out comment.
+  explicit ADR-068 carve-out comment. **CLOSED 2026-05-18:**
+  added explicit ADR-068 carve-out comment in `import-edgar/
+  core.clj` covering both `d/transact` sites + the documented
+  atomicity limitation between the close-validity and new-fact
+  writes.
 - **`ingest-facts!` does N transactions in a `reduce`** — each
   fact is its own tx (correctly, for the bitemporal-restatement
   semantic). But the close-validity step happens in a SEPARATE

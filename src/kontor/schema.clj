@@ -655,6 +655,44 @@
                      gist URI, LEI gleif IRI). ADR-090."}])
 
 ;; ============================================================================
+;; Person — shared substrate for natural persons across kontor-partner +
+;; kontor-hr (+ future companions). Per audit note 95 §2: previously each
+;; module re-defined :person/birth-date + :person/national-id with diverging
+;; shapes, so installing both schemas against the same conn silently
+;; overwrote whichever module installed first. Hoisted here as one source
+;; of truth. Module-private attrs (HR-side :person/given-name vs partner-
+;; side :person/first-name, etc.) remain in the modules; only the genuinely
+;; cross-cutting bits live here.
+;;
+;; Shape decisions:
+;;   - :person/national-id is :db.type/string (partner's historic shape) —
+;;     simpler default that doesn't drag in the :audit-doc dependency at
+;;     the kernel level. Consumers needing audit-doc-backed storage of
+;;     national-ID material can add a module-private ref attr (e.g.
+;;     :hr-person/national-id-doc) without redefining this ident.
+;;   - :person/birth-date is :db.type/instant (both modules agreed).
+;; ============================================================================
+
+(def ^:private person-attrs
+  [{:db/ident       :person/birth-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "PII; typical :audit-doc/category :hr-personnel.
+                     DSAR collectors walk this attr; per-jurisdiction
+                     :retention-policy governs erasure."}
+
+   {:db/ident       :person/national-id
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Plaintext national identifier (SSN / SV-Nummer /
+                     SIN / CPF / …). Sensitive — encrypt at the
+                     consumer layer if subject to GDPR / HIPAA /
+                     similar. Companions that prefer audit-doc-backed
+                     storage should define their own ref attribute
+                     (e.g. :hr-person/national-id-doc) rather than
+                     re-defining this ident."}])
+
+;; ============================================================================
 ;; ADR-039: master-data primitives — merge, bank-account, partner-bank-
 ;; account junction, partner-tag.
 ;; ============================================================================
@@ -3905,6 +3943,7 @@
     account-tag-attrs
     journal-attrs
     partner-attrs
+    person-attrs                         ; kernel-shared :person/* (note 95)
     fiscal-position-attrs
     tax-attrs
     tax-rep-attrs

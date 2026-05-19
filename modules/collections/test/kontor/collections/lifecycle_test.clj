@@ -129,17 +129,17 @@
                     :partner (partner "BIG-CUST")
                     :entity (entity "ACME-DE")
                     :opened-by-uid (actor "alice")})
-  (kcase/advance-state! *conn*
+  (kcase/advance-case-state! *conn*
                        {:case "CASE-DUNN"
                         :to :dunning-l1
                         :changed-by-uid (actor "alice")
                         :reason :dunning-l1-sent})
-  (kcase/advance-state! *conn*
+  (kcase/advance-case-state! *conn*
                        {:case "CASE-DUNN"
                         :to :dunning-l2
                         :changed-by-uid (actor "alice")
                         :reason :dunning-l2-sent})
-  (kcase/advance-state! *conn*
+  (kcase/advance-case-state! *conn*
                        {:case "CASE-DUNN"
                         :to :final-notice
                         :changed-by-uid (actor "alice")
@@ -161,7 +161,7 @@
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"Illegal status transition"
-         (kcase/advance-state! *conn*
+         (kcase/advance-case-state! *conn*
                               {:case "CASE-ILL"
                                :to :written-off
                                :changed-by-uid (actor "alice")})))))

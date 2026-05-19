@@ -189,6 +189,11 @@
                       (instance? java.net.URL rows-or-source))
                 (read-csv rows-or-source)
                 rows-or-source)]
+     ;; ADR-068 carve-out: bulk master-data ingest. Kernel invariants
+     ;; (sum-to-zero, period-lock, sealing) don't apply to :entity/*
+     ;; writes; routing through kontor.validation/transact-with-validation
+     ;; would add per-row overhead with nothing to validate. See note 95
+     ;; §2 (kontor-import-gleif) for the audit entry.
      (d/transact conn (import-level-1-tx-data rows opts)))))
 
 ;; ============================================================================
@@ -271,6 +276,7 @@
                      (instance? java.net.URL rows-or-source))
                (read-csv rows-or-source)
                rows-or-source)]
+    ;; ADR-068 carve-out: bulk relationship ingest — see import-level-1!.
     (d/transact conn (import-level-2-tx-data (d/db conn) rows))))
 
 ;; ============================================================================

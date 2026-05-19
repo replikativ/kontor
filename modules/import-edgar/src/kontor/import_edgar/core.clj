@@ -273,6 +273,13 @@
                  ;; The prior tx-eid is recoverable via :db/txInstant
                  ;; on the prior fact entity — kontor's
                  ;; close-validity-tx-data takes the tx-eid directly.
+                 ;; ADR-068 carve-out: bulk substrate-seam ingest. Both
+                 ;; the close-validity and the new-fact write below go
+                 ;; through raw d/transact because kernel invariants
+                 ;; (sum-to-zero / period-lock / sealing) don't apply to
+                 ;; :reported-fact/*. See note 95 §2 (kontor-import-edgar)
+                 ;; for the audit entry + the documented atomicity
+                 ;; limitation between the two transacts.
                  _ (when prior
                      (let [prior-tx-eid
                            (d/q '[:find ?tx .

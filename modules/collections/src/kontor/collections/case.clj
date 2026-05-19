@@ -87,7 +87,7 @@
 ;; ============================================================================
 
 (declare open-case-tx-data
-         advance-state-tx-data
+         advance-case-state-tx-data
          close-case-tx-data
          assign-collector-tx-data
          refresh-denorms-tx-data)
@@ -164,7 +164,7 @@
                     :reason :case-opened})]
     (into [row] status-tx)))
 
-(defn advance-state!
+(defn advance-case-state!
   "Drive `:collection-case/state` through the status-machine. Generic
    helper for dunning-l1 / l2 / final-notice / promised / disputed
    / legal / paid / written-off transitions.
@@ -172,17 +172,17 @@
    Required opts: :case, :to, :changed-by-uid.
    Optional: :reason, :reason-note, :supporting-doc.
 
-   The pure tx-data builder is `advance-state-tx-data`."
+   The pure tx-data builder is `advance-case-state-tx-data`."
   [conn {:keys [vt-from vt-to] :as opts}]
   (let [now (java.util.Date.)]
     (validation/transact-with-validation
-     conn (kbt/with-vt (advance-state-tx-data
+     conn (kbt/with-vt (advance-case-state-tx-data
                         (d/db conn) (assoc opts :changed-at now))
                        (or vt-from now)
                        (or vt-to kbt/forever)))))
 
-(defn advance-state-tx-data
-  "Pure tx-data builder for `advance-state!` (ADR-068)."
+(defn advance-case-state-tx-data
+  "Pure tx-data builder for `advance-case-state!` (ADR-068)."
   [db {:keys [case to changed-by-uid reason reason-note supporting-doc
               changed-at]}]
   (let [eid (resolve-case db case)
@@ -204,7 +204,7 @@
   "Close a case (:closed-at set). The case's :state must already be
    in a terminal-ish state (:paid, :written-off, :resolved) — caller's
    responsibility to drive to the right state first via
-   `advance-state!`.
+   `advance-case-state!`.
 
    Required opts: :case, :closed-by-uid.
    Optional: :reason, :reason-note, :supporting-doc, :vt-from, :vt-to.

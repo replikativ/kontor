@@ -18,7 +18,7 @@
             [kontor.core :as core]
             [kontor.costing-provider :as costing]
             [kontor.inventory.core :as inv]
-            [kontor.inventory.costing :as inv-costing]
+            [kontor.inventory.fefo-costing-provider :as inv-costing]
             [kontor.inventory.count :as count]
             [kontor.inventory.ops :as ops]
             [kontor.inventory.report :as report]

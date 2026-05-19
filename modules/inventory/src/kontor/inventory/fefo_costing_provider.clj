@@ -1,4 +1,4 @@
-(ns kontor.inventory.costing
+(ns kontor.inventory.fefo-costing-provider
   "FEFO (first-expiry-first-out) CostingProvider — ADR-060.
 
    A companion-shipped `CostingProvider` impl — ADR-029's protocol is
