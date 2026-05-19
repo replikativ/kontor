@@ -216,6 +216,41 @@ Irregularities flagged:
   provider are bundled together — not wrong but inconsistent.
 - **Module has NO README until 2026-05-18.**
 
+### kontor-partner
+
+**Read 2026-05-18. README written 2026-05-18.**
+
+Irregularities flagged:
+
+- **`kontor.partner` lives at `src/kontor/partner.clj` (top level),
+  not in `src/kontor/partner/`.** Same kernel-collision case as
+  `kontor.invoice.bridge` — except this module DOES claim the
+  bare-`kontor.partner` namespace (the kernel only ships
+  `:partner/*` schema attrs in `kontor.schema`, not a `kontor.
+  partner` namespace). So this is structurally cleaner than
+  invoice — but it means the module has BOTH `kontor.partner.clj`
+  AND `kontor/partner/schema.clj`, and the test file is
+  `kontor/partner_test.clj` (not nested). Worth canonicalising.
+- **`install!` in `kontor.partner.schema`** — 6/6 modules so far.
+  The pattern is universal.
+- **All transactor logic lives in ONE file (`kontor.partner.clj`).**
+  Resolution, pulls, queries, junction traversal, merge — all in
+  one ~560-line file. Counter-example to kontor-collections'
+  9-file scatter. There's no canonical "right" decomposition;
+  both extremes coexist in the repo.
+- **Only `merge-partners!` follows the ADR-068 `*-tx-data` + `!`
+  pattern.** Most of `kontor.partner` is read-only (resolution +
+  queries) so this is fine, but the schema implies a lot of
+  business writes (create-partner, add-contact-mech, add-role,
+  start-relationship, end-relationship, place-on-tag) that
+  consumers presumably hand-build with raw `d/transact`. No
+  transactor surface for the routine party-master writes.
+- **Single test file (`partner_test.clj` at the top level).** 6/6
+  modules so far have either a single test file or scattered ones
+  with no clear contract about what to test where. Worth a
+  test-layout convention in §3.
+- **Module has NO README until 2026-05-18.**
+
 (More modules to be appended as their READMEs land.)
 
 ## §3 — Cross-cutting patterns worth canonicalizing
