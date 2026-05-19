@@ -10,9 +10,12 @@
 
 ;; # kontor showcases
 ;;
-;; Four narrative notebooks. Each exercises a different
-;; jurisdictional / multi-entity shape and cites the real-world
-;; regulatory sources behind the workflow.
+;; Six narrative notebooks. Showcases 1-4 exercise different
+;; jurisdictional / multi-entity shapes on synthetic data. Showcase
+;; 5 exercises the bitemporal substrate on REAL SEC EDGAR data —
+;; Apple's 2009 10-K/A restatement. Showcase 6 demonstrates the
+;; full bitemporal-correction story on a multi-year synthetic DE
+;; GmbH including consent + DSAR + retention per ADR-094.
 ;;
 ;; ## Showcase 1 — DE B2B Factur-X + Mahnverfahren
 ;;
@@ -70,11 +73,53 @@
 ;; `:no-self-approval` enforcement rejects self-approved payments
 ;; then succeeds with a different actor.
 ;;
+;; ## Showcase 5 — Apple 10-K bitemporal restatement (REAL DATA)
+;;
+;; [Open Showcase 5 →](showcases.05_apple_10k_bitemporal.html)
+;;
+;; *Apple Inc.* — ingest the real SEC EDGAR companyfacts JSON for
+;; CIK 0000320193. Apple's 2009 10-K (filed 2009-10-27) reported
+;; AccruedLiabilities FY2008 = $3.719B; the 10-K/A amendment filed
+;; 2010-01-25 restated it to $4.224B (+$505M) per ASC 605-25
+;; revenue-recognition adoption. The substrate records both,
+;; stamping each fact with `:tx/valid-from` = SEC `:filed` date;
+;; `(d/valid-at db 2009-12-01)` returns the original 10-K value,
+;; `(d/valid-at db 2010-02-01)` returns the amended value.
+;;
+;; Cited: SEC EDGAR API (public domain, 17 U.S.C. § 105), Apple
+;; 10-K accession 0001193125-09-214859, 10-K/A accession
+;; 0001193125-10-012091, ASC 605-25 (FASB revenue recognition).
+;;
+;; ## Showcase 6 — Multi-year DE GmbH (bitemporal + consent + DSAR + retention)
+;;
+;; [Open Showcase 6 →](showcases.06_de_gmbh_multi_year.html)
+;;
+;; *Acme Manufacturing GmbH* (München) — 3-year company history
+;; exercising the substrate end-to-end. Y1: hire + consent grants
+;; under BDSG §26(1), monthly DATEV LODAS payroll. Y1 Q4: a 1200 EUR
+;; expense gets misclassified to Reisekosten when it should have
+;; been Bewirtungskosten (EStG §4(5) Nr. 2 — 70% deductible). Y2:
+;; promotion + comp supersession; Y2 Q4 the Steuerberater catches
+;; the Y1 misclassification — kontor.bitemporal/close-validity!
+;; closes the original posting and the corrected split lands
+;; without rewriting history. `(d/valid-at db 2026-12-31)` still
+;; sees the original; `(d/valid-at db 2027-11-01)` sees the
+;; correction. Y3: terminated employee triggers DSAR via the
+;; kontor.dsar walker + people-record bundle; ADR-094 + l10n-de
+;; retention seeds drive eligibility check.
+;;
+;; Cited: BGB / HGB §238-263, BDSG §26, DSGVO Art. 5(1)(e),
+;; EStG §4(5) Nr. 2, BetrVG §82-83, DATEV SKR04, ADR-094 + research
+;; notes 93 + 94.
+;;
 ;; ## How these notebooks fit
 ;;
-;; - **Synthetic data only**: company names, GSTINs, EINs are
-;;   fictional. The accounting workflows are grounded in cited
-;;   regulatory sources.
+;; - **Showcases 1-4 + 6: synthetic data**. Company names, GSTINs,
+;;   EINs are fictional. The accounting workflows are grounded in
+;;   cited regulatory sources.
+;; - **Showcase 5: real public data**. Apple's actual SEC filings;
+;;   the amendment is real; the values restated are the actual
+;;   ASC 605-25 deltas.
 ;; - **Reference comparisons**: each notebook ends with a section
 ;;   comparing the implementation to how Odoo / Tryton / SAP /
 ;;   NetSuite / Tally / etc. model the same flow.
