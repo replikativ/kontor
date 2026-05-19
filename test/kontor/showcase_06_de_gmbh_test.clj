@@ -48,7 +48,7 @@
   (let [conn (core/create-test-db)]
     (hr/install! conn)
     (datev/install! conn)
-    (pr-schema/install! conn)
+    (pr/install! conn)
     (de-retention/install! conn)
     (d/transact
      conn
@@ -252,6 +252,14 @@
           (testing "people-record DSAR bundle reaches Schmidt's track record"
             (is (= 2 (count (:positions pr-bundle))))
             (is (= 1 (count (:promotions pr-bundle)))))
+
+          (testing "Kernel DSAR walker ALSO reaches people-record via :extensions :people-record
+                    (closes the ADR-094 silent compliance gap flagged in note 95)"
+            (let [pr-ext (get-in kernel-bundle [:extensions :people-record])]
+              (is (some? pr-ext)
+                  "kontor.people-record.core/install! registers the extension collector")
+              (is (= 2 (count (:positions pr-ext))))
+              (is (= 1 (count (:promotions pr-ext))))))
 
           (testing "DPIA retention — not yet eligible at Y3 (10-year floor)"
             (let [dpia (ref-eid (d/db conn) :audit-doc/code "DPIA-acme-2026")

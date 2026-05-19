@@ -32,7 +32,7 @@
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
     (hr/install! conn)
-    (pr-schema/install! conn)
+    (pr/install! conn)
     (d/transact conn
                 [{:db/id "eur"
                   :commodity/symbol "EUR"

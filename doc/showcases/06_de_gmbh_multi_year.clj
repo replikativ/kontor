@@ -92,7 +92,7 @@
 (def conn (core/create-test-db))
 (hr/install! conn)
 (datev/install! conn)
-(pr-schema/install! conn)
+(pr/install! conn)
 (de-retention/install! conn)
 
 ;; Commodities, entity, journals, fiscal periods, and the SKR04

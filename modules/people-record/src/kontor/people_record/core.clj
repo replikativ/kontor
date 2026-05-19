@@ -38,9 +38,40 @@
   (:require [datahike.api :as d]
             [kontor.audit-doc :as audit-doc]
             [kontor.bitemporal :as kbt]
+            [kontor.dsar :as dsar]
             [kontor.hr.consent :as consent]
+            [kontor.people-record.schema :as schema]
             [kontor.validation :as validation])
   (:import [java.util Date]))
+
+(declare dsar-bundle)
+
+(defn install!
+  "Idempotent install — kernel + kontor-hr attrs must be present (run
+   `kontor.core/install-schema!` + `kontor.hr.core/install!` first).
+
+   Registers a `kontor.dsar` extension collector under `:people-
+   record` so the kernel-canonical `kontor.dsar/collect` walk reaches
+   the track-record bundle. Same pattern as `kontor.hr.core/install!`
+   (note 86 P1-86-5): given a partner eid, we resolve the linked
+   `:person` (if any) via `:partner/person` and call `dsar-bundle`.
+   The kernel walker merges the result under `:extensions :people-
+   record`.
+
+   Without this registration, consumer DSAR pipelines using the
+   kernel-canonical walker silently miss track-record data — an
+   ADR-094 compliance gap. See note 95 §2 (kontor-people-record) for
+   the audit + this followup."
+  [conn]
+  (schema/install! conn)
+  (dsar/register-extension-collector!
+   :people-record
+   (fn [db partner-eid _opts]
+     (when-let [person-eid (d/q '[:find ?p .
+                                  :in $ ?pa
+                                  :where [?pa :partner/person ?p]]
+                                db partner-eid)]
+       (dsar-bundle db person-eid)))))
 
 ;; ============================================================================
 ;; Consent gate — every write through this ns checks active-at?
