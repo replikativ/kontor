@@ -362,6 +362,45 @@ Irregularities flagged:
   overwriting? (Verified: no, the prior list showed it missing,
   and the file write created.)
 
+### kontor-people-record
+
+**Read 2026-05-18. README written 2026-05-18.**
+
+Irregularities flagged:
+
+- **`install!` in `kontor.people-record.schema`** — 9/10 modules
+  put it there (hr is the lone exception that has it in both).
+  The pattern is settled in practice; §1 needs to be rewritten.
+- **Hyphenated module namespace: `kontor.people-record.*`.** The
+  module directory uses an underscore (`people_record`) per Clojure
+  convention; the namespace uses a hyphen. Consistent with the
+  rest of the kernel (`payment-application`, `import-edgar`) — but
+  the disparity catches the eye in `find` output.
+- **`check-consent!` is a private `defn-`.** Same issue as
+  `kontor.expense.core/change-status!` — a consumer composing
+  this module into their own `kontor.process` orchestration
+  cannot reuse the consent gate as a tx-data step; they would
+  have to re-implement the check or wrap the impure `record-*!`
+  call. Either expose `check-consent-tx-data` (a step that
+  throws on missing consent) or document the consent-check API
+  as `kontor.hr.consent/active-at?` directly.
+- **No `core.clj` `install!`** — only `schema.clj` `install!`,
+  no convenience installer in core. By contrast kontor-hr has
+  the full `core/install!` pattern that ALSO registers a DSAR
+  extension. If people-record had analogous DSAR registration
+  (it has `dsar-bundle`, but no automatic kernel-walker
+  registration), the bundle would only be reachable via direct
+  call, not via `kontor.dsar/collect`.
+- **`dsar-bundle` is NOT registered with `kontor.dsar/register-
+  extension-collector!`.** kontor-hr does this in its
+  `core/install!`. people-record could (and probably should) do
+  the same so a consumer's `kontor.dsar/collect` walk
+  automatically includes track-record data without manual
+  composition. Worth a followup.
+- **Brand-new module (commit `bcfe1af`).** Small surface; the
+  irregularities above are easy to fix early before consumers
+  lock in the call patterns.
+
 (More modules to be appended as their READMEs land.)
 
 ## §3 — Cross-cutting patterns worth canonicalizing
