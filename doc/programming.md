@@ -76,7 +76,53 @@ Q1 (`:tx/valid-from = 2026-03-31`). Queries can ask either question:
 ```
 
 ADR-008 / ADR-048 cover this. `kontor.bitemporal` has the helpers.
-Showcase #1 walks through a real bitemporal query.
+[Showcase 06](showcases/06_de_gmbh_multi_year.clj) is the worked
+example to read first: a misclassified Y1 expense gets caught and
+corrected in Y2 via `close-validity!` + a new write at the
+original valid-time, and both views — "what the Y1 books said at
+year-end 2026" and "what they say now, restated" — remain queryable
+forever.
+
+#### `commit-tx-eid` — the close-validity footgun, averted
+
+`close-validity!` operates on the **datahike commit-tx eid** (the
+carrier of the `:db.valid/from` / `:db.valid/to` window), NOT on
+any business entity created in that transaction. A kontor
+`:transaction` / `:partner` / `:posting` entity's eid is *not* the
+commit-tx eid; they are EAVT-distinct. Closing a business-entity
+eid is a silent no-op — it looks valid (no error raised), but
+nothing happens.
+
+`kontor.bitemporal/commit-tx-eid` extracts the commit-tx eid from
+a `d/transact` (or `transact-with-validation`) tx-report so the
+caller can pass it back into `close-validity!` later:
+
+```clojure
+(require '[kontor.bitemporal :as kbt])
+
+;; Make the original write — remember the commit-tx eid.
+(let [report (validation/transact-with-validation
+              conn (kbt/with-vt (posting/post-transaction-tx-data ...)
+                                #inst "2026-11-22"))
+      original-tx-eid (kbt/commit-tx-eid report)]
+  (save-somewhere! original-tx-eid))
+
+;; ... 11 months later ...
+
+;; Close the original tx's valid-time window at the correction date,
+;; then write the corrected posting at the original valid-time.
+(kbt/close-validity! conn original-tx-eid #inst "2027-10-15")
+(validation/transact-with-validation
+ conn (kbt/with-vt (posting/post-transaction-tx-data ...)
+                   #inst "2026-11-22")) ; original effective-date
+```
+
+If you ever see "I called close-validity! and nothing happened,"
+the explanation is almost always that you passed a business-entity
+eid (the invoice, the posting, the transaction row) instead of the
+commit-tx eid. `commit-tx-eid` is the right ergonomic; it throws
+`:type :kontor.bitemporal/no-commit-tx` if the report is malformed
+rather than silently returning nil.
 
 ### Axis 2 — status machines
 
@@ -350,6 +396,183 @@ Recipe for a typical kernel or companion transactor:
    ```
    See `legal_hold.clj` for the canonical example.
 
+## Substrate-tier seams — `*-Provider` protocols
+
+A handful of kernel namespaces expose **provider protocols** the
+consumer implements once per (vendor, jurisdiction, valuation
+method) and the kernel calls. The recurring shape is "the kernel
+ships the protocol + a static-table default + a chain combinator;
+the consumer ships the live integration." Three additions since
+Stage P matter most for a consumer writing trans-national code:
+
+### `TaxRateProvider` (ADR-071)
+
+`kontor.tax-rate-provider/TaxRateProvider` (one method:
+`rate-for`) returns a `TaxFacts` record given a `TaxQuery` (buyer
++ seller jurisdictions, product/service category, valid date,
+amount). `TaxPostingBuilder` turns the `TaxFacts` into postings.
+The kernel ships `StaticTableProvider` + scaffolds for Avalara,
+TaxJar, SST; the consumer composes them via `chain`.
+
+This supersedes the original `kontor.tax-provider/TaxProvider`
+(ADR-005), which is kept for back-compat but new code should
+target the ADR-071 shape — rate determination is now pure data,
+and a `TaxFacts` is composable into a `kontor.process` step
+without a side-effect to the rate engine inside the writer lock.
+
+### `FxRateProvider` (ADR-072)
+
+`kontor.fx-rate-provider/FxRateProvider` (`get-rate`,
+`get-rates-batch`) returns the rate for a `(from, to, instant,
+rate-type)` tuple. Rate-types are the IAS 21 / ASC 830 concepts —
+`:spot`, `:closing`, `:average`, `:historical`. Built-ins:
+`StaticTable` (test fixtures), `EcbReferenceRates` (CSV ingest
+from the ECB), `Chained` (try providers in order, first hit
+wins). `kontor.fx` then exposes `convert`, `translate-money-seq`,
+`to-functional-currency` over `Money` values.
+
+A typical consumer setup:
+
+```clojure
+(require '[kontor.fx-rate-provider :as fxp]
+         '[kontor.fx :as fx])
+
+(def fx (fxp/chain [(fxp/make-static-table-provider conn :override)
+                    (fxp/make-ecb-reference-rates-provider conn)]))
+
+(fx/convert fx (k/money 1000M "EUR") "USD"
+            #inst "2026-09-30" :closing)
+;; => Money[USD, 1063.50M]
+```
+
+### `PayrollProvider` trio (ADR-075)
+
+`kontor.payroll-provider` exposes three protocols that together
+drive `kontor.hr.payroll/run-payroll!`:
+
+- **`PayrollComputeProvider`** — `(compute period employment)`
+  returns canonical `PayrollFacts` (gross, statutory withholdings,
+  net) for one employment in one period. Country adapters parse
+  their engine's export file (DATEV LODAS, ADP GLI, Ceridian
+  Dayforce, …) into this canonical shape.
+- **`PayrollPostingBuilder`** — `(postings-for facts)` returns
+  tx-data routing the facts to the country's chart of accounts +
+  any required accruals (HGB §249 PTO for DE, ASC 710 PTO + 401(k)
+  match for US, CPC-33 férias + 13º for BR, etc.).
+- **`PayrollEmitProvider`** — `(emit period facts)` produces the
+  regulator filing for the period (LODAS Importdatei, W-2, T4 +
+  T619, DSN NEODES, STP P2, eSocial S-1000 … S-2399, CFDI Nómina,
+  Form 24Q, Gensen, IIT, mBGM + L16).
+
+Same orchestrator, eleven country adapters
+(`modules/payroll-{de-datev,us-adp,ca,fr,au,br,mx,in,jp,cn,at}`).
+The trans-national Jane-Doe scenario in
+`test/kontor/stage_r_cross_stage_test.clj` runs three concurrent
+employments (DE + US + BR) on one global `:person` through one
+month of payroll across three engines, demonstrating that the
+substrate keeps the bitemporal audit chain intact across
+jurisdictions.
+
+## Consent — `:consent/*` as a bitemporal gate
+
+ADR-094 ships a `:consent/*` mini-schema (in `kontor-hr`) that
+records per-(subject, scope, legal-basis) consent as a bitemporal
+fact, plus a query helper that answers "was consent operationally
+in force at time T?" without re-reading the current `:state`:
+
+```clojure
+(require '[kontor.hr.consent :as consent])
+
+(consent/active-at?
+ (d/db conn)
+ jane-doe-person-eid          ; subject
+ :hr-monitoring-consent       ; scope (an :audit-doc/category)
+ #inst "2026-09-15")          ; the instant to test
+;; => true   ; consent was granted before and not yet withdrawn
+```
+
+`active-at?` deliberately respects the operational window
+`[granted-at, withdrawn-at)` even when the current `:state` is
+`:withdrawn` or `:superseded`. That's the regulator-aligned
+semantic: a withdrawal does NOT retroactively invalidate
+processing that happened lawfully under the prior consent.
+
+The kernel does NOT enforce consent at the write path —
+substrate stays neutral. Consumer policy layers
+(`kontor-people-record`, the `kontor.dsar` bundler, your MCP
+agent's tool catalog) decide whether to refuse a write based on
+the consent's `:legal-basis`. The substrate's job is to record
+every grant + withdrawal + supersession as a bitemporal fact so a
+regulator can replay the timeline.
+
+Two new `:approval-policy/rule` values land alongside (ADR-094):
+
+- **`:requires-dpia-supporting-doc`** — the change-spec's
+  `:supporting-doc` ref must point to an `:audit-doc` carrying
+  `:audit-doc/category :hr-monitoring-consent`.
+- **`:requires-works-agreement-ref`** — the change-spec must
+  include a `:works-agreement-ref` pointing at an audit-doc with
+  `:audit-doc/type :betriebsvereinbarung` or `:works-agreement`.
+
+Both are kernel-enforced in `kontor.status-machine/check-policy`,
+so consumer transitions opt in via a transacted `:approval-policy`
+seed without needing custom validator code.
+
+## LLM / MCP agent integration — `kontor.agent-tools`
+
+For agentic write-paths (MCP servers, OpenAI tool-use, Anthropic
+tool-use), `kontor.agent-tools` ships a **server-agnostic tool
+catalog** the agent invokes through the kernel's normal validation
+gate. The catalog is plain data; the transport (MCP JSON-RPC,
+HTTP, gRPC) is the consumer's choice.
+
+A tool spec is a map:
+
+```clojure
+{:name          "snake_case_name"
+ :description   "What it does — visible to the agent."
+ :input-schema  {:type "object" :properties {...} :required [...]}
+ :side-effects? true | false
+ :handler       (fn [{:keys [conn db args]}] result-map)}
+```
+
+Read tools (`:side-effects? false`) read from `db` (defaults to
+`(d/db conn)`). Write tools (`:side-effects? true`) route through
+`kontor.validation/transact-with-validation` — every kernel gate
+fires identically to a direct Clojure call. There is no separate
+permission layer; the substrate gates are the only enforcement.
+
+The bundled `default-catalog-tools` covers eight tools across the
+read + write surface:
+
+- **Read**: `kontor_explain_balance`, `kontor_account_balance`,
+  `kontor_trial_balance`, `kontor_explain_posting`,
+  `kontor_entities_with_concept_iri`, `kontor_dsar_collect`.
+- **Write**: `kontor_create_audit_doc`,
+  `kontor_post_transaction`.
+
+Consumers register more with `register-tool!` (idempotent —
+re-registration overwrites by `:name`, useful for REPL hot-reload).
+
+`kontor.agent-tools` deliberately does NOT ship its own JSON-RPC
+server. The kontor project's stance (note 94 §3.2): the
+leverage point is the tool catalog, not another server.
+For MCP transport, compose with [dvergr](https://github.com/replikativ/dvergr)'s
+existing MCP server:
+
+```clojure
+(require '[dvergr.mcp.server :as dvergr-mcp]
+         '[kontor.agent-tools :as kt])
+
+(kt/install-default-catalog!)
+(swap! dvergr-mcp/tool-handlers merge
+       (kt/dvergr-handlers conn (kt/default-catalog conn)))
+(dvergr-mcp/start! {:port 17888})
+```
+
+A standalone `kontor-mcp` is deferred until a consumer asks for
+one without buying into dvergr's full stack.
+
 ## The documented carve-outs
 
 Three places where the "every `!` routes through the gate" rule has
@@ -454,20 +677,40 @@ test through its `!` wrapper.
 
 ## Where to go next
 
+- **Single worked example to read first**:
+  [doc/showcases/06_de_gmbh_multi_year.clj](showcases/06_de_gmbh_multi_year.clj)
+  exercises every axis in this document — bitemporal correction
+  via `close-validity!` + `commit-tx-eid`, status machines on
+  invoice + employment + DSAR lifecycles, the transact gate on
+  every business write, `kontor.process` for atomic cross-module
+  composition (sealing a period closes related invoices and emits
+  the BWA in one commit). The 10-minute walkthrough version lives
+  at [doc/start-here.md](start-here.md).
 - **The eight kernel concerns** kontor solves end-to-end: see
   [doc/value.md §"The eight pains kontor solves at the kernel"](value.md#the-eight-pains-kontor-solves-at-the-kernel).
 - **ADR-067 + ADR-068** for the canonical design of the transact
-  programming model: [doc/decisions.md](decisions.md).
+  programming model: [doc/decisions.md](decisions.md). ADR-071..074
+  for the trans-national substrate (`TaxRateProvider`,
+  `FxRateProvider`, `kontor.consolidation`, `CrossTxRouter`).
+  ADR-075 for the payroll provider trio. ADR-090..092 for the
+  McComb-aligned substrate seams (`:concept-iri`,
+  `kontor.explain`, `kontor.event-bus`). ADR-094 for the consent +
+  retention + AI Act posture.
 - **Research note 47** (inventory + transaction composition) for
   the prior-art analysis that informed the cross-module composition
   story across Odoo / Tryton / NetSuite / SAP.
 - **Research notes 48 + 49** for the Stage P review-after — code-
   review findings + integration-shape analysis with the carve-outs
   documented.
-- **Showcases**: [doc/showcases/](showcases/) — fully-worked
-  end-to-end scenarios. Showcase 1 (DE Mahnverfahren), Showcase 4
-  (multi-entity intercompany) are particularly good for grokking
-  the cross-module composition story.
+- **Research note 92** for the company-as-software market
+  positioning + note 94 §3.2 for the `kontor.agent-tools` design
+  rationale.
+- **Showcases**: [doc/showcases/](showcases/) — six fully-worked
+  end-to-end scenarios. Showcase 05 (Apple 10-K/A) and showcase 06
+  (DE GmbH multi-year) demonstrate the bitemporal headline;
+  Showcase 4 (multi-entity intercompany) and Showcase 1 (DE
+  Mahnverfahren) are good for grokking the cross-module
+  composition story.
 
 ## A note on what's NOT here
 
