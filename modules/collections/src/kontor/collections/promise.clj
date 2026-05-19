@@ -171,11 +171,29 @@
        reason      (assoc :reason reason)
        reason-note (assoc :reason-note reason-note)))))
 
+(defn mark-promise-kept-tx-data
+  "Pure tx-data builder for `mark-promise-kept!` (ADR-068). Returns
+   the status-machine tx-data for `:open → :kept`; the `!` wrapper
+   stamps `:tx/valid-from` and routes through the gate. Composes into
+   `kontor.process` step lists where a payment-application + the
+   promise transition must commit in one tx."
+  [db {:keys [promise changed-by-uid reason reason-note changed-at]
+       :as _opts}]
+  (transition-promise-tx-data
+   db {:promise promise
+       :to :kept
+       :changed-by-uid changed-by-uid
+       :reason (or reason :promise-kept)
+       :reason-note reason-note
+       :changed-at changed-at}))
+
 (defn mark-promise-kept!
   "Promise → :kept (a :payment-application reduced the open balance
    by enough). Caller passes the matching application eid via
    :matching-application if available; we record it as a reference
-   for audit."
+   for audit.
+
+   The pure tx-data builder is `mark-promise-kept-tx-data` (ADR-068)."
   [conn {:keys [promise matching-application changed-by-uid reason
                 reason-note vt-from vt-to]}]
   (transition-promise! conn {:promise promise

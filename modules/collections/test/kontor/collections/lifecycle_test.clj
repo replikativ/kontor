@@ -399,3 +399,68 @@
                                     {:partner (partner "BIG-CUST")
                                      :entity (entity "ACME-DE")
                                      :as-of-valid #inst "2020-01-01"})))))
+
+;; ============================================================================
+;; ADR-068 — `*-tx-data` builder shape for the two newly-exposed
+;; primitives (`mark-promise-kept-tx-data` + `release-all-for-tx-data`)
+;; ============================================================================
+
+(deftest mark-promise-kept-and-release-all-for-tx-data-are-pure
+  (kcase/open-case! *conn*
+                   {:code "CASE-TXD"
+                    :partner (partner "BIG-CUST")
+                    :entity (entity "ACME-DE")
+                    :opened-by-uid (actor "alice")})
+  (let [case-eid (kcase/by-code (d/db *conn*) "CASE-TXD")]
+    (kpromise/record-promise! *conn*
+                              {:external-id "PTP-TXD"
+                               :case case-eid
+                               :amount 1000M
+                               :commodity (commodity "EUR")
+                               :promised-by-date #inst "2026-06-01"
+                               :captured-by-uid (actor "alice")})
+    ;; Place TWO holds against the same (partner, entity) so the
+    ;; release-all builder produces a multi-hold tx-data vector.
+    (chold/place-hold! *conn*
+                       {:partner (partner "BIG-CUST")
+                        :entity (entity "ACME-DE")
+                        :reason-code :manual
+                        :placed-by-uid (actor "alice")
+                        :tempid "h1"})
+    (chold/place-hold! *conn*
+                       {:partner (partner "BIG-CUST")
+                        :entity (entity "ACME-DE")
+                        :reason-code :credit-review
+                        :placed-by-uid (actor "alice")
+                        :tempid "h2"})
+    (let [db-before (d/db *conn*)
+          tx-before (:max-tx db-before)
+          ptp-eid (kpromise/by-external-id db-before "PTP-TXD")
+          kept-tx (kpromise/mark-promise-kept-tx-data
+                   db-before {:promise ptp-eid
+                              :changed-by-uid (actor "alice")})
+          release-tx (chold/release-all-for-tx-data
+                      db-before {:partner (partner "BIG-CUST")
+                                 :entity (entity "ACME-DE")
+                                 :released-by-uid (actor "bob")
+                                 :notes "bulk release"})]
+      (testing "mark-promise-kept-tx-data returns a non-empty vector"
+        (is (vector? kept-tx))
+        (is (seq kept-tx)))
+      (testing "release-all-for-tx-data returns a multi-hold vector"
+        (is (vector? release-tx))
+        ;; 2 holds × (1 update map + 2 status-machine entries) = 6 ops.
+        (is (>= (count release-tx) 4)))
+      (testing "builders are pure (no side effects on conn)"
+        (is (= tx-before (:max-tx (d/db *conn*)))))
+      (testing "transacting the bulk-release atomically flips both holds"
+        (d/transact *conn* release-tx)
+        (let [db (d/db *conn*)
+              actives (chold/active-holds-for
+                       db {:partner (partner "BIG-CUST")
+                           :entity (entity "ACME-DE")})]
+          (is (empty? actives) "all holds released in ONE tx")))
+      (testing "transacting mark-promise-kept-tx-data flips status"
+        (d/transact *conn* kept-tx)
+        (is (= :kept (:payment-promise/status
+                      (kpromise/pull-promise (d/db *conn*) "PTP-TXD"))))))))

@@ -324,8 +324,36 @@
                      supporting-doc (assoc :supporting-doc supporting-doc)))]
     (into [update] status-tx)))
 
+(defn release-all-for-tx-data
+  "Pure tx-data builder for `release-all-for!` (ADR-068). Resolves
+   every active hold for (partner, entity) against `db` and produces
+   ONE tx-data vector concatenating each release's
+   `release-hold-tx-data`. Lets a consumer atomically release every
+   hold (typically when a customer's account is reinstated) inside a
+   `kontor.process` step list — the loop-of-`!`-calls form in
+   `release-all-for!` cannot give that atomicity.
+   Returns `[]` when no holds are active."
+  [db {:keys [released-by-uid notes released-at] :as opts}]
+  (when-not released-by-uid
+    (throw (ex-info ":released-by-uid required" {})))
+  (let [holds (active-holds-for db opts)
+        rel-at (or released-at (java.util.Date.))]
+    (vec (mapcat (fn [h]
+                   (release-hold-tx-data
+                    db {:hold-eid (:db/id h)
+                        :released-by-uid released-by-uid
+                        :notes notes
+                        :released-at rel-at}))
+                 holds))))
+
 (defn release-all-for!
-  "Convenience: release every active hold for (partner, entity)."
+  "Convenience: release every active hold for (partner, entity). Uses
+   one `release-hold!` call per hold — each is its own tx (the
+   per-hold gate validation runs independently). Use
+   `release-all-for-tx-data` instead when atomicity is required.
+
+   Returns the count of holds released. The pure tx-data builder is
+   `release-all-for-tx-data` (ADR-068)."
   [conn {:keys [partner entity released-by-uid notes]
          :as opts}]
   (let [holds (active-holds-for (d/db conn) opts)]
