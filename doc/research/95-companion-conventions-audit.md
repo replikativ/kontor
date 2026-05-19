@@ -179,6 +179,43 @@ Irregularities flagged:
   splitting.
 - **Module has NO README until 2026-05-18.**
 
+### kontor-collections
+
+**Read 2026-05-18. README written 2026-05-18.**
+
+Irregularities flagged:
+
+- **No `core.clj` at all.** The module has 9 source files all of
+  which are concern-namespaced (case, dispute, promise, pause,
+  credit-hold, aging, dunning, writeoff, schema). No single entry
+  point exists for installer + public re-exports — consumers
+  require the per-concern namespaces directly. Consistent with
+  kontor-lease's tendency to scatter, but more pronounced.
+- **`install!` in `kontor.collections.schema`** — 5/5 now follow
+  this anti-convention. The convention as written in §1 is
+  effectively dead text; either rewrite §1 or refactor every
+  module's installer location.
+- **Two `advance-state!` functions with the same name in different
+  namespaces** — `kontor.collections.case/advance-state!` and
+  `kontor.collections.dispute/advance-state!`. Both are thin
+  status-machine wrappers. Either both should be renamed to
+  reflect their entity (`advance-case-state!` /
+  `advance-dispute-state!`) or both should be the canonical name
+  in a hypothetical `core.clj`. Same-name-different-ns is fine in
+  Clojure but confusing in this codebase's grep-driven
+  navigation.
+- **Some thin status wrappers are still bare `record-status-
+  change!` calls** without paired `*-tx-data` (e.g.
+  `mark-promise-kept!`, `mark-promise-broken!`, `release-all-
+  for!`). Most of the module DOES have the ADR-068 pair, but
+  these are exceptions — same pattern as kontor-invoice.
+- **`DunningTemplateProvider` protocol lives in `kontor.
+  collections.dunning`, not in `kontor.collections.dunning-template-
+  provider`.** §1 convention says protocol files are
+  `<module>.<provider-name>-provider.clj`. The dunning logic +
+  provider are bundled together — not wrong but inconsistent.
+- **Module has NO README until 2026-05-18.**
+
 (More modules to be appended as their READMEs land.)
 
 ## §3 — Cross-cutting patterns worth canonicalizing
