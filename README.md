@@ -107,25 +107,86 @@ For the bitemporal-correction story — the headline feature — see
 [doc/start-here.md](doc/start-here.md), which walks through showcase
 06 step-by-step.
 
-## What's NOT in kontor
+## What's in the box
 
-- **No UI.** Build it in your app. We use HTMX in
-  [beleg](https://github.com/replikativ/beleg); others use Replicant /
-  React / Reagent.
-- **No ERP.** Companions ship sales / invoice / procurement /
-  collections / inventory / asset / lease / authz / hr; the kernel
-  itself stays small.
-- **No US sales-tax engine bundled.** We provide the `TaxRateProvider`
-  seam (ADR-071); customers integrate Avalara, TaxJar, or TaxCloud.
-- **No Peppol Access Point.** UBL is emitted; transport is partner-
-  side.
-- **No bundled API credentials**, ever (ADR-005).
-- **No Odoo translation.** FSF treats translation as derivative work;
-  the LGPLv3 would propagate. Reference design only (ADR-001).
-- **Categories the project refuses to scaffold.** Real-time biometric
-  emotion recognition, covert workforce monitoring, automated
-  termination recommendations — all banned by EU AI Act Art. 5 + Art.
-  22 (ADR-094).
+The kernel under `src/kontor/` is small; everything else is a
+composable companion under `modules/`. Each module has its own
+README + can be excluded if you don't need it. Pull only the pieces
+your app uses.
+
+**Accounting primitives** — booked beyond the kernel's posting /
+balance / period semantics:
+
+| Module | Adds |
+|---|---|
+| [`asset`](modules/asset/README.md) | `:asset` register + per-(asset, ledger) depreciation books (ADR-053/054/055) |
+| [`lease`](modules/lease/README.md) | IFRS 16 / ASC 842 lessee-side + modifications + FX retranslation (ADR-063/064) |
+| [`inventory`](modules/inventory/README.md) | FIFO / LIFO / WeightedAverage / StandardCost + valuation layers (ADR-029) |
+| [`expense`](modules/expense/README.md) | Expense report + reimbursement + per-diem |
+
+**Order-to-cash + procure-to-pay**:
+
+| Module | Adds |
+|---|---|
+| [`partner`](modules/partner/README.md) | Party-as-root + person/org subtypes + polymorphic contact mechs (ADR-033) |
+| [`sales`](modules/sales/README.md) | Order header + items + ship-groups + adjustments (ADR-035) |
+| [`invoice`](modules/invoice/README.md) | Order → invoice bridge + status machine + AcctgTrans posting (ADR-036) |
+| [`procurement`](modules/procurement/README.md) | Requisition + receipt + 3-way match + drop-ship + RTV (ADR-042) |
+| [`collections`](modules/collections/README.md) | AR collections + dunning + dispute + credit-hold + bad-debt write-off (ADR-043) |
+
+**Workforce**:
+
+| Module | Adds |
+|---|---|
+| [`hr`](modules/hr/README.md) | `:person` / `:employment` / `:compensation` + `:consent/*` (ADR-075 + ADR-094) |
+| [`people-record`](modules/people-record/README.md) | Career history + reviews + promotions, consent-gated (ADR-094) |
+| `payroll-{de-datev,us-adp,ca,fr,au,br,mx,in,jp,cn,at}` | 11 country payroll adapters — parse engine export, post to country chart, emit regulator filing (ADR-076..087) |
+
+**Compliance + authz**:
+
+| Module | Adds |
+|---|---|
+| [`authz`](modules/authz/README.md) | ReBAC indexed traversal + consumer-readiness API (ADR-066/127) |
+
+**Real-data ingest**:
+
+| Module | Adds |
+|---|---|
+| [`import-gleif`](modules/import-gleif/README.md) | GLEIF Golden Copy LEI ingest (CC0) → `:entity/lei` substrate |
+| [`import-edgar`](modules/import-edgar/README.md) | SEC EDGAR `companyfacts` JSON ingest with bitemporal restatement supersession |
+
+**Localization** — per-jurisdiction charts, tax rules, filings, e-invoice:
+
+`l10n-{de,fr,ca,us,au,jp,cn,in,br,mx,at}` + `einvoice-de`
++ `bank-{de,fr,ca,us,at}`. Depth varies by country — see the
+[country coverage](#country-coverage) matrix below. The l10n modules
+ship under their own licenses (some charts are GPLv3 per Tryton /
+GnuCash provenance) — each module's README documents its terms.
+
+**Agent integration** (substrate-side, not under `modules/`):
+
+- `kontor.agent-tools` — server-agnostic tool catalog for LLM / MCP
+  agents over the kontor read+write surface. Composes with
+  [dvergr](https://github.com/replikativ/dvergr)'s MCP server today;
+  a standalone `kontor-mcp` is deferred until a consumer asks for one.
+
+## What kontor doesn't ship
+
+Four genuine non-features:
+
+- **No UI.** Build it in your app — we use HTMX in
+  [beleg](https://github.com/replikativ/beleg); others use Replicant
+  / React / Reagent.
+- **No bundled API credentials**, ever (ADR-005). The TaxProvider /
+  PAC / SEFAZ / Peppol AP / Avalara seams are protocols; you wire
+  the credentials.
+- **No US sales-tax rate tables.** We provide the `TaxRateProvider`
+  seam (ADR-071); integrate Avalara, TaxJar, TaxCloud, or your own.
+- **No scaffolding for EU AI Act-banned categories** (ADR-094). The
+  project refuses to canonicalize real-time biometric emotion
+  recognition, covert workforce monitoring, or automated termination
+  recommendations — even though the substrate could technically host
+  them.
 
 ## Where to read next
 
@@ -187,28 +248,6 @@ Dayforce, Silae, Xero, RH Sistemas, CONTPAQi, Keka, freee, Yonyou,
 BMD), posts to the country's chart, and emits the regulator filing
 (LODAS Importdatei, W-2, T4 + T619, DSN NEODES, STP P2, eSocial, CFDI
 Nómina, Form 24Q, Gensen, IIT, mBGM + L16).
-
-## Companion modules
-
-Inside `modules/`, layered on top of the kernel:
-
-| Module | What it adds |
-|---|---|
-| `kontor-invoice` | Order → invoice bridge, status machine, AcctgTrans posting (ADR-036) |
-| `kontor-sales` | Order header + items + ship-groups + adjustments (ADR-035) |
-| `kontor-partner` | Party-as-root + person/org subtypes + polymorphic contact mechs (ADR-033) |
-| `kontor-procurement` | Requisition + receipt + 3-way match + drop-ship + RTV (ADR-042) |
-| `kontor-collections` | AR collections + dunning + dispute + credit-hold + bad-debt write-off (ADR-043) |
-| `kontor-inventory` | FIFO/LIFO/WA/StandardCost + valuation layers (ADR-029) |
-| `kontor-asset` | `:asset` register + per-(asset, ledger) depreciation books (ADR-053/054/055) |
-| `kontor-lease` | IFRS 16 / ASC 842 lessee-side + modifications + FX retranslation (ADR-063/064) |
-| `kontor-expense` | Expense report + reimbursement + per-diem |
-| `kontor-authz` | ReBAC indexed traversal + consumer-readiness API (ADR-066/127) |
-| `kontor-hr` | `:person` / `:employment` / `:compensation` + `:consent` (ADR-075 + ADR-094) |
-| `kontor-people-record` | Career history + performance reviews + promotions, consent-gated (ADR-094) |
-| `kontor-import-gleif` | GLEIF Golden Copy LEI ingest → `:entity/lei` substrate |
-| `kontor-import-edgar` | SEC EDGAR companyfacts JSON ingest with bitemporal restatement supersession |
-| `kontor.agent-tools` | Server-agnostic tool catalog for LLM/MCP agents over the kontor read+write surface |
 
 ## Substrate-tier seams
 
