@@ -322,6 +322,46 @@ Irregularities flagged:
   data` for builder forms that intentionally skip validation).
 - **Module has NO README until 2026-05-18.**
 
+### kontor-hr
+
+**Read 2026-05-18. README written 2026-05-18.**
+
+Irregularities flagged:
+
+- **`install!` exists in BOTH `kontor.hr.core` AND `kontor.hr.
+  schema`.** The core one calls schema's + additionally registers
+  a DSAR extension collector. This is the FIRST module in the
+  audit where `core.clj` carries `install!` (matches §1's
+  intended convention). Worth canonicalising as the precedent.
+  The schema-level `install!` is then the bare datahike-attrs +
+  seeds installer — useful for tests that don't need DSAR. Worth
+  a §3 rule: schema/install! is the bare attr loader; core/
+  install! is the composite that wires extension points.
+- **Two `:person` namespaces in the codebase.** `kontor.hr.person`
+  + `kontor.partner` (when `:partner/type :person` + a `:person`
+  subtype) BOTH define `:person/*` attrs in different schemas.
+  Confusing — at first glance a consumer can't tell which
+  `:person/external-id` they're looking at. The schema is
+  actually NS-disjoint (`:person/given-name` is HR; `:person/
+  first-name` is partner), but the partial overlap is
+  problematic. Worth a rename pass — e.g. `:hr-person/*` for HR
+  and keep `:person/*` for partner (or vice versa).
+- **`run-payroll!` lives in `kontor.hr.payroll`, not
+  `kontor.hr.core`.** This is the canonical `run-<verb>!`
+  orchestrator the §1 convention names; finding it requires
+  knowing to look in payroll.clj specifically. core.clj is just
+  installer + resolvers, not an orchestrator hub. Either accept
+  the per-concern split or add public re-exports in core.clj.
+- **`:consent/*` schema added incrementally** in commit
+  `a247fb0` — the rest of the module is ADR-075, but `:consent/
+  *` is ADR-094. The README documents both; the source file
+  comments are clean — but a consumer reading the schema EDN
+  would benefit from a clear "this group is ADR-094 added later"
+  section divider.
+- **Module had a README BEFORE this round** — check before
+  overwriting? (Verified: no, the prior list showed it missing,
+  and the file write created.)
+
 (More modules to be appended as their READMEs land.)
 
 ## §3 — Cross-cutting patterns worth canonicalizing
