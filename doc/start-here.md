@@ -218,7 +218,5 @@ namespace map, then [doc/decisions.md](decisions.md) for the 94 ADRs
 
 **To see all six showcases**: index lives at
 [doc/showcases/](showcases/) with a one-line hook each. Render
-locally with `clojure -J-Xss16m -M:notebooks:dev` (the 16MB stack
-flag is required because kindly's markdown parser has been observed
-to overflow on URL-bullet-followed-by-numeric-bullet patterns —
-without `-Xss16m` you'll get a `StackOverflowError`).
+locally with `clojure -M:notebooks:dev` and then in the REPL
+`(scicloj.clay.v2.api/make! {:source-path "doc/showcases/NN_name.clj"})`.

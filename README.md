@@ -21,7 +21,7 @@ Clojure only. No bundled API credentials, ever.
 
 Six end-to-end scenarios, each a complete story on cited regulatory
 sources. Open the source on GitHub for code+commentary, or render
-locally with `clojure -J-Xss16m -M:notebooks:dev` + Clay's `make!`.
+locally with `clojure -M:notebooks:dev` + Clay's `make!`.
 
 | Showcase | What you'll see |
 |---|---|
