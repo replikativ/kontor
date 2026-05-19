@@ -71,6 +71,41 @@ Irregularities flagged:
   convention distinct from the public `*-tx-data` surface.
 - Module has NO README until 2026-05-18 (closed in this round).
 
+### kontor-lease
+
+**Read 2026-05-18. README written 2026-05-18.**
+
+Irregularities flagged:
+
+- **`install!` lives in `kontor.lease.schema`**, not in `kontor.
+  lease.core` — same divergence as kontor-asset. The `core.clj`
+  here IS the canonical entry namespace per the spec, but it owns
+  the `define-lease!` lifecycle transactor (sibling to kontor-
+  asset's `kontor.asset.asset`) rather than the installer.
+- **Posting builders use `plan-*` instead of `*-tx-data`** (mirrors
+  kontor-asset; same critique). `kontor.lease.posting` exposes
+  `plan-lease-recognition`, `plan-lease-payment`, `plan-adjustment`,
+  `plan-fx-retranslation` — they ARE composable like `*-tx-data`
+  builders, but the naming hides it.
+- **The lifecycle transactors are split across `core.clj` +
+  `runner.clj` + `modification.clj` + `liability.clj`.** `define-
+  lease!` is in `core.clj`; `commence!` / `import-lease!` /
+  `run-lease!` are in `runner.clj`; `remeasure!` / `partial-
+  terminate!` / `terminate!` / `purchase!` are in `modification.
+  clj`; `open-liability-book!` / `revise-liability-book!` are in
+  `liability.clj`. The asset module bundles its lifecycle into
+  `kontor.asset.asset`; lease scatters by concern. Not wrong, but
+  inconsistent with the asset sibling.
+- **`commence!` and `run-lease!` are explicitly NOT one atomic tx**
+  (per the runner ns docstring). They do several `d/transact`s;
+  only the per-period payments inside `run-lease!` are atomic via
+  `kontor.process`. This is a deviation from the implicit "one
+  transactor = one tx" convention and IS documented — but the
+  divergence-recovery story (the lockstep guard refusing to run on
+  partial-prior-failure) suggests the convention should either be
+  formalised or atomicised end-to-end.
+- **Module has NO README until 2026-05-18** (closed in this round).
+
 (More modules to be appended as their READMEs land.)
 
 ## §3 — Cross-cutting patterns worth canonicalizing
