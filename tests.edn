@@ -41,7 +41,8 @@
                        "modules/payroll-de-datev/test"
                        "modules/payroll-cn/test"
                        "modules/import-gleif/test"
-                       "modules/import-edgar/test"]
+                       "modules/import-edgar/test"
+                       "modules/people-record/test"]
           :ns-patterns [".*-test$"]}]
  :color? true
  :randomize? false

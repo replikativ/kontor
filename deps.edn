@@ -51,7 +51,8 @@
          "modules/payroll-de-datev/src" "modules/payroll-de-datev/resources"
          "modules/payroll-cn/src"  "modules/payroll-cn/resources"
          "modules/import-gleif/src" "modules/import-gleif/resources"
-         "modules/import-edgar/src" "modules/import-edgar/resources"]
+         "modules/import-edgar/src" "modules/import-edgar/resources"
+         "modules/people-record/src" "modules/people-record/resources"]
 
  :deps
  {org.clojure/clojure              {:mvn/version "1.12.4"}
@@ -121,7 +122,8 @@
                  "modules/payroll-de-datev/test/resources"
                  "modules/payroll-cn/test"   "modules/payroll-cn/test/resources"
                  "modules/import-gleif/test" "modules/import-gleif/test/resources"
-                 "modules/import-edgar/test" "modules/import-edgar/test/resources"]
+                 "modules/import-edgar/test" "modules/import-edgar/test/resources"
+                 "modules/people-record/test" "modules/people-record/test/resources"]
    :extra-deps  {lambdaisland/kaocha     {:mvn/version "1.91.1392"}
                  org.clojure/test.check  {:mvn/version "1.1.1"}}
    :main-opts   ["-m" "kaocha.runner"]}
@@ -169,7 +171,8 @@
                  "modules/payroll-de-datev/test/resources"
                  "modules/payroll-cn/test"   "modules/payroll-cn/test/resources"
                  "modules/import-gleif/test" "modules/import-gleif/test/resources"
-                 "modules/import-edgar/test" "modules/import-edgar/test/resources"]
+                 "modules/import-edgar/test" "modules/import-edgar/test/resources"
+                 "modules/people-record/test" "modules/people-record/test/resources"]
    :extra-deps  {nrepl/nrepl             {:mvn/version "1.3.0"}
                  lambdaisland/kaocha     {:mvn/version "1.91.1392"}
                  org.clojure/test.check  {:mvn/version "1.1.1"}
