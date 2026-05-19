@@ -401,6 +401,42 @@ Irregularities flagged:
   irregularities above are easy to fix early before consumers
   lock in the call patterns.
 
+### kontor-import-gleif
+
+**Read 2026-05-18. README written 2026-05-18.**
+
+Irregularities flagged:
+
+- **No `schema.clj` and no `install!`.** The module is a single
+  `core.clj` because the schema attrs (`:entity/lei`, etc.) it
+  populates live in the KERNEL schema (`src/kontor/schema.clj`).
+  This is the first audit module without local schema, and the
+  shape works — pure-ingest modules don't need installer
+  boilerplate. Worth canonicalising as a §3 pattern: "substrate-
+  seam ingest modules co-evolve their attrs into the kernel
+  schema; they ship `core.clj` only."
+- **`import-level-1!` / `import-level-2!` call `d/transact`
+  directly, bypassing the validation gate.** Same shape as
+  authz's `do-write-relationships!` carve-out (ADR-068 §carve-
+  outs). Use case is mass-import of master data — kernel
+  invariants (sum-to-zero, period-lock) don't apply. But ADR-068
+  expects either a gate-route or an explicit carve-out comment;
+  here there's no explicit carve-out comment. Worth adding.
+- **`row->level-1-tx` is private (`defn-`).** Per-row transform
+  is the natural unit of reuse / testing for a CSV importer;
+  hiding it means a consumer wanting per-row inspection has to
+  re-implement. Suggest making it public.
+- **Two-phase semantic is correct + documented**, but the
+  transactor pair isn't composable into ONE `kontor.process`
+  step — Phase 2 reads its own `(d/db conn)` separately, so a
+  consumer can't atomically commit "import this delta of level
+  1 + level 2 together". This is fine for the daily-bulk-ingest
+  use case the README describes, but a documented limitation
+  for delta-ingest scenarios.
+- **Brand-new module (commit `ce73598`).** Small + clean — the
+  schema-in-kernel + transactor-only-module pattern feels right
+  for substrate-seam ingest.
+
 (More modules to be appended as their READMEs land.)
 
 ## §3 — Cross-cutting patterns worth canonicalizing
