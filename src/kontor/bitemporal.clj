@@ -66,6 +66,43 @@
           :db.valid/to vt-to})))
 
 ;; ============================================================================
+;; commit-tx-eid — extract the datahike commit-tx eid from a tx-report.
+;;
+;; `close-validity!` operates on the DATAHIKE tx-entity (the carrier of
+;; `:db.valid/from` / `:db.valid/to` window), NOT on any business
+;; entity created in the transaction. A caller wanting to later close
+;; the window on a write they just made needs the commit-tx eid, which
+;; datahike does not expose directly on the tx-report. The recipe is
+;; to scan `:tx-data` for the `:db/txInstant` datom — its `.-tx` slot
+;; is the commit-tx eid. This helper makes the extraction obvious +
+;; one-line.
+;;
+;; Subtle footgun this helper averts: a kontor `:transaction` /
+;; `:partner` / `:posting` entity's eid is NOT the commit-tx eid. They
+;; are EAVT-distinct: the tx-entity holds the `:db/txInstant` +
+;; `:db.valid/from` / `:db.valid/to` slots; the business entity holds
+;; user data. close-validity on a business eid is a silent no-op that
+;; looks valid (no error) but doesn't close the window.
+
+(defn commit-tx-eid
+  "Extract the datahike commit-tx eid from a `d/transact` `tx-report`.
+
+   Use when a write you just made needs to be closed via
+   `close-validity!` later — pass the report's eid through.
+
+   Throws `:type :kontor.bitemporal/no-commit-tx` if the report has no
+   `:db/txInstant` datom (which would indicate a malformed report)."
+  [tx-report]
+  (let [d (->> (:tx-data tx-report)
+               (filter #(= :db/txInstant (.-a %)))
+               first)]
+    (if d
+      (.-tx d)
+      (throw (ex-info "tx-report has no :db/txInstant datom"
+                      {:type :kontor.bitemporal/no-commit-tx
+                       :tx-report (select-keys tx-report [:tempids :max-tx])})))))
+
+;; ============================================================================
 ;; close-validity — retroactively close a prior tx's valid-time window.
 ;;
 ;; Datahike accepts `[:db/add prior-tx-eid :db.valid/to <date>]` as a
@@ -90,8 +127,18 @@
    `prior-tx-eid` — closing that tx's valid-time window so queries at
    any vt ≥ `vt` no longer see the prior tx's datoms.
 
-   `prior-tx-eid` must be a tx-entity eid (returned in a prior
-   transact's `:tx-data`); pass a long, NOT a tempid or lookup-ref.
+   **`prior-tx-eid` must be the DATAHIKE COMMIT-TX eid**, NOT any
+   business entity created in that tx (kontor `:transaction`,
+   `:partner`, `:posting`, etc.). The two are EAVT-distinct: the
+   commit-tx holds the `:db.valid/from` / `:db.valid/to` window; the
+   business entity holds user data. Closing a business-entity eid is a
+   silent no-op (looks valid; doesn't close the window). Extract the
+   commit-tx eid from a `tx-report` via [[commit-tx-eid]]:
+
+       (let [report (d/transact conn ...)
+             tx-eid (commit-tx-eid report)]
+         ;; ... later ...
+         (close-validity! conn tx-eid <vt>))
 
    The datahike transactor enforces a cross-tx `vf < vt` check on the
    resulting combined state — closing with a `vt` that would produce

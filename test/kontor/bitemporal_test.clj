@@ -21,17 +21,14 @@
 
 (defn- post-tx-with-vt!
   "Post a trivial tx with the given vt-from and (optional) vt-to.
-   Returns the resulting tx-eid."
+   Returns the resulting tx-eid via `kbt/commit-tx-eid`."
   [conn vt-from & [vt-to]]
   (let [tx-meta (cond-> {:db.valid/from vt-from}
                   vt-to (assoc :db.valid/to vt-to))
         r (d/transact conn {:tx-data [{:commodity/symbol (str "X-" (random-uuid))
                                        :commodity/precision 2}]
                             :tx-meta tx-meta})]
-    (->> (:tx-data r)
-         (filter #(= :db/txInstant (.-a %)))
-         first
-         .-tx)))
+    (kbt/commit-tx-eid r)))
 
 ;; ============================================================================
 ;; with-vt + strip-tx-meta (existing surface)
@@ -67,6 +64,70 @@
   (let [tx-data (kbt/close-validity-tx-data 12345 feb-1)]
     (is (= [{:db/id 12345 :db.valid/to feb-1}]
            tx-data))))
+
+;; ============================================================================
+;; commit-tx-eid — extract the datahike commit-tx eid from a tx-report
+;; ============================================================================
+
+(deftest commit-tx-eid-extracts-the-tx-entity-from-a-tx-report
+  (let [conn (bootstrap)
+        report (d/transact
+                conn
+                {:tx-data [{:commodity/symbol "TEST-COMMIT-TX" :commodity/precision 2}]
+                 :tx-meta {:db.valid/from jan-2}})
+        tx-eid (kbt/commit-tx-eid report)]
+    (testing "returns a number (eid)"
+      (is (number? tx-eid)))
+    (testing "the eid carries :db/txInstant (it IS the commit tx)"
+      (let [db (d/db conn)
+            inst (d/q '[:find ?inst .
+                        :in $ ?tx
+                        :where [?tx :db/txInstant ?inst]]
+                      db tx-eid)]
+        (is (some? inst))))
+    (testing "the eid carries the :db.valid/from we passed in tx-meta"
+      (let [db (d/db conn)
+            vf (d/q '[:find ?vf .
+                      :in $ ?tx
+                      :where [?tx :db.valid/from ?vf]]
+                    db tx-eid)]
+        (is (= jan-2 vf))))
+    (testing "the eid is NOT the business entity's eid"
+      (let [db (d/db conn)
+            biz-eid (d/q '[:find ?e .
+                           :in $ ?sym
+                           :where [?e :commodity/symbol ?sym]]
+                         db "TEST-COMMIT-TX")]
+        (is (not= biz-eid tx-eid)
+            "commit-tx eid differs from any business entity in the tx")))))
+
+(deftest commit-tx-eid-composes-cleanly-with-close-validity!
+  (testing "The canonical recipe: extract from report, then close later."
+    (let [conn (bootstrap)
+          report (d/transact
+                  conn
+                  {:tx-data [{:commodity/symbol "CT-RECIPE" :commodity/precision 2}]
+                   :tx-meta {:db.valid/from jan-15}})
+          tx-eid (kbt/commit-tx-eid report)]
+      ;; Before close — visible
+      (is (some? (d/q '[:find ?e . :in $ ?s
+                        :where [?e :commodity/symbol ?s]]
+                      (d/valid-at (d/db conn) feb-15) "CT-RECIPE")))
+      (kbt/close-validity! conn tx-eid feb-1)
+      ;; After close — not visible at feb-15
+      (is (nil? (d/q '[:find ?e . :in $ ?s
+                       :where [?e :commodity/symbol ?s]]
+                     (d/valid-at (d/db conn) feb-15) "CT-RECIPE"))))))
+
+(deftest commit-tx-eid-throws-on-malformed-report
+  (testing "Missing :tx-data raises the structured error."
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo #"no :db/txInstant"
+         (kbt/commit-tx-eid {:tempids {} :max-tx 0}))))
+  (testing "Empty :tx-data raises the structured error."
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo #"no :db/txInstant"
+         (kbt/commit-tx-eid {:tx-data []})))))
 
 ;; ============================================================================
 ;; close-validity! — side-effecting wrapper, end-to-end
