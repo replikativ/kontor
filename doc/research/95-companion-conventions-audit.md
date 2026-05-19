@@ -437,6 +437,45 @@ Irregularities flagged:
   schema-in-kernel + transactor-only-module pattern feels right
   for substrate-seam ingest.
 
+### kontor-import-edgar
+
+**Read 2026-05-18. README written 2026-05-18.**
+
+Irregularities flagged:
+
+- **`install!` in `kontor.import-edgar.schema`** — 10/11
+  modules now. Universal pattern; §1 must be rewritten or every
+  module needs a refactor pass.
+- **Diverges from import-gleif's schema-in-kernel pattern.**
+  import-gleif puts its `:entity/*` substrate seams in the
+  KERNEL schema; import-edgar ships `:reported-fact/*` in the
+  module's own `schema.clj`. Both are right — `:entity/*` is a
+  cross-cutting substrate concern; `:reported-fact/*` is one
+  module's responsibility. But the inconsistency is worth a §3
+  decision criterion: "co-evolve into kernel iff multiple
+  modules will read the attrs; otherwise stay local."
+- **`ingest-facts!` doesn't use `kontor.validation/transact-
+  with-validation`** — same gate-bypass as import-gleif. The
+  rationale is fine (mass-import of master data), but again no
+  explicit ADR-068 carve-out comment.
+- **`ingest-facts!` does N transactions in a `reduce`** — each
+  fact is its own tx (correctly, for the bitemporal-restatement
+  semantic). But the close-validity step happens in a SEPARATE
+  `d/transact` from the new-fact write; a crash between those
+  two leaves the prior fact open-validity + a new fact also
+  open-validity for the same quadruple. Documented swallowed
+  exception (`(catch Exception _ nil)`) on close-validity
+  failure quietly accepts this divergence. Worth either a
+  process-level guard or an explicit comment about the recovery
+  contract.
+- **`parse-companyfacts` accepts EITHER a JSON string OR a
+  parsed map** — convenient but type-untidy. Splitting into
+  `parse-string` + `parse-data` (the latter taking the parsed
+  map) would be cleaner.
+- **Brand-new module (commit `d19fa2c`).** Same as
+  import-gleif: small + clean enough that fixes are cheap to
+  apply early.
+
 (More modules to be appended as their READMEs land.)
 
 ## §3 — Cross-cutting patterns worth canonicalizing
