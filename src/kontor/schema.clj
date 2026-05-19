@@ -3268,7 +3268,63 @@
 
    {:db/ident       :entity/active
     :db/valueType   :db.type/boolean
-    :db/cardinality :db.cardinality/one}])
+    :db/cardinality :db.cardinality/one}
+
+   ;; GLEIF master-data hooks (kontor-import-gleif / ADR-090 family).
+   ;; The LEI is the global join key for cross-jurisdictional consolidations
+   ;; (ADR-073). EDGAR ingest joins on CIK→LEI, Companies House on CRN→LEI,
+   ;; Bundesanzeiger on HRB→LEI — and GLEIF carries every cross-reference.
+   {:db/ident       :entity/lei
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/value
+    :db/doc         "GLEIF Legal Entity Identifier (20-character ISO
+                     17442). Optional — synthetic entities + sole
+                     proprietorships rarely carry an LEI. Unique-value
+                     (not -identity) so an entity can be looked up by
+                     LEI but uniqueness is enforced. ADR-073 +
+                     research note 91 §6."}
+
+   {:db/ident       :entity/legal-form
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "GLEIF ELF (Entity Legal Form) code or local
+                     equivalent — 'GmbH', 'LLC', 'plc', 'AS', 'SA',
+                     'KK', etc. Free-string; consumers using the
+                     ISO 20275 codes use those (e.g. '2HBR' for GmbH)."}
+
+   {:db/ident       :entity/registration-status
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "GLEIF registration status. Open-set:
+                     :issued | :lapsed | :merged | :retired
+                     | :duplicate | :transferred | :annulled."}
+
+   {:db/ident       :entity/parent-lei
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Direct parent LEI (GLEIF RR-CDF Level 2
+                     IS_DIRECTLY_CONSOLIDATED_BY). Stored as the raw
+                     LEI string for ingest-time + reingest-time
+                     debugging; the resolved :entity/parent-entity ref
+                     is the structural answer that
+                     `kontor.entity/family` walks."}
+
+   {:db/ident       :entity/ultimate-parent-lei
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ultimate parent LEI (GLEIF RR-CDF
+                     IS_ULTIMATELY_CONSOLIDATED_BY). Same posture as
+                     :entity/parent-lei — provenance only."}
+
+   {:db/ident       :entity/source-id
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Provenance opaque identifier — e.g.
+                     'gleif://Golden-Copy/2026-05-18',
+                     'edgar://CIK0000320193/10-K/2024'. Carries the
+                     ingest source + version for audit + idempotent
+                     re-ingest."}])
 
 (def ^:private posting-entity-attrs
   [{:db/ident       :posting/entity
