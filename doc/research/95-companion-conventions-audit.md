@@ -286,6 +286,42 @@ Irregularities flagged:
   expectations.
 - **Module has NO README until 2026-05-18.**
 
+### kontor-authz
+
+**Read 2026-05-18. README written 2026-05-18.**
+
+Irregularities flagged:
+
+- **`install!` in `kontor.authz.schema`** — 8/8 modules so far.
+  The pattern is universal. The convention as written in §1 is
+  dead text and §3 needs to formalise schema-owns-install! as
+  canonical.
+- **Explicit ADR-068 carve-out** for `do-write-relationships!`
+  bypassing `transact-with-validation`. The rationale is sound
+  (authz can run standalone without kernel schema) but it's the
+  first explicit deviation from ADR-068 in the audit so far —
+  worth noting in §3 as a precedent for "standalone-module"
+  carve-outs.
+- **`kontor.authz.core` is genuinely the protocol + value types**
+  (no transactor, no datahike dep). This is the cleanest core.clj
+  in the audit so far — purely declarative, the canonical reference
+  for what a `core.clj` could mean. Counterexample to the
+  installer-in-core convention §1 advocates.
+- **Schema definitions (Relation/Permission) live in
+  `kontor.authz.base`, NOT in `kontor.authz.schema`.** The schema
+  ns is the *datahike attrs*; base.clj is the value-constructors
+  for Relation/Permission/Relationship. Confusing naming — a
+  consumer expects "schema-related stuff" under one of those two
+  but it's split. Suggested rename: `kontor.authz.defs` or
+  `kontor.authz.types`.
+- **Two distinct `write-relationships*` surfaces**: the protocol
+  method `write-relationships!` (single call, bypasses gate) AND
+  `write-relationships-tx-data` (composable, routes through gate).
+  Same name pattern, different semantics. Worth a §3 convention
+  about gate-bypass naming (suggest `*-tx-data-raw` or `*-direct-tx-
+  data` for builder forms that intentionally skip validation).
+- **Module has NO README until 2026-05-18.**
+
 (More modules to be appended as their READMEs land.)
 
 ## §3 — Cross-cutting patterns worth canonicalizing
