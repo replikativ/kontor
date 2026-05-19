@@ -40,7 +40,8 @@
                        "modules/einvoice-de/test"
                        "modules/payroll-de-datev/test"
                        "modules/payroll-cn/test"
-                       "modules/import-gleif/test"]
+                       "modules/import-gleif/test"
+                       "modules/import-edgar/test"]
           :ns-patterns [".*-test$"]}]
  :color? true
  :randomize? false
