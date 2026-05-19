@@ -317,6 +317,547 @@
         set)))
 
 ;; ============================================================================
+;; ADR-068 — Party / contact-mech / relationship / role transactors
+;;
+;; Every transactor follows the kontor `*-tx-data` builder + `!`
+;; wrapper convention (ADR-068): the pure builder returns a vector of
+;; tx-ops, the `!` form routes through
+;; `kontor.validation/transact-with-validation` so the kernel gate
+;; stack (legal-hold + period-lock + sealing + status-machine + sum-
+;; to-zero) fires uniformly.
+;;
+;; The schema does NOT install `:status-transition` seeds for
+;; `:partner/status` or `:partner-relationship/status`, so those are
+;; written as plain facet updates. If/when a future ADR adds the
+;; seeds, `update-party!` + `end-relationship!` can switch to
+;; `kontor.status-machine/record-status-change-tx-data` without a
+;; callsite churn (the public arity stays the same).
+;;
+;; "Removal" of a partner-contact-mech association honours ADR-007
+;; (no silent retract of consequential history) by setting
+;; `:partner-contact-mech/thru-date` rather than retracting the
+;; junction row. The audit chain documents the withdrawal.
+;; ============================================================================
+
+(defn- ^java.util.Date now-instant []
+  (java.util.Date.))
+
+(defn create-party-tx-data
+  "Pure tx-data builder for `create-party!`. Returns a vector of
+   tx-ops: one `:partner` map plus, when `:type` is `:person` or
+   `:org`, a 1:1 subtype row joined by `:person/partner` or
+   `:org/partner`.
+
+   Required:
+     :external-id  — string, unique :partner/external-id
+     :type         — :person | :org (drives subtype + sub-attrs)
+     :name         — string :partner/name
+
+   Optional kernel attrs:
+     :kind                — :customer | :vendor | :both
+     :country-code        — ISO-3166 alpha-2
+     :tax-id              — primary tax-id string
+
+   Optional companion attrs:
+     :status              — :enabled (default) | :disabled | :archived
+     :preferred-commodity — ref/eid
+     :description         — string
+     :created-at          — instant (default now)
+
+   Optional subtype attrs (passed through when type matches):
+     :person — :first-name :middle-name :last-name :salutation
+               :suffix :nickname :first-name-local :last-name-local
+               :gender :birth-date :deceased-date :marital-status
+               :national-id-type :national-id
+     :org    — :legal-name :legal-form :trading-name
+               :registration-number :duns :lei :ticker-symbol
+               :exchange :annual-revenue :revenue-commodity
+               :num-employees :incorporation-date :dissolution-date
+
+   Optional `:tempid` (default `\"partner-1\"`) for cross-step
+   composition; the subtype row tempid is `<tempid>-subtype`."
+  [_db {:keys [external-id type name kind country-code tax-id
+               status preferred-commodity description created-at
+               person org tempid]
+        :or   {tempid "partner-1"}}]
+  (when-not external-id (throw (ex-info ":external-id required" {:type :partner/missing-external-id})))
+  (when-not type        (throw (ex-info ":type required (:person or :org)"
+                                        {:type :partner/missing-type})))
+  (when-not name        (throw (ex-info ":name required" {:type :partner/missing-name})))
+  (when-not (contains? #{:person :org} type)
+    (throw (ex-info ":type must be :person or :org"
+                    {:type :partner/invalid-type :got type})))
+  (let [now (or created-at (now-instant))
+        partner-row (cond-> {:db/id               tempid
+                             :partner/external-id external-id
+                             :partner/name        name
+                             :partner/type        type
+                             :partner/status      (or status :enabled)
+                             :partner/created-at  now
+                             :partner/modified-at now}
+                      kind                (assoc :partner/kind kind)
+                      country-code        (assoc :partner/country-code country-code)
+                      tax-id              (assoc :partner/tax-id tax-id)
+                      preferred-commodity (assoc :partner/preferred-commodity preferred-commodity)
+                      description         (assoc :partner/description description))
+        subtype-tempid (str tempid "-subtype")
+        ;; Subtype rows are only emitted when the caller passes the
+        ;; corresponding `:person` / `:org` sub-map. A `:partner` of
+        ;; `:type :person` without any `:person/*` attrs is valid —
+        ;; consumers may populate the subtype later via
+        ;; `update-party!` (TODO) or a direct `add-person-attrs!`
+        ;; transactor. This keeps the builder a strict 1-row
+        ;; constructor when no subtype payload is supplied.
+        person-row (when (and (= type :person) (seq person))
+                     (cond-> {:db/id          subtype-tempid
+                              :person/partner tempid}
+                       (:first-name person)       (assoc :person/first-name (:first-name person))
+                       (:middle-name person)      (assoc :person/middle-name (:middle-name person))
+                       (:last-name person)        (assoc :person/last-name (:last-name person))
+                       (:salutation person)       (assoc :person/salutation (:salutation person))
+                       (:suffix person)           (assoc :person/suffix (:suffix person))
+                       (:nickname person)         (assoc :person/nickname (:nickname person))
+                       (:first-name-local person) (assoc :person/first-name-local (:first-name-local person))
+                       (:last-name-local person)  (assoc :person/last-name-local (:last-name-local person))
+                       (:gender person)           (assoc :person/gender (:gender person))
+                       (:birth-date person)       (assoc :person/birth-date (:birth-date person))
+                       (:deceased-date person)    (assoc :person/deceased-date (:deceased-date person))
+                       (:marital-status person)   (assoc :person/marital-status (:marital-status person))
+                       (:national-id-type person) (assoc :person/national-id-type (:national-id-type person))
+                       (:national-id person)      (assoc :person/national-id (:national-id person))))
+        org-row (when (and (= type :org) (seq org))
+                  (cond-> {:db/id       subtype-tempid
+                           :org/partner tempid}
+                    (:legal-name org)          (assoc :org/legal-name (:legal-name org))
+                    (:legal-form org)          (assoc :org/legal-form (:legal-form org))
+                    (:trading-name org)        (assoc :org/trading-name (:trading-name org))
+                    (:registration-number org) (assoc :org/registration-number (:registration-number org))
+                    (:duns org)                (assoc :org/duns (:duns org))
+                    (:lei org)                 (assoc :org/lei (:lei org))
+                    (:ticker-symbol org)       (assoc :org/ticker-symbol (:ticker-symbol org))
+                    (:exchange org)            (assoc :org/exchange (:exchange org))
+                    (:annual-revenue org)      (assoc :org/annual-revenue (:annual-revenue org))
+                    (:revenue-commodity org)   (assoc :org/revenue-commodity (:revenue-commodity org))
+                    (:num-employees org)       (assoc :org/num-employees (:num-employees org))
+                    (:incorporation-date org)  (assoc :org/incorporation-date (:incorporation-date org))
+                    (:dissolution-date org)    (assoc :org/dissolution-date (:dissolution-date org))))]
+    (cond-> [partner-row]
+      person-row (conj person-row)
+      org-row    (conj org-row))))
+
+(defn create-party!
+  "Create a `:partner` (+ matching `:person` or `:org` subtype row) in
+   one tx. Routes through `transact-with-validation` (ADR-068).
+
+   See `create-party-tx-data` for the option vocabulary."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (create-party-tx-data (d/db conn) opts)))
+
+(defn update-party-tx-data
+  "Pure tx-data builder for `update-party!`. Rewrites the named fields
+   on an existing `:partner` row (resolved by eid or
+   `:partner/external-id`). `:partner/modified-at` is stamped to
+   `now` automatically unless `:modified-at` is supplied.
+
+   Optional fields (each present-only-if-passed):
+     :name :kind :status :country-code :tax-id
+     :preferred-commodity :description :modified-at
+
+   Throws if the partner does not resolve."
+  [db spec {:keys [name kind status country-code tax-id
+                   preferred-commodity description modified-at]
+            :as   opts}]
+  (let [eid (resolve-partner db spec)]
+    (when-not eid
+      (throw (ex-info "Partner not found"
+                      {:type :partner/not-found :spec spec})))
+    (when (empty? (dissoc opts :modified-at))
+      (throw (ex-info "update-party! requires at least one field to change"
+                      {:type :partner/empty-update :spec spec})))
+    [(cond-> {:db/id eid
+              :partner/modified-at (or modified-at (now-instant))}
+       name                 (assoc :partner/name name)
+       kind                 (assoc :partner/kind kind)
+       status               (assoc :partner/status status)
+       country-code         (assoc :partner/country-code country-code)
+       tax-id               (assoc :partner/tax-id tax-id)
+       preferred-commodity  (assoc :partner/preferred-commodity preferred-commodity)
+       description          (assoc :partner/description description))]))
+
+(defn update-party!
+  "Mutate fields on an existing partner. Routes through the gate
+   (ADR-068). See `update-party-tx-data` for the field vocabulary."
+  [conn spec opts]
+  (validation/transact-with-validation
+   conn (update-party-tx-data (d/db conn) spec opts)))
+
+;; ----------------------------------------------------------------------------
+;; Contact mechanisms
+;; ----------------------------------------------------------------------------
+
+(def ^:private contact-mech-kinds
+  "Discriminator values the schema endorses on `:contact-mech/type`."
+  #{:postal :telecom :email :web :ftp})
+
+(defn- contact-mech-tempid [base] (str base "-cm"))
+(defn- contact-mech-payload-tempid [base] (str base "-cm-payload"))
+(defn- junction-tempid [base] (str base "-junction"))
+(defn- purpose-tempid [base i] (str base "-purpose-" i))
+
+(defn- typed-payload-row
+  "Build the typed subtype row that hangs off a `:contact-mech`.
+   Returns nil for `:web` / `:ftp` (no schema-side subtype — payload
+   goes into `:contact-mech/info-string` directly)."
+  [kind payload-tempid cm-tempid payload]
+  (case kind
+    :postal (let [{:keys [to-name attn-name address1 address2 house-number
+                          house-number-ext directions city postal-code
+                          postal-code-ext county region state country
+                          latitude longitude]} payload]
+              (cond-> {:db/id                       payload-tempid
+                       :postal-address/contact-mech cm-tempid}
+                to-name           (assoc :postal-address/to-name to-name)
+                attn-name         (assoc :postal-address/attn-name attn-name)
+                address1          (assoc :postal-address/address1 address1)
+                address2          (assoc :postal-address/address2 address2)
+                house-number      (assoc :postal-address/house-number house-number)
+                house-number-ext  (assoc :postal-address/house-number-ext house-number-ext)
+                directions        (assoc :postal-address/directions directions)
+                city              (assoc :postal-address/city city)
+                postal-code       (assoc :postal-address/postal-code postal-code)
+                postal-code-ext   (assoc :postal-address/postal-code-ext postal-code-ext)
+                county            (assoc :postal-address/county county)
+                region            (assoc :postal-address/region region)
+                state             (assoc :postal-address/state state)
+                country           (assoc :postal-address/country country)
+                latitude          (assoc :postal-address/latitude latitude)
+                longitude         (assoc :postal-address/longitude longitude)))
+    :telecom (let [{:keys [country-code area-code contact-number extension
+                           ask-for-name]} payload]
+               (cond-> {:db/id                       payload-tempid
+                        :telecom-number/contact-mech cm-tempid}
+                 country-code   (assoc :telecom-number/country-code country-code)
+                 area-code      (assoc :telecom-number/area-code area-code)
+                 contact-number (assoc :telecom-number/contact-number contact-number)
+                 extension      (assoc :telecom-number/extension extension)
+                 ask-for-name   (assoc :telecom-number/ask-for-name ask-for-name)))
+    :email (let [{:keys [address verified? bounced?]} payload]
+             (cond-> {:db/id                      payload-tempid
+                      :email-address/contact-mech cm-tempid}
+               address                (assoc :email-address/address address)
+               (some? verified?)      (assoc :email-address/verified? (boolean verified?))
+               (some? bounced?)       (assoc :email-address/bounced? (boolean bounced?))))
+    (:web :ftp) nil))
+
+(defn add-contact-mech-tx-data
+  "Pure tx-data builder for `add-contact-mech!`. Creates a
+   `:contact-mech` root row with a typed subtype payload
+   (`:postal-address` / `:telecom-number` / `:email-address`; `:web`
+   and `:ftp` store the raw URL via `:contact-mech/info-string`),
+   plus a `:partner-contact-mech` junction row linking the mech to
+   `partner` from `from-date` (default now), plus optional
+   `:partner-contact-mech-purpose` rows (one per `:purposes` entry).
+
+   Required:
+     :partner    — partner eid or external-id string
+     :code       — string :contact-mech/code (unique-identity)
+     :kind       — :postal | :telecom | :email | :web | :ftp
+     :payload    — typed sub-map matching `:kind` (see schema for
+                   field vocabulary); for `:web` / `:ftp` `payload`
+                   may be `{:info-string \"…\"}`
+
+   Optional:
+     :from-date          — instant (default now); junction validity
+     :thru-date          — instant; exclusive end of validity
+     :role-type          — keyword stamped on the junction row
+     :allow-solicitation?— boolean stamped on the junction row
+     :verified?          — boolean stamped on the junction row
+     :comments           — string stamped on the junction row
+     :purposes           — sequence of purpose-types (keywords);
+                           ONE `:partner-contact-mech-purpose` row
+                           per entry, with the same `:from-date` /
+                           `:thru-date`
+     :info-string        — string (always written to
+                           `:contact-mech/info-string`; useful for
+                           `:web` / `:ftp` payload)
+     :tempid             — base tempid prefix (default
+                           `\"contact-mech-1\"`); the cm / payload /
+                           junction rows get derived tempids."
+  [db {:keys [partner code kind payload from-date thru-date role-type
+              allow-solicitation? verified? comments purposes info-string
+              tempid]
+       :or {tempid "contact-mech-1"}}]
+  (when-not partner (throw (ex-info ":partner required" {:type :contact-mech/missing-partner})))
+  (when-not code    (throw (ex-info ":code required"    {:type :contact-mech/missing-code})))
+  (when-not kind    (throw (ex-info ":kind required"    {:type :contact-mech/missing-kind})))
+  (when-not (contains? contact-mech-kinds kind)
+    (throw (ex-info ":kind must be :postal :telecom :email :web or :ftp"
+                    {:type :contact-mech/invalid-kind :got kind})))
+  (let [partner-eid (resolve-partner db partner)
+        _ (when-not partner-eid
+            (throw (ex-info "Partner not found"
+                            {:type :partner/not-found :spec partner})))
+        now           (now-instant)
+        from          (or from-date now)
+        cm-tempid     (contact-mech-tempid tempid)
+        payload-tempid (contact-mech-payload-tempid tempid)
+        j-tempid      (junction-tempid tempid)
+        effective-info (or info-string
+                           (when (contains? #{:web :ftp} kind)
+                             (:info-string payload)))
+        cm-row        (cond-> {:db/id                 cm-tempid
+                               :contact-mech/code     code
+                               :contact-mech/type     kind
+                               :contact-mech/created-at  now
+                               :contact-mech/modified-at now}
+                        effective-info (assoc :contact-mech/info-string effective-info))
+        payload-row   (typed-payload-row kind payload-tempid cm-tempid (or payload {}))
+        junction-row  (cond-> {:db/id                             j-tempid
+                               :partner-contact-mech/partner      partner-eid
+                               :partner-contact-mech/contact-mech cm-tempid
+                               :partner-contact-mech/from-date    from}
+                        thru-date              (assoc :partner-contact-mech/thru-date thru-date)
+                        role-type              (assoc :partner-contact-mech/role-type role-type)
+                        (some? allow-solicitation?)
+                        (assoc :partner-contact-mech/allow-solicitation?
+                               (boolean allow-solicitation?))
+                        (some? verified?)
+                        (assoc :partner-contact-mech/verified? (boolean verified?))
+                        comments               (assoc :partner-contact-mech/comments comments))
+        purpose-rows  (map-indexed
+                       (fn [i purpose]
+                         (cond-> {:db/id (purpose-tempid tempid i)
+                                  :partner-contact-mech-purpose/partner      partner-eid
+                                  :partner-contact-mech-purpose/contact-mech cm-tempid
+                                  :partner-contact-mech-purpose/purpose-type purpose
+                                  :partner-contact-mech-purpose/from-date    from}
+                           thru-date
+                           (assoc :partner-contact-mech-purpose/thru-date thru-date)))
+                       (or purposes []))]
+    (cond-> [cm-row]
+      payload-row (conj payload-row)
+      :always     (conj junction-row)
+      (seq purpose-rows) (into purpose-rows))))
+
+(defn add-contact-mech!
+  "Attach a new contact mechanism to `partner`. Routes through the
+   gate (ADR-068). See `add-contact-mech-tx-data` for options."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (add-contact-mech-tx-data (d/db conn) opts)))
+
+(defn remove-contact-mech-tx-data
+  "Pure tx-data builder for `remove-contact-mech!`. Closes the
+   currently-active `:partner-contact-mech` junction row(s) between
+   `partner` and `contact-mech` by setting
+   `:partner-contact-mech/thru-date` (default now).
+
+   Per ADR-007 the substrate prefers `thru-date` closure over silent
+   retraction: the junction history stays in the chain. If multiple
+   currently-active junction rows exist (overlapping windows, role-
+   type slices), every active row at `:as-of` is closed.
+
+   Required:
+     :partner       — eid or external-id
+     :contact-mech  — eid or `:contact-mech/code` string
+
+   Optional:
+     :thru-date     — instant (default now); inclusive cutoff
+     :as-of         — instant for the active-window filter (default
+                      `:thru-date`)"
+  [db {:keys [partner contact-mech thru-date as-of]}]
+  (when-not partner      (throw (ex-info ":partner required" {:type :contact-mech/missing-partner})))
+  (when-not contact-mech (throw (ex-info ":contact-mech required" {:type :contact-mech/missing-contact-mech})))
+  (let [partner-eid (resolve-partner db partner)
+        _ (when-not partner-eid
+            (throw (ex-info "Partner not found"
+                            {:type :partner/not-found :spec partner})))
+        cm-eid (if (string? contact-mech)
+                 (d/q '[:find ?cm .
+                        :in $ ?code
+                        :where [?cm :contact-mech/code ?code]]
+                      db contact-mech)
+                 contact-mech)
+        _ (when-not cm-eid
+            (throw (ex-info "Contact-mech not found"
+                            {:type :contact-mech/not-found :spec contact-mech})))
+        thru (or thru-date (now-instant))
+        as-of-d (or as-of thru)
+        rows (d/q '[:find ?j ?from ?thru
+                    :in $ ?p ?cm
+                    :where
+                    [?j :partner-contact-mech/partner ?p]
+                    [?j :partner-contact-mech/contact-mech ?cm]
+                    [?j :partner-contact-mech/from-date ?from]
+                    [(get-else $ ?j :partner-contact-mech/thru-date :__none) ?thru]]
+                  db partner-eid cm-eid)
+        active (filter (fn [[_ from t]]
+                         (active-as-of? from
+                                        (when (instance? java.util.Date t) t)
+                                        as-of-d))
+                       rows)]
+    (when (empty? active)
+      (throw (ex-info "No active partner-contact-mech junction to close"
+                      {:type :contact-mech/no-active-junction
+                       :partner partner-eid
+                       :contact-mech cm-eid
+                       :as-of as-of-d})))
+    (mapv (fn [[j _ _]]
+            {:db/id j
+             :partner-contact-mech/thru-date thru})
+          active)))
+
+(defn remove-contact-mech!
+  "Close the active `:partner-contact-mech` junction row(s) between
+   `partner` and `contact-mech` by stamping `:thru-date`. Routes
+   through the gate (ADR-068). The contact-mech entity itself is
+   preserved — only the *association* is closed. See ADR-007 (no
+   silent retract of consequential history)."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (remove-contact-mech-tx-data (d/db conn) opts)))
+
+;; ----------------------------------------------------------------------------
+;; Relationships
+;; ----------------------------------------------------------------------------
+
+(defn add-relationship-tx-data
+  "Pure tx-data builder for `add-relationship!`. Creates a single
+   `:partner-relationship` row linking `partner-from` to
+   `partner-to`. The relationship's composite identity is
+   `[partner-from role-type-from partner-to role-type-to from-date]`,
+   so re-running the same call upserts.
+
+   Required:
+     :partner-from         — eid or external-id
+     :partner-to           — eid or external-id
+     :role-type-from       — keyword (role context of from-side)
+     :role-type-to         — keyword (role context of to-side)
+     :relationship-type    — keyword (:employment :subsidiary …)
+
+   Optional:
+     :from-date            — instant (default now)
+     :thru-date            — instant
+     :status               — :active (default) | :inactive | :pending
+     :relationship-name    — string
+     :position-title       — string
+     :priority             — long (multi-employment ranking tiebreak)
+     :comments             — string
+     :tempid               — default `\"relationship-1\"`"
+  [db {:keys [partner-from partner-to role-type-from role-type-to
+              relationship-type from-date thru-date status
+              relationship-name position-title priority comments
+              tempid]
+       :or {tempid "relationship-1"
+            status :active}}]
+  (when-not partner-from      (throw (ex-info ":partner-from required" {:type :relationship/missing-from})))
+  (when-not partner-to        (throw (ex-info ":partner-to required"   {:type :relationship/missing-to})))
+  (when-not role-type-from    (throw (ex-info ":role-type-from required" {:type :relationship/missing-role-from})))
+  (when-not role-type-to      (throw (ex-info ":role-type-to required"   {:type :relationship/missing-role-to})))
+  (when-not relationship-type (throw (ex-info ":relationship-type required" {:type :relationship/missing-rel-type})))
+  (let [from-eid (resolve-partner db partner-from)
+        to-eid   (resolve-partner db partner-to)
+        _ (when-not from-eid
+            (throw (ex-info "from-partner not found"
+                            {:type :partner/not-found :spec partner-from})))
+        _ (when-not to-eid
+            (throw (ex-info "to-partner not found"
+                            {:type :partner/not-found :spec partner-to})))
+        from (or from-date (now-instant))]
+    [(cond-> {:db/id                                  tempid
+              :partner-relationship/partner-from      from-eid
+              :partner-relationship/partner-to        to-eid
+              :partner-relationship/role-type-from    role-type-from
+              :partner-relationship/role-type-to      role-type-to
+              :partner-relationship/relationship-type relationship-type
+              :partner-relationship/from-date         from
+              :partner-relationship/status            status}
+       thru-date         (assoc :partner-relationship/thru-date thru-date)
+       relationship-name (assoc :partner-relationship/relationship-name relationship-name)
+       position-title    (assoc :partner-relationship/position-title position-title)
+       priority          (assoc :partner-relationship/priority priority)
+       comments          (assoc :partner-relationship/comments comments))]))
+
+(defn add-relationship!
+  "Link two partners with a `:partner-relationship` row. Routes
+   through the gate (ADR-068). See `add-relationship-tx-data` for
+   options."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (add-relationship-tx-data (d/db conn) opts)))
+
+(defn end-relationship-tx-data
+  "Pure tx-data builder for `end-relationship!`. Stamps `:thru-date`
+   (default now) and optionally `:status` (default `:inactive`) on
+   an existing `:partner-relationship` row.
+
+   `relationship` may be either an entity-id (preferred) or a tuple
+   lookup ref into `:partner-relationship/identity`."
+  [db {:keys [relationship thru-date status]
+       :or   {status :inactive}}]
+  (when-not relationship
+    (throw (ex-info ":relationship required" {:type :relationship/missing-eid})))
+  (let [rel-eid (if (number? relationship)
+                  relationship
+                  (let [pulled (d/pull db [:db/id] relationship)]
+                    (:db/id pulled)))]
+    (when-not rel-eid
+      (throw (ex-info "Relationship not found"
+                      {:type :relationship/not-found :spec relationship})))
+    [(cond-> {:db/id rel-eid
+              :partner-relationship/thru-date (or thru-date (now-instant))}
+       status (assoc :partner-relationship/status status))]))
+
+(defn end-relationship!
+  "Terminate a `:partner-relationship` by setting its `:thru-date`
+   and `:status` (default `:inactive`). Routes through the gate
+   (ADR-068)."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (end-relationship-tx-data (d/db conn) opts)))
+
+;; ----------------------------------------------------------------------------
+;; Roles
+;; ----------------------------------------------------------------------------
+
+(defn add-party-role-tx-data
+  "Pure tx-data builder for `add-party-role!`. Creates a
+   `:partner-role` row tagging `partner` with `role-type`
+   (`:customer | :supplier | :employee | :contractor | :ship-to |
+   :bill-to | :internal-organization | …`).
+
+   Required:
+     :partner    — eid or external-id
+     :role-type  — keyword (per ADR-033 vocabulary; consumers extend)
+
+   Optional:
+     :from-date  — instant (default now)
+     :thru-date  — instant
+     :tempid     — default `\"role-1\"`"
+  [db {:keys [partner role-type from-date thru-date tempid]
+       :or   {tempid "role-1"}}]
+  (when-not partner   (throw (ex-info ":partner required"   {:type :role/missing-partner})))
+  (when-not role-type (throw (ex-info ":role-type required" {:type :role/missing-role-type})))
+  (let [partner-eid (resolve-partner db partner)
+        _ (when-not partner-eid
+            (throw (ex-info "Partner not found"
+                            {:type :partner/not-found :spec partner})))
+        from (or from-date (now-instant))]
+    [(cond-> {:db/id                  tempid
+              :partner-role/partner   partner-eid
+              :partner-role/role-type role-type
+              :partner-role/from-date from}
+       thru-date (assoc :partner-role/thru-date thru-date))]))
+
+(defn add-party-role!
+  "Assign `role-type` to `partner` as a `:partner-role` row. Routes
+   through the gate (ADR-068). See `add-party-role-tx-data`."
+  [conn opts]
+  (validation/transact-with-validation
+   conn (add-party-role-tx-data (d/db conn) opts)))
+
+;; ============================================================================
 ;; ADR-039 — Merge (non-destructive)
 ;; ============================================================================
 
