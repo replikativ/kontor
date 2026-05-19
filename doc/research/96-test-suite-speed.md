@@ -9,12 +9,30 @@ audience: maintainer — read before any "make tests faster" attempt
 
 ## Total
 
-Wall-clock: **~5m 42s** (`342080 ms`) summed across 77 sampled test
-namespaces (REPL `(t/run-tests …)` per ns; doesn't include kaocha
-loader overhead + JVM warm-up). Full `bb test` (kaocha + format + lint
-pre-steps in `bb ci` excluded) measured ~7m in interactive sessions.
+Two complementary measurements:
+
+- **REPL `(t/run-tests …)` per-ns**, 77 sampled nses: ~5m 42s
+  (`342080 ms`). Doesn't include kaocha loader / JVM warm-up.
+- **Full kaocha run** (`clojure -M:test --plugin kaocha.plugin/
+  profiling`) — official numbers: **~7m 38s** (`457.74 s`) across
+  the 247 `deftest`s in the unit suite. Avg per-deftest: **1.85 s**.
 
 2246 tests, 8813 assertions, 0 failures.
+
+Kaocha's `profiling` plugin also surfaces the slowest *individual*
+deftests, which the per-ns view hides:
+
+| Test | ms | File |
+|---:|---|---|
+| 2112 | `kontor.l10n-at.invoice-test/invoice-postings-sum-to-zero` | `modules/l10n-at/test/kontor/l10n_at/invoice_test.clj:327` |
+| 2008 | `kontor.l10n-br.invoice-test/invoice-postings-sum-to-zero` | `modules/l10n-br/test/kontor/l10n_br/invoice_test.clj:482` |
+| 1866 | `kontor.l10n-mx.invoice-test/invoice-postings-sum-to-zero` | `modules/l10n-mx/test/kontor/l10n_mx/invoice_test.clj:355` |
+
+Same-named deftest in three l10n modules, all ~2 s each. Pattern:
+each builds a full invoice + posts + asserts sum-to-zero — likely
+the heaviest single setup in the suite. Worth a focused read; if
+the shape repeats across all 11 country invoice tests, that's
+~20 s alone on a single named-after pattern.
 
 ## Top 20 slowest namespaces
 
