@@ -251,6 +251,41 @@ Irregularities flagged:
   test-layout convention in §3.
 - **Module has NO README until 2026-05-18.**
 
+### kontor-expense
+
+**Read 2026-05-18. README written 2026-05-18.**
+
+Irregularities flagged:
+
+- **`install!` in `kontor.expense.schema`** — 7/7 now follow this
+  anti-convention. This is universal across companions; the
+  §1 convention is dead text.
+- **`change-status!` is private (`defn-`).** ADR-068 expects every
+  business write to expose its `*-tx-data` builder for
+  composition; `change-status!` + `change-status-tx-data` are
+  both private. The four public wrappers (`submit!`, `approve!`,
+  `reject!`, `reopen!`) call the private one, so the inner builder
+  cannot be composed into a `kontor.process` step list — a
+  consumer needing to compose a status change with another write
+  must re-implement the call.
+- **No `:expense-line/*-tx-data` builder.** `add-line!` exists +
+  has a paired `add-line-tx-data`, which is fine, but the line
+  schema is rich (`:commodity`, `:cost-center`, `:receipt`,
+  `:payment-mode`) and the builder is monolithic — there's no
+  decomposed primitive for "build just the line row" reusable
+  outside the `add-line!` context.
+- **Test ns is `kontor.expense.expense-test`** — the doubled-
+  `expense` (matching `kontor.asset.asset` lifecycle namespace
+  pattern). Mirrors the asset module's namespace-name oddity, but
+  this time in TESTS. Suggested: rename to `kontor.expense.core-
+  test` to match the source ns being tested.
+- **Spec called out "per-diem" but the implementation has no
+  per-diem support.** Worth either implementing it (with a
+  per-jurisdiction rate table — necessarily an l10n concern) or
+  removing it from the parent README table to set realistic
+  expectations.
+- **Module has NO README until 2026-05-18.**
+
 (More modules to be appended as their READMEs land.)
 
 ## §3 — Cross-cutting patterns worth canonicalizing
