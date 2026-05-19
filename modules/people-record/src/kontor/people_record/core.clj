@@ -79,10 +79,18 @@
 
 (def ^:const hr-track-record-scope :hr-track-record)
 
-(defn- check-consent!
+(defn check-consent!
   "Throw `:consent/missing` if no active `:hr-track-record` consent
    for `person` at `at`. The substrate stays neutral; this is the
-   consumer-side enforcement of ADR-094's substrate posture."
+   consumer-side enforcement of ADR-094's substrate posture.
+
+   Public so a consumer composing a custom track-record write into
+   their own `kontor.process` step list can apply the same consent
+   gate the built-in `record-position!` / `record-review!` /
+   `record-promotion!` wrappers apply. Note this is a pure guard
+   (throws on missing consent, returns nil otherwise) — NOT a
+   tx-data builder; ADR-068's `*-tx-data` shape doesn't apply
+   because there's no transactable side-effect."
   [db person ^Date at]
   (when-not (consent/active-at? db person hr-track-record-scope at)
     (throw (ex-info "No active :hr-track-record consent for person"

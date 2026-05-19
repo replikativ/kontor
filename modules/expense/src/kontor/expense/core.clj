@@ -184,8 +184,12 @@
 ;; Lifecycle — submit! / approve! / reject!
 ;; ============================================================================
 
-(defn- change-status-tx-data
-  "Pure tx-data builder for `change-status!` (ADR-068)."
+(defn change-status-tx-data
+  "Pure tx-data builder for `change-status!` (ADR-068). Public so a
+   consumer composing this expense-report transition into a larger
+   `kontor.process` step list — alongside, say, a payment-application
+   write or an audit-doc attachment — gets the same status-machine +
+   gate guarantees as a standalone `change-status!` call."
   [db report-eid from to {:keys [changed-by-uid reason reason-note
                                   supporting-doc changed-at]}]
   (sm/record-status-change-tx-data
@@ -199,9 +203,13 @@
         reason-note    (assoc :reason-note reason-note)
         supporting-doc (assoc :supporting-doc supporting-doc))))
 
-(defn- change-status!
+(defn change-status!
   "Drive an :expense-report/status transition through the status
-   machine, wrapped in valid-time. Routes through the gate (ADR-068)."
+   machine, wrapped in valid-time. Routes through the gate (ADR-068).
+
+   Public so consumers can drive transitions the convenience wrappers
+   (`submit!`, `approve!`, `reject!`, `unreject!`) don't cover. The
+   pure tx-data builder is `change-status-tx-data` (per ADR-068)."
   [conn report-eid from to {:keys [vt-from vt-to] :as opts}]
   (let [now (Date.)]
     (validation/transact-with-validation
