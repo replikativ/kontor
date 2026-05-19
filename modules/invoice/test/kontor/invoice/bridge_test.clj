@@ -488,3 +488,45 @@
     (testing ":rejected → :draft (resubmit) is legal"
       (is (true? (sm/legal-transition? db :invoice :invoice/status
                                        :rejected :draft))))))
+
+;; ============================================================================
+;; ADR-068 — `*-tx-data` builder shape
+;; ============================================================================
+
+(deftest make-ready-mark-paid-cancel-tx-data-are-pure-vectors
+  ;; The new ADR-068 builders must return tx-data vectors without
+  ;; mutating the DB; a follow-up transact then applies them. This
+  ;; lets consumers compose the transitions into `kontor.process`
+  ;; step lists.
+  (let [_ (minimal-order!)
+        _ (inv/make-invoice-from-order! *conn* "ORD-1"
+                                        {:external-id "INV-TXD-1"})
+        db-before (d/db *conn*)
+        tx-before (:max-tx db-before)
+        inv-eid (inv/by-external-id db-before "INV-TXD-1")
+        ready-tx (inv/make-ready-tx-data db-before inv-eid nil)
+        cancel-tx (inv/cancel-tx-data db-before inv-eid nil)]
+    (testing "ready + cancel builders return non-empty vectors"
+      (is (vector? ready-tx))
+      (is (vector? cancel-tx))
+      (is (seq ready-tx))
+      (is (seq cancel-tx)))
+    (testing "builders are pure (no side effects on conn)"
+      (is (= tx-before (:max-tx (d/db *conn*)))))
+    (testing "transacting the make-ready-tx-data flips :invoice/status to :ready"
+      (d/transact *conn* ready-tx)
+      (is (= :ready (:invoice/status (inv/pull-invoice (d/db *conn*)
+                                                       "INV-TXD-1")))))
+    (testing "mark-paid-tx-data composes once the invoice reaches :sent"
+      ;; :ready → :sent → :paid path; the builder validates against
+      ;; the supplied db, so we read after the prior transact.
+      (sm/record-status-change! *conn* {:entity inv-eid
+                                        :entity-type :invoice
+                                        :facet :invoice/status
+                                        :to :sent})
+      (let [paid-tx (inv/mark-paid-tx-data (d/db *conn*) inv-eid nil)]
+        (is (vector? paid-tx))
+        (is (seq paid-tx))
+        (d/transact *conn* paid-tx)
+        (is (= :paid (:invoice/status (inv/pull-invoice (d/db *conn*)
+                                                        "INV-TXD-1"))))))))

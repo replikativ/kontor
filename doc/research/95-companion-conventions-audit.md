@@ -13,34 +13,61 @@ across the 42 `modules/*/` companions while writing per-module
 READMEs. This is the input list for a future consistency-cleanup
 round.
 
-## §1 — Conventions the project *should* enforce (but doesn't yet)
+## §1 — Conventions, corrected from prior art (2026-05-18 sweep)
 
-Drawn from CLAUDE.md + ADR-067 + ADR-068 + the kontor.core /
-kontor.posting / kontor.hr.core / kontor.audit-doc prior art:
+The first draft of §1 here was prescriptive but contradicted by the
+prior art. After reading every tier-1 companion's source, here are
+the conventions THAT ARE ACTUALLY IN USE — call them "Pattern A" —
+plus the small set of "Pattern B" exceptions where a module needs
+more.
 
-1. **`<module>/core.clj`** is the canonical entry namespace with a
-   public `install!` fn. Examples doing it right: `kontor.hr.core`,
-   `kontor.import-edgar.schema` (with `core.clj` re-exporting),
-   `kontor.import-gleif.core`. The pattern is: one short `core.clj`
-   that bundles installer + public re-exports.
-2. **`<module>.schema`** is the schema-only namespace owning the
-   `:db/ident` rows + status-transition seeds + approval-policy
-   seeds. `install!` ideally lives in `core.clj`, NOT in
-   `schema.clj`, so the schema ns stays declarative.
+**Pattern A — the dominant convention (~10/12 tier-1 modules):**
+
+1. **`<module>/schema.clj` owns the schema AND `install!`.** Schema
+   attrs + status-transition seeds + approval-policy seeds +
+   `(defn install! [conn] (d/transact conn all) ...)`. Single
+   namespace, single installer entry-point.
+2. **`<module>/core.clj` (when present) is the public lifecycle
+   namespace** — `acquire!` / `create!` / business-write transactors
+   + queries, NOT the installer. `kontor-people-record`,
+   `kontor-inventory`, `kontor-invoice` (named `bridge.clj` for
+   kernel-collision reasons), `kontor-expense`, all follow this.
 3. **ADR-068 `*-tx-data` builders + `!` wrappers.** Every business
-   write exposes a pure `*-tx-data` builder (composable into
-   `kontor.process` step lists) and a thin `!` wrapper that routes
-   through `kontor.validation/transact-with-validation`.
+   write exposes a pure `*-tx-data` builder + a thin `!` wrapper
+   routing through `kontor.validation/transact-with-validation`.
+   Per-module gap audit in §2.
 4. **`run-<verb>!`** for orchestrators that compose multiple
-   `*-tx-data` builders into one tx (e.g. `kontor.hr.payroll/
-   run-payroll!`, `kontor.asset.runner/run-depreciation!`). Single
-   transactor; valid-time stamped once at the outer call; commits
-   atomically.
-5. **Provider protocols** in `<module>.<provider-name>-provider.clj`
-   — sibling pattern of `kontor.tax-provider`,
-   `kontor.fx-rate-provider`, `kontor.payroll-provider`. The
-   protocol + the kernel-shipped built-ins + a registry resolver
-   (`provider-for`, `register-provider!`).
+   `*-tx-data` builders into one tx (`kontor.hr.payroll/run-payroll!`,
+   `kontor.asset.runner/run-depreciation!`, `kontor.lease.runner/
+   run-lease!`).
+5. **Provider protocols** in `<module>/<provider-name>_provider.clj`
+   — sibling pattern of `kontor.tax-provider`, `kontor.fx-rate-
+   provider`. Some modules ship impls in the protocol file
+   (kontor-asset's 4 built-ins); others ship them in a sibling
+   `dunning.clj` / `costing.clj` (collections / inventory) — the
+   impl-file naming is the unsettled bit.
+
+**Pattern B — the load-bearing exception (when a module attaches
+to a kernel extension registry):**
+
+6. **`<module>/core.clj/install!` composes schema install + extension
+   registrations.** `core/install!` calls `schema/install!` THEN
+   registers with kernel extension registries
+   (`kontor.dsar/register-extension-collector!`, the McComb seams,
+   etc.). `kontor-hr` is the canonical example (P1-86-5 fix).
+   `kontor-people-record` was a Pattern B module that was missing
+   the registrations until this sweep — see §2.
+
+**Implications for the cleanup round:**
+
+- Pattern A is the dominant prior art; converting modules TO
+  Pattern A means leaving most modules alone.
+- Pattern B is the load-bearing exception. The audit should flag
+  modules where Pattern B IS needed but missing (people-record was
+  one; check whether others should register with kontor.dsar /
+  kontor.event-bus / etc.).
+- Per-module `!` wrapper / `*-tx-data` gaps (item 3) are independent
+  of Pattern A/B and need their own pass — tracked per-module in §2.
 
 ## §2 — Per-module audit (filled as READMEs are written)
 
@@ -169,7 +196,12 @@ Irregularities flagged:
   `make-invoice-from-order!` and `post-to-ledger!` follow the
   `*-tx-data` pattern. The kernel's `kontor.status-machine` exposes
   `record-status-change-tx-data`, so the fix is mechanical: thread
-  it through.
+  it through. **CLOSED 2026-05-18:** added `make-ready-tx-data`,
+  `mark-paid-tx-data`, `cancel-tx-data` public builders in
+  `bridge.clj`; the `!` wrappers now route through
+  `kontor.validation/transact-with-validation` calling the new
+  builders. Bridge test gained `make-ready-mark-paid-cancel-tx-data-
+  are-pure-vectors` covering shape + purity + transactability.
 - **Only ONE test file (`bridge_test.clj`)** for a module with two
   source files of business logic (`bridge.clj` + `posting.clj`).
   Posting code-paths are exercised transitively via the bridge
@@ -396,7 +428,11 @@ Irregularities flagged:
   `core/install!`. people-record could (and probably should) do
   the same so a consumer's `kontor.dsar/collect` walk
   automatically includes track-record data without manual
-  composition. Worth a followup.
+  composition. **CLOSED 2026-05-18:** added Pattern B
+  `kontor.people-record.core/install!` that calls schema/install!
+  + registers the extension collector under `:people-record`.
+  showcase 06 test verifies the kernel walker now surfaces
+  track-record data in `kernel-bundle[:extensions :people-record]`.
 - **Brand-new module (commit `bcfe1af`).** Small surface; the
   irregularities above are easy to fix early before consumers
   lock in the call patterns.

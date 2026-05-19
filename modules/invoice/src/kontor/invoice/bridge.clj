@@ -107,17 +107,29 @@
 ;; Status transitions
 ;; ============================================================================
 
+(defn make-ready-tx-data
+  "Pure tx-data builder for `make-ready!` (ADR-068). Composes the
+   `:invoice/status :draft → :ready` status-machine transition into
+   a vector ready to transact, so consumer orchestrations can fold
+   the transition into a larger `kontor.process` step list."
+  [db invoice opts]
+  (let [eid (resolve-invoice db invoice)]
+    (sm/record-status-change-tx-data
+     db (merge {:entity eid
+                :entity-type :invoice
+                :facet :invoice/status
+                :to :ready}
+               opts))))
+
 (defn make-ready!
-  "Finalize an invoice (:draft → :ready). Locks edits."
+  "Finalize an invoice (:draft → :ready). Locks edits. Routes through
+   the gate (ADR-068).
+
+   The pure tx-data builder is `make-ready-tx-data`."
   ([conn invoice] (make-ready! conn invoice nil))
   ([conn invoice opts]
-   (let [eid (resolve-invoice (d/db conn) invoice)]
-     (sm/record-status-change! conn
-                               (merge {:entity eid
-                                       :entity-type :invoice
-                                       :facet :invoice/status
-                                       :to :ready}
-                                      opts)))))
+   (validation/transact-with-validation
+    conn (make-ready-tx-data (d/db conn) invoice opts))))
 
 (defn post-to-ledger!
   "Post the invoice to the GL. Delegates to kontor.invoice.posting/
@@ -126,32 +138,54 @@
   ([conn invoice opts]
    (posting/post-to-ledger! conn invoice opts)))
 
+(defn mark-paid-tx-data
+  "Pure tx-data builder for `mark-paid!` (ADR-068). Composes the
+   `:invoice/status :sent → :paid` status-machine transition into a
+   vector ready to transact — useful when reconciliation needs to
+   atomically apply payment + flip the invoice in one tx."
+  [db invoice opts]
+  (let [eid (resolve-invoice db invoice)]
+    (sm/record-status-change-tx-data
+     db (merge {:entity eid
+                :entity-type :invoice
+                :facet :invoice/status
+                :to :paid}
+               opts))))
+
 (defn mark-paid!
   "Transition :sent → :paid. Typically called by reconciliation
-   when the bank-line settles."
+   when the bank-line settles. Routes through the gate (ADR-068).
+
+   The pure tx-data builder is `mark-paid-tx-data`."
   ([conn invoice] (mark-paid! conn invoice nil))
   ([conn invoice opts]
-   (let [eid (resolve-invoice (d/db conn) invoice)]
-     (sm/record-status-change! conn
-                               (merge {:entity eid
-                                       :entity-type :invoice
-                                       :facet :invoice/status
-                                       :to :paid}
-                                      opts)))))
+   (validation/transact-with-validation
+    conn (mark-paid-tx-data (d/db conn) invoice opts))))
+
+(defn cancel-tx-data
+  "Pure tx-data builder for `cancel!` (ADR-068). Composes the
+   `:invoice/status → :cancelled` status-machine transition into a
+   vector ready to transact — useful when the consumer needs to
+   atomically link cancellation to a reversing journal entry."
+  [db invoice opts]
+  (let [eid (resolve-invoice db invoice)]
+    (sm/record-status-change-tx-data
+     db (merge {:entity eid
+                :entity-type :invoice
+                :facet :invoice/status
+                :to :cancelled}
+               opts))))
 
 (defn cancel!
   "Transition any non-cancelled state → :cancelled. If already :sent,
    the consumer is responsible for creating a reversal :transaction
-   per ADR-007 sealing."
+   per ADR-007 sealing. Routes through the gate (ADR-068).
+
+   The pure tx-data builder is `cancel-tx-data`."
   ([conn invoice] (cancel! conn invoice nil))
   ([conn invoice opts]
-   (let [eid (resolve-invoice (d/db conn) invoice)]
-     (sm/record-status-change! conn
-                               (merge {:entity eid
-                                       :entity-type :invoice
-                                       :facet :invoice/status
-                                       :to :cancelled}
-                                      opts)))))
+   (validation/transact-with-validation
+    conn (cancel-tx-data (d/db conn) invoice opts))))
 
 ;; ============================================================================
 ;; Order → invoice bridge
