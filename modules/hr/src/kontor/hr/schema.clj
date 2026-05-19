@@ -528,6 +528,112 @@
                      :audit-doc/category :tax-filing."}])
 
 ;; ============================================================================
+;; :consent — per-(subject, scope) legal-basis record (ADR-094, note 93 §4.2)
+;; ============================================================================
+;;
+;; A :consent row captures that a particular :person has granted (or
+;; withdrawn) consent for processing data in a particular scope, under
+;; a particular legal basis, supported by a particular DPIA / works-
+;; agreement / consent-form. Bitemporal substrate captures consent +
+;; withdrawal as facts at time T; (d/valid-at db T) answers "what was
+;; the legal basis at T?".
+;;
+;; Per ADR-094 + note 93 §5: kernel never enforces consent. The slot is
+;; descriptive — a consumer policy layer (kontor-people-record, MCP
+;; agent tools, DSAR builders) reads :consent before doing whatever
+;; they would have done anyway. The substrate's audit story is that
+;; the consent record exists.
+
+(def ^:private consent-attrs
+  [{:db/ident       :consent/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Consumer-supplied opaque identifier."}
+
+   {:db/ident       :consent/subject
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to :person — the data subject consenting."}
+
+   {:db/ident       :consent/scope
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Open-set keyword matching the
+                     :audit-doc/category vocabulary
+                     (kontor.audit-doc/canonical-categories). The
+                     consent applies to processing of data tagged
+                     with this category."}
+
+   {:db/ident       :consent/legal-basis
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Legal basis vocabulary (note 93 §4.2, open-set):
+                     :gdpr-art-6-1-a-consent, :gdpr-art-6-1-b-contract,
+                     :gdpr-art-6-1-c-legal-obligation,
+                     :gdpr-art-6-1-d-vital-interests,
+                     :gdpr-art-6-1-e-public-task,
+                     :gdpr-art-6-1-f-legit-interest,
+                     :gdpr-art-9-2-a-explicit-consent,
+                     :gdpr-art-9-2-b-employment-law,
+                     :gdpr-art-9-2-h-occupational-medicine,
+                     :gdpr-art-10-criminal-records-msl,
+                     :bdsg-26-1-employment,
+                     :bdsg-26-3-special-category,
+                     :bdsg-26-4-collective-agreement,
+                     :works-agreement,
+                     :ai-act-incompatible (substrate-level refusal marker —
+                     consumer-policy hook for AI-Act-banned use; never
+                     enforced by the kernel),
+                     :withdrawn. Consumer extends freely."}
+
+   {:db/ident       :consent/granted-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :consent/withdrawn-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "nil = still in force. Processing AFTER
+                     :withdrawn-at must rely on a different
+                     :consent/legal-basis (or stop). Processing BEFORE
+                     :withdrawn-at under the prior basis remains
+                     lawful."}
+
+   {:db/ident       :consent/supporting-doc
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to :audit-doc — the DPIA, LIA, consent form
+                     scan, etc. Typical :audit-doc/category
+                     :hr-monitoring-consent."}
+
+   {:db/ident       :consent/works-agreement-ref
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to :audit-doc with :audit-doc/type
+                     :betriebsvereinbarung / :works-agreement. Required
+                     by BetrVG §87 for DE :consent/scope values
+                     covered by co-determination."}
+
+   {:db/ident       :consent/notice-acknowledged-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "For US-state electronic-monitoring notice statutes
+                     (NY 52-c, CT 31-48d, DE 19/705)."}
+
+   {:db/ident       :consent/parent-consent
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to :consent — for parental co-consent on
+                     under-18 interns / apprentices. nil for adults."}
+
+   {:db/ident       :consent/state
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "ADR-034 facet. #{:proposed :active :withdrawn
+                     :superseded}."}])
+
+;; ============================================================================
 ;; Aggregate
 ;; ============================================================================
 
@@ -539,7 +645,8 @@
                compensation-attrs
                compensation-component-attrs
                pay-period-attrs
-               payroll-run-attrs)))
+               payroll-run-attrs
+               consent-attrs)))
 
 ;; ============================================================================
 ;; Status-transition seeds (ADR-034)
@@ -626,6 +733,28 @@
            [:posted       :reconciled  "Reconcile (no emit jurisdiction)"]]]
       {:status-transition/entity-type :payroll-run
        :status-transition/facet :payroll-run/state
+       :status-transition/from from
+       :status-transition/to to
+       :status-transition/active true
+       :status-transition/name name})
+
+    ;; :consent/state — ADR-094 (note 93 §5). :proposed = DPIA drafted
+    ;; but not yet effective; :active = in force; :withdrawn = subject
+    ;; revoked; :superseded = replaced by a successor consent row
+    ;; (e.g. scope expanded, new legal basis under updated works-
+    ;; agreement). Withdrawn ≠ superseded: a withdrawal stops the
+    ;; legal basis going forward; a supersession is the bitemporal
+    ;; revision pattern (the old row's :effective-to closes; a new
+    ;; row takes its place).
+    (for [[from to name]
+          [[:nil       :proposed    "Draft consent record"]
+           [:nil       :active      "Create active consent"]
+           [:proposed  :active      "Activate"]
+           [:proposed  :superseded  "Discard (proposed)"]
+           [:active    :withdrawn   "Subject withdraws"]
+           [:active    :superseded  "Supersede with new scope / basis"]]]
+      {:status-transition/entity-type :consent
+       :status-transition/facet :consent/state
        :status-transition/from from
        :status-transition/to to
        :status-transition/active true

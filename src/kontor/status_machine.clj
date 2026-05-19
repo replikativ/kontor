@@ -188,7 +188,8 @@
    {:rule ... :reason ...} if violated."
   [db {:approval-policy/keys [rule]}
    {:keys [entity changed-by-uid reason-note]
-    sup-doc :supporting-doc}]
+    sup-doc :supporting-doc
+    :as change-spec}]
   (case rule
     :no-self-approval
     (let [creator (->eid (:create/uid (d/pull db [:create/uid] entity)))
@@ -225,6 +226,47 @@
         {:rule rule
          :reason "invoice match-status must be :auto-matched, :manual-approved, or :cleared"
          :match-status match-status}))
+
+    :requires-dpia-supporting-doc
+    ;; ADR-094 — like :requires-supporting-doc but the referenced
+    ;; audit-doc must carry :audit-doc/category :hr-monitoring-consent
+    ;; (the DPIA / LIA / consent-form bucket). Used on consent + people-
+    ;; record transitions that legally require a documented privacy
+    ;; impact assessment.
+    (cond
+      (nil? sup-doc)
+      {:rule rule
+       :reason ":supporting-doc ref is required (DPIA / LIA / consent-form)"}
+
+      :else
+      (let [cat (:audit-doc/category
+                 (d/pull db [:audit-doc/category]
+                         (if (map? sup-doc) (:db/id sup-doc) sup-doc)))]
+        (when-not (= cat :hr-monitoring-consent)
+          {:rule rule
+           :reason ":supporting-doc must carry :audit-doc/category :hr-monitoring-consent"
+           :actual-category cat})))
+
+    :requires-works-agreement-ref
+    ;; ADR-094 — the change-spec must include :works-agreement-ref
+    ;; pointing at an :audit-doc with :audit-doc/type
+    ;; :betriebsvereinbarung (or :works-agreement). Used on consent /
+    ;; activity-monitoring transitions covered by BetrVG §87 co-
+    ;; determination.
+    (let [wa-ref (:works-agreement-ref change-spec)]
+      (cond
+        (nil? wa-ref)
+        {:rule rule
+         :reason ":works-agreement-ref is required (Betriebsvereinbarung / works-agreement)"}
+
+        :else
+        (let [doc-type (:audit-doc/type
+                        (d/pull db [:audit-doc/type]
+                                (if (map? wa-ref) (:db/id wa-ref) wa-ref)))]
+          (when-not (#{:betriebsvereinbarung :works-agreement} doc-type)
+            {:rule rule
+             :reason ":works-agreement-ref must point to an :audit-doc with :audit-doc/type :betriebsvereinbarung or :works-agreement"
+             :actual-type doc-type}))))
 
     ;; Unknown rule: treat as a no-op (forward-compat for new rules
     ;; defined by future ADRs). A future linter can flag rule-typos.

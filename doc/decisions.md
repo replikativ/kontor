@@ -8580,6 +8580,82 @@ Five module files (~0.9 kLoC + tests):
 **Research backing.** doc/research/87-cn-payroll-research-before.md (full spec source + the licence + accounting-pattern citations), 79 §5.3 (C11 plan), 82 (DE pattern reference), 83 (US pattern reference), 84 (CA pattern reference).
 
 **License posture (final).** STA + MoF specs public; ASBE 2211 / 2221 sub-account decomposition public (CAS 9 / 财会〔2014〕8号 / Cai Kuai [2016] No. 22); USCC (GB 32100-2015) public — already used in `kontor.l10n-cn.identifiers`. No bundled per-city SI rate table; no bundled IIT brackets; no 自然人电子税务局 credentials; no proprietary code from Yonyou / Kingdee / Beisen lifted. Component-kind catalog + account-tag map drawn from CAS 9 + the four references in §9 of note 87; the per-engine CSV column-mapping defaults are derived from public vendor API documentation.
+## ADR-094 — Employee-monitoring substrate posture + consent schema + retention floors + refusal positions
+
+**Status.** Accepted. Stage R+1.
+
+**Context.** Research note 93 ("Employee track-record privacy", 2026-05-18) surveyed the multi-jurisdictional privacy + AI-Act + co-determination landscape that bounds what kontor's HR substrate can do credibly. Key findings:
+
+- EU AI Act Article 5(1)(f)+(g) (in force since 2 Feb 2025) prohibits real-time biometric emotion recognition + biometric categorisation by sensitive characteristics in workplace + education.
+- BAG 1 ABR 22/21 (13 Sep 2022) makes working-time recording mandatory under §3(2) Nr 1 ArbSchG — `:hr-activity-monitoring` is a positive obligation in DE, not a hazard.
+- CA CPRA terminated the employee-data exemption on 1 Jan 2023; US employee data is now structurally GDPR-shaped under CCPA/CPRA.
+- Illinois BIPA + Texas CUBI + Washington biometric statutes carry per-scan penalty exposure on fingerprint / facial time-clocks.
+- GDPR Art. 6/9/22/35/88 + BDSG §26 + BetrVG §87 + DSGVO Art. 5(1)(e) are load-bearing for the multi-jurisdictional pitch.
+
+Without a substrate-level posture, kontor cannot ship the trans-national showcase 06 or the `kontor-people-record` consumer credibly — compliance auditors would refuse the design without a documented category + consent + retention story.
+
+**Decision.**
+
+1. **Canonical category vocabulary (kernel).** Ship `kontor.audit-doc/canonical-categories` + `canonical-category-set` documenting the project-endorsed open-set of `:audit-doc/category` values. Adds 8 new HR values to the existing financial + payroll + tax + legal + compliance set: `:hr-track-record`, `:hr-activity-monitoring`, `:hr-activity-content`, `:hr-communications`, `:hr-background-check`, `:hr-compensation-negotiation`, `:hr-grievance`, `:hr-monitoring-consent`. Closes note 86 P0-86-2 vocabulary-canonicalization gap. No schema migration — `:audit-doc/category` is `:db.type/keyword` open-set.
+
+2. **`:consent/*` mini-schema (kontor-hr).** Ten new attrs scoped to kontor-hr (per note 93 §5 "lives in kontor-hr initially"). A `:consent` row records that a `:person` has consented (or withdrawn consent) for processing data tagged with a particular `:audit-doc/category` scope, under a particular legal basis, supported by a particular DPIA / works-agreement / consent-form. `:consent/legal-basis` carries an open-set keyword vocabulary keyed to GDPR Art. 6(1)(a-f) + Art. 9(2)(a/b/h) + Art. 10 + BDSG §26(1/3/4) + a special `:ai-act-incompatible` substrate-level refusal marker (consumer-policy hook; kernel never enforces). `:consent/state` is an ADR-034 facet: `:proposed → :active → :withdrawn → :superseded`.
+
+3. **`kontor.hr.consent` helpers.** Ship `grant!` / `withdraw!` / `supersede!` + matching `*-tx-data` builders (ADR-068 convention) + an `active-at?` query helper that respects the operational time window (`[granted-at, withdrawn-at)`) independent of the current `:state` — withdrawal does NOT retroactively invalidate prior processing.
+
+4. **Per-jurisdiction retention-policy seeds (l10n companions).** Companion modules ship per-(jurisdiction × category) `:retention-policy` rows. The kernel ships shape only (ADR-050). ADR-094 lands the DE seeds at `modules/l10n-de/src/kontor/l10n_de/retention.clj` (7 seeds covering HGB §257 + BDSG §26 + GefStoffV §10a + DSGVO Art. 5 + BetrVG §82 + AO §147 + SGB IV §28f). Other l10n modules add their seeds incrementally — no schema change required.
+
+5. **Two new `:approval-policy/rule` values (kernel).** `:requires-dpia-supporting-doc` enforces that the change-spec's `:supporting-doc` ref points to an `:audit-doc` carrying `:audit-doc/category :hr-monitoring-consent`. `:requires-works-agreement-ref` enforces that the change-spec includes `:works-agreement-ref` pointing at an audit-doc with `:audit-doc/type :betriebsvereinbarung` or `:works-agreement`. Both are kernel-side enforced in `kontor.status-machine/check-policy`, so any consumer transition can be gated on them via a transacted `:approval-policy` seed.
+
+6. **Substrate neutrality.** The kernel does NOT enforce consent. `:consent/legal-basis :ai-act-incompatible` is a consumer-policy refusal marker — kontor.hr.consent treats it as just-another-keyword. Consumer policy layers (kontor-people-record, MCP agent tools, kontor.dsar bundlers) decide whether the marker blocks an action.
+
+7. **Project refusal posture.** The kontor PROJECT publicly refuses to ship:
+   - Default integrations with real-time biometric emotion recognition vendors (AI Act Art. 5(1)(f)).
+   - Pre-canonicalized categories the maintainer believes facilitate AI-Act-banned use (`:hr-emotion-score`, `:hr-burnout-prediction`, `:hr-sentiment-derived`, etc.) — these stay possible as consumer extensions but never enter `canonical-categories`.
+   - Bundled continuous-recording integrations with default-on configurations.
+   - First-party "productivity score" derived metrics in the kernel or first-party companions. Third-party companions may; the project does not endorse.
+   - Covert monitoring scaffolding ("stealth telemetry" features).
+
+   This posture is the analog of ADR-001's no-Odoo-translation, ADR-005's no-bundled-Avalara-keys, ADR-010's no-UI-in-kernel. Substrate-tier neutrality coexists with project-tier opinion.
+
+8. **AI Act forward-compat.** A `:ai-deployer-log/*` shape is reserved for the 2 Dec 2027 Article 26 high-risk-employment obligations (logs retained at least 6 months, deployer / provider chain, human-oversight events). Sketched in §3 of note 93; full landing as ADR-095 ~Q3 2027.
+
+**Substrate posture summary.** The kernel tags + the substrate captures consent as bitemporal facts; the kernel does NOT decide. Consumer policy layers (kontor-people-record, kontor.dsar bundler, MCP agent tools, l10n-{de,us,gb,ca,eu} retention seeds) compose to enforce policy. The audit story is: "the substrate records every consent grant + withdrawal + supersession + retention policy + DSAR bundle + privilege classification, and a regulator can replay the bitemporal axis to verify what the consumer-policy layer decided at any past time T."
+
+**What this does NOT do.**
+
+- Does NOT add a UI for consent collection. Consumer companions (kontor-people-record) implement that.
+- Does NOT bundle vendor-specific consent-form templates. Consumer companions ship those as `:audit-doc` template entries.
+- Does NOT enforce consent at the kernel write path. Substrate stays neutral; refusal is consumer policy.
+- Does NOT define biometric template storage shape. Deferred until a real consumer asks for fingerprint time-clock / facial door-access.
+- Does NOT ship AI deployer logs. ADR-095 scope.
+
+**Test discipline.**
+
+- `modules/hr/test/kontor/hr/consent_test.clj` — 5 deftests / 32 assertions. Covers `canonical-categories` extension, `grant!` happy path, `active-at?` semantics across grant + withdrawal + scope-isolation windows, `supersede!` deactivation + replacement, empty-subject path.
+- `modules/l10n-de/test/kontor/l10n_de/retention_test.clj` — 1 deftest / 15 assertions. Covers 7-seed install, hr-activity-content 0-year purge floor, hr-medical 30-year archive, country-ref binding, install! idempotency.
+
+**Implication.**
+
+- `src/kontor/audit_doc.clj` grows ~30 LoC for the canonical-categories defs.
+- `modules/hr/src/kontor/hr/schema.clj` grows ~80 LoC for the `:consent/*` attrs + the status-transitions.
+- `modules/hr/src/kontor/hr/consent.clj` is new (~190 LoC).
+- `src/kontor/status_machine.clj` grows ~50 LoC for the two new rule branches in `check-policy`.
+- `modules/l10n-de/src/kontor/l10n_de/retention.clj` is new (~120 LoC of seeds).
+- No schema migration. No breaking change for existing callers. No behavior change for any consumer that does not opt in.
+
+**Composition.**
+
+- Composes with ADR-038 (`:approval-policy/rule`) via the two new rules.
+- Composes with ADR-050 (`kontor.retention`) — l10n-de retention seeds plug straight in.
+- Composes with ADR-051 (`:audit-doc/privilege`) — `:hr-grievance` typically also carries `:work-product` or `:attorney-client` privilege.
+- Composes with ADR-052 (`kontor.dsar`) — `:consent` rows are part of a person's DSAR bundle.
+- Composes with ADR-075 (`:audit-doc/category`) by extending the canonical vocabulary.
+- Composes with ADR-090 (`:concept-iri` seam) — a consumer can attach an external-vocabulary IRI to a `:consent` row via a paired `:audit-doc` (consent forms get canonical taxonomy bindings the same way).
+
+**Research backing.** doc/research/93-employee-tracking-privacy.md (~9656 words, full per-jurisdiction tables + ADR sketch + source citations); doc/research/94-strategy-synthesis-91-92-93.md (§3.1 priority queue rationale).
+
+Date: 2026-05-18.
+
 ## ADR-090 — `:concept-iri` seam generalized across substrate entities
 
 **Decision.** Add an optional `:concept-iri` attribute (string, cardinality-one, indexed, no constraint) to six substrate entity groups: `:account-tag`, `:account`, `:partner`, `:commodity`, `:tax`, `:document-type`. The attribute carries an IRI that binds a kontor entity to an external concept vocabulary (XBRL, FIBO, gist, regulator namespace, internal taxonomies). The kernel stores and indexes; verification + dereference is consumer-tier.

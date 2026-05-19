@@ -3744,11 +3744,16 @@
    {:db/ident       :audit-doc/category
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
-    :db/doc         "Subject-matter category (ADR-075). Open-set;
-                     nil = :none. Orthogonal to :audit-doc/privilege —
-                     legal-doctrine and domain are independent axes.
-                     The consumer's auth layer reads BOTH to make
-                     access decisions; the kernel tags only."}
+    :db/doc         "Subject-matter category (ADR-075 + ADR-094).
+                     Open-set; nil = :none. Orthogonal to
+                     :audit-doc/privilege — legal-doctrine and domain
+                     are independent axes. The consumer's auth layer
+                     reads BOTH to make access decisions; the kernel
+                     tags only. Canonical vocabulary (project-endorsed,
+                     consumer-extensible) lives in
+                     `kontor.audit-doc/canonical-categories`. Per
+                     ADR-094, the project refuses to canonicalize
+                     values facilitating AI-Act-banned use."}
 
    ;; ADR-078 — language/locale axis, orthogonal to category +
    ;; privilege. Open-set keyword: nil (default; treated as :en in

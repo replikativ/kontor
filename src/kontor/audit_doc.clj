@@ -30,6 +30,51 @@
             [kontor.validation :as validation]))
 
 ;; ============================================================================
+;; Canonical categories (ADR-075 + ADR-094)
+;; ============================================================================
+;;
+;; Closes note 86 P0-86-2 (category vocabulary canonicalization) + adds
+;; the 8 HR values from note 93 §4.1. Open-set — the substrate still
+;; accepts any keyword on `:audit-doc/category`; this def names the
+;; values the project endorses + documents. Consumers extending the
+;; vocabulary (e.g. :hr-equity-vesting, :hr-secondment-agreement) just
+;; transact arbitrary keywords; no migration.
+;;
+;; Refusal posture (ADR-094): the project deliberately does NOT
+;; canonicalize values that facilitate AI-Act-banned use (emotion
+;; scores, biometric inference, covert telemetry). See note 93 §6.
+
+(def canonical-categories
+  "Endorsed `:audit-doc/category` values. Open-set; consumers extend
+   freely. Grouped here for documentation + IDE autocomplete + DSAR /
+   retention-policy targeting; the substrate never restricts."
+  [;; Financial + regulator-bound filings
+   :financial
+   :payroll
+   :payroll-filing
+   :tax-filing
+   :legal-proceeding
+   :compliance-attestation
+   ;; HR — note 93 §4.1
+   :hr-personnel
+   :hr-track-record
+   :hr-activity-monitoring
+   :hr-activity-content
+   :hr-communications
+   :hr-medical
+   :hr-immigration
+   :hr-background-check
+   :hr-compensation-negotiation
+   :hr-grievance
+   :hr-monitoring-consent])
+
+(def canonical-category-set
+  "Set version of `canonical-categories` for fast membership checks
+   (e.g. linters / consumer dashboards distinguishing canonical from
+   extension values)."
+  (set canonical-categories))
+
+;; ============================================================================
 ;; Resolution
 ;; ============================================================================
 
