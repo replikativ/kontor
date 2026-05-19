@@ -106,6 +106,45 @@ Irregularities flagged:
   formalised or atomicised end-to-end.
 - **Module has NO README until 2026-05-18** (closed in this round).
 
+### kontor-inventory
+
+**Read 2026-05-18. README written 2026-05-18.**
+
+Irregularities flagged:
+
+- **`install!` lives in `kontor.inventory.schema`** — same divergence
+  as kontor-asset + kontor-lease. The `core.clj` exists and IS the
+  primary lifecycle namespace (facility / location / item builders)
+  but the installer is in schema.clj.
+- **Lifecycle is split across `core` + `ops` + `count` +
+  `reservation`.** `define-facility!` / `define-location!` /
+  `define-facility-product!` / `find-or-create-inventory-item!` /
+  `record-detail!` / `place-opening-stock!` are in `core.clj`;
+  `receive!` / `issue!` / `transfer!` / `complete-transfer!` /
+  `true-up-negative-fill!` are in `ops.clj`; `start-count!` /
+  `record-count-line!` / `post-count!` in `count.clj`; `reserve!` /
+  `release-reservation!` in `reservation.clj`. Symmetric scattering
+  to kontor-lease — split by concern, not bundled.
+- **Costing in `costing.clj`, not `<module>.<provider>-provider.clj`.**
+  The §1 convention names the provider file
+  `<module>.<provider-name>-provider.clj` (e.g.
+  `kontor.tax-provider`). This module ships a `CostingProvider`
+  impl (FEFO) in `kontor.inventory.costing` — single-word file
+  name. The protocol itself lives in `kontor.costing-provider`
+  (kernel); convention is fine for impls but worth canonicalizing
+  the impl-file naming too.
+- **`receive!` and friends are NOT split into `*-tx-data` builders
+  consistently.** Most ops DO have a paired `*-tx-data` (receive-
+  tx-data, transfer-tx-data, cancel-transfer-tx-data, reserve-tx-
+  data, release-reservation-tx-data, true-up-negative-fill-tx-
+  data). But `issue!`, `complete-transfer!`, `start-count!`,
+  `record-count-line!`, `post-count!`, `record-detail!`,
+  `place-opening-stock!` and the facility/location/product builders
+  in `core.clj` either don't have a paired tx-data builder or have
+  one that's private. ADR-068 expects ALL business writes to expose
+  the pure builder.
+- **Module has NO README until 2026-05-18.**
+
 (More modules to be appended as their READMEs land.)
 
 ## §3 — Cross-cutting patterns worth canonicalizing
