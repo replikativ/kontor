@@ -243,3 +243,19 @@ two 2026-05-20 research-agent reports (implementation-options +
 staged plan). ADRs to write: 095 (`kontor.book`), 096 (report as
 marginalization), 097 (`:posting/dimension`), 098
 (`kontor-commitment`); ADR-071 implemented + status-corrected.
+
+## Status — all stages shipped (2026-05-20 / -21)
+
+| Stage | ADR | Commit |
+|---|---|---|
+| S1 — `kontor.book` verb facade | ADR-095 | `bb15037` |
+| S2 — `TaxRateProvider` trio implemented | ADR-071 (impl) | `3c72cd8` |
+| S3a — `marginalize` / σ_E report engine | ADR-096 | `115a276` |
+| S3b — `:posting-dimension` classification axes | ADR-097 | `f0515b2` |
+| S4 — `kontor-commitment` companion | ADR-098 | `4e3ba2f` |
+| S5 — consistency cleanup | — | `d6f4276` |
+| S6 — `quickstart.md` + `accounting-model.md` | — | (this round) |
+
+Full suite green throughout: 2258 → 2268 → 2274 tests, 0 failures.
+Follow-up: research note 100 scopes the per-l10n `TaxRateProvider`
+migration (task #281) — pilot AT, 5 substrate gaps flagged.

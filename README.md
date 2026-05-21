@@ -103,6 +103,12 @@ Then in a REPL (or `clj-nrepl-eval -p <port> "..."`):
                            :as-of-tx    #inst "2026-06-30"})
 ```
 
+That is the raw kernel API. For the friendlier **verb facade** —
+`(book/sell! conn {…})`, eight named verbs that each post a balanced,
+sealed entry — start with [doc/quickstart.md](doc/quickstart.md), and
+[doc/accounting-model.md](doc/accounting-model.md) for how the verbs
+map onto debits, credits, journals, and financial statements.
+
 For the bitemporal-correction story — the headline feature — see
 [doc/start-here.md](doc/start-here.md), which walks through showcase
 06 step-by-step.
@@ -123,6 +129,7 @@ balance / period semantics:
 | [`lease`](modules/lease/README.md) | IFRS 16 / ASC 842 lessee-side + modifications + FX retranslation (ADR-063/064) |
 | [`inventory`](modules/inventory/README.md) | FIFO / LIFO / WeightedAverage / StandardCost + valuation layers (ADR-029) |
 | [`expense`](modules/expense/README.md) | Expense report + reimbursement + multi-currency lines |
+| [`commitment`](modules/commitment/README.md) | `:commitment` obligations (receivable / payable / encumbrance) + fulfillment edge + aging (ADR-098) |
 
 **Order-to-cash + procure-to-pay**:
 
@@ -197,7 +204,10 @@ Three audience-specific entry points:
   showcase 06) and then [doc/value.md](doc/value.md) (the 8 kernel
   concerns kontor solves that ERPs make hard, with accounting terms
   defined inline).
-- **Clojure developer who wants to use the substrate.** Read
+- **Clojure developer who wants to use the substrate.** Start with
+  [doc/quickstart.md](doc/quickstart.md) (a paste-able verb-facade
+  on-ramp) and [doc/accounting-model.md](doc/accounting-model.md)
+  (verbs ↔ debits/credits ↔ statements). Then
   [doc/programming.md](doc/programming.md) (the three-axis programming
   model: bitemporal + status machines + the transact gate) + open
   showcase 06's source as a working example.
@@ -269,7 +279,11 @@ Pluggable interfaces consumers extend without forking the kernel:
 Trans-national substrate, 11 country payroll adapters, McComb-aligned
 substrate seams, ADR-094 employee-monitoring posture, and three v0
 ingest companions (import-gleif, import-edgar, people-record) landed
-2026-05-17/-18. 94 ADRs total; 2223 tests / 8721 assertions.
+2026-05-17/-18. The note-99 arc landed 2026-05-20: the `kontor.book`
+verb facade, the `marginalize` / `σ_E` report engine, `:posting/
+dimensions` classification axes, and the `kontor-commitment`
+companion (ADR-095..098), plus ADR-071's tax abstraction implemented
+for real. 98 ADRs total; 2274 tests / 8905 assertions.
 
 The kernel runs all six showcase notebooks end-to-end. Every business-
 write transactor across kernel + companions exposes a pure `*-tx-data`

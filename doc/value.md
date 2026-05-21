@@ -30,6 +30,16 @@ composition primitive, the trans-national substrate (FX, tax,
 consolidation, 11 country payroll adapters). You build the product
 (or the per-country package) on top.
 
+Under the marketing, kontor has a precise definition: it is a
+**typed, bitemporal realization of the balance module** — the kernel
+of the sum map over (account × commodity), the algebraic object that
+*is* double-entry (Ellerman's "social systems software"; the Pacioli
+group). The verbs, the report engine, and the companion modules all
+sit on that one invariant. [doc/accounting-model.md](accounting-model.md)
+spells out the translation for an accountant; you do not need it to
+*use* kontor, but it is why the substrate is correct rather than
+merely careful.
+
 The bet: every accounting platform eventually has to answer the
 same eight questions (audit chain, bitemporal restatement,
 multi-entity intercompany, legal hold, retention / DSAR, segregation

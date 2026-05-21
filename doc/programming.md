@@ -12,6 +12,14 @@ relevant pieces. Not required to know accounting terminology either;
 the doc names accounting concepts as they appear with one-liner
 explanations.
 
+> **Just want to post entries?** The `kontor.book` verb facade
+> (ADR-095) — `sell!`, `pay!`, `receive-payment!`, … — is the short
+> path; [doc/quickstart.md](quickstart.md) is a paste-able transcript
+> and [doc/accounting-model.md](accounting-model.md) explains the
+> debit/credit translation. This document is the layer *under* the
+> verbs: the gate, the status machines, and the bitemporal substrate
+> every transactor — verb or hand-built — runs through.
+
 ## The three axes you'll always be writing against
 
 Every kontor transactor sits inside a **three-axis frame**:
