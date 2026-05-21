@@ -1,11 +1,13 @@
 (ns kontor.report-test
-  "Stage 3a of research note 99 — the report engine as a family of
-   quotient epimorphisms σ_E (ADR-096). `marginalize` is the σ_E
-   primitive; the `run-engine` methods (`:account-codes`, `:tax-tags`,
-   the new generic `:dimension`) are per-line views of it. Acceptance:
+  "Stages 3a + 3b of research note 99 — the report engine as a family
+   of quotient epimorphisms σ_E (ADR-096), and `:posting/dimensions`
+   classification axes (ADR-097). `marginalize` is the σ_E primitive;
+   the `run-engine` methods (`:account-codes`, `:tax-tags`, the new
+   generic `:dimension`) are per-line views of it. Acceptance:
    `marginalize` over `:account-type` reproduces the balance sheet
-   (the classes sum to zero — Ker σ — and each class is correct), and
-   the historical engines stay behaviour-identical."
+   (the classes sum to zero — Ker σ — and each class is correct), the
+   historical engines stay behaviour-identical, and a posting booked
+   with `:posting/dimensions` aggregates over its custom axis."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
             [kontor.book :as book]
@@ -137,3 +139,59 @@
     (is (= 1 (count narrow)) "only the AR leg")
     (is (== 1000M (-> (report/marginalize narrow :account-type {:sign :raw})
                       :asset amt)))))
+
+;; ============================================================================
+;; Stage 3b — :posting/dimensions classification axes (ADR-097)
+;; ============================================================================
+
+(defn- fresh-dimensioned-book
+  "A conn with one 100-EUR expense entry split across two cost centres
+   plus an undimensioned cash leg — booked via the verb facade."
+  []
+  (let [conn (core/create-test-db)]
+    (d/transact conn
+                [{:commodity/symbol "EUR" :commodity/name "Euro" :commodity/precision 2}
+                 {:journal/code "GEN" :journal/type :general}
+                 {:account/path "Expenses:Travel"  :account/type :expense}
+                 {:account/path "Expenses:Meals"   :account/type :expense}
+                 {:account/path "Assets:Cash"      :account/type :asset}])
+    (book/adjust! conn {:commodity [:commodity/symbol "EUR"]
+                        :effective-date d1
+                        :postings
+                        [{:account [:account/path "Expenses:Travel"] :amount 60
+                          :dimensions {:cost-center "CC-Sales" :project "PRJ-Alpha"}}
+                         {:account [:account/path "Expenses:Meals"] :amount 40
+                          :dimensions {:cost-center "CC-Ops"}}
+                         {:account [:account/path "Assets:Cash"] :amount -100}]})
+    conn))
+
+(deftest marginalize-over-a-posting-dimension-axis
+  (let [conn (fresh-dimensioned-book)
+        m    (report/marginalize (report/report-postings conn) :cost-center {:sign :raw})]
+    (testing "each cost-centre class sums its postings"
+      (is (== 60M (amt (get m "CC-Sales"))))
+      (is (== 40M (amt (get m "CC-Ops")))))
+    (testing "the undimensioned cash leg is absent from a covering"
+      (is (= #{"CC-Sales" "CC-Ops"} (set (keys m)))))))
+
+(deftest dimension-engine-over-a-posting-dimension-axis
+  (let [conn (fresh-dimensioned-book)
+        rpt  {:report/name "by project + cost centre"
+              :report/lines
+              [{:line/code "PA" :line/label "Project Alpha"
+                :line/expression {:engine :dimension :dimension :project
+                                  :match "PRJ-Alpha"}}
+               {:line/code "CCS" :line/label "Cost centre Sales"
+                :line/expression {:engine :dimension :dimension :cost-center
+                                  :match "CC-Sales"}}]}
+        out  (report/compute-report conn rpt)]
+    (is (== 60M (:amount (report/line-value out "PA"))))
+    (is (== 60M (:amount (report/line-value out "CCS")))
+        "the travel posting carries both axes")))
+
+(deftest a-posting-carries-several-axes-independently
+  (let [conn (fresh-dimensioned-book)
+        ps   (report/report-postings conn)]
+    (testing "marginalizing the same postings on a different axis repartitions them"
+      (is (== 60M (amt (-> (report/marginalize ps :project {:sign :raw})
+                           (get "PRJ-Alpha"))))))))

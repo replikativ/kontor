@@ -87,7 +87,9 @@
                         {:posting/account [:account/code
                                            :account/type
                                            :account/tags]}
-                        {:posting/account-tags [:account-tag/name]}]
+                        {:posting/account-tags [:account-tag/name]}
+                        {:posting/dimensions [:posting-dimension/axis
+                                              :posting-dimension/value]}]
                        p)
         tx-state (some-> (-> pulled :posting/transaction :db/id)
                          (#(d/pull db [:transaction/state] %))
@@ -113,7 +115,13 @@
                                (map :account-tag/name)
                                (filter some?)
                                (map keyword)
-                               set)]
+                               set)
+        ;; ADR-097 classification dimensions → {axis #{values}}
+        dimensions (reduce (fn [acc d]
+                             (update acc (:posting-dimension/axis d)
+                                     (fnil conj #{}) (:posting-dimension/value d)))
+                           {}
+                           (:posting/dimensions pulled))]
     (assoc pulled
            :valid-from vf
            :tx-state tx-state
@@ -122,6 +130,7 @@
            :partner-eid (:db/id (:posting/partner pulled))
            :account-code (:account/code account)
            :account-type (:account/type account)
+           :dimensions dimensions
            :all-tags (clojure.set/union acct-tag-names posting-tag-names))))
 
 (defn- in-window?
@@ -195,28 +204,43 @@
 
 (def ^:private set-valued-dimensions #{:account-tags})
 
+(defn- resolve-dimension
+  "Resolve a `dimension` argument to `[extract-fn set-valued?]`.
+   `dimension` is a `posting→class` function, a built-in axis keyword
+   (see `dimension-extractors`), or — for any other keyword — a
+   `:posting/dimensions` classification axis (ADR-097), which is
+   set-valued (a posting may carry several values on one axis)."
+  [dimension]
+  (cond
+    (fn? dimension)
+    [dimension false]
+
+    (dimension-extractors dimension)
+    [(dimension-extractors dimension) (contains? set-valued-dimensions dimension)]
+
+    (keyword? dimension)
+    [#(get (:dimensions %) dimension) true]
+
+    :else
+    (throw (ex-info "report: unresolvable dimension" {:dimension dimension}))))
+
 (defn marginalize
   "The quotient epimorphism σ_E (note 97 §3): partition `postings` by
    `dimension` and sum within each class. `dimension` is a built-in
-   axis keyword (see `dimension-extractors`) or a function
-   posting→class. Returns `{class {:value Money :postings [eid…]}}`.
+   axis keyword (see `dimension-extractors`), a `:posting/dimensions`
+   classification axis keyword (ADR-097), or a function posting→class.
+   Returns `{class {:value Money :postings [eid…]}}`.
 
    For a scalar axis this is a true partition — every posting lands in
    exactly one class, and the classes' values sum to the grand total.
-   For the set-valued `:account-tags` axis a posting contributes to
-   each tag-class it carries (a covering).
+   For a set-valued axis (`:account-tags` and any `:posting/dimensions`
+   axis) a posting contributes to each class it carries (a covering).
 
    Opts: `:sign` (`:raw` | `:inflow`, default `:raw`) and `:commodity`
    (default `:EUR`)."
   ([postings dimension] (marginalize postings dimension {}))
   ([postings dimension {:keys [sign commodity] :or {sign :raw commodity :EUR}}]
-   (let [extract  (cond
-                    (fn? dimension)              dimension
-                    (dimension-extractors dimension) (dimension-extractors dimension)
-                    :else (throw (ex-info "marginalize: unknown dimension"
-                                          {:dimension dimension
-                                           :supported (set (keys dimension-extractors))})))
-         set-axis? (contains? set-valued-dimensions dimension)
+   (let [[extract set-axis?] (resolve-dimension dimension)
          grouped  (reduce (fn [acc p]
                             (let [v (extract p)]
                               (if set-axis?
@@ -261,16 +285,12 @@
 
 (defmethod run-engine :dimension
   ;; The generic σ_E line: sum the postings of one class under a
-  ;; built-in axis. `:match` is the class value (or a collection — any
-  ;; of). For the set-valued `:account-tags` axis, `:match` is matched
-  ;; by intersection.
+  ;; built-in axis OR a `:posting/dimensions` axis (ADR-097). `:match`
+  ;; is the class value (or a collection — any of). For a set-valued
+  ;; axis, `:match` is matched by intersection.
   [postings {:keys [dimension match sign commodity] :or {sign :raw commodity :EUR}} _opts]
-  (let [extract   (or (dimension-extractors dimension)
-                      (throw (ex-info "run-engine :dimension — unknown dimension"
-                                      {:dimension dimension
-                                       :supported (set (keys dimension-extractors))})))
-        match-set (if (coll? match) (set match) #{match})
-        set-axis? (contains? set-valued-dimensions dimension)]
+  (let [[extract set-axis?] (resolve-dimension dimension)
+        match-set (if (coll? match) (set match) #{match})]
     (sum-postings (filter (fn [p]
                             (let [v (extract p)]
                               (if set-axis?

@@ -48,7 +48,10 @@
    pass `:postings` — a vector of `{:account … :amount … :commodity …}`
    maps (`:commodity` falls back to the top-level `:commodity`). The
    amounts must sum to zero per (ledger, commodity); positive is a
-   debit. `adjust!` is the named verb for this.
+   debit. `adjust!` is the named verb for this. A posting map may also
+   carry `:dimensions` — a `{axis value}` map of ADR-097 classification
+   tags (cost-centre, project, segment); the report engine
+   `marginalize`s over any such axis (ADR-096).
 
    The builder opts `:posted-at` / `:vt-from` / `:vt-to` pass through
    to `post-transaction-tx-data`.
@@ -77,11 +80,29 @@
     (nil? x)                 nil
     :else                    (bigdec x)))
 
+(defn- ->dimension-value
+  "Coerce a friendly dimension value to the schema's string."
+  [v]
+  (cond
+    (string? v)  v
+    (keyword? v) (name v)
+    :else        (str v)))
+
+(defn- ->dimensions
+  "Map a friendly `{axis value-or-coll}` dimensions map into a vector
+   of `:posting-dimension` entity maps (ADR-097). A collection value
+   expands to one dimension per element."
+  [dimensions]
+  (vec (for [[axis v] dimensions
+             one      (if (coll? v) v [v])]
+         {:posting-dimension/axis  axis
+          :posting-dimension/value (->dimension-value one)})))
+
 (defn- ->posting
-  "Map a friendly `{:account :amount :commodity?}` posting (used in
-   `:postings` for multi-leg entries) into the kernel `:posting/*`
-   shape, defaulting commodity to the entry-level one."
-  [default-commodity {:keys [account amount commodity] :as p}]
+  "Map a friendly `{:account :amount :commodity? :dimensions?}` posting
+   (used in `:postings` for multi-leg entries) into the kernel
+   `:posting/*` shape, defaulting commodity to the entry-level one."
+  [default-commodity {:keys [account amount commodity dimensions] :as p}]
   (when (nil? account)
     (throw (ex-info "kontor.book: each :postings entry needs :account" {:posting p})))
   (when (nil? amount)
@@ -90,9 +111,10 @@
     (when (nil? c)
       (throw (ex-info "kontor.book: posting needs :commodity (or an entry-level :commodity)"
                       {:posting p})))
-    {:posting/account   account
-     :posting/amount    (->bigdec amount)
-     :posting/commodity c}))
+    (cond-> {:posting/account   account
+             :posting/amount    (->bigdec amount)
+             :posting/commodity c}
+      (seq dimensions) (assoc :posting/dimensions (->dimensions dimensions)))))
 
 (defn- build-input
   "Translate a verb options map into the `{:transaction … :postings …}`

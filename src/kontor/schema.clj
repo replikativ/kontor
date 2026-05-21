@@ -2144,7 +2144,50 @@
     :db/index       true
     :db/doc         "Mirror of :transaction/clearance-token at the
                      posting level for query ergonomics. Set together
-                     with the parent transaction's token. ADR-018."}])
+                     with the parent transaction's token. ADR-018."}
+
+   ;; ADR-097 — classification dimensions. `:posting/account` is ONE
+   ;; classification axis; this many-ref carries the others (cost-
+   ;; centre, project, segment, fund, McComb-style business
+   ;; categories). The report engine `marginalize`s over any axis
+   ;; (ADR-096). Written explicitly by the consumer / verb facade —
+   ;; NOT materialized the way `:posting/account-tags` is.
+   {:db/ident       :posting/dimensions
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Many-ref to :posting-dimension entities — the
+                     classification axes of this posting beyond
+                     :posting/account. ADR-097."}])
+
+;; ============================================================================
+;; Posting dimension — a flat classification tag on a posting (ADR-097).
+;;
+;; Demotes :account from THE classification axis to ONE axis among
+;; several. A :posting-dimension is a CBox entity in McComb's
+;; TBox/CBox/ABox split (research note 99): a consumer-governed
+;; taxonomy value, not kernel structure. Per the note-99 DCR
+;; sharpening, taxonomies are FLAT TAGS — :value is a string, not an
+;; entity with its own relational web. The anti-pattern to avoid is
+;; axis-as-attribute (a bespoke :posting/cost-center attr per axis —
+;; the SNOMED mistake): keep the axes few and structural, the values
+;; data.
+;; ============================================================================
+
+(def ^:private posting-dimension-attrs
+  [{:db/ident       :posting-dimension/axis
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "The classification axis — :cost-center, :project,
+                     :segment, :fund, … An open-set keyword; consumers
+                     define their own axes. ADR-097."}
+
+   {:db/ident       :posting-dimension/value
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The class within the axis — a flat string tag
+                     (\"CC-Sales\", \"PRJ-Alpha\"). Consumers key
+                     their own vocabularies. ADR-097."}])
 
 (def ^:private tax-application-attrs
   "ADR-016 — per-posting per-tax computation record. Captures the
@@ -3953,6 +3996,7 @@
     balance-assertion-attrs
     transaction-attrs                    ; +pending-attestation + clearance-token (ADR-018)
     posting-attrs                        ; +tax-breakdown + clearance-token
+    posting-dimension-attrs              ; ADR-097
     payment-term-attrs
     invoice-attrs
     invoice-line-attrs

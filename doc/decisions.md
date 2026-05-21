@@ -8975,3 +8975,31 @@ Date: 2026-05-20.
 **Research backing.** `doc/research/97-commitment-event-accounting-three-layer-model.md` §3 (reports as quotient epimorphisms); note 99 Stage 3a.
 
 Date: 2026-05-20.
+
+## ADR-097 — Classification dimensions: `:posting-dimension` + `:posting/dimensions`
+
+**Status.** Accepted. Stage 3b of research note 99.
+
+**Context.** ADR-096 made the report engine's `marginalize` dimension-agnostic — but a posting could only be *classified* by its `:posting/account` (and the few axes derivable from it: type, code, ledger, entity, commodity, partner). Real accounting also pivots on cost centre, project, segment, fund, and McComb-style business categories. The McComb critique (research notes 80 / 88 / 99) is precise here: the account number must not be THE classification axis — it is *one* axis, and overloading it (the "4400 = sales-19%-in-region-X" konto-smuggling that DE/AT charts do) is exactly the anti-pattern. Demote `:account` to one axis among several.
+
+**Decision.** Add a kernel entity for a posting's classification tags. No change to balance/posting semantics — dimensions are read-only metadata `marginalize` partitions over.
+
+1. **`:posting-dimension`** — `{:posting-dimension/axis <keyword> :posting-dimension/value <string>}`. The `:axis` is an open-set keyword (`:cost-center`, `:project`, `:segment`, `:fund`, …) consumers define; `:value` is a **flat string tag**.
+
+2. **`:posting/dimensions`** — a `:db.cardinality/many` ref from a posting to its `:posting-dimension` entities. A posting with no analytic classification carries none — existing postings and the whole 11-module suite are untouched, zero migration, zero overhead.
+
+3. **`report.clj`** — `pull-posting` reads `:posting/dimensions` into a `{axis #{values}}` map; `resolve-dimension` treats *any* keyword not in the built-in `dimension-extractors` as a `:posting/dimensions` axis (set-valued — a posting may carry several values on one axis). `marginalize` and the `:dimension` engine therefore pivot over a custom axis with no further code.
+
+4. **`kontor.book`** — a friendly posting map in `:postings` accepts `:dimensions {axis value}` (a collection value expands to several). The two-leg verbs do not yet take `:dimensions` (which leg an analytic tag belongs on is a per-business call) — `adjust!`/`:postings` is the Stage-3b integration point.
+
+**Flat tags, not an ontology.** Per the note-99 DCR sharpening (McComb's *Data-Centric Revolution*, the TBox/CBox/ABox split): a `:posting-dimension` is a CBox value — a consumer-governed classification, not kernel (TBox) structure. The `:value` is deliberately a string, not a ref into an entity with its own relational web; "taxonomies are flat tags." The anti-pattern explicitly rejected is **axis-as-attribute** — a bespoke `:posting/cost-center` + `:posting/project` + … attribute per axis (the SNOMED mistake of promoting every classification to a schema slot). Keep the axes few and structural, the values data.
+
+**Why an entity, not a tuple or per-axis attr.** A `:db.type/tuple` `[axis value]` card-many attr would be lighter, but card-many tuple support is less load-bearing across datahike than a plain card-many ref — and a ref entity leaves room to attach provenance later without a schema break. Per-axis attributes are the rejected anti-pattern above. The `:posting-dimension` entities are not interned (no composite `(axis,value)` identity) — each dimensioned posting owns its rows; simple, and only dimensioned postings pay.
+
+**Acceptance.** `test/kontor/report_test.clj` (Stage 3b section) — an entry booked through `kontor.book/adjust!` with `:dimensions` on its legs, then `marginalize`d over `:cost-center` and `:project`; the `:dimension` engine over both axes; the same postings repartitioned on a second axis.
+
+**Implication.** Kernel schema add, strictly additive. `marginalize` already supported arbitrary axes (ADR-096) — this ADR is what gives a posting the *data* to be classified by something other than its account. Stage 4 (`kontor-commitment`, ADR-098) and the marginalizing report engine together are the McComb-aligned core of note 99.
+
+**Research backing.** Research note 99 (Stage 3b + the DCR sharpening section); notes 80 / 88 (McComb survey + substrate seams).
+
+Date: 2026-05-20.
