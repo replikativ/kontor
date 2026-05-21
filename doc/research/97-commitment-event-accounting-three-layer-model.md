@@ -236,7 +236,91 @@ accounts foundationalism, closing-as-process, taxonomies.
    module `Balₙ(R)`, with `kontor.process` folds and an optional
    event vocabulary. Note 80 §7.3, now precisely grounded.
 
-## §8 — Where it breaks (the honest criticism)
+## §8 — Two kinds of invariant: the epistemic status of the algebra
+
+The algebra of §2 is real and worth having — but it is essential not
+to over-claim for it. Accounting carries (at least) two kinds of
+invariant, with sharply different epistemic status, and the design
+must keep them apart.
+
+**The closed (analytic) invariant.** Zero-sum / `Ker(σ)` / the
+Pacioli group. It is true *by construction* — like "a T-account has
+two sides" or "a sentence has a subject." It is **grammar, not
+physics.** This cuts both ways against the temptation (Winschel's, in
+the OiCOS years; McComb's "always closed" in different clothes) to
+treat it as a conservation law: it is *more* certain than any
+physical law — a conservation law could be empirically false, this
+one cannot, because we *defined* the two entries as two sides of one
+recording act — and it says *far less* — it constrains the *books*,
+not the *world*. Calling it "a law of physics" is a category mistake
+in both directions: it over-dignifies a tautology and under-dignifies
+an analytic certainty. The kernel enforces it absolutely (the
+validation gate); it is "free" in that it guarantees *form*, never
+*truth*.
+
+**The open (synthetic) invariants — standing bets.** "This asset is
+worth its carrying amount." "This receivable is collectible." "The
+entity is a going concern." These are empirical, contingent,
+defeasible — and, because a firm is a far-from-equilibrium system
+living on entropy gradients, *structurally unstable*: a stable
+valuation would be the equilibrium of death. They are never
+"enforced" and never "closed"; they are *asserted, dated, attributed,
+and revised*. kontor's mechanisms for them are exactly the non-kernel
+ones: bitemporality (the revision trail), `:audit-doc` + attestation
+(governed human judgment with provenance), and the provider protocols
+(pluggable, explicitly-external models of the unknown dynamics —
+Fx / valuation / depreciation).
+
+**The reconciliation.** The algebra is valuable *because* it is
+epistemically modest: it claims only the form, so it is never wrong;
+it is the one thing you can hold fixed *regardless of how the
+dynamics resolve* — the still point you reason *from*, not a
+description of the motion. A revaluation is *algebraically clean*
+(it still sums to zero — debit the asset, credit a reserve) yet
+*epistemically loaded* (the number came from outside the algebra).
+The algebra catches the form; it cannot and must not pretend to catch
+the content.
+
+**Design payoff — a classification principle.** Every accounting
+fact sorts by which invariant it touches, and that says which
+mechanism owns it: closed → gate-enforced; open → bitemporal trail +
+audit-doc + provider, never silent state. Proposed kernel principle:
+*the kernel enforces the analytic invariant; the synthetic ones enter
+only as dated, governed, provider-sourced events — never as silent
+state.* This also locates McComb's "always closed" precisely: trivial
+of the closed invariants, permanently false of the open ones (they
+are forever provisional). "Always closed" can only honestly mean
+"no human *batch* work."
+
+**Bitemporality is the structural honesty here.** "State = integral
+of events" *is* the Pacioli group (the ledger is the fold of
+zero-terms — discrete FTC). What the OiCOS framing adds — events as
+deltas, state as the integral, dual by the fundamental theorem — is
+true and elegant, but the hard part is that *the integrand is unknown
+and revisable*. That is exactly what the second time axis represents:
+bitemporality is an FTC where you keep editing the integrand, and the
+tx-time axis is the edit history. A purely event-sourced, one-axis
+model (McComb's) has *no representation of "we changed our mind about
+the past"*; kontor's two-axis substrate does. The maintainer's
+critique — "the algebra does not catch devaluations / backdating" —
+therefore lands as a kontor *strength*: kontor never asks the algebra
+to; it routes revision through valid-time + tx-time instead.
+
+**Lineage** (note 98 expands): Georgescu-Roegen, *The Entropy Law and
+the Economic Process* (1971) — the economy is entropic and
+irreversible, the equilibrium framing is wrong; the accounting
+measurement debate (Chambers' CoCoA, Sterling, Edwards & Bell,
+Ijiri's "hardness") — the field's century-long admission that
+valuation is the unstable part; Mattessich's onion model — a stable
+purpose-neutral core + mutable instrumental shells, already this
+statics/dynamics layering; Sunder — accounting as evolving social
+convention, not science; reflexivity — the Lucas critique, MacKenzie's
+*An Engine, Not a Camera* (the model shapes the thing it measures);
+the dissipative-structures / autopoiesis frame (Baecker / Luhmann in
+the maintainer's own notes — accounting as "der endogene apollinische
+Vers innerhalb des exogenen dionysischen Reigens").
+
+### §8.1 — Where the algebra stops — instances of the synthetic residue
 
 - **The homomorphism covers trade, not judgment.** Impairment, fair
   value, litigation provisions have *non-event* inputs; `θ` cannot
@@ -301,3 +385,12 @@ McComb & Dunn, *The Future of Accounting* (2025, maintainer's
 paperback); ValueFlows (valueflo.ws) + hREA; McCarthy REA (1982).
 Three full research-agent reports (formal-algebra, ValueFlows-hREA,
 theory-canon) archived from the 2026-05-20 round.
+
+§8 (two kinds of invariant): Georgescu-Roegen, *The Entropy Law and
+the Economic Process* (1971); Chambers, *Accounting, Evaluation and
+Economic Behavior* (1966, CoCoA); Sterling, *Theory of the
+Measurement of Enterprise Income* (1970); MacKenzie, *An Engine, Not
+a Camera* (2006); Mattessich's onion model + Sunder (note 98). The
+distinction synthesizes a 2026-05-20 maintainer discussion — the
+algebra as "fixing statics under unknown dynamics," not a law of
+physics.
