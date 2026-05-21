@@ -249,3 +249,17 @@ no-`tax.clj` variant), then easy→hard: AU/FR/JP → CA → CN → IN → MX �
 with US's substrate shim parallel and its Avalara adapter on its own track.
 Close G1 (reverse-charge both-legs) and G4 (withholding posting) before the
 IN/MX ports or ADR-071's P1-71-2 reverse-charge contract remains unproven.
+
+## Status — 7 S/M modules migrated (2026-05-21)
+
+The full-rewire migration (maintainer chose Option B — delete the old
+path) is **done for the 7 S/M modules**: AT (pilot) → DE, AU, FR, JP,
+CA, CN. Each now has a bespoke `kontor.l10n-XX.tax-provider`
+(`TaxRateProvider` wrapping `compute-tax` + a `TaxPostingBuilder`); each
+`invoice.clj` is rewired through `compute-tax-postings` +
+`aggregate-postings` (the G5 wrapper, now shipped in
+`kontor.tax-posting-builder`); the hardcoded tax-posting code is
+deleted; per-module golden-fixture tests added. CA's multi-authority
+case (GST/HST + PST + QST) mapped onto multi-component `TaxFacts` with
+**no kernel change**. Full suite: 2319 tests / 9150 assertions / 0
+failures. Deferred per this note: BR / IN / MX / US (the 4 L/XL).

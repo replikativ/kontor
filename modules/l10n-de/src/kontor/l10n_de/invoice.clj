@@ -11,10 +11,20 @@
        19% standard:  4400 (Erlöse 19%)  + 3801 (USt 19%)
        7%  ermäßigt: 4300 (Erlöse 7%)   + 3806 (USt 7%)
        0%  steuerfrei: 4200 (Steuerfreie Umsätze §4 UStG)
-       reverse-charge / EU: 4125 / 4120
 
-   Pass `posting-builder` to invoice/send! to invoke."
-  (:require [datahike.api :as d]))
+   Pass `posting-builder` to invoice/send! to invoke.
+
+   ## ADR-071 migration (research note 100)
+
+   The USt computation + USt-payable account routing has moved to
+   `kontor.l10n-de.tax-provider` — a bespoke `TaxRateProvider` +
+   `TaxPostingBuilder` pair. This namespace composes them per VAT-rate
+   bucket via `kontor.tax-posting-builder/compute-tax-postings` and
+   collapses the result with `aggregate-postings`. Revenue routing
+   stays here — revenue is a base posting, not tax."
+  (:require [datahike.api :as d]
+            [kontor.l10n-de.tax-provider :as tax-provider]
+            [kontor.tax-posting-builder :as tpb]))
 
 ;; ============================================================================
 ;; Account lookup
@@ -25,25 +35,24 @@
 
 (def ^:private rev-account-by-rate
   "VAT rate (BigDecimal) → SKR04 revenue account code. Caller can
-   override per-line via :invoice-line/account."
+   override per-line via :invoice-line/account. Revenue is a base
+   posting (not tax) so this routing stays in invoice.clj."
   {19.0M "4400"  ; Erlöse 19% USt
    7.0M  "4300"  ; Erlöse 7% USt
    0.0M  "4200"  ; Steuerfreie Umsätze §4 UStG
    })
 
-(def ^:private vat-account-by-rate
-  "VAT rate → SKR04 USt-payable account code. Steuerfrei has no
-   VAT account (the line goes 100% to revenue)."
-  {19.0M "3801"  ; Umsatzsteuer 19%
-   7.0M  "3806"  ; Umsatzsteuer 7%
-   })
+;; USt-payable account routing per VAT rate moved to
+;; `kontor.l10n-de.tax-provider` (ADR-071 migration, research note 100).
 
 ;; ============================================================================
 ;; Per-rate bucketing
 ;; ============================================================================
 
-(defn- bucket-by-rate
-  "Group lines by VAT rate. Returns {rate {:net … :vat …}}."
+(defn- bucket-net-by-rate
+  "Group lines by VAT rate, summing the per-line net. Returns
+   {rate net-BigDecimal}. Per-line net = qty × unit-price rounded
+   HALF-EVEN to 2dp; the bucket net is the sum of those."
   [lines]
   (->> lines
        (group-by :invoice-line/vat-rate)
@@ -54,12 +63,8 @@
                        (.add a (.setScale (.multiply (bigdec (:invoice-line/quantity l))
                                                      (bigdec (:invoice-line/unit-price l)))
                                           2 java.math.RoundingMode/HALF_EVEN)))
-                     0M group)
-                vat (.setScale (.multiply net
-                                          (.divide (bigdec rate) 100M
-                                                   6 java.math.RoundingMode/HALF_EVEN))
-                               2 java.math.RoundingMode/HALF_EVEN)]
-            (assoc acc rate {:net net :vat vat})))
+                     0M group)]
+            (assoc acc rate net)))
         {})))
 
 ;; ============================================================================
@@ -79,7 +84,10 @@
                          :invoice/currency.
 
    Pass via the third arg of `invoice/send!`'s posting-builder
-   closure."
+   closure.
+
+   USt postings are produced by the ADR-071 tax provider/builder
+   (`kontor.l10n-de.tax-provider`); revenue postings stay here."
   [{:keys [ar-code journal-code commodity-symbol]
     :or {ar-code "1400" journal-code "INV"}}
    db invoice]
@@ -91,29 +99,35 @@
         jnl       (:db/id (d/entity db [:journal/code journal-code]))
         partner   (:db/id (:invoice/buyer invoice))
         gross     (:invoice/total-gross invoice)
-        buckets   (bucket-by-rate (:invoice/lines invoice))
-        ;; Build credit postings: one revenue + one VAT (when rate>0)
-        ;; per bucket. Lines' explicit :invoice-line/account override
-        ;; the default revenue account when present (rare; usually the
-        ;; rate-driven default is right).
-        credit-postings
+        ;; Net per VAT-rate bucket — VAT is computed by the provider
+        ;; per bucket, so the bucket-level rounding the legacy code
+        ;; performed is preserved byte-for-byte.
+        buckets   (bucket-net-by-rate (:invoice/lines invoice))
+        provider  (tax-provider/make-de-tax-rate-provider)
+        tax-bld   (tax-provider/make-de-tax-posting-builder)
+        ;; Revenue credits: one per VAT-rate bucket. Lines' explicit
+        ;; :invoice-line/account override the default revenue account
+        ;; when present (rare; usually the rate-driven default is
+        ;; right). Revenue is a base posting, not tax.
+        revenue-postings
         (vec
-         (mapcat
-          (fn [[rate {:keys [net vat]}]]
-            (let [rev-code  (or (rev-account-by-rate rate) "4400")
-                  rev-acct  (ace db rev-code)
-                  postings [{:posting/account rev-acct
-                             :posting/amount (.negate ^java.math.BigDecimal net)
-                             :posting/commodity commodity
-                             :posting/posted-at date}]]
-              (if-let [vat-code (vat-account-by-rate rate)]
-                (conj postings
-                      {:posting/account (ace db vat-code)
-                       :posting/amount (.negate ^java.math.BigDecimal vat)
-                       :posting/commodity commodity
-                       :posting/posted-at date})
-                postings)))
-          buckets))]
+         (for [[rate net] buckets
+               :let [rev-code (or (rev-account-by-rate rate) "4400")
+                     rev-acct (ace db rev-code)]]
+           {:posting/account rev-acct
+            :posting/amount (.negate ^java.math.BigDecimal net)
+            :posting/commodity commodity
+            :posting/posted-at date}))
+        ;; USt credits via the ADR-071 provider/builder — run per
+        ;; bucket then collapse per USt account.
+        ust-postings
+        (tpb/aggregate-postings
+         (mapcat (fn [[rate net]]
+                   (tpb/compute-tax-postings
+                    provider tax-bld
+                    {:base net :vat-rate rate :commodity commodity}
+                    {:db db :date date}))
+                 buckets))]
     {:transaction
      (cond-> {:transaction/external-id ext-id
               :transaction/journal jnl
@@ -126,4 +140,4 @@
                        :posting/amount gross
                        :posting/commodity commodity
                        :posting/posted-at date}]
-                     credit-postings)}))
+                     (into revenue-postings ust-postings))}))

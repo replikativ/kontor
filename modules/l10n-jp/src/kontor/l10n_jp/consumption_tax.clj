@@ -56,6 +56,101 @@
 (def reduced-rate  0.08M)
 
 ;; ============================================================================
+;; JCT classes — the invoicing-side compute (research note 100 migration)
+;; ============================================================================
+
+(def jct-class->rate
+  "JCT class → BigDecimal output-tax rate.
+
+   - `:standard` (10%) + `:reduced` (8%) collect JCT.
+   - `:non-taxable` (非課税 — financial services, residential rent,
+     healthcare, education, land, securities), `:export-exempt`
+     (免税 — exports, international transport / communications), and
+     `:out-of-scope` (不課税 — wages, donations: outside the scope of
+     consumption tax entirely) all carry a 0M rate but with distinct
+     input-tax-credit semantics (see the ns docstring). The
+     arithmetic is identical; the audit / filing meaning is not."
+  {:standard      standard-rate
+   :reduced       reduced-rate
+   :non-taxable   0M
+   :export-exempt 0M
+   :out-of-scope  0M})
+
+(def jct-classes
+  "The set of valid `:jct-class` values."
+  (set (keys jct-class->rate)))
+
+(def zero-jct-classes
+  "JCT classes whose arithmetic produces 0% output JCT — the three
+   distinct zero kinds. None of them emit a JCT leg."
+  #{:non-taxable :export-exempt :out-of-scope})
+
+(defn- assert-jct-class! [jct-class]
+  (when-not (contains? jct-classes jct-class)
+    (throw (ex-info "Invalid :jct-class"
+                    {:value jct-class :valid jct-classes})))
+  jct-class)
+
+(defn rate-for
+  "Return the BigDecimal output-JCT rate for a `:jct-class`. Public
+   helper for callers that want the rate without computing tax."
+  [jct-class]
+  (assert-jct-class! jct-class)
+  (get jct-class->rate jct-class))
+
+(defn compute-tax
+  "Compute the per-line JCT breakdown for one Japanese sales line.
+
+   This is the *invoicing-side* JCT compute — the published-rate
+   source of truth that `kontor.l10n-jp.tax-provider` wraps into a
+   `TaxFacts`. It is complementary to `compute-return` above, which
+   is the *filing-side* aggregation over tagged ledger postings.
+
+   Required input:
+     :line       BigDecimal | Money | number — net taxable amount.
+
+   Optional input:
+     :jct-class  keyword in `jct-classes` (default :standard).
+
+   Returns:
+     {:net        Money :JPY  ; echoed, rounded to whole yen
+      :jct        Money :JPY  ; output JCT (0 for the three zero kinds)
+      :total-gross Money :JPY ; net + jct
+      :jct-class  keyword     ; echoed
+      :rate       BigDecimal} ; the rate applied (informational)
+
+   JPY has no sub-unit (`:commodity/precision 0`); every Money is
+   rounded to whole yen HALF-EVEN — the same rounding the JCT return
+   uses (`m-cents`). Rate logic is unchanged: `:standard` → 10%,
+   `:reduced` → 8%, the three zero kinds → 0.
+
+   Examples:
+     (compute-tax {:line 100000M})
+       → {:net ¥100000 :jct ¥10000 :total-gross ¥110000 :rate 0.10 …}
+     (compute-tax {:line 1000M :jct-class :reduced})
+       → {:net ¥1000 :jct ¥80 :total-gross ¥1080 :rate 0.08 …}
+     (compute-tax {:line 1000M :jct-class :export-exempt})
+       → {:net ¥1000 :jct ¥0 :total-gross ¥1000 :rate 0 …}"
+  [{:keys [line jct-class] :or {jct-class :standard}}]
+  (assert-jct-class! jct-class)
+  (let [net-bd (cond
+                 (instance? java.math.BigDecimal line) line
+                 (number? line) (bigdec line)
+                 (and (map? line) (contains? line :amount)) (:amount line)
+                 :else (throw (ex-info "compute-tax: cannot coerce :line to BigDecimal"
+                                       {:value line})))
+        net-m  (m-cents (money/money net-bd :JPY))
+        rate   (get jct-class->rate jct-class)
+        jct-m  (if (zero? (.signum ^java.math.BigDecimal rate))
+                 (m-zero)
+                 (m-cents (money/money (.multiply net-bd rate) :JPY)))]
+    {:net         net-m
+     :jct         jct-m
+     :total-gross (money/add net-m jct-m)
+     :jct-class   jct-class
+     :rate        rate}))
+
+;; ============================================================================
 ;; Return computation
 ;; ============================================================================
 

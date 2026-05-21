@@ -61,7 +61,9 @@
   (:require [clojure.string :as str]
             [datahike.api :as d]
             [kontor.l10n-ca.tax :as tax]
+            [kontor.l10n-ca.tax-provider :as tax-provider]
             [kontor.posting :as posting]
+            [kontor.tax-posting-builder :as tpb]
             [kontor.validation :as validation]))
 
 ;; ============================================================================
@@ -99,20 +101,10 @@
 (defn- commodity-by-symbol [db sym]
   (:db/id (d/entity db [:commodity/symbol sym])))
 
-;; ============================================================================
-;; PST account routing — per-province
-;; ============================================================================
-
-(defn- pst-account-code-for-province
-  "Resolve which PST-style liability account a given province posts to.
-   Returns nil when the province has no PST/RST (i.e. it's an HST,
-   GST-only, or QC jurisdiction)."
-  [province codes]
-  (case province
-    :BC (:bc-pst-code codes default-bc-pst-collected-code)
-    :SK (:sk-pst-code codes default-sk-pst-collected-code)
-    :MB (:mb-rst-code codes default-mb-rst-collected-code)
-    nil))
+;; Per-authority tax-payable account routing moved to
+;; `kontor.l10n-ca.tax-provider` (ADR-071 migration). The default
+;; account-code vars above are retained for documentation + caller
+;; reference; the live routing reads them through the provider.
 
 ;; ============================================================================
 ;; Per-line revenue routing
@@ -173,40 +165,26 @@
         :posting/commodity commodity-eid
         :posting/posted-at date}))))
 
-(defn- nonzero? [^java.math.BigDecimal x]
-  (not (zero? (.compareTo x 0M))))
-
-(defn- tax-posting
-  "Build a single per-authority credit posting. Returns nil if the
-   amount is zero (so the caller can filter)."
-  [db code ^java.math.BigDecimal amount commodity-eid date]
-  (when (and code (nonzero? amount))
-    {:posting/account (require-account db code)
-     :posting/amount (.negate amount)
-     :posting/commodity commodity-eid
-     :posting/posted-at date}))
-
-(defn- tax-postings
-  "Build the per-authority tax-credit postings from the compute-tax
-   per-line breakdown. Emits at most 3 entries (GST/HST combined,
-   PST/RST, QST) — each only when its per-authority amount is
-   non-zero."
-  [db per-line province codes commodity-eid date]
-  (let [sum-of (fn [k]
-                 (reduce (fn [^java.math.BigDecimal acc r]
-                           (.add acc (:amount (k r))))
-                         0M per-line))
-        gst+hst (.add (sum-of :gst) (sum-of :hst))
-        pst (sum-of :pst)
-        qst (sum-of :qst)
-        gst-hst-code (get codes :gst-hst-code default-gst-hst-collected-code)
-        qst-code (get codes :qst-code default-qst-collected-code)
-        pst-code (pst-account-code-for-province province codes)]
-    (->> [(tax-posting db gst-hst-code gst+hst commodity-eid date)
-          (tax-posting db pst-code     pst     commodity-eid date)
-          (tax-posting db qst-code     qst     commodity-eid date)]
-         (remove nil?)
-         vec)))
+(defn- ca-tax-postings
+  "Per-invoice tax postings, via the ADR-071 tax provider + builder
+   (`kontor.l10n-ca.tax-provider`). Runs the provider per line — each
+   line may yield a multi-component `TaxFacts` (federal GST/HST +
+   provincial PST/RST + Quebec QST, up to four parallel authorities) —
+   and collapses the per-line tax legs to one posting per
+   authority-account with `kontor.tax-posting-builder/aggregate-postings`."
+  [db lines ship-to-province codes commodity-eid date]
+  (let [provider (tax-provider/make-ca-tax-rate-provider)
+        builder  (tax-provider/make-ca-tax-posting-builder {:codes codes})]
+    (tpb/aggregate-postings
+     (mapcat (fn [l]
+               (tpb/compute-tax-postings
+                provider builder
+                {:base             (line-net l)
+                 :ship-to-province ship-to-province
+                 :tax-status       (or (:invoice-line/tax-status l) :taxable)
+                 :commodity        commodity-eid}
+                {:db db :date date}))
+             lines))))
 
 (defn plan-ca-invoice-tx-data
   "Pure tx-data builder for a Canadian sales invoice (ADR-068).
@@ -267,25 +245,25 @@
         jnl (or (journal-by-code db jnl-code)
                 (throw (ex-info (str "Journal " jnl-code " not found — create it before posting")
                                 {:code jnl-code})))
-        ;; Compute tax via the rate-table fn, line by line.
-        compute-input
-        {:ship-to-province ship-to-province
-         :lines (mapv (fn [l]
-                        {:line (line-net l)
-                         :tax-status (or (:invoice-line/tax-status l) :taxable)})
-                      lines)}
-        tax-r (tax/compute-invoice-tax compute-input)
-        per-line (:per-line tax-r)
-        gross (:total-gross tax-r)
+        ;; Tax via the ADR-071 provider/builder (`kontor.l10n-ca.tax-
+        ;; provider`). Revenue routing stays here — it is base-posting
+        ;; work, not tax.
         debit-code (if cash-sale?
                      (get codes :cash-code "1010")
                      (get codes :ar-code default-ar-code))
         debit-acct (require-account db debit-code)
         rev-posts (revenue-postings db lines codes commodity-eid issue-date)
-        tax-posts (tax-postings db per-line ship-to-province codes
-                                commodity-eid issue-date)
+        tax-posts (ca-tax-postings db lines ship-to-province codes
+                                   commodity-eid issue-date)
+        net-sum   (reduce (fn [^java.math.BigDecimal a l]
+                            (.add a (line-net l)))
+                          0M lines)
+        ;; Tax postings are credits (negative); gross = net − Σ(tax).
+        gross     (reduce (fn [^java.math.BigDecimal a p]
+                            (.subtract a ^java.math.BigDecimal (:posting/amount p)))
+                          net-sum tax-posts)
         debit-post {:posting/account debit-acct
-                    :posting/amount (:amount gross)
+                    :posting/amount gross
                     :posting/commodity commodity-eid
                     :posting/posted-at issue-date}
         tx-base (cond-> {:transaction/external-id external-id

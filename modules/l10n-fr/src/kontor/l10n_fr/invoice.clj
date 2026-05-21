@@ -68,7 +68,9 @@
   (:require [clojure.string :as str]
             [datahike.api :as d]
             [kontor.l10n-fr.tax :as tax]
+            [kontor.l10n-fr.tax-provider :as tax-provider]
             [kontor.posting :as posting]
+            [kontor.tax-posting-builder :as tpb]
             [kontor.validation :as validation]))
 
 ;; ============================================================================
@@ -97,13 +99,8 @@
    :intra-eu-b2b "7081"
    :export       "7081"})
 
-(def default-tva-by-rate
-  "TVA collectée account per rate. Per the FR PCG (Plan Comptable
-   Général) 4457x prefix is the TVA collectée family."
-  {:std   "44571"
-   :inter "44572"
-   :red   "44573"
-   :spec  "44574"})
+;; TVA-collectée account routing per rate moved to
+;; `kontor.l10n-fr.tax-provider` (ADR-071 migration, research note 100).
 
 ;; ============================================================================
 ;; DB lookup helpers
@@ -184,31 +181,28 @@
         :posting/commodity commodity-eid
         :posting/posted-at date}))))
 
-(defn- nonzero? [^java.math.BigDecimal x]
-  (not (zero? (.compareTo x 0M))))
-
 (defn- tax-postings
-  "Build the per-rate TVA-credit postings. Walks the compute-tax per-
-   line breakdown and groups by rate, emitting one posting per non-
-   zero TVA bucket."
-  [db per-line codes commodity-eid date]
-  (let [by-rate (group-by :rate per-line)
-        tva-by-rate (:tva-by-rate codes)]
-    (vec
-     (for [[rate results] by-rate
-           :let [;; Non-taxable rate keys (lines with :tax-status
-                 ;; :exempt/:intra-eu-b2b/:export). These produce zero
-                 ;; TVA per the compute and may not have a 4457x bucket
-                 ;; (e.g. rate :zero / lines without a rate).
-                 tva-code (get tva-by-rate rate)
-                 tva-sum (reduce (fn [^java.math.BigDecimal acc r]
-                                   (.add acc (:amount (:tva r))))
-                                 0M results)]
-           :when (and tva-code (nonzero? tva-sum))]
-       {:posting/account (require-account db tva-code)
-        :posting/amount (.negate tva-sum)
-        :posting/commodity commodity-eid
-        :posting/posted-at date}))))
+  "Per-invoice TVA-collectée postings, via the ADR-071 tax provider +
+   builder (`kontor.l10n-fr.tax-provider`). Runs the provider per line
+   and collapses the per-line TVA legs to one posting per rate-account
+   with `kontor.tax-posting-builder/aggregate-postings`.
+
+   `codes` carries the resolved `:tva-by-rate` `{rate account-code}`
+   override map, which the builder consumes as its `:tva-codes` opt."
+  [db lines codes commodity-eid date]
+  (let [provider (tax-provider/make-fr-tax-rate-provider)
+        builder  (tax-provider/make-fr-tax-posting-builder
+                  {:tva-codes (:tva-by-rate codes)})]
+    (tpb/aggregate-postings
+     (mapcat (fn [l]
+               (tpb/compute-tax-postings
+                provider builder
+                {:base       (line-net l)
+                 :rate       (or (:invoice-line/rate l) :std)
+                 :tax-status (or (:invoice-line/tax-status l) :taxable)
+                 :commodity  commodity-eid}
+                {:db db :date date}))
+             lines))))
 
 (defn plan-fr-invoice-tx-data
   "Pure tx-data builder for a French sales invoice (ADR-068).
@@ -263,29 +257,33 @@
         jnl (or (journal-by-code db jnl-code)
                 (throw (ex-info (str "Journal " jnl-code " not found — create it before posting")
                                 {:code jnl-code})))
+        ;; `:tva-by-rate` is intentionally absent from the defaults —
+        ;; `kontor.l10n-fr.tax-provider` owns the TVA-account routing
+        ;; and supplies its own default; a caller-passed `:tva-by-rate`
+        ;; in `:codes` flows through as the builder's `:tva-codes`
+        ;; override.
         codes' (merge {:revenue-by-rate default-revenue-by-rate
-                       :revenue-by-status default-revenue-by-status
-                       :tva-by-rate default-tva-by-rate}
+                       :revenue-by-status default-revenue-by-status}
                       codes)
-        ;; Compute TVA via the rate-table fn, line by line.
-        compute-input
-        {:lines (mapv (fn [l]
-                        {:line (line-net l)
-                         :rate (or (:invoice-line/rate l) :std)
-                         :tax-status (or (:invoice-line/tax-status l) :taxable)})
-                      lines)}
-        tax-r (tax/compute-invoice-tax compute-input)
-        per-line (:per-line tax-r)
-        gross (:total-gross tax-r)
         debit-code (cond
                      cash-sale? (or cash-code (:cash-code codes') default-cash-code)
                      ar-code    ar-code
                      :else      (or (:ar-code codes') default-ar-code))
         debit-acct (require-account db debit-code)
+        ;; Revenue routing stays here — it is base-posting work, not
+        ;; tax. TVA goes through the ADR-071 provider/builder.
         rev-posts (revenue-postings db lines codes' commodity-eid issue-date)
-        tax-posts (tax-postings db per-line codes' commodity-eid issue-date)
+        tax-posts (tax-postings db lines codes' commodity-eid issue-date)
+        ;; The debit (AR / cash) leg is gross = net + Σ(TVA). TVA
+        ;; postings are credits (negative), so gross = net − Σ(amounts).
+        net-sum   (reduce (fn [^java.math.BigDecimal a l]
+                            (.add a (line-net l)))
+                          0M lines)
+        gross     (reduce (fn [^java.math.BigDecimal a p]
+                            (.subtract a ^java.math.BigDecimal (:posting/amount p)))
+                          net-sum tax-posts)
         debit-post {:posting/account debit-acct
-                    :posting/amount (:amount gross)
+                    :posting/amount gross
                     :posting/commodity commodity-eid
                     :posting/posted-at issue-date}
         tx-base (cond-> {:transaction/external-id external-id

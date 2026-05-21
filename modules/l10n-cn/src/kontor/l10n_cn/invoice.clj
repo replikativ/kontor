@@ -73,7 +73,9 @@
   (:require [clojure.string :as str]
             [datahike.api :as d]
             [kontor.l10n-cn.tax :as tax]
+            [kontor.l10n-cn.tax-provider :as tax-provider]
             [kontor.posting :as posting]
+            [kontor.tax-posting-builder :as tpb]
             [kontor.validation :as validation]))
 
 ;; ============================================================================
@@ -83,7 +85,9 @@
 (def ^:const default-ar-code "1122")           ; 应收账款
 (def ^:const default-cash-code "1002")         ; 银行存款 (bank deposits)
 (def ^:const default-cash-on-hand-code "1001") ; 库存现金
-(def ^:const default-output-vat-code "2221.01.01") ; 销项税额
+;; Output-VAT account routing moved to `kontor.l10n-cn.tax-provider`
+;; (`default-output-vat-code` there) — ADR-071 migration, research
+;; note 100. The `:codes {:output-vat-code …}` opt still overrides it.
 (def ^:const default-revenue-13-code "5001.13")
 (def ^:const default-revenue-9-code "5001.9")
 (def ^:const default-revenue-6-code "5001.6")
@@ -221,19 +225,28 @@
         :posting/commodity commodity-eid
         :posting/posted-at date}))))
 
-(defn- nonzero? [^java.math.BigDecimal x]
-  (not (zero? (.compareTo x 0M))))
-
-(defn- output-vat-posting
-  "Single consolidated output-VAT credit posting (MOF-canonical
-   single-account routing per Cai Kuai [2016] No. 22). Returns nil
-   when the amount is zero (an all-export invoice has zero output)."
-  [db code ^java.math.BigDecimal amount commodity-eid date]
-  (when (and code (nonzero? amount))
-    {:posting/account (require-account db code)
-     :posting/amount (.negate amount)
-     :posting/commodity commodity-eid
-     :posting/posted-at date}))
+(defn- cn-output-vat-postings
+  "Per-invoice output-VAT postings, via the ADR-071 tax provider +
+   builder (`kontor.l10n-cn.tax-provider`). Runs the provider per line
+   and collapses the per-line output-VAT legs to one consolidated
+   posting on the single MOF-canonical 2221.01.01 account with
+   `kontor.tax-posting-builder/aggregate-postings`."
+  [db lines taxpayer-status codes commodity-eid date]
+  (let [provider (tax-provider/make-cn-tax-rate-provider)
+        builder  (tax-provider/make-cn-tax-posting-builder
+                  (when-let [c (:output-vat-code codes)]
+                    {:output-vat-code c}))]
+    (tpb/aggregate-postings
+     (mapcat (fn [l]
+               (tpb/compute-tax-postings
+                provider builder
+                {:base            (line-net l)
+                 :rate            (line-rate l taxpayer-status)
+                 :taxpayer-status taxpayer-status
+                 :tax-status      (or (:invoice-line/tax-status l) :taxable)
+                 :commodity       commodity-eid}
+                {:db db :date date}))
+             lines))))
 
 (defn plan-cn-invoice-tx-data
   "Pure tx-data builder for a Chinese sales invoice / fapiao (ADR-068).
@@ -304,28 +317,25 @@
         jnl (or (journal-by-code db jnl-code)
                 (throw (ex-info (str "Journal " jnl-code " not found — create it before posting")
                                 {:code jnl-code})))
-        ;; Compute tax via the rate-table fn, line by line.
-        compute-input
-        {:taxpayer-status taxpayer-status
-         :lines (mapv (fn [l]
-                        {:line (line-net l)
-                         :rate (line-rate l taxpayer-status)
-                         :tax-status (or (:invoice-line/tax-status l) :taxable)})
-                      lines)}
-        tax-r (tax/compute-invoice-tax compute-input)
-        gross (:total-gross tax-r)
-        output (:output-vat tax-r)
+        ;; Tax via the ADR-071 provider/builder (research note 100).
+        ;; Revenue routing stays here — it is base-posting work, not tax.
+        rev-posts (revenue-postings db lines taxpayer-status
+                                    codes commodity-eid issue-date)
+        vat-posts (cn-output-vat-postings db lines taxpayer-status
+                                          codes commodity-eid issue-date)
+        net-sum (reduce (fn [^java.math.BigDecimal a l]
+                          (.add a (line-net l)))
+                        0M lines)
+        ;; Output-VAT postings are credits (negative); gross = net − Σ(vat).
+        gross (reduce (fn [^java.math.BigDecimal a p]
+                        (.subtract a ^java.math.BigDecimal (:posting/amount p)))
+                      net-sum vat-posts)
         debit-code (if cash-sale?
                      (get codes :cash-code default-cash-code)
                      (get codes :ar-code default-ar-code))
         debit-acct (require-account db debit-code)
-        rev-posts (revenue-postings db lines taxpayer-status
-                                    codes commodity-eid issue-date)
-        vat-post (output-vat-posting
-                  db (get codes :output-vat-code default-output-vat-code)
-                  (:amount output) commodity-eid issue-date)
         debit-post {:posting/account debit-acct
-                    :posting/amount (:amount gross)
+                    :posting/amount gross
                     :posting/commodity commodity-eid
                     :posting/posted-at issue-date}
         tx-base (cond-> {:transaction/external-id external-id
@@ -338,9 +348,8 @@
                   buyer       (assoc :transaction/partner buyer)
                   fapiao-type (assoc :transaction/clearance-format
                                      (fapiao-type->clearance-format fapiao-type)))
-        postings (cond-> (into [debit-post] rev-posts)
-                   vat-post (conj vat-post))
-        input {:transaction tx-base :postings postings}]
+        input {:transaction tx-base
+               :postings (into [debit-post] (into rev-posts vat-posts))}]
     (posting/build-transaction input)))
 
 (defn post-cn-invoice!

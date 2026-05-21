@@ -65,8 +65,9 @@
    builder from a `kontor.process` step."
   (:require [clojure.string :as str]
             [datahike.api :as d]
-            [kontor.l10n-au.tax :as tax]
+            [kontor.l10n-au.tax-provider :as tax-provider]
             [kontor.posting :as posting]
+            [kontor.tax-posting-builder :as tpb]
             [kontor.validation :as validation]))
 
 ;; ============================================================================
@@ -174,17 +175,34 @@
         :posting/commodity commodity-eid
         :posting/posted-at date}))))
 
-(defn- tax-posting
-  "Build the single GST credit posting (or nil if amount is zero).
-   AU is single-level federal — only one tax-side leg per invoice."
-  [db code ^java.math.BigDecimal amount commodity-eid date kind]
-  (when (and code (nonzero? amount))
-    (let [sm (sign-multiplier kind)
-          amt (.multiply (.negate amount) sm)]
-      {:posting/account (require-account db code)
-       :posting/amount amt
-       :posting/commodity commodity-eid
-       :posting/posted-at date})))
+(defn- au-gst-postings
+  "Per-invoice GST postings, via the ADR-071 tax provider + builder
+   (`kontor.l10n-au.tax-provider`). Runs the provider per line and
+   collapses the per-line GST legs to one posting per GST account with
+   `kontor.tax-posting-builder/aggregate-postings`. An adjustment note
+   negates every leg (the builder always emits the tax-invoice sign —
+   a GST credit — so the sign flip happens here).
+
+   AU is single-level federal: at most one GST posting per invoice."
+  [db lines codes commodity-eid date kind]
+  (let [provider (tax-provider/make-au-tax-rate-provider)
+        builder  (tax-provider/make-au-tax-posting-builder
+                  {:gst-payable-code (get codes :gst-payable-code)})
+        sm       (sign-multiplier kind)
+        raw      (tpb/aggregate-postings
+                  (mapcat (fn [l]
+                            (tpb/compute-tax-postings
+                             provider builder
+                             {:base       (line-net l)
+                              :tax-status (or (:invoice-line/tax-status l)
+                                              :taxable)
+                              :commodity  commodity-eid}
+                             {:db db :date date}))
+                          lines))]
+    (mapv (fn [p]
+            (update p :posting/amount
+                    (fn [^java.math.BigDecimal a] (.multiply a sm))))
+          raw)))
 
 (defn plan-au-invoice-tx-data
   "Pure tx-data builder for an Australian sales invoice (ADR-068).
@@ -248,24 +266,27 @@
         jnl (or (journal-by-code db jnl-code)
                 (throw (ex-info (str "Journal " jnl-code " not found — create it before posting")
                                 {:code jnl-code})))
-        ;; Compute tax via the rate-table fn, line by line.
-        compute-input
-        {:lines (mapv (fn [l]
-                        {:line (line-net l)
-                         :tax-status (or (:invoice-line/tax-status l) :taxable)})
-                      lines)}
-        tax-r (tax/compute-invoice-tax compute-input)
-        gross (:total-gross tax-r)
-        gst   (:gst tax-r)
+        ;; Tax via the ADR-071 provider/builder (research note 100).
+        ;; Revenue routing stays here — it is base-posting work, not tax.
         sm (sign-multiplier kind)
         debit-code (if cash-sale?
                      (get codes :cash-code default-cash-code)
                      (get codes :ar-code default-ar-code))
         debit-acct (require-account db debit-code)
         rev-posts (revenue-postings db lines codes commodity-eid issue-date kind)
-        gst-code (get codes :gst-payable-code default-gst-payable-code)
-        tax-post (tax-posting db gst-code (:amount gst) commodity-eid issue-date kind)
-        debit-amt (.multiply ^java.math.BigDecimal (:amount gross) sm)
+        gst-posts (au-gst-postings db lines codes commodity-eid issue-date kind)
+        ;; Net per-line sum (always positive). `rev-posts` and
+        ;; `gst-posts` already carry the tax-invoice/adjustment sign;
+        ;; the debit (AR / cash) is their offset, so it is the negation
+        ;; of (Σ rev-posts + Σ gst-posts) — equivalently
+        ;; (sm × net) − Σ(gst-posts), since a tax-invoice GST leg is a
+        ;; credit (negative).
+        net-sum (reduce (fn [^java.math.BigDecimal a l]
+                          (.add a (line-net l)))
+                        0M lines)
+        debit-amt (reduce (fn [^java.math.BigDecimal a p]
+                            (.subtract a ^java.math.BigDecimal (:posting/amount p)))
+                          (.multiply net-sum sm) gst-posts)
         debit-post (when (nonzero? debit-amt)
                      {:posting/account debit-acct
                       :posting/amount debit-amt
@@ -282,7 +303,7 @@
         postings (cond-> []
                    debit-post (conj debit-post)
                    :always (into rev-posts)
-                   tax-post (conj tax-post))
+                   :always (into gst-posts))
         input {:transaction tx-base
                :postings postings}]
     (posting/build-transaction input)))
