@@ -9055,3 +9055,29 @@ Date: 2026-05-20.
 **Research backing.** Research note 99 (Stage 4 + the DCR sharpening — "recognition and liquidation of obligations"); notes 80 / 88 (McComb).
 
 Date: 2026-05-20.
+
+---
+
+## ADR-099 — `PeriodTaxProvider`: the period-tax substrate
+
+**Status.** Accepted. Iteration 1 (the substrate) implemented; research note 102.
+
+**Context.** ADR-071's `TaxRateProvider` handles *transaction-incident* taxes — VAT, sales tax, withholding — one `TaxFacts` per invoice line. It is structurally incapable of *period/entity-incident* taxes — personal and corporate income tax, capital gains, property/wealth tax, standalone employer payroll levies — which attach to an **entity over a period** and are computed from an **aggregate** through a **schedule** (progressive brackets, not a flat per-line rate). Research note 102 surveyed all 11 kontor legislations and found kontor computes **exactly one** period tax today (CA personal income, `l10n-ca/y2024/t1` — a single-year, single-province prototype); corporate income tax and the entire property/asset/wealth family are uncomputed everywhere.
+
+**Decision.** A **sibling** protocol, `PeriodTaxProvider` — not `TaxRateProvider` stretched. Both are the one general form `(scope, base-selector, schedule) → liability → posting`; they fill the slots with categorically different contents, so they are siblings sharing the *vocabulary discipline* (closed enum, open implementation — note 101) but no protocol operation. Three new kernel namespaces, **schema-free** (`TaxReturnFacts` is a runtime record, like `TaxFacts`):
+
+1. **`kontor.tax-schedule`** — the schedule algebra: `apply-schedule` over four base shapes (`:flat`, `:progressive-bracket` — generalizing CA's `apply-brackets`, `:capped`, `:formula`) plus the `:elect` combinator (same base, pick min/max — taxpayer election); `surtax-on` for tax-on-a-tax (DE Soli, JP reconstruction surtax, IN/BR cess). Commodity-agnostic BigDecimal arithmetic; a `:flat` schedule is also what a transaction tax's `rate × base` is, so the two tax families share this layer.
+
+2. **`kontor.period-tax-provider`** — the `PeriodTaxProvider` protocol (`period-tax-facts [this {:entity :period :db …}] → TaxReturnFacts | nil`), the `TaxReturnFacts` record (a component vector over a **closed 8-value `period-tax-kinds` enum** — `:personal-income-tax :corporate-income-tax :capital-gains-tax :property-tax :wealth-tax :payroll-tax-employer :minimum-tax :branch-or-presumptive-tax`), and the helpers `assessed?` / `total-liability` / `total-prepaid` / `balance` / `valid-return-facts?` (the closed-vocabulary structural check). The base-selector is `kontor.report/marginalize` (ADR-096) — a windowed σ_E for flow bases, a cumulative roll-up for wealth-tax stock bases.
+
+3. **`kontor.tax-return-posting-builder`** — the `TaxReturnPostingBuilder` protocol (`provision-tx-data` / `payment-tx-data`) + a generic `StaticTaxReturnPostingBuilder`. Unlike the transaction `TaxPostingBuilder` (which returns legs to splice into an invoice), this returns **whole balanced transactions** via the `kontor.book` verb facade — a period tax IS its own transaction (provision at close, payment later). A tax provision is a `:payable` `kontor-commitment`-shaped obligation; the builder composes with kontor-commitment but does not require it.
+
+**Design stresses (note 102 §7 / §9), carried not pre-solved.** Capital gains is a per-disposal/annual hybrid; presumptive regimes have a base not in the books; minimum taxes / surtaxes compose over *other components*; elective regimes (IN/BR/MX/CN) make a tax a *set* of `(transform, schedule)` pairs. The substrate accommodates these via the `:elect` combinator, `surtax-on`, the `:minimum-tax`/`:branch-or-presumptive-tax` enum members, and the component's `:regime` / `:composed-of` / `:line-items` / `:inputs` slots — naming the stress so it is ADR-trackable, never a hidden flag.
+
+**Tested.** `period_tax_provider_test.clj` — 8 tests / 31 assertions: the schedule algebra (all shapes + `surtax-on` + monotonicity + one-bracket≡flat), the `TaxReturnFacts` helpers, `valid-return-facts?` rejecting an out-of-vocabulary `:kind`, and a synthetic `PeriodTaxProvider` exercising the **whole pipeline end to end** — book → `marginalize` (σ_E base-selector) → schedule → `TaxReturnFacts` → provision posting (`Ker σ`) → payment.
+
+**Implication.** Kernel, schema-free, strictly additive. Iteration 1 is the substrate; the per-jurisdiction build is staged (note 102 §10) — pilot = CA `t1` re-expressed as a provider; then the unmodeled standalone payroll taxes (MX ISN, AU state payroll, AT Kommunalsteuer), flat-rate corporate income tax, and personal income tax (AT/AU clean, DE/FR as design-stress validators). Capital-gains lot/ACB tracking and a property-asset-register-with-assessed-value are named deferrals. Per-jurisdiction ports are consumer-demand-driven, as ADR-071 established for the transaction side.
+
+**Research backing.** Research note 102 (the design + the 11-legislation gap map + the §9 reconciliation); notes 100 / 101 (the transaction-tax precedent + the closed-vocabulary/open-implementation discipline).
+
+Date: 2026-05-21.

@@ -198,6 +198,9 @@ src/kontor/    kernel
   book.clj                  kontor.book verb facade — receive/pay/sell/buy/… (ADR-095)
   tax_rate_provider.clj     TaxRateProvider + TaxFacts + StaticTableProvider (ADR-071)
   tax_posting_builder.clj   TaxPostingBuilder + StaticTablePostingBuilder (ADR-071)
+  tax_schedule.clj          schedule algebra — flat/bracket/capped/formula/elect (ADR-099)
+  period_tax_provider.clj   PeriodTaxProvider + TaxReturnFacts (ADR-099)
+  tax_return_posting_builder.clj  TaxReturnPostingBuilder — provision/payment (ADR-099)
   tax.clj                   apply-tax to a posting
   fx_rate_provider.clj      FxRateProvider protocol + StaticTable / ECB / Chained (ADR-072)
   fx.clj                    Money-level convert / translate / to-functional-currency
@@ -229,6 +232,10 @@ The McComb arc (research notes 80 / 88 / 97 / 98 / 99). A deliberately **deflate
 - **ADR-096** — `kontor.report` as a family of marginalizations `σ_E`: `marginalize` (the quotient-epimorphism primitive), a generic `:dimension` engine, `:account-codes`/`:tax-tags` reframed as instances (behaviour-identical). Kernel, no schema.
 - **ADR-097** — `:posting-dimension` + `:posting/dimensions`: classification axes beyond `:account` (cost-centre, project, segment). `marginalize` pivots over any axis. Kernel schema, additive.
 - **ADR-098** — `kontor-commitment` companion: `:commitment` (recognising + liquidating obligations) + `:commitment-fulfillment` edge to the settling `:transaction`. Kernel untouched.
+
+### ADR-099 — `PeriodTaxProvider`: the period-tax substrate
+
+Sibling of ADR-071's `TaxRateProvider` for *period/entity-incident* taxes (income / corporate / capital-gains / property / wealth / standalone employer-payroll). A tax is `(scope, base-selector, schedule) → liability → posting`; the period sibling fills the slots with `(entity×period, marginalize/σ_E, progressive brackets)`. Three schema-free kernel namespaces: `kontor.tax-schedule` (the schedule algebra), `kontor.period-tax-provider` (`PeriodTaxProvider` + `TaxReturnFacts` + a closed 8-value `period-tax-kinds` enum), `kontor.tax-return-posting-builder` (provision/payment via the verb facade). Iteration 1 (substrate) shipped; per-jurisdiction build staged per research note 102 §10 — pilot = CA `t1`, then standalone payroll taxes, corporate income tax, personal income tax. Research note 102.
 
 ### Stage R substrate (ADR-067 .. ADR-087) — HR/payroll across 11 jurisdictions
 

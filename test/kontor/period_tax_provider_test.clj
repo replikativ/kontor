@@ -1,0 +1,200 @@
+(ns kontor.period-tax-provider-test
+  "Iteration 1 of the period-tax build (ADR-099, research note 102) —
+   the substrate: the `kontor.tax-schedule` algebra, the
+   `PeriodTaxProvider` / `TaxReturnFacts` contract, and the
+   `TaxReturnPostingBuilder`. A synthetic provider exercises the whole
+   pipeline end to end — book → marginalize (σ_E base-selector) →
+   schedule → TaxReturnFacts → provision posting → Ker σ → payment."
+  (:require [clojure.test :refer [deftest is testing]]
+            [datahike.api :as d]
+            [kontor.book :as book]
+            [kontor.core :as core]
+            [kontor.money :as money]
+            [kontor.period-tax-provider :as ptp]
+            [kontor.report :as report]
+            [kontor.tax-return-posting-builder :as trpb]
+            [kontor.tax-schedule :as ts]
+            [kontor.validation :as validation]))
+
+;; ============================================================================
+;; The schedule algebra
+;; ============================================================================
+
+(deftest schedule-base-shapes
+  (testing ":flat"
+    (is (== 200M (ts/apply-schedule (ts/flat 0.20M) 1000M))))
+  (testing ":progressive-bracket — bracket fold"
+    (let [s (ts/progressive [{:rate 0.10M :upper 1000M}
+                             {:rate 0.20M :upper 5000M}
+                             {:rate 0.30M :upper nil}])]
+      (is (== 0M    (ts/apply-schedule s 0M)))
+      (is (== 50M   (ts/apply-schedule s 500M))   "wholly in band 1")
+      (is (== 100M  (ts/apply-schedule s 1000M))  "exactly the band-1 ceiling")
+      (is (== 130M  (ts/apply-schedule s 1150M))  "100 + 30 — spills into band 2")
+      (is (== 1500M (ts/apply-schedule s 7000M))  "100 + 800 + 600 — open top band")))
+  (testing ":capped — rate on [floor, ceiling]"
+    (let [s (ts/capped 0.06M {:floor 3500M :ceiling 68500M})]
+      (is (== 0M    (ts/apply-schedule s 3500M))  "at the floor")
+      (is (== 60M   (ts/apply-schedule s 4500M))  "1000 above the floor")
+      (is (== 3900M (ts/apply-schedule s 99999M)) "capped at the ceiling")))
+  (testing ":formula — escape hatch"
+    (is (== 42M (ts/apply-schedule {:schedule/type :formula
+                                    :fn (fn [_] 42M)} 999M))))
+  (testing ":elect — same base, pick min/max"
+    (is (== 250M (ts/apply-schedule {:schedule/type :elect :choose :min
+                                     :schedules [(ts/flat 0.30M) (ts/flat 0.25M)]}
+                                    1000M)))
+    (is (== 300M (ts/apply-schedule {:schedule/type :elect :choose :max
+                                     :schedules [(ts/flat 0.30M) (ts/flat 0.25M)]}
+                                    1000M)))))
+
+(deftest surtax-on-is-tax-on-a-tax
+  ;; DE Solidaritätszuschlag — 5.5% of the income tax, not of income.
+  (is (== 11M (ts/surtax-on 0.055M 200M))))
+
+(deftest unknown-schedule-throws
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unknown :schedule/type"
+                        (ts/apply-schedule {:schedule/type :bogus} 100M))))
+
+(deftest progressive-is-monotonic-in-base
+  ;; a progressive schedule never decreases as the base grows.
+  (let [s (ts/progressive [{:rate 0.15M :upper 50000M}
+                           {:rate 0.30M :upper nil}])]
+    (is (apply <= (map #(ts/apply-schedule s (bigdec %))
+                       (range 0 1000000 25000))))))
+
+(deftest one-bracket-progressive-equals-flat
+  ;; a single open bracket is the degenerate :flat case.
+  (let [prog (ts/progressive [{:rate 0.25M :upper nil}])
+        flat (ts/flat 0.25M)]
+    (is (every? (fn [base]
+                  (== (ts/apply-schedule prog (bigdec base))
+                      (ts/apply-schedule flat (bigdec base))))
+                (range 0 1000000 50000)))))
+
+;; ============================================================================
+;; TaxReturnFacts helpers
+;; ============================================================================
+
+(defn- m [n] (money/money (bigdec n) :EUR))
+
+(defn- facts-with [components]
+  (ptp/tax-return-facts {:entity 1 :period {:from #inst "2026-01-01"
+                                            :to #inst "2027-01-01"}
+                         :jurisdiction {:country "XX"}
+                         :functional-commodity :EUR
+                         :components components}))
+
+(deftest tax-return-facts-helpers
+  (let [f (facts-with [{:kind :corporate-income-tax
+                        :liability (m 150) :prepaid (m 40)}
+                       {:kind :payroll-tax-employer
+                        :liability (m 30) :prepaid (m 0)}])]
+    (is (ptp/assessed? f))
+    (is (== 180M (:amount (ptp/total-liability f))))
+    (is (== 40M  (:amount (ptp/total-prepaid f))))
+    (is (== 140M (:amount (ptp/balance f))) "180 owed − 40 prepaid"))
+  (testing "no assessed liability"
+    (is (not (ptp/assessed? (facts-with [{:kind :wealth-tax :liability (m 0)}])))))
+  (testing "balance is negative when over-prepaid — a refund"
+    (is (neg? (:amount (ptp/balance
+                        (facts-with [{:kind :personal-income-tax
+                                      :liability (m 100) :prepaid (m 250)}])))))))
+
+(deftest valid-return-facts-is-the-closed-vocabulary-check
+  (is (true?  (ptp/valid-return-facts?
+               (facts-with [{:kind :personal-income-tax :liability (m 100)}]))))
+  (is (false? (ptp/valid-return-facts?
+               (facts-with [{:kind :not-a-real-tax :liability (m 100)}])))
+      "a :kind outside period-tax-kinds fails — extend the enum by ADR")
+  (is (false? (ptp/valid-return-facts?
+               (facts-with [{:kind :wealth-tax}])))
+      "a component with no :liability fails the structural check"))
+
+;; ============================================================================
+;; End to end — a synthetic PeriodTaxProvider through the whole pipeline
+;; ============================================================================
+
+(defn- fresh []
+  (let [conn (core/create-test-db)]
+    (d/transact conn
+                [{:commodity/symbol "EUR" :commodity/name "Euro" :commodity/precision 2}
+                 {:journal/code "SALE" :journal/type :sale}
+                 {:journal/code "PUR"  :journal/type :purchase}
+                 {:journal/code "GEN"  :journal/type :general}
+                 {:account/path "Assets:Cash"          :account/type :asset}
+                 {:account/path "Assets:Receivable"    :account/type :asset}
+                 {:account/path "Income:Sales"         :account/type :income}
+                 {:account/path "Expenses:Goods"       :account/type :expense}
+                 {:account/path "Expenses:Income-Tax"  :account/type :expense}
+                 {:account/path "Liabilities:Tax-Payable" :account/type :liability}])
+    conn))
+
+(def ^:private eur [:commodity/symbol "EUR"])
+(def ^:private fy-2026 {:from #inst "2026-01-01" :to #inst "2027-01-01"})
+
+(defn- synthetic-corp-tax-provider
+  "A minimal PeriodTaxProvider: marginalize the period's income and
+   expense (the σ_E base-selector), apply a flat corporate-tax rate."
+  [rate]
+  (reify ptp/PeriodTaxProvider
+    (provider-id [_] :synthetic-corp)
+    (period-tax-facts [_ {:keys [entity period conn]}]
+      (let [postings (report/report-postings conn {:from (:from period)
+                                                   :to   (:to period)})
+            by-type  (report/marginalize postings :account-type {:sign :inflow})
+            income   (get-in by-type [:income :value] (money/zero :EUR))
+            expense  (get-in by-type [:expense :value] (money/zero :EUR))
+            taxable  (money/sub income expense)
+            gross    (ts/apply-schedule (ts/flat rate) (:amount taxable))]
+        (ptp/tax-return-facts
+         {:entity entity :period period
+          :jurisdiction {:country "XX"}
+          :functional-commodity :EUR
+          :components [{:kind            :corporate-income-tax
+                        :base            taxable
+                        :schedule        (ts/flat rate)
+                        :gross-liability (money/money gross :EUR)
+                        :credits         []
+                        :liability       (money/money gross :EUR)
+                        :prepaid         (money/zero :EUR)
+                        :provenance      {:provider-id :synthetic-corp}}]})))))
+
+(defn- sum-account [conn path]
+  (reduce + 0M
+          (d/q '[:find [?amt ...] :in $ ?p
+                 :where [?a :account/path ?p] [?pp :posting/account ?a]
+                 [?pp :posting/amount ?amt]]
+               (d/db conn) path)))
+
+(deftest synthetic-provider-full-pipeline
+  (let [conn (fresh)]
+    ;; a year's trading — 1000 income, 400 expense → 600 taxable
+    (book/sell! conn {:debit-account [:account/path "Assets:Receivable"]
+                      :credit-account [:account/path "Income:Sales"]
+                      :amount 1000 :commodity eur :effective-date #inst "2026-04-01"})
+    (book/buy! conn {:debit-account [:account/path "Expenses:Goods"]
+                     :credit-account [:account/path "Assets:Cash"]
+                     :amount 400 :commodity eur :effective-date #inst "2026-05-01"})
+    (let [provider (synthetic-corp-tax-provider 0.25M)
+          builder  (trpb/make-static-tax-return-posting-builder
+                    {:expense-account [:account/path "Expenses:Income-Tax"]
+                     :payable-account [:account/path "Liabilities:Tax-Payable"]
+                     :cash-account    [:account/path "Assets:Cash"]
+                     :journal         [:journal/code "GEN"]
+                     :commodity       eur})
+          facts    (ptp/period-tax-facts provider {:entity 1 :period fy-2026 :conn conn})]
+      (testing "the provider marginalizes the base and applies the schedule"
+        (is (ptp/valid-return-facts? facts))
+        (is (== 600M (:amount (:base (first (:components facts))))) "1000 − 400")
+        (is (== 150M (:amount (ptp/total-liability facts))) "25% of 600"))
+      (testing "the provision posts a balanced expense + payable transaction"
+        (validation/transact-with-validation
+         conn (trpb/provision-tx-data builder facts {:effective-date #inst "2026-12-31"}))
+        (is (== 150M  (sum-account conn "Expenses:Income-Tax")) "Dr tax expense")
+        (is (== -150M (sum-account conn "Liabilities:Tax-Payable")) "Cr tax payable"))
+      (testing "the payment liquidates the payable"
+        (validation/transact-with-validation
+         conn (trpb/payment-tx-data builder facts
+                                    {:amount 150 :date #inst "2027-02-15"} {}))
+        (is (zero? (sum-account conn "Liabilities:Tax-Payable")) "payable cleared")))))
