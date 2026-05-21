@@ -57,7 +57,9 @@
   (:require [clojure.string :as str]
             [datahike.api :as d]
             [kontor.l10n-at.tax :as tax]
+            [kontor.l10n-at.tax-provider :as tax-provider]
             [kontor.posting :as posting]
+            [kontor.tax-posting-builder :as tpb]
             [kontor.validation :as validation]))
 
 ;; ============================================================================
@@ -87,16 +89,8 @@
    :exempt         default-revenue-exempt-code
    :reverse-charge default-revenue-reverse-charge-code})
 
-(def ^:private vat-class->ust-code
-  "Output-VAT liability account per VAT class. Classes mapping to
-   nil emit no USt posting (zero-rated, exempt, reverse-charge — see
-   ns docstring for the audit reasoning)."
-  {:standard       default-ust-standard-code
-   :reduced-13     default-ust-reduced-13-code
-   :reduced-10     default-ust-reduced-10-code
-   :zero           nil
-   :exempt         nil
-   :reverse-charge nil})
+;; USt-payable account routing per VAT class moved to
+;; `kontor.l10n-at.tax-provider` (ADR-071 migration, research note 100).
 
 ;; ============================================================================
 ;; DB lookup helpers
@@ -148,20 +142,9 @@
       (throw (ex-info (str "No revenue account configured for VAT class " vat-class)
                       {:vat-class vat-class}))))
 
-(defn- ust-code-for-class
-  "Resolve which USt-payable account a given VAT class posts to.
-   Returns nil for zero-rated / exempt / reverse-charge (no USt
-   posting)."
-  [vat-class codes]
-  (or (get codes (keyword (str (name vat-class) "-ust")))
-      (get vat-class->ust-code vat-class)))
-
 ;; ============================================================================
 ;; Tx-data builder (ADR-068 pure form)
 ;; ============================================================================
-
-(defn- nonzero? [^java.math.BigDecimal x]
-  (not (zero? (.compareTo x 0M))))
 
 (defn- revenue-postings
   "Per-line revenue credit postings. Groups by (revenue-account,
@@ -186,27 +169,34 @@
         :posting/commodity commodity-eid
         :posting/posted-at date}))))
 
-(defn- ust-posting
-  "Build a single per-rate USt credit posting. Returns nil if the
-   amount is zero (so the caller can filter)."
-  [db code ^java.math.BigDecimal amount commodity-eid date]
-  (when (and code (nonzero? amount))
-    {:posting/account (require-account db code)
-     :posting/amount (.negate amount)
-     :posting/commodity commodity-eid
-     :posting/posted-at date}))
+(defn- ust-codes-from
+  "Translate the per-call `:codes` override map into the
+   `{vat-class account-code}` shape `AtTaxPostingBuilder` expects."
+  [codes]
+  (into {} (keep (fn [[cls k]]
+                   (when-let [c (get codes k)] [cls c]))
+                 {:standard   :standard-ust-code
+                  :reduced-13 :reduced-13-ust-code
+                  :reduced-10 :reduced-10-ust-code})))
 
-(defn- ust-postings
-  "Build the per-rate USt credit postings from the compute-tax
-   per-class breakdown. Emits at most 3 entries (20% / 13% / 10%) —
-   each only when its per-class amount is non-zero."
-  [db by-class codes commodity-eid date]
-  (->> (for [[vat-class {:keys [ust]}] by-class
-             :let [ust-bd (:amount ust)
-                   code (ust-code-for-class vat-class codes)]]
-         (ust-posting db code ust-bd commodity-eid date))
-       (remove nil?)
-       vec))
+(defn- at-ust-postings
+  "Per-invoice USt postings, via the ADR-071 tax provider + builder
+   (`kontor.l10n-at.tax-provider`). Runs the provider per line and
+   collapses the per-line USt legs to one posting per rate-account
+   with `kontor.tax-posting-builder/aggregate-postings`."
+  [db lines codes commodity-eid date]
+  (let [provider (tax-provider/make-at-tax-rate-provider)
+        builder  (tax-provider/make-at-tax-posting-builder
+                  {:ust-codes (ust-codes-from codes)})]
+    (tpb/aggregate-postings
+     (mapcat (fn [l]
+               (tpb/compute-tax-postings
+                provider builder
+                {:base      (line-net l)
+                 :vat-class (or (:invoice-line/vat-class l) :standard)
+                 :commodity commodity-eid}
+                {:db db :date date}))
+             lines))))
 
 (defn plan-at-invoice-tx-data
   "Pure tx-data builder for an Austrian sales invoice (ADR-068).
@@ -273,23 +263,23 @@
         jnl (or (journal-by-code db jnl-code)
                 (throw (ex-info (str "Journal " jnl-code " not found — create it before posting")
                                 {:code jnl-code})))
-        ;; Compute tax via the rate-table fn, line by line.
-        compute-input
-        {:lines (mapv (fn [l]
-                        {:line (line-net l)
-                         :vat-class (or (:invoice-line/vat-class l) :standard)})
-                      lines)}
-        tax-r (tax/compute-invoice-tax compute-input)
-        by-class (:by-class tax-r)
-        gross (:total-gross tax-r)
+        ;; Tax via the ADR-071 provider/builder (research note 100).
+        ;; Revenue routing stays here — it is base-posting work, not tax.
+        rev-posts (revenue-postings db lines codes commodity-eid issue-date)
+        ust-posts (at-ust-postings db lines codes commodity-eid issue-date)
+        net-sum   (reduce (fn [^java.math.BigDecimal a l]
+                            (.add a (line-net l)))
+                          0M lines)
+        ;; USt postings are credits (negative); gross = net − Σ(ust).
+        gross     (reduce (fn [^java.math.BigDecimal a p]
+                            (.subtract a ^java.math.BigDecimal (:posting/amount p)))
+                          net-sum ust-posts)
         debit-code (if cash-sale?
                      (get codes :cash-code default-cash-code)
                      (get codes :ar-code default-ar-code))
         debit-acct (require-account db debit-code)
-        rev-posts (revenue-postings db lines codes commodity-eid issue-date)
-        ust-posts (ust-postings db by-class codes commodity-eid issue-date)
         debit-post {:posting/account debit-acct
-                    :posting/amount (:amount gross)
+                    :posting/amount gross
                     :posting/commodity commodity-eid
                     :posting/posted-at issue-date}
         tx-base (cond-> {:transaction/external-id external-id

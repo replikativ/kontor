@@ -197,3 +197,37 @@
      (if (trp/taxable? facts)
        (tax-postings posting-builder facts opts)
        []))))
+
+;; ============================================================================
+;; Multi-line aggregation — the G5 wrapper (research note 100 / 101)
+;;
+;; `tax-postings` is per-line; an invoice-level builder runs it across
+;; every line and then collapses postings that hit the same account
+;; into one (every l10n `compute-invoice-tax` buckets across lines).
+;; `aggregate-postings` is that collapse — shared so each per-l10n
+;; builder need not re-roll it.
+;; ============================================================================
+
+(defn aggregate-postings
+  "Collapse tax postings that target the same account into one per
+   account. Postings are grouped by `[:posting/account :posting/commodity
+   :posting/display-type]`; `:posting/amount` is summed; the first
+   posting's remaining keys are kept and `:posting/account-tags` are
+   unioned. Groups whose summed amount is zero are dropped.
+
+   NOTE: a posting's `:posting/tax-rep` is taken from the first member
+   of its group — lossless for the bespoke per-l10n builders (no
+   `:tax-rep` refs), lossy for `StaticTablePostingBuilder` output;
+   aggregate per-rate there, not across rates."
+  [postings]
+  (->> postings
+       (group-by (juxt :posting/account :posting/commodity :posting/display-type))
+       vals
+       (keep (fn [group]
+               (let [sum (reduce + 0M (map :posting/amount group))]
+                 (when-not (zero? sum)
+                   (cond-> (assoc (first group) :posting/amount sum)
+                     (some :posting/account-tags group)
+                     (assoc :posting/account-tags
+                            (vec (distinct (mapcat :posting/account-tags group)))))))))
+       vec))
