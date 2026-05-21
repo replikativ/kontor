@@ -37,9 +37,9 @@
       (is (== 0M    (ts/apply-schedule s 3500M))  "at the floor")
       (is (== 60M   (ts/apply-schedule s 4500M))  "1000 above the floor")
       (is (== 3900M (ts/apply-schedule s 99999M)) "capped at the ceiling")))
-  (testing ":formula — escape hatch"
+  (testing ":formula — escape hatch (fn is (fn [base ctx]))"
     (is (== 42M (ts/apply-schedule {:schedule/type :formula
-                                    :fn (fn [_] 42M)} 999M))))
+                                    :fn (fn [_ _] 42M)} 999M))))
   (testing ":elect — same base, pick min/max"
     (is (== 250M (ts/apply-schedule {:schedule/type :elect :choose :min
                                      :schedules [(ts/flat 0.30M) (ts/flat 0.25M)]}
@@ -71,6 +71,53 @@
                   (== (ts/apply-schedule prog (bigdec base))
                       (ts/apply-schedule flat (bigdec base))))
                 (range 0 1000000 50000)))))
+
+;; ============================================================================
+;; ADR-099 addendum — base transform + component combinators (note 103)
+;; ============================================================================
+
+(deftest base-transform-shapes
+  (testing "nil / absent transform is the identity"
+    (is (== 1000M (ts/apply-base-transform nil 1000M)))
+    (is (== 1000M (ts/apply-base-transform {:transform/type :identity} 1000M))))
+  (testing ":presumption-ratio — BR Lucro Presumido (32% of revenue)"
+    (is (== 320M (ts/apply-base-transform
+                  {:transform/type :presumption-ratio :ratio 0.32M} 1000M))))
+  (testing ":adjustments — corporate book profit → taxable income"
+    (is (== 1150M (ts/apply-base-transform
+                   {:transform/type :adjustments
+                    :additions [200M] :deductions [50M]} 1000M))
+        "book 1000 + 200 add-back − 50 deduction"))
+  (testing ":formula — escape hatch"
+    (is (== 500M (ts/apply-base-transform
+                  {:transform/type :formula :fn (fn [b] (* b 0.5M))} 1000M))))
+  (testing "unknown :transform/type throws"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unknown :transform/type"
+                          (ts/apply-base-transform {:transform/type :bogus} 1M)))))
+
+(deftest component-combinators
+  (testing "greater-of — the minimum-tax shape (regular tax vs MAT)"
+    (is (== 500M (ts/greater-of 500M 300M)))
+    (is (== 500M (ts/greater-of 300M 500M))))
+  (testing "lesser-of — a liability cap"
+    (is (== 300M (ts/lesser-of 500M 300M)))
+    (is (== 300M (ts/lesser-of 300M 500M)))))
+
+(deftest formula-schedule-receives-ctx
+  ;; note 103 GAP 3 — the tax-unit reaches the schedule (the substrate seam
+  ;; FR quotient familial / DE Ehegattensplitting need).
+  (let [per-part {:schedule/type :formula
+                  :fn (fn [base ctx] (/ base (:parts ctx)))}]
+    (is (== 500M (ts/apply-schedule per-part 1000M {:parts 2M}))
+        "the schedule reads :parts from ctx")
+    (is (== 250M (ts/apply-schedule per-part 1000M {:parts 4M}))))
+  (testing ":elect threads ctx into its sub-schedules"
+    (let [s {:schedule/type :elect :choose :min
+             :schedules [{:schedule/type :formula :fn (fn [base ctx]
+                                                        (* base (:rate ctx)))}
+                         (ts/flat 0.40M)]}]
+      (is (== 200M (ts/apply-schedule s 1000M {:rate 0.20M}))
+          "0.20 (from ctx) beats the flat 0.40"))))
 
 ;; ============================================================================
 ;; TaxReturnFacts helpers

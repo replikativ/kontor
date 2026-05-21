@@ -23,7 +23,7 @@
                            module supplies for genuinely non-tabular
                            schedules (a notch, a taper)
 
-   ## Combinators
+   ## Schedule combinators
 
      :elect    apply several sub-schedules to the SAME base, pick the
                `:min` or `:max` — the taxpayer-election shape
@@ -31,16 +31,30 @@
                choice is an explicit input, the provider just passes
                the chosen sub-schedule directly.
 
+   ## Base transform — `apply-base-transform`
+
+   `apply-base-transform` is the stage BETWEEN the marginalized
+   aggregate and the schedule (ADR-099 addendum, note 103 GAP 1): the
+   taxable base is often not the raw aggregate but a transform of it —
+   a presumption ratio (BR Lucro Presumido: 8 %/32 % × revenue) or
+   book profit ± statutory add-backs (corporate income tax). Tagged
+   data over a closed `:transform/type` set; an absent transform is
+   the identity.
+
+   ## Component-level combinators
+
    `surtax-on` is the tax-on-a-tax operator — a rate applied to
    another component's *liability*, not to a base (DE Soli, JP
-   復興特別所得税, IN/BR cess). It is a component-level operation, not
-   a `base → liability` schedule, so it is a separate fn.
+   復興特別所得税, IN/BR cess).
 
-   Minimum-tax / AMT (`max` of two whole `(base, schedule)`
-   computations over *different* bases) is composed by the provider
-   at the `TaxReturnFacts` level — see note 102 §7 / §9-A; it is not
-   an `apply-schedule` shape because its arms do not share a base."
-  (:require [clojure.set]))
+   `greater-of` / `lesser-of` combine two already-computed component
+   liabilities — `greater-of` is the minimum-tax shape (AMT, IN MAT:
+   `max(regular-tax, minimum-tax)` where the two arms have DIFFERENT
+   bases, so it cannot be an `:elect` schedule — note 103 GAP 2).
+
+   All three are component-level operations, not `base → liability`
+   schedules, so they are separate fns — composed by the provider at
+   the `TaxReturnFacts` level.")
 
 ;; ============================================================================
 ;; Base shapes
@@ -76,8 +90,8 @@
 (declare apply-schedule)
 
 (defn- elect-tax
-  [{:keys [choose schedules]} base]
-  (let [liabilities (map #(apply-schedule % base) schedules)]
+  [{:keys [choose schedules]} base ctx]
+  (let [liabilities (map #(apply-schedule % base ctx) schedules)]
     (case choose
       :min (apply min liabilities)
       :max (apply max liabilities)
@@ -88,16 +102,59 @@
   "Run BigDecimal `base` through `schedule`, returning the BigDecimal
    gross liability. `schedule` is plain data tagged by
    `:schedule/type` — `:flat | :progressive-bracket | :capped |
-   :formula | :elect` (see the ns docstring)."
-  ^java.math.BigDecimal [schedule ^java.math.BigDecimal base]
-  (case (:schedule/type schedule)
-    :flat                (* base (:rate schedule))
-    :progressive-bracket (progressive-tax (:brackets schedule) base)
-    :capped              (capped-tax schedule base)
-    :formula             ((:fn schedule) base)
-    :elect               (elect-tax schedule base)
-    (throw (ex-info "apply-schedule: unknown :schedule/type"
-                    {:schedule schedule}))))
+   :formula | :elect` (see the ns docstring).
+
+   The optional `ctx` map is threaded to `:formula` schedules — its
+   `:tax-unit` lets a schedule depend on household / filing status
+   (FR quotient familial, DE Ehegattensplitting; note 103 GAP 3). A
+   `:formula` fn is `(fn [base ctx])`."
+  (^java.math.BigDecimal [schedule base]
+   (apply-schedule schedule base nil))
+  (^java.math.BigDecimal [schedule ^java.math.BigDecimal base ctx]
+   (case (:schedule/type schedule)
+     :flat                (* base (:rate schedule))
+     :progressive-bracket (progressive-tax (:brackets schedule) base)
+     :capped              (capped-tax schedule base)
+     :formula             ((:fn schedule) base ctx)
+     :elect               (elect-tax schedule base ctx)
+     (throw (ex-info "apply-schedule: unknown :schedule/type"
+                     {:schedule schedule})))))
+
+;; ============================================================================
+;; Base transform — the stage between the aggregate and the schedule
+;; ============================================================================
+
+(def transform-types
+  "The closed set of `:transform/type` values `apply-base-transform`
+   accepts. An absent / nil transform is the identity."
+  #{:identity :presumption-ratio :adjustments :formula})
+
+(defn apply-base-transform
+  "Transform a marginalized aggregate into the taxable `:base` before
+   the schedule (ADR-099 addendum, note 103 GAP 1). `transform` is
+   tagged data; `nil` / absent is the identity.
+
+     {:transform/type :identity}                  base unchanged
+     {:transform/type :presumption-ratio          ratio × base
+      :ratio <bigdec>}                            (BR Lucro Presumido)
+     {:transform/type :adjustments                base + Σadditions
+      :additions [<bigdec>] :deductions [<bigdec>]}  − Σdeductions
+                                                  (CIT book → taxable)
+     {:transform/type :formula :fn <fn>}          (fn base)"
+  ^java.math.BigDecimal [transform ^java.math.BigDecimal base]
+  (case (:transform/type transform)
+    nil                base
+    :identity          base
+    :presumption-ratio (* base (:ratio transform))
+    :adjustments       (- (+ base (reduce + 0M (:additions transform)))
+                          (reduce + 0M (:deductions transform)))
+    :formula           ((:fn transform) base)
+    (throw (ex-info "apply-base-transform: unknown :transform/type"
+                    {:transform transform}))))
+
+;; ============================================================================
+;; Component-level combinators
+;; ============================================================================
 
 (defn surtax-on
   "Tax-on-a-tax: a `rate` applied to a prior component's
@@ -105,6 +162,18 @@
    surtax, IN/BR cess). Both args BigDecimal."
   ^java.math.BigDecimal [^java.math.BigDecimal rate ^java.math.BigDecimal prior-liability]
   (* prior-liability rate))
+
+(defn greater-of
+  "The larger of two already-computed liabilities — the minimum-tax
+   shape (AMT, IN MAT: the two arms have different bases, so this is
+   a component-level `max`, not an `:elect` schedule; note 103 GAP 2)."
+  ^java.math.BigDecimal [^java.math.BigDecimal a ^java.math.BigDecimal b]
+  (if (>= (compare a b) 0) a b))
+
+(defn lesser-of
+  "The smaller of two already-computed liabilities — a liability cap."
+  ^java.math.BigDecimal [^java.math.BigDecimal a ^java.math.BigDecimal b]
+  (if (<= (compare a b) 0) a b))
 
 ;; ============================================================================
 ;; Constructors — sugar

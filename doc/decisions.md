@@ -9081,3 +9081,56 @@ Date: 2026-05-20.
 **Research backing.** Research note 102 (the design + the 11-legislation gap map + the §9 reconciliation); notes 100 / 101 (the transaction-tax precedent + the closed-vocabulary/open-implementation discipline).
 
 Date: 2026-05-21.
+
+### ADR-099 — Addendum 2026-05-21: coverage-proof gaps closed (research note 103)
+
+After ADR-099's substrate shipped, a two-agent coverage proof (research note
+103) verified it against a 44-cell `(tax-type × legislation)` matrix across all
+11 kontor legislations. Verdict: the design holds — 42/44 regular cells
+expressible, property tax and standalone payroll levies clean across all 11.
+But three gaps surfaced: each was foreseen by note 102 §9 yet had not been
+carried from the §1–§4 v1 spec into iteration-1's code. All three are closed
+here — small, additive, schema-free:
+
+- **GAP 1 — the base transform.** Corporate income tax's taxable base is book
+  profit ± statutory add-backs; BR Lucro Presumido's is a presumption ratio ×
+  revenue. The pipeline was `base-selector → schedule` with no stage between.
+  Added `kontor.tax-schedule/apply-base-transform` over a closed
+  `:transform/type` set (`:identity` / `:presumption-ratio` / `:adjustments` /
+  `:formula`; nil = identity) and an optional `:base-transform` component
+  field. The provider pipeline is now `marginalize → apply-base-transform →
+  apply-schedule`.
+
+- **GAP 2 — minimum tax over divergent bases.** `:elect` applies its
+  sub-schedules to one shared base; a genuine minimum tax (IN MAT, US AMT)
+  compares regular tax against a minimum on a *different* base. Added the
+  component-level combinators `greater-of` / `lesser-of` — `greater-of` is the
+  minimum-tax shape; the provider computes both arms and composes them,
+  recording the relationship in `:composed-of`.
+
+- **GAP 3 — the tax-unit reaching the schedule.** `:formula` schedules were
+  single-arity `(fn [base])`, so a household/filing-unit descriptor (FR
+  quotient familial, DE Ehegattensplitting) had to be closed over at
+  construction. `apply-schedule` now has a 3-arity `[schedule base ctx]` (the
+  2-arity threads `ctx` = nil); `:formula` fns are `(fn [base ctx])` and read
+  `:tax-unit` from `ctx`. `:elect` threads `ctx` into its sub-schedules.
+
+**The `:inputs` capital-loss-carryforward convention.** note 103 §3a: the
+capital-loss carry-in uses the fixed key `:inputs {:capital-loss-carryforward
+{:short <Money> :long <Money>}}`; the residual after netting is reported in the
+component's `:line-items`. A documented convention, no code — it closes the
+`s3.clj` "handled at the NoA-ingestion layer" hole.
+
+**Capital gains — sequencing.** note 103 confirms CGT is v1-expressible (gains
+fed via `:inputs`, the `s3.clj` pattern) for CA/AT/FR/CN/IN; the 6
+jurisdictions with holding-period splits or non-trivial cost-base rules
+(US/AU/JP/DE/IN/MX) need a `:disposal/*` data model for a faithful build — a
+companion module, zero kernel change, deferred and named. note 102 §10 is
+revised: `:inputs`-fed CGT ships with the CA T1 pilot (CA folds CGT into
+income).
+
+**Tested.** `period_tax_provider_test.clj` — 11 tests / 44 assertions: the
+three new capabilities (`apply-base-transform` over all shapes, `greater-of` /
+`lesser-of`, `:formula`/`:elect` threading `ctx`) plus the iteration-1 suite.
+
+Date: 2026-05-21.

@@ -74,6 +74,10 @@
 ;; A component map (see note 102 §2):
 ;;   {:kind         <closed period-tax-kinds enum>
 ;;    :base         <Money>   the resolved taxable base (base-selector output)
+;;    :base-transform <data>  optional kontor.tax-schedule transform from the
+;;                            marginalized aggregate to :base — corporate
+;;                            add-backs / BR Lucro Presumido (ADR-099
+;;                            addendum, note 103 GAP 1)
 ;;    :schedule     <data>    the kontor.tax-schedule that produced the gross
 ;;    :gross-liability <Money> base through the schedule, before credits
 ;;    :credits      [<{:code :label :amount}>]  credits applied
@@ -119,9 +123,13 @@
                        schedules indexed by it (FR quotient familial;
                        note 102 §9-D)
        :inputs       — out-of-books facts the provider needs that are
-                       NOT derivable from postings (a prior-year loss
-                       carryforward, a presumptive base, a property
-                       assessed value, a regime election; note 102 §7)
+                       NOT derivable from postings: a presumptive base,
+                       a property assessed value, a regime election
+                       (note 102 §7). The capital-loss carry-in uses a
+                       fixed key — `:inputs {:capital-loss-carryforward
+                       {:short <Money> :long <Money>}}` — and the residual
+                       is reported back in `:line-items` (ADR-099
+                       addendum, note 103 §3a).
 
      Determination is pure: it reads the db, never writes."))
 

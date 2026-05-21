@@ -198,7 +198,7 @@ src/kontor/    kernel
   book.clj                  kontor.book verb facade — receive/pay/sell/buy/… (ADR-095)
   tax_rate_provider.clj     TaxRateProvider + TaxFacts + StaticTableProvider (ADR-071)
   tax_posting_builder.clj   TaxPostingBuilder + StaticTablePostingBuilder (ADR-071)
-  tax_schedule.clj          schedule algebra — flat/bracket/capped/formula/elect (ADR-099)
+  tax_schedule.clj          schedule algebra — flat/bracket/capped/formula/elect + base-transform (ADR-099)
   period_tax_provider.clj   PeriodTaxProvider + TaxReturnFacts (ADR-099)
   tax_return_posting_builder.clj  TaxReturnPostingBuilder — provision/payment (ADR-099)
   tax.clj                   apply-tax to a posting
