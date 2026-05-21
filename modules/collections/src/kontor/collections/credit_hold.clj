@@ -226,12 +226,16 @@
      :expires-at      instant (auto-release boundary; nil = manual)
      :notes           string
      :supporting-doc  ref to :audit-doc
+     :placed-at       instant the hold was placed (default = now).
+                      The active-check compares `:placed-at` against
+                      a query's `:as-of-valid`, so a backdated
+                      placement should set this alongside `:vt-from`.
      :vt-from         valid-time start (default = now)
      :vt-to           valid-time end (default = kbt/forever)
 
    The pure tx-data builder is `place-hold-tx-data`."
-  [conn {:keys [vt-from vt-to] :as opts}]
-  (let [placed-at (java.util.Date.)]
+  [conn {:keys [vt-from vt-to placed-at] :as opts}]
+  (let [placed-at (or placed-at (java.util.Date.))]
     (validation/transact-with-validation
      conn (kbt/with-vt (place-hold-tx-data
                         (d/db conn) (assoc opts :placed-at placed-at))

@@ -214,11 +214,18 @@
 ;; ============================================================================
 
 (deftest credit-hold-expires-at-auto-releases
+  ;; :placed-at + :vt-from pin the placement to a fixed past date so
+  ;; the :as-of-valid assertions below are deterministic. Without them
+  ;; both default to wall-clock now, and "hold active before
+  ;; :expires-at" (:as-of-valid 2026-05-20) fails once the clock
+  ;; reaches that date — a time-bomb on a hardcoded near-future #inst.
   (chold/place-hold! *conn*
                      {:partner (partner "CUST")
                       :entity (entity "ACME-DE")
                       :reason-code :manual
                       :placed-by-uid (actor "alice")
+                      :placed-at #inst "2026-05-01"
+                      :vt-from #inst "2026-05-01"
                       :expires-at #inst "2026-05-30"})
   (testing "hold active before :expires-at"
     (is (= :hold (chold/credit-status-for
