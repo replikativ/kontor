@@ -73,6 +73,11 @@
 
 ;; A component map (see note 102 §2):
 ;;   {:kind         <closed period-tax-kinds enum>
+;;    :authority    <kw|nil>  the taxing authority for this component —
+;;                            lets one return fan out across governments
+;;                            (CA federal :cra + provincial :bc; US 50
+;;                            states). nil = the return's top-level
+;;                            :jurisdiction
 ;;    :base         <Money>   the resolved taxable base (base-selector output)
 ;;    :base-transform <data>  optional kontor.tax-schedule transform from the
 ;;                            marginalized aggregate to :base — corporate
