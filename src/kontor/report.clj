@@ -54,7 +54,6 @@
   (:require [clojure.set]
             [clojure.string :as str]
             [datahike.api :as d]
-            [kontor.bitemporal :as kbt]
             [kontor.fx :as fx]
             [kontor.money :as money])
   (:import [java.util Date]))
@@ -84,6 +83,7 @@
                         :posting/transaction
                         {:posting/ledger [:db/id]}
                         {:posting/entity [:db/id]}
+                        {:posting/partner [:db/id]}
                         {:posting/account [:account/code
                                            :account/type
                                            :account/tags]}
@@ -119,6 +119,7 @@
            :tx-state tx-state
            :ledger-eid (:db/id (:posting/ledger pulled))
            :entity-eid (:db/id (:posting/entity pulled))
+           :partner-eid (:db/id (:posting/partner pulled))
            :account-code (:account/code account)
            :account-type (:account/type account)
            :all-tags (clojure.set/union acct-tag-names posting-tag-names))))
@@ -149,8 +150,81 @@
     stored-amount))
 
 ;; ============================================================================
-;; Engines
+;; Engines — every report line is a quotient epimorphism σ_E (ADR-096)
+;;
+;; A report line sums the postings of ONE class under some partition.
+;; `sum-postings` is the shared fold; `marginalize` is the full σ_E
+;; (every class at once); the `run-engine` methods are the per-line
+;; views — `:account-codes` and `:tax-tags` (the historical engines,
+;; kept behaviour-identical) and the generic `:dimension`.
 ;; ============================================================================
+
+(defn- amount-of
+  "The signed BigDecimal a posting contributes under `sign`
+   (`:raw` = stored; `:inflow` = natural-increase side)."
+  [p sign]
+  (let [stored (:posting/amount p)]
+    (case sign
+      :inflow (natural-sign (:account-type p) stored)
+      :raw    stored)))
+
+(defn- sum-postings
+  "Fold a seq of pulled postings into `{:value Money :postings [eid…]}`
+   — the shared tail of every engine."
+  [postings sign commodity]
+  (let [sum (reduce (fn [^java.math.BigDecimal acc p]
+                      (.add acc ^java.math.BigDecimal (amount-of p sign)))
+                    java.math.BigDecimal/ZERO
+                    postings)]
+    {:value    (money/money sum (or commodity :EUR))
+     :postings (mapv :db/id postings)}))
+
+;; The built-in classification dimensions a `marginalize` / `:dimension`
+;; engine can partition over. Each maps an axis keyword to a function
+;; pulled-posting → class. `:account-tags` is set-valued — a posting
+;; carries several tags, so a tag-marginalization is a covering, not a
+;; strict partition (it may double-count; that is expected for tags).
+(def ^:private dimension-extractors
+  {:account-type :account-type
+   :account-code :account-code
+   :ledger       :ledger-eid
+   :entity       :entity-eid
+   :commodity    :posting/commodity
+   :partner      :partner-eid
+   :account-tags :all-tags})
+
+(def ^:private set-valued-dimensions #{:account-tags})
+
+(defn marginalize
+  "The quotient epimorphism σ_E (note 97 §3): partition `postings` by
+   `dimension` and sum within each class. `dimension` is a built-in
+   axis keyword (see `dimension-extractors`) or a function
+   posting→class. Returns `{class {:value Money :postings [eid…]}}`.
+
+   For a scalar axis this is a true partition — every posting lands in
+   exactly one class, and the classes' values sum to the grand total.
+   For the set-valued `:account-tags` axis a posting contributes to
+   each tag-class it carries (a covering).
+
+   Opts: `:sign` (`:raw` | `:inflow`, default `:raw`) and `:commodity`
+   (default `:EUR`)."
+  ([postings dimension] (marginalize postings dimension {}))
+  ([postings dimension {:keys [sign commodity] :or {sign :raw commodity :EUR}}]
+   (let [extract  (cond
+                    (fn? dimension)              dimension
+                    (dimension-extractors dimension) (dimension-extractors dimension)
+                    :else (throw (ex-info "marginalize: unknown dimension"
+                                          {:dimension dimension
+                                           :supported (set (keys dimension-extractors))})))
+         set-axis? (contains? set-valued-dimensions dimension)
+         grouped  (reduce (fn [acc p]
+                            (let [v (extract p)]
+                              (if set-axis?
+                                (reduce #(update %1 %2 (fnil conj []) p) acc (or v #{}))
+                                (update acc v (fnil conj []) p))))
+                          {}
+                          postings)]
+     (update-vals grouped #(sum-postings % sign commodity)))))
 
 (defmulti run-engine
   "Dispatch on (:engine expression). Each engine receives the
@@ -171,43 +245,39 @@
 
 (defmethod run-engine :account-codes
   [postings {:keys [codes sign commodity] :or {sign :raw commodity :EUR}} _opts]
-  (let [matched (filter (fn [p]
+  (sum-postings (filter (fn [p]
                           (let [code (:account-code p)]
                             (and (some? code) (code-prefix-match? code codes))))
                         postings)
-        amounts (mapv (fn [p]
-                        (let [stored (:posting/amount p)]
-                          (case sign
-                            :inflow (natural-sign (:account-type p) stored)
-                            :raw    stored)))
-                      matched)
-        sum (if (seq amounts)
-              (reduce (fn [^java.math.BigDecimal a ^java.math.BigDecimal b] (.add a b))
-                      java.math.BigDecimal/ZERO
-                      amounts)
-              java.math.BigDecimal/ZERO)]
-    {:value (money/money sum (or commodity :EUR))
-     :postings (mapv :db/id matched)}))
+                sign commodity))
 
 (defmethod run-engine :tax-tags
   [postings {:keys [tags sign commodity] :or {sign :raw commodity :EUR}} _opts]
-  (let [tag-set (set tags)
-        matched (filter (fn [p]
-                          (seq (clojure.set/intersection tag-set (:all-tags p))))
-                        postings)
-        amounts (mapv (fn [p]
-                        (let [stored (:posting/amount p)]
-                          (case sign
-                            :inflow (natural-sign (:account-type p) stored)
-                            :raw    stored)))
-                      matched)
-        sum (if (seq amounts)
-              (reduce (fn [^java.math.BigDecimal a ^java.math.BigDecimal b] (.add a b))
-                      java.math.BigDecimal/ZERO
-                      amounts)
-              java.math.BigDecimal/ZERO)]
-    {:value (money/money sum (or commodity :EUR))
-     :postings (mapv :db/id matched)}))
+  (let [tag-set (set tags)]
+    (sum-postings (filter (fn [p]
+                            (seq (clojure.set/intersection tag-set (:all-tags p))))
+                          postings)
+                  sign commodity)))
+
+(defmethod run-engine :dimension
+  ;; The generic σ_E line: sum the postings of one class under a
+  ;; built-in axis. `:match` is the class value (or a collection — any
+  ;; of). For the set-valued `:account-tags` axis, `:match` is matched
+  ;; by intersection.
+  [postings {:keys [dimension match sign commodity] :or {sign :raw commodity :EUR}} _opts]
+  (let [extract   (or (dimension-extractors dimension)
+                      (throw (ex-info "run-engine :dimension — unknown dimension"
+                                      {:dimension dimension
+                                       :supported (set (keys dimension-extractors))})))
+        match-set (if (coll? match) (set match) #{match})
+        set-axis? (contains? set-valued-dimensions dimension)]
+    (sum-postings (filter (fn [p]
+                            (let [v (extract p)]
+                              (if set-axis?
+                                (seq (clojure.set/intersection match-set (or v #{})))
+                                (contains? match-set v))))
+                          postings)
+                  sign commodity)))
 
 (defmethod run-engine :default
   [_ expression _opts]
@@ -255,6 +325,35 @@
         (throw (ex-info "compute-report: :entity not found" {:entity entity-spec})))
       (fn [p] (= id (:entity-eid p))))))
 
+(defn report-postings
+  "Fetch + bitemporally filter the postings a report sees, returning a
+   vector of pulled posting maps — the shape the `run-engine` engines
+   and `marginalize` (the σ_E primitive) consume. Exposed so a
+   consumer can `marginalize` directly without going through a full
+   report definition.
+
+   Options (the posting-selection subset of `compute-report`'s):
+   `:from` `:to` `:as-of-tx` `:include-states` `:ledger` `:entity`
+   `:posting-filter` — see `compute-report` for each."
+  ([conn] (report-postings conn {}))
+  ([conn {:keys [from to as-of-tx include-states ledger entity posting-filter]
+          :or   {include-states default-included-states}}]
+   (let [as-of-tx    (or as-of-tx (now))
+         db          (-> conn d/db (d/as-of as-of-tx))
+         ledger-pred (ledger-filter-pred db ledger)
+         entity-pred (entity-filter-pred db entity)
+         all-pids    (d/q (into '[:find [?p ...] :where [?p :posting/account _]]
+                                (or posting-filter []))
+                          db)]
+     (into []
+           (comp (map #(pull-posting db %))
+                 (filter (fn [p]
+                           (and (in-window? p from to)
+                                (contains? include-states (:tx-state p))
+                                (ledger-pred p)
+                                (entity-pred p)))))
+           all-pids))))
+
 (defn compute-report
   "Run a report definition against `conn` and return:
 
@@ -273,6 +372,15 @@
      :include-states — set of :transaction/state values to include
                        (default: #{:posted}). Drafts excluded so the
                        report reflects what's actually been posted.
+     :posting-filter — optional vector of extra datalog :where clauses
+                       (the posting is bound to `?p`) appended to the
+                       candidate-posting query. Lets a consumer narrow
+                       the pull-all-postings scan at the datalog level
+                       — e.g. `[[?p :posting/posted-at ?pa]
+                       [(< ?pa #inst \"2027-01-01\")]]`, or by a
+                       literal ledger/entity eid. nil = scan all.
+                       (A materialized / incremental report is a
+                       deferred follow-up; this is the cheap mitigation.)
      :ledger         — optional ledger eid / lookup-ref. When set,
                        only postings on that ledger are summed (ADR-021
                        parallel books — the HGB-vs-IFRS Jahresabschluss
@@ -300,25 +408,13 @@
      :rate-type      — IAS 21 rate-type keyword for translation
                        (default `:closing`)."
   ([conn report] (compute-report conn report {}))
-  ([conn report {:keys [from to as-of-tx include-states ledger entity
-                        translate-to fx-provider rate-type]
-                 :or   {include-states default-included-states
-                        rate-type :closing}}]
+  ([conn report {:keys [from to translate-to fx-provider rate-type]
+                 :or   {rate-type :closing}
+                 :as   opts}]
    (when (and translate-to (nil? fx-provider))
      (throw (ex-info "compute-report: :translate-to requires :fx-provider"
                      {:translate-to translate-to})))
-   (let [as-of-tx (or as-of-tx (now))
-         db (-> conn d/db (d/as-of as-of-tx))
-         ledger-pred (ledger-filter-pred db ledger)
-         entity-pred (entity-filter-pred db entity)
-         all-pids (d/q '[:find [?p ...] :where [?p :posting/account _]] db)
-         pulled (mapv #(pull-posting db %) all-pids)
-         filtered (filter (fn [p]
-                            (and (in-window? p from to)
-                                 (contains? include-states (:tx-state p))
-                                 (ledger-pred p)
-                                 (entity-pred p)))
-                          pulled)
+   (let [filtered     (report-postings conn opts)
          translate-at (or to (now))
          lines (mapv (fn [{:keys [:line/code :line/label :line/expression]}]
                        (let [{:keys [value postings]} (run-engine filtered expression {})

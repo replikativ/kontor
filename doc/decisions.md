@@ -8947,3 +8947,31 @@ The friction the facade removes: there is no small, named, uniform on-ramp. A co
 **Research backing.** `doc/research/99-event-driven-accounting-staged-plan.md` (Stage 1); notes 97 (the critical reading), 80 (the McComb map).
 
 Date: 2026-05-20.
+
+## ADR-096 — The report engine as a family of marginalizations (σ_E)
+
+**Status.** Accepted. Stage 3a of research note 99.
+
+**Context.** Research note 97 §3 established that, in the algebra of accounting (Cruz Rambaud's balance module), a report — the balance sheet, a P&L, a tax-return box, a consolidation — is a **quotient epimorphism `σ_E`**: partition the postings by some equivalence `E` and sum within each class. `kontor.report` had two hard-wired `defmulti` engines (`:account-codes`, `:tax-codes`) — each genuinely a `σ_E` for one specific partition, but the partition was not first-class and there was no way to aggregate over an arbitrary dimension. The chart of accounts was the only axis a report could pivot on.
+
+**Decision.** Generalize `kontor.report` so the engine is dimension-agnostic. No schema change; the kernel namespace is the designed extension point.
+
+1. **`sum-postings`** — the shared fold every engine ends in: filter → signed-amount (`:raw` | `:inflow`) → reduce → `{:value Money :postings [eid…]}`. Extracted so the engines stop duplicating it.
+
+2. **`marginalize`** — the `σ_E` primitive. `(marginalize postings dimension opts)` partitions `postings` by `dimension` (a built-in axis keyword or a `posting→class` function) and `sum-postings` each class, returning `{class {:value :postings}}`. For a scalar axis this is a true partition — the classes' values sum to the grand total (a marginalized trial balance is `Ker σ`); for the set-valued `:account-tags` axis it is a covering.
+
+3. **Built-in dimensions** — `:account-type`, `:account-code`, `:ledger`, `:entity`, `:commodity`, `:partner`, `:account-tags` — each resolvable from the pulled-posting map (`pull-posting` gained `:posting/partner`). These are CBox-style classifications in McComb's TBox/CBox/ABox split (note 99 DCR sharpening): consumer-governed taxonomies, not kernel structure.
+
+4. **`:dimension` engine** — a generic `run-engine` method: `{:engine :dimension :dimension <axis> :match <value-or-coll>}` sums the one class. The historical `:account-codes` and `:tax-tags` engines were **rewritten to delegate to `sum-postings`** — byte-identical behaviour (same filter, same fold) — so the 11 l10n tax-return modules that consume them are untouched.
+
+5. **`report-postings`** — public fetch+bitemporal-filter, returning the pulled-posting vector the engines / `marginalize` consume. Exposed so `marginalize` is usable as a standalone `σ_E` primitive, not only through a report definition.
+
+6. **`:posting-filter`** — an optional vector of extra datalog `:where` clauses on `compute-report`, appended to the candidate-posting query so a consumer can narrow the O(all-postings) scan at the datalog level (the cheap mitigation — a materialized / incremental report stays a deferred follow-up).
+
+**Acceptance.** `test/kontor/report_test.clj` — `marginalize` over `:account-type` reproduces the balance sheet (each class correct; classes sum to zero — `Ker σ`); the `:dimension` engine on scalar and set axes; `:account-codes` / `:tax-tags` unchanged; `:posting-filter` narrows. The 11 l10n tax-return modules' tests are the behaviour-identical regression gate (full `bb test`).
+
+**Implication.** Kernel, **no schema change**, strictly additive — pure generalization of an existing namespace. A pre-existing dead `kontor.bitemporal` require in `report.clj` was removed in passing. Stage 3b (ADR-097) adds the `:posting/dimension` schema so a posting can carry classification axes beyond `:account` — `marginalize` already supports the axis once the data exists.
+
+**Research backing.** `doc/research/97-commitment-event-accounting-three-layer-model.md` §3 (reports as quotient epimorphisms); note 99 Stage 3a.
+
+Date: 2026-05-20.
