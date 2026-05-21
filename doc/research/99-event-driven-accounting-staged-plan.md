@@ -190,6 +190,52 @@ after Move 2. S5 interleaved-cheap. S6 last.
   dimension` deliberately does NOT replicate it; the contrast must
   be documented or it confuses future contributors.
 
+## DCR cross-check + sharpening (2026-05-20)
+
+A research agent read McComb's earlier book *The Data-Centric
+Revolution* (2019) against this plan. **Verdict: DCR supports the
+deflation.** Its own doctrine — thin operations over a stable core,
+"think big, start small," an explicit warning against "think big,
+implement big" — *is* note 99's deflation in different words; a
+stored-`:event` / θ-as-data framework would be the implement-big move
+DCR warns against. No stage or sequencing changes. Concrete
+sharpening to fold into the per-stage ADRs:
+
+- **ADR-096/097 — adopt McComb's TBox / CBox / ABox split.**
+  `:posting/dimension` is a **CBox** mechanism (consumer-governed
+  taxonomies / enumerated lists), explicitly contrasted with
+  TBox-governed structure like `:account-type`. This is the clean
+  external name for the `:posting/account-tags`-materialization
+  contrast the Risks section flags.
+- **ADR-097 — "taxonomies are flat tags."** `:posting-dimension/
+  {axis,value}` values are tags, not entities with their own
+  relational web. Name **axis-as-attribute** (`:posting/cost-center`
+  instead of a `:posting-dimension` row) as the documented
+  anti-pattern, citing DCR's SNOMED/Montefiore case.
+- **ADR-098 — scope sentence "recognition and liquidation of
+  obligations"** (DCR Ch. 12); adopt the bilateral
+  obligor/obligee/**evidence** shape (the WorkComp case) as warrant
+  for the single `:commitment` entity + opt-in `:commitment/origin`
+  soft link.
+- **Deferred commitment-unification is McComb-endorsed.** DCR's
+  WorkComp "reducing schema variety" case is the documented
+  justification — record in ADR-098 that the named later pass is the
+  natural next stage, not optional.
+- **ADR-095 — state the verb-set acceptance criterion as an
+  orphan-class / coverage-per-concept test:** no verb without a real
+  business event, no business event without a verb. DCR offers no
+  operation-design theory — change no signatures.
+- **Stage 6 docs** — borrow DCR's "writing queries becomes a pruning
+  exercise" as the plain-language gloss on `marginalize` / `σ_E`.
+- **Do NOT** let DCR's "the chart is just a report-axis" reopen the
+  `:account`-stays-mandatory call — note 97 §8's analytic/synthetic
+  split already settled it (`:account` backs `Ker(σ)` — grammar, not
+  a contingent taxonomy).
+
+Ignored as non-transferable (settled by note 80): the RDF / SPARQL /
+OWL / SHACL stack, global-URI identity, schema-later, model-driven
+UI/security, and the change-management ~60% of the book.
+
 ## Sources
 
 Internal: notes 80 / 88 / 97 / 98; note 95 (consistency audit);
