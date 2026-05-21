@@ -8904,3 +8904,31 @@ If a third German-language country lands (a Swiss-DACH adapter or a Liechtenstei
 **Research backing.** `doc/research/80-payroll-at-research.md`.
 
 Date: 2026-05-18.
+
+## ADR-095 — `kontor.book`: the verb facade
+
+**Status.** Accepted. Stage 1 of research note 99.
+
+**Context.** The McComb round (notes 80 / 88 / 97 / 98) and the critical reading in note 97 concluded that kontor does *not* build a stored-`:event` / θ-as-data framework: kontor's ~200 `*-tx-data` builders + `!` wrappers (ADR-068) already *are* the event vocabulary, spelled as function calls; sealing (ADR-007) neutralizes the framework's re-derivability payoff; "events" are the dispatch operations kontor already provides. Note 99 deflated the scope to three targeted moves. This ADR is move 1.
+
+The friction the facade removes: there is no small, named, uniform on-ramp. A consumer posting a sale hand-assembles a `{:transaction {…} :postings [{…} {…}]}` map for `kontor.posting/post-transaction!`. The tedious, error-prone part is building the postings vector and remembering the header's required fields.
+
+**Decision.** Ship a new kernel namespace `kontor.book` — *organizing sugar*, not a new layer.
+
+1. **One builder.** `entry-tx-data` is the single pure ADR-068 builder behind every verb (composable into a `kontor.process` step list); it requires `:journal` + `:effective-date` explicitly. `entry!` routes it through the validation gate via `post-transaction!`, and adds two ergonomic conveniences: it resolves `:journal` from a `:journal/type` when `:journal` is absent, and defaults `:effective-date` to now.
+
+2. **Eight named verbs as `!`-side conveniences** — `receive!` `pay!` `sell!` `buy!` `receive-payment!` `pay-bill!` `transfer!` `adjust!`. Each delegates to `entry!` with a baked-in `:journal/type` and carries a teaching docstring. There is no per-verb `*-tx-data` builder: there is exactly one business write here (post a balanced transaction), and `entry-tx-data` is it. The verbs are the named front door.
+
+3. **Uniform signature.** One options map: `:debit-account` / `:credit-account` / `:amount` / `:commodity` / `:effective-date` / `:journal` (+ optional `:narration` / `:partner` / `:external-id`). `adjust!` instead takes `:postings` — a vector of friendly `{:account :amount :commodity?}` maps — for multi-leg / judgment entries (the synthetic residue of note 97 §8). The credit leg's amount is the negation of the debit leg's; sum-to-zero (`Ker(σ)`) holds by construction.
+
+4. **`:debit-account` / `:credit-account`, not role-named keys.** kontor's facade audience is Clojure developers (ADR-010 — no UI); a two-leg entry has exactly two slots; naming them per-verb relocates rather than removes the debit/credit decision. The verb name + docstring teach the convention.
+
+5. **Namespace name.** `kontor.book` — "to book a transaction" is the accounting term of art, and the namespace is free (`kontor.event` collides conceptually with ADR-092's `kontor.event-bus`; `kontor.activity` overlaps `kontor.process`; `record` is a `clojure.core` name).
+
+**Acceptance criterion (orphan-class test, per note 99 DCR sharpening).** No verb without a real business event behind it; no common business event without a verb. The "minimal 8" close a complete cash + accrual single-entity book — verified end-to-end in `book_test.clj` (`buy → sell → receive-payment → pay-bill`, zero trial balance, balances matching a hand-built `post-transaction!` baseline).
+
+**Implication.** One new kernel namespace, **zero schema change**, strictly additive — pure sugar over existing kernel builders. The verb signature is a published surface and is treated with the care ADR-068 gives `*-tx-data`. Deliberately excluded from the kernel facade: `deliver` (needs a `CostingProvider` — it is the inventory companion's verb) and `order` (a commitment, not a posting — Stage 4 / ADR-098).
+
+**Research backing.** `doc/research/99-event-driven-accounting-staged-plan.md` (Stage 1); notes 97 (the critical reading), 80 (the McComb map).
+
+Date: 2026-05-20.
