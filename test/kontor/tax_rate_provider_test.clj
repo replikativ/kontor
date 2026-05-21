@@ -150,3 +150,137 @@
       (is (= [] (tpb/compute-tax-postings prov bld
                                           {:base 1000 :commodity eur
                                            :country-code "US" :tax-use :sale :at at}))))))
+
+;; ============================================================================
+;; G1 (reverse charge) + G4 (withholding) — ADR-071 addendum / research note 101
+;; ============================================================================
+
+(defn- acct [conn path]
+  (d/q '[:find ?a . :in $ ?p :where [?a :account/path ?p]] (d/db conn) path))
+
+(defn- fresh-mechanism-db
+  "A db with reverse-charge taxes (country \"RC\", buyer + seller side)
+   and a withholding tax (country \"WH\", seller side — the MX
+   retención shape). Distinct country codes keep each `rate-facts`
+   query to exactly one component."
+  []
+  (let [conn (core/create-test-db)]
+    (d/transact conn
+                [{:commodity/symbol "EUR" :commodity/name "Euro" :commodity/precision 2}
+                 {:account/path "Assets:Input-VAT"       :account/type :asset}
+                 {:account/path "Liabilities:Output-VAT" :account/type :liability}
+                 {:account/path "Assets:WH-Receivable"   :account/type :asset}
+                 ;; reverse charge needs a :tax-group with BOTH accounts
+                 {:db/id "rc-grp" :tax-group/name "RC VAT" :tax-group/country-code "RC"
+                  :tax-group/payable-account    [:account/path "Liabilities:Output-VAT"]
+                  :tax-group/receivable-account [:account/path "Assets:Input-VAT"]}
+                 {:db/id "t-rc-pur" :tax/code "RC-19-PUR" :tax/name "RC 19% (purchase)"
+                  :tax/country-code "RC" :tax/type-tax-use :purchase
+                  :tax/amount-type :percent :tax/amount 0.19M
+                  :tax/recoverable? true :tax/active true
+                  :tax/mechanism :reverse-charge :tax/tax-group "rc-grp"}
+                 {:db/id "t-rc-sale" :tax/code "RC-19-SALE" :tax/name "RC 19% (sale)"
+                  :tax/country-code "RC" :tax/type-tax-use :sale
+                  :tax/amount-type :percent :tax/amount 0.19M
+                  :tax/recoverable? true :tax/active true
+                  :tax/mechanism :reverse-charge :tax/tax-group "rc-grp"}
+                 {:db/id "t-wh" :tax/code "WH-ISR-10" :tax/name "Withholding ISR 10%"
+                  :tax/country-code "WH" :tax/type-tax-use :sale
+                  :tax/amount-type :percent :tax/amount 0.10M
+                  :tax/recoverable? false :tax/active true
+                  :tax/mechanism :withholding}
+                 {:tax-rep/tax "t-wh" :tax-rep/document-type :invoice
+                  :tax-rep/repartition-type :tax :tax-rep/factor-percent 100M
+                  :tax-rep/account [:account/path "Assets:WH-Receivable"]
+                  :tax-rep/sequence 0}])
+    conn))
+
+;; --- G1 reverse charge -------------------------------------------------------
+
+(deftest reverse-charge-buyer-side-emits-both-legs
+  (let [conn  (fresh-mechanism-db)
+        prov  (trp/make-static-table-provider conn)
+        bld   (tpb/make-static-table-posting-builder conn)
+        facts (trp/rate-facts prov {:base 1000 :commodity eur
+                                    :country-code "RC" :tax-use :purchase :at at})
+        in-vat  (acct conn "Assets:Input-VAT")
+        out-vat (acct conn "Liabilities:Output-VAT")]
+    (is (= :reverse-charge (:kind (first (:components facts)))))
+    (let [ps (tpb/tax-postings bld facts {})
+          by-acct (fn [a] (some #(when (= a (:posting/account %)) %) ps))]
+      (is (= 2 (count ps)) "buyer self-assesses both halves")
+      (is (== 190M  (:posting/amount (by-acct in-vat)))  "Dr input-VAT")
+      (is (== -190M (:posting/amount (by-acct out-vat))) "Cr output-VAT")
+      (is (zero? (reduce + (map :posting/amount ps))) "the pair self-nets"))
+    (is (== 0M (trp/net-tax-effect facts)) "reverse charge is cash-neutral")))
+
+(deftest reverse-charge-seller-side-emits-no-tax-leg
+  (let [conn  (fresh-mechanism-db)
+        prov  (trp/make-static-table-provider conn)
+        bld   (tpb/make-static-table-posting-builder conn)
+        facts (trp/rate-facts prov {:base 1000 :commodity eur
+                                    :country-code "RC" :tax-use :sale :at at})]
+    (is (= :reverse-charge (:kind (first (:components facts)))))
+    (is (= [] (tpb/tax-postings bld facts {}))
+        "seller side: VAT-return marker only, no GL tax leg")))
+
+;; --- G4 withholding ----------------------------------------------------------
+
+(deftest withholding-posts-as-a-contra
+  (let [conn  (fresh-mechanism-db)
+        prov  (trp/make-static-table-provider conn)
+        bld   (tpb/make-static-table-posting-builder conn)
+        facts (trp/rate-facts prov {:base 1000 :commodity eur
+                                    :country-code "WH" :tax-use :sale :at at})
+        wh-recv (acct conn "Assets:WH-Receivable")]
+    (is (= :withholding (:kind (first (:components facts)))))
+    (let [ps (tpb/tax-postings bld facts {})]
+      (is (= 1 (count ps)))
+      (is (= wh-recv (:posting/account (first ps))))
+      (is (== 100M (:posting/amount (first ps)))
+          "sale → withholding is a debit to a receivable (+) — inverted from VAT"))
+    (testing "withholding nets the cash leg DOWN"
+      (is (== 100M  (trp/withheld-total facts)))
+      (is (== 0M    (trp/additive-total facts)))
+      (is (== -100M (trp/net-tax-effect facts))))))
+
+(deftest withholding-invoice-balances-end-to-end
+  ;; note 101 §5: a withholding sale must still land in Ker σ once the
+  ;; consumer assembles base legs sized by net-tax-effect.
+  (let [conn   (fresh-mechanism-db)
+        prov   (trp/make-static-table-provider conn)
+        bld    (tpb/make-static-table-posting-builder conn)
+        net    1000M
+        facts  (trp/rate-facts prov {:base net :commodity eur
+                                     :country-code "WH" :tax-use :sale :at at})
+        tax-ps (tpb/tax-postings bld facts {})
+        ar-leg (+ net (trp/net-tax-effect facts))
+        base-ps [{:posting/amount ar-leg}       ;; Dr Accounts-Receivable
+                 {:posting/amount (- net)}]     ;; Cr Revenue
+        all     (concat base-ps tax-ps)]
+    (is (== 900M ar-leg) "AR = net 1000 − withholding 100")
+    (is (zero? (reduce + (map :posting/amount all)))
+        "base + tax legs sum to zero (Ker σ)")))
+
+;; --- the netting helpers + the closed-vocabulary check -----------------------
+
+(deftest netting-helpers-on-a-mixed-tax-facts
+  ;; an MX-style retención sale: output VAT 160 (additive) + retención 106.67
+  (let [facts (trp/tax-facts
+               {:tax-use :sale :line-base 1000M :commodity eur
+                :components [{:kind :output-vat  :amount 160M}
+                             {:kind :withholding :amount 106.67M}]})]
+    (is (== 160M    (trp/additive-total facts)))
+    (is (== 106.67M (trp/withheld-total facts)))
+    (is (== 53.33M  (trp/net-tax-effect facts)) "AR leg adjustment = net + 53.33")
+    (is (== 266.67M (trp/total-tax facts)) "total-tax still sums the gross notional")))
+
+(deftest valid-tax-facts-is-the-closed-vocabulary-check
+  (is (true?  (trp/valid-tax-facts?
+               (trp/tax-facts {:components [{:kind :output-vat :amount 19M}]}))))
+  (is (false? (trp/valid-tax-facts?
+               (trp/tax-facts {:components [{:kind :not-a-real-kind :amount 19M}]})))
+      "a :kind outside the closed set fails — the signal to extend the enum by ADR")
+  (is (false? (trp/valid-tax-facts?
+               (trp/tax-facts {:components [{:kind :output-vat :amount 19.0}]})))
+      "a non-BigDecimal :amount fails the structural check"))

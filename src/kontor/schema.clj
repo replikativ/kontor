@@ -1553,6 +1553,18 @@
                      taxes (PST/RST in CA; sales tax in the US) where
                      the tax becomes cost of the input."}
 
+   ;; ADR-071 addendum (research note 101). The tax-collection
+   ;; *mechanism* — the posting shape, as distinct from the *rate*.
+   ;; StaticTableProvider maps this to the TaxFacts component :kind; a
+   ;; bespoke per-country provider sets :kind directly and ignores it.
+   {:db/ident       :tax/mechanism
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":standard (default — when absent) | :reverse-charge
+                     | :withholding. :reverse-charge → buyer-side
+                     self-assessment (both-legs); :withholding → a
+                     contra deduction (TDS, retención). ADR-071 / note 101."}
+
    {:db/ident       :tax/tax-group
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one

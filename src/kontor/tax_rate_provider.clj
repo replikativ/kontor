@@ -86,9 +86,74 @@
   (boolean (and facts (seq (:components facts)))))
 
 (defn total-tax
-  "Sum of every component's (unsigned) `:amount` in `facts`."
+  "Sum of every component's (unsigned) `:amount` in `facts` — the
+   gross notional tax. NOTE: this is *not* the cash-leg adjustment
+   when withholding or reverse charge is present — use `net-tax-effect`
+   for that."
   [facts]
   (reduce (fn [acc c] (+ acc (:amount c 0M))) 0M (:components facts)))
+
+;; ----------------------------------------------------------------------------
+;; The netting contract (ADR-071 addendum / research note 101)
+;;
+;; A component's :amount affects the counterparty cash leg (AR on a
+;; sale, AP on a purchase) of the transaction the tax sits on in one
+;; of three ways. A consumer sizes that leg as `net + net-tax-effect`.
+;; ----------------------------------------------------------------------------
+
+(def kind-effect
+  "How a component's `:amount` affects the counterparty cash leg:
+     :additive — adds to the gross (VAT, sales tax, cess, duty, fee,
+                 surcharge, pre-collection)
+     :withheld — subtracts from it (withholding — a contra deduction)
+     :neutral  — no effect (reverse charge — the buyer-side legs net
+                 to zero; the seller-side marker is no GL leg)."
+  {:output-vat     :additive  :input-vat      :additive
+   :sales-tax      :additive  :cess           :additive
+   :duty           :additive  :fee            :additive
+   :surcharge      :additive  :pre-collection :additive
+   :withholding    :withheld
+   :reverse-charge :neutral})
+
+(defn- sum-where-effect [facts effect]
+  (reduce (fn [acc c]
+            (if (= effect (kind-effect (:kind c)))
+              (+ acc (:amount c 0M))
+              acc))
+          0M
+          (:components facts)))
+
+(defn additive-total
+  "Σ of `:amount` over the components that *add* to the gross."
+  [facts]
+  (sum-where-effect facts :additive))
+
+(defn withheld-total
+  "Σ of `:amount` over the `:withholding` components — the part
+   *subtracted* from the counterparty cash leg."
+  [facts]
+  (sum-where-effect facts :withheld))
+
+(defn net-tax-effect
+  "The signed amount a consumer adds to the pre-tax net to size the
+   counterparty cash leg: `additive-total − withheld-total`. For pure
+   VAT this equals `total-tax`; with withholding it is correctly
+   smaller; reverse charge contributes nothing (its legs self-net)."
+  [facts]
+  (- (additive-total facts) (withheld-total facts)))
+
+(defn valid-tax-facts?
+  "Structural / closed-vocabulary check (validation layer 1, note 101):
+   `facts` is a `TaxFacts` whose every component carries a `:kind` from
+   the closed `component-kinds` set and a BigDecimal `:amount`. A
+   `:kind` outside the set means a provider has outrun the vocabulary —
+   the signal to extend the enum by ADR, not to special-case."
+  [facts]
+  (and (instance? TaxFacts facts)
+       (every? (fn [c]
+                 (and (contains? component-kinds (:kind c))
+                      (decimal? (:amount c))))
+               (:components facts))))
 
 ;; ============================================================================
 ;; Protocol
@@ -137,15 +202,21 @@
          (or (nil? until) (.before at ^java.util.Date until)))))
 
 (defn- component-kind
-  "Map (`:tax/recoverable?`, `:tax-use`) to a `TaxFacts` component
-   `:kind`. Recoverable VAT is input/output by use; a non-recoverable
-   tax becomes cost and is reported as :sales-tax."
-  [recoverable? tax-use]
-  (cond
-    (not recoverable?)        :sales-tax
-    (= tax-use :sale)         :output-vat
-    (= tax-use :purchase)     :input-vat
-    :else                     :sales-tax))
+  "Map a `:tax` entity + `:tax-use` to a `TaxFacts` component `:kind`.
+   `:tax/mechanism` (ADR-071 addendum / note 101) wins when set:
+   `:reverse-charge` and `:withholding` are mechanism-determined. For
+   `:standard` (or absent) recoverable VAT is input/output by use, and
+   a non-recoverable tax becomes cost and is reported as `:sales-tax`."
+  [tax tax-use]
+  (case (:tax/mechanism tax)
+    :reverse-charge :reverse-charge
+    :withholding    :withholding
+    ;; :standard or absent
+    (cond
+      (not (:tax/recoverable? tax)) :sales-tax
+      (= tax-use :sale)             :output-vat
+      (= tax-use :purchase)         :input-vat
+      :else                         :sales-tax)))
 
 (defn- component-amount
   "Compute the (unsigned) tax amount for a tax entity against `base`.
@@ -181,8 +252,7 @@
                (filter #(effective? % at))
                (keep (fn [tax]
                        (when-let [amt (component-amount tax base)]
-                         {:kind         (component-kind (:tax/recoverable? tax)
-                                                        tax-use)
+                         {:kind         (component-kind tax tax-use)
                           :rate         (:tax/amount tax)
                           :base         base
                           :amount       amt

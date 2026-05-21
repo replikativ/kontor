@@ -38,6 +38,46 @@ already has `:reverse-charge` and `:withholding`), or the kernel `:tax-rep` /
 `:tax-group` schema. G1's two-legged posting reuses the `:tax-group`'s
 already-existing `:payable-account` + `:receivable-account` pair.
 
+## 0. Why a closed interface can be international
+
+The worry behind this work: an international tax interface "needs to
+generalize", and tax is notoriously full of jurisdiction-specific special
+cases. The resolution is to *not* generalize the thing that cannot be
+generalized. Separate two layers:
+
+- **Mechanism** — *how* tax attaches to a transaction, as a posting shape.
+  Output VAT (add-on collected), input VAT (add-on reclaimed),
+  non-recoverable tax (add-on that becomes cost), reverse charge (liability
+  flips, both-legs), withholding (contra deduction), cascade (tax-on-tax
+  base), pre-collection (collected upstream), per-unit duty. About 8-10 of
+  them — the `:component/kind` enum. This set is **small, bounded, and
+  genuinely international**, because it is about double-entry bookkeeping
+  structure, which is the same everywhere. Each mechanism is a fixed
+  θ-fragment (note 97): a fixed pattern of postings.
+
+- **Application** — *which* mechanism fires, at *what* rate, for *whom*,
+  *when*. Rate tables, place-of-supply, B2B/B2C, exemptions, nexus,
+  thresholds, effective dates. This is **irregular and jurisdiction-
+  specific**, and no interface should try to generalize it.
+
+The interface therefore generalizes the **vocabulary**, not the **logic**.
+`TaxRateProvider/rate-facts` is the irregular half — its body is
+unconstrained, a country may do anything; only its *output type* is fixed:
+a `TaxFacts` whose components are drawn from the closed mechanism enum.
+`TaxPostingBuilder` is the regular half — it consumes mechanisms, and
+because mechanisms are regular it generalizes. The principle: **closed at
+the vocabulary, open at the implementation.**
+
+Two pressure-release valves keep the closed vocabulary survivable:
+`:jurisdiction-specific-codes` (an opaque map the kernel never interprets —
+irregular data, regular envelope) and the bespoke-provider / -builder
+escape (the protocols are contracts, not a framework; `StaticTable*` are
+conveniences, not mandates). And the enum is a **falsifiable bet** — the
+claim that ~10 mechanisms span the world's posting shapes. Migrating all 11
+l10n modules is the experiment. A country that needs an 11th mechanism
+falsifies the bet visibly, and the response is a deliberate ADR-gated enum
+extension — never a quiet per-country flag on the interface.
+
 ## 1. What the substrate does today, and where G1/G4 bite
 
 `StaticTablePostingBuilder` materializes a `TaxFacts` component into
@@ -347,6 +387,45 @@ total                       1160 − 1160 =              0  ✓
 
 Both satisfy the kernel's sum-to-zero gate because the consumer sized the
 counterparty leg with `net-tax-effect`. That *is* the G4 contract.
+
+## 5b. Validating the interface
+
+Validation must catch two distinct failure modes, at different layers:
+
+- **A — the interface does not generalize:** a country cannot express its
+  tax as a `TaxFacts` at all. Detected only by doing the ports.
+- **B — a country's implementation is wrong:** the `TaxFacts` is well-formed
+  but the numbers or accounts are wrong.
+
+Five layers, cheapest first:
+
+1. **Structural — closed-vocabulary check.** `valid-tax-facts?` — every
+   component's `:kind` is in `component-kinds`. An unknown `:kind` is the
+   signal of failure mode A; the response is an ADR-gated enum extension,
+   not a special-case.
+2. **The kernel invariant — free.** θ_tax must land in `Ker σ`: tax legs +
+   base legs sum to zero. The kernel validation gate already enforces this
+   at transact time, so a structurally-wrong tax computation *cannot be
+   posted* — it catches mis-signed legs and unbalanced reverse-charge
+   pairs. It does *not* catch wrong-but-balanced (a 19 % rate applied as
+   20 %).
+3. **Golden fixtures, per country** (ADR-071 test discipline) —
+   `test/kontor/l10n_*/posting_builder_test.clj`, a known invoice → exact
+   expected postings, sourced from cited regulator worked examples. The
+   only layer that catches failure mode B.
+4. **Property tests on the mechanism layer.** Because mechanisms are
+   regular: for any `TaxFacts`, reverse-charge legs sum to zero;
+   withholding netting via `net-tax-effect` balances; `additive-total`
+   round-trips. Generative testing works here precisely because this layer
+   is regular — the irregular `rate-facts` bodies are not property-testable,
+   the regular mechanism algebra is.
+5. **Differential validation during migration** — the new provider path and
+   the old hardcoded path produce byte-identical postings on the existing
+   l10n fixtures (note 100's behaviour-identical regression gate). The old
+   code is the oracle; no fresh ground truth needed.
+
+Plus the audit layer: `:provenance` per component + the deferred
+`:tax-fact/*` snapshot make "why this number" always answerable.
 
 ## 6. Sequencing + recommendation
 

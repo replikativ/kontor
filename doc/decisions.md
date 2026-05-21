@@ -7732,6 +7732,30 @@ Tested: `test/kontor/tax_rate_provider_test.clj` — 7 tests / 27 assertions, ex
 
 Deferred (unchanged from this ADR's "Implication"): the 11 per-l10n migrations; real Avalara / TaxJar / SST adapters; the `:tax-fact/*` audit-snapshot entity + `:posting/tax-fact-id`; a full `kontor.tax-pipeline` ns with the `kontor.document.invoice/send!` adapter. Tax groups (`:tax/amount-type :group`/`:division`) are not expanded by `StaticTableProvider` — a per-l10n provider handles those.
 
+### Addendum 2026-05-21 — G1 + G4: reverse charge + withholding posting-side completion
+
+Research note 100's per-l10n migration survey found that the Stage-2 substrate has two *posting-side* gaps: the `TaxPostingBuilder` had no branch for `:reverse-charge` (P1-71-2's buyer-side both-legs was contract-only) or `:withholding` (`sign-for` would mis-post a withholding leg as ordinary VAT). Research note 101 designed the fix; this addendum is the decision, implemented.
+
+**The framing — closed at the vocabulary, open at the implementation.** The interface generalizes internationally *not* by making tax logic uniform — that is impossible — but by fixing the **vocabulary** the irregular per-country logic must report in. Separate the **mechanism** (the posting shape — a small, bounded, genuinely-international set, the `:component/kind` enum, because double-entry structure is the same everywhere) from the **application** (which mechanism fires, at what rate, for whom, when — irregular, jurisdiction-specific, and deliberately *not* the kernel's concern). `TaxRateProvider/rate-facts` is the irregular half: its body is unconstrained; only its output type — a `TaxFacts` over the closed enum — is fixed. `TaxPostingBuilder` is the regular half. The enum is a falsifiable bet; the per-l10n migration is the experiment; a genuine 11th mechanism is an ADR-gated enum extension, never a quiet per-country flag.
+
+**Decision.**
+
+1. **`:tax/mechanism`** — one new kernel attr on `:tax/*` (`:standard` | `:reverse-charge` | `:withholding`, default-absent = `:standard`). `StaticTableProvider`'s `component-kind` maps it to the `TaxFacts` component `:kind`; a bespoke per-country provider sets `:kind` directly and ignores it. The only schema change.
+
+2. **`TaxPostingBuilder` — `:kind` dispatch.** `component-postings` is now a `case` on the component `:kind`; the previous body is the additive `standard` default (byte-identical for every existing VAT / sales-tax / cess / duty / fee / surcharge / pre-collection case).
+   - **G1 `:reverse-charge`** — seller-side (`:sale`) emits `[]` (the VAT-return marker rides the base posting as a tag, applied by the consumer); buyer-side (`:purchase`) emits the both-legs pattern — `Dr` input-VAT receivable, `Cr` output-VAT payable — sourced from the backing `:tax`'s `:tax-group` `payable-account` + `receivable-account` pair. The pair self-nets, so reverse charge has no cash effect. Partial-deductibility is the documented bespoke-builder override.
+   - **G4 `:withholding`** — a *contra* component. Its posting sign is inverted from VAT (`:sale → +` debit/receivable — the MX retención shape; `:purchase → −` credit/payable — the buyer-withholds shape). It reuses the ordinary `:tax-rep` rep-line walk, parameterized by `withholding-sign`.
+
+3. **The netting contract.** Withholding does not *add* to the gross — it *subtracts* from the counterparty cash leg. `kontor.tax-rate-provider` gains a `kind-effect` classification (`:additive` | `:withheld` | `:neutral`) and three helpers — `additive-total`, `withheld-total`, `net-tax-effect` (= additive − withheld). A consumer sizes the AR/AP leg as `net + net-tax-effect`; for pure VAT that equals `total-tax` (unchanged), for a withholding invoice it is correctly smaller, for reverse charge it is neutral. `total-tax` stays as the gross-notional sum with a docstring caveat.
+
+4. **`valid-tax-facts?`** — the structural / closed-vocabulary check (validation layer 1): every component's `:kind` is in `component-kinds` and `:amount` is a `BigDecimal`. An unknown `:kind` is the signal a provider has outrun the enum.
+
+**Validation strategy** (note 101 §5b): structural (`valid-tax-facts?`); the kernel sum-to-zero gate (free — a structurally-wrong tax computation cannot be posted); per-country golden fixtures (the only check for wrong-but-balanced rates); property tests on the regular mechanism layer; differential validation (new path vs old hardcoded path) during the per-l10n migration.
+
+**Tested.** `tax_rate_provider_test.clj` — 13 tests / 51 assertions: reverse-charge buyer-side both-legs + seller-side `[]`, withholding contra sign, the `net-tax-effect` netting, an end-to-end balanced withholding invoice (Ker σ), the helpers, `valid-tax-facts?`. Existing VAT behaviour byte-identical.
+
+**Open limit** (note 101 §6): `:tax/mechanism` is a flat 3-value enum — a single `:tax` cannot be *both* reverse-charge *and* withholding. None of the 11 jurisdictions need that; such a tax would use a bespoke provider. Flagged, not pre-solved.
+
 ---
 
 ## ADR-072 — `FxRateProvider` protocol + `:fx-rate/*` schema + `kontor.fx` Money translation
