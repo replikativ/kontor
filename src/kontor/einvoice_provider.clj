@@ -2,7 +2,7 @@
   "EInvoiceProvider — protocol for emitting and transmitting
    e-invoice artifacts per jurisdiction (ADR-017).
 
-   Sibling to `kontor.tax-provider/TaxProvider` (ADR-005). The kernel
+   Sibling to `kontor.tax-rate-provider/TaxProvider` (ADR-005). The kernel
    ships the protocol seam + a `PureXmlProvider` shape; concrete
    per-country implementations live in `kontor-l10n-<cc>` modules and
    in partner artifacts (e.g. `kontor-l10n-br-nfe` for SEFAZ

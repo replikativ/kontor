@@ -7661,6 +7661,8 @@ Date: 2026-05-15.
 
 ## ADR-071 — Tax abstraction: `TaxRateProvider` + `TaxFacts` + `TaxPostingBuilder`
 
+**Status.** Substrate **implemented** 2026-05-20 (research note 99 Stage 2) — see the Addendum at the end of this ADR. The protocol trio + `StaticTableProvider` ship; per-l10n migration of the 11 country modules remains consumer-demand-driven, as this ADR's "Implication" always stated. (Originally drafted 2026-05-17 as a decided-but-unimplemented ADR; `tax_rate_provider.clj` had never existed in git until note 99 Stage 2.)
+
 **Decision.** Replace the dead `kontor.tax-provider/TaxProvider` (ADR-005, superseded) with a three-protocol-plus-data-shape design:
 
 1. **`TaxRateProvider`** — determines rates. Pure: given a transaction context (line items, partner, jurisdiction, date, `:tax-use`), return a vector of `TaxFacts` — one per line that is subject to tax. Implementations: `StaticTableProvider` (DE/CA/CN-shaped), `AvalaraProvider` / `TaxJarProvider` (scaffolds, customer keys), `SstCsvProvider` (24 US SST states), and per-l10n providers that wrap the static `:tax/*` schema.
@@ -7716,6 +7718,19 @@ Five items from the independent design audit (note 76 ADR-071 section) that don'
 * **P2-71-3 — US implementation cost.** ADR-071's "AU +120 LoC → US +1500 LoC" range stays — but the deeper structural point is that US Avalara/SST/nexus is not a single-protocol port but a multi-protocol integration: `TaxRateProvider` calls Avalara per-line; `TaxPostingBuilder` knows the per-state / per-jurisdiction account routing; the einvoice provider is not involved (US has no clearance regime). Expect a `kontor-l10n-us` companion to be its own multi-week sub-project; the substrate ADR enables it, doesn't deliver it.
 
 Implementation work remains future. The clarifications above guide the per-l10n migration; no code changes in this addendum.
+
+### Addendum 2026-05-20 — substrate implemented (note 99 Stage 2)
+
+The protocol trio shipped as kernel namespaces:
+
+* **`kontor.tax-rate-provider`** — the `TaxRateProvider` protocol; the `TaxFacts` record (with the `component-kinds` enum, `tax-facts` constructor, `taxable?` / `total-tax` helpers); `StaticTableProvider` — a real implementation that reads the `:tax/*` schema, respects the `:tax/effective-from`/`-until` window (P2-71-1), and maps `(`:tax/recoverable?`, `:tax-use`)` to a component `:kind`; throwing `AvalaraProvider` / `TaxJarProvider` / `SstCsvProvider` scaffolds (names migrated from the legacy ns per Implication 2 — no bundled keys, ADR-005); `ChainedProvider`.
+* **`kontor.tax-posting-builder`** — the `TaxPostingBuilder` protocol; `StaticTablePostingBuilder` — walks each component's backing `:tax` entity's `:tax-rep` repartition lines, materialises `:posting/*` maps with the sign keyed off `:tax-use` (sale → credit, purchase → debit); a `compute-tax-postings` pipeline fn wiring the trio for one line.
+
+The legacy `kontor.tax-provider` namespace was **removed** (Implication 2): its only real consumer, `kontor.core/make-default-tax-provider`, was rewired to the new ns; three sibling-provider docstrings were updated.
+
+Tested: `test/kontor/tax_rate_provider_test.clj` — 7 tests / 27 assertions, exercising rate resolution (sale + purchase), the effective-window filter, the no-tax `nil` case, posting sign per `:tax-use`, and the end-to-end trio.
+
+Deferred (unchanged from this ADR's "Implication"): the 11 per-l10n migrations; real Avalara / TaxJar / SST adapters; the `:tax-fact/*` audit-snapshot entity + `:posting/tax-fact-id`; a full `kontor.tax-pipeline` ns with the `kontor.document.invoice/send!` adapter. Tax groups (`:tax/amount-type :group`/`:division`) are not expanded by `StaticTableProvider` — a per-l10n provider handles those.
 
 ---
 

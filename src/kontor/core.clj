@@ -18,7 +18,7 @@
                               allocate-fifo! (ADR-043)
      kontor.sealing           seal-transaction! middleware (ADR-007)
      kontor.audit             commit-hash wrapper (ADR-003)
-     kontor.tax-provider      TaxProvider protocol + impls (ADR-005)
+     kontor.tax-rate-provider TaxRateProvider + TaxFacts (ADR-071)
      kontor.import.beancount  round-trip importer (ADR-009)
 
    See doc/architecture.md for the layer cake and how companions
@@ -30,7 +30,7 @@
             [kontor.legal-hold :as legal-hold]
             [kontor.retention :as retention]
             [kontor.schema :as schema]
-            [kontor.tax-provider :as tp]
+            [kontor.tax-rate-provider :as trp]
             [kontor.valuation :as valuation]))
 
 ;; ============================================================================
@@ -119,10 +119,11 @@
 ;; ============================================================================
 
 (defn make-default-tax-provider
-  "Return a StaticTableProvider configured for the given default country.
-   See `kontor.tax-provider/make-static-table-provider`."
-  ([] (tp/make-static-table-provider {}))
-  ([opts] (tp/make-static-table-provider opts)))
+  "Return a `StaticTableProvider` (the ADR-071 `TaxRateProvider` impl)
+   over `conn`, configured for the given default country. See
+   `kontor.tax-rate-provider/make-static-table-provider`."
+  ([conn] (trp/make-static-table-provider conn))
+  ([conn opts] (trp/make-static-table-provider conn opts)))
 
 ;; ============================================================================
 ;; REPL conveniences

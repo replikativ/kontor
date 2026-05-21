@@ -18,7 +18,7 @@
        property, never bundled (same posture as ADR-005's tax-API
        stance and ADR-071's TaxRateProvider).
      - In-DB rates (`:fx-rate/*`, manually entered or batch-imported)
-       and live-API rates compose via [[chain]] just like TaxProvider.
+       and live-API rates compose via [[chain]] just like TaxRateProvider.
 
    Built-in impls:
      - [[StaticTableProvider]] — reads `:fx-rate/*` from the connected

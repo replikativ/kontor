@@ -3082,7 +3082,7 @@
 ;; Effective-dated tax rates — ADR-026.
 ;;
 ;; Optional :tax/effective-from / :tax/effective-until on existing
-;; :tax entities. TaxProvider selects the tax record whose validity
+;; :tax entities. TaxRateProvider selects the tax record whose validity
 ;; window contains the transaction's effective-date. Drives India
 ;; GST 2.0 (pre-2025-09-22 vs current), Brazil IBS/CBS transition,
 ;; Mexico IEPS annual cuotas, Germany 7%-vs-19% restaurant VAT.

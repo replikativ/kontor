@@ -2,7 +2,7 @@
   "The DepreciationProvider protocol + companion-shipped built-ins —
    ADR-055.
 
-   Sibling of `kontor.tax-provider` (ADR-005) and
+   Sibling of `kontor.tax-rate-provider` (ADR-005) and
    `kontor.costing-provider` (ADR-029): the kernel/companion ships
    the *protocol* + a handful of method built-ins; l10n modules ship
    the jurisdiction-specific impls (MACRS, AfA-degressive, CCA,

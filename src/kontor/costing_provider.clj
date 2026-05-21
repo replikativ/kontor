@@ -1,7 +1,7 @@
 (ns kontor.costing-provider
   "CostingProvider protocol + kernel-shipped implementations — ADR-029.
 
-   Direct sibling of `kontor.tax-provider`. The kernel ships four
+   Direct sibling of `kontor.tax-rate-provider`. The kernel ships four
    methods: FIFO, LIFO, Weighted Average, Standard Cost. Modules
    extend the protocol for jurisdiction-specific variants
    (Anglo-Saxon FIFO, Continental immediate-expense, lot-isolated

@@ -195,8 +195,9 @@ src/kontor/    kernel
   side_effect/cross.clj     :cross-tx/step-id + CrossTxRouter + drain! (ADR-074)
   schedule.clj              :schedule recurring postings (ADR-032)
   process.clj               kontor.process / run-process orchestrator (ADR-067)
-  tax_provider.clj          legacy TaxProvider (kept for back-compat; ADR-005 / superseded by ADR-071)
-  tax_rate_provider.clj     TaxRateProvider + TaxFacts (ADR-071)
+  book.clj                  kontor.book verb facade — receive/pay/sell/buy/… (ADR-095)
+  tax_rate_provider.clj     TaxRateProvider + TaxFacts + StaticTableProvider (ADR-071)
+  tax_posting_builder.clj   TaxPostingBuilder + StaticTablePostingBuilder (ADR-071)
   tax.clj                   apply-tax to a posting
   fx_rate_provider.clj      FxRateProvider protocol + StaticTable / ECB / Chained (ADR-072)
   fx.clj                    Money-level convert / translate / to-functional-currency

@@ -113,8 +113,8 @@ src/kontor/
   process.clj               kontor.process / run-process orchestrator (ADR-067)
 
   ; --- Provider protocols ---
-  tax_provider.clj          legacy TaxProvider (ADR-005, superseded by ADR-071)
-  tax_rate_provider.clj     TaxRateProvider + TaxFacts (ADR-071)
+  tax_rate_provider.clj     TaxRateProvider + TaxFacts + StaticTableProvider (ADR-071)
+  tax_posting_builder.clj   TaxPostingBuilder + StaticTablePostingBuilder (ADR-071)
   tax.clj                   apply-tax to a posting
   fx_rate_provider.clj      FxRateProvider + StaticTable / ECB / Chained (ADR-072)
   fx.clj                    Money-level convert / translate-* / to-functional-currency
@@ -324,33 +324,39 @@ Per ADR-048 the status-transition timestamp denorms (`:invoice/sent-at`, `:dispu
 
 kontor exposes seven pluggable seams. Each lets a consumer plug in their own logic (or a partner adapter) without touching the kernel.
 
-### TaxProvider (ADR-005, superseded by ADR-071)
+### TaxRateProvider + TaxPostingBuilder (ADR-071)
 
-The original single-protocol shape (kept for back-compat in `kontor.tax-provider`):
-
-```clojure
-(defprotocol TaxProvider
-  (resolve-taxes [this {:keys [partner posting context]}])
-  (provider-id [this]))
-```
-
-ADR-071 redesigns this into three protocols that separate rate-determination from posting-expansion (the older shape conflated both, with the consequence that the abstraction sat unused — every l10n module rolled its own posting builder):
+ADR-071 splits the tax abstraction into three pieces that separate
+rate-determination from posting-expansion — the older single-protocol
+`TaxProvider` (ADR-005) conflated both and sat unused, so every l10n
+module rolled its own posting builder. The trio is **implemented** as
+of research note 99 Stage 2 (`kontor.tax-rate-provider` +
+`kontor.tax-posting-builder`); the legacy `kontor.tax-provider` ns is
+removed.
 
 ```clojure
-(defprotocol TaxRateProvider     ; rate determination — pure
-  (resolve-taxes [this context])) ;  → vector of TaxFacts (data records)
+(defprotocol TaxRateProvider          ; rate determination — no chart
+  (provider-id [this])
+  (rate-facts  [this context]))       ;  → a TaxFacts (or nil)
 
-;; TaxFacts is a pure-data shape with line-base + commodity,
-;; jurisdiction, per-component rate items keyed by :component/kind
-;; (:output-vat :input-vat :sales-tax :reverse-charge :withholding
-;;  :pre-collection :surcharge :cess :duty :fee), per-component
-;; :provenance, and a :jurisdiction-specific-codes opaque slot.
+;; TaxFacts is a pure-data record: :tax-use, :line-base, :commodity,
+;; :jurisdiction, and :components — per-component rate items keyed by
+;; :kind (:output-vat :input-vat :sales-tax :reverse-charge
+;; :withholding :pre-collection :surcharge :cess :duty :fee), each
+;; with :provenance and an opaque :jurisdiction-specific-codes slot.
 
-(defprotocol TaxPostingBuilder    ; per-country posting materialization
-  (materialize-postings [this tax-facts {:keys [chart]}]))
+(defprotocol TaxPostingBuilder        ; posting materialization — chart-aware
+  (builder-id   [this])
+  (tax-postings [this tax-facts opts])) ;  → vector of :posting/* maps
 ```
 
-Implementations (current — old-shape): `StaticTableProvider`, `SstCsvProvider`, `AvalaraProvider`, `TaxJarProvider`, `ChainedProvider`. Migration to the new shape is per-l10n-module + consumer-driven (Phase 5 in the country localizations); the kernel ships the new protocol skeletons alongside the existing one.
+Implementations shipped: `StaticTableProvider` (reads the `:tax/*`
+schema, respects effective-dated windows) and `StaticTablePostingBuilder`
+(walks `:tax-rep` repartition lines); `AvalaraProvider` / `TaxJarProvider`
+/ `SstCsvProvider` are throwing scaffolds — customers hold their own
+keys (ADR-005); `ChainedProvider` composes. `compute-tax-postings`
+wires the trio for one line. Per-l10n migration of the 11 country
+modules remains consumer-demand-driven.
 
 ### FxRateProvider (ADR-072)
 
