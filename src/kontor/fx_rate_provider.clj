@@ -223,7 +223,7 @@
           via-eid   (cond
                       via                              (coerce-commodity-eid db via)
                       (:default-via opts)              (coerce-commodity-eid
-                                                       db (:default-via opts))
+                                                        db (:default-via opts))
                       :else                            nil)]
       (when-not (and from-eid to-eid)
         (throw (ex-info "static-table: unknown commodity"

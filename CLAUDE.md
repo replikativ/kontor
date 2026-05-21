@@ -102,7 +102,7 @@ Friction discovered this way is the ground truth — the per-stage research info
 
 ### Namespacing
 
-Every datahike attribute namespaces under one of: `:account/* :journal/* :transaction/* :posting/* :commodity/* :lot/* :tax/* :tax-rep/* :tax-group/* :account-tag/* :partner/* :fiscal-position/* :period/* :balance-assertion/*`. New namespaces require an ADR.
+Every datahike attribute namespaces under one of: `:account/* :journal/* :transaction/* :posting/* :posting-dimension/* :commodity/* :lot/* :tax/* :tax-rep/* :tax-group/* :account-tag/* :partner/* :fiscal-position/* :period/* :balance-assertion/*`. New namespaces require an ADR. (`:posting-dimension/*` — ADR-097 classification axes. Companion modules add their own namespaces — e.g. `:commitment/*` + `:commitment-fulfillment/*`, ADR-098.)
 
 This convention is what lets kontor cohabit with beleg in one DB (ADR-002).
 
@@ -220,6 +220,15 @@ modules/       companion modules + l10n + bank importers (each a separate Maven 
 ```
 
 ## Recent ADRs + research (since last refresh)
+
+### Note 99 — event-driven accounting (ADR-095 .. ADR-098)
+
+The McComb arc (research notes 80 / 88 / 97 / 98 / 99). A deliberately **deflated** scope: kontor does NOT build a stored-`:event` / θ-as-data framework — the `*-tx-data` builders already ARE θ in code, and sealing (ADR-007) neutralizes the re-derivability payoff (note 97's critical reading). What shipped instead:
+
+- **ADR-095** — `kontor.book`: a verb facade — `entry-tx-data`/`entry!` + 8 verbs (`receive`/`pay`/`sell`/`buy`/`receive-payment`/`pay-bill`/`transfer`/`adjust`). Organizing sugar over ADR-068; no new schema.
+- **ADR-096** — `kontor.report` as a family of marginalizations `σ_E`: `marginalize` (the quotient-epimorphism primitive), a generic `:dimension` engine, `:account-codes`/`:tax-tags` reframed as instances (behaviour-identical). Kernel, no schema.
+- **ADR-097** — `:posting-dimension` + `:posting/dimensions`: classification axes beyond `:account` (cost-centre, project, segment). `marginalize` pivots over any axis. Kernel schema, additive.
+- **ADR-098** — `kontor-commitment` companion: `:commitment` (recognising + liquidating obligations) + `:commitment-fulfillment` edge to the settling `:transaction`. Kernel untouched.
 
 ### Stage R substrate (ADR-067 .. ADR-087) — HR/payroll across 11 jurisdictions
 

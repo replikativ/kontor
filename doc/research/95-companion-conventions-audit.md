@@ -565,15 +565,37 @@ Irregularities flagged:
 
 (More modules to be appended as their READMEs land.)
 
-## §3 — Cross-cutting patterns worth canonicalizing
+## §3 — Cross-cutting patterns — resolved (note 99 Stage 5, 2026-05-20)
 
-Stub. Will accumulate as the audit progresses:
+The four open questions, resolved against the observed prior art
+(§1 + §2). These describe what the code DOES — the convention is
+descriptive, not aspirational. The deviations are triaged in §4.
 
-- `install!` location: `core.clj` vs `schema.clj` vs separate
-  `installer.clj` — pick one
-- Lifecycle namespace name: `core` vs `<module>.<module>` vs `<module>.lifecycle`
-- Pure-builder naming: `*-tx-data` (ADR-068) vs `plan-*` vs `build-*`
-- Public re-exports in `core.clj` — yes / no / how much
+- **`install!` location → `<module>/schema.clj`.** The schema
+  namespace owns the attrs, the status-transition / approval-policy
+  seeds, and `(defn install! [conn] …)`. ~10/12 tier-1 modules do
+  this (Pattern A, §1). The exception is Pattern B — a module that
+  attaches to a kernel extension registry (`kontor.dsar`, the McComb
+  seams) adds a `core/install!` that calls `schema/install!` THEN
+  registers. `kontor-commitment` (ADR-098) follows Pattern A:
+  `kontor.commitment.schema/install!`, re-exported as
+  `kontor.commitment/install!`.
+- **Lifecycle namespace name → `<module>/core.clj`** for the public
+  lifecycle/transactor namespace when the module is large enough to
+  split schema from lifecycle. A small module may keep lifecycle in
+  the top `<module>.clj` (kontor-commitment does — one concern, so
+  `kontor.commitment` is both entry and impl). The deviations
+  (`kontor.asset.asset`) are real but the rename is deferred (§4).
+- **Pure-builder naming → `*-tx-data`** (ADR-068) is canonical for a
+  pure builder; the matching side-effecting wrapper is `*!`. `plan-*`
+  (kontor-asset, kontor-lease GL planners) is a surviving deviation —
+  rename deferred (§4). `build-*` is not used for transactors.
+- **Public re-exports in `core.clj`/`<module>.clj` → yes, a thin
+  re-export hub** is the norm (`kontor.collections` re-exports every
+  per-concern fn). Optional — a single-namespace module needs none.
+
+These are descriptive conventions, not an ADR. A `kontor-conventions`
+ADR remains the §4 deferred proposal.
 
 ## §4 — Cleanup proposal (deferred)
 

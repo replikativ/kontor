@@ -390,10 +390,10 @@
               ;; BigDecimal coercion + Date parsing + lookup-ref
               ;; resolution before passing to the kernel builder.
               (let [tx-header (cond-> (:transaction args)
-                               (:transaction/journal (:transaction args))
-                               (update :transaction/journal #(resolve-eid db %))
-                               (string? (:transaction/effective-date (:transaction args)))
-                               (update :transaction/effective-date ->date))
+                                (:transaction/journal (:transaction args))
+                                (update :transaction/journal #(resolve-eid db %))
+                                (string? (:transaction/effective-date (:transaction args)))
+                                (update :transaction/effective-date ->date))
                     postings (mapv
                               (fn [p]
                                 (cond-> p

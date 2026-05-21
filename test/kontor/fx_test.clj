@@ -240,9 +240,9 @@
       ;; With :allow-inverse? false, USD→EUR returns nil — the reverse
       ;; direction is NOT persisted as its own sample anymore.
       (let [p-strict (fxp/make-ecb-reference-rates-provider
-                     conn {:fallback-on-or-before? false :allow-inverse? false})]
+                      conn {:fallback-on-or-before? false :allow-inverse? false})]
         (is (= 1.08M (fxp/resolve-rate p-strict {:from-commodity "EUR" :to-commodity "USD"
-                                                  :at-date jan-2}))
+                                                 :at-date jan-2}))
             "EUR→USD forward direction is persisted")
         (is (nil? (fxp/resolve-rate p-strict {:from-commodity "USD" :to-commodity "EUR"
                                               :at-date jan-2}))
