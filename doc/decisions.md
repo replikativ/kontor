@@ -9003,3 +9003,31 @@ Date: 2026-05-20.
 **Research backing.** Research note 99 (Stage 3b + the DCR sharpening section); notes 80 / 88 (McComb survey + substrate seams).
 
 Date: 2026-05-20.
+
+## ADR-098 — `kontor-commitment`: recognising and liquidating obligations
+
+**Status.** Accepted. Stage 4 of research note 99.
+
+**Context.** The general ledger records what *moved* — postings, balanced to zero (`Ker σ`). It does not record what is *supposed to* move: a receivable a customer owes before they pay, a payable you owe before you settle it, an encumbrance you have reserved against a budget. The McComb reading behind note 99 frames this precisely — recognising and liquidating **obligations** is the half of accounting the ledger alone cannot see. kontor had pieces of this scattered (`:payment-promise` in kontor-collections, lease liabilities in kontor-lease, `:schedule` recurring postings, `:order` lines) but no first-class, general obligation entity.
+
+**Decision.** A new companion module `modules/commitment/` — `kontor-commitment` — with a first-class `:commitment` entity. **The kernel is untouched.**
+
+1. **`:commitment`** — `{:external-id (identity), :kind (:receivable|:payable|:encumbrance), :counterparty, :entity?, :committed-amount, :fulfilled-amount, :commodity, :due-date, :state, :recorded-by-uid, :recorded-at, :origin?, :notes?}`. `:state` is an ADR-034 status-machine facet: `:open → :partially-fulfilled → :fulfilled`, with `:open`/`:partially-fulfilled → :cancelled`.
+
+2. **`:commitment-fulfillment`** — an edge entity `{:commitment, :transaction, :amount, :fulfilled-at, :recorded-by-uid, :notes?}`. The edge points *at* a kernel `:transaction` — but the kernel `:transaction` gains **no attribute**. A commitment can be fulfilled by many transactions (partial settlement); the edge is the many-to-one join, and it lives entirely in the companion.
+
+3. **Helpers** (all ADR-068 — pure `*-tx-data` builder + `!` wrapper through `kontor.validation`, bitemporally stamped): `record-commitment!`, `fulfill!` (records the edge, advances the `:fulfilled-amount` denorm in the same tx, transitions `:state` when it actually changes), `cancel!`, plus the queries `open-commitments`, `outstanding`, `aging`, `pull-commitment` / `resolve-commitment`.
+
+4. **`:fulfilled-amount` denorm.** `outstanding = committed − fulfilled`. The running total is denormalized onto `:commitment` and updated in the *same* transaction as each `:commitment-fulfillment` edge — no drift window. `aging` and `open-commitments` stay O(1) per commitment.
+
+**Conservatively scoped.** `:commitment/origin` is an **opt-in soft link** (a plain ref, kernel-uninterpreted) to whatever the obligation arose from — an `:order` line, a `:schedule`, a lease liability. Those modules are **not changed**, and `:commitment` does not try to be their common supertype. Unifying the several obligation sources behind one vocabulary is a real piece of work and a deliberately deferred later pass — note 99 names it; this ADR does not attempt it. Building the general entity first, migrating origins later, is the low-risk order.
+
+**Bitemporality.** `record-commitment!` / `fulfill!` / `cancel!` stamp `:tx/valid-from` via `kontor.bitemporal/with-vt`. `open-commitments` over `(d/as-of (d/db conn) t)` gives a fully consistent tx-time snapshot — state included. (A valid-time-resolved `open-commitments` is a follow-up; the entities carry the stamps for a stratum/valid-time query to use.)
+
+**Acceptance.** `modules/commitment/test/kontor/commitment_test.clj` — record an open receivable; `sell!` then `receive-payment!` through the verb facade; `fulfill!` links the settling transaction; `open-commitments` closes it out; partial-then-complete; `cancel!`; `aging` buckets a still-open one; the tx-time snapshot before a fulfillment still sees the commitment open.
+
+**Why a companion, not the kernel.** ADR-002 / ADR-010 — the kernel is the double-entry substrate; obligations-vs-ledger is a workflow layer. Keeping it a companion preserves the single-dep kernel and lets a consumer that only wants the ledger ignore it entirely. It cohabits the same DB via the `:commitment/*` namespace (ADR-002).
+
+**Research backing.** Research note 99 (Stage 4 + the DCR sharpening — "recognition and liquidation of obligations"); notes 80 / 88 (McComb).
+
+Date: 2026-05-20.
