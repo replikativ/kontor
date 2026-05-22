@@ -9148,3 +9148,48 @@ The faithfulness test held: DE §32a is implemented as the **real five-zone piec
 `kontor.personal-income-tax` ships the generic `PersonalIncomeTaxProvider` (marginalize income → deduct → schedule → − credits + surtaxes); l10n-at / l10n-au / l10n-de / l10n-fr supply the country schedules. Tested — 25 tests / 115 assertions across the substrate + four jurisdictions.
 
 Date: 2026-05-21.
+
+### ADR-099 — Addendum 2026-05-21 (3): note-104 Stage 1 — personal income tax, six jurisdictions
+
+note 104's Stage 1 (the individual rung) built personal income tax for the six
+jurisdictions that lacked it — **US, CN, MX, JP, IN, BR** — as faithful
+`PersonalIncomeTaxProvider` configs, six parallel agents under the note-104 §4
+dual mandate (implement faithfully + audit the abstraction). All green; real
+statutory schedules, golden-tested against published rate tables. The audits:
+
+**One genuine substrate fix — `:inputs :prepaid`.** The generic
+`PersonalIncomeTaxProvider` hardcoded `:prepaid` to zero — no path for
+in-period withholding (CN surfaced it: the annual reconciliation 年度汇算清缴
+nets the year's cumulative withholding against the liability). Fixed:
+`period-tax-facts` now reads `(:prepaid inputs)` into the component's
+`:prepaid`. It does NOT reduce `:liability` (the liability is the full-period
+tax) — `balance` yields the refund-or-top-up. One line, additive; CN's IIT
+provider now uses it instead of the credit workaround.
+
+**A documented boundary (JP).** Japan's national income tax (current year) and
+local inhabitant tax (assessed on the *prior* year — `:base-period`) are two
+providers, not two components of one `TaxReturnFacts`: **components of one
+`TaxReturnFacts` share the assessment + base window; cross-period siblings are
+separate providers.** `:base-period` itself worked cleanly.
+
+**Noted design tensions — not built (the abstraction is not *limiting the
+calculation*, only its structured representation; the `:formula` escape hatch
+carries every real computation faithfully).** Candidates for a future addendum
+if demand accumulates: (a) **base-aware credit / surtax fns** — IN's §87A
+rebate and its income-dependent surcharge are functions of the *base*, not the
+tax; `:credits` take static constants and `:surtax-fns` see only the post-credit
+tax, so both are currently folded into IN's `:formula` schedule (faithful, but
+invisible to the `:credits`/`:surtaxes` component fields); (b) a **regime as a
+`(schedule, deduction-profile)` pair** the substrate couples and validates
+(IN old/new regime — today the provider records `:regime` but cannot enforce
+the matching deduction set); (c) a **deduction-regime `:elect`** (BR
+simplified-vs-itemized, US standard-vs-itemized — today an ad-hoc `:formula`
+base-transform); (d) `progressive`-keyed-by-`:tax-unit` sugar (US filing
+status — today a `:formula`). MX flagged a sub-cent cuota-fija rounding
+divergence — handled with an alternative `:formula` schedule, no substrate
+issue.
+
+After Stage 1 an individual worker in all 11 jurisdictions can keep books in
+`kontor.book` and compute their personal income-tax return.
+
+Date: 2026-05-21.

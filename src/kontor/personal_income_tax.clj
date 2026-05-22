@@ -15,6 +15,10 @@
    - credits + consumer-supplied surtaxes ride `:inputs`; computed
      surtaxes derived from the tax itself (DE Solidaritätszuschlag)
      come from the config's `:surtax-fns`.
+   - tax already withheld in-period (PAYE, monthly cumulative
+     withholding) rides `:inputs :prepaid` → the component's
+     `:prepaid`; `balance` then yields the refund-or-top-up. It does
+     NOT reduce `:liability` — the liability is the full-period tax.
 
    Per-jurisdiction credit and deduction TABLES are l10n content that
    grows on demand — this provider + the schedule are the bounded
@@ -57,7 +61,8 @@
           after-cred (max 0M (- gross (sum-amounts credits)))
           surtaxes   (vec (concat (keep #(% after-cred) (or surtax-fns []))
                                   (:surtaxes inputs)))
-          liability  (+ after-cred (sum-amounts surtaxes))]
+          liability  (+ after-cred (sum-amounts surtaxes))
+          prepaid    (money/money (bigdec (or (:prepaid inputs) 0M)) commodity)]
       (ptp/tax-return-facts
        {:entity               entity
         :period               period
@@ -72,7 +77,7 @@
           :credits         (->money-items credits commodity)
           :surtaxes        (->money-items surtaxes commodity)
           :liability       (money/money liability commodity)
-          :prepaid         (money/zero commodity)
+          :prepaid         prepaid
           :provenance      {:provider-id id :statute statute}
           :line-items
           (into [{:line :gross-income   :label "Gross income"
