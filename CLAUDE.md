@@ -204,6 +204,8 @@ src/kontor/    kernel
   standalone_payroll_tax.clj  StandalonePayrollTaxProvider — generic levy on a marginalized wage sum (ADR-099)
   corporate_income_tax.clj  CorporateIncomeTaxProvider — flat-rate CIT on marginalized book profit (ADR-099)
   personal_income_tax.clj   PersonalIncomeTaxProvider — schedule(income−deductions)−credits+surtaxes (ADR-099)
+  vat_return.clj            periodic VAT/GST return — compute-vat-return + remittance (ADR-100)
+  sole_proprietor.clj       business-net + business-income-input — the sole-proprietor rung (ADR-100)
   tax.clj                   apply-tax to a posting
   fx_rate_provider.clj      FxRateProvider protocol + StaticTable / ECB / Chained (ADR-072)
   fx.clj                    Money-level convert / translate / to-functional-currency

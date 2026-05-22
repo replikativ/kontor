@@ -9232,3 +9232,56 @@ ordered, the `:op` guard) + a kernel base-aware/signed end-to-end + the
 behaviour-preserving DE/JP/IN goldens.
 
 Date: 2026-05-21.
+
+---
+
+## ADR-100 — Phase 2: the sole-proprietor rung
+
+**Status.** Accepted. Research note 104 Phase 2.
+
+**Context.** note 104's tax-completion program is organised by the
+individual → corporation growth continuum. Phase 1 (ADR-099 + addenda) gave an
+individual worker personal income tax in all 11 jurisdictions. Phase 2 is the
+next rung: the **sole proprietor** — an individual running a trade (a side
+hustle, a freelance practice) that is not yet incorporated.
+
+**Decision.** Two thin kernel namespaces — composition over primitives that
+already exist (`:entity` ADR-031, `kontor.book`, `kontor.report/marginalize`,
+the tax providers); no new substrate.
+
+- **`kontor.sole-proprietor`.** A sole proprietor's trade is kept as its own
+  bookkeeping context — its own `:entity`, or its own DB. A kontor DB may hold
+  *only* the business, with no personal accounts at all (the side-hustle case).
+  `business-net` marginalizes (σ_E) the business P&L — Σ income − Σ expense —
+  over a period (may be a loss). When the proprietor also files a personal
+  income-tax return, `business-income-input` wires that net onto the
+  `kontor.personal-income-tax` provider call's `:inputs` as an addition to the
+  personal taxable base — the CA `t2125` pattern, generalised. The business and
+  personal books stay separate: the personal return never marginalizes the
+  business book, so there is no double-count, and the business books never
+  depend on the personal return.
+
+- **`kontor.vat-return`.** The periodic VAT / GST return. VAT is collected per
+  transaction (ADR-071's `TaxRateProvider` posts output VAT on sales, input VAT
+  on purchases); the *return* is the periodic reconciliation. `compute-vat-return`
+  marginalizes the filing period's output- and input-VAT postings (identified
+  by account code) and nets them; `vat-return-tx-data` materialises the
+  remittance — one balanced transaction clearing both VAT accounts into the net
+  VAT payable to the authority. It nets already-posted tax; it computes none.
+
+**Implication.** Kernel, schema-free, strictly additive. The continuum now
+reaches the sole-proprietor rung: an individual can keep standalone business
+books, file a periodic VAT return, and carry the business net onto their
+personal return. Phase 3 (incorporation) is next — the business `:entity`
+becomes a legal entity, corporate income tax for DE/FR/CA/JP, the `:disposal`
+capital-gains companion.
+
+**Tested.** `sole_proprietor_test.clj` — the freelancer → sole-proprietor user
+story end to end: `business-net` (standalone + a trading loss), the VAT return
+(compute + a balanced remittance), and the business net flowing onto a personal
+return (a pure sole proprietor, and one who also draws a salary).
+
+**Research backing.** Research note 104 (the tax-completion program); the
+individual→corporation continuum is also recorded in project memory.
+
+Date: 2026-05-21.
