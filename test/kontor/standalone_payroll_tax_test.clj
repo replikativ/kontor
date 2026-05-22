@@ -1,0 +1,96 @@
+(ns kontor.standalone-payroll-tax-test
+  "Iteration 3 — the standalone employer payroll-tax mechanism
+   (ADR-099; note 102 §10 / note 103). The first period-tax provider
+   to use `marginalize` as the base-selector — it books wage expense,
+   marginalizes (σ_E) the wage-coded postings, applies the schedule."
+  (:require [clojure.test :refer [deftest is testing]]
+            [datahike.api :as d]
+            [kontor.book :as book]
+            [kontor.core :as core]
+            [kontor.period-tax-provider :as ptp]
+            [kontor.standalone-payroll-tax :as spt]
+            [kontor.tax-return-posting-builder :as trpb]
+            [kontor.tax-schedule :as ts]
+            [kontor.validation :as validation]))
+
+(def ^:private eur [:commodity/symbol "EUR"])
+(def ^:private fy {:from #inst "2026-01-01" :to #inst "2027-01-01"})
+
+(defn- fresh []
+  (let [conn (core/create-test-db)]
+    (d/transact conn
+                [{:commodity/symbol "EUR" :commodity/name "Euro"
+                  :commodity/precision 2}
+                 {:journal/code "GEN" :journal/type :general}
+                 {:journal/code "PUR" :journal/type :purchase}
+                 {:account/path "Expenses:Wages"   :account/code "6200"
+                  :account/type :expense}
+                 {:account/path "Expenses:Other"   :account/code "6900"
+                  :account/type :expense}
+                 {:account/path "Assets:Cash"      :account/code "1000"
+                  :account/type :asset}
+                 {:account/path "Expenses:Payroll-Tax" :account/code "6300"
+                  :account/type :expense}
+                 {:account/path "Liabilities:Payroll-Tax-Payable"
+                  :account/code "2300" :account/type :liability}])
+    conn))
+
+(defn- book-expense! [conn path amount]
+  (book/buy! conn {:debit-account  [:account/path path]
+                   :credit-account [:account/path "Assets:Cash"]
+                   :amount amount :commodity eur
+                   :effective-date #inst "2026-06-15"}))
+
+(defn- sum-account [conn path]
+  (reduce + 0M
+          (d/q '[:find [?amt ...] :in $ ?p
+                 :where [?a :account/path ?p] [?pp :posting/account ?a]
+                 [?pp :posting/amount ?amt]]
+               (d/db conn) path)))
+
+(deftest flat-levy-marginalizes-only-wage-coded-postings
+  (let [conn (fresh)]
+    (book-expense! conn "Expenses:Wages" 100000)
+    (book-expense! conn "Expenses:Other" 50000)
+    (let [provider (spt/standalone-payroll-tax-provider
+                    {:id :test-flat :schedule (ts/flat 0.03M)
+                     :wage-codes ["6200"] :authority :test :commodity :EUR})
+          facts    (ptp/period-tax-facts provider {:period fy :conn conn})
+          [c]      (:components facts)]
+      (is (ptp/valid-return-facts? facts))
+      (is (= :payroll-tax-employer (:kind c)))
+      (is (= :test (:authority c)))
+      (is (== 100000M (:amount (:base c)))
+          "the base-selector picks the wage-coded postings only")
+      (is (== 3000M (:amount (:liability c)))
+          "3% of 100000 — the 50000 non-wage expense is excluded"))))
+
+(deftest capped-levy-applies-the-rate-above-the-threshold
+  (let [conn (fresh)]
+    (book-expense! conn "Expenses:Wages" 1500000)
+    (let [provider (spt/standalone-payroll-tax-provider
+                    {:id :test-capped
+                     :schedule (ts/capped 0.05M {:floor 1000000M})
+                     :wage-codes ["6200"] :authority :test :commodity :EUR})
+          facts    (ptp/period-tax-facts provider {:period fy :conn conn})]
+      (is (== 25000M (:amount (ptp/total-liability facts)))
+          "5% of (1.5M wages − 1M tax-free threshold)"))))
+
+(deftest provision-posts-a-balanced-levy-transaction
+  (let [conn (fresh)]
+    (book-expense! conn "Expenses:Wages" 200000)
+    (let [provider (spt/standalone-payroll-tax-provider
+                    {:id :test :schedule (ts/flat 0.03M)
+                     :wage-codes ["6200"] :authority :test :commodity :EUR})
+          builder  (trpb/make-static-tax-return-posting-builder
+                    {:expense-account [:account/path "Expenses:Payroll-Tax"]
+                     :payable-account [:account/path
+                                       "Liabilities:Payroll-Tax-Payable"]
+                     :journal   [:journal/code "GEN"]
+                     :commodity eur})
+          facts    (ptp/period-tax-facts provider {:period fy :conn conn})]
+      (validation/transact-with-validation
+       conn (trpb/provision-tx-data builder facts
+                                    {:effective-date #inst "2026-12-31"}))
+      (is (== 6000M  (sum-account conn "Expenses:Payroll-Tax")))
+      (is (== -6000M (sum-account conn "Liabilities:Payroll-Tax-Payable"))))))

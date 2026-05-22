@@ -201,6 +201,7 @@ src/kontor/    kernel
   tax_schedule.clj          schedule algebra — flat/bracket/capped/formula/elect + base-transform (ADR-099)
   period_tax_provider.clj   PeriodTaxProvider + TaxReturnFacts (ADR-099)
   tax_return_posting_builder.clj  TaxReturnPostingBuilder — provision/payment (ADR-099)
+  standalone_payroll_tax.clj  StandalonePayrollTaxProvider — generic levy on a marginalized wage sum (ADR-099)
   tax.clj                   apply-tax to a posting
   fx_rate_provider.clj      FxRateProvider protocol + StaticTable / ECB / Chained (ADR-072)
   fx.clj                    Money-level convert / translate / to-functional-currency
