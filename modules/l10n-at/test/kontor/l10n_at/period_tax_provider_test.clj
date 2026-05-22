@@ -1,7 +1,8 @@
 (ns kontor.l10n-at.period-tax-provider-test
   "Iteration 3 — AT Kommunalsteuer period-tax provider."
   (:require [clojure.test :refer [deftest is testing]]
-            [kontor.l10n-at.period-tax-provider :as at]))
+            [kontor.l10n-at.period-tax-provider :as at]
+            [kontor.tax-schedule :as ts]))
 
 (deftest kommunalsteuer-is-a-flat-3pct-levy
   (let [p (at/at-kommunalsteuer-provider {:wage-codes ["6000"]})]
@@ -23,3 +24,12 @@
   (testing "the Mindest-KöSt is overridable per entity type"
     (is (= 3500M (:minimum-tax (at/at-corporate-income-tax-provider
                                 {:minimum-tax 3500M}))))))
+
+(deftest einkommensteuer-brackets
+  (let [s (:schedule (at/at-income-tax-provider {}))]
+    (is (zero? (ts/apply-schedule s 12816M)) "the 0% Existenzminimum")
+    (is (== 11903.70M (ts/apply-schedule s 50000M))
+        "§33 EStG — 7-band progressive")
+    (let [p (at/at-income-tax-provider {})]
+      (is (= :at-est (:id p)))
+      (is (= :EUR (:commodity p))))))

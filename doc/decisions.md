@@ -9134,3 +9134,17 @@ three new capabilities (`apply-base-transform` over all shapes, `greater-of` /
 `lesser-of`, `:formula`/`:elect` threading `ctx`) plus the iteration-1 suite.
 
 Date: 2026-05-21.
+
+### ADR-099 — Addendum 2026-05-21 (2): personal income tax — two interface refinements
+
+Iteration 5 (note 102 §10's final rung — personal income tax for AT / AU / DE / FR, with the directive that the implementations be *faithful* and the abstraction not rule out real tax law) surfaced two small interface refinements. Both are additive, both make the abstraction express the real computation rather than approximate it:
+
+- **`:sum` schedule combinator.** AU levies the Medicare levy (2 % of taxable income) *alongside* the income-tax brackets — a base-surcharge. `:elect` picks one sub-schedule; there was no "apply all and add". Added `:sum` to `kontor.tax-schedule` — the additive sibling of `:elect`. AU's schedule is now `(sum-of [brackets medicare-formula])`; the `:schedule` field faithfully represents the real computation.
+
+- **`:surtaxes` component field.** DE's Solidaritätszuschlag is a tax-on-tax surcharge (with its own Freigrenze + Milderungszone). A `TaxReturnFacts` component already had `:credits` (which reduce the gross); `:surtaxes` is its symmetric counterpart (which add) — `:liability = gross − Σcredits + Σsurtaxes`. Documented optional field, no schema.
+
+The faithfulness test held: DE §32a is implemented as the **real five-zone piecewise-polynomial formula** (a `:formula` schedule — continuous at every zone boundary, REPL-verified), FR's quotient familial as the **real `parts × barème(income/parts)` with the plafonnement cap** (a `:formula` reading the `:tax-unit` from `ctx` — GAP 3's first use). Neither needed an interface change — the `:formula` escape hatch carried the statutory function unchanged. The substrate did not limit the real calculation; where it was slightly short (AU base-surcharge, DE tax-surcharge) it was extended, not worked around.
+
+`kontor.personal-income-tax` ships the generic `PersonalIncomeTaxProvider` (marginalize income → deduct → schedule → − credits + surtaxes); l10n-at / l10n-au / l10n-de / l10n-fr supply the country schedules. Tested — 25 tests / 115 assertions across the substrate + four jurisdictions.
+
+Date: 2026-05-21.

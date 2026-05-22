@@ -52,6 +52,12 @@
   ;; DE Solidaritätszuschlag — 5.5% of the income tax, not of income.
   (is (== 11M (ts/surtax-on 0.055M 200M))))
 
+(deftest sum-combinator-adds-base-surcharges
+  ;; AU — income-tax brackets + a 2% Medicare levy on the SAME base.
+  (let [s (ts/sum-of [(ts/progressive [{:rate 0.10M :upper nil}])
+                      (ts/flat 0.02M)])]
+    (is (== 1200M (ts/apply-schedule s 10000M)) "10% bracket + 2% levy")))
+
 (deftest unknown-schedule-throws
   (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unknown :schedule/type"
                         (ts/apply-schedule {:schedule/type :bogus} 100M))))

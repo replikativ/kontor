@@ -86,6 +86,10 @@
 ;;    :schedule     <data>    the kontor.tax-schedule that produced the gross
 ;;    :gross-liability <Money> base through the schedule, before credits
 ;;    :credits      [<{:code :label :amount}>]  credits applied
+;;    :surtaxes     [<{:code :label :amount}>]  tax-on-tax surcharges
+;;                            added AFTER credits (DE Soli, church tax,
+;;                            IN/BR cess) — symmetric with :credits;
+;;                            :liability = gross − Σcredits + Σsurtaxes
 ;;    :liability    <Money>   resolved net tax owed — the number provisioned
 ;;    :prepaid      <Money>   tax already remitted in-period (withholding)
 ;;    :regime       <kw|nil>  which elective regime applied (note 102 §9-C)

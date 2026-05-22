@@ -10,6 +10,7 @@
    rates and thresholds move — verify against current state revenue
    offices."
   (:require [kontor.corporate-income-tax :as cit]
+            [kontor.personal-income-tax :as pit]
             [kontor.standalone-payroll-tax :as spt]
             [kontor.tax-schedule :as ts]))
 
@@ -61,3 +62,45 @@
     :authority :au-ato
     :commodity :AUD
     :statute   "Income Tax Assessment Act 1997"}))
+
+;; ============================================================================
+;; Individual income tax + Medicare levy
+;; ============================================================================
+
+(def income-tax-brackets
+  "AU resident individual income-tax brackets, 2024-25 (the 'stage 3'
+   rates; verify against current law). First band is the tax-free
+   threshold."
+  [{:rate 0M    :upper 18200M}
+   {:rate 0.16M :upper 45000M}
+   {:rate 0.30M :upper 135000M}
+   {:rate 0.37M :upper 190000M}
+   {:rate 0.45M :upper nil}])
+
+(def medicare-levy-threshold
+  "Medicare-levy low-income threshold (single, no dependants),
+   2024-25 — below it no levy is due; verify."
+  27222M)
+
+(defn- medicare-levy
+  "The Medicare levy, faithful to the low-income shading-in: 0 below
+   the threshold, a 10 % shade-in zone, then a flat 2 % of taxable
+   income. `min(2% × ti, 10% × max(0, ti − threshold))` expresses all
+   three regimes in one expression."
+  [taxable-income _ctx]
+  (min (* 0.02M taxable-income)
+       (* 0.10M (max 0M (- taxable-income medicare-levy-threshold)))))
+
+(defn au-income-tax-provider
+  "AU personal income tax — the resident individual schedule plus the
+   Medicare levy, as a `:sum` of the bracket tax and the levy on the
+   one taxable-income base. Offsets (LITO etc.) ride `context
+   :inputs` as credits."
+  [_]
+  (pit/personal-income-tax-provider
+   {:id        :au-individual
+    :schedule  (ts/sum-of [(ts/progressive income-tax-brackets)
+                           {:schedule/type :formula :fn medicare-levy}])
+    :authority :au-ato
+    :commodity :AUD
+    :statute   "Income Tax Assessment Act 1997 + Medicare Levy Act 1986"}))

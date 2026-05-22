@@ -11,6 +11,7 @@
    provider determines the liability as a `TaxReturnFacts`; it does
    not duplicate the payroll module's posting."
   (:require [kontor.corporate-income-tax :as cit]
+            [kontor.personal-income-tax :as pit]
             [kontor.standalone-payroll-tax :as spt]
             [kontor.tax-schedule :as ts]))
 
@@ -61,3 +62,32 @@
     :authority   :at-finanz
     :commodity   :EUR
     :statute     "Körperschaftsteuergesetz 1988"}))
+
+;; ============================================================================
+;; Einkommensteuer — personal income tax
+;; ============================================================================
+
+(def est-brackets
+  "AT Einkommensteuer — §33 EStG progressive brackets, tax year 2024
+   (after the cold-progression adjustment; verify against current
+   law). The first band is the 0 % Existenzminimum."
+  [{:rate 0M    :upper 12816M}
+   {:rate 0.20M :upper 20818M}
+   {:rate 0.30M :upper 34513M}
+   {:rate 0.40M :upper 66612M}
+   {:rate 0.48M :upper 99266M}
+   {:rate 0.50M :upper 1000000M}
+   {:rate 0.55M :upper nil}])
+
+(defn at-income-tax-provider
+  "AT personal income tax — Einkommensteuer — provider. A 7-band
+   progressive schedule (§33 EStG). Absetzbeträge (tax credits) and
+   Sonderausgaben / Werbungskosten (deductions) ride `context
+   :inputs`."
+  [_]
+  (pit/personal-income-tax-provider
+   {:id        :at-est
+    :schedule  (ts/progressive est-brackets)
+    :authority :at-finanz
+    :commodity :EUR
+    :statute   "§33 EStG"}))

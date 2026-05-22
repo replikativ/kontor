@@ -30,6 +30,11 @@
                (FR PFU-vs-barème). For a regime election where the
                choice is an explicit input, the provider just passes
                the chosen sub-schedule directly.
+     :sum      apply several sub-schedules to the SAME base and ADD
+               the results — a base-surcharge levied alongside the
+               main schedule (AU Medicare levy on taxable income next
+               to the income-tax brackets). The additive sibling of
+               `:elect`.
 
    ## Base transform — `apply-base-transform`
 
@@ -98,6 +103,10 @@
       (throw (ex-info "elect schedule: :choose must be :min or :max"
                       {:choose choose})))))
 
+(defn- sum-tax
+  [{:keys [schedules]} base ctx]
+  (reduce (fn [acc s] (+ acc (apply-schedule s base ctx))) 0M schedules))
+
 (defn apply-schedule
   "Run BigDecimal `base` through `schedule`, returning the BigDecimal
    gross liability. `schedule` is plain data tagged by
@@ -117,6 +126,7 @@
      :capped              (capped-tax schedule base)
      :formula             ((:fn schedule) base ctx)
      :elect               (elect-tax schedule base ctx)
+     :sum                 (sum-tax schedule base ctx)
      (throw (ex-info "apply-schedule: unknown :schedule/type"
                      {:schedule schedule})))))
 
@@ -197,6 +207,13 @@
     floor   (assoc :floor floor)
     ceiling (assoc :ceiling ceiling)))
 
+(defn sum-of
+  "A `:sum` schedule — apply every sub-schedule to the same base and
+   add the results (a base-surcharge alongside the main schedule, e.g.
+   AU income-tax brackets + the Medicare levy)."
+  [schedules]
+  {:schedule/type :sum :schedules (vec schedules)})
+
 (def schedule-types
   "The closed set of `:schedule/type` values `apply-schedule` accepts."
-  #{:flat :progressive-bracket :capped :formula :elect})
+  #{:flat :progressive-bracket :capped :formula :elect :sum})
