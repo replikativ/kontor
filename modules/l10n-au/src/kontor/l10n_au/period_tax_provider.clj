@@ -9,7 +9,8 @@
    `payroll-tax-rates` carries all eight jurisdictions. Statutory
    rates and thresholds move — verify against current state revenue
    offices."
-  (:require [kontor.standalone-payroll-tax :as spt]
+  (:require [kontor.corporate-income-tax :as cit]
+            [kontor.standalone-payroll-tax :as spt]
             [kontor.tax-schedule :as ts]))
 
 (def payroll-tax-rates
@@ -42,3 +43,21 @@
       :commodity  :AUD
       :statute    "Payroll Tax Act (state / territory)"
       :base-label "Taxable wages"})))
+
+;; ============================================================================
+;; Company income tax
+;; ============================================================================
+
+(defn au-company-tax-provider
+  "AU company income tax provider. 25 % for a base-rate entity
+   (aggregated turnover < $50M and ≤ 80 % passive income), else 30 %.
+   Config:
+     :base-rate-entity? — true for the 25 % base-rate-entity rate
+     :rate              — optional explicit override"
+  [{:keys [base-rate-entity? rate]}]
+  (cit/corporate-income-tax-provider
+   {:id        :au-company-tax
+    :rate      (or rate (if base-rate-entity? 0.25M 0.30M))
+    :authority :au-ato
+    :commodity :AUD
+    :statute   "Income Tax Assessment Act 1997"}))

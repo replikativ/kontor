@@ -10,7 +10,8 @@
    stay engine-authoritative). They are separate concerns: this
    provider determines the liability as a `TaxReturnFacts`; it does
    not duplicate the payroll module's posting."
-  (:require [kontor.standalone-payroll-tax :as spt]
+  (:require [kontor.corporate-income-tax :as cit]
+            [kontor.standalone-payroll-tax :as spt]
             [kontor.tax-schedule :as ts]))
 
 (def kommunalsteuer-rate
@@ -30,3 +31,33 @@
     :commodity  :EUR
     :statute    "Kommunalsteuergesetz 1993"
     :base-label "Bemessungsgrundlage (Lohnsumme)"}))
+
+;; ============================================================================
+;; Körperschaftsteuer — corporate income tax
+;; ============================================================================
+
+(def koest-rate
+  "Körperschaftsteuer — flat 23 % (KStG 1988, from 2024)."
+  0.23M)
+
+(def koest-minimum-default
+  "Mindest-KöSt — the minimum corporate tax, payable even at a loss.
+   A GmbH pays €1,750/yr (€437.50 × 4); €3,500/yr after year 5; an AG
+   €5,452/yr. Pass `:minimum-tax` to match the entity. Verify against
+   current law — the figure has changed."
+  1750M)
+
+(defn at-corporate-income-tax-provider
+  "AT corporate income tax — Körperschaftsteuer — provider. A flat
+   23 % with the Mindest-KöSt floor (applied via `greater-of`).
+   Config:
+     :rate        — optional override (default 23 %)
+     :minimum-tax — optional Mindest-KöSt override (default €1,750)"
+  [{:keys [rate minimum-tax]}]
+  (cit/corporate-income-tax-provider
+   {:id          :at-koest
+    :rate        (or rate koest-rate)
+    :minimum-tax (or minimum-tax koest-minimum-default)
+    :authority   :at-finanz
+    :commodity   :EUR
+    :statute     "Körperschaftsteuergesetz 1988"}))

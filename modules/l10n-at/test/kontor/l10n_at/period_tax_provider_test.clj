@@ -13,3 +13,13 @@
   (testing "an explicit :rate overrides the default"
     (is (= 0.025M (:rate (:schedule (at/at-kommunalsteuer-provider
                                      {:rate 0.025M :wage-codes ["6000"]})))))))
+
+(deftest koest-is-flat-23pct-with-a-minimum
+  (let [p (at/at-corporate-income-tax-provider {})]
+    (is (= 0.23M (:rate p)) "KöSt — flat 23%")
+    (is (= 1750M (:minimum-tax p)) "the Mindest-KöSt floor")
+    (is (= :at-koest (:id p)))
+    (is (= :EUR (:commodity p))))
+  (testing "the Mindest-KöSt is overridable per entity type"
+    (is (= 3500M (:minimum-tax (at/at-corporate-income-tax-provider
+                                {:minimum-tax 3500M}))))))

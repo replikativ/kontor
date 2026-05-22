@@ -41,3 +41,10 @@
       (is (== 15000M (:amount (ptp/total-liability facts)))
           "CDMX ISN — 3% of the 500000 nómina gravable")
       (is (= :mx-state/cdmx (:authority (first (:components facts))))))))
+
+(deftest isr-corporate-is-flat-30pct
+  (let [p (mx/mx-isr-corporate-provider {})]
+    (is (= 0.30M (:rate p)) "ISR personas morales — flat 30%")
+    (is (= :MXN (:commodity p)))
+    (is (= :mx-isr-corporate (:id p)))
+    (is (= :mx-sat (:authority p)))))

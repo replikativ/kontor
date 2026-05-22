@@ -17,3 +17,12 @@
   (testing "an unknown state throws"
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unknown state"
                           (au/au-payroll-tax-provider {:state :XYZ})))))
+
+(deftest company-tax-rate
+  (testing "a base-rate entity — 25%"
+    (is (= 0.25M (:rate (au/au-company-tax-provider {:base-rate-entity? true})))))
+  (testing "otherwise — 30%"
+    (is (= 0.30M (:rate (au/au-company-tax-provider {:base-rate-entity? false})))))
+  (let [p (au/au-company-tax-provider {})]
+    (is (= :au-company-tax (:id p)))
+    (is (= :AUD (:commodity p)))))

@@ -10,7 +10,8 @@
    `isn-rates` carries a representative subset of the 32 states; for
    any other state pass an explicit `:rate`. Statutory rates change —
    verify against current state law."
-  (:require [kontor.standalone-payroll-tax :as spt]
+  (:require [kontor.corporate-income-tax :as cit]
+            [kontor.standalone-payroll-tax :as spt]
             [kontor.tax-schedule :as ts]))
 
 (def isn-rates
@@ -38,3 +39,23 @@
     :commodity  :MXN
     :statute    "Impuesto Sobre Nóminas (ley estatal)"
     :base-label "Nómina gravable"}))
+
+;; ============================================================================
+;; ISR personas morales — corporate income tax
+;; ============================================================================
+
+(def isr-corporate-rate
+  "ISR personas morales — flat 30 % (Ley del ISR §9)."
+  0.30M)
+
+(defn mx-isr-corporate-provider
+  "MX corporate income tax — ISR personas morales — provider. A flat
+   30 % on taxable profit (utilidad fiscal). Config:
+     :rate — optional override (default 30 %)"
+  [{:keys [rate]}]
+  (cit/corporate-income-tax-provider
+   {:id        :mx-isr-corporate
+    :rate      (or rate isr-corporate-rate)
+    :authority :mx-sat
+    :commodity :MXN
+    :statute   "Ley del Impuesto sobre la Renta"}))
