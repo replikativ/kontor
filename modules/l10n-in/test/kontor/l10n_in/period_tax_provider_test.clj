@@ -1,9 +1,14 @@
 (ns kontor.l10n-in.period-tax-provider-test
   "Stage 1 of the tax-completion program (research note 104) — Indian
-   personal income tax, the deliberate dual-regime stress case.
+   personal income tax, the deliberate dual-regime stress case. Since
+   note 105 frontier 1 (ADR-099 addendum 4) the §87A rebate and the
+   surcharge are base-aware adjustment items, so these tests run the
+   provider end to end and assert the final liability (income tax −
+   §87A + surcharge + 4 % cess).
 
    Golden values are cross-checked against the published FY 2025-26 /
-   AY 2026-27 income-tax slabs (post Union Budget 2025)."
+   AY 2026-27 income-tax slabs (post Union Budget 2025): each is the
+   trusted pre-cess figure × 1.04."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
             [kontor.book :as book]
@@ -13,7 +18,7 @@
             [kontor.tax-schedule :as ts]))
 
 ;; ============================================================================
-;; Config assertions
+;; Config
 ;; ============================================================================
 
 (deftest provider-config
@@ -27,93 +32,101 @@
         (is (satisfies? ptp/PeriodTaxProvider p) (str regime))
         (is (= :INR (:commodity p)) (str regime))
         (is (= :in-income-tax-department (:authority p)) (str regime))
-        (is (= :formula (:schedule/type (:schedule p)))
-            (str regime " — the schedule is a :formula (the §87A rebate "
-                 "is income-conditional, so not a static credit/surtax)")))))
+        (is (= :progressive-bracket (:schedule/type (:schedule p)))
+            (str regime " — the schedule is the plain bracket ladder; "
+                 "§87A + surcharge are base-aware adjustment items"))
+        (is (= 3 (count (:adjustments p)))
+            (str regime " — §87A rebate, surcharge, cess")))))
   (testing "an unknown regime throws"
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #":regime must be"
                           (in/in-income-tax-provider {:regime :hybrid})))))
 
 ;; ============================================================================
-;; New regime — §115BAC, the default
+;; The provider end to end
 ;; ============================================================================
 
-(deftest new-regime-slabs
-  (let [s (:schedule (in/in-income-tax-provider {:regime :new}))]
-    (testing "the basic exemption — no tax up to ₹4,00,000"
-      (is (zero? (ts/apply-schedule s 400000M)))
-      (is (zero? (ts/apply-schedule s 300000M))))
-    (testing "§87A — a total income up to ₹12,00,000 is effectively tax-free"
-      ;; bracket tax at ₹12L = 5%·4L + 10%·4L = ₹60,000, fully rebated
-      (is (zero? (ts/apply-schedule s 1200000M))
-          "the headline '12 lakh tax-free' under the new regime")
-      (is (zero? (ts/apply-schedule s 700000M))))
-    (testing "§87A marginal relief just above ₹12,00,000"
-      ;; bracket tax at ₹12.5L = 60000 + 15%·50000 = 67500; marginal
-      ;; relief caps the tax at the income in excess of ₹12L = ₹50,000
-      (is (== 50000M (ts/apply-schedule s 1250000M))
-          "marginal relief — tax = income above the ₹12L threshold"))
-    (testing "published worked examples — FY 2025-26 slabs"
-      (is (== 120000M (ts/apply-schedule s 1600000M))
-          "₹16L — 20000+40000+15%·4L = ₹1,20,000")
-      (is (== 300000M (ts/apply-schedule s 2400000M))
-          "₹24L — 20000+40000+60000+20%·4L+25%·4L = ₹3,00,000")
-      (is (== 1080000M (ts/apply-schedule s 5000000M))
-          "₹50L — top-slab tax, no surcharge at exactly ₹50L"))
-    (testing "monotone increasing"
-      (is (apply < (map #(ts/apply-schedule s %)
-                        [1300000M 2000000M 3000000M 8000000M]))))))
+(defn- fresh []
+  (let [conn (core/create-test-db)]
+    (d/transact conn
+                [{:commodity/symbol "INR" :commodity/name "Indian Rupee"
+                  :commodity/precision 2}
+                 {:journal/code "SALE" :journal/type :sale}
+                 {:account/path "Income:Salary" :account/type :income}
+                 {:account/path "Assets:Bank"   :account/type :asset}])
+    conn))
 
-(deftest new-regime-surcharge
-  (let [s (:schedule (in/in-income-tax-provider {:regime :new}))]
-    (testing "the surcharge applies above ₹50L, with marginal relief"
-      ;; at ₹51L: post-rebate tax = 300000 + 30%·27L = ₹11,10,000;
-      ;; raw 10% surcharge = 111000 → total 12,21,000; marginal relief
-      ;; caps total at tax(₹50L)=10,80,000 + ₹1L income above = 11,80,000
-      (is (== 1180000M (ts/apply-schedule s 5100000M))
-          "marginal relief on the surcharge just above ₹50L"))
-    (testing "the new regime caps the surcharge at 25 % (no 37 % band)"
-      ;; ₹6Cr: post-rebate tax = 300000 + 30%·(6Cr−24L) = 1,75,80,000;
-      ;; surcharge 25% (NOT 37%) = 43,95,000 → 2,19,75,000
-      (is (== 21975000M (ts/apply-schedule s 60000000M))
-          "§115BAC surcharge is capped at 25 %"))))
+(defn- assess
+  "Book `taxable` as income (no deductions) and run the IN provider for
+   `regime`; return the `:personal-income-tax` component."
+  [regime taxable]
+  (let [conn (fresh)]
+    (book/sell! conn {:debit-account  [:account/path "Assets:Bank"]
+                      :credit-account [:account/path "Income:Salary"]
+                      :amount taxable :commodity [:commodity/symbol "INR"]
+                      :effective-date #inst "2026-06-30"})
+    (first (:components
+            (ptp/period-tax-facts
+             (in/in-income-tax-provider {:regime regime})
+             {:period {:from #inst "2026-04-01" :to #inst "2027-04-01"}
+              :conn conn})))))
 
-;; ============================================================================
-;; Old regime — the optional regime (Form 10-IEA)
-;; ============================================================================
+(defn- liability [regime taxable]
+  (:amount (:liability (assess regime taxable))))
 
-(deftest old-regime-slabs
-  (let [s (:schedule (in/in-income-tax-provider {:regime :old}))]
-    (testing "the basic exemption — no tax up to ₹2,50,000"
-      (is (zero? (ts/apply-schedule s 250000M)))
-      (is (zero? (ts/apply-schedule s 200000M))))
-    (testing "§87A — a total income up to ₹5,00,000 is tax-free"
-      ;; bracket tax at ₹5L = 5%·2.5L = ₹12,500, fully rebated
-      (is (zero? (ts/apply-schedule s 500000M))))
-    (testing "the old-regime §87A is a HARD CLIFF — no marginal relief"
-      ;; ₹5,10,000: bracket tax = 12500 + 20%·10000 = 14500; a rupee
-      ;; above ₹5L forfeits the whole rebate, so the full ₹14,500 stands
-      (is (== 14500M (ts/apply-schedule s 510000M))
-          "above ₹5L the old-regime §87A rebate vanishes entirely"))
-    (testing "published worked examples — old-regime slabs"
-      (is (== 62500M (ts/apply-schedule s 750000M))
-          "₹7.5L — 12500 + 20%·2.5L = ₹62,500")
-      (is (== 112500M (ts/apply-schedule s 1000000M))
-          "₹10L — 12500 + 20%·5L = ₹1,12,500")
-      (is (== 262500M (ts/apply-schedule s 1500000M))
-          "₹15L — 12500 + 100000 + 30%·5L = ₹2,62,500"))
-    (testing "the old regime retains the 37 % top surcharge band"
-      ;; ₹6Cr: bracket tax = 112500 + 30%·(6Cr−10L) = 1,78,12,500;
-      ;; surcharge 37% = 65,90,625 → 2,44,03,125
-      (is (== 24403125M (ts/apply-schedule s 60000000M))
-          "old regime — 37 % surcharge above ₹5Cr"))))
+(deftest new-regime
+  (testing "§87A — a total income up to ₹12,00,000 is effectively tax-free"
+    (is (zero? (liability :new 1200000M))
+        "the headline '12 lakh tax-free' under the new regime"))
+  (testing "§87A marginal relief just above ₹12,00,000"
+    ;; bracket tax ₹67,500; marginal relief caps the income tax at the
+    ;; income above ₹12L = ₹50,000; + 4 % cess = ₹52,000.
+    (is (== 52000M (liability :new 1250000M))))
+  (testing "published worked examples (income tax + 4 % cess)"
+    (is (== 124800M  (liability :new 1600000M)) "₹16L — 120000 + cess")
+    (is (== 312000M  (liability :new 2400000M)) "₹24L — 300000 + cess")
+    (is (== 1123200M (liability :new 5000000M)) "₹50L — 1080000 + cess"))
+  (testing "the surcharge above ₹50L, with marginal relief"
+    (is (== 1227200M (liability :new 5100000M))
+        "₹51L — marginal relief on the surcharge, then cess"))
+  (testing "§115BAC caps the surcharge at 25 % (no 37 % band)"
+    (is (== 22854000M (liability :new 60000000M))
+        "₹6Cr — 21975000 (25 % surcharge) + cess")))
+
+(deftest old-regime
+  (testing "§87A — a total income up to ₹5,00,000 is tax-free"
+    (is (zero? (liability :old 500000M))))
+  (testing "the old-regime §87A is a HARD CLIFF — no marginal relief"
+    (is (== 15080M (liability :old 510000M))
+        "₹5.1L — the rebate vanishes entirely; 14500 + cess"))
+  (testing "published worked examples (income tax + 4 % cess)"
+    (is (== 65000M  (liability :old 750000M))  "₹7.5L")
+    (is (== 117000M (liability :old 1000000M)) "₹10L")
+    (is (== 273000M (liability :old 1500000M)) "₹15L"))
+  (testing "the old regime retains the 37 % top surcharge band"
+    (is (== 25379250M (liability :old 60000000M))
+        "₹6Cr — 24403125 (37 % surcharge) + cess")))
+
+(deftest credits-and-surtaxes-are-structured
+  ;; note 105 / ADR-099 addendum 4 — §87A and the surcharge are now
+  ;; structured `:credits` / `:surtaxes`, not `:formula` internals.
+  (testing "§87A surfaces as a structured :credit"
+    (let [c      (assess :new 1200000M)
+          rebate (first (filter #(= :87a-rebate (:code %)) (:credits c)))]
+      (is (some? rebate) "the §87A rebate is a :credit item")
+      (is (== 60000M (:amount (:amount rebate)))
+          "the full ₹60,000 rebate at ₹12L")))
+  (testing "the surcharge surfaces as a structured :surtax"
+    (let [c   (assess :new 60000000M)
+          sur (first (filter #(= :surcharge (:code %)) (:surtaxes c)))]
+      (is (some? sur) "the surcharge is a :surtax item")
+      (is (pos? (:amount (:amount sur))) "a positive surcharge at ₹6Cr"))))
 
 ;; ============================================================================
 ;; The cess — a 4 % surtax on both regimes
 ;; ============================================================================
 
 (deftest health-education-cess
-  (testing "4 % Health & Education cess as a computed surtax-fn"
+  (testing "4 % Health & Education cess in the adjustment layer"
     (let [conn (core/create-test-db)]
       (d/transact conn
                   [{:commodity/symbol "INR" :commodity/name "Indian Rupee"
@@ -135,11 +148,12 @@
                               :deductions [in/new-regime-standard-deduction]}}})
             [c]   (:components facts)]
         ;; ₹20L gross − ₹75,000 standard deduction = ₹19,25,000 taxable.
-        ;; New-regime tax = 20000+40000+60000+20%·325000 = ₹1,85,000.
+        ;; New-regime bracket tax = 20000+40000+60000+20%·325000 = ₹1,85,000.
         (is (== 1925000M (:amount (:base c))) "gross − standard deduction")
         (is (== 185000M (:amount (:gross-liability c)))
             "new-regime bracket tax on ₹19,25,000")
-        (is (= 1 (count (:surtaxes c))) "the 4 % Health & Education cess")
+        (is (= 2 (count (:surtaxes c)))
+            "the surcharge (₹0 here) + the 4 % Health & Education cess")
         ;; cess = 4 % × 185000 = 7400; liability = 185000 + 7400
         (is (== 192400M (:amount (:liability c)))
             "income tax + 4 % cess")
@@ -189,8 +203,6 @@
         (is (== 210600M (:amount (:liability c))))
         (is (= :old (:regime c)))))
     (testing "the regimes feed DIFFERENT bases — not an :elect over one base"
-      ;; The whole point of approach (a): the bases differ (1425000 vs
-      ;; 1300000), so the election cannot be a single :elect schedule.
       (is (not= (:amount (:base (first (:components
                                         (facts :new [in/new-regime-standard-deduction])))))
                 (:amount (:base (first (:components

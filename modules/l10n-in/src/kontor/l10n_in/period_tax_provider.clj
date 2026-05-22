@@ -34,16 +34,18 @@
    See the abstraction audit in research note 104's Stage-1 report
    for the strain this still leaves (the §87A rebate).
 
-   ## The §87A rebate lives INSIDE the schedule
+   ## §87A and the surcharge are base-aware adjustment items
 
-   The §87A rebate is income-conditional: `min(bracket-tax, cap)` iff
+   The §87A rebate is income-conditional — `min(bracket-tax, cap)` iff
    total income ≤ a regime threshold, with marginal relief just above
-   it. It is neither a static `:credits` entry (those are caller-fed
-   constants) nor a `:surtax-fn` (those see only the post-credit tax,
-   not the income). So the regime schedule is a `:formula` —
-   `taxable-income → bracket-tax → − §87A rebate → + surcharge` — the
-   substrate's escape hatch carrying the real `base → liability` map.
-   The 4 % cess remains a clean `:surtax-fn` on top.
+   it — and the surcharge is income-banded. Both depend on the *base*,
+   not just the tax. Since research note 105's frontier 1 (ADR-099
+   addendum 4) the adjustment layer is base-aware, so §87A is a
+   `:credit` item and the surcharge a `:surtax` item, each with an
+   `:amount` fn of `{:base :running}` — they surface as structured
+   `:credits` / `:surtaxes` on the `TaxReturnFacts`, not as opaque
+   `:formula` internals. The schedule is the plain bracket ladder; the
+   4 % Health & Education cess is a third adjustment item.
 
    All figures are FY 2025-26 / AY 2026-27 (post Union Budget 2025).
    Verify against the current Finance Act before relying on them."
@@ -205,30 +207,34 @@
                                    (:running ctx)))})
 
 ;; ============================================================================
-;; The regime schedule — a :formula carrying the real base → liability map
+;; The regime adjustment layer — §87A + surcharge as base-aware items
 ;; ============================================================================
 
-(defn- regime-schedule
-  "Build the `:formula` schedule for a regime: run the taxable income
-   through the bracket ladder, subtract the §87A rebate, then add the
-   income-banded surcharge with statutory marginal relief. The result
-   is the tax before cess (cess is the separate `:surtax-fn`)."
+(defn- regime-adjustments
+  "Build the adjustment layer for a regime (research note 105): the
+   §87A rebate (a base-aware `:credit`), the income-banded surcharge
+   (a base-aware `:surtax` with statutory marginal relief), and the
+   4 % cess. Returned in canonical order — credit, then surtaxes. Each
+   `:amount` fn reads `:base` (the taxable income) and `:running` (the
+   tax so far) from the fold context."
   [brackets rebate-cfg surcharge-bands]
-  (let [ladder        (ts/progressive brackets)
-        ;; post-§87A-rebate income tax, before any surcharge
-        post-rebate   (fn [^java.math.BigDecimal taxable-income]
-                        (let [bracket-tax (ts/apply-schedule ladder
-                                                             taxable-income)]
-                          (- bracket-tax
-                             (rebate-87a rebate-cfg taxable-income
-                                         bracket-tax))))]
-    {:schedule/type :formula
-     :fn (fn [^java.math.BigDecimal taxable-income _ctx]
-           (let [after-87a (post-rebate taxable-income)
-                 surcharge (surcharge-with-marginal-relief
-                            surcharge-bands taxable-income after-87a
-                            post-rebate)]
-             (+ after-87a surcharge)))}))
+  (let [ladder      (ts/progressive brackets)
+        ;; post-§87A income tax at a given income — the surcharge's
+        ;; marginal-relief comparison recomputes it at a band floor.
+        post-rebate (fn [^java.math.BigDecimal ti]
+                      (let [bt (ts/apply-schedule ladder ti)]
+                        (- bt (rebate-87a rebate-cfg ti bt))))]
+    [{:code   :87a-rebate
+      :label  "§87A rebate"
+      :op     :credit
+      :amount (fn [ctx] (rebate-87a rebate-cfg (:base ctx) (:running ctx)))}
+     {:code   :surcharge
+      :label  "Surcharge on income tax"
+      :op     :surtax
+      :amount (fn [ctx] (surcharge-with-marginal-relief
+                         surcharge-bands (:base ctx) (:running ctx)
+                         post-rebate))}
+     cess-adjustment]))
 
 ;; ============================================================================
 ;; The provider
@@ -260,13 +266,12 @@
      :regime — `:new` (§115BAC, the statutory default) or `:old`
                (elected on Form 10-IEA). Defaults to `:new`.
 
-   The selected regime fixes the rate ladder, the §87A rebate
-   threshold/cap, and the surcharge bands — all baked into a
-   `:formula` schedule (the §87A rebate is income-conditional, so it
-   cannot be a static credit or a tax-only surtax). The 4 % Health &
-   Education cess is a computed `:surtax-fn` on top of both regimes.
-   The elected regime is recorded on every `TaxReturnFacts`
-   component's `:regime` field.
+   The selected regime fixes the rate ladder (a plain bracket
+   schedule) and the adjustment layer — the §87A rebate (a base-aware
+   `:credit`), the income-banded surcharge (a base-aware `:surtax`)
+   and the 4 % Health & Education cess (a `:surtax`). The elected
+   regime is recorded on every `TaxReturnFacts` component's `:regime`
+   field.
 
    The regime ALSO governs which deductions may legitimately feed the
    `:base-transform` on `context :inputs`: the new regime allows
@@ -291,13 +296,14 @@
          {:id         (case regime
                         :new :in-income-tax-new
                         :old :in-income-tax-old)
-          :schedule   (regime-schedule brackets rebate-cfg surcharge-bands)
+          :schedule   (ts/progressive brackets)
           :authority  :in-income-tax-department
           :commodity  :INR
           :statute    (case regime
                         :new "Income-tax Act §115BAC (new regime)"
                         :old "Income-tax Act §§87A, 2 (old regime)")
-          :adjustments [cess-adjustment]})]
+          :adjustments (regime-adjustments brackets rebate-cfg
+                                           surcharge-bands)})]
     ;; Carry the generic provider's config keys onto the wrapper so it
     ;; stays inspectable (`:schedule`, `:commodity`, `:id`, …) the way
     ;; the AT / FR / DE l10n providers are.
