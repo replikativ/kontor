@@ -9193,3 +9193,42 @@ After Stage 1 an individual worker in all 11 jurisdictions can keep books in
 `kontor.book` and compute their personal income-tax return.
 
 Date: 2026-05-21.
+
+### ADR-099 — Addendum 2026-05-21 (4): the adjustment layer (research note 105 frontier 1)
+
+note 104 Stage 1's per-country audits surfaced that the substrate's credit /
+surtax layer — `liability = gross − Σcredits + Σsurtaxes` — modelled a
+*commutative sum*. Research note 105 names it as one of three frontier
+generalizations (a tax is a *stateful, signed, graph-composable* pipeline);
+frontier 1 — the adjustment layer — is implemented here. Frontiers 2 (the
+inter-period carry) and 3 (the cross-tax graph) are named in note 105 and
+deferred to Phase 3, when the corporate build demands them.
+
+**`kontor.tax-schedule/apply-adjustments`** — an ordered fold over **adjustment
+items** `{:code :label :op :credit|:surtax :refundable? :amount}` where
+`:amount` is a BigDecimal *or a fn of ctx*. Three facets, all demanded across
+most jurisdictions (CA BPA phase-out, US CTC / EITC, AU LITO, MX subsidio, IN
+§87A):
+
+- **base-aware** — a fn `:amount` is called with `{:base :gross :running
+  :tax-unit}`, so a credit / surtax can depend on income, not only on a static
+  constant or the post-credit tax.
+- **ordered** — a non-refundable credit does `max(0, running − amount)`; order
+  matters once flooring bites.
+- **signed** — a *refundable* credit (`:refundable? true`) does `running −
+  amount` and may drive the liability **negative** — a refund / negative tax
+  (the EITC, the MX subsidio). The liability is no longer floored at zero.
+
+`PersonalIncomeTaxProvider`'s config field `:surtax-fns` is replaced by
+`:adjustments` (an ordered vector of adjustment items); the provider assembles
+config `:adjustments` + the consumer's `:inputs :credits` / `:surtaxes` /
+`:adjustments`, canonically orders them (non-refundable credits, surtaxes,
+refundable credits), and folds via `apply-adjustments`. `:credits` / `:surtaxes`
+as plain `:inputs` data still work. DE (Soli), JP (reconstruction surtax) and
+IN (cess) migrated to `:adjustments` items — behaviour-preserving.
+
+Tested — `apply-adjustments` units (base-aware fn, refundable→negative,
+ordered, the `:op` guard) + a kernel base-aware/signed end-to-end + the
+behaviour-preserving DE/JP/IN goldens.
+
+Date: 2026-05-21.

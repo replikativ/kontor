@@ -100,12 +100,14 @@
 
 (deftest reconstruction-surtax-is-2_1pct-of-the-income-tax
   (is (= 0.021M jp/reconstruction-surtax-rate))
-  (testing "2.1% of the national income tax (after credits)"
-    (let [s (jp/reconstruction-surtax 1000000M)]
-      (is (= :reconstruction-surtax (:code s)))
-      (is (== 21000M (:amount s)) "1,000,000 × 2.1% = 21,000")))
-  (testing "no surtax when there is no underlying tax"
-    (is (nil? (jp/reconstruction-surtax 0M)))))
+  (let [item jp/reconstruction-surtax-adjustment]
+    (is (= :reconstruction-surtax (:code item)))
+    (is (= :surtax (:op item)))
+    (testing "2.1% of the running national income tax"
+      (is (== 21000M ((:amount item) {:running 1000000M}))
+          "1,000,000 × 2.1% = 21,000"))
+    (testing "zero surtax when there is no underlying tax"
+      (is (zero? ((:amount item) {:running 0M}))))))
 
 ;; ============================================================================
 ;; National provider — config assertions
@@ -116,7 +118,7 @@
     (is (= :jp-shotokuzei (ptp/provider-id p)))
     (is (= :jp-nta (:authority p)))
     (is (= :JPY (:commodity p)))
-    (is (= 1 (count (:surtax-fns p))) "the reconstruction surtax")))
+    (is (= 1 (count (:adjustments p))) "the reconstruction surtax")))
 
 ;; ============================================================================
 ;; National provider — end-to-end against the posting kernel

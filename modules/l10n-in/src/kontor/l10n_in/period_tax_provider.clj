@@ -193,17 +193,16 @@
    on both regimes. Verify against the current Finance Act."
   0.04M)
 
-(defn- cess
-  "The 4 % Health & Education cess as a computed `:surtax-fn` —
-   `(income tax + surcharge − §87A rebate) → surtax`. The argument is
-   the after-credits tax the substrate hands every surtax-fn (here,
-   post-rebate tax-plus-surcharge, since the rebate and surcharge are
-   already inside the schedule formula)."
-  [tax]
-  (when (pos? tax)
-    {:code   :health-education-cess
-     :label  "Health & Education Cess (4 %)"
-     :amount (ts/surtax-on health-education-cess-rate tax)}))
+(def ^:private cess-adjustment
+  "The 4 % Health & Education cess as an adjustment-layer item
+   (note 105) — a surtax of 4 % of the running tax (income tax − §87A
+   rebate + surcharge, which the schedule formula has already resolved
+   by the time the cess applies)."
+  {:code   :health-education-cess
+   :label  "Health & Education Cess (4 %)"
+   :op     :surtax
+   :amount (fn [ctx] (ts/surtax-on health-education-cess-rate
+                                   (:running ctx)))})
 
 ;; ============================================================================
 ;; The regime schedule — a :formula carrying the real base → liability map
@@ -298,7 +297,7 @@
           :statute    (case regime
                         :new "Income-tax Act §115BAC (new regime)"
                         :old "Income-tax Act §§87A, 2 (old regime)")
-          :surtax-fns [cess]})]
+          :adjustments [cess-adjustment]})]
     ;; Carry the generic provider's config keys onto the wrapper so it
     ;; stays inspectable (`:schedule`, `:commodity`, `:id`, …) the way
     ;; the AT / FR / DE l10n providers are.

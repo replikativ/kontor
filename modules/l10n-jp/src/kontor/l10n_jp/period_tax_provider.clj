@@ -122,31 +122,30 @@
    law (東日本大震災復興特別措置法)."
   0.021M)
 
-(defn reconstruction-surtax
-  "復興特別所得税 as a `kontor.personal-income-tax` `:surtax-fn`:
-   2.1 % of the national income tax (after credits). Always due
-   when the underlying tax is positive."
-  [^java.math.BigDecimal income-tax-after-credits]
-  (when (pos? income-tax-after-credits)
-    {:code   :reconstruction-surtax
-     :label  "復興特別所得税 (Special Reconstruction Income Tax)"
-     :amount (ts/surtax-on reconstruction-surtax-rate
-                           income-tax-after-credits)}))
+(def reconstruction-surtax-adjustment
+  "復興特別所得税 as an adjustment-layer item (note 105) — a surtax of
+   2.1 % of the running national income tax."
+  {:code   :reconstruction-surtax
+   :label  "復興特別所得税 (Special Reconstruction Income Tax)"
+   :op     :surtax
+   :amount (fn [ctx] (ts/surtax-on reconstruction-surtax-rate
+                                   (:running ctx)))})
 
 (defn jp-income-tax-provider
   "JP NATIONAL personal income tax — 所得税 — provider. The 7-band
    progressive schedule (所得税法 §89) plus the 2.1 % reconstruction
-   surtax (a computed surtax). The employment-income deduction
-   (給与所得控除) and personal deductions ride `context :inputs` as a
-   `:base-transform` — see `employment-income-base-transform`."
+   surtax (a computed surtax in the adjustment layer). The
+   employment-income deduction (給与所得控除) and personal deductions
+   ride `context :inputs` as a `:base-transform` — see
+   `employment-income-base-transform`."
   [_]
   (pit/personal-income-tax-provider
-   {:id         :jp-shotokuzei
-    :schedule   (ts/progressive income-tax-brackets)
-    :authority  :jp-nta
-    :commodity  :JPY
-    :statute    "所得税法 §89 + 復興特別所得税 (東日本大震災復興特別措置法)"
-    :surtax-fns [reconstruction-surtax]}))
+   {:id          :jp-shotokuzei
+    :schedule    (ts/progressive income-tax-brackets)
+    :authority   :jp-nta
+    :commodity   :JPY
+    :statute     "所得税法 §89 + 復興特別所得税 (東日本大震災復興特別措置法)"
+    :adjustments [reconstruction-surtax-adjustment]}))
 
 ;; ============================================================================
 ;; Local inhabitant tax (住民税) — prior-year base via :base-period

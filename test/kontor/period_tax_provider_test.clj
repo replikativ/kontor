@@ -62,6 +62,43 @@
   (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unknown :schedule/type"
                         (ts/apply-schedule {:schedule/type :bogus} 100M))))
 
+(deftest apply-adjustments-fold
+  ;; note 105 frontier 1 — the ordered, signed, base-aware adjustment fold.
+  (testing "a non-refundable credit floors the running tax at zero"
+    (is (zero? (:liability (ts/apply-adjustments
+                            100M [{:op :credit :code :c :amount 250M}] {})))))
+  (testing "a refundable credit drives the result negative — a refund"
+    (is (== -150M (:liability (ts/apply-adjustments
+                               100M [{:op :credit :code :c :refundable? true
+                                      :amount 250M}] {})))))
+  (testing "a surtax adds"
+    (is (== 1055M (:liability (ts/apply-adjustments
+                               1000M [{:op :surtax :code :s :amount 55M}] {})))))
+  (testing "a fn :amount sees the base and the running tax"
+    (let [{:keys [liability resolved]}
+          (ts/apply-adjustments
+           1000M [{:op :credit :code :c
+                   :amount (fn [{:keys [base running]}]
+                             (* 0.10M (+ base running)))}]
+           {:base 4000M})]
+      (is (== 500M (:amount (first resolved))) "10% of (4000 base + 1000 running)")
+      (is (== 500M liability))))
+  (testing "order matters when a non-refundable credit floors"
+    (is (== 100M (:liability (ts/apply-adjustments
+                              1000M
+                              [{:op :credit :code :c :amount 1200M}
+                               {:op :surtax :code :s :amount 100M}] {})))
+        "credit first floors to 0, then +100")
+    (is (zero? (:liability (ts/apply-adjustments
+                            1000M
+                            [{:op :surtax :code :s :amount 100M}
+                             {:op :credit :code :c :amount 1200M}] {})))
+        "surtax first → 1100, then the 1200 credit floors to 0"))
+  (testing "an unknown :op throws"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #":op must be :credit"
+                          (ts/apply-adjustments
+                           100M [{:op :bogus :amount 5M}] {})))))
+
 (deftest progressive-is-monotonic-in-base
   ;; a progressive schedule never decreases as the base grows.
   (let [s (ts/progressive [{:rate 0.15M :upper 50000M}

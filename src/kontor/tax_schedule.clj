@@ -186,6 +186,55 @@
   (if (<= (compare a b) 0) a b))
 
 ;; ============================================================================
+;; The adjustment layer — an ordered, signed, base-aware credit/surtax fold
+;; ============================================================================
+
+(defn apply-adjustments
+  "Fold an ordered seq of credit / surtax adjustment `items` over a
+   `gross` tax — the adjustment layer (research note 105 frontier 1).
+   Each item:
+
+     {:code :label
+      :op          :credit | :surtax
+      :refundable? <bool>            ; :credit only — false (default) floors
+      :amount      <bigdec> | <fn>}  ; data, OR a base-aware fn of ctx
+
+   A fn `:amount` is called with `ctx` plus the current `:running`
+   tax — so a credit or surtax can depend on the base, the gross tax,
+   the running tax and the tax-unit, not only on a static constant or
+   the post-credit tax. A non-refundable credit does
+   `max(0, running − amount)`; a refundable credit `running − amount`
+   (may go negative — a refund / a transfer to the taxpayer); a surtax
+   `running + amount`.
+
+   Returns `{:liability <signed BigDecimal> :resolved [<item>]}` —
+   each resolved item carries its numeric `:amount`, so credits and
+   surtaxes surface as structured data rather than being buried in a
+   `:formula`."
+  [^java.math.BigDecimal gross items ctx]
+  (let [result
+        (reduce
+         (fn [{:keys [running resolved]} item]
+           (let [raw (:amount item)
+                 amt (bigdec (if (fn? raw)
+                               (raw (assoc ctx :running running))
+                               raw))
+                 running' (case (:op item)
+                            :surtax (+ running amt)
+                            :credit (if (:refundable? item)
+                                      (- running amt)
+                                      (max 0M (- running amt)))
+                            (throw (ex-info
+                                    "apply-adjustments: :op must be :credit or :surtax"
+                                    {:item item})))]
+             {:running  running'
+              :resolved (conj resolved (assoc item :amount amt))}))
+         {:running gross :resolved []}
+         items)]
+    {:liability (:running result)
+     :resolved  (:resolved result)}))
+
+;; ============================================================================
 ;; Constructors — sugar
 ;; ============================================================================
 

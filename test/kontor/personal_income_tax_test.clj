@@ -62,11 +62,11 @@
 (deftest deductions-credits-and-surtaxes
   (let [conn (fresh)]
     (book-income! conn 50000)
-    (let [soli-fn  (fn [tax] {:code :soli :label "Soli"
-                              :amount (* 0.055M tax)})
+    (let [soli     {:code :soli :label "Soli" :op :surtax
+                    :amount (fn [ctx] (* 0.055M (:running ctx)))}
           provider (pit/personal-income-tax-provider
                     {:id :test :schedule test-schedule :authority :test
-                     :commodity :EUR :surtax-fns [soli-fn]})
+                     :commodity :EUR :adjustments [soli]})
           facts    (ptp/period-tax-facts
                     provider {:period fy :conn conn
                               :inputs {:base-transform
@@ -82,6 +82,37 @@
       (is (== 8967.50M (:amount (:liability c)))       "− credit + soli")
       (is (= 1 (count (:credits c))))
       (is (= 1 (count (:surtaxes c)))))))
+
+(deftest adjustment-layer-is-base-aware-and-signed
+  ;; note 105 frontier 1 — a base-aware credit fn + a refundable credit
+  ;; driving the liability negative (a refund / negative tax).
+  (let [conn (fresh)]
+    (book-income! conn 50000)
+    (let [;; an income-tested credit — full €1,000 below €40k taxable,
+          ;; phasing to zero by €60k.
+          phased   {:code :low-income :label "Low-income credit" :op :credit
+                    :amount (fn [{:keys [base]}]
+                              (cond (<= base 40000M) 1000M
+                                    (>= base 60000M) 0M
+                                    :else (* 1000M (/ (- 60000M base)
+                                                      20000M))))}
+          ;; a large refundable credit — pushes the liability negative.
+          refund   {:code :rebate :label "Refundable rebate" :op :credit
+                    :refundable? true :amount 12000M}
+          provider (pit/personal-income-tax-provider
+                    {:id :test :schedule test-schedule :authority :test
+                     :commodity :EUR})
+          facts    (ptp/period-tax-facts
+                    provider {:period fy :conn conn
+                              :inputs {:adjustments [phased refund]}})
+          [c]      (:components facts)]
+      ;; taxable 50,000 → gross 25%×40,000 = 10,000; phased credit at
+      ;; base 50,000 = 1000×(60000−50000)/20000 = 500 → 9,500;
+      ;; refundable 12,000 → −2,500 (a negative tax — a refund).
+      (is (== 500M (:amount (:amount (first (:credits c)))))
+          "the credit fn read :base from ctx and phased the amount")
+      (is (== -2500M (:amount (:liability c)))
+          "a refundable credit drives the liability negative — a refund"))))
 
 (deftest provision-posts-the-personal-tax
   (let [conn (fresh)]

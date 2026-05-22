@@ -46,26 +46,33 @@
    due on an Einkommensteuer at or below this; verify."
   18130M)
 
-(defn- soli
-  "Solidaritätszuschlag — 5.5 % of the Einkommensteuer, with the
-   Freigrenze and the Milderungszone (the 11.9 % sliding cap that
-   phases the Soli in above the Freigrenze)."
-  [est]
-  (when (> est soli-freigrenze)
-    {:code   :soli
-     :label  "Solidaritätszuschlag"
-     :amount (min (* 0.055M est)
-                  (* 0.119M (- est soli-freigrenze)))}))
+(defn- soli-amount
+  "Solidaritätszuschlag on an Einkommensteuer of `est` — 5.5 %, with
+   the Freigrenze and the Milderungszone (the 11.9 % sliding cap that
+   phases the Soli in above the Freigrenze); zero at or below the
+   Freigrenze."
+  ^java.math.BigDecimal [^java.math.BigDecimal est]
+  (if (> est soli-freigrenze)
+    (min (* 0.055M est) (* 0.119M (- est soli-freigrenze)))
+    0M))
+
+(def ^:private soli-adjustment
+  "The Solidaritätszuschlag as an adjustment-layer item (note 105) —
+   a surtax computed from the running income tax."
+  {:code   :soli
+   :label  "Solidaritätszuschlag"
+   :op     :surtax
+   :amount (fn [ctx] (soli-amount (:running ctx)))})
 
 (defn de-income-tax-provider
   "DE personal income tax — Einkommensteuer — provider. The §32a
    continuous-formula schedule plus the Solidaritätszuschlag (a
-   computed surtax)."
+   computed surtax in the adjustment layer)."
   [_]
   (pit/personal-income-tax-provider
-   {:id         :de-est
-    :schedule   {:schedule/type :formula :fn est-2024}
-    :authority  :de-finanzamt
-    :commodity  :EUR
-    :statute    "§32a EStG"
-    :surtax-fns [soli]}))
+   {:id          :de-est
+    :schedule    {:schedule/type :formula :fn est-2024}
+    :authority   :de-finanzamt
+    :commodity   :EUR
+    :statute     "§32a EStG"
+    :adjustments [soli-adjustment]}))
