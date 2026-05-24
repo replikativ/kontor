@@ -165,8 +165,11 @@
 ;; ============================================================================
 
 (deftest individual-§1250-unrecaptured-at-25pct
-  (testing "depreciated real-property LT sale routes to §1250 lane at 25%"
+  (testing "depreciated real-property LT sale splits §1250 (25%) + LT residual (§1(h))"
     (let [conn (fresh)]
+      ;; gain = 1,100,000 − 338,462 = 761,538; dep-taken = 461,538.
+      ;; Per IRC §1(h)(6)(A) + Pub 544: §1250 unrecaptured slice =
+      ;; min(gain, dep-taken) = 461,538; residual 300,000 → LT bracket.
       (record! conn {:external-id "§1250-1"
                      :acquired-on #inst "2010-06-01"
                      :disposed-on #inst "2026-04-01"
@@ -176,12 +179,20 @@
                      :depreciation-taken {:amount 461538M :commodity usd}})
       (let [facts (run-provider conn :individual p2026
                                 {:tax-unit {:filing-status :single}})
-            §1250 (component-by-lane facts :§1250-unrecaptured)]
+            §1250 (component-by-lane facts :§1250-unrecaptured)
+            lt    (component-by-lane facts :lt)]
         (is (some? §1250))
-        (is (== 761538M (-> §1250 :base :amount))
-            "the entire LT gain folds into the §1250 lane (depreciation present)")
-        ;; 761,538 × 25% = 190,384.50
-        (is (== 190384.5M (-> §1250 :liability :amount)))))))
+        (is (== 461538M (-> §1250 :base :amount))
+            "§1250 base = min(gain, dep-taken) per §1(h)(6)(A)")
+        ;; 461,538 × 25% = 115,384.50
+        (is (== 115384.5M (-> §1250 :liability :amount)))
+
+        ;; Residual 300,000 → LT lane. Single filer 0% bracket
+        ;; ceiling $49,450; 15% to $545,500. Tax = 0 × 49,450 +
+        ;; 15% × 250,550 = $37,582.50.
+        (is (some? lt) "LT lane carries the depreciation-excess residual")
+        (is (== 300000M (-> lt :base :amount)))
+        (is (== 37582.5M (-> lt :liability :amount)))))))
 
 ;; ============================================================================
 ;; §5. §1245 ordinary recapture — personal property at ordinary rate

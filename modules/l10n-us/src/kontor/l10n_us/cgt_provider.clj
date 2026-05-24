@@ -105,60 +105,70 @@
     (- p b r)))
 
 (defn- classify
-  "Classify one disposal into US CGT lanes, returning a map
-   `{:lane <kw> :gain <bigdec> :recapture-ordinary <bigdec>}`. For
-   depreciable real / personal property the `:recapture-ordinary`
-   slice splits off as ordinary income (the §1245 / §1250 mechanic
-   per kind).
+  "Classify one disposal into one or more US CGT lane contributions,
+   returning a VECTOR of `{:lane <kw> :gain <bigdec>
+   :recapture-ordinary <bigdec> :disposal <map>}` entries. A single
+   disposal can contribute to MULTIPLE lanes — e.g. a real-property
+   sale with depreciation splits the gain into the §1250-unrecaptured
+   slice (capped at depreciation taken) AND a residual that runs
+   through the §1(h) brackets at LT rates (IRC §1(h)(6)(A) +
+   Pub 544).
 
    The classification is conservative: when `:depreciation-taken` is
    absent or zero, the whole gain stays in the :st / :lt lane.
 
-   The lane assignment depends on holder kind:
-   - :individual real-property gain with depreciation → :§1250-unrecaptured
-     (the 25 % cap; what remains of the LT gain after recapture)
-   - :corporation real-property gain → :§1250-ordinary (excess
-     accelerated only); straight-line stays capital (= :lt)
-   - any depreciable personal property (asset-class :us-personal-
-     property-§1245 etc.) → :§1245-recapture for the depreciation
-     slice, :st / :lt for the rest."
+   Lane mechanics per kind / asset class:
+   - **Personal property §1245** (asset-class :us-personal-property-§1245):
+     `min(gain, dep-taken)` → :ordinary-recapture lane (rides
+     :recapture-ordinary, folds to PIT/CIT base). Residual stays
+     in :st or :lt by holding period.
+   - **Individual real property §1250** (asset-class :us-real-property,
+     kind :individual): `min(gain, dep-taken)` → :§1250-unrecaptured
+     at 25 % cap rate (IRC §1(h)(6)(A) — the part of LT gain 'due to
+     depreciation'). Residual `gain − dep` flows to :lt at §1(h)
+     0/15/20 brackets. Per Pub 544 ch. 3.
+   - **Corporation real property §1250** (corporation kind): for v1,
+     no recapture split — straight-line depreciation stays in the
+     capital lane; accelerated-over-straight-line would be ordinary
+     (deferred — would need consumer-supplied accelerated portion)."
   [disposal {:keys [kind cutoff-days]}]
   (let [g            (realized-gain disposal)
         dep-taken    (depreciation-taken disposal)
         long?        (long-term? disposal cutoff-days)
         asset-class  (:disposal/asset-class disposal)
-        ;; Recapture only fires on a POSITIVE gain (a loss has no
-        ;; depreciation to recapture as ordinary).
-        recapture    (cond
-                       (not (pos? g))                       0M
-                       (= asset-class :us-personal-property-§1245)
-                       (min dep-taken g)
-                       (and (= kind :individual)
-                            (= asset-class :us-real-property))
-                       0M                                ; the rest goes to :§1250-unrecaptured lane
-                       (and (= kind :corporation)
-                            (= asset-class :us-real-property))
-                       0M                                ; corp §1250 ordinary excess only
-                       :else                                 0M)
-        residual     (- g recapture)
-        ;; Default lane for the residual.
-        lane         (cond
-                       (= asset-class :us-personal-property-§1245)
-                       (if long? :lt :st)
-                       (and (= kind :individual)
-                            (= asset-class :us-real-property)
-                            long?
-                            (pos? residual)
-                            (pos? dep-taken))
-                       :§1250-unrecaptured
-                       long?
-                       :lt
-                       :else
-                       :st)]
-    {:lane               lane
-     :gain               residual
-     :recapture-ordinary recapture
-     :disposal           disposal}))
+        positive?    (pos? g)
+        residual-lane (if long? :lt :st)
+        base         {:disposal disposal :recapture-ordinary 0M}]
+    (cond
+      ;; §1245 personal property — depreciation slice ordinary; rest
+      ;; capital by holding period.
+      (and positive? (= asset-class :us-personal-property-§1245))
+      (let [recap    (min dep-taken g)
+            residual (- g recap)]
+        (cond-> []
+          (pos? recap)
+          (conj (assoc base :lane :ordinary-recapture :gain 0M
+                       :recapture-ordinary recap))
+          (pos? residual)
+          (conj (assoc base :lane residual-lane :gain residual))))
+
+      ;; §1250 individual real property — unrecaptured slice at 25 %;
+      ;; residual at §1(h) brackets per IRC §1(h)(6)(A).
+      (and positive?
+           (= kind :individual)
+           (= asset-class :us-real-property)
+           long?
+           (pos? dep-taken))
+      (let [unrecap  (min dep-taken g)
+            residual (- g unrecap)]
+        (cond-> [(assoc base :lane :§1250-unrecaptured :gain unrecap)]
+          (pos? residual)
+          (conj (assoc base :lane :lt :gain residual))))
+
+      ;; Anything else (corp real property, plain capital, losses): the
+      ;; whole gain (or loss) goes in :st or :lt.
+      :else
+      [(assoc base :lane residual-lane :gain g)])))
 
 ;; ============================================================================
 ;; Compute-fn registration — §1411 NIIT
@@ -403,7 +413,10 @@
           cutoff-days (long (statute/parameter-value-at
                              db "US.CGT.holding-period-cutoff-days" as-of))
           disposals   (ds/disposals-in source entity period)
-          classified  (mapv #(classify % {:kind kind :cutoff-days cutoff-days}) disposals)
+          ;; classify returns a vector of lane entries per disposal (one
+          ;; or two — §1245/§1250 split). mapcat flattens.
+          classified  (into [] (mapcat #(classify % {:kind kind :cutoff-days cutoff-days})
+                                       disposals))
           carry-in    (or (:capital-loss-carryforward inputs) {})
           opts        {:authority authority :commodity commodity}
           components

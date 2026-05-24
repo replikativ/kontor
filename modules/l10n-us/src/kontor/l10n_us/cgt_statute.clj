@@ -147,32 +147,32 @@
     :parameter-value/citation       "IRS Rev. Proc. 2025-32 TY 2026"}
    {:parameter-value/parameter      [:parameter/code "US.CGT.LT.threshold-single-15to20"]
     :parameter-value/effective-from #inst "2026-01-01"
-    :parameter-value/decimal-value  545100M
-    :parameter-value/citation       "IRS Rev. Proc. 2025-32 TY 2026"}
+    :parameter-value/decimal-value  545500M
+    :parameter-value/citation       "IRS Rev. Proc. 2025-32 §3.03 TY 2026"}
    {:parameter-value/parameter      [:parameter/code "US.CGT.LT.threshold-mfj-0to15"]
     :parameter-value/effective-from #inst "2026-01-01"
     :parameter-value/decimal-value  98900M
     :parameter-value/citation       "IRS Rev. Proc. 2025-32 TY 2026"}
    {:parameter-value/parameter      [:parameter/code "US.CGT.LT.threshold-mfj-15to20"]
     :parameter-value/effective-from #inst "2026-01-01"
-    :parameter-value/decimal-value  613750M
-    :parameter-value/citation       "IRS Rev. Proc. 2025-32 TY 2026"}
+    :parameter-value/decimal-value  613700M
+    :parameter-value/citation       "IRS Rev. Proc. 2025-32 §3.03 TY 2026"}
    {:parameter-value/parameter      [:parameter/code "US.CGT.LT.threshold-mfs-0to15"]
     :parameter-value/effective-from #inst "2026-01-01"
     :parameter-value/decimal-value  49450M
     :parameter-value/citation       "IRS Rev. Proc. 2025-32 TY 2026"}
    {:parameter-value/parameter      [:parameter/code "US.CGT.LT.threshold-mfs-15to20"]
     :parameter-value/effective-from #inst "2026-01-01"
-    :parameter-value/decimal-value  306875M
-    :parameter-value/citation       "IRS Rev. Proc. 2025-32 TY 2026"}
+    :parameter-value/decimal-value  306850M
+    :parameter-value/citation       "IRS Rev. Proc. 2025-32 §3.03 TY 2026"}
    {:parameter-value/parameter      [:parameter/code "US.CGT.LT.threshold-hoh-0to15"]
     :parameter-value/effective-from #inst "2026-01-01"
     :parameter-value/decimal-value  66200M
     :parameter-value/citation       "IRS Rev. Proc. 2025-32 TY 2026"}
    {:parameter-value/parameter      [:parameter/code "US.CGT.LT.threshold-hoh-15to20"]
     :parameter-value/effective-from #inst "2026-01-01"
-    :parameter-value/decimal-value  566700M
-    :parameter-value/citation       "IRS Rev. Proc. 2025-32 TY 2026"}
+    :parameter-value/decimal-value  579600M
+    :parameter-value/citation       "IRS Rev. Proc. 2025-32 §3.03 TY 2026"}
 
    {:parameter-value/parameter      [:parameter/code "US.CGT.LT.rate-0"]
     :parameter-value/effective-from #inst "2013-01-01"
