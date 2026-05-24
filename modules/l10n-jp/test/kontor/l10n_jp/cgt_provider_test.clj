@@ -259,10 +259,10 @@
 ;; §5. §35 ¥30M residence deduction — base deduction before the rate
 ;; ============================================================================
 
-(deftest §35-30m-deduction-applies
-  (testing "§35 deduction reduces the base by ¥30M before the rate"
+(deftest §35-30m-deduction-applies-to-plain-long
+  (testing "§35 deduction reduces base on plain :long (no §31-3 election) — note 140 P0-1 fix"
     (let [conn (fresh)]
-      (record! conn {:external-id "§35-only"
+      (record! conn {:external-id "§35-plain-long"
                      :asset-class :jp-real-estate
                      :residence?  true
                      :acquired-on #inst "2018-06-01"  ; long but <10y from disposal year start
@@ -273,14 +273,57 @@
       (let [facts (run-provider conn :individual p2026)
             re    (component-by-regime facts :jp-real-estate-long)]
         (is (some? re) "classifies as long-term (8 elapsed years)")
-        ;; Gross gain ¥50M; §35 only applies to long-residence regime
-        ;; by our design (note 115 §1.5 — but it can apply to any
-        ;; residence sale; we restrict to the §31-3 lane to keep the
-        ;; substrate small and per the task prompt). Verify here that
-        ;; §35 does NOT fire in the plain :long regime — the base
-        ;; remains ¥50M and the consumer must elect §31-3 to get §35.
+        ;; Per NTA タックスアンサー No.3302 + 措置法通達 35-2 / 35-6, the §35
+        ;; ¥30M deduction applies to ANY residence sale regardless of
+        ;; holding period. Gross gain ¥50M − ¥30M § 35 = ¥20M taxable base.
+        (is (== 20000000M (-> re :base :amount))
+            "§35 deduction DOES apply on plain :long when :residence? true + claim stamped")
+        ;; 20M × 15% = 3,000,000 national; +2.1% = 3,063,000; +5% × 20M = 1,000,000 → 4,063,000
+        (is (== 4063000M (-> re :liability :amount))
+            "plain-long rate (20.315%) applied to post-§35 base ¥20M")))))
+
+(deftest §35-deduction-applies-to-short-term
+  (testing "§35 + §32 short-term residence (sub-5-year) — note 140 P0-1"
+    (let [conn (fresh)]
+      (record! conn {:external-id "§35-short"
+                     :asset-class :jp-real-estate
+                     :residence?  true
+                     :acquired-on #inst "2023-03-01"  ; ~3 elapsed years → SHORT
+                     :disposed-on #inst "2026-04-01"
+                     :exemption-claimed #{:jp-§35-residence}
+                     :proceeds {:amount 80000000M :commodity jpy}
+                     :basis    {:amount 30000000M :commodity jpy}})
+      (let [facts (run-provider conn :individual p2026)
+            re    (component-by-regime facts :jp-real-estate-short)]
+        (is (some? re) "classifies as short-term (3 elapsed years)")
+        ;; Per NTA No.3302 — §35 has NO holding-period requirement; the
+        ;; short-term §32 lane (39.63 %) DOES allow the ¥30M deduction.
+        ;; Gross gain ¥50M − ¥30M § 35 = ¥20M taxable base.
+        (is (== 20000000M (-> re :base :amount))
+            "§35 deduction DOES apply on §32 short-term residence")
+        ;; 20M × 30% = 6,000,000 national; +2.1% = 6,126,000;
+        ;; +9% × 20M = 1,800,000 → 7,926,000
+        (is (== 7926000M (-> re :liability :amount))
+            "short-term rate (39.63%) applied to post-§35 base ¥20M")))))
+
+(deftest §35-not-applied-without-residence-flag
+  (testing "§35 is residence-only — a non-residence real-estate sale stamping §35 does not deduct"
+    (let [conn (fresh)]
+      (record! conn {:external-id "§35-non-residence"
+                     :asset-class :jp-real-estate
+                     :residence?  false   ; not a residence
+                     :acquired-on #inst "2018-06-01"
+                     :disposed-on #inst "2026-05-01"
+                     :exemption-claimed #{:jp-§35-residence}
+                     :proceeds {:amount 100000000M :commodity jpy}
+                     :basis    {:amount 50000000M  :commodity jpy}})
+      (let [facts (run-provider conn :individual p2026)
+            re    (component-by-regime facts :jp-real-estate-long)]
+        (is (some? re))
+        ;; §35 must NOT apply — no `:disposal/residence? true` flag.
+        ;; Defensive: silently drop the claim rather than reward bad data.
         (is (== 50000000M (-> re :base :amount))
-            "§35 deduction NOT applied without :elective-regime :jp-§31-3")))))
+            "§35 deduction NOT applied without :disposal/residence? true")))))
 
 (deftest §35-deduction-applies-to-§31-3-lane
   (testing "§35 + §31-3 election → deduction subtracts before §31-3 rate"

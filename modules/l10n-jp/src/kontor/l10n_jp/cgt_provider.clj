@@ -323,8 +323,20 @@
   [{:keys [db ctx as-of commodity §35-amount]} regime regime-disposals carry-in]
   (let [scoped-ctx     (assoc ctx :db db :as-of as-of :regime regime)
         gross-gain     (->> regime-disposals (map realized-gain) (reduce + 0M))
-        §35?           (and (= regime :jp-real-estate-long-residence)
-                            (§35-deduction-claimed? regime-disposals))
+        ;; §35 ¥30M residence deduction: per NTA タックスアンサー No.3302
+        ;; + 措置法通達 35-2 / 35-6, the deduction applies to ANY residence
+        ;; sale regardless of holding period, and per No.3305 it COMBINES
+        ;; with the §31-3 軽減税率 (neither is a prerequisite for the
+        ;; other). Gate the deduction on:
+        ;;   (a) regime ∈ #{short, long, long-residence}    (residence-only relief)
+        ;;   (b) the disposal stamps :exemption-claimed :jp-§35-residence
+        ;;   (c) the disposal stamps :disposal/residence? true            (defensive)
+        ;; All three real-estate regimes participate; equity regimes never.
+        §35?           (and (#{:jp-real-estate-short
+                               :jp-real-estate-long
+                               :jp-real-estate-long-residence} regime)
+                            (§35-deduction-claimed?
+                             (filter :disposal/residence? regime-disposals)))
         after-§35      (apply-§35-deduction gross-gain §35-amount §35?)
         net-base       (net-against-carry after-§35 carry-in)
         {:keys [national local]} (schedules-for regime db as-of)
