@@ -9285,3 +9285,115 @@ return (a pure sole proprietor, and one who also draws a salary).
 individual→corporation continuum is also recorded in project memory.
 
 Date: 2026-05-21.
+
+## ADR-101 — Tax law as data: `:tax-concept` / `:provision` / `:regime` / `:parameter`
+
+**Status.** Accepted. Research notes 107 / 108-115 / 116 / 117 / 118 / 119.
+
+**Context.** The Phase 1 tax substrate (`PeriodTaxProvider`, ADR-099 + addenda;
+note 105's adjustment-layer algebra) treats each jurisdiction's tax law as a
+Clojure record with rates, brackets, and adjustments hardcoded inside a
+`defrecord` body. Phase 1 shipped 11 PIT providers this way. As Phase 3 fanned
+out into 4 CIT + 4 CGT jurisdictions, eight independent research agents (notes
+108-115) kept naming the **same cross-jurisdiction concepts** — rollover
+relief (US §1031 / DE §6b / UK s152 / JP §36-2), participation exemption
+(DE §8b / UK SSE), lifetime cap on preferential treatment (UK BADR /
+US §1202), loss-offset compartmentalization (DE 4 buckets / UK gains-only /
+US $3k/year / JP per-class), holding-period preferential rate (US LT/ST /
+DE §23 / JP real-estate 5y@Jan-1) — that the current substrate cannot
+represent as data: each instance lives only inside its provider's compiled
+code, and the concept itself lives nowhere. Prior-art survey (note 116)
+confirmed two serious productionised tax-as-data systems (Catala — Apache 2.0;
+OpenFisca — AGPL); per-project code-depth reads (notes 117 / 118) independently
+converged on essentially the same 3-namespace kontor schema, with OpenFisca
+contributing a 4th (`:parameter`) for the date-keyed rate/bracket history.
+
+**Decision.** Four kernel namespaces — statutes, provisions, regimes, and
+parameters as first-class queryable data — plus two small extensions to
+existing substrate. The detailed attribute listings (≈36 attrs total) live in
+notes 117 §2 and 118 §2; this ADR commits to the **shape**:
+
+- **`:tax-concept`** (~5 attrs) — the **cross-jurisdiction catalogue**. A
+  named, ADR-closed set of abstractions (`:participation-exemption`,
+  `:rollover-relief`, `:loss-bucket`, `:lifetime-cap`, …) that
+  jurisdiction-specific provisions reference. Composes with ADR-090
+  `:concept-iri` for XBRL / FIBO / external taxonomy edges. Starter set of 14
+  concepts (note 119 D6) seeds the convention; additions are 1-row schema
+  migrations.
+- **`:provision`** (~14 attrs) — the **per-jurisdiction encoded statute
+  rule**. Carries the source-of-law citation, the affected `:tax-concept`, a
+  condition expression (closed-vocab `:and`/`:or`/`:leq`/`:geq`/`:eq`/`:in`/
+  `:status-is`/… predicates over `:tax-context` facts), a consequence
+  (`:base-transform`, `:credit`, `:surtax`, `:base-deduct`,
+  `:schedule-override`, …), an ordered `:priority`, an optional
+  `:exception-of` ref (Catala-inspired default+exception semantics), and
+  `:effective-from` / `:effective-until` date guards. A
+  `:provision/compute-fn` keyword escape hatch resolves to a registered
+  Clojure fn for the rare provision that exceeds the closed predicate
+  vocabulary.
+- **`:regime`** (~7 attrs) — the **elective container**. Groups provisions
+  that compose into one computation (IN's old-vs-new, FR's PME vs standard
+  IS); supports `:regime/extends` for counterfactual / amendment overlay.
+  The elect event itself rides the existing ADR-034 status-machine substrate
+  (no parallel `:regime-election` namespace).
+- **`:parameter` + `:parameter-value` + `:parameter-bracket`** (~9 attrs) —
+  the **date-keyed value history**. The OpenFisca operational pattern: rates
+  / brackets / thresholds are entities with `:parameter-value` records keyed
+  by `:effective-from` (so the 2024 rate, 2025 rate, … are separate data
+  points), per-bracket fields with independent histories. Replaces the
+  current pattern of "edit the y2024 namespace's `defrecord` config to
+  update a rate."
+
+Two small extensions to existing substrate:
+
+- **`:op :base-deduct`** added to the adjustment-layer vocabulary (note 105).
+  Today's `:op` set is `{:credit :surtax}`; DE §9 GewSt reductions are
+  base-deducts (subtract from the taxable base before the schedule fires),
+  distinct from `:credit` (subtract from gross liability) and from negative
+  additions in `:base-transform :adjustments`. The vocabulary becomes
+  `{:credit :surtax :base-add :base-deduct}`.
+- **`:provision/effective-from`** semantically distinct from
+  `:tx/valid-from` (ADR-048). The former is *the statutory date the law
+  applies from* (e.g. "this rate is effective FY 2025"); the latter is *when
+  we entered the provision into our books*. Some jurisdictions allow
+  retroactive amendments (`:effective-from` < the amendment's enactment date)
+  and the audit story needs both axes.
+
+A single kernel evaluator (`kontor.statute/apply-provisions`, name TBD) folds
+applicable provisions onto a base in priority order, detecting ambiguity (two
+provisions at same priority both applicable) at run-time as a
+`kontor.tax/ambiguous-provision` exception with both citations. Existing
+`PeriodTaxProvider` records continue to work unchanged; new per-country
+implementations from Phase 3 onward become **configurations of `:provision`
+data** rather than hardcoded `defrecord` bodies.
+
+**Implication.** Kernel, additive, no breaking changes to ADR-099 / note 105
+/ shipped Phase 1 providers. Per-country tax becomes data — queryable
+("which jurisdictions implement `:rollover-relief`?"), auditable (every
+component carries `:provision/citations` back to the statute section), and
+counterfactual (a `:regime/extends` overlay models proposed amendments).
+The 11 shipped PIT providers stay record-shaped; migrate opportunistically
+when l10n modules are touched (not a forced sweep — record-shaped providers
+and statute-data providers coexist).
+
+**Tested.** A new `statute_test.clj` will exercise: catalogue lookup,
+provision priority + exception-of fold, ambiguity-detection trap, parameter
+history at-instant resolution, `:regime` electives via ADR-034 status-machine.
+The Phase 3 CIT/CGT providers (ADR-104+) will be the first end-to-end
+consumers, with the existing notes 108-115 fit-assessments as the golden-case
+template.
+
+**Research backing.** Notes 108-115 (cross-jurisdiction patterns surfaced
+the gap); note 116 (prior-art survey ruling out 11 of 13 candidate systems);
+notes 117 (Catala, Apache 2.0) + 118 (OpenFisca, AGPL — concepts read by
+analogy, no code lifted) — independent code-depth reads that converged on
+this schema shape; note 119 (ADR draft + 6 resolved design choices).
+
+**Sequencing consequence.** Note 107 proposed `kontor-disposal` as ADR-101 +
+`kontor.incorporation` as ADR-102 + CIT providers as ADR-103/104/105/106. With
+ADR-101 taken by the statute-as-data substrate, the Phase 3 ADRs shift:
+ADR-102 = `kontor-disposal`; ADR-103 = `kontor.incorporation` + dividend
+verbs; ADR-104..107 = DE/FR/JP/CA CIT providers (now as `:provision` data,
+not records); ADR-108..111 = US/DE/UK/JP CGT providers.
+
+Date: 2026-05-24.
