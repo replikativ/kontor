@@ -91,23 +91,46 @@
   (d/transact conn [cost-center-plan-seed])
   conn)
 
+(defonce ^:private test-template
+  ;; Lazy schema'd in-memory template DB. The kernel schema install
+  ;; is ~260 ms for the 505 attrs — building it once per JVM and
+  ;; CoW-branching per test (datahike's branching API; each branch
+  ;; is an isolated fork, connections deduplicate by [store-id
+  ;; branch]) cuts per-test setup from ~560 ms to ~1 ms.
+  (delay
+    (let [cfg (-> default-config (assoc-in [:store :id] (random-uuid)))]
+      (d/create-database cfg)
+      (let [conn (d/connect cfg)]
+        (install-schema! conn)
+        {:cfg cfg :conn conn}))))
+
 (defn create-test-db
   "Create an ephemeral in-memory accounting DB with the kernel schema
-   installed. Each call creates a fresh database keyed by a random UUID.
+   installed. The zero-arg form CoW-branches off a shared template
+   (the kernel schema is installed once per JVM; each test gets a
+   fresh isolated branch); the 2-arg form is a slow-path escape for
+   tests that need a non-default `overrides` config (builds a fresh
+   DB and re-installs the schema).
 
    For production / persistent use, build your own config and call
    (install-schema! conn) explicitly.
 
    Returns a connection (`d/connect` result)."
-  ([] (create-test-db {}))
+  ([]
+   (let [{:keys [cfg conn]} @test-template
+         branch-kw          (keyword (str "t-" (random-uuid)))]
+     (d/branch! conn :db branch-kw)
+     (d/connect (assoc cfg :branch branch-kw))))
   ([overrides]
-   (let [cfg (-> default-config
-                 (assoc-in [:store :id] (random-uuid))
-                 (merge overrides))]
-     (d/create-database cfg)
-     (let [conn (d/connect cfg)]
-       (install-schema! conn)
-       conn))))
+   (if (empty? overrides)
+     (create-test-db)
+     (let [cfg (-> default-config
+                   (assoc-in [:store :id] (random-uuid))
+                   (merge overrides))]
+       (d/create-database cfg)
+       (let [conn (d/connect cfg)]
+         (install-schema! conn)
+         conn)))))
 
 ;; ============================================================================
 ;; Provider registration

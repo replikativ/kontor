@@ -1,8 +1,10 @@
 ---
 date: 2026-05-21
 title: 106 — Test-suite speed + simplification plan
-status: assessment + plan; remediation not yet applied
-audience: maintainer — read before any "make tests faster" attempt
+status: superseded by §0 (2026-05-24) — dominant lever applied,
+  the §1-§7 plan below is now historical context
+audience: maintainer — read §0 first; the body is the analysis that
+  preceded the §0 fix
 supersedes-partially: note 96 (Lever 2 there assumed a kaocha parallel
   plugin that does not exist; Lever 1's `d/with` reuse is largely
   inapplicable — see §3)
@@ -14,6 +16,89 @@ Note 96 measured the suite (~7m38s) and named three levers; remediation
 was deferred "until consumer demand." The demand is now here. This note
 re-measures, **corrects two factual errors in note 96**, and gives a
 prioritized, coverage-preserving plan with a concrete target.
+
+## 0 — Update 2026-05-24: applied via datahike branching API
+
+The §1-§7 plan below names three levers — process-parallel sharding,
+fix the bootstrap-in-`doseq` anti-pattern, and `:once` fixtures via a
+shared `kontor.test-fixtures` helper. It **misses the dominant lever
+entirely**: datahike's CoW branching API (`d/branch!` +
+`d/connect (assoc cfg :branch …)`) on the `:memory` backend.
+
+### What was applied
+
+`kontor.core/create-test-db` rewritten to (a) build ONE schema'd
+in-memory template DB lazily (once per JVM), and (b) per call,
+`d/branch!` a fresh CoW branch off the template's `:db` and
+`d/connect` to it. Connections deduplicate by `[store-id branch]`
+(`datahike.connector.cljc:175`), so each branch is its own isolated,
+writable DB. ~15-line change in `src/kontor/core.clj`; zero test-file
+changes.
+
+### Measured impact (REPL bench, warm JVM)
+
+| Step | ms |
+|---|---:|
+| template build (once per JVM) | ~1100 |
+| `d/branch!` + `d/connect` (per test) | **~1** |
+| `d/delete-branch!` (per teardown) | ~0.6 |
+| old `create-test-db` per call | ~560 |
+
+Per-fixture speedup: **~560×**. The "GC pressure ~1.6 s" inflation
+documented in §1 disappears with it (no per-test 505-attr schema
+transaction).
+
+### End-to-end suite result
+
+`bb test`: **7m38s → 4m39.7s** on the same box, single process.
+2407 tests / 9604 assertions / 0 failures. ~39% wall-time reduction.
+
+### Why the §1-§7 plan missed it
+
+§3 surveyed two approaches to amortizing schema install — `d/with`
+on a shared db (rejected: only 1/274 files pure-query) and konserve
+store-fork (rejected: connection caches schema separately). It did
+not consider datahike's first-class **branching** primitive, which
+solves the same problem cleanly: the connection cache isn't bypassed,
+it's branch-keyed; isolation is enforced by the branching contract
+(CoW indices, separate writer state).
+
+This is a documentation/awareness gap, not a substrate one — the API
+has been in datahike for some time (`doc/secondary-indices.md`
+documents the `branch! + connect` recipe directly).
+
+### What the §1-§7 levers buy from here
+
+Still valid as **further** wins, but the priority order changes:
+
+1. **Process-parallel sharding** (§5 Lever 1) — ~2× wall-time on a
+   multi-core box. Now the biggest remaining lever. Worth it if/when
+   4m39s feels slow.
+2. **Bootstrap-in-`doseq` fix** (§5 Lever 2) — ~14 deftests still
+   call `create-test-db` inside a loop, paying it 5-13×. With branch
+   cost ~1 ms it's no longer dominant; saves ~10-20s, not the 60-100s
+   originally projected.
+3. **`:once` fixtures helper** (§5 Lever 4) — largely subsumed; the
+   per-test cost is already ~1 ms. The motivation (sharing a costly
+   bootstrap) is gone. Could still help the few namespaces with
+   expensive per-test setup beyond `create-test-db`.
+
+**Revised target if pursued further**: <2m with sharding alone; the
+§5 Stage-3 ":once fixtures" work is now hard to justify on cost
+grounds.
+
+### What did not change
+
+- The §1 decomposition (where the 960 ms went) is still accurate
+  for `:once` per-process fixtures.
+- The §2 "no safe in-JVM parallelism" finding stands — `defonce`
+  store state, sealing middleware, etc. would still race.
+- The §8 corrections to note 96 stand.
+
+The rest of this note (§1-§8) is the assessment that preceded this
+fix and remains useful as background for any future test-perf work.
+
+---
 
 ## TL;DR
 
