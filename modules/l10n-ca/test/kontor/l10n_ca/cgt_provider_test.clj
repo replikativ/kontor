@@ -12,7 +12,8 @@
      §8  Corp net folds into CIT base additions (no LCGE)
      §9  Individual folds into PIT base additions
      §10 Voided disposals excluded
-     §11 Superficial loss flag — denied"
+     §11 Superficial loss flag — denied
+     §12 Terminal loss on depreciable property — s.20(16) ordinary deduction"
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
             [kontor.core :as core]
@@ -451,3 +452,64 @@
             s     (summary facts)]
         (is (== 0M (:gross-capital s)) "superficial loss denied")
         (is (some #(= :superficial-loss-denied (:role %)) (:line-items comp)))))))
+
+;; ============================================================================
+;; §12. Terminal loss on depreciable property — s.20(16) ordinary deduction
+;; ============================================================================
+
+(deftest depreciable-property-loss-emits-terminal-loss-not-capital-loss
+  (testing "depreciable property sold below NBV: per ITA s.20(16) the loss is
+            a TERMINAL LOSS (ordinary deduction against ANY income), NOT a
+            capital loss. s.39(1)(b)(i) excludes depreciable property from
+            capital-loss treatment. CRA Folio S3-F4-C1 ¶1.92-1.96.
+
+            Example: NBV 40k, proceeds 30k, dep-taken 60k →
+            terminal loss = NBV − proceeds = 10k; zero capital; zero recapture."
+    (let [conn (fresh)]
+      (record! conn {:external-id "terminal-loss-1"
+                     :acquired-on #inst "2018-01-01"
+                     :disposed-on #inst "2026-06-15"
+                     :asset-class :ca-depreciable
+                     :proceeds {:amount 30000M :commodity cad}
+                     :basis    {:amount 40000M :commodity cad}
+                     :depreciation-taken {:amount 60000M :commodity cad}})
+      (let [facts (run-provider conn :individual p2026)
+            comp  (only-component facts)
+            s     (summary facts)]
+        (is (== 0M (:gross-capital s))
+            "NO capital loss — depreciable property is excluded from s.39 capital-loss universe")
+        (is (== 0M (:taxable-capital s)) "no taxable capital gain")
+        (is (== 0M (:ordinary-recapture s)) "no recapture on a loss")
+        (is (== 10000M (:terminal-loss s))
+            "terminal loss = NBV − proceeds = 40k − 30k = 10k (s.20(16))")
+        (is (= [10000M] (get-in comp [:jurisdiction-specific-codes :pit-base-deductions]))
+            "terminal loss surfaces as PIT base DEDUCTION (against ANY income)")
+        (is (nil? (get-in comp [:jurisdiction-specific-codes :pit-base-additions]))
+            "no PIT base additions (no positive items)")
+        (is (some #(= :terminal-loss (:role %)) (:line-items comp))
+            "per-disposal line item records the terminal loss")
+        (is (some #(= :terminal-loss-total (:role %)) (:line-items comp))
+            "summary line item records the aggregated terminal loss")))))
+
+(deftest corporate-terminal-loss-routes-to-cit-base-deductions
+  (testing "corp terminal loss on depreciable property routes to :cit-base-deductions"
+    (let [conn (fresh)]
+      ;; Corp disposes of a class-14.1 asset at a loss:
+      ;; NBV 100k, proceeds 50k, dep-taken 20k → terminal loss = 50k.
+      (record! conn {:external-id "corp-terminal-loss"
+                     :acquired-on #inst "2020-01-01"
+                     :disposed-on #inst "2026-06-15"
+                     :asset-class :ca-class-14.1
+                     :proceeds {:amount 50000M :commodity cad}
+                     :basis    {:amount 100000M :commodity cad}
+                     :depreciation-taken {:amount 20000M :commodity cad}})
+      (let [facts (run-provider conn :corporation p2026)
+            comp  (only-component facts)
+            s     (summary facts)]
+        (is (== 0M (:gross-capital s)) "no capital loss for depreciable property")
+        (is (== 50000M (:terminal-loss s))
+            "terminal loss = 100k − 50k = 50k (s.20(16))")
+        (is (= [50000M] (get-in comp [:jurisdiction-specific-codes :cit-base-deductions]))
+            "corp routes terminal loss to :cit-base-deductions")
+        (is (nil? (get-in comp [:jurisdiction-specific-codes :pit-base-deductions]))
+            "no :pit- key for corporate kind")))))

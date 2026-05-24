@@ -234,17 +234,25 @@
     (- p b r)))
 
 (defn- cca-split
-  "Split a depreciable-property gain into ordinary recapture and
-   capital portion. Returns `{:recapture <bigdec> :capital <bigdec>}`.
+  "Split a depreciable-property gain/loss into ordinary recapture,
+   capital portion, and terminal loss. Returns
+   `{:recapture <bigdec> :capital <bigdec> :terminal-loss <bigdec>}`.
 
      NBV          = :disposal/basis-amount
      capital_cost = NBV + :disposal/depreciation-taken-amount
      gain         = proceeds − NBV (basis already = NBV)
      recapture    = min(proceeds, capital_cost) − NBV  (positive only)
      capital      = max(0, proceeds − capital_cost)
+     terminal-loss = max(0, NBV − proceeds)            (positive magnitude)
 
-   When `:depreciation-taken-amount` is absent / zero, recapture is 0
-   and the entire gain stays capital."
+   Per ITA s.20(16): when proceeds < NBV (UCC) on disposal of the last
+   asset of a CCA class, the un-recovered UCC is a TERMINAL LOSS —
+   deductible against ORDINARY income, not a capital loss. ITA
+   s.39(1)(b)(i) explicitly excludes depreciable property from the
+   capital-loss universe. CRA Folio S3-F4-C1 ¶1.92-1.96.
+
+   When `:depreciation-taken-amount` is absent / zero AND there is a
+   gain, recapture is 0 and the entire gain stays capital."
   [disposal]
   (let [proceeds     (bigdec0 (:disposal/proceeds-amount disposal))
         nbv          (bigdec0 (:disposal/basis-amount disposal))
@@ -252,15 +260,22 @@
         capital-cost (+ nbv dep-taken)
         gain         (realized-gain disposal)]
     (cond
-      ;; No depreciation OR a loss → nothing to recapture; everything
-      ;; stays in the capital lane.
-      (or (not (pos? dep-taken)) (not (pos? gain)))
-      {:recapture 0M :capital gain}
+      ;; LOSS on depreciable property → s.20(16) terminal loss
+      ;; (deductible against ordinary income). NOT a capital loss
+      ;; (s.39(1)(b)(i) excludes depreciable property). The loss
+      ;; magnitude is (NBV − proceeds), independent of dep-taken.
+      (neg? gain)
+      {:recapture 0M :capital 0M :terminal-loss (- nbv proceeds)}
+
+      ;; No depreciation taken → no recapture; whatever gain there is
+      ;; stays capital (zero-gain falls through here too: capital 0).
+      (not (pos? dep-taken))
+      {:recapture 0M :capital gain :terminal-loss 0M}
 
       :else
       (let [recapture (max 0M (- (min proceeds capital-cost) nbv))
             capital   (max 0M (- proceeds capital-cost))]
-        {:recapture recapture :capital capital}))))
+        {:recapture recapture :capital capital :terminal-loss 0M}))))
 
 ;; ============================================================================
 ;; Per-disposal classification
@@ -271,6 +286,8 @@
 
      {:capital-pre-inclusion  <bigdec>   ; gain that enters the 50%-inclusion pool
       :ordinary-recapture     <bigdec>   ; CCA recapture (positive only)
+      :terminal-loss          <bigdec>   ; s.20(16) terminal loss (positive
+                                         ; magnitude; consumer SUBTRACTS)
       :abil-deduction         <bigdec>   ; 1/2 × business-investment-loss
                                          ; (positive number; consumer SUBTRACTS)
       :lcge-eligible?         <bool>     ; true if LCGE may be applied to capital-pre-inclusion
@@ -279,7 +296,9 @@
 
    The four major exclusion gates (in order): superficial loss,
    principal residence, rollover, charitable public share. Then ABIL
-   detour, then CCA split, then leave the rest as capital."
+   detour, then CCA split (which may yield a TERMINAL LOSS for
+   depreciable property at a loss — s.20(16)), then leave the rest as
+   capital."
   [disposal]
   (let [external-id (:disposal/external-id disposal)
         gain        (realized-gain disposal)
@@ -290,6 +309,7 @@
       (and (neg? gain) (superficial-loss-flagged? disposal))
       {:capital-pre-inclusion 0M
        :ordinary-recapture    0M
+       :terminal-loss         0M
        :abil-deduction        0M
        :lcge-eligible?        false
        :line-items            [(assoc base-line :role :superficial-loss-denied)]
@@ -299,6 +319,7 @@
       (principal-residence-exempt? disposal)
       {:capital-pre-inclusion 0M
        :ordinary-recapture    0M
+       :terminal-loss         0M
        :abil-deduction        0M
        :lcge-eligible?        false
        :line-items            [(assoc base-line :role :principal-residence-exempt)]
@@ -308,6 +329,7 @@
       (rollover-elected? disposal)
       {:capital-pre-inclusion 0M
        :ordinary-recapture    0M
+       :terminal-loss         0M
        :abil-deduction        0M
        :lcge-eligible?        false
        :line-items            [(assoc base-line :role :rollover-deferred)]
@@ -317,6 +339,7 @@
       (charitable-public-share-zero? disposal)
       {:capital-pre-inclusion 0M
        :ordinary-recapture    0M
+       :terminal-loss         0M
        :abil-deduction        0M
        :lcge-eligible?        false
        :line-items            [(assoc base-line :role :charitable-public-share-zero-inclusion)]
@@ -329,26 +352,35 @@
       (let [raw-loss (- gain)] ; positive number representing loss magnitude
         {:capital-pre-inclusion 0M
          :ordinary-recapture    0M
+         :terminal-loss         0M
          :abil-deduction        raw-loss
          :lcge-eligible?        false
          :line-items            [(assoc base-line :role :abil-raw-loss
                                         :amount raw-loss)]
          :disposal              disposal})
 
-      ;; Depreciable — split into recapture (ordinary) + capital.
+      ;; Depreciable — split into recapture (ordinary) + capital +
+      ;; terminal-loss (ordinary deduction per s.20(16)).
       (depreciable? disposal)
-      (let [{:keys [recapture capital]} (cca-split disposal)]
+      (let [{:keys [recapture capital terminal-loss]} (cca-split disposal)]
         {:capital-pre-inclusion capital
          :ordinary-recapture    recapture
+         :terminal-loss         terminal-loss
          :abil-deduction        0M
          :lcge-eligible?        false
          :line-items            (cond-> [(assoc base-line :role :depreciable-split
                                                 :capital capital
-                                                :recapture recapture)]
+                                                :recapture recapture
+                                                :terminal-loss terminal-loss)]
                                   (pos? recapture)
                                   (conj {:disposal/external-id external-id
                                          :role :cca-recapture
-                                         :amount recapture}))
+                                         :amount recapture})
+                                  (pos? terminal-loss)
+                                  (conj {:disposal/external-id external-id
+                                         :role :terminal-loss
+                                         :amount terminal-loss
+                                         :note "s.20(16) terminal loss — deducts vs ANY income; depreciable property is NOT a capital loss per s.39(1)(b)(i)"}))
          :disposal              disposal})
 
       ;; Default lane — plain capital gain or loss; LCGE-eligible if
@@ -356,6 +388,7 @@
       :else
       {:capital-pre-inclusion gain
        :ordinary-recapture    0M
+       :terminal-loss         0M
        :abil-deduction        0M
        :lcge-eligible?        (lcge-eligible? disposal)
        :line-items            [(assoc base-line :role :capital
@@ -413,6 +446,9 @@
                                       (the headline CGT base)
       :ordinary-recapture <bigdec>   Σ CCA recapture (goes to PIT/CIT
                                       as +base addition, ordinary)
+      :terminal-loss     <bigdec>    Σ s.20(16) terminal losses
+                                      (goes to PIT/CIT as −base
+                                      addition, against ANY income)
       :abil-deduction    <bigdec>    1/2 × Σ ABIL losses
                                       (goes to PIT/CIT as −base
                                       addition, against ANY income)
@@ -430,6 +466,7 @@
         net-capital'  (max 0M net-capital)
         taxable-capital (* net-capital' inclusion-rate)
         ordinary-recapture (reduce + 0M (map :ordinary-recapture classified))
+        terminal-loss (reduce + 0M (map (comp bigdec0 :terminal-loss) classified))
         raw-abil      (reduce + 0M (map :abil-deduction classified))
         abil-deduction (* raw-abil abil-rate)
         line-items    (vec (mapcat :line-items classified))]
@@ -438,6 +475,7 @@
      :net-capital        net-capital'
      :taxable-capital    taxable-capital
      :ordinary-recapture ordinary-recapture
+     :terminal-loss      terminal-loss
      :abil-deduction     abil-deduction
      :line-items         line-items}))
 
@@ -464,25 +502,30 @@
      - `:cgt-summary` — the structured pool numbers for audit
      - `:lcge-applied` / `:lcge-cap-remaining` — for carry-state echo"
   [{:keys [commodity authority kind]}
-   {:keys [taxable-capital ordinary-recapture abil-deduction
+   {:keys [taxable-capital ordinary-recapture abil-deduction terminal-loss
            gross-capital net-capital lcge-applied
            line-items lcge-cap-remaining]}]
   (let [base-add-key (if (= kind :individual) :pit-base-additions :cit-base-additions)
         base-deduct-key (if (= kind :individual) :pit-base-deductions :cit-base-deductions)
         ;; Combine the taxable cap gain + CCA recapture into the
-        ;; PIT/CIT base additions vector. ABIL goes via :base-deductions.
+        ;; PIT/CIT base additions vector. ABIL + terminal loss go via
+        ;; :base-deductions.
         ordinary-base-additions (cond-> []
                                   (pos? taxable-capital)    (conj taxable-capital)
                                   (pos? ordinary-recapture) (conj ordinary-recapture))
         ordinary-base-deductions (cond-> []
-                                   (pos? abil-deduction) (conj abil-deduction))
-        ;; A summary line item for ABIL when present (the "slice that
-        ;; goes against ordinary").
+                                   (pos? abil-deduction)  (conj abil-deduction)
+                                   (pos? terminal-loss)   (conj terminal-loss))
+        ;; Summary line items for ABIL / terminal-loss / LCGE when present.
         line-items' (cond-> line-items
                       (pos? abil-deduction)
                       (conj {:role :abil-deduction-half
                              :amount abil-deduction
                              :note "1/2 × business investment loss; deducts vs ANY income per s.38(c)+s.39(1)(c)"})
+                      (pos? terminal-loss)
+                      (conj {:role :terminal-loss-total
+                             :amount terminal-loss
+                             :note "Σ s.20(16) terminal losses; deducts vs ANY income (depreciable property — NOT a capital loss per s.39(1)(b)(i))"})
                       (pos? lcge-applied)
                       (conj {:role :lcge-applied-total
                              :amount lcge-applied
@@ -493,6 +536,7 @@
                              :net-capital        net-capital
                              :taxable-capital    taxable-capital
                              :ordinary-recapture ordinary-recapture
+                             :terminal-loss      terminal-loss
                              :abil-deduction     abil-deduction}))]
     {:kind            :capital-gains-tax
      :authority       authority
@@ -511,6 +555,7 @@
                                    :net-capital        net-capital
                                    :taxable-capital    taxable-capital
                                    :ordinary-recapture ordinary-recapture
+                                   :terminal-loss      terminal-loss
                                    :abil-deduction     abil-deduction}}
        (seq ordinary-base-additions)  (assoc base-add-key ordinary-base-additions)
        (seq ordinary-base-deductions) (assoc base-deduct-key ordinary-base-deductions))}))
