@@ -123,7 +123,24 @@
     :parameter/label        "§12 Abs 3 Z 2 KStG — Siebentelregelung: §10-Option losses spread over 7 years"
     :parameter/jurisdiction :at
     :parameter/unit         :ratio
-    :parameter/concept-iri  "https://www.jusline.at/gesetz/kstg/paragraf/12"}])
+    :parameter/concept-iri  "https://www.jusline.at/gesetz/kstg/paragraf/12"}
+
+   ;; --- §30 Abs 6a EStG — Umwidmungszuschlag (BBG 2025) ------------------
+   ;; 30 % surcharge on the LAND-slice positive gain when previously
+   ;; agricultural/forest land was rezoned to Bauland. Applies to
+   ;; disposals after 2025-06-30 where the rezoning was legally
+   ;; effective after 2024-12-31. The enhanced base is capped at
+   ;; proceeds: Bemessungsgrundlage = min(1.30 × Gewinn ; Erlös).
+   ;; The consumer flags eligibility via
+   ;; `:elective-regime :at-umwidmungszuschlag` on the disposal AND
+   ;; supplies the LAND-slice basis via `:disposal/basis-amount`
+   ;; (building portion documented in `:notes`), per the existing
+   ;; Herstellerbefreiung convention. Research note 146 §3.1.
+   {:parameter/code         "AT.EStG.§30-Abs-6a.umwidmungszuschlag-rate"
+    :parameter/label        "§30 Abs 6a EStG — Umwidmungszuschlag (30 % surcharge on land-slice gain for post-2024 rezoning to Bauland)"
+    :parameter/jurisdiction :at
+    :parameter/unit         :rate
+    :parameter/concept-iri  "https://www.jusline.at/gesetz/estg/paragraf/30"}])
 
 ;; ============================================================================
 ;; Parameter values — current rates with their statutory effective windows
@@ -220,7 +237,13 @@
    {:parameter-value/parameter      [:parameter/code "AT.KStG.§12-Abs-3-Z-2.siebentel-years"]
     :parameter-value/effective-from #inst "2011-01-01"
     :parameter-value/decimal-value  7M
-    :parameter-value/citation       "§12 Abs 3 Z 2 KStG — Siebentelregelung: 7-year spread for §10-Option-elected losses"}])
+    :parameter-value/citation       "§12 Abs 3 Z 2 KStG — Siebentelregelung: 7-year spread for §10-Option-elected losses"}
+
+   ;; --- Umwidmungszuschlag — BBG 2025, effective for sales post-2025-06-30
+   {:parameter-value/parameter      [:parameter/code "AT.EStG.§30-Abs-6a.umwidmungszuschlag-rate"]
+    :parameter-value/effective-from #inst "2025-07-01"
+    :parameter-value/decimal-value  0.30M
+    :parameter-value/citation       "§30 Abs 6a EStG (BBG 2025) — 30 % Umwidmungszuschlag on the LAND-slice positive gain for disposals after 2025-06-30 where rezoning effective after 2024-12-31; Bemessungsgrundlage = min(1.30 × Gewinn ; Erlös)"}])
 
 ;; ============================================================================
 ;; Provisions — empty for AT CGT v1

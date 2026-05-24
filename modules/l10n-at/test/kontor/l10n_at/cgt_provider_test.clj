@@ -350,8 +350,131 @@
               "12,000 / year vs §28 Vermietung (the cross-category destination)"))))))
 
 ;; ============================================================================
+;; §6b. §30 Abs 6a Umwidmungszuschlag (BBG 2025, P0-1 from note 146)
+;; ============================================================================
+
+(deftest umwidmungszuschlag-post-2025-07-01-bauland-disposal
+  (testing "Brandauer example (note 146 §3.1): €180k LAND-slice gain on rezoned Bauland → surcharge component at 30% × ImmoESt rate"
+    (let [conn (fresh)]
+      ;; Consumer attests: land-only basis via :basis (Herstellerbefreiung
+      ;; convention); building share would live in :notes (irrelevant
+      ;; for the test). Gain = 600k − 420k = 180k.
+      (record! conn {:external-id "immo-bauland-umwidmung"
+                     :acquired-on #inst "2018-03-15"
+                     :disposed-on #inst "2026-07-20"
+                     :asset-class :at-immoest-neu
+                     :subject-kind :real-estate-private
+                     :elective-regime #{:at-umwidmungszuschlag}
+                     :proceeds    {:amount 600000M :commodity eur}
+                     :basis       {:amount 420000M :commodity eur}})
+      (let [facts (run-provider conn :immoest p2026)
+            neu   (component-by-lane facts :at-immoest-neu)
+            surch (component-by-lane facts :at-umwidmungszuschlag)]
+        (is (some? neu) "base Neuvermögen component still emitted")
+        (is (== 180000M (-> neu :base :amount)))
+        ;; 180k × 30% = 54k Neuvermögen ImmoESt
+        (is (== 54000M (-> neu :gross-liability :amount)))
+        (is (some? surch) "Umwidmungszuschlag surcharge component emitted")
+        (is (= :umwidmungszuschlag (:regime surch)))
+        ;; surcharge base = min(0.30 × 180k ; 600k − 180k) = min(54k ; 420k) = 54k
+        (is (== 54000M (-> surch :base :amount))
+            "surcharge base = 0.30 × land gain (cap does not bind for this example)")
+        ;; surcharge tax = 54k × 30% = 16,200
+        (is (== 16200M (-> surch :gross-liability :amount))
+            "surcharge tax = 30 % × surcharge base = €16 200 (note 146 §3.1)")
+        (is (== 16200M (-> surch :liability :amount)))))))
+
+(deftest umwidmungszuschlag-rate-effective-from-2025-07-01
+  (testing "the surcharge parameter is loaded as date-keyed (BBG 2025)"
+    (let [conn (fresh)
+          db   (d/db conn)
+          rate-2026 (kontor.statute/parameter-value-at
+                     db "AT.EStG.§30-Abs-6a.umwidmungszuschlag-rate"
+                     #inst "2026-06-01")
+          rate-pre  (kontor.statute/parameter-value-at
+                     db "AT.EStG.§30-Abs-6a.umwidmungszuschlag-rate"
+                     #inst "2025-01-01")]
+      (is (== 0.30M rate-2026) "30 % active from 2025-07-01")
+      (is (nil? rate-pre) "no rate before 2025-07-01 (BBG 2025 effective-from gate)"))))
+
+(deftest umwidmungszuschlag-pre-2025-07-01-raises
+  (testing "flagging Umwidmungszuschlag at an :as-of before the BBG 2025 effective-from raises informatively rather than silently undercharging"
+    (let [conn (fresh)]
+      (record! conn {:external-id "immo-bauland-too-early"
+                     :acquired-on #inst "2018-03-15"
+                     :disposed-on #inst "2025-03-15"
+                     :asset-class :at-immoest-neu
+                     :subject-kind :real-estate-private
+                     :elective-regime #{:at-umwidmungszuschlag}
+                     :proceeds    {:amount 600000M :commodity eur}
+                     :basis       {:amount 420000M :commodity eur}})
+      ;; :as-of resolves to :period :to (2025-04-01) — strictly BEFORE
+      ;; the 2025-07-01 effective-from of the surcharge parameter.
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"Umwidmungszuschlag"
+           (run-provider conn :immoest
+                         {:from #inst "2025-01-01" :to #inst "2025-04-01"}))))))
+
+;; ============================================================================
 ;; §7. §10 KStG — default exempt (INVERSION)
 ;; ============================================================================
+
+(deftest §10-default-exempt-loss-neutralizes-gl
+  (testing "P0-3 (note 146 §5): default-exempt LOSS branch emits POSITIVE :cit-base-additions to neutralize the GL loss (not the signed-negative gain which would DOUBLE the loss)"
+    (let [conn (fresh)]
+      ;; Qualifying participation, no Option, sold at €1M loss.
+      ;; The GL booked the loss as ordinary expense (CIT base ↓ by €1M).
+      ;; §10 default-exempt says: this loss is tax-neutral. To make it
+      ;; neutral, the CGT provider must ADD €1M BACK to the CIT base.
+      (record! conn {:external-id "§10-default-loss"
+                     :acquired-on #inst "2018-02-15"
+                     :disposed-on #inst "2026-09-15"
+                     :asset-class :at-§10-participation
+                     :subject-kind :participation
+                     :subject-form :corp
+                     :ownership-fraction 0.25M
+                     :proceeds    {:amount 3000000M :commodity eur}
+                     :basis       {:amount 4000000M :commodity eur}})
+      (let [facts (run-provider conn :corporate p2026)
+            cmp   (component-by-lane facts :at-§10-exempt-loss)]
+        (is (some? cmp))
+        (is (= :§10-default-exempt-loss (:regime cmp)))
+        (is (== 0M (-> cmp :liability :amount))
+            "default-exempt-loss has zero CGT liability — composition is via :cit-base-additions")
+        (let [add (get-in cmp [:jurisdiction-specific-codes :cit-base-additions])]
+          (is (= [1000000M] add)
+              "POSITIVE +€1M added back to neutralize the GL's −€1M loss (not −1M which would double it)")
+          (is (pos? (first add))
+              "magnitude must be positive; signed-negative gain would inflate the loss"))))))
+
+(deftest §10-domestic-participation-not-inverted
+  (testing "P0-2 (note 146 §3.2): AT-domestic 25 % GmbH stake disposal — :tax-unit :held-entity-domestic? true blocks the INVERSION → no component (gain stays in CIT base)"
+    (let [conn (fresh)]
+      (record! conn {:external-id "§10-domestic-AT"
+                     :acquired-on #inst "2018-02-15"
+                     :disposed-on #inst "2026-09-15"
+                     :asset-class :at-§10-participation
+                     :subject-kind :participation
+                     :subject-form :corp
+                     :ownership-fraction 0.25M
+                     :proceeds    {:amount 12000000M :commodity eur}
+                     :basis       {:amount 4000000M  :commodity eur}})
+      ;; Without the guard, the provider would silently route €8M to
+      ;; :cit-base-deductions and understate CIT by 23 % × €8M = €1.84M.
+      ;; With the guard, the gain stays in the CIT base (no component
+      ;; emitted by the CGT provider — the GL handles it as ordinary
+      ;; corporate income).
+      (let [facts (run-provider conn :corporate p2026
+                                {:tax-unit {:held-entity-domestic? true}})]
+        (is (empty? (:components facts))
+            "domestic stake → §10 INVERSION blocked → no CGT component (gain enters CIT normally)"))
+      ;; Sanity: WITHOUT the flag (or :held-entity-domestic? false),
+      ;; the default-exempt INVERSION still fires correctly.
+      (let [facts (run-provider conn :corporate p2026
+                                {:tax-unit {:held-entity-domestic? false}})
+            cmp   (component-by-lane facts :at-§10-exempt)]
+        (is (some? cmp) "explicit false → INVERSION fires as before")
+        (is (= [8000000M] (get-in cmp [:jurisdiction-specific-codes :cit-base-deductions])))))))
 
 (deftest §10-default-exempt-no-option
   (testing "Müller-Holding 25 % Swiss AG gain (note 134 §2.3) — default exempt, no Option"

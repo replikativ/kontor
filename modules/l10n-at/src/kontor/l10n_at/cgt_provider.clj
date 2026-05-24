@@ -26,6 +26,15 @@
      against §28-Vermietung income (note 134 §6.2 — first cross-
      category CGT loss in the kontor substrate; provider writes to
      `:pit-base-deductions {:§28-vermietung [...]}`).
+     **Umwidmungszuschlag** (§30 Abs 6a EStG, BBG 2025, effective
+     2025-07-01): the consumer flags eligibility via
+     `:elective-regime :at-umwidmungszuschlag` on a Neuvermögen-style
+     Bauland disposal; the basis supplied on the disposal MUST
+     represent the LAND-only portion (consistent with Herstellerbefreiung
+     convention) so the gain the surcharge fires on IS the land-slice
+     gain. The provider then emits a separate surcharge component at
+     30 % of the positive land-slice gain (note 146 §3.1; cap
+     `Bemessungsgrundlage = min(1.30 × Gewinn ; Erlös)` enforced).
 
    - **`at-corporate-cgt-provider`** (kind `:corporation`) — §10 KStG.
      **INVERSION** of the usual exemption-flag direction (note 134
@@ -35,6 +44,12 @@
      option is in force, gains enter the CIT base at 23 % (2024+)
      and losses spread over 7 years via Siebentelregelung
      (`:inputs :at-§10-loss-siebentel`).
+     **Foreign-corp guard** (§10 Abs 2 KStG, note 146 §3.2): §10
+     applies to foreign corps only. The consumer attests via
+     `:tax-unit :held-entity-domestic? <bool>`; when true, the §10
+     default-exempt INVERSION does NOT fire — the gain stays in the
+     CIT base as ordinary income (consistent with §10 Abs 1 Z 1 KStG
+     which exempts dividends but NOT gains on domestic stakes).
      §9 KStG Gruppenbesteuerung is OUT OF SCOPE for v1.
 
    ## Lane classification (`:disposal/asset-class`)
@@ -130,6 +145,18 @@
    post-1987-12-31)."
   :at-immoest-alt-gewidmet)
 
+(def ^:private umwidmungszuschlag-flag
+  ":elective-regime flag opting INTO the §30 Abs 6a Umwidmungszuschlag
+   (BBG 2025, effective 2025-07-01). The consumer attests that (a) the
+   disposal involves land previously zoned non-building (e.g.
+   agricultural/forest) that was rezoned to Bauland after 2024-12-31,
+   (b) the disposal occurred after 2025-06-30, and (c) the
+   `:disposal/basis-amount` represents the LAND-only portion (building
+   share documented in `:notes` per Herstellerbefreiung convention).
+   Provider emits a separate 30 %-of-positive-land-gain surcharge
+   component (cap: Bemessungsgrundlage ≤ proceeds). Note 146 §3.1."
+  :at-umwidmungszuschlag)
+
 ;; ============================================================================
 ;; Helpers — date math, ctx, gain, regime/exemption set reading
 ;; ============================================================================
@@ -201,19 +228,31 @@
   [disposal]
   (contains? (regime-set disposal) §10-option-flag))
 
+(defn- umwidmungszuschlag-claimed?
+  "True iff the disposal flags the §30 Abs 6a EStG Umwidmungszuschlag
+   regime (BBG 2025; note 146 §3.1)."
+  [disposal]
+  (contains? (regime-set disposal) umwidmungszuschlag-flag))
+
 (defn- §10-qualifying?
-  "True iff the disposal qualifies as a §10 KStG Schachtelbeteiligung:
-   ≥ 10 % ownership AND ≥ 1-year holding (note 134 §1.7).
-   The 'foreign corporation' check is on the held entity — out of
-   substrate scope here; provider assumes the asset-class
-   `:at-§10-participation` is set only when the consumer has verified
-   the entity is foreign (per note 134 §3 row labelled §10 Abs 2)."
-  [disposal qualifying-fraction qualifying-days]
+  "True iff the disposal qualifies as a §10 KStG internationale
+   Schachtelbeteiligung: foreign corp (note 146 §3.2) AND ≥ 10 %
+   ownership AND ≥ 1-year holding (note 134 §1.7).
+
+   Foreign-corp gate (note 146 §3.2 P0-2): §10 Abs 2 KStG applies to
+   FOREIGN corporations only. §10 Abs 1 Z 1 KStG exempts dividends
+   from domestic stakes but does NOT exempt gains. The consumer
+   attests via `:tax-unit :held-entity-domestic? <bool>`; when true,
+   this predicate returns false so the default-exempt INVERSION does
+   NOT fire and the gain stays in the CIT base as ordinary income."
+  [disposal qualifying-fraction qualifying-days ctx]
   (let [own (or (:disposal/ownership-fraction disposal) 0M)
         acq (:disposal/acquired-on disposal)
         dis (:disposal/disposed-on disposal)
-        days (when (and acq dis) (days-between acq dis))]
-    (and (>= (compare own qualifying-fraction) 0)
+        days (when (and acq dis) (days-between acq dis))
+        domestic? (boolean (get-in ctx [:tax-unit :held-entity-domestic?]))]
+    (and (not domestic?)
+         (>= (compare own qualifying-fraction) 0)
          days
          (>= days (long qualifying-days)))))
 
@@ -377,6 +416,57 @@
                                  "§30 Abs 4 Z 2 EStG — 4.2 % effective rate (unwidmet)")
                         :value (money/money gross-tax commodity)}]
      :jurisdiction-specific-codes {:lane :at-immoest-alt}}))
+
+(defn- umwidmungszuschlag-component
+  "§30 Abs 6a EStG Umwidmungszuschlag (BBG 2025) — 30 % surcharge on
+   the LAND-slice positive gain when previously non-Bauland was rezoned
+   to Bauland after 2024-12-31 and disposed after 2025-06-30.
+
+   Bemessungsgrundlage = min(1.30 × Gewinn ; Erlös) per statute — the
+   *enhanced* base cannot exceed gross proceeds. The provider expresses
+   this as a separate component on the DELTA between the enhanced base
+   and the plain gain, taxed at the ImmoESt rate. Equivalent math:
+   surcharge = (capped-enhanced-base − gain) × ImmoESt-rate.
+
+   When the simpler form (no cap binding) applies:
+     surcharge = gain × 0.30 × ImmoESt-rate
+   When the cap binds (1.30 × gain > proceeds):
+     surcharge = (proceeds − gain) × ImmoESt-rate.
+
+   Consumer attests via `:elective-regime :at-umwidmungszuschlag` and
+   supplies the LAND-slice basis as `:disposal/basis-amount` so the
+   gain IS the land slice (per Herstellerbefreiung convention)."
+  [{:keys [commodity authority]} disposal
+   ^java.math.BigDecimal surcharge-rate
+   ^java.math.BigDecimal immoest-rate]
+  (let [gain          (realized-gain disposal)
+        gross-proceeds (proceeds disposal)
+        positive-gain (max 0M gain)
+        ;; surcharge add-on to the base: min(0.30 × Gewinn ; Erlös − Gewinn).
+        ;; The total enhanced base is min(1.30 × Gewinn ; Erlös);
+        ;; the DELTA over the plain gain is the surcharge base.
+        plain-delta   (* surcharge-rate positive-gain)
+        cap-delta     (- gross-proceeds positive-gain)
+        surcharge-base (max 0M (min plain-delta cap-delta))
+        surcharge-tax (* surcharge-base immoest-rate)]
+    {:kind            :capital-gains-tax
+     :authority       authority
+     :base            (money/money surcharge-base commodity)
+     :schedule        (ts/flat immoest-rate)
+     :gross-liability (money/money surcharge-tax commodity)
+     :liability       (money/money surcharge-tax commodity)
+     :prepaid         (money/zero commodity)
+     :regime          :umwidmungszuschlag
+     :line-items      [{:line :at-umwidmungszuschlag-land-gain
+                        :label "§30 Abs 6a EStG — LAND-slice positive gain (consumer-supplied as basis split)"
+                        :value (money/money positive-gain commodity)}
+                       {:line :at-umwidmungszuschlag-surcharge-base
+                        :label "§30 Abs 6a EStG — Umwidmungszuschlag base = min(0.30 × Gewinn ; Erlös − Gewinn)"
+                        :value (money/money surcharge-base commodity)}
+                       {:line :at-umwidmungszuschlag-tax
+                        :label "§30 Abs 6a EStG — Umwidmungszuschlag at 30 % ImmoESt on surcharge base"
+                        :value (money/money surcharge-tax commodity)}]
+     :jurisdiction-specific-codes {:lane :at-umwidmungszuschlag}}))
 
 (defn- §30-loss-carry-component
   "§30 Abs 7 EStG loss-distribution component (note 134 §6.2 — the
@@ -564,33 +654,73 @@
                          db "AT.EStG.§30-Abs-7.loss-carry-factor" as-of)
           carry-years   (statute/parameter-value-at
                          db "AT.EStG.§30-Abs-7.loss-carry-years" as-of)
+          umwidmung-rate (statute/parameter-value-at
+                          db "AT.EStG.§30-Abs-6a.umwidmungszuschlag-rate" as-of)
           prepaid       (or (:at-immoest-prepaid inputs) 0M)
           opts          {:authority authority :commodity commodity}
           per-disposal-components
           (->> relevant
-               (mapv (fn [d]
-                       (let [ac (:disposal/asset-class d)]
-                         (cond
+               (mapcat
+                (fn [d]
+                  (let [ac (:disposal/asset-class d)
+                        base-cmp
+                        (cond
                            ;; Hauptwohnsitzbefreiung short-circuit
                            ;; (note 134 §1.4)
-                           (and (or (= ac :at-immoest-residence)
-                                    (= ac :at-immoest-neu))
-                                (hauptwohnsitz-claimed? d))
-                           (residence-component opts d)
+                          (and (or (= ac :at-immoest-residence)
+                                   (= ac :at-immoest-neu))
+                               (hauptwohnsitz-claimed? d))
+                          (residence-component opts d)
 
                            ;; Altvermögen pauschale (4.2 % / 18 %)
-                           (= ac :at-immoest-alt)
-                           (altvermoegen-component
-                            opts ctx d rate-unwidmet rate-gewidmet prepaid)
+                          (= ac :at-immoest-alt)
+                          (altvermoegen-component
+                           opts ctx d rate-unwidmet rate-gewidmet prepaid)
 
                            ;; Neuvermögen 30 % (default for
                            ;; :at-immoest-neu and :at-immoest-residence
                            ;; when Hauptwohnsitz NOT claimed)
-                           (or (= ac :at-immoest-neu)
-                               (= ac :at-immoest-residence))
-                           (neuvermoegen-component opts ctx d rate-30 prepaid)
+                          (or (= ac :at-immoest-neu)
+                              (= ac :at-immoest-residence))
+                          (neuvermoegen-component opts ctx d rate-30 prepaid)
 
-                           :else nil))))
+                          :else nil)
+                        ;; Umwidmungszuschlag rides on Neuvermögen-style
+                        ;; Bauland disposals (note 146 §3.1). If the
+                        ;; consumer flagged it but the surcharge
+                        ;; parameter isn't effective at :as-of (pre-
+                        ;; 2025-07-01), raise an informative ex-info
+                        ;; rather than silently undercharging.
+                        umwidmung-cmp
+                        (when (umwidmungszuschlag-claimed? d)
+                          (cond
+                            (nil? umwidmung-rate)
+                            (throw (ex-info
+                                    "AT §30 Abs 6a Umwidmungszuschlag flagged but no rate effective at :as-of (BBG 2025 effective-from 2025-07-01)"
+                                    {:disposal/external-id (:disposal/external-id d)
+                                     :as-of as-of}))
+
+                            (not (or (= ac :at-immoest-neu)
+                                     (= ac :at-immoest-residence)))
+                            (throw (ex-info
+                                    "AT §30 Abs 6a Umwidmungszuschlag only applies to Neuvermögen-style Bauland disposals (:at-immoest-neu / :at-immoest-residence); reclassify the disposal or remove :at-umwidmungszuschlag from :elective-regime"
+                                    {:disposal/external-id (:disposal/external-id d)
+                                     :asset-class ac}))
+
+                            (and (or (= ac :at-immoest-residence)
+                                     (= ac :at-immoest-neu))
+                                 (hauptwohnsitz-claimed? d))
+                            ;; Hauptwohnsitzbefreiung overrides — gain
+                            ;; was already exempted; surcharge has
+                            ;; nothing to ride on. Silent skip.
+                            nil
+
+                            :else
+                            (umwidmungszuschlag-component
+                             opts d umwidmung-rate rate-30)))]
+                    (cond-> []
+                      base-cmp     (conj base-cmp)
+                      umwidmung-cmp (conj umwidmung-cmp)))))
                (remove nil?)
                vec)
           ;; §30 Abs 7 loss carry: when net (Neuvermögen-only) realised
@@ -645,7 +775,7 @@
                (mapv (fn [d]
                        (let [g (realized-gain d)
                              option? (§10-option-elected? d)
-                             qualifying? (§10-qualifying? d qualifying-fraction qualifying-days)]
+                             qualifying? (§10-qualifying? d qualifying-fraction qualifying-days ctx)]
                          (cond
                            ;; Option elected + LOSS → Siebentelregelung
                            ;; (note 134 §2.4)
@@ -667,23 +797,33 @@
 
                            ;; Option NOT elected + qualifying + LOSS
                            ;; → also tax-neutral by default (symmetric).
-                           ;; No CIT impact this period; no
-                           ;; Siebentelregelung either.
+                           ;; The GL booked the loss as ordinary
+                           ;; expense, pulling CIT base DOWN by |g|.
+                           ;; To neutralize, ADD the positive magnitude
+                           ;; back to the CIT base. Note 146 §5 P0-3:
+                           ;; emitting `[g]` (signed-negative) would
+                           ;; DOUBLE the loss effect, not neutralize
+                           ;; it. The correct value is `(- 0M g)`
+                           ;; (positive).
                            (and (not option?) qualifying? (neg? g))
-                           {:kind            :capital-gains-tax
-                            :authority       authority
-                            :base            (money/money (- 0M g) commodity)
-                            :schedule        nil
-                            :gross-liability (money/zero commodity)
-                            :liability       (money/zero commodity)
-                            :prepaid         (money/zero commodity)
-                            :regime          :§10-default-exempt-loss
-                            :line-items      [{:line :at-§10-loss-raw
-                                               :label "§10 Abs 3 KStG — Schachtel loss (DEFAULT tax-neutral, no Option)"
-                                               :value (money/money g commodity)}]
-                            :jurisdiction-specific-codes
-                            {:cit-base-additions [g]
-                             :lane :at-§10-exempt-loss}}
+                           (let [pos-mag (- 0M g)]
+                             {:kind            :capital-gains-tax
+                              :authority       authority
+                              :base            (money/money pos-mag commodity)
+                              :schedule        nil
+                              :gross-liability (money/zero commodity)
+                              :liability       (money/zero commodity)
+                              :prepaid         (money/zero commodity)
+                              :regime          :§10-default-exempt-loss
+                              :line-items      [{:line :at-§10-loss-raw
+                                                 :label "§10 Abs 3 KStG — Schachtel loss (DEFAULT tax-neutral, no Option)"
+                                                 :value (money/money g commodity)}
+                                                {:line :at-§10-cit-base-add
+                                                 :label "§10 Abs 3 KStG — loss neutralized by adding |loss| back to CIT base"
+                                                 :value (money/money pos-mag commodity)}]
+                              :jurisdiction-specific-codes
+                              {:cit-base-additions [pos-mag]
+                               :lane :at-§10-exempt-loss}})
 
                            ;; Otherwise (non-qualifying participation
                            ;; OR zero gain): no component. The gain
