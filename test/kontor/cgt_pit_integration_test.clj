@@ -21,14 +21,14 @@
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
             [kontor.book :as book]
+            [kontor.cgt :as cgt]
             [kontor.core :as core]
             [kontor.disposal :as disposal]
             [kontor.disposal.source :as disp-source]
             [kontor.l10n-us.cgt-provider :as us-cgt]
             [kontor.l10n-us.cgt-statute :as cgt-statute]
             [kontor.l10n-us.period-tax-provider :as us-pit]
-            [kontor.period-tax-provider :as ptp]
-            [kontor.tax-schedule :as ts]))
+            [kontor.period-tax-provider :as ptp]))
 
 ;; ============================================================================
 ;; Fixture — a US individual entity, USD commodity, all schemas installed
@@ -144,17 +144,14 @@
                           :magi 500000M}})))
 
 (defn- compose-pit-inputs
-  "THE COMPOSITION SEAM (ADR-103 §A.5). Read `:pit-base-additions`
-   from every CGT component and assemble a `:base-transform
-   :adjustments :additions` for the PIT provider's `:inputs`."
+  "THE COMPOSITION SEAM (ADR-103 §A.5). Delegates to
+   `kontor.cgt/fold-into-base-transform` — the canonical helper for
+   reading `:pit-base-additions` / `:pit-base-deductions` across CGT
+   components and assembling the `:base-transform` shape the PIT
+   provider consumes. Returns nil when there's nothing to fold."
   [cgt-facts]
-  (let [additions (mapcat (fn [c]
-                            (get-in c [:jurisdiction-specific-codes
-                                       :pit-base-additions]))
-                          (:components cgt-facts))]
-    (when (seq additions)
-      {:base-transform {:transform/type :adjustments
-                        :additions      (vec additions)}})))
+  (when-let [bt (cgt/fold-into-base-transform cgt-facts :pit)]
+    {:base-transform bt}))
 
 (defn- run-pit [conn cgt-base-additions]
   ;; NOTE: we omit `:entity` here because `book/sell!` does not tag
