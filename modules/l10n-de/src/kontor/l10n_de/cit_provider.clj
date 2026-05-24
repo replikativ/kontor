@@ -22,11 +22,18 @@
    `:tax-unit` (company config):
      {:hebesatz <long>}   GewSt municipality multiplier expressed as
                           integer percent (380 = 380% = factor 3.80)
+     {:cgt-provider-active? <bool>}
+                          optional, default false. When true the
+                          DE-KStG-§8b-Abs-5 provision is suppressed —
+                          consumer is wiring the DE CGT provider as the
+                          §8b add-back source-of-truth (note 136 P0-3).
 
    `:inputs` (period facts):
      {:book-profit             <BigDecimal>  required
       :kst-non-deductibles     <BigDecimal>  optional, default 0
-      :participation-gain      <BigDecimal>  optional, default 0
+      :participation-gain      <BigDecimal>  optional, default 0 —
+                                              IGNORED when
+                                              `:cgt-provider-active?` true
       :gewst-§8 {:interest        <BigDecimal>  optional, default 0
                  :annuity         <BigDecimal>  optional, default 0
                  :silent-partner  <BigDecimal>  optional, default 0

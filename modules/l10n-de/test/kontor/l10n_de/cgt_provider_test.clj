@@ -238,9 +238,11 @@
             "Freibetrag fully covers the €6k Teileinkünfte")))))
 
 (deftest §17-freibetrag-partial-taper
-  (testing "§17 gain in the taper zone: gain €60k → Teileinkünfte €36k;
-            taper-start €36 100, so Teileinkünfte under taper-start →
-            full €9 060 Freibetrag → taxable = 36 000 − 9 060 = 26 940"
+  (testing "§17 gross gain €60k > taper-start €36 100; excess €23 900
+            fully consumes the €9 060 Freibetrag → Freibetrag after
+            taper = 0; Teileinkünfte €36 000 → taxable €36 000 (note
+            136 P0-2: the taper anchors on GROSS Veräußerungsgewinn,
+            NOT on the 60 % Teileinkünfte)"
     (let [conn (fresh)]
       (record! conn {:external-id "§17-taper-edge"
                      :asset-class :de-§17-wesentlich
@@ -250,13 +252,13 @@
                      :basis    {:amount 20000M :commodity eur}})
       (let [facts (run-provider conn :individual p2026)
             §17   (component-by-lane facts :de-§17)]
-        (is (== 26940M (-> §17 :base :amount)))))))
+        (is (== 36000M (-> §17 :base :amount)))))))
 
 (deftest §17-freibetrag-mid-taper
-  (testing "§17 gain inside the taper zone: gain €70k → Teileinkünfte €42k;
-            taper consumes (42 000 − 36 100) = 5 900 of Freibetrag →
-            remaining Freibetrag = 9 060 − 5 900 = 3 160 →
-            taxable = 42 000 − 3 160 = 38 840"
+  (testing "§17 gross gain €70k → Teileinkünfte €42k; taper anchors on
+            GROSS, so excess = 70 000 − 36 100 = 33 900 fully consumes
+            the €9 060 Freibetrag → Freibetrag after taper = 0 →
+            taxable = €42 000 (note 136 P0-2: statute-faithful reading)"
     (let [conn (fresh)]
       (record! conn {:external-id "§17-mid-taper"
                      :asset-class :de-§17-wesentlich
@@ -266,7 +268,26 @@
                      :basis    {:amount 20000M :commodity eur}})
       (let [facts (run-provider conn :individual p2026)
             §17   (component-by-lane facts :de-§17)]
-        (is (== 38840M (-> §17 :base :amount)))))))
+        (is (== 42000M (-> §17 :base :amount)))))))
+
+(deftest §17-freibetrag-boundary-at-fully-consumed
+  (testing "§17 gross gain at exactly €45 160 (= €9 060 + €36 100) —
+            the boundary at which the Freibetrag is JUST fully consumed.
+            excess = 45 160 − 36 100 = 9 060 → Freibetrag after taper = 0
+            → Teileinkünfte = 27 096 → taxable = 27 096. This pins the
+            gross-gain taper math at the cliff edge (note 136 P0-2)."
+    (let [conn (fresh)]
+      (record! conn {:external-id "§17-boundary"
+                     :asset-class :de-§17-wesentlich
+                     :acquired-on #inst "2020-01-01"
+                     :disposed-on #inst "2026-06-15"
+                     :proceeds {:amount 65160M :commodity eur}
+                     :basis    {:amount 20000M :commodity eur}})
+      (let [facts (run-provider conn :individual p2026)
+            §17   (component-by-lane facts :de-§17)]
+        ;; 45160 × 0.60 = 27096 Teileinkünfte; Freibetrag fully tapered
+        ;; → taxable = 27096
+        (is (== 27096M (-> §17 :base :amount)))))))
 
 ;; ============================================================================
 ;; §5. §20 Abgeltungsteuer — 25 % flat + Soli
@@ -414,9 +435,11 @@
         (is (== 40000M (-> §23 :base :amount)))))))
 
 (deftest §23-freigrenze-hard-threshold
-  (testing "Freigrenze is a HARD threshold per §23 Abs. 3 S. 5:
-            ≤ €1 000 → entire gain tax-free; > €1 000 → entire gain
-            taxable (NOT just the excess)"
+  (testing "Freigrenze is a HARD threshold per §23 Abs. 3 S. 5
+            (\"weniger als 1 000 Euro\"): < €1 000 → entire gain
+            tax-free; ≥ €1 000 → entire gain taxable (NOT just the
+            excess). Note 136 P0-1: the €1 000.00 boundary is taxable,
+            not the tax-free edge."
     (testing "at €999.99 the gain is fully tax-free"
       (let [conn (fresh)]
         (record! conn {:external-id "§23-under"
@@ -429,6 +452,24 @@
         (let [facts (run-provider conn :individual p2026)]
           (is (nil? (component-by-lane facts :de-§23))
               "below Freigrenze: §23 component suppressed"))))
+
+    (testing "at €1 000.00 EXACTLY the FULL amount is taxable
+              (note 136 P0-1 boundary case: \"weniger als 1 000\" is
+              strict less-than → ≥ €1 000 is fully taxable)"
+      (let [conn (fresh)]
+        (record! conn {:external-id "§23-boundary"
+                       :asset-class :de-§23-movable
+                       :acquired-on #inst "2026-01-01"
+                       :disposed-on #inst "2026-06-15"
+                       :proceeds {:amount 2000M :commodity eur}
+                       :basis    {:amount 1000M :commodity eur}})
+        ;; Gain exactly €1 000.00 — AT the Freigrenze boundary;
+        ;; statute says fully taxable.
+        (let [facts (run-provider conn :individual p2026)
+              §23   (component-by-lane facts :de-§23)]
+          (is (some? §23) "boundary case: §23 component emitted")
+          (is (== 1000M (-> §23 :base :amount))
+              "at the boundary the FULL €1 000.00 is taxable"))))
 
     (testing "at €1 000.01 the FULL amount is taxable"
       (let [conn (fresh)]
@@ -458,16 +499,16 @@
                      :disposed-on #inst "2026-06-15"
                      :proceeds {:amount 200000M :commodity eur}
                      :basis    {:amount 100000M :commodity eur}})
-      ;; §17 carry-in = €40k; gross gain = €100k → §17 net = €60k →
-      ;; Teileinkünfte = €36k → Freibetrag fully tapers off (>€36 100
-      ;; barrier hit at 36k? Actually 36 000 < 36 100, so full €9 060
-      ;; Freibetrag available) → taxable = max(0, 36 000 − 9 060)
-      ;; = 26 940
+      ;; §17 carry-in = €40k; gross gain = €100k → §17 net = €60k.
+      ;; Note 136 P0-2 fix: taper anchors on the post-carry-in GROSS
+      ;; gain (€60k), NOT on the Teileinkünfte. excess = 60 000 −
+      ;; 36 100 = 23 900 → Freibetrag fully consumed → 0; Teileinkünfte
+      ;; = 60 000 × 0.60 = 36 000 → taxable = 36 000.
       (let [facts (run-provider
                    conn :individual p2026
                    {:inputs {:capital-loss-carryforward {:de-§17 40000M}}})
             §17   (component-by-lane facts :de-§17)]
-        (is (== 26940M (-> §17 :base :amount)))))))
+        (is (== 36000M (-> §17 :base :amount)))))))
 
 ;; ============================================================================
 ;; §8. Multi-regime composition — §17 + §20 + §23 + voided exclusion

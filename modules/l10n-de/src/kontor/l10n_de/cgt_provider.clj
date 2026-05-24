@@ -22,6 +22,34 @@
      `kontor.sole-proprietor/business-income-input` (ADR-100) between
      business-net and PIT.
 
+   ## CGT-CIT integration (note 136 P0-3)
+
+   When this corporate CGT provider runs alongside the DE CIT provider
+   on the same period, the CGT provider is the SOURCE-OF-TRUTH for the
+   §8b 5 % add-back: it computes the add-back from the disposal-level
+   gain (after carry-in netting) and emits it as
+   `:jurisdiction-specific-codes :cit-base-additions` on the `:de-§8b`
+   component. To avoid double-counting against the CIT statute's
+   `DE-KStG-§8b-Abs-5` provision (which can re-derive the same number
+   from `:inputs :participation-gain` in standalone-CIT mode), the
+   consumer wires the integration as:
+
+     1. Call the CGT provider; get `TaxReturnFacts`.
+     2. Read the §8b add-back via `cgt-§8b-addback-input` (sums the
+        `:cit-base-additions` across all components).
+     3. Call the CIT provider with `:tax-unit
+        {:cgt-provider-active? true}` — this gates off the CIT
+        statute's standalone §8b provision so the CGT-side add-back
+        isn't re-derived. The consumer is responsible for folding the
+        CGT-side add-back into the CIT base via whatever channel suits
+        the consumer (it may continue to pass it as
+        `:inputs :participation-gain` purely as a fact — the gated
+        provision will not fire on it).
+
+   Standalone-CIT consumers (no CGT provider) leave the flag absent and
+   pass `:inputs :participation-gain` directly — the CIT statute's
+   provision fires as before. No behaviour change for that path.
+
    - **`de-personal-cgt-provider`** (kind `:individual`): four loss-
      bucket-isolated regimes:
        - §17 EStG — wesentliche Beteiligung (≥1 % stake) →
@@ -33,7 +61,8 @@
          gains — §20 Abs. 6 wall).
        - §23 EStG — private speculation (real estate within 10 y;
          movable within 1 y; tax-FREE past cutoff). €1 000 Freigrenze
-         (HARD threshold — over by €1 → full amount taxable).
+         (HARD threshold per §23 Abs. 3 S. 5: \"weniger als 1 000\" →
+         < €1 000 tax-free; ≥ €1 000 → full amount taxable).
        - Günstigerprüfung: `:tax-unit
          :abgeltungsteuer-elect-marginal?  true` suppresses the §20
          standalone component and folds the §20 net into PIT base
@@ -160,20 +189,29 @@
 
 (defn- §17-freibetrag-after-taper
   "§17 Abs. 3 EStG — €9 060 Freibetrag, reduced 1:1 by every euro of
-   the taxable gain exceeding €36 100 (the Abschmelzungsgrenze).
-   Negative results clamped to 0M.
+   the GROSS Veräußerungsgewinn exceeding €36 100 (the
+   Abschmelzungsgrenze). Negative results clamped to 0M.
 
-   Worked example: gain €40 000 →
+   Per §17 Abs. 3 S. 2 EStG: \"Der Freibetrag ermäßigt sich um den
+   Betrag, um den der **Veräußerungsgewinn** den Teil von 36 100 Euro
+   übersteigt …\" — the taper-start comparison is against the GROSS
+   (100 %) gain, NOT the 60 %-included Teileinkünfte. The
+   Teileinkünfteverfahren (§3 Nr. 40 c / §3c Abs. 2 EStG) is a
+   downstream inclusion mechanic at the §2 EStG income-aggregation
+   stage; §17 Abs. 3's Freibetrag-with-taper sits inside §17 itself
+   (note 136 P0-2).
+
+   Worked example: gross gain €40 000 →
      taper-amount = max(0, 40 000 − 36 100) = 3 900
      freibetrag-after-taper = max(0, 9 060 − 3 900) = 5 160 → €5 160
-     freed gain. (Note: the taper compares against the TEILEINKÜNFTE
-     GAIN, i.e. the 60 %-included amount, per the canonical reading.)
+     freed gain (then deducted from the Teileinkünfte downstream).
 
-   Past €45 160 (= 9 060 + 36 100) the Freibetrag is fully consumed."
-  ^java.math.BigDecimal [^java.math.BigDecimal teileinkünfte-gain
+   Past €45 160 (= 9 060 + 36 100) gross gain the Freibetrag is fully
+   consumed."
+  ^java.math.BigDecimal [^java.math.BigDecimal gross-gain
                         ^java.math.BigDecimal freibetrag
                         ^java.math.BigDecimal taper-start]
-  (let [excess (max 0M (- teileinkünfte-gain taper-start))
+  (let [excess (max 0M (- gross-gain taper-start))
         fb     (max 0M (- freibetrag excess))]
     fb))
 
@@ -363,7 +401,12 @@
         fb        (statute/parameter-value-at db "DE.EStG.§17.freibetrag" as-of)
         taper-start (statute/parameter-value-at db "DE.EStG.§17.taper-start" as-of)
         teileinkünfte (* §17-net-gain inclusion)
-        fb-after-taper (§17-freibetrag-after-taper teileinkünfte fb taper-start)
+        ;; §17 Abs. 3 S. 2 — Freibetrag taper anchors on the GROSS
+        ;; Veräußerungsgewinn (not the 60 % Teileinkünfte). The
+        ;; Teileinkünfteverfahren is downstream at §2 EStG income
+        ;; aggregation; §17's Freibetrag-with-taper sits inside §17
+        ;; (note 136 P0-2).
+        fb-after-taper (§17-freibetrag-after-taper §17-net-gain fb taper-start)
         taxable   (max 0M (- teileinkünfte fb-after-taper))]
     {:kind            :capital-gains-tax
      :authority       authority
@@ -428,17 +471,20 @@
 
 (defn- §23-component
   "Individual §23 component — private speculation. Freigrenze applied:
-   if net > €1 000 the FULL amount is taxable (HARD threshold); if
-   ≤ €1 000 the whole thing is tax-free. Taxable amount folds into
-   PIT base."
+   if net ≥ €1 000 the FULL amount is taxable (HARD threshold); if
+   < €1 000 the whole thing is tax-free. Taxable amount folds into
+   PIT base. Per §23 Abs. 3 S. 5 EStG (\"weniger als 1 000 Euro\") the
+   €1 000.00 boundary is fully taxable — not the tax-free edge."
   [{:keys [commodity authority]} ctx ^java.math.BigDecimal §23-net-gain]
   (let [db         (:db ctx)
         as-of      (as-of-from-ctx ctx)
         freigrenze (statute/parameter-value-at db "DE.EStG.§23.freigrenze" as-of)
-        ;; HARD threshold per §23 Abs. 3 S. 5: if net ≤ Freigrenze
-        ;; the entire amount is tax-free; if net > Freigrenze the
-        ;; FULL net (not just the excess) is taxable.
-        taxable    (if (> §23-net-gain freigrenze) §23-net-gain 0M)]
+        ;; HARD threshold per §23 Abs. 3 S. 5: if net < Freigrenze the
+        ;; entire amount is tax-free; if net ≥ Freigrenze the FULL
+        ;; net (not just the excess) is taxable. The statute reads
+        ;; "weniger als 1 000" — strict less-than in the tax-free
+        ;; direction, equivalently ≥ in the taxable direction.
+        taxable    (if (>= §23-net-gain freigrenze) §23-net-gain 0M)]
     {:kind            :capital-gains-tax
      :authority       authority
      :base            (money/money taxable commodity)
@@ -545,11 +591,13 @@
                                günstig? (§20-pit-fold-component opts §20-total)
                                :else    (§20-component opts ctx §20-total))
                   ;; §23 component is emitted only when the net clears
-                  ;; the Freigrenze (HARD threshold). Below the line
-                  ;; the entire gain is tax-free and we suppress the
-                  ;; component entirely — there is no tax to fold.
+                  ;; the Freigrenze (HARD threshold per §23 Abs. 3 S. 5:
+                  ;; "weniger als 1 000" → ≥ €1 000 fully taxable).
+                  ;; Below the line the entire gain is tax-free and we
+                  ;; suppress the component entirely — there is no tax
+                  ;; to fold.
                   §23-cmp    (when (and (pos? §23-net)
-                                        (> §23-net §23-freigrenze))
+                                        (>= §23-net §23-freigrenze))
                                (§23-component opts ctx §23-net))]
               (->> [§17-cmp §20-cmp §23-cmp] (remove nil?) vec))
 
@@ -596,3 +644,26 @@
   "Install the DE CGT statute (parameters + provisions) into `conn`."
   [conn]
   (cgt-statute/install! conn))
+
+;; ============================================================================
+;; CGT-CIT bridge — feed the §8b add-back into the CIT provider's :inputs
+;; ============================================================================
+
+(defn cgt-§8b-addback-input
+  "Sum the `:cit-base-additions` across all CGT components into a single
+   BigDecimal — the §8b add-back the CIT provider should compose into
+   the KSt base. Returns 0M when there are no contributions (no §8b
+   disposals in the period).
+
+   Wire-shape recap (note 136 P0-3): the corporate CGT provider emits
+   `:cit-base-additions` on its `:de-§8b` (+ `:de-§6b-residual`,
+   `:de-§6b-deferred`) components. This fn collapses them to one
+   number a consumer threads into the CIT provider's `:inputs`. Per
+   the CGT-CIT integration convention, the consumer ALSO sets
+   `:tax-unit :cgt-provider-active? true` on the CIT call to suppress
+   the CIT statute's standalone §8b provision."
+  ^java.math.BigDecimal [cgt-facts]
+  (reduce + 0M
+          (mapcat (fn [c]
+                    (get-in c [:jurisdiction-specific-codes :cit-base-additions]))
+                  (:components cgt-facts))))

@@ -189,9 +189,13 @@
 
    The §8b 5 % add-back is NOT a Soli surtax — it surfaces in
    `:cit-base-additions` for the CIT provider to compose into the KSt
-   base; that flow goes through the existing DE-KStG-§8b-Abs-5
-   provision (CIT statute) which fires on the
-   `:inputs :participation-gain` consumer-supplied fact."
+   base. Per note 136 P0-3, the CGT provider is the source-of-truth
+   for the add-back when both providers are wired: the consumer sets
+   `:tax-unit :cgt-provider-active? true` on the CIT call to suppress
+   the CIT statute's DE-KStG-§8b-Abs-5 provision (which would otherwise
+   re-derive the add-back from `:inputs :participation-gain` and
+   double-count). The bridge fn is `cgt-§8b-addback-input` in
+   `kontor.l10n-de.cgt-provider`."
 
   [;; --------------------------------------------------------------------
    ;; §4 SolZG on §20 Abgeltungsteuer — 5.5 % surtax on the §20 component

@@ -237,6 +237,16 @@
    ;; §8b Abs. 5 KStG — 5% of dividend / participation gains stays
    ;; non-deductible even when the underlying gain is 95% exempt.
    ;; Computed via compute-fn (reads the §8b exemption-rate parameter).
+   ;;
+   ;; CGT-CIT integration (note 136 P0-3): when the DE CGT provider is
+   ;; wired alongside this CIT provider, the CGT provider is the source-
+   ;; of-truth for the §8b add-back — it computes the 5% from the
+   ;; disposal-level gain and emits `:cit-base-additions` on its `:de-§8b`
+   ;; component. To avoid double-counting, the consumer sets
+   ;; `:tax-unit :cgt-provider-active? true` which suppresses this
+   ;; provision. When the flag is absent / false this provision fires
+   ;; from the consumer-supplied `:inputs :participation-gain` fact
+   ;; (the legacy / standalone-CIT path).
    {:provision/code            "DE-KStG-§8b-Abs-5"
     :provision/jurisdiction    :de
     :provision/concept         [:tax-concept/code :base-transform-add]
@@ -246,7 +256,8 @@
     :provision/priority        200
     :provision/condition       (pr-str [:and
                                         [:eq :component :kst]
-                                        [:gt [:inputs :participation-gain] 0M]])
+                                        [:gt [:inputs :participation-gain] 0M]
+                                        [:not [:eq [:tax-unit :cgt-provider-active?] true]]])
     :provision/consequence     (pr-str {:op :base-add
                                         :code :kst-§8b-addback
                                         :label "§8b 5% non-deductible addback"
