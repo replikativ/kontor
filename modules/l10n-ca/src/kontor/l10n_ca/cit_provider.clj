@@ -93,12 +93,19 @@
   (or (get-in ctx [:inputs fact]) default))
 
 (defn- sbd-pool
-  "The slice of the federal $500k business limit allocated to one
+  "The slice of a per-province small-business limit allocated to one
    province for the CCPC small-business cascade. Multi-province
    corporations get a proportional split via the Sch-5 allocation
-   factor; single-province corporations get the full limit."
-  ^java.math.BigDecimal [db as-of ^java.math.BigDecimal share]
-  (let [limit (statute/parameter-value-at db "CA.Federal.CIT.sbd-business-limit" as-of)]
+   factor; single-province corporations get the full limit.
+
+   Note 126 P0-3 fix: the SBD pool is per-province, not always
+   federal — Ontario's Bill 12 (royal assent Nov 2025) raises ON's
+   small-business limit to $600k from 2026-01-01, breaking the
+   prior alignment with the federal $500k. Callers now pass the
+   per-province `:parameter/code` (`CA.ON.CIT.sbd-limit` etc.); the
+   federal caller passes `CA.Federal.CIT.sbd-business-limit`."
+  ^java.math.BigDecimal [db as-of ^java.math.BigDecimal share limit-parameter-code]
+  (let [limit (statute/parameter-value-at db limit-parameter-code as-of)]
     (* limit share)))
 
 (defn- two-bracket-progressive
@@ -144,29 +151,30 @@
 
 (defn- provincial-ccpc-schedule
   "Shared per-province CCPC schedule builder — small-business rate on
-   the allocated slice of the federal $500k limit, general rate above.
-   Each province has the SAME structural shape (the provincial small-
-   business limit always matches the federal; only the rates differ),
-   so this fn is parametrised by province + rate-codes."
-  [province sbd-rate-code general-rate-code]
+   the allocated slice of the province's small-business limit, general
+   rate above. Each province has its OWN `:sbd-limit` parameter (used
+   to match the federal $500k; ON's Bill 12 raises it to $600k from
+   2026-01-01 per note 126 P0-2). Parametrised by province + rate +
+   limit codes."
+  [province sbd-rate-code sbd-limit-code general-rate-code]
   (fn [_base ctx]
     (let [db        (:db ctx)
           as-of     (as-of-from-ctx ctx)
           share     (province-share ctx province)
           sbd-rate  (statute/parameter-value-at db sbd-rate-code     as-of)
           gen-rate  (statute/parameter-value-at db general-rate-code as-of)
-          pool      (sbd-pool db as-of share)
+          pool      (sbd-pool db as-of share sbd-limit-code)
           schedule  (two-bracket-progressive sbd-rate pool gen-rate)]
       schedule)))
 
 (def ^:private ca-on-ccpc-schedule
-  (provincial-ccpc-schedule :on "CA.ON.CIT.sbd-rate" "CA.ON.CIT.general-rate"))
+  (provincial-ccpc-schedule :on "CA.ON.CIT.sbd-rate" "CA.ON.CIT.sbd-limit" "CA.ON.CIT.general-rate"))
 
 (def ^:private ca-bc-ccpc-schedule
-  (provincial-ccpc-schedule :bc "CA.BC.CIT.sbd-rate" "CA.BC.CIT.general-rate"))
+  (provincial-ccpc-schedule :bc "CA.BC.CIT.sbd-rate" "CA.BC.CIT.sbd-limit" "CA.BC.CIT.general-rate"))
 
 (def ^:private ca-ab-ccpc-schedule
-  (provincial-ccpc-schedule :ab "CA.AB.CIT.sbd-rate" "CA.AB.CIT.general-rate"))
+  (provincial-ccpc-schedule :ab "CA.AB.CIT.sbd-rate" "CA.AB.CIT.sbd-limit" "CA.AB.CIT.general-rate"))
 
 ;; ----------------------------------------------------------------------------
 ;; The `:fn-from :compute-fn` resolver in kontor.statute expects the

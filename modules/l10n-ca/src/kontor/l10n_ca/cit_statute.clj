@@ -239,13 +239,32 @@
 
    {:parameter-value/parameter       [:parameter/code "CA.ON.CIT.sbd-rate"]
     :parameter-value/effective-from  #inst "2020-01-01"
+    :parameter-value/effective-until #inst "2026-07-01"
     :parameter-value/decimal-value   0.032M
-    :parameter-value/citation        "Ontario small-business CIT rate 3.2% since 2020-01-01 (was 3.5% in 2018-2019)"}
+    :parameter-value/citation        "Ontario small-business CIT rate 3.2% (2020-01-01 to 2026-06-30; was 3.5% in 2018-2019)"}
 
+   ;; Note 126 P0-1 (Bill 12, royal assent Nov 2025; SO 2025, c.12) —
+   ;; ON small-business rate cuts from 3.2% to 2.2% effective 2026-07-01.
+   ;; Straddle-year corps prorate per Ontario Taxation Act 2007 §32(2).
+   {:parameter-value/parameter      [:parameter/code "CA.ON.CIT.sbd-rate"]
+    :parameter-value/effective-from #inst "2026-07-01"
+    :parameter-value/decimal-value  0.022M
+    :parameter-value/citation       "Ontario Taxation Act 2007 §32 as amended by Bill 12 (RA 2025-11; SO 2025, c.12) — SBD rate cut to 2.2% from 2026-07-01"}
+
+   {:parameter-value/parameter       [:parameter/code "CA.ON.CIT.sbd-limit"]
+    :parameter-value/effective-from  #inst "2009-01-01"
+    :parameter-value/effective-until #inst "2026-01-01"
+    :parameter-value/decimal-value   500000M
+    :parameter-value/citation        "Ontario small-business limit $500k 2009-01-01 to 2025-12-31 (matched federal)"}
+
+   ;; Note 126 P0-2 (Bill 12, same act) — ON business limit raises from
+   ;; $500k to $600k effective 2026-01-01. Diverges from federal $500k
+   ;; for the first time since 2009; the sbd-pool fix (P0-3) ensures
+   ;; the per-province limit is now read, not the federal value.
    {:parameter-value/parameter      [:parameter/code "CA.ON.CIT.sbd-limit"]
-    :parameter-value/effective-from #inst "2009-01-01"
-    :parameter-value/decimal-value  500000M
-    :parameter-value/citation       "Ontario small-business limit $500k (matches federal)"}
+    :parameter-value/effective-from #inst "2026-01-01"
+    :parameter-value/decimal-value  600000M
+    :parameter-value/citation       "Ontario Taxation Act 2007 §31 as amended by Bill 12 — business limit raised to $600k from 2026-01-01"}
 
    ;; --------------------------------------------------------------------
    ;; British Columbia — 12% general / 2% small / $500k

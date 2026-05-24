@@ -263,6 +263,36 @@
                               :tax-unit {:ccpc? false :provincial-allocation {:on 1M}}
                               :inputs   {}}))))))
 
+(deftest on-2026-bill-12-transition
+  ;; Note 126 P0-1 + P0-2 + P0-3 — Ontario Bill 12 (RA Nov 2025;
+  ;; SO 2025, c.12) raises ON small-business limit from $500k to $600k
+  ;; effective 2026-01-01 and cuts the SBD rate from 3.2% to 2.2%
+  ;; effective 2026-07-01. The provider must read the per-province
+  ;; sbd-limit (not federal) for ON, and pick up both transitions.
+  (let [conn (fresh)
+        run-on (fn [as-of]
+                 (ptp/period-tax-facts
+                  (ca-cit/ca-cit-provider {})
+                  {:entity   :corp
+                   :period   {:from #inst "2026-01-01" :to #inst "2027-01-01"}
+                   :db       (d/db conn)
+                   :as-of    as-of
+                   :tax-unit {:ccpc?                 true
+                              :provincial-allocation {:on 1M}}
+                   :inputs   {:taxable-income 600000M}}))]
+    (testing "as-of 2025-12-31 → pre-Bill-12: $500k limit at 3.2%"
+      (let [on (component (run-on #inst "2025-12-31") :ca-on)]
+        ;; 500000 × 3.2% + 100000 × 11.5% = 16000 + 11500 = 27500
+        (is (== 27500.00M (:amount (:liability on))))))
+    (testing "as-of 2026-04-01 → limit raised to $600k (Jan 2026) but rate still 3.2% (cut not yet 2026-07-01)"
+      (let [on (component (run-on #inst "2026-04-01") :ca-on)]
+        ;; whole 600000 at 3.2% = 19200 (no general-rate slice)
+        (is (== 19200.00M (:amount (:liability on))))))
+    (testing "as-of 2026-09-01 → limit $600k + rate 2.2% (both transitions live)"
+      (let [on (component (run-on #inst "2026-09-01") :ca-on)]
+        ;; 600000 × 2.2% = 13200 (no general-rate slice)
+        (is (== 13200.00M (:amount (:liability on))))))))
+
 (deftest functional-commodity-is-cad-on-every-money
   (let [facts (compute {:ccpc? true :provincial-allocation {:on 1M}}
                        {:taxable-income 100000M})]
