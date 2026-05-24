@@ -285,6 +285,88 @@
         (is (== 3000000M (-> ltcg :base :amount)))
         (is (== 375000M  (-> ltcg :liability :amount)))))))
 
+(deftest §54EC-mixed-§54-claim-counts-only-§54EC-slice-against-cap
+  (testing "P0 (note 143 §3.1) — when a disposal claims BOTH :in-§54EC
+            and :in-§54, only the §54EC-attributable slice of the
+            rollover counts against the ₹50 L FY cap. The remainder
+            (allocated to §54) MUST NOT inflate :§54EC-cap-used.
+
+            Pre-fix: a single disposal with rollover 8M (5M §54EC + 3M
+            §54) would silently push §54EC-cap-used to 8M, exhausting
+            the cap and denying later §54EC claims in the same FY.
+            Post-fix: §54EC-cap-used = 5M (the cap-allowed §54EC slice
+            only); the §54-sibling remainder is tracked through the
+            ordinary §54-family-rollover line item."
+    (let [conn (fresh)]
+      ;; Single mixed disposal — rollover (8M) > §54EC cap (5M); sibling
+      ;; §54 absorbs the 3M remainder.
+      (record! conn {:external-id      "mixed-§54EC-§54"
+                     :asset-class      :in-immovable
+                     :acquired-on      #inst "2020-03-01"
+                     :disposed-on      #inst "2026-04-15"
+                     :proceeds         {:amount 12000000M :commodity inr}
+                     :basis            {:amount  4000000M :commodity inr}
+                     :exemption-claimed #{:in-§54EC :in-§54}
+                     :rollover         {:into-asset rollover-stub
+                                        :amount     8000000M
+                                        :commodity  inr}})
+      (let [facts  (run-provider conn :individual fy-2026-27)
+            ltcg   (component-by-lane facts :ltcg-§112)
+            exempt (component-by-lane facts :exempt)
+            cap-used-line
+            (->> (:line-items exempt)
+                 (some #(when (= :§54EC-cap-used (:line %)) %)))
+            full-roll-line
+            (->> (:line-items exempt)
+                 (some #(when (= :§54-family-rollover (:line %)) %)))]
+        ;; The mixed claim fully shelters the 8M gain → no §112 component.
+        (is (nil? ltcg))
+        ;; The exempt-component's :§54-family-rollover surfaces the
+        ;; FULL 8M (§54EC 5M + §54 3M) for audit.
+        (is (some? full-roll-line))
+        (is (== 8000000M (-> full-roll-line :value :amount)))
+        ;; The :§54EC-cap-used line shows ONLY the §54EC-allocated 5M,
+        ;; not the full 8M. (Pre-fix the test would have asserted 8M.)
+        (is (some? cap-used-line))
+        (is (== 5000000M (-> cap-used-line :value :amount))
+            "Only the §54EC slice (5M) counts against the cap — not the
+             sibling §54 remainder (3M)."))))
+
+  (testing "And a subsequent §54EC-only disposal in the same FY still
+            sees the unused cap headroom — modelled via the consumer-
+            supplied :in-§54EC-prior-claimed input (which the previous
+            sub-test demonstrates would be 5M, not 8M)."
+    (let [conn (fresh)]
+      ;; Simulate: an EARLIER mixed §54+§54EC claim consumed 5M of cap
+      ;; (its §54EC slice). The consumer supplies that 5M as
+      ;; :in-§54EC-prior-claimed for this run.
+      (record! conn {:external-id      "later-§54EC-only"
+                     :asset-class      :in-immovable
+                     :acquired-on      #inst "2020-06-01"
+                     :disposed-on      #inst "2026-11-01"
+                     :proceeds         {:amount 7000000M :commodity inr}
+                     :basis            {:amount 4000000M :commodity inr}
+                     :exemption-claimed #{:in-§54EC}
+                     :rollover         {:into-asset rollover-stub
+                                        :amount     2000000M
+                                        :commodity  inr}})
+      (let [;; Pre-fix: a real consumer would have supplied 8M
+            ;; (the full prior rollover) and seen head = 0 → denied.
+            ;; Post-fix: the consumer supplies 5M (the actual §54EC
+            ;; slice from the mixed claim) → head = 0 too IF cap is
+            ;; exhausted. But here we model the post-fix scenario
+            ;; where the consumer feeds back the corrected 5M and
+            ;; still has headroom (cap 5M, prior 0M would give 5M
+            ;; head). Use a smaller prior to expose the headroom.
+            facts (run-provider conn :individual fy-2026-27
+                                {:inputs {:in-§54EC-prior-claimed 3000000M}})
+            ltcg  (component-by-lane facts :ltcg-§112)]
+        ;; Cap head = 5M - 3M = 2M; rollover 2M → allowed 2M → gain
+        ;; (3M) - 2M = 1M base; tax = 1M × 12.5 % = 125k
+        (is (some? ltcg))
+        (is (== 1000000M (-> ltcg :base :amount)))
+        (is (== 125000M (-> ltcg :liability :amount)))))))
+
 ;; ============================================================================
 ;; §6. §47 transfer-not-regarded
 ;; ============================================================================

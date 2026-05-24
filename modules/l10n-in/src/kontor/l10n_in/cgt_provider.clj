@@ -286,12 +286,33 @@
 
 (defn- §54-family-rollover-amount
   "If the disposal claims any §54 family exemption AND the consumer
-   recorded `:disposal/rollover-amount`, return the BigDecimal
-   amount (capped by the §54EC ₹50 L hard cap if §54EC is the only
-   claimed exemption and the running FY total exceeds the cap).
-   Returns 0M otherwise."
-  ^java.math.BigDecimal [disposal {:keys [§54EC-cap §54EC-prior-claimed
-                                          §54EC-running-claimed]}]
+   recorded `:disposal/rollover-amount`, return a map
+   `{:total <BigDecimal> :§54EC-used <BigDecimal>}` where `:total` is
+   the total amount deferred (capped by §54EC ₹50 L if §54EC was the
+   sole claim) and `:§54EC-used` is the §54EC-attributable slice that
+   counts against the FY cap.
+
+   Allocation rule when a disposal claims BOTH `:in-§54EC` and another
+   `:in-§54x`: the §54EC cap is consumed FIRST (up to the head of the
+   FY cap), with any remainder allocated to the sibling exemption.
+   This matches the natural intent — the consumer's rollover total
+   spans both bond purchases (§54EC) and the qualifying replacement
+   asset (sibling §54x), and the bond portion is what counts against
+   the ₹50 L cap.
+
+   When the cap is exhausted (head ≤ 0) and the disposal also claims a
+   non-§54EC sibling, the ENTIRE rollover routes through the sibling
+   and `:§54EC-used` is 0M — preserving cap headroom for later
+   disposals in the same FY.
+
+   Returns `{:total 0M :§54EC-used 0M}` when no §54-family exemption
+   is claimed.
+
+   (Fixes the P0 in research note 143 §3.1 — the old shape returned
+   only the total, and the caller had to guess which portion was
+   §54EC-attributable, which it did wrong by adding the FULL rollover
+   to the FY accumulator on every mixed claim.)"
+  [disposal {:keys [§54EC-cap §54EC-prior-claimed §54EC-running-claimed]}]
   (let [claimed   (set (:disposal/exemption-claimed disposal))
         rollover  (or (:disposal/rollover-amount disposal) 0M)
         §54EC?    (contains? claimed :in-§54EC)
@@ -299,17 +320,19 @@
     (cond
       ;; Hard ₹50 L cap on §54EC — sum prior+running across FY.
       §54EC?
-      (let [already  (+ (or §54EC-prior-claimed 0M) (or §54EC-running-claimed 0M))
-            head    (max 0M (- §54EC-cap already))
-            allowed (min rollover head)]
-        (+ allowed
-           ;; If the disposal ALSO claims a non-§54EC exemption, the
-           ;; remainder still rolls (subject to that exemption's own
-           ;; rules — the consumer's responsibility to size).
-           (if non-§54EC (max 0M (- rollover allowed)) 0M)))
+      (let [already   (+ (or §54EC-prior-claimed 0M) (or §54EC-running-claimed 0M))
+            head      (max 0M (- §54EC-cap already))
+            allowed   (min rollover head)
+            remainder (max 0M (- rollover allowed))]
+        {:total      (+ allowed
+                        ;; If the disposal ALSO claims a non-§54EC
+                        ;; exemption, the remainder still rolls under
+                        ;; that exemption's own rules (consumer-sized).
+                        (if non-§54EC remainder 0M))
+         :§54EC-used allowed})
 
-      non-§54EC rollover
-      :else     0M)))
+      non-§54EC {:total rollover :§54EC-used 0M}
+      :else     {:total 0M       :§54EC-used 0M})))
 
 (defn- classify
   "Classify one disposal into IN CGT lanes, returning a map
@@ -330,10 +353,11 @@
         long?         (long-term? disposal {:equity-cutoff-mo equity-cutoff-mo
                                              :other-cutoff-mo other-cutoff-mo})
         §47?          (§47-exempt? disposal)
-        rollover      (§54-family-rollover-amount
-                       disposal {:§54EC-cap            §54EC-cap
-                                 :§54EC-prior-claimed  §54EC-prior-claimed
-                                 :§54EC-running-claimed §54EC-running-claimed})
+        {rollover    :total
+         §54EC-used  :§54EC-used} (§54-family-rollover-amount
+                                   disposal {:§54EC-cap            §54EC-cap
+                                             :§54EC-prior-claimed  §54EC-prior-claimed
+                                             :§54EC-running-claimed §54EC-running-claimed})
         gain-net      (max 0M (- (max 0M gain-pre) rollover))
         ;; Lane assignment by (asset-class, long?).
         lane          (cond
@@ -356,12 +380,13 @@
 
                         :else
                         :stcg-slab)]
-    {:lane     lane
-     :gain     (if §47? 0M gain-net)
-     :rollover rollover
-     :election (when cii-elected? :in-cii-indexation)
-     :gain-pre gain-pre
-     :disposal disposal}))
+    {:lane       lane
+     :gain       (if §47? 0M gain-net)
+     :rollover   rollover
+     :§54EC-used §54EC-used
+     :election   (when cii-elected? :in-cii-indexation)
+     :gain-pre   gain-pre
+     :disposal   disposal}))
 
 ;; ============================================================================
 ;; Within-year set-off + carry-in (§70 / §74)
@@ -595,9 +620,11 @@
                                 :§54EC-prior-claimed §54EC-prior
                                 :§54EC-running-claimed §54EC-used
                                 :§50C-opts §50C-opts})
-                   §54EC-add (if (contains? (set (:disposal/exemption-claimed d))
-                                            :in-§54EC)
-                               (:rollover c) 0M)]
+                   ;; Only the §54EC-attributable slice consumes the
+                   ;; ₹50 L FY cap — NOT the entire rollover when a
+                   ;; sibling §54x exemption also claims part of it.
+                   ;; (Fixes the P0 in research note 143 §3.1.)
+                   §54EC-add (or (:§54EC-used c) 0M)]
                {:classified (conj classified c)
                 :§54EC-used (+ §54EC-used §54EC-add)}))
            {:classified [] :§54EC-used 0M}
