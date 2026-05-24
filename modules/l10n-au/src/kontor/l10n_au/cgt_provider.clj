@@ -270,38 +270,43 @@
      :cap-remaining   (- cap-remaining-in retire-used)}))
 
 ;; ============================================================================
-;; Per-disposal compute — exemption gates → indexation guard → discount → cascade
+;; Per-disposal classification — PHASE 1: exemption gates → raw classification
 ;; ============================================================================
 
-(defn- compute-disposal
-  "Compute the assessable capital gain for one disposal. Returns:
+(defn- classify-disposal
+  "Classify a single disposal into one of four kinds, WITHOUT applying
+   the Div 115 discount or the Subdiv 152 cascade. Discount + cascade
+   are deferred to PHASE 2 (`finalize-taxable`) so that capital losses
+   net against PRE-discount raw gains per ITAA 1997 s102-5 Method
+   Statement Steps 1-3.
 
-     {:disposal       <input map>
-      :raw-gain       <bigdec>  proceeds − basis − rollover
-      :gain-after-disc <bigdec> after Div 115 discount
-      :assessable     <bigdec>  AFTER cascade — feeds the net stream
-      :exempt-reason  <kw|nil>  exemption gate that fired (else nil)
-      :discount-rate  <bigdec>  rate applied (0 if not eligible)
-      :line-items     [<{:line :label :value}>]
-      :cap-remaining  <bigdec>  the holder's cap headroom after this
-                                disposal — caller threads forward.}
+   Returns a classification map shaped:
 
-   For losses (`raw-gain` < 0), discount / cascade are bypassed; the
-   loss flows into the net-stream untouched (s115-105: no discount on
-   capital losses).
+     {:disposal      <input>
+      :class         #{:exempt :loss-disregarded :loss :taxable-gain}
+      :raw-gain      <bigdec>     proceeds − basis − rollover
+      :exempt-reason <kw|nil>     gate that fired (when :class = :exempt)
+      :commodity     <str>}
 
-   The indexation method (`:au-indexation-method`) is recognised but not
-   computed in v1 — provider RAISES (`:not-yet-implemented`) to surface
-   the gap explicitly per note 129 §6 Q6."
-  [disposal {:keys [db kind cutoff-days as-of cap-remaining]}]
+   - `:exempt`            — full-disregard gates (thresholds, main-res,
+                            Div 855 non-TAP, Subdiv 152-B 15-yr).
+   - `:loss-disregarded`  — personal-use loss (s108-20(1) — the loss
+                            VANISHES, does NOT enter the loss bucket).
+   - `:loss`              — regular capital loss; enters the loss bucket
+                            and may offset other gains pre-discount.
+   - `:taxable-gain`      — positive raw gain that will, after loss
+                            netting in PHASE 2, attract discount +
+                            cascade.
+
+   The indexation method (`:au-indexation-method`) is recognised but
+   not computed in v1 — provider RAISES (`:not-yet-implemented`) to
+   surface the gap explicitly per note 129 §6 Q6."
+  [disposal {:keys [db as-of]}]
   (let [raw           (realized-gain disposal)
+        asset-class   (:disposal/asset-class disposal)
         commodity-sym (or (:commodity/symbol (:disposal/proceeds-commodity disposal))
                           "AUD")
         regimes       (elective-regime-set disposal)
-        exempt-line   (fn [reason]
-                        [{:line :gain          :label "Raw realised gain"     :value raw}
-                         {:line :exempt-reason :label "Exemption fired"       :value reason}
-                         {:line :assessable    :label "Assessable gain"       :value 0M}])
         below-thresh  (below-threshold-exempt? disposal db as-of)
         main-res      (main-residence-exempt? disposal)
         non-tap       (foreign-non-tap-exempt? disposal)
@@ -314,98 +319,195 @@
                        :external-id (:disposal/external-id disposal)
                        :as-of as-of}))
 
-      ;; --- Exemption gates (in priority order) --------------------------
       below-thresh
-      {:disposal disposal :raw-gain raw :gain-after-disc 0M :assessable 0M
-       :exempt-reason below-thresh :discount-rate 0M
-       :line-items (exempt-line below-thresh)
-       :cap-remaining cap-remaining
-       :commodity commodity-sym}
+      {:disposal disposal :class :exempt :raw-gain raw
+       :exempt-reason below-thresh :commodity commodity-sym}
 
       main-res
-      {:disposal disposal :raw-gain raw :gain-after-disc 0M :assessable 0M
-       :exempt-reason main-res :discount-rate 0M
-       :line-items (exempt-line main-res)
-       :cap-remaining cap-remaining
-       :commodity commodity-sym}
+      {:disposal disposal :class :exempt :raw-gain raw
+       :exempt-reason main-res :commodity commodity-sym}
 
       non-tap
-      {:disposal disposal :raw-gain raw :gain-after-disc 0M :assessable 0M
-       :exempt-reason non-tap :discount-rate 0M
-       :line-items (exempt-line non-tap)
-       :cap-remaining cap-remaining
-       :commodity commodity-sym}
+      {:disposal disposal :class :exempt :raw-gain raw
+       :exempt-reason non-tap :commodity commodity-sym}
 
       §152-15?
-      {:disposal disposal :raw-gain raw :gain-after-disc 0M :assessable 0M
-       :exempt-reason :s152-105-15y :discount-rate 0M
-       :line-items [{:line :gain        :label "Raw realised gain"   :value raw}
-                    {:line :§152-15y    :label "Subdiv 152-B 15-yr exemption" :value raw}
-                    {:line :assessable  :label "Assessable gain"     :value 0M}]
-       :cap-remaining cap-remaining
+      {:disposal disposal :class :exempt :raw-gain raw
+       :exempt-reason :s152-105-15y :commodity commodity-sym}
+
+      ;; P0-2: personal-use LOSSES are DISREGARDED per ITAA 1997
+      ;; s108-20(1) — the loss vanishes entirely, does not enter the
+      ;; loss bucket.
+      (and (neg? raw) (= asset-class :au-personal-use))
+      {:disposal disposal :class :loss-disregarded :raw-gain raw
+       :exempt-reason :s108-20-personal-use-loss-disregarded
        :commodity commodity-sym}
 
       (neg? raw)
-      ;; Loss — no discount, no cascade. Flow into net stream.
-      {:disposal disposal :raw-gain raw :gain-after-disc raw :assessable raw
-       :exempt-reason nil :discount-rate 0M
-       :line-items [{:line :loss       :label "Realised capital loss" :value raw}
-                    {:line :assessable :label "Loss to net stream"    :value raw}]
-       :cap-remaining cap-remaining
-       :commodity commodity-sym}
+      {:disposal disposal :class :loss :raw-gain raw
+       :exempt-reason nil :commodity commodity-sym}
 
       :else
-      (let [rate (if (discount-eligible? disposal kind cutoff-days)
-                   (discount-rate db as-of kind)
-                   0M)
-            after-disc (- raw (* raw rate))
-            {:keys [assessable active-reduced retirement-used
-                    cap-remaining]}
-            (apply-cascade after-disc cap-remaining disposal)]
-        {:disposal       disposal
-         :raw-gain       raw
-         :gain-after-disc after-disc
-         :assessable     assessable
-         :exempt-reason  nil
-         :discount-rate  rate
-         :line-items     (cond-> [{:line :gain        :label "Raw realised gain"     :value raw}]
-                           (pos? rate)
-                           (conj {:line :discount    :label (str "Div 115 discount × " rate)
-                                  :value (- after-disc raw)})
-                           (pos? active-reduced)
-                           (conj {:line :§152-C-50pct
-                                  :label "Subdiv 152-C 50 % active-asset reduction"
-                                  :value (- active-reduced)})
-                           (pos? retirement-used)
-                           (conj {:line :§152-D-retirement
-                                  :label "Subdiv 152-D retirement exemption (consumed)"
-                                  :value (- retirement-used)})
-                           true
-                           (conj {:line :assessable  :label "Assessable gain (net of cascade)"
-                                  :value assessable}))
-         :cap-remaining  cap-remaining
-         :commodity      commodity-sym}))))
+      {:disposal disposal :class :taxable-gain :raw-gain raw
+       :exempt-reason nil :commodity commodity-sym})))
 
 ;; ============================================================================
-;; Loss netting — single AU bucket
+;; Loss netting — PHASE 2a — losses applied to PRE-discount raw gains
 ;; ============================================================================
 
 (defn- apply-losses
-  "Apply current-year capital losses + carry-in losses to current-year
-   gains. AU has a SINGLE capital-loss bucket (note 129 §1.6): losses
-   apply to gains BEFORE the discount (s102-5(1)(b) order is handled
-   per-disposal — losses sit on their own row with discount=0, so the
-   sum-after-cascade is the correct netting base).
+  "Pool current-year capital losses and prior-year carryforward losses
+   and apply them to taxable gains BEFORE the Div 115 discount and the
+   Subdiv 152 cascade (ITAA 1997 s102-5 Method Statement Steps 1-3).
 
-   Returns `{:net <bigdec> :loss-carry-forward <bigdec>}`. A `:net`
-   below zero is the new carryforward; the `:net` above zero is the
-   period's assessable amount."
-  [computed carry-in]
-  (let [sum (reduce + 0M (map :assessable computed))
-        after-carry (- sum (or carry-in 0M))]
-    (if (neg? after-carry)
-      {:net 0M :loss-carry-forward (- after-carry)}
-      {:net after-carry :loss-carry-forward 0M})))
+   Walks `:taxable-gain` classifications in input order, reducing each
+   raw-gain in turn until the loss pool is exhausted. Returns:
+
+     {:classifications <vec>           each :taxable-gain now has
+                                        `:netted-gain` (≥ 0) set; other
+                                        :class values pass through.
+      :loss-carry-forward <bigdec>}   ≥ 0 — losses left after all
+                                        gains were absorbed.
+
+   Personal-use `:loss-disregarded` entries DO NOT contribute to the
+   pool — they are statutorily disregarded per s108-20(1)."
+  [classifications carry-in]
+  (let [current-year-losses (->> classifications
+                                 (filter #(= :loss (:class %)))
+                                 (map (comp #(- %) :raw-gain))
+                                 (reduce + 0M))
+        loss-pool (+ current-year-losses (or carry-in 0M))
+        ;; Walk taxable gains in input order, consuming the pool FIFO.
+        {:keys [acc remaining]}
+        (reduce
+         (fn [{:keys [acc remaining]} c]
+           (if (= :taxable-gain (:class c))
+             (let [absorbed (min remaining (:raw-gain c))
+                   netted   (- (:raw-gain c) absorbed)]
+               {:acc       (conj acc (assoc c
+                                            :netted-gain netted
+                                            :loss-absorbed absorbed))
+                :remaining (- remaining absorbed)})
+             {:acc (conj acc c) :remaining remaining}))
+         {:acc [] :remaining loss-pool}
+         classifications)]
+    {:classifications acc :loss-carry-forward remaining}))
+
+;; ============================================================================
+;; Discount + cascade — PHASE 2b — applied to POST-loss netted gain
+;; ============================================================================
+
+(defn- finalize-taxable
+  "Apply Div 115 discount and the Subdiv 152 cascade to each
+   `:taxable-gain` classification's `:netted-gain` (the pre-discount
+   raw gain after losses have been netted in `apply-losses`). Returns
+   a per-disposal `computed` map shaped to match the previous
+   `compute-disposal` contract:
+
+     {:disposal       <input>
+      :raw-gain       <bigdec>  original raw gain (pre-loss)
+      :netted-gain    <bigdec>  raw gain after loss absorption
+      :gain-after-disc <bigdec> after Div 115 discount
+      :assessable     <bigdec>  after Subdiv 152 cascade
+      :exempt-reason  <kw|nil>
+      :discount-rate  <bigdec>
+      :line-items     [<{:line :label :value}>]
+      :cap-remaining  <bigdec>  the holder's cap headroom AFTER this
+                                 disposal — caller threads forward.}
+
+   Non-`:taxable-gain` classifications are converted to the
+   `computed` shape with `:assessable = 0M` and a single descriptive
+   line item."
+  [classification {:keys [db kind cutoff-days as-of cap-remaining]}]
+  (let [{:keys [class disposal raw-gain exempt-reason commodity]} classification
+        exempt-line (fn [reason raw]
+                      [{:line :gain          :label "Raw realised gain"     :value raw}
+                       {:line :exempt-reason :label "Exemption fired"       :value reason}
+                       {:line :assessable    :label "Assessable gain"       :value 0M}])]
+    (case class
+      :exempt
+      {:disposal disposal :raw-gain raw-gain :netted-gain 0M
+       :gain-after-disc 0M :assessable 0M
+       :exempt-reason exempt-reason :discount-rate 0M
+       :line-items (if (= exempt-reason :s152-105-15y)
+                     [{:line :gain        :label "Raw realised gain"   :value raw-gain}
+                      {:line :§152-15y    :label "Subdiv 152-B 15-yr exemption" :value raw-gain}
+                      {:line :assessable  :label "Assessable gain"     :value 0M}]
+                     (exempt-line exempt-reason raw-gain))
+       :cap-remaining cap-remaining
+       :commodity commodity}
+
+      :loss-disregarded
+      ;; P0-2: s108-20(1) — personal-use loss disregarded. No loss
+      ;; flows into the bucket, no assessable amount produced.
+      {:disposal disposal :raw-gain raw-gain :netted-gain 0M
+       :gain-after-disc 0M :assessable 0M
+       :exempt-reason exempt-reason :discount-rate 0M
+       :line-items [{:line :loss          :label "Realised capital loss"          :value raw-gain}
+                    {:line :exempt-reason :label "s108-20(1) personal-use disregarded"
+                     :value exempt-reason}
+                    {:line :assessable    :label "Loss disregarded — no carry"    :value 0M}]
+       :cap-remaining cap-remaining
+       :commodity commodity}
+
+      :loss
+      ;; Regular capital loss — already pooled by `apply-losses`; the
+      ;; per-disposal computed shape records the loss but contributes
+      ;; 0 to the assessable sum (losses live in `:loss-carry-forward`
+      ;; for the period).
+      {:disposal disposal :raw-gain raw-gain :netted-gain 0M
+       :gain-after-disc raw-gain :assessable 0M
+       :exempt-reason nil :discount-rate 0M
+       :line-items [{:line :loss       :label "Realised capital loss" :value raw-gain}
+                    {:line :pooled     :label "Pooled into loss bucket (pre-discount)"
+                     :value (- raw-gain)}]
+       :cap-remaining cap-remaining
+       :commodity commodity}
+
+      :taxable-gain
+      (let [netted (:netted-gain classification)
+            absorbed (:loss-absorbed classification 0M)
+            rate (if (and (pos? netted)
+                          (discount-eligible? disposal kind cutoff-days))
+                   (discount-rate db as-of kind)
+                   0M)
+            after-disc (- netted (* netted rate))
+            {:keys [assessable active-reduced retirement-used
+                    cap-remaining]}
+            (apply-cascade after-disc cap-remaining disposal)]
+        {:disposal        disposal
+         :raw-gain        raw-gain
+         :netted-gain     netted
+         :gain-after-disc after-disc
+         :assessable      assessable
+         :exempt-reason   nil
+         :discount-rate   rate
+         :line-items      (cond-> [{:line :gain :label "Raw realised gain" :value raw-gain}]
+                            (pos? absorbed)
+                            (conj {:line :loss-absorbed
+                                   :label "Capital losses applied (pre-discount, s102-5 Step 1-2)"
+                                   :value (- absorbed)})
+                            true
+                            (conj {:line :netted-gain
+                                   :label "Pre-discount gain after loss netting"
+                                   :value netted})
+                            (pos? rate)
+                            (conj {:line :discount    :label (str "Div 115 discount × " rate)
+                                   :value (- after-disc netted)})
+                            (pos? active-reduced)
+                            (conj {:line :§152-C-50pct
+                                   :label "Subdiv 152-C 50 % active-asset reduction"
+                                   :value (- active-reduced)})
+                            (pos? retirement-used)
+                            (conj {:line :§152-D-retirement
+                                   :label "Subdiv 152-D retirement exemption (consumed)"
+                                   :value (- retirement-used)})
+                            true
+                            (conj {:line :assessable
+                                   :label "Assessable gain (net of cascade)"
+                                   :value assessable}))
+         :cap-remaining   cap-remaining
+         :commodity       commodity}))))
 
 ;; ============================================================================
 ;; Components
@@ -489,20 +591,35 @@
                           {})
           carry-amt   (or (:capital carry-in) 0M)
           disposals   (ds/disposals-in source entity period)
-          ;; Thread cap-remaining through the computed-disposal stream so
-          ;; the retirement exemption is consumed in the disposal-order
-          ;; sequence (it's a lifetime budget — later disposals see what
-          ;; earlier ones already consumed).
           init-cap    (max 0M (- ret-cap used))
+          ;; PHASE 1 — classify each disposal (exempt / loss-disregarded
+          ;; / loss / taxable-gain) WITHOUT applying discount or
+          ;; cascade yet. Keeps raw-gains available for pre-discount
+          ;; loss netting (ITAA 1997 s102-5 Method Statement Steps 1-3).
+          classifications (mapv #(classify-disposal % {:db db :as-of as-of})
+                                disposals)
+          ;; PHASE 2a — pool current-year losses + carry-in and net
+          ;; them against taxable-gain raw amounts (FIFO in disposal
+          ;; order). Personal-use `:loss-disregarded` entries are
+          ;; excluded from the pool per s108-20(1).
+          ;; `:loss-carry-forward` is the loss pool residual after
+          ;; gains absorb — surfaced for a future v2 :emits-inputs
+          ;; carry-forward channel; v1 does not flow it back.
+          {:keys [classifications]}
+          (apply-losses classifications carry-amt)
+          ;; PHASE 2b — apply Div 115 discount + Subdiv 152 cascade to
+          ;; each taxable-gain's post-loss `:netted-gain`. Thread the
+          ;; retirement-cap headroom in disposal order so later
+          ;; disposals see what earlier ones consumed.
           {:keys [computed cap-remaining]}
           (reduce
-           (fn [{:keys [computed cap-remaining]} d]
-             (let [c (compute-disposal d {:db db :kind kind :cutoff-days cutoff-days
+           (fn [{:keys [computed cap-remaining]} c]
+             (let [r (finalize-taxable c {:db db :kind kind :cutoff-days cutoff-days
                                           :as-of as-of :cap-remaining cap-remaining})]
-               {:computed (conj computed c) :cap-remaining (:cap-remaining c)}))
+               {:computed (conj computed r) :cap-remaining (:cap-remaining r)}))
            {:computed [] :cap-remaining init-cap}
-           disposals)
-          {:keys [net]} (apply-losses computed carry-amt)
+           classifications)
+          net (reduce + 0M (map :assessable computed))
           components (if (zero? (count computed))
                        []
                        [(one-component {:authority authority :commodity commodity :kind kind}

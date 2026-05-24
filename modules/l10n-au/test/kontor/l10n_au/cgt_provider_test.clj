@@ -350,7 +350,7 @@
 ;; ============================================================================
 
 (deftest loss-carryforward-offsets
-  (testing "$30 000 LT gain assessable post-discount − $10 000 capital carry-in = $5 000"
+  (testing "$30 000 LT gain − $10 000 carry-in BEFORE discount = $10 000 assessable (s102-5 Steps 1-3)"
     (let [conn (fresh)]
       (record! conn {:external-id "lt-carry"
                      :asset-class :au-listed-shares
@@ -361,13 +361,12 @@
       (let [facts (run-provider conn :individual p2026
                                 {:inputs {:au-capital-loss-carryforward {:capital 10000M}}})
             cmp   (component facts)]
-        ;; gain 30_000 ×50% discount = 15_000 assessable; − 10_000 carry-in = 5_000.
-        ;; (AU mechanics: losses offset BEFORE discount per s102-5; here for
-        ;; simplicity the provider nets against the post-cascade `:assessable`.
-        ;; The numerical difference is significant for losses against the
-        ;; same disposal — future refinement; this asserts the carry-in
-        ;; channel works.)
-        (is (== 5000M (-> cmp :base :amount)))))))
+        ;; ITAA 1997 s102-5 Method Statement: losses (Step 1-2) apply
+        ;; BEFORE the discount (Step 3). Raw gain $30 000 − $10 000
+        ;; carry-in = $20 000 net pre-discount; × 50 % discount =
+        ;; $10 000 assessable. (Was previously $5 000 with the
+        ;; post-discount-netting bug — P0-1, note 138 §2.4.)
+        (is (== 10000M (-> cmp :base :amount)))))))
 
 ;; ============================================================================
 ;; §13. Personal-use threshold — first-element basis under $10k → exempt
@@ -386,6 +385,34 @@
             cmp   (component facts)]
         (is (== 0M (-> cmp :base :amount))
             "basis $8 000 ≤ $10 000 → s118-10(3) personal-use exemption")))))
+
+(deftest personal-use-loss-above-threshold-disregarded
+  (testing "above-$10k personal-use LOSS is disregarded per s108-20(1) — does NOT offset other gains"
+    (let [conn (fresh)]
+      ;; A personal-use boat with basis > $10k so the s118-10(3)
+      ;; threshold exemption does NOT fire — but s108-20(1) still
+      ;; disregards the loss entirely. Pair it with a discountable
+      ;; share gain to assert the loss DOES NOT enter the loss bucket.
+      (record! conn {:external-id "boat-loss"
+                     :asset-class :au-personal-use
+                     :acquired-on #inst "2022-06-01"
+                     :disposed-on #inst "2026-03-15"
+                     :proceeds    {:amount 12000M :commodity aud}
+                     :basis       {:amount 17000M :commodity aud}})
+      (record! conn {:external-id "shares-gain"
+                     :asset-class :au-listed-shares
+                     :acquired-on #inst "2022-06-01"
+                     :disposed-on #inst "2026-03-15"
+                     :proceeds    {:amount 30000M :commodity aud}
+                     :basis       {:amount 10000M :commodity aud}})
+      (let [facts (run-provider conn :individual p2026)
+            cmp   (component facts)]
+        ;; If the personal-use loss were (wrongly) bucketed, the share
+        ;; gain would be ($20 000 − $5 000) × 50 % = $7 500. The
+        ;; law-correct answer: loss disregarded, full $20 000 × 50 % =
+        ;; $10 000 assessable. (P0-2, note 138 §2.5.)
+        (is (== 10000M (-> cmp :base :amount))
+            "s108-20(1) personal-use loss vanishes — share gain attracts full discount only")))))
 
 (deftest collectable-under-500-exempt
   (testing "collectable with basis ≤ $500 → s118-10(1) exempt"
