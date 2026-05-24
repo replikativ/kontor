@@ -154,15 +154,36 @@
                         {:capital-class cap :headcount-class hc
                          :known (keys cit-statute/per-capita-levy-table)})))))
 
+(defn- jp-cit-sme-large-income-schedule
+  "Note 125 P0-1 — the SME-with-income-over-¥1B 2-bracket schedule
+   (17% on first ¥8M, 23.2% above). Same kink as the standard SME
+   schedule; the first-bracket rate is the only difference.
+
+   Registered as a `:formula` schedule compute-fn — invoked by
+   `kontor.tax-schedule/apply-schedule` with `[base ctx]` after
+   `kontor.statute/resolve-schedule-template` resolves the
+   `:fn-from :compute-fn` reference."
+  ^java.math.BigDecimal [^java.math.BigDecimal base ctx]
+  (let [db    (:db ctx)
+        as-of (as-of-from-ctx ctx)]
+    (ts/apply-schedule
+     (ts/progressive
+      [{:rate  (statute/parameter-value-at db "JP.CIT.sme-reduced-rate-large-income" as-of)
+        :upper (statute/parameter-value-at db "JP.CIT.sme-kink" as-of)}
+       {:rate  (statute/parameter-value-at db "JP.CIT.flat-rate" as-of)
+        :upper nil}])
+     base)))
+
 (defn register!
   "Register JP CIT compute-fns with `kontor.statute`. Called
    automatically at namespace load; idempotent."
   []
-  (statute/register-compute-fn! :jp-local-cit-on-national    jp-local-cit-on-national)
-  (statute/register-compute-fn! :jp-defense-surtax           jp-defense-surtax)
-  (statute/register-compute-fn! :jp-special-corp-enterprise  jp-special-corp-enterprise)
-  (statute/register-compute-fn! :jp-inhabitant-income-levy   jp-inhabitant-income-levy)
-  (statute/register-compute-fn! :jp-inhabitant-per-capita    jp-inhabitant-per-capita))
+  (statute/register-compute-fn! :jp-local-cit-on-national         jp-local-cit-on-national)
+  (statute/register-compute-fn! :jp-defense-surtax                jp-defense-surtax)
+  (statute/register-compute-fn! :jp-special-corp-enterprise       jp-special-corp-enterprise)
+  (statute/register-compute-fn! :jp-inhabitant-income-levy        jp-inhabitant-income-levy)
+  (statute/register-compute-fn! :jp-inhabitant-per-capita         jp-inhabitant-per-capita)
+  (statute/register-compute-fn! :jp-cit-sme-large-income-schedule jp-cit-sme-large-income-schedule))
 
 (register!)
 

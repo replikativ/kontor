@@ -159,6 +159,44 @@
                        "JP-Enterprise-§72-large"))))))
 
 ;; ============================================================================
+;; §2b. Note 125 P0-1 — SME with income > ¥1B (post-Reiwa-7 17% band)
+;; ============================================================================
+
+(deftest sme-17pct-band-above-1b
+  (testing "Note 125 P0-1 — SME with income > ¥1B (FY 2025-04-01+) jumps
+            the first-¥8M band from 15% to 17%; above-¥8M stays at 23.2%."
+    (let [tax-unit  {:is-sme?         true
+                     :capital-class   :capital-up-to-100m
+                     :headcount-class :small
+                     :prefecture      :tokyo}
+          asof-post #inst "2026-06-30"]
+      (testing "income ≤ ¥1B → default SME 15% schedule fires"
+        (let [facts (compute tax-unit {:book-profit 800000000M} asof-post)
+              nat   (component facts :jp-nta)]
+          ;; 15% on first ¥8M = 1,200,000; 23.2% on remaining 792M = 183,744,000
+          ;; total = 184,944,000
+          (is (== 184944000M (:amount (:gross-liability nat))))
+          (is (not (contains? (set (-> nat :provenance :provisions-applied))
+                              "JP-CIT-§66②-large-income"))
+              "JP-CIT-§66②-large-income should NOT fire below ¥1B")))
+      (testing "income > ¥1B → JP-CIT-§66②-large-income fires, 17% on first ¥8M"
+        (let [facts (compute tax-unit {:book-profit 1500000000M} asof-post)
+              nat   (component facts :jp-nta)]
+          ;; 17% on first ¥8M = 1,360,000; 23.2% on remaining 1,492M = 346,144,000
+          ;; total = 347,504,000
+          (is (== 347504000M (:amount (:gross-liability nat)))
+              "1,360,000 + 346,144,000 = 347,504,000")
+          (is (contains? (set (-> nat :provenance :provisions-applied))
+                         "JP-CIT-§66②-large-income"))))
+      (testing "pre-2025-04-01 → §66② provision NOT in effect; default SME schedule fires"
+        (let [facts (compute tax-unit {:book-profit 1500000000M} #inst "2025-03-31")
+              nat   (component facts :jp-nta)]
+          ;; 15% on first ¥8M + 23.2% on 1,492M = 1,200,000 + 346,144,000
+          (is (== 347344000M (:amount (:gross-liability nat))))
+          (is (not (contains? (set (-> nat :provenance :provisions-applied))
+                              "JP-CIT-§66②-large-income"))))))))
+
+;; ============================================================================
 ;; §3. Defense surtax temporal gate
 ;; ============================================================================
 

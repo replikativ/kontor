@@ -68,6 +68,15 @@
   "JP CIT parameter definitions — one row per `:parameter/code`.
    Values live in `parameter-values` keyed by `:effective-from`."
   [;; ----- National corporation tax 法人税 -----
+   ;; Note 125 P0-1 — the SME-large-income 17% rate (FY 2025-04-01+) is
+   ;; a separate parameter from the standard 15% SME reduced rate.
+   ;; Triggered when :is-sme? AND book-profit > ¥1B.
+   {:parameter/code         "JP.CIT.sme-reduced-rate-large-income"
+    :parameter/label        "Reduced rate on first ¥8M for SMEs with income > ¥1B (FY 2025+)"
+    :parameter/jurisdiction :jp
+    :parameter/unit         :rate
+    :parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=340AC0000000034"}
+
    {:parameter/code         "JP.CIT.sme-reduced-rate"
     :parameter/label        "Hōjinzei (法人税) reduced SME rate on the first ¥8 000 000 of taxable income"
     :parameter/jurisdiction :jp
@@ -179,6 +188,13 @@
     :parameter-value/effective-from #inst "2018-04-01"
     :parameter-value/decimal-value  0.15M
     :parameter-value/citation       "法人税法 §66②; NTA No. 5759 (中小法人の税率特例)"}
+
+   ;; Note 125 P0-1 — SME with income > ¥1B: 17% on first ¥8M (vs the
+   ;; standard 15% SME band). FY ≥ 2025-04-01 per Reiwa-7 Tax Reform Act.
+   {:parameter-value/parameter      [:parameter/code "JP.CIT.sme-reduced-rate-large-income"]
+    :parameter-value/effective-from #inst "2025-04-01"
+    :parameter-value/decimal-value  0.17M
+    :parameter-value/citation       "法人税法 §66② post-Reiwa-7 amendment; NTA No. 5759 — 17% on first ¥8M for SMEs with income > ¥1B"}
 
    {:parameter-value/parameter      [:parameter/code "JP.CIT.flat-rate"]
     :parameter-value/effective-from #inst "2018-04-01"
@@ -334,6 +350,29 @@
                                         :schedule {:schedule/type :flat
                                                    :rate-from :parameter
                                                    :parameter "JP.CIT.flat-rate"}})}
+
+   ;; Note 125 P0-1 — SME with annual income > ¥1B: the §66② reduced
+   ;; rate jumps from 15 % to 17 % on the first ¥8M (the >¥8M band stays
+   ;; at 23.2 %). Effective FY 2025-04-01 per the Reiwa-7 Tax Reform Act.
+   ;; Mutually exclusive with JP-CIT-§66-large (this fires only when
+   ;; :is-sme? true; that fires only when :is-sme? false) — no ambiguity.
+   {:provision/code            "JP-CIT-§66②-large-income"
+    :provision/jurisdiction    :jp
+    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/title           "法人税法 §66② post-Reiwa-7 — SME 17 % first-¥8M band when income > ¥1B"
+    :provision/citation        "https://elaws.e-gov.go.jp/document?lawid=340AC0000000034"
+    :provision/effective-from  #inst "2025-04-01"
+    :provision/priority        100
+    :provision/condition       (pr-str [:and
+                                        [:eq :component :national]
+                                        [:eq [:tax-unit :is-sme?] true]
+                                        [:gt [:inputs :book-profit] 1000000000M]])
+    :provision/consequence     (pr-str {:op :schedule-override
+                                        :code :jp-cit-sme-large-income
+                                        :label "法人税 SME 17%/23.2% (income > ¥1B)"
+                                        :schedule {:schedule/type :formula
+                                                   :fn-from :compute-fn
+                                                   :fn :jp-cit-sme-large-income-schedule}})}
 
    ;; 地方法人税 — 10.3 % surtax on the national CIT amount. Same shape
    ;; as DE Soli (late-bound compute-fn reads `:running`).
