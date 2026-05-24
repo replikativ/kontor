@@ -60,15 +60,30 @@
 (defrecord DatahikeDisposalSource [conn]
   src/DisposalSource
   (disposals-in [_ entity period]
-    (let [;; Resolve entity to its db-id if a keyword/lookup-ref was
-          ;; passed; if it's already a long, leave it alone.
-          db       (d/db conn)
+    (let [db        (d/db conn)
           entity-id (if (integer? entity) entity (:db/id (d/entity db entity)))
-          ;; disposals-in-period excludes :voided entries already.
-          basics   (disposal/disposals-in-period db period)
-          for-ent  (when entity-id
-                     (filter #(= entity-id (:db/id %)) basics))
-          eids     (mapv :db/id (or for-ent basics))]
+          eids      (if entity-id
+                      ;; Entity-scoped path — exact eq on :disposal/entity ref.
+                      (d/q '[:find [?d ...]
+                             :in $ ?ent ?from ?to
+                             :where
+                             [?d :disposal/entity ?ent]
+                             [?d :disposal/disposed-on ?on]
+                             [(<= ?from ?on)]
+                             [(< ?on ?to)]
+                             [?d :disposal/state ?st]
+                             [(not= ?st :voided)]]
+                           db entity-id (:from period) (:to period))
+                      ;; No entity → list all (still void-excluded).
+                      (d/q '[:find [?d ...]
+                             :in $ ?from ?to
+                             :where
+                             [?d :disposal/disposed-on ?on]
+                             [(<= ?from ?on)]
+                             [(< ?on ?to)]
+                             [?d :disposal/state ?st]
+                             [(not= ?st :voided)]]
+                           db (:from period) (:to period)))]
       (mapv #(d/pull db pull-spec %) eids))))
 
 (defn datahike-source

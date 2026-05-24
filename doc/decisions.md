@@ -9839,3 +9839,84 @@ jurisdiction-specific shape tests (DE §8b / US §1245 / UK BADR / JP
 (structural precedent).
 
 Date: 2026-05-24.
+
+## ADR-103 — `DisposalSource` protocol + per-jurisdiction CGT provider pattern
+
+**Status.** Accepted. Research notes 112-115 + 127-134 (US/DE/UK/JP/CA/FR/AU/BR/IN/MX/CN/AT).
+
+**Context.** Eleven jurisdictions have CGT regimes that differ
+materially in rate (DE 25 % flat vs US 0/15/20 progressive vs JP
+3 × declared regimes), loss-bucket cardinality (1 in AU vs 5 in DE
+vs 7 in JP), and integration with the entity's primary tax (corp
+gains fold into CIT in most jurisdictions; individuals get their own
+preferential schedule under US §1(h) / DE §20 / AT KESt / FR PFU).
+The disposal substrate (ADR-102) captures the events; the providers
+encode each jurisdiction's law.
+
+**Decision.** Three layered pieces:
+
+1. **Kernel `DisposalSource` protocol** (`src/kontor/disposal_source.clj`)
+   — single method `(disposals-in [source entity period])` returning
+   a vector of plain Clojure maps keyed by `:disposal/*`. CGT providers
+   depend on the protocol; the companion ships the canonical impl;
+   consumers with external storage write their own. Mirrors the
+   TaxRateProvider / FxRateProvider / PayrollEmitProvider seam.
+   `kontor.disposal-source/empty-source` is the no-op default for
+   periods with no disposals.
+
+2. **Companion impl** (`modules/disposal/src/kontor/disposal/source.clj`)
+   — `DatahikeDisposalSource` defrecord, entity-scoped query with
+   void exclusion + a pull spec resolving commodity refs.
+
+3. **Per-jurisdiction CGT providers** (`modules/l10n-<cc>/.../cgt_*.clj`)
+   — each one a `kontor.cgt-statute` (parameters + provisions per
+   ADR-101) plus a `kontor.cgt-provider` (defrecord implementing
+   `PeriodTaxProvider`). The provider:
+     a) reads disposals via the `DisposalSource`;
+     b) classifies each into the jurisdiction's lanes (ST/LT/§1250/
+        §1245-recapture/...) per the `:disposal/asset-class`
+        + `:elective-regime` + `:exemption-claimed` fields and the
+        date math on `:acquired-on`/`:disposed-on`;
+     c) nets within each lane against the carry-in from
+        `:inputs :capital-loss-carryforward`;
+     d) emits 0..N `:capital-gains-tax` components — some with their
+        own `:schedule` (DE §20 25 %, US §1(h) progressive, AT KESt
+        27.5 %), others as fold-into-CIT/PIT signals via
+        `:jurisdiction-specific-codes {:cit-base-additions [...]
+                                       :pit-base-additions [...]}`
+        that the consumer threads into the CIT/PIT provider's
+        `:inputs :base-transform`.
+
+The composition between CGT and CIT/PIT mirrors the precedent
+`kontor.sole-proprietor` (ADR-100) — no new substrate operator; the
+provider returns data, the consumer composes.
+
+**The US reference implementation** (`modules/l10n-us/src/kontor/l10n_us/cgt_{statute,provider}.clj`)
+ships with both kinds (`:individual` / `:corporation`):
+- statute: 17 parameters (LT bracket thresholds × 4 filing statuses,
+  3 LT rates, §1250 25 %, §1411 3.8 % NIIT + 3 MAGI thresholds,
+  §1211(b) $3 k cap, §1222 365-day cutoff); 1 provision (NIIT
+  surtax).
+- provider: lane classification (ST / LT / §1250-unrecaptured /
+  §1245-recapture / §1250-ordinary); LT schedule reads
+  filing-status-conditioned thresholds + universal rates; NIIT
+  composed-of LT + §1250 components; corp returns single
+  `:cit-base-additions` component; void exclusion via the
+  companion's source.
+- 12 tests / 31 assertions covering each lane, NIIT trigger /
+  no-trigger, carry-in consumption, corp net-folds-into-CIT, and
+  voided-disposal exclusion.
+
+**Implication.** Ten more jurisdictions follow this template — DE
+(2 providers: corporate §8b / personal §17/§20/§23 with 4 buckets),
+UK, JP, CA, FR (PFU + barème + immobilière + IS), AU, BR, IN, MX,
+CN (3 providers: IIT + EIT exceptions + LAT), AT (KESt + ImmoESt).
+Each jurisdiction's statute + provider + tests is ~300-500 lines
+modeled on this US reference.
+
+**Tested.** 2517 / 9988 / 0 full suite green.
+
+**Research backing.** Notes 107 + 112-115 + 127 + 128 + 129 + 130 +
+131 + 132 + 133 + 134 + ADR-099 + ADR-101 + ADR-102.
+
+Date: 2026-05-24.
