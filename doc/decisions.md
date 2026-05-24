@@ -9567,3 +9567,214 @@ named the relevant polish item with concrete file:line + worked-
 example justification.
 
 Date: 2026-05-24.
+
+## ADR-105 — FR corporate income tax (IS) — PME bracket + CGE surtax + mère-fille + CIR
+
+**Status.** Accepted. Research note 109 (FR CIT fit assessment); second
+consumer of the ADR-101 substrate via the Phase 3 parallel fan-out.
+
+**Context.** With ADR-101 + Addendum 1 shipped and validated on DE
+(ADR-104), the FR/JP/CA fan-out is the substrate-validation final
+mile. FR is the highest-signal pick because it exercises THREE
+substrate features the DE case didn't: (a) `:op :schedule-override`
+swapping a flat schedule for a progressive-bracket schedule (the PME
+15%/25% election), (b) a `:tax-unit`-driven `:condition` gate on
+company eligibility (`:pme?`), (c) a refundable `:credit` that can
+drive the liability negative (CIR). Plus the cross-jurisdiction
+participation-exemption pattern (régime mère-fille) parallels DE §8b.
+
+**Decision.** Three files in `modules/l10n-fr/`:
+
+- **`cit-statute`** — 9 `:parameter`s (FR.IS.standard-rate 25% from
+  2022; FR.IS.pme-brackets as a `:bracket-scale`; FR.CGE.rate 3.3%
+  + FR.CGE.abattement €763k; FR.MereFille.quote-part 5%; FR.CIR.*)
+  with citations to legifrance.gouv.fr article IDs (CGI 219-I-2°)b /
+  216 / 235 ter ZC / 244 quater B); 4 `:provision`s — `FR-IS-PME-rate`
+  (`:op :schedule-override` swapping to the PME progressive bracket
+  when `:tax-unit :pme?` true), `FR-CGI-216` (régime mère-fille 5%
+  Quote-part addback), `FR-CGI-235ter-ZC` (`:op :surtax` 3.3% on IS
+  above €763k abattement, with note-105 base-aware fn-of-running),
+  `FR-CGI-244quater-B` (CIR — `:op :credit :refundable? true` for
+  SMEs, non-refundable otherwise; piecewise 30% on first €100M / 5%
+  above via compute-fn).
+
+- **`cit-provider`** — `FRCITProvider` defrecord + 3 compute-fns
+  registered at namespace load (`:fr-mere-fille-addback`,
+  `:fr-cge-on-is` (late-binding), `:fr-cir`). Single `is-component`
+  in the `TaxReturnFacts` (authority `:fr-dgfip`). Provider queries
+  `:elective-regime` for the schedule-override + the four standard
+  concepts; picks highest-priority override or falls back to flat 25%.
+
+- **`cit-provider-test`** — 11 deftests / 52 assertions including the
+  note 109 §2 canonical SAS (CA HT €8M / profit €4M / PME-eligible /
+  CGE-applies → IS €995,750 + CS €7,680.75 = €1,003,430.75 to the
+  cent, sourced from legifiscal.fr), a standard 25% case, PME with
+  CGE provision firing at 0, PME with refundable CIR driving liability
+  negative, mère-fille 5% addback, provenance audit trail, idempotent
+  install!. Functional commodity `:EUR` invariant.
+
+**Implication.** Second l10n consumer of ADR-101; the substrate's
+`:op :schedule-override` + `:refundable?` credits + `:tax-unit`
+eligibility gating all exercised in production-shape code against
+an authority-published worked example.
+
+**Tested.** 11 deftests / 52 assertions (the file's own tests, all
+green); full `bb test` 2484 / 9900 / 0.
+
+**Substrate stress logged.** One minor: `:parameter-bracket` carries
+no uniqueness attr in kernel schema, so per-module `install!`s need
+internal dedup to be idempotent across re-installs. FR ships a local
+`bracket-row-already-present?` helper. Worth a kernel polish later —
+composite uniqueness on `(parameter, index, effective-from)` would
+let installers re-run cleanly. Not blocking; queued as a P2 followup.
+
+**Authoring trap caught (worth recording).** Local `is` binding
+silently shadows `clojure.test/is` — every `(is …)` becomes
+map-application returning nil and reports "0 assertions". Future
+authors picking jurisdictional abbreviations should avoid the trap;
+DE's `kst` / `gewst` happened to dodge it.
+
+**Reviews scheduled.** Per the maintainer's mandate, a baseline-
+review agent will verify the FR encoding against current BOFiP /
+impots.gouv.fr / Big-4 published guidance and reproduce the worked
+example against an online simulator. Lands as research note
+124-fr-cit-baseline-review.
+
+**Research backing.** Note 109 (FR CIT fit) + ADR-101 + Addendum 1.
+
+Date: 2026-05-24.
+
+## ADR-106 — JP corporate income tax — 5-component stack (national + local CIT + enterprise + inhabitants' + defense surtax)
+
+**Status.** Accepted. Research note 110 (JP CIT fit assessment).
+
+**Context.** JP CIT is the most multi-component of the four Phase 3
+jurisdictions — five (or six) statutory taxes file on one return:
+national CIT (Hōjinzei), local CIT surtax (Chihō Hōjinzei), enterprise
+tax (Jigyōzei), inhabitants' tax (Jūminzei — itself two-part: income-
+percentage + per-capita), and the new defense surtax (post-2026 FY).
+Multi-component `TaxReturnFacts` was always meant to scale (CA T1
+ships 2; DE CIT ships 2; JP ships 3+ depending on how you count
+inhabitants'). This is the stress test.
+
+**Decision.** Three files in `modules/l10n-jp/`:
+
+- **`cit-statute`** — 17 `:parameter`s + 23 `:parameter-value`s + 7
+  `:provision`s + a 10-cell `per-capita-levy-table` map (consumer-
+  supplied tier lookup; not modelled as 10 separate `:parameter`s per
+  namespace docstring rationale — capital × employee tiers fit a
+  table better than a parameter family). National CIT graduated
+  SME-vs-large via `:op :schedule-override`. Local CIT 10.3%, defense
+  surtax 4% (post-2026-04-01), inhabitants' income-percentage ~10.4%
+  (Tokyo) all as `:op :surtax` with compute-fns that read the prior
+  component's GROSS (NOT `:running`) to avoid inflating with prior
+  surtaxes. Per-capita inhabitants' as a "surtax-on-zero" pattern per
+  note 110 §4 stress A (zero-base component + surtax fn returning the
+  table value).
+
+- **`cit-provider`** — `JPCITProvider` defrecord + 5 compute-fns. Emits
+  THREE components: `:jp-nta` (national CIT + local CIT + defense
+  surtax), `:jp-prefecture` (enterprise tax + special corporate
+  enterprise tax), `:jp-municipality` (inhabitants' income-percentage
+  + per-capita). Cross-component surtaxes wired by injecting
+  `:national-cit-gross` / `:enterprise-tax-gross` into the next pass's
+  ctx so late-bound fns read the underlying tax, not the running total.
+
+- **`cit-provider-test`** — 11 deftests / 50 assertions. JETRO §3.3
+  worked example: Tokyo SME @ ¥10M income → ¥2,625,912 (without
+  per-capita) / ¥2,695,912 (with ¥70k per-capita) to the yen.
+  Large-corp flat 23.2% via `:schedule-override`. Defense surtax
+  temporal gate (as-of 2025-12-31 vs 2026-04-01 fires different
+  provisions). Per-capita levy tier coverage. Three traps (book-profit
+  / is-sme? / capital-class required). Provenance audit. `:JPY`
+  commodity invariant.
+
+**Implication.** Three-component `TaxReturnFacts` exercised cleanly.
+Cross-component data flow (one component's gross feeding the next's
+compute-fn) is provider-side, no substrate change — the multi-pass
+fn-of-prior-component-amount pattern is now a documented convention.
+Substrate-shorthand candidates (`:fixed-amount` schedule kind for
+per-capita; per-jurisdiction `:authority`-level cross-references)
+deferred to follow-up.
+
+**Tested.** 11 deftests / 50 assertions; full bb test 2484 / 9900 / 0.
+
+**Substrate deferrals logged.**
+- Large-corp pro-forma enterprise tax (3 bases: value-added + capital +
+  income) — note 110 §1; v1 ships only the income-base component.
+- `:fixed-amount` schedule kind for per-capita levy — note 110 §4 stress
+  A; v1 expresses it as "surtax on zero" which works cleanly.
+
+**Reviews scheduled.** Per the maintainer's mandate, a baseline-review
+agent will verify the JP encoding against NTA + JETRO + Big-4 Japan
+published guidance. Lands as research note 125-jp-cit-baseline-review.
+
+**Research backing.** Note 110 (JP CIT fit) + ADR-101 + Addendum 1.
+
+Date: 2026-05-24.
+
+## ADR-107 — CA corporate income tax (T2) — federal + per-province multi-jurisdiction
+
+**Status.** Accepted. Research note 111 (CA CIT fit assessment).
+
+**Context.** CA T2 has the same multi-jurisdiction shape CA T1 (PIT)
+already exercises (one federal + one provincial component per province
+with allocated income), but adds CCPC-conditional Small Business
+Deduction (SBD) — a progressive-bracket cascade gated on company status.
+Plus per-province SBD limits + refundable SR&ED for CCPCs.
+The multi-province allocation per T2 Schedule 5 (wages + revenue
+2-factor) was flagged by note 111 as the CA-specific complexity and
+by note 123 (CN CCSV cross-check) as provider-side logic — not a
+substrate change.
+
+**Decision.** Three files in `modules/l10n-ca/`:
+
+- **`cit-statute`** — 18 `:parameter`s with date-keyed values + citations
+  to canada.ca / laws-lois.justice.gc.ca / provincial finance ministries
+  (federal base 38% / general-reduction −13% / provincial-abatement −10%
+  → 15% effective; CCPC SBD rate 9% with $500k limit; SR&ED 35% CCPC
+  refundable / 15% standard with $3M expenditure-limit; ON/BC/AB general
+  + SBD rates with limits). 10 `:provision`s — 2 federal `:schedule-
+  override`s (CCPC SBD cascade vs general flat), 2 SR&ED credit (refundable
+  for CCPC; non-refundable otherwise — `:refundable?` driven by
+  `:tax-unit :ccpc?`), and 2 per province (ON, BC, AB) for CCPC vs
+  general — all scoped via `:condition [:eq :component <kw>]`.
+  Idempotent install!.
+
+- **`cit-provider`** — `CACITProvider` defrecord + 4 compute-fns
+  (`:ca-federal-ccpc-schedule`, `:ca-on/bc/ab-ccpc-schedule`,
+  `:ca-sred-credit`). Per-province SBD pool allocation = federal $500k
+  × Sch-5 share, provider-internal (note 111 §4 Finding 2 — no
+  substrate change). N-component `TaxReturnFacts` (1 federal + N
+  provinces with non-zero allocation).
+
+- **`cit-provider-test`** — 10 deftests / 66 assertions. CCPC ON+AB
+  multi-province case (note 111 §2 reference; total CAD 89,230);
+  non-CCPC flat-rate; two-province ON+BC; SR&ED refundable for CCPC
+  drives liability negative; SR&ED non-refundable floors at 0;
+  idempotent install; provenance audit; missing-taxable-income trap;
+  `:CAD` commodity invariant.
+
+**Implication.** Most multi-jurisdiction l10n provider so far (1 + N
+components). Multi-province allocation lives entirely in provider —
+confirms note 123 (CN CCSV) prediction that the existing `:authority`-
+per-component design + provider-side allocation scales to multi-region
+tax structures without substrate change.
+
+**Tested.** 10 deftests / 66 assertions; full bb test 2484 / 9900 / 0.
+
+**Honest note re. note 111 §2 arithmetic.** Note 111's worked example
+had a small inconsistency between share = 0.65 and SBD pool 322,580
+(0.65 × $500k = 325,000; the 322,580 figure corresponds to share
+0.6452). The provider implements the consistent methodology (share =
+0.65 → $325k SBD pool → total CAD 89,230). Test asserts 89,230; code
+comment documents the divergence from the note's typo'd intermediate.
+
+**Reviews scheduled.** Per the maintainer's mandate, a baseline-review
+agent will verify the CA encoding against CRA T2 + provincial finance
+ministry + Big-4 Canada guidance. Lands as research note 126-ca-cit-
+baseline-review.
+
+**Research backing.** Note 111 (CA CIT fit) + ADR-101 + Addendum 1.
+
+Date: 2026-05-24.
