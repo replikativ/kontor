@@ -270,6 +270,33 @@ Three polish items landed after the BR / IN / CN cross-checks (notes 121-123) co
 
 `modules/l10n-ca/cit-{statute,provider,test}` — 18 `:parameter`s + 10 `:provision`s. Most multi-jurisdiction l10n provider yet — N-component `TaxReturnFacts` (1 federal + N provincial with non-zero allocation). CCPC-conditional Small Business Deduction cascade via `:op :schedule-override` + `:tax-unit :ccpc?` gating. Per-province SBD pool = federal $500k × Schedule-5 allocation share (provider-internal — note 111 §4 Finding 2 + note 123 (CN CCSV) cross-check both confirmed this pattern doesn't need substrate change). Refundable SR&ED for CCPCs (35% on first $3M) vs non-refundable for others (15%) — `:refundable?` driven by `:tax-unit :ccpc?`. v1 ships federal + ON + BC + AB; other provinces via consumer rate override. Worked example: CCPC ON+AB multi-province → CAD 89,230 (note 111 §2 reference). 10 deftests / 66 assertions. Research note 111.
 
+### ADR-102 — `kontor-disposal` companion: ownership-change events
+
+The substrate for capital-gains tax. `:disposal/*` schema (kind / subject / asset-class / acquired-on / disposed-on / proceeds / basis / depreciation-taken / ownership-fraction / elective-regime / exemption-claimed / rollover / loss-bucket / state) + ADR-034 status-machine facet (`:recorded → :recognized | :voided`). Companion at `modules/disposal/`; kernel untouched. Builders: `record-disposal!` / `recognize!` / `void!` per ADR-068. Queries: `disposals-of` / `disposals-in-period` (entity-scoped + void-aware). 18 tests / 44 assertions. Research notes 107 + 112-115.
+
+### ADR-103 — `DisposalSource` protocol + per-jurisdiction CGT provider pattern
+
+Three pieces: (1) kernel `kontor.disposal-source/DisposalSource` protocol (CGT providers depend on this, not the companion); (2) companion `kontor.disposal.source/DatahikeDisposalSource` canonical impl; (3) per-jurisdiction CGT providers per ADR-101 statute-as-data. Provider returns 0+ `:capital-gains-tax` components — some standalone with own schedule (DE §20 25%, US §1(h) 0/15/20), others fold via `:jurisdiction-specific-codes {:cit-base-additions [...] :pit-base-additions [...]}` consumed by CIT/PIT providers. **All 11 jurisdictions shipped** in this stage: research notes 112-115 (US/DE/UK/JP) + 127-134 (CA/FR/AU/BR/IN/MX/CN/AT).
+
+### ADR-103 in practice — 11 CGT providers (~16k lines, 226 tests / 549 assertions)
+
+| Country | File | Tests | Distinguishing feature |
+|---|---|---|---|
+| US | `l10n-us/cgt-{statute,provider}` | 12 / 31 | LT §1(h) 0/15/20 brackets × filing-status; §1250 25%; §1411 NIIT 3.8% surtax |
+| DE | `l10n-de/cgt-{statute,provider}` (2 providers) | 21 / 57 | §8b 95/5; §17 60% Teileinkünfte + €9,060 Freibetrag taper; §20 Abgeltungsteuer + Soli; §23 10y/1y cutoffs + €1k Freigrenze HARD; 4 loss buckets |
+| CA | `l10n-ca/cgt-{statute,provider}` | 18 / 61 | 50% inclusion; LCGE $1.275M (2026); ABIL via :pit-base-deductions; CCA recapture split |
+| AU | `l10n-au/cgt-{statute,provider}` | 17 / 29 | Div 115 50% discount (sunset 2027-07-01); Subdiv 152 cascade w/ $500k retirement cap |
+| UK | `l10n-uk/cgt-{statute,provider}` (new module) | 16 / 34 | AEA £3k; 18/24% std; BADR £1M cap; SSE corporate; post-Autumn-Budget-2024 rates |
+| JP | `l10n-jp/cgt-{statute,provider}` | 22 / 57 | 5-component (listed/unlisted/RE-short/RE-long/§31-3); **Jan-1 measurement rule**; §35 ¥30M deduction; 復興 surtax |
+| FR | `l10n-fr/cgt-{statute,provider}` (2 providers) | 27 / 58 | PFU 31.4% vs barème; mobilière abattements; immobilière dual IR/PS ladders; QPFC 12%; brevets IP-box 10% |
+| BR | `l10n-br/cgt-{statute,provider}` | 22 / 56 | 4-bracket ladder 15→22.5%; B3 swing 15% / day 20%; R$35k+R$20k monthly aggregate exemptions |
+| IN | `l10n-in/cgt-{statute,provider}` | 24 / 66 | Post-FA-2024 12.5% LTCG / 20% STCG; CII indexation election; §54 family + §54EC ₹50L cap; 4% cess |
+| MX | `l10n-mx/cgt-{statute,provider}` | 19 / 45 | art. 120 averaging; 700k UDIS casa-habitación; art. 22 costo promedio w/ CUFIN/CUCA |
+| CN | `l10n-cn/cgt-{statute,provider}` + `lat-provider` (3 providers) | 28 / 55 | IIT 20% cat 9 (listed exempt Caishui [1998] 61); 满五唯一 dual-prong; EIT 25% fold; Land Appreciation Tax 30/40/50/60% progressive |
+| AT | `l10n-at/cgt-{statute,provider}` | 21 / 59 | KESt 27.5% (no carry, annual reset); ImmoESt 30% w/ 2 alternative residence tests; §10 KStG default-EXEMPT (inverted election direction) |
+
+ZERO kernel changes were needed across all 11 — the disposal substrate (ADR-102) + DisposalSource protocol (ADR-103) generalised cleanly. Two new kontor.book code paths (CDA in CA, CFDI in BR/MX) are tracked for follow-up.
+
 ### Stage R substrate (ADR-067 .. ADR-087) — HR/payroll across 11 jurisdictions
 
 - **ADR-067** — `kontor.process`: multi-step transactional processes as pure step-lists.
