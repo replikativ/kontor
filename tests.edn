@@ -24,6 +24,7 @@
                        "modules/l10n-br/test"
                        "modules/l10n-in/test"
                        "modules/l10n-mx/test"
+                       "modules/l10n-uk/test"
                        "modules/payroll-ca/test"
                        "modules/payroll-jp/test"
                        "modules/payroll-br/test"
