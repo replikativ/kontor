@@ -9397,3 +9397,82 @@ verbs; ADR-104..107 = DE/FR/JP/CA CIT providers (now as `:provision` data,
 not records); ADR-108..111 = US/DE/UK/JP CGT providers.
 
 Date: 2026-05-24.
+
+## ADR-104 — DE corporate income tax provider (KSt + Soli + GewSt)
+
+**Status.** Accepted. Research note 108 (DE CIT fit assessment); first
+end-to-end consumer of ADR-101 statute-as-data substrate.
+
+**Context.** ADR-101 established `:tax-concept` / `:provision` / `:regime`
+/ `:parameter` as the kernel data shape for tax law and shipped the
+evaluator + 33 unit tests. To prove the substrate end-to-end on a real
+statute, Phase 3 needs at least one per-country provider built as data.
+Note 108 walked through DE CIT in detail — KSt + Soli + GewSt as a
+3-tax stack — and named it the natural pick: most thoroughly researched,
+matches an officially published BMF / onlinebilanz worked example
+(GmbH @ €150k profit, Hebesatz 380% → €43,687.50), and exercises every
+substrate feature (multi-component `TaxReturnFacts`, base-add via
+`:op :base-add`, base-deduct via `:op :base-deduct`, surtax via
+`:op :surtax`, parameter scales, compute-fn escape hatch, `:tax-unit`
+ctx for Hebesatz).
+
+**Decision.** Three new files in `modules/l10n-de/`:
+
+- **`kontor.l10n-de.cit-statute`** — pure data. Eight `:parameter`s
+  (DE.KSt.rate, DE.Soli.rate, DE.GewSt.messzahl, DE.GewSt.§8.freibetrag,
+  DE.GewSt.§8.interest-share, DE.GewSt.§8.rental-share,
+  DE.GewSt.§9.real-estate-rate, DE.KStG.§8b.exemption-rate) with
+  date-keyed `:parameter-value`s and citations back to
+  gesetze-im-internet.de. Six `:provision`s — `DE-KStG-§10` (non-
+  deductibles → KSt `:base-add`), `DE-KStG-§8b-Abs-5` (5%
+  Pauschalzuschlag → KSt `:base-add`), `DE-SolZG-§4` (Soli → KSt
+  `:surtax`), `DE-GewStG-§8-Nr-1a` (interest → GewSt `:base-add`),
+  `DE-GewStG-§8-Nr-1d` (rental → GewSt `:base-add`), `DE-GewStG-§9-Nr-1`
+  (real-estate → GewSt `:base-deduct`). Provisions scope to a component
+  via `:condition [:eq :component :kst]` / `:gewst`; the provider sets
+  `:component` in ctx on each per-component pass. `install!` transacts
+  parameters + parameter-values + provisions; idempotent on identity
+  attrs.
+
+- **`kontor.l10n-de.cit-provider`** — the `PeriodTaxProvider` record
+  + five compute-fns registered at namespace load (`:de-soli-on-kst`,
+  `:de-§8b-addback`, `:de-gewst-§8-interest`, `:de-gewst-§8-rental`,
+  `:de-gewst-§9-real-estate`). The provider does just three things:
+  set `:component` in ctx, call `kontor.statute/apply-provisions`
+  for the three concepts (`:base-transform-add` /
+  `:base-transform-deduct` / `:surtax`), and assemble a 2-component
+  `TaxReturnFacts`. KSt schedule is `:flat` (reading
+  `DE.KSt.rate`); GewSt is `:formula` (reading `DE.GewSt.messzahl` ×
+  `(Hebesatz / 100)`). Hebesatz comes from `:tax-unit` (same
+  mechanism US filing-status / FR PME / CA CCPC use; absent →
+  ex-info trap). The functional commodity defaults to `:EUR`.
+
+- **`kontor.l10n-de.cit-provider-test`** — 6 deftests / 28 assertions:
+  the BMF worked example (€43,687.50 to the cent), a complex case
+  exercising every adjustment lever (€83,402.15), Hebesatz-missing
+  trap, `:provenance` records the provisions applied (audit trail
+  back to the statute), `install!` idempotency, every Money carries
+  `:EUR`.
+
+**Implication.** Substrate validated end-to-end on a real statute,
+matching authority-published figures to the cent. The per-jurisdiction
+shape Phase 3 will follow is now concrete: rate / threshold data as
+`:parameter`s with citations; statute logic as `:provision`s with
+EDN conditions and consequences; compute-fns only for the genuinely-
+imperative parts (rate × running tax, fact × parameter); provider
+code is ~100 lines of "thread the substrate." The next four CIT
+providers (FR ADR-105, JP ADR-106, CA ADR-107) fan out to parallel
+agents per note 107.
+
+**Tested.** Above (6 / 28). Plus full `bb test` green.
+
+**Research backing.** Note 108 (DE CIT fit assessment) + note 119
+(ADR-101 design choices). The BMF worked example is sourced from
+onlinebilanz.de and cross-checked against the BMF Handbuch.
+
+**Reviews scheduled.** Per the maintainer's mandate, every l10n
+update triggers a baseline review — an agent verifies the encoding
+against current BMF / commercial DATEV / online tax-calculator
+output. That follow-up lands as a separate review-after note.
+
+Date: 2026-05-24.

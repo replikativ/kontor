@@ -305,16 +305,24 @@
 
      {:amount-from :literal           :amount <bigdec>}
      {:amount-from :parameter         :parameter <code>}
-     {:amount-from :tax-context-fact  :fact <kw>}
+     {:amount-from :tax-context-fact  :fact <kw-or-vector>}
      {:amount-from :compute-fn        :fn <kw>}
 
-   Parameter shape resolves at `as-of`; tax-context-fact reads `ctx`;
-   compute-fn invokes the registered fn with `ctx` and returns its value."
+   Parameter shape resolves at `as-of`; tax-context-fact reads `ctx`
+   (vector `:fact` keys read via `get-in` — same shape as
+   `eval-condition`'s nested-fact-key support, so a provision can read
+   `:inputs :gewst-interest-post-freibetrag` without flattening); the
+   compute-fn variant invokes the registered fn with `ctx` and returns
+   whatever it returns (literal bigdec OR a fn-of-ctx-with-running for
+   late-binding — apply-adjustments / apply-base-adjustments handle
+   the latter via their existing `(fn? raw)` branch)."
   [db consequence ctx ^java.util.Date as-of]
   (case (:amount-from consequence)
     :literal          (bigdec (:amount consequence))
     :parameter        (parameter-value-at db (:parameter consequence) as-of)
-    :tax-context-fact (some-> (get ctx (:fact consequence)) bigdec)
+    :tax-context-fact (let [k (:fact consequence)
+                            v (if (vector? k) (get-in ctx k) (get ctx k))]
+                        (some-> v bigdec))
     :compute-fn       ((resolve-compute-fn (:fn consequence)) ctx)
     (throw (ex-info "kontor.statute/resolve-amount: unknown :amount-from"
                     {:consequence consequence
