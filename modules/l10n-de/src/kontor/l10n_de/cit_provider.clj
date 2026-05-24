@@ -20,16 +20,28 @@
    ## Inputs the consumer supplies
 
    `:tax-unit` (company config):
-     {:hebesatz <long>}   GewSt municipality multiplier (380 = 3.80×)
+     {:hebesatz <long>}   GewSt municipality multiplier expressed as
+                          integer percent (380 = 380% = factor 3.80)
 
    `:inputs` (period facts):
-     {:book-profit                       <BigDecimal> required
-      :kst-non-deductibles               <BigDecimal> optional, default 0
-      :participation-gain                <BigDecimal> optional, default 0
-      :gewst-interest-post-freibetrag    <BigDecimal> optional, default 0
-                                          (consumer applies §8 Freibetrag)
-      :gewst-rental-expense              <BigDecimal> optional, default 0
-      :gewst-real-estate-value           <BigDecimal> optional, default 0}
+     {:book-profit             <BigDecimal>  required
+      :kst-non-deductibles     <BigDecimal>  optional, default 0
+      :participation-gain      <BigDecimal>  optional, default 0
+      :gewst-§8 {:interest        <BigDecimal>  optional, default 0
+                 :annuity         <BigDecimal>  optional, default 0
+                 :silent-partner  <BigDecimal>  optional, default 0
+                 :rent-movable    <BigDecimal>  optional, default 0
+                 :rent-immovable  <BigDecimal>  optional, default 0
+                 :royalties       <BigDecimal>  optional, default 0}
+            — RAW expense amounts; the substrate applies the §8 a-f
+              per-bucket weights, then the €200k Freibetrag once on
+              the weighted sum, then × ¼ (note 120 P0-1/P0-2 fix)
+      :gewst-real-estate-value <BigDecimal>  pre-2025 only — already
+                                              multiplied (Einheitswert × 1.4)
+      :grundsteuer-paid        <BigDecimal>  from 2025-01-01 — actual
+                                              Grundsteuer paid as a
+                                              business expense
+                                              (Grundsteuerreform; note 120 P0-3)}
 
    ## Out-of-substrate
 
@@ -77,38 +89,55 @@
                              (as-of-from-ctx ctx)))]
     (* (inputs-fact ctx :participation-gain 0M) addback-share)))
 
-(defn- de-gewst-§8-interest
-  "§8 Nr. 1a GewStG — 25% × interest expense above the €200k Freibetrag.
-   Consumer supplies the POST-Freibetrag total via
-   `:inputs :gewst-interest-post-freibetrag`."
-  ^java.math.BigDecimal [ctx]
-  (* (inputs-fact ctx :gewst-interest-post-freibetrag 0M)
-     (statute/parameter-value-at (:db ctx) "DE.GewSt.§8.interest-share" (as-of-from-ctx ctx))))
+(defn- de-gewst-§8-hinzurechnung
+  "§8 Nr. 1 GewStG — the consolidated six-bucket Hinzurechnung
+   (note 120 §1.6 Option B). Statute: ¼ × max(0, Σ(bucket × weight) −
+   Freibetrag) over the six §8 Nr. 1 categories (a interest, b
+   annuity, c silent-partner, d rent on movable property, e rent on
+   immovable property, f royalties).
 
-(defn- de-gewst-§8-rental
-  "§8 Nr. 1d GewStG — 50% × 25% combined share of rental/lease payments.
-   The substrate parameter `:DE.GewSt.§8.rental-share` is the
-   pre-combined 12.5% (= ½ × ¼)."
+   Reads each weight + the Freibetrag + the universal ¼ from
+   `:parameter` data so a future weight or Freibetrag change is a
+   one-row migration. Consumer supplies the raw amounts under
+   `:inputs :gewst-§8 {:interest :annuity :silent-partner
+   :rent-movable :rent-immovable :royalties}` — any absent key is 0M."
   ^java.math.BigDecimal [ctx]
-  (* (inputs-fact ctx :gewst-rental-expense 0M)
-     (statute/parameter-value-at (:db ctx) "DE.GewSt.§8.rental-share" (as-of-from-ctx ctx))))
+  (let [db          (:db ctx)
+        as-of       (as-of-from-ctx ctx)
+        gewst-§8    (or (get-in ctx [:inputs :gewst-§8]) {})
+        get-bucket  #(or (get gewst-§8 %) 0M)
+        weight      #(statute/parameter-value-at db % as-of)
+        weighted    (+ (* (get-bucket :interest)        (weight "DE.GewSt.§8.a-interest-weight"))
+                       (* (get-bucket :annuity)         (weight "DE.GewSt.§8.b-annuity-weight"))
+                       (* (get-bucket :silent-partner)  (weight "DE.GewSt.§8.c-silent-partner-weight"))
+                       (* (get-bucket :rent-movable)    (weight "DE.GewSt.§8.d-rent-movable-weight"))
+                       (* (get-bucket :rent-immovable)  (weight "DE.GewSt.§8.e-rent-immovable-weight"))
+                       (* (get-bucket :royalties)       (weight "DE.GewSt.§8.f-royalty-weight")))
+        freibetrag  (statute/parameter-value-at db "DE.GewSt.§8.freibetrag" as-of)
+        fraction    (statute/parameter-value-at db "DE.GewSt.§8.hinzurechnung-fraction" as-of)]
+    (* (max 0M (- weighted freibetrag)) fraction)))
 
 (defn- de-gewst-§9-real-estate
-  "§9 Nr. 1 GewStG — 1.2% × the real-estate Einheitswert × 1.4
-   (consumer supplies the already-multiplied value)."
+  "§9 Nr. 1 GewStG (pre-2025) — 1.2% × the real-estate Einheitswert × 1.4
+   (consumer supplies the already-multiplied value). Sunset by the
+   Jahressteuergesetz 2024 Grundsteuerreform; the post-2024 successor
+   is `:de-gewst-§9-grundsteuer` below."
   ^java.math.BigDecimal [ctx]
   (* (inputs-fact ctx :gewst-real-estate-value 0M)
      (statute/parameter-value-at (:db ctx) "DE.GewSt.§9.real-estate-rate" (as-of-from-ctx ctx))))
 
 (defn register!
   "Register the four DE CIT compute-fns with `kontor.statute`. Called
-   automatically at namespace load; idempotent."
+   automatically at namespace load; idempotent. (Post note-120 P0
+   fixes: the §8 a-f categories are now ONE compute-fn covering the
+   weighted sum minus Freibetrag × ¼; the post-2025 §9 reads
+   `:grundsteuer-paid` directly via `:tax-context-fact`, so no
+   compute-fn needed there.)"
   []
-  (statute/register-compute-fn! :de-soli-on-kst         de-soli-on-kst)
-  (statute/register-compute-fn! :de-§8b-addback         de-§8b-addback)
-  (statute/register-compute-fn! :de-gewst-§8-interest   de-gewst-§8-interest)
-  (statute/register-compute-fn! :de-gewst-§8-rental     de-gewst-§8-rental)
-  (statute/register-compute-fn! :de-gewst-§9-real-estate de-gewst-§9-real-estate))
+  (statute/register-compute-fn! :de-soli-on-kst          de-soli-on-kst)
+  (statute/register-compute-fn! :de-§8b-addback          de-§8b-addback)
+  (statute/register-compute-fn! :de-gewst-§8-hinzurechnung de-gewst-§8-hinzurechnung)
+  (statute/register-compute-fn! :de-gewst-§9-real-estate  de-gewst-§9-real-estate))
 
 (register!)
 

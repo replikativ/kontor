@@ -59,25 +59,54 @@
     :parameter/concept-iri  "https://www.gesetze-im-internet.de/gewstg/__11.html"}
 
    {:parameter/code         "DE.GewSt.§8.freibetrag"
-    :parameter/label        "§8 Nr. 1 GewStG Freibetrag (interest add-back threshold)"
+    :parameter/label        "§8 Nr. 1 GewStG Freibetrag — applied ONCE to the weighted sum of all six §8 buckets"
     :parameter/jurisdiction :de
     :parameter/unit         :amount-money
     :parameter/concept-iri  "https://www.gesetze-im-internet.de/gewstg/__8.html"}
 
-   {:parameter/code         "DE.GewSt.§8.interest-share"
-    :parameter/label        "§8 Nr. 1a GewStG add-back share for interest expense (25% of post-Freibetrag)"
+   {:parameter/code         "DE.GewSt.§8.hinzurechnung-fraction"
+    :parameter/label        "§8 Nr. 1 GewStG universal ¼ factor — applied AFTER weighted sum minus Freibetrag"
     :parameter/jurisdiction :de
     :parameter/unit         :rate
     :parameter/concept-iri  "https://www.gesetze-im-internet.de/gewstg/__8.html"}
 
-   {:parameter/code         "DE.GewSt.§8.rental-share"
-    :parameter/label        "§8 Nr. 1d/e GewStG add-back share for rental/leasing (50% × 25%)"
-    :parameter/jurisdiction :de
-    :parameter/unit         :rate
+   ;; Per-bucket statutory weights (§8 Nr. 1 a-f). These are stable
+   ;; data, but parametrising them lets a future weight amendment be a
+   ;; one-row migration (note 120 §1.6 — the law's six sub-letters have
+   ;; been stable since 2008-01-01 UntStRefG; the d/e/f weights came in
+   ;; via Unternehmensteuerreform).
+   {:parameter/code         "DE.GewSt.§8.a-interest-weight"
+    :parameter/label        "§8 Nr. 1a — interest expense weight (100%)"
+    :parameter/jurisdiction :de :parameter/unit :rate
+    :parameter/concept-iri  "https://www.gesetze-im-internet.de/gewstg/__8.html"}
+
+   {:parameter/code         "DE.GewSt.§8.b-annuity-weight"
+    :parameter/label        "§8 Nr. 1b — annuities + permanent burdens weight (100%)"
+    :parameter/jurisdiction :de :parameter/unit :rate
+    :parameter/concept-iri  "https://www.gesetze-im-internet.de/gewstg/__8.html"}
+
+   {:parameter/code         "DE.GewSt.§8.c-silent-partner-weight"
+    :parameter/label        "§8 Nr. 1c — silent-partner profit shares weight (100%)"
+    :parameter/jurisdiction :de :parameter/unit :rate
+    :parameter/concept-iri  "https://www.gesetze-im-internet.de/gewstg/__8.html"}
+
+   {:parameter/code         "DE.GewSt.§8.d-rent-movable-weight"
+    :parameter/label        "§8 Nr. 1d — rent on movable property (20% / ein Fünftel)"
+    :parameter/jurisdiction :de :parameter/unit :rate
+    :parameter/concept-iri  "https://www.gesetze-im-internet.de/gewstg/__8.html"}
+
+   {:parameter/code         "DE.GewSt.§8.e-rent-immovable-weight"
+    :parameter/label        "§8 Nr. 1e — rent on immovable property (50% / die Hälfte)"
+    :parameter/jurisdiction :de :parameter/unit :rate
+    :parameter/concept-iri  "https://www.gesetze-im-internet.de/gewstg/__8.html"}
+
+   {:parameter/code         "DE.GewSt.§8.f-royalty-weight"
+    :parameter/label        "§8 Nr. 1f — royalty / licence expense weight (25% / ein Viertel)"
+    :parameter/jurisdiction :de :parameter/unit :rate
     :parameter/concept-iri  "https://www.gesetze-im-internet.de/gewstg/__8.html"}
 
    {:parameter/code         "DE.GewSt.§9.real-estate-rate"
-    :parameter/label        "§9 Nr. 1 GewStG real-estate (Grundbesitz) reduction rate"
+    :parameter/label        "§9 Nr. 1 GewStG real-estate reduction rate (1.2% × Einheitswert × 1.4) — SUNSET 2024-12-31"
     :parameter/jurisdiction :de
     :parameter/unit         :rate
     :parameter/concept-iri  "https://www.gesetze-im-internet.de/gewstg/__9.html"}
@@ -109,25 +138,57 @@
     :parameter-value/decimal-value  0.035M
     :parameter-value/citation       "§11 Abs. 2 GewStG (since 2008 Unternehmenssteuerreform)"}
 
+   {:parameter-value/parameter       [:parameter/code "DE.GewSt.§8.freibetrag"]
+    :parameter-value/effective-from  #inst "2008-01-01"
+    :parameter-value/effective-until #inst "2020-01-01"
+    :parameter-value/decimal-value   100000M
+    :parameter-value/citation        "§8 Nr. 1 GewStG (UntStRefG 2008 → €100k Freibetrag)"}
+
    {:parameter-value/parameter      [:parameter/code "DE.GewSt.§8.freibetrag"]
     :parameter-value/effective-from #inst "2020-01-01"
     :parameter-value/decimal-value  200000M
-    :parameter-value/citation       "§8 Nr. 1 GewStG (raised from 100k to 200k in 2020)"}
+    :parameter-value/citation       "§8 Nr. 1 GewStG (Zweites Corona-Steuerhilfegesetz raised to €200k, BGBl. I 2020 S. 1512)"}
 
-   {:parameter-value/parameter      [:parameter/code "DE.GewSt.§8.interest-share"]
+   {:parameter-value/parameter      [:parameter/code "DE.GewSt.§8.hinzurechnung-fraction"]
     :parameter-value/effective-from #inst "2008-01-01"
     :parameter-value/decimal-value  0.25M
-    :parameter-value/citation       "§8 Nr. 1a GewStG (¼ of full interest expense above Freibetrag)"}
+    :parameter-value/citation       "§8 Nr. 1 closing clause: \"ein Viertel der Summe aus …\""}
 
-   {:parameter-value/parameter      [:parameter/code "DE.GewSt.§8.rental-share"]
+   {:parameter-value/parameter      [:parameter/code "DE.GewSt.§8.a-interest-weight"]
     :parameter-value/effective-from #inst "2008-01-01"
-    :parameter-value/decimal-value  0.125M
-    :parameter-value/citation       "§8 Nr. 1d/e GewStG — ½ of rental × ¼ Hinzurechnung = ⅛"}
+    :parameter-value/decimal-value  1.00M
+    :parameter-value/citation       "§8 Nr. 1a — full amount of interest expense"}
 
-   {:parameter-value/parameter      [:parameter/code "DE.GewSt.§9.real-estate-rate"]
+   {:parameter-value/parameter      [:parameter/code "DE.GewSt.§8.b-annuity-weight"]
     :parameter-value/effective-from #inst "2008-01-01"
-    :parameter-value/decimal-value  0.012M
-    :parameter-value/citation       "§9 Nr. 1 S. 1 GewStG (1.2% of Einheitswert × 1.4)"}
+    :parameter-value/decimal-value  1.00M
+    :parameter-value/citation       "§8 Nr. 1b — Renten und dauernden Lasten in full"}
+
+   {:parameter-value/parameter      [:parameter/code "DE.GewSt.§8.c-silent-partner-weight"]
+    :parameter-value/effective-from #inst "2008-01-01"
+    :parameter-value/decimal-value  1.00M
+    :parameter-value/citation       "§8 Nr. 1c — Gewinnanteile stiller Gesellschafter in full"}
+
+   {:parameter-value/parameter      [:parameter/code "DE.GewSt.§8.d-rent-movable-weight"]
+    :parameter-value/effective-from #inst "2008-01-01"
+    :parameter-value/decimal-value  0.20M
+    :parameter-value/citation       "§8 Nr. 1d — ein Fünftel der Miet- und Pachtzinsen für bewegliche Wirtschaftsgüter"}
+
+   {:parameter-value/parameter      [:parameter/code "DE.GewSt.§8.e-rent-immovable-weight"]
+    :parameter-value/effective-from #inst "2008-01-01"
+    :parameter-value/decimal-value  0.50M
+    :parameter-value/citation       "§8 Nr. 1e — die Hälfte der Miet- und Pachtzinsen für unbewegliche Wirtschaftsgüter"}
+
+   {:parameter-value/parameter      [:parameter/code "DE.GewSt.§8.f-royalty-weight"]
+    :parameter-value/effective-from #inst "2008-01-01"
+    :parameter-value/decimal-value  0.25M
+    :parameter-value/citation       "§8 Nr. 1f — ein Viertel der Lizenzaufwendungen"}
+
+   {:parameter-value/parameter       [:parameter/code "DE.GewSt.§9.real-estate-rate"]
+    :parameter-value/effective-from  #inst "2008-01-01"
+    :parameter-value/effective-until #inst "2025-01-01"
+    :parameter-value/decimal-value   0.012M
+    :parameter-value/citation        "§9 Nr. 1 S. 1 GewStG pre-JStG-2024 (1.2% × Einheitswert × 1.4) — SUNSET via Grundsteuerreform"}
 
    {:parameter-value/parameter      [:parameter/code "DE.KStG.§8b.exemption-rate"]
     :parameter-value/effective-from #inst "2004-01-01"
@@ -211,61 +272,81 @@
    ;; --------------------------------------------------------------------
    ;; GewSt — Gewerbesteuer
    ;; --------------------------------------------------------------------
-   ;; §8 Nr. 1a GewStG — Hinzurechnung von Zinsaufwendungen.
-   ;; Consumer supplies POST-Freibetrag interest via :inputs (i.e.
-   ;; max(0, interest - €200k)); the §8 share parameter (25%) is
-   ;; applied by the compute-fn.
-   {:provision/code            "DE-GewStG-§8-Nr-1a"
+   ;; §8 Nr. 1 GewStG — Hinzurechnung von Finanzierungsanteilen.
+   ;; ONE provision covers all six sub-letters (a-f) — the statute is
+   ;; "ein Viertel der Summe aus a + b + c + d + e + f, soweit die
+   ;; Summe €200k übersteigt." So the weighted sum is taken FIRST, the
+   ;; Freibetrag applied ONCE, and the universal ¼ once. Note 120 P0-1
+   ;; + P0-2 — splitting interest/rental into separate provisions with
+   ;; per-category Freibetrag is structurally wrong.
+   ;;
+   ;; Consumer supplies the six RAW expense buckets via :inputs :gewst-§8
+   ;; sub-map (any missing key defaults to 0M). The compute-fn does:
+   ;;   weighted-sum = Σ (bucket × weight-parameter)
+   ;;   post-freibetrag = max(0, weighted-sum − DE.GewSt.§8.freibetrag)
+   ;;   hinzurechnung = post-freibetrag × DE.GewSt.§8.hinzurechnung-fraction
+   {:provision/code            "DE-GewStG-§8-Nr-1"
     :provision/jurisdiction    :de
     :provision/concept         [:tax-concept/code :base-transform-add]
-    :provision/title           "§8 Nr. 1a GewStG — Hinzurechnung Zinsen (25% × post-Freibetrag)"
+    :provision/title           "§8 Nr. 1 GewStG — Hinzurechnungen Finanzierungsanteile (a-f, ¼ × (Σweighted − €200k))"
     :provision/citation        "https://www.gesetze-im-internet.de/gewstg/__8.html"
     :provision/effective-from  #inst "2008-01-01"
     :provision/priority        100
     :provision/condition       (pr-str [:and
                                         [:eq :component :gewst]
-                                        [:gt [:inputs :gewst-interest-post-freibetrag] 0M]])
+                                        [:or
+                                         [:gt [:inputs :gewst-§8 :interest] 0M]
+                                         [:gt [:inputs :gewst-§8 :annuity] 0M]
+                                         [:gt [:inputs :gewst-§8 :silent-partner] 0M]
+                                         [:gt [:inputs :gewst-§8 :rent-movable] 0M]
+                                         [:gt [:inputs :gewst-§8 :rent-immovable] 0M]
+                                         [:gt [:inputs :gewst-§8 :royalties] 0M]]])
     :provision/consequence     (pr-str {:op :base-add
-                                        :code :gewst-§8-interest
-                                        :label "§8 Nr. 1a Hinzurechnung Zinsen"
+                                        :code :gewst-§8
+                                        :label "§8 Nr. 1 Hinzurechnungen (Finanzierungsanteile)"
                                         :amount-from :compute-fn
-                                        :fn :de-gewst-§8-interest})}
+                                        :fn :de-gewst-§8-hinzurechnung})}
 
-   {:provision/code            "DE-GewStG-§8-Nr-1d"
-    :provision/jurisdiction    :de
-    :provision/concept         [:tax-concept/code :base-transform-add]
-    :provision/title           "§8 Nr. 1d GewStG — Hinzurechnung Miet-/Pachtaufwand"
-    :provision/citation        "https://www.gesetze-im-internet.de/gewstg/__8.html"
-    :provision/effective-from  #inst "2008-01-01"
-    :provision/priority        110
-    :provision/condition       (pr-str [:and
-                                        [:eq :component :gewst]
-                                        [:gt [:inputs :gewst-rental-expense] 0M]])
-    :provision/consequence     (pr-str {:op :base-add
-                                        :code :gewst-§8-rental
-                                        :label "§8 Nr. 1d Hinzurechnung Mieten"
-                                        :amount-from :compute-fn
-                                        :fn :de-gewst-§8-rental})}
-
-   ;; §9 Nr. 1 GewStG — Kürzung für Grundbesitz (real-estate). Consumer
-   ;; supplies the taxable real-estate value (Einheitswert × 1.4 —
-   ;; already multiplied); the §9 rate parameter (1.2%) is applied
-   ;; by the compute-fn.
-   {:provision/code            "DE-GewStG-§9-Nr-1"
+   ;; §9 Nr. 1 GewStG — Kürzung für Grundbesitz. Pre-Grundsteuerreform
+   ;; (effective until 2025-01-01): 1.2% × Einheitswert × 1.4 (the
+   ;; "1.2% × bewertungsrechtlicher Wert" rule). Consumer supplies the
+   ;; already-×1.4 value via `:inputs :gewst-real-estate-value`.
+   {:provision/code            "DE-GewStG-§9-Nr-1-pre-2025"
     :provision/jurisdiction    :de
     :provision/concept         [:tax-concept/code :base-transform-deduct]
-    :provision/title           "§9 Nr. 1 GewStG — Kürzung für Grundbesitz (1.2%)"
+    :provision/title           "§9 Nr. 1 GewStG (pre-2025) — 1.2% × Einheitswert × 1.4"
     :provision/citation        "https://www.gesetze-im-internet.de/gewstg/__9.html"
     :provision/effective-from  #inst "2008-01-01"
+    :provision/effective-until #inst "2025-01-01"
     :provision/priority        100
     :provision/condition       (pr-str [:and
                                         [:eq :component :gewst]
                                         [:gt [:inputs :gewst-real-estate-value] 0M]])
     :provision/consequence     (pr-str {:op :base-deduct
                                         :code :gewst-§9-real-estate
-                                        :label "§9 Nr. 1 real-estate deduction"
+                                        :label "§9 Nr. 1 (pre-2025) real-estate deduction"
                                         :amount-from :compute-fn
-                                        :fn :de-gewst-§9-real-estate})}])
+                                        :fn :de-gewst-§9-real-estate})}
+
+   ;; §9 Nr. 1 GewStG — Kürzung für Grundbesitz. Post-Grundsteuerreform
+   ;; (effective from 2025-01-01 per JStG 2024 / BGBl. I 2024 Nr. 387):
+   ;; deduction equals the actual Grundsteuer paid as a business
+   ;; expense. Consumer supplies `:inputs :grundsteuer-paid`.
+   {:provision/code            "DE-GewStG-§9-Nr-1-from-2025"
+    :provision/jurisdiction    :de
+    :provision/concept         [:tax-concept/code :base-transform-deduct]
+    :provision/title           "§9 Nr. 1 GewStG (from 2025) — actual Grundsteuer paid"
+    :provision/citation        "https://www.gesetze-im-internet.de/gewstg/__9.html"
+    :provision/effective-from  #inst "2025-01-01"
+    :provision/priority        100
+    :provision/condition       (pr-str [:and
+                                        [:eq :component :gewst]
+                                        [:gt [:inputs :grundsteuer-paid] 0M]])
+    :provision/consequence     (pr-str {:op :base-deduct
+                                        :code :gewst-§9-grundsteuer
+                                        :label "§9 Nr. 1 (from 2025) Grundsteuer-deduction"
+                                        :amount-from :tax-context-fact
+                                        :fact [:inputs :grundsteuer-paid]})}])
 
 ;; ============================================================================
 ;; Install! — transact parameters + provisions into a connection

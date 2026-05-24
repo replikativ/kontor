@@ -82,13 +82,19 @@
 ;; ============================================================================
 
 (deftest complex-case-all-adjustments-fire
-  (testing "every statute lever fires; Hebesatz 410% (Berlin avg)"
-    (let [facts (compute 410 {:book-profit                    200000M
-                              :kst-non-deductibles            50000M
-                              :participation-gain             20000M
-                              :gewst-interest-post-freibetrag 400000M
-                              :gewst-rental-expense           40000M
-                              :gewst-real-estate-value        50000M})
+  (testing "every statute lever fires; Hebesatz 410% (Berlin's exact rate);
+            as-of 2025-06-30 so the post-Grundsteuerreform §9 fires"
+    (let [;; Raw §8 expenses (post note-120 P0-1/P0-2 fix: substrate
+          ;; applies per-bucket weights + Freibetrag, not the consumer).
+          ;; interest 600k @ 100% + immovable rent 40k @ 50% = weighted sum 620k
+          ;; − 200k Freibetrag = 420k × ¼ = 105000 add to GewSt base.
+          ;; Grundsteuer-paid 600 directly deducts (post-2024 §9).
+          facts (compute 410 {:book-profit         200000M
+                              :kst-non-deductibles 50000M
+                              :participation-gain  20000M
+                              :gewst-§8            {:interest       600000M
+                                                    :rent-immovable 40000M}
+                              :grundsteuer-paid    600M})
           kst   (component facts :de-bundesfinanzministerium)
           gewst (component facts :de-municipality)]
       (testing "KSt base: 200000 + §10 50000 + §8b (20000 × 5%) 1000 = 251000"
@@ -99,15 +105,44 @@
         (is (== 37650M    (:amount (:gross-liability kst))))
         (is (== 2070.75M  (:amount (first (:surtaxes kst)))))
         (is (== 39720.75M (:amount (:liability kst)))))
-      (testing "GewSt base: 200000 + §8a 100000 + §8d 5000 − §9 600 = 304400"
+      (testing "GewSt base: 200000 + §8 consolidated 105000 − §9 (post-2024) 600 = 304400"
         (is (== 304400M (:amount (:base gewst))))
-        (is (= #{:gewst-§8-interest :gewst-§8-rental :gewst-§9-real-estate}
+        (is (= #{:gewst-§8 :gewst-§9-grundsteuer}
                (set (map :code (:items (:base-transform gewst)))))))
       (testing "GewSt gross: 304400 × 3.5% × 410% = 43681.40"
         (is (== 43681.40M (:amount (:gross-liability gewst))))
         (is (== 43681.40M (:amount (:liability gewst)))))
       (testing "Total: 39720.75 + 43681.40 = 83402.15"
         (is (== 83402.15M (total-liability facts)))))))
+
+(deftest section-9-bitemporal-swap
+  (testing "as-of 2024-12-31 → pre-2025 §9 fires (1.2% × :gewst-real-estate-value);
+            as-of 2025-01-01 → post-2024 §9 fires (direct :grundsteuer-paid)"
+    (let [conn (fresh)
+          run-asof (fn [as-of inputs]
+                     (ptp/period-tax-facts
+                      (de-cit/de-cit-provider {})
+                      {:entity   :gmbh
+                       :period   {:from #inst "2024-01-01" :to #inst "2025-01-01"}
+                       :db       (d/db conn)
+                       :as-of    as-of
+                       :tax-unit {:hebesatz 400}
+                       :inputs   inputs}))
+          ;; Pre-2025: 50000 × 1.2% = 600 deducted from GewSt base
+          pre  (run-asof #inst "2024-12-31" {:book-profit 100000M
+                                             :gewst-real-estate-value 50000M})
+          ;; Post-2024: grundsteuer-paid 600 deducted directly
+          post (run-asof #inst "2025-01-01" {:book-profit 100000M
+                                             :grundsteuer-paid 600M})
+          gewst-deduct-code #(-> (component % :de-municipality)
+                                 :base-transform :items first :code)]
+      (is (= :gewst-§9-real-estate (gewst-deduct-code pre))
+          "pre-2025 fires the old 1.2% × Einheitswert formula")
+      (is (= :gewst-§9-grundsteuer (gewst-deduct-code post))
+          "post-2024 fires the new direct-Grundsteuer rule")
+      (testing "both produce the same GewSt base by design of this test"
+        (is (== (:amount (:base (component pre :de-municipality)))
+                (:amount (:base (component post :de-municipality)))))))))
 
 ;; ============================================================================
 ;; §3. Substrate-property sanity
@@ -128,17 +163,20 @@
 
 (deftest provisions-applied-recorded-in-provenance
   (testing "every component records the provisions that fired in :provenance"
-    (let [facts (compute 380 {:book-profit             100000M
-                              :kst-non-deductibles     5000M
-                              :gewst-real-estate-value 10000M})
+    ;; as-of 2025-06-30 fires the post-2024 §9; consumer supplies
+    ;; :grundsteuer-paid (not :gewst-real-estate-value which is
+    ;; pre-2025 only).
+    (let [facts (compute 380 {:book-profit         100000M
+                              :kst-non-deductibles 5000M
+                              :grundsteuer-paid    600M})
           kst   (component facts :de-bundesfinanzministerium)
           gewst (component facts :de-municipality)]
       (is (= #{"DE-KStG-§10" "DE-SolZG-§4"}
              (set (-> kst :provenance :provisions-applied)))
           "KSt fired §10 + Soli; §8b skipped (no participation-gain)")
-      (is (= #{"DE-GewStG-§9-Nr-1"}
+      (is (= #{"DE-GewStG-§9-Nr-1-from-2025"}
              (set (-> gewst :provenance :provisions-applied)))
-          "GewSt fired §9 only; no §8 (no interest / rental)"))))
+          "GewSt fired the post-2024 §9 only; no §8 (no §8 buckets)"))))
 
 (deftest installable-is-idempotent
   (testing "install! is idempotent (re-run is a no-op on identity attrs)"
