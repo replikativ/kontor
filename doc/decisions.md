@@ -9778,3 +9778,64 @@ baseline-review.
 **Research backing.** Note 111 (CA CIT fit) + ADR-101 + Addendum 1.
 
 Date: 2026-05-24.
+
+## ADR-102 — `kontor-disposal` companion: the ownership-change event substrate
+
+**Status.** Accepted. Research notes 107 (incorporation + disposal scope), 112 (US CGT fit), 113 (DE CGT fit), 114 (UK CGT fit), 115 (JP CGT fit).
+
+**Context.** Capital-gains tax (CGT) computation depends on facts the
+GL alone cannot see: what was disposed, when it was acquired, what
+the basis was, what depreciation was taken, whether the holder elects
+a regime, whether the gain is rolled into a replacement. The kernel
+already has `:lot` (kontor lot-tracking) and `kontor-asset` (registered
+assets), but neither carries the EVENT data of a disposal — acquisition
+date is a lot-field, but `disposed-on`, `proceeds`, `basis-at-disposal`,
+`holding-period-classification`, `elective-regime`, `exemption-claimed`
+are the disposal's own data.
+
+The four CGT research notes (112-115) independently converge on the
+same event-entity shape: a `:disposal` with core data (kind / subject /
+acquired-on / disposed-on / proceeds / basis / realizing-tx) plus a
+sparse jurisdiction-extension layer (ownership-fraction / asset-class /
+elective-regime / exemption-claimed / rollover-into-asset).
+
+**Decision.** Ship `modules/disposal/` as a companion (NOT in the kernel),
+matching the `kontor-commitment` precedent (ADR-098):
+
+- **`kontor.disposal.schema`** — `:disposal/*` namespace covering core
+  + extension fields, plus `:disposal/state` ADR-034 facet. Status
+  transitions: `:recorded` → `:recognized`; `:recorded` or `:recognized`
+  → `:voided`.
+
+- **`kontor.disposal`** — `record-disposal-tx-data` / `record-disposal!`
+  (initial create at `:recorded`), `recognize-tx-data` / `recognize!`
+  (links the realizing `:transaction` ref, advances to `:recognized`),
+  `void-tx-data` / `void!` (with optional `:replaced-by` audit edge).
+  Queries: `disposals-of`, `disposals-in-period`, `realized-gain` (=
+  proceeds − basis − rollover-amount), `realized-gain-summary` (grouped
+  by `:loss-bucket`).
+
+- **No kernel changes.** The substrate is purely event-shaped data; CGT
+  computation per jurisdiction lives in `kontor-l10n-<cc>` providers
+  that consume `:disposal` entities via a `DisposalSource` protocol
+  (one method: `(disposals-in-period conn period entity)`).
+
+**Implication.** Pure-service consumers don't load the companion → no
+`:disposal/*` schema → CGT providers see no disposals (return nil).
+Loose coupling matches the existing `TaxRateProvider` / `FxRateProvider`
+pattern. The companion is the FIRST end-to-end consumer of research
+notes 112-115; jurisdictional CGT providers land per ADR-101 (statute-
+as-data) using the disposal event's enum fields (`:asset-class` /
+`:elective-regime` / `:exemption-claimed` / `:loss-bucket`) to drive
+schedule selection.
+
+**Tested.** 18 deftests / 44 assertions covering install, schema,
+record / recognize / void, query / window / void-exclusion semantics,
+realized-gain with-and-without rollover, summary-by-bucket, and four
+jurisdiction-specific shape tests (DE §8b / US §1245 / UK BADR / JP
+§35-residence). Full bb test green.
+
+**Research backing.** Notes 107 + 112 + 113 + 114 + 115 + ADR-098
+(structural precedent).
+
+Date: 2026-05-24.

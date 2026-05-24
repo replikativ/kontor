@@ -43,7 +43,8 @@
                        "modules/import-gleif/test"
                        "modules/import-edgar/test"
                        "modules/people-record/test"
-                       "modules/commitment/test"]
+                       "modules/commitment/test"
+                       "modules/disposal/test"]
           :ns-patterns [".*-test$"]}]
  :color? true
  :randomize? false
