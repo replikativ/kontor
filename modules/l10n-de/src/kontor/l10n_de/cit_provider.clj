@@ -148,7 +148,11 @@
 (defn- component-items
   "For one component (:kst or :gewst), query the statute for all
    applicable base-side + tax-side provisions and resolve them to
-   fold-ready items. Returns `{:base-items :tax-items :provisions}`."
+   fold-ready items. Returns `{:base-items :tax-items :provisions}`.
+
+   apply-provisions (post-polish) returns items pre-grouped by `:op`
+   category, so the provider concatenates the per-concept queries by
+   key rather than splitting them itself."
   [db ctx as-of component]
   (let [scoped-ctx (assoc ctx :component component :db db :as-of as-of)
         adds       (statute/apply-provisions db {:concept :base-transform-add
@@ -160,8 +164,8 @@
         surtaxes   (statute/apply-provisions db {:concept :surtax
                                                  :jurisdiction :de
                                                  :as-of as-of} scoped-ctx)]
-    {:base-items (concat (:items adds) (:items deducts))
-     :tax-items  (:items surtaxes)
+    {:base-items (vec (concat (:base-items adds) (:base-items deducts)))
+     :tax-items  (:tax-items surtaxes)
      :provisions (concat (:provisions adds) (:provisions deducts) (:provisions surtaxes))}))
 
 (defn- kst-component

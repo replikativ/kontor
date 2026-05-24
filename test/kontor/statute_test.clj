@@ -379,10 +379,10 @@
                    :provision/concept [:tax-concept/code :surtax]
                    :provision/consequence (pr-str {:op :surtax :code :p2
                                                    :amount-from :literal :amount 20M})})])
-        {:keys [items]} (statute/apply-provisions (d/db conn)
-                                                  {:concept :surtax :jurisdiction :test :as-of #inst "2025-01-01"} {})]
-    (is (= [:p1 :p2 :p3] (mapv :code items))
-        "items emerge in :provision/priority ascending order")))
+        {:keys [tax-items]} (statute/apply-provisions (d/db conn)
+                                                      {:concept :surtax :jurisdiction :test :as-of #inst "2025-01-01"} {})]
+    (is (= [:p1 :p2 :p3] (mapv :code tax-items))
+        ":tax-items (:surtax/:credit) emerge in :provision/priority ascending order")))
 
 (deftest apply-provisions-exception-of-suppression
   (let [conn (core/create-test-db)]
@@ -404,15 +404,15 @@
                                                   :amount-from :literal :amount 300M})}])
     (testing "default fires when exception doesn't apply"
       (is (= [:default]
-             (mapv :code (:items (statute/apply-provisions (d/db conn)
-                                                           {:concept :refundable-credit :jurisdiction :test
-                                                            :as-of #inst "2025-01-01"} {}))))))
+             (mapv :code (:tax-items (statute/apply-provisions (d/db conn)
+                                                               {:concept :refundable-credit :jurisdiction :test
+                                                                :as-of #inst "2025-01-01"} {}))))))
     (testing "exception fires AND default is suppressed when condition holds"
       (is (= [:boost]
-             (mapv :code (:items (statute/apply-provisions (d/db conn)
-                                                           {:concept :refundable-credit :jurisdiction :test
-                                                            :as-of #inst "2025-01-01"}
-                                                           {:is-startup? true}))))))))
+             (mapv :code (:tax-items (statute/apply-provisions (d/db conn)
+                                                               {:concept :refundable-credit :jurisdiction :test
+                                                                :as-of #inst "2025-01-01"}
+                                                               {:is-startup? true}))))))))
 
 (deftest apply-provisions-same-priority-ambiguity-trap
   (let [conn (fresh-with-provisions
@@ -448,12 +448,12 @@
                 [(p {:provision/code "compute-fn" :provision/priority 400
                      :provision/concept [:tax-concept/code :surtax]
                      :provision/consequence (pr-str {:op :surtax :code :fn :amount-from :compute-fn :fn :test-fn})})])
-    (let [{:keys [items]} (statute/apply-provisions (d/db conn)
-                                                    {:concept :surtax :jurisdiction :test :as-of #inst "2025-01-01"}
-                                                    {:my-fact 13M})]
-      (is (= [7M 42M 13M 99M] (mapv :amount items)))
+    (let [{:keys [tax-items]} (statute/apply-provisions (d/db conn)
+                                                        {:concept :surtax :jurisdiction :test :as-of #inst "2025-01-01"}
+                                                        {:my-fact 13M})]
+      (is (= [7M 42M 13M 99M] (mapv :amount tax-items)))
       (testing "every item carries provenance back to its provision"
-        (is (every? #(some? (-> % :provenance :provision/code)) items))))))
+        (is (every? #(some? (-> % :provenance :provision/code)) tax-items))))))
 
 (deftest compute-fn-unregistered-raises
   (is (thrown-with-msg? clojure.lang.ExceptionInfo #"compute-fn not registered"
@@ -501,6 +501,118 @@
 ;; ============================================================================
 ;; End-to-end composition smoke
 ;; ============================================================================
+
+;; ============================================================================
+;; §7. :schedule-override op (post-cross-check polish — notes 121/122/123)
+;; ============================================================================
+
+(deftest schedule-override-flat-from-parameter
+  (testing "a regime-elective provision can swap the schedule via :schedule-override"
+    (let [conn (core/create-test-db)]
+      (d/transact conn [{:parameter/code "CN.EIT.hnte-rate"
+                         :parameter/label "HNTE preferential rate"
+                         :parameter/jurisdiction :cn :parameter/unit :rate}
+                        {:parameter-value/parameter [:parameter/code "CN.EIT.hnte-rate"]
+                         :parameter-value/effective-from #inst "2008-01-01"
+                         :parameter-value/decimal-value 0.15M}])
+      (d/transact conn
+                  [(p {:provision/code "CN-EIT-HNTE-rate"
+                       :provision/concept [:tax-concept/code :elective-regime]
+                       :provision/consequence (pr-str {:op :schedule-override
+                                                       :code :hnte
+                                                       :label "HNTE 15%"
+                                                       :schedule {:schedule/type :flat
+                                                                  :rate-from :parameter
+                                                                  :parameter "CN.EIT.hnte-rate"}})})])
+      (let [{:keys [schedule-overrides]}
+            (statute/apply-provisions (d/db conn)
+                                      {:concept :elective-regime :jurisdiction :test :as-of #inst "2025-06-01"}
+                                      {})
+            override (first schedule-overrides)]
+        (is (= 1 (count schedule-overrides)))
+        (is (= :schedule-override (:op override)))
+        (is (= :hnte (:code override)))
+        (testing "the :schedule field has the rate resolved from the parameter at as-of"
+          (is (= 0.15M (get-in override [:schedule :rate])))
+          (is (= :flat (get-in override [:schedule :schedule/type]))))
+        (testing "the resolved schedule feeds tax-schedule/apply-schedule directly"
+          (is (== 7500M (ts/apply-schedule (:schedule override) 50000M))))))))
+
+(deftest schedule-override-progressive-brackets-from-parameter
+  (testing "the FR PME case: progressive-bracket override from :parameter-bracket"
+    (let [conn (core/create-test-db)]
+      (d/transact conn [{:parameter/code "FR.IS.pme-brackets" :parameter/label "FR IS PME"
+                         :parameter/jurisdiction :fr :parameter/unit :bracket-scale}])
+      (d/transact conn [{:parameter-bracket/parameter [:parameter/code "FR.IS.pme-brackets"]
+                         :parameter-bracket/index 0 :parameter-bracket/rate 0.15M
+                         :parameter-bracket/upper 42500M
+                         :parameter-bracket/effective-from #inst "2023-01-01"}
+                        {:parameter-bracket/parameter [:parameter/code "FR.IS.pme-brackets"]
+                         :parameter-bracket/index 1 :parameter-bracket/rate 0.25M
+                         :parameter-bracket/effective-from #inst "2023-01-01"}])
+      (d/transact conn
+                  [(p {:provision/code "FR-IS-PME-rate"
+                       :provision/concept [:tax-concept/code :elective-regime]
+                       :provision/consequence (pr-str {:op :schedule-override
+                                                       :code :pme
+                                                       :label "FR PME 15%/25%"
+                                                       :schedule {:schedule/type :progressive-bracket
+                                                                  :brackets-from :parameter
+                                                                  :parameter "FR.IS.pme-brackets"}})})])
+      (let [{:keys [schedule-overrides]}
+            (statute/apply-provisions (d/db conn)
+                                      {:concept :elective-regime :jurisdiction :test :as-of #inst "2025-06-01"}
+                                      {})
+            override (first schedule-overrides)
+            schedule (:schedule override)]
+        (is (= :progressive-bracket (:schedule/type schedule)))
+        (is (= [{:rate 0.15M :upper 42500M} {:rate 0.25M :upper nil}]
+               (:brackets schedule)))
+        (testing "200000 → 42500×15% + 157500×25% = 45750"
+          (is (== 45750.00M (ts/apply-schedule schedule 200000M))))))))
+
+(deftest schedule-override-empty-when-no-elective-fires
+  (testing "no schedule-override provision → empty :schedule-overrides list"
+    (let [conn (fresh-with-provisions
+                [(p {:provision/code "X" :provision/concept [:tax-concept/code :surtax]
+                     :provision/consequence (pr-str {:op :surtax :code :x
+                                                     :amount-from :literal :amount 10M})})])]
+      (is (empty? (:schedule-overrides
+                   (statute/apply-provisions (d/db conn)
+                                             {:concept :surtax :jurisdiction :test :as-of #inst "2025-01-01"} {})))))))
+
+;; ============================================================================
+;; §8. compose-greater-of — MAT/AMT composition convention
+;; ============================================================================
+
+(deftest compose-greater-of-picks-the-greater
+  (testing "MAT (alternative-base) > regular tax → MAT prevails"
+    (let [regular {:kind :corporate-income-tax :liability {:amount 100000M :commodity :INR}}
+          mat     {:kind :minimum-tax          :liability {:amount 150000M :commodity :INR}}
+          out     (statute/compose-greater-of regular mat)]
+      (is (= 150000M (:amount (:liability out))))
+      (is (= [:corporate-income-tax :minimum-tax] (:composed-of out)))
+      (is (= :b (-> out :composition :prevailed)))
+      (is (= :minimum-tax (-> out :composition :b :kind)))))
+  (testing "regular > MAT → regular prevails"
+    (let [regular {:kind :corporate-income-tax :liability {:amount 200000M :commodity :INR}}
+          mat     {:kind :minimum-tax          :liability {:amount 150000M :commodity :INR}}
+          out     (statute/compose-greater-of regular mat)]
+      (is (= 200000M (:amount (:liability out))))
+      (is (= :a (-> out :composition :prevailed)))))
+  (testing "tie → :a wins by convention"
+    (let [a {:kind :a-kind :liability {:amount 100M :commodity :USD}}
+          b {:kind :b-kind :liability {:amount 100M :commodity :USD}}
+          out (statute/compose-greater-of a b)]
+      (is (= :tied-a (-> out :composition :prevailed))))))
+
+(deftest compose-greater-of-handles-nil-liabilities
+  (testing "missing :liability defaults to 0"
+    (let [a {:kind :a :liability nil}
+          b {:kind :b :liability {:amount 50M :commodity :USD}}
+          out (statute/compose-greater-of a b)]
+      (is (= :b (-> out :composition :prevailed)))
+      (is (= 50M (:amount (:liability out)))))))
 
 (deftest end-to-end-base-then-schedule-then-tax
   (testing "base-add + base-deduct → flat schedule → surtax = the canonical DE-style pipeline"

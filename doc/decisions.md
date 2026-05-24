@@ -9476,3 +9476,94 @@ against current BMF / commercial DATEV / online tax-calculator
 output. That follow-up lands as a separate review-after note.
 
 Date: 2026-05-24.
+
+## ADR-101 Addendum 1 — `:op :schedule-override` + `compose-greater-of` + two-pass query
+
+**Status.** Accepted. Research notes 120 / 121 / 122 / 123 (DE baseline
+review + BR / IN / CN substrate-fit cross-checks).
+
+**Context.** Three cross-jurisdiction patterns surfaced during the BR /
+IN / CN cross-checks (notes 121-123) that the ADR-101 substrate as
+shipped almost covers but doesn't quite complete. None are blockers —
+the substrate validated across all four jurisdictions (DE / BR / IN /
+CN) with no required additions — but each is a polish that future
+per-country providers (FR PME, JP CIT, CA T2, the IN PIT migration)
+will benefit from. Land them once, in one ADR addendum, before the
+fan-out.
+
+**Decision.**
+
+- **`:op :schedule-override`** added to the closed `:provision/
+  consequence :op` set. A provision can now swap the schedule for the
+  duration of its applicability — the canonical use is a regime-
+  elective preferential rate (CN HNTE 15% / SLPE 5% / Hainan-Lingang-
+  Western 15%; FR PME 15%/25% bracket; IN §115BAA flat 22%).
+  Consequence shape:
+
+      {:op :schedule-override
+       :code :hnte :label "..."
+       :schedule {:schedule/type :flat
+                  :rate-from :parameter
+                  :parameter "CN.EIT.hnte-rate"}}
+
+  Supports `:flat` (`:rate-from :parameter` or inline `:rate`),
+  `:progressive-bracket` (`:brackets-from :parameter`), `:formula`
+  (`:fn-from :compute-fn`). The resolver baked-in via
+  `kontor.statute/resolve-consequence` calls
+  `parameter-value-at` / `parameter-brackets-at` to materialise a
+  concrete `kontor.tax-schedule` map.
+
+  `apply-provisions` return shape extended to expose
+  `:schedule-overrides` as a separate channel. The provider picks
+  the (already-priority-ordered, ambiguity-trapped) first override
+  to replace its default schedule, or sticks with the default if the
+  list is empty. The DE CIT pattern of "provider reads rate
+  parameters directly" still works (DE has no regime swap); the new
+  op is for the per-jurisdiction cases that genuinely need it.
+
+- **`kontor.statute/compose-greater-of`** — the MAT / AMT composition
+  convention. The minimum-tax pattern (US CAMT §59A, IN MAT §115JB,
+  JP local-minimum) computes regular tax against one base + an
+  alternative tax against a different base, and the taxpayer owes
+  the GREATER. Cannot be an `:elect` schedule (the bases differ);
+  cannot be a single `:provision` (the conditions diverge). The
+  substrate already supports it as "two components in one
+  `TaxReturnFacts`"; this helper documents the convention with code:
+
+      (compose-greater-of regular-cit-component mat-component)
+      ;; → component with the greater :liability prevailing, both
+      ;;   recorded in :composed-of + :composition for audit.
+
+- **Two-pass query pattern** documented in `apply-provisions`
+  docstring. Some provisions gate on the very value being computed —
+  CN SLPE qualifies only when taxable income ≤ RMB 3M; IN's
+  turnover-band surcharge gates on net income. The convention:
+  first pass computes the base / taxable income from non-cliff
+  provisions; second pass re-queries with the computed value
+  injected into `:inputs` so cliff conditions can reference it.
+  Avoids cyclic dependency (the cliff is on the OUTCOME, not on a
+  different input).
+
+**Implication.** `apply-provisions`'s return shape changes from
+`{:items :provisions}` to `{:base-items :tax-items
+:schedule-overrides :provisions}`. Sole existing caller (DE CIT in
+`modules/l10n-de`) migrated in the same commit. Per ADR-101 §D2
+discipline the `:op` vocab additions are catalogued, not silent —
+the closed set is now `{:credit :surtax :base-add :base-deduct
+:schedule-override}`. Future Phase 3 providers (FR ADR-105, JP
+ADR-106, CA ADR-107, IN PIT migration) consume the polished
+substrate directly.
+
+**Tested.** `statute_test.clj` grew 33 → 38 tests / 78 → 97
+assertions: §7 covers schedule-override (`:flat` from parameter,
+`:progressive-bracket` from parameter, empty-list passthrough);
+§8 covers `compose-greater-of` (greater wins, ties → `:a`, nil
+liabilities default to 0). DE CIT regression: 7/31 unchanged
+(same return numbers, internal call sites migrated to
+`:base-items` / `:tax-items` keys).
+
+**Research backing.** Notes 121 (BR), 122 (IN), 123 (CN) — each
+named the relevant polish item with concrete file:line + worked-
+example justification.
+
+Date: 2026-05-24.

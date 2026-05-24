@@ -328,24 +328,84 @@
                     {:consequence consequence
                      :supported #{:literal :parameter :tax-context-fact :compute-fn}}))))
 
+(defn- resolve-schedule-template
+  "Resolve a schedule template embedded in a `:schedule-override`
+   consequence to a concrete `kontor.tax-schedule` schedule map at
+   `as-of`. Supported shapes:
+
+     {:schedule/type :flat
+      :rate-from :parameter :parameter <code>}
+     {:schedule/type :flat :rate <bigdec>}              (inline literal)
+     {:schedule/type :progressive-bracket
+      :brackets-from :parameter :parameter <code>}
+     {:schedule/type :progressive-bracket :brackets [{:rate ... :upper ...} ...]}
+     {:schedule/type :formula :fn <kw>}                 (resolves via compute-fn)
+     other schedule shapes pass through unchanged
+
+   Lets a `:provision/consequence` express \"swap the schedule based
+   on a parameter\" cleanly — CN HNTE 15%, FR PME progressive, IN
+   §115BAA new-regime flat 22%."
+  [template db ^java.util.Date as-of]
+  (case (:schedule/type template)
+    :flat
+    (assoc template :rate
+           (case (:rate-from template)
+             :parameter (parameter-value-at db (:parameter template) as-of)
+             nil        (:rate template)
+             (throw (ex-info "resolve-schedule-template :flat — unknown :rate-from"
+                             {:template template}))))
+    :progressive-bracket
+    (assoc template :brackets
+           (case (:brackets-from template)
+             :parameter (parameter-brackets-at db (:parameter template) as-of)
+             nil        (:brackets template)
+             (throw (ex-info "resolve-schedule-template :progressive-bracket — unknown :brackets-from"
+                             {:template template}))))
+    :formula
+    (assoc template :fn
+           (case (:fn-from template)
+             :compute-fn (resolve-compute-fn (:fn template))
+             nil         (:fn template)
+             (throw (ex-info "resolve-schedule-template :formula — unknown :fn-from"
+                             {:template template}))))
+    ;; pass through for shapes that don't need parameter resolution
+    template))
+
 (defn resolve-consequence
   "Turn a `:provision/consequence` EDN map into a fold-ready item the
-   `kontor.tax-schedule` adjustment folds will consume. The output item
-   shape:
+   `kontor.tax-schedule` adjustment folds will consume.
+
+   For amount-bearing ops (`:credit` / `:surtax` / `:base-add` /
+   `:base-deduct`) the output item shape is:
 
      {:code :label :op :amount :provenance}
 
-   where `:provenance` is `{:provision/code <id> :provision/citation <url>}`
-   so the auditable resolved-items list traces every applied number back
-   to the statute. The fold caller (often the per-jurisdiction provider)
-   appends `:refundable?` for credits if needed."
+   For `:op :schedule-override` the output item shape is:
+
+     {:code :label :op :schedule :provenance}
+
+   where `:schedule` is a fully-resolved `kontor.tax-schedule` data
+   map (rate / brackets / formula fn baked in). Provider picks the
+   highest-priority schedule-override to replace the default schedule.
+
+   `:provenance` is `{:provision/code <id> :provision/citation <url>}`
+   so the auditable resolved-items list traces every applied effect
+   back to the statute."
   [db provision ctx ^java.util.Date as-of]
-  (let [consequence (read-edn (:provision/consequence provision))]
-    (-> consequence
-        (select-keys [:op :code :label :refundable?])
-        (assoc :amount     (resolve-amount db consequence ctx as-of)
-               :provenance {:provision/code     (:provision/code provision)
-                            :provision/citation (:provision/citation provision)}))))
+  (let [consequence (read-edn (:provision/consequence provision))
+        provenance  {:provision/code     (:provision/code provision)
+                     :provision/citation (:provision/citation provision)}]
+    (case (:op consequence)
+      :schedule-override
+      (-> consequence
+          (select-keys [:op :code :label])
+          (assoc :schedule (resolve-schedule-template (:schedule consequence) db as-of)
+                 :provenance provenance))
+      ;; default: amount-bearing op (:credit / :surtax / :base-add / :base-deduct)
+      (-> consequence
+          (select-keys [:op :code :label :refundable?])
+          (assoc :amount     (resolve-amount db consequence ctx as-of)
+                 :provenance provenance)))))
 
 ;; ============================================================================
 ;; The fold — apply-provisions with exception-of suppression + ambiguity trap
@@ -378,26 +438,86 @@
                                           ambiguous)})))))
 
 (defn apply-provisions
-  "Resolve applicable provisions to fold-ready items.
+  "Resolve applicable provisions to fold-ready items, grouped by `:op`
+   category.
 
    Pipeline: applicable-provisions → prune defaults whose exceptions
    apply → assert no same-priority ambiguity → resolve each consequence
-   to an item map. Returns `{:items [<item>] :provisions [<provision>]}`
-   — the items feed `kontor.tax-schedule/apply-base-adjustments` or
-   `apply-adjustments` (based on each item's `:op`); the provisions
-   list is the audit trail (citations).
+   to an item map. Returns:
 
-   The caller typically splits the items by `:op` and runs the two
-   folds (base-side, then schedule, then tax-side) in the surrounding
-   provider's pipeline."
+     {:base-items         [<item with :op :base-add / :base-deduct>]
+      :tax-items          [<item with :op :credit  / :surtax>]
+      :schedule-overrides [<item with :op :schedule-override>]
+      :provisions         [<source :provision pull-map>]}
+
+   The provider routes each list to the right place:
+     base-items         → `kontor.tax-schedule/apply-base-adjustments`
+     tax-items          → `kontor.tax-schedule/apply-adjustments`
+     schedule-overrides → first/highest-priority replaces the default
+                          schedule (ambiguity already trapped above)
+     provisions         → audit trail (citations).
+
+   ## Two-pass query pattern (qualification cliffs)
+
+   Some provisions gate on the very value being computed — CN SLPE
+   qualifies only when taxable income ≤ RMB 3M; IN's turnover-band
+   surcharge gates on net income; FR PME 15% requires turnover < €10M
+   but the relief is computed on the taxable base. The substrate
+   pattern: provider runs FIRST PASS to compute the base / taxable
+   income from non-cliff provisions, then re-calls `apply-provisions`
+   with `:inputs` augmented with the computed value as a fact the
+   cliff-gating conditions can reference. (Avoids cyclic dependency:
+   the cliff is on the OUTCOME, not on a different input.)"
   [db query ctx]
   (let [applicable  (applicable-provisions db query ctx)
         post-prune  (prune-defaults applicable)
         _           (assert-no-ambiguity! post-prune)
         as-of       (:as-of query)
-        items       (mapv #(resolve-consequence db % ctx as-of) post-prune)]
-    {:items      items
-     :provisions post-prune}))
+        items       (mapv #(resolve-consequence db % ctx as-of) post-prune)
+        by-op       (group-by :op items)]
+    {:base-items         (vec (concat (:base-add by-op) (:base-deduct by-op)))
+     :tax-items          (vec (concat (:credit by-op)   (:surtax by-op)))
+     :schedule-overrides (vec (:schedule-override by-op))
+     :provisions         post-prune}))
+
+;; ============================================================================
+;; Composition helpers — substrate conventions for multi-component patterns
+;; ============================================================================
+
+(defn compose-greater-of
+  "Compose two `TaxReturnFacts` components into a single \"minimum-tax\"
+   result — the one with greater `:liability` prevails, the other is
+   recorded in `:composed-of` + `:composition` for audit.
+
+   The canonical use is the MAT / AMT pattern: regular tax computed
+   against the book / taxable base; an alternative minimum tax (US CAMT
+   §59A, IN MAT §115JB, JP local-minimum, KR AMT) computed against a
+   different base (e.g. book profit minus permitted adjustments). The
+   taxpayer owes the GREATER of the two — exactly this fn.
+
+   Note 102 §7 + ADR-101 / note 122 §3.3: the substrate does NOT
+   express \"alternative bases\" as an `:elect` schedule because the
+   two bases differ (you cannot pick a base across a single base);
+   it expresses them as TWO components, then composes via this helper.
+
+   Output preserves the prevailing component's structure; adds:
+     :composed-of   [<kind of a> <kind of b>]
+     :composition   {:method :greater-of
+                     :prevailed :a | :b | :tied-a
+                     :a {:kind :liability}
+                     :b {:kind :liability}}"
+  [a b]
+  (let [a-amt (or (some-> a :liability :amount) 0M)
+        b-amt (or (some-> b :liability :amount) 0M)
+        cmp   (compare a-amt b-amt)]
+    (assoc (if (>= cmp 0) a b)
+           :composed-of (mapv :kind [a b])
+           :composition {:method    :greater-of
+                         :prevailed (cond (> cmp 0) :a
+                                          (< cmp 0) :b
+                                          :else     :tied-a)
+                         :a         {:kind (:kind a) :liability a-amt}
+                         :b         {:kind (:kind b) :liability b-amt}})))
 
 ;; ============================================================================
 ;; Starter concept catalogue — installed by core/install-schema!
