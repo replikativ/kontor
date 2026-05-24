@@ -41,10 +41,24 @@
      value-add ≤ 20 % of deductibles** (Provisional Regs §8 §1).
      Provider verifies via ctx `:tax-unit :ordinary-residential?` AND
      ratio ≤ 0.20.
-   - **Individual sales of personal residences — fully exempt** per
-     Caishui [2008] 137 (broader than the IIT 滿五唯一 exemption).
-     Provider drops disposals with
-     `:exemption-claimed :cn-lat-personal-residence`.
+
+   ## Scope — developers / commercial transferors only
+
+   LAT is structurally a tax on **developers + commercial transferors**.
+   Individual residential disposals are **out of scope by construction**
+   — they are fully exempt from LAT per Caishui [2008] 137 (clarified +
+   preserved by the 2024 财政部 税务总局 住建部 房地产市场平稳健康
+   发展公告). The way to express this in the substrate is to record
+   such disposals with asset-class `:cn-residential` (NOT
+   `:cn-developer-real-estate`); they will be picked up by the IIT
+   provider (which applies the 满五唯一 exemption + 20 % flat / 1-3 %
+   deemed-gross election as appropriate) and never enter LAT.
+
+   The provider therefore filters strictly on
+   `:asset-class :cn-developer-real-estate`; the
+   `:cn-lat-personal-residence` exemption keyword is intentionally NOT
+   part of the public API (it would be a contradiction in terms — an
+   individual is not a developer). Note 145 §1 P0-1 fix.
 
    ## Inputs
 
@@ -107,17 +121,13 @@
 
 (defn- lat-eligible?
   "True iff this disposal is LAT-eligible (developer real-estate).
-   Excludes individual residential sales (which carry their own
-   exemption per Caishui [2008] 137)."
+   Individual residential sales — out of scope by construction (the
+   Caishui [2008] 137 exemption is enforced by NOT recording them
+   under `:cn-developer-real-estate`; consumers should use
+   `:cn-residential` and let the IIT provider handle them). See the
+   namespace docstring + note 145 §1 P0-1."
   [disposal]
   (= :cn-developer-real-estate (:disposal/asset-class disposal)))
-
-(defn- personal-residence-exempt?
-  "True iff the disposal claims the Caishui [2008] 137 personal-
-   residence LAT exemption."
-  [disposal]
-  (contains? (set (:disposal/exemption-claimed disposal))
-             :cn-lat-personal-residence))
 
 (defn- value-add
   "Value-add = proceeds − basis (= the deductibles). Negative ⇒ no
@@ -186,11 +196,12 @@
       (throw (ex-info ":db required in ctx for CN LAT provider"
                       {:ctx-keys (keys ctx)})))
     (let [disposals (ds/disposals-in source entity period)
-          ;; Three filters: LAT-eligible + not personal-residence-exempt
-          ;;               + not ordinary-residential-developer-exempt.
+          ;; Two filters: LAT-eligible (developer real-estate) + not
+          ;; ordinary-residential-developer-exempt. Individual
+          ;; personal-residence disposals are out of scope by
+          ;; construction — see namespace docstring + note 145 §1 P0-1.
           eligible  (->> disposals
                          (filter lat-eligible?)
-                         (remove personal-residence-exempt?)
                          (remove #(ordinary-residential-developer-exempt? % ctx)))
           components (mapv #(lat-component-one
                              {:authority authority :commodity commodity}

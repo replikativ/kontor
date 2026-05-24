@@ -272,13 +272,23 @@
   "Real-estate component (art. 120 averaging path). Handles the
    casa-habitación cap when the asset class is
    `:mx-inmueble-residencia`. The acumulable portion folds into PIT
-   base; the no-acumulable portion is currently surfaced as a
-   `:line-item` annotated with the TODO for the cross-provider
-   effective-rate coupling.
+   base; the no-acumulable portion is taxed in-period at a SIMPLIFIED
+   proxy of the effective rate (consumer-supplied via
+   `:inputs :mx-marginal-rate`, defaulting to 35 % — the art. 152 top
+   marginal). The proper cross-provider two-pass coupling against
+   `mx-isr-personal-provider` is still TODO per note 132 §5.3; the v1
+   simplification is documented inline.
+
+   `:gross-liability` therefore includes BOTH:
+     - the art. 127 state 5 % surtax on the taxable gain, AND
+     - the federal ISR on the no-acumulable portion at the simplified
+       effective rate.
+   The acumulable portion still rides `:pit-base-additions` for the
+   PIT provider's progressive evaluation.
 
    Notary withholdings (art. 126 federal + art. 127 state, both
-   consumer-supplied) ride `:prepaid` and the state-5 % surtax is
-   computed from the statute provision.
+   consumer-supplied) are tracked separately so the prepaid credit
+   lands on the correct liability slice.
 
    Returns nil when there is no taxable real-estate gain (full
    exemption / pure loss in v1)."
@@ -306,14 +316,25 @@
             state-rate    (statute/parameter-value-at
                            (:db ctx) "MX.CGT.art-127.state-notary-rate" (as-of-from-ctx ctx))
             state-surtax  (* taxable-gain state-rate)
+            ;; SIMPLIFIED federal ISR on the no-acumulable portion —
+            ;; consumer-supplied marginal rate (default 35 % per art. 152
+            ;; top bracket). Proper two-pass coupling against
+            ;; mx-isr-personal-provider is still TODO per note 132 §5.3.
+            marginal-rate (or (get inputs :mx-marginal-rate) 0.35M)
+            federal-isr   (* no-acumulable marginal-rate)
             ;; Notary federal + state prepayments (consumer-supplied).
             fed-prepaid   (or (get inputs :mx-isr-retencion-federal) 0M)
             state-prepaid (or (get inputs :mx-isr-retencion-estatal) 0M)
             total-prepaid (+ fed-prepaid state-prepaid)
-            ;; Liability v1: surfaces the state surtax as part of the
-            ;; in-period assessment; the federal portion is computed
-            ;; at PIT (acumulable into base + no-acumulable as a fold
-            ;; the consumer wires per the TODO).
+            ;; Total in-period liability: federal ISR on no-acumulable
+            ;; + state 5 % surtax on taxable gain. Federal prepayment
+            ;; credits federal liability; state prepayment credits
+            ;; state liability. Both clamped at zero — excess on one
+            ;; side does NOT cross over.
+            net-federal   (max 0M (- federal-isr fed-prepaid))
+            net-state     (max 0M (- state-surtax state-prepaid))
+            gross-total   (+ federal-isr state-surtax)
+            net-total     (+ net-federal net-state)
             line-items
             (cond-> [{:line :gross-gain
                       :label "Ganancia bruta (proceeds − basis − rollover)"
@@ -322,11 +343,15 @@
                       :label "Years held (capped at art. 120 limit)"
                       :value yh}
                      {:line :acumulable
-                      :label "Ganancia acumulable (gain / years)"
+                      :label "Ganancia acumulable (gain / years) — folds into PIT base"
                       :value (money/money acumulable commodity)}
                      {:line :no-acumulable
-                      :label "Ganancia no acumulable (gain × (years-1) / years) — TODO: cross-provider effective-rate coupling against mx-isr-personal-provider"
+                      :label "Ganancia no acumulable (gain × (years-1) / years)"
                       :value (money/money no-acumulable commodity)}
+                     {:line :federal-isr-no-acumulable
+                      :label (str "Federal ISR on no-acumulable @ " marginal-rate
+                                  " (SIMPLIFIED — TODO: cross-provider effective-rate coupling)")
+                      :value (money/money federal-isr commodity)}
                      {:line :state-surtax
                       :label "Art. 127 state 5 % notary surtax"
                       :value (money/money state-surtax commodity)}]
@@ -349,18 +374,23 @@
          :authority       authority
          :base            (money/money taxable-gain commodity)
          :schedule        nil
-         :gross-liability (money/money state-surtax commodity)
-         :liability       (money/money (max 0M (- state-surtax total-prepaid)) commodity)
+         :gross-liability (money/money gross-total commodity)
+         :liability       (money/money net-total commodity)
          :prepaid         (money/money total-prepaid commodity)
          :line-items      line-items
          :jurisdiction-specific-codes
          {:pit-base-additions [acumulable]
           :lane               :mx-pf-real-estate-art-120
           :no-acumulable      no-acumulable
+          :federal-isr        federal-isr
+          :state-surtax       state-surtax
+          :federal-prepaid    fed-prepaid
+          :state-prepaid      state-prepaid
+          :marginal-rate      marginal-rate
           :years-held         yh
           :asset-class        asset-class
           :casa-habitacion?   casa?
-          :art-120-todo       "no-acumulable taxed at effective-rate from PIT coupling — note 132 §5"}}))))
+          :art-120-todo       "no-acumulable federal ISR uses SIMPLIFIED :mx-marginal-rate proxy — full cross-provider coupling against mx-isr-personal-provider per note 132 §5.3 still TODO"}}))))
 
 (defn- bolsa-component
   "BMV / BIVA listed-share component — art. 129 10 % definitive flat

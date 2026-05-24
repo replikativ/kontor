@@ -434,7 +434,7 @@
 ;; ============================================================================
 
 (deftest art-127-state-5pct-surfaces
-  (testing "Real-estate disposal — 5 % state surtax appears in :gross-liability"
+  (testing "Real-estate disposal — federal ISR on no-acumulable + 5 % state surtax in :gross-liability"
     (let [conn (fresh)]
       (record! conn {:external-id "art-127-1"
                      :asset-class :mx-inmueble
@@ -442,10 +442,89 @@
                      :disposed-on #inst "2026-06-15"
                      :proceeds    {:amount 5000000M :commodity mxn}
                      :basis       {:amount 3000000M :commodity mxn}})
-      ;; Gain 2M → state 5 % = 100 000
+      ;; Gain 2M, ~2.45 yrs → floor 2 yrs.
+      ;;   acumulable     = 2M / 2 = 1M (folds into PIT base)
+      ;;   no-acumulable  = 2M - 1M = 1M
+      ;; Federal ISR (simplified) = 1M × 0.35 = 350 000
+      ;; State surtax = 2M × 5 %  = 100 000
+      ;; gross-liability = 450 000
       (let [facts (run-provider conn :individual p2026
                                 {:inputs {:mx-udis-rate 8.78M}})
             cmp   (component-by-lane facts :mx-pf-real-estate-art-120)]
         (is (some? cmp))
-        (is (== 100000M (-> cmp :gross-liability :amount))
-            "state surtax = 5 % × 2 000 000")))))
+        (is (== 100000M (get-in cmp [:jurisdiction-specific-codes :state-surtax]))
+            "state surtax = 5 % × 2 000 000 surfaces in jurisdiction-specific-codes")
+        (is (== 350000M (get-in cmp [:jurisdiction-specific-codes :federal-isr]))
+            "federal ISR on no-acumulable = 1 000 000 × 0.35 (default marginal)")
+        (is (== 450000M (-> cmp :gross-liability :amount))
+            "gross-liability = federal ISR + state surtax")
+        (is (== 450000M (-> cmp :liability :amount))
+            "no prepayments → liability = gross-liability")))))
+
+(deftest art-127-real-estate-federal-isr-with-custom-marginal-rate
+  (testing "Real-estate disposal — consumer-supplied :mx-marginal-rate is honored"
+    (let [conn (fresh)]
+      (record! conn {:external-id "art-127-2"
+                     :asset-class :mx-inmueble
+                     :acquired-on #inst "2019-01-01"
+                     :disposed-on #inst "2026-06-15"
+                     :proceeds    {:amount 10000000M :commodity mxn}
+                     :basis       {:amount  3000000M :commodity mxn}})
+      ;; Gain 7M, override 7 yrs.
+      ;;   acumulable     = 7M / 7 = 1M
+      ;;   no-acumulable  = 7M - 1M = 6M
+      ;; Federal ISR @ 0.25 = 1 500 000
+      ;; State surtax = 7M × 5 % = 350 000
+      ;; gross-liability = 1 850 000
+      (let [facts (run-provider conn :individual p2026
+                                {:inputs {:mx-udis-rate 8.78M
+                                          :mx-marginal-rate 0.25M
+                                          :mx-years-held-override 7M}})
+            cmp   (component-by-lane facts :mx-pf-real-estate-art-120)]
+        (is (== 1500000M (get-in cmp [:jurisdiction-specific-codes :federal-isr]))
+            "federal ISR honors consumer-supplied marginal rate")
+        (is (== 350000M (get-in cmp [:jurisdiction-specific-codes :state-surtax])))
+        (is (== 1850000M (-> cmp :gross-liability :amount)))))))
+
+(deftest art-127-federal-and-state-prepayments-credit-correct-slice
+  (testing "Federal prepayment credits federal liability; state prepayment credits state — neither over-credits"
+    (let [conn (fresh)]
+      (record! conn {:external-id "art-127-3"
+                     :asset-class :mx-inmueble
+                     :acquired-on #inst "2024-01-01"
+                     :disposed-on #inst "2026-06-15"
+                     :proceeds    {:amount 5000000M :commodity mxn}
+                     :basis       {:amount 3000000M :commodity mxn}})
+      ;; Same gain as above: federal ISR = 350 000, state surtax = 100 000.
+      ;; Notary federal withholding 200 000, state withholding 80 000.
+      ;; Net federal = max(0, 350 000 − 200 000) = 150 000
+      ;; Net state   = max(0, 100 000 −  80 000) =  20 000
+      ;; Net total   = 170 000
+      (let [facts (run-provider conn :individual p2026
+                                {:inputs {:mx-udis-rate            8.78M
+                                          :mx-isr-retencion-federal 200000M
+                                          :mx-isr-retencion-estatal  80000M}})
+            cmp   (component-by-lane facts :mx-pf-real-estate-art-120)]
+        (is (== 200000M (get-in cmp [:jurisdiction-specific-codes :federal-prepaid])))
+        (is (==  80000M (get-in cmp [:jurisdiction-specific-codes :state-prepaid])))
+        (is (== 170000M (-> cmp :liability :amount))
+            "federal prepaid does NOT over-credit state surtax")))))
+
+(deftest art-127-overpaid-state-does-not-credit-federal
+  (testing "An over-large state prepayment cannot be redirected to credit federal liability"
+    (let [conn (fresh)]
+      (record! conn {:external-id "art-127-4"
+                     :asset-class :mx-inmueble
+                     :acquired-on #inst "2024-01-01"
+                     :disposed-on #inst "2026-06-15"
+                     :proceeds    {:amount 5000000M :commodity mxn}
+                     :basis       {:amount 3000000M :commodity mxn}})
+      ;; federal ISR = 350 000, state surtax = 100 000.
+      ;; Notary state withholding 500 000 (excessive) — must NOT cross over.
+      ;; Net federal = 350 000 (unchanged) ; Net state = 0 ; Net total = 350 000
+      (let [facts (run-provider conn :individual p2026
+                                {:inputs {:mx-udis-rate            8.78M
+                                          :mx-isr-retencion-estatal 500000M}})
+            cmp   (component-by-lane facts :mx-pf-real-estate-art-120)]
+        (is (== 350000M (-> cmp :liability :amount))
+            "excess state withholding does not credit federal ISR")))))

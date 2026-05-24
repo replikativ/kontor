@@ -6,6 +6,7 @@
             [kontor.core :as core]
             [kontor.disposal :as disposal]
             [kontor.disposal.source :as disp-source]
+            [kontor.l10n-cn.cgt-provider :as cn-cgt]
             [kontor.l10n-cn.cgt-statute :as cgt-statute]
             [kontor.l10n-cn.lat-provider :as lat]
             [kontor.period-tax-provider :as ptp]
@@ -179,17 +180,36 @@
 ;; §4. Carve-outs — personal residence exemption + ordinary residential
 ;; ============================================================================
 
-(deftest lat-personal-residence-exempt
-  (testing "individual sales of personal residences exempt (Caishui [2008] 137)"
+(deftest lat-individual-residential-out-of-scope-by-construction
+  (testing "Individual residential sales (Caishui [2008] 137) are out-of-scope for LAT — they ride :cn-residential and are picked up by the IIT provider, never recorded under :cn-developer-real-estate. Note 145 §1 P0-1."
     (let [conn (fresh)]
+      ;; An individual sells a residence (held > 5 years, 满五唯一);
+      ;; recorded with the substrate-correct :cn-residential class.
       (record! conn {:external-id "personal-1"
-                     :asset-class :cn-developer-real-estate
+                     :asset-class :cn-residential
+                     :acquired-on #inst "2018-01-01"
+                     :disposed-on #inst "2026-06-15"
+                     :residence?  true
                      :proceeds {:amount 30000000M :commodity cny}
-                     :basis    {:amount  5000000M :commodity cny}
-                     :exemption-claimed #{:cn-lat-personal-residence}})
-      (let [facts (run-lat conn p2026)]
-        (is (empty? (:components facts))
-            "personal-residence LAT exemption short-circuits the provider")))))
+                     :basis    {:amount  5000000M :commodity cny}})
+      ;; (a) LAT sees nothing — :cn-residential is not LAT-eligible.
+      (let [lat-facts (run-lat conn p2026)]
+        (is (empty? (:components lat-facts))
+            ":cn-residential is not LAT-eligible — only :cn-developer-real-estate is"))
+      ;; (b) The IIT provider DOES route it — and with 满五唯一 fires the
+      ;;     residential exemption (audit-line, zero liability).
+      (let [source   (disp-source/datahike-source conn)
+            iit      (cn-cgt/cn-iit-cgt-provider {:source source})
+            iit-facts (ptp/period-tax-facts
+                       iit {:db (d/db conn)
+                            :entity (dev-eid conn)
+                            :period p2026
+                            :tax-unit {:tax-residency :resident-individual
+                                       :family-sole-residence? true}})
+            cmp (first (:components iit-facts))]
+        (is (some? cmp) "IIT provider produces a component")
+        (is (== 0M (-> cmp :liability :amount))
+            "满五唯一 exemption → zero IIT liability; audit-trail surfaces on IIT side")))))
 
 (deftest lat-ordinary-residential-under-20pct-exempt
   (testing "developer ordinary residential with value-add ≤ 20 % exempt (Provisional Regs §8 §1)"
