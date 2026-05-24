@@ -10,7 +10,8 @@
             [kontor.disposal.source :as disp-source]
             [kontor.l10n-fr.cgt-provider :as fr-cgt]
             [kontor.l10n-fr.cgt-statute :as cgt-statute]
-            [kontor.period-tax-provider :as ptp]))
+            [kontor.period-tax-provider :as ptp]
+            [kontor.statute :as statute]))
 
 ;; ============================================================================
 ;; Fixture — one HOLDCO + one INDIVIDUAL entity, EUR commodity, FR CGT statute
@@ -110,14 +111,14 @@
     (let [conn (fresh)
           db   (d/db conn)]
       (is (== 0.186M
-              (kontor.statute/parameter-value-at
+              (statute/parameter-value-at
                db "FR.CGT.PS.default-rate" #inst "2026-06-15")))
       (is (== 0.172M
-              (kontor.statute/parameter-value-at
+              (statute/parameter-value-at
                db "FR.CGT.PS.default-rate" #inst "2024-06-15"))
           "2024 still on the legacy 17.2 % rate")
       (is (== 0.172M
-              (kontor.statute/parameter-value-at
+              (statute/parameter-value-at
                db "FR.CGT.PS.real-estate-rate" #inst "2026-06-15"))
           "real-estate stays at 17.2 % through 2026 — LFSS carve-out"))))
 
@@ -551,11 +552,11 @@
     (let [conn (fresh)
           db   (d/db conn)]
       ;; 2024 read sees €500k full-exemption cliff
-      (is (== 500000M (kontor.statute/parameter-value-at
+      (is (== 500000M (statute/parameter-value-at
                        db "FR.CGT.§238-quindecies.threshold-full" #inst "2024-06-15"))
           "pre-2025 cliff €500k")
       ;; 2026 read sees €700k full-exemption cliff
-      (is (== 700000M (kontor.statute/parameter-value-at
+      (is (== 700000M (statute/parameter-value-at
                        db "FR.CGT.§238-quindecies.threshold-full" #inst "2026-06-15"))
           "post-2025 cliff €700k (LFI 2024)"))))
 

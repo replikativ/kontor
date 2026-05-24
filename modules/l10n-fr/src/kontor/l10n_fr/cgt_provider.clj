@@ -84,8 +84,7 @@
             [kontor.l10n-fr.cgt-statute :as cgt-statute]
             [kontor.money :as money]
             [kontor.period-tax-provider :as ptp]
-            [kontor.statute :as statute]
-            [kontor.tax-schedule :as ts]))
+            [kontor.statute :as statute]))
 
 ;; ============================================================================
 ;; Constants — the closed lane keywords
@@ -379,14 +378,6 @@
 ;; ============================================================================
 ;; Mobilière component — CGI Art. 150-0 A
 ;; ============================================================================
-
-(defn- ps-rate-for-asset
-  "Per-asset-class PS rate (note 128 §5.4). Real-estate / life-
-   insurance / PEA stay at 17.2 %; securities at 18.6 % from 2026."
-  ^java.math.BigDecimal [db ^java.util.Date as-of asset-class]
-  (cond
-    (immo-asset-classes asset-class) (param db "FR.CGT.PS.real-estate-rate" as-of)
-    :else                            (param db "FR.CGT.PS.default-rate" as-of)))
 
 (defn- mobiliere-component
   "Build the mobilière component (PFU or barème).
