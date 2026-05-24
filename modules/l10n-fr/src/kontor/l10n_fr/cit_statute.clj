@@ -66,55 +66,55 @@
     :parameter/label        "Impôt sur les sociétés (IS) — taux normal (flat rate when not PME)"
     :parameter/jurisdiction :fr
     :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000044979423"}
+    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046868562"}
 
    {:parameter/code         "FR.IS.pme-brackets"
     :parameter/label        "IS PME progressive bracket scale (CGI Art. 219 I-b) — 15 % then 25 %"
     :parameter/jurisdiction :fr
     :parameter/unit         :bracket-scale
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000044979423"}
+    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046868562"}
 
    {:parameter/code         "FR.IS.pme-bracket-upper"
     :parameter/label        "IS PME reduced-rate bracket upper (CGI Art. 219 I-b) — €42 500"
     :parameter/jurisdiction :fr
     :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000044979423"}
+    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046868562"}
 
    {:parameter/code         "FR.CGE.rate"
     :parameter/label        "Contribution sociale sur l'IS (CGE) — 3.3 % surtax (CGI Art. 235 ter ZC)"
     :parameter/jurisdiction :fr
     :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006309243"}
+    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000031011715"}
 
    {:parameter/code         "FR.CGE.abattement"
     :parameter/label        "CGE abattement — IS amount below which CGE is 0 (€763 000)"
     :parameter/jurisdiction :fr
     :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006309243"}
+    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000031011715"}
 
    {:parameter/code         "FR.MereFille.quote-part"
     :parameter/label        "Régime mère-fille — quote-part de frais et charges (5 % réintégration sur dividendes exonérés)"
     :parameter/jurisdiction :fr
     :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000033817770"}
+    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000048831340"}
 
    {:parameter/code         "FR.CIR.rate-base"
     :parameter/label        "Crédit d'Impôt Recherche (CIR) — base rate on first €100 M (30 %)"
     :parameter/jurisdiction :fr
     :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000049680229"}
+    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051215816"}
 
    {:parameter/code         "FR.CIR.rate-above"
     :parameter/label        "Crédit d'Impôt Recherche (CIR) — reduced rate above €100 M (5 %)"
     :parameter/jurisdiction :fr
     :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000049680229"}
+    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051215816"}
 
    {:parameter/code         "FR.CIR.threshold"
     :parameter/label        "Crédit d'Impôt Recherche (CIR) — €100 M kink between base + above rates"
     :parameter/jurisdiction :fr
     :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000049680229"}])
+    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051215816"}])
 
 (def parameter-values
   "FR CIT scalar parameter values with their statutory effective
@@ -208,7 +208,7 @@
     :provision/jurisdiction    :fr
     :provision/concept         [:tax-concept/code :elective-regime]
     :provision/title           "CGI Art. 219 I-b — Taux réduit PME (15 % puis 25 %)"
-    :provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000044979423"
+    :provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046868562"
     :provision/effective-from  #inst "2023-01-01"
     :provision/priority        100
     :provision/condition       (pr-str [:and
@@ -238,7 +238,7 @@
     :provision/jurisdiction    :fr
     :provision/concept         [:tax-concept/code :base-transform-add]
     :provision/title           "CGI Art. 145 + 216 I — Régime mère-fille (5 % quote-part de frais et charges)"
-    :provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000033817770"
+    :provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000048831340"
     :provision/effective-from  #inst "2000-01-01"
     :provision/priority        200
     :provision/condition       (pr-str [:and
@@ -261,7 +261,7 @@
     :provision/jurisdiction    :fr
     :provision/concept         [:tax-concept/code :surtax]
     :provision/title           "CGI Art. 235 ter ZC — Contribution sociale 3.3 % sur IS (au-delà de €763 000)"
-    :provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006309243"
+    :provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000031011715"
     :provision/effective-from  #inst "2000-01-01"
     :provision/priority        100
     :provision/condition       (pr-str [:and
@@ -286,7 +286,7 @@
     :provision/jurisdiction    :fr
     :provision/concept         [:tax-concept/code :refundable-credit]
     :provision/title           "CGI Art. 244 quater B — Crédit d'Impôt Recherche (30 % / 5 %)"
-    :provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000049680229"
+    :provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051215816"
     :provision/effective-from  #inst "2008-01-01"
     :provision/priority        200
     :provision/condition       (pr-str [:and
