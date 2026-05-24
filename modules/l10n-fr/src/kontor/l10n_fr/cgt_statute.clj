@@ -98,8 +98,22 @@
     :parameter/unit         :rate
     :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000045760882"}
 
-   {:parameter/code         "FR.CGT.PS.default-rate"
-    :parameter/label        "Prélèvements sociaux default rate — securities + ordinary investment income (CSG 10.6 % + CRDS 0.5 % + prélèvement solidarité 7.5 % = 18.6 % post-LFSS 2026)"
+   ;; PS split per LFSS 2026 effective-date semantics (note 141 P0-1):
+   ;; - revenus du PATRIMOINE (plus-values mobilières, revenus fonciers,
+   ;;   rentes viagères à titre onéreux) — hike RETROACTIVE to 2025-income;
+   ;; - revenus de PLACEMENT (dividendes, intérêts, produits d'assurance-vie,
+   ;;   gains soumis au PFLU) — hike applies to revenus versés à compter
+   ;;   du 1er janvier 2026.
+   ;; Mobilière disposals route via :patrimoine-rate; PEA pool / dividend
+   ;; income / placement income route via :placement-rate.
+   {:parameter/code         "FR.CGT.PS.patrimoine-rate"
+    :parameter/label        "Prélèvements sociaux — revenus du patrimoine (plus-values mobilières + revenus fonciers + rentes viagères constituées à titre onéreux) — CSG 10.6 % + CRDS 0.5 % + prélèvement solidarité 7.5 % = 18.6 % post-LFSS 2026, RÉTROACTIF aux revenus 2025"
+    :parameter/jurisdiction :fr
+    :parameter/unit         :rate
+    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article/LEGITEXT000006073189/LEGIARTI000006740051/"}
+
+   {:parameter/code         "FR.CGT.PS.placement-rate"
+    :parameter/label        "Prélèvements sociaux — revenus de placement (dividendes, intérêts, produits d'assurance-vie, certains gains soumis au PFLU) — CSG 10.6 % + CRDS 0.5 % + prélèvement solidarité 7.5 % = 18.6 % post-LFSS 2026, applicable aux revenus versés à compter du 1er janvier 2026"
     :parameter/jurisdiction :fr
     :parameter/unit         :rate
     :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article/LEGITEXT000006073189/LEGIARTI000006740051/"}
@@ -188,14 +202,33 @@
     :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000036591469"}
 
    ;; --- §238 quindecies transmission-d'entreprise exemption ----------
+   ;; Note 141 P0-2 split: the LFI 2024 raise to €700k/€1.2M is reserved
+   ;; to AGRICULTURAL transmissions only (CGI Art. 238 quindecies VII bis
+   ;; — young-farmer installation aid). Standard non-agricultural
+   ;; transmissions stay at the legacy €500k/€1M cliffs. The provider
+   ;; routes per consumer-supplied
+   ;;   :inputs :238-quindecies {:activity :agricultural | :standard}
+   ;; defaulting to :standard.
    {:parameter/code         "FR.CGT.§238-quindecies.threshold-full"
-    :parameter/label        "§238 quindecies — full-exemption value cliff (€700 000 from FY-2025; €500 000 prior)"
+    :parameter/label        "§238 quindecies — STANDARD non-agricultural full-exemption value cliff (€500 000, stable)"
     :parameter/jurisdiction :fr
     :parameter/unit         :amount-money
     :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051216496"}
 
    {:parameter/code         "FR.CGT.§238-quindecies.threshold-degressive"
-    :parameter/label        "§238 quindecies — degressive-band upper cliff (€1 200 000 from FY-2025; €1 000 000 prior)"
+    :parameter/label        "§238 quindecies — STANDARD non-agricultural degressive-band upper cliff (€1 000 000, stable)"
+    :parameter/jurisdiction :fr
+    :parameter/unit         :amount-money
+    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051216496"}
+
+   {:parameter/code         "FR.CGT.§238-quindecies.agri-threshold-full"
+    :parameter/label        "§238 quindecies VII bis — AGRICULTURAL transmissions full-exemption value cliff (€700 000 from FY-2025; €500 000 prior)"
+    :parameter/jurisdiction :fr
+    :parameter/unit         :amount-money
+    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051216496"}
+
+   {:parameter/code         "FR.CGT.§238-quindecies.agri-threshold-degressive"
+    :parameter/label        "§238 quindecies VII bis — AGRICULTURAL transmissions degressive-band upper cliff (€1 200 000 from FY-2025; €1 000 000 prior)"
     :parameter/jurisdiction :fr
     :parameter/unit         :amount-money
     :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051216496"}
@@ -238,16 +271,32 @@
     :parameter-value/decimal-value  0.128M
     :parameter-value/citation       "CGI Art. 200 A 1° — PFU 12.8 % stable since loi de finances 2018"}
 
-   ;; PS default — 17.2 % through 2025-12-31, then 18.6 % from 2026-01-01
-   {:parameter-value/parameter       [:parameter/code "FR.CGT.PS.default-rate"]
+   ;; PS revenus du patrimoine (mobilière + revenus fonciers + rentes
+   ;; viagères à titre onéreux) — 17.2 % through 2024-12-31, then 18.6 %
+   ;; RÉTROACTIF aux revenus 2025 (LFSS 2026 — DLA Piper / Actu-Juridique /
+   ;; TGS France; note 141 §1.2 P0-1).
+   {:parameter-value/parameter       [:parameter/code "FR.CGT.PS.patrimoine-rate"]
+    :parameter-value/effective-from  #inst "2018-01-01"
+    :parameter-value/effective-until #inst "2025-01-01"
+    :parameter-value/decimal-value   0.172M
+    :parameter-value/citation        "CSG 9.2 % + CRDS 0.5 % + prélèvement solidarité 7.5 % = 17.2 % (2018-2024)"}
+   {:parameter-value/parameter      [:parameter/code "FR.CGT.PS.patrimoine-rate"]
+    :parameter-value/effective-from #inst "2025-01-01"
+    :parameter-value/decimal-value  0.186M
+    :parameter-value/citation       "LFSS 2026 (loi 2025-1403) — CSG 9.2 → 10.6 % → PS 18.6 %, application RÉTROACTIVE aux revenus du patrimoine perçus dès 2025 (DLA Piper / TGS France / Actu-Juridique commentary)"}
+
+   ;; PS revenus de placement (dividendes, intérêts, AV, gains PFLU) —
+   ;; 17.2 % through 2025-12-31, then 18.6 % from 2026-01-01 (forward,
+   ;; date-of-payment semantics).
+   {:parameter-value/parameter       [:parameter/code "FR.CGT.PS.placement-rate"]
     :parameter-value/effective-from  #inst "2018-01-01"
     :parameter-value/effective-until #inst "2026-01-01"
     :parameter-value/decimal-value   0.172M
     :parameter-value/citation        "CSG 9.2 % + CRDS 0.5 % + prélèvement solidarité 7.5 % = 17.2 % (2018-2025)"}
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.PS.default-rate"]
+   {:parameter-value/parameter      [:parameter/code "FR.CGT.PS.placement-rate"]
     :parameter-value/effective-from #inst "2026-01-01"
     :parameter-value/decimal-value  0.186M
-    :parameter-value/citation       "CSG raised 9.2 → 10.6 % by LFSS 2026 (loi 2025-1403) → total PS 18.6 % on securities + ordinary investment income"}
+    :parameter-value/citation       "LFSS 2026 (loi 2025-1403) — CSG 9.2 → 10.6 % → PS 18.6 % sur revenus de placement versés à compter du 1er janvier 2026"}
 
    ;; PS real-estate carve-out — stays at 17.2 %
    {:parameter-value/parameter      [:parameter/code "FR.CGT.PS.real-estate-rate"]
@@ -313,26 +362,42 @@
     :parameter-value/decimal-value  350000M
     :parameter-value/citation       "CGI Art. 151 septies II — marchandises band supérieure €250 001-€350 000"}
 
-   ;; §238 quindecies — pre-2025 (€500 k / €1 M), post-2025 (€700 k / €1.2 M)
-   {:parameter-value/parameter       [:parameter/code "FR.CGT.§238-quindecies.threshold-full"]
+   ;; §238 quindecies STANDARD non-agricultural — €500k / €1M, stable
+   ;; since 2006 (NOT raised by LFI 2024 — the €700k / €1.2M raise is
+   ;; reserved to agricultural transmissions per VII bis; note 141 §1.8
+   ;; P0-2 + Bpifrance Création + Légifrance current text).
+   {:parameter-value/parameter      [:parameter/code "FR.CGT.§238-quindecies.threshold-full"]
+    :parameter-value/effective-from #inst "2006-01-01"
+    :parameter-value/decimal-value  500000M
+    :parameter-value/citation       "CGI Art. 238 quindecies I — full-exemption cliff €500 000 pour les transmissions non-agricoles (stable depuis 2006 ; le relèvement LFI 2024 ne concerne que les transmissions agricoles VII bis)"}
+   {:parameter-value/parameter      [:parameter/code "FR.CGT.§238-quindecies.threshold-degressive"]
+    :parameter-value/effective-from #inst "2006-01-01"
+    :parameter-value/decimal-value  1000000M
+    :parameter-value/citation       "CGI Art. 238 quindecies I — degressive cliff €1 000 000 pour les transmissions non-agricoles (stable)"}
+
+   ;; §238 quindecies VII bis AGRICULTURAL — pre-2025 €500k / €1M,
+   ;; post-2025 €700k / €1.2M (LFI 2024, exercices ouverts à compter
+   ;; du 1er janvier 2025 — aide à la transmission agricole / installation
+   ;; jeunes agriculteurs).
+   {:parameter-value/parameter       [:parameter/code "FR.CGT.§238-quindecies.agri-threshold-full"]
     :parameter-value/effective-from  #inst "2006-01-01"
     :parameter-value/effective-until #inst "2025-01-01"
     :parameter-value/decimal-value   500000M
-    :parameter-value/citation        "CGI Art. 238 quindecies — full-exemption cliff €500 000 (pré-LFI 2024)"}
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.§238-quindecies.threshold-full"]
+    :parameter-value/citation        "CGI Art. 238 quindecies VII bis — transmissions agricoles, cliff €500 000 (pré-LFI 2024)"}
+   {:parameter-value/parameter      [:parameter/code "FR.CGT.§238-quindecies.agri-threshold-full"]
     :parameter-value/effective-from #inst "2025-01-01"
     :parameter-value/decimal-value  700000M
-    :parameter-value/citation       "CGI Art. 238 quindecies — full-exemption cliff relevée à €700 000 par LFI 2024 (exercices ouverts à compter du 1er janvier 2025)"}
+    :parameter-value/citation       "CGI Art. 238 quindecies VII bis — transmissions agricoles, cliff relevée à €700 000 par LFI 2024 (exercices ouverts à compter du 1er janvier 2025)"}
 
-   {:parameter-value/parameter       [:parameter/code "FR.CGT.§238-quindecies.threshold-degressive"]
+   {:parameter-value/parameter       [:parameter/code "FR.CGT.§238-quindecies.agri-threshold-degressive"]
     :parameter-value/effective-from  #inst "2006-01-01"
     :parameter-value/effective-until #inst "2025-01-01"
     :parameter-value/decimal-value   1000000M
-    :parameter-value/citation        "CGI Art. 238 quindecies — degressive cliff €1 000 000 (pré-LFI 2024)"}
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.§238-quindecies.threshold-degressive"]
+    :parameter-value/citation        "CGI Art. 238 quindecies VII bis — transmissions agricoles, degressive cliff €1 000 000 (pré-LFI 2024)"}
+   {:parameter-value/parameter      [:parameter/code "FR.CGT.§238-quindecies.agri-threshold-degressive"]
     :parameter-value/effective-from #inst "2025-01-01"
     :parameter-value/decimal-value  1200000M
-    :parameter-value/citation       "CGI Art. 238 quindecies — degressive cliff relevée à €1 200 000 par LFI 2024"}
+    :parameter-value/citation       "CGI Art. 238 quindecies VII bis — transmissions agricoles, degressive cliff relevée à €1 200 000 par LFI 2024"}
 
    ;; QPFC 12 % titres de participation — stable since 2013
    {:parameter-value/parameter      [:parameter/code "FR.CGT.§219.QPFC-rate"]

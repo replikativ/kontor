@@ -77,6 +77,7 @@
              :period period}
             extra-ctx))))
 
+(def ^:private p2025 {:from #inst "2025-01-01" :to #inst "2026-01-01"})
 (def ^:private p2026 {:from #inst "2026-01-01" :to #inst "2027-01-01"})
 
 (defn- by-lane
@@ -106,17 +107,32 @@
           facts (run-corporate conn "HOLDCO" p2026)]
       (is (empty? (:components facts))))))
 
-(deftest statute-installs-2026-PS-default-rate
-  (testing "the 2026 LFSS PS rate bump (17.2 % → 18.6 %) is encoded"
+(deftest statute-installs-2026-PS-rates
+  (testing "the LFSS 2026 PS rate bump (17.2 % → 18.6 %) splits by income class (note 141 P0-1)"
     (let [conn (fresh)
           db   (d/db conn)]
+      ;; Revenus du patrimoine (mobilière) — hike RETROACTIVE to 2025-income
       (is (== 0.186M
               (statute/parameter-value-at
-               db "FR.CGT.PS.default-rate" #inst "2026-06-15")))
+               db "FR.CGT.PS.patrimoine-rate" #inst "2025-08-15"))
+          "patrimoine 2025-income at 18.6 % (LFSS 2026 retroactive)")
+      (is (== 0.186M
+              (statute/parameter-value-at
+               db "FR.CGT.PS.patrimoine-rate" #inst "2026-06-15"))
+          "patrimoine 2026 at 18.6 %")
       (is (== 0.172M
               (statute/parameter-value-at
-               db "FR.CGT.PS.default-rate" #inst "2024-06-15"))
-          "2024 still on the legacy 17.2 % rate")
+               db "FR.CGT.PS.patrimoine-rate" #inst "2024-06-15"))
+          "2024 patrimoine still at legacy 17.2 %")
+      ;; Revenus de placement (dividendes / intérêts / PFLU) — hike forward 2026-01-01
+      (is (== 0.172M
+              (statute/parameter-value-at
+               db "FR.CGT.PS.placement-rate" #inst "2025-08-15"))
+          "placement 2025 still at legacy 17.2 % (hike only forward from 2026-01-01)")
+      (is (== 0.186M
+              (statute/parameter-value-at
+               db "FR.CGT.PS.placement-rate" #inst "2026-06-15"))
+          "placement 2026 at 18.6 %")
       (is (== 0.172M
               (statute/parameter-value-at
                db "FR.CGT.PS.real-estate-rate" #inst "2026-06-15"))
@@ -146,6 +162,29 @@
         (is (== 62800M (amt (:liability mob)))
             "Total = €25 600 IR + €37 200 PS = €62 800 (per note 128 §2.1 Track 1)")
         (is (= :fr-pfu (:regime mob)))))))
+
+(deftest mobiliere-2025-disposal-PS-186-retroactive
+  (testing "2025 mobilière disposal pays PS at 18.6 % (LFSS 2026 rétroactif aux revenus du patrimoine 2025 — note 141 P0-1)"
+    (let [conn (fresh)]
+      (record! conn {:external-id "mob-2025"
+                     :asset-class :fr-titres-listed
+                     :acquired-on #inst "2020-01-15"
+                     :disposed-on #inst "2025-09-10"   ; 2025-period disposal
+                     :proceeds {:amount 200000M :commodity eur}
+                     :basis    {:amount 100000M :commodity eur}})
+      (let [facts (run-personal conn "INDIV" p2025
+                                {:tax-unit {:pfu-or-bareme :pfu}})
+            mob   (by-lane facts :fr-mobilière)]
+        (is (some? mob) "mobilière component present for 2025 period")
+        ;; €100k gain. IR PFU 12.8 % = €12 800.
+        ;; PS RÉTROACTIF (revenus du patrimoine 2025 → 18.6 %) × €100k = €18 600.
+        ;; Total = €31 400. Under the buggy encoding pre-P0-1 fix, PS would
+        ;; be 17.2 % = €17 200 (off by €1 400).
+        (is (== 12800M (-> (filter #(= :mob-ir-tax (:line %)) (:line-items mob))
+                           first :value :amount))
+            "IR PFU 12.8 % × €100k = €12 800")
+        (is (== 31400M (amt (:liability mob)))
+            "Total = €12 800 IR + €18 600 PS = €31 400 (PS 18.6 % retroactive per LFSS 2026)")))))
 
 ;; ============================================================================
 ;; §3. Mobilière — barème + abattement renforcé 85 % (note 128 §2.1 Track 2)
@@ -415,19 +454,47 @@
         (is (== 30000M (amt (:liability plt)))
             "12.8 % IR + 17.2 % PS = 30 % on €100k = €30 000")))))
 
-(deftest pro-long-terme-238-quindecies-full-exempt
-  (testing "§238 quindecies transmission ≤ €700k (FY-2025 cliff) → fully exempt"
+(deftest pro-long-terme-238-quindecies-agri-full-exempt
+  (testing "§238 quindecies AGRICULTURAL transmission ≤ €700k (FY-2025 cliff) → fully exempt"
     (let [conn (fresh)]
-      (record! conn {:external-id "plt-§238"
+      (record! conn {:external-id "plt-§238-agri"
                      :asset-class :fr-pro-long-terme
                      :acquired-on #inst "2020-01-01"
                      :disposed-on #inst "2026-06-15"
-                     :proceeds {:amount 600000M :commodity eur}  ; <€700k FY-2025 cliff
+                     :proceeds {:amount 600000M :commodity eur}  ; <€700k FY-2025 agri cliff
                      :basis    {:amount 100000M :commodity eur}
                      :exemption-claimed #{:fr-238-quindecies-transmission}})
-      (let [facts (run-personal conn "INDIV" p2026)]
+      (let [facts (run-personal conn "INDIV" p2026
+                                {:inputs {:238-quindecies
+                                          {:transmission-value 600000M
+                                           :activity :agricultural}}})]
         (is (nil? (by-lane facts :fr-pro-lt))
-            "transmission value €600k < €700k cliff → fully exempt")))))
+            "agricultural transmission €600k < €700k cliff → fully exempt")))))
+
+(deftest pro-long-terme-238-quindecies-standard-600k-not-fully-exempt
+  (testing "§238 quindecies STANDARD non-agricultural transmission €600k → partial taxable (note 141 P0-2)"
+    (let [conn (fresh)]
+      (record! conn {:external-id "plt-§238-std"
+                     :asset-class :fr-pro-long-terme
+                     :acquired-on #inst "2020-01-01"
+                     :disposed-on #inst "2026-06-15"
+                     :proceeds {:amount 600000M :commodity eur}
+                     :basis    {:amount 100000M :commodity eur}
+                     :exemption-claimed #{:fr-238-quindecies-transmission}})
+      ;; Default activity is :standard. Standard cliffs €500k / €1M (stable).
+      ;; transmission €600k → fraction = (600k − 500k)/(1M − 500k) = 0.2
+      ;; gain €500k × 20 % = €100k taxable.
+      ;; IR 12.8 % × €100k = €12 800; PS 17.2 % × €100k = €17 200; total €30 000.
+      (let [facts (run-personal conn "INDIV" p2026
+                                {:inputs {:238-quindecies
+                                          {:transmission-value 600000M}}})
+            plt   (by-lane facts :fr-pro-lt)]
+        (is (some? plt) "standard transmission at €600k is NOT fully exempt")
+        (is (== 100000M (-> (filter #(= :pro-lt-base (:line %)) (:line-items plt))
+                            first :value :amount))
+            "taxable base = €500k × 20 % = €100k (note 141 P0-2 — standard cliffs unchanged)")
+        (is (== 30000M (amt (:liability plt)))
+            "€12 800 IR + €17 200 PS = €30 000 on €100k taxable base")))))
 
 ;; ============================================================================
 ;; §9. Titres de participation — IS-side QPFC 12 % (note 128 §2.3)
@@ -548,17 +615,23 @@
 ;; ============================================================================
 
 (deftest §238-quindecies-bitemporal-cliff
-  (testing "pre-2025 cliff at €500k vs post-2025 at €700k"
+  (testing "standard cliff stable €500k; agricultural cliff bitemporal €500k → €700k (note 141 P0-2)"
     (let [conn (fresh)
           db   (d/db conn)]
-      ;; 2024 read sees €500k full-exemption cliff
+      ;; Standard (non-agricultural) cliff is stable at €500k — LFI 2024 did NOT raise it.
       (is (== 500000M (statute/parameter-value-at
                        db "FR.CGT.§238-quindecies.threshold-full" #inst "2024-06-15"))
-          "pre-2025 cliff €500k")
-      ;; 2026 read sees €700k full-exemption cliff
-      (is (== 700000M (statute/parameter-value-at
+          "standard cliff €500k (pre-2025)")
+      (is (== 500000M (statute/parameter-value-at
                        db "FR.CGT.§238-quindecies.threshold-full" #inst "2026-06-15"))
-          "post-2025 cliff €700k (LFI 2024)"))))
+          "standard cliff stays €500k post-2025 (LFI 2024 raise is agri-only)")
+      ;; Agricultural cliff IS bitemporal: €500k pre-2025, €700k from FY-2025.
+      (is (== 500000M (statute/parameter-value-at
+                       db "FR.CGT.§238-quindecies.agri-threshold-full" #inst "2024-06-15"))
+          "agricultural pre-2025 cliff €500k")
+      (is (== 700000M (statute/parameter-value-at
+                       db "FR.CGT.§238-quindecies.agri-threshold-full" #inst "2026-06-15"))
+          "agricultural post-2025 cliff €700k (LFI 2024 VII bis)"))))
 
 ;; ============================================================================
 ;; §13. Multi-component — corporate has both titres + brevets simultaneously

@@ -338,19 +338,34 @@
 (defn- §238-quindecies-fraction
   "Return the fraction (0-1) of a pro plus-value that REMAINS TAXABLE
    under §238 quindecies for the given `transmission-value`. The
-   cliffs are date-keyed (€500 k / €1 M pre-2025; €700 k / €1.2 M
-   from FY-2025 per LFI 2024).
+   activity classification picks the cliff pair (note 141 P0-2):
 
-   The provider reads the transmission value from `:inputs
-   :238-quindecies {:transmission-value <bigdec>}`. When the consumer
-   does not supply it, defaults to the disposal's proceeds amount.
+   - `:standard` (default — non-agricultural transmissions): €500k /
+     €1M, STABLE since 2006 (CGI Art. 238 quindecies I).
+   - `:agricultural` (CGI Art. 238 quindecies VII bis — transmissions
+     agricoles, aide à l'installation jeunes agriculteurs): €500k /
+     €1M pre-2025, €700k / €1.2M from FY-2025 (LFI 2024).
+
+   The provider reads the transmission value + activity from `:inputs
+   :238-quindecies {:transmission-value <bigdec> :activity <kw>}`.
+   When the consumer does not supply :transmission-value, defaults to
+   the disposal's proceeds amount. When :activity is unspecified,
+   defaults to :standard (the most common — over-exempting
+   non-agricultural transmissions was the original P0).
 
    §151 septies + §238 quindecies CANNOT cumulate on the same disposal
    (note 128 §1.5); the consumer's `:disposal/exemption-claimed`
    should pick one."
-  ^java.math.BigDecimal [db ^java.util.Date as-of {:keys [transmission-value]}]
-  (let [full       (param db "FR.CGT.§238-quindecies.threshold-full" as-of)
-        degressive (param db "FR.CGT.§238-quindecies.threshold-degressive" as-of)
+  ^java.math.BigDecimal [db ^java.util.Date as-of {:keys [transmission-value activity]}]
+  (let [agri?      (= activity :agricultural)
+        [full-key degressive-key]
+        (if agri?
+          ["FR.CGT.§238-quindecies.agri-threshold-full"
+           "FR.CGT.§238-quindecies.agri-threshold-degressive"]
+          ["FR.CGT.§238-quindecies.threshold-full"
+           "FR.CGT.§238-quindecies.threshold-degressive"])
+        full       (param db full-key as-of)
+        degressive (param db degressive-key as-of)
         v          (or transmission-value 0M)]
     (cond
       (<= (compare v full) 0)       0M
@@ -432,11 +447,15 @@
         ir-tax  (if barème?
                   0M                                  ; folds into PIT base
                   (* ir-base ir-rate))
-        ;; PS on gross gain (excluding PEA — covered separately at the same rate)
-        ps-rate-securities (param db "FR.CGT.PS.default-rate" as-of)
-        ps-tax-non-pea     (* (max 0M gross-net-non-pea) ps-rate-securities)
-        ;; PEA: zero IR, PS on its gain at the same securities PS rate
-        ps-tax-pea         (* pea-net ps-rate-securities)
+        ;; PS rate: mobilière disposals are "revenus du patrimoine"
+        ;; → use patrimoine-rate (LFSS 2026 RÉTROACTIF to 2025-income —
+        ;; note 141 P0-1). PEA pool is a placement-style envelope:
+        ;; PS triggers on payment from the envelope, hence placement-rate.
+        ps-rate-patrimoine (param db "FR.CGT.PS.patrimoine-rate" as-of)
+        ps-rate-placement  (param db "FR.CGT.PS.placement-rate" as-of)
+        ps-tax-non-pea     (* (max 0M gross-net-non-pea) ps-rate-patrimoine)
+        ;; PEA: zero IR, PS at placement rate on its gain
+        ps-tax-pea         (* pea-net ps-rate-placement)
         total-liability    (+ ir-tax ps-tax-non-pea ps-tax-pea)
         any-gain?          (or (pos? post-carry-non-pea)
                                (pos? pea-net))]
