@@ -16,21 +16,27 @@
             [kontor.disposal.schema :as disp-schema]))
 
 (defn- fresh
-  "Fresh test DB with the disposal schema installed."
+  "Fresh test DB with the disposal schema installed plus one test
+   entity (`HoldCo`) and one commodity (USD)."
   []
   (let [conn (core/create-test-db)]
     (disp/install! conn)
     (d/transact conn [{:commodity/symbol "USD" :commodity/name "US Dollar"
-                       :commodity/precision 2}])
+                       :commodity/precision 2}
+                      {:entity/code "HOLDCO" :entity/name "HoldCo"
+                       :entity/kind :company :entity/country "US"
+                       :entity/functional-commodity [:commodity/symbol "USD"]}])
     conn))
 
 (def ^:private usd [:commodity/symbol "USD"])
+(def ^:private holdco [:entity/code "HOLDCO"])
 
 (defn- record-basic
   "Record a minimal disposal with the named external-id; return the conn."
   [conn xid proceeds basis & [overrides]]
   (disp/record-disposal!
-   conn (merge {:external-id     xid
+   conn (merge {:entity          holdco
+                :external-id     xid
                 :kind            :sale
                 :subject         [:commodity/symbol "USD"]  ; any stable ref
                 :subject-kind    :fixed-asset
@@ -51,6 +57,7 @@
         idents (set (d/q '[:find [?i ...]
                            :where [_ :db/ident ?i]] (d/db conn)))]
     (is (contains? idents :disposal/external-id))
+    (is (contains? idents :disposal/entity))
     (is (contains? idents :disposal/kind))
     (is (contains? idents :disposal/subject))
     (is (contains? idents :disposal/subject-kind))
@@ -90,12 +97,14 @@
 
 (deftest record-disposal-required-fields-trap
   (let [conn (fresh)]
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo #":external-id required"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #":entity required"
                           (disp/record-disposal! conn {:kind :sale})))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #":external-id required"
+                          (disp/record-disposal! conn {:entity holdco :kind :sale})))
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #":kind must be"
-                          (disp/record-disposal! conn {:external-id "x" :kind :bogus})))
+                          (disp/record-disposal! conn {:entity holdco :external-id "x" :kind :bogus})))
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #":subject required"
-                          (disp/record-disposal! conn {:external-id "x" :kind :sale})))))
+                          (disp/record-disposal! conn {:entity holdco :external-id "x" :kind :sale})))))
 
 ;; ============================================================================
 ;; §3. State transitions — recognize! + void!
@@ -161,6 +170,31 @@
                   (disp/disposals-in-period (d/db conn)
                                             {:from #inst "2024-01-01"
                                              :to   #inst "2025-01-01"})))))))
+
+(deftest disposals-in-period-entity-scoped
+  (testing "two-arity form filters to the named entity (multi-tenant CGT)"
+    (let [conn (fresh)
+          _    (d/transact conn [{:entity/code "OTHERCO" :entity/name "OtherCo"
+                                  :entity/kind :company :entity/country "US"
+                                  :entity/functional-commodity usd}])
+          other [:entity/code "OTHERCO"]
+          db1   (d/db conn)
+          holdco-eid (d/q '[:find ?e . :in $ ?c
+                            :where [?e :entity/code ?c]]
+                          db1 "HOLDCO")
+          other-eid  (d/q '[:find ?e . :in $ ?c
+                            :where [?e :entity/code ?c]]
+                          db1 "OTHERCO")]
+      (record-basic conn "d-holdco-1" 100M 50M)
+      (record-basic conn "d-other-1"  100M 50M {:entity other
+                                                :external-id "d-other-1"})
+      (let [period {:from #inst "2024-01-01" :to #inst "2026-01-01"}]
+        (is (= ["d-holdco-1"]
+               (map :disposal/external-id
+                    (disp/disposals-in-period (d/db conn) holdco-eid period))))
+        (is (= ["d-other-1"]
+               (map :disposal/external-id
+                    (disp/disposals-in-period (d/db conn) other-eid period))))))))
 
 (deftest disposals-of-subject
   (let [conn (fresh)]

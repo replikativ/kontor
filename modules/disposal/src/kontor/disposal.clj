@@ -76,6 +76,7 @@
   "Pure tx-data builder for `record-disposal!` (ADR-068).
 
    REQUIRED opts:
+     :entity            ref to the holder `:entity` (whose CGT this is)
      :external-id       string — caller's stable id
      :kind              one of #{:sale :incorporation-contribution
                                  :abandonment :gift :conversion
@@ -109,13 +110,14 @@
    to the GL — the consumer's transaction (Dr cash / Cr asset / Dr-Cr
    realised gain-or-loss) is posted separately, then linked via
    `recognize!` which advances `:recorded → :recognized`."
-  [db {:keys [external-id kind subject subject-kind asset-class subject-form
+  [db {:keys [entity external-id kind subject subject-kind asset-class subject-form
               acquired-on disposed-on holding-period
               proceeds basis depreciation-taken
               ownership-fraction residence? elective-regime exemption-claimed
               rollover loss-bucket audit-doc notes
               recorded-by-uid tempid recorded-at]
        :or   {tempid "disposal-1"}}]
+  (when-not entity         (throw (ex-info ":entity required (the disposal's holder)" {})))
   (when-not external-id    (throw (ex-info ":external-id required" {})))
   (when-not (kinds kind)   (throw (ex-info (str ":kind must be one of " kinds)
                                            {:kind kind})))
@@ -131,6 +133,7 @@
   (let [recorded-at (or recorded-at (java.util.Date.))
         row (cond-> {:db/id                       tempid
                      :disposal/external-id        external-id
+                     :disposal/entity             entity
                      :disposal/kind               kind
                      :disposal/subject            subject
                      :disposal/subject-kind       subject-kind
@@ -287,20 +290,41 @@
 
 (defn disposals-in-period
   "Every disposal whose `:disposal/disposed-on` lies in the half-open
-   `[from, to)` window. Excludes voided disposals."
-  [db {:keys [from to]}]
-  (->> (d/q '[:find [?d ...]
-              :in $ ?from ?to
-              :where
-              [?d :disposal/disposed-on ?on]
-              [(<= ?from ?on)]
-              [(< ?on ?to)]
-              [?d :disposal/state ?st]
-              [(not= ?st :voided)]]
-            db from to)
-       (map #(pull-disposal db %))
-       (sort-by :disposal/disposed-on)
-       vec))
+   `[from, to)` window. Excludes voided disposals.
+
+   Two arities:
+   - `[db period]` — all disposals in the window, across all entities.
+   - `[db entity period]` — only disposals owned by `entity` (an eid
+     or `[:entity/code <code>]` lookup ref). The entity-scoped form
+     is what CGT providers call — per-entity is the natural CGT
+     unit of analysis."
+  ([db period]
+   (->> (d/q '[:find [?d ...]
+               :in $ ?from ?to
+               :where
+               [?d :disposal/disposed-on ?on]
+               [(<= ?from ?on)]
+               [(< ?on ?to)]
+               [?d :disposal/state ?st]
+               [(not= ?st :voided)]]
+             db (:from period) (:to period))
+        (map #(pull-disposal db %))
+        (sort-by :disposal/disposed-on)
+        vec))
+  ([db entity {:keys [from to]}]
+   (->> (d/q '[:find [?d ...]
+               :in $ ?entity ?from ?to
+               :where
+               [?d :disposal/entity ?entity]
+               [?d :disposal/disposed-on ?on]
+               [(<= ?from ?on)]
+               [(< ?on ?to)]
+               [?d :disposal/state ?st]
+               [(not= ?st :voided)]]
+             db entity from to)
+        (map #(pull-disposal db %))
+        (sort-by :disposal/disposed-on)
+        vec)))
 
 ;; ============================================================================
 ;; Realised gain / loss helpers

@@ -82,6 +82,18 @@
                      :deemed (statutorily-deemed, e.g. exit tax,
                        constructive sale, mark-to-market election)."}
 
+   ;; --- Who is disposing (the holder) ----------------------------------
+   {:db/ident       :disposal/entity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The `:entity` holder — the legal person whose books
+                     this disposal hits and against whom the CGT liability
+                     accrues. Required for multi-tenant CGT computation:
+                     the CGT provider asks per-entity for disposals in a
+                     period; without `:entity` it would either over-report
+                     (mixing entities) or have to climb every polymorphic
+                     `:subject` ref to derive the holder."}
+
    ;; --- What was disposed ------------------------------------------------
    {:db/ident       :disposal/subject
     :db/valueType   :db.type/ref
