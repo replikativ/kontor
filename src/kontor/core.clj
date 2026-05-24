@@ -30,6 +30,7 @@
             [kontor.legal-hold :as legal-hold]
             [kontor.retention :as retention]
             [kontor.schema :as schema]
+            [kontor.statute :as statute]
             [kontor.tax-rate-provider :as trp]
             [kontor.valuation :as valuation]))
 
@@ -88,6 +89,7 @@
   (retention/install-seeds! conn)    ; ADR-050 status-transition + approval-policy seeds
   (audit-doc/install-seeds! conn)    ; ADR-051 :audit-doc/privilege transitions + policies
   (dsar/install-seeds! conn)         ; ADR-052 :dsar-request transitions + policies
+  (statute/install-seeds! conn)      ; ADR-101 starter :tax-concept catalogue
   (d/transact conn [cost-center-plan-seed])
   conn)
 

@@ -191,8 +191,8 @@
 
 (defn apply-adjustments
   "Fold an ordered seq of credit / surtax adjustment `items` over a
-   `gross` tax — the adjustment layer (research note 105 frontier 1).
-   Each item:
+   `gross` tax — the tax-side leg of the adjustment layer (research
+   note 105 frontier 1; ADR-101 unified-vocab `:op` set). Each item:
 
      {:code :label
       :op          :credit | :surtax
@@ -206,6 +206,12 @@
    `max(0, running − amount)`; a refundable credit `running − amount`
    (may go negative — a refund / a transfer to the taxpayer); a surtax
    `running + amount`.
+
+   Items with `:op :base-add` or `:base-deduct` are rejected here — they
+   operate on the pre-schedule base; use `apply-base-adjustments` for
+   those (ADR-101). The unified vocabulary lets a provider tag every
+   item with its phase: base-side items feed `apply-base-adjustments`;
+   tax-side items feed `apply-adjustments`.
 
    Returns `{:liability <signed BigDecimal> :resolved [<item>]}` —
    each resolved item carries its numeric `:amount`, so credits and
@@ -224,6 +230,10 @@
                             :credit (if (:refundable? item)
                                       (- running amt)
                                       (max 0M (- running amt)))
+                            (:base-add :base-deduct)
+                            (throw (ex-info
+                                    "apply-adjustments: base-side :op must go through apply-base-adjustments"
+                                    {:item item}))
                             (throw (ex-info
                                     "apply-adjustments: :op must be :credit or :surtax"
                                     {:item item})))]
@@ -233,6 +243,49 @@
          items)]
     {:liability (:running result)
      :resolved  (:resolved result)}))
+
+(defn apply-base-adjustments
+  "Fold an ordered seq of base-side adjustment `items` over a pre-
+   schedule `base` (ADR-101 — companion to `apply-adjustments` on the
+   tax-side). Same item shape; `:op` is `:base-add` or `:base-deduct`.
+   Items with tax-side `:op` (`:credit` / `:surtax`) are rejected — use
+   `apply-adjustments` for those.
+
+   The named/ordered/auditable item pattern is identical to
+   `apply-adjustments`: each resolved item surfaces as structured data
+   with its numeric `:amount`, so DE §9 GewSt reductions, §8 GewSt
+   add-backs, KSt §10 non-deductibles, etc. each carry their own
+   provenance back to the provision that introduced them — distinct
+   from buried-in-a-list `:base-transform :adjustments` numbers.
+
+   `:amount` may be a fn `(ctx-with-:running) -> bigdec`, mirroring
+   `apply-adjustments`'s base-aware-fn convention.
+
+   Returns `{:base <BigDecimal> :resolved [<item>]}`."
+  [^java.math.BigDecimal base items ctx]
+  (let [result
+        (reduce
+         (fn [{:keys [running resolved]} item]
+           (let [raw (:amount item)
+                 amt (bigdec (if (fn? raw)
+                               (raw (assoc ctx :running running))
+                               raw))
+                 running' (case (:op item)
+                            :base-add    (+ running amt)
+                            :base-deduct (- running amt)
+                            (:credit :surtax)
+                            (throw (ex-info
+                                    "apply-base-adjustments: tax-side :op must go through apply-adjustments"
+                                    {:item item}))
+                            (throw (ex-info
+                                    "apply-base-adjustments: :op must be :base-add or :base-deduct"
+                                    {:item item})))]
+             {:running  running'
+              :resolved (conj resolved (assoc item :amount amt))}))
+         {:running base :resolved []}
+         items)]
+    {:base     (:running result)
+     :resolved (:resolved result)}))
 
 ;; ============================================================================
 ;; Constructors — sugar

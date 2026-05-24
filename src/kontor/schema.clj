@@ -1052,6 +1052,348 @@
     :db/doc         "Free-text annotation."}])
 
 ;; ============================================================================
+;; :tax-concept / :provision / :regime / :parameter — ADR-101
+;; Statute-as-data substrate. Tax law lifted into first-class queryable
+;; entities. See doc/decisions.md ADR-101 + research notes 116/117/118/119.
+;; ============================================================================
+
+(def ^:private tax-concept-attrs
+  "Cross-jurisdiction catalogue of tax-law abstractions. A `:tax-concept`
+   is a named, ADR-closed handle that jurisdiction-specific `:provision`
+   entities reference (`:participation-exemption`, `:rollover-relief`,
+   `:loss-bucket`, `:lifetime-cap`, …). Closed-by-ADR (additions are
+   one-row migrations). Composes with ADR-090 `:concept-iri` for
+   XBRL / FIBO / external taxonomy edges. ADR-101 §D6 + note 119."
+  [{:db/ident       :tax-concept/code
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Closed-by-ADR concept code (e.g. :participation-exemption,
+                     :rollover-relief, :loss-bucket, :lifetime-cap). Starter
+                     set seeded by kontor.statute/install-seeds!; new entries
+                     require an ADR addendum + a migration row."}
+
+   {:db/ident       :tax-concept/label
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Human-readable label for the concept."}
+
+   {:db/ident       :tax-concept/description
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "One-paragraph description of what the concept names —
+                     enough for an l10n author to know whether their
+                     statute-provision instantiates it."}
+
+   {:db/ident       :tax-concept/family
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Coarse family this concept belongs to:
+                     :exemption / :relief / :credit / :surtax / :minimum-tax /
+                     :base-adjustment / :elective-regime."}
+
+   {:db/ident       :tax-concept/concept-iri
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ADR-090 IRI into an external taxonomy
+                     (XBRL / FIBO / gist). Lets the concept's identity be
+                     anchored beyond the kontor catalogue when one exists."}])
+
+(def ^:private provision-attrs
+  "Per-jurisdiction encoded statute rule. A `:provision` is one law
+   contribution: it cites the source, names the affected `:tax-concept`,
+   tests applicability via a closed-vocabulary condition expression, and
+   declares its consequence (a credit, surtax, base adjustment, schedule
+   override, …) for the evaluator to fold in priority order. Default +
+   exception semantics ride `:priority` + `:exception-of` (Catala-
+   inspired). The escape hatch `:provision/compute-fn` resolves to a
+   registered Clojure fn for the rare provision that exceeds the closed
+   predicate vocabulary. ADR-101 + note 119."
+  [{:db/ident       :provision/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Stable provision id (e.g. \"DE-KStG-§8b-Abs-1\",
+                     \"US-IRC-§1031-2024\"). Identity attribute — one row
+                     per (statute-section × law-version) combination."}
+
+   {:db/ident       :provision/jurisdiction
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Jurisdiction code (:de, :fr, :jp, :us-fed, :ca-on, …).
+                     Indexed; lets the evaluator filter applicable provisions
+                     by jurisdiction in one datalog clause."}
+
+   {:db/ident       :provision/concept
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Reference to the `:tax-concept` this provision
+                     instantiates. The evaluator queries by concept first;
+                     a provision without a concept is invalid."}
+
+   {:db/ident       :provision/title
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Human-readable provision title — typically the
+                     statute section title (\"Beteiligungsertragsbefreiung\"
+                     for DE KStG §8b)."}
+
+   {:db/ident       :provision/citation
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "URL to the authoritative statute text. Lets the
+                     audit trail link a computed liability back to the
+                     official source."}
+
+   {:db/ident       :provision/concept-iri
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ADR-090 IRI to the provision in an external
+                     taxonomy (XBRL / FIBO). Distinct from
+                     `:tax-concept/concept-iri` — that's the abstract
+                     concept; this is the specific provision."}
+
+   {:db/ident       :provision/effective-from
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Statutory effective-from date — when the law applies
+                     under the law's own terms. Distinct from
+                     `:tx/valid-from` (ADR-048), which is when the
+                     provision was entered into the books. Retroactive
+                     amendments can have `:effective-from` earlier than
+                     `:tx/valid-from`."}
+
+   {:db/ident       :provision/effective-until
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Statutory effective-until date (open if absent — the
+                     provision is still in force)."}
+
+   {:db/ident       :provision/priority
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Application priority. Lower numbers fire first. Same-
+                     priority applicable provisions are ambiguity — the
+                     evaluator raises `kontor.tax/ambiguous-provision`.
+                     Conventional ranges: 0-99 base-level defaults;
+                     100-999 normal provisions; 1000+ overrides."}
+
+   {:db/ident       :provision/exception-of
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to another `:provision` this one is an
+                     exception of (Catala-inspired default+exception
+                     semantics). When the exception applies, the default
+                     is suppressed; when the exception doesn't apply, the
+                     default fires."}
+
+   {:db/ident       :provision/condition
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Closed-vocabulary EDN predicate expression stored as
+                     a string (round-trips through any backing store; read
+                     by the evaluator). Vocabulary: `:and`/`:or`/`:not`/
+                     `:eq`/`:in`/`:leq`/`:geq`/`:lt`/`:gt`/`:between`/
+                     `:status-is`/`true`/`false` over `:tax-context` facts.
+                     `nil` ⇒ always applicable."}
+
+   {:db/ident       :provision/consequence
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "EDN consequence map stored as string. Shape depends
+                     on `:op`: e.g.
+                     `{:op :base-deduct :amount-from :parameter :parameter
+                       \"DE.GewSt.§9.1-real-estate-deduction\"}`,
+                     `{:op :credit :refundable? true :amount-from
+                       :tax-context-fact :fact :cir-claimed}`,
+                     `{:op :surtax :rate-from :parameter :parameter
+                       \"DE.Soli.rate\"}`,
+                     `{:op :schedule-override :schedule {...}}`."}
+
+   {:db/ident       :provision/compute-fn
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional escape-hatch fn-key resolving to a Clojure
+                     fn in the `kontor.statute/*compute-fns*` registry.
+                     For provisions whose computation exceeds the closed
+                     predicate vocabulary (cumulative lifetime caps,
+                     indexation-table lookups, complex eligibility
+                     cascades). The fn receives `[ctx applicable-context]`
+                     and returns the consequence resolved to a numeric
+                     amount. Use sparingly — every use is a documented
+                     deviation from data-only provisions."}
+
+   {:db/ident       :provision/regime
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional `:regime` ref. If absent, the provision
+                     applies whenever its condition matches; if present,
+                     applies only when the taxpayer has elected this
+                     regime (election rides ADR-034 status-machine — see
+                     ADR-101 §D5)."}
+
+   {:db/ident       :provision/audit-doc
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Per ADR-038 audit-doc refs (Beck commentary, BMF
+                     Schreiben, board-resolution docs)."}])
+
+(def ^:private regime-attrs
+  "Elective container — a `:regime` groups provisions that compose into
+   one computation (IN's old-vs-new income-tax regime, FR's PME vs
+   standard IS, US's itemized vs standard deduction). The election event
+   itself rides ADR-034's `:status-transition` + `:status-history` — no
+   parallel `:regime-election` namespace; see ADR-101 §D5.
+   `:regime/extends` supports counterfactual / amendment overlay (OpenFisca
+   reform pattern). ADR-101 + note 118."
+  [{:db/ident       :regime/code
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Regime code (e.g. :in-pit-new, :in-pit-old, :fr-is-pme).
+                     Identity attribute."}
+
+   {:db/ident       :regime/label
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Human-readable label."}
+
+   {:db/ident       :regime/jurisdiction
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Jurisdiction code (:in, :fr, …)."}
+
+   {:db/ident       :regime/concept-iri
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ADR-090 IRI."}
+
+   {:db/ident       :regime/extends
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional parent regime — the OpenFisca reform pattern
+                     for counterfactual overlay. A `:regime` that extends
+                     another inherits its provisions, may add new ones,
+                     and may override (via `:provision/exception-of`).
+                     Cycles raise `kontor.tax/cyclic-regime`."}
+
+   {:db/ident       :regime/effective-from
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :regime/effective-until
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}])
+
+(def ^:private parameter-attrs
+  "Date-keyed value history — the OpenFisca operational pattern. A
+   `:parameter` is an identified entity (rate / bracket-scale / threshold);
+   its values are kept as a temporal series of `:parameter-value` rows
+   (scalar parameters) or `:parameter-bracket` rows (bracket scales).
+   Replaces the pattern of editing a defrecord config to update a rate.
+   ADR-101 + note 118 §1.1."
+  [{:db/ident       :parameter/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Stable parameter id, hierarchical dot-notation per
+                     OpenFisca convention (e.g. \"de.kst.rate\",
+                     \"de.gewst.messzahl\", \"fr.is.pme-brackets\").
+                     Identity attribute."}
+
+   {:db/ident       :parameter/label
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Human-readable label."}
+
+   {:db/ident       :parameter/jurisdiction
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :parameter/unit
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "What this parameter measures: :rate (decimal 0-1),
+                     :amount-money (BigDecimal in some commodity),
+                     :threshold (BigDecimal, same shape as :amount-money
+                     but used as a comparison value), :ratio (BigDecimal
+                     unbounded), :bracket-scale (collection of
+                     `:parameter-bracket` rows refer to this parent)."}
+
+   {:db/ident       :parameter/commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional commodity ref — when `:unit` is :amount-money
+                     or :threshold, the commodity the value is denominated
+                     in. nil for :rate / :ratio / :bracket-scale."}
+
+   {:db/ident       :parameter/concept-iri
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ADR-090 IRI."}
+
+   {:db/ident       :parameter-value/parameter
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to the `:parameter` this value belongs to. One
+                     `:parameter` typically has many `:parameter-value`
+                     rows, each effective in a different period."}
+
+   {:db/ident       :parameter-value/effective-from
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Statutory effective-from date of this value. The
+                     resolver picks the value whose effective range
+                     contains the as-of instant."}
+
+   {:db/ident       :parameter-value/effective-until
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :parameter-value/decimal-value
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The scalar value (BigDecimal). v1 ships only the
+                     decimal shape; non-scalar values (instant, boolean,
+                     string) deferred per ADR-101 §D9."}
+
+   {:db/ident       :parameter-value/citation
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional URL to the authority publication asserting
+                     this value (BMF Schreiben, IRS Rev. Proc., …)."}
+
+   {:db/ident       :parameter-bracket/parameter
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Ref to the parent `:parameter` (must have
+                     `:parameter/unit :bracket-scale`)."}
+
+   {:db/ident       :parameter-bracket/index
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Position in the scale (0-indexed, ordered)."}
+
+   {:db/ident       :parameter-bracket/rate
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Marginal rate for this bracket (decimal 0-1)."}
+
+   {:db/ident       :parameter-bracket/upper
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Upper threshold (exclusive) for this bracket. Absent
+                     ⇒ open top band."}
+
+   {:db/ident       :parameter-bracket/effective-from
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :parameter-bracket/effective-until
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}])
+
+;; ============================================================================
 
 (def ^:private partner-merge-attrs
   [{:db/ident       :partner-merge/duplicate-of
@@ -4060,7 +4402,11 @@
     ;; pre-installed by datahike's feature/bitemporal-v1)
     legal-hold-attrs                      ; ADR-049 (kontor.legal-hold)
     retention-policy-attrs                ; ADR-050 (kontor.retention)
-    dsar-request-attrs)))                 ; ADR-052 (kontor.dsar)
+    dsar-request-attrs                    ; ADR-052 (kontor.dsar)
+    tax-concept-attrs                     ; ADR-101 (kontor.statute)
+    provision-attrs                       ; ADR-101 (kontor.statute)
+    regime-attrs                          ; ADR-101 (kontor.statute)
+    parameter-attrs)))                    ; ADR-101 (kontor.statute)
 
 (defn install!
   "Transact the kernel schema into a connection. Idempotent — re-running
