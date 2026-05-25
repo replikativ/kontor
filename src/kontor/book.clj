@@ -43,15 +43,20 @@
      :narration       — string                      (optional)
      :partner         — partner ref                 (optional)
      :external-id     — string                      (optional)
+     :entity          — entity ref (ADR-031)        (optional)
+                        Stamped on every posting as :posting/entity;
+                        required for per-entity trial-balance / BS /
+                        GuV filters to scope correctly.
 
    For a multi-leg / judgment entry, instead of debit/credit/amount
    pass `:postings` — a vector of `{:account … :amount … :commodity …}`
    maps (`:commodity` falls back to the top-level `:commodity`). The
    amounts must sum to zero per (ledger, commodity); positive is a
    debit. `adjust!` is the named verb for this. A posting map may also
-   carry `:dimensions` — a `{axis value}` map of ADR-097 classification
-   tags (cost-centre, project, segment); the report engine
-   `marginalize`s over any such axis (ADR-096).
+   carry `:entity` (overrides the entry-level one — for intercompany
+   entries) and `:dimensions` — a `{axis value}` map of ADR-097
+   classification tags (cost-centre, project, segment); the report
+   engine `marginalize`s over any such axis (ADR-096).
 
    The builder opts `:posted-at` / `:vt-from` / `:vt-to` pass through
    to `post-transaction-tx-data`.
@@ -99,36 +104,45 @@
           :posting-dimension/value (->dimension-value one)})))
 
 (defn- ->posting
-  "Map a friendly `{:account :amount :commodity? :dimensions?}` posting
-   (used in `:postings` for multi-leg entries) into the kernel
-   `:posting/*` shape, defaulting commodity to the entry-level one."
-  [default-commodity {:keys [account amount commodity dimensions] :as p}]
+  "Map a friendly `{:account :amount :commodity? :entity? :dimensions?}`
+   posting (used in `:postings` for multi-leg entries) into the kernel
+   `:posting/*` shape, defaulting commodity + entity to the entry-level
+   one. Per-posting `:entity` overrides the entry-level one (ADR-031
+   intercompany pattern)."
+  [default-commodity default-entity {:keys [account amount commodity entity dimensions] :as p}]
   (when (nil? account)
     (throw (ex-info "kontor.book: each :postings entry needs :account" {:posting p})))
   (when (nil? amount)
     (throw (ex-info "kontor.book: each :postings entry needs :amount" {:posting p})))
-  (let [c (or commodity default-commodity)]
+  (let [c (or commodity default-commodity)
+        e (or entity   default-entity)]
     (when (nil? c)
       (throw (ex-info "kontor.book: posting needs :commodity (or an entry-level :commodity)"
                       {:posting p})))
     (cond-> {:posting/account   account
              :posting/amount    (->bigdec amount)
              :posting/commodity c}
+      e                (assoc :posting/entity e)
       (seq dimensions) (assoc :posting/dimensions (->dimensions dimensions)))))
 
 (defn- build-input
   "Translate a verb options map into the `{:transaction … :postings …}`
    shape `kontor.posting/post-transaction-tx-data` expects. Pure;
-   throws `ex-info` on a missing required field."
+   throws `ex-info` on a missing required field.
+
+   `:entity` (optional, ADR-031) is stamped on every posting via
+   `:posting/entity` — required for per-entity trial-balance / BS / GuV
+   filters to scope correctly. Per-posting `:entity` overrides the
+   entry-level one (intercompany)."
   [{:keys [debit-account credit-account amount commodity journal
-           effective-date narration partner external-id postings]}]
+           effective-date narration partner external-id entity postings]}]
   (when (nil? journal)
     (throw (ex-info "kontor.book: :journal is required" {})))
   (when (nil? effective-date)
     (throw (ex-info "kontor.book: :effective-date is required" {})))
   (let [ps (cond
              (seq postings)
-             (mapv #(->posting commodity %) postings)
+             (mapv #(->posting commodity entity %) postings)
 
              :else
              (let [amt (->bigdec amount)]
@@ -140,12 +154,14 @@
                  (throw (ex-info "kontor.book: :amount is required" {})))
                (when (nil? commodity)
                  (throw (ex-info "kontor.book: :commodity is required" {})))
-               [{:posting/account   debit-account
-                 :posting/amount    amt
-                 :posting/commodity commodity}
-                {:posting/account   credit-account
-                 :posting/amount    (- amt)
-                 :posting/commodity commodity}]))]
+               [(cond-> {:posting/account   debit-account
+                         :posting/amount    amt
+                         :posting/commodity commodity}
+                  entity (assoc :posting/entity entity))
+                (cond-> {:posting/account   credit-account
+                         :posting/amount    (- amt)
+                         :posting/commodity commodity}
+                  entity (assoc :posting/entity entity))]))]
     {:transaction (cond-> {:transaction/journal        journal
                            :transaction/effective-date effective-date}
                     narration   (assoc :transaction/narration narration)

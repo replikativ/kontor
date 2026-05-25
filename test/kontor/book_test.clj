@@ -164,3 +164,65 @@
     (is (= (bal via-facade ar)  (bal via-baseline ar)))
     (is (= (bal via-facade rev) (bal via-baseline rev)))
     (is (= 1000M (bal via-facade ar)))))
+
+;; ============================================================================
+;; :entity stamping — F10 regression (note 159/160 §I-6)
+;;
+;; Pre-fix, `kontor.book` verbs accepted no `:entity` — so postings carried
+;; no `:posting/entity`, and per-entity trial-balance / BS / GuV filters
+;; returned empty for any real consumer. This test asserts that:
+;; (1) top-level `:entity` is stamped on every posting,
+;; (2) per-posting `:entity` overrides (the intercompany pattern), and
+;; (3) `kontor.trial/trial-balance {:entity …}` actually filters.
+;; ============================================================================
+
+(deftest entity-is-stamped-on-every-posting
+  (let [conn (fresh-book)
+        _    (d/transact conn [{:entity/name "UG"   :entity/code "UG"}
+                               {:entity/name "Hans" :entity/code "HANS"}])
+        ug   [:entity/code "UG"]
+        hans [:entity/code "HANS"]]
+
+    (testing "2-leg entry: top-level :entity stamps both postings"
+      (book/sell! conn {:debit-account ar :credit-account rev
+                        :amount 500 :commodity eur :effective-date d1
+                        :entity ug})
+      (let [ents (set (d/q '[:find [?ec ...]
+                             :where [_ :posting/entity ?e]
+                                    [?e :entity/code ?ec]]
+                           (d/db conn)))]
+        (is (contains? ents "UG"))))
+
+    (testing "n-leg entry: per-posting :entity overrides for intercompany
+              (each entity's legs must self-balance per ADR-031)"
+      ;; Intercompany loan UG → Hans:
+      ;;   UG side:   Dr AR ←→ Cr Cash    (UG sum = 0)
+      ;;   Hans side: Dr Exp ←→ Cr AP     (Hans sum = 0)
+      (book/entry! conn
+        {:journal [:journal/code "GEN"] :effective-date d1
+         :commodity eur
+         :narration "Intercompany loan UG → Hans (€100)"
+         :postings [{:account ar    :amount 100M  :entity ug}
+                    {:account cash  :amount -100M :entity ug}
+                    {:account exp   :amount 100M  :entity hans}
+                    {:account ap    :amount -100M :entity hans}]})
+      (let [pairs (set (d/q '[:find ?acct-path ?ent-code
+                              :where [?p :posting/account ?a]
+                                     [?a :account/path ?acct-path]
+                                     [?p :posting/entity ?e]
+                                     [?e :entity/code ?ent-code]]
+                            (d/db conn)))]
+        (is (contains? pairs ["Assets:Receivable"   "UG"]))
+        (is (contains? pairs ["Liabilities:Payable" "HANS"]))))
+
+    (testing "trial-balance {:entity ug} returns only UG-stamped postings"
+      (let [tb (trial/trial-balance conn {:entity ug})
+            pull-path (fn [eid] (:account/path (d/pull (d/db conn) [:account/path] eid)))
+            paths (set (map pull-path (keys tb)))]
+        ;; UG should have AR, Cash, Income, but NOT Hans's AP or Exp.
+        (is (contains? paths "Assets:Receivable"))
+        (is (contains? paths "Income:Sales"))
+        (is (not (contains? paths "Liabilities:Payable"))
+            "Hans's AP leg must not show under UG's per-entity TB")
+        (is (not (contains? paths "Expenses:Supplies"))
+            "Hans's Exp leg must not show under UG's per-entity TB")))))
