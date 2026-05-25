@@ -511,24 +511,27 @@
                    :amount       380000M  :foreign-tax-paid 19000M
                    :holding-chain [:participation :issuer]}]
                  {:tax-unit {:tax-residency :resident-corporation}})
-          excluded-cmp (component-by-lane facts :cn-eit-investment-income)
-          included-cmp (->> (:components facts)
-                            (filter #(seq (get-in % [:jurisdiction-specific-codes
-                                                     :cit-base-additions])))
-                            first)
-          excl-total (first (get-in excluded-cmp
-                                    [:jurisdiction-specific-codes :cit-base-deductions]))
-          incl-total (first (get-in included-cmp
-                                    [:jurisdiction-specific-codes :cit-base-additions]))]
+          excluded-cmp  (component-by-lane facts :cn-eit-investment-income)
+          domestic-cmp  (component-by-lane facts :cn-eit-domestic-included)
+          foreign-cmp   (component-by-lane facts :cn-eit-foreign)
+          excl-total    (first (get-in excluded-cmp
+                                       [:jurisdiction-specific-codes :cit-base-deductions]))
+          domestic-total (first (get-in domestic-cmp
+                                        [:jurisdiction-specific-codes :cit-base-additions]))
+          foreign-total  (first (get-in foreign-cmp
+                                        [:jurisdiction-specific-codes :cit-base-additions]))]
       (is (some? excluded-cmp))
-      (is (some? included-cmp))
+      (is (some? domestic-cmp))
+      (is (some? foreign-cmp))
       (is (== 11330000M excl-total)
           "Excluded: 10M + 600k + 730k = 11.33M (per §2 ex B)")
-      (is (== 580000M incl-total)
-          "Included: 200k (listed <12m) + 380k (foreign) = 580k")
-      (let [ftc (get-in included-cmp [:jurisdiction-specific-codes :cit-foreign-tax-credit])]
+      (is (== 200000M domestic-total)
+          "Domestic non-qualifying: 200k (listed <12m)")
+      (is (== 380000M foreign-total)
+          "Foreign-source: 380k (§23 FTC eligible)")
+      (let [ftc (get-in foreign-cmp [:jurisdiction-specific-codes :cit-foreign-tax-credit])]
         (is (= 19000M (-> ftc first :amount))
-            "FTC = CNY 19,000")))))
+            "FTC = CNY 19,000 (only on the foreign component, per §23-24)")))))
 
 ;; ============================================================================
 ;; §12. IIT — paying-agent prepaid + foreign tax credit

@@ -103,29 +103,28 @@
 
 (defn- investment-income-base-selectors
   "Marginalize the GL income postings and split into the dividend +
-   interest lanes per the chart convention (note 148 §3.1). Returns
-   a map of `{<lane-key> <bigdec>}` keyed by chart prefix."
+   interest lanes per the chart-code convention (note 148 §3.1).
+   Returns a map of `{<lane-key> <bigdec>}` keyed by chart prefix.
+
+   Requires `:conn` in ctx (`report-postings` needs a connection to
+   take a bitemporal snapshot). When no `:conn` is available, the
+   consumer must pre-marginalize via `:inputs :investment-income-bases`."
   [{:keys [conn entity period]} commodity]
   (let [postings (report/report-postings
                   conn (cond-> {:from (:from period) :to (:to period)}
                          entity (assoc :entity entity)))
-        by-path  (report/marginalize postings :account
-                                     {:sign :inflow :commodity commodity})
-        ;; The :account axis keys are account refs; we use the account
-        ;; path for prefix-matching. Pull the :account/path for each.
-        by-path' (into {} (for [[acc-id v] by-path
-                                :let [path (some-> acc-id meta :account/path)]]
-                            [(or path acc-id) v]))]
-    {:qualified-dividends  (sum-prefix by-path' "Income:Dividends:Qualified")
-     :ordinary-dividends   (sum-prefix by-path' "Income:Dividends:Ordinary")
-     :reit-dividends       (sum-prefix by-path' "Income:Dividends:REIT")
-     :bank-interest        (sum-prefix by-path' "Income:Interest:Bank")
-     :corp-bond-interest   (sum-prefix by-path' "Income:Interest:Corporate")
-     :treasury-interest    (sum-prefix by-path' "Income:Interest:Treasury")
-     :oid-interest         (sum-prefix by-path' "Income:Interest:OID")
-     :market-discount      (sum-prefix by-path' "Income:Interest:Market-Discount")
-     :muni-interest        (sum-prefix by-path' "Income:Interest:Municipal")
-     :investment-interest-paid (sum-prefix by-path' "Expense:Interest:Investment")}))
+        by-code  (report/marginalize postings :account-code
+                                     {:sign :inflow :commodity commodity})]
+    {:qualified-dividends      (sum-prefix by-code "Income:Dividends:Qualified")
+     :ordinary-dividends       (sum-prefix by-code "Income:Dividends:Ordinary")
+     :reit-dividends           (sum-prefix by-code "Income:Dividends:REIT")
+     :bank-interest            (sum-prefix by-code "Income:Interest:Bank")
+     :corp-bond-interest       (sum-prefix by-code "Income:Interest:Corporate")
+     :treasury-interest        (sum-prefix by-code "Income:Interest:Treasury")
+     :oid-interest             (sum-prefix by-code "Income:Interest:OID")
+     :market-discount          (sum-prefix by-code "Income:Interest:Market-Discount")
+     :muni-interest            (sum-prefix by-code "Income:Interest:Municipal")
+     :investment-interest-paid (sum-prefix by-code "Expense:Interest:Investment")}))
 
 (defn- taxable-interest [bases]
   (+ (:bank-interest bases)
@@ -265,15 +264,20 @@
           qd        (or (:qualified-dividends bases) 0M)
           ordinary  (ordinary-investment-income bases)
           paid      (or (:investment-interest-paid bases) 0M)
-          ;; The §163(d) cap is computed via the registered compute-fn,
-          ;; reading consumer-supplied :nii input (the consumer must
-          ;; pre-net the NII = QD + ordinary − any losses; this is the
-          ;; statute provision's responsibility, but for v1 we let the
-          ;; consumer supply :nii directly or infer it as QD+ordinary).
-          nii       (or (:nii inputs) (+ qd ordinary))
-          allowed   (min paid (max 0M nii))
+          ;; §1411(c)(1) defines NII as gross investment income MINUS
+          ;; allocable deductions. The consumer may supply `:nii`
+          ;; pre-netted (to fold in capital gains from a sibling CGT
+          ;; provider); we use that as the pre-§163(d) base. If not
+          ;; supplied, we infer NII-gross = QD + ordinary (interest +
+          ;; non-qualified dividends).
+          nii-gross (or (:nii inputs) (+ qd ordinary))
+          ;; §163(d) cap = min(paid, NII-gross). Allowed deduction
+          ;; reduces NII for NIIT base purposes per §1411(c)(1)(B).
+          allowed   (min paid (max 0M nii-gross))
+          nii       (max 0M (- nii-gross allowed))
           opts      {:authority authority :commodity commodity}
-          ;; Inject the NII into ctx for the NIIT compute-fn to read.
+          ;; Inject the POST-§163(d) NII into ctx for the NIIT
+          ;; compute-fn to read.
           ctx'      (-> ctx
                         (assoc-in [:inputs :net-investment-income] nii)
                         (assoc-in [:inputs :investment-interest-paid] paid))

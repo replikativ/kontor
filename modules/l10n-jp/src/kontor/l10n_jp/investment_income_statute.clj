@@ -98,14 +98,48 @@
     :parameter/jurisdiction :jp
     :parameter/unit         :rate
     :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
-   ;; Investment-trust variant — half rate of the cash dividend
+   ;; Investment-trust variants — half / quarter of the cash dividend.
+   ;; Per note 151 §1.3 table: trust-domestic is HALF of cash rate;
+   ;; trust-foreign is HALF of trust-domestic (quarter of cash).
    {:parameter/code         "JP.InvIncome.haitō-kōjo.trust-domestic-rate"
     :parameter/label        "配当控除 domestic investment-trust rate — 5 % ≤¥10M (national)"
     :parameter/jurisdiction :jp
     :parameter/unit         :rate
     :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
+   {:parameter/code         "JP.InvIncome.haitō-kōjo.trust-domestic-high-rate"
+    :parameter/label        "配当控除 domestic investment-trust rate — 2.5 % >¥10M (national)"
+    :parameter/jurisdiction :jp
+    :parameter/unit         :rate
+    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
    {:parameter/code         "JP.InvIncome.haitō-kōjo.trust-foreign-rate"
     :parameter/label        "配当控除 foreign-asset investment-trust rate — 2.5 % ≤¥10M (national)"
+    :parameter/jurisdiction :jp
+    :parameter/unit         :rate
+    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
+   {:parameter/code         "JP.InvIncome.haitō-kōjo.trust-foreign-high-rate"
+    :parameter/label        "配当控除 foreign-asset investment-trust rate — 1.25 % >¥10M (national)"
+    :parameter/jurisdiction :jp
+    :parameter/unit         :rate
+    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
+   ;; Trust × inhabitants (local) rates — half / quarter of the cash
+   ;; inhabitants rate (2.8 % / 1.4 %).
+   {:parameter/code         "JP.InvIncome.haitō-kōjo.jūmin-trust-domestic-rate"
+    :parameter/label        "配当控除 domestic-trust rate — 1.4 % ≤¥10M (inhabitants)"
+    :parameter/jurisdiction :jp
+    :parameter/unit         :rate
+    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
+   {:parameter/code         "JP.InvIncome.haitō-kōjo.jūmin-trust-domestic-high-rate"
+    :parameter/label        "配当控除 domestic-trust rate — 0.7 % >¥10M (inhabitants)"
+    :parameter/jurisdiction :jp
+    :parameter/unit         :rate
+    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
+   {:parameter/code         "JP.InvIncome.haitō-kōjo.jūmin-trust-foreign-rate"
+    :parameter/label        "配当控除 foreign-trust rate — 0.7 % ≤¥10M (inhabitants)"
+    :parameter/jurisdiction :jp
+    :parameter/unit         :rate
+    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
+   {:parameter/code         "JP.InvIncome.haitō-kōjo.jūmin-trust-foreign-high-rate"
+    :parameter/label        "配当控除 foreign-trust rate — 0.35 % >¥10M (inhabitants)"
     :parameter/jurisdiction :jp
     :parameter/unit         :rate
     :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}])
@@ -159,15 +193,40 @@
     :parameter-value/decimal-value  0.014M
     :parameter-value/citation       "地方税法 — 配当控除 1.4 % on inhabitants tax of dividend slice > ¥10M"}
 
-   ;; --- 配当控除 — investment-trust variants --------------------------------
+   ;; --- 配当控除 — investment-trust variants (national, low + high) --------
    {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.trust-domestic-rate"]
     :parameter-value/effective-from #inst "1965-04-01"
     :parameter-value/decimal-value  0.05M
-    :parameter-value/citation       "所得税法 §92 + 措置法 — 投資信託 (domestic asset) 配当控除 5 %"}
+    :parameter-value/citation       "所得税法 §92 + 措置法 — 投資信託 (domestic asset) 配当控除 5 % ≤¥10M"}
+   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.trust-domestic-high-rate"]
+    :parameter-value/effective-from #inst "1965-04-01"
+    :parameter-value/decimal-value  0.025M
+    :parameter-value/citation       "所得税法 §92 + 措置法 — 投資信託 (domestic asset) 配当控除 2.5 % >¥10M"}
    {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.trust-foreign-rate"]
     :parameter-value/effective-from #inst "1965-04-01"
     :parameter-value/decimal-value  0.025M
-    :parameter-value/citation       "所得税法 §92 + 措置法 — 投資信託 (foreign asset) 配当控除 2.5 %"}])
+    :parameter-value/citation       "所得税法 §92 + 措置法 — 投資信託 (foreign asset) 配当控除 2.5 % ≤¥10M"}
+   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.trust-foreign-high-rate"]
+    :parameter-value/effective-from #inst "1965-04-01"
+    :parameter-value/decimal-value  0.0125M
+    :parameter-value/citation       "所得税法 §92 + 措置法 — 投資信託 (foreign asset) 配当控除 1.25 % >¥10M"}
+   ;; --- 配当控除 — investment-trust variants (inhabitants, low + high) -----
+   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.jūmin-trust-domestic-rate"]
+    :parameter-value/effective-from #inst "1965-04-01"
+    :parameter-value/decimal-value  0.014M
+    :parameter-value/citation       "地方税法 — 投資信託 (domestic) 配当控除 1.4 % ≤¥10M (inhabitants)"}
+   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.jūmin-trust-domestic-high-rate"]
+    :parameter-value/effective-from #inst "1965-04-01"
+    :parameter-value/decimal-value  0.007M
+    :parameter-value/citation       "地方税法 — 投資信託 (domestic) 配当控除 0.7 % >¥10M (inhabitants)"}
+   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.jūmin-trust-foreign-rate"]
+    :parameter-value/effective-from #inst "1965-04-01"
+    :parameter-value/decimal-value  0.007M
+    :parameter-value/citation       "地方税法 — 投資信託 (foreign) 配当控除 0.7 % ≤¥10M (inhabitants)"}
+   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.jūmin-trust-foreign-high-rate"]
+    :parameter-value/effective-from #inst "1965-04-01"
+    :parameter-value/decimal-value  0.0035M
+    :parameter-value/citation       "地方税法 — 投資信託 (foreign) 配当控除 0.35 % >¥10M (inhabitants)"}])
 
 ;; ============================================================================
 ;; Provisions

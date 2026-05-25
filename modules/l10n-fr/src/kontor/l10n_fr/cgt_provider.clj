@@ -411,7 +411,7 @@
   [opts ctx mob-disposals]
   (let [{:keys [commodity authority db]} opts
         as-of   (as-of-from-ctx ctx)
-        barème? (= :barème (get-in ctx [:tax-unit :pfu-or-bareme]))
+        barème? (= :bareme (get-in ctx [:tax-unit :pfu-or-bareme]))
         ir-rate (param db "FR.CGT.PFU.IR-rate" as-of)
         ;; Split PEA disposals — they take IR exoneration
         pea? (fn [d] (boolean (or (#{:fr-pea :fr-pea-pme} (:disposal/asset-class d))
@@ -797,7 +797,7 @@
    - Pro long-terme (Art. 39 quindecies) — 12.8 % IR + 17.2 % PS
 
    Inputs the consumer may supply via ctx:
-     :tax-unit {:pfu-or-bareme :pfu | :barème}
+     :tax-unit {:pfu-or-bareme :pfu | :bareme}
      :inputs   {:capital-loss-carryforward {:fr-mv-mobilière <bd>
                                              :fr-mv-pro-long <bd>}
                 :151-septies {:activity :services|:goods :revenue <bd>}

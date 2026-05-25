@@ -508,6 +508,30 @@
      :jurisdiction-specific-codes {:lane :cn-eit-investment-income
                                    :cit-base-deductions [total]}}))
 
+(defn- eit-domestic-included-component
+  "Emit the `:cit-base-additions` component for domestic non-qualifying
+   corporate dividends — included in the CIT base at 25 % with NO
+   foreign-tax credit. Separate from `eit-foreign-fold-component` so
+   the downstream CIT provider can apply §23 FTC capping only to the
+   foreign portion."
+  [{:keys [commodity authority]} domestic-events]
+  (let [total (reduce + 0M (map #(or (:amount %) 0M) domestic-events))]
+    {:kind            :investment-income-tax
+     :authority       authority
+     :base            (money/money total commodity)
+     :schedule        nil
+     :gross-liability (money/zero commodity)
+     :liability       (money/zero commodity)
+     :prepaid         (money/zero commodity)
+     :line-items      (vec
+                       (for [ev domestic-events]
+                         {:line  :cn-eit-non-qualifying-dividend
+                          :label (str "Non-qualifying dividend (to CIT base): "
+                                      (or (:event-id ev) "—"))
+                          :value (money/money (or (:amount ev) 0M) commodity)}))
+     :jurisdiction-specific-codes {:lane                :cn-eit-domestic-included
+                                   :cit-base-additions  [total]}}))
+
 (defn- eit-foreign-fold-component
   "Emit the `:cit-base-additions` + `:cit-foreign-tax-credit`
    component for foreign-source corporate dividends — included in the
@@ -575,43 +599,15 @@
                    {:authority authority :commodity commodity}
                    excluded))
 
-            (or (seq foreign) (seq domestic-included))
-            (conj (let [all-included (concat domestic-included foreign)
-                        total       (reduce + 0M (map #(or (:amount %) 0M) all-included))
-                        ftc-total   (reduce + 0M (map #(or (:foreign-tax-paid %) 0M) foreign))]
-                    {:kind            :investment-income-tax
-                     :authority       authority
-                     :base            (money/money total commodity)
-                     :schedule        nil
-                     :gross-liability (money/zero commodity)
-                     :liability       (money/zero commodity)
-                     :prepaid         (money/zero commodity)
-                     :line-items
-                     (vec
-                      (concat
-                       (for [ev domestic-included]
-                         {:line  :cn-eit-non-qualifying-dividend
-                          :label (str "Non-qualifying dividend (to CIT base): "
-                                      (or (:event-id ev) "—"))
-                          :value (money/money (or (:amount ev) 0M) commodity)})
-                       (for [ev foreign]
-                         {:line  :cn-eit-foreign-dividend
-                          :label (str "Foreign dividend (§23 FTC eligible): "
-                                      (or (:event-id ev) "—"))
-                          :value (money/money (or (:amount ev) 0M) commodity)})
-                       (when (pos? ftc-total)
-                         [{:line  :cn-eit-foreign-tax-credit
-                           :label "§23-24 EIT Law — foreign tax credit"
-                           :value (money/money (- ftc-total) commodity)}])))
-                     :jurisdiction-specific-codes
-                     {:lane                    :cn-eit-investment-income
-                      :cit-base-additions      [total]
-                      :cit-foreign-tax-credit  (when (pos? ftc-total)
-                                                 [{:amount ftc-total
-                                                   :events (mapv (fn [ev]
-                                                                   {:event-id (:event-id ev)
-                                                                    :amount   (:foreign-tax-paid ev)})
-                                                                 foreign)}])}}))
+            (seq domestic-included)
+            (conj (eit-domestic-included-component
+                   {:authority authority :commodity commodity}
+                   domestic-included))
+
+            (seq foreign)
+            (conj (eit-foreign-fold-component
+                   {:authority authority :commodity commodity}
+                   foreign))
 
             (seq non-resident-events)
             (conj (eit-non-resident-component

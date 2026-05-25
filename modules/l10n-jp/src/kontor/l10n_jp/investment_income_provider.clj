@@ -124,37 +124,38 @@
       (java.util.Date.)))
 
 (defn- haitō-kōjo-rate-for
-  "Look up the per-asset-class 配当控除 rate at as-of. Returns the
-   national-side rate; the inhabitants side uses different parameter
-   codes (`-jūmin-*`)."
+  "Look up the per-asset-class 配当控除 rate at as-of for the
+   `dividend slice ≤ ¥10M` tier. Cash dividends use the standard
+   national + jūmin rate; trust variants use distinct parameter
+   codes per note 151 §1.3 (trust-domestic = ½ cash; trust-foreign
+   = ¼ cash)."
   ^java.math.BigDecimal [db asset-class as-of pass]
   (let [code (case [asset-class pass]
                [:investment-trust-domestic :national] "JP.InvIncome.haitō-kōjo.trust-domestic-rate"
                [:investment-trust-foreign  :national] "JP.InvIncome.haitō-kōjo.trust-foreign-rate"
-               [:investment-trust-domestic :local]    "JP.InvIncome.haitō-kōjo.jūmin-standard-rate"
-               [:investment-trust-foreign  :local]    "JP.InvIncome.haitō-kōjo.jūmin-standard-rate"
+               [:investment-trust-domestic :local]    "JP.InvIncome.haitō-kōjo.jūmin-trust-domestic-rate"
+               [:investment-trust-foreign  :local]    "JP.InvIncome.haitō-kōjo.jūmin-trust-foreign-rate"
                (case pass
                  :national "JP.InvIncome.haitō-kōjo.standard-rate"
                  :local    "JP.InvIncome.haitō-kōjo.jūmin-standard-rate"))]
     (or (statute/parameter-value-at db code as-of) 0M)))
 
 (defn- haitō-kōjo-high-rate-for
-  "Look up the > ¥10M high-income-slice rate."
+  "Look up the > ¥10M high-income-slice 配当控除 rate. Cash dividends
+   use the `high-income-rate` (national 5 %, jūmin 1.4 %); trust
+   variants have distinct parameter codes (trust-domestic high
+   = 2.5 % / 0.7 %; trust-foreign high = 1.25 % / 0.35 %) per
+   note 151 §1.3."
   ^java.math.BigDecimal [db asset-class as-of pass]
-  (cond
-    (#{:investment-trust-domestic :investment-trust-foreign} asset-class)
-    ;; Half of the half — note 151 §1.3 table. Use the high-rate
-    ;; standard for v1 (the trust-high refinement is not in the
-    ;; current parameter set — consumer can override).
-    (or (statute/parameter-value-at
-         db (case pass
-              :national "JP.InvIncome.haitō-kōjo.high-income-rate"
-              :local    "JP.InvIncome.haitō-kōjo.jūmin-high-income-rate") as-of) 0M)
-    :else
-    (or (statute/parameter-value-at
-         db (case pass
-              :national "JP.InvIncome.haitō-kōjo.high-income-rate"
-              :local    "JP.InvIncome.haitō-kōjo.jūmin-high-income-rate") as-of) 0M)))
+  (let [code (case [asset-class pass]
+               [:investment-trust-domestic :national] "JP.InvIncome.haitō-kōjo.trust-domestic-high-rate"
+               [:investment-trust-foreign  :national] "JP.InvIncome.haitō-kōjo.trust-foreign-high-rate"
+               [:investment-trust-domestic :local]    "JP.InvIncome.haitō-kōjo.jūmin-trust-domestic-high-rate"
+               [:investment-trust-foreign  :local]    "JP.InvIncome.haitō-kōjo.jūmin-trust-foreign-high-rate"
+               (case pass
+                 :national "JP.InvIncome.haitō-kōjo.high-income-rate"
+                 :local    "JP.InvIncome.haitō-kōjo.jūmin-high-income-rate"))]
+    (or (statute/parameter-value-at db code as-of) 0M)))
 
 (defn- haitō-kōjo-amount
   "The 配当控除 amount given a `dividend-slice` of an `asset-class`
@@ -441,9 +442,21 @@
                  (map :amount)
                  (reduce + 0M)))
           0M)
+        local-kojo-ctx (assoc ctx :db db :pass :local
+                              :election :sogo
+                              :asset-class asset-class
+                              :dividend-slice amount)
         local-credit
         (if (contains? haitō-kōjo-eligible-classes asset-class)
-          (haitō-kōjo-amount db asset-class amount tti as-of :local)
+          (let [{:keys [tax-items]}
+                (statute/apply-provisions
+                 db {:concept :non-refundable-credit
+                     :jurisdiction :jp :as-of as-of}
+                 local-kojo-ctx)]
+            (->> tax-items
+                 (filter #(= :jp-haitō-kōjo-jūmin (:code %)))
+                 (map :amount)
+                 (reduce + 0M)))
           0M)
         foreign-paid (or (:foreign-tax-paid source) 0M)
         withheld     (or (:withheld source) 0M)]

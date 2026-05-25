@@ -201,7 +201,7 @@
                      :basis    {:amount 100000M :commodity eur}
                      :exemption-claimed #{:fr-abattement-durée}})
       (let [facts (run-personal conn "INDIV" p2026
-                                {:tax-unit {:pfu-or-bareme :barème}})
+                                {:tax-unit {:pfu-or-bareme :bareme}})
             mob   (by-lane facts :fr-mobilière)]
         (is (some? mob))
         (is (= :fr-barème (:regime mob)))
@@ -230,7 +230,7 @@
                      :basis    {:amount 100000M :commodity eur}
                      :exemption-claimed #{:fr-abattement-durée}})
       (let [facts (run-personal conn "INDIV" p2026
-                                {:tax-unit {:pfu-or-bareme :barème}})
+                                {:tax-unit {:pfu-or-bareme :bareme}})
             mob   (by-lane facts :fr-mobilière)]
         ;; No abattement — full €200k base folds into PIT
         (is (== 200000M (-> (filter #(= :mob-ir-base (:line %)) (:line-items mob))
@@ -248,7 +248,7 @@
                      :basis    {:amount 100000M :commodity eur}
                      :exemption-claimed #{:fr-abattement-durée}})
       (let [facts (run-personal conn "INDIV" p2026
-                                {:tax-unit {:pfu-or-bareme :barème}})
+                                {:tax-unit {:pfu-or-bareme :bareme}})
             mob   (by-lane facts :fr-mobilière)]
         ;; ≥8y général → 65 % abattement → taxable = 35 % × €100k = €35k
         (is (== 35000M (-> (filter #(= :mob-ir-base (:line %)) (:line-items mob))
