@@ -86,7 +86,7 @@
   (testing "the provider rejects unknown :kind"
     (let [conn (fresh)
           source (disp-source/datahike-source conn)
-          bad (us-cgt/->USCapitalGainsTaxProvider :bogus source :us-irs :USD "" :bogus)]
+          bad (us-cgt/->USCapitalGainsTaxProvider :bogus source :us-irs :USD "" :bogus false)]
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #":kind must be"
                             (ptp/period-tax-facts
                              bad {:db (d/db conn) :entity (holdco-eid conn) :period p2026}))))))

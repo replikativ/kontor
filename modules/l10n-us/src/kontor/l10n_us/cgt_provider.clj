@@ -213,10 +213,14 @@
 ;; LT bracket assembly — read per-filing-status parameters → schedule
 ;; ============================================================================
 
-(defn- lt-schedule
+(defn lt-schedule
   "Assemble the §1(h) 0/15/20 progressive-bracket schedule for the
    given filing status by reading the per-status thresholds + the
-   three universal rates from the parameter table."
+   three universal rates from the parameter table.
+
+   Public so the US investment-income provider can reuse it for the
+   qualified-dividend lane (which is taxed at the same §1(h)
+   brackets as long-term capital gains per IRC §1(h)(11))."
   [db ^java.util.Date as-of filing-status]
   (let [param   #(statute/parameter-value-at db % as-of)
         [t01 t12] (case filing-status
@@ -402,7 +406,7 @@
 ;; ============================================================================
 
 (defrecord USCapitalGainsTaxProvider
-           [id source authority commodity statute kind]
+           [id source authority commodity statute kind emit-niit?]
   ptp/PeriodTaxProvider
   (provider-id [_] id)
   (period-tax-facts [_ {:keys [entity period inputs] :as ctx}]
@@ -436,7 +440,12 @@
                               (ordinary-recapture-component opts ctx recapture :individual))
                   running   (+ (or (some-> lt-cmp :gross-liability :amount) 0M)
                                (or (some-> §1250-cmp :gross-liability :amount) 0M))
-                  niit-cmp  (when (pos? running) (niit-component opts ctx running))]
+                  ;; NIIT only fires when this provider owns it (default
+                  ;; for backwards-compat; the investment-income provider
+                  ;; opts out by constructing CGT with :emit-niit? false
+                  ;; so the surtax doesn't double-fire — note 148 §5).
+                  niit-cmp  (when (and emit-niit? (pos? running))
+                              (niit-component opts ctx running))]
               (->> [lt-cmp §1250-cmp st-cmp rec-cmp niit-cmp]
                    (remove nil?)
                    vec))
@@ -469,18 +478,25 @@
 
 (defn us-individual-cgt-provider
   "Build a US individual CGT provider. Required: `:source` — a
-   `DisposalSource` (kernel protocol)."
-  [{:keys [source id]}]
+   `DisposalSource` (kernel protocol).
+
+   `:emit-niit?` (default `true`) — when this provider should compute
+   the §1411 NIIT. Set `false` when the consumer wires a separate
+   US investment-income provider that owns NIIT (note 148 §5)."
+  [{:keys [source id emit-niit?] :or {emit-niit? true}}]
   (when-not source (throw (ex-info ":source DisposalSource required" {})))
   (->USCapitalGainsTaxProvider (or id :us-cgt-individual) source :us-irs :USD
-                               "IRC §1(h), §1411, §1211(b)" :individual))
+                               "IRC §1(h), §1411, §1211(b)" :individual
+                               emit-niit?))
 
 (defn us-corporate-cgt-provider
-  "Build a US corporate CGT provider. Required: `:source`."
+  "Build a US corporate CGT provider. Required: `:source`.
+   NIIT is individual-only; this constructor never emits NIIT."
   [{:keys [source id]}]
   (when-not source (throw (ex-info ":source DisposalSource required" {})))
   (->USCapitalGainsTaxProvider (or id :us-cgt-corporate) source :us-irs :USD
-                               "IRC §1211(a), §1212(a), §1245, §1250" :corporation))
+                               "IRC §1211(a), §1212(a), §1245, §1250" :corporation
+                               false))
 
 (defn install-statute!
   "Install the US CGT statute (parameters + provisions) into `conn`."
