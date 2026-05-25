@@ -43,14 +43,28 @@
 
 (def period-tax-kinds
   "The closed set of period-tax `:kind` values a `TaxReturnFacts`
-   component may carry. A genuine 9th mechanism is an ADR-gated enum
+   component may carry. A genuine new mechanism is an ADR-gated enum
    extension, never a quiet per-jurisdiction flag (note 101's
    discipline). `:minimum-tax` and `:branch-or-presumptive-tax` are
    in the set deliberately — they name note 102 §7's stressed cases
-   so the stress is ADR-trackable."
+   so the stress is ADR-trackable.
+
+   `:investment-income-tax` + `:part-iv-tax` added per the Phase C2
+   sweep (notes 147-158 across 11 jurisdictions): preferential
+   dividend / interest treatment + the CA Part IV refundable
+   corporate dividend tax. Both are statutorily distinct flows from
+   ordinary PIT/CIT and warrant their own component kind so consumers
+   can filter / aggregate the dividend stack cleanly."
   #{:personal-income-tax        ; CA T1, DE Einkommensteuer, US 1040
     :corporate-income-tax       ; CA T2, DE Körperschaftsteuer, US 1120
     :capital-gains-tax          ; CA S3, US Sch-D — note 102 §7, the hybrid
+    :investment-income-tax      ; preferential dividend / interest regime —
+                                ;   DE Abgeltungsteuer, US qualified-div,
+                                ;   FR PFU, UK div allowance, JP 申告分離,
+                                ;   CA gross-up+DTC, AU franking, AT KESt,
+                                ;   CN cat 7 — notes 147-158
+    :part-iv-tax                ;   CA Part IV refundable corporate
+                                ;   dividend tax (38⅓ %) — note 152
     :property-tax               ; real-property / land tax
     :wealth-tax                 ; net-worth tax — base is a balance snapshot
     :payroll-tax-employer       ; standalone employer payroll levy (MX ISN,
