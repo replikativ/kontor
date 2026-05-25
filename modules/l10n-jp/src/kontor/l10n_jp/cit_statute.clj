@@ -58,7 +58,8 @@
    Citations point at NTA (nta.go.jp), Tokyo Metropolitan Bureau of
    Taxation, e-gov.go.jp statute text, JETRO Section 3.3 and the
    PwC / JETRO worked examples. Research note 110."
-  (:require [datahike.api :as d]))
+  (:require [datahike.api :as d]
+            [kontor.statute :as statute]))
 
 ;; ============================================================================
 ;; Parameters (date-keyed value history per ADR-101 :parameter)
@@ -390,15 +391,29 @@
                                         :amount-from :compute-fn
                                         :fn :jp-local-cit-on-national})}
 
-   ;; 防衛特別法人税 — 4 % × max(0, national CIT − ¥5M). FY ≥ 2026-04-01.
+   ;; 防衛特別法人税 — 4 % × max(0, national CIT − ¥5M).
+   ;; FISCAL YEARS BEGINNING ON OR AFTER 2026-04-01 (NOT as-of) per
+   ;; the law text (Special Defense Corporation Tax Act, enacted
+   ;; 2025-03-31). A calendar-year corp with FY 2026-01-01 → 2026-12-31
+   ;; does NOT pay the surtax — only FY beginning 2027-01-01 onwards.
+   ;;
+   ;; The condition uses `period-from-on-or-after` (ADR-101 Addendum 2)
+   ;; to gate on the period START, not on :as-of. The `:effective-from`
+   ;; below documents the statute enactment for audit; the cliff
+   ;; semantics live in `:condition`.
+   ;;
+   ;; Note 125 §1.5 / P1-1.
    {:provision/code            "JP-DefenseSurtax"
     :provision/jurisdiction    :jp
     :provision/concept         [:tax-concept/code :surtax]
-    :provision/title           "防衛特別法人税 — 4 % × max(0, national CIT − ¥5M); FY ≥ 2026-04-01"
+    :provision/title           "防衛特別法人税 — 4 % × max(0, national CIT − ¥5M); FY beginning on or after 2026-04-01"
     :provision/citation        "https://www.mof.go.jp/tax_policy/summary/corporation/c01.htm"
-    :provision/effective-from  #inst "2026-04-01"
+    :provision/effective-from  #inst "2026-04-01"  ; statute enactment (audit)
     :provision/priority        200
-    :provision/condition       (pr-str [:eq :component :national])
+    :provision/condition       (pr-str
+                                 [:and
+                                  (statute/period-from-on-or-after #inst "2026-04-01")
+                                  [:eq :component :national]])
     :provision/consequence     (pr-str {:op :surtax
                                         :code :defense-surtax
                                         :label "防衛特別法人税 (Defense Surtax, 4 % × (法人税 − ¥5M))"

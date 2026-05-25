@@ -173,6 +173,51 @@
                   decimal-value))
               values)))))
 
+;; ============================================================================
+;; Period-cliff condition builders (ADR-101 Addendum 2)
+;; ============================================================================
+
+(defn period-from-on-or-after
+  "Build the canonical \"fiscal years beginning on or after `cutover`\"
+   predicate (ADR-101 Addendum 2). Returns:
+
+     [:geq [:period :from] cutover]
+
+   For use inside `:provision/condition`:
+
+     :provision/condition (pr-str (statute/period-from-on-or-after
+                                    #inst \"2026-04-01\"))
+
+   Combine with `:and` for compound conditions:
+
+     :provision/condition (pr-str
+                            [:and
+                             (statute/period-from-on-or-after
+                               #inst \"2026-04-01\")
+                             [:eq :component :national]])
+
+   ## When to use vs `:provision/effective-from`
+
+   - **`:provision/effective-from`** gates on `:as-of` (the
+     `applicable-provisions` filter). Use for event-date-based
+     statutes (CGT disposal rules, sales-tax rate changes, parameter
+     value cutovers).
+   - **`period-from-on-or-after`** gates on the period's start
+     instant. Use for fiscal-year-cliff statutes (\"for fiscal years
+     beginning on or after X\") so a corp with a calendar year does
+     NOT pay a rule effective mid-its-fiscal-year.
+
+   Note 125 §1.5 / Addendum 2."
+  [^java.util.Date cutover]
+  [:geq [:period :from] cutover])
+
+(defn period-from-before
+  "Companion to `period-from-on-or-after` — \"fiscal years beginning
+   before `cutover`\". Useful for sunset rules (\"applies to fiscal
+   years beginning before 1 April 2030\")."
+  [^java.util.Date cutover]
+  [:lt [:period :from] cutover])
+
 (defn parameter-brackets-at
   "Look up the bracket scale of `:parameter/code` (parent parameter
    must have `:parameter/unit :bracket-scale`) effective at `as-of`.

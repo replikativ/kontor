@@ -38,14 +38,23 @@
 (defn- compute
   "Run the JP CIT provider over `tax-unit` + `inputs` + an as-of
    instant; return the `TaxReturnFacts`. The period defaults to
-   FY 2025-04-01 .. 2026-04-01."
-  ([tax-unit inputs] (compute tax-unit inputs #inst "2025-06-30"))
+   FY 2025-04-01 .. 2026-04-01 (the standard JP fiscal year that
+   ENDS at the cusp of the defense surtax effective date but does
+   not begin on or after it). The 4-arg overload lets a test
+   override the period for fiscal-year-cliff scenarios (per
+   ADR-101 Addendum 2 / note 125 §1.5)."
+  ([tax-unit inputs]
+   (compute tax-unit inputs #inst "2025-06-30"
+            {:from #inst "2025-04-01" :to #inst "2026-04-01"}))
   ([tax-unit inputs as-of]
+   (compute tax-unit inputs as-of
+            {:from #inst "2025-04-01" :to #inst "2026-04-01"}))
+  ([tax-unit inputs as-of period]
    (let [conn (fresh)]
      (ptp/period-tax-facts
       (jp-cit/jp-cit-provider {})
       {:entity   :kk
-       :period   {:from #inst "2025-04-01" :to #inst "2026-04-01"}
+       :period   period
        :db       (d/db conn)
        :as-of    as-of
        :tax-unit tax-unit
@@ -129,7 +138,9 @@
                           :headcount-class :small
                           :prefecture      :tokyo}
                          {:book-profit 1000000000M}     ;; ¥1B book profit
-                         #inst "2026-06-30")            ;; post defense-surtax effective
+                         #inst "2026-06-30"             ;; post defense-surtax effective
+                         {:from #inst "2026-04-01"
+                          :to   #inst "2027-04-01"})    ;; FY begins on the cliff
           nat   (component facts :jp-nta)
           ent   (component facts :jp-prefecture)]
       (testing "National CIT: flat 23.2 % schedule override active"
@@ -201,24 +212,37 @@
 ;; ============================================================================
 
 (deftest defense-surtax-temporal-gate
-  (testing "Defense surtax (4 %) is FY ≥ 2026-04-01 only"
+  (testing "Defense surtax (4 %) gates on FY-START ≥ 2026-04-01,
+            NOT on as-of (per ADR-101 Addendum 2 / note 125 §1.5)"
     (let [tax-unit {:is-sme?         false
                     :capital-class   :capital-up-to-1b
                     :headcount-class :small}
           inputs   {:book-profit 1000000000M}
-          ;; Pre-2026 — defense surtax NOT effective
+          ;; FY beginning 2025-04-01 — pre-cliff. Default period.
           pre  (compute tax-unit inputs #inst "2025-06-30")
-          ;; Post-2026 — defense surtax IS effective
-          post (compute tax-unit inputs #inst "2026-06-30")
-          nat-pre  (component pre  :jp-nta)
-          nat-post (component post :jp-nta)]
+          ;; FY beginning 2026-04-01 — first eligible FY.
+          post (compute tax-unit inputs #inst "2026-06-30"
+                        {:from #inst "2026-04-01" :to #inst "2027-04-01"})
+          ;; FY 2026-01-01 → 2026-12-31 (calendar-year corp) — the
+          ;; cliff-trap case note 125 §1.5 explicitly named: as-of
+          ;; CROSSES 2026-04-01 within the period, but the period
+          ;; itself BEGAN before the cliff → surtax does NOT fire.
+          cal-year (compute tax-unit inputs #inst "2026-06-30"
+                            {:from #inst "2026-01-01" :to #inst "2026-12-31"})
+          nat-pre      (component pre      :jp-nta)
+          nat-post     (component post     :jp-nta)
+          nat-cal-year (component cal-year :jp-nta)]
       (is (nil? (surtax-amount nat-pre :defense-surtax))
-          "as-of 2025-06-30 — no defense surtax in :surtaxes")
+          "pre-cliff FY (2025-04-01..) — no defense surtax")
       (is (== 9080000M (surtax-amount nat-post :defense-surtax))
-          "as-of 2026-06-30 — defense surtax fires")
-      (testing "local CIT fires on both sides (unchanged by the gate)"
-        (is (some? (surtax-amount nat-pre  :local-corporate-tax)))
-        (is (some? (surtax-amount nat-post :local-corporate-tax)))))))
+          "post-cliff FY (2026-04-01..) — defense surtax fires")
+      (is (nil? (surtax-amount nat-cal-year :defense-surtax))
+          "calendar-year FY (2026-01-01..) — does NOT fire even with
+           as-of past 2026-04-01; FY did not BEGIN on or after the cliff")
+      (testing "local CIT fires on all three (unchanged by the gate)"
+        (is (some? (surtax-amount nat-pre      :local-corporate-tax)))
+        (is (some? (surtax-amount nat-post     :local-corporate-tax)))
+        (is (some? (surtax-amount nat-cal-year :local-corporate-tax)))))))
 
 ;; ============================================================================
 ;; §4. Per-capita levy tier coverage

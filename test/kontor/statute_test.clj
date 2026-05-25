@@ -627,3 +627,53 @@
       (is (= 103000M base'))
       (is (= 15450.00M gross))
       (is (= 16299.75000M liability)))))
+
+;; ============================================================================
+;; §9 — Period-cliff condition builders (ADR-101 Addendum 2)
+;; ============================================================================
+
+(deftest period-from-on-or-after-shape
+  (testing "builder returns the canonical predicate"
+    (is (= [:geq [:period :from] #inst "2026-04-01"]
+           (statute/period-from-on-or-after #inst "2026-04-01"))))
+  (testing "and the predicate evaluates correctly via eval-condition"
+    (let [cliff (statute/period-from-on-or-after #inst "2026-04-01")]
+      ;; FY beginning 2026-04-01 — cliff fires
+      (is (true? (statute/eval-condition
+                  cliff {:period {:from #inst "2026-04-01" :to #inst "2027-03-31"}})))
+      ;; FY beginning 2026-04-02 (later) — fires
+      (is (true? (statute/eval-condition
+                  cliff {:period {:from #inst "2026-04-02" :to #inst "2027-04-01"}})))
+      ;; FY beginning 2026-01-01 (before cliff — calendar-year corp) — does NOT fire
+      ;; Note 125 §1.5: this is the JP defense-surtax case that AS-OF-based gating got wrong.
+      (is (false? (statute/eval-condition
+                   cliff {:period {:from #inst "2026-01-01" :to #inst "2026-12-31"}})))
+      ;; FY beginning 2025-04-01 — pre-cliff, does NOT fire
+      (is (false? (statute/eval-condition
+                   cliff {:period {:from #inst "2025-04-01" :to #inst "2026-03-31"}}))))))
+
+(deftest period-from-before-shape
+  (testing "sunset-style cliff — period beginning STRICTLY BEFORE the cutover"
+    (let [sunset (statute/period-from-before #inst "2030-04-01")]
+      (is (= [:lt [:period :from] #inst "2030-04-01"] sunset))
+      (is (true?  (statute/eval-condition sunset {:period {:from #inst "2029-04-01"}}))
+          "FY beginning 2029 — pre-sunset, fires")
+      (is (false? (statute/eval-condition sunset {:period {:from #inst "2030-04-01"}}))
+          "FY beginning EXACTLY on the cutover — does NOT fire (strict <)")
+      (is (false? (statute/eval-condition sunset {:period {:from #inst "2030-05-01"}}))
+          "FY beginning after cutover — does NOT fire"))))
+
+(deftest period-cliff-composes-with-and
+  (testing "cliff combines with other predicates via :and"
+    (let [cond [:and
+                (statute/period-from-on-or-after #inst "2026-04-01")
+                [:eq :component :national]]]
+      (is (true?  (statute/eval-condition
+                   cond {:period {:from #inst "2026-04-01"} :component :national}))
+          "both gates true → fires")
+      (is (false? (statute/eval-condition
+                   cond {:period {:from #inst "2025-04-01"} :component :national}))
+          "pre-cliff fiscal year → does not fire even with component match")
+      (is (false? (statute/eval-condition
+                   cond {:period {:from #inst "2026-04-01"} :component :local}))
+          "post-cliff but wrong component → does not fire"))))

@@ -9568,6 +9568,150 @@ example justification.
 
 Date: 2026-05-24.
 
+## ADR-101 Addendum 2 — `:provision/effective-from` semantics + period-start convention
+
+**Status.** Accepted. Research note 125 §1.5 / §1.6 / P1-1 (JP CIT
+defense-surtax baseline review).
+
+**Context.** Tax statutes consistently use one of two date semantics
+for "when does this rule apply":
+
+1. **As-of-the-event** — "for transactions occurring on or after X"
+   (e.g. UK CGT rate change 30 Oct 2024 — applies to every disposal
+   on or after that date, regardless of the taxpayer's fiscal year).
+2. **Fiscal-year-beginning** — "for fiscal years beginning on or
+   after X" (e.g. JP defense surtax — "For each fiscal year
+   beginning on or after 1 April 2026"). A calendar-year corp with
+   a 2026-01-01 → 2026-12-31 fiscal year does NOT pay the surtax
+   even though `:as-of (today)` after 2026-04-01.
+
+The ADR-101 `:provision/effective-from` filter (in `applicable-
+provisions`) gates on `:as-of`, which is correct for shape #1 but
+**under-reports the fiscal-year-start cliff** of shape #2 if the
+provision authors merely set `:effective-from` to the statute date.
+
+JP defense surtax (note 125 §1.5) is the first case in the substrate
+to surface this — the encoding's `:effective-from #inst "2026-04-01"`
+fires for calendar-year corps in 2026, which the law does NOT.
+
+**Decision.** Two-part fix — convention + helper. No substrate
+change; the `:condition` predicate vocabulary already supports
+period-fact reads (`[:geq [:period :from] X]`).
+
+1. **Convention.** Provisions that use fiscal-year-beginning
+   semantics MUST express the cliff via a `:condition` predicate
+   reading `[:period :from]`, not via `:effective-from` alone. The
+   `:effective-from` field continues to mean "as-of the statute
+   became law" — appropriate for transaction-level taxes and
+   parameter values (which always gate on `:as-of`). The provision-
+   level `:condition` carries the fiscal-period semantics.
+
+   Canonical pattern:
+
+   ```clojure
+   {:provision/code            "JP-FUKKO-DefenseSurtax"
+    :provision/effective-from  #inst "2026-04-01"   ; statute date (audit)
+    :provision/condition       (pr-str
+                                 [:geq [:period :from] #inst "2026-04-01"])
+    ...}
+   ```
+
+   The condition gates the FIRING; the `:effective-from` keeps the
+   audit trail of when the law was enacted.
+
+2. **Helper.** `kontor.statute/period-from-on-or-after` builds the
+   common cliff predicate without verbatim repetition:
+
+   ```clojure
+   (statute/period-from-on-or-after #inst "2026-04-01")
+   ;;=> [:geq [:period :from] #inst "2026-04-01"]
+   ```
+
+   Provision authors call it inside `pr-str`:
+
+   ```clojure
+   :provision/condition (pr-str (statute/period-from-on-or-after
+                                  #inst "2026-04-01"))
+   ```
+
+   Combinator-friendly with `:and` for compound conditions:
+
+   ```clojure
+   :provision/condition (pr-str
+                          [:and
+                           (statute/period-from-on-or-after #inst "2026-04-01")
+                           [:eq :component :national]])
+   ```
+
+**Implication.** The note 125 JP defense-surtax encoding gets a
+follow-up commit updating its `:condition` to use the new pattern.
+Cross-jurisdiction audit (Phase A2 review notes 135-146) found one
+similar P1 in UK CGT (`:as-of` boundary trap, note 139); other
+jurisdictions correctly use `:as-of` because their statutes ARE
+event-date-based (CGT disposals, sales-tax rate changes). The
+convention is now codified for any future jurisdiction encoding a
+fiscal-year-cliff rule.
+
+**Tested.** `statute_test.clj` adds 2 tests covering the helper +
+the predicate evaluation under realistic period contexts.
+
+**Research backing.** Note 125 §1.5 / §1.6 / P1-1 + the cross-
+jurisdiction sweep notes 135-146.
+
+Date: 2026-05-24.
+
+## ADR-103 Addendum 1 — `kontor.cgt` composition helper
+
+**Status.** Accepted. Research note 137 §6 (CA CGT baseline review
+cross-cutting finding).
+
+**Context.** The 11 ADR-103 per-jurisdiction CGT providers all emit
+`:capital-gains-tax` components whose `:jurisdiction-specific-codes`
+carry one or more of `:pit-base-additions` / `:pit-base-deductions`
+/ `:cit-base-additions` / `:cit-base-deductions` for the consumer
+to thread into the PIT/CIT provider's `:inputs :base-transform`.
+
+The wire was conventional, undocumented at the substrate level, and
+silent-tax-miss-prone — a consumer wiring CGT + PIT/CIT without
+knowing about the fan-out shape would simply omit the cap-gain
+contribution. Each of the 4 providers using `:pit-base-deductions`
+(US / AT / CN / CA) ships its own ad-hoc reader.
+
+**Decision.** Add `src/kontor/cgt.clj` (kernel) with:
+
+- `fold-into-base-transform` — gathers flat-vector additions and
+  deductions across all components of a `TaxReturnFacts` and
+  assembles the `:base-transform :adjustments` shape the kernel
+  PIT/CIT providers consume via
+  `kontor.tax-schedule/apply-base-transform`. Returns `nil` when
+  nothing to fold (consumer cleanly omits `:base-transform`).
+- `fold-into-inputs` — convenience that merges the fold with
+  extra pass-through inputs (`:tax-unit`, `:credits`, etc.).
+- `components-by-lane` — group components by their `:jurisdiction-
+  specific-codes :lane` keyword.
+- `total-liability` — sum of standalone CGT liabilities across
+  components.
+
+The helper explicitly does NOT consume jurisdiction-specific tagged-
+map shapes (notably AT's `:pit-base-deductions {:§28-vermietung
+[...]}` for §30 Abs 7 cross-category carry — Vermietung is a
+DIFFERENT income category than the PIT base). Those need per-
+jurisdiction consumer routing; the helper's docstring documents
+this.
+
+**Implication.** Showcase 08 (`test/kontor/cgt_pit_integration_test.
+clj`) uses the helper as the canonical consumer pattern. Future
+showcases (#9 incorporation/dividends, #10 group consolidation) will
+also use it.
+
+**Tested.** 9 helper tests / 20 assertions + 4 integration tests /
+22 assertions; full bb test 2782 / 10682 / 0.
+
+**Research backing.** Note 137 §6 (CA review-after) flagged the
+absence of a kernel helper + the silent-tax-miss risk.
+
+Date: 2026-05-24.
+
 ## ADR-105 — FR corporate income tax (IS) — PME bracket + CGE surtax + mère-fille + CIR
 
 **Status.** Accepted. Research note 109 (FR CIT fit assessment); second
