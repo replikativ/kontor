@@ -151,4 +151,26 @@
  {:code "6855" :path "Aufwendungen:Buchhaltung"
   :type :expense :name "Buchführungskosten"}
  {:code "6900" :path "Aufwendungen:Sonstige"
-  :type :expense :name "Sonstige betriebliche Aufwendungen"}]
+  :type :expense :name "Sonstige betriebliche Aufwendungen"}
+
+ ;; --- Steuern vom Einkommen + Gewerbesteuer (HGB §275 Abs. 2 Nr. 14) ---
+ ;; Note 160 §I-18: shipping these so a UG/GmbH consumer doesn't have
+ ;; to add tax-side accounts manually.
+ {:code "7610" :path "Aufwendungen:Steuern:KSt"
+  :type :expense :name "Körperschaftsteuer (KSt) inkl. Solidaritätszuschlag"}
+ {:code "7681" :path "Aufwendungen:Steuern:GewSt"
+  :type :expense :name "Gewerbesteuer (GewSt)"}
+ {:code "3050" :path "Verbindlichkeiten:Steuern:KSt-Rückstellung"
+  :type :liability :reconcilable? true
+  :name "Rückstellungen Körperschaftsteuer + Soli"}
+ {:code "3060" :path "Verbindlichkeiten:Steuern:GewSt-Rückstellung"
+  :type :liability :reconcilable? true
+  :name "Rückstellungen Gewerbesteuer"}
+
+ ;; --- Dividenden / Gewinnausschüttung ---
+ {:code "3680" :path "Verbindlichkeiten:Dividenden-Zahlbar"
+  :type :liability :reconcilable? true
+  :name "Verbindlichkeiten aus Gewinnausschüttung (an Gesellschafter)"}
+ {:code "3691" :path "Verbindlichkeiten:KESt-Zahlbar"
+  :type :liability :reconcilable? true
+  :name "Verbindlichkeiten Kapitalertragsteuer + Soli (an Finanzamt)"}]

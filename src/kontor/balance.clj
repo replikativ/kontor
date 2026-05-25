@@ -44,6 +44,12 @@
    *before* this fn runs, so the snapshot already only contains
    tx-visible datoms.
 
+   `as-of-valid` may be nil — in which case there is NO upper-bound
+   filter on valid-from (note 160 §I-17). This is the default; consumers
+   modelling future scenarios / simulations / forward-looking accruals
+   get all posted postings rather than silently losing the future-dated
+   ones to wall-clock now.
+
    Per ADR-008 (revised): only :valid-from is checked. :valid-to was
    dropped — corrections are modeled as reverse-and-repost, not as
    superseding postings with an end-date. Valid-from lives on the tx
@@ -52,7 +58,7 @@
   (let [vf (:valid-from posting)
         st (:transaction/state posting)]
     (and (some? vf)
-         (before-or-eq? vf as-of-valid)
+         (or (nil? as-of-valid) (before-or-eq? vf as-of-valid))
          (contains? included-states st))))
 
 (defn- pull-postings-against
@@ -108,7 +114,13 @@
    matching postings.
 
    Options (all optional):
-     :as-of-valid    — java.util.Date  (defaults to now)
+     :as-of-valid    — java.util.Date — point-in-time upper bound on
+                       valid-from. **Default: nil (all valid time)** —
+                       includes future-dated postings. Pass an explicit
+                       date for a real point-in-time balance. Note 160
+                       §I-17 reverses the prior wall-clock-now default
+                       which silently broke simulations and forward-
+                       looking accruals.
      :as-of-tx       — java.util.Date  (defaults to now)
      :include-states — set of :transaction/state values to include
                        (defaults to #{:posted})
@@ -130,8 +142,7 @@
   ([conn account-eid] (account-balance conn account-eid {}))
   ([conn account-eid {:keys [as-of-valid as-of-tx include-states entity]
                       :or   {include-states default-included-states}}]
-   (let [as-of-valid (or as-of-valid (now))
-         as-of-tx    (or as-of-tx (now))
+   (let [as-of-tx    (or as-of-tx (now))
          db          (d/db conn)
          tx-snap     (if as-of-tx (d/as-of db as-of-tx) db)
          entity-eid  (when entity

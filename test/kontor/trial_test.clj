@@ -155,3 +155,28 @@
         "Zero-balance account excluded from default trial.")
     (is (contains? tb-zeros usd-bank)
         ":include-zero? true retains it.")))
+
+;; ============================================================================
+;; I-17 regression — default :as-of-valid is nil (= all valid time).
+;;
+;; Pre-fix, the implicit `(or as-of-valid (now))` silently filtered
+;; future-dated postings out of the default trial balance. For a
+;; substrate that aims to be the deterministic forward model (θ) for
+;; simmis simulations (kontor-vision), that wall-clock-now default
+;; broke the use case. New default: nil = no upper bound; pass an
+;; explicit date for a real point-in-time view.
+;; ============================================================================
+
+(deftest future-dated-postings-show-in-default-trial-balance
+  (let [conn (core/create-test-db)
+        _ (v/install-invariants! conn)
+        {:keys [eur rec] :as cat} (catalog! conn)
+        ;; Post 5 years in the future — well past wall-clock now.
+        future-date (java.util.Date.
+                     (long (+ (.getTime (java.util.Date.))
+                              (* 1000 60 60 24 365 5))))
+        _ (post-pair! conn cat future-date 500M "FUTURE-1")
+        tb-default (trial/trial-balance conn)]
+    (is (contains? tb-default rec)
+        "I-17 regression: future-dated posting must appear in default trial balance.")
+    (is (money/equiv? (money/money "500" eur) (get-in tb-default [rec eur])))))

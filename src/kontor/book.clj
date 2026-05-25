@@ -53,10 +53,15 @@
    maps (`:commodity` falls back to the top-level `:commodity`). The
    amounts must sum to zero per (ledger, commodity); positive is a
    debit. `adjust!` is the named verb for this. A posting map may also
-   carry `:entity` (overrides the entry-level one — for intercompany
-   entries) and `:dimensions` — a `{axis value}` map of ADR-097
-   classification tags (cost-centre, project, segment); the report
-   engine `marginalize`s over any such axis (ADR-096).
+   carry:
+   - `:entity`     overrides the entry-level one — intercompany pattern
+   - `:partner`    overrides the entry-level one — multi-counterparty
+                   pattern (e.g. dividend declaration to several
+                   shareholders, where each leg carries its own
+                   `:posting/partner`). Note 160 §I-15.
+   - `:dimensions` `{axis value}` map of ADR-097 classification tags
+                   (cost-centre, project, segment); the report engine
+                   `marginalize`s over any such axis (ADR-096).
 
    The builder opts `:posted-at` / `:vt-from` / `:vt-to` pass through
    to `post-transaction-tx-data`.
@@ -104,18 +109,22 @@
           :posting-dimension/value (->dimension-value one)})))
 
 (defn- ->posting
-  "Map a friendly `{:account :amount :commodity? :entity? :dimensions?}`
-   posting (used in `:postings` for multi-leg entries) into the kernel
-   `:posting/*` shape, defaulting commodity + entity to the entry-level
-   one. Per-posting `:entity` overrides the entry-level one (ADR-031
-   intercompany pattern)."
-  [default-commodity default-entity {:keys [account amount commodity entity dimensions] :as p}]
+  "Map a friendly `{:account :amount :commodity? :entity? :partner?
+   :dimensions?}` posting (used in `:postings` for multi-leg entries)
+   into the kernel `:posting/*` shape, defaulting commodity + entity +
+   partner to the entry-level ones. Per-posting overrides:
+   - `:entity`  — ADR-031 intercompany pattern (per-entity sum-to-zero)
+   - `:partner` — per-leg counterparty (e.g. multi-shareholder dividend
+                  declaration; note 160 §I-15)."
+  [default-commodity default-entity default-partner
+   {:keys [account amount commodity entity partner dimensions] :as p}]
   (when (nil? account)
     (throw (ex-info "kontor.book: each :postings entry needs :account" {:posting p})))
   (when (nil? amount)
     (throw (ex-info "kontor.book: each :postings entry needs :amount" {:posting p})))
-  (let [c (or commodity default-commodity)
-        e (or entity   default-entity)]
+  (let [c  (or commodity default-commodity)
+        e  (or entity    default-entity)
+        pa (or partner   default-partner)]
     (when (nil? c)
       (throw (ex-info "kontor.book: posting needs :commodity (or an entry-level :commodity)"
                       {:posting p})))
@@ -123,6 +132,7 @@
              :posting/amount    (->bigdec amount)
              :posting/commodity c}
       e                (assoc :posting/entity e)
+      pa               (assoc :posting/partner pa)
       (seq dimensions) (assoc :posting/dimensions (->dimensions dimensions)))))
 
 (defn- build-input
@@ -142,7 +152,7 @@
     (throw (ex-info "kontor.book: :effective-date is required" {})))
   (let [ps (cond
              (seq postings)
-             (mapv #(->posting commodity entity %) postings)
+             (mapv #(->posting commodity entity partner %) postings)
 
              :else
              (let [amt (->bigdec amount)]

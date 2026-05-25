@@ -215,6 +215,33 @@
         (is (contains? pairs ["Assets:Receivable"   "UG"]))
         (is (contains? pairs ["Liabilities:Payable" "HANS"]))))
 
+    (testing "per-posting :partner stamps :posting/partner (I-15 regression).
+              Multi-shareholder dividend declaration is the motivating case:
+              one Dr Gewinnvortrag leg, N Cr Dividenden-Payable legs each
+              tagged with a distinct shareholder."
+      (let [_ (d/transact conn [{:partner/name "Sarah" :partner/external-id "SARAH"}
+                                {:partner/name "Tomas" :partner/external-id "TOMAS"}])
+            sarah [:partner/external-id "SARAH"]
+            tomas [:partner/external-id "TOMAS"]]
+        (book/entry! conn
+          {:journal [:journal/code "GEN"] :effective-date d1
+           :commodity eur
+           :narration "Dividend declaration to 2 shareholders (60/40)"
+           :postings [{:account rev :amount 1000M}
+                      {:account ap  :amount -600M :partner sarah}
+                      {:account ap  :amount -400M :partner tomas}]})
+        (let [pairs (set (d/q '[:find ?path ?amt ?pa-code
+                                :where [?p :posting/account ?a]
+                                       [?a :account/path ?path]
+                                       [?p :posting/amount ?amt]
+                                       [?p :posting/partner ?pa]
+                                       [?pa :partner/external-id ?pa-code]]
+                              (d/db conn)))]
+          (is (contains? pairs ["Liabilities:Payable" -600M "SARAH"])
+              "Sarah's leg carries her :posting/partner")
+          (is (contains? pairs ["Liabilities:Payable" -400M "TOMAS"])
+              "Tomas's leg carries his :posting/partner"))))
+
     (testing "trial-balance {:entity ug} returns only UG-stamped postings"
       (let [tb (trial/trial-balance conn {:entity ug})
             pull-path (fn [eid] (:account/path (d/pull (d/db conn) [:account/path] eid)))

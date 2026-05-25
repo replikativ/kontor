@@ -17,9 +17,15 @@
   (testing "(preset/create-de-db) returns a fully wired DE conn"
     (let [conn (preset/create-de-db)
           db   (d/db conn)]
-      (testing "SKR04 chart is present"
-        (let [n (count (d/q '[:find [?path ...] :where [_ :account/path ?path]] db))]
-          (is (>= n 40) "expected ~44 SKR04 accounts")))
+      (testing "SKR04 chart is present (incl. tax + dividend accounts per I-18)"
+        (let [paths (set (d/q '[:find [?path ...] :where [_ :account/path ?path]] db))]
+          (is (>= (count paths) 46) "expected ~50 SKR04 accounts")
+          ;; F18 / I-18 regression: the corp-tax + dividend accounts must ship
+          (is (contains? paths "Aufwendungen:Steuern:KSt"))
+          (is (contains? paths "Aufwendungen:Steuern:GewSt"))
+          (is (contains? paths "Verbindlichkeiten:Steuern:KSt-Rückstellung"))
+          (is (contains? paths "Verbindlichkeiten:Dividenden-Zahlbar"))
+          (is (contains? paths "Verbindlichkeiten:KESt-Zahlbar"))))
       (testing "default 5 journals are present"
         (let [n (count (d/q '[:find [?c ...] :where [_ :journal/code ?c]] db))]
           (is (= 5 n))))
