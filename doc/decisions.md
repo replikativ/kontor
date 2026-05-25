@@ -9233,6 +9233,63 @@ behaviour-preserving DE/JP/IN goldens.
 
 Date: 2026-05-21.
 
+### ADR-099 — Addendum 2026-05-25 (5): FX on the tax-emission path (note 168 S1)
+
+**Context.** Note 168 (tax-system coverage + design-validation audit)
+surfaced a P0: `grep -lR "kontor.fx" modules/l10n-*/src` returned ZERO
+results. Nine tax-emission kernel namespaces but none thread an
+`FxRateProvider` or translate non-functional-currency bases before
+schedule application. Invisible to per-jurisdiction tests (every
+fixture declares income in the local commodity) but silent-wrong the
+moment two jurisdictions meet (note 161's two-DB scenario hit a softer
+version that the `treaty-de-ca` helper worked around manually).
+
+**Decision.** Add three substrate primitives to `kontor.period-tax-
+provider`:
+
+- `:fx-provider` becomes a documented OPTIONAL ctx key on
+  `period-tax-facts`. Providers thread it when their marginalized
+  base spans commodities.
+- `(translate-to-functional ctx money)` — translates a Money into the
+  ctx's `:functional-commodity` via the ctx's `:fx-provider` at the
+  period close (or `:at-date` override). Identity short-circuit when
+  already in functional. Throws `{:hint :missing-fx-provider}` when
+  translation IS needed but no provider — failing loudly is the
+  substrate-trust posture.
+- `(translate-amounts-to-functional ctx amounts)` — convenience for a
+  `{commodity → BigDecimal}` summary (the shape `marginalize` would
+  return if it didn't collapse to one commodity), folds via the helper
+  above.
+- `(monocommodity-facts? facts)` — checker: every component's `:base`
+  + `:liability` is in `:functional-commodity`. Provider-side post-
+  construction assertion. Not added to `valid-return-facts?` yet —
+  tightening the existing contract requires a per-l10n audit sweep
+  (tracked as a P1 followup).
+
+**What this does NOT close.** `kontor.report/sum-postings` still
+sums amounts regardless of commodity and stamps the result with the
+user-supplied target — silent-wrong at the marginalize layer for
+mixed-commodity postings. This addendum makes the *post-marginalize*
+path correct but doesn't fix the marginalize-side leak. That's a P1
+sweep (extend `sum-postings` with a `:strict-commodity?` opt; opt-in
+per provider).
+
+**Adoption sequence.**
+1. Substrate primitives shipped (this addendum).
+2. Per-l10n audit sweep: each provider that takes Money inputs (vs
+   raw BigDecimal + commodity field) adds an `assert
+   (ptp/monocommodity-facts? facts)` after construction. Tracked
+   note-168 P1.
+3. Future: `marginalize`-side strict mode + opt-in adoption.
+
+Tested — 6 new deftests / 11 assertions in
+`test/kontor/period_tax_provider_test.clj` (identity short-circuit,
+loud-failure on missing provider, EUR→CHF conversion,
+multi-commodity summary folding, `monocommodity-facts?` true + false
+cases). Full suite green.
+
+Date: 2026-05-25. Note 168 S1.
+
 ---
 
 ## ADR-100 — Phase 2: the sole-proprietor rung

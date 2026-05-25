@@ -288,3 +288,88 @@
          conn (trpb/payment-tx-data builder facts
                                     {:amount 150 :date #inst "2027-02-15"} {}))
         (is (zero? (sum-account conn "Liabilities:Tax-Payable")) "payable cleared")))))
+
+;; ============================================================================
+;; S1 regression: FX on the tax-emission path (note 168 / ADR-099 addendum 3)
+;; ============================================================================
+
+(defn- const-fx-provider
+  "Hand-rolled FxRateProvider returning a fixed CHF/EUR rate. Avoids the
+   StaticTableProvider's db dependency for this kernel-level test."
+  [rate]
+  (reify kontor.fx_rate_provider.FxRateProvider
+    (provider-id [_] :const-fx-test)
+    (resolve-rate [_ {:keys [from-commodity to-commodity]}]
+      (cond
+        (= from-commodity to-commodity) 1M
+        :else                            rate))
+    (resolve-period-rates [_ _] {})))
+
+(deftest translate-to-functional-identity-short-circuits
+  (testing "When base commodity matches functional, no fx-provider needed"
+    (let [ctx {:functional-commodity "EUR"
+               :period {:to #inst "2026-12-31"}}
+          eur-base (money/->Money 1000M "EUR")
+          out      (ptp/translate-to-functional ctx eur-base)]
+      (is (= eur-base out) "identity short-circuit returns input unchanged"))))
+
+(deftest translate-to-functional-throws-without-fx-provider
+  (testing "Missing :fx-provider on a foreign-currency base is a loud failure"
+    (let [ctx {:functional-commodity "EUR"
+               :period {:to #inst "2026-12-31"}}
+          chf-base (money/->Money 1000M "CHF")]
+      (try
+        (ptp/translate-to-functional ctx chf-base)
+        (is false "should have thrown")
+        (catch clojure.lang.ExceptionInfo e
+          (is (= :missing-fx-provider (:hint (ex-data e))))
+          (is (= "CHF" (:from (ex-data e))))
+          (is (= "EUR" (:to (ex-data e)))))))))
+
+(deftest translate-to-functional-converts-when-provider-present
+  (testing "CHF 1000 with 0.95 CHF/EUR rate → EUR 950 (HALF_EVEN, default 2dp)"
+    (let [ctx {:functional-commodity "EUR"
+               :period {:to #inst "2026-12-31"}
+               :fx-provider (const-fx-provider 0.95M)}
+          chf-base (money/->Money 1000M "CHF")
+          out      (ptp/translate-to-functional ctx chf-base)]
+      (is (= "EUR" (:commodity out)))
+      (is (== 950M (:amount out)) "1000 × 0.95 = 950"))))
+
+(deftest translate-amounts-to-functional-folds-mixed-commodities
+  (testing "Multi-commodity balance summary collapses to one functional Money"
+    (let [ctx {:functional-commodity "EUR"
+               :period {:to #inst "2026-12-31"}
+               :fx-provider (const-fx-provider 0.95M)}
+          ;; EUR 500 + CHF 1000 @ 0.95 = EUR 500 + EUR 950 = EUR 1450
+          summary {"EUR" 500M "CHF" 1000M}
+          out     (ptp/translate-amounts-to-functional ctx summary)]
+      (is (= "EUR" (:commodity out)))
+      (is (== 1450M (:amount out))))))
+
+(deftest monocommodity-facts?-true-for-uniform-functional-currency
+  (testing "Facts whose every component's :base / :liability are in functional"
+    (let [facts (ptp/tax-return-facts
+                 {:entity 1 :period {:from #inst "2026-01-01" :to #inst "2026-12-31"}
+                  :jurisdiction {:country :de}
+                  :functional-commodity "EUR"
+                  :components [{:kind :corporate-income-tax
+                                :base (money/->Money 100000M "EUR")
+                                :liability (money/->Money 15000M "EUR")}]})]
+      (is (true? (ptp/monocommodity-facts? facts))))))
+
+(deftest monocommodity-facts?-false-when-base-in-wrong-commodity
+  ;; This is the silent-wrong case S1 documents: a provider that built a base
+  ;; in CHF without translating to the EUR functional currency. The check
+  ;; catches it post-construction.
+  (testing "Facts with a CHF base under an EUR return → caught by checker"
+    (let [bad (ptp/tax-return-facts
+               {:entity 1 :period {:from #inst "2026-01-01" :to #inst "2026-12-31"}
+                :jurisdiction {:country :de}
+                :functional-commodity "EUR"
+                :components [{:kind :corporate-income-tax
+                              :base (money/->Money 100000M "CHF")  ; oops
+                              :liability (money/->Money 15000M "EUR")}]})]
+      (is (false? (ptp/monocommodity-facts? bad))
+          "S1 regression: monocommodity-facts? surfaces the cross-currency leak"))))
+

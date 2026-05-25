@@ -145,6 +145,23 @@ P2 = polish / convention drift.
   measurement date before computing liability. Document in a new ADR
   addendum. Cost: ~50 LOC + a kernel test that fails today.
 
+**Status 2026-05-25 — SUBSTRATE FIXED**: kernel primitives shipped in
+`kontor.period-tax-provider` (commit pending):
+`translate-to-functional`, `translate-amounts-to-functional`,
+`monocommodity-facts?`. Ctx contract documents `:fx-provider`. 6 new
+deftests pin the substrate behaviour (identity short-circuit,
+loud-failure on missing provider, CHF→EUR conversion, multi-commodity
+folding, monocommodity check). ADR-099 Addendum (5). Full suite
+3050/11683/0.
+
+**Open follow-ups (P1):**
+1. `kontor.report/sum-postings` (the marginalize layer) still sums
+   amounts regardless of commodity — silent-wrong for mixed-commodity
+   postings. Add `:strict-commodity?` opt.
+2. Per-l10n adoption sweep: each provider that takes Money inputs (vs
+   raw BigDecimal + commodity field) calls `monocommodity-facts?`
+   post-construction.
+
 ### S2 — Two install entry points per module
 **Severity: P0** · **Scope: 11 jurisdictions × {cit, cgt, investment_income}**
 

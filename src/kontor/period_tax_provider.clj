@@ -35,7 +35,8 @@
    per-jurisdiction providers (CA T1, etc.) are companions, migrated
    consumer-demand-driven exactly as the transaction providers were
    (note 100)."
-  (:require [kontor.money :as money]))
+  (:require [kontor.fx :as fx]
+            [kontor.money :as money]))
 
 ;; ============================================================================
 ;; The closed period-tax :kind enum (note 102 §2.1)
@@ -145,6 +146,14 @@
        :tax-unit     — optional household/filing-unit descriptor, for
                        schedules indexed by it (FR quotient familial;
                        note 102 §9-D)
+       :fx-provider  — optional kontor.fx-rate-provider/FxRateProvider.
+                       Required when the entity's marginalized base spans
+                       commodities other than the return's
+                       :functional-commodity (e.g. a DE GmbH with a CHF
+                       custody account). Providers thread this through
+                       (translate-to-functional ctx money) BEFORE
+                       running the schedule. Note 168 S1 / ADR-099
+                       addendum 3.
        :inputs       — out-of-books facts the provider needs that are
                        NOT derivable from postings: a presumptive base,
                        a property assessed value, a regime election
@@ -209,3 +218,103 @@
                  (and (contains? period-tax-kinds (:kind c))
                       (some? (:liability c))))
                (:components facts))))
+
+;; ============================================================================
+;; FX-on-tax-emission (note 168 S1)
+;; ============================================================================
+;;
+;; Tax determination is denominated in the entity's functional commodity (the
+;; commodity the return's :liability is paid in). When a provider's
+;; marginalized base spans commodities (e.g. a DE GmbH holding a CHF custody
+;; account) the base must be translated to the functional commodity at the
+;; period's measurement date BEFORE the schedule is applied. Otherwise the
+;; substrate silently computes against the wrong base.
+;;
+;; The helpers below are pure-on-Money + ctx; they do not write the db.
+
+(defn translate-to-functional
+  "Translate a `Money` into the period's `:functional-commodity` via the
+   ctx's `:fx-provider` at the period close (or `:at-date` override).
+
+   Identity short-circuit when `m`'s commodity already matches
+   `:functional-commodity` — no `:fx-provider` needed, no rounding.
+
+   Throws a clear error when a translation IS needed but `:fx-provider`
+   is missing — failing loudly is the substrate-trust posture (silent
+   FX coercion was the bug class that motivated this addition, see
+   note 168 S1)."
+  [{:keys [fx-provider functional-commodity period at-date rate-type]
+    :as _ctx}
+   ^kontor.money.Money m]
+  (when (nil? m)
+    (throw (ex-info "translate-to-functional: m is nil" {})))
+  (when (nil? functional-commodity)
+    (throw (ex-info "translate-to-functional: ctx needs :functional-commodity"
+                    {:ctx-keys (keys _ctx)})))
+  (let [from (:commodity m)
+        ;; Two forms are equivalent for identity: bare keyword/string
+        ;; vs lookup-ref. The fx layer's convert handles the lookup-side;
+        ;; we compare the raw value here.
+        same? (or (= from functional-commodity)
+                  (and (vector? from) (vector? functional-commodity)
+                       (= from functional-commodity)))]
+    (if same?
+      m
+      (do
+        (when (nil? fx-provider)
+          (throw (ex-info
+                  (str "translate-to-functional: base in " (pr-str from)
+                       " ≠ functional " (pr-str functional-commodity)
+                       " and no :fx-provider in ctx. "
+                       "Add an FxRateProvider (see kontor.fx-rate-provider).")
+                  {:from from :to functional-commodity
+                   :hint :missing-fx-provider})))
+        (fx/convert m fx-provider
+                    {:to        functional-commodity
+                     :at-date   (or at-date (:to period))
+                     :rate-type (or rate-type :spot)})))))
+
+(defn translate-amounts-to-functional
+  "Convenience over [[translate-to-functional]] for a `{commodity →
+   BigDecimal}` summary (the shape `kontor.report/marginalize` returns
+   when it doesn't collapse to one commodity). Returns one `Money` in
+   `:functional-commodity`."
+  [ctx amounts]
+  (let [{:keys [functional-commodity]} ctx]
+    (when (nil? functional-commodity)
+      (throw (ex-info "translate-amounts-to-functional: ctx needs :functional-commodity" {})))
+    (->> amounts
+         (mapv (fn [[commodity amt]] (money/->Money (bigdec amt) commodity)))
+         (reduce (fn [acc m]
+                   (money/add acc (translate-to-functional ctx m)))
+                 (money/zero functional-commodity)))))
+
+(defn monocommodity-facts?
+  "True when every `:base` / `:liability` Money across `facts`'
+   components is denominated in `:functional-commodity`. This is the
+   FX-discipline check (note 168 S1): a `true` here means the provider
+   either (a) didn't touch foreign currency, or (b) called
+   [[translate-to-functional]] before assembling the facts. A `false`
+   means the substrate WILL silently emit a wrong-currency liability.
+
+   Use as a post-construction assertion in provider code:
+     (assert (ptp/monocommodity-facts? facts))
+
+   Not added to [[valid-return-facts?]] yet — that's an existing
+   contract and tightening it would require an audit sweep. The
+   intended adoption sequence is (a) new providers call this directly,
+   (b) the per-l10n audit sweep adds it module-by-module."
+  [facts]
+  (let [fc (:functional-commodity facts)]
+    (and (some? fc)
+         (every? (fn [c]
+                   (let [base (:base c)
+                         liab (:liability c)
+                         okay? (fn [m]
+                                 (or (nil? m)
+                                     (= (:commodity m) fc)
+                                     (and (vector? (:commodity m))
+                                          (vector? fc)
+                                          (= (:commodity m) fc))))]
+                     (and (okay? base) (okay? liab))))
+                 (:components facts)))))
