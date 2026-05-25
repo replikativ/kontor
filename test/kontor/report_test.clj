@@ -195,3 +195,31 @@
     (testing "marginalizing the same postings on a different axis repartitions them"
       (is (== 60M (amt (-> (report/marginalize ps :project {:sign :raw})
                            (get "PRJ-Alpha"))))))))
+
+;; ============================================================================
+;; F11 / I-10 regression — `:through` inclusive-end sugar
+;;
+;; Pre-fix, the off-by-one between intuitive ("FY ends Dec 31") and the
+;; substrate's exclusive `:to` (`< 2026-12-31`) silently dropped any
+;; posting effective on the last day of the period. `:through` is the
+;; inclusive twin (note 160 §I-10).
+;; ============================================================================
+
+(deftest through-is-inclusive-end-of-window
+  (let [conn (fresh-dimensioned-book)
+        ;; `:through #inst "2026-12-31"` should be equivalent to
+        ;; `:to #inst "2027-01-01"` (= day-after :through, exclusive).
+        thr         #inst "2026-12-31"
+        to+1        #inst "2027-01-01"
+        via-through (count (report/report-postings conn {:through thr}))
+        via-to+1    (count (report/report-postings conn {:to to+1}))]
+    (is (= via-through via-to+1)
+        ":through 2026-12-31 yields the same windowed postings as :to 2027-01-01")))
+
+(deftest through-and-to-are-mutually-exclusive
+  (let [conn (fresh-dimensioned-book)]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"either :to .* or :through .*, not both"
+                          (report/report-postings conn
+                            {:to #inst "2027-01-01"
+                             :through #inst "2026-12-31"})))))

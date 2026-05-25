@@ -348,6 +348,24 @@
         (throw (ex-info "compute-report: :entity not found" {:entity entity-spec})))
       (fn [p] (= id (:entity-eid p))))))
 
+(defn- ->day-after
+  "Inclusive `through` → exclusive `to`: midnight of the following day.
+   Note 160 §I-10."
+  ^java.util.Date [^java.util.Date through]
+  (Date. (+ (.getTime through) (* 1000 60 60 24))))
+
+(defn- resolve-window-bounds
+  "Translate `:through` (inclusive end) into the canonical exclusive
+   `:to` the engine uses. Errors if both are supplied — pick one.
+   Note 160 §I-10."
+  [{:keys [to through] :as opts}]
+  (when (and to through)
+    (throw (ex-info "kontor.report: pass either :to (exclusive) or :through (inclusive), not both"
+                    {:to to :through through})))
+  (cond-> opts
+    through (-> (dissoc :through)
+                (assoc :to (->day-after through)))))
+
 (defn report-postings
   "Fetch + bitemporally filter the postings a report sees, returning a
    vector of pulled posting maps — the shape the `run-engine` engines
@@ -356,12 +374,18 @@
    report definition.
 
    Options (the posting-selection subset of `compute-report`'s):
-   `:from` `:to` `:as-of-tx` `:include-states` `:ledger` `:entity`
-   `:posting-filter` — see `compute-report` for each."
+   `:from` `:to` `:through` `:as-of-tx` `:include-states` `:ledger`
+   `:entity` `:posting-filter` — see `compute-report` for each.
+
+   `:through` is inclusive sugar over `:to`: pass `:through #inst
+   \"2026-12-31\"` to mean \"the FY 2026 ends Dec 31\" without having
+   to remember `:to` is exclusive (note 160 §I-10)."
   ([conn] (report-postings conn {}))
-  ([conn {:keys [from to as-of-tx include-states ledger entity posting-filter]
-          :or   {include-states default-included-states}}]
-   (let [as-of-tx    (or as-of-tx (now))
+  ([conn opts]
+   (let [{:keys [from to as-of-tx include-states ledger entity posting-filter]
+          :or   {include-states default-included-states}}
+         (resolve-window-bounds opts)
+         as-of-tx    (or as-of-tx (now))
          db          (-> conn d/db (d/as-of as-of-tx))
          ledger-pred (ledger-filter-pred db ledger)
          entity-pred (entity-filter-pred db entity)
@@ -390,7 +414,12 @@
      :from           — inclusive lower bound on the posting's valid-from
                        (resolved via :tx/valid-from on the creating tx).
                        Default: nil = beginning of time.
-     :to             — exclusive upper bound (default: nil = today+1d)
+     :to             — EXCLUSIVE upper bound (default: nil = today+1d).
+                       Pass `:to #inst \"2027-01-01\"` for FY 2026.
+     :through        — INCLUSIVE upper bound (sugar over :to). Pass
+                       `:through #inst \"2026-12-31\"` for FY 2026 —
+                       reads natural. Mutually exclusive with :to.
+                       Note 160 §I-10.
      :as-of-tx       — datahike snapshot timestamp (default: now)
      :include-states — set of :transaction/state values to include
                        (default: #{:posted}). Drafts excluded so the
@@ -431,13 +460,17 @@
      :rate-type      — IAS 21 rate-type keyword for translation
                        (default `:closing`)."
   ([conn report] (compute-report conn report {}))
-  ([conn report {:keys [from to translate-to fx-provider rate-type]
+  ([conn report {:keys [translate-to fx-provider rate-type]
                  :or   {rate-type :closing}
                  :as   opts}]
    (when (and translate-to (nil? fx-provider))
      (throw (ex-info "compute-report: :translate-to requires :fx-provider"
                      {:translate-to translate-to})))
-   (let [filtered     (report-postings conn opts)
+   ;; Resolve :through → :to up front so the :report/window payload
+   ;; reflects the canonical exclusive bound (note 160 §I-10).
+   (let [opts         (resolve-window-bounds opts)
+         {:keys [from to]} opts
+         filtered     (report-postings conn opts)
          translate-at (or to (now))
          lines (mapv (fn [{:keys [:line/code :line/label :line/expression]}]
                        (let [{:keys [value postings]} (run-engine filtered expression {})
