@@ -154,28 +154,10 @@
 (register!)
 
 ;; ============================================================================
-;; In-namespace Soli provision — sibling of cgt-statute's DE-SolZG-§4-on-§20,
-;; scoped on :de-§20-income so it coexists cleanly with the gains-side provision.
+;; The Soli-on-§20-income provision is now in `investment-income-statute`
+;; (note 159 §F8) — single install path. The compute-fn `:de-soli-on-§20-
+;; income` is registered above; requiring this namespace loads it.
 ;; ============================================================================
-
-(def soli-on-§20-income-provision
-  "Soli (5.5 %) on §20-income Abgeltungsteuer. Installed alongside the
-   investment-income statute (not in `inv-statute/provisions` because
-   it lives next to its compute-fn registration in this provider ns —
-   the standalone-runnable convention)."
-  {:provision/code            "DE-SolZG-§4-on-§20-income"
-   :provision/jurisdiction    :de
-   :provision/concept         [:tax-concept/code :surtax]
-   :provision/title           "§4 SolZG — Solidaritätszuschlag (5.5 %) on §20 Abgeltungsteuer (income side)"
-   :provision/citation        "https://www.gesetze-im-internet.de/solzg_1995/__4.html"
-   :provision/effective-from  #inst "2009-01-01"
-   :provision/priority        100
-   :provision/condition       (pr-str [:eq :component :de-§20-income])
-   :provision/consequence     (pr-str {:op :surtax
-                                       :code :soli-on-§20-income
-                                       :label "Solidaritätszuschlag (5.5 %) auf §20 Abgeltungsteuer"
-                                       :amount-from :compute-fn
-                                       :fn :de-soli-on-§20-income})})
 
 ;; ============================================================================
 ;; Base-selector — chart-of-accounts σ_E over §20 income postings
@@ -448,11 +430,12 @@
    "§ 20 + § 32d EStG + § 4 SolZG + KiStG"))
 
 (defn install-statute!
-  "Install the DE investment-income statute (parameters + provisions)
-   into `conn`, plus the in-provider Soli-on-§20-income provision.
-   Requires the DE CIT statute (for `DE.Soli.rate`) AND the DE CGT
-   statute (for `DE.EStG.§20.flat-rate` + `DE.EStG.§17.inclusion-rate`)
-   to be installed first."
+  "Back-compat shim — delegates to `kontor.l10n-de.investment-income-
+   statute/install!`, which since note 159 §F8 ships the complete
+   provision set (Soli + KiSt). Requires the DE CIT statute (for
+   `DE.Soli.rate`) AND the DE CGT statute (for `DE.EStG.§20.flat-rate`
+   + `DE.EStG.§17.inclusion-rate`) to be installed first.
+
+   Equivalent to: `(de-inv-statute/install! conn)`."
   [conn]
-  (inv-statute/install! conn)
-  (d/transact conn [soli-on-§20-income-provision]))
+  (inv-statute/install! conn))

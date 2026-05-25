@@ -120,29 +120,51 @@
 ;; ============================================================================
 
 (def provisions
-  "DE investment-income provisions. ONE provision: the Kirchensteuer
-   surtax on §20 Abgeltungsteuer.
+  "DE investment-income provisions. TWO provisions: Soli + KiSt on
+   §20 Abgeltungsteuer. Both reference compute-fns registered by
+   `kontor.l10n-de.investment-income-provider`'s `register!` (called
+   at namespace load).
 
-   - **Priority 110** (after Soli-on-§20 at 100) so the Soli is folded
-     FIRST onto the gross Abgeltungsteuer; the KiSt surtax operates on
-     the same `:running` after Soli has been added. Per § 32d Abs. 1
-     EStG, Soli + KiSt are both surtaxes on the Abgeltungsteuer; the
-     ordering does not change the sum (linear in the running base) but
-     the convention follows the CIT-statute ordering pattern.
+   Single install path — `install!` here ships everything; the
+   provider's `install-statute!` is now just a thin wrapper for
+   back-compat (note 159 §F8). A consumer who calls only
+   `inv-statute/install!` gets the complete tax stack.
 
-   - **Condition** `[:eq :component :de-§20-income]` — so this fires
-     ONLY on the investment-income provider's standalone Abgeltungsteuer
-     component, NOT on the CGT provider's `:de-§20` component (those are
-     gains; the consumer can elect to add a KiSt provision for §20 gains
-     too via a separate provision keyed on `:de-§20`, but that is out
-     of scope for v1 — note 147 §5 deliberately keeps the income- and
-     gains-side standalone components separate).
+   - **`DE-SolZG-§4-on-§20-income`** (priority 100): Soli 5.5 % surtax,
+     fires on `:component :de-§20-income`. Sibling of the CGT statute's
+     `DE-SolZG-§4-on-§20` (which fires on `:de-§20` for gains). Both
+     reference 5.5 % × Abgeltungsteuer; the income side has its own
+     compute-fn `:de-soli-on-§20-income` so the two providers stay
+     standalone-runnable.
 
-   - The compute-fn `:de-kist-on-abgeltungsteuer` reads
-     `(:church-tax-rate (:tax-unit ctx))` (consumer-supplied 0M / 0.08M
-     / 0.09M) and multiplies it by `(:running ctx)`."
+   - **`DE-KiStG-on-§20`** (priority 110, fires after Soli): Kirchensteuer
+     surtax 8 % (BY/BW) or 9 % (other Länder), reads `(:church-tax-rate
+     (:tax-unit ctx))`. Per § 32d Abs. 1 EStG, Soli + KiSt are both
+     surtaxes on the Abgeltungsteuer (linear, so ordering doesn't change
+     the sum — the priority follows the CIT-statute ordering pattern).
 
-  [{:provision/code            "DE-KiStG-on-§20"
+   - Condition `[:eq :component :de-§20-income]` scopes both to the
+     investment-income provider's standalone Abgeltungsteuer component,
+     NOT the CGT provider's `:de-§20` (gains) component."
+
+  [;; Soli on §20-income Abgeltungsteuer — sibling of cgt-statute's
+   ;; DE-SolZG-§4-on-§20 (gains side). Lives in the IC statute so that
+   ;; `install!` here ships the full Soli+KiSt stack.
+   {:provision/code            "DE-SolZG-§4-on-§20-income"
+    :provision/jurisdiction    :de
+    :provision/concept         [:tax-concept/code :surtax]
+    :provision/title           "§4 SolZG — Solidaritätszuschlag (5.5 %) on §20 Abgeltungsteuer (income side)"
+    :provision/citation        "https://www.gesetze-im-internet.de/solzg_1995/__4.html"
+    :provision/effective-from  #inst "2009-01-01"
+    :provision/priority        100
+    :provision/condition       (pr-str [:eq :component :de-§20-income])
+    :provision/consequence     (pr-str {:op :surtax
+                                        :code :soli-on-§20-income
+                                        :label "Solidaritätszuschlag (5.5 %) auf §20 Abgeltungsteuer"
+                                        :amount-from :compute-fn
+                                        :fn :de-soli-on-§20-income})}
+
+   {:provision/code            "DE-KiStG-on-§20"
     :provision/jurisdiction    :de
     :provision/concept         [:tax-concept/code :surtax]
     :provision/title           "KiStG — Kirchensteuer (8 %/9 %) auf §20 Abgeltungsteuer"

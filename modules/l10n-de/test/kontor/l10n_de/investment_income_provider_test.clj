@@ -18,6 +18,7 @@
             [kontor.l10n-de.cgt-statute :as cgt-statute]
             [kontor.l10n-de.cit-statute :as cit-statute]
             [kontor.l10n-de.investment-income-provider :as inv]
+            [kontor.l10n-de.investment-income-statute :as inv-statute]
             [kontor.period-tax-provider :as ptp]))
 
 ;; ============================================================================
@@ -362,6 +363,37 @@
 ;; `kontor.book`, calls `period-tax-facts` WITHOUT `:investment-income-
 ;; bases` (so the GL-scan path fires), and verifies non-zero tax.
 ;; ============================================================================
+
+(deftest single-install-path-yields-full-soli-stack
+  (testing "F8 regression (note 159): `inv-statute/install!` alone — without
+            calling the provider's `install-statute!` — must ship BOTH KiSt
+            AND Soli provisions; consumer dividend → full 25 % + 5.5 % Soli"
+    (let [conn (core/create-test-db)]
+      (cit-statute/install! conn)
+      (cgt-statute/install! conn)
+      (inv-statute/install! conn)        ; ← the statute ns directly
+      (d/transact conn [{:commodity/symbol "EUR" :commodity/name "Euro"
+                         :commodity/precision 2}])
+      (let [provider (inv/de-investment-income-provider {})
+            facts (ptp/period-tax-facts
+                   provider
+                   {:db (d/db conn) :entity nil
+                    :period p2026
+                    :tax-unit {:filing-status :single :church-tax-rate 0M}
+                    :inputs {:investment-income-bases
+                             {:dividends 4000M :interest 0M
+                              :fund-distributions 0M :royalties 0M
+                              :elected-dividends 0M}}})
+            §20   (component-by-lane facts :de-§20-income)]
+        (is (some? §20))
+        (is (== 3000M (-> §20 :base :amount))
+            "base = 4000 − 1000 SP = 3000")
+        (is (== 750M (-> §20 :gross-liability :amount))
+            "25 % × 3000 = 750 Abgst")
+        (is (== 791.25M (-> §20 :liability :amount))
+            "+ 5.5 % Soli (41.25) = 791.25 — Soli MUST fire from inv-statute/install! alone")
+        (is (some #(= :soli-on-§20-income (:code %)) (:surtaxes §20))
+            "Soli surtax line present (F8 regression — no silent omission)")))))
 
 (deftest gl-scan-resolves-against-account-path-convention
   (testing "GL-scan picks up dividend postings on `:account/path`-keyed chart"
