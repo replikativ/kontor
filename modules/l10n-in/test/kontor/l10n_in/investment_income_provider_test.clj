@@ -367,8 +367,13 @@
       (is (== 800000M (get-in corp [:jurisdiction-specific-codes :in/§80m-deduction]))
           "§80M-deduction = min(received, redistributed) = ₹8 L")
       (is (== 100000M (-> corp :prepaid :amount)) "TDS prepaid")
-      ;; net CIT addition = 1 000 000 − 800 000 = 200 000
-      (is (= [200000M] (get-in corp [:jurisdiction-specific-codes :cit-base-additions])))))
+      ;; Per cross-jurisdiction convention (CA §112 / DE §8b / CN §26(2)),
+      ;; gross dividend goes to :cit-base-additions; §80M deduction
+      ;; surfaces separately as :cit-base-deductions (auditable).
+      (is (= [1000000M] (get-in corp [:jurisdiction-specific-codes :cit-base-additions]))
+          "gross dividend ₹10 L into :cit-base-additions")
+      (is (= [800000M] (get-in corp [:jurisdiction-specific-codes :cit-base-deductions]))
+          "§80M chain relief ₹8 L into :cit-base-deductions (downstream CIT nets)")))
 
   (testing "corp with foreign dividend: gross to CIT + foreign-tax-credit hint"
     (let [conn  (fresh)

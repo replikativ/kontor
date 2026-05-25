@@ -300,8 +300,36 @@
   [event ^java.math.BigDecimal threshold]
   (cond
     (true? (:low-tax-jurisdiction? event)) true
-    (some? (:foreign-corp-etr event))      (< (compare (:foreign-corp-etr event) threshold) 0)
+    ;; §10 Abs 4 KStG triggers when foreign ETR is "nicht mehr als"
+    ;; the threshold (i.e., ≤). Boundary cases (exactly 12.5 % pre-
+    ;; 2026 or 15 % from 2026) trigger the switch-over.
+    (some? (:foreign-corp-etr event))      (<= (compare (:foreign-corp-etr event) threshold) 0)
     :else                                  false))
+
+(defn- §10-schachtel-qualifying?
+  "True iff a `:schachtelbeteiligung` event qualifies under
+   §10 Abs 2 KStG: ≥ 10 % ownership-fraction AND ≥ 365-day holding
+   period. Mirrors the AT CGT `§10-qualifying?` gate (note 146 §3.2 +
+   note 134 §1.7). Consumer attests via:
+   - `:ownership-fraction <bd>` on the event
+   - `:held-since #inst …` on the event (compared to `as-of` for the
+     holding-days math)
+
+   Each check is OPTIONAL — supplied data is verified; missing data
+   trusts the consumer's label (v1 substrate leniency). Supplying
+   `:ownership-fraction 0.03M` therefore downgrades; omitting both
+   metrics keeps the consumer-supplied `:schachtelbeteiligung` label."
+  [event ^java.math.BigDecimal qualifying-fraction
+   ^long qualifying-days ^java.util.Date as-of]
+  (let [own       (:ownership-fraction event)
+        held      (:held-since event)
+        days      (when (and held as-of)
+                    (long (/ (- (.getTime ^java.util.Date as-of)
+                                (.getTime ^java.util.Date held))
+                             (* 1000 60 60 24))))
+        own-ok?   (or (nil? own)  (>= (compare own qualifying-fraction) 0))
+        days-ok?  (or (nil? days) (>= days qualifying-days))]
+    (and own-ok? days-ok?)))
 
 (defn- §10-default-exempt-component
   "§10 KStG default-exempt branch — domestic / foreign-portfolio /
@@ -574,13 +602,30 @@
           domestic-stake? (boolean (get-in ctx [:tax-unit :held-entity-domestic?]))
           cit-rate       (param db "AT.KStG.cit-rate" as-of)
           threshold      (param db "AT.KStG.§10-Abs-4.low-tax-threshold" as-of)
+          ;; §10 Abs 2 KStG qualification thresholds — reused from
+          ;; cgt-statute (no IC-specific re-declaration).
+          qual-fraction  (or (param db "AT.KStG.§10.qualifying-ownership-fraction" as-of)
+                             0.10M)
+          qual-days      (long (or (param db "AT.KStG.§10.qualifying-holding-days" as-of)
+                                   365))
           opts           {:authority authority :commodity commodity}
           per-event-components
           (->> events
                (mapv (fn [event]
                        (let [classification (:§10-classification event)
                              option?        (§10-option-elected? event)
-                             switch-over?   (§10-switch-over? event threshold)]
+                             switch-over?   (§10-switch-over? event threshold)
+                             ;; §10 Abs 2 qualification only gates the
+                             ;; default-exempt INVERSION. Option / switch-
+                             ;; over make the dividend taxable regardless
+                             ;; of how the consumer labelled the stake.
+                             ;; A `:schachtelbeteiligung` event that fails
+                             ;; ownership/holding is silently downgraded
+                             ;; in the default-exempt branch only.
+                             schachtel-qualifies?
+                             (or (not= classification :schachtelbeteiligung)
+                                 (§10-schachtel-qualifying?
+                                  event qual-fraction qual-days as-of))]
                          (cond
                            ;; Sanity: unrecognised classification → no component
                            (not (contains? §10-classifications classification))
@@ -614,6 +659,17 @@
                            (and domestic-stake?
                                 (or (= classification :foreign-portfolio)
                                     (= classification :schachtelbeteiligung)))
+                           nil
+
+                           ;; §10 Abs 2 qualification gate: when a
+                           ;; consumer labels an event :schachtelbeteiligung
+                           ;; but supplies ownership/holding metrics that
+                           ;; fail the ≥10 % + ≥365-day test, the §10
+                           ;; default-exempt INVERSION does NOT fire —
+                           ;; the dividend stays in the CIT base. Cross-
+                           ;; module consistency with the AT CGT provider
+                           ;; (note 146 §3.2 + note 134 §1.7).
+                           (not schachtel-qualifies?)
                            nil
 
                            ;; Default-exempt branch (domestic /

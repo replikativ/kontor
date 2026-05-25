@@ -463,10 +463,16 @@
         §194-label  (section-label-at as-of §194-names)
         §80m-deduction (ts/lesser-of (bigdec0 §80m-redistribution)
                                      (bigdec0 domestic-dividend))
-        domestic-net (- domestic-dividend §80m-deduction)
-        cit-adds (cond-> []
-                   (pos? domestic-net)   (conj domestic-net)
-                   (pos? foreign-dividend) (conj foreign-dividend))]
+        ;; Per cross-jurisdiction convention (CA §112 / DE §8b / CN
+        ;; §26(2) / AU LIC), emit the gross dividend in
+        ;; `:cit-base-additions` and the §80M relief as a separate
+        ;; `:cit-base-deductions` line — keeps the deduction
+        ;; auditable rather than silently netted.
+        cit-adds   (cond-> []
+                     (pos? domestic-dividend) (conj domestic-dividend)
+                     (pos? foreign-dividend)  (conj foreign-dividend))
+        cit-deds   (cond-> []
+                     (pos? §80m-deduction) (conj §80m-deduction))]
     {:kind            :investment-income-tax
      :authority       authority
      :base            (money/money (+ domestic-dividend foreign-dividend) commodity)
@@ -496,7 +502,8 @@
      (cond-> {:lane :in-corp-dividend
               :in/§80m-deduction §80m-deduction
               :in/foreign-tax-credit foreign-dividend}
-       (seq cit-adds) (assoc :cit-base-additions cit-adds))}))
+       (seq cit-adds) (assoc :cit-base-additions cit-adds)
+       (seq cit-deds) (assoc :cit-base-deductions cit-deds))}))
 
 ;; ============================================================================
 ;; Provider

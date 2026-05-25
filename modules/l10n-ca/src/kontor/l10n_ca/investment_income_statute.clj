@@ -95,7 +95,7 @@
     :parameter/concept-iri  "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96215_01"}
 
    {:parameter/code         "CA.AB.InvIncome.dtc-eligible-rate"
-    :parameter/label        "Alberta Personal Income Tax Act §21 — eligible dividend DTC (8.85% of grossed-up)"
+    :parameter/label        "Alberta Personal Income Tax Act §21 — eligible dividend DTC (8.12% of grossed-up)"
     :parameter/jurisdiction :ca-ab
     :parameter/unit         :rate
     :parameter/concept-iri  "https://kings-printer.alberta.ca/1266.cfm?page=A30P1.cfm&leg_type=Acts"}
@@ -194,8 +194,8 @@
 
    {:parameter-value/parameter      [:parameter/code "CA.AB.InvIncome.dtc-eligible-rate"]
     :parameter-value/effective-from #inst "2017-01-01"
-    :parameter-value/decimal-value  0.0885M
-    :parameter-value/citation       "Alberta eligible DTC 8.85% of grossed-up (KPMG Tax Facts 2025-2026)"}
+    :parameter-value/decimal-value  0.0812M
+    :parameter-value/citation       "Alberta eligible DTC 8.12% of grossed-up (TaxTips.ca — long-stable; matches note 152 §1.4 table)"}
 
    {:parameter-value/parameter      [:parameter/code "CA.AB.InvIncome.dtc-non-eligible-rate"]
     :parameter-value/effective-from #inst "2017-01-01"
@@ -389,7 +389,7 @@
    {:provision/code            "CA-AB-DTC-Eligible"
     :provision/jurisdiction    :ca-ab
     :provision/concept         [:tax-concept/code :non-refundable-credit]
-    :provision/title           "Alberta eligible-dividend tax credit (8.85% of grossed-up)"
+    :provision/title           "Alberta eligible-dividend tax credit (8.12% of grossed-up)"
     :provision/citation        "https://kings-printer.alberta.ca/1266.cfm?page=A30P1.cfm&leg_type=Acts"
     :provision/effective-from  #inst "2017-01-01"
     :provision/priority        100

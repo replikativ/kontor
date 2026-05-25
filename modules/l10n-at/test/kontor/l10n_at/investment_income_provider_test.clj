@@ -480,3 +480,43 @@
                                   :§10-classification :ordinary}]})]
       (is (empty? (:components facts))
           ":ordinary → no §10 path → no provider component (GL booking already in CIT base)"))))
+
+(deftest §10-schachtel-qualification-downgrade
+  (testing "schachtel labelled but ownership < 10 % → §10 INVERSION blocked"
+    (let [conn  (fresh)
+          facts (run-corporate conn
+                               {:corporate-dividend-events
+                                [{:gross 50000M
+                                  :§10-classification :schachtelbeteiligung
+                                  :ownership-fraction 0.03M}]})]
+      (is (empty? (:components facts))
+          ":schachtel + 3 % ownership fails §10 Abs 2 ≥10 % gate → no component")))
+  (testing "schachtel labelled but held < 365 days → §10 INVERSION blocked"
+    (let [conn  (fresh)
+          facts (run-corporate conn
+                               {:corporate-dividend-events
+                                [{:gross 50000M
+                                  :§10-classification :schachtelbeteiligung
+                                  :ownership-fraction 0.20M
+                                  :held-since #inst "2026-06-01"}]}
+                               {:as-of #inst "2026-12-15"
+                                :period {:from #inst "2026-01-01"
+                                         :to   #inst "2026-12-31"}})]
+      (is (empty? (:components facts))
+          ":schachtel + ~197-day hold fails §10 Abs 2 ≥365-day gate → no component"))))
+
+(deftest §10-abs-4-boundary-triggers-switch-over
+  (testing "ETR exactly at threshold (15 % from 2026) triggers switch-over (\"nicht mehr als\" = ≤)"
+    (let [conn  (fresh)
+          facts (run-corporate conn
+                               {:corporate-dividend-events
+                                [{:gross 100000M
+                                  :§10-classification :foreign-portfolio
+                                  :ownership-fraction 0.05M
+                                  :foreign-corp-etr 0.15M}]}
+                               {:as-of #inst "2026-06-01"
+                                :period {:from #inst "2026-01-01"
+                                         :to   #inst "2026-12-31"}})
+          cmp   (component-by-lane facts :at-§10-abs-4-switchover-taxable)]
+      (is (some? cmp)
+          "ETR = 15 % at the 2026 threshold triggers switch-over (boundary is inclusive)"))))

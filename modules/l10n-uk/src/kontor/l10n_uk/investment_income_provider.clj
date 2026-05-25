@@ -333,7 +333,11 @@
    per note 150 §1.5 the substrate convention is the consumer keeps
    ISA portfolio inside an `Asset:ISA-Portfolio` and the income never
    posts to the income accounts at all; the wrapped-tag exists for
-   consumers who DO post for portfolio-tracking purposes."
+   consumers who DO post for portfolio-tracking purposes.
+
+   Requires `:conn` in ctx (`report-postings` needs a connection for
+   a bitemporal snapshot). Consumers without `:conn` must pre-supply
+   `:inputs :investment-income-bases`."
   [{:keys [conn entity period]} commodity]
   (let [postings (report/report-postings
                   conn (cond-> {:from (:from period) :to (:to period)}

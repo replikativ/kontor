@@ -135,7 +135,11 @@
 (defn- tag-bases
   "Marginalize the entity's income postings by `:account-tag` and
    return `{<tag> <BigDecimal>}` for the closed `investment-income-tags`
-   set. Postings without a recognised tag are silently dropped."
+   set. Postings without a recognised tag are silently dropped.
+
+   Requires `:conn` in ctx (`report-postings` needs a connection for
+   a bitemporal snapshot). Consumers without `:conn` must pre-supply
+   `:inputs :investment-income-bases`."
   [{:keys [conn entity period]} commodity]
   (let [postings (report/report-postings
                   conn (cond-> {:from (:from period) :to (:to period)}

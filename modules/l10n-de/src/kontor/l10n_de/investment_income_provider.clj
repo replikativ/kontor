@@ -193,21 +193,22 @@
 
 (defn- investment-income-base-selectors
   "Marginalize the GL income postings and split into the §20 sub-
-   categories by chart-prefix (note 147 §3.2). Returns a map of
-   `{<lane-key> <bigdec>}`."
+   categories by chart-code convention (note 147 §3.2). Returns a
+   map of `{<lane-key> <bigdec>}`.
+
+   Requires `:conn` in ctx (`report-postings` needs a connection for
+   a bitemporal snapshot). Consumers without `:conn` must pre-supply
+   `:inputs :investment-income-bases`."
   [{:keys [conn entity period]} commodity]
   (let [postings (report/report-postings
                   conn (cond-> {:from (:from period) :to (:to period)}
                          entity (assoc :entity entity)))
-        by-acc   (report/marginalize postings :account
-                                     {:sign :inflow :commodity commodity})
-        by-path  (into {} (for [[acc-id v] by-acc
-                                :let [path (some-> acc-id meta :account/path)]]
-                            [(or path acc-id) v]))]
-    {:dividends           (sum-prefix by-path "Income:Dividends")
-     :interest            (sum-prefix by-path "Income:Interest")
-     :fund-distributions  (sum-prefix by-path "Income:Fund-Distributions")
-     :royalties           (sum-prefix by-path "Income:Royalties")
+        by-code  (report/marginalize postings :account-code
+                                     {:sign :inflow :commodity commodity})]
+    {:dividends           (sum-prefix by-code "Income:Dividends")
+     :interest            (sum-prefix by-code "Income:Interest")
+     :fund-distributions  (sum-prefix by-code "Income:Fund-Distributions")
+     :royalties           (sum-prefix by-code "Income:Royalties")
      :elected-dividends   0M}))   ; Teileinkünfte-elected; consumer pre-supplies
 
 (defn- gross-§20-income

@@ -278,15 +278,15 @@
 ;; ============================================================================
 
 (deftest ab-resident-eligible-dtc-rate
-  (testing "AB eligible DTC rate 8.85% × grossed-up"
+  (testing "AB eligible DTC rate 8.12% × grossed-up (per note 152 §1.4 + TaxTips.ca)"
     (let [conn  (fresh)
           facts (run-individual conn {:eligible-dividends 10000M}
                                 {:province :ab})
           ab    (component-by-authority facts :ca-ab-tra)
           ab-e  (credit-by-code ab :ca-ab-dtc-eligible)]
       (is (some? ab))
-      ;; AB eligible: 8.85% × 13800 = 1221.30
-      (is (== 1221.300M (:amount ab-e))))))
+      ;; AB eligible: 8.12% × 13800 = 1120.56
+      (is (== 1120.560M (:amount ab-e))))))
 
 ;; ============================================================================
 ;; §10. Corporate Part IV refundable tax — note 152 §2 Example B (OpsCo)
