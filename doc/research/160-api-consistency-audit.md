@@ -222,7 +222,123 @@ not.
 
 ---
 
-## §7 — Test fixture conventions
+## §7 — Findings from the two-DB scenario walk (Phase D, 2026-05-25)
+
+### I-14 — `:entity/legal-form` is `string?`, not a keyword/enum
+**Status**: OPEN · **Severity**: P2 · **Surfaced**: Phase D REPL
+
+`(d/transact conn [{:entity/legal-form :ug-haftungsbeschränkt …}])` throws
+schema validation. Must be a free-form string. Reasonable for v1 (allows
+arbitrary jurisdictional types) but no enum-like attr enables consumers
+to query "all UG/GmbH/AG/sole-prop/etc" across jurisdictions.
+
+**Proposed direction**: keep `:entity/legal-form` as string for the free-
+form description; add a `:entity/legal-form-kind` `:db.type/keyword` with
+a closed enum (`:gmbh | :ug | :ag | :ohg | :kg | :sole-prop | :inc | :ccpc
+| :llc | :s-corp | :partnership | …`) for queryable cross-jurisdiction
+filtering. Optional, no breaking change.
+
+### I-15 — Per-posting `:partner` silently dropped by `kontor.book` verbs
+**Status**: OPEN · **Severity**: P1 · **Surfaced**: Phase D REPL
+
+The transaction-level `:partner` is stamped on `:transaction/partner`.
+But `:postings [{:account … :amount … :partner …}]` silently drops the
+per-posting partner — `->posting` (book.clj) destructures only
+`{:account :amount :commodity :entity :dimensions}`. Critical for
+multi-shareholder dividend allocation (the EXACT case I hit): a 4-leg
+"Cr Dividenden-Zahlbar 9000 (CW) / Cr Dividenden-Zahlbar 6000 (PB) /
+Dr Gewinnvortrag 15000" entry — the per-shareholder allocation is lost
+silently from the GL.
+
+**Proposed direction**: extend `->posting` to also accept `:partner`
+(symmetric with `:entity`). Document that per-posting `:partner`
+overrides the entry-level one (same intercompany pattern).
+
+### I-16 — F10 fix doesn't retro-apply (only NEW entries get :posting/entity)
+**Status**: OPEN · **Severity**: P2 · **Surfaced**: Phase D REPL
+
+Obvious in hindsight — postings transacted before the F10 fix carry no
+`:posting/entity`. Per-entity trial-balance / reports filter them out.
+The substrate has no "backfill entity" helper for existing data.
+
+**Proposed direction**: ship `kontor.entity/backfill-postings!` —
+takes `(conn entity-ref account-paths-to-claim)` and stamps
+`:posting/entity` on matching pre-existing postings via `:db/add`
+(bitemporally — keeps the original `:tx/valid-from`). Useful for
+adopting consumers who started without entity refs.
+
+### I-17 — `trial-balance` defaults `:as-of-valid` to wall-clock now;
+silently drops future-dated postings.
+**Status**: OPEN · **Severity**: P0 · **Surfaced**: Phase D REPL
+
+For a substrate aimed at being the deterministic forward model (θ) for
+[[kontor-vision]] / simmis simulations and what-if analyses, defaulting
+to wall-clock now BREAKS the use case. A consumer modeling a 2026
+fiscal year today (2026-05-25) gets a trial balance with only postings
+effective ≤ today; the Dec 31 year-end entries, the Jan 15 dividend
+distribution, the 2027 forward-looking accruals — all silently missing.
+
+Verified live: in Phase D, posting €40k revenue effective Jun 30 2026,
+opex effective Dec 15 2026, dividend declare Dec 31, distribute Jan 15
+2027 → `(trial/trial-balance conn)` returns only the Jan 2 opening
+entry. €0 of revenue visible. Looks correct on the surface.
+
+**Proposed direction**: change the default `:as-of-valid` from `now` to
+`nil` (= "all valid time"). For point-in-time queries, the consumer
+passes an explicit date. Same for `kontor.balance/account-balance` and
+anything else with the same default. Loud-fail when the implicit-now
+default would silently exclude data is a non-starter for simulations.
+
+**This is the single most dangerous default in the substrate right now.**
+
+### I-18 — Tax accounts (KSt / GewSt / Soli / Dividenden-Zahlbar / KESt-Zahlbar) not in shipped SKR04
+**Status**: OPEN · **Severity**: P2 · **Surfaced**: Phase D REPL
+
+SKR04 chart (modules/l10n-de/resources/kontor/l10n_de/skr04.edn) ships
+~44 accounts covering basic income, opex, balance-sheet items. Missing
+the corporate-tax expense + liability side:
+- `Aufwendungen:Steuern:KSt`         (7610)
+- `Aufwendungen:Steuern:GewSt`       (7681)
+- `Verbindlichkeiten:Steuern:*-Rückstellung`
+- `Verbindlichkeiten:Dividenden-Zahlbar`
+- `Verbindlichkeiten:KESt-Zahlbar`
+
+Anyone running a DE GmbH/UG via kontor has to add these manually.
+
+**Proposed direction**: extend SKR04 EDN with ~6 standard tax-side
+accounts. Keep them under the conventional Aufwendungen / Verbindlich-
+keiten branches. Same for CA (T2 line items) and US (Form 1120 lines).
+
+### I-19 — Cross-DB FX + cross-DB partner refs are consumer plumbing
+**Status**: OPEN · **Severity**: P1 · **Surfaced**: Phase D REPL
+
+When booking the DE-UG dividend on Christian's CA personal DB, the
+consumer manually:
+- Looks up the EUR/CAD rate at the value-date (no `kontor.fx` call
+  pulled the ECB rate; the consumer hard-coded 1.50)
+- Decides how to map the DE WHT 26.375% into CA's §126 FTC slot
+  (the treaty-15% cap is the consumer's responsibility)
+- Decides where to book the BZSt-refundable excess (11.375% over
+  treaty) — there's no `:asset/foreign-tax-refundable` convention
+
+Each of these is a per-treaty-pair business rule. The substrate has
+ADR-074 (cross-DB saga) but no `kontor.treaty.de-ca/dividend-receive!`
+or similar helper.
+
+**Proposed direction**: ship per-treaty helper namespaces in a new
+`modules/treaty-{src}-{dst}/` companion (e.g. `treaty-de-ca`). Each
+ships:
+- The treaty rate per income type (dividend / interest / royalty)
+- A helper that, given the FX rate at value-date, builds the CA-side
+  receipt entry with the right split (treaty-creditable, BZSt-
+  refundable-excess, net-cash)
+- The reverse helper for outbound (e.g. CA Inc paying dividend to a
+  DE resident)
+
+This is exactly the "two-sided" McComb framing from [[kontor-vision]]
+— both sides of a treaty-pair compose.
+
+## §8 — Test fixture conventions
 
 ### I-13 — Journal codes differ across tests
 **Status**: OPEN · **Severity**: P2 · **Surfaced**: code-review 2026-05-25
