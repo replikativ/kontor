@@ -28,7 +28,7 @@
             [kontor.period :as period]
             [kontor.sealing :as sealing]
             [kontor.state-machine :as state-machine]
-            [invariant.datahike :as inv]))
+            [kontor.invariant :as inv]))
 
 ;; ============================================================================
 ;; Schema for invariant registration

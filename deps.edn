@@ -63,10 +63,9 @@
   ;; Local checkout while feature/bitemporal-v1 + DH-11 fixes land upstream.
   ;; Revert to :mvn/version once the next datahike release ships PR #828.
   org.replikativ/datahike          {:local/root "../datahike-bitemporal-v1"}
-  ;; Declarative datalog invariants — see ADR-011 + research note 04.
-  ;; Currently linked locally; switch to :git/url + :sha once we cut a
-  ;; release of the bumped library.
-  io.datopia/invariant             {:local/root "../datopia/invariant"}
+  ;; ADR-011's declarative datalog invariants now live inline at
+  ;; `kontor.invariant` (vendored from datopia/invariant, MIT, maintained
+  ;; by us). Single-dep posture per ADR-001 preserved.
   ;; Beancount parser (Phase 1 acceptance test — ADR-009). Small EPL
   ;; library, no further transitive deps to speak of.
   instaparse/instaparse            {:mvn/version "1.5.0"}
