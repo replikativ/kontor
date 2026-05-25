@@ -13,6 +13,7 @@
    - §7 Herr Weber retiree (note 147 §2.2) — Path A standalone."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
+            [kontor.book :as book]
             [kontor.core :as core]
             [kontor.l10n-de.cgt-statute :as cgt-statute]
             [kontor.l10n-de.cit-statute :as cit-statute]
@@ -349,3 +350,56 @@
     (is (= :de-investment-income (ptp/provider-id provider)))
     (is (= :EUR (:commodity provider)))
     (is (= :de-finanzamt (:authority provider)))))
+
+;; ============================================================================
+;; §8. GL-scan integration — F7 regression guard (note 159)
+;;
+;; The canonical chart-of-accounts convention is `:account/path` (unique
+;; identity). Pre-fix (commits 0ad48aa / 4a5158b), the IC provider's
+;; GL-scan marginalized on `:account/code`, so a consumer using the
+;; documented chart got silent zero income detected — no error, no tax.
+;; This test seeds a real GL with `:account/path` accounts, posts via
+;; `kontor.book`, calls `period-tax-facts` WITHOUT `:investment-income-
+;; bases` (so the GL-scan path fires), and verifies non-zero tax.
+;; ============================================================================
+
+(deftest gl-scan-resolves-against-account-path-convention
+  (testing "GL-scan picks up dividend postings on `:account/path`-keyed chart"
+    (let [conn (fresh)
+          eur  [:commodity/symbol "EUR"]]
+      ;; Minimal chart using the canonical :account/path convention.
+      (d/transact conn
+        [{:account/path "Assets:Bank"               :account/type :asset
+          :account/commodity eur}
+         {:account/path "Income:Dividends"          :account/type :income
+          :account/commodity eur}
+         {:journal/code "CR" :journal/type :cash :journal/name "Cash Receipts"}])
+      ;; Record €4,000 of dividend income.
+      (book/entry! conn
+        {:journal [:journal/code "CR"]
+         :effective-date #inst "2026-06-15"
+         :commodity eur
+         :narration "Acme dividend"
+         :postings [{:account [:account/path "Assets:Bank"]
+                     :amount 4000M}
+                    {:account [:account/path "Income:Dividends"]
+                     :amount -4000M}]})
+      ;; Provider with NO pre-supplied :investment-income-bases —
+      ;; forces the GL-scan path.
+      (let [provider (inv/de-investment-income-provider {})
+            facts (ptp/period-tax-facts
+                   provider
+                   {:db (d/db conn) :conn conn :entity nil
+                    :period p2026
+                    :tax-unit {:filing-status :single :church-tax-rate 0M}})
+            §20   (component-by-lane facts :de-§20-income)]
+        (is (some? §20)
+            "F7 regression: GL-scan must produce a §20 component from
+             :account/path-keyed dividend postings")
+        ;; €4,000 dividends − €1,000 Sparer-Pauschbetrag = €3,000 base
+        (is (== 3000M (-> §20 :base :amount))
+            "base = 4000 − 1000 SP = 3000")
+        ;; 25 % × 3000 = €750 Abgeltungsteuer
+        (is (== 750M (-> §20 :gross-liability :amount)))
+        ;; + 5.5 % Soli on 750 = 41.25 → liability 791.25
+        (is (== 791.25M (-> §20 :liability :amount)))))))

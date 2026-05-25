@@ -85,6 +85,7 @@
                         {:posting/entity [:db/id]}
                         {:posting/partner [:db/id]}
                         {:posting/account [:account/code
+                                           :account/path
                                            :account/type
                                            :account/tags]}
                         {:posting/account-tags [:account-tag/name]}
@@ -129,6 +130,7 @@
            :entity-eid (:db/id (:posting/entity pulled))
            :partner-eid (:db/id (:posting/partner pulled))
            :account-code (:account/code account)
+           :account-path (:account/path account)
            :account-type (:account/type account)
            :dimensions dimensions
            :all-tags (clojure.set/union acct-tag-names posting-tag-names))))
@@ -196,6 +198,7 @@
 (def ^:private dimension-extractors
   {:account-type :account-type
    :account-code :account-code
+   :account-path :account-path
    :ledger       :ledger-eid
    :entity       :entity-eid
    :commodity    :posting/commodity

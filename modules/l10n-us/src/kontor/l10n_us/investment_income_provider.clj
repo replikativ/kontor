@@ -103,8 +103,9 @@
 
 (defn- investment-income-base-selectors
   "Marginalize the GL income postings and split into the dividend +
-   interest lanes per the chart-code convention (note 148 §3.1).
-   Returns a map of `{<lane-key> <bigdec>}` keyed by chart prefix.
+   interest lanes per the canonical `:account/path` chart convention
+   (note 148 §3.1). Returns a map of `{<lane-key> <bigdec>}` keyed by
+   chart prefix.
 
    Requires `:conn` in ctx (`report-postings` needs a connection to
    take a bitemporal snapshot). When no `:conn` is available, the
@@ -113,18 +114,18 @@
   (let [postings (report/report-postings
                   conn (cond-> {:from (:from period) :to (:to period)}
                          entity (assoc :entity entity)))
-        by-code  (report/marginalize postings :account-code
+        by-path  (report/marginalize postings :account-path
                                      {:sign :inflow :commodity commodity})]
-    {:qualified-dividends      (sum-prefix by-code "Income:Dividends:Qualified")
-     :ordinary-dividends       (sum-prefix by-code "Income:Dividends:Ordinary")
-     :reit-dividends           (sum-prefix by-code "Income:Dividends:REIT")
-     :bank-interest            (sum-prefix by-code "Income:Interest:Bank")
-     :corp-bond-interest       (sum-prefix by-code "Income:Interest:Corporate")
-     :treasury-interest        (sum-prefix by-code "Income:Interest:Treasury")
-     :oid-interest             (sum-prefix by-code "Income:Interest:OID")
-     :market-discount          (sum-prefix by-code "Income:Interest:Market-Discount")
-     :muni-interest            (sum-prefix by-code "Income:Interest:Municipal")
-     :investment-interest-paid (sum-prefix by-code "Expense:Interest:Investment")}))
+    {:qualified-dividends      (sum-prefix by-path "Income:Dividends:Qualified")
+     :ordinary-dividends       (sum-prefix by-path "Income:Dividends:Ordinary")
+     :reit-dividends           (sum-prefix by-path "Income:Dividends:REIT")
+     :bank-interest            (sum-prefix by-path "Income:Interest:Bank")
+     :corp-bond-interest       (sum-prefix by-path "Income:Interest:Corporate")
+     :treasury-interest        (sum-prefix by-path "Income:Interest:Treasury")
+     :oid-interest             (sum-prefix by-path "Income:Interest:OID")
+     :market-discount          (sum-prefix by-path "Income:Interest:Market-Discount")
+     :muni-interest            (sum-prefix by-path "Income:Interest:Municipal")
+     :investment-interest-paid (sum-prefix by-path "Expense:Interest:Investment")}))
 
 (defn- taxable-interest [bases]
   (+ (:bank-interest bases)
