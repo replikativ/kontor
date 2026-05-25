@@ -629,7 +629,3 @@
                                "LISR Título II Cap I (arts 9, 18-IV, 19, 22, 22-A)"
                                :corporation))
 
-(defn install-statute!
-  "Install the MX CGT statute (parameters + provisions) into `conn`."
-  [conn]
-  (cgt-statute/install! conn))

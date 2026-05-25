@@ -416,7 +416,3 @@
    "TCGA 1992 (corporate chargeable gains) + Sch 7AC (SSE) + FA 2018 (indexation freeze)"
    :corporation))
 
-(defn install-statute!
-  "Install the UK CGT statute (parameters + provisions) into `conn`."
-  [conn]
-  (cgt-statute/install! conn))

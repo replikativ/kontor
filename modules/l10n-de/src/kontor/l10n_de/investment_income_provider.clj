@@ -429,13 +429,3 @@
    id :de-finanzamt commodity
    "§ 20 + § 32d EStG + § 4 SolZG + KiStG"))
 
-(defn install-statute!
-  "Back-compat shim — delegates to `kontor.l10n-de.investment-income-
-   statute/install!`, which since note 159 §F8 ships the complete
-   provision set (Soli + KiSt). Requires the DE CIT statute (for
-   `DE.Soli.rate`) AND the DE CGT statute (for `DE.EStG.§20.flat-rate`
-   + `DE.EStG.§17.inclusion-rate`) to be installed first.
-
-   Equivalent to: `(de-inv-statute/install! conn)`."
-  [conn]
-  (inv-statute/install! conn))

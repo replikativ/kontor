@@ -495,7 +495,3 @@
   (->CnEitCgtProvider (or id :cn-eit-cgt) source :cn-sat :CNY
                       "中华人民共和国企业所得税法 §4 §6 + Caishui [2009] 59 / Caishui [2014] 109 / Caishui [2014] 116"))
 
-(defn install-statute!
-  "Install the CN CGT statute (parameters + provisions) into `conn`."
-  [conn]
-  (cgt-statute/install! conn))

@@ -680,9 +680,3 @@
    "法人税法 §23 受取配当等の益金不算入"
    :corporation))
 
-(defn install-statute!
-  "Install JP investment-income statute (parameters + provisions)
-   into `conn`. REQUIRES JP CGT statute be installed first
-   (the 復興 surtax provision lives there)."
-  [conn]
-  (inv-statute/install! conn))

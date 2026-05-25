@@ -1,0 +1,55 @@
+(ns kontor.l10n-uk.preset
+  "One-call UK preset — turns the multi-step prerequisite-aware install
+   dance into a single `(install-all! conn)` call.
+
+   Per note 168 §S10 (one-preset-per-module sweep).
+
+   What it installs:
+   - Kernel schema (re-call is idempotent)
+   - GBP commodity
+   - Default journals: GJ / CR / CD / SJ / PJ
+   - Statutes: CGT (AEA + 18/24 % std + BADR £1M cap + SSE corporate +
+     post-Autumn-Budget-2024 rates), investment-income (CTA 2009 Part 9A
+     distribution exemption + savings allowance + dividend allowance).
+
+   UK does not yet ship a chart module — consumers either bring their
+   own chart or post against ad-hoc accounts. UK does not yet ship an
+   ADR-101 CIT statute; the period-tax provider carries the rate
+   (record-shape, pre-ADR-101). The iXBRL filing gate is deferred per
+   research note 78.
+
+   Idempotent."
+  (:require [datahike.api :as d]
+            [kontor.core :as core]
+            [kontor.l10n-uk.cgt-statute :as cgt-statute]
+            [kontor.l10n-uk.investment-income-provider]  ; load compute-fns
+            [kontor.l10n-uk.investment-income-statute :as inv-statute]))
+
+(def ^:private default-commodity
+  [{:commodity/symbol "GBP" :commodity/name "Pound Sterling"
+    :commodity/precision 2}])
+
+(def ^:private default-journals
+  [{:journal/code "GJ" :journal/type :general :journal/name "General Journal"}
+   {:journal/code "CR" :journal/type :cash    :journal/name "Cash Receipts"}
+   {:journal/code "CD" :journal/type :cash    :journal/name "Cash Disbursements"}
+   {:journal/code "SJ" :journal/type :sale    :journal/name "Sales Journal"}
+   {:journal/code "PJ" :journal/type :purchase :journal/name "Purchase Journal"}])
+
+(defn install-all!
+  "Install everything a UK consumer needs to start booking + producing
+   reports + period taxes. See namespace docstring."
+  [conn]
+  (d/transact conn default-commodity)
+  (cgt-statute/install! conn)
+  (inv-statute/install! conn)
+  (d/transact conn default-journals)
+  conn)
+
+(defn create-uk-db
+  "Convenience for tests / scripts: `(create-test-db)` + `(install-all!)`.
+   Returns the connection."
+  []
+  (let [conn (core/create-test-db)]
+    (install-all! conn)
+    conn))

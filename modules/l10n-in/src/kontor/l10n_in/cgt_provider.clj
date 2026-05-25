@@ -783,7 +783,3 @@
    "Income-tax Act 1961 §111A / §112 / §112A / §50AA / §54 family"
    kind))
 
-(defn install-statute!
-  "Install the IN CGT statute (parameters + provisions) into `conn`."
-  [conn]
-  (cgt-statute/install! conn))

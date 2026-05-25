@@ -1,0 +1,52 @@
+(ns kontor.l10n-us.preset
+  "One-call US preset — turns the multi-step prerequisite-aware install
+   dance into a single `(install-all! conn)` call.
+
+   Per note 168 §S10 (one-preset-per-module sweep).
+
+   What it installs:
+   - Kernel schema (re-call is idempotent)
+   - USD commodity (via chart)
+   - Default journals: GJ / CR / CD / SJ / PJ
+   - US chart of accounts (US GAAP skeleton)
+   - Statutes: CGT (§1(h) 0/15/20 brackets × filing-status + §1250 25 %
+     + §1411 NIIT 3.8 %), investment-income (§1(h)(11) qualified
+     dividends + §103 muni-bond + §163(d) NII election + §901 FTC).
+
+   US does not yet ship an ADR-101 CIT statute; the period-tax provider
+   carries the federal flat 21 % (record-shape, pre-ADR-101). State
+   income taxes are out of scope per ADR-005 / ADR-010 (consumers
+   integrate Avalara / TaxJar for sub-federal income / sales taxes).
+
+   Idempotent."
+  (:require [datahike.api :as d]
+            [kontor.core :as core]
+            [kontor.l10n-us.cgt-statute :as cgt-statute]
+            [kontor.l10n-us.chart :as chart]
+            [kontor.l10n-us.investment-income-provider]  ; load compute-fns
+            [kontor.l10n-us.investment-income-statute :as inv-statute]))
+
+(def ^:private default-journals
+  [{:journal/code "GJ" :journal/type :general :journal/name "General Journal"}
+   {:journal/code "CR" :journal/type :cash    :journal/name "Cash Receipts"}
+   {:journal/code "CD" :journal/type :cash    :journal/name "Cash Disbursements"}
+   {:journal/code "SJ" :journal/type :sale    :journal/name "Sales Journal"}
+   {:journal/code "PJ" :journal/type :purchase :journal/name "Purchase Journal"}])
+
+(defn install-all!
+  "Install everything a US consumer needs to start booking + producing
+   reports + period taxes. See namespace docstring."
+  [conn]
+  (cgt-statute/install! conn)
+  (inv-statute/install! conn)
+  (chart/install! conn)
+  (d/transact conn default-journals)
+  conn)
+
+(defn create-us-db
+  "Convenience for tests / scripts: `(create-test-db)` + `(install-all!)`.
+   Returns the connection."
+  []
+  (let [conn (core/create-test-db)]
+    (install-all! conn)
+    conn))

@@ -311,9 +311,3 @@
    "IRC §1(h)(11), §103, §163(d), §901, §1411"
    emit-niit?))
 
-(defn install-statute!
-  "Install the US investment-income statute. Requires the US CGT
-   statute to be installed first (this statute references the CGT
-   bracket parameters by code)."
-  [conn]
-  (inv-statute/install! conn))

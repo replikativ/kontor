@@ -809,7 +809,3 @@
    id source :fr-dgfip commodity
    "CGI Art. 150-0 A + 150 U + 39 duodecies + 39 quindecies + 200 A"))
 
-(defn install-statute!
-  "Install the FR CGT statute (parameters) into `conn`."
-  [conn]
-  (cgt-statute/install! conn))

@@ -266,9 +266,3 @@
   [{:keys [id commodity] :or {id :fr-cit commodity :EUR}}]
   (->FRCITProvider id commodity))
 
-(defn install-statute!
-  "Convenience wrapper around `kontor.l10n-fr.cit-statute/install!` for
-   callers that want one-call statute setup before constructing the
-   provider."
-  [conn]
-  (cit-statute/install! conn))

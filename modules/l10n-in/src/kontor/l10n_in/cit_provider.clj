@@ -367,9 +367,3 @@
   [{:keys [id commodity] :or {id :in-cit commodity :INR}}]
   (->INCITProvider id commodity))
 
-(defn install-statute!
-  "Convenience wrapper around `kontor.l10n-in.cit-statute/install!` for
-   callers that want one-call statute setup before constructing the
-   provider."
-  [conn]
-  (cit-statute/install! conn))

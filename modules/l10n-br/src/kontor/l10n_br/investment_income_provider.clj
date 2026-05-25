@@ -644,9 +644,3 @@
         "(CFC); Lei 15.270/2025 art. 6 §3 (PJ exemption carve-out)")
    :corporation))
 
-(defn install-statute!
-  "Install the BR investment-income statute (parameters + values) into
-   `conn`. Standalone — does not require any other statute installed
-   first."
-  [conn]
-  (inv-statute/install! conn))

@@ -615,8 +615,3 @@
    "ITAA 1997 Part 3-6 + ITAA 1936 Pt IIIAA Div 1A (savings) + s.770-10 + Pt VA"
    kind))
 
-(defn install-statute!
-  "Install the AU investment-income statute (parameters + values) into
-   `conn`."
-  [conn]
-  (inv-statute/install! conn))

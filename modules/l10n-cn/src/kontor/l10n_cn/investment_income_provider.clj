@@ -642,8 +642,3 @@
    (or id :cn-eit-investment-income) :cn-sat :CNY
    "中华人民共和国企业所得税法 §4 §23 §26(2) + Caishui [2008] 130 / [2008] 159 / [2014] 81"))
 
-(defn install-statute!
-  "Install the CN investment-income statute (parameters + provisions)
-   into `conn`."
-  [conn]
-  (inv-statute/install! conn))

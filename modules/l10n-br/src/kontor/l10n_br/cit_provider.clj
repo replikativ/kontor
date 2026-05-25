@@ -437,9 +437,3 @@
   [{:keys [id commodity] :or {id :br-cit commodity :BRL}}]
   (->BRCITProvider id commodity))
 
-(defn install-statute!
-  "Convenience wrapper around `kontor.l10n-br.cit-statute/install!` for
-   callers that want one-call statute setup before constructing the
-   provider."
-  [conn]
-  (cit-statute/install! conn))

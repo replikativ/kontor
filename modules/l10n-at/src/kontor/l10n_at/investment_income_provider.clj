@@ -737,9 +737,3 @@
    id :at-finanzamt commodity
    "KStG §10 Abs 1 Z 1 (domestic) + §10 Abs 1 Z 5-6 (foreign portfolio) + §10 Abs 2-3 (Schachtelbeteiligung) + §10 Abs 4 (Switch-over)"))
 
-(defn install-statute!
-  "Install the AT investment-income statute into `conn`. Requires the
-   AT CGT statute to be installed first (this statute references KESt
-   rates + §10 thresholds + CIT rate parameters by code)."
-  [conn]
-  (inv-statute/install! conn))

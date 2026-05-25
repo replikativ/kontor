@@ -641,8 +641,3 @@
    kind commodity
    "IT Act 1961 §194 / §194A / §194K / §115A / §80TTA / §80TTB + FA 2024 surcharge cap"))
 
-(defn install-statute!
-  "Install the IN investment-income statute (parameters + parameter-values
-   + provisions) into `conn`. Idempotent."
-  [conn]
-  (inv-statute/install! conn))

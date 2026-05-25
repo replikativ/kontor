@@ -529,7 +529,3 @@
                                "法人税法 §22 (corporate gains fold into ordinary income)"
                                :corporation))
 
-(defn install-statute!
-  "Install the JP CGT statute (parameters + provisions) into `conn`."
-  [conn]
-  (cgt-statute/install! conn))

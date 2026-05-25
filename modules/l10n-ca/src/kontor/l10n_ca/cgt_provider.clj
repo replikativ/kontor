@@ -624,7 +624,3 @@
   (->CACapitalGainsTaxProvider (or id :ca-cgt-corporate) source :ca-cra :CAD
                                "ITA s.38, s.39, s.40 (corporate)" :corporation))
 
-(defn install-statute!
-  "Install the CA CGT statute (parameters) into `conn`."
-  [conn]
-  (cgt-statute/install! conn))

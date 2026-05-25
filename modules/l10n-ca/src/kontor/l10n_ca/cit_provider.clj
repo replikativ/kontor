@@ -397,9 +397,3 @@
   [{:keys [id commodity] :or {id :ca-cit commodity :CAD}}]
   (->CACITProvider id commodity))
 
-(defn install-statute!
-  "Convenience wrapper around `kontor.l10n-ca.cit-statute/install!`
-   for callers that want one-call statute setup before constructing
-   the provider."
-  [conn]
-  (cit-statute/install! conn))

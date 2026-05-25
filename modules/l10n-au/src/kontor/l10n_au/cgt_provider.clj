@@ -657,7 +657,3 @@
    "ITAA 1997 Div 115 / Subdiv 152 / Div 118-B / Div 855"
    kind))
 
-(defn install-statute!
-  "Install the AU CGT statute (parameters + values) into `conn`."
-  [conn]
-  (cgt-statute/install! conn))

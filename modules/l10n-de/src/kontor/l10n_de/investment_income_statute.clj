@@ -125,9 +125,8 @@
    `kontor.l10n-de.investment-income-provider`'s `register!` (called
    at namespace load).
 
-   Single install path — `install!` here ships everything; the
-   provider's `install-statute!` is now just a thin wrapper for
-   back-compat (note 159 §F8). A consumer who calls only
+   Single install path — `install!` here ships everything (note 159
+   §F8, consolidated by note 168 §S2). A consumer who calls only
    `inv-statute/install!` gets the complete tax stack.
 
    - **`DE-SolZG-§4-on-§20-income`** (priority 100): Soli 5.5 % surtax,

@@ -21,6 +21,7 @@
             [datahike.api :as d]
             [kontor.core :as core]
             [kontor.l10n-br.investment-income-provider :as inv]
+            [kontor.l10n-br.investment-income-statute :as inv-statute]
             [kontor.period-tax-provider :as ptp]))
 
 ;; ============================================================================
@@ -32,7 +33,7 @@
    + one PF and one PJ entity."
   []
   (let [conn (core/create-test-db)]
-    (inv/install-statute! conn)
+    (inv-statute/install! conn)
     (d/transact conn [{:commodity/symbol    "BRL"
                        :commodity/name      "Brazilian Real"
                        :commodity/precision 2}

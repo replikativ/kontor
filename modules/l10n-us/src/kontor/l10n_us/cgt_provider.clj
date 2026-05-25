@@ -498,7 +498,3 @@
                                "IRC §1211(a), §1212(a), §1245, §1250" :corporation
                                false))
 
-(defn install-statute!
-  "Install the US CGT statute (parameters + provisions) into `conn`."
-  [conn]
-  (cgt-statute/install! conn))

@@ -898,7 +898,3 @@
   (->ATCorporateCgtProvider id source :at-finanzamt commodity
                             "KStG §10 + §12 Abs 3 Z 2 (Schachtelbeteiligung + Siebentelregelung)"))
 
-(defn install-statute!
-  "Install the AT CGT statute (parameters + provisions) into `conn`."
-  [conn]
-  (cgt-statute/install! conn))

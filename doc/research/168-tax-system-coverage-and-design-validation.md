@@ -163,7 +163,7 @@ folding, monocommodity check). ADR-099 Addendum (5). Full suite
    post-construction.
 
 ### S2 — Two install entry points per module
-**Severity: P0** · **Scope: 11 jurisdictions × {cit, cgt, investment_income}**
+**Severity: P0** · **Scope: 11 jurisdictions × {cit, cgt, investment_income}** · **Status: FIXED 2026-05-25 (commit pending)** — T1.W1.2 deleted all 30 provider-side `install-statute!` delegators across the 11 l10n modules. The statute-side `install!` is now the single per-concept entry point; 3 test callers (`l10n-{at,de,br}/test/.../investment_income_provider_test.clj`) re-wired to call `inv-statute/install!` directly.
 
 - **Evidence**: every `*_statute.clj` exports `install!`; every
   `*_provider.clj` exports `install-statute!` which delegates one line to
@@ -340,7 +340,7 @@ folding, monocommodity check). ADR-099 Addendum (5). Full suite
   `:entity`.
 
 ### S10 — Each module ships its own `install!` for every statute (no per-module orchestrator)
-**Severity: P1** · **Scope: every l10n module**
+**Severity: P1** · **Scope: every l10n module** · **Status: FIXED 2026-05-25 (commit pending)** — T1.W1.2 added a `preset.clj` with `install-all!` + `create-XX-db` to all 10 modules missing one (`l10n-{at,au,br,cn,fr,in,jp,mx,uk,us}`); DE + CA already had presets. Each preset orders statutes by prerequisite (CIT-first where present), then chart, then default GJ/CR/CD/SJ/PJ journals (localised names where applicable). UK ships GBP commodity inline since it lacks a chart module per note 78 §3.
 
 - **Evidence**: DE has `cit-statute/install!`, `cgt-statute/install!`,
   `investment-income-statute/install!`, `chart/install!`,

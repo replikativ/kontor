@@ -540,8 +540,3 @@
    id :corporation commodity
    "ITA §112, §123.3, §186"))
 
-(defn install-statute!
-  "Install the CA investment-income statute (parameters + provisions)
-   into `conn`."
-  [conn]
-  (inv-statute/install! conn))

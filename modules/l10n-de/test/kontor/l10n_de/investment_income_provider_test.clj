@@ -33,7 +33,7 @@
   (let [conn (core/create-test-db)]
     (cit-statute/install! conn)
     (cgt-statute/install! conn)
-    (inv/install-statute! conn)
+    (inv-statute/install! conn)
     (d/transact conn [{:commodity/symbol "EUR" :commodity/name "Euro"
                        :commodity/precision 2}])
     conn))
@@ -365,9 +365,9 @@
 ;; ============================================================================
 
 (deftest single-install-path-yields-full-soli-stack
-  (testing "F8 regression (note 159): `inv-statute/install!` alone — without
-            calling the provider's `install-statute!` — must ship BOTH KiSt
-            AND Soli provisions; consumer dividend → full 25 % + 5.5 % Soli"
+  (testing "F8 regression (note 159): `inv-statute/install!` alone must ship
+            BOTH KiSt AND Soli provisions; consumer dividend → full 25 % +
+            5.5 % Soli (note 168 §S2 — single install entry per concept)"
     (let [conn (core/create-test-db)]
       (cit-statute/install! conn)
       (cgt-statute/install! conn)

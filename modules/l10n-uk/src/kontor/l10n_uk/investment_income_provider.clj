@@ -517,8 +517,3 @@
    "CTA 2009 Part 9A — distribution exemption for corporate recipients"
    :corporation))
 
-(defn install-statute!
-  "Install the UK investment-income statute (parameters + values)
-   into `conn`."
-  [conn]
-  (inv-statute/install! conn))

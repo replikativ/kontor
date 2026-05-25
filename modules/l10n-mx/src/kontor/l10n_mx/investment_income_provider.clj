@@ -503,8 +503,3 @@
    id :corporation commodity authority
    "LISR Título II — arts 9, 16 fr. III"))
 
-(defn install-statute!
-  "Install the MX investment-income statute (parameters + provisions)
-   into `conn`."
-  [conn]
-  (inv-statute/install! conn))

@@ -499,10 +499,3 @@
    id :fr-dgfip commodity
    "CGI Art. 145 + 216 + 223 A (intégration fiscale)"))
 
-(defn install-statute!
-  "Install the FR investment-income statute (parameters) into `conn`.
-   Requires the FR CGT statute to be installed first (this statute
-   references the CGT PS placement-rate + PFU IR-rate parameters by
-   code)."
-  [conn]
-  (inv-statute/install! conn))

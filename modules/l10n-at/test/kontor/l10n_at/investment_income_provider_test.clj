@@ -20,6 +20,7 @@
             [kontor.core :as core]
             [kontor.l10n-at.cgt-statute :as cgt-statute]
             [kontor.l10n-at.investment-income-provider :as inv]
+            [kontor.l10n-at.investment-income-statute :as inv-statute]
             [kontor.period-tax-provider :as ptp]))
 
 ;; ============================================================================
@@ -33,7 +34,7 @@
   []
   (let [conn (core/create-test-db)]
     (cgt-statute/install! conn)
-    (inv/install-statute! conn)
+    (inv-statute/install! conn)
     (d/transact conn [{:commodity/symbol "EUR" :commodity/name "Euro"
                        :commodity/precision 2}])
     conn))

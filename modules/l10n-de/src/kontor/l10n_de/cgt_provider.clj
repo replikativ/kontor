@@ -640,10 +640,6 @@
   (->DECapitalGainsTaxProvider id source :de-finanzamt commodity
                                "EStG §17 + §20 + §23 + SolZG §4" :individual))
 
-(defn install-statute!
-  "Install the DE CGT statute (parameters + provisions) into `conn`."
-  [conn]
-  (cgt-statute/install! conn))
 
 ;; ============================================================================
 ;; CGT-CIT bridge — feed the §8b add-back into the CIT provider's :inputs

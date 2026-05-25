@@ -544,7 +544,3 @@
    :corporation
    (merge default-asset-class->lane (or asset-class-overrides {}))))
 
-(defn install-statute!
-  "Install the BR CGT statute (parameters + brackets) into `conn`."
-  [conn]
-  (cgt-statute/install! conn))
