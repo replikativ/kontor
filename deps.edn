@@ -55,7 +55,8 @@
          "modules/import-edgar/src" "modules/import-edgar/resources"
          "modules/people-record/src" "modules/people-record/resources"
          "modules/commitment/src"  "modules/commitment/resources"
-         "modules/disposal/src"    "modules/disposal/resources"]
+         "modules/disposal/src"    "modules/disposal/resources"
+         "modules/treaty-de-ca/src"]
 
  :deps
  {org.clojure/clojure              {:mvn/version "1.12.4"}

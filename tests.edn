@@ -45,7 +45,8 @@
                        "modules/import-edgar/test"
                        "modules/people-record/test"
                        "modules/commitment/test"
-                       "modules/disposal/test"]
+                       "modules/disposal/test"
+                       "modules/treaty-de-ca/test"]
           :ns-patterns [".*-test$"]}]
  :color? true
  :randomize? false
