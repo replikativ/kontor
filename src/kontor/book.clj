@@ -288,3 +288,43 @@
    type `:general`."
   ([conn opts] (adjust! conn opts {}))
   ([conn opts extra] (entry! conn (assoc opts :journal-type :general) extra)))
+
+;; ============================================================================
+;; Equity-distribution verbs — note 107 §2.6 (the corporation→shareholder loop)
+;; ============================================================================
+
+(defn declare-dividend!
+  "CORPORATION side — book a dividend declaration. Debit Retained
+   Earnings; credit Dividends Payable (a liability). Journal type
+   `:general` — this is the accrual; the cash payment is a separate
+   `distribute-dividend!`.
+
+   Conventional accounts (the consumer wires the chart):
+     :debit-account   Equity:Retained-Earnings
+     :credit-account  Liabilities:Dividends-Payable
+
+   The shareholder is `:partner` (a `:partner` ref) — the GL stamps
+   `:transaction/partner` so the dividend liability is shareholder-
+   traceable.
+
+   Note 107 §2.6."
+  ([conn opts] (declare-dividend! conn opts {}))
+  ([conn opts extra] (entry! conn (assoc opts :journal-type :general) extra)))
+
+(defn distribute-dividend!
+  "CORPORATION side — pay an already-declared dividend. Debit
+   Dividends Payable (settles the liability); credit Cash/Bank.
+   Journal type `:cash`.
+
+   Conventional accounts:
+     :debit-account   Liabilities:Dividends-Payable
+     :credit-account  Assets:Bank
+
+   The shareholder records the receipt separately on their books
+   via `receive!` (Dr Bank, Cr Income:Dividends) — the investment-
+   income regime in `kontor-l10n-<cc>` then taxes it (DE
+   Abgeltungsteuer, US qualified-dividend, FR PFU, JP 20.315 %, …).
+
+   Note 107 §2.6."
+  ([conn opts] (distribute-dividend! conn opts {}))
+  ([conn opts extra] (entry! conn (assoc opts :journal-type :cash) extra)))
