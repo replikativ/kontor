@@ -101,6 +101,21 @@
   (when-not commodity        (throw (ex-info ":commodity required" {})))
   (when-not due-date         (throw (ex-info ":due-date required" {})))
   (when-not recorded-by-uid  (throw (ex-info ":recorded-by-uid required" {})))
+  ;; Helpful pre-check (note 160 §I-12): if the consumer transacted the
+  ;; schema attrs but not the `:status-transition` seeds, the underlying
+  ;; sm/record-status-change-tx-data would throw a generic "Illegal
+  ;; status transition" with no hint. Catch it here with a pointer.
+  (when-not (d/q '[:find ?t .
+                   :where [?t :status-transition/entity-type :commitment]
+                          [?t :status-transition/from :nil]
+                          [?t :status-transition/to :open]
+                          [?t :status-transition/active true]]
+                 db)
+    (throw (ex-info
+            (str "kontor.commitment: status-transition seeds not found in the DB. "
+                 "Did you call `(kontor.commitment/install! conn)`? "
+                 "It installs both the schema attrs AND the seeds.")
+            {:hint :missing-status-transition-seeds})))
   (let [recorded-at (or recorded-at (java.util.Date.))
         row (cond-> {:db/id                       tempid
                      :commitment/external-id      external-id

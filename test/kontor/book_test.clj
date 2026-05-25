@@ -242,6 +242,33 @@
           (is (contains? pairs ["Liabilities:Payable" -400M "TOMAS"])
               "Tomas's leg carries his :posting/partner"))))
 
+    (testing "I-2 regression: bare keyword + short string :commodity
+              are auto-coerced to [:commodity/symbol …] lookup-ref"
+      ;; All three forms must succeed and produce identical postings.
+      (let [d2 #inst "2026-04-01"
+            mk (fn [c]
+                 (book/entry! conn
+                   {:journal [:journal/code "GEN"] :effective-date d2
+                    :commodity c
+                    :narration (str "I-2 coerce: " (pr-str c))
+                    :postings [{:account rev :amount 10M}
+                               {:account ap  :amount -10M}]}))]
+        ;; Lookup-ref (canonical)
+        (mk [:commodity/symbol "EUR"])
+        ;; Bare keyword (Phase D / note 159 §F6)
+        (mk :EUR)
+        ;; Short string
+        (mk "EUR")
+        ;; All 3 should have produced postings with the same :posting/commodity eid
+        (let [eids (set (d/q '[:find [?c ...]
+                               :in $ ?d
+                               :where [?t :transaction/effective-date ?d]
+                                      [?p :posting/transaction ?t]
+                                      [?p :posting/commodity ?c]]
+                             (d/db conn) d2))]
+          (is (= 1 (count eids))
+              "all 3 :commodity forms resolve to the same EUR eid"))))
+
     (testing "trial-balance {:entity ug} returns only UG-stamped postings"
       (let [tb (trial/trial-balance conn {:entity ug})
             pull-path (fn [eid] (:account/path (d/pull (d/db conn) [:account/path] eid)))

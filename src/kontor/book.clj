@@ -33,7 +33,11 @@
      :debit-account   — account ref or lookup-ref   (required)
      :credit-account  — account ref or lookup-ref   (required)
      :amount          — number, coerced to BigDecimal (required)
-     :commodity       — commodity ref               (required)
+     :commodity       — commodity ref               (required). Accepts:
+                        bare keyword `:EUR`, short string `\"EUR\"`,
+                        lookup-ref `[:commodity/symbol \"EUR\"]`, or
+                        an eid. Bare keyword/string are auto-promoted
+                        to the lookup-ref (note 160 §I-2).
      :effective-date  — #inst, the bitemporal valid-time
                         (required for `entry-tx-data`; `entry!` and
                          the verbs default it to now)
@@ -90,6 +94,22 @@
     (nil? x)                 nil
     :else                    (bigdec x)))
 
+(defn- ->commodity-ref
+  "Coerce a consumer-friendly `:commodity` value to a datahike
+   reference. Note 160 §I-2: bare keyword `:EUR` or short string `\"EUR\"`
+   are the natural ways to write a commodity in a verb call; both get
+   auto-promoted to the canonical `[:commodity/symbol \"EUR\"]`
+   lookup-ref. Pre-existing eid (Long) or explicit lookup-ref (vector)
+   passes through unchanged."
+  [c]
+  (cond
+    (nil? c)              nil
+    (vector? c)           c                       ; already a lookup-ref
+    (number? c)           c                       ; already an eid
+    (keyword? c)          [:commodity/symbol (name c)]
+    (string? c)           [:commodity/symbol c]
+    :else                 c))
+
 (defn- ->dimension-value
   "Coerce a friendly dimension value to the schema's string."
   [v]
@@ -122,7 +142,7 @@
     (throw (ex-info "kontor.book: each :postings entry needs :account" {:posting p})))
   (when (nil? amount)
     (throw (ex-info "kontor.book: each :postings entry needs :amount" {:posting p})))
-  (let [c  (or commodity default-commodity)
+  (let [c  (->commodity-ref (or commodity default-commodity))
         e  (or entity    default-entity)
         pa (or partner   default-partner)]
     (when (nil? c)
@@ -155,22 +175,23 @@
              (mapv #(->posting commodity entity partner %) postings)
 
              :else
-             (let [amt (->bigdec amount)]
+             (let [amt (->bigdec amount)
+                   c   (->commodity-ref commodity)]
                (when (nil? debit-account)
                  (throw (ex-info "kontor.book: :debit-account is required" {})))
                (when (nil? credit-account)
                  (throw (ex-info "kontor.book: :credit-account is required" {})))
                (when (nil? amt)
                  (throw (ex-info "kontor.book: :amount is required" {})))
-               (when (nil? commodity)
+               (when (nil? c)
                  (throw (ex-info "kontor.book: :commodity is required" {})))
                [(cond-> {:posting/account   debit-account
                          :posting/amount    amt
-                         :posting/commodity commodity}
+                         :posting/commodity c}
                   entity (assoc :posting/entity entity))
                 (cond-> {:posting/account   credit-account
                          :posting/amount    (- amt)
-                         :posting/commodity commodity}
+                         :posting/commodity c}
                   entity (assoc :posting/entity entity))]))]
     {:transaction (cond-> {:transaction/journal        journal
                            :transaction/effective-date effective-date}

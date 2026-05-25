@@ -41,18 +41,19 @@ Recommend `:*/code` for short stable identifiers, `:*/external-id` for
 opaque consumer-supplied keys. Document in `doc/conventions.md`.
 
 ### I-2 — `:posting/commodity` ref takes a lookup-ref or eid, not a bare keyword
-**Status**: OPEN · **Severity**: P1 · **Surfaced**: note 159 §F6
+**Status**: FIXED · **Severity**: P1 · **Surfaced**: note 159 §F6
 
-`:commodity :EUR` in `kontor.book` verbs throws `entid-strict: Nothing
-found`. Must be `[:commodity/symbol "EUR"]` (or an eid). Test fixtures
-universally define a top-level var:
+`:commodity :EUR` in `kontor.book` verbs threw `entid-strict: Nothing
+found`. Required `[:commodity/symbol "EUR"]` (or an eid). Test fixtures
+universally defined a top-level var:
 ```clojure
 (def ^:private eur [:commodity/symbol "EUR"])
 ```
 
-**Proposed direction**: `kontor.book` verbs auto-coerce bare keyword /
-short-string `:commodity` to a `[:commodity/symbol …]` lookup-ref —
-mirrors what consumers naturally write.
+**Fixed**: `kontor.book` verbs now auto-coerce via `->commodity-ref`:
+bare keyword (`:EUR`), short string (`"EUR"`), lookup-ref, or eid all
+accepted in both `:commodity` (entry-level default) and `:commodity`
+on individual postings. Test: `book-test/I-2 regression …`.
 
 ### I-3 — `:account/code` not unique; `:account/path` IS
 **Status**: OPEN · **Severity**: P1 · **Surfaced**: note 159 §F5
@@ -198,27 +199,18 @@ fn, others as private.
 ## §6 — Status-machine + commitment
 
 ### I-12 — `commit/record-commitment!` requires status-transition schema seed
-**Status**: OPEN · **Severity**: P1 · **Surfaced**: REPL 2026-05-25
+**Status**: FIXED · **Severity**: P1 · **Surfaced**: REPL 2026-05-25
 
-First call to `commit/record-commitment!` after `core/create-test-db` +
-`commit/install!` throws "Illegal status transition" until you ALSO call
-`kontor.commitment.schema/install!` to seed the transition table.
+First call to `commit/record-commitment!` after `core/create-test-db`
+threw "Illegal status transition" because the per-companion status-
+transition seeds weren't installed. The error pointed at status-
+machine, not commitment — making the diagnosis costly.
 
-Confusingly:
-- `kontor.commitment/install!` is `(def install! schema/install!)` — yes!
-- But in the REPL the namespace alias `commit` was set up before `schema`
-  was loaded, and `install!` resolved to the schema-only one (no journal
-  install).
-
-Investigated: actually `commit/install!` DOES call `schema/install!`
-(line 31 of commitment.clj). But in the REPL session it wasn't being
-called before `record-commitment!`. The error message points at status-
-machine, not commitment.
-
-**Proposed direction**: `commit/record-commitment!` should sanity-check
-that the status-transition seeds exist and throw a clearer error
-("commitment.schema not installed; call commit/install! first") if
-not.
+**Fixed**: `record-commitment-tx-data` now pre-checks for the
+`:status-transition/entity-type :commitment` seeds and throws a
+targeted `kontor.commitment: status-transition seeds not found in
+the DB. Did you call '(kontor.commitment/install! conn)'?` with
+`{:hint :missing-status-transition-seeds}`.
 
 ---
 
