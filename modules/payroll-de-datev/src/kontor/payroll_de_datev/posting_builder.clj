@@ -28,7 +28,7 @@
    The Verrechnungskonto nets to zero per fact — the same invariant
    the EXTF Buchungsbeleg parser checks (note 82 §4.2 / §11.18).
 
-   The builder produces flat `:posting/*` maps ready for
+   The builder produces flat `:kontor.posting/*` maps ready for
    `kontor.posting/build-transaction` (per ADR-068 *-tx-data builder
    convention). The orchestrator (`kontor.hr.payroll/run-payroll!`)
    wraps them into one balanced `:transaction`.
@@ -87,11 +87,11 @@
 
 (defn- gross-leg
   [{:keys [commodity ledger] :as _ctx} acct ^BigDecimal amt narration]
-  (cond-> {:posting/account acct
-           :posting/amount  (money-amount amt)
-           :posting/commodity commodity
-           :posting/narration narration}
-    ledger (assoc :posting/ledger ledger)))
+  (cond-> {:kontor.posting/account acct
+           :kontor.posting/amount  (money-amount amt)
+           :kontor.posting/commodity commodity
+           :kontor.posting/narration narration}
+    ledger (assoc :kontor.posting/ledger ledger)))
 
 (defn- gross-postings
   "Per PayrollFact emit the gross-side Dr legs:
@@ -269,7 +269,7 @@
 
 (defn urlaubsrueckstellung-tx-data
   "Pure tx-data builder for an Urlaubsrückstellung accrual posting
-   (note 82 §5.1). Returns a vector of `:posting/*` maps ready for
+   (note 82 §5.1). Returns a vector of `:kontor.posting/*` maps ready for
    `kontor.posting/build-transaction-tx-data`.
 
    Inputs:
@@ -292,13 +292,13 @@
                                         :urlaubsrueckstellung-aufwand)
         rs-acct   (account-ref-or-throw ctx :urlaubsrueckstellung
                                         :urlaubsrueckstellung)]
-    [(cond-> {:posting/account aufw-acct
-              :posting/amount  (money-amount amount)
-              :posting/commodity commodity
-              :posting/narration narration}
-       ledger (assoc :posting/ledger ledger))
-     (cond-> {:posting/account rs-acct
-              :posting/amount  (neg (money-amount amount))
-              :posting/commodity commodity
-              :posting/narration narration}
-       ledger (assoc :posting/ledger ledger))]))
+    [(cond-> {:kontor.posting/account aufw-acct
+              :kontor.posting/amount  (money-amount amount)
+              :kontor.posting/commodity commodity
+              :kontor.posting/narration narration}
+       ledger (assoc :kontor.posting/ledger ledger))
+     (cond-> {:kontor.posting/account rs-acct
+              :kontor.posting/amount  (neg (money-amount amount))
+              :kontor.posting/commodity commodity
+              :kontor.posting/narration narration}
+       ledger (assoc :kontor.posting/ledger ledger))]))

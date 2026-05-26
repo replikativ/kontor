@@ -6,7 +6,7 @@
      - 1 consolidation entity (acme-group, functional commodity EUR)
      - 1 elimination entity (acme-elim)
      - Intercompany sale: DE books AR + Sales, US books AP + Purchases,
-       both tagged with shared :transaction/intercompany-pair-id
+       both tagged with shared :kontor.transaction/intercompany-pair-id
      - consolidate! runs: each entity's trial balance translated to EUR,
        the intercompany pair eliminated. Group trial balance verified."
   (:require [clojure.test :refer [deftest is testing]]
@@ -96,10 +96,10 @@
                   :kontor.account/type :equity
                   :kontor.account/active true}
                  {:db/id "journal"
-                  :journal/code "GEN"
-                  :journal/name "General"
-                  :journal/type :misc
-                  :journal/active true}])
+                  :kontor.journal/code "GEN"
+                  :kontor.journal/name "General"
+                  :kontor.journal/type :misc
+                  :kontor.journal/active true}])
     conn))
 
 (def code->path
@@ -119,42 +119,42 @@
 (defn- book-intercompany-pair! [conn]
   "DE books AR-IC +100 EUR / Sales-IC -100 EUR.
    US books Purchases-IC +108 USD / AP-IC -108 USD.
-   Both tagged :transaction/intercompany-pair-id \"P-001\"."
+   Both tagged :kontor.transaction/intercompany-pair-id \"P-001\"."
   (let [db (d/db conn)
         ac (eids db ["1400-IC" "1600-IC" "4400-IC" "5400-IC"])
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         usd (:db/id (d/entity db [:kontor.commodity/symbol "USD"]))
-        jnl (:db/id (d/entity db [:journal/code "GEN"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "GEN"]))
         de (:db/id (d/entity db [:kontor.entity/code "acme-de"]))
         us (:db/id (d/entity db [:kontor.entity/code "acme-us"]))]
     (posting/post-transaction!
      conn
-     {:transaction {:transaction/journal jnl
-                    :transaction/effective-date jan-2
-                    :transaction/intercompany-pair-id "P-001"
-                    :transaction/narration "DE side IC sale"}
-      :postings    [{:posting/account (ac "1400-IC")
-                     :posting/commodity eur
-                     :posting/amount 100M
-                     :posting/entity de}
-                    {:posting/account (ac "4400-IC")
-                     :posting/commodity eur
-                     :posting/amount -100M
-                     :posting/entity de}]})
+     {:transaction {:kontor.transaction/journal jnl
+                    :kontor.transaction/effective-date jan-2
+                    :kontor.transaction/intercompany-pair-id "P-001"
+                    :kontor.transaction/narration "DE side IC sale"}
+      :postings    [{:kontor.posting/account (ac "1400-IC")
+                     :kontor.posting/commodity eur
+                     :kontor.posting/amount 100M
+                     :kontor.posting/entity de}
+                    {:kontor.posting/account (ac "4400-IC")
+                     :kontor.posting/commodity eur
+                     :kontor.posting/amount -100M
+                     :kontor.posting/entity de}]})
     (posting/post-transaction!
      conn
-     {:transaction {:transaction/journal jnl
-                    :transaction/effective-date jan-2
-                    :transaction/intercompany-pair-id "P-001"
-                    :transaction/narration "US side IC purchase"}
-      :postings    [{:posting/account (ac "5400-IC")
-                     :posting/commodity usd
-                     :posting/amount 108M
-                     :posting/entity us}
-                    {:posting/account (ac "1600-IC")
-                     :posting/commodity usd
-                     :posting/amount -108M
-                     :posting/entity us}]})))
+     {:transaction {:kontor.transaction/journal jnl
+                    :kontor.transaction/effective-date jan-2
+                    :kontor.transaction/intercompany-pair-id "P-001"
+                    :kontor.transaction/narration "US side IC purchase"}
+      :postings    [{:kontor.posting/account (ac "5400-IC")
+                     :kontor.posting/commodity usd
+                     :kontor.posting/amount 108M
+                     :kontor.posting/entity us}
+                    {:kontor.posting/account (ac "1600-IC")
+                     :kontor.posting/commodity usd
+                     :kontor.posting/amount -108M
+                     :kontor.posting/entity us}]})))
 
 ;; ============================================================================
 ;; translate-trial-balance-tx-data
@@ -170,7 +170,7 @@
           de (:db/id (d/entity db [:kontor.entity/code "acme-de"]))
           group (:db/id (d/entity db [:kontor.entity/code "acme-group"]))
           cta (:db/id (d/entity db [:kontor.account/path "Equity:CTA"]))
-          jnl (:db/id (d/entity db [:journal/code "GEN"]))
+          jnl (:db/id (d/entity db [:kontor.journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
           de-tb (trial/trial-balance conn {:entity de})
           tx-data (cons/translate-trial-balance-tx-data
@@ -184,11 +184,11 @@
                     :cta-account cta
                     :trial-balance de-tb})
           ;; Pull amount + account-code per posting in the result
-          postings (filter :posting/amount tx-data)
+          postings (filter :kontor.posting/amount tx-data)
           ;; The DE trial balance: AR-IC +100, Sales-IC -100 (in EUR).
           ;; Translated to EUR at rate 1.0 (identity): +100, -100.
           ;; No CTA plug needed.
-          amounts (set (mapv :posting/amount postings))]
+          amounts (set (mapv :kontor.posting/amount postings))]
       (is (= 2 (count postings))
           "two postings — AR-IC + Sales-IC — no CTA when identity translation")
       (is (= #{100M -100M} amounts)))))
@@ -204,7 +204,7 @@
           us (:db/id (d/entity db [:kontor.entity/code "acme-us"]))
           group (:db/id (d/entity db [:kontor.entity/code "acme-group"]))
           cta (:db/id (d/entity db [:kontor.account/path "Equity:CTA"]))
-          jnl (:db/id (d/entity db [:journal/code "GEN"]))
+          jnl (:db/id (d/entity db [:kontor.journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
           us-tb (trial/trial-balance conn {:entity us})
           tx-data (cons/translate-trial-balance-tx-data
@@ -217,8 +217,8 @@
                     :journal jnl
                     :cta-account cta
                     :trial-balance us-tb})
-          postings (filter :posting/amount tx-data)
-          amounts (mapv :posting/amount postings)
+          postings (filter :kontor.posting/amount tx-data)
+          amounts (mapv :kontor.posting/amount postings)
           sum (reduce (fn [^java.math.BigDecimal a ^java.math.BigDecimal b] (.add a b))
                       0M amounts)]
       (is (zero? sum)
@@ -229,7 +229,7 @@
       (is (every? #{(:db/id (d/entity db [:kontor.account/path "Expenses:Purchases-Intercompany"]))
                     (:db/id (d/entity db [:kontor.account/path "Liabilities:AP-Intercompany"]))
                     cta}
-                  (mapv :posting/account postings))))))
+                  (mapv :kontor.posting/account postings))))))
 
 ;; ============================================================================
 ;; eliminate-intercompany-pair-tx-data
@@ -237,32 +237,32 @@
 
 (deftest eliminate-emits-negation-of-paired-postings
   (testing "The elimination tx posts the exact negation of every paired
-            posting, stamped with :posting/entity = elimination-entity.
+            posting, stamped with :kontor.posting/entity = elimination-entity.
             Sums-to-zero-per-(entity, commodity) holds automatically."
     (let [conn (bootstrap!)
           _ (book-intercompany-pair! conn)
           db (d/db conn)
           elim (:db/id (d/entity db [:kontor.entity/code "acme-elim"]))
-          jnl (:db/id (d/entity db [:journal/code "GEN"]))
+          jnl (:db/id (d/entity db [:kontor.journal/code "GEN"]))
           tx-data (cons/eliminate-intercompany-pair-tx-data
                    {:db db
                     :pair-id "P-001"
                     :elimination-entity elim
                     :journal jnl
                     :date jan-2})
-          postings (filter :posting/amount tx-data)
-          amounts-by-commodity (group-by :posting/commodity postings)
+          postings (filter :kontor.posting/amount tx-data)
+          amounts-by-commodity (group-by :kontor.posting/commodity postings)
           eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           usd (:db/id (d/entity db [:kontor.commodity/symbol "USD"]))
-          sum-eur (reduce (fn [^java.math.BigDecimal a p] (.add a (:posting/amount p)))
+          sum-eur (reduce (fn [^java.math.BigDecimal a p] (.add a (:kontor.posting/amount p)))
                           0M (amounts-by-commodity eur))
-          sum-usd (reduce (fn [^java.math.BigDecimal a p] (.add a (:posting/amount p)))
+          sum-usd (reduce (fn [^java.math.BigDecimal a p] (.add a (:kontor.posting/amount p)))
                           0M (amounts-by-commodity usd))]
       (is (= 4 (count postings))
           "4 elimination postings — 2 per source tx (DE + US)")
       (is (zero? sum-eur) "EUR side sums to zero")
       (is (zero? sum-usd) "USD side sums to zero")
-      (is (every? #(= elim (:posting/entity %)) postings)
+      (is (every? #(= elim (:kontor.posting/entity %)) postings)
           "every elimination posting is stamped with elimination-entity"))))
 
 ;; ============================================================================
@@ -278,7 +278,7 @@
           group (:db/id (d/entity db [:kontor.entity/code "acme-group"]))
           elim (:db/id (d/entity db [:kontor.entity/code "acme-elim"]))
           cta (:db/id (d/entity db [:kontor.account/path "Equity:CTA"]))
-          jnl (:db/id (d/entity db [:journal/code "GEN"]))
+          jnl (:db/id (d/entity db [:kontor.journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
           fragments (cons/consolidate-tx-data
                      {:conn conn
@@ -295,7 +295,7 @@
       ;; Each fragment is a vector starting with a transaction
       (is (every? vector? fragments))
       (is (every? (fn [frag]
-                    (some :transaction/journal frag))
+                    (some :kontor.transaction/journal frag))
                   fragments)))))
 
 (deftest consolidate-bang-commits-atomically
@@ -308,7 +308,7 @@
           group (:db/id (d/entity db0 [:kontor.entity/code "acme-group"]))
           elim (:db/id (d/entity db0 [:kontor.entity/code "acme-elim"]))
           cta (:db/id (d/entity db0 [:kontor.account/path "Equity:CTA"]))
-          jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
+          jnl (:db/id (d/entity db0 [:kontor.journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
           _ (cons/consolidate! {:conn conn
                                 :group-root group
@@ -379,7 +379,7 @@
           group (:db/id (d/entity db0 [:kontor.entity/code "acme-group"]))
           elim (:db/id (d/entity db0 [:kontor.entity/code "acme-elim"]))
           cta (:db/id (d/entity db0 [:kontor.account/path "Equity:CTA"]))
-          jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
+          jnl (:db/id (d/entity db0 [:kontor.journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
           input {:conn conn
                  :group-root group
@@ -396,9 +396,9 @@
           (d/q '[:find (count ?p) .
                  :in $ ?elim
                  :where
-                 [?t :transaction/consolidation-kind :elimination]
-                 [?p :posting/transaction ?t]
-                 [?p :posting/entity ?elim]]
+                 [?t :kontor.transaction/consolidation-kind :elimination]
+                 [?p :kontor.posting/transaction ?t]
+                 [?p :kontor.posting/entity ?elim]]
                (d/db conn) elim)
           ;; Second run — should be a no-op for both translation + elimination
           _ (cons/consolidate! input)
@@ -406,9 +406,9 @@
           (d/q '[:find (count ?p) .
                  :in $ ?elim
                  :where
-                 [?t :transaction/consolidation-kind :elimination]
-                 [?p :posting/transaction ?t]
-                 [?p :posting/entity ?elim]]
+                 [?t :kontor.transaction/consolidation-kind :elimination]
+                 [?p :kontor.posting/transaction ?t]
+                 [?p :kontor.posting/entity ?elim]]
                (d/db conn) elim)]
       (is (= 4 elim-postings-after-1) "first run emits 4 elim postings")
       (is (= elim-postings-after-1 elim-postings-after-2)
@@ -424,7 +424,7 @@
           group (:db/id (d/entity db0 [:kontor.entity/code "acme-group"]))
           elim (:db/id (d/entity db0 [:kontor.entity/code "acme-elim"]))
           cta (:db/id (d/entity db0 [:kontor.account/path "Equity:CTA"]))
-          jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
+          jnl (:db/id (d/entity db0 [:kontor.journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
           _ (cons/consolidate! {:conn conn
                                 :group-root group
@@ -435,20 +435,20 @@
                                 :at-date jan-2
                                 :journal jnl
                                 :cta-account cta})
-          ;; Pull every tx with :transaction/consolidation-kind and
+          ;; Pull every tx with :kontor.transaction/consolidation-kind and
           ;; check its creating tx carries :db.valid/from
           db (d/db conn)
           cons-txs (d/q '[:find [?tx ...]
-                          :where [?tx :transaction/consolidation-kind _]]
+                          :where [?tx :kontor.transaction/consolidation-kind _]]
                         db)
           ;; :db.valid/from lives on the DATOMIC tx entity (the
-          ;; assertion source), not on the :transaction/* entity.
+          ;; assertion source), not on the :kontor.transaction/* entity.
           ;; Find the creating tx via the 5-position EAVT pattern.
           vfs (mapv (fn [t]
                       (d/q '[:find ?vf .
                              :in $ ?t
                              :where
-                             [?t :transaction/consolidation-kind _ ?dtx]
+                             [?t :kontor.transaction/consolidation-kind _ ?dtx]
                              [?dtx :db.valid/from ?vf]]
                            db t))
                     cons-txs)]
@@ -469,7 +469,7 @@
           group (:db/id (d/entity db [:kontor.entity/code "acme-group"]))
           elim (:db/id (d/entity db [:kontor.entity/code "acme-elim"]))
           cta (:db/id (d/entity db [:kontor.account/path "Equity:CTA"]))
-          jnl (:db/id (d/entity db [:journal/code "GEN"]))
+          jnl (:db/id (d/entity db [:kontor.journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
           tb (trial/trial-balance conn {:entity de})
           ;; vt-from-only path
@@ -519,24 +519,24 @@
           de (:db/id (d/entity db0 [:kontor.entity/code "acme-de"]))
           group (:db/id (d/entity db0 [:kontor.entity/code "acme-group"]))
           cta (:db/id (d/entity db0 [:kontor.account/path "Equity:CTA"]))
-          jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
+          jnl (:db/id (d/entity db0 [:kontor.journal/code "GEN"]))
           ppe (:db/id (d/entity db0 [:kontor.account/path "Assets:PPE"]))
           ar (:db/id (d/entity db0 [:kontor.account/path "Assets:AR-Intercompany"]))
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           ;; Post a PP&E purchase in DE (just PP&E + offsetting AR)
           _ (posting/post-transaction!
              conn
-             {:transaction {:transaction/journal jnl
-                            :transaction/effective-date jan-2
-                            :transaction/narration "PP&E purchase"}
-              :postings    [{:posting/account ppe
-                             :posting/commodity eur
-                             :posting/amount 1000M
-                             :posting/entity de}
-                            {:posting/account ar
-                             :posting/commodity eur
-                             :posting/amount -1000M
-                             :posting/entity de}]})
+             {:transaction {:kontor.transaction/journal jnl
+                            :kontor.transaction/effective-date jan-2
+                            :kontor.transaction/narration "PP&E purchase"}
+              :postings    [{:kontor.posting/account ppe
+                             :kontor.posting/commodity eur
+                             :kontor.posting/amount 1000M
+                             :kontor.posting/entity de}
+                            {:kontor.posting/account ar
+                             :kontor.posting/commodity eur
+                             :kontor.posting/amount -1000M
+                             :kontor.posting/entity de}]})
           provider (fxp/make-static-table-provider conn)
           ;; Run consolidate with custom rate-type-by-account that lets
           ;; us OBSERVE the pick: stamp distinct rates per type and
@@ -567,15 +567,15 @@
           translation-tx (d/q '[:find ?t .
                                 :in $ ?src
                                 :where
-                                [?t :transaction/consolidation-kind :translation]
-                                [?t :transaction/consolidation-source-entity ?src]]
+                                [?t :kontor.transaction/consolidation-kind :translation]
+                                [?t :kontor.transaction/consolidation-source-entity ?src]]
                               db de)
           ppe-posting-amt (d/q '[:find ?amt .
                                  :in $ ?tx ?ppe
                                  :where
-                                 [?p :posting/transaction ?tx]
-                                 [?p :posting/account ?ppe]
-                                 [?p :posting/amount ?amt]]
+                                 [?p :kontor.posting/transaction ?tx]
+                                 [?p :kontor.posting/account ?ppe]
+                                 [?p :kontor.posting/amount ?amt]]
                                db translation-tx ppe)]
       (is (some? translation-tx) "DE translation tx exists")
       (is (= 1000M ppe-posting-amt)
@@ -591,7 +591,7 @@
           group (:db/id (d/entity db0 [:kontor.entity/code "acme-group"]))
           elim (:db/id (d/entity db0 [:kontor.entity/code "acme-elim"]))
           cta (:db/id (d/entity db0 [:kontor.account/path "Equity:CTA"]))
-          jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
+          jnl (:db/id (d/entity db0 [:kontor.journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
           input {:conn conn
                  :group-root group
@@ -605,12 +605,12 @@
           _ (cons/consolidate! input)
           translations-after-1
           (d/q '[:find (count ?t) .
-                 :where [?t :transaction/consolidation-kind :translation]]
+                 :where [?t :kontor.transaction/consolidation-kind :translation]]
                (d/db conn))
           _ (cons/consolidate! input)
           translations-after-2
           (d/q '[:find (count ?t) .
-                 :where [?t :transaction/consolidation-kind :translation]]
+                 :where [?t :kontor.transaction/consolidation-kind :translation]]
                (d/db conn))]
       ;; Should be 2 translations (DE + US), same after 2nd run
       (is (= translations-after-1 translations-after-2)

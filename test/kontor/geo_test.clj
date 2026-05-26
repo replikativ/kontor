@@ -255,18 +255,18 @@
                         [{:db/id -1 :kontor.country/code "IN" :kontor.country/name "India" :kontor.country/active true}
                          {:db/id -10 :state/country -1 :state/code "MH" :state/name "Maharashtra" :state/active true}
                          {:db/id -20 :state/country -1 :state/code "KA" :state/name "Karnataka"   :state/active true}
-                         {:db/id -100 :journal/code "INV-IN" :journal/name "Sales India"
-                          :journal/type :sale :journal/active true}
+                         {:db/id -100 :kontor.journal/code "INV-IN" :kontor.journal/name "Sales India"
+                          :kontor.journal/type :sale :kontor.journal/active true}
                          {:db/id -200
-                          :transaction/external-id    "INV-2026-001"
-                          :transaction/journal        -100
-                          :transaction/effective-date #inst "2026-05-11"
-                          :transaction/narration      "Consulting MH → KA"
-                          :transaction/place-of-supply -20}])
+                          :kontor.transaction/external-id    "INV-2026-001"
+                          :kontor.transaction/journal        -100
+                          :kontor.transaction/effective-date #inst "2026-05-11"
+                          :kontor.transaction/narration      "Consulting MH → KA"
+                          :kontor.transaction/place-of-supply -20}])
           db (d/db conn)
-          tx (d/entity db [:transaction/external-id "INV-2026-001"])]
-      (is (= "KA" (-> tx :transaction/place-of-supply :state/code)))
-      (is (= "IN" (-> tx :transaction/place-of-supply :state/country :kontor.country/code))))))
+          tx (d/entity db [:kontor.transaction/external-id "INV-2026-001"])]
+      (is (= "KA" (-> tx :kontor.transaction/place-of-supply :state/code)))
+      (is (= "IN" (-> tx :kontor.transaction/place-of-supply :state/country :kontor.country/code))))))
 
 (deftest schema-attr-shapes
   (testing "ADR-023 attributes are present with expected typing"
@@ -274,7 +274,7 @@
           db   (d/db conn)
           ;; refs
           state-attr (d/pull db '[*] :kontor.partner/state)
-          pos-attr   (d/pull db '[*] :transaction/place-of-supply)
+          pos-attr   (d/pull db '[*] :kontor.transaction/place-of-supply)
           ;; tuple composite
           state-id   (d/pull db '[*] :state/identity)
           country-id (d/pull db '[*] :kontor.country-code/identity)]

@@ -107,29 +107,29 @@
     (concat
      ;; Dr each contributed asset on the corp's books, at FMV (:amount).
      (mapv (fn [{:keys [account amount commodity]}]
-             {:posting/account   (resolve-account db account)
-              :posting/amount    (->bigdec amount)
-              :posting/commodity commodity
-              :posting/entity    corp-entity})
+             {:kontor.posting/account   (resolve-account db account)
+              :kontor.posting/amount    (->bigdec amount)
+              :kontor.posting/commodity commodity
+              :kontor.posting/entity    corp-entity})
            contributions)
      ;; Cr each assumed liability on the corp's books.
      (mapv (fn [{:keys [account amount commodity]}]
-             {:posting/account   (resolve-account db account)
-              :posting/amount    (- (->bigdec amount))
-              :posting/commodity commodity
-              :posting/entity    corp-entity})
+             {:kontor.posting/account   (resolve-account db account)
+              :kontor.posting/amount    (- (->bigdec amount))
+              :kontor.posting/commodity commodity
+              :kontor.posting/entity    corp-entity})
            assumed-liabilities)
      ;; Cr Common Stock for par × shares.
-     [{:posting/account   (resolve-account db common-stock-account)
-       :posting/amount    (- par-total)
-       :posting/commodity (-> contributions first :commodity)
-       :posting/entity    corp-entity}]
+     [{:kontor.posting/account   (resolve-account db common-stock-account)
+       :kontor.posting/amount    (- par-total)
+       :kontor.posting/commodity (-> contributions first :commodity)
+       :kontor.posting/entity    corp-entity}]
      ;; Cr Additional Paid-In Capital for the residual, when positive.
      (when (pos? apic)
-       [{:posting/account   (resolve-account db additional-paid-in-capital-account)
-         :posting/amount    (- apic)
-         :posting/commodity (-> contributions first :commodity)
-         :posting/entity    corp-entity}]))))
+       [{:kontor.posting/account   (resolve-account db additional-paid-in-capital-account)
+         :kontor.posting/amount    (- apic)
+         :kontor.posting/commodity (-> contributions first :commodity)
+         :kontor.posting/entity    corp-entity}]))))
 
 (defn- founder-side-postings
   "Build the founder-side leg: Dr Investment-in-NewCo at BASIS
@@ -146,23 +146,23 @@
      ;; Dr Investment-in-NewCo at the net basis of contributed property
      ;; (basis − assumed liabilities). This IS the founder's basis in
      ;; the new shares.
-     [{:posting/account   (resolve-account db founder-investment-account)
-       :posting/amount    net-basis
-       :posting/commodity (-> founder-contributions first :commodity)
-       :posting/entity    founder-entity}]
+     [{:kontor.posting/account   (resolve-account db founder-investment-account)
+       :kontor.posting/amount    net-basis
+       :kontor.posting/commodity (-> founder-contributions first :commodity)
+       :kontor.posting/entity    founder-entity}]
      ;; Cr each contributed asset at its basis.
      (mapv (fn [{:keys [account basis commodity]}]
-             {:posting/account   (resolve-account db account)
-              :posting/amount    (- (->bigdec basis))
-              :posting/commodity commodity
-              :posting/entity    founder-entity})
+             {:kontor.posting/account   (resolve-account db account)
+              :kontor.posting/amount    (- (->bigdec basis))
+              :kontor.posting/commodity commodity
+              :kontor.posting/entity    founder-entity})
            founder-contributions)
      ;; Dr each assumed liability (settles the founder's payable).
      (mapv (fn [{:keys [account amount commodity]}]
-             {:posting/account   (resolve-account db account)
-              :posting/amount    (->bigdec amount)
-              :posting/commodity commodity
-              :posting/entity    founder-entity})
+             {:kontor.posting/account   (resolve-account db account)
+              :kontor.posting/amount    (->bigdec amount)
+              :kontor.posting/commodity commodity
+              :kontor.posting/entity    founder-entity})
            founder-assumed-liabilities))))
 
 ;; ============================================================================
@@ -309,11 +309,11 @@
                        :shares-issued shares-issued}
         postings      (concat (corp-side-postings db opts)
                               (founder-side-postings db opts))
-        tx            (cond-> {:transaction/journal       journal
-                               :transaction/effective-date effective-date
-                               :transaction/external-id    external-id}
-                        narration     (assoc :transaction/narration narration)
-                        owner-partner (assoc :transaction/partner owner-partner))
+        tx            (cond-> {:kontor.transaction/journal       journal
+                               :kontor.transaction/effective-date effective-date
+                               :kontor.transaction/external-id    external-id}
+                        narration     (assoc :kontor.transaction/narration narration)
+                        owner-partner (assoc :kontor.transaction/partner owner-partner))
         main-tx-data  (posting/build-transaction
                        {:transaction tx
                         :postings    postings

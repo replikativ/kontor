@@ -80,12 +80,12 @@
   (chart/install! conn)
   (pt/install-standard-terms! conn)
   (d/transact conn
-              [{:journal/code "INV"  :journal/name "Sales invoices"
-                :journal/type :sale  :journal/active true}
-               {:journal/code "EXP"  :journal/name "Expense bookings"
-                :journal/type :purchase :journal/active true}
-               {:journal/code "BANK" :journal/name "Bank movements"
-                :journal/type :bank  :journal/active true}
+              [{:kontor.journal/code "INV"  :kontor.journal/name "Sales invoices"
+                :kontor.journal/type :sale  :kontor.journal/active true}
+               {:kontor.journal/code "EXP"  :kontor.journal/name "Expense bookings"
+                :kontor.journal/type :purchase :kontor.journal/active true}
+               {:kontor.journal/code "BANK" :kontor.journal/name "Bank movements"
+                :kontor.journal/type :bank  :kontor.journal/active true}
                {:kontor.partner/external-id "OWN"  :kontor.partner/name "Self GmbH"
                 :kontor.partner/kind :company :kontor.partner/country-code "DE"
                 :kontor.partner/tax-id "DE111111111"}
@@ -131,21 +131,21 @@
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         bank (ace db "1200")
         exp (ace db expense-code)
-        exp-jnl (:db/id (d/entity db [:journal/code "EXP"]))]
+        exp-jnl (:db/id (d/entity db [:kontor.journal/code "EXP"]))]
     (d/transact conn
                 (posting/build-transaction
                  {:transaction
-                  {:transaction/external-id ext-id
-                   :transaction/journal exp-jnl
-                   :transaction/effective-date date
-                   :transaction/narration narration
-                   :transaction/state :posted
-                   :transaction/posted-at date}
+                  {:kontor.transaction/external-id ext-id
+                   :kontor.transaction/journal exp-jnl
+                   :kontor.transaction/effective-date date
+                   :kontor.transaction/narration narration
+                   :kontor.transaction/state :posted
+                   :kontor.transaction/posted-at date}
                   :postings
-                  [{:posting/account exp :posting/amount amount
-                    :posting/commodity eur :posting/posted-at date}
-                   {:posting/account bank :posting/amount (.negate amount)
-                    :posting/commodity eur :posting/posted-at date}]}))))
+                  [{:kontor.posting/account exp :kontor.posting/amount amount
+                    :kontor.posting/commodity eur :kontor.posting/posted-at date}
+                   {:kontor.posting/account bank :kontor.posting/amount (.negate amount)
+                    :kontor.posting/commodity eur :kontor.posting/posted-at date}]}))))
 
 (defn- ingest-and-reconcile-payment!
   "Ingest a bank-line, find a matching open AR, commit the match,
@@ -154,7 +154,7 @@
   (let [db (d/db conn)
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         bank-acct (ace db "1200")
-        bank-jnl (:db/id (d/entity db [:journal/code "BANK"]))
+        bank-jnl (:db/id (d/entity db [:kontor.journal/code "BANK"]))
         _ (recon/ingest-statement!
            conn [{:bank :test :date date :amount amount
                   :counterparty counterparty :description memo

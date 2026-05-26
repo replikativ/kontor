@@ -4,7 +4,7 @@
 
    1. **Parallel-ledger entity helpers (ADR-021).** Bootstrapping the
       primary ledger, resolving a ledger by code, etc. Postings carry
-      `:posting/ledger` to support IFRS-vs-local-GAAP-style parallel
+      `:kontor.posting/ledger` to support IFRS-vs-local-GAAP-style parallel
       books. Sum-to-zero in a transaction runs per ledger.
 
    2. **Account-statement view.** Bitemporal-aware ordered postings
@@ -25,7 +25,7 @@
 
 (def primary-code
   "The bootstrap ledger's stable identifier. Posting-builders that
-   omit `:posting/ledger` resolve to this."
+   omit `:kontor.posting/ledger` resolve to this."
   "primary")
 
 (def primary-seed
@@ -99,7 +99,7 @@
      :as-of-tx       Date — default now
      :include-states set  — default #{:posted}
      :entity         eid or lookup-ref — restrict to a single
-                     `:posting/entity` (ADR-031 trans-national books).
+                     `:kontor.posting/entity` (ADR-031 trans-national books).
      :order          :asc | :desc — default :asc on :valid-from"
   ([conn account-eid] (postings-against conn account-eid {}))
   ([conn account-eid {:keys [as-of-valid as-of-tx include-states entity order]
@@ -118,42 +118,42 @@
                 (d/q '[:find ?p ?vf
                        :in $ ?account ?entity
                        :where
-                       [?p :posting/account ?account]
-                       [?p :posting/entity ?entity]
-                       [?p :posting/transaction _ ?tx]
+                       [?p :kontor.posting/account ?account]
+                       [?p :kontor.posting/entity ?entity]
+                       [?p :kontor.posting/transaction _ ?tx]
                        [?tx :db/txInstant ?ti]
                        [(get-else $ ?tx :db.valid/from ?ti) ?vf]]
                      tx-snap account-eid entity-eid)
                 (d/q '[:find ?p ?vf
                        :in $ ?account
                        :where
-                       [?p :posting/account ?account]
-                       [?p :posting/transaction _ ?tx]
+                       [?p :kontor.posting/account ?account]
+                       [?p :kontor.posting/transaction _ ?tx]
                        [?tx :db/txInstant ?ti]
                        [(get-else $ ?tx :db.valid/from ?ti) ?vf]]
                      tx-snap account-eid))
               (mapv (fn [[p vf]]
                       (let [pulled (d/pull tx-snap
                                            [:db/id
-                                            :posting/amount
-                                            :posting/commodity
-                                            :posting/transaction
-                                            :posting/narration
-                                            :posting/partner]
+                                            :kontor.posting/amount
+                                            :kontor.posting/commodity
+                                            :kontor.posting/transaction
+                                            :kontor.posting/narration
+                                            :kontor.posting/partner]
                                            p)
-                            tx-id (-> pulled :posting/transaction :db/id)
-                            tx-state (:transaction/state
-                                      (d/pull tx-snap [:transaction/state] tx-id))
-                            tx-narr  (:transaction/narration
-                                      (d/pull tx-snap [:transaction/narration] tx-id))]
+                            tx-id (-> pulled :kontor.posting/transaction :db/id)
+                            tx-state (:kontor.transaction/state
+                                      (d/pull tx-snap [:kontor.transaction/state] tx-id))
+                            tx-narr  (:kontor.transaction/narration
+                                      (d/pull tx-snap [:kontor.transaction/narration] tx-id))]
                         {:posting     (:db/id pulled)
                          :transaction tx-id
                          :valid-from  vf
                          :amount      (money/posting->money pulled)
-                         :commodity   (let [c (:posting/commodity pulled)]
+                         :commodity   (let [c (:kontor.posting/commodity pulled)]
                                         (if (map? c) (:db/id c) c))
-                         :narration   (or (:posting/narration pulled) tx-narr)
-                         :partner     (some-> (:posting/partner pulled) :db/id)
+                         :narration   (or (:kontor.posting/narration pulled) tx-narr)
+                         :partner     (some-> (:kontor.posting/partner pulled) :db/id)
                          :tx-state    tx-state}))))
          filtered
          (filter (fn [{:keys [valid-from tx-state]}]

@@ -77,7 +77,7 @@
 ;;                    strictly AFTER this instant. nil (default) =
 ;;                    no upper bound. Matches the ADR-008 bitemporal
 ;;                    contract that `kontor.balance` already follows.
-;;   :include-states  set of `:transaction/state` keywords whose
+;;   :include-states  set of `:kontor.transaction/state` keywords whose
 ;;                    events are included. Layers / consumption /
 ;;                    adjustment events whose origin transaction is
 ;;                    NOT in this set are filtered out. Default:
@@ -107,7 +107,7 @@
            (and (some? event-instant)
                 (before-or-eq? event-instant as-of-valid)))
        (let [state (d/q '[:find ?s . :in $ ?t :where
-                          [?t :transaction/state ?s]]
+                          [?t :kontor.transaction/state ?s]]
                         db tx-eid)]
          (or (nil? state)
              (contains? include-states state)))))
@@ -209,7 +209,7 @@
    issued at-or-before the cursor.
 
    Cancelled-transaction filter: layers whose origin transaction's
-   `:transaction/state` is NOT in `:include-states` are excluded.
+   `:kontor.transaction/state` is NOT in `:include-states` are excluded.
    Default include-states excludes `:cancelled`.
 
    Ordering: `:order-by` is `:received-at` (default — FIFO) or

@@ -70,7 +70,7 @@
 ;; The :cn-province analytic plan + per-province analytic accounts
 ;; ============================================================================
 ;; Per note 87 §2.2 — multi-city allocation uses :analytic-account, NOT
-;; :posting/entity. A CN Ltd Co with employees in 5 cities is ONE
+;; :kontor.posting/entity. A CN Ltd Co with employees in 5 cities is ONE
 ;; legal entity (one CIT filing). Per-province lives on ADR-022
 ;; analytic distributions; we install the plan + 34 administrative
 ;; divisions (23 provinces + 5 autonomous regions + 4 municipalities

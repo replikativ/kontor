@@ -22,9 +22,9 @@
     (d/transact conn
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                   :kontor.commodity/precision 2}
-                 {:journal/code "SALE" :journal/type :sale}
-                 {:journal/code "PUR"  :journal/type :purchase}
-                 {:journal/code "GEN"  :journal/type :general}
+                 {:kontor.journal/code "SALE" :kontor.journal/type :sale}
+                 {:kontor.journal/code "PUR"  :kontor.journal/type :purchase}
+                 {:kontor.journal/code "GEN"  :kontor.journal/type :general}
                  {:kontor.account/path "Income:Sales"      :kontor.account/code "4000"
                   :kontor.account/type :income}
                  {:kontor.account/path "Expenses:Supplies" :kontor.account/code "6000"
@@ -44,8 +44,8 @@
 (defn- sum-account [conn path]
   (reduce + 0M
           (d/q '[:find [?amt ...] :in $ ?p
-                 :where [?a :kontor.account/path ?p] [?pp :posting/account ?a]
-                 [?pp :posting/amount ?amt]]
+                 :where [?a :kontor.account/path ?p] [?pp :kontor.posting/account ?a]
+                 [?pp :kontor.posting/amount ?amt]]
                (d/db conn) path)))
 
 ;; ============================================================================
@@ -87,7 +87,7 @@
                                    :amount -100000}
                                   {:account [:kontor.account/path "Liabilities:VAT-Output"]
                                    :amount -19000}]
-                       :commodity eur :journal [:journal/code "SALE"]
+                       :commodity eur :journal [:kontor.journal/code "SALE"]
                        :effective-date #inst "2026-03-01" :narration "Taxed sale"})
     ;; a taxed purchase — 23,800 paid: 20,000 expense + 3,800 input VAT
     ;; (recoverable).
@@ -97,7 +97,7 @@
                                    :amount 3800}
                                   {:account [:kontor.account/path "Assets:Bank"]
                                    :amount -23800}]
-                       :commodity eur :journal [:journal/code "PUR"]
+                       :commodity eur :journal [:kontor.journal/code "PUR"]
                        :effective-date #inst "2026-04-01" :narration "Taxed purchase"})
     (let [r (vat/compute-vat-return conn {:from (:from fy) :to (:to fy)
                                           :output-vat-codes ["2200"]
@@ -112,7 +112,7 @@
                r {:output-vat-account  [:kontor.account/path "Liabilities:VAT-Output"]
                   :input-vat-account   [:kontor.account/path "Assets:VAT-Input"]
                   :vat-payable-account [:kontor.account/path "Liabilities:VAT-Payable"]
-                  :journal             [:journal/code "GEN"]
+                  :journal             [:kontor.journal/code "GEN"]
                   :effective-date      #inst "2026-12-31"
                   :commodity           eur}))
         (is (zero? (sum-account conn "Liabilities:VAT-Output")) "output VAT cleared")

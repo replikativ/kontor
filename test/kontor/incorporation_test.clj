@@ -25,8 +25,8 @@
                   :kontor.entity/kind :individual :kontor.entity/country "US"
                   :kontor.entity/functional-commodity usd}
                  ;; Journals.
-                 {:journal/code "GEN"     :journal/type :general :journal/active true}
-                 {:journal/code "CASH"    :journal/type :cash    :journal/active true}
+                 {:kontor.journal/code "GEN"     :kontor.journal/type :general :kontor.journal/active true}
+                 {:kontor.journal/code "CASH"    :kontor.journal/type :cash    :kontor.journal/active true}
                  ;; Founder-side chart.
                  {:kontor.account/path "Assets:Bank"               :kontor.account/type :asset
                   :kontor.account/commodity usd}
@@ -71,7 +71,7 @@
                            db {:corp-spec {:code "X" :name "X"
                                            :functional-commodity usd}
                                :founder-entity sarah
-                               :journal [:journal/code "GEN"]
+                               :journal [:kontor.journal/code "GEN"]
                                :effective-date #inst "2026-01-01"})))))
 
 ;; ============================================================================
@@ -87,7 +87,7 @@
                     :functional-commodity usd
                     :legal-form "LLC"}
         :founder-entity sarah
-        :journal [:journal/code "GEN"]
+        :journal [:kontor.journal/code "GEN"]
         :effective-date #inst "2026-01-01"
         :external-id "incorp-2026-01"
         :recorded-by-uid "sarah"
@@ -124,7 +124,7 @@
        {:corp-spec {:code "DUO" :name "Duo LLC"
                     :functional-commodity usd :legal-form "LLC"}
         :founder-entity sarah
-        :journal [:journal/code "GEN"]
+        :journal [:kontor.journal/code "GEN"]
         :effective-date #inst "2026-01-01"
         :external-id "incorp-duo"
         :recorded-by-uid "sarah"
@@ -155,7 +155,7 @@
                     :functional-commodity usd
                     :legal-form "LLC"}
         :founder-entity sarah
-        :journal [:journal/code "GEN"]
+        :journal [:kontor.journal/code "GEN"]
         :effective-date #inst "2026-01-01"
         :external-id "incorp-appreciated"
         :recorded-by-uid "sarah"
@@ -214,8 +214,8 @@
                          (reduce + 0M
                                  (d/q '[:find [?amt ...] :in $ ?path
                                         :where [?a :kontor.account/path ?path]
-                                        [?p :posting/account ?a]
-                                        [?p :posting/amount ?amt]]
+                                        [?p :kontor.posting/account ?a]
+                                        [?p :kontor.posting/amount ?amt]]
                                       db acc-path)))]
         ;; Retained Earnings: -5000 (debit-decreasing-equity)
         (is (== 5000M (balance-on "Corp:Equity:Retained-Earnings")))
@@ -236,8 +236,8 @@
             inc (reduce + 0M
                         (d/q '[:find [?amt ...]
                                :where [?a :kontor.account/path "Income:Dividends"]
-                               [?p :posting/account ?a]
-                               [?p :posting/amount ?amt]]
+                               [?p :kontor.posting/account ?a]
+                               [?p :kontor.posting/amount ?amt]]
                              db))]
         ;; Income:Dividends credited → balance is negative (credit-positive
         ;; for income in the substrate's debit-positive convention).

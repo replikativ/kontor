@@ -64,7 +64,7 @@
      :as-of-valid    Date  — default now
      :as-of-tx       Date  — default now
      :include-states set   — default #{:posted}
-     :entity         eid   — restrict to one :posting/entity (ADR-031)
+     :entity         eid   — restrict to one :kontor.posting/entity (ADR-031)
      :order          :asc  | :desc — default :asc on :valid-from
 
    ADR-091."
@@ -88,26 +88,26 @@
 
 (defn- pull-posting
   "Pull the headline posting fields. Returns nil iff the posting does
-   not exist in `db` (no `:posting/transaction` ref). Pull pattern is
+   not exist in `db` (no `:kontor.posting/transaction` ref). Pull pattern is
    deliberately small + kernel-only — consumers wanting richer pulls
    compose with `d/pull` themselves; this is the substrate's
    'explain' default."
   [db posting-eid]
   (let [p (d/pull db
                   [:db/id
-                   :posting/amount
-                   :posting/commodity
-                   :posting/account
-                   :posting/partner
-                   :posting/entity
-                   :posting/ledger
-                   :posting/narration
-                   :posting/posted-at
-                   :posting/transaction
-                   :posting/tax-rep
-                   :posting/tax-base]
+                   :kontor.posting/amount
+                   :kontor.posting/commodity
+                   :kontor.posting/account
+                   :kontor.posting/partner
+                   :kontor.posting/entity
+                   :kontor.posting/ledger
+                   :kontor.posting/narration
+                   :kontor.posting/posted-at
+                   :kontor.posting/transaction
+                   :kontor.posting/tax-rep
+                   :kontor.posting/tax-base]
                   posting-eid)]
-    (when (:posting/transaction p) p)))
+    (when (:kontor.posting/transaction p) p)))
 
 (defn- pull-transaction
   "Pull the transaction shape. The pull pattern captures the kernel-
@@ -117,17 +117,17 @@
   [db tx-eid]
   (d/pull db
           [:db/id
-           :transaction/external-id
-           :transaction/journal
-           :transaction/effective-date
-           :transaction/narration
-           :transaction/partner
-           :transaction/fiscal-position
-           :transaction/state
-           :transaction/posted-at
-           :transaction/document-type
-           :transaction/clearance-token
-           :transaction/clearance-format
+           :kontor.transaction/external-id
+           :kontor.transaction/journal
+           :kontor.transaction/effective-date
+           :kontor.transaction/narration
+           :kontor.transaction/partner
+           :kontor.transaction/fiscal-position
+           :kontor.transaction/state
+           :kontor.transaction/posted-at
+           :kontor.transaction/document-type
+           :kontor.transaction/clearance-token
+           :kontor.transaction/clearance-format
            :db.valid/from
            :db.valid/to]
           tx-eid))
@@ -271,7 +271,7 @@
          tx-snap   (d/as-of db as-of-tx)
          posting   (pull-posting tx-snap posting-eid)]
      (when posting
-       (let [tx-eid    (-> posting :posting/transaction :db/id)
+       (let [tx-eid    (-> posting :kontor.posting/transaction :db/id)
              tx        (pull-transaction tx-snap tx-eid)
              history   (status-history-for tx-snap tx-eid)
              docs-from-tx       (audit-docs-for tx-snap tx-eid)

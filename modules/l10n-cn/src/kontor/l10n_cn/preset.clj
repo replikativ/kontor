@@ -24,11 +24,11 @@
             [kontor.l10n-cn.investment-income-statute :as inv-statute]))
 
 (def ^:private default-journals
-  [{:journal/code "GJ" :journal/type :general :journal/name "总账 (General Journal)"}
-   {:journal/code "CR" :journal/type :cash    :journal/name "现金收入 (Cash Receipts)"}
-   {:journal/code "CD" :journal/type :cash    :journal/name "现金支出 (Cash Disbursements)"}
-   {:journal/code "SJ" :journal/type :sale    :journal/name "销售 (Sales Journal)"}
-   {:journal/code "PJ" :journal/type :purchase :journal/name "采购 (Purchase Journal)"}])
+  [{:kontor.journal/code "GJ" :kontor.journal/type :general :kontor.journal/name "总账 (General Journal)"}
+   {:kontor.journal/code "CR" :kontor.journal/type :cash    :kontor.journal/name "现金收入 (Cash Receipts)"}
+   {:kontor.journal/code "CD" :kontor.journal/type :cash    :kontor.journal/name "现金支出 (Cash Disbursements)"}
+   {:kontor.journal/code "SJ" :kontor.journal/type :sale    :kontor.journal/name "销售 (Sales Journal)"}
+   {:kontor.journal/code "PJ" :kontor.journal/type :purchase :kontor.journal/name "采购 (Purchase Journal)"}])
 
 (defn install-all!
   "Install everything a CN consumer needs to start booking + producing

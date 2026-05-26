@@ -29,16 +29,16 @@
     (chart/install! conn)
     (d/transact conn pb-test/payroll-wage-accounts)
     (d/transact conn acc-test/accrual-rueck-accounts)
-    (d/transact conn [{:journal/code "PAYROLL"
-                       :journal/name "Lohn- und Gehaltsabrechnung"
-                       :journal/type :general
-                       :journal/active true}])
+    (d/transact conn [{:kontor.journal/code "PAYROLL"
+                       :kontor.journal/name "Lohn- und Gehaltsabrechnung"
+                       :kontor.journal/type :general
+                       :kontor.journal/active true}])
     conn))
 
 (deftest e2e-jan-period
   (let [conn (bootstrap-full)
         db0 (d/db conn)
-        jnl (:db/id (d/entity db0 [:journal/code "PAYROLL"]))
+        jnl (:db/id (d/entity db0 [:kontor.journal/code "PAYROLL"]))
         eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
         {:keys [payroll-result gl-tx-report mbgm urlaubs-tx-report]}
         (payroll/run-payroll-period!
@@ -76,7 +76,7 @@
             audit-doc rows, each :category :payroll-filing"
     (let [conn (bootstrap-full)
           db0 (d/db conn)
-          jnl (:db/id (d/entity db0 [:journal/code "PAYROLL"]))
+          jnl (:db/id (d/entity db0 [:kontor.journal/code "PAYROLL"]))
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           jan-result (payroll/run-payroll-period!
                       conn
@@ -133,7 +133,7 @@
              debits = net credits"
     (let [conn (bootstrap-full)
           db0 (d/db conn)
-          jnl (:db/id (d/entity db0 [:journal/code "PAYROLL"]))
+          jnl (:db/id (d/entity db0 [:kontor.journal/code "PAYROLL"]))
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           _ (payroll/run-payroll-period!
              conn
@@ -147,14 +147,14 @@
           db (d/db conn)
           ;; Pull all postings from this journal
           journal-id (d/q '[:find ?j . :in $ ?c
-                            :where [?j :journal/code ?c]]
+                            :where [?j :kontor.journal/code ?c]]
                           db "PAYROLL")
           postings (d/q '[:find ?amt
                           :in $ ?j
                           :where
-                          [?p :posting/transaction ?t]
-                          [?t :transaction/journal ?j]
-                          [?p :posting/amount ?amt]]
+                          [?p :kontor.posting/transaction ?t]
+                          [?t :kontor.transaction/journal ?j]
+                          [?p :kontor.posting/amount ?amt]]
                         db journal-id)
           total (reduce (fn [^java.math.BigDecimal acc [^java.math.BigDecimal x]]
                           (.add acc x))

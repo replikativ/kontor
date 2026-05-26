@@ -6,7 +6,7 @@
      line into retained earnings,
    - post-close, P&L balances at year-end are zero AND retained
      earnings carries the net result,
-   - the closing tx is unique per period (`:transaction/closes-period`
+   - the closing tx is unique per period (`:kontor.transaction/closes-period`
      is :db.unique/identity),
    - the kernel's sum-to-zero invariant is preserved end-to-end.
 
@@ -33,10 +33,10 @@
   (let [conn (core/create-test-db)]
     (chart/install! conn)
     (d/transact conn
-                [{:journal/code "INV"  :journal/name "Sales invoices"
-                  :journal/type :sale  :journal/active true}
-                 {:journal/code "EXP"  :journal/name "Expense bookings"
-                  :journal/type :purchase :journal/active true}
+                [{:kontor.journal/code "INV"  :kontor.journal/name "Sales invoices"
+                  :kontor.journal/type :sale  :kontor.journal/active true}
+                 {:kontor.journal/code "EXP"  :kontor.journal/name "Expense bookings"
+                  :kontor.journal/type :purchase :kontor.journal/active true}
                  {:period/start jan-1
                   :period/end   jan-1-26
                   :period/tag   :normal
@@ -54,71 +54,71 @@
         bank (ace db "1200")
         rent (ace db "6300")          ; Miete (expense)
         sw   (ace db "6815")          ; Software (expense)
-        inv-jnl (:db/id (d/entity db [:journal/code "INV"]))
-        exp-jnl (:db/id (d/entity db [:journal/code "EXP"]))]
+        inv-jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
+        exp-jnl (:db/id (d/entity db [:kontor.journal/code "EXP"]))]
     ;; A sales invoice: gross 1190, net 1000, VAT 190 — fully on Feb 15.
     (d/transact conn
                 (posting/build-transaction
                  {:transaction
-                  {:transaction/external-id "FY25-INV-1"
-                   :transaction/journal inv-jnl
-                   :transaction/effective-date feb-15
-                   :transaction/narration "Sales invoice 1"
-                   :transaction/state :posted
-                   :transaction/posted-at feb-15}
+                  {:kontor.transaction/external-id "FY25-INV-1"
+                   :kontor.transaction/journal inv-jnl
+                   :kontor.transaction/effective-date feb-15
+                   :kontor.transaction/narration "Sales invoice 1"
+                   :kontor.transaction/state :posted
+                   :kontor.transaction/posted-at feb-15}
                   :postings
-                  [{:posting/account recv  :posting/amount 1190M
-                    :posting/commodity eur :posting/posted-at feb-15}
-                   {:posting/account rev19 :posting/amount -1000M
-                    :posting/commodity eur :posting/posted-at feb-15}
-                   {:posting/account ust19 :posting/amount -190M
-                    :posting/commodity eur :posting/posted-at feb-15}]}))
+                  [{:kontor.posting/account recv  :kontor.posting/amount 1190M
+                    :kontor.posting/commodity eur :kontor.posting/posted-at feb-15}
+                   {:kontor.posting/account rev19 :kontor.posting/amount -1000M
+                    :kontor.posting/commodity eur :kontor.posting/posted-at feb-15}
+                   {:kontor.posting/account ust19 :kontor.posting/amount -190M
+                    :kontor.posting/commodity eur :kontor.posting/posted-at feb-15}]}))
     ;; A second invoice in June for 2380 gross.
     (d/transact conn
                 (posting/build-transaction
                  {:transaction
-                  {:transaction/external-id "FY25-INV-2"
-                   :transaction/journal inv-jnl
-                   :transaction/effective-date jun-1
-                   :transaction/narration "Sales invoice 2"
-                   :transaction/state :posted
-                   :transaction/posted-at jun-1}
+                  {:kontor.transaction/external-id "FY25-INV-2"
+                   :kontor.transaction/journal inv-jnl
+                   :kontor.transaction/effective-date jun-1
+                   :kontor.transaction/narration "Sales invoice 2"
+                   :kontor.transaction/state :posted
+                   :kontor.transaction/posted-at jun-1}
                   :postings
-                  [{:posting/account recv  :posting/amount 2380M
-                    :posting/commodity eur :posting/posted-at jun-1}
-                   {:posting/account rev19 :posting/amount -2000M
-                    :posting/commodity eur :posting/posted-at jun-1}
-                   {:posting/account ust19 :posting/amount -380M
-                    :posting/commodity eur :posting/posted-at jun-1}]}))
+                  [{:kontor.posting/account recv  :kontor.posting/amount 2380M
+                    :kontor.posting/commodity eur :kontor.posting/posted-at jun-1}
+                   {:kontor.posting/account rev19 :kontor.posting/amount -2000M
+                    :kontor.posting/commodity eur :kontor.posting/posted-at jun-1}
+                   {:kontor.posting/account ust19 :kontor.posting/amount -380M
+                    :kontor.posting/commodity eur :kontor.posting/posted-at jun-1}]}))
     ;; Expenses paid out of bank: rent 600, software 100.
     (d/transact conn
                 (posting/build-transaction
                  {:transaction
-                  {:transaction/external-id "FY25-EXP-1"
-                   :transaction/journal exp-jnl
-                   :transaction/effective-date feb-15
-                   :transaction/narration "Office rent Feb"
-                   :transaction/state :posted
-                   :transaction/posted-at feb-15}
+                  {:kontor.transaction/external-id "FY25-EXP-1"
+                   :kontor.transaction/journal exp-jnl
+                   :kontor.transaction/effective-date feb-15
+                   :kontor.transaction/narration "Office rent Feb"
+                   :kontor.transaction/state :posted
+                   :kontor.transaction/posted-at feb-15}
                   :postings
-                  [{:posting/account rent :posting/amount 600M
-                    :posting/commodity eur :posting/posted-at feb-15}
-                   {:posting/account bank :posting/amount -600M
-                    :posting/commodity eur :posting/posted-at feb-15}]}))
+                  [{:kontor.posting/account rent :kontor.posting/amount 600M
+                    :kontor.posting/commodity eur :kontor.posting/posted-at feb-15}
+                   {:kontor.posting/account bank :kontor.posting/amount -600M
+                    :kontor.posting/commodity eur :kontor.posting/posted-at feb-15}]}))
     (d/transact conn
                 (posting/build-transaction
                  {:transaction
-                  {:transaction/external-id "FY25-EXP-2"
-                   :transaction/journal exp-jnl
-                   :transaction/effective-date jun-1
-                   :transaction/narration "Software license"
-                   :transaction/state :posted
-                   :transaction/posted-at jun-1}
+                  {:kontor.transaction/external-id "FY25-EXP-2"
+                   :kontor.transaction/journal exp-jnl
+                   :kontor.transaction/effective-date jun-1
+                   :kontor.transaction/narration "Software license"
+                   :kontor.transaction/state :posted
+                   :kontor.transaction/posted-at jun-1}
                   :postings
-                  [{:posting/account sw   :posting/amount 100M
-                    :posting/commodity eur :posting/posted-at jun-1}
-                   {:posting/account bank :posting/amount -100M
-                    :posting/commodity eur :posting/posted-at jun-1}]}))
+                  [{:kontor.posting/account sw   :kontor.posting/amount 100M
+                    :kontor.posting/commodity eur :kontor.posting/posted-at jun-1}
+                   {:kontor.posting/account bank :kontor.posting/amount -100M
+                    :kontor.posting/commodity eur :kontor.posting/posted-at jun-1}]}))
     ;; Expected end-of-year (before close):
     ;;   revenue 19%      = -3000  (credit balance, natural for income)
     ;;   rent expense     =   600
@@ -157,7 +157,7 @@
     (let [db (d/db conn)
           period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] db)
           retained (ace db "2900")
-          inv-jnl (:db/id (d/entity db [:journal/code "INV"]))
+          inv-jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
           {:keys [transaction-eid postings-count net-by-commodity]}
           (closing/close-period! conn
                                  {:period-eid period-eid
@@ -209,7 +209,7 @@
     (let [db (d/db conn)
           period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] db)
           retained (ace db "2900")
-          inv-jnl (:db/id (d/entity db [:journal/code "INV"]))]
+          inv-jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))]
       (closing/close-period! conn
                              {:period-eid period-eid
                               :retained-earnings-eid retained
@@ -225,7 +225,7 @@
         db (d/db conn)
         period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] db)
         retained (ace db "2900")
-        inv-jnl (:db/id (d/entity db [:journal/code "INV"]))
+        inv-jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         result (closing/close-period! conn
                                       {:period-eid period-eid
                                        :retained-earnings-eid retained

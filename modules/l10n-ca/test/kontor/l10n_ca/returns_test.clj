@@ -29,10 +29,10 @@
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
     (chart/install! conn)
-    (d/transact conn [{:journal/code "INV"
-                       :journal/name "Sales"
-                       :journal/type :sale
-                       :journal/active true}])
+    (d/transact conn [{:kontor.journal/code "INV"
+                       :kontor.journal/name "Sales"
+                       :kontor.journal/type :sale
+                       :kontor.journal/active true}])
     conn))
 
 (defn- ace [db code]
@@ -48,24 +48,24 @@
         cad (:db/id (d/entity db [:kontor.commodity/symbol "CAD"]))
         rec (ace db "1100") rev (ace db "4000")
         coll (ace db "2310")
-        jnl (:db/id (d/entity db [:journal/code "INV"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         net-bd (bigdec net)
         vat-bd (.setScale (.multiply net-bd (bigdec "0.13")) 2 java.math.RoundingMode/HALF_EVEN)
         gross  (.add net-bd vat-bd)
         tx (-> (posting/build-transaction
                 {:transaction
-                 {:transaction/external-id external-id
-                  :transaction/journal jnl
-                  :transaction/effective-date date
-                  :transaction/narration external-id
-                  :transaction/state :posted
-                  :transaction/posted-at date}
+                 {:kontor.transaction/external-id external-id
+                  :kontor.transaction/journal jnl
+                  :kontor.transaction/effective-date date
+                  :kontor.transaction/narration external-id
+                  :kontor.transaction/state :posted
+                  :kontor.transaction/posted-at date}
                  :postings
-                 [{:posting/account rec :posting/amount gross :posting/commodity cad}
-                  {:posting/account rev :posting/amount (.negate net-bd) :posting/commodity cad}
-                  {:posting/account coll :posting/amount (.negate vat-bd) :posting/commodity cad}]})
-               (->> (mapv #(if (some? (:posting/account %))
-                             (assoc % :posting/posted-at date) %))))]
+                 [{:kontor.posting/account rec :kontor.posting/amount gross :kontor.posting/commodity cad}
+                  {:kontor.posting/account rev :kontor.posting/amount (.negate net-bd) :kontor.posting/commodity cad}
+                  {:kontor.posting/account coll :kontor.posting/amount (.negate vat-bd) :kontor.posting/commodity cad}]})
+               (->> (mapv #(if (some? (:kontor.posting/account %))
+                             (assoc % :kontor.posting/posted-at date) %))))]
     (v/transact-with-validation conn tx)))
 
 (defn- post-bc-sale!
@@ -79,26 +79,26 @@
         cad (:db/id (d/entity db [:kontor.commodity/symbol "CAD"]))
         rec (ace db "1100") rev (ace db "4000")
         gst (ace db "2310") pst (ace db "2320")
-        jnl (:db/id (d/entity db [:journal/code "INV"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         net-bd (bigdec net)
         gst-bd (.setScale (.multiply net-bd (bigdec "0.05")) 2 java.math.RoundingMode/HALF_EVEN)
         pst-bd (.setScale (.multiply net-bd (bigdec "0.07")) 2 java.math.RoundingMode/HALF_EVEN)
         gross  (-> net-bd (.add gst-bd) (.add pst-bd))
         tx (-> (posting/build-transaction
                 {:transaction
-                 {:transaction/external-id external-id
-                  :transaction/journal jnl
-                  :transaction/effective-date date
-                  :transaction/narration external-id
-                  :transaction/state :posted
-                  :transaction/posted-at date}
+                 {:kontor.transaction/external-id external-id
+                  :kontor.transaction/journal jnl
+                  :kontor.transaction/effective-date date
+                  :kontor.transaction/narration external-id
+                  :kontor.transaction/state :posted
+                  :kontor.transaction/posted-at date}
                  :postings
-                 [{:posting/account rec :posting/amount gross :posting/commodity cad}
-                  {:posting/account rev :posting/amount (.negate net-bd) :posting/commodity cad}
-                  {:posting/account gst :posting/amount (.negate gst-bd) :posting/commodity cad}
-                  {:posting/account pst :posting/amount (.negate pst-bd) :posting/commodity cad}]})
-               (->> (mapv #(if (some? (:posting/account %))
-                             (assoc % :posting/posted-at date) %))))]
+                 [{:kontor.posting/account rec :kontor.posting/amount gross :kontor.posting/commodity cad}
+                  {:kontor.posting/account rev :kontor.posting/amount (.negate net-bd) :kontor.posting/commodity cad}
+                  {:kontor.posting/account gst :kontor.posting/amount (.negate gst-bd) :kontor.posting/commodity cad}
+                  {:kontor.posting/account pst :kontor.posting/amount (.negate pst-bd) :kontor.posting/commodity cad}]})
+               (->> (mapv #(if (some? (:kontor.posting/account %))
+                             (assoc % :kontor.posting/posted-at date) %))))]
     (v/transact-with-validation conn tx)))
 
 (defn- post-qc-sale!
@@ -113,26 +113,26 @@
         cad (:db/id (d/entity db [:kontor.commodity/symbol "CAD"]))
         rec (ace db "1100") rev (ace db "4000")
         gst (ace db "2310") qst (ace db "2330")
-        jnl (:db/id (d/entity db [:journal/code "INV"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         net-bd (bigdec net)
         gst-bd (.setScale (.multiply net-bd (bigdec "0.05")) 2 java.math.RoundingMode/HALF_EVEN)
         qst-bd (.setScale (.multiply net-bd (bigdec "0.09975")) 2 java.math.RoundingMode/HALF_EVEN)
         gross  (-> net-bd (.add gst-bd) (.add qst-bd))
         tx (-> (posting/build-transaction
                 {:transaction
-                 {:transaction/external-id external-id
-                  :transaction/journal jnl
-                  :transaction/effective-date date
-                  :transaction/narration external-id
-                  :transaction/state :posted
-                  :transaction/posted-at date}
+                 {:kontor.transaction/external-id external-id
+                  :kontor.transaction/journal jnl
+                  :kontor.transaction/effective-date date
+                  :kontor.transaction/narration external-id
+                  :kontor.transaction/state :posted
+                  :kontor.transaction/posted-at date}
                  :postings
-                 [{:posting/account rec :posting/amount gross :posting/commodity cad}
-                  {:posting/account rev :posting/amount (.negate net-bd) :posting/commodity cad}
-                  {:posting/account gst :posting/amount (.negate gst-bd) :posting/commodity cad}
-                  {:posting/account qst :posting/amount (.negate qst-bd) :posting/commodity cad}]})
-               (->> (mapv #(if (some? (:posting/account %))
-                             (assoc % :posting/posted-at date) %))))]
+                 [{:kontor.posting/account rec :kontor.posting/amount gross :kontor.posting/commodity cad}
+                  {:kontor.posting/account rev :kontor.posting/amount (.negate net-bd) :kontor.posting/commodity cad}
+                  {:kontor.posting/account gst :kontor.posting/amount (.negate gst-bd) :kontor.posting/commodity cad}
+                  {:kontor.posting/account qst :kontor.posting/amount (.negate qst-bd) :kontor.posting/commodity cad}]})
+               (->> (mapv #(if (some? (:kontor.posting/account %))
+                             (assoc % :kontor.posting/posted-at date) %))))]
     (v/transact-with-validation conn tx)))
 
 (defn- post-bill-with-itc!
@@ -144,24 +144,24 @@
   (let [db (d/db conn)
         cad (:db/id (d/entity db [:kontor.commodity/symbol "CAD"]))
         exp (ace db "6000") itc (ace db "1310") pay (ace db "2000")
-        jnl (:db/id (d/entity db [:journal/code "INV"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         net-bd (bigdec net)
         gst-bd (.setScale (.multiply net-bd (bigdec "0.05")) 2 java.math.RoundingMode/HALF_EVEN)
         gross (.add net-bd gst-bd)
         tx (-> (posting/build-transaction
                 {:transaction
-                 {:transaction/external-id external-id
-                  :transaction/journal jnl
-                  :transaction/effective-date date
-                  :transaction/narration external-id
-                  :transaction/state :posted
-                  :transaction/posted-at date}
+                 {:kontor.transaction/external-id external-id
+                  :kontor.transaction/journal jnl
+                  :kontor.transaction/effective-date date
+                  :kontor.transaction/narration external-id
+                  :kontor.transaction/state :posted
+                  :kontor.transaction/posted-at date}
                  :postings
-                 [{:posting/account exp :posting/amount net-bd :posting/commodity cad}
-                  {:posting/account itc :posting/amount gst-bd :posting/commodity cad}
-                  {:posting/account pay :posting/amount (.negate gross) :posting/commodity cad}]})
-               (->> (mapv #(if (some? (:posting/account %))
-                             (assoc % :posting/posted-at date) %))))]
+                 [{:kontor.posting/account exp :kontor.posting/amount net-bd :kontor.posting/commodity cad}
+                  {:kontor.posting/account itc :kontor.posting/amount gst-bd :kontor.posting/commodity cad}
+                  {:kontor.posting/account pay :kontor.posting/amount (.negate gross) :kontor.posting/commodity cad}]})
+               (->> (mapv #(if (some? (:kontor.posting/account %))
+                             (assoc % :kontor.posting/posted-at date) %))))]
     (v/transact-with-validation conn tx)))
 
 ;; ============================================================================

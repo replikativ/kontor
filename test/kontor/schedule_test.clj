@@ -123,15 +123,15 @@
                        {:db/id -3 :kontor.account/path "Asset:AccumulatedDepreciation"
                         :kontor.account/name "Accumulated depreciation" :kontor.account/type :asset
                         :kontor.account/active true}
-                       {:db/id -4 :journal/code "DEP"
-                        :journal/name "Depreciation" :journal/type :general
-                        :journal/active true}])
+                       {:db/id -4 :kontor.journal/code "DEP"
+                        :kontor.journal/name "Depreciation" :kontor.journal/type :general
+                        :kontor.journal/active true}])
         db (d/db conn)]
     {:asset asset-eid
      :commodity (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
      :dep-expense (:db/id (d/entity db [:kontor.account/path "Expense:Depreciation"]))
      :accum-dep (:db/id (d/entity db [:kontor.account/path "Asset:AccumulatedDepreciation"]))
-     :journal (:db/id (d/entity db [:journal/code "DEP"]))}))
+     :journal (:db/id (d/entity db [:kontor.journal/code "DEP"]))}))
 
 (defn- dep-tx-data
   "Build a minimal depreciation journal entry. Tempid -1 is the
@@ -142,28 +142,28 @@
     :db.valid/from date
     :db.valid/to #inst "9999-12-31T23:59:59.999-00:00"}
    {:db/id -1
-    :transaction/journal journal
-    :transaction/effective-date date
-    :transaction/narration (str "Depreciation " (.toString ^java.util.Date date))
-    :transaction/state :posted
-    ;; :transaction/posted-at is required by the state-machine gate
+    :kontor.transaction/journal journal
+    :kontor.transaction/effective-date date
+    :kontor.transaction/narration (str "Depreciation " (.toString ^java.util.Date date))
+    :kontor.transaction/state :posted
+    ;; :kontor.transaction/posted-at is required by the state-machine gate
     ;; alongside :state :posted (matches the production builders'
     ;; convention; was missing in this fixture pre-Stage-P).
-    :transaction/posted-at date}
+    :kontor.transaction/posted-at date}
    {:db/id -10
-    :posting/account dep-expense
-    :posting/amount amount
-    :posting/commodity commodity
-    :posting/transaction -1
-    :posting/display-type :product
-    :posting/posted-at date}
+    :kontor.posting/account dep-expense
+    :kontor.posting/amount amount
+    :kontor.posting/commodity commodity
+    :kontor.posting/transaction -1
+    :kontor.posting/display-type :product
+    :kontor.posting/posted-at date}
    {:db/id -11
-    :posting/account accum-dep
-    :posting/amount (.negate ^java.math.BigDecimal amount)
-    :posting/commodity commodity
-    :posting/transaction -1
-    :posting/display-type :product
-    :posting/posted-at date}])
+    :kontor.posting/account accum-dep
+    :kontor.posting/amount (.negate ^java.math.BigDecimal amount)
+    :kontor.posting/commodity commodity
+    :kontor.posting/transaction -1
+    :kontor.posting/display-type :product
+    :kontor.posting/posted-at date}])
 
 (deftest record-occurrence-creates-occurrence-and-transaction
   (let [conn (core/create-test-db)

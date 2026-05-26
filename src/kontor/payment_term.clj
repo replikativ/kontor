@@ -45,14 +45,14 @@
 
 (defn apply-term
   "Return a transaction-attribute map fragment (plain map, not
-   tx-data) populating :transaction/payment-term, :due-date, and
+   tx-data) populating :kontor.transaction/payment-term, :due-date, and
    :discount-deadline given an effective-date + payment-term entity.
    Caller merges this into their transaction map before transact."
   [^Date effective-date payment-term]
-  (cond-> {:transaction/payment-term (:db/id payment-term)
-           :transaction/due-date     (compute-due-date effective-date payment-term)}
+  (cond-> {:kontor.transaction/payment-term (:db/id payment-term)
+           :kontor.transaction/due-date     (compute-due-date effective-date payment-term)}
     (compute-discount-deadline effective-date payment-term)
-    (assoc :transaction/discount-deadline
+    (assoc :kontor.transaction/discount-deadline
            (compute-discount-deadline effective-date payment-term))))
 
 ;; ============================================================================

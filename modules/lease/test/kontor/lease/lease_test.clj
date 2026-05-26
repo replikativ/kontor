@@ -43,8 +43,8 @@
                   :kontor.account/type :expense :kontor.account/active true}
                  {:db/id "acct-cash" :kontor.account/code "1800" :kontor.account/name "Bank"
                   :kontor.account/type :asset :kontor.account/active true}
-                 {:db/id "journal-gen" :journal/code "GEN" :journal/name "General"
-                  :journal/type :general}])
+                 {:db/id "journal-gen" :kontor.journal/code "GEN" :kontor.journal/name "General"
+                  :kontor.journal/type :general}])
     conn))
 
 (defn- ref-eid [db a v]
@@ -53,7 +53,7 @@
 (defn- commodity [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- p   [db code] (ref-eid db :kontor.partner/external-id code))
 (defn- acct [db code] (ref-eid db :kontor.account/code code))
-(defn- journal [db] (ref-eid db :journal/code "GEN"))
+(defn- journal [db] (ref-eid db :kontor.journal/code "GEN"))
 (defn- class-eid [db] (ref-eid db :asset-class/code "rou-property"))
 (defn- adoc [db] (ref-eid db :audit-doc/code "LEASE-CONTRACT-1"))
 
@@ -145,11 +145,11 @@
                       :date #inst "2026-03-01"
                       :lease-expense-account (acct (d/db conn) "6740")
                       :credit-account (acct (d/db conn) "1800")})
-            tx (first (filter :transaction/journal tx-data))
-            postings (filter :posting/account tx-data)]
+            tx (first (filter :kontor.transaction/journal tx-data))
+            postings (filter :kontor.posting/account tx-data)]
         (is (:ok? (kposting/validate {:transaction tx :postings postings})))
-        (is (= #{100.00M -100.00M} (set (map :posting/amount postings))))
-        (is (every? #(some? (:posting/posted-at %)) postings) "sealed")))))
+        (is (= #{100.00M -100.00M} (set (map :kontor.posting/amount postings))))
+        (is (every? #(some? (:kontor.posting/posted-at %)) postings) "sealed")))))
 
 (deftest exempt-lease-remainder-lands-on-the-last-period
   (let [conn (bootstrap)

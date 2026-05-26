@@ -209,9 +209,9 @@
   (let [conn (core/create-test-db)]
     (d/transact conn
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
-                 {:journal/code "SALE" :journal/type :sale}
-                 {:journal/code "PUR"  :journal/type :purchase}
-                 {:journal/code "GEN"  :journal/type :general}
+                 {:kontor.journal/code "SALE" :kontor.journal/type :sale}
+                 {:kontor.journal/code "PUR"  :kontor.journal/type :purchase}
+                 {:kontor.journal/code "GEN"  :kontor.journal/type :general}
                  {:kontor.account/path "Assets:Cash"          :kontor.account/type :asset}
                  {:kontor.account/path "Assets:Receivable"    :kontor.account/type :asset}
                  {:kontor.account/path "Income:Sales"         :kontor.account/type :income}
@@ -253,8 +253,8 @@
 (defn- sum-account [conn path]
   (reduce + 0M
           (d/q '[:find [?amt ...] :in $ ?p
-                 :where [?a :kontor.account/path ?p] [?pp :posting/account ?a]
-                 [?pp :posting/amount ?amt]]
+                 :where [?a :kontor.account/path ?p] [?pp :kontor.posting/account ?a]
+                 [?pp :kontor.posting/amount ?amt]]
                (d/db conn) path)))
 
 (deftest synthetic-provider-full-pipeline
@@ -271,7 +271,7 @@
                     {:expense-account [:kontor.account/path "Expenses:Income-Tax"]
                      :payable-account [:kontor.account/path "Liabilities:Tax-Payable"]
                      :cash-account    [:kontor.account/path "Assets:Cash"]
-                     :journal         [:journal/code "GEN"]
+                     :journal         [:kontor.journal/code "GEN"]
                      :commodity       eur})
           facts    (ptp/period-tax-facts provider {:entity 1 :period fy-2026 :conn conn})]
       (testing "the provider marginalizes the base and applies the schedule"

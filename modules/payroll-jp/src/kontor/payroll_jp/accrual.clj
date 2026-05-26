@@ -119,7 +119,7 @@
      :commodity                     — :commodity ref (JPY)
      :journal                       — :journal ref
      :effective-date                — #inst
-     :tx-code                       — :transaction/external-id
+     :tx-code                       — :kontor.transaction/external-id
 
    Optional:
      :ledger                        — :ledger ref (book ledger)
@@ -143,24 +143,24 @@
                   :bonus-accrual-liability-account
                   :amount :commodity :journal :effective-date :tx-code])
   (let [amt (to-whole-yen amount)
-        postings [(cond-> {:posting/account bonus-accrual-expense-account
-                           :posting/amount amt
-                           :posting/commodity commodity
-                           :posting/narration "賞与引当金繰入額 (expense)"}
-                    ledger (assoc :posting/ledger ledger))
-                  (cond-> {:posting/account bonus-accrual-liability-account
-                           :posting/amount (.negate ^BigDecimal amt)
-                           :posting/commodity commodity
-                           :posting/narration "賞与引当金 (liability)"}
-                    ledger (assoc :posting/ledger ledger))]
+        postings [(cond-> {:kontor.posting/account bonus-accrual-expense-account
+                           :kontor.posting/amount amt
+                           :kontor.posting/commodity commodity
+                           :kontor.posting/narration "賞与引当金繰入額 (expense)"}
+                    ledger (assoc :kontor.posting/ledger ledger))
+                  (cond-> {:kontor.posting/account bonus-accrual-liability-account
+                           :kontor.posting/amount (.negate ^BigDecimal amt)
+                           :kontor.posting/commodity commodity
+                           :kontor.posting/narration "賞与引当金 (liability)"}
+                    ledger (assoc :kontor.posting/ledger ledger))]
         tx-input {:tx-tempid tx-tempid
-                  :transaction (cond-> {:transaction/external-id tx-code
-                                        :transaction/effective-date effective-date
-                                        :transaction/narration narration
-                                        :transaction/journal journal
-                                        :transaction/state :draft}
+                  :transaction (cond-> {:kontor.transaction/external-id tx-code
+                                        :kontor.transaction/effective-date effective-date
+                                        :kontor.transaction/narration narration
+                                        :kontor.transaction/journal journal
+                                        :kontor.transaction/state :draft}
                                  pay-period
-                                 (assoc :transaction/source
+                                 (assoc :kontor.transaction/source
                                         (str "pay-period:" pay-period)))
                   :postings postings}]
     (posting/build-transaction tx-input)))
@@ -208,24 +208,24 @@
                   :amount :commodity :journal :effective-date :tx-code])
   (let [amt (to-whole-yen amount)
         narr (or narration (str bucket-kanji " — 法定福利費 (事業主負担)"))
-        postings [(cond-> {:posting/account si-expense-account
-                           :posting/amount amt
-                           :posting/commodity commodity
-                           :posting/narration (str "法定福利費: " bucket-kanji)}
-                    ledger (assoc :posting/ledger ledger))
-                  (cond-> {:posting/account si-liability-account
-                           :posting/amount (.negate ^BigDecimal amt)
-                           :posting/commodity commodity
-                           :posting/narration (str "預り金: " bucket-kanji)}
-                    ledger (assoc :posting/ledger ledger))]
+        postings [(cond-> {:kontor.posting/account si-expense-account
+                           :kontor.posting/amount amt
+                           :kontor.posting/commodity commodity
+                           :kontor.posting/narration (str "法定福利費: " bucket-kanji)}
+                    ledger (assoc :kontor.posting/ledger ledger))
+                  (cond-> {:kontor.posting/account si-liability-account
+                           :kontor.posting/amount (.negate ^BigDecimal amt)
+                           :kontor.posting/commodity commodity
+                           :kontor.posting/narration (str "預り金: " bucket-kanji)}
+                    ledger (assoc :kontor.posting/ledger ledger))]
         tx-input {:tx-tempid tx-tempid
-                  :transaction (cond-> {:transaction/external-id tx-code
-                                        :transaction/effective-date effective-date
-                                        :transaction/narration narr
-                                        :transaction/journal journal
-                                        :transaction/state :draft}
+                  :transaction (cond-> {:kontor.transaction/external-id tx-code
+                                        :kontor.transaction/effective-date effective-date
+                                        :kontor.transaction/narration narr
+                                        :kontor.transaction/journal journal
+                                        :kontor.transaction/state :draft}
                                  pay-period
-                                 (assoc :transaction/source
+                                 (assoc :kontor.transaction/source
                                         (str "pay-period:" pay-period)))
                   :postings postings}]
     (posting/build-transaction tx-input)))

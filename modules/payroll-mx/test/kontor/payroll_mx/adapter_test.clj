@@ -47,10 +47,10 @@
        :kontor.entity/name "Acme México S.A. de C.V."
        :kontor.entity/kind :operating}
       {:db/id "journal-nom"
-       :journal/code "NOM"
-       :journal/name "Nómina"
-       :journal/type :general
-       :journal/active true}
+       :kontor.journal/code "NOM"
+       :kontor.journal/name "Nómina"
+       :kontor.journal/type :general
+       :kontor.journal/active true}
       {:db/id "period-2026-05"
        :period/name "2026-05"
        :period/start #inst "2026-05-01"
@@ -168,7 +168,7 @@
           db   (d/db conn)
           mxn       (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "MXN"]] db)
           entity    (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-MX"]] db)
-          journal   (d/q '[:find ?e . :where [?e :journal/code "NOM"]] db)
+          journal   (d/q '[:find ?e . :where [?e :kontor.journal/code "NOM"]] db)
           fiscal-pp (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)
           ;; Persons + employments matching the CONTPAQi CSV fixture (E001 + E002).
           _ (person/create-person!
@@ -267,11 +267,11 @@
                        db "ACME-MX-2026-05-001")
           run (d/pull db
                       '[* {:payroll-run/payroll-transaction
-                           [:transaction/external-id
-                            {:posting/_transaction
-                             [:posting/amount
-                              {:posting/account [:kontor.account/code]}
-                              {:posting/commodity [:kontor.commodity/symbol]}]}]}
+                           [:kontor.transaction/external-id
+                            {:kontor.posting/_transaction
+                             [:kontor.posting/amount
+                              {:kontor.posting/account [:kontor.account/code]}
+                              {:kontor.posting/commodity [:kontor.commodity/symbol]}]}]}
                         {:payroll-run/emit-docs
                          [:audit-doc/code
                           :audit-doc/category
@@ -294,8 +294,8 @@
       (testing "Posting legs sum to zero per ledger × commodity"
         (let [postings (-> run
                            :payroll-run/payroll-transaction
-                           :posting/_transaction)
-              sum (reduce (fn [^BigDecimal a {:keys [posting/amount]}]
+                           :kontor.posting/_transaction)
+              sum (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                             (.add a ^BigDecimal amount))
                           0M postings)]
           (is (pos? (count postings))
@@ -305,9 +305,9 @@
       (testing "Postings route via SAT Código Agrupador accounts"
         (let [postings (-> run
                            :payroll-run/payroll-transaction
-                           :posting/_transaction)
+                           :kontor.posting/_transaction)
               codes-seen (->> postings
-                              (map (comp :kontor.account/code :posting/account))
+                              (map (comp :kontor.account/code :kontor.posting/account))
                               set)]
           ;; Sueldos (worker percep) → 601.01
           (is (contains? codes-seen "601.01"))

@@ -32,7 +32,7 @@
    `(dispatch-supply supplier-state pos-state pos-is-ut?)` →
      :intra-state | :inter-state | :ut-supply
 
-   The kernel-level `:transaction/place-of-supply` (ADR-023) is the
+   The kernel-level `:kontor.transaction/place-of-supply` (ADR-023) is the
    POS state. The supplier state comes from the issuer entity
    (typically `:kontor.partner/state` of the company itself in single-
    establishment setups, or the establishment's state in multi-

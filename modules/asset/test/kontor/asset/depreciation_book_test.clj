@@ -71,8 +71,8 @@
                   :ledger/active true}
                  ;; Journal.
                  {:db/id "journal-gen"
-                  :journal/code "GEN" :journal/name "General"
-                  :journal/type :general}
+                  :kontor.journal/code "GEN" :kontor.journal/name "General"
+                  :kontor.journal/type :general}
                  ;; Asset class.
                  {:db/id "class-machinery"
                   :asset-class/code "machinery"
@@ -87,7 +87,7 @@
 (defn- commodity [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- acct      [db code] (ref-eid db :kontor.account/code code))
 (defn- ledger    [db code] (ref-eid db :ledger/code code))
-(defn- journal   [db] (ref-eid db :journal/code "GEN"))
+(defn- journal   [db] (ref-eid db :kontor.journal/code "GEN"))
 (defn- class-eid [db] (ref-eid db :asset-class/code "machinery"))
 
 ;; A standard in-service €120,000 machine, salvage €0.
@@ -239,12 +239,12 @@
 (defn- tx-balanced?
   "A built tx-data vector balances iff posting/validate is :ok?."
   [tx-data]
-  (let [tx (first (filter #(:transaction/journal %) tx-data))
-        postings (filter :posting/account tx-data)]
+  (let [tx (first (filter #(:kontor.transaction/journal %) tx-data))
+        postings (filter :kontor.posting/account tx-data)]
     (:ok? (kposting/validate {:transaction tx :postings postings}))))
 
 (defn- posting-rows [tx-data]
-  (filter :posting/account tx-data))
+  (filter :kontor.posting/account tx-data))
 
 (deftest plan-capitalisation-builds-balanced-entry
   (let [conn (bootstrap)
@@ -260,8 +260,8 @@
       (is (tx-balanced? tx-data))
       (let [ps (posting-rows tx-data)]
         (is (= 2 (count ps)))
-        (is (= 120000.00M (->> ps (map :posting/amount) (filter pos?) first)))
-        (is (= -120000.00M (->> ps (map :posting/amount) (filter neg?) first)))))))
+        (is (= 120000.00M (->> ps (map :kontor.posting/amount) (filter pos?) first)))
+        (is (= -120000.00M (->> ps (map :kontor.posting/amount) (filter neg?) first)))))))
 
 (deftest plan-depreciation-charge-builds-balanced-ledger-tagged-entry
   (let [conn (bootstrap)
@@ -280,8 +280,8 @@
       (let [ps (posting-rows tx-data)
             hgb (ledger (d/db conn) "hgb")]
         (is (= 2 (count ps)))
-        (is (every? #(= hgb (:posting/ledger %)) ps))
-        (is (= #{1000.00M -1000.00M} (set (map :posting/amount ps))))))))
+        (is (every? #(= hgb (:kontor.posting/ledger %)) ps))
+        (is (= #{1000.00M -1000.00M} (set (map :kontor.posting/amount ps))))))))
 
 (deftest plan-disposal-gain-loss-and-scrap
   (let [conn (bootstrap)
@@ -323,7 +323,7 @@
                       :journal (journal (d/db conn))
                       :date #inst "2026-12-01"})]
         (is (tx-balanced? tx-data))
-        (let [amts (set (map :posting/amount (posting-rows tx-data)))]
+        (let [amts (set (map :kontor.posting/amount (posting-rows tx-data)))]
           ;; Dr bank 115,000 + Dr accum 10,000 / Cr asset 120,000 + Cr gain 5,000
           (is (contains? amts 115000.00M))
           (is (contains? amts 10000.00M))
@@ -342,7 +342,7 @@
                       :journal (journal (d/db conn))
                       :date #inst "2026-12-01"})]
         (is (tx-balanced? tx-data))
-        (let [amts (set (map :posting/amount (posting-rows tx-data)))]
+        (let [amts (set (map :kontor.posting/amount (posting-rows tx-data)))]
           ;; Dr bank 90,000 + Dr accum 10,000 + Dr loss 20,000 / Cr asset 120,000
           (is (contains? amts 90000.00M))
           (is (contains? amts 10000.00M))
@@ -361,7 +361,7 @@
         (let [ps (posting-rows tx-data)]
           ;; Dr accum 120,000 / Cr asset 120,000 — exactly two lines.
           (is (= 2 (count ps)))
-          (is (= #{120000.00M -120000.00M} (set (map :posting/amount ps)))))))))
+          (is (= #{120000.00M -120000.00M} (set (map :kontor.posting/amount ps)))))))))
 
 (deftest plan-impairment-builds-balanced-entry
   (let [conn (bootstrap)
@@ -379,7 +379,7 @@
     (testing "Dr impairment-expense 15,000 / Cr accumulated 15,000"
       (is (tx-balanced? tx-data))
       (is (= #{15000.00M -15000.00M}
-             (set (map :posting/amount (posting-rows tx-data))))))))
+             (set (map :kontor.posting/amount (posting-rows tx-data))))))))
 
 (deftest plan-revaluation-upward-and-downward
   (let [conn (bootstrap)
@@ -397,7 +397,7 @@
                       :journal (journal (d/db conn)) :date #inst "2027-01-01"})]
         (is (tx-balanced? tx-data))
         (is (= #{20000.00M -20000.00M}
-               (set (map :posting/amount (posting-rows tx-data)))))))
+               (set (map :kontor.posting/amount (posting-rows tx-data)))))))
     (testing "downward revaluation: a negative :amount flips the entry"
       (let [tx-data (ap/plan-revaluation
                      (d/db conn)
@@ -406,7 +406,7 @@
                       :journal (journal (d/db conn)) :date #inst "2027-06-01"})]
         (is (tx-balanced? tx-data))
         (is (= #{-8000.00M 8000.00M}
-               (set (map :posting/amount (posting-rows tx-data)))))))))
+               (set (map :kontor.posting/amount (posting-rows tx-data)))))))))
 
 ;; ============================================================================
 ;; Review-after fixes
@@ -448,5 +448,5 @@
     (testing "the asset-account is credited with the full acquisition cost"
       (is (tx-balanced? tx-data))
       ;; No occurrences, no proceeds → Dr loss 120,000 / Cr asset 120,000.
-      (is (contains? (set (map :posting/amount (posting-rows tx-data)))
+      (is (contains? (set (map :kontor.posting/amount (posting-rows tx-data)))
                      -120000.00M)))))

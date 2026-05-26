@@ -46,9 +46,9 @@
                   :kontor.entity/name "Acme株式会社"
                   :kontor.entity/kind :operating}
                  {:db/id "journal-pay"
-                  :journal/code "PAY-JP"
-                  :journal/name "Payroll (JP)"
-                  :journal/type :general}
+                  :kontor.journal/code "PAY-JP"
+                  :kontor.journal/name "Payroll (JP)"
+                  :kontor.journal/type :general}
                  {:db/id "period-2026-05"
                   :period/name "2026-05"
                   :period/start #inst "2026-05-01"
@@ -138,7 +138,7 @@
         db (d/db conn)
         jpy (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "JPY"]] db)
         ent (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-JP"]] db)
-        journal (d/q '[:find ?e . :where [?e :journal/code "PAY-JP"]] db)
+        journal (d/q '[:find ?e . :where [?e :kontor.journal/code "PAY-JP"]] db)
         period (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)
         ;; Persons + employments
         _ (person/create-person!
@@ -230,10 +230,10 @@
                        :where [?r :payroll-run/code ?c]]
                      db "ACME-JP-2026-05-001")
         run (d/pull db '[* {:payroll-run/payroll-transaction
-                            [:transaction/external-id
-                             {:posting/_transaction
-                              [:posting/amount
-                               {:posting/account [:kontor.account/code]}]}]}]
+                            [:kontor.transaction/external-id
+                             {:kontor.posting/_transaction
+                              [:kontor.posting/amount
+                               {:kontor.posting/account [:kontor.account/code]}]}]}]
                     run-eid)]
     (testing "payroll-run row created"
       (is (some? run-eid))
@@ -244,28 +244,28 @@
       (is (= 1220000M (:payroll-run/control-total-gross run))))
     (testing "Posting legs sum to zero per (ledger × commodity)"
       (let [postings (-> run :payroll-run/payroll-transaction
-                         :posting/_transaction)
-            sum (reduce (fn [a {:keys [posting/amount]}]
+                         :kontor.posting/_transaction)
+            sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                           (.add ^BigDecimal a ^BigDecimal amount))
                         0M postings)]
         (is (zero? (.compareTo ^BigDecimal sum 0M)))))
     (testing "Long-term-care (介護保険料) posts ONLY for Suzuki (≥40)"
       (let [postings (-> run :payroll-run/payroll-transaction
-                         :posting/_transaction)
-            by-code (group-by (comp :kontor.account/code :posting/account) postings)
-            kaigo-total (reduce (fn [a {:keys [posting/amount]}]
+                         :kontor.posting/_transaction)
+            by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)
+            kaigo-total (reduce (fn [a {:kontor.posting/keys [amount]}]
                                   (.add ^BigDecimal a ^BigDecimal amount))
                                 0M (get by-code "216400"))]
         ;; -4510 (employee) + -4510 (employer payable) = -9020
         (is (= -9020M kaigo-total))))
     (testing "Income tax + resident tax route to DIFFERENT liability buckets"
       (let [postings (-> run :payroll-run/payroll-transaction
-                         :posting/_transaction)
-            by-code (group-by (comp :kontor.account/code :posting/account) postings)
-            itx-total (reduce (fn [a {:keys [posting/amount]}]
+                         :kontor.posting/_transaction)
+            by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)
+            itx-total (reduce (fn [a {:kontor.posting/keys [amount]}]
                                 (.add ^BigDecimal a ^BigDecimal amount))
                               0M (get by-code "216500"))
-            rt-total (reduce (fn [a {:keys [posting/amount]}]
+            rt-total (reduce (fn [a {:kontor.posting/keys [amount]}]
                                (.add ^BigDecimal a ^BigDecimal amount))
                              0M (get by-code "216600"))]
         ;; ITX: -8000 + -22000 + -10500 = -40500
@@ -288,7 +288,7 @@
   (let [conn (bootstrap)
         db (d/db conn)
         jpy (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "JPY"]] db)
-        journal (d/q '[:find ?e . :where [?e :journal/code "PAY-JP"]] db)
+        journal (d/q '[:find ?e . :where [?e :kontor.journal/code "PAY-JP"]] db)
         bonus-exp-acct (get-account-eid db "614000")
         bonus-liab-acct (get-account-eid db "217000")
         accrual-amount (jp-accrual/bonus-accrual-amount
@@ -310,16 +310,16 @@
       (let [postings (d/q '[:find ?amount
                             :in $ ?a
                             :where
-                            [?p :posting/account ?a]
-                            [?p :posting/amount ?amount]]
+                            [?p :kontor.posting/account ?a]
+                            [?p :kontor.posting/amount ?amount]]
                           db bonus-exp-acct)]
         (is (= 300000M (ffirst postings)))))
     (testing "Bonus liability booked"
       (let [postings (d/q '[:find ?amount
                             :in $ ?a
                             :where
-                            [?p :posting/account ?a]
-                            [?p :posting/amount ?amount]]
+                            [?p :kontor.posting/account ?a]
+                            [?p :kontor.posting/amount ?amount]]
                           db bonus-liab-acct)]
         (is (= -300000M (ffirst postings)))))))
 

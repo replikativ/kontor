@@ -25,8 +25,8 @@
     (d/transact conn
                 [{:kontor.commodity/symbol "MXN" :kontor.commodity/name "Mexican Peso"
                   :kontor.commodity/precision 2}
-                 {:journal/code "GEN" :journal/type :general}
-                 {:journal/code "PUR" :journal/type :purchase}
+                 {:kontor.journal/code "GEN" :kontor.journal/type :general}
+                 {:kontor.journal/code "PUR" :kontor.journal/type :purchase}
                  {:kontor.account/path "Gastos:Sueldos" :kontor.account/code "6010"
                   :kontor.account/type :expense}
                  {:kontor.account/path "Activo:Banco"   :kontor.account/code "1010"
@@ -144,8 +144,8 @@
     (d/transact conn
                 [{:kontor.commodity/symbol "MXN" :kontor.commodity/name "Mexican Peso"
                   :kontor.commodity/precision 2}
-                 {:journal/code "GEN" :journal/type :general}
-                 {:journal/code "SAL" :journal/type :sale}
+                 {:kontor.journal/code "GEN" :kontor.journal/type :general}
+                 {:kontor.journal/code "SAL" :kontor.journal/type :sale}
                  {:kontor.account/path "Ingresos:Honorarios" :kontor.account/code "4010"
                   :kontor.account/type :income}
                  {:kontor.account/path "Activo:Banco" :kontor.account/code "1010"

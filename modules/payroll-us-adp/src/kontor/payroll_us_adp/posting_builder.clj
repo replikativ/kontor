@@ -25,10 +25,10 @@
    ## Multi-state allocation (note 83 §4)
 
    STRONGLY recommended: per-state allocation lives on
-   `:posting/analytic-distributions` via an `:analytic-plan/code
+   `:kontor.posting/analytic-distributions` via an `:analytic-plan/code
    \"state\"` (consumer-installed at install time), NOT on
-   `:posting/entity`. A US LLC with employees in 15 states is ONE
-   legal entity — `:posting/entity` is reserved for true multi-LLC /
+   `:kontor.posting/entity`. A US LLC with employees in 15 states is ONE
+   legal entity — `:kontor.posting/entity` is reserved for true multi-LLC /
    cross-border scenarios.
 
    Per-state allocation uses the kernel's existing analytic-
@@ -185,12 +185,12 @@
     (for [ledger-key ledgers
           :let [ledger-eid (get ledgers-map ledger-key)]
           :when ledger-eid]
-      (cond-> {:posting/account acct
-               :posting/amount gl-amt
-               :posting/commodity commodity
-               :posting/narration narration
-               :posting/ledger ledger-eid}
-        (seq dists) (assoc :posting/analytic-distributions dists)))))
+      (cond-> {:kontor.posting/account acct
+               :kontor.posting/amount gl-amt
+               :kontor.posting/commodity commodity
+               :kontor.posting/narration narration
+               :kontor.posting/ledger ledger-eid}
+        (seq dists) (assoc :kontor.posting/analytic-distributions dists)))))
 
 (defn- balancing-postings-by-ledger
   "Per-ledger, compute the sum of explicit postings; if non-zero, emit
@@ -205,19 +205,19 @@
    match on `:us-gaap` only) the per-ledger balance can diverge and
    a balancing leg keeps the substrate happy."
   [postings accounts commodity]
-  (let [by-ledger (group-by :posting/ledger postings)]
+  (let [by-ledger (group-by :kontor.posting/ledger postings)]
     (for [[ledger ps] by-ledger
-          :let [sum (reduce (fn [^BigDecimal a {:keys [posting/amount]}]
+          :let [sum (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                               (.add a ^BigDecimal amount))
                             0M ps)
                 non-zero? (not (zero? (.signum sum)))]
           :when non-zero?]
-      {:posting/account (or (:balance-clearing accounts)
+      {:kontor.posting/account (or (:balance-clearing accounts)
                             (:net-pay-payable accounts))
-       :posting/amount (neg-bd sum)
-       :posting/commodity commodity
-       :posting/narration "Per-ledger balancing leg (ADP GLI parallel-ledger split)"
-       :posting/ledger ledger})))
+       :kontor.posting/amount (neg-bd sum)
+       :kontor.posting/commodity commodity
+       :kontor.posting/narration "Per-ledger balancing leg (ADP GLI parallel-ledger split)"
+       :kontor.posting/ledger ledger})))
 
 (defn build-payroll-postings
   "Public functional entry — pure (no providers). Returns a vector of

@@ -54,7 +54,7 @@
 
 (deftest postings-balance-to-zero
   (let [postings (build {} (jane-fact))
-        sum (reduce (fn [a {:keys [posting/amount]}]
+        sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                       (.add ^java.math.BigDecimal a
                             ^java.math.BigDecimal amount))
                     0M postings)]
@@ -63,51 +63,51 @@
 
 (deftest one-wages-debit-for-gross
   (let [postings (build {} (jane-fact))
-        wages-leg (first (filter #(= :acct/wages (:posting/account %)) postings))]
+        wages-leg (first (filter #(= :acct/wages (:kontor.posting/account %)) postings))]
     (testing "Single wages-expense leg for the gross"
-      (is (= 5000M (:posting/amount wages-leg))))))
+      (is (= 5000M (:kontor.posting/amount wages-leg))))))
 
 (deftest deduction-legs-target-cra-payable-buckets
   (let [postings (build {} (jane-fact))
-        by-acct (group-by :posting/account postings)]
+        by-acct (group-by :kontor.posting/account postings)]
     (testing "Income tax credited to :acct/itx"
       (let [legs (get by-acct :acct/itx)]
         (is (= 1 (count legs)))
-        (is (= -850M (:posting/amount (first legs))))))
+        (is (= -850M (:kontor.posting/amount (first legs))))))
     (testing "CPP payable receives BOTH the employee deduction and the employer match"
       (let [legs (get by-acct :acct/cpp)]
         (is (= 2 (count legs)))
         (is (= -520.60M
-               (.add ^java.math.BigDecimal (:posting/amount (first legs))
-                     ^java.math.BigDecimal (:posting/amount (second legs)))))))
+               (.add ^java.math.BigDecimal (:kontor.posting/amount (first legs))
+                     ^java.math.BigDecimal (:kontor.posting/amount (second legs)))))))
     (testing "EI payable receives BOTH employee (-81.50) and employer (-114.10) sides"
       (let [legs (get by-acct :acct/ei)]
         (is (= 2 (count legs)))
         (is (= -195.60M
-               (.add ^java.math.BigDecimal (:posting/amount (first legs))
-                     ^java.math.BigDecimal (:posting/amount (second legs)))))))))
+               (.add ^java.math.BigDecimal (:kontor.posting/amount (first legs))
+                     ^java.math.BigDecimal (:kontor.posting/amount (second legs)))))))))
 
 (deftest employer-side-emits-paired-legs
   (let [postings (build {} (jane-fact))
-        by-acct (group-by :posting/account postings)]
+        by-acct (group-by :kontor.posting/account postings)]
     (testing "Employer CPP expense debit"
-      (is (= 260.30M (:posting/amount (first (get by-acct :acct/er-cpp))))))
+      (is (= 260.30M (:kontor.posting/amount (first (get by-acct :acct/er-cpp))))))
     (testing "Employer EI expense debit"
-      (is (= 114.10M (:posting/amount (first (get by-acct :acct/er-ei))))))))
+      (is (= 114.10M (:kontor.posting/amount (first (get by-acct :acct/er-ei))))))))
 
 (deftest net-wages-payable-credit
   (let [postings (build {} (jane-fact))
-        net-legs (filter #(= :acct/net-wages (:posting/account %)) postings)]
+        net-legs (filter #(= :acct/net-wages (:kontor.posting/account %)) postings)]
     (testing "Single net-wages credit equal to the fact's :net"
       (is (= 1 (count net-legs)))
-      (is (= -3808.20M (:posting/amount (first net-legs)))))))
+      (is (= -3808.20M (:kontor.posting/amount (first net-legs)))))))
 
 (deftest rp-routing-tag-applies-to-every-posting
   (let [postings (build {:rp-account-tag "ca-cra-rp-RP0001"} (jane-fact))]
     (testing "Every posting carries the RP routing tag"
       (is (every? (fn [p]
                     (some #(= % [:kontor.account-tag/name "ca-cra-rp-RP0001"])
-                          (:posting/account-tags p)))
+                          (:kontor.posting/account-tags p)))
                   postings)))))
 
 (deftest missing-account-tag-throws
@@ -139,13 +139,13 @@
                                :employer-side? false}]
                  :jurisdiction-specific-codes {:engine :test :province-of-employment "QC"}}
         postings (build {} qc-fact)
-        by-acct (group-by :posting/account postings)]
+        by-acct (group-by :kontor.posting/account postings)]
     (testing "QPP credit posts to :acct/qpp"
-      (is (= -319M (:posting/amount (first (get by-acct :acct/qpp))))))
+      (is (= -319M (:kontor.posting/amount (first (get by-acct :acct/qpp))))))
     (testing "QPIP credit posts to :acct/qpip"
-      (is (= -55M (:posting/amount (first (get by-acct :acct/qpip))))))
+      (is (= -55M (:kontor.posting/amount (first (get by-acct :acct/qpip))))))
     (testing "QC ITX credit posts to :acct/qc-itx"
-      (is (= -300M (:posting/amount (first (get by-acct :acct/qc-itx))))))))
+      (is (= -300M (:kontor.posting/amount (first (get by-acct :acct/qc-itx))))))))
 
 (deftest vacation-pay-accrual-emits-paired-legs
   (let [fact {:employment :emp/jane
@@ -158,8 +158,8 @@
                            ;; (DR vacation-accrual, CR vacation-liability).
                            {:kind :vacation-pay-accrual :amount 200M :employer-side? true}]}
         postings (build {} fact)
-        by-acct (group-by :posting/account postings)]
+        by-acct (group-by :kontor.posting/account postings)]
     (testing "DR vacation-accrual expense"
-      (is (= 200M (:posting/amount (first (get by-acct :acct/vacation-accrual))))))
+      (is (= 200M (:kontor.posting/amount (first (get by-acct :acct/vacation-accrual))))))
     (testing "CR vacation-liability"
-      (is (= -200M (:posting/amount (first (get by-acct :acct/vacation-liability))))))))
+      (is (= -200M (:kontor.posting/amount (first (get by-acct :acct/vacation-liability))))))))

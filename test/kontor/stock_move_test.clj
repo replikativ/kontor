@@ -40,14 +40,14 @@
                        {:db/id -20 :kontor.account/path "Item:Widget"
                         :kontor.account/name "Widget item" :kontor.account/type :asset
                         :kontor.account/active true}
-                       {:db/id -30 :journal/code "STOCK"
-                        :journal/name "Stock" :journal/type :general
-                        :journal/active true}])
+                       {:db/id -30 :kontor.journal/code "STOCK"
+                        :kontor.journal/name "Stock" :kontor.journal/type :general
+                        :kontor.journal/active true}])
         db0 (d/db conn)]
     {:conn      conn
      :commodity (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
      :item      (:db/id (d/entity db0 [:kontor.account/path "Item:Widget"]))
-     :journal   (:db/id (d/entity db0 [:journal/code "STOCK"]))
+     :journal   (:db/id (d/entity db0 [:kontor.journal/code "STOCK"]))
      :book      (valuation/primary db0)}))
 
 (def account-fn
@@ -93,12 +93,12 @@
                            (valuation/on-hand-qty db book item)))))
     (testing "Posting count: 2 (Dr inventory / Cr GR-IR) — no variance leg"
       (let [n-postings (d/q '[:find (count ?p) .
-                              :where [?p :posting/transaction _]]
+                              :where [?p :kontor.posting/transaction _]]
                             db)]
         (is (= 2 n-postings))))
     (testing "Postings sum to zero per (ledger, commodity)"
       (let [sum (d/q '[:find (sum ?amt) .
-                       :where [_ :posting/amount ?amt]]
+                       :where [_ :kontor.posting/amount ?amt]]
                      db)]
         (is (= 0 (.compareTo (bigdec "0") sum)))))))
 
@@ -126,22 +126,22 @@
                            :in $ ?path
                            :where
                            [?a :kontor.account/path ?path]
-                           [?p :posting/account ?a]
-                           [?p :posting/amount ?amt]]
+                           [?p :kontor.posting/account ?a]
+                           [?p :kontor.posting/amount ?amt]]
                          db asset-acc-path)
           var-bal (d/q '[:find (sum ?amt) .
                          :in $ ?path
                          :where
                          [?a :kontor.account/path ?path]
-                         [?p :posting/account ?a]
-                         [?p :posting/amount ?amt]]
+                         [?p :kontor.posting/account ?a]
+                         [?p :kontor.posting/amount ?amt]]
                        db variance-path)
           gr-ir-bal (d/q '[:find (sum ?amt) .
                            :in $ ?path
                            :where
                            [?a :kontor.account/path ?path]
-                           [?p :posting/account ?a]
-                           [?p :posting/amount ?amt]]
+                           [?p :kontor.posting/account ?a]
+                           [?p :kontor.posting/amount ?amt]]
                          db gr-ir-path)]
       (is (= 0 (.compareTo (bigdec "280.00") asset-bal))
           "Inventory at standard: 40 × 7.00 = 280.00")
@@ -186,8 +186,8 @@
                           :in $ ?path
                           :where
                           [?a :kontor.account/path ?path]
-                          [?p :posting/account ?a]
-                          [?p :posting/amount ?amt]]
+                          [?p :kontor.posting/account ?a]
+                          [?p :kontor.posting/amount ?amt]]
                         db cogs-path)]
       (testing "COGS leg equals total consumption value (620)"
         (is (= 0 (.compareTo (bigdec "620.00") cogs-bal))))

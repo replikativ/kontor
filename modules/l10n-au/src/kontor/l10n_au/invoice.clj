@@ -97,7 +97,7 @@
                        :code code}))))
 
 (defn- journal-by-code [db code]
-  (:db/id (d/entity db [:journal/code code])))
+  (:db/id (d/entity db [:kontor.journal/code code])))
 
 (defn- commodity-by-symbol [db sym]
   (:db/id (d/entity db [:kontor.commodity/symbol sym])))
@@ -170,10 +170,10 @@
                  ;; (negative). An adjustment note flips the sign.
                  amt (.multiply (.negate ^java.math.BigDecimal net) sm)]
            :when (nonzero? amt)]
-       {:posting/account acct
-        :posting/amount amt
-        :posting/commodity commodity-eid
-        :posting/posted-at date}))))
+       {:kontor.posting/account acct
+        :kontor.posting/amount amt
+        :kontor.posting/commodity commodity-eid
+        :kontor.posting/posted-at date}))))
 
 (defn- au-gst-postings
   "Per-invoice GST postings, via the ADR-071 tax provider + builder
@@ -200,7 +200,7 @@
                              {:db db :date date}))
                           lines))]
     (mapv (fn [p]
-            (update p :posting/amount
+            (update p :kontor.posting/amount
                     (fn [^java.math.BigDecimal a] (.multiply a sm))))
           raw)))
 
@@ -228,9 +228,9 @@
      :invoice/cash-sale?    when true, post Dr cash (11100 default)
                             instead of AR (11200 default).
      :invoice/cash-code     account-code override for the cash leg.
-     :invoice/buyer         partner ref (kernel :transaction/partner).
+     :invoice/buyer         partner ref (kernel :kontor.transaction/partner).
      :invoice/journal       journal code override (default INV).
-     :invoice/narration     :transaction/narration override.
+     :invoice/narration     :kontor.transaction/narration override.
 
    Opts:
      :codes        — map of code overrides (`:ar-code`, `:cash-code`,
@@ -285,21 +285,21 @@
                           (.add a (line-net l)))
                         0M lines)
         debit-amt (reduce (fn [^java.math.BigDecimal a p]
-                            (.subtract a ^java.math.BigDecimal (:posting/amount p)))
+                            (.subtract a ^java.math.BigDecimal (:kontor.posting/amount p)))
                           (.multiply net-sum sm) gst-posts)
         debit-post (when (nonzero? debit-amt)
-                     {:posting/account debit-acct
-                      :posting/amount debit-amt
-                      :posting/commodity commodity-eid
-                      :posting/posted-at issue-date})
-        tx-base (cond-> {:transaction/external-id external-id
-                         :transaction/journal jnl
-                         :transaction/effective-date issue-date
-                         :transaction/narration (or (:invoice/narration invoice)
+                     {:kontor.posting/account debit-acct
+                      :kontor.posting/amount debit-amt
+                      :kontor.posting/commodity commodity-eid
+                      :kontor.posting/posted-at issue-date})
+        tx-base (cond-> {:kontor.transaction/external-id external-id
+                         :kontor.transaction/journal jnl
+                         :kontor.transaction/effective-date issue-date
+                         :kontor.transaction/narration (or (:invoice/narration invoice)
                                                     external-id)
-                         :transaction/state :posted
-                         :transaction/posted-at issue-date}
-                  buyer (assoc :transaction/partner buyer))
+                         :kontor.transaction/state :posted
+                         :kontor.transaction/posted-at issue-date}
+                  buyer (assoc :kontor.transaction/partner buyer))
         postings (cond-> []
                    debit-post (conj debit-post)
                    :always (into rev-posts)

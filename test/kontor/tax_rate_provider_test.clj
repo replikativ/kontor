@@ -116,11 +116,11 @@
                          (d/db conn))]
     (is (= 1 (count ps)))
     (let [p (first ps)]
-      (is (= vat-payable (:posting/account p)))
-      (is (== -190M (:posting/amount p)) "sale → output VAT is a credit (negative)")
-      (is (= :tax (:posting/display-type p)))
-      (is (= eur (:posting/commodity p)))
-      (is (== 1000M (:posting/tax-base p))))))
+      (is (= vat-payable (:kontor.posting/account p)))
+      (is (== -190M (:kontor.posting/amount p)) "sale → output VAT is a credit (negative)")
+      (is (= :tax (:kontor.posting/display-type p)))
+      (is (= eur (:kontor.posting/commodity p)))
+      (is (== 1000M (:kontor.posting/tax-base p))))))
 
 (deftest posting-builder-materializes-purchase-tax-as-a-debit
   (let [conn  (fresh-tax-db)
@@ -129,7 +129,7 @@
         facts (trp/rate-facts prov {:base 500 :commodity eur
                                     :country-code "DE" :tax-use :purchase :at at})
         ps    (tpb/tax-postings bld facts {})]
-    (is (== 95M (:posting/amount (first ps)))
+    (is (== 95M (:kontor.posting/amount (first ps)))
         "purchase → recoverable input VAT is a debit (positive)")))
 
 ;; ============================================================================
@@ -145,7 +145,7 @@
                                          {:base 1000 :commodity eur
                                           :country-code "DE" :tax-use :sale :at at})]
         (is (= 1 (count ps)))
-        (is (== -190M (:posting/amount (first ps))))))
+        (is (== -190M (:kontor.posting/amount (first ps))))))
     (testing "a non-taxable line yields []"
       (is (= [] (tpb/compute-tax-postings prov bld
                                           {:base 1000 :commodity eur
@@ -207,11 +207,11 @@
         out-vat (acct conn "Liabilities:Output-VAT")]
     (is (= :reverse-charge (:kind (first (:components facts)))))
     (let [ps (tpb/tax-postings bld facts {})
-          by-acct (fn [a] (some #(when (= a (:posting/account %)) %) ps))]
+          by-acct (fn [a] (some #(when (= a (:kontor.posting/account %)) %) ps))]
       (is (= 2 (count ps)) "buyer self-assesses both halves")
-      (is (== 190M  (:posting/amount (by-acct in-vat)))  "Dr input-VAT")
-      (is (== -190M (:posting/amount (by-acct out-vat))) "Cr output-VAT")
-      (is (zero? (reduce + (map :posting/amount ps))) "the pair self-nets"))
+      (is (== 190M  (:kontor.posting/amount (by-acct in-vat)))  "Dr input-VAT")
+      (is (== -190M (:kontor.posting/amount (by-acct out-vat))) "Cr output-VAT")
+      (is (zero? (reduce + (map :kontor.posting/amount ps))) "the pair self-nets"))
     (is (== 0M (trp/net-tax-effect facts)) "reverse charge is cash-neutral")))
 
 (deftest reverse-charge-seller-side-emits-no-tax-leg
@@ -236,8 +236,8 @@
     (is (= :withholding (:kind (first (:components facts)))))
     (let [ps (tpb/tax-postings bld facts {})]
       (is (= 1 (count ps)))
-      (is (= wh-recv (:posting/account (first ps))))
-      (is (== 100M (:posting/amount (first ps)))
+      (is (= wh-recv (:kontor.posting/account (first ps))))
+      (is (== 100M (:kontor.posting/amount (first ps)))
           "sale → withholding is a debit to a receivable (+) — inverted from VAT"))
     (testing "withholding nets the cash leg DOWN"
       (is (== 100M  (trp/withheld-total facts)))
@@ -255,11 +255,11 @@
                                      :country-code "WH" :tax-use :sale :at at})
         tax-ps (tpb/tax-postings bld facts {})
         ar-leg (+ net (trp/net-tax-effect facts))
-        base-ps [{:posting/amount ar-leg}       ;; Dr Accounts-Receivable
-                 {:posting/amount (- net)}]     ;; Cr Revenue
+        base-ps [{:kontor.posting/amount ar-leg}       ;; Dr Accounts-Receivable
+                 {:kontor.posting/amount (- net)}]     ;; Cr Revenue
         all     (concat base-ps tax-ps)]
     (is (== 900M ar-leg) "AR = net 1000 − withholding 100")
-    (is (zero? (reduce + (map :posting/amount all)))
+    (is (zero? (reduce + (map :kontor.posting/amount all)))
         "base + tax legs sum to zero (Ker σ)")))
 
 ;; --- the netting helpers + the closed-vocabulary check -----------------------

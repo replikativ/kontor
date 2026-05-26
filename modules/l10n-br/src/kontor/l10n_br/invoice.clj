@@ -112,7 +112,7 @@
                        :code code}))))
 
 (defn- journal-by-code [db code]
-  (:db/id (d/entity db [:journal/code code])))
+  (:db/id (d/entity db [:kontor.journal/code code])))
 
 (defn- commodity-by-symbol [db sym]
   (:db/id (d/entity db [:kontor.commodity/symbol sym])))
@@ -222,10 +222,10 @@
                                (.add acc (line-net l)))
                              0M ls)
                  acct (require-account db acct-code)]]
-       {:posting/account acct
-        :posting/amount (.negate (bd net))
-        :posting/commodity commodity-eid
-        :posting/posted-at date}))))
+       {:kontor.posting/account acct
+        :kontor.posting/amount (.negate (bd net))
+        :kontor.posting/commodity commodity-eid
+        :kontor.posting/posted-at date}))))
 
 (defn- nonzero? [^java.math.BigDecimal x]
   (not (zero? (.compareTo x 0M))))
@@ -235,10 +235,10 @@
    is zero (so the caller can filter)."
   [db code ^java.math.BigDecimal amount commodity-eid date]
   (when (and code (nonzero? amount))
-    {:posting/account (require-account db code)
-     :posting/amount (.negate amount)
-     :posting/commodity commodity-eid
-     :posting/posted-at date}))
+    {:kontor.posting/account (require-account db code)
+     :kontor.posting/amount (.negate amount)
+     :kontor.posting/commodity commodity-eid
+     :kontor.posting/posted-at date}))
 
 (defn- sum-amounts
   "Sum the :amount on a tax key across the per-line breakdowns.
@@ -330,7 +330,7 @@
    Optional top-level fields:
      :invoice/cash-sale?    when true, debit Caixa instead of AR.
      :invoice/cash-code     account-code override for the cash leg.
-     :invoice/buyer         partner ref (kernel :transaction/partner).
+     :invoice/buyer         partner ref (kernel :kontor.transaction/partner).
      :invoice/journal       journal code override (default INV).
 
    Opts:
@@ -385,18 +385,18 @@
         debit-acct (require-account db debit-code)
         rev-posts (revenue-postings db lines codes commodity-eid issue-date)
         tax-posts (tax-postings db per-line codes commodity-eid issue-date)
-        debit-post {:posting/account debit-acct
-                    :posting/amount (:amount gross)
-                    :posting/commodity commodity-eid
-                    :posting/posted-at issue-date}
-        tx-base (cond-> {:transaction/external-id external-id
-                         :transaction/journal jnl
-                         :transaction/effective-date issue-date
-                         :transaction/narration (or (:invoice/narration invoice)
+        debit-post {:kontor.posting/account debit-acct
+                    :kontor.posting/amount (:amount gross)
+                    :kontor.posting/commodity commodity-eid
+                    :kontor.posting/posted-at issue-date}
+        tx-base (cond-> {:kontor.transaction/external-id external-id
+                         :kontor.transaction/journal jnl
+                         :kontor.transaction/effective-date issue-date
+                         :kontor.transaction/narration (or (:invoice/narration invoice)
                                                     external-id)
-                         :transaction/state :posted
-                         :transaction/posted-at issue-date}
-                  buyer (assoc :transaction/partner buyer))
+                         :kontor.transaction/state :posted
+                         :kontor.transaction/posted-at issue-date}
+                  buyer (assoc :kontor.transaction/partner buyer))
         input {:transaction tx-base
                :postings (into [debit-post] (into rev-posts tax-posts))}]
     (posting/build-transaction input)))

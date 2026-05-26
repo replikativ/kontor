@@ -90,7 +90,7 @@
      :ledger                 — ref to :ledger
      :journal                — ref to :journal
      :effective-date         — #inst
-     :tx-code                — string for :transaction/external-id
+     :tx-code                — string for :kontor.transaction/external-id
 
    Optional keys:
      :narration              — default 'Payment of Bonus Act 1965 accrual'
@@ -111,25 +111,25 @@
     (when (nil? v)
       (throw (ex-info (str (subs (str k) 1) " required for bonus-accrual-tx-data") {}))))
   (let [amt (round-half-even amount)
-        postings [{:posting/account bonus-expense-account
-                   :posting/amount amt
-                   :posting/commodity commodity
-                   :posting/ledger ledger
-                   :posting/narration "Bonus expense accrual (Bonus Act 1965)"}
-                  {:posting/account bonus-payable-account
-                   :posting/amount (.negate ^BigDecimal amt)
-                   :posting/commodity commodity
-                   :posting/ledger ledger
-                   :posting/narration "Bonus liability accrual (Bonus Act 1965)"}]
+        postings [{:kontor.posting/account bonus-expense-account
+                   :kontor.posting/amount amt
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger ledger
+                   :kontor.posting/narration "Bonus expense accrual (Bonus Act 1965)"}
+                  {:kontor.posting/account bonus-payable-account
+                   :kontor.posting/amount (.negate ^BigDecimal amt)
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger ledger
+                   :kontor.posting/narration "Bonus liability accrual (Bonus Act 1965)"}]
         tx-input {:tx-tempid tx-tempid
                   :transaction
-                  (cond-> {:transaction/external-id tx-code
-                           :transaction/effective-date effective-date
-                           :transaction/narration narration
-                           :transaction/journal journal
-                           :transaction/state :draft}
+                  (cond-> {:kontor.transaction/external-id tx-code
+                           :kontor.transaction/effective-date effective-date
+                           :kontor.transaction/narration narration
+                           :kontor.transaction/journal journal
+                           :kontor.transaction/state :draft}
                     pay-period
-                    (assoc :transaction/source (str "pay-period:" pay-period)))
+                    (assoc :kontor.transaction/source (str "pay-period:" pay-period)))
                   :postings postings}]
     (posting/build-transaction tx-input)))
 
@@ -163,25 +163,25 @@
     (when (nil? v)
       (throw (ex-info (str (subs (str k) 1) " required for leave-encashment-accrual-tx-data") {}))))
   (let [amt (round-half-even amount)
-        postings [{:posting/account leave-expense-account
-                   :posting/amount amt
-                   :posting/commodity commodity
-                   :posting/ledger ledger
-                   :posting/narration "Leave encashment expense"}
-                  {:posting/account leave-liability-account
-                   :posting/amount (.negate ^BigDecimal amt)
-                   :posting/commodity commodity
-                   :posting/ledger ledger
-                   :posting/narration "Leave encashment liability"}]
+        postings [{:kontor.posting/account leave-expense-account
+                   :kontor.posting/amount amt
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger ledger
+                   :kontor.posting/narration "Leave encashment expense"}
+                  {:kontor.posting/account leave-liability-account
+                   :kontor.posting/amount (.negate ^BigDecimal amt)
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger ledger
+                   :kontor.posting/narration "Leave encashment liability"}]
         tx-input {:tx-tempid tx-tempid
                   :transaction
-                  (cond-> {:transaction/external-id tx-code
-                           :transaction/effective-date effective-date
-                           :transaction/narration narration
-                           :transaction/journal journal
-                           :transaction/state :draft}
+                  (cond-> {:kontor.transaction/external-id tx-code
+                           :kontor.transaction/effective-date effective-date
+                           :kontor.transaction/narration narration
+                           :kontor.transaction/journal journal
+                           :kontor.transaction/state :draft}
                     pay-period
-                    (assoc :transaction/source (str "pay-period:" pay-period)))
+                    (assoc :kontor.transaction/source (str "pay-period:" pay-period)))
                   :postings postings}]
     (posting/build-transaction tx-input)))
 
@@ -214,7 +214,7 @@
                                    :payroll-filing or :compliance-
                                    attestation per the consumer's
                                    classification). The string is
-                                   embedded in :transaction/source so
+                                   embedded in :kontor.transaction/source so
                                    the audit chain ties the entry to
                                    the valuation document.
 
@@ -233,25 +233,25 @@
     (when (nil? v)
       (throw (ex-info (str (subs (str k) 1) " required for gratuity-accrual-tx-data") {}))))
   (let [amt (round-half-even amount)
-        postings [{:posting/account gratuity-expense-account
-                   :posting/amount amt
-                   :posting/commodity commodity
-                   :posting/ledger ledger
-                   :posting/narration "Gratuity expense (Ind AS 19; consumer actuarial)"}
-                  {:posting/account gratuity-liability-account
-                   :posting/amount (.negate ^BigDecimal amt)
-                   :posting/commodity commodity
-                   :posting/ledger ledger
-                   :posting/narration "Gratuity liability (Ind AS 19)"}]
+        postings [{:kontor.posting/account gratuity-expense-account
+                   :kontor.posting/amount amt
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger ledger
+                   :kontor.posting/narration "Gratuity expense (Ind AS 19; consumer actuarial)"}
+                  {:kontor.posting/account gratuity-liability-account
+                   :kontor.posting/amount (.negate ^BigDecimal amt)
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger ledger
+                   :kontor.posting/narration "Gratuity liability (Ind AS 19)"}]
         tx-input {:tx-tempid tx-tempid
                   :transaction
-                  (cond-> {:transaction/external-id tx-code
-                           :transaction/effective-date effective-date
-                           :transaction/narration narration
-                           :transaction/journal journal
-                           :transaction/state :draft}
+                  (cond-> {:kontor.transaction/external-id tx-code
+                           :kontor.transaction/effective-date effective-date
+                           :kontor.transaction/narration narration
+                           :kontor.transaction/journal journal
+                           :kontor.transaction/state :draft}
                     (or pay-period audit-doc-code)
-                    (assoc :transaction/source
+                    (assoc :kontor.transaction/source
                            (str (when pay-period
                                   (str "pay-period:" pay-period))
                                 (when (and pay-period audit-doc-code) "; ")

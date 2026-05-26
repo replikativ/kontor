@@ -75,13 +75,13 @@
                         {:db db :date d1}))]
     (testing "19% → one credit of 190 to 3801"
       (let [p (first (post 19.0M))]
-        (is (= a3801 (:posting/account p)))
-        (is (== -190M (:posting/amount p)) "output VAT is a credit")
-        (is (= :tax (:posting/display-type p)))))
+        (is (= a3801 (:kontor.posting/account p)))
+        (is (== -190M (:kontor.posting/amount p)) "output VAT is a credit")
+        (is (= :tax (:kontor.posting/display-type p)))))
     (testing "7% → 70 to 3806"
       (let [p (first (post 7.0M))]
-        (is (= a3806 (:posting/account p)))
-        (is (== -70M (:posting/amount p)))))
+        (is (= a3806 (:kontor.posting/account p)))
+        (is (== -70M (:kontor.posting/amount p)))))
     (testing "0% steuerfrei → no leg"
       (is (= [] (post 0.0M))))))
 
@@ -99,4 +99,4 @@
         agg  (tpb/aggregate-postings raw)]
     (is (= 3 (count raw)) "three lines → three raw USt postings")
     (is (= 1 (count agg)) "aggregated to one 3801 posting")
-    (is (== -114M (:posting/amount (first agg))) "19% of 600")))
+    (is (== -114M (:kontor.posting/amount (first agg))) "19% of 600")))

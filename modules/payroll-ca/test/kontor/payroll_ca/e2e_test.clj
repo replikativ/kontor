@@ -53,9 +53,9 @@
                   :kontor.entity/name "Acme Canada Inc."
                   :kontor.entity/kind :operating}
                  {:db/id "journal-pay"
-                  :journal/code "PAY-CA"
-                  :journal/name "Payroll (CA)"
-                  :journal/type :general}
+                  :kontor.journal/code "PAY-CA"
+                  :kontor.journal/name "Payroll (CA)"
+                  :kontor.journal/type :general}
                  {:db/id "period-2026-05"
                   :period/name "2026-05"
                   :period/start #inst "2026-05-01"
@@ -133,7 +133,7 @@
         db (d/db conn)
         cad (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "CAD"]] db)
         ent (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-CA"]] db)
-        journal (d/q '[:find ?e . :where [?e :journal/code "PAY-CA"]] db)
+        journal (d/q '[:find ?e . :where [?e :kontor.journal/code "PAY-CA"]] db)
         period (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)
         ;; Persons + employments
         _ (person/create-person!
@@ -215,10 +215,10 @@
                        :where [?r :payroll-run/code ?c]]
                      db "ACME-2026-05-001")
         run (d/pull db '[* {:payroll-run/payroll-transaction
-                            [:transaction/external-id
-                             {:posting/_transaction
-                              [:posting/amount
-                               {:posting/account [:kontor.account/code]}]}]}]
+                            [:kontor.transaction/external-id
+                             {:kontor.posting/_transaction
+                              [:kontor.posting/amount
+                               {:kontor.posting/account [:kontor.account/code]}]}]}]
                     run-eid)]
     (testing "payroll-run row created"
       (is (some? run-eid))
@@ -229,28 +229,28 @@
       (is (= 12583.33M (:payroll-run/control-total-gross run))))
     (testing "Posting legs sum to zero per ledger × commodity"
       (let [postings (-> run :payroll-run/payroll-transaction
-                         :posting/_transaction)
-            sum (reduce (fn [a {:keys [posting/amount]}]
+                         :kontor.posting/_transaction)
+            sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                           (.add ^BigDecimal a ^BigDecimal amount))
                         0M postings)]
         (is (zero? (.compareTo ^BigDecimal sum 0M)))))
     (testing "Sophie's QC-specific deductions hit the right accounts"
       (let [postings (-> run :payroll-run/payroll-transaction
-                         :posting/_transaction)
-            by-code (group-by (comp :kontor.account/code :posting/account) postings)]
+                         :kontor.posting/_transaction)
+            by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)]
         ;; QPP (2521) total: -353 employee + -353 employer payable
         (is (= -706M
-               (reduce (fn [a {:keys [posting/amount]}]
+               (reduce (fn [a {:kontor.posting/keys [amount]}]
                          (.add ^BigDecimal a ^BigDecimal amount))
                        0M (get by-code "2521"))))
         ;; QPIP (2531) total: -53 employee + -75 employer payable
         (is (= -128M
-               (reduce (fn [a {:keys [posting/amount]}]
+               (reduce (fn [a {:kontor.posting/keys [amount]}]
                          (.add ^BigDecimal a ^BigDecimal amount))
                        0M (get by-code "2531"))))
         ;; QC ITX (2511): -260 employee only (no employer parallel)
         (is (= -260M
-               (reduce (fn [a {:keys [posting/amount]}]
+               (reduce (fn [a {:kontor.posting/keys [amount]}]
                          (.add ^BigDecimal a ^BigDecimal amount))
                        0M (get by-code "2511"))))))
     (testing "PD7A helper computes the three CRA buckets cleanly"
@@ -320,7 +320,7 @@
         db (d/db conn)
         cad (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "CAD"]] db)
         ent (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-CA"]] db)
-        journal (d/q '[:find ?e . :where [?e :journal/code "PAY-CA"]] db)
+        journal (d/q '[:find ?e . :where [?e :kontor.journal/code "PAY-CA"]] db)
         period (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)
         _ (person/create-person!
            conn {:external-id "P-james"

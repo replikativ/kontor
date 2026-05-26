@@ -56,8 +56,8 @@
                  {:db/id "book" :valuation-book/code "primary"
                   :valuation-book/name "Primary" :valuation-book/cost-method :fifo
                   :valuation-book/active true}
-                 {:db/id "journal-gen" :journal/code "GEN" :journal/name "General"
-                  :journal/type :general}
+                 {:db/id "journal-gen" :kontor.journal/code "GEN" :kontor.journal/name "General"
+                  :kontor.journal/type :general}
                  ;; Two lots — LOT-B expires sooner than LOT-A.
                  {:db/id "lot-a" :lot/label "LOT-A" :lot/expires-at #inst "2026-09-01"}
                  {:db/id "lot-b" :lot/label "LOT-B" :lot/expires-at #inst "2026-04-01"}])
@@ -69,7 +69,7 @@
 (defn- p       [db code] (ref-eid db :kontor.partner/external-id code))
 (defn- acct    [db code] (ref-eid db :kontor.account/code code))
 (defn- book    [db] (ref-eid db :valuation-book/code "primary"))
-(defn- journal [db] (ref-eid db :journal/code "GEN"))
+(defn- journal [db] (ref-eid db :kontor.journal/code "GEN"))
 (defn- eur     [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- lot     [db label] (ref-eid db :lot/label label))
 
@@ -143,7 +143,7 @@
       (is (= 1 (:count result)))
       (is (= 92M (inv/on-hand-qty (d/db conn) item)))
       (is (= 1 (count (d/q '[:find [?pp ...] :in $ ?a
-                             :where [?pp :posting/account ?a]]
+                             :where [?pp :kontor.posting/account ?a]]
                            (d/db conn) (acct (d/db conn) "5100")))))
       (is (= :posted (:physical-inventory/status
                       (d/pull (d/db conn) [:physical-inventory/status]

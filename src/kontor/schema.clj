@@ -15,13 +15,13 @@
                           (kontor.bitemporal). All postings written by
                           one tx share that tx's valid-from. The kernel
                           builders stamp it from
-                          :transaction/effective-date.
+                          :kontor.transaction/effective-date.
      - the resolver in kontor.bitemporal answers per-attribute
        polygons; postings are append-only so :tx/valid-to is always
        forever for them.
 
    Sealing per ADR-007:
-     - :posting/posted-at is the seal marker. Once set, the application
+     - :kontor.posting/posted-at is the seal marker. Once set, the application
        middleware in `sealing.clj` refuses silent retract; explicit
        :db/purge is permitted (and is itself a recorded commit, so the
        audit chain documents the deletion)."
@@ -355,7 +355,7 @@
 ;;
 ;; First-class entity for the regulator-recognized kind of a fiscal
 ;; document. Registered per-country at module install time; referenced
-;; by :transaction/document-type.
+;; by :kontor.transaction/document-type.
 ;; ============================================================================
 
 (def ^:private document-type-attrs
@@ -525,36 +525,36 @@
 ;; ============================================================================
 
 (def ^:private journal-attrs
-  [{:db/ident       :journal/code
+  [{:db/ident       :kontor.journal/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Short code (\"INV\", \"BNK\", \"GEN\"). Identity."}
 
-   {:db/ident       :journal/name
+   {:db/ident       :kontor.journal/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :journal/type
+   {:db/ident       :kontor.journal/type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "One of: :sale :purchase :cash :bank :general.
                      Determines default account behaviors and report
                      classification."}
 
-   {:db/ident       :journal/default-account
+   {:db/ident       :kontor.journal/default-account
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Account auto-debited/credited when a transaction
                      in this journal omits the contra side."}
 
-   {:db/ident       :journal/sequence-prefix
+   {:db/ident       :kontor.journal/sequence-prefix
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Prefix for auto-generated transaction names
                      (\"INV/{year}/\")."}
 
-   {:db/ident       :journal/active
+   {:db/ident       :kontor.journal/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}])
 
@@ -874,7 +874,7 @@
     :db/doc         "The clock-anchor attribute keyword. The
                      retention clock starts at the value of this
                      attribute ON the entity (v1: direct-attribute
-                     anchors only — e.g. :transaction/effective-date,
+                     anchors only — e.g. :kontor.transaction/effective-date,
                      :audit-doc/uploaded-at, :status-history/changed-
                      at). Entities lacking the attribute are skipped
                      by the sweeper."}
@@ -2099,7 +2099,7 @@
                      DE compliance: HGB year-end audit corrections post
                      into period 13 with effective date 31 December but
                      must NOT appear in January's reports. Postings opt
-                     into the adjustment period via :posting/period-tag."}
+                     into the adjustment period via :kontor.posting/period-tag."}
 
    {:db/ident       :period/tag
     :db/valueType   :db.type/keyword
@@ -2159,24 +2159,24 @@
 ;; fully draft.
 ;;
 ;; Bitemporal:
-;;   :transaction/effective-date is valid-time (when in the world this
+;;   :kontor.transaction/effective-date is valid-time (when in the world this
 ;;   business event happened — invoice date, payment date).
 ;;   tx-time comes from datahike's :db/txInstant.
 ;; ============================================================================
 
 (def ^:private transaction-attrs
-  [{:db/ident       :transaction/external-id
+  [{:db/ident       :kontor.transaction/external-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Stable caller-supplied id (\"INV-2026-0001\",
                      a beleg :invoice/id stringified, etc.). Identity."}
 
-   {:db/ident       :transaction/journal
+   {:db/ident       :kontor.transaction/journal
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :transaction/effective-date
+   {:db/ident       :kontor.transaction/effective-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -2184,24 +2184,24 @@
                      bitemporal query, all :as-of-valid filters apply
                      against this attribute."}
 
-   {:db/ident       :transaction/narration
+   {:db/ident       :kontor.transaction/narration
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Free-text description (\"Customer invoice 2026-0001
                      for ACME services\")."}
 
-   {:db/ident       :transaction/partner
+   {:db/ident       :kontor.transaction/partner
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional: the primary partner for this transaction
                      (the customer for an invoice, vendor for a bill).
                      Postings may also carry their own partner refs."}
 
-   {:db/ident       :transaction/fiscal-position
+   {:db/ident       :kontor.transaction/fiscal-position
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :transaction/state
+   {:db/ident       :kontor.transaction/state
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":draft | :pending-attestation | :posted | :cancelled.
@@ -2218,7 +2218,7 @@
                      paper jurisdictions (CA, US, AT, FR) bypass this
                      state, going :draft → :posted directly."}
 
-   {:db/ident       :transaction/clearance-token
+   {:db/ident       :kontor.transaction/clearance-token
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -2235,7 +2235,7 @@
                      step. ADR-018."}
 
    ;; ADR-020: document-type registry + clearance-format dispatch.
-   {:db/ident       :transaction/document-type
+   {:db/ident       :kontor.transaction/document-type
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -2245,7 +2245,7 @@
                      mod 65, CT-e mod 57, CN special-VAT fapiao 01,
                      etc.). See ADR-020."}
 
-   {:db/ident       :transaction/clearance-format
+   {:db/ident       :kontor.transaction/clearance-format
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -2261,7 +2261,7 @@
                      the token matches the regex for this format
                      (18-digit, 20-digit, 44-digit, etc.). ADR-020."}
 
-   {:db/ident       :transaction/posted-at
+   {:db/ident       :kontor.transaction/posted-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Tx-time when the transaction was posted (state
@@ -2269,19 +2269,19 @@
                      and sealing.clj. Once set, postings on this
                      transaction may not be silently retracted."}
 
-   {:db/ident       :transaction/posted-by
+   {:db/ident       :kontor.transaction/posted-by
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Caller-supplied user ref recorded at posting time."}
 
-   {:db/ident       :transaction/reverses
+   {:db/ident       :kontor.transaction/reverses
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "If this transaction is a reversal, the original
                      transaction it reverses. Per ADR-007, corrections
                      are reversals + re-postings, never in-place edits."}
 
-   {:db/ident       :transaction/closes-period
+   {:db/ident       :kontor.transaction/closes-period
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
@@ -2290,13 +2290,13 @@
                      into retained earnings. Unique-identity prevents
                      a second closing entry for the same period."}
 
-   {:db/ident       :transaction/source
+   {:db/ident       :kontor.transaction/source
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Free-form provenance (\"beleg invoice 0001\",
                      \"bank statement camt053 2026-04-30\")."}
 
-   {:db/ident       :transaction/settles
+   {:db/ident       :kontor.transaction/settles
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Other transactions this one settles. A payment-
@@ -2305,16 +2305,16 @@
                      Cardinality many because one bank deposit can
                      settle multiple invoices for the same partner."}
 
-   {:db/ident       :transaction/payment-term
+   {:db/ident       :kontor.transaction/payment-term
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ref to a :payment-term entity. When set
-                     plus :transaction/effective-date, the helper
+                     plus :kontor.transaction/effective-date, the helper
                      fns in payment-term.clj derive :due-date and
                      :discount-deadline. Aging reports key off the
                      resulting due-date."}
 
-   {:db/ident       :transaction/due-date
+   {:db/ident       :kontor.transaction/due-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -2324,7 +2324,7 @@
                      aging reports filter on the relation
                      `due-date < today`."}
 
-   {:db/ident       :transaction/discount-deadline
+   {:db/ident       :kontor.transaction/discount-deadline
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Last day the early-payment discount applies.
@@ -2344,64 +2344,64 @@
 ;; ============================================================================
 
 (def ^:private posting-attrs
-  [{:db/ident       :posting/transaction
+  [{:db/ident       :kontor.posting/transaction
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/index       true}
 
-   {:db/ident       :posting/account
+   {:db/ident       :kontor.posting/account
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/index       true}
 
-   {:db/ident       :posting/amount
+   {:db/ident       :kontor.posting/amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
-    :db/doc         "Signed amount in :posting/commodity. Positive = debit,
+    :db/doc         "Signed amount in :kontor.posting/commodity. Positive = debit,
                      negative = credit. Postings within a transaction must
                      sum to zero per commodity."}
 
-   {:db/ident       :posting/commodity
+   {:db/ident       :kontor.posting/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :posting/lot
+   {:db/ident       :kontor.posting/lot
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional: specific lot when the posting affects a
                      trackable inventory of units (stocks, crypto)."}
 
-   {:db/ident       :posting/cost
+   {:db/ident       :kontor.posting/cost
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional cost-basis per unit at posting time, in
-                     :posting/cost-commodity. Used by FIFO/LIFO disposal
+                     :kontor.posting/cost-commodity. Used by FIFO/LIFO disposal
                      calculation."}
 
-   {:db/ident       :posting/cost-commodity
+   {:db/ident       :kontor.posting/cost-commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
    ;; Foreign-currency support: when commodity differs from the journal's
    ;; reporting currency, both representations are stored.
-   {:db/ident       :posting/amount-base
+   {:db/ident       :kontor.posting/amount-base
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "The same amount, expressed in the journal/company
-                     base currency. Set iff :posting/commodity differs
+                     base currency. Set iff :kontor.posting/commodity differs
                      from the base currency."}
 
-   {:db/ident       :posting/base-commodity
+   {:db/ident       :kontor.posting/base-commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
    ;; Valid-time lives on the tx via kontor.bitemporal's
    ;; :tx/valid-from. ADR-048: all postings written by one tx share
    ;; that tx's :tx/valid-from, which the kernel builders stamp from
-   ;; :transaction/effective-date. There is no per-posting valid-from
+   ;; :kontor.transaction/effective-date. There is no per-posting valid-from
    ;; attribute. :valid-to and the temporal-key tuple were dropped per
    ;; research note 08 — corrections are reverse-and-repost.
-   {:db/ident       :posting/display-type
+   {:db/ident       :kontor.posting/display-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "What kind of line this is, mirroring Odoo's
@@ -2412,33 +2412,33 @@
                      adjustment), :section (UI section header),
                      :note (UI annotation, no posting effect)."}
 
-   {:db/ident       :posting/partner
+   {:db/ident       :kontor.posting/partner
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional partner ref (overrides
                      transaction-level partner for this line)."}
 
-   {:db/ident       :posting/narration
+   {:db/ident       :kontor.posting/narration
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   ;; Tax connection. A tax line carries :posting/tax-rep (the rep line
-   ;; that produced it) and :posting/tax-base (the base amount the tax
+   ;; Tax connection. A tax line carries :kontor.posting/tax-rep (the rep line
+   ;; that produced it) and :kontor.posting/tax-base (the base amount the tax
    ;; was computed from). A base/product line that is taxed by N taxes
-   ;; carries :posting/taxes-applied (cardinality many).
-   {:db/ident       :posting/tax-rep
+   ;; carries :kontor.posting/taxes-applied (cardinality many).
+   {:db/ident       :kontor.posting/tax-rep
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "For :tax display-type postings: the
                      tax-repartition-line that produced this posting."}
 
-   {:db/ident       :posting/tax-base
+   {:db/ident       :kontor.posting/tax-base
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "For :tax display-type postings: the base amount
                      this tax was computed from."}
 
-   {:db/ident       :posting/taxes-applied
+   {:db/ident       :kontor.posting/taxes-applied
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "For :product display-type postings: which taxes
@@ -2446,22 +2446,22 @@
                      a single line may be subject to multiple taxes
                      (e.g., GST + PST in BC)."}
 
-   {:db/ident       :posting/account-tags
+   {:db/ident       :kontor.posting/account-tags
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Materialized account-tag refs at posting time
                      (mirroring tax-rep tags + account tags). Pre-
                      materialized so report engines need only one query."}
 
-   {:db/ident       :posting/posted-at
+   {:db/ident       :kontor.posting/posted-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "Tx-time when this posting was posted. Sealing
                      trigger — see ADR-007. Set together with parent
-                     transaction's :transaction/posted-at."}
+                     transaction's :kontor.transaction/posted-at."}
 
-   {:db/ident       :posting/period-tag
+   {:db/ident       :kontor.posting/period-tag
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional opt-in to a non-default period (ADR-014).
@@ -2478,40 +2478,40 @@
    ;; produces 5 applications; JP dual-rate produces 1 per posting;
    ;; DE reverse-charge produces 1.
    ;;
-   ;; This is parallel to :posting/taxes-applied (which still records
+   ;; This is parallel to :kontor.posting/taxes-applied (which still records
    ;; "this line was taxed by these taxes" for simple uses) and to
    ;; the auto-generated :tax-display-type postings (the ledger entries).
    ;; The breakdown is intent + audit; the postings are bookkeeping.
-   {:db/ident       :posting/tax-breakdown
+   {:db/ident       :kontor.posting/tax-breakdown
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Many-ref to :tax-application entities. ADR-016."}
 
    ;; ADR-018 — clearance token mirror at the posting level. Set
-   ;; together with :transaction/clearance-token by the country
+   ;; together with :kontor.transaction/clearance-token by the country
    ;; module's EInvoiceProvider on transition :pending-attestation
    ;; → :posted. Mirrored at the posting level so reports keyed off
    ;; postings (rather than transactions) can find the token directly.
-   {:db/ident       :posting/clearance-token
+   {:db/ident       :kontor.posting/clearance-token
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true
-    :db/doc         "Mirror of :transaction/clearance-token at the
+    :db/doc         "Mirror of :kontor.transaction/clearance-token at the
                      posting level for query ergonomics. Set together
                      with the parent transaction's token. ADR-018."}
 
-   ;; ADR-097 — classification dimensions. `:posting/account` is ONE
+   ;; ADR-097 — classification dimensions. `:kontor.posting/account` is ONE
    ;; classification axis; this many-ref carries the others (cost-
    ;; centre, project, segment, fund, McComb-style business
    ;; categories). The report engine `marginalize`s over any axis
    ;; (ADR-096). Written explicitly by the consumer / verb facade —
-   ;; NOT materialized the way `:posting/account-tags` is.
-   {:db/ident       :posting/dimensions
+   ;; NOT materialized the way `:kontor.posting/account-tags` is.
+   {:db/ident       :kontor.posting/dimensions
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Many-ref to :posting-dimension entities — the
                      classification axes of this posting beyond
-                     :posting/account. ADR-097."}])
+                     :kontor.posting/account. ADR-097."}])
 
 ;; ============================================================================
 ;; Posting dimension — a flat classification tag on a posting (ADR-097).
@@ -2522,13 +2522,13 @@
 ;; taxonomy value, not kernel structure. Per the note-99 DCR
 ;; sharpening, taxonomies are FLAT TAGS — :value is a string, not an
 ;; entity with its own relational web. The anti-pattern to avoid is
-;; axis-as-attribute (a bespoke :posting/cost-center attr per axis —
+;; axis-as-attribute (a bespoke :kontor.posting/cost-center attr per axis —
 ;; the SNOMED mistake): keep the axes few and structural, the values
 ;; data.
 ;; ============================================================================
 
 (def ^:private posting-dimension-attrs
-  [{:db/ident       :posting-dimension/axis
+  [{:db/ident       :kontor.posting-dimension/axis
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -2536,7 +2536,7 @@
                      :segment, :fund, … An open-set keyword; consumers
                      define their own axes. ADR-097."}
 
-   {:db/ident       :posting-dimension/value
+   {:db/ident       :kontor.posting-dimension/value
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "The class within the axis — a flat string tag
@@ -2599,8 +2599,8 @@
 ;; Payment terms — Net N + early-discount window. Reusable
 ;; entities (one per term, e.g. NET30, NET14, 2/10-NET30) referenced
 ;; from transactions / invoices. The `payment-term.clj` helpers
-;; compute :transaction/due-date + :transaction/discount-deadline
-;; from :transaction/effective-date + :payment-term.
+;; compute :kontor.transaction/due-date + :kontor.transaction/discount-deadline
+;; from :kontor.transaction/effective-date + :payment-term.
 ;; ============================================================================
 
 (def ^:private payment-term-attrs
@@ -2944,7 +2944,7 @@
 ;; Analytic accounting (cost-center / profit-center / project) — ADR-012.
 ;;
 ;; A separate dimension orthogonal to the financial account hierarchy.
-;; Postings can carry zero or more `:posting/analytic-distributions`,
+;; Postings can carry zero or more `:kontor.posting/analytic-distributions`,
 ;; each of which is a (plan, account, percent) triple. Used by:
 ;;   - German Kostenrechnung
 ;;   - Canadian SR&ED project tracking
@@ -3031,7 +3031,7 @@
     :db/cardinality :db.cardinality/one
     :db/doc         "Back-ref to the posting this distribution annotates.
                      A posting may carry multiple distributions; we
-                     reverse-traverse via :posting/_analytic-distribution-
+                     reverse-traverse via :kontor.posting/_analytic-distribution-
                      posting at query time. Storing the back-ref directly
                      also keeps the distribution entity self-contained."}])
 
@@ -3040,12 +3040,12 @@
 ;; whole posting shape in `(d/pull db [...] eid)`.
 
 (def ^:private posting-analytic-attrs
-  [{:db/ident       :posting/analytic-distributions
+  [{:db/ident       :kontor.posting/analytic-distributions
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Optional analytic-distribution refs annotating
                      this posting. Independent of the financial
-                     :posting/account; used by management-reporting
+                     :kontor.posting/account; used by management-reporting
                      queries and SR&ED-style project tracking."}])
 
 ;; ============================================================================
@@ -3109,7 +3109,7 @@
     :db/cardinality :db.cardinality/one}])
 
 (def ^:private posting-ledger-attrs
-  [{:db/ident       :posting/ledger
+  [{:db/ident       :kontor.posting/ledger
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The ledger this posting lives in. Optional in
@@ -3285,11 +3285,11 @@
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Partner's registered state — billing / address.
-                     Distinct from :transaction/place-of-supply.
+                     Distinct from :kontor.transaction/place-of-supply.
                      Optional (consumer-side bootstrap)."}])
 
 (def ^:private transaction-pos-attrs
-  [{:db/ident       :transaction/place-of-supply
+  [{:db/ident       :kontor.transaction/place-of-supply
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Place of supply (ADR-023). Ref to :state.
@@ -3310,7 +3310,7 @@
 ;; (IRN, e-way bill, PAC stamp UUID, NF-e access key, fapiao number,
 ;; ZATCA ICV, etc.) each with its own format, token, validity window,
 ;; lifecycle state, and depends-on graph. Coexists with the legacy
-;; singular :transaction/clearance-token; the cardinality-many is
+;; singular :kontor.transaction/clearance-token; the cardinality-many is
 ;; authoritative when both are present.
 ;; ============================================================================
 
@@ -3394,12 +3394,12 @@
                      once. Re-issuing replaces."}])
 
 (def ^:private transaction-attestations-attrs
-  [{:db/ident       :transaction/attestations
+  [{:db/ident       :kontor.transaction/attestations
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Refs to :attestation entities. ADR-024.
 
-                     Coexists with :transaction/clearance-token
+                     Coexists with :kontor.transaction/clearance-token
                      (singular string). When both present, the
                      cardinality-many is authoritative.
 
@@ -3470,7 +3470,7 @@
     :db/doc         "One fragment per (transaction, namespace)."}])
 
 (def ^:private transaction-complementos-attrs
-  [{:db/ident       :transaction/complementos
+  [{:db/ident       :kontor.transaction/complementos
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Refs to :complemento entities. ADR-025."}])
@@ -3762,7 +3762,7 @@
                      re-ingest."}])
 
 (def ^:private posting-entity-attrs
-  [{:db/ident       :posting/entity
+  [{:db/ident       :kontor.posting/entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ref to :entity (ADR-031). When any
@@ -3777,7 +3777,7 @@
                      subsidiary, D365 per-LE DataAreaId."}])
 
 (def ^:private intercompany-pair-attrs
-  [{:db/ident       :transaction/intercompany-pair-id
+  [{:db/ident       :kontor.transaction/intercompany-pair-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -3793,7 +3793,7 @@
                      Not unique: the same pair-id by construction
                      appears on each tx in the pair. ADR-073."}
 
-   {:db/ident       :transaction/consolidation-source-entity
+   {:db/ident       :kontor.transaction/consolidation-source-entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Provenance ref on a consolidation tx: the
@@ -3802,7 +3802,7 @@
                      kontor.consolidation/translate-trial-balance-tx-data;
                      readable for audit + drill-back. ADR-073."}
 
-   {:db/ident       :transaction/consolidation-kind
+   {:db/ident       :kontor.transaction/consolidation-kind
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":translation | :elimination — tags the kind of

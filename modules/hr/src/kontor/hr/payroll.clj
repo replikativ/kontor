@@ -116,7 +116,7 @@
      :accounts         — map keyed by component-kind → :account ref
                          (consumer-supplied CoA)
      :run-code         — string for :payroll-run/code
-     :tx-code          — string for the :transaction/code
+     :tx-code          — string for the :kontor.transaction/code
 
    Optional opts:
      :emit-provider     — satisfies PayrollEmitProvider
@@ -185,13 +185,13 @@
                                                       state-allocations)))
                 tx-input (cond-> {:tx-tempid "payroll-tx-1"
                                   :transaction
-                                  (cond-> {:transaction/external-id tx-code
-                                           :transaction/effective-date
+                                  (cond-> {:kontor.transaction/external-id tx-code
+                                           :kontor.transaction/effective-date
                                            (or vt-from (java.util.Date.))
-                                           :transaction/narration
+                                           :kontor.transaction/narration
                                            (str "Payroll run " run-code)
-                                           :transaction/state :draft}
-                                    journal (assoc :transaction/journal journal))
+                                           :kontor.transaction/state :draft}
+                                    journal (assoc :kontor.transaction/journal journal))
                                   :postings postings})
                 tx-frag (posting/build-transaction tx-input)
                 ;; P0-86-1 fix — give every emit-doc a tempid so the

@@ -24,10 +24,10 @@
   (let [conn (core/create-test-db)]
     (d/transact conn
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
-                 {:journal/code "SALE" :journal/type :sale}
-                 {:journal/code "PUR"  :journal/type :purchase}
-                 {:journal/code "CASH" :journal/type :cash}
-                 {:journal/code "GEN"  :journal/type :general}
+                 {:kontor.journal/code "SALE" :kontor.journal/type :sale}
+                 {:kontor.journal/code "PUR"  :kontor.journal/type :purchase}
+                 {:kontor.journal/code "CASH" :kontor.journal/type :cash}
+                 {:kontor.journal/code "GEN"  :kontor.journal/type :general}
                  {:kontor.account/path "Assets:Cash"         :kontor.account/type :asset}
                  {:kontor.account/path "Assets:Receivable"   :kontor.account/type :asset}
                  {:kontor.account/path "Liabilities:Payable" :kontor.account/type :liability}
@@ -81,9 +81,9 @@
     (let [tx-data (book/entry-tx-data
                    {:debit-account cash :credit-account rev
                     :amount 50 :commodity eur :effective-date d1
-                    :journal [:journal/code "CASH"]})]
+                    :journal [:kontor.journal/code "CASH"]})]
       (is (vector? tx-data))
-      (is (some #(= :posted (:transaction/state %)) tx-data)
+      (is (some #(= :posted (:kontor.transaction/state %)) tx-data)
           "post-transaction-tx-data seals the transaction")))
   (testing "entry-tx-data throws on a missing required field"
     (is (thrown? clojure.lang.ExceptionInfo
@@ -93,7 +93,7 @@
     (is (thrown? clojure.lang.ExceptionInfo
                  (book/entry-tx-data {:debit-account cash :credit-account rev
                                       :amount 50 :commodity eur
-                                      :journal [:journal/code "CASH"]}))))) ; no date
+                                      :journal [:kontor.journal/code "CASH"]}))))) ; no date
 
 ;; ============================================================================
 ;; adjust! — the multi-leg / judgment-entry verb
@@ -125,11 +125,11 @@
     (let [conn (fresh-book)]
       (book/sell! conn {:debit-account ar :credit-account rev :amount 500
                         :commodity eur :effective-date d1
-                        :journal [:journal/code "GEN"]})
+                        :journal [:kontor.journal/code "GEN"]})
       (is (= 500M (bal conn ar)))))
   (testing "ambiguous journal type throws a clear error"
     (let [conn (fresh-book)]
-      (d/transact conn [{:journal/code "CASH2" :journal/type :cash}])
+      (d/transact conn [{:kontor.journal/code "CASH2" :kontor.journal/type :cash}])
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"ambiguous"
                             (book/pay! conn {:debit-account exp :credit-account cash
                                              :amount 10 :commodity eur
@@ -157,10 +157,10 @@
                             :amount 1000 :commodity eur :effective-date d1})
     (posting/post-transaction!
      via-baseline
-     {:transaction {:transaction/journal        [:journal/code "SALE"]
-                    :transaction/effective-date d1}
-      :postings    [{:posting/account ar  :posting/amount 1000M  :posting/commodity eur}
-                    {:posting/account rev :posting/amount -1000M :posting/commodity eur}]})
+     {:transaction {:kontor.transaction/journal        [:kontor.journal/code "SALE"]
+                    :kontor.transaction/effective-date d1}
+      :postings    [{:kontor.posting/account ar  :kontor.posting/amount 1000M  :kontor.posting/commodity eur}
+                    {:kontor.posting/account rev :kontor.posting/amount -1000M :kontor.posting/commodity eur}]})
     (is (= (bal via-facade ar)  (bal via-baseline ar)))
     (is (= (bal via-facade rev) (bal via-baseline rev)))
     (is (= 1000M (bal via-facade ar)))))
@@ -169,7 +169,7 @@
 ;; :entity stamping — F10 regression (note 159/160 §I-6)
 ;;
 ;; Pre-fix, `kontor.book` verbs accepted no `:entity` — so postings carried
-;; no `:posting/entity`, and per-entity trial-balance / BS / GuV filters
+;; no `:kontor.posting/entity`, and per-entity trial-balance / BS / GuV filters
 ;; returned empty for any real consumer. This test asserts that:
 ;; (1) top-level `:entity` is stamped on every posting,
 ;; (2) per-posting `:entity` overrides (the intercompany pattern), and
@@ -188,7 +188,7 @@
                         :amount 500 :commodity eur :effective-date d1
                         :entity ug})
       (let [ents (set (d/q '[:find [?ec ...]
-                             :where [_ :posting/entity ?e]
+                             :where [_ :kontor.posting/entity ?e]
                                     [?e :kontor.entity/code ?ec]]
                            (d/db conn)))]
         (is (contains? ents "UG"))))
@@ -199,7 +199,7 @@
       ;;   UG side:   Dr AR ←→ Cr Cash    (UG sum = 0)
       ;;   Hans side: Dr Exp ←→ Cr AP     (Hans sum = 0)
       (book/entry! conn
-        {:journal [:journal/code "GEN"] :effective-date d1
+        {:journal [:kontor.journal/code "GEN"] :effective-date d1
          :commodity eur
          :narration "Intercompany loan UG → Hans (€100)"
          :postings [{:account ar    :amount 100M  :entity ug}
@@ -207,15 +207,15 @@
                     {:account exp   :amount 100M  :entity hans}
                     {:account ap    :amount -100M :entity hans}]})
       (let [pairs (set (d/q '[:find ?acct-path ?ent-code
-                              :where [?p :posting/account ?a]
+                              :where [?p :kontor.posting/account ?a]
                                      [?a :kontor.account/path ?acct-path]
-                                     [?p :posting/entity ?e]
+                                     [?p :kontor.posting/entity ?e]
                                      [?e :kontor.entity/code ?ent-code]]
                             (d/db conn)))]
         (is (contains? pairs ["Assets:Receivable"   "UG"]))
         (is (contains? pairs ["Liabilities:Payable" "HANS"]))))
 
-    (testing "per-posting :partner stamps :posting/partner (I-15 regression).
+    (testing "per-posting :partner stamps :kontor.posting/partner (I-15 regression).
               Multi-shareholder dividend declaration is the motivating case:
               one Dr Gewinnvortrag leg, N Cr Dividenden-Payable legs each
               tagged with a distinct shareholder."
@@ -224,23 +224,23 @@
             sarah [:kontor.partner/external-id "SARAH"]
             tomas [:kontor.partner/external-id "TOMAS"]]
         (book/entry! conn
-          {:journal [:journal/code "GEN"] :effective-date d1
+          {:journal [:kontor.journal/code "GEN"] :effective-date d1
            :commodity eur
            :narration "Dividend declaration to 2 shareholders (60/40)"
            :postings [{:account rev :amount 1000M}
                       {:account ap  :amount -600M :partner sarah}
                       {:account ap  :amount -400M :partner tomas}]})
         (let [pairs (set (d/q '[:find ?path ?amt ?pa-code
-                                :where [?p :posting/account ?a]
+                                :where [?p :kontor.posting/account ?a]
                                        [?a :kontor.account/path ?path]
-                                       [?p :posting/amount ?amt]
-                                       [?p :posting/partner ?pa]
+                                       [?p :kontor.posting/amount ?amt]
+                                       [?p :kontor.posting/partner ?pa]
                                        [?pa :kontor.partner/external-id ?pa-code]]
                               (d/db conn)))]
           (is (contains? pairs ["Liabilities:Payable" -600M "SARAH"])
-              "Sarah's leg carries her :posting/partner")
+              "Sarah's leg carries her :kontor.posting/partner")
           (is (contains? pairs ["Liabilities:Payable" -400M "TOMAS"])
-              "Tomas's leg carries his :posting/partner"))))
+              "Tomas's leg carries his :kontor.posting/partner"))))
 
     (testing "I-2 regression: bare keyword + short string :commodity
               are auto-coerced to [:kontor.commodity/symbol …] lookup-ref"
@@ -248,7 +248,7 @@
       (let [d2 #inst "2026-04-01"
             mk (fn [c]
                  (book/entry! conn
-                   {:journal [:journal/code "GEN"] :effective-date d2
+                   {:journal [:kontor.journal/code "GEN"] :effective-date d2
                     :commodity c
                     :narration (str "I-2 coerce: " (pr-str c))
                     :postings [{:account rev :amount 10M}
@@ -259,12 +259,12 @@
         (mk :EUR)
         ;; Short string
         (mk "EUR")
-        ;; All 3 should have produced postings with the same :posting/commodity eid
+        ;; All 3 should have produced postings with the same :kontor.posting/commodity eid
         (let [eids (set (d/q '[:find [?c ...]
                                :in $ ?d
-                               :where [?t :transaction/effective-date ?d]
-                                      [?p :posting/transaction ?t]
-                                      [?p :posting/commodity ?c]]
+                               :where [?t :kontor.transaction/effective-date ?d]
+                                      [?p :kontor.posting/transaction ?t]
+                                      [?p :kontor.posting/commodity ?c]]
                              (d/db conn) d2))]
           (is (= 1 (count eids))
               "all 3 :commodity forms resolve to the same EUR eid"))))

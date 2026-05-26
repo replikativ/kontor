@@ -84,8 +84,8 @@
 (defn- sum-account [conn path]
   (reduce + 0M
           (d/q '[:find [?amt ...] :in $ ?p
-                 :where [?a :kontor.account/path ?p] [?pp :posting/account ?a]
-                 [?pp :posting/amount ?amt]]
+                 :where [?a :kontor.account/path ?p] [?pp :kontor.posting/account ?a]
+                 [?pp :kontor.posting/amount ?amt]]
                (d/db conn) path)))
 
 (deftest provision-posts-a-balanced-transaction
@@ -93,14 +93,14 @@
     (d/transact conn
                 [{:kontor.commodity/symbol "CAD" :kontor.commodity/name "Canadian Dollar"
                   :kontor.commodity/precision 2}
-                 {:journal/code "GEN" :journal/type :general}
+                 {:kontor.journal/code "GEN" :kontor.journal/type :general}
                  {:kontor.account/path "Expenses:Income-Tax"     :kontor.account/type :expense}
                  {:kontor.account/path "Liabilities:Tax-Payable" :kontor.account/type :liability}])
     (let [facts   (ca-ptp/t1-tax-return-facts {:entity 1 :inputs employee-input})
           builder (trpb/make-static-tax-return-posting-builder
                    {:expense-account [:kontor.account/path "Expenses:Income-Tax"]
                     :payable-account [:kontor.account/path "Liabilities:Tax-Payable"]
-                    :journal         [:journal/code "GEN"]
+                    :journal         [:kontor.journal/code "GEN"]
                     :commodity       [:kontor.commodity/symbol "CAD"]})]
       (validation/transact-with-validation
        conn (trpb/provision-tx-data builder facts

@@ -130,16 +130,16 @@
                       {:codigo-agrupador prov-code
                        :hint "Pass :provision-code to override the default 206.07."})))
     (posting/build-transaction
-     {:transaction {:transaction/journal journal
-                    :transaction/effective-date date
-                    :transaction/state :draft
-                    :transaction/narration (or narration
+     {:transaction {:kontor.transaction/journal journal
+                    :kontor.transaction/effective-date date
+                    :kontor.transaction/state :draft
+                    :kontor.transaction/narration (or narration
                                                "Provisión mensual de aguinaldo")}
-      :postings [{:posting/account aguinaldo-acct
-                  :posting/amount amount
-                  :posting/commodity commodity
-                  :posting/narration "Dr 601.02 Aguinaldo (gasto)"}
-                 {:posting/account prov-acct
-                  :posting/amount  (.negate ^BigDecimal amount)
-                  :posting/commodity commodity
-                  :posting/narration "Cr 206.07 Provisión aguinaldo"}]})))
+      :postings [{:kontor.posting/account aguinaldo-acct
+                  :kontor.posting/amount amount
+                  :kontor.posting/commodity commodity
+                  :kontor.posting/narration "Dr 601.02 Aguinaldo (gasto)"}
+                 {:kontor.posting/account prov-acct
+                  :kontor.posting/amount  (.negate ^BigDecimal amount)
+                  :kontor.posting/commodity commodity
+                  :kontor.posting/narration "Cr 206.07 Provisión aguinaldo"}]})))

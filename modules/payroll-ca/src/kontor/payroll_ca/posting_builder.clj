@@ -29,7 +29,7 @@
    Per note 84 §4 we route per-RP via the `:kontor.account-tag/name`
    convention. The consumer's `:rp-account-tag` opt is a string like
    `\"ca-cra-rp-RP0001\"`; if supplied the builder appends this tag
-   to every posting via `:posting/account-tags`, letting downstream
+   to every posting via `:kontor.posting/account-tags`, letting downstream
    PD7A + T4 aggregators filter by RP cheaply.
 
    ## Accounts map shape
@@ -82,11 +82,11 @@
 
 (defn- with-rp-tag
   "Optionally attach the RP routing tag to a posting via
-   :posting/account-tags. The kernel's :posting/account-tags is a
+   :kontor.posting/account-tags. The kernel's :kontor.posting/account-tags is a
    ref-many to :account-tag entities (looked up by name)."
   [posting rp-account-tag]
   (if (and rp-account-tag (not (str/blank? rp-account-tag)))
-    (update posting :posting/account-tags
+    (update posting :kontor.posting/account-tags
             (fnil conj [])
             [:kontor.account-tag/name rp-account-tag])
     posting))
@@ -113,12 +113,12 @@
         gross (sum-bd (map :amount wage-comps))]
     (when (pos? (compare gross 0M))
       [(cond->
-        {:posting/account (account-for-tag! accounts :ca-payroll-wages)
-         :posting/amount gross
-         :posting/commodity commodity
-         :posting/narration (or narration "Wages and salaries (gross)")}
+        {:kontor.posting/account (account-for-tag! accounts :ca-payroll-wages)
+         :kontor.posting/amount gross
+         :kontor.posting/commodity commodity
+         :kontor.posting/narration (or narration "Wages and salaries (gross)")}
          rp-account-tag
-         (update :posting/account-tags
+         (update :kontor.posting/account-tags
                  (fnil conj [])
                  [:kontor.account-tag/name rp-account-tag]))])))
 
@@ -139,12 +139,12 @@
                  (cond->
                   ;; amount is already negative; CR is negative in
                   ;; kontor's sign convention.
-                  {:posting/account acct
-                   :posting/amount amount
-                   :posting/commodity commodity
-                   :posting/narration (str "Payroll deduction: " (name kind))}
+                  {:kontor.posting/account acct
+                   :kontor.posting/amount amount
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/narration (str "Payroll deduction: " (name kind))}
                    rp-account-tag
-                   (update :posting/account-tags
+                   (update :kontor.posting/account-tags
                            (fnil conj [])
                            [:kontor.account-tag/name rp-account-tag])))))))
 
@@ -165,22 +165,22 @@
                        exp-acct (account-for-tag! accounts exp-tag)
                        pay-acct (when pay-tag (account-for-tag! accounts pay-tag))]
                    (cond-> [(cond->
-                             {:posting/account exp-acct
-                              :posting/amount amount
-                              :posting/commodity commodity
-                              :posting/narration (str "Employer expense: " (name kind))}
+                             {:kontor.posting/account exp-acct
+                              :kontor.posting/amount amount
+                              :kontor.posting/commodity commodity
+                              :kontor.posting/narration (str "Employer expense: " (name kind))}
                               rp-account-tag
-                              (update :posting/account-tags
+                              (update :kontor.posting/account-tags
                                       (fnil conj [])
                                       [:kontor.account-tag/name rp-account-tag]))]
                      pay-acct
                      (conj (cond->
-                            {:posting/account pay-acct
-                             :posting/amount (.negate ^BigDecimal amount)
-                             :posting/commodity commodity
-                             :posting/narration (str "Employer payable: " (name kind))}
+                            {:kontor.posting/account pay-acct
+                             :kontor.posting/amount (.negate ^BigDecimal amount)
+                             :kontor.posting/commodity commodity
+                             :kontor.posting/narration (str "Employer payable: " (name kind))}
                              rp-account-tag
-                             (update :posting/account-tags
+                             (update :kontor.posting/account-tags
                                      (fnil conj [])
                                      [:kontor.account-tag/name rp-account-tag])))))))))
 
@@ -191,12 +191,12 @@
    {:keys [accounts commodity rp-account-tag]}]
   (when (pos? (compare ^BigDecimal net 0M))
     [(cond->
-      {:posting/account (account-for-tag! accounts :ca-payroll-net-wages)
-       :posting/amount (.negate ^BigDecimal net)
-       :posting/commodity commodity
-       :posting/narration "Wages payable (net)"}
+      {:kontor.posting/account (account-for-tag! accounts :ca-payroll-net-wages)
+       :kontor.posting/amount (.negate ^BigDecimal net)
+       :kontor.posting/commodity commodity
+       :kontor.posting/narration "Wages payable (net)"}
        rp-account-tag
-       (update :posting/account-tags
+       (update :kontor.posting/account-tags
                (fnil conj [])
                [:kontor.account-tag/name rp-account-tag]))]))
 
@@ -234,5 +234,5 @@
         (fn [fact]
           (let [postings (fact->postings fact base-opts)]
             (cond->> postings
-              ledger (mapv #(assoc % :posting/ledger ledger)))))
+              ledger (mapv #(assoc % :kontor.posting/ledger ledger)))))
         payroll-facts)))))

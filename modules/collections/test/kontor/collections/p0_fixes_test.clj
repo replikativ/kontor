@@ -126,11 +126,11 @@
   (let [inv1 (inv/by-external-id (d/db *conn*) "INV-CU-1")
         eur (d/q '[:find ?c . :where [?c :kontor.commodity/symbol "EUR"]] (d/db *conn*))
         _ (d/transact *conn*
-                      [{:transaction/external-id "PAY-CU-1"
-                        :transaction/state :posted
-                        :transaction/effective-date #inst "2026-04-15"
-                        :transaction/partner (partner "CUST")}])
-        pay (d/q '[:find ?t . :where [?t :transaction/external-id "PAY-CU-1"]]
+                      [{:kontor.transaction/external-id "PAY-CU-1"
+                        :kontor.transaction/state :posted
+                        :kontor.transaction/effective-date #inst "2026-04-15"
+                        :kontor.transaction/partner (partner "CUST")}])
+        pay (d/q '[:find ?t . :where [?t :kontor.transaction/external-id "PAY-CU-1"]]
                  (d/db *conn*))]
     (papp/apply-payment! *conn*
                          {:payment pay :invoice inv1 :amount 1000M

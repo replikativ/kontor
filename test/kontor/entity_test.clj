@@ -102,20 +102,20 @@
 ;; ============================================================================
 
 (deftest single-entity-mode-unchanged
-  (testing "When no posting carries :posting/entity, validate falls
+  (testing "When no posting carries :kontor.posting/entity, validate falls
             back to per-(ledger, commodity) — existing ADR-021
             behavior preserved exactly"
     (let [r (posting/validate
-             {:transaction {:transaction/journal :journal/sales
-                            :transaction/effective-date #inst "2026-05-11"
-                            :transaction/narration "single-entity test"}
+             {:transaction {:kontor.transaction/journal :kontor.journal/sales
+                            :kontor.transaction/effective-date #inst "2026-05-11"
+                            :kontor.transaction/narration "single-entity test"}
               :postings
-              [{:posting/account :kontor.account/receivable
-                :posting/amount 100.00M
-                :posting/commodity :EUR}
-               {:posting/account :kontor.account/revenue
-                :posting/amount -100.00M
-                :posting/commodity :EUR}]})]
+              [{:kontor.posting/account :kontor.account/receivable
+                :kontor.posting/amount 100.00M
+                :kontor.posting/commodity :EUR}
+               {:kontor.posting/account :kontor.account/revenue
+                :kontor.posting/amount -100.00M
+                :kontor.posting/commodity :EUR}]})]
       (is (:ok? r))
       (is (= :single-entity (:mode r))
           "Mode flag should report :single-entity")
@@ -133,28 +133,28 @@
   (testing "DE intercompany clearing 100 EUR → US intercompany clearing
             -100 EUR. Each entity's footprint sums to zero independently."
     (let [r (posting/validate
-             {:transaction {:transaction/journal :journal/intercompany
-                            :transaction/effective-date #inst "2026-05-11"
-                            :transaction/narration "DE → US transfer"}
+             {:transaction {:kontor.transaction/journal :kontor.journal/intercompany
+                            :kontor.transaction/effective-date #inst "2026-05-11"
+                            :kontor.transaction/narration "DE → US transfer"}
               :postings
               [;; DE side
-               {:posting/account :kontor.account/de-due-from-us
-                :posting/amount  100.00M
-                :posting/commodity :EUR
-                :posting/entity de-ref}
-               {:posting/account :kontor.account/de-cash
-                :posting/amount -100.00M
-                :posting/commodity :EUR
-                :posting/entity de-ref}
+               {:kontor.posting/account :kontor.account/de-due-from-us
+                :kontor.posting/amount  100.00M
+                :kontor.posting/commodity :EUR
+                :kontor.posting/entity de-ref}
+               {:kontor.posting/account :kontor.account/de-cash
+                :kontor.posting/amount -100.00M
+                :kontor.posting/commodity :EUR
+                :kontor.posting/entity de-ref}
                ;; US side (intercompany matching counter)
-               {:posting/account :kontor.account/us-cash
-                :posting/amount  100.00M
-                :posting/commodity :EUR
-                :posting/entity us-ref}
-               {:posting/account :kontor.account/us-due-to-de
-                :posting/amount -100.00M
-                :posting/commodity :EUR
-                :posting/entity us-ref}]})]
+               {:kontor.posting/account :kontor.account/us-cash
+                :kontor.posting/amount  100.00M
+                :kontor.posting/commodity :EUR
+                :kontor.posting/entity us-ref}
+               {:kontor.posting/account :kontor.account/us-due-to-de
+                :kontor.posting/amount -100.00M
+                :kontor.posting/commodity :EUR
+                :kontor.posting/entity us-ref}]})]
       (is (:ok? r) (str "errors: " (:errors r)))
       (is (= :multi-entity (:mode r)))
       (is (empty? (:unbalanced r))))))
@@ -163,18 +163,18 @@
   (testing "DE side balances; US side off by 1 EUR. The error
             identifies the US entity's unbalanced commodity."
     (let [r (posting/validate
-             {:transaction {:transaction/journal :journal/intercompany
-                            :transaction/effective-date #inst "2026-05-11"
-                            :transaction/narration "Broken intercompany"}
+             {:transaction {:kontor.transaction/journal :kontor.journal/intercompany
+                            :kontor.transaction/effective-date #inst "2026-05-11"
+                            :kontor.transaction/narration "Broken intercompany"}
               :postings
-              [{:posting/account :a :posting/amount  100.00M :posting/commodity :EUR
-                :posting/entity de-ref}
-               {:posting/account :b :posting/amount -100.00M :posting/commodity :EUR
-                :posting/entity de-ref}
-               {:posting/account :a :posting/amount  100.00M :posting/commodity :EUR
-                :posting/entity us-ref}
-               {:posting/account :b :posting/amount  -99.00M :posting/commodity :EUR
-                :posting/entity us-ref}]})]
+              [{:kontor.posting/account :a :kontor.posting/amount  100.00M :kontor.posting/commodity :EUR
+                :kontor.posting/entity de-ref}
+               {:kontor.posting/account :b :kontor.posting/amount -100.00M :kontor.posting/commodity :EUR
+                :kontor.posting/entity de-ref}
+               {:kontor.posting/account :a :kontor.posting/amount  100.00M :kontor.posting/commodity :EUR
+                :kontor.posting/entity us-ref}
+               {:kontor.posting/account :b :kontor.posting/amount  -99.00M :kontor.posting/commodity :EUR
+                :kontor.posting/entity us-ref}]})]
       (is (not (:ok? r)))
       (is (= :multi-entity (:mode r)))
       (is (= #{us-ref} (set (keys (:unbalanced r))))
@@ -185,14 +185,14 @@
   (testing "Per ADR-031: a 5 EUR debit on DE does NOT net against
             a 5 EUR credit on US. Each entity self-balances."
     (let [r (posting/validate
-             {:transaction {:transaction/journal :journal/intercompany
-                            :transaction/effective-date #inst "2026-05-11"
-                            :transaction/narration "Cross-entity netting attempt"}
+             {:transaction {:kontor.transaction/journal :kontor.journal/intercompany
+                            :kontor.transaction/effective-date #inst "2026-05-11"
+                            :kontor.transaction/narration "Cross-entity netting attempt"}
               :postings
-              [{:posting/account :a :posting/amount   5.00M :posting/commodity :EUR
-                :posting/entity de-ref}
-               {:posting/account :b :posting/amount  -5.00M :posting/commodity :EUR
-                :posting/entity us-ref}]})]
+              [{:kontor.posting/account :a :kontor.posting/amount   5.00M :kontor.posting/commodity :EUR
+                :kontor.posting/entity de-ref}
+               {:kontor.posting/account :b :kontor.posting/amount  -5.00M :kontor.posting/commodity :EUR
+                :kontor.posting/entity us-ref}]})]
       (is (not (:ok? r)))
       (is (= :multi-entity (:mode r)))
       (is (= #{de-ref us-ref} (set (keys (:unbalanced r))))
@@ -202,30 +202,30 @@
   (testing "DE-IFRS, DE-primary, US-IFRS, US-primary: four
             (entity, ledger) groups, each must balance independently"
     (let [r (posting/validate
-             {:transaction {:transaction/journal :journal/intercompany
-                            :transaction/effective-date #inst "2026-05-11"
-                            :transaction/narration "Multi-ledger intercompany"}
+             {:transaction {:kontor.transaction/journal :kontor.journal/intercompany
+                            :kontor.transaction/effective-date #inst "2026-05-11"
+                            :kontor.transaction/narration "Multi-ledger intercompany"}
               :postings
               ;; DE side — IFRS book
-              [{:posting/account :a :posting/amount  100M :posting/commodity :EUR
-                :posting/entity de-ref :posting/ledger ifrs-ref}
-               {:posting/account :b :posting/amount -100M :posting/commodity :EUR
-                :posting/entity de-ref :posting/ledger ifrs-ref}
+              [{:kontor.posting/account :a :kontor.posting/amount  100M :kontor.posting/commodity :EUR
+                :kontor.posting/entity de-ref :kontor.posting/ledger ifrs-ref}
+               {:kontor.posting/account :b :kontor.posting/amount -100M :kontor.posting/commodity :EUR
+                :kontor.posting/entity de-ref :kontor.posting/ledger ifrs-ref}
                ;; DE side — primary (no explicit ledger ref; nil-keyed)
-               {:posting/account :a :posting/amount  100M :posting/commodity :EUR
-                :posting/entity de-ref}
-               {:posting/account :b :posting/amount -100M :posting/commodity :EUR
-                :posting/entity de-ref}
+               {:kontor.posting/account :a :kontor.posting/amount  100M :kontor.posting/commodity :EUR
+                :kontor.posting/entity de-ref}
+               {:kontor.posting/account :b :kontor.posting/amount -100M :kontor.posting/commodity :EUR
+                :kontor.posting/entity de-ref}
                ;; US side — IFRS book
-               {:posting/account :a :posting/amount  100M :posting/commodity :EUR
-                :posting/entity us-ref :posting/ledger ifrs-ref}
-               {:posting/account :b :posting/amount -100M :posting/commodity :EUR
-                :posting/entity us-ref :posting/ledger ifrs-ref}
+               {:kontor.posting/account :a :kontor.posting/amount  100M :kontor.posting/commodity :EUR
+                :kontor.posting/entity us-ref :kontor.posting/ledger ifrs-ref}
+               {:kontor.posting/account :b :kontor.posting/amount -100M :kontor.posting/commodity :EUR
+                :kontor.posting/entity us-ref :kontor.posting/ledger ifrs-ref}
                ;; US side — primary
-               {:posting/account :a :posting/amount  100M :posting/commodity :EUR
-                :posting/entity us-ref}
-               {:posting/account :b :posting/amount -100M :posting/commodity :EUR
-                :posting/entity us-ref}]})]
+               {:kontor.posting/account :a :kontor.posting/amount  100M :kontor.posting/commodity :EUR
+                :kontor.posting/entity us-ref}
+               {:kontor.posting/account :b :kontor.posting/amount -100M :kontor.posting/commodity :EUR
+                :kontor.posting/entity us-ref}]})]
       (is (:ok? r) (str "errors: " (:errors r)))
       (is (= :multi-entity (:mode r)))
       (is (empty? (:unbalanced r))))))
@@ -238,14 +238,14 @@
   (testing "Some postings tagged with entity, some not — ambiguous
             invariant, must be rejected"
     (let [r (posting/validate
-             {:transaction {:transaction/journal :journal/sales
-                            :transaction/effective-date #inst "2026-05-11"
-                            :transaction/narration "Mixed mode (broken)"}
+             {:transaction {:kontor.transaction/journal :kontor.journal/sales
+                            :kontor.transaction/effective-date #inst "2026-05-11"
+                            :kontor.transaction/narration "Mixed mode (broken)"}
               :postings
-              [{:posting/account :a :posting/amount  100M :posting/commodity :EUR
-                :posting/entity de-ref}
-               {:posting/account :b :posting/amount -100M :posting/commodity :EUR}
-               ;; ^ no :posting/entity
+              [{:kontor.posting/account :a :kontor.posting/amount  100M :kontor.posting/commodity :EUR
+                :kontor.posting/entity de-ref}
+               {:kontor.posting/account :b :kontor.posting/amount -100M :kontor.posting/commodity :EUR}
+               ;; ^ no :kontor.posting/entity
                ]})]
       (is (not (:ok? r)))
       (is (some #(= :mixed-entity-mode (:error %)) (:errors r))
@@ -257,16 +257,16 @@
             balance-affecting postings + an untagged :note is still
             valid multi-entity mode."
     (let [r (posting/validate
-             {:transaction {:transaction/journal :journal/intercompany
-                            :transaction/effective-date #inst "2026-05-11"
-                            :transaction/narration "With ui section"}
+             {:transaction {:kontor.transaction/journal :kontor.journal/intercompany
+                            :kontor.transaction/effective-date #inst "2026-05-11"
+                            :kontor.transaction/narration "With ui section"}
               :postings
-              [{:posting/display-type :section :posting/narration "DE leg"}
-               {:posting/account :a :posting/amount  100M :posting/commodity :EUR
-                :posting/entity de-ref}
-               {:posting/account :b :posting/amount -100M :posting/commodity :EUR
-                :posting/entity de-ref}
-               {:posting/display-type :note :posting/narration "End"}]})]
+              [{:kontor.posting/display-type :section :kontor.posting/narration "DE leg"}
+               {:kontor.posting/account :a :kontor.posting/amount  100M :kontor.posting/commodity :EUR
+                :kontor.posting/entity de-ref}
+               {:kontor.posting/account :b :kontor.posting/amount -100M :kontor.posting/commodity :EUR
+                :kontor.posting/entity de-ref}
+               {:kontor.posting/display-type :note :kontor.posting/narration "End"}]})]
       (is (:ok? r) (str "errors: " (:errors r)))
       (is (= :multi-entity (:mode r))))))
 
@@ -281,8 +281,8 @@
       (let [a (d/pull db '[*] :kontor.entity/code)]
         (is (= :db.type/string (:db/valueType a)))
         (is (= :db.unique/identity (:db/unique a)))))
-    (testing ":posting/entity / :ledger/entity / :valuation-book/entity all refs"
-      (doseq [k [:posting/entity :ledger/entity :valuation-book/entity]]
+    (testing ":kontor.posting/entity / :ledger/entity / :valuation-book/entity all refs"
+      (doseq [k [:kontor.posting/entity :ledger/entity :valuation-book/entity]]
         (let [a (d/pull db '[*] k)]
           (is (= :db.type/ref (:db/valueType a)) (str k))
           (is (= :db.cardinality/one (:db/cardinality a)) (str k)))))))

@@ -36,7 +36,7 @@
   (testing "All required fields present → no complaints"
     (let [complete {:issuer/name "Acme KK"
                     :issuer/registration-number "T1234567890123"
-                    :transaction/date #inst "2026-01-15"
+                    :kontor.transaction/date #inst "2026-01-15"
                     :buyer/name "Beta KK"
                     :line-items/by-rate [{:rate :10pct :amount 1000}]
                     :totals/taxable-amount-by-rate {:10pct 1000}
@@ -55,8 +55,8 @@
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
     (chart/install! conn)
-    (d/transact conn [{:journal/code "INV" :journal/name "Sales"
-                       :journal/type :sale :journal/active true}])
+    (d/transact conn [{:kontor.journal/code "INV" :kontor.journal/name "Sales"
+                       :kontor.journal/type :sale :kontor.journal/active true}])
     conn))
 
 (defn- ace [db code]

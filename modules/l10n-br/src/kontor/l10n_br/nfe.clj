@@ -10,7 +10,7 @@
    4.0. Signing (ICP-Brasil cert) and SEFAZ transmission are partner
    concerns (`kontor-l10n-br-nfe`). Per ADR-018 the resulting
    cStat=100 chave de acesso (44-digit access key) lands in
-   `:transaction/clearance-token`.
+   `:kontor.transaction/clearance-token`.
 
    ## Architecture — CST-driven dispatch (refactored 2026-05-11)
 

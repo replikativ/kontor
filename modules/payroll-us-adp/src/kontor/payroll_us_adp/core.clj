@@ -62,7 +62,7 @@
 ;; The :state analytic plan + per-state analytic accounts (note 83 §4)
 ;; ============================================================================
 ;; Per note 83 §4 — multi-state allocation uses :analytic-account, NOT
-;; :posting/entity. A US LLC with 15 remote-employee states is ONE
+;; :kontor.posting/entity. A US LLC with 15 remote-employee states is ONE
 ;; legal entity (one Form 1120). Per-state lives on ADR-022 analytic
 ;; distributions; we install the plan + 50 states + DC + 5 territories
 ;; here so consumers don't need to.

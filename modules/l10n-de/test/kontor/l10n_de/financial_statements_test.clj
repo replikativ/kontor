@@ -34,10 +34,10 @@
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
     (chart/install! conn)
-    (d/transact conn [{:journal/code "GEN"
-                       :journal/name "General"
-                       :journal/type :general
-                       :journal/active true}])
+    (d/transact conn [{:kontor.journal/code "GEN"
+                       :kontor.journal/name "General"
+                       :kontor.journal/type :general
+                       :kontor.journal/active true}])
     conn))
 
 (defn- ace [db code]
@@ -45,18 +45,18 @@
 
 (defn- post! [conn external-id date postings]
   (let [db (d/db conn)
-        jnl (:db/id (d/entity db [:journal/code "GEN"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "GEN"]))
         tx (-> (posting/build-transaction
                 {:transaction
-                 {:transaction/external-id external-id
-                  :transaction/journal jnl
-                  :transaction/effective-date date
-                  :transaction/narration external-id
-                  :transaction/state :posted
-                  :transaction/posted-at date}
+                 {:kontor.transaction/external-id external-id
+                  :kontor.transaction/journal jnl
+                  :kontor.transaction/effective-date date
+                  :kontor.transaction/narration external-id
+                  :kontor.transaction/state :posted
+                  :kontor.transaction/posted-at date}
                  :postings postings})
-               (->> (mapv #(if (some? (:posting/account %))
-                             (assoc % :posting/posted-at date) %))))]
+               (->> (mapv #(if (some? (:kontor.posting/account %))
+                             (assoc % :kontor.posting/posted-at date) %))))]
     (v/transact-with-validation conn tx)))
 
 (defn- invoice-19! [conn id date net]
@@ -67,9 +67,9 @@
                        2 java.math.RoundingMode/HALF_EVEN)
         gross (.add net-bd vat)]
     (post! conn id date
-           [{:posting/account (ace db "1400") :posting/amount gross :posting/commodity eur-c}
-            {:posting/account (ace db "4400") :posting/amount (.negate net-bd) :posting/commodity eur-c}
-            {:posting/account (ace db "3801") :posting/amount (.negate vat) :posting/commodity eur-c}])))
+           [{:kontor.posting/account (ace db "1400") :kontor.posting/amount gross :kontor.posting/commodity eur-c}
+            {:kontor.posting/account (ace db "4400") :kontor.posting/amount (.negate net-bd) :kontor.posting/commodity eur-c}
+            {:kontor.posting/account (ace db "3801") :kontor.posting/amount (.negate vat) :kontor.posting/commodity eur-c}])))
 
 (defn- invoice-7! [conn id date net]
   (let [db (d/db conn)
@@ -79,9 +79,9 @@
                        2 java.math.RoundingMode/HALF_EVEN)
         gross (.add net-bd vat)]
     (post! conn id date
-           [{:posting/account (ace db "1400") :posting/amount gross :posting/commodity eur-c}
-            {:posting/account (ace db "4300") :posting/amount (.negate net-bd) :posting/commodity eur-c}
-            {:posting/account (ace db "3806") :posting/amount (.negate vat) :posting/commodity eur-c}])))
+           [{:kontor.posting/account (ace db "1400") :kontor.posting/amount gross :kontor.posting/commodity eur-c}
+            {:kontor.posting/account (ace db "4300") :kontor.posting/amount (.negate net-bd) :kontor.posting/commodity eur-c}
+            {:kontor.posting/account (ace db "3806") :kontor.posting/amount (.negate vat) :kontor.posting/commodity eur-c}])))
 
 (defn- supplier-bill-19! [conn id date net expense-code]
   (let [db (d/db conn)
@@ -91,25 +91,25 @@
                        2 java.math.RoundingMode/HALF_EVEN)
         gross (.add net-bd vat)]
     (post! conn id date
-           [{:posting/account (ace db expense-code) :posting/amount net-bd :posting/commodity eur-c}
-            {:posting/account (ace db "1576")       :posting/amount vat    :posting/commodity eur-c}
-            {:posting/account (ace db "3300")       :posting/amount (.negate gross) :posting/commodity eur-c}])))
+           [{:kontor.posting/account (ace db expense-code) :kontor.posting/amount net-bd :kontor.posting/commodity eur-c}
+            {:kontor.posting/account (ace db "1576")       :kontor.posting/amount vat    :kontor.posting/commodity eur-c}
+            {:kontor.posting/account (ace db "3300")       :kontor.posting/amount (.negate gross) :kontor.posting/commodity eur-c}])))
 
 (defn- rent-no-vat! [conn id date amount]
   (let [db (d/db conn)
         eur-c (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         bd (bigdec amount)]
     (post! conn id date
-           [{:posting/account (ace db "6300") :posting/amount bd :posting/commodity eur-c}
-            {:posting/account (ace db "1200") :posting/amount (.negate bd) :posting/commodity eur-c}])))
+           [{:kontor.posting/account (ace db "6300") :kontor.posting/amount bd :kontor.posting/commodity eur-c}
+            {:kontor.posting/account (ace db "1200") :kontor.posting/amount (.negate bd) :kontor.posting/commodity eur-c}])))
 
 (defn- salary! [conn id date amount]
   (let [db (d/db conn)
         eur-c (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         bd (bigdec amount)]
     (post! conn id date
-           [{:posting/account (ace db "6020") :posting/amount bd :posting/commodity eur-c}
-            {:posting/account (ace db "1200") :posting/amount (.negate bd) :posting/commodity eur-c}])))
+           [{:kontor.posting/account (ace db "6020") :kontor.posting/amount bd :kontor.posting/commodity eur-c}
+            {:kontor.posting/account (ace db "1200") :kontor.posting/amount (.negate bd) :kontor.posting/commodity eur-c}])))
 
 (defn- seed-q1 [conn]
   ;; Sales: 3 × 19% × 1000 + 1 × 7% × 500

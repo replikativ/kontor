@@ -314,16 +314,16 @@
   (when-not lease-expense-account (throw (ex-info ":lease-expense-account required" {})))
   (when-not credit-account      (throw (ex-info ":credit-account required" {})))
   (posting/build-transaction
-   {:transaction (cond-> {:transaction/journal journal
-                          :transaction/effective-date date
-                          :transaction/state :posted
-                          :transaction/posted-at date}
-                   narration (assoc :transaction/narration narration))
-    :postings [{:posting/account lease-expense-account
-                :posting/amount amount
-                :posting/commodity commodity
-                :posting/posted-at date}
-               {:posting/account credit-account
-                :posting/amount (.negate ^BigDecimal amount)
-                :posting/commodity commodity
-                :posting/posted-at date}]}))
+   {:transaction (cond-> {:kontor.transaction/journal journal
+                          :kontor.transaction/effective-date date
+                          :kontor.transaction/state :posted
+                          :kontor.transaction/posted-at date}
+                   narration (assoc :kontor.transaction/narration narration))
+    :postings [{:kontor.posting/account lease-expense-account
+                :kontor.posting/amount amount
+                :kontor.posting/commodity commodity
+                :kontor.posting/posted-at date}
+               {:kontor.posting/account credit-account
+                :kontor.posting/amount (.negate ^BigDecimal amount)
+                :kontor.posting/commodity commodity
+                :kontor.posting/posted-at date}]}))

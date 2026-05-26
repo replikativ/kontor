@@ -25,10 +25,10 @@
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
     (chart/install! conn)
-    (d/transact conn [{:journal/code "INV"
-                       :journal/name "Sales invoices"
-                       :journal/type :sale
-                       :journal/active true}])
+    (d/transact conn [{:kontor.journal/code "INV"
+                       :kontor.journal/name "Sales invoices"
+                       :kontor.journal/type :sale
+                       :kontor.journal/active true}])
     conn))
 
 (defn- account-eid [db code]
@@ -47,28 +47,28 @@
         receivable (account-eid db "1400")
         revenue    (account-eid db "4400")
         ust-19     (account-eid db "3801")
-        jnl        (:db/id (d/entity db [:journal/code "INV"]))
+        jnl        (:db/id (d/entity db [:kontor.journal/code "INV"]))
         net-bd  (bigdec net)
         vat-bd  (.setScale (.multiply net-bd (bigdec "0.19"))
                            2 java.math.RoundingMode/HALF_EVEN)
         gross   (.add net-bd vat-bd)
         tx      (-> (posting/build-transaction
                      {:transaction
-                      {:transaction/external-id external-id
-                       :transaction/journal jnl
-                       :transaction/effective-date date
-                       :transaction/narration external-id
-                       :transaction/state :posted
-                       :transaction/posted-at date}
+                      {:kontor.transaction/external-id external-id
+                       :kontor.transaction/journal jnl
+                       :kontor.transaction/effective-date date
+                       :kontor.transaction/narration external-id
+                       :kontor.transaction/state :posted
+                       :kontor.transaction/posted-at date}
                       :postings
-                      [{:posting/account receivable :posting/amount gross
-                        :posting/commodity eur}
-                       {:posting/account revenue :posting/amount (.negate net-bd)
-                        :posting/commodity eur}
-                       {:posting/account ust-19 :posting/amount (.negate vat-bd)
-                        :posting/commodity eur}]})
-                    (->> (mapv #(if (some? (:posting/account %))
-                                  (assoc % :posting/posted-at date)
+                      [{:kontor.posting/account receivable :kontor.posting/amount gross
+                        :kontor.posting/commodity eur}
+                       {:kontor.posting/account revenue :kontor.posting/amount (.negate net-bd)
+                        :kontor.posting/commodity eur}
+                       {:kontor.posting/account ust-19 :kontor.posting/amount (.negate vat-bd)
+                        :kontor.posting/commodity eur}]})
+                    (->> (mapv #(if (some? (:kontor.posting/account %))
+                                  (assoc % :kontor.posting/posted-at date)
                                   %))))]
     (v/transact-with-validation conn tx)))
 
@@ -80,28 +80,28 @@
         receivable (account-eid db "1400")
         revenue    (account-eid db "4300")
         ust-7      (account-eid db "3806")
-        jnl        (:db/id (d/entity db [:journal/code "INV"]))
+        jnl        (:db/id (d/entity db [:kontor.journal/code "INV"]))
         net-bd (bigdec net)
         vat-bd (.setScale (.multiply net-bd (bigdec "0.07"))
                           2 java.math.RoundingMode/HALF_EVEN)
         gross  (.add net-bd vat-bd)
         tx (-> (posting/build-transaction
                 {:transaction
-                 {:transaction/external-id external-id
-                  :transaction/journal jnl
-                  :transaction/effective-date date
-                  :transaction/narration external-id
-                  :transaction/state :posted
-                  :transaction/posted-at date}
+                 {:kontor.transaction/external-id external-id
+                  :kontor.transaction/journal jnl
+                  :kontor.transaction/effective-date date
+                  :kontor.transaction/narration external-id
+                  :kontor.transaction/state :posted
+                  :kontor.transaction/posted-at date}
                  :postings
-                 [{:posting/account receivable :posting/amount gross
-                   :posting/commodity eur}
-                  {:posting/account revenue :posting/amount (.negate net-bd)
-                   :posting/commodity eur}
-                  {:posting/account ust-7 :posting/amount (.negate vat-bd)
-                   :posting/commodity eur}]})
-               (->> (mapv #(if (some? (:posting/account %))
-                             (assoc % :posting/posted-at date)
+                 [{:kontor.posting/account receivable :kontor.posting/amount gross
+                   :kontor.posting/commodity eur}
+                  {:kontor.posting/account revenue :kontor.posting/amount (.negate net-bd)
+                   :kontor.posting/commodity eur}
+                  {:kontor.posting/account ust-7 :kontor.posting/amount (.negate vat-bd)
+                   :kontor.posting/commodity eur}]})
+               (->> (mapv #(if (some? (:kontor.posting/account %))
+                             (assoc % :kontor.posting/posted-at date)
                              %))))]
     (v/transact-with-validation conn tx)))
 
@@ -116,28 +116,28 @@
         expense    (account-eid db "6800")
         vorst-19   (account-eid db "1576")
         payable    (account-eid db "3300")
-        jnl        (:db/id (d/entity db [:journal/code "INV"]))
+        jnl        (:db/id (d/entity db [:kontor.journal/code "INV"]))
         net-bd  (bigdec net)
         vat-bd  (.setScale (.multiply net-bd (bigdec "0.19"))
                            2 java.math.RoundingMode/HALF_EVEN)
         gross   (.add net-bd vat-bd)
         tx (-> (posting/build-transaction
                 {:transaction
-                 {:transaction/external-id external-id
-                  :transaction/journal jnl
-                  :transaction/effective-date date
-                  :transaction/narration external-id
-                  :transaction/state :posted
-                  :transaction/posted-at date}
+                 {:kontor.transaction/external-id external-id
+                  :kontor.transaction/journal jnl
+                  :kontor.transaction/effective-date date
+                  :kontor.transaction/narration external-id
+                  :kontor.transaction/state :posted
+                  :kontor.transaction/posted-at date}
                  :postings
-                 [{:posting/account expense :posting/amount net-bd
-                   :posting/commodity eur}
-                  {:posting/account vorst-19 :posting/amount vat-bd
-                   :posting/commodity eur}
-                  {:posting/account payable :posting/amount (.negate gross)
-                   :posting/commodity eur}]})
-               (->> (mapv #(if (some? (:posting/account %))
-                             (assoc % :posting/posted-at date)
+                 [{:kontor.posting/account expense :kontor.posting/amount net-bd
+                   :kontor.posting/commodity eur}
+                  {:kontor.posting/account vorst-19 :kontor.posting/amount vat-bd
+                   :kontor.posting/commodity eur}
+                  {:kontor.posting/account payable :kontor.posting/amount (.negate gross)
+                   :kontor.posting/commodity eur}]})
+               (->> (mapv #(if (some? (:kontor.posting/account %))
+                             (assoc % :kontor.posting/posted-at date)
                              %))))]
     (v/transact-with-validation conn tx)))
 
@@ -231,19 +231,19 @@
           receivable (account-eid db "1400")
           revenue    (account-eid db "4400")
           ust-19     (account-eid db "3801")
-          jnl        (:db/id (d/entity db [:journal/code "INV"]))
+          jnl        (:db/id (d/entity db [:kontor.journal/code "INV"]))
           ;; A DRAFT (no :posted state)
           tx (posting/build-transaction
               {:transaction
-               {:transaction/external-id "DRAFT-1"
-                :transaction/journal jnl
-                :transaction/effective-date jan-15
-                :transaction/narration "draft"
-                :transaction/state :draft}
+               {:kontor.transaction/external-id "DRAFT-1"
+                :kontor.transaction/journal jnl
+                :kontor.transaction/effective-date jan-15
+                :kontor.transaction/narration "draft"
+                :kontor.transaction/state :draft}
                :postings
-               [{:posting/account receivable :posting/amount 1190M :posting/commodity eur}
-                {:posting/account revenue :posting/amount -1000M :posting/commodity eur}
-                {:posting/account ust-19 :posting/amount -190M :posting/commodity eur}]})
+               [{:kontor.posting/account receivable :kontor.posting/amount 1190M :kontor.posting/commodity eur}
+                {:kontor.posting/account revenue :kontor.posting/amount -1000M :kontor.posting/commodity eur}
+                {:kontor.posting/account ust-19 :kontor.posting/amount -190M :kontor.posting/commodity eur}]})
           _ (v/transact-with-validation conn tx)
           r (ustva/compute conn {:from jan-1 :to feb-1})]
       (is (money/zero? (:81 (:ustva/lines r))) "Draft excluded by default."))))

@@ -106,7 +106,7 @@
    Required opts:
      :case            ref/eid/code
      :written-off-by  ref to :create/uid
-     :journal-ref     [:journal/code \"..\"]
+     :journal-ref     [:kontor.journal/code \"..\"]
      :reason          keyword (e.g. :uncollectible-90-days)
      :supporting-doc  ref to :audit-doc (provide a pre-uploaded doc
                       with the manager's sign-off + customer outreach
@@ -178,30 +178,30 @@
                                          :entity entity-eid})
                  bad-debt (resolve-account db {:account-type :bad-debt-expense
                                                :entity entity-eid})
-                 input {:transaction (cond-> {:transaction/journal journal-ref
-                                              :transaction/effective-date effective-date
-                                              :transaction/state :posted
-                                              :transaction/posted-at effective-date
-                                              :transaction/narration
+                 input {:transaction (cond-> {:kontor.transaction/journal journal-ref
+                                              :kontor.transaction/effective-date effective-date
+                                              :kontor.transaction/state :posted
+                                              :kontor.transaction/posted-at effective-date
+                                              :kontor.transaction/narration
                                               (str "Write-off invoice #" invoice-eid
                                                    " " open-amount " "
                                                    commodity-sym)}
                                        partner-eid
-                                       (assoc :transaction/partner partner-eid))
-                        :postings [(cond-> {:posting/account bad-debt
-                                            :posting/amount open-amount
-                                            :posting/commodity commodity-eid
-                                            :posting/partner partner-eid}
-                                     entity-eid (assoc :posting/entity entity-eid)
-                                     ledger-ref (assoc :posting/ledger ledger-ref))
-                                   (cond-> {:posting/account ar
-                                            :posting/amount (.negate
+                                       (assoc :kontor.transaction/partner partner-eid))
+                        :postings [(cond-> {:kontor.posting/account bad-debt
+                                            :kontor.posting/amount open-amount
+                                            :kontor.posting/commodity commodity-eid
+                                            :kontor.posting/partner partner-eid}
+                                     entity-eid (assoc :kontor.posting/entity entity-eid)
+                                     ledger-ref (assoc :kontor.posting/ledger ledger-ref))
+                                   (cond-> {:kontor.posting/account ar
+                                            :kontor.posting/amount (.negate
                                                              ^java.math.BigDecimal
                                                              open-amount)
-                                            :posting/commodity commodity-eid
-                                            :posting/partner partner-eid}
-                                     entity-eid (assoc :posting/entity entity-eid)
-                                     ledger-ref (assoc :posting/ledger ledger-ref))]}
+                                            :kontor.posting/commodity commodity-eid
+                                            :kontor.posting/partner partner-eid}
+                                     entity-eid (assoc :kontor.posting/entity entity-eid)
+                                     ledger-ref (assoc :kontor.posting/ledger ledger-ref))]}
                  raw (posting/build-transaction input)
                  ;; build-transaction uses -1 for tx-tempid and -300+
                  ;; for postings. Walk and offset by idx.

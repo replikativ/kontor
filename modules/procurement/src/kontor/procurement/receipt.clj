@@ -251,13 +251,13 @@
               (throw (ex-info ":receipt-item/unit-cost required for posting"
                               {:type :receipt/missing-unit-cost
                                :receipt-item (:db/id item)}))))
-        ;; The state-machine middleware requires :transaction/posted-at
-        ;; in the same tx as :transaction/state :posted. plan-stock-move
+        ;; The state-machine middleware requires :kontor.transaction/posted-at
+        ;; in the same tx as :kontor.transaction/state :posted. plan-stock-move
         ;; sets state but not posted-at; stamp it here.
         stamp-posted-at (fn [tx-row]
                           (if (and (map? tx-row)
-                                   (= :posted (:transaction/state tx-row)))
-                            (assoc tx-row :transaction/posted-at eff-date)
+                                   (= :posted (:kontor.transaction/state tx-row)))
+                            (assoc tx-row :kontor.transaction/posted-at eff-date)
                             tx-row))
         per-item-tx
         (mapv (fn [idx item]

@@ -91,7 +91,7 @@
     (d/transact conn
                 [{:kontor.commodity/symbol "CNY" :kontor.commodity/name "Renminbi"
                   :kontor.commodity/precision 2}
-                 {:journal/code "SALE" :journal/type :sale}
+                 {:kontor.journal/code "SALE" :kontor.journal/type :sale}
                  {:kontor.account/path "Income:Salary" :kontor.account/type :income}
                  {:kontor.account/path "Assets:Bank"   :kontor.account/type :asset}])
     conn))

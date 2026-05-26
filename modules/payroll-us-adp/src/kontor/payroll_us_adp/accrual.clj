@@ -108,7 +108,7 @@
                              IRC §461(h))
      :journal              — ref to :journal
      :effective-date       — #inst
-     :tx-code              — string for :transaction/external-id
+     :tx-code              — string for :kontor.transaction/external-id
      :pay-period           — ref to :pay-period (linkage)
 
    Optional keys:
@@ -130,24 +130,24 @@
                  :tx-code tx-code}]
     (when (nil? v) (throw (ex-info (str (subs (str k) 1) " required") {}))))
   (let [amt (round-half-even amount)
-        postings [{:posting/account pto-expense-account
-                   :posting/amount amt
-                   :posting/commodity commodity
-                   :posting/ledger ledger
-                   :posting/narration "PTO expense accrual"}
-                  {:posting/account pto-accrual-account
-                   :posting/amount (.negate ^BigDecimal amt)
-                   :posting/commodity commodity
-                   :posting/ledger ledger
-                   :posting/narration "PTO liability accrual"}]
+        postings [{:kontor.posting/account pto-expense-account
+                   :kontor.posting/amount amt
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger ledger
+                   :kontor.posting/narration "PTO expense accrual"}
+                  {:kontor.posting/account pto-accrual-account
+                   :kontor.posting/amount (.negate ^BigDecimal amt)
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger ledger
+                   :kontor.posting/narration "PTO liability accrual"}]
         tx-input {:tx-tempid tx-tempid
-                  :transaction (cond-> {:transaction/external-id tx-code
-                                        :transaction/effective-date effective-date
-                                        :transaction/narration narration
-                                        :transaction/journal journal
-                                        :transaction/state :draft}
+                  :transaction (cond-> {:kontor.transaction/external-id tx-code
+                                        :kontor.transaction/effective-date effective-date
+                                        :kontor.transaction/narration narration
+                                        :kontor.transaction/journal journal
+                                        :kontor.transaction/state :draft}
                                  pay-period
-                                 (assoc :transaction/source
+                                 (assoc :kontor.transaction/source
                                         (str "pay-period:" pay-period)))
                   :postings postings}]
     (posting/build-transaction tx-input)))
@@ -194,24 +194,24 @@
                  :tx-code tx-code}]
     (when (nil? v) (throw (ex-info (str (subs (str k) 1) " required") {}))))
   (let [amt (round-half-even amount)
-        postings [{:posting/account match-expense-account
-                   :posting/amount amt
-                   :posting/commodity commodity
-                   :posting/ledger ledger
-                   :posting/narration "401(k) match expense"}
-                  {:posting/account match-payable-account
-                   :posting/amount (.negate ^BigDecimal amt)
-                   :posting/commodity commodity
-                   :posting/ledger ledger
-                   :posting/narration "401(k) match payable"}]
+        postings [{:kontor.posting/account match-expense-account
+                   :kontor.posting/amount amt
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger ledger
+                   :kontor.posting/narration "401(k) match expense"}
+                  {:kontor.posting/account match-payable-account
+                   :kontor.posting/amount (.negate ^BigDecimal amt)
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger ledger
+                   :kontor.posting/narration "401(k) match payable"}]
         tx-input {:tx-tempid tx-tempid
-                  :transaction (cond-> {:transaction/external-id tx-code
-                                        :transaction/effective-date effective-date
-                                        :transaction/narration narration
-                                        :transaction/journal journal
-                                        :transaction/state :draft}
+                  :transaction (cond-> {:kontor.transaction/external-id tx-code
+                                        :kontor.transaction/effective-date effective-date
+                                        :kontor.transaction/narration narration
+                                        :kontor.transaction/journal journal
+                                        :kontor.transaction/state :draft}
                                  pay-period
-                                 (assoc :transaction/source
+                                 (assoc :kontor.transaction/source
                                         (str "pay-period:" pay-period)))
                   :postings postings}]
     (posting/build-transaction tx-input)))
@@ -255,22 +255,22 @@
                  :tx-code tx-code}]
     (when (nil? v) (throw (ex-info (str (subs (str k) 1) " required") {}))))
   (let [amt (round-half-even amount)
-        postings [{:posting/account match-expense-account
-                   :posting/amount amt
-                   :posting/commodity commodity
-                   :posting/ledger tax-ledger
-                   :posting/narration "401(k) match expense (tax)"}
-                  {:posting/account match-payable-account
-                   :posting/amount (.negate ^BigDecimal amt)
-                   :posting/commodity commodity
-                   :posting/ledger tax-ledger
-                   :posting/narration "401(k) match payable (tax)"}]
+        postings [{:kontor.posting/account match-expense-account
+                   :kontor.posting/amount amt
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger tax-ledger
+                   :kontor.posting/narration "401(k) match expense (tax)"}
+                  {:kontor.posting/account match-payable-account
+                   :kontor.posting/amount (.negate ^BigDecimal amt)
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger tax-ledger
+                   :kontor.posting/narration "401(k) match payable (tax)"}]
         tx-input {:tx-tempid tx-tempid
-                  :transaction {:transaction/external-id tx-code
-                                :transaction/effective-date effective-date
-                                :transaction/narration narration
-                                :transaction/journal journal
-                                :transaction/state :draft}
+                  :transaction {:kontor.transaction/external-id tx-code
+                                :kontor.transaction/effective-date effective-date
+                                :kontor.transaction/narration narration
+                                :kontor.transaction/journal journal
+                                :kontor.transaction/state :draft}
                   :postings postings}]
     (posting/build-transaction tx-input)))
 

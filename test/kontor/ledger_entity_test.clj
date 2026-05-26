@@ -66,10 +66,10 @@
       (is (= prim (ledger/resolve-ledger db prim))))))
 
 (deftest posting-ledger-attr-installed
-  (testing ":posting/ledger attribute is part of the schema"
+  (testing ":kontor.posting/ledger attribute is part of the schema"
     (let [conn (core/create-test-db)
           db   (d/db conn)
-          attr (d/pull db '[*] :posting/ledger)]
+          attr (d/pull db '[*] :kontor.posting/ledger)]
       (is (= :db.type/ref         (:db/valueType attr)))
       (is (= :db.cardinality/one  (:db/cardinality attr))))))
 

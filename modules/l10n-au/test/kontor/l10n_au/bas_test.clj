@@ -17,8 +17,8 @@
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
     (chart/install! conn)
-    (d/transact conn [{:journal/code "INV" :journal/name "Sales"
-                       :journal/type :sale :journal/active true}])
+    (d/transact conn [{:kontor.journal/code "INV" :kontor.journal/name "Sales"
+                       :kontor.journal/type :sale :kontor.journal/active true}])
     conn))
 
 ;; ============================================================================
@@ -191,25 +191,25 @@
           aud-eid (:db/id (d/entity db [:kontor.commodity/symbol "AUD"]))
           gst-recv (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db "11700")
           bank     (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db "11100")
-          jnl (:db/id (d/entity db [:journal/code "INV"]))
+          jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
           date #inst "2026-02-15T00:00:00Z"
           tx-data (posting/build-transaction
                    {:transaction
-                    {:transaction/external-id "PURCH-1"
-                     :transaction/journal jnl
-                     :transaction/effective-date date
-                     :transaction/narration "Capital purchase ITC"
-                     :transaction/state :posted
-                     :transaction/posted-at date}
+                    {:kontor.transaction/external-id "PURCH-1"
+                     :kontor.transaction/journal jnl
+                     :kontor.transaction/effective-date date
+                     :kontor.transaction/narration "Capital purchase ITC"
+                     :kontor.transaction/state :posted
+                     :kontor.transaction/posted-at date}
                     :postings
-                    [{:posting/account gst-recv
-                      :posting/amount 100M
-                      :posting/commodity aud-eid
-                      :posting/posted-at date}
-                     {:posting/account bank
-                      :posting/amount -100M
-                      :posting/commodity aud-eid
-                      :posting/posted-at date}]})
+                    [{:kontor.posting/account gst-recv
+                      :kontor.posting/amount 100M
+                      :kontor.posting/commodity aud-eid
+                      :kontor.posting/posted-at date}
+                     {:kontor.posting/account bank
+                      :kontor.posting/amount -100M
+                      :kontor.posting/commodity aud-eid
+                      :kontor.posting/posted-at date}]})
           _ (v/transact-with-validation conn tx-data)
           r (bas/compute-bas conn {:fy 2026 :quarter 3})]
       (is (money/equiv? (aud "100.00") (get-in r [:bas/labels :1B]))

@@ -48,8 +48,8 @@
                   :kontor.account/name "Verbindlichkeiten LuG"
                   :kontor.account/type :liability :kontor.account/active true}
                  ;; Journal + period (kernel-required by build-transaction).
-                 {:db/id "journal-payroll-de" :journal/code "PAY-DE"
-                  :journal/name "Payroll (DE)" :journal/type :general}
+                 {:db/id "journal-payroll-de" :kontor.journal/code "PAY-DE"
+                  :kontor.journal/name "Payroll (DE)" :kontor.journal/type :general}
                  {:db/id "period-2026-05" :period/name "2026-05"
                   :period/start #inst "2026-05-01"
                   :period/end #inst "2026-06-01"}
@@ -356,14 +356,14 @@
       ;; Real builders split per component-kind across many accounts.
       (mapcat
        (fn [{:keys [gross net]}]
-         [{:posting/account (:wages-expense accounts)
-           :posting/amount gross
-           :posting/commodity eur-eid
-           :posting/narration "Payroll wages (gross)"}
-          {:posting/account (:wages-payable accounts)
-           :posting/amount (.negate ^java.math.BigDecimal gross)
-           :posting/commodity eur-eid
-           :posting/narration "Wages payable (gross)"}])
+         [{:kontor.posting/account (:wages-expense accounts)
+           :kontor.posting/amount gross
+           :kontor.posting/commodity eur-eid
+           :kontor.posting/narration "Payroll wages (gross)"}
+          {:kontor.posting/account (:wages-payable accounts)
+           :kontor.posting/amount (.negate ^java.math.BigDecimal gross)
+           :kontor.posting/commodity eur-eid
+           :kontor.posting/narration "Wages payable (gross)"}])
        facts))))
 
 (deftest run-payroll-end-to-end
@@ -375,7 +375,7 @@
         de (ref-eid db :kontor.entity/code "DE-GMBH")
         eur (ref-eid db :kontor.commodity/symbol "EUR")
         period (ref-eid db :period/name "2026-05")
-        journal (ref-eid db :journal/code "PAY-DE")
+        journal (ref-eid db :kontor.journal/code "PAY-DE")
         wages-exp (ref-eid db :kontor.account/code "4120")
         wages-pay (ref-eid db :kontor.account/code "1741")
         _ (employment/hire! conn {:code "EMP-DE-jane" :person jane :entity de
@@ -406,9 +406,9 @@
                        :where [?r :payroll-run/code ?c]]
                      db "RUN-DE-2026-05-001")
         run (d/pull db '[* {:payroll-run/payroll-transaction
-                            [:transaction/external-id
-                             {:posting/_transaction [:posting/amount
-                                                     :posting/account]}]}]
+                            [:kontor.transaction/external-id
+                             {:kontor.posting/_transaction [:kontor.posting/amount
+                                                     :kontor.posting/account]}]}]
                     run-eid)]
     (testing "payroll-run row is created with control totals"
       (is (= 5000M (:payroll-run/control-total-gross run)))
@@ -417,12 +417,12 @@
       (is (= :computed (:payroll-run/state run))))
     (testing "the linked :transaction has two posting legs that sum to zero"
       (let [tx (:payroll-run/payroll-transaction run)
-            postings (:posting/_transaction tx)
-            sum (reduce (fn [a {:keys [posting/amount]}]
+            postings (:kontor.posting/_transaction tx)
+            sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                           (.add ^java.math.BigDecimal a
                                 ^java.math.BigDecimal amount))
                         0M postings)]
-        (is (= "TX-PAYROLL-DE-2026-05" (:transaction/external-id tx)))
+        (is (= "TX-PAYROLL-DE-2026-05" (:kontor.transaction/external-id tx)))
         (is (= 2 (count postings)))
         (is (zero? (.compareTo ^java.math.BigDecimal sum 0M)))))))
 
@@ -456,7 +456,7 @@
         de (ref-eid db :kontor.entity/code "DE-GMBH")
         eur (ref-eid db :kontor.commodity/symbol "EUR")
         period (ref-eid db :period/name "2026-05")
-        journal (ref-eid db :journal/code "PAY-DE")
+        journal (ref-eid db :kontor.journal/code "PAY-DE")
         wages-exp (ref-eid db :kontor.account/code "4120")
         wages-pay (ref-eid db :kontor.account/code "1741")
         _ (employment/hire! conn {:code "EMP-DE-jane" :person jane :entity de

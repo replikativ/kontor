@@ -72,8 +72,8 @@
                   :kontor.account/type :expense :kontor.account/active true}
                  {:db/id "a-cash"   :kontor.account/code "1800" :kontor.account/name "Bank"
                   :kontor.account/type :asset :kontor.account/active true}
-                 {:db/id "j-gen" :journal/code "GEN" :journal/name "General"
-                  :journal/type :general}])
+                 {:db/id "j-gen" :kontor.journal/code "GEN" :kontor.journal/name "General"
+                  :kontor.journal/type :general}])
     conn))
 
 (defn- ref-eid [db a v]
@@ -82,7 +82,7 @@
 (defn- commodity [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- p         [db code] (ref-eid db :kontor.partner/external-id code))
 (defn- acct      [db code] (ref-eid db :kontor.account/code code))
-(defn- journal   [db] (ref-eid db :journal/code "GEN"))
+(defn- journal   [db] (ref-eid db :kontor.journal/code "GEN"))
 (defn- class-eid [db] (ref-eid db :asset-class/code "rou-property"))
 (defn- adoc      [db] (ref-eid db :audit-doc/code "LEASE-CONTRACT-1"))
 (defn- ifrs      [db] (ref-eid db :ledger/code "ifrs"))
@@ -92,11 +92,11 @@
              :with ?p
              :in $ ?acct ?led
              :where
-             [?p :posting/account ?acct]
-             [?p :posting/ledger ?led]
-             [?p :posting/amount ?amt]
-             [?p :posting/transaction ?tx]
-             [?tx :transaction/state :posted]]
+             [?p :kontor.posting/account ?acct]
+             [?p :kontor.posting/ledger ?led]
+             [?p :kontor.posting/amount ?amt]
+             [?p :kontor.posting/transaction ?tx]
+             [?tx :kontor.transaction/state :posted]]
            db account ledger-eid)
       0M))
 

@@ -25,11 +25,11 @@
             [kontor.l10n-mx.investment-income-statute :as inv-statute]))
 
 (def ^:private default-journals
-  [{:journal/code "GJ" :journal/type :general :journal/name "Libro Diario (General Journal)"}
-   {:journal/code "CR" :journal/type :cash    :journal/name "Ingresos (Cash Receipts)"}
-   {:journal/code "CD" :journal/type :cash    :journal/name "Egresos (Cash Disbursements)"}
-   {:journal/code "SJ" :journal/type :sale    :journal/name "Ventas (Sales Journal)"}
-   {:journal/code "PJ" :journal/type :purchase :journal/name "Compras (Purchase Journal)"}])
+  [{:kontor.journal/code "GJ" :kontor.journal/type :general :kontor.journal/name "Libro Diario (General Journal)"}
+   {:kontor.journal/code "CR" :kontor.journal/type :cash    :kontor.journal/name "Ingresos (Cash Receipts)"}
+   {:kontor.journal/code "CD" :kontor.journal/type :cash    :kontor.journal/name "Egresos (Cash Disbursements)"}
+   {:kontor.journal/code "SJ" :kontor.journal/type :sale    :kontor.journal/name "Ventas (Sales Journal)"}
+   {:kontor.journal/code "PJ" :kontor.journal/type :purchase :kontor.journal/name "Compras (Purchase Journal)"}])
 
 (defn install-all!
   "Install everything an MX consumer needs to start booking + producing

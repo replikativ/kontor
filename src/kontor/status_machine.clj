@@ -8,7 +8,7 @@
    metadata.
 
    Distinct from `kontor.state-machine` (which encodes the kernel's
-   `:transaction/state` lifecycle with sealing-specific guards). The
+   `:kontor.transaction/state` lifecycle with sealing-specific guards). The
    two coexist; new companion entities use this generic table.
 
    ## Vocabulary conventions

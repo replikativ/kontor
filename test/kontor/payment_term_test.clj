@@ -59,9 +59,9 @@
         db (d/db conn)
         skonto (pt/by-code db "2/10-NET30")
         frag (pt/apply-term jan-1 skonto)]
-    (is (= (:db/id skonto) (:transaction/payment-term frag)))
-    (is (= jan-31 (:transaction/due-date frag)))
-    (is (= jan-11 (:transaction/discount-deadline frag)))))
+    (is (= (:db/id skonto) (:kontor.transaction/payment-term frag)))
+    (is (= jan-31 (:kontor.transaction/due-date frag)))
+    (is (= jan-11 (:kontor.transaction/discount-deadline frag)))))
 
 (deftest leap-year-correctness
   (testing "2026 is not a leap year — Feb has 28 days. NET30 from

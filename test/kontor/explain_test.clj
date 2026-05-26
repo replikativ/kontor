@@ -49,8 +49,8 @@
                 :kontor.account/name "Sales revenue"
                 :kontor.account/type :income :kontor.account/active true
                 :kontor.account/concept-iri "http://xbrl.ifrs.org/taxonomy/2024-03-27/ifrs-full#Revenue"}
-               {:db/id -4 :journal/code "INV" :journal/name "Customer invoices"
-                :journal/type :sale :journal/active true}
+               {:db/id -4 :kontor.journal/code "INV" :kontor.journal/name "Customer invoices"
+                :kontor.journal/type :sale :kontor.journal/active true}
                ;; ADR-090: partner with concept-iri (FIBO Organization).
                {:db/id -5 :kontor.partner/external-id "acme"
                 :kontor.partner/name "ACME Corp"
@@ -72,25 +72,25 @@
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         rec (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
         rev (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
-        jnl (:db/id (d/entity db [:journal/code "INV"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         prt (:db/id (d/entity db [:kontor.partner/external-id "acme"]))
         _   (posting/post-transaction!
              conn
              {:transaction
-              {:transaction/external-id    external-id
-               :transaction/journal        jnl
-               :transaction/effective-date some-date
-               :transaction/partner        prt
-               :transaction/narration      narration}
+              {:kontor.transaction/external-id    external-id
+               :kontor.transaction/journal        jnl
+               :kontor.transaction/effective-date some-date
+               :kontor.transaction/partner        prt
+               :kontor.transaction/narration      narration}
               :postings
-              [{:posting/account rec :posting/amount  amount :posting/commodity eur}
-               {:posting/account rev :posting/amount  (- amount) :posting/commodity eur}]}
+              [{:kontor.posting/account rec :kontor.posting/amount  amount :kontor.posting/commodity eur}
+               {:kontor.posting/account rev :kontor.posting/amount  (- amount) :kontor.posting/commodity eur}]}
              {:vt-from some-date})
         db' (d/db conn)
-        tx-eid (:db/id (d/entity db' [:transaction/external-id external-id]))
+        tx-eid (:db/id (d/entity db' [:kontor.transaction/external-id external-id]))
         posting-eids (d/q '[:find [?p ...]
                             :in $ ?tx
-                            :where [?p :posting/transaction ?tx]]
+                            :where [?p :kontor.posting/transaction ?tx]]
                           db' tx-eid)]
     [tx-eid (vec posting-eids)]))
 
@@ -155,10 +155,10 @@
       (is (some? (:transaction r)))
       (is (= tx-eid (-> r :transaction :db/id))))
     (testing "transaction state surfaces"
-      (is (= :posted (-> r :transaction :transaction/state))))
+      (is (= :posted (-> r :transaction :kontor.transaction/state))))
     (testing "transaction effective date and partner are visible"
-      (is (= some-date (-> r :transaction :transaction/effective-date)))
-      (is (some? (-> r :transaction :transaction/partner))))))
+      (is (= some-date (-> r :transaction :kontor.transaction/effective-date)))
+      (is (some? (-> r :transaction :kontor.transaction/partner))))))
 
 (deftest explain-posting-walks-status-history
   (testing "Status changes on the originating tx surface in :status-history."

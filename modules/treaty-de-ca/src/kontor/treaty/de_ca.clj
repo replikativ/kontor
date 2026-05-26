@@ -151,7 +151,7 @@
         cad-refundable (round2 (* over-treaty-refundable fx-rate))
         cad-gross      (+ cad-net-cash cad-creditable cad-refundable)]
     (book/entry! conn
-      {:journal        (or journal [:journal/code "CR"])  ; default to Cash Receipts
+      {:journal        (or journal [:kontor.journal/code "CR"])  ; default to Cash Receipts
        :commodity      [:kontor.commodity/symbol "CAD"]
        :effective-date effective-date
        :entity         entity

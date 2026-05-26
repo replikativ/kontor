@@ -129,7 +129,7 @@
     (d/transact conn
                 [{:kontor.commodity/symbol "JPY" :kontor.commodity/name "Japanese Yen"
                   :kontor.commodity/precision 0}
-                 {:journal/code "SALE" :journal/type :sale}
+                 {:kontor.journal/code "SALE" :kontor.journal/type :sale}
                  {:kontor.account/path "Income:給料" :kontor.account/type :income}
                  {:kontor.account/path "Assets:銀行"  :kontor.account/type :asset}])
     conn))

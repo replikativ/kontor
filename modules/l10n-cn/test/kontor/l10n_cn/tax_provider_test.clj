@@ -92,18 +92,18 @@
                          {:db db :date d1}))]
     (testing "13% → one credit of 130 to 2221.01.01"
       (let [p (first (post {:rate 0.13M}))]
-        (is (= a2221 (:posting/account p)))
-        (is (== -130M (:posting/amount p)) "output VAT is a credit")
-        (is (= :tax (:posting/display-type p)))))
+        (is (= a2221 (:kontor.posting/account p)))
+        (is (== -130M (:kontor.posting/amount p)) "output VAT is a credit")
+        (is (= :tax (:kontor.posting/display-type p)))))
     (testing "9% and 6% also route to the SAME 2221.01.01 (MOF-canonical)"
-      (is (= a2221 (:posting/account (first (post {:rate 0.09M})))))
-      (is (== -90M (:posting/amount (first (post {:rate 0.09M})))))
-      (is (= a2221 (:posting/account (first (post {:rate 0.06M})))))
-      (is (== -60M (:posting/amount (first (post {:rate 0.06M}))))))
+      (is (= a2221 (:kontor.posting/account (first (post {:rate 0.09M})))))
+      (is (== -90M (:kontor.posting/amount (first (post {:rate 0.09M})))))
+      (is (= a2221 (:kontor.posting/account (first (post {:rate 0.06M})))))
+      (is (== -60M (:kontor.posting/amount (first (post {:rate 0.06M}))))))
     (testing "small-scale 1% → 10 to 2221.01.01"
       (let [p (first (post {:rate 0.01M :taxpayer-status :small-scale}))]
-        (is (= a2221 (:posting/account p)))
-        (is (== -10M (:posting/amount p)))))
+        (is (= a2221 (:kontor.posting/account p)))
+        (is (== -10M (:kontor.posting/amount p)))))
     (testing "zero-rated / exempt / 0% → no leg"
       (is (= [] (post {:tax-status :zero-rated})))
       (is (= [] (post {:tax-status :exempt})))
@@ -126,7 +126,7 @@
     (is (= 3 (count raw)) "three lines → three raw output-VAT postings")
     (is (= 1 (count agg)) "aggregated to one 2221.01.01 posting")
     ;; 650 + 270 + 120 = 1040
-    (is (== -1040M (:posting/amount (first agg)))
+    (is (== -1040M (:kontor.posting/amount (first agg)))
         "all rates consolidated on the single MOF account")))
 
 (deftest builder-honours-output-vat-code-override
@@ -141,8 +141,8 @@
                        prov bld
                        {:base 1000M :rate 0.13M :commodity cny}
                        {:db db :date d1}))]
-      (is (= a99 (:posting/account p)) "routes to the overridden account")
-      (is (== -130M (:posting/amount p))))))
+      (is (= a99 (:kontor.posting/account p)) "routes to the overridden account")
+      (is (== -130M (:kontor.posting/amount p))))))
 
 (deftest builder-throws-on-missing-account
   (let [conn (core/create-test-db)

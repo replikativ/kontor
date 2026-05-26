@@ -45,24 +45,24 @@
              :bonus-accrual-liability-account :acct/bonus-accrual-liab
              :amount 300000M
              :commodity :kontor.commodity/jpy
-             :journal :journal/payroll
+             :journal :kontor.journal/payroll
              :effective-date #inst "2026-05-31"
              :tx-code "BONUS-ACC-2026-05"})
-        postings (filter #(contains? % :posting/account) tx)]
+        postings (filter #(contains? % :kontor.posting/account) tx)]
     (testing "Two posting legs (expense + liability)"
       (is (= 2 (count postings))))
     (testing "Sum to zero"
-      (let [sum (reduce (fn [a {:keys [posting/amount]}]
+      (let [sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                           (.add ^java.math.BigDecimal a
                                 ^java.math.BigDecimal amount))
                         0M postings)]
         (is (zero? (.compareTo ^java.math.BigDecimal sum 0M)))))
     (testing "Expense leg is positive (DR)"
-      (let [exp (first (filter #(= :acct/bonus-accrual-exp (:posting/account %)) postings))]
-        (is (= 300000M (:posting/amount exp)))))
+      (let [exp (first (filter #(= :acct/bonus-accrual-exp (:kontor.posting/account %)) postings))]
+        (is (= 300000M (:kontor.posting/amount exp)))))
     (testing "Liability leg is negative (CR)"
-      (let [liab (first (filter #(= :acct/bonus-accrual-liab (:posting/account %)) postings))]
-        (is (= -300000M (:posting/amount liab)))))))
+      (let [liab (first (filter #(= :acct/bonus-accrual-liab (:kontor.posting/account %)) postings))]
+        (is (= -300000M (:kontor.posting/amount liab)))))))
 
 (deftest bonus-accrual-rounds-fractional
   (let [tx (accrual/bonus-accrual-tx-data
@@ -70,20 +70,20 @@
              :bonus-accrual-liability-account :acct/bonus-liab
              :amount 333333.6667M
              :commodity :kontor.commodity/jpy
-             :journal :journal/payroll
+             :journal :kontor.journal/payroll
              :effective-date #inst "2026-05-31"
              :tx-code "BONUS-FRAC-2026-05"})
-        postings (filter #(contains? % :posting/account) tx)
-        sum (reduce (fn [a {:keys [posting/amount]}]
+        postings (filter #(contains? % :kontor.posting/account) tx)
+        sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                       (.add ^java.math.BigDecimal a
                             ^java.math.BigDecimal amount))
                     0M postings)]
     (testing "Each leg rounded to whole yen"
       (is (every? (fn [p]
                     (zero? (.compareTo
-                            ^java.math.BigDecimal (:posting/amount p)
+                            ^java.math.BigDecimal (:kontor.posting/amount p)
                             (.setScale ^java.math.BigDecimal
-                             (:posting/amount p) 0))))
+                             (:kontor.posting/amount p) 0))))
                   postings)))
     (testing "Sum still zero after rounding"
       (is (zero? (.compareTo ^java.math.BigDecimal sum 0M))))))
@@ -96,7 +96,7 @@
                           ;; missing :bonus-accrual-liability-account
                           :amount 300000M
                           :commodity :kontor.commodity/jpy
-                          :journal :journal/payroll
+                          :journal :kontor.journal/payroll
                           :effective-date #inst "2026-05-31"
                           :tx-code "X"}))))
 
@@ -110,50 +110,50 @@
     :si-liability-account :acct/si-liab
     :amount 25000M
     :commodity :kontor.commodity/jpy
-    :journal :journal/payroll
+    :journal :kontor.journal/payroll
     :effective-date #inst "2026-05-31"
     :tx-code "SI-TEST"}))
 
 (deftest health-insurance-accrual-balances
   (let [tx (si-tx accrual/health-insurance-accrual-tx-data)
-        postings (filter #(contains? % :posting/account) tx)
-        sum (reduce (fn [a {:keys [posting/amount]}]
+        postings (filter #(contains? % :kontor.posting/account) tx)
+        sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                       (.add ^java.math.BigDecimal a
                             ^java.math.BigDecimal amount))
                     0M postings)]
     (is (zero? (.compareTo ^java.math.BigDecimal sum 0M)))
     (testing "Narration includes 健康保険料"
-      (is (some #(re-find #"健康保険料" (:posting/narration %)) postings)))))
+      (is (some #(re-find #"健康保険料" (:kontor.posting/narration %)) postings)))))
 
 (deftest pension-accrual-balances
   (let [tx (si-tx accrual/pension-accrual-tx-data)
-        postings (filter #(contains? % :posting/account) tx)]
+        postings (filter #(contains? % :kontor.posting/account) tx)]
     (testing "Two legs that sum to zero"
       (is (= 2 (count postings)))
       (is (zero? (.compareTo
                   ^java.math.BigDecimal
-                  (reduce (fn [a {:keys [posting/amount]}]
+                  (reduce (fn [a {:kontor.posting/keys [amount]}]
                             (.add ^java.math.BigDecimal a
                                   ^java.math.BigDecimal amount))
                           0M postings) 0M))))
     (testing "Narration includes 厚生年金保険料"
-      (is (some #(re-find #"厚生年金保険料" (:posting/narration %)) postings)))))
+      (is (some #(re-find #"厚生年金保険料" (:kontor.posting/narration %)) postings)))))
 
 (deftest employment-insurance-accrual-balances
   (let [tx (si-tx accrual/employment-insurance-accrual-tx-data)
-        postings (filter #(contains? % :posting/account) tx)]
+        postings (filter #(contains? % :kontor.posting/account) tx)]
     (testing "Two legs"
       (is (= 2 (count postings))))
     (testing "Narration includes 雇用保険料"
-      (is (some #(re-find #"雇用保険料" (:posting/narration %)) postings)))))
+      (is (some #(re-find #"雇用保険料" (:kontor.posting/narration %)) postings)))))
 
 (deftest long-term-care-accrual-balances
   (let [tx (si-tx accrual/long-term-care-accrual-tx-data)
-        postings (filter #(contains? % :posting/account) tx)]
+        postings (filter #(contains? % :kontor.posting/account) tx)]
     (testing "Two legs"
       (is (= 2 (count postings))))
     (testing "Narration includes 介護保険料"
-      (is (some #(re-find #"介護保険料" (:posting/narration %)) postings)))))
+      (is (some #(re-find #"介護保険料" (:kontor.posting/narration %)) postings)))))
 
 (deftest accrual-rejects-missing-amount
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
@@ -163,7 +163,7 @@
                           :si-liability-account :acct/si-liab
                           ;; missing :amount
                           :commodity :kontor.commodity/jpy
-                          :journal :journal/payroll
+                          :journal :kontor.journal/payroll
                           :effective-date #inst "2026-05-31"
                           :tx-code "X"}))))
 
@@ -173,10 +173,10 @@
              :si-liability-account :acct/si-liab
              :amount 25000M
              :commodity :kontor.commodity/jpy
-             :journal :journal/payroll
+             :journal :kontor.journal/payroll
              :effective-date #inst "2026-05-31"
              :tx-code "SI-TEST"
              :ledger :ledger/jp-jgaap})
-        postings (filter #(contains? % :posting/account) tx)]
+        postings (filter #(contains? % :kontor.posting/account) tx)]
     (testing "Every leg carries the supplied :ledger"
-      (is (every? #(= :ledger/jp-jgaap (:posting/ledger %)) postings)))))
+      (is (every? #(= :ledger/jp-jgaap (:kontor.posting/ledger %)) postings)))))

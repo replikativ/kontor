@@ -12,7 +12,7 @@
      90+          — > 90 days past due
 
    Sits on top of `reconciliation/open-receivables-by-tx` and the
-   `:transaction/due-date` attr (set by `payment-term.clj`)."
+   `:kontor.transaction/due-date` attr (set by `payment-term.clj`)."
   (:require [datahike.api :as d]
             [kontor.reconciliation :as recon])
   (:import [java.time Instant ZoneOffset]
@@ -73,12 +73,12 @@
          (mapv (fn [{:keys [transaction-eid] :as o}]
                  (let [tx (d/pull db
                                   [:db/id
-                                   :transaction/due-date
-                                   {:transaction/partner [:db/id :kontor.partner/name]}]
+                                   :kontor.transaction/due-date
+                                   {:kontor.transaction/partner [:db/id :kontor.partner/name]}]
                                   transaction-eid)
-                       due (or (:transaction/due-date tx) (:date o))
+                       due (or (:kontor.transaction/due-date tx) (:date o))
                        overdue (if due (days-between due as-of) 0)
-                       partner (:transaction/partner tx)]
+                       partner (:kontor.transaction/partner tx)]
                    (assoc o
                           :due-date due
                           :days-overdue overdue

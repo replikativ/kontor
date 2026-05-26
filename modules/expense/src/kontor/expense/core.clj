@@ -354,12 +354,12 @@
         ;; Debit postings — one per line.
         debit-postings
         (mapv (fn [l]
-                (cond-> {:posting/account (:db/id (:expense-line/expense-account l))
-                         :posting/amount (:expense-line/amount l)
-                         :posting/commodity (:db/id (:expense-line/commodity l))
-                         :posting/posted-at pa}
+                (cond-> {:kontor.posting/account (:db/id (:expense-line/expense-account l))
+                         :kontor.posting/amount (:expense-line/amount l)
+                         :kontor.posting/commodity (:db/id (:expense-line/commodity l))
+                         :kontor.posting/posted-at pa}
                   (and cost-center-plan (:expense-line/cost-center l))
-                  (assoc :posting/analytic-distributions
+                  (assoc :kontor.posting/analytic-distributions
                          [{:analytic-distribution/plan cost-center-plan
                            :analytic-distribution/account
                            (:db/id (:expense-line/cost-center l))
@@ -371,21 +371,21 @@
              (group-by (juxt :expense-line/payment-mode
                              #(:db/id (:expense-line/commodity %))))
              (mapv (fn [[[mode commodity] grp]]
-                     {:posting/account (credit-account-for mode opts)
-                      :posting/amount (.negate ^BigDecimal
+                     {:kontor.posting/account (credit-account-for mode opts)
+                      :kontor.posting/amount (.negate ^BigDecimal
                                        (reduce (fn [^BigDecimal a l]
                                                  (.add a (:expense-line/amount l)))
                                                0M grp))
-                      :posting/commodity commodity
-                      :posting/posted-at pa})))
+                      :kontor.posting/commodity commodity
+                      :kontor.posting/posted-at pa})))
         tx-data (posting/build-transaction
-                 {:transaction {:transaction/journal journal
-                                :transaction/effective-date pa
-                                :transaction/state :posted
-                                :transaction/posted-at pa
-                                :transaction/source
+                 {:transaction {:kontor.transaction/journal journal
+                                :kontor.transaction/effective-date pa
+                                :kontor.transaction/state :posted
+                                :kontor.transaction/posted-at pa
+                                :kontor.transaction/source
                                 (str "expense-report:" (:expense-report/code r))
-                                :transaction/narration
+                                :kontor.transaction/narration
                                 (str "Expense report " (:expense-report/code r))}
                   :postings (into debit-postings credit-postings)})
         status-tx (sm/record-status-change-tx-data
@@ -408,11 +408,11 @@
    credit legs are grouped by `(payment-mode, commodity)` —
    `:own-account` → `:reimbursement-payable-account`,
    `:company-account` → `:card-clearing-account`. Stamps
-   `:transaction/source` = `\"expense-report:<code>\"` and links
+   `:kontor.transaction/source` = `\"expense-report:<code>\"` and links
    `:expense-report/transaction`. Routes through the gate (ADR-068).
 
    When `:cost-center-plan` is supplied, a line's `:cost-center` is
-   attached to its debit posting as a `:posting/analytic-distributions`
+   attached to its debit posting as a `:kontor.posting/analytic-distributions`
    entry (100%); without it the cost-center stays recorded on the
    line only (a documented follow-up).
 
@@ -465,21 +465,21 @@
                        (let [total (reduce (fn [^BigDecimal a l]
                                              (.add a (:expense-line/amount l)))
                                            0M grp)]
-                         [{:posting/account reimbursement-payable-account
-                           :posting/amount total
-                           :posting/commodity commodity
-                           :posting/posted-at pa}
-                          {:posting/account cash-account
-                           :posting/amount (.negate ^BigDecimal total)
-                           :posting/commodity commodity
-                           :posting/posted-at pa}])))
+                         [{:kontor.posting/account reimbursement-payable-account
+                           :kontor.posting/amount total
+                           :kontor.posting/commodity commodity
+                           :kontor.posting/posted-at pa}
+                          {:kontor.posting/account cash-account
+                           :kontor.posting/amount (.negate ^BigDecimal total)
+                           :kontor.posting/commodity commodity
+                           :kontor.posting/posted-at pa}])))
              vec)
         tx-data (posting/build-transaction
-                 {:transaction {:transaction/journal journal
-                                :transaction/effective-date pa
-                                :transaction/state :posted
-                                :transaction/posted-at pa
-                                :transaction/narration "Expense reimbursement"}
+                 {:transaction {:kontor.transaction/journal journal
+                                :kontor.transaction/effective-date pa
+                                :kontor.transaction/state :posted
+                                :kontor.transaction/posted-at pa
+                                :kontor.transaction/narration "Expense reimbursement"}
                   :postings by-commodity})
         status-tx (sm/record-status-change-tx-data
                    db (cond-> {:entity report

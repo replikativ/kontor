@@ -125,7 +125,7 @@
                        :code code}))))
 
 (defn- journal-by-code [db code]
-  (:db/id (d/entity db [:journal/code code])))
+  (:db/id (d/entity db [:kontor.journal/code code])))
 
 (defn- commodity-by-symbol [db sym]
   (:db/id (d/entity db [:kontor.commodity/symbol sym])))
@@ -252,10 +252,10 @@
                                (bd-add acc (:net r)))
                              0M rows)
                  acct (require-account db acct-code)]]
-       {:posting/account acct
-        :posting/amount (.negate ^java.math.BigDecimal net)
-        :posting/commodity commodity-eid
-        :posting/posted-at date}))))
+       {:kontor.posting/account acct
+        :kontor.posting/amount (.negate ^java.math.BigDecimal net)
+        :kontor.posting/commodity commodity-eid
+        :kontor.posting/posted-at date}))))
 
 (defn- iva-postings
   "Group taxable lines by (iva-rate) and emit one credit posting per
@@ -271,10 +271,10 @@
                                    0M rows)
                  code (iva-code-for-rate rate cash-sale? codes)]
            :when (nonzero? iva-total)]
-       {:posting/account (require-account db code)
-        :posting/amount (.negate ^java.math.BigDecimal iva-total)
-        :posting/commodity commodity-eid
-        :posting/posted-at date}))))
+       {:kontor.posting/account (require-account db code)
+        :kontor.posting/amount (.negate ^java.math.BigDecimal iva-total)
+        :kontor.posting/commodity commodity-eid
+        :kontor.posting/posted-at date}))))
 
 (defn- ieps-posting
   "Single IEPS credit posting summed across lines, routed cobrado vs
@@ -287,10 +287,10 @@
       (let [code (if cash-sale?
                    (:ieps-cobrado-code codes)
                    (:ieps-no-cobrado-code codes))]
-        {:posting/account (require-account db code)
-         :posting/amount (.negate ^java.math.BigDecimal total)
-         :posting/commodity commodity-eid
-         :posting/posted-at date}))))
+        {:kontor.posting/account (require-account db code)
+         :kontor.posting/amount (.negate ^java.math.BigDecimal total)
+         :kontor.posting/commodity commodity-eid
+         :kontor.posting/posted-at date}))))
 
 (defn- retencion-postings
   "Per-retención-type DEBIT postings for amounts withheld by the
@@ -305,17 +305,17 @@
                         (bd-add acc (:retencion-isr r))) 0M breakdown)]
     (cond-> []
       (nonzero? iva-r)
-      (conj {:posting/account
+      (conj {:kontor.posting/account
              (require-account db (:retencion-iva-cobrar-code codes))
-             :posting/amount iva-r
-             :posting/commodity commodity-eid
-             :posting/posted-at date})
+             :kontor.posting/amount iva-r
+             :kontor.posting/commodity commodity-eid
+             :kontor.posting/posted-at date})
       (nonzero? isr-r)
-      (conj {:posting/account
+      (conj {:kontor.posting/account
              (require-account db (:retencion-isr-cobrar-code codes))
-             :posting/amount isr-r
-             :posting/commodity commodity-eid
-             :posting/posted-at date}))))
+             :kontor.posting/amount isr-r
+             :kontor.posting/commodity commodity-eid
+             :kontor.posting/posted-at date}))))
 
 (defn- debit-account-code
   "Resolve the debit-leg account code: cash / bank / export-AR / AR
@@ -373,7 +373,7 @@
                             recognised at issuance
      :invoice/bank-sale?    when true, debit Bancos (102) instead of AR
      :invoice/export?       when true, debit Clientes Extranjero (105.02)
-     :invoice/buyer         partner ref (kernel :transaction/partner)
+     :invoice/buyer         partner ref (kernel :kontor.transaction/partner)
      :invoice/journal       journal code override (default \"INV\")
      :invoice/narration     transaction narration (default = external-id)
 
@@ -419,18 +419,18 @@
         ;; Debit (AR / cash / bank) carries the NET cash position:
         ;; gross minus retención withheld at source.
         debit-amount (.subtract gross total-ret)
-        debit-post {:posting/account debit-acct
-                    :posting/amount debit-amount
-                    :posting/commodity commodity-eid
-                    :posting/posted-at issue-date}
-        tx-base (cond-> {:transaction/external-id external-id
-                         :transaction/journal jnl
-                         :transaction/effective-date issue-date
-                         :transaction/narration (or (:invoice/narration invoice)
+        debit-post {:kontor.posting/account debit-acct
+                    :kontor.posting/amount debit-amount
+                    :kontor.posting/commodity commodity-eid
+                    :kontor.posting/posted-at issue-date}
+        tx-base (cond-> {:kontor.transaction/external-id external-id
+                         :kontor.transaction/journal jnl
+                         :kontor.transaction/effective-date issue-date
+                         :kontor.transaction/narration (or (:invoice/narration invoice)
                                                     external-id)
-                         :transaction/state :posted
-                         :transaction/posted-at issue-date}
-                  buyer (assoc :transaction/partner buyer))
+                         :kontor.transaction/state :posted
+                         :kontor.transaction/posted-at issue-date}
+                  buyer (assoc :kontor.transaction/partner buyer))
         all-postings (-> [debit-post]
                          (into ret-posts)
                          (into rev-posts)

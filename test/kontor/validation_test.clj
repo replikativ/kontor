@@ -34,14 +34,14 @@
                {:db/id -4 :kontor.account/path "Equity:Opening"
                 :kontor.account/name "Opening balance"
                 :kontor.account/type :equity}
-               {:db/id -5 :journal/code "INV" :journal/name "Customer invoices"
-                :journal/type :sale :journal/active true}])
+               {:db/id -5 :kontor.journal/code "INV" :kontor.journal/name "Customer invoices"
+                :kontor.journal/type :sale :kontor.journal/active true}])
   (let [db (d/db conn)]
     {:eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
      :rec (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
      :rev (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
      :opn (:db/id (d/entity db [:kontor.account/path "Equity:Opening"]))
-     :jnl (:db/id (d/entity db [:journal/code "INV"]))}))
+     :jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))}))
 
 ;; ============================================================================
 ;; Installation
@@ -68,13 +68,13 @@
         {:keys [eur rec rev jnl]} (catalog! conn {})
         tx-data (posting/build-transaction
                  {:transaction
-                  {:transaction/external-id    "INV-2026-0001"
-                   :transaction/journal        jnl
-                   :transaction/effective-date some-date
-                   :transaction/narration      "Active accounts only"}
+                  {:kontor.transaction/external-id    "INV-2026-0001"
+                   :kontor.transaction/journal        jnl
+                   :kontor.transaction/effective-date some-date
+                   :kontor.transaction/narration      "Active accounts only"}
                   :postings
-                  [{:posting/account rec :posting/amount  100M :posting/commodity eur}
-                   {:posting/account rev :posting/amount -100M :posting/commodity eur}]})]
+                  [{:kontor.posting/account rec :kontor.posting/amount  100M :kontor.posting/commodity eur}
+                   {:kontor.posting/account rev :kontor.posting/amount -100M :kontor.posting/commodity eur}]})]
     (is (some? (v/transact-with-validation conn tx-data))
         "Both accounts active → invariant holds, transact returns a report.")))
 
@@ -87,13 +87,13 @@
           {:keys [eur opn rev jnl]} (catalog! conn {})
           tx-data (posting/build-transaction
                    {:transaction
-                    {:transaction/external-id    "OPN-2026-0001"
-                     :transaction/journal        jnl
-                     :transaction/effective-date some-date
-                     :transaction/narration      "Opening balance"}
+                    {:kontor.transaction/external-id    "OPN-2026-0001"
+                     :kontor.transaction/journal        jnl
+                     :kontor.transaction/effective-date some-date
+                     :kontor.transaction/narration      "Opening balance"}
                     :postings
-                    [{:posting/account opn :posting/amount  500M :posting/commodity eur}
-                     {:posting/account rev :posting/amount -500M :posting/commodity eur}]})]
+                    [{:kontor.posting/account opn :kontor.posting/amount  500M :kontor.posting/commodity eur}
+                     {:kontor.posting/account rev :kontor.posting/amount -500M :kontor.posting/commodity eur}]})]
       (is (some? (v/transact-with-validation conn tx-data))
           "Account 'opn' has no :kontor.account/active attribute; invariant passes."))))
 
@@ -103,13 +103,13 @@
         {:keys [eur rec rev jnl]} (catalog! conn {:active-receivable? false})
         tx-data (posting/build-transaction
                  {:transaction
-                  {:transaction/external-id    "INV-2026-BAD"
-                   :transaction/journal        jnl
-                   :transaction/effective-date some-date
-                   :transaction/narration      "Posting against inactive"}
+                  {:kontor.transaction/external-id    "INV-2026-BAD"
+                   :kontor.transaction/journal        jnl
+                   :kontor.transaction/effective-date some-date
+                   :kontor.transaction/narration      "Posting against inactive"}
                   :postings
-                  [{:posting/account rec :posting/amount  100M :posting/commodity eur}
-                   {:posting/account rev :posting/amount -100M :posting/commodity eur}]})]
+                  [{:kontor.posting/account rec :kontor.posting/amount  100M :kontor.posting/commodity eur}
+                   {:kontor.posting/account rev :kontor.posting/amount -100M :kontor.posting/commodity eur}]})]
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo #"Invariant mismatch"
          (v/transact-with-validation conn tx-data))
@@ -137,15 +137,15 @@
      :kontor.account/commodity -1}                              ;; EUR-typed
     {:db/id -5 :kontor.account/path "Equity:Polymorphic" :kontor.account/name "Suspense"
      :kontor.account/type :equity :kontor.account/active true}         ;; no commodity
-    {:db/id -6 :journal/code "INV" :journal/name "J"
-     :journal/type :sale :journal/active true}])
+    {:db/id -6 :kontor.journal/code "INV" :kontor.journal/name "J"
+     :kontor.journal/type :sale :kontor.journal/active true}])
   (let [db (d/db conn)]
     {:eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
      :usd (:db/id (d/entity db [:kontor.commodity/symbol "USD"]))
      :rec (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
      :rev (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
      :sus (:db/id (d/entity db [:kontor.account/path "Equity:Polymorphic"]))
-     :jnl (:db/id (d/entity db [:journal/code "INV"]))}))
+     :jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))}))
 
 (deftest commodity-match-passes-when-postings-match-account-commodity
   (let [conn (core/create-test-db)
@@ -153,13 +153,13 @@
         {:keys [eur rec rev jnl]} (catalog-with-typed-accounts! conn)
         tx-data (posting/build-transaction
                  {:transaction
-                  {:transaction/external-id    "OK-EUR"
-                   :transaction/journal        jnl
-                   :transaction/effective-date some-date
-                   :transaction/narration      "EUR posting against EUR-typed accounts"}
+                  {:kontor.transaction/external-id    "OK-EUR"
+                   :kontor.transaction/journal        jnl
+                   :kontor.transaction/effective-date some-date
+                   :kontor.transaction/narration      "EUR posting against EUR-typed accounts"}
                   :postings
-                  [{:posting/account rec :posting/amount  100M :posting/commodity eur}
-                   {:posting/account rev :posting/amount -100M :posting/commodity eur}]})]
+                  [{:kontor.posting/account rec :kontor.posting/amount  100M :kontor.posting/commodity eur}
+                   {:kontor.posting/account rev :kontor.posting/amount -100M :kontor.posting/commodity eur}]})]
     (is (some? (v/transact-with-validation conn tx-data)))))
 
 (deftest commodity-match-rejects-mismatch
@@ -168,14 +168,14 @@
         {:keys [usd rec rev jnl]} (catalog-with-typed-accounts! conn)
         tx-data (posting/build-transaction
                  {:transaction
-                  {:transaction/external-id    "BAD-USD"
-                   :transaction/journal        jnl
-                   :transaction/effective-date some-date
-                   :transaction/narration      "USD posting against EUR-typed accounts"}
+                  {:kontor.transaction/external-id    "BAD-USD"
+                   :kontor.transaction/journal        jnl
+                   :kontor.transaction/effective-date some-date
+                   :kontor.transaction/narration      "USD posting against EUR-typed accounts"}
                   :postings
                   ;; Both postings are USD, both accounts demand EUR
-                  [{:posting/account rec :posting/amount  100M :posting/commodity usd}
-                   {:posting/account rev :posting/amount -100M :posting/commodity usd}]})]
+                  [{:kontor.posting/account rec :kontor.posting/amount  100M :kontor.posting/commodity usd}
+                   {:kontor.posting/account rev :kontor.posting/amount -100M :kontor.posting/commodity usd}]})]
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo #"Invariant mismatch"
          (v/transact-with-validation conn tx-data))
@@ -192,30 +192,30 @@
           ;; books, but the invariant must allow it on the polymorphic side.
           tx-data (posting/build-transaction
                    {:transaction
-                    {:transaction/external-id    "POLY"
-                     :transaction/journal        jnl
-                     :transaction/effective-date some-date
-                     :transaction/narration      "Polymorphic suspense"}
+                    {:kontor.transaction/external-id    "POLY"
+                     :kontor.transaction/journal        jnl
+                     :kontor.transaction/effective-date some-date
+                     :kontor.transaction/narration      "Polymorphic suspense"}
                     :postings
                     ;; All same-currency to keep sum-to-zero satisfied;
                     ;; the polymorphic account accepts USD, the receivable
                     ;; demands EUR — we use EUR for both to stay valid.
-                    [{:posting/account rec :posting/amount  100M :posting/commodity eur}
-                     {:posting/account sus :posting/amount -100M :posting/commodity eur}]})
+                    [{:kontor.posting/account rec :kontor.posting/amount  100M :kontor.posting/commodity eur}
+                     {:kontor.posting/account sus :kontor.posting/amount -100M :kontor.posting/commodity eur}]})
           tx-data-usd (posting/build-transaction
                        {:transaction
-                        {:transaction/external-id    "POLY-USD"
-                         :transaction/journal        jnl
-                         :transaction/effective-date some-date
-                         :transaction/narration      "Polymorphic accepts USD"}
+                        {:kontor.transaction/external-id    "POLY-USD"
+                         :kontor.transaction/journal        jnl
+                         :kontor.transaction/effective-date some-date
+                         :kontor.transaction/narration      "Polymorphic accepts USD"}
                         :postings
                         ;; This would fail on the receivable side (EUR
                         ;; demanded vs USD posted) — so use TWO polymorphic
                         ;; postings. We only have one polymorphic account
                         ;; in the fixture, so use it on both sides via
                         ;; opposite signs (an unusual but legal book).
-                        [{:posting/account sus :posting/amount  50M :posting/commodity usd}
-                         {:posting/account sus :posting/amount -50M :posting/commodity usd}]})]
+                        [{:kontor.posting/account sus :kontor.posting/amount  50M :kontor.posting/commodity usd}
+                         {:kontor.posting/account sus :kontor.posting/amount -50M :kontor.posting/commodity usd}]})]
       (is (some? (v/transact-with-validation conn tx-data))
           "EUR posting on EUR-typed receivable + EUR-polymorphic suspense passes.")
       (is (some? (v/transact-with-validation conn tx-data-usd))

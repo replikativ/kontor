@@ -42,17 +42,17 @@
 
    Each emitted event is a plain map:
 
-       {:event/kind       — :transaction/committed (currently the only kind)
+       {:event/kind       — :kontor.transaction/committed (currently the only kind)
         :event/tx-report  — the datahike tx-report (carries :db-after,
                             :tx-data, :tempids)
         :event/conn       — the connection the commit happened on
         :event/transactions  — vec of pulled :transaction maps that
                             were created or mutated in this tx (empty
-                            if no :transaction/* ops were present)
+                            if no :kontor.transaction/* ops were present)
         :event/at         — java.util.Date of dispatch}
 
    Future kinds (`:status-history/changed`, `:audit-doc/created`,
-   `:posting/posted`) compose orthogonally; consumers filter on
+   `:kontor.posting/posted`) compose orthogonally; consumers filter on
    `:event/kind` in their handler.
 
    ## Wiring
@@ -155,16 +155,16 @@
 
 (defn- transactions-in-tx-data
   "Pull the :transaction entities affected by `tx-data` from `db-after`.
-   Walks the tx-data datoms for any `:transaction/*` attribute touched
+   Walks the tx-data datoms for any `:kontor.transaction/*` attribute touched
    (created or mutated) and pulls each distinct eid. Empty when no
-   :transaction/* ops are present."
+   :kontor.transaction/* ops are present."
   [db-after tx-data]
   (let [eids
         (->> tx-data
              (keep (fn [op]
                      (let [a (datom-attr op)]
                        (when (and (keyword? a)
-                                  (= "transaction" (namespace a)))
+                                  (= "kontor.transaction" (namespace a)))
                          (datom-entity op)))))
              distinct
              vec)]
@@ -173,16 +173,16 @@
                  (try
                    (d/pull db-after
                            [:db/id
-                            :transaction/external-id
-                            :transaction/journal
-                            :transaction/effective-date
-                            :transaction/narration
-                            :transaction/partner
-                            :transaction/state
-                            :transaction/posted-at
-                            :transaction/document-type
-                            :transaction/clearance-token
-                            :transaction/clearance-format]
+                            :kontor.transaction/external-id
+                            :kontor.transaction/journal
+                            :kontor.transaction/effective-date
+                            :kontor.transaction/narration
+                            :kontor.transaction/partner
+                            :kontor.transaction/state
+                            :kontor.transaction/posted-at
+                            :kontor.transaction/document-type
+                            :kontor.transaction/clearance-token
+                            :kontor.transaction/clearance-format]
                            eid)
                    (catch Throwable _ nil))))
          (filterv :db/id))))
@@ -192,7 +192,7 @@
    so consumers writing their own dispatch path can build the same
    shape. ADR-092."
   [conn tx-report]
-  {:event/kind         :transaction/committed
+  {:event/kind         :kontor.transaction/committed
    :event/conn         conn
    :event/tx-report    tx-report
    :event/transactions (transactions-in-tx-data (:db-after tx-report)
@@ -234,7 +234,7 @@
   "A `:commit` fn for `kontor.process/run-process` (and a drop-in
    replacement for any other commit fn). Runs the kernel's
    `transact-with-validation` gate; if it returns a tx-report,
-   dispatches a `:transaction/committed` event to the bus.
+   dispatches a `:kontor.transaction/committed` event to the bus.
 
    Use:
 

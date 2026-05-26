@@ -11,7 +11,7 @@
 
    Per **ADR-025** the CFDI envelope is one root + N stacked
    complementos. The emitter assembles the `<cfdi:Complemento>` block
-   from `:transaction/complementos` sorted by `:complemento/sequence`,
+   from `:kontor.transaction/complementos` sorted by `:complemento/sequence`,
    splicing each payload XML into the parent in order.
 
    ## Known emit gaps (deferred)
@@ -193,7 +193,7 @@
 
    `:cfdi/complementos` is the ordered list of complemento XML payloads
    to splice into `<cfdi:Complemento>` per ADR-025 — typically built
-   from `:transaction/complementos` ordered by `:complemento/sequence`."
+   from `:kontor.transaction/complementos` ordered by `:complemento/sequence`."
   [{:keys [cfdi/version cfdi/serie cfdi/folio cfdi/fecha
            cfdi/forma-pago cfdi/no-certificado cfdi/certificado
            cfdi/subtotal cfdi/descuento cfdi/moneda cfdi/tipo-cambio
@@ -245,7 +245,7 @@
   (xml/emit-str doc))
 
 (defn assemble-from-transaction
-  "Build the CFDI envelope from a transaction's `:transaction/complementos`,
+  "Build the CFDI envelope from a transaction's `:kontor.transaction/complementos`,
    ordered by `:complemento/sequence`. Returns a CFDI XML string.
 
    This is the kernel/ADR-025 integration point: complementos stored

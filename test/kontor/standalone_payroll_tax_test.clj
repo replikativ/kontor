@@ -21,8 +21,8 @@
     (d/transact conn
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                   :kontor.commodity/precision 2}
-                 {:journal/code "GEN" :journal/type :general}
-                 {:journal/code "PUR" :journal/type :purchase}
+                 {:kontor.journal/code "GEN" :kontor.journal/type :general}
+                 {:kontor.journal/code "PUR" :kontor.journal/type :purchase}
                  {:kontor.account/path "Expenses:Wages"   :kontor.account/code "6200"
                   :kontor.account/type :expense}
                  {:kontor.account/path "Expenses:Other"   :kontor.account/code "6900"
@@ -44,8 +44,8 @@
 (defn- sum-account [conn path]
   (reduce + 0M
           (d/q '[:find [?amt ...] :in $ ?p
-                 :where [?a :kontor.account/path ?p] [?pp :posting/account ?a]
-                 [?pp :posting/amount ?amt]]
+                 :where [?a :kontor.account/path ?p] [?pp :kontor.posting/account ?a]
+                 [?pp :kontor.posting/amount ?amt]]
                (d/db conn) path)))
 
 (deftest flat-levy-marginalizes-only-wage-coded-postings
@@ -86,7 +86,7 @@
                     {:expense-account [:kontor.account/path "Expenses:Payroll-Tax"]
                      :payable-account [:kontor.account/path
                                        "Liabilities:Payroll-Tax-Payable"]
-                     :journal   [:journal/code "GEN"]
+                     :journal   [:kontor.journal/code "GEN"]
                      :commodity eur})
           facts    (ptp/period-tax-facts provider {:period fy :conn conn})]
       (validation/transact-with-validation

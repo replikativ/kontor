@@ -66,10 +66,10 @@
                         {:db db :date d1}))]
     (testing "taxable → one credit of 100 to 21500"
       (let [p (first (post :taxable))]
-        (is (= a21500 (:posting/account p)))
-        (is (== -100M (:posting/amount p)) "output GST is a credit")
-        (is (= :tax (:posting/display-type p)))
-        (is (= aud (:posting/commodity p)))))
+        (is (= a21500 (:kontor.posting/account p)))
+        (is (== -100M (:kontor.posting/amount p)) "output GST is a credit")
+        (is (= :tax (:kontor.posting/display-type p)))
+        (is (= aud (:kontor.posting/commodity p)))))
     (testing "gst-free → no leg"
       (is (= [] (post :gst-free))))
     (testing "input-taxed → no leg"
@@ -89,7 +89,7 @@
         agg  (tpb/aggregate-postings raw)]
     (is (= 3 (count raw)) "three lines → three raw GST postings")
     (is (= 1 (count agg)) "aggregated to one 21500 posting")
-    (is (== -60M (:posting/amount (first agg))) "10% of 600")))
+    (is (== -60M (:kontor.posting/amount (first agg))) "10% of 600")))
 
 (deftest builder-honours-gst-payable-code-override
   (let [conn (fresh)
@@ -107,4 +107,4 @@
                         prov bld
                         {:base 1000M :tax-status :taxable :commodity aud}
                         {:db db :date d1}))]
-        (is (== -100M (:posting/amount p)))))))
+        (is (== -100M (:kontor.posting/amount p)))))))

@@ -12,7 +12,7 @@
         scenario in `accrual_test` already covers the parallel-ledger
         split).
      4. Attaches a `:state` analytic distribution on every wage-side
-        posting (per note 83 §4 — NOT `:posting/entity`).
+        posting (per note 83 §4 — NOT `:kontor.posting/entity`).
      5. Records the `:payroll-run` row with control totals.
 
    This test exercises the FULL kernel gate stack via
@@ -86,8 +86,8 @@
                  {:db/id "acct-1999" :kontor.account/code "1999"
                   :kontor.account/name "Unmapped Suspense"
                   :kontor.account/type :asset :kontor.account/active true}
-                 {:db/id "journal-payroll" :journal/code "PAY-US"
-                  :journal/name "Payroll (US)" :journal/type :general}
+                 {:db/id "journal-payroll" :kontor.journal/code "PAY-US"
+                  :kontor.journal/name "Payroll (US)" :kontor.journal/type :general}
                  {:db/id "period-2026-04" :period/name "2026-04"
                   :period/start #inst "2026-04-01"
                   :period/end #inst "2026-05-01"}])
@@ -141,7 +141,7 @@
         usd (ref-eid db :kontor.commodity/symbol "USD")
         gaap (ref-eid db :ledger/code "us-gaap")
         period (ref-eid db :period/name "2026-04")
-        journal (ref-eid db :journal/code "PAY-US")
+        journal (ref-eid db :kontor.journal/code "PAY-US")
         e101 (hr/employment-by-code db "E101")
         e102 (hr/employment-by-code db "E102")
         e103 (hr/employment-by-code db "E103")
@@ -186,16 +186,16 @@
                        :where [?r :payroll-run/code ?c]]
                      db' "RUN-US-2026-04-001")
         run (d/pull db' '[* {:payroll-run/payroll-transaction
-                             [:transaction/external-id
-                              {:posting/_transaction
-                               [:posting/amount :posting/account
-                                {:posting/analytic-distributions
+                             [:kontor.transaction/external-id
+                              {:kontor.posting/_transaction
+                               [:kontor.posting/amount :kontor.posting/account
+                                {:kontor.posting/analytic-distributions
                                  [:analytic-distribution/percent
                                   {:analytic-distribution/account
                                    [:analytic-account/code]}]}]}]}]
                     run-eid)
         postings (-> run :payroll-run/payroll-transaction
-                     :posting/_transaction)]
+                     :kontor.posting/_transaction)]
     (testing "the payroll-run row is created"
       (is (some? run-eid))
       (is (= :adp-gli (:payroll-run/provider-id run))))
@@ -205,17 +205,17 @@
       ;; Net 5669.75 + 6221.20 + 5903.30 = 17,794.25
       (is (= 17794.25M (:payroll-run/control-total-net run))))
     (testing "the linked :transaction balances per-(ledger, commodity)"
-      (let [sum (reduce (fn [^BigDecimal a {:keys [posting/amount]}]
+      (let [sum (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                           (.add a ^BigDecimal amount))
                         0M postings)]
         (is (zero? (.signum sum)))))
     (testing "every wage-side posting carries an :analytic-distribution to a state"
-      (let [with-dist (filter (fn [p] (seq (:posting/analytic-distributions p)))
+      (let [with-dist (filter (fn [p] (seq (:kontor.posting/analytic-distributions p)))
                               postings)]
         (is (seq with-dist))
         (let [state-codes
               (->> with-dist
-                   (mapcat :posting/analytic-distributions)
+                   (mapcat :kontor.posting/analytic-distributions)
                    (map :analytic-distribution/account)
                    (map :analytic-account/code)
                    distinct

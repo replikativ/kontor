@@ -99,10 +99,10 @@
             :where
             [?acct :kontor.account/tags ?at]
             [?at :kontor.account-tag/name ?tag]
-            [?p :posting/account ?acct]
-            [?p :posting/amount ?amount]
-            [?p :posting/transaction ?tx]
-            [?tx :transaction/effective-date ?ed]
+            [?p :kontor.posting/account ?acct]
+            [?p :kontor.posting/amount ?amount]
+            [?p :kontor.posting/transaction ?tx]
+            [?tx :kontor.transaction/effective-date ?ed]
             [(.before ^java.util.Date ?ed ?end)]
             [(.after ^java.util.Date ?ed ?start)]]
         q-with-est '[:find ?p ?amount
@@ -110,12 +110,12 @@
                      :where
                      [?acct :kontor.account/tags ?at]
                      [?at :kontor.account-tag/name ?tag]
-                     [?p :posting/account ?acct]
-                     [?p :posting/amount ?amount]
-                     [?p :posting/account-tags ?rt]
+                     [?p :kontor.posting/account ?acct]
+                     [?p :kontor.posting/amount ?amount]
+                     [?p :kontor.posting/account-tags ?rt]
                      [?rt :kontor.account-tag/name ?est]
-                     [?p :posting/transaction ?tx]
-                     [?tx :transaction/effective-date ?ed]
+                     [?p :kontor.posting/transaction ?tx]
+                     [?tx :kontor.transaction/effective-date ?ed]
                      [(.before ^java.util.Date ?ed ?end)]
                      [(.after ^java.util.Date ?ed ?start)]]
         rows (if (and establishment-code-tag (not (str/blank? establishment-code-tag)))

@@ -29,7 +29,7 @@
    AU has 8 jurisdictions (NSW / VIC / QLD / WA / SA / TAS / ACT / NT)
    with state payroll tax that varies wildly: threshold-then-rate
    between 4.75 % and 6.85 % depending on state. Allocation lives on
-   `:posting/analytic-distributions` via the `:analytic-plan/code
+   `:kontor.posting/analytic-distributions` via the `:analytic-plan/code
    \"state\"` plan + ISO-3166-2:AU per-state `:analytic-account`
    rows (installed via `kontor.payroll-au.core/install-state-analytic-plan!`).
 
@@ -37,7 +37,7 @@
    Pty Ltd employing remote workers in 5 states is ONE legal entity
    filing ONE BAS + one PAYGW summary; the per-state split is a
    reporting / analytic concern, not a separate balanced-books
-   entity. `:posting/entity` stays reserved for true multi-entity
+   entity. `:kontor.posting/entity` stays reserved for true multi-entity
    scenarios (PEO secondment, intercompany).
 
    Per-state allocation override is supported via
@@ -127,7 +127,7 @@
   [posting component state-allocations]
   (let [dists (state-distribution component state-allocations)]
     (cond-> posting
-      (seq dists) (assoc :posting/analytic-distributions dists))))
+      (seq dists) (assoc :kontor.posting/analytic-distributions dists))))
 
 ;; ============================================================================
 ;; Per-fact posting legs
@@ -153,10 +153,10 @@
         gross (sum-bd (map :amount wage-comps))]
     (when (pos? (compare gross 0M))
       [(with-state-dist
-         {:posting/account (account-for-tag! accounts :au-payroll-wages)
-          :posting/amount gross
-          :posting/commodity commodity
-          :posting/narration "Wages and salaries (gross)"}
+         {:kontor.posting/account (account-for-tag! accounts :au-payroll-wages)
+          :kontor.posting/amount gross
+          :kontor.posting/commodity commodity
+          :kontor.posting/narration "Wages and salaries (gross)"}
          (first wage-comps) state-allocations)])))
 
 (defn- deduction-legs
@@ -174,10 +174,10 @@
                                          {:kind kind})))
                      acct (account-for-tag! accounts tag)]
                  (with-state-dist
-                   {:posting/account acct
-                    :posting/amount amount
-                    :posting/commodity commodity
-                    :posting/narration (str "Payroll deduction: " (name kind))}
+                   {:kontor.posting/account acct
+                    :kontor.posting/amount amount
+                    :kontor.posting/commodity commodity
+                    :kontor.posting/narration (str "Payroll deduction: " (name kind))}
                    comp state-allocations))))))
 
 (defn- employer-side-legs
@@ -197,17 +197,17 @@
                        exp-acct (account-for-tag! accounts exp-tag)
                        pay-acct (when pay-tag (account-for-tag! accounts pay-tag))]
                    (cond-> [(with-state-dist
-                              {:posting/account exp-acct
-                               :posting/amount amount
-                               :posting/commodity commodity
-                               :posting/narration (str "Employer expense: " (name kind))}
+                              {:kontor.posting/account exp-acct
+                               :kontor.posting/amount amount
+                               :kontor.posting/commodity commodity
+                               :kontor.posting/narration (str "Employer expense: " (name kind))}
                               comp state-allocations)]
                      pay-acct
                      (conj (with-state-dist
-                             {:posting/account pay-acct
-                              :posting/amount (.negate ^BigDecimal amount)
-                              :posting/commodity commodity
-                              :posting/narration (str "Employer payable: " (name kind))}
+                             {:kontor.posting/account pay-acct
+                              :kontor.posting/amount (.negate ^BigDecimal amount)
+                              :kontor.posting/commodity commodity
+                              :kontor.posting/narration (str "Employer payable: " (name kind))}
                              comp state-allocations))))))))
 
 (defn- net-wages-leg
@@ -216,10 +216,10 @@
   [{:keys [net]}
    {:keys [accounts commodity]}]
   (when (pos? (compare ^BigDecimal net 0M))
-    [{:posting/account (account-for-tag! accounts :au-payroll-net-wages)
-      :posting/amount (.negate ^BigDecimal net)
-      :posting/commodity commodity
-      :posting/narration "Wages payable (net)"}]))
+    [{:kontor.posting/account (account-for-tag! accounts :au-payroll-net-wages)
+      :kontor.posting/amount (.negate ^BigDecimal net)
+      :kontor.posting/commodity commodity
+      :kontor.posting/narration "Wages payable (net)"}]))
 
 (defn fact->postings
   "Translate one PayrollFact into a balanced set of posting maps."
@@ -254,5 +254,5 @@
                            :state-allocations allocs}
                 postings (fact->postings fact base-opts)]
             (cond->> postings
-              ledger (mapv #(assoc % :posting/ledger ledger)))))
+              ledger (mapv #(assoc % :kontor.posting/ledger ledger)))))
         payroll-facts)))))

@@ -46,9 +46,9 @@
                   :kontor.entity/name "Acme India Pvt Ltd"
                   :kontor.entity/kind :operating}
                  {:db/id "journal-pay"
-                  :journal/code "PAY-IN"
-                  :journal/name "Payroll (IN)"
-                  :journal/type :general}
+                  :kontor.journal/code "PAY-IN"
+                  :kontor.journal/name "Payroll (IN)"
+                  :kontor.journal/type :general}
                  {:db/id "ledger-ifrs-in"
                   :ledger/code "ind-as"
                   :ledger/name "Ind AS"
@@ -133,7 +133,7 @@
         acme    (ref-eid db :kontor.entity/code "ACME-IN")
         inr     (ref-eid db :kontor.commodity/symbol "INR")
         ledger  (ref-eid db :ledger/code "ind-as")
-        journal (ref-eid db :journal/code "PAY-IN")
+        journal (ref-eid db :kontor.journal/code "PAY-IN")
         period  (ref-eid db :period/name "2026-05")
         e001 (hr/employment-by-code db "E001")
         e002 (hr/employment-by-code db "E002")
@@ -174,19 +174,19 @@
                        :where [?r :payroll-run/code ?c]]
                      db' "RUN-IN-2026-05-001")
         run (d/pull db' '[* {:payroll-run/payroll-transaction
-                             [:transaction/external-id
-                              {:posting/_transaction
-                               [:posting/amount
-                                {:posting/account [:kontor.account/code
+                             [:kontor.transaction/external-id
+                              {:kontor.posting/_transaction
+                               [:kontor.posting/amount
+                                {:kontor.posting/account [:kontor.account/code
                                                    {:kontor.account/tags
                                                     [:kontor.account-tag/name]}]}
-                                {:posting/analytic-distributions
+                                {:kontor.posting/analytic-distributions
                                  [:analytic-distribution/percent
                                   {:analytic-distribution/account
                                    [:analytic-account/code]}]}]}]}]
                     run-eid)
         postings (-> run :payroll-run/payroll-transaction
-                     :posting/_transaction)]
+                     :kontor.posting/_transaction)]
     (testing "Payroll run row created with the expected provider-id"
       (is (some? run-eid))
       (is (= :keka (:payroll-run/provider-id run)))
@@ -203,7 +203,7 @@
       ;; Total net = 173450
       (is (= 173450M (:payroll-run/control-total-net run))))
     (testing "Transaction balances per (ledger, commodity)"
-      (let [sum (reduce (fn [^BigDecimal a {:keys [posting/amount]}]
+      (let [sum (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                           (.add a ^BigDecimal amount))
                         0M postings)]
         (is (zero? (.signum sum)))))
@@ -211,12 +211,12 @@
       (let [pt-postings (filter (fn [p]
                                   (some #(= "in-payroll-pt-payable"
                                             (:kontor.account-tag/name %))
-                                        (:kontor.account/tags (:posting/account p))))
+                                        (:kontor.account/tags (:kontor.posting/account p))))
                                 postings)]
         (is (= 3 (count pt-postings)) "One PT leg per employee")
         (let [state-codes
               (->> pt-postings
-                   (mapcat :posting/analytic-distributions)
+                   (mapcat :kontor.posting/analytic-distributions)
                    (map :analytic-distribution/account)
                    (map :analytic-account/code)
                    distinct

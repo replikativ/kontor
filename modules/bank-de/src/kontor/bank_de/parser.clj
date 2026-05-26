@@ -197,21 +197,21 @@
   [candidate {:keys [bank-account-eid commodity-eid journal-eid contra-resolver]}]
   (let [contra (contra-resolver (:category candidate))]
     {:transaction
-     {:transaction/external-id   (str (:bank candidate) "/"
+     {:kontor.transaction/external-id   (str (:bank candidate) "/"
                                       (.getTime ^java.util.Date (:date candidate))
                                       "/" (hash (:raw-row candidate)))
-      :transaction/journal       journal-eid
-      :transaction/effective-date (:date candidate)
-      :transaction/narration     (str (:counterparty candidate)
+      :kontor.transaction/journal       journal-eid
+      :kontor.transaction/effective-date (:date candidate)
+      :kontor.transaction/narration     (str (:counterparty candidate)
                                       " — " (:description candidate))
-      :transaction/state         :draft}
+      :kontor.transaction/state         :draft}
      :postings
-     [{:posting/account   bank-account-eid
-       :posting/amount    (:amount candidate)
-       :posting/commodity commodity-eid
-       :posting/narration (:description candidate)}
-      {:posting/account   contra
-       :posting/amount    (.negate ^java.math.BigDecimal (:amount candidate))
-       :posting/commodity commodity-eid
-       :posting/narration (:description candidate)}]
+     [{:kontor.posting/account   bank-account-eid
+       :kontor.posting/amount    (:amount candidate)
+       :kontor.posting/commodity commodity-eid
+       :kontor.posting/narration (:description candidate)}
+      {:kontor.posting/account   contra
+       :kontor.posting/amount    (.negate ^java.math.BigDecimal (:amount candidate))
+       :kontor.posting/commodity commodity-eid
+       :kontor.posting/narration (:description candidate)}]
      :_money (money/money (:amount candidate) commodity-eid)}))

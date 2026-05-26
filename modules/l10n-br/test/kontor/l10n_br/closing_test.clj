@@ -30,10 +30,10 @@
     (v/install-invariants! conn)
     (chart/install! conn)
     (d/transact conn
-                [{:journal/code "INV" :journal/name "Sales"
-                  :journal/type :sale :journal/active true}
-                 {:journal/code "EXP" :journal/name "Expenses"
-                  :journal/type :purchase :journal/active true}
+                [{:kontor.journal/code "INV" :kontor.journal/name "Sales"
+                  :kontor.journal/type :sale :kontor.journal/active true}
+                 {:kontor.journal/code "EXP" :kontor.journal/name "Expenses"
+                  :kontor.journal/type :purchase :kontor.journal/active true}
                  {:period/start jan-1
                   :period/end   jan-1-26
                   :period/tag   :normal
@@ -62,38 +62,38 @@
         bank   (ace db "1.01.01.02.01")   ; Bancos – No País
         rent   (ace db "3.04.02.01.01")   ; Aluguéis
         other  (ace db "3.04.99.01.01")   ; Outras Despesas Operacionais
-        exp-jnl (:db/id (d/entity db [:journal/code "EXP"]))]
+        exp-jnl (:db/id (d/entity db [:kontor.journal/code "EXP"]))]
     (v/transact-with-validation
      conn
      (posting/build-transaction
       {:transaction
-       {:transaction/external-id "EXP-2025-1"
-        :transaction/journal exp-jnl
-        :transaction/effective-date feb-15
-        :transaction/narration "Aluguel Fev"
-        :transaction/state :posted
-        :transaction/posted-at feb-15}
+       {:kontor.transaction/external-id "EXP-2025-1"
+        :kontor.transaction/journal exp-jnl
+        :kontor.transaction/effective-date feb-15
+        :kontor.transaction/narration "Aluguel Fev"
+        :kontor.transaction/state :posted
+        :kontor.transaction/posted-at feb-15}
        :postings
-       [{:posting/account rent :posting/amount 600M
-         :posting/commodity brl :posting/posted-at feb-15}
-        {:posting/account bank :posting/amount -600M
-         :posting/commodity brl :posting/posted-at feb-15}]}))
+       [{:kontor.posting/account rent :kontor.posting/amount 600M
+         :kontor.posting/commodity brl :kontor.posting/posted-at feb-15}
+        {:kontor.posting/account bank :kontor.posting/amount -600M
+         :kontor.posting/commodity brl :kontor.posting/posted-at feb-15}]}))
     ;; Expense: R$400 other operating expense paid Jun 1.
     (v/transact-with-validation
      conn
      (posting/build-transaction
       {:transaction
-       {:transaction/external-id "EXP-2025-2"
-        :transaction/journal exp-jnl
-        :transaction/effective-date jun-1
-        :transaction/narration "Outras Despesas Jun"
-        :transaction/state :posted
-        :transaction/posted-at jun-1}
+       {:kontor.transaction/external-id "EXP-2025-2"
+        :kontor.transaction/journal exp-jnl
+        :kontor.transaction/effective-date jun-1
+        :kontor.transaction/narration "Outras Despesas Jun"
+        :kontor.transaction/state :posted
+        :kontor.transaction/posted-at jun-1}
        :postings
-       [{:posting/account other :posting/amount 400M
-         :posting/commodity brl :posting/posted-at jun-1}
-        {:posting/account bank  :posting/amount -400M
-         :posting/commodity brl :posting/posted-at jun-1}]})))
+       [{:kontor.posting/account other :kontor.posting/amount 400M
+         :kontor.posting/commodity brl :kontor.posting/posted-at jun-1}
+        {:kontor.posting/account bank  :kontor.posting/amount -400M
+         :kontor.posting/commodity brl :kontor.posting/posted-at jun-1}]})))
   ;; Add a second sales invoice for a real net-profit close (the
   ;; first invoice's revenue 1000 vs expenses 1000 would zero-out).
   (br-invoice/post-br-invoice!
@@ -218,22 +218,22 @@
     (let [conn (core/create-test-db)
           _ (v/install-invariants! conn)
           _ (chart/install! conn)
-          _ (d/transact conn [{:journal/code "INV" :journal/name "Sales"
-                               :journal/type :sale :journal/active true}
-                              {:journal/code "EXP" :journal/name "Expenses"
-                               :journal/type :purchase :journal/active true}
+          _ (d/transact conn [{:kontor.journal/code "INV" :kontor.journal/name "Sales"
+                               :kontor.journal/type :sale :kontor.journal/active true}
+                              {:kontor.journal/code "EXP" :kontor.journal/name "Expenses"
+                               :kontor.journal/type :purchase :kontor.journal/active true}
                               {:period/start jan-1
                                :period/end jan-1-26
                                :period/tag :normal
                                :period/name "FY2025"}])
           _ (seed-fy2025! conn)
           period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] (d/db conn))]
-      (is (nil? (:db/id (d/entity (d/db conn) [:journal/code "CLOSE"])))
+      (is (nil? (:db/id (d/entity (d/db conn) [:kontor.journal/code "CLOSE"])))
           "CLOSE journal not present before close")
       (br-closing/close-br-fiscal-year! conn
                                         {:period-eid period-eid
                                          :external-id "AUTO-J-CLOSE"})
-      (is (some? (:db/id (d/entity (d/db conn) [:journal/code "CLOSE"])))
+      (is (some? (:db/id (d/entity (d/db conn) [:kontor.journal/code "CLOSE"])))
           "CLOSE journal auto-created"))))
 
 ;; ============================================================================
@@ -323,7 +323,7 @@
                                            :external-id "FY25-BR-Z"}))
       (let [db (d/db conn)
             pairs (d/q '[:find ?p ?amt
-                         :where [?p :posting/amount ?amt]] db)
+                         :where [?p :kontor.posting/amount ?amt]] db)
             total (reduce (fn [^java.math.BigDecimal acc [_ ^java.math.BigDecimal x]]
                             (.add acc x))
                           0M pairs)]

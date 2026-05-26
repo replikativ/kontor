@@ -15,7 +15,7 @@
      2. `suggest-match` — given a `:bank-line` and a db, return a
         seq of match candidates ranked by confidence. Strategies:
           a. reference-id: bank description contains a known
-             transaction's `:transaction/external-id`
+             transaction's `:kontor.transaction/external-id`
           b. exact-amount + partner-name match against open AR/AP
           c. multi-line: subset-sum search for combinations of
              same-counterparty open invoices summing to the bank
@@ -28,7 +28,7 @@
 
      3. `commit-match!` — apply a match decision atomically:
           - construct the bank-side transaction (bank ↔ AR/AP/contra)
-          - link `:transaction/settles` to the settled invoices
+          - link `:kontor.transaction/settles` to the settled invoices
           - update `:bank-line/status` to `:reconciled`
           - set `:bank-line/posting`
 
@@ -148,15 +148,15 @@
                     :in $ [?ar-code ...]
                     :where
                     [?a :kontor.account/code ?ar-code]
-                    [?p :posting/account ?a]
-                    [?p :posting/amount ?amount]
-                    [?p :posting/transaction ?tx]
-                    [?tx :transaction/external-id ?ext-id]
-                    [?tx :transaction/state ?state]
-                    [(get-else $ ?tx :transaction/effective-date :__null__) ?date]
-                    [(get-else $ ?tx :transaction/partner :__null__) ?partner]
-                    [?tx :transaction/journal ?j]
-                    [(get-else $ ?j :journal/type :__null__) ?journal-type]]
+                    [?p :kontor.posting/account ?a]
+                    [?p :kontor.posting/amount ?amount]
+                    [?p :kontor.posting/transaction ?tx]
+                    [?tx :kontor.transaction/external-id ?ext-id]
+                    [?tx :kontor.transaction/state ?state]
+                    [(get-else $ ?tx :kontor.transaction/effective-date :__null__) ?date]
+                    [(get-else $ ?tx :kontor.transaction/partner :__null__) ?partner]
+                    [?tx :kontor.transaction/journal ?j]
+                    [(get-else $ ?j :kontor.journal/type :__null__) ?journal-type]]
                   db ar-account-codes)
         ;; Group postings by transaction and sum.
         by-tx (reduce
@@ -171,16 +171,16 @@
                {}
                rows)
         ;; For each candidate sales tx, find any other transactions
-        ;; that :transaction/settles → it; subtract their AR-side
+        ;; that :kontor.transaction/settles → it; subtract their AR-side
         ;; offsets to get the open amount.
         settled (d/q '[:find ?settled ?amount
                        :in $ [?ar-code ...]
                        :where
-                       [?settler :transaction/settles ?settled]
-                       [?p :posting/transaction ?settler]
-                       [?p :posting/account ?a]
+                       [?settler :kontor.transaction/settles ?settled]
+                       [?p :kontor.posting/transaction ?settler]
+                       [?p :kontor.posting/account ?a]
                        [?a :kontor.account/code ?ar-code]
-                       [?p :posting/amount ?amount]]
+                       [?p :kontor.posting/amount ?amount]]
                      db ar-account-codes)
         settled-by (reduce (fn [acc [tx amt]]
                              (update acc tx (fnil #(.add ^java.math.BigDecimal % amt) 0M)))
@@ -211,15 +211,15 @@
                     :in $ [?ap-code ...]
                     :where
                     [?a :kontor.account/code ?ap-code]
-                    [?p :posting/account ?a]
-                    [?p :posting/amount ?amount]
-                    [?p :posting/transaction ?tx]
-                    [?tx :transaction/external-id ?ext-id]
-                    [?tx :transaction/state ?state]
-                    [(get-else $ ?tx :transaction/effective-date :__null__) ?date]
-                    [(get-else $ ?tx :transaction/partner :__null__) ?partner]
-                    [?tx :transaction/journal ?j]
-                    [(get-else $ ?j :journal/type :__null__) ?journal-type]]
+                    [?p :kontor.posting/account ?a]
+                    [?p :kontor.posting/amount ?amount]
+                    [?p :kontor.posting/transaction ?tx]
+                    [?tx :kontor.transaction/external-id ?ext-id]
+                    [?tx :kontor.transaction/state ?state]
+                    [(get-else $ ?tx :kontor.transaction/effective-date :__null__) ?date]
+                    [(get-else $ ?tx :kontor.transaction/partner :__null__) ?partner]
+                    [?tx :kontor.transaction/journal ?j]
+                    [(get-else $ ?j :kontor.journal/type :__null__) ?journal-type]]
                   db ap-account-codes)
         by-tx (reduce
                (fn [acc [tx ext amt partner date jtype state]]
@@ -235,11 +235,11 @@
         settled (d/q '[:find ?settled ?amount
                        :in $ [?ap-code ...]
                        :where
-                       [?settler :transaction/settles ?settled]
-                       [?p :posting/transaction ?settler]
-                       [?p :posting/account ?a]
+                       [?settler :kontor.transaction/settles ?settled]
+                       [?p :kontor.posting/transaction ?settler]
+                       [?p :kontor.posting/account ?a]
                        [?a :kontor.account/code ?ap-code]
-                       [?p :posting/amount ?amount]]
+                       [?p :kontor.posting/amount ?amount]]
                      db ap-account-codes)
         settled-by (reduce (fn [acc [tx amt]]
                              (update acc tx (fnil #(.add ^java.math.BigDecimal % amt) 0M)))
@@ -445,8 +445,8 @@
     (ffirst (d/q '[:find ?a
                    :in $ [?ar-code ...] [?tx ...]
                    :where
-                   [?p :posting/transaction ?tx]
-                   [?p :posting/account ?a]
+                   [?p :kontor.posting/transaction ?tx]
+                   [?p :kontor.posting/account ?a]
                    [?a :kontor.account/code ?ar-code]]
                  db target-codes eids))))
 
@@ -456,7 +456,7 @@
   "Apply a match decision:
      - construct a payment-receipt transaction with two postings
        (bank ↔ AR/AP/contra)
-     - link via :transaction/settles when match is :settle
+     - link via :kontor.transaction/settles when match is :settle
      - update bank-line/status to :reconciled and link
        :bank-line/posting
 
@@ -510,26 +510,26 @@
         (posting/build-transaction
          {:tx-tempid "pay-tx"
           :transaction
-          (cond-> {:transaction/external-id    pay-ext-id
-                   :transaction/journal        journal-eid
-                   :transaction/effective-date date
-                   :transaction/narration      (str "Payment via bank: "
+          (cond-> {:kontor.transaction/external-id    pay-ext-id
+                   :kontor.transaction/journal        journal-eid
+                   :kontor.transaction/effective-date date
+                   :kontor.transaction/narration      (str "Payment via bank: "
                                                     (:bank-line/counterparty bl))
-                   :transaction/state          :posted
-                   :transaction/posted-at      date}
+                   :kontor.transaction/state          :posted
+                   :kontor.transaction/posted-at      date}
             (and (= :settle (:kind match))
                  (seq (:transactions match)))
-            (assoc :transaction/settles (vec (:transactions match))))
+            (assoc :kontor.transaction/settles (vec (:transactions match))))
           ;; Bank-side leg FIRST → gets tempid "pay-tx-p0".
           :postings
-          [{:posting/account bank-acct
-            :posting/amount amount
-            :posting/commodity commodity
-            :posting/posted-at date}
-           {:posting/account contra
-            :posting/amount (.negate ^java.math.BigDecimal amount)
-            :posting/commodity commodity
-            :posting/posted-at date}]})]
+          [{:kontor.posting/account bank-acct
+            :kontor.posting/amount amount
+            :kontor.posting/commodity commodity
+            :kontor.posting/posted-at date}
+           {:kontor.posting/account contra
+            :kontor.posting/amount (.negate ^java.math.BigDecimal amount)
+            :kontor.posting/commodity commodity
+            :kontor.posting/posted-at date}]})]
     (conj (vec payment-tx)
           {:db/id bank-line-eid
            :bank-line/status :reconciled

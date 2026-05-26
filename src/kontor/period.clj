@@ -11,8 +11,8 @@
      - `:period/locked-at`  — SOFT close. `period/reopen!` allowed.
                               Refuses new postings whose inbound
                               valid-time (`:tx/valid-from`, falling
-                              back to `:transaction/effective-date`)
-                              is in range AND whose `:posting/period-tag`
+                              back to `:kontor.transaction/effective-date`)
+                              is in range AND whose `:kontor.posting/period-tag`
                               matches the period's `:period/tag`.
      - `:period/sealed-at`  — HARD close. Monotone, irrevocable.
                               `period/reopen!` refuses. Sealing
@@ -25,7 +25,7 @@
    commodity sum across all postings in range is non-zero (trial-
    balance-zero invariant).
 
-   Posting routing: `:posting/period-tag` selects which period a
+   Posting routing: `:kontor.posting/period-tag` selects which period a
    posting belongs to when multiple periods cover the same date.
    Default tag is `:normal`."
   (:require [datahike.api :as d]
@@ -52,27 +52,27 @@
   [tx-data]
   (filter (fn [tx]
             (and (map? tx)
-                 (contains? tx :posting/account)))
+                 (contains? tx :kontor.posting/account)))
           tx-data))
 
 (defn- proposed-transactions
   [tx-data]
   (filter (fn [tx]
             (and (map? tx)
-                 (or (contains? tx :transaction/journal)
-                     (contains? tx :transaction/effective-date))))
+                 (or (contains? tx :kontor.transaction/journal)
+                     (contains? tx :kontor.transaction/effective-date))))
           tx-data))
 
 (defn- posting-journal
   [posting tx-by-id]
-  (some-> (:posting/transaction posting)
+  (some-> (:kontor.posting/transaction posting)
           tx-by-id
-          :transaction/journal))
+          :kontor.transaction/journal))
 
 (defn- posting-period-tag
   "Effective period tag for a proposed posting; default :normal."
   [posting]
-  (or (:posting/period-tag posting) default-period-tag))
+  (or (:kontor.posting/period-tag posting) default-period-tag))
 
 (defn- in-range?
   "[start, end) range check."
@@ -159,7 +159,7 @@
                        :violations  violations
                        :remediation
                        "Each violating posting either targets the wrong
-                        period (re-date it or set :posting/period-tag
+                        period (re-date it or set :kontor.posting/period-tag
                         to route into an open adjustment period like
                         :adjustment-13), or the period was sealed too
                         early. Sealed periods are irrevocable; soft-
@@ -217,9 +217,9 @@
   (let [base-q '{:find [?p]
                  :in [$ ?start ?end]
                  :where
-                 [[?t :transaction/state :draft]
-                  [?p :posting/transaction ?t]
-                  [?p :posting/transaction _ ?tx]
+                 [[?t :kontor.transaction/state :draft]
+                  [?p :kontor.posting/transaction ?t]
+                  [?p :kontor.posting/transaction _ ?tx]
                   [?tx :db/txInstant ?ti]
                   [(get-else $ ?tx :db.valid/from ?ti) ?vf]
                   [(>= ?vf ?start)]
@@ -228,12 +228,12 @@
         with-journal (if journal-eid
                        (-> base-q
                            (update :in conj '?j)
-                           (update :where conj '[?t :transaction/journal ?j]))
+                           (update :where conj '[?t :kontor.transaction/journal ?j]))
                        base-q)
         with-tag (if (and tag (not= tag :normal))
                    (-> with-journal
                        (update :in conj '?tag)
-                       (update :where conj '[(get-else $ ?p :posting/period-tag :normal) ?ptag]
+                       (update :where conj '[(get-else $ ?p :kontor.posting/period-tag :normal) ?ptag]
                                '[(= ?ptag ?tag)]))
                    with-journal)
         args (cond-> [db start end]
@@ -248,8 +248,8 @@
   (let [base-q '{:find [?p]
                  :in [$ ?start ?end]
                  :where
-                 [[?p :posting/transaction ?t]
-                  [?p :posting/transaction _ ?tx]
+                 [[?p :kontor.posting/transaction ?t]
+                  [?p :kontor.posting/transaction _ ?tx]
                   [?tx :db/txInstant ?ti]
                   [(get-else $ ?tx :db.valid/from ?ti) ?vf]
                   [(>= ?vf ?start)]
@@ -257,14 +257,14 @@
         with-journal (if journal-eid
                        (-> base-q
                            (update :in conj '?j)
-                           (update :where conj '[?t :transaction/journal ?j]))
+                           (update :where conj '[?t :kontor.transaction/journal ?j]))
                        base-q)
         args (cond-> [db start end]
                journal-eid (conj journal-eid))
         eids (apply d/q with-journal args)]
     (->> eids
          (map first)
-         (map #(d/pull db [:posting/amount :posting/commodity] %))
+         (map #(d/pull db [:kontor.posting/amount :kontor.posting/commodity] %))
          (keep money/posting->money)
          money/sum-by-commodity)))
 

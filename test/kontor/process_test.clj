@@ -27,24 +27,24 @@
                 :kontor.account/type :asset :kontor.account/active true}
                {:db/id -3 :kontor.account/path "Income:Sales" :kontor.account/name "Sales"
                 :kontor.account/type :income :kontor.account/active true}
-               {:db/id -4 :journal/code "GEN" :journal/name "General"
-                :journal/type :general :journal/active true}])
+               {:db/id -4 :kontor.journal/code "GEN" :kontor.journal/name "General"
+                :kontor.journal/type :general :kontor.journal/active true}])
   (let [db (d/db conn)]
     {:eur  (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
      :cash (:db/id (d/entity db [:kontor.account/path "Assets:Cash"]))
      :rev  (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
-     :jnl  (:db/id (d/entity db [:journal/code "GEN"]))}))
+     :jnl  (:db/id (d/entity db [:kontor.journal/code "GEN"]))}))
 
 (defn- balanced-txn-step
   "A step that builds one balanced cash↔revenue transaction."
   [{:keys [eur cash rev jnl]} amount]
   (fn [_db _ctx]
     (posting/build-transaction
-     {:transaction {:transaction/journal        jnl
-                    :transaction/effective-date some-date
-                    :transaction/narration      "process step"}
-      :postings    [{:posting/account cash :posting/amount amount       :posting/commodity eur}
-                    {:posting/account rev  :posting/amount (- amount)    :posting/commodity eur}]})))
+     {:transaction {:kontor.transaction/journal        jnl
+                    :kontor.transaction/effective-date some-date
+                    :kontor.transaction/narration      "process step"}
+      :postings    [{:kontor.posting/account cash :kontor.posting/amount amount       :kontor.posting/commodity eur}
+                    {:kontor.posting/account rev  :kontor.posting/amount (- amount)    :kontor.posting/commodity eur}]})))
 
 ;; ============================================================================
 ;; run-steps — the pure engine
@@ -89,7 +89,7 @@
   (let [conn (core/create-test-db)
         cat  (catalog! conn)
         _    (v/install-invariants! conn)
-        eid-count (fn [] (d/q '[:find (count ?e) . :where [?e :transaction/narration _]]
+        eid-count (fn [] (d/q '[:find (count ?e) . :where [?e :kontor.transaction/narration _]]
                               (d/db conn)))
         before    (eid-count)
         {:keys [db tx-data]} (p/run-process
@@ -106,7 +106,7 @@
           _    (v/install-invariants! conn)
           rep  (p/run-process conn {:steps [(balanced-txn-step cat 100M)]})]
       (is (some? (:db-after rep)) "returns a tx-report")
-      (is (= 1 (d/q '[:find (count ?e) . :where [?e :transaction/narration "process step"]]
+      (is (= 1 (d/q '[:find (count ?e) . :where [?e :kontor.transaction/narration "process step"]]
                     (d/db conn)))
           "the transaction is in the db"))))
 
@@ -121,13 +121,13 @@
                                  :kontor.account/name "Orphan" :kontor.account/type :asset}])
           unbalanced (fn [_ _]
                        (posting/build-transaction
-                        {:transaction {:transaction/journal        (:jnl cat)
-                                       :transaction/effective-date some-date
-                                       :transaction/narration      "bad"}
-                         :postings    [{:posting/account (:cash cat) :posting/amount 100M
-                                        :posting/commodity (:eur cat)}
-                                       {:posting/account (:rev cat) :posting/amount -60M
-                                        :posting/commodity (:eur cat)}]}))]
+                        {:transaction {:kontor.transaction/journal        (:jnl cat)
+                                       :kontor.transaction/effective-date some-date
+                                       :kontor.transaction/narration      "bad"}
+                         :postings    [{:kontor.posting/account (:cash cat) :kontor.posting/amount 100M
+                                        :kontor.posting/commodity (:eur cat)}
+                                       {:kontor.posting/account (:rev cat) :kontor.posting/amount -60M
+                                        :kontor.posting/commodity (:eur cat)}]}))]
       (is (thrown? clojure.lang.ExceptionInfo
                    (p/run-process conn {:steps [mk-account unbalanced]})))
       (is (nil? (d/entity (d/db conn) [:kontor.account/path "Assets:Orphan"]))

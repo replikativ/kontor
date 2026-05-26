@@ -21,14 +21,14 @@
                 :kontor.account/name "AR" :kontor.account/type :asset :kontor.account/active true}
                {:db/id -3 :kontor.account/path "Income:Sales"
                 :kontor.account/name "Sales" :kontor.account/type :income :kontor.account/active true}
-               {:db/id -4 :journal/code "INV-IN" :journal/name "Sales India"
-                :journal/type :sale :journal/active true}
+               {:db/id -4 :kontor.journal/code "INV-IN" :kontor.journal/name "Sales India"
+                :kontor.journal/type :sale :kontor.journal/active true}
                {:db/id -10
-                :transaction/external-id    "INV-2026-IN-0001"
-                :transaction/journal        -4
-                :transaction/effective-date #inst "2026-05-11"
-                :transaction/narration      "Test invoice"}])
-  (:db/id (d/entity (d/db conn) [:transaction/external-id "INV-2026-IN-0001"])))
+                :kontor.transaction/external-id    "INV-2026-IN-0001"
+                :kontor.transaction/journal        -4
+                :kontor.transaction/effective-date #inst "2026-05-11"
+                :kontor.transaction/narration      "Test invoice"}])
+  (:db/id (d/entity (d/db conn) [:kontor.transaction/external-id "INV-2026-IN-0001"])))
 
 (deftest single-attestation-roundtrip
   (testing "Brazilian NF-e style (one attestation per transaction)"
@@ -41,10 +41,10 @@
                     :attestation/token       "35260112345678000100550010000000011234567897"
                     :attestation/state       :issued
                     :attestation/issued-at   #inst "2026-05-11T10:00:00Z"}
-                   {:db/id tx :transaction/attestations -100}])
+                   {:db/id tx :kontor.transaction/attestations -100}])
       (let [db (d/db conn)
             tx-entity (d/entity db tx)
-            attestations (:transaction/attestations tx-entity)]
+            attestations (:kontor.transaction/attestations tx-entity)]
         (is (= 1 (count attestations)))
         (let [a (first attestations)]
           (is (= :br/nfe-44 (:attestation/format a)))
@@ -62,7 +62,7 @@
                           :attestation/token       "f8b3a1c9-irn-hash-for-test"
                           :attestation/state       :issued
                           :attestation/issued-at   #inst "2026-05-11T10:23:00Z"}
-                         {:db/id tx :transaction/attestations -100}])
+                         {:db/id tx :kontor.transaction/attestations -100}])
           irn-eid (d/q '[:find ?a .
                          :in $ ?t
                          :where
@@ -81,10 +81,10 @@
                           ;; 400 km @ 1d/200km → ~48h validity
                           :attestation/valid-until #inst "2026-05-13T10:24:00Z"
                           :attestation/depends-on  [irn-eid]}
-                         {:db/id tx :transaction/attestations -200}])]
+                         {:db/id tx :kontor.transaction/attestations -200}])]
       (let [db (d/db conn)
             tx-entity (d/entity db tx)
-            attestations (:transaction/attestations tx-entity)
+            attestations (:kontor.transaction/attestations tx-entity)
             by-format (into {} (map (juxt :attestation/format identity) attestations))]
         (is (= 2 (count attestations)))
         (is (contains? by-format :in/irn))
@@ -182,7 +182,7 @@
                           :complemento/payload     "<tfd:TimbreFiscalDigital ... UUID=\"...\"/>"
                           :complemento/active      true}
                          {:db/id tx
-                          :transaction/complementos [-100 -200 -300]}])
+                          :kontor.transaction/complementos [-100 -200 -300]}])
           db (d/db conn)
           comps (->> (d/q '[:find [?c ...]
                             :in $ ?t

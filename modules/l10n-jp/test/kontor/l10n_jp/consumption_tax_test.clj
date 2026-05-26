@@ -18,10 +18,10 @@
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
     (chart/install! conn)
-    (d/transact conn [{:journal/code "INV"
-                       :journal/name "Sales"
-                       :journal/type :sale
-                       :journal/active true}])
+    (d/transact conn [{:kontor.journal/code "INV"
+                       :kontor.journal/name "Sales"
+                       :kontor.journal/type :sale
+                       :kontor.journal/active true}])
     conn))
 
 (defn- ace [db code]
@@ -35,24 +35,24 @@
         rec (ace db "121000")             ; AR
         rev (ace db "411000")             ; Sales 10%
         out-tax (ace db "215100")         ; Output JCT 10%
-        jnl (:db/id (d/entity db [:journal/code "INV"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         net-bd (bigdec net)
         tax-bd (.setScale (.multiply net-bd 0.10M) 0 java.math.RoundingMode/HALF_EVEN)
         gross  (.add net-bd tax-bd)
         tx (-> (posting/build-transaction
                 {:transaction
-                 {:transaction/external-id external-id
-                  :transaction/journal jnl
-                  :transaction/effective-date date
-                  :transaction/narration external-id
-                  :transaction/state :posted
-                  :transaction/posted-at date}
+                 {:kontor.transaction/external-id external-id
+                  :kontor.transaction/journal jnl
+                  :kontor.transaction/effective-date date
+                  :kontor.transaction/narration external-id
+                  :kontor.transaction/state :posted
+                  :kontor.transaction/posted-at date}
                  :postings
-                 [{:posting/account rec :posting/amount gross :posting/commodity jpy-eid}
-                  {:posting/account rev :posting/amount (.negate net-bd) :posting/commodity jpy-eid}
-                  {:posting/account out-tax :posting/amount (.negate tax-bd) :posting/commodity jpy-eid}]})
-               (->> (mapv #(if (some? (:posting/account %))
-                             (assoc % :posting/posted-at date) %))))]
+                 [{:kontor.posting/account rec :kontor.posting/amount gross :kontor.posting/commodity jpy-eid}
+                  {:kontor.posting/account rev :kontor.posting/amount (.negate net-bd) :kontor.posting/commodity jpy-eid}
+                  {:kontor.posting/account out-tax :kontor.posting/amount (.negate tax-bd) :kontor.posting/commodity jpy-eid}]})
+               (->> (mapv #(if (some? (:kontor.posting/account %))
+                             (assoc % :kontor.posting/posted-at date) %))))]
     (v/transact-with-validation conn tx)))
 
 (defn- post-reduced-sale!
@@ -63,24 +63,24 @@
         rec (ace db "121000")
         rev (ace db "412000")
         out-tax (ace db "215200")
-        jnl (:db/id (d/entity db [:journal/code "INV"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         net-bd (bigdec net)
         tax-bd (.setScale (.multiply net-bd 0.08M) 0 java.math.RoundingMode/HALF_EVEN)
         gross  (.add net-bd tax-bd)
         tx (-> (posting/build-transaction
                 {:transaction
-                 {:transaction/external-id external-id
-                  :transaction/journal jnl
-                  :transaction/effective-date date
-                  :transaction/narration external-id
-                  :transaction/state :posted
-                  :transaction/posted-at date}
+                 {:kontor.transaction/external-id external-id
+                  :kontor.transaction/journal jnl
+                  :kontor.transaction/effective-date date
+                  :kontor.transaction/narration external-id
+                  :kontor.transaction/state :posted
+                  :kontor.transaction/posted-at date}
                  :postings
-                 [{:posting/account rec :posting/amount gross :posting/commodity jpy-eid}
-                  {:posting/account rev :posting/amount (.negate net-bd) :posting/commodity jpy-eid}
-                  {:posting/account out-tax :posting/amount (.negate tax-bd) :posting/commodity jpy-eid}]})
-               (->> (mapv #(if (some? (:posting/account %))
-                             (assoc % :posting/posted-at date) %))))]
+                 [{:kontor.posting/account rec :kontor.posting/amount gross :kontor.posting/commodity jpy-eid}
+                  {:kontor.posting/account rev :kontor.posting/amount (.negate net-bd) :kontor.posting/commodity jpy-eid}
+                  {:kontor.posting/account out-tax :kontor.posting/amount (.negate tax-bd) :kontor.posting/commodity jpy-eid}]})
+               (->> (mapv #(if (some? (:kontor.posting/account %))
+                             (assoc % :kontor.posting/posted-at date) %))))]
     (v/transact-with-validation conn tx)))
 
 ;; ============================================================================

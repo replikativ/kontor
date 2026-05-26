@@ -127,14 +127,14 @@
                 :kontor.account/name "AR" :kontor.account/type :asset :kontor.account/active true}
                {:db/id -3 :kontor.account/path "Income:Sales"
                 :kontor.account/name "Sales" :kontor.account/type :income :kontor.account/active true}
-               {:db/id -4 :journal/code "INV-MX" :journal/name "Ventas México"
-                :journal/type :sale :journal/active true}
+               {:db/id -4 :kontor.journal/code "INV-MX" :kontor.journal/name "Ventas México"
+                :kontor.journal/type :sale :kontor.journal/active true}
                {:db/id -10
-                :transaction/external-id    "INV-2026-MX-0001"
-                :transaction/journal        -4
-                :transaction/effective-date #inst "2026-05-11"
-                :transaction/narration      "Sample CFDI"}])
-  (:db/id (d/entity (d/db conn) [:transaction/external-id "INV-2026-MX-0001"])))
+                :kontor.transaction/external-id    "INV-2026-MX-0001"
+                :kontor.transaction/journal        -4
+                :kontor.transaction/effective-date #inst "2026-05-11"
+                :kontor.transaction/narration      "Sample CFDI"}])
+  (:db/id (d/entity (d/db conn) [:kontor.transaction/external-id "INV-2026-MX-0001"])))
 
 (deftest assemble-from-transaction-pulls-complementos-in-sequence
   (testing "**The load-bearing ADR-025 test.** Persist three
@@ -171,7 +171,7 @@
                           :complemento/sequence    100
                           :complemento/payload     pagos-payload
                           :complemento/active      true}
-                         {:db/id tx :transaction/complementos [-100 -200 -300]}])
+                         {:db/id tx :kontor.transaction/complementos [-100 -200 -300]}])
           xml-str (cfdi/assemble-from-transaction conn tx sample-invoice-base)]
       (is (string? xml-str))
       (is (re-find #"<[^/>]*Complemento>" xml-str))
@@ -197,7 +197,7 @@
                           :complemento/sequence    100
                           :complemento/payload     "<pago20:Pagos xmlns:pago20=\"http://www.sat.gob.mx/Pagos20\" Version=\"2.0\" obsolete=\"yes\"/>"
                           :complemento/active      false}
-                         {:db/id tx :transaction/complementos -1}])
+                         {:db/id tx :kontor.transaction/complementos -1}])
           xml-str (cfdi/assemble-from-transaction conn tx sample-invoice-base)]
       (is (not (re-find #"obsolete" xml-str))
           "Inactive complemento payload must not appear in the output"))))

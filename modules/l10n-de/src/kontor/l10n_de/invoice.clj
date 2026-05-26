@@ -96,7 +96,7 @@
         currency  (or commodity-symbol (:invoice/currency invoice) "EUR")
         commodity (:db/id (d/entity db [:kontor.commodity/symbol currency]))
         recv      (ace db ar-code)
-        jnl       (:db/id (d/entity db [:journal/code journal-code]))
+        jnl       (:db/id (d/entity db [:kontor.journal/code journal-code]))
         partner   (:db/id (:invoice/buyer invoice))
         gross     (:invoice/total-gross invoice)
         ;; Net per VAT-rate bucket — VAT is computed by the provider
@@ -114,10 +114,10 @@
          (for [[rate net] buckets
                :let [rev-code (or (rev-account-by-rate rate) "4400")
                      rev-acct (ace db rev-code)]]
-           {:posting/account rev-acct
-            :posting/amount (.negate ^java.math.BigDecimal net)
-            :posting/commodity commodity
-            :posting/posted-at date}))
+           {:kontor.posting/account rev-acct
+            :kontor.posting/amount (.negate ^java.math.BigDecimal net)
+            :kontor.posting/commodity commodity
+            :kontor.posting/posted-at date}))
         ;; USt credits via the ADR-071 provider/builder — run per
         ;; bucket then collapse per USt account.
         ust-postings
@@ -129,15 +129,15 @@
                     {:db db :date date}))
                  buckets))]
     {:transaction
-     (cond-> {:transaction/external-id ext-id
-              :transaction/journal jnl
-              :transaction/effective-date date
-              :transaction/narration ext-id
-              :transaction/state :posted
-              :transaction/posted-at date}
-       partner (assoc :transaction/partner partner))
-     :postings (into [{:posting/account recv
-                       :posting/amount gross
-                       :posting/commodity commodity
-                       :posting/posted-at date}]
+     (cond-> {:kontor.transaction/external-id ext-id
+              :kontor.transaction/journal jnl
+              :kontor.transaction/effective-date date
+              :kontor.transaction/narration ext-id
+              :kontor.transaction/state :posted
+              :kontor.transaction/posted-at date}
+       partner (assoc :kontor.transaction/partner partner))
+     :postings (into [{:kontor.posting/account recv
+                       :kontor.posting/amount gross
+                       :kontor.posting/commodity commodity
+                       :kontor.posting/posted-at date}]
                      (into revenue-postings ust-postings))}))

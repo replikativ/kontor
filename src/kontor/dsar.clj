@@ -53,8 +53,8 @@
    modules register their own (`:collection-case/partner`,
    `:order/bill-to-partner`, `:kontor.person/partner`, …) at load time via
    `register-partner-attr!`."
-  #{:transaction/partner
-    :posting/partner
+  #{:kontor.transaction/partner
+    :kontor.posting/partner
     :invoice/buyer
     :invoice/seller
     :partner-bank-account/partner
@@ -97,7 +97,7 @@
    register their own (`:payment-application/payment`,
    `:asset-event/transaction`, …) via `register-tx-attr!`."
   #{:status-history/origin-transaction
-    :transaction/reverses})
+    :kontor.transaction/reverses})
 
 (defonce ^{:doc "Atom holding the set of attributes referencing
    :transaction that `collect` walks on the indirect axis. Seeded
@@ -324,7 +324,7 @@
    - `:references` — the DIRECT walk: entities referencing the
      subject :partner via a registered `partner-attrs` attribute.
    - `:indirect-references` — the INDIRECT walk: from the subject's
-     transactions (anything with `:transaction/partner` = subject),
+     transactions (anything with `:kontor.transaction/partner` = subject),
      every entity referencing those transactions via a registered
      `tx-attrs` attribute (`:status-history/origin-transaction`, a
      companion `:payment-application/payment`, …). A great deal of
@@ -369,7 +369,7 @@
                          (mapcat (fn [p]
                                    (d/q '[:find [?t ...]
                                           :in $ ?p
-                                          :where [?t :transaction/partner ?p]]
+                                          :where [?t :kontor.transaction/partner ?p]]
                                         db p)))
                          distinct)
         indirect (if (seq subject-txs)

@@ -18,7 +18,7 @@
    `kontor.validation/transact-with-validation`.
 
    Per note 87 §2.2: multi-province wage allocation in the GL uses
-   `:posting/analytic-distributions` with `:analytic-plan/code
+   `:kontor.posting/analytic-distributions` with `:analytic-plan/code
    \"cn-province\"`. This is the substrate's structural answer to
    multi-city CN workforces."
   (:require [clojure.string :as str]
@@ -107,9 +107,9 @@
                   :kontor.entity/name "Acme China Co., Ltd."
                   :kontor.entity/kind :operating}
                  {:db/id "journal-pay"
-                  :journal/code "PAY-CN"
-                  :journal/name "Payroll (CN)"
-                  :journal/type :general}
+                  :kontor.journal/code "PAY-CN"
+                  :kontor.journal/name "Payroll (CN)"
+                  :kontor.journal/type :general}
                  {:db/id "period-2026-04"
                   :period/name "2026-04"
                   :period/start #inst "2026-04-01"
@@ -173,7 +173,7 @@
         ent (ref-eid db :kontor.entity/code "ACME-CN")
         cny (ref-eid db :kontor.commodity/symbol "CNY")
         period (ref-eid db :period/name "2026-04")
-        journal (ref-eid db :journal/code "PAY-CN")
+        journal (ref-eid db :kontor.journal/code "PAY-CN")
         e1 (hr/employment-by-code db "E001")
         e2 (hr/employment-by-code db "E002")
         e3 (hr/employment-by-code db "E003")
@@ -218,10 +218,10 @@
                        :where [?r :payroll-run/code ?c]]
                      db' "RUN-CN-2026-04-001")
         run (d/pull db' '[* {:payroll-run/payroll-transaction
-                             [:transaction/external-id
-                              {:posting/_transaction
-                               [:posting/amount :posting/account
-                                {:posting/analytic-distributions
+                             [:kontor.transaction/external-id
+                              {:kontor.posting/_transaction
+                               [:kontor.posting/amount :kontor.posting/account
+                                {:kontor.posting/analytic-distributions
                                  [:analytic-distribution/percent
                                   {:analytic-distribution/account
                                    [:analytic-account/code]}]}]}]}
@@ -230,7 +230,7 @@
                             :audit-doc/language :audit-doc/inline-payload]}]
                     run-eid)
         postings (-> run :payroll-run/payroll-transaction
-                     :posting/_transaction)
+                     :kontor.posting/_transaction)
         emit-docs (:payroll-run/emit-docs run)]
     (testing "the payroll-run row is created"
       (is (some? run-eid))
@@ -241,16 +241,16 @@
       ;; Net 12620 × 3 = 37860
       (is (= 37860M (:payroll-run/control-total-net run))))
     (testing "the linked :transaction balances per-(ledger, commodity)"
-      (let [sum (reduce (fn [^BigDecimal a {:keys [posting/amount]}]
+      (let [sum (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                           (.add a ^BigDecimal amount))
                         0M postings)]
         (is (zero? (.signum sum)))))
     (testing "every posting carries an :analytic-distribution to one of the three provinces"
-      (let [with-dist (filter (fn [p] (seq (:posting/analytic-distributions p))) postings)]
+      (let [with-dist (filter (fn [p] (seq (:kontor.posting/analytic-distributions p))) postings)]
         (is (seq with-dist))
         (let [province-codes
               (->> with-dist
-                   (mapcat :posting/analytic-distributions)
+                   (mapcat :kontor.posting/analytic-distributions)
                    (map :analytic-distribution/account)
                    (map :analytic-account/code)
                    distinct

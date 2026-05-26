@@ -26,11 +26,11 @@
 
    ## Province routing (note 87 §2.2)
 
-   Per-province allocation lives on `:posting/analytic-distributions`
+   Per-province allocation lives on `:kontor.posting/analytic-distributions`
    via an `:analytic-plan/code \"cn-province\"` (consumer-installed at
    install time, OR auto-installed by `kontor.payroll-cn.core/install!`),
-   NOT on `:posting/entity`. A CN Ltd Co with employees in BJ / SH / SZ
-   is ONE legal entity (one CIT filing) — `:posting/entity` is reserved
+   NOT on `:kontor.posting/entity`. A CN Ltd Co with employees in BJ / SH / SZ
+   is ONE legal entity (one CIT filing) — `:kontor.posting/entity` is reserved
    for true cross-entity scenarios.
 
    Per-city allocation is a follow-up (note 87 §7): consumers needing
@@ -131,11 +131,11 @@
         dists (province-distribution province)]
     (when (pos? (compare gross 0M))
       [(cond->
-        {:posting/account (account-for-tag! accounts :cn-payroll-wages-expense)
-         :posting/amount gross
-         :posting/commodity commodity
-         :posting/narration "工资费用 (Wages expense — gross)"}
-         (seq dists) (assoc :posting/analytic-distributions dists))])))
+        {:kontor.posting/account (account-for-tag! accounts :cn-payroll-wages-expense)
+         :kontor.posting/amount gross
+         :kontor.posting/commodity commodity
+         :kontor.posting/narration "工资费用 (Wages expense — gross)"}
+         (seq dists) (assoc :kontor.posting/analytic-distributions dists))])))
 
 (defn- deduction-legs
   "For each negative employee-side deduction component, CR the
@@ -156,12 +156,12 @@
                        acct (account-for-tag! accounts tag)
                        label (or (wt/chinese-name kind extras-map) (name kind))]
                    (cond->
-                    {:posting/account acct
-                     :posting/amount amount
-                     :posting/commodity commodity
-                     :posting/narration (str "扣除 — " label)}
+                    {:kontor.posting/account acct
+                     :kontor.posting/amount amount
+                     :kontor.posting/commodity commodity
+                     :kontor.posting/narration (str "扣除 — " label)}
                      (seq dists)
-                     (assoc :posting/analytic-distributions dists))))))))
+                     (assoc :kontor.posting/analytic-distributions dists))))))))
 
 (defn- employer-side-legs
   "For each employer-side component, DR the expense account AND CR the
@@ -189,20 +189,20 @@
                          pay-acct (when pay-tag (account-for-tag! accounts pay-tag))
                          label (or (wt/chinese-name kind extras-map) (name kind))]
                      (cond-> [(cond->
-                               {:posting/account exp-acct
-                                :posting/amount amount
-                                :posting/commodity commodity
-                                :posting/narration (str "单位承担 — " label)}
+                               {:kontor.posting/account exp-acct
+                                :kontor.posting/amount amount
+                                :kontor.posting/commodity commodity
+                                :kontor.posting/narration (str "单位承担 — " label)}
                                 (seq dists)
-                                (assoc :posting/analytic-distributions dists))]
+                                (assoc :kontor.posting/analytic-distributions dists))]
                        pay-acct
                        (conj (cond->
-                              {:posting/account pay-acct
-                               :posting/amount (.negate ^BigDecimal amount)
-                               :posting/commodity commodity
-                               :posting/narration (str "单位应付 — " label)}
+                              {:kontor.posting/account pay-acct
+                               :kontor.posting/amount (.negate ^BigDecimal amount)
+                               :kontor.posting/commodity commodity
+                               :kontor.posting/narration (str "单位应付 — " label)}
                                (seq dists)
-                               (assoc :posting/analytic-distributions dists))))))))))
+                               (assoc :kontor.posting/analytic-distributions dists))))))))))
 
 (defn- net-wages-leg
   "CR 2211.01 应付职工薪酬-工资 for the net amount (gross + sum of
@@ -213,12 +213,12 @@
         dists (province-distribution province)]
     (when (pos? (compare ^BigDecimal net 0M))
       [(cond->
-        {:posting/account (account-for-tag! accounts :cn-payroll-net-wages)
-         :posting/amount (.negate ^BigDecimal net)
-         :posting/commodity commodity
-         :posting/narration "应付职工薪酬-工资 (net wages payable)"}
+        {:kontor.posting/account (account-for-tag! accounts :cn-payroll-net-wages)
+         :kontor.posting/amount (.negate ^BigDecimal net)
+         :kontor.posting/commodity commodity
+         :kontor.posting/narration "应付职工薪酬-工资 (net wages payable)"}
          (seq dists)
-         (assoc :posting/analytic-distributions dists))])))
+         (assoc :kontor.posting/analytic-distributions dists))])))
 
 (defn fact->postings
   "Translate one PayrollFact into a balanced set of posting maps. The
@@ -253,7 +253,7 @@
         (fn [fact]
           (let [postings (fact->postings fact base-opts)]
             (cond->> postings
-              ledger (mapv #(assoc % :posting/ledger ledger)))))
+              ledger (mapv #(assoc % :kontor.posting/ledger ledger)))))
         payroll-facts)))))
 
 ;; ============================================================================
@@ -284,5 +284,5 @@
      (mapcat (fn [fact]
                (let [postings (fact->postings fact base-opts)]
                  (cond->> postings
-                   ledger (mapv #(assoc % :posting/ledger ledger)))))
+                   ledger (mapv #(assoc % :kontor.posting/ledger ledger)))))
              facts))))

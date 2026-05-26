@@ -81,10 +81,10 @@
                {:gl-account-default/account-type :gr-ir-clearing
                 :gl-account-default/account [:kontor.account/path "2150"]}
                ;; Journals
-               {:journal/code "PURCH" :journal/name "Purchase Journal"
-                :journal/type :purchase}
-               {:journal/code "SALES" :journal/name "Sales Journal"
-                :journal/type :sales}]))
+               {:kontor.journal/code "PURCH" :kontor.journal/name "Purchase Journal"
+                :kontor.journal/type :purchase}
+               {:kontor.journal/code "SALES" :kontor.journal/name "Sales Journal"
+                :kontor.journal/type :sales}]))
 
 (defn- create-purchase-order!
   [{:keys [external-id qty unit-price]
@@ -136,7 +136,7 @@
       (receipt/post-receipt-with-inventory!
        *conn* "RCPT-1"
        {:provider (costing/make-fifo-provider)
-        :journal-ref [:journal/code "PURCH"]})
+        :journal-ref [:kontor.journal/code "PURCH"]})
       (let [db (d/db *conn*)]
         (testing "receipt transitioned :pending → :accepted"
           (is (= :accepted
@@ -153,16 +153,16 @@
                                (or (d/q '[:find (sum ?amt) .
                                           :where
                                           [?a :kontor.account/path "1400"]
-                                          [?p :posting/account ?a]
-                                          [?p :posting/amount ?amt]]
+                                          [?p :kontor.posting/account ?a]
+                                          [?p :kontor.posting/amount ?amt]]
                                         db) 0M)))))
         (testing "Cr GR-IR 250.00 (= negative 250)"
           (is (= 0 (.compareTo (bigdec "-250.00")
                                (or (d/q '[:find (sum ?amt) .
                                           :where
                                           [?a :kontor.account/path "2150"]
-                                          [?p :posting/account ?a]
-                                          [?p :posting/amount ?amt]]
+                                          [?p :kontor.posting/account ?a]
+                                          [?p :kontor.posting/amount ?amt]]
                                         db) 0M)))))))))
 
 (deftest post-receipt-fails-on-non-pending
@@ -182,7 +182,7 @@
            (receipt/post-receipt-with-inventory!
             *conn* "RCPT-2"
             {:provider (costing/make-fifo-provider)
-             :journal-ref [:journal/code "PURCH"]}))))))
+             :journal-ref [:kontor.journal/code "PURCH"]}))))))
 
 (deftest post-receipt-fails-without-unit-cost
   (testing "P0-1: missing :receipt-item/unit-cost throws clearly"
@@ -199,7 +199,7 @@
            (receipt/post-receipt-with-inventory!
             *conn* "RCPT-3"
             {:provider (costing/make-fifo-provider)
-             :journal-ref [:journal/code "PURCH"]}))))))
+             :journal-ref [:kontor.journal/code "PURCH"]}))))))
 
 (deftest post-receipt-with-multiple-items-atomic
   (testing "P0-1: multi-item receipt posts in one tx with distinct
@@ -250,7 +250,7 @@
       (receipt/post-receipt-with-inventory!
        *conn* "RCPT-MULTI"
        {:provider (costing/make-fifo-provider)
-        :journal-ref [:journal/code "PURCH"]})
+        :journal-ref [:kontor.journal/code "PURCH"]})
       (let [db (d/db *conn*)]
         (testing "two valuation-layers"
           (is (= 2 (d/q '[:find (count ?l) . :where [?l :valuation-layer/book _]] db))))
@@ -259,16 +259,16 @@
                                (d/q '[:find (sum ?amt) .
                                       :where
                                       [?a :kontor.account/path "1400"]
-                                      [?p :posting/account ?a]
-                                      [?p :posting/amount ?amt]]
+                                      [?p :kontor.posting/account ?a]
+                                      [?p :kontor.posting/amount ?amt]]
                                     db)))))
         (testing "Cr GR-IR total = -430"
           (is (= 0 (.compareTo (bigdec "-430.00")
                                (d/q '[:find (sum ?amt) .
                                       :where
                                       [?a :kontor.account/path "2150"]
-                                      [?p :posting/account ?a]
-                                      [?p :posting/amount ?amt]]
+                                      [?p :kontor.posting/account ?a]
+                                      [?p :kontor.posting/amount ?amt]]
                                     db)))))))))
 
 ;; ============================================================================
@@ -290,7 +290,7 @@
       (receipt/post-receipt-with-inventory!
        *conn* "RCPT-J1"
        {:provider (costing/make-fifo-provider)
-        :journal-ref [:journal/code "PURCH"]})
+        :journal-ref [:kontor.journal/code "PURCH"]})
       (receipt/make-receipt!
        *conn*
        {:external-id "RCPT-J2"
@@ -300,7 +300,7 @@
       (receipt/post-receipt-with-inventory!
        *conn* "RCPT-J2"
        {:provider (costing/make-fifo-provider)
-        :journal-ref [:journal/code "PURCH"]})
+        :journal-ref [:kontor.journal/code "PURCH"]})
       (inv/make-invoice-from-order!
        *conn* "PO-1"
        {:external-id "INV-J" :type :purchase})
@@ -349,7 +349,7 @@
       (receipt/post-receipt-with-inventory!
        *conn* "RCPT-E2E"
        {:provider (costing/make-fifo-provider)
-        :journal-ref [:journal/code "PURCH"]})
+        :journal-ref [:kontor.journal/code "PURCH"]})
       ;; 2. Generate the supplier invoice
       (inv/make-invoice-from-order!
        *conn* "PO-1"
@@ -357,7 +357,7 @@
       ;; 3. Post the invoice to the GL
       (inv-post/post-to-ledger!
        *conn* "INV-E2E"
-       {:journal-ref [:journal/code "PURCH"]})
+       {:journal-ref [:kontor.journal/code "PURCH"]})
       (let [db (d/db *conn*)]
         (testing "invoice status :sent (post completed)"
           (is (= :sent
@@ -369,8 +369,8 @@
                                (d/q '[:find (sum ?amt) .
                                       :where
                                       [?a :kontor.account/path "2150"]
-                                      [?p :posting/account ?a]
-                                      [?p :posting/amount ?amt]]
+                                      [?p :kontor.posting/account ?a]
+                                      [?p :kontor.posting/amount ?amt]]
                                     db)))))
         (testing "Inventory residual = +250 (Dr at receipt; not re-Dr'd)"
           ;; With the bridge fix, the purchase invoice for :direct
@@ -380,21 +380,21 @@
                                (d/q '[:find (sum ?amt) .
                                       :where
                                       [?a :kontor.account/path "1400"]
-                                      [?p :posting/account ?a]
-                                      [?p :posting/amount ?amt]]
+                                      [?p :kontor.posting/account ?a]
+                                      [?p :kontor.posting/amount ?amt]]
                                     db)))))
         (testing "AP credited 250 (the supplier obligation)"
           (is (= 0 (.compareTo (bigdec "-250.00")
                                (d/q '[:find (sum ?amt) .
                                       :where
                                       [?a :kontor.account/path "2000"]
-                                      [?p :posting/account ?a]
-                                      [?p :posting/amount ?amt]]
+                                      [?p :kontor.posting/account ?a]
+                                      [?p :kontor.posting/amount ?amt]]
                                     db)))))
         (testing "overall ledger balances (sum = 0)"
           (is (= 0 (.compareTo (bigdec "0")
                                (d/q '[:find (sum ?amt) .
-                                      :where [_ :posting/amount ?amt]]
+                                      :where [_ :kontor.posting/amount ?amt]]
                                     db)))))))))
 
 ;; ============================================================================
@@ -417,7 +417,7 @@
       (receipt/post-receipt-with-inventory!
        *conn* "RCPT-EXC"
        {:provider (costing/make-fifo-provider)
-        :journal-ref [:journal/code "PURCH"]})
+        :journal-ref [:kontor.journal/code "PURCH"]})
       ;; Generate the supplier invoice for FULL 10
       (inv/make-invoice-from-order!
        *conn* "PO-1"
@@ -439,7 +439,7 @@
            #"Approval-policy violation"
            (inv-post/post-to-ledger!
             *conn* "INV-EXC"
-            {:journal-ref [:journal/code "PURCH"]}))))))
+            {:journal-ref [:kontor.journal/code "PURCH"]}))))))
 
 (deftest match-pass-policy-allows-posting-on-auto-matched
   (testing "P0-2: policy allows posting once match-status is :auto-matched"
@@ -453,7 +453,7 @@
       (receipt/post-receipt-with-inventory!
        *conn* "RCPT-OK"
        {:provider (costing/make-fifo-provider)
-        :journal-ref [:journal/code "PURCH"]})
+        :journal-ref [:kontor.journal/code "PURCH"]})
       (inv/make-invoice-from-order!
        *conn* "PO-1"
        {:external-id "INV-OK" :type :purchase})
@@ -469,7 +469,7 @@
       ;; Should NOT throw
       (inv-post/post-to-ledger!
        *conn* "INV-OK"
-       {:journal-ref [:journal/code "PURCH"]})
+       {:journal-ref [:kontor.journal/code "PURCH"]})
       (is (= :sent
              (sm/current-status (d/db *conn*)
                                 (inv/by-external-id (d/db *conn*) "INV-OK")
@@ -512,7 +512,7 @@
     ;; Sales invoice has no match-status — policy must passthrough
     (inv-post/post-to-ledger!
      *conn* "INV-SALES"
-     {:journal-ref [:journal/code "SALES"]})
+     {:journal-ref [:kontor.journal/code "SALES"]})
     (is (= :sent
            (sm/current-status (d/db *conn*)
                               (inv/by-external-id (d/db *conn*) "INV-SALES")
@@ -566,26 +566,26 @@
                                               {:external-id "CM-POL-1"})
       (inv-post/post-to-ledger!
        *conn* "CM-POL-1"
-       {:journal-ref [:journal/code "SALES"]})
+       {:journal-ref [:kontor.journal/code "SALES"]})
       (let [db (d/db *conn*)]
         (testing "Dr Sales Revenue +75 (reverses the original +75 credit)"
           (is (= 0 (.compareTo (bigdec "75.00")
                                (d/q '[:find (sum ?amt) .
                                       :where
                                       [?a :kontor.account/path "4000"]
-                                      [?p :posting/account ?a]
-                                      [?p :posting/amount ?amt]]
+                                      [?p :kontor.posting/account ?a]
+                                      [?p :kontor.posting/amount ?amt]]
                                     db)))))
         (testing "Cr AR -75 (reverses the original +75 debit)"
           (is (= 0 (.compareTo (bigdec "-75.00")
                                (d/q '[:find (sum ?amt) .
                                       :where
                                       [?a :kontor.account/path "1200"]
-                                      [?p :posting/account ?a]
-                                      [?p :posting/amount ?amt]]
+                                      [?p :kontor.posting/account ?a]
+                                      [?p :kontor.posting/amount ?amt]]
                                     db)))))
         (testing "ledger balances"
           (is (= 0 (.compareTo (bigdec "0")
                                (d/q '[:find (sum ?amt) .
-                                      :where [_ :posting/amount ?amt]]
+                                      :where [_ :kontor.posting/amount ?amt]]
                                     db)))))))))

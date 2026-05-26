@@ -23,8 +23,8 @@
                   :kontor.account/concept-iri "urn:test:bank"}
                  {:kontor.account/code "5000" :kontor.account/name "Office"
                   :kontor.account/type :expense :kontor.account/active true}
-                 {:journal/code "GEN" :journal/name "General"
-                  :journal/type :general}
+                 {:kontor.journal/code "GEN" :kontor.journal/name "General"
+                  :kontor.journal/type :general}
                  {:period/name "2026-01"
                   :period/start #inst "2026-01-01"
                   :period/end #inst "2026-02-01"}])
@@ -160,25 +160,25 @@
               (kt/invoke! "kontor_post_transaction"
                           {:conn conn
                            :args {:transaction
-                                  {:transaction/external-id "TX-AGENT-1"
-                                   :transaction/journal [:journal/code "GEN"]
-                                   :transaction/effective-date "2026-01-15T00:00:00Z"
-                                   :transaction/narration "agent-driven write"}
+                                  {:kontor.transaction/external-id "TX-AGENT-1"
+                                   :kontor.transaction/journal [:kontor.journal/code "GEN"]
+                                   :kontor.transaction/effective-date "2026-01-15T00:00:00Z"
+                                   :kontor.transaction/narration "agent-driven write"}
                                   :postings
-                                  [{:posting/account [:kontor.account/code "5000"]
-                                    :posting/amount "100.00"
-                                    :posting/commodity [:kontor.commodity/symbol "EUR"]
-                                    :posting/narration "Office supplies"}
-                                   {:posting/account [:kontor.account/code "1000"]
-                                    :posting/amount "-100.00"
-                                    :posting/commodity [:kontor.commodity/symbol "EUR"]
-                                    :posting/narration "Paid from bank"}]}})]
+                                  [{:kontor.posting/account [:kontor.account/code "5000"]
+                                    :kontor.posting/amount "100.00"
+                                    :kontor.posting/commodity [:kontor.commodity/symbol "EUR"]
+                                    :kontor.posting/narration "Office supplies"}
+                                   {:kontor.posting/account [:kontor.account/code "1000"]
+                                    :kontor.posting/amount "-100.00"
+                                    :kontor.posting/commodity [:kontor.commodity/symbol "EUR"]
+                                    :kontor.posting/narration "Paid from bank"}]}})]
           (is (nil? (:error result)) (str result))
           (is (some? (:result result)))
           (let [db (d/db conn)
                 tx-eid (d/q '[:find ?t .
                               :in $ ?ext
-                              :where [?t :transaction/external-id ?ext]]
+                              :where [?t :kontor.transaction/external-id ?ext]]
                             db "TX-AGENT-1")]
             (is (some? tx-eid)
                 "the transaction landed in the DB"))))
@@ -188,16 +188,16 @@
               (kt/invoke! "kontor_post_transaction"
                           {:conn conn
                            :args {:transaction
-                                  {:transaction/external-id "TX-AGENT-2"
-                                   :transaction/journal [:journal/code "GEN"]
-                                   :transaction/effective-date "2026-01-15T00:00:00Z"}
+                                  {:kontor.transaction/external-id "TX-AGENT-2"
+                                   :kontor.transaction/journal [:kontor.journal/code "GEN"]
+                                   :kontor.transaction/effective-date "2026-01-15T00:00:00Z"}
                                   :postings
-                                  [{:posting/account [:kontor.account/code "5000"]
-                                    :posting/amount "100.00"
-                                    :posting/commodity [:kontor.commodity/symbol "EUR"]}
-                                   {:posting/account [:kontor.account/code "1000"]
-                                    :posting/amount "-99.00"
-                                    :posting/commodity [:kontor.commodity/symbol "EUR"]}]}})]
+                                  [{:kontor.posting/account [:kontor.account/code "5000"]
+                                    :kontor.posting/amount "100.00"
+                                    :kontor.posting/commodity [:kontor.commodity/symbol "EUR"]}
+                                   {:kontor.posting/account [:kontor.account/code "1000"]
+                                    :kontor.posting/amount "-99.00"
+                                    :kontor.posting/commodity [:kontor.commodity/symbol "EUR"]}]}})]
           (is (some? (:error result))
               "unbalanced postings are rejected before any datom is written")
           (is (string? (:error result)))))

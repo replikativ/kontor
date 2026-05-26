@@ -52,28 +52,28 @@
   (let [calls (atom [])
         _id1  (bus/register-handler! (fn [ev] (swap! calls conj [:h1 (:event/kind ev)])))
         _id2  (bus/register-handler! (fn [ev] (swap! calls conj [:h2 (:event/kind ev)])))
-        r     (bus/dispatch {:event/kind :transaction/committed})]
+        r     (bus/dispatch {:event/kind :kontor.transaction/committed})]
     (is (= 2 (:invoked r)))
-    (is (= #{[:h1 :transaction/committed]
-             [:h2 :transaction/committed]}
+    (is (= #{[:h1 :kontor.transaction/committed]
+             [:h2 :kontor.transaction/committed]}
            (set @calls)))))
 
 (deftest dispatch-respects-filter
   (let [calls (atom [])
         _yes  (bus/register-handler!
                (fn [ev] (swap! calls conj [:yes (:event/kind ev)]))
-               {:filter (fn [ev] (= :transaction/committed (:event/kind ev)))})
+               {:filter (fn [ev] (= :kontor.transaction/committed (:event/kind ev)))})
         _no   (bus/register-handler!
                (fn [ev] (swap! calls conj [:no (:event/kind ev)]))
                {:filter (fn [ev] (= :status-history/changed (:event/kind ev)))})
-        r     (bus/dispatch {:event/kind :transaction/committed})]
+        r     (bus/dispatch {:event/kind :kontor.transaction/committed})]
     (is (= 1 (:invoked r)))
-    (is (= [[:yes :transaction/committed]] @calls))))
+    (is (= [[:yes :kontor.transaction/committed]] @calls))))
 
 (deftest dispatch-collects-handler-exceptions
   (let [_ok    (bus/register-handler! (fn [_] :ok))
         _boom  (bus/register-handler! (fn [_] (throw (ex-info "boom" {:hook :x}))))
-        r      (bus/dispatch {:event/kind :transaction/committed})
+        r      (bus/dispatch {:event/kind :kontor.transaction/committed})
         errors (-> r meta :errors)]
     (testing "the OK handler still ran"
       (is (= 1 (:invoked r))))
@@ -97,8 +97,8 @@
                {:db/id -3 :kontor.account/path "Income:Sales"
                 :kontor.account/name "Sales revenue"
                 :kontor.account/type :income :kontor.account/active true}
-               {:db/id -4 :journal/code "INV" :journal/name "Customer invoices"
-                :journal/type :sale :journal/active true}])
+               {:db/id -4 :kontor.journal/code "INV" :kontor.journal/name "Customer invoices"
+                :kontor.journal/type :sale :kontor.journal/active true}])
   (d/db conn))
 
 (deftest commit-and-emit-fires-event-on-successful-tx
@@ -108,7 +108,7 @@
         eur   (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         rec   (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
         rev   (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
-        jnl   (:db/id (d/entity db [:journal/code "INV"]))
+        jnl   (:db/id (d/entity db [:kontor.journal/code "INV"]))
         events (atom [])
         _     (bus/register-handler! (fn [ev] (swap! events conj ev)))
         ;; Run a single-step process that posts one invoice; tag the
@@ -119,13 +119,13 @@
          {:steps  [(fn [_db _ctx]
                      (posting/post-transaction-tx-data
                       {:transaction
-                       {:transaction/external-id    "INV-BUS-1"
-                        :transaction/journal        jnl
-                        :transaction/effective-date some-date
-                        :transaction/narration      "Bus emission test"}
+                       {:kontor.transaction/external-id    "INV-BUS-1"
+                        :kontor.transaction/journal        jnl
+                        :kontor.transaction/effective-date some-date
+                        :kontor.transaction/narration      "Bus emission test"}
                        :postings
-                       [{:posting/account rec :posting/amount  10.00M :posting/commodity eur}
-                        {:posting/account rev :posting/amount -10.00M :posting/commodity eur}]}
+                       [{:kontor.posting/account rec :kontor.posting/amount  10.00M :kontor.posting/commodity eur}
+                        {:kontor.posting/account rev :kontor.posting/amount -10.00M :kontor.posting/commodity eur}]}
                       {:vt-from some-date}))]
           :commit bus/commit-and-emit})]
     (testing "the process returned a tx-report"
@@ -135,7 +135,7 @@
       (is (= 1 (count @events))))
     (let [ev (first @events)]
       (testing "event shape"
-        (is (= :transaction/committed (:event/kind ev)))
+        (is (= :kontor.transaction/committed (:event/kind ev)))
         (is (some? (:event/tx-report ev)))
         (is (= conn (:event/conn ev)))
         (is (some? (:event/at ev)))
@@ -143,8 +143,8 @@
       (testing ":event/transactions carries the committed :transaction"
         (let [txs (:event/transactions ev)]
           (is (= 1 (count txs)))
-          (is (= "INV-BUS-1" (-> txs first :transaction/external-id)))
-          (is (= :posted (-> txs first :transaction/state))))))))
+          (is (= "INV-BUS-1" (-> txs first :kontor.transaction/external-id)))
+          (is (= :posted (-> txs first :kontor.transaction/state))))))))
 
 (deftest commit-and-emit-handler-crash-does-not-block-commit
   (let [conn  (core/create-test-db)
@@ -153,7 +153,7 @@
         eur   (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         rec   (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
         rev   (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
-        jnl   (:db/id (d/entity db [:journal/code "INV"]))
+        jnl   (:db/id (d/entity db [:kontor.journal/code "INV"]))
         _     (bus/register-handler!
                (fn [_] (throw (ex-info "handler-boom" {}))))
         result
@@ -162,23 +162,23 @@
          {:steps  [(fn [_db _ctx]
                      (posting/post-transaction-tx-data
                       {:transaction
-                       {:transaction/external-id    "INV-BUS-CRASH"
-                        :transaction/journal        jnl
-                        :transaction/effective-date some-date
-                        :transaction/narration      "Bus-crash test"}
+                       {:kontor.transaction/external-id    "INV-BUS-CRASH"
+                        :kontor.transaction/journal        jnl
+                        :kontor.transaction/effective-date some-date
+                        :kontor.transaction/narration      "Bus-crash test"}
                        :postings
-                       [{:posting/account rec :posting/amount  20.00M :posting/commodity eur}
-                        {:posting/account rev :posting/amount -20.00M :posting/commodity eur}]}
+                       [{:kontor.posting/account rec :kontor.posting/amount  20.00M :kontor.posting/commodity eur}
+                        {:kontor.posting/account rev :kontor.posting/amount -20.00M :kontor.posting/commodity eur}]}
                       {:vt-from some-date}))]
           :commit bus/commit-and-emit})]
     (testing "the commit still succeeded despite the handler exception"
       (is (some? result))
       (is (= :posted
              (-> (d/db conn)
-                 (d/entity [:transaction/external-id "INV-BUS-CRASH"])
-                 :transaction/state))))))
+                 (d/entity [:kontor.transaction/external-id "INV-BUS-CRASH"])
+                 :kontor.transaction/state))))))
 
 (deftest no-handlers-no-emission
   (testing "dispatch with no registered handlers is a no-op"
-    (let [r (bus/dispatch {:event/kind :transaction/committed})]
+    (let [r (bus/dispatch {:event/kind :kontor.transaction/committed})]
       (is (= 0 (:invoked r))))))

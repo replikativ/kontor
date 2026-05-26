@@ -29,10 +29,10 @@
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
     (chart/install! conn)
-    (d/transact conn [{:journal/code "INV"
-                       :journal/name "Sales"
-                       :journal/type :sale
-                       :journal/active true}])
+    (d/transact conn [{:kontor.journal/code "INV"
+                       :kontor.journal/name "Sales"
+                       :kontor.journal/type :sale
+                       :kontor.journal/active true}])
     conn))
 
 (defn- ace [db code]
@@ -52,25 +52,25 @@
         rec (ace db "1200")
         rev (ace db "4000")
         tax (ace db state-tax-code)
-        jnl (:db/id (d/entity db [:journal/code "INV"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         net-bd (bigdec net)
         rate-frac (/ (bigdec rate-pct) (bigdec 100))
         tax-bd (.setScale (.multiply net-bd rate-frac) 2 java.math.RoundingMode/HALF_EVEN)
         gross  (.add net-bd tax-bd)
         tx (-> (posting/build-transaction
                 {:transaction
-                 {:transaction/external-id external-id
-                  :transaction/journal jnl
-                  :transaction/effective-date date
-                  :transaction/narration external-id
-                  :transaction/state :posted
-                  :transaction/posted-at date}
+                 {:kontor.transaction/external-id external-id
+                  :kontor.transaction/journal jnl
+                  :kontor.transaction/effective-date date
+                  :kontor.transaction/narration external-id
+                  :kontor.transaction/state :posted
+                  :kontor.transaction/posted-at date}
                  :postings
-                 [{:posting/account rec :posting/amount gross :posting/commodity usd}
-                  {:posting/account rev :posting/amount (.negate net-bd) :posting/commodity usd}
-                  {:posting/account tax :posting/amount (.negate tax-bd) :posting/commodity usd}]})
-               (->> (mapv #(if (some? (:posting/account %))
-                             (assoc % :posting/posted-at date) %))))]
+                 [{:kontor.posting/account rec :kontor.posting/amount gross :kontor.posting/commodity usd}
+                  {:kontor.posting/account rev :kontor.posting/amount (.negate net-bd) :kontor.posting/commodity usd}
+                  {:kontor.posting/account tax :kontor.posting/amount (.negate tax-bd) :kontor.posting/commodity usd}]})
+               (->> (mapv #(if (some? (:kontor.posting/account %))
+                             (assoc % :kontor.posting/posted-at date) %))))]
     (v/transact-with-validation conn tx)))
 
 (defn- post-multi-jurisdiction-sale!
@@ -85,25 +85,25 @@
         rec (ace db "1200")
         rev (ace db "4000")
         denver (ace db "2230")
-        jnl (:db/id (d/entity db [:journal/code "INV"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         net-bd (bigdec net)
         denver-bd (.setScale (.multiply net-bd (bigdec "0.0881"))
                              2 java.math.RoundingMode/HALF_EVEN)
         gross (.add net-bd denver-bd)
         tx (-> (posting/build-transaction
                 {:transaction
-                 {:transaction/external-id external-id
-                  :transaction/journal jnl
-                  :transaction/effective-date date
-                  :transaction/narration external-id
-                  :transaction/state :posted
-                  :transaction/posted-at date}
+                 {:kontor.transaction/external-id external-id
+                  :kontor.transaction/journal jnl
+                  :kontor.transaction/effective-date date
+                  :kontor.transaction/narration external-id
+                  :kontor.transaction/state :posted
+                  :kontor.transaction/posted-at date}
                  :postings
-                 [{:posting/account rec :posting/amount gross :posting/commodity usd}
-                  {:posting/account rev :posting/amount (.negate net-bd) :posting/commodity usd}
-                  {:posting/account denver :posting/amount (.negate denver-bd) :posting/commodity usd}]})
-               (->> (mapv #(if (some? (:posting/account %))
-                             (assoc % :posting/posted-at date) %))))]
+                 [{:kontor.posting/account rec :kontor.posting/amount gross :kontor.posting/commodity usd}
+                  {:kontor.posting/account rev :kontor.posting/amount (.negate net-bd) :kontor.posting/commodity usd}
+                  {:kontor.posting/account denver :kontor.posting/amount (.negate denver-bd) :kontor.posting/commodity usd}]})
+               (->> (mapv #(if (some? (:kontor.posting/account %))
+                             (assoc % :kontor.posting/posted-at date) %))))]
     (v/transact-with-validation conn tx)))
 
 ;; ============================================================================

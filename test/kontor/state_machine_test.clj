@@ -17,35 +17,35 @@
      :kontor.account/type :asset :kontor.account/active true}
     {:db/id -3 :kontor.account/path "Income:Sales" :kontor.account/name "Sales"
      :kontor.account/type :income :kontor.account/active true}
-    {:db/id -4 :journal/code "INV" :journal/name "J"
-     :journal/type :sale :journal/active true}])
+    {:db/id -4 :kontor.journal/code "INV" :kontor.journal/name "J"
+     :kontor.journal/type :sale :kontor.journal/active true}])
   (let [db (d/db conn)]
     {:eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
      :rec (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
      :rev (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
-     :jnl (:db/id (d/entity db [:journal/code "INV"]))}))
+     :jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))}))
 
 (defn- mk-tx
   [{:keys [eur rec rev jnl]} state]
   (let [tx-data (posting/build-transaction
                  {:transaction
-                  {:transaction/external-id    (str "TX-" (name state))
-                   :transaction/journal        jnl
-                   :transaction/effective-date some-date
-                   :transaction/narration      "test"
-                   :transaction/state          state}
+                  {:kontor.transaction/external-id    (str "TX-" (name state))
+                   :kontor.transaction/journal        jnl
+                   :kontor.transaction/effective-date some-date
+                   :kontor.transaction/narration      "test"
+                   :kontor.transaction/state          state}
                   :postings
-                  [{:posting/account rec :posting/amount  100M :posting/commodity eur}
-                   {:posting/account rev :posting/amount -100M :posting/commodity eur}]})]
+                  [{:kontor.posting/account rec :kontor.posting/amount  100M :kontor.posting/commodity eur}
+                   {:kontor.posting/account rev :kontor.posting/amount -100M :kontor.posting/commodity eur}]})]
     ;; If we want :posted, also stamp posted-at on the header and on
     ;; each balance-affecting posting (the latter for sealing).
     (if (= :posted state)
       (mapv (fn [m]
               (cond-> m
-                (some? (:transaction/journal m))
-                (assoc :transaction/posted-at some-date)
-                (some? (:posting/account m))
-                (assoc :posting/posted-at some-date)))
+                (some? (:kontor.transaction/journal m))
+                (assoc :kontor.transaction/posted-at some-date)
+                (some? (:kontor.posting/account m))
+                (assoc :kontor.posting/posted-at some-date)))
             tx-data)
       tx-data)))
 
@@ -93,11 +93,11 @@
 (deftest posting-without-posted-at-rejected
   (let [conn (core/create-test-db)
         cat  (catalog! conn)
-        ;; Same shape as :posted but stripped of :transaction/posted-at
+        ;; Same shape as :posted but stripped of :kontor.transaction/posted-at
         tx-data (mapv (fn [m]
                         (cond-> m
-                          (contains? m :transaction/posted-at)
-                          (dissoc :transaction/posted-at)))
+                          (contains? m :kontor.transaction/posted-at)
+                          (dissoc :kontor.transaction/posted-at)))
                       (mk-tx cat :posted))
         violations (sm/find-violations (d/db conn) tx-data)]
     (is (some #(= :state-machine/missing-posted-at (:reason %)) violations))))
@@ -112,11 +112,11 @@
         ;; First create as draft
         _ (v/transact-with-validation conn (mk-tx cat :draft))
         db (d/db conn)
-        tx-eid (:db/id (d/entity db [:transaction/external-id "TX-draft"]))
+        tx-eid (:db/id (d/entity db [:kontor.transaction/external-id "TX-draft"]))
         ;; Now flip to posted
         upgrade [{:db/id              tx-eid
-                  :transaction/state  :posted
-                  :transaction/posted-at some-date}]]
+                  :kontor.transaction/state  :posted
+                  :kontor.transaction/posted-at some-date}]]
     (is (= [] (sm/find-violations db upgrade)))))
 
 (deftest posted-to-draft-rejected
@@ -124,8 +124,8 @@
         cat  (catalog! conn)
         _ (v/transact-with-validation conn (mk-tx cat :posted))
         db (d/db conn)
-        tx-eid (:db/id (d/entity db [:transaction/external-id "TX-posted"]))
-        regress [{:db/id tx-eid :transaction/state :draft}]
+        tx-eid (:db/id (d/entity db [:kontor.transaction/external-id "TX-posted"]))
+        regress [{:db/id tx-eid :kontor.transaction/state :draft}]
         violations (sm/find-violations db regress)]
     (is (some #(= :state-machine/illegal-transition (:reason %)) violations))))
 
@@ -180,23 +180,23 @@
           cat (catalog! conn)
           _ (v/transact-with-validation conn (mk-tx cat :draft))
           db (d/db conn)
-          eid (:db/id (d/entity db [:transaction/external-id "TX-draft"]))]
+          eid (:db/id (d/entity db [:kontor.transaction/external-id "TX-draft"]))]
       ;; :draft → :pending-attestation (no clearance token yet)
       (is (some?
            (v/transact-with-validation
             conn
             [{:db/id eid
-              :transaction/state :pending-attestation}])))
+              :kontor.transaction/state :pending-attestation}])))
       ;; :pending-attestation → :posted requires posted-at + sets token
       (is (some?
            (v/transact-with-validation
             conn
             [{:db/id eid
-              :transaction/state :posted
-              :transaction/posted-at some-date
-              :transaction/clearance-token "351234567890123456789012345678901234567890ZZZZZ"}])))
+              :kontor.transaction/state :posted
+              :kontor.transaction/posted-at some-date
+              :kontor.transaction/clearance-token "351234567890123456789012345678901234567890ZZZZZ"}])))
       (let [db (d/db conn)
             ent (d/entity db eid)]
-        (is (= :posted (:transaction/state ent)))
+        (is (= :posted (:kontor.transaction/state ent)))
         (is (= "351234567890123456789012345678901234567890ZZZZZ"
-               (:transaction/clearance-token ent)))))))
+               (:kontor.transaction/clearance-token ent)))))))

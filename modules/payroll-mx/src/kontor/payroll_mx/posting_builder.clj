@@ -128,7 +128,7 @@
 
    Required opts:
      :db          — datahike value used to resolve accounts
-     :journal     — :journal eid OR [:journal/code 'NOM']
+     :journal     — :journal eid OR [:kontor.journal/code 'NOM']
      :commodity   — :commodity eid OR [:kontor.commodity/symbol 'MXN']
      :period      — {:start <inst> :end <inst> :payment-date <inst>}
      :facts       — vector of :payroll-facts maps
@@ -156,10 +156,10 @@
         debit-rows
         (for [[[codigo kind _eo? wage-type] amount] aggs
               :when (and (= kind :percepcion) (pos? (.signum ^BigDecimal amount)))]
-          {:posting/account (resolve-account! db codigo)
-           :posting/amount  amount
-           :posting/commodity commodity
-           :posting/narration (str "Dr " codigo " "
+          {:kontor.posting/account (resolve-account! db codigo)
+           :kontor.posting/amount  amount
+           :kontor.posting/commodity commodity
+           :kontor.posting/narration (str "Dr " codigo " "
                                    (wt/description wage-type))})
 
         ;; Worker-side credit lines (the bank-payable, the ISR liability,
@@ -213,28 +213,28 @@
         credit-rows
         (cond-> []
           (pos? (.signum neto-payable))
-          (conj {:posting/account (resolve-account! db "206.01")
-                 :posting/amount  (.negate neto-payable)
-                 :posting/commodity commodity
-                 :posting/narration "Cr 206.01 Sueldos por pagar (neto)"})
+          (conj {:kontor.posting/account (resolve-account! db "206.01")
+                 :kontor.posting/amount  (.negate neto-payable)
+                 :kontor.posting/commodity commodity
+                 :kontor.posting/narration "Cr 206.01 Sueldos por pagar (neto)"})
 
           (pos? (.signum isr-liability))
-          (conj {:posting/account (resolve-account! db "206.04")
-                 :posting/amount  (.negate isr-liability)
-                 :posting/commodity commodity
-                 :posting/narration "Cr 206.04 ISR retenido neto subsidio"})
+          (conj {:kontor.posting/account (resolve-account! db "206.04")
+                 :kontor.posting/amount  (.negate isr-liability)
+                 :kontor.posting/commodity commodity
+                 :kontor.posting/narration "Cr 206.04 ISR retenido neto subsidio"})
 
           (pos? (.signum imss-payable))
-          (conj {:posting/account (resolve-account! db "206.05")
-                 :posting/amount  (.negate imss-payable)
-                 :posting/commodity commodity
-                 :posting/narration "Cr 206.05 IMSS por pagar"})
+          (conj {:kontor.posting/account (resolve-account! db "206.05")
+                 :kontor.posting/amount  (.negate imss-payable)
+                 :kontor.posting/commodity commodity
+                 :kontor.posting/narration "Cr 206.05 IMSS por pagar"})
 
           (pos? (.signum infonavit-payable))
-          (conj {:posting/account (resolve-account! db "206.06")
-                 :posting/amount  (.negate infonavit-payable)
-                 :posting/commodity commodity
-                 :posting/narration "Cr 206.06 INFONAVIT por pagar"}))
+          (conj {:kontor.posting/account (resolve-account! db "206.06")
+                 :kontor.posting/amount  (.negate infonavit-payable)
+                 :kontor.posting/commodity commodity
+                 :kontor.posting/narration "Cr 206.06 INFONAVIT por pagar"}))
 
         tx-narration (or narration
                          (str "Nómina periodo "
@@ -242,9 +242,9 @@
         tx-ext-id (or external-id
                       (str "NOM-" (:payment-date period)))]
     (posting/build-transaction
-     {:transaction (cond-> {:transaction/journal journal
-                            :transaction/effective-date (:payment-date period)
-                            :transaction/narration tx-narration
-                            :transaction/state :draft}
-                     tx-ext-id (assoc :transaction/external-id tx-ext-id))
+     {:transaction (cond-> {:kontor.transaction/journal journal
+                            :kontor.transaction/effective-date (:payment-date period)
+                            :kontor.transaction/narration tx-narration
+                            :kontor.transaction/state :draft}
+                     tx-ext-id (assoc :kontor.transaction/external-id tx-ext-id))
       :postings (vec (concat debit-rows credit-rows))})))

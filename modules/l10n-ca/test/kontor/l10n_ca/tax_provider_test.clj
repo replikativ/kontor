@@ -132,24 +132,24 @@
                 {:db db :date d1}))]
     (testing "ON → one credit of 130 to 2310 (GST/HST)"
       (let [p (first (post :ON))]
-        (is (= (a "2310") (:posting/account p)))
-        (is (== -130M (:posting/amount p)) "output tax is a credit")
-        (is (= :tax (:posting/display-type p)))))
+        (is (= (a "2310") (:kontor.posting/account p)))
+        (is (== -130M (:kontor.posting/amount p)) "output tax is a credit")
+        (is (= :tax (:kontor.posting/display-type p)))))
     (testing "BC → 50 to 2310, 70 to 2320"
       (let [ps (post :BC)
-            by-acct (into {} (map (juxt :posting/account :posting/amount)) ps)]
+            by-acct (into {} (map (juxt :kontor.posting/account :kontor.posting/amount)) ps)]
         (is (= 2 (count ps)))
         (is (== -50M (get by-acct (a "2310"))))
         (is (== -70M (get by-acct (a "2320"))))))
     (testing "QC → 50 to 2310, 99.75 to 2330 (QST → Revenu Québec)"
       (let [ps (post :QC)
-            by-acct (into {} (map (juxt :posting/account :posting/amount)) ps)]
+            by-acct (into {} (map (juxt :kontor.posting/account :kontor.posting/amount)) ps)]
         (is (= 2 (count ps)))
         (is (== -50M (get by-acct (a "2310"))))
         (is (== -99.75M (get by-acct (a "2330"))))))
     (testing "SK PST routes to 2321, MB RST to 2322"
-      (let [sk (into {} (map (juxt :posting/account :posting/amount)) (post :SK))
-            mb (into {} (map (juxt :posting/account :posting/amount)) (post :MB))]
+      (let [sk (into {} (map (juxt :kontor.posting/account :kontor.posting/amount)) (post :SK))
+            mb (into {} (map (juxt :kontor.posting/account :kontor.posting/amount)) (post :MB))]
         (is (== -60M (get sk (a "2321"))) "SK PST 6% to 2321")
         (is (== -70M (get mb (a "2322"))) "MB RST 7% to 2322")))
     (testing "zero-rated / exempt → no leg"
@@ -174,7 +174,7 @@
                         {:db db :date d1}))
                      [100M 200M 50M])
         agg  (tpb/aggregate-postings raw)
-        by-acct (into {} (map (juxt :posting/account :posting/amount)) agg)]
+        by-acct (into {} (map (juxt :kontor.posting/account :kontor.posting/amount)) agg)]
     (is (= 6 (count raw)) "three BC lines → six raw postings (GST + PST each)")
     (is (= 2 (count agg)) "collapsed to one per authority")
     ;; net 350: GST 5% = 17.50, PST 7% = 24.50
@@ -199,5 +199,5 @@
                        prov bld
                        {:base 1000M :ship-to-province :ON :commodity cad}
                        {:db db :date d1}))]
-      (is (= a9999 (:posting/account p)) "routed to the overridden account")
-      (is (== -130M (:posting/amount p))))))
+      (is (= a9999 (:kontor.posting/account p)) "routed to the overridden account")
+      (is (== -130M (:kontor.posting/amount p))))))

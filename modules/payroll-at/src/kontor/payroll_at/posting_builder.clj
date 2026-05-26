@@ -99,11 +99,11 @@
        (keep (fn [wt]
                (when-let [^BigDecimal amt (get totals wt)]
                  (when (pos? (.signum amt))
-                   {:posting/account   (resolve-acct
+                   {:kontor.posting/account   (resolve-acct
                                         db (wt/account-code-for wt account-map))
-                    :posting/amount    amt
-                    :posting/commodity commodity-ref
-                    :posting/narration (str "Payroll Aufwand: " (name wt))}))))
+                    :kontor.posting/amount    amt
+                    :kontor.posting/commodity commodity-ref
+                    :kontor.posting/narration (str "Payroll Aufwand: " (name wt))}))))
        vec))
 
 (defn- payable-postings
@@ -117,10 +117,10 @@
   [db totals account-map payable-map commodity-ref]
   (let [neg (fn [^BigDecimal x] (.negate ^BigDecimal x))
         cred (fn [code amt narration]
-               {:posting/account   (resolve-acct db code)
-                :posting/amount    (neg amt)
-                :posting/commodity commodity-ref
-                :posting/narration narration})]
+               {:kontor.posting/account   (resolve-acct db code)
+                :kontor.posting/amount    (neg amt)
+                :kontor.posting/commodity commodity-ref
+                :kontor.posting/narration narration})]
     (cond-> []
       ;; Withholdings — pure Cr legs against the Aufwand-side gross.
       (some-> (:lohnsteuer totals) (.signum) pos?)
@@ -176,7 +176,7 @@
 
    Required opts:
      :payroll-result   the normalized engine output
-     :journal          journal ref (:journal/code lookup-ref works)
+     :journal          journal ref (:kontor.journal/code lookup-ref works)
      :commodity        :commodity ref ([:kontor.commodity/symbol \"EUR\"])
      :effective-date   the period-end #inst (drives :tx/valid-from)
 
@@ -209,16 +209,16 @@
         post-at (or posted-at effective-date)
         postings (vec (concat debits credits))
         postings (if (= state :posted)
-                   (mapv #(assoc % :posting/posted-at post-at) postings)
+                   (mapv #(assoc % :kontor.posting/posted-at post-at) postings)
                    postings)
-        tx-base (cond-> {:transaction/journal         journal
-                         :transaction/effective-date  effective-date
-                         :transaction/external-id     ext-id
-                         :transaction/narration       narr
-                         :transaction/source          (str "payroll-at:" period-str)
-                         :transaction/state           state}
+        tx-base (cond-> {:kontor.transaction/journal         journal
+                         :kontor.transaction/effective-date  effective-date
+                         :kontor.transaction/external-id     ext-id
+                         :kontor.transaction/narration       narr
+                         :kontor.transaction/source          (str "payroll-at:" period-str)
+                         :kontor.transaction/state           state}
                   (= state :posted)
-                  (assoc :transaction/posted-at post-at))]
+                  (assoc :kontor.transaction/posted-at post-at))]
     (posting/build-transaction
      {:transaction tx-base
       :postings    postings})))

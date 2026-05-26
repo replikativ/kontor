@@ -73,8 +73,8 @@
 
 (defn- seed-journal! []
   (d/transact *conn*
-              [{:journal/code "PURCH" :journal/name "Purchase Journal"
-                :journal/type :purchase}]))
+              [{:kontor.journal/code "PURCH" :kontor.journal/name "Purchase Journal"
+                :kontor.journal/type :purchase}]))
 
 (defn- create-purchase-order!
   "Seed a :purchase order with one item. Returns the order-eid +

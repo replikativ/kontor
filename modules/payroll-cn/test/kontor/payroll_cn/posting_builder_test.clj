@@ -44,7 +44,7 @@
                                  :employee-external-id "E001"}})
 
 (defn- sum-postings ^BigDecimal [postings]
-  (reduce (fn [a {:keys [posting/amount]}]
+  (reduce (fn [a {:kontor.posting/keys [amount]}]
             (.add ^BigDecimal a ^BigDecimal amount))
           0M postings))
 
@@ -57,42 +57,42 @@
     (testing "posting set sums to zero"
       (is (zero? (.signum (sum-postings postings)))))
     (testing "every posting carries the ledger"
-      (is (every? #(= :test-ledger (:posting/ledger %)) postings)))
+      (is (every? #(= :test-ledger (:kontor.posting/ledger %)) postings)))
     (testing "every posting carries the commodity"
-      (is (every? #(= commodity (:posting/commodity %)) postings)))))
+      (is (every? #(= commodity (:kontor.posting/commodity %)) postings)))))
 
 (deftest gross-wage-leg-is-debited
   (let [postings (pb/build-payroll-postings
                   {:facts [(balanced-fact)]
                    :accounts accounts
                    :commodity commodity})
-        wage-leg (first (filter #(= :acct-wages-exp (:posting/account %)) postings))]
+        wage-leg (first (filter #(= :acct-wages-exp (:kontor.posting/account %)) postings))]
     (testing "wages expense leg debits the gross 18000"
-      (is (= 18000.00M (:posting/amount wage-leg))))))
+      (is (= 18000.00M (:kontor.posting/amount wage-leg))))))
 
 (deftest iit-withholding-is-credited
   (let [postings (pb/build-payroll-postings
                   {:facts [(balanced-fact)]
                    :accounts accounts
                    :commodity commodity})
-        iit (first (filter #(= :acct-iit-payable (:posting/account %)) postings))]
-    (is (= -1330.00M (:posting/amount iit)))))
+        iit (first (filter #(= :acct-iit-payable (:kontor.posting/account %)) postings))]
+    (is (= -1330.00M (:kontor.posting/amount iit)))))
 
 (deftest net-pay-leg-is-credited
   (let [postings (pb/build-payroll-postings
                   {:facts [(balanced-fact)]
                    :accounts accounts
                    :commodity commodity})
-        net (first (filter #(= :acct-net-pay (:posting/account %)) postings))]
-    (is (= -12620.00M (:posting/amount net)))))
+        net (first (filter #(= :acct-net-pay (:kontor.posting/account %)) postings))]
+    (is (= -12620.00M (:kontor.posting/amount net)))))
 
 (deftest employer-side-emits-two-legs
   (let [postings (pb/build-payroll-postings
                   {:facts [(balanced-fact)]
                    :accounts accounts
                    :commodity commodity})
-        er-si-exp (filter #(= :acct-er-si-exp (:posting/account %)) postings)
-        er-si-pay (filter #(= :acct-er-si-payable (:posting/account %)) postings)]
+        er-si-exp (filter #(= :acct-er-si-exp (:kontor.posting/account %)) postings)
+        er-si-pay (filter #(= :acct-er-si-payable (:kontor.posting/account %)) postings)]
     (testing "four ER SI legs DR + matching CR pairs (pension/medical/unemployment/work-injury)"
       (is (= 4 (count er-si-exp)))
       (is (= 4 (count er-si-pay))))
@@ -112,7 +112,7 @@
               [:analytic-account/path "cn-province:BJ"]
               :analytic-distribution/percent 100M}]]
         (is (every? #(= bj-distribution
-                        (:posting/analytic-distributions %))
+                        (:kontor.posting/analytic-distributions %))
                     postings))))))
 
 (deftest missing-account-tag-throws
@@ -137,12 +137,12 @@
         sh-leg (first (filter #(some (fn [d]
                                        (= [:analytic-account/path "cn-province:SH"]
                                           (:analytic-distribution/account d)))
-                                     (:posting/analytic-distributions %))
+                                     (:kontor.posting/analytic-distributions %))
                               postings))
         bj-leg (first (filter #(some (fn [d]
                                        (= [:analytic-account/path "cn-province:BJ"]
                                           (:analytic-distribution/account d)))
-                                     (:posting/analytic-distributions %))
+                                     (:kontor.posting/analytic-distributions %))
                               postings))]
     (testing "all postings sum to zero across both employees"
       (is (zero? (.signum (sum-postings postings)))))
@@ -157,7 +157,7 @@
                                     {:accounts accounts
                                      :ledger :test-ledger})]
     (is (zero? (.signum (sum-postings postings))))
-    (is (every? #(= :test-ledger (:posting/ledger %)) postings))))
+    (is (every? #(= :test-ledger (:kontor.posting/ledger %)) postings))))
 
 (deftest builder-without-commodity-throws
   (is (thrown? clojure.lang.ExceptionInfo

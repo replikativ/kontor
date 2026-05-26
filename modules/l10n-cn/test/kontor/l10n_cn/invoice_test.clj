@@ -13,7 +13,7 @@
      - Small-scale taxpayer, 1% preferential — rate routes to the
        export catch-all (5001.0) when no per-line override
      - Cash sale — debit hits 1002 (bank) instead of 1122 (AR)
-     - Fapiao-type — recorded as :transaction/clearance-format,
+     - Fapiao-type — recorded as :kontor.transaction/clearance-format,
        does NOT affect postings"
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
@@ -29,10 +29,10 @@
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
     (chart/install! conn)
-    (d/transact conn [{:journal/code "INV"
-                       :journal/name "Sales"
-                       :journal/type :sale
-                       :journal/active true}])
+    (d/transact conn [{:kontor.journal/code "INV"
+                       :kontor.journal/name "Sales"
+                       :kontor.journal/type :sale
+                       :kontor.journal/active true}])
     conn))
 
 (defn- ace [db code]
@@ -45,8 +45,8 @@
       (d/q '[:find [?amt ...]
              :in $ ?a
              :where
-             [?p :posting/account ?a]
-             [?p :posting/amount ?amt]]
+             [?p :kontor.posting/account ?a]
+             [?p :kontor.posting/amount ?amt]]
            db a))))
 
 (defn- sum-account [db code]
@@ -176,7 +176,7 @@
 ;; ============================================================================
 
 (deftest fapiao-type-records-clearance-format
-  (testing "An :invoice/fapiao-type → :transaction/clearance-format.
+  (testing "An :invoice/fapiao-type → :kontor.transaction/clearance-format.
               The postings are identical regardless; the field exists
               so downstream STA-platform routing knows which fapiao
               API to call."
@@ -195,9 +195,9 @@
               tx (d/entity db
                            (d/q '[:find ?t .
                                   :in $ ?eid
-                                  :where [?t :transaction/external-id ?eid]]
+                                  :where [?t :kontor.transaction/external-id ?eid]]
                                 db (:invoice/external-id inv-map)))]
-          (is (= expected-format (:transaction/clearance-format tx))
+          (is (= expected-format (:kontor.transaction/clearance-format tx))
               (str "fapiao-type " fapiao-type " → " expected-format)))
         ;; postings invariant regardless of fapiao-type
         (let [db (d/db conn)]
@@ -257,7 +257,7 @@
       (is (vector? tx-data))
       (is (every? map? (filter map? tx-data))
           "tx-data entries are maps (entity-style)")
-      (is (zero? (count (d/q '[:find [?p ...] :where [?p :posting/account _]] db)))
+      (is (zero? (count (d/q '[:find [?p ...] :where [?p :kontor.posting/account _]] db)))
           "Pure planner does not transact"))))
 
 ;; ============================================================================
@@ -321,7 +321,7 @@
         (inv/post-cn-invoice! conn inv-map)
         (let [db (d/db conn)
               all-amounts (d/q '[:find [?amt ...]
-                                 :where [_ :posting/amount ?amt]]
+                                 :where [_ :kontor.posting/amount ?amt]]
                                db)
               total (reduce (fn [^java.math.BigDecimal acc ^java.math.BigDecimal x]
                               (.add acc x))

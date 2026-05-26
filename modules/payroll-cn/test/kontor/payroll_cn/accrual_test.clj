@@ -24,13 +24,13 @@
     (testing "tx-data is a vector"
       (is (vector? tx)))
     (testing "contains a :transaction map"
-      (is (some #(and (map? %) (contains? % :transaction/external-id)) tx)))
+      (is (some #(and (map? %) (contains? % :kontor.transaction/external-id)) tx)))
     (testing "contains exactly two postings"
-      (let [postings (filter #(and (map? %) (contains? % :posting/account)) tx)]
+      (let [postings (filter #(and (map? %) (contains? % :kontor.posting/account)) tx)]
         (is (= 2 (count postings)))))
     (testing "postings sum to zero per (ledger, commodity)"
-      (let [postings (filter #(and (map? %) (contains? % :posting/account)) tx)
-            sum (reduce (fn [a {:keys [posting/amount]}]
+      (let [postings (filter #(and (map? %) (contains? % :kontor.posting/account)) tx)
+            sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                           (.add ^BigDecimal a ^BigDecimal amount))
                         0M postings)]
         (is (zero? (.signum sum)))))))
@@ -45,11 +45,11 @@
              :journal :journal-payroll
              :effective-date #inst "2026-04-30"
              :tx-code "ACR-CN-2026-04-002"})
-        postings (filter #(and (map? %) (contains? % :posting/account)) tx)
-        dr (first (filter #(= :acct-5603 (:posting/account %)) postings))
-        cr (first (filter #(= :acct-2211-bonus (:posting/account %)) postings))]
-    (is (= 833.34M (:posting/amount dr)))
-    (is (= -833.34M (:posting/amount cr)))))
+        postings (filter #(and (map? %) (contains? % :kontor.posting/account)) tx)
+        dr (first (filter #(= :acct-5603 (:kontor.posting/account %)) postings))
+        cr (first (filter #(= :acct-2211-bonus (:kontor.posting/account %)) postings))]
+    (is (= 833.34M (:kontor.posting/amount dr)))
+    (is (= -833.34M (:kontor.posting/amount cr)))))
 
 (deftest accrual-rejects-missing-fields
   (testing "missing :amount"
@@ -83,8 +83,8 @@
              :journal :journal-payroll
              :effective-date #inst "2026-04-30"
              :tx-code "ACR-CN-REV-001"})
-        postings (filter #(and (map? %) (contains? % :posting/account)) tx)
-        dr (first (filter #(= :acct-5603 (:posting/account %)) postings))
-        cr (first (filter #(= :acct-2211-bonus (:posting/account %)) postings))]
-    (is (= -500.00M (:posting/amount dr)))
-    (is (= 500.00M (:posting/amount cr)))))
+        postings (filter #(and (map? %) (contains? % :kontor.posting/account)) tx)
+        dr (first (filter #(= :acct-5603 (:kontor.posting/account %)) postings))
+        cr (first (filter #(= :acct-2211-bonus (:kontor.posting/account %)) postings))]
+    (is (= -500.00M (:kontor.posting/amount dr)))
+    (is (= 500.00M (:kontor.posting/amount cr)))))

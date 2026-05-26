@@ -25,11 +25,11 @@
             [kontor.l10n-jp.investment-income-statute :as inv-statute]))
 
 (def ^:private default-journals
-  [{:journal/code "GJ" :journal/type :general :journal/name "総勘定元帳 (General Journal)"}
-   {:journal/code "CR" :journal/type :cash    :journal/name "現金収入 (Cash Receipts)"}
-   {:journal/code "CD" :journal/type :cash    :journal/name "現金支出 (Cash Disbursements)"}
-   {:journal/code "SJ" :journal/type :sale    :journal/name "売上 (Sales Journal)"}
-   {:journal/code "PJ" :journal/type :purchase :journal/name "仕入 (Purchase Journal)"}])
+  [{:kontor.journal/code "GJ" :kontor.journal/type :general :kontor.journal/name "総勘定元帳 (General Journal)"}
+   {:kontor.journal/code "CR" :kontor.journal/type :cash    :kontor.journal/name "現金収入 (Cash Receipts)"}
+   {:kontor.journal/code "CD" :kontor.journal/type :cash    :kontor.journal/name "現金支出 (Cash Disbursements)"}
+   {:kontor.journal/code "SJ" :kontor.journal/type :sale    :kontor.journal/name "売上 (Sales Journal)"}
+   {:kontor.journal/code "PJ" :kontor.journal/type :purchase :kontor.journal/name "仕入 (Purchase Journal)"}])
 
 (defn install-all!
   "Install everything a JP consumer needs to start booking + producing

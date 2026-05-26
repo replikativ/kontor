@@ -110,7 +110,7 @@
                        :code code}))))
 
 (defn- journal-by-code [db code]
-  (:db/id (d/entity db [:journal/code code])))
+  (:db/id (d/entity db [:kontor.journal/code code])))
 
 (defn- commodity-by-symbol [db sym]
   (:db/id (d/entity db [:kontor.commodity/symbol sym])))
@@ -199,10 +199,10 @@
                                (.add acc (line-net l)))
                              0M ls)
                  acct (require-account db acct-code)]]
-       {:posting/account acct
-        :posting/amount (.negate (bd net))
-        :posting/commodity commodity-eid
-        :posting/posted-at date}))))
+       {:kontor.posting/account acct
+        :kontor.posting/amount (.negate (bd net))
+        :kontor.posting/commodity commodity-eid
+        :kontor.posting/posted-at date}))))
 
 (defn- tax-postings
   "Build sales-tax-payable credit postings. When track-by-state? is
@@ -221,10 +221,10 @@
     (if (nonzero? total-tax)
       (let [code (resolve-state-tax-code opts ship-to-state)
             acct (require-account db code)]
-        [{:posting/account acct
-          :posting/amount (.negate total-tax)
-          :posting/commodity commodity-eid
-          :posting/posted-at date}])
+        [{:kontor.posting/account acct
+          :kontor.posting/amount (.negate total-tax)
+          :kontor.posting/commodity commodity-eid
+          :kontor.posting/posted-at date}])
       [])))
 
 (defn plan-us-invoice-tx-data
@@ -250,7 +250,7 @@
    Optional top-level fields:
      :invoice/cash-sale?           debit cash (1100) instead of AR (1200)
      :invoice/cash-code            account-code override for the cash leg
-     :invoice/buyer                partner ref (kernel :transaction/partner)
+     :invoice/buyer                partner ref (kernel :kontor.transaction/partner)
      :invoice/journal              journal code override (default INV)
      :invoice/out-of-state?        route revenue to 4200 (no-nexus state)
      :invoice/rate                 invoice-level rate (applied to taxable lines
@@ -326,18 +326,18 @@
                                     commodity-eid issue-date)
         tax-posts (tax-postings db opts ship-to-state per-line
                                 commodity-eid issue-date)
-        debit-post {:posting/account debit-acct
-                    :posting/amount (:amount gross)
-                    :posting/commodity commodity-eid
-                    :posting/posted-at issue-date}
-        tx-base (cond-> {:transaction/external-id external-id
-                         :transaction/journal jnl
-                         :transaction/effective-date issue-date
-                         :transaction/narration (or (:invoice/narration invoice)
+        debit-post {:kontor.posting/account debit-acct
+                    :kontor.posting/amount (:amount gross)
+                    :kontor.posting/commodity commodity-eid
+                    :kontor.posting/posted-at issue-date}
+        tx-base (cond-> {:kontor.transaction/external-id external-id
+                         :kontor.transaction/journal jnl
+                         :kontor.transaction/effective-date issue-date
+                         :kontor.transaction/narration (or (:invoice/narration invoice)
                                                     external-id)
-                         :transaction/state :posted
-                         :transaction/posted-at issue-date}
-                  buyer (assoc :transaction/partner buyer))
+                         :kontor.transaction/state :posted
+                         :kontor.transaction/posted-at issue-date}
+                  buyer (assoc :kontor.transaction/partner buyer))
         input {:transaction tx-base
                :postings (into [debit-post] (into rev-posts tax-posts))}]
     (posting/build-transaction input)))

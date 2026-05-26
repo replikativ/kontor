@@ -203,37 +203,37 @@
                       signed-amt   (if (= direction :debit)
                                      amount
                                      (.negate ^java.math.BigDecimal amount))]
-                  (cond-> {:posting/account account
-                           :posting/amount signed-amt
-                           :posting/commodity commodity-eid
-                           :posting/partner partner-eid}
-                    entity-eid (assoc :posting/entity entity-eid)
-                    ledger-eid (assoc :posting/ledger ledger-eid))))
+                  (cond-> {:kontor.posting/account account
+                           :kontor.posting/amount signed-amt
+                           :kontor.posting/commodity commodity-eid
+                           :kontor.posting/partner partner-eid}
+                    entity-eid (assoc :kontor.posting/entity entity-eid)
+                    ledger-eid (assoc :kontor.posting/ledger ledger-eid))))
               lines)
         contra-account-type (case invoice-type
                               :sales       :ar
                               :purchase    :ap
                               :credit-memo :ar
                               :debit-memo  :ap)
-        line-sum (reduce (fn [acc {:posting/keys [amount]}]
+        line-sum (reduce (fn [acc {:kontor.posting/keys [amount]}]
                            (.add ^java.math.BigDecimal acc amount))
                          0M line-postings)
         contra-amount (.negate ^java.math.BigDecimal line-sum)
         contra-account (resolve-gl-account
                         db {:account-type contra-account-type
                             :entity entity-eid})
-        contra-posting (cond-> {:posting/account contra-account
-                                :posting/amount contra-amount
-                                :posting/commodity commodity-eid
-                                :posting/partner partner-eid}
-                         entity-eid (assoc :posting/entity entity-eid)
-                         ledger-eid (assoc :posting/ledger ledger-eid))]
-    {:transaction (cond-> {:transaction/journal journal-ref
-                           :transaction/effective-date posted-at
-                           :transaction/state :posted
-                           :transaction/posted-at posted-at
-                           :transaction/external-id (:invoice/external-id invoice)}
-                    partner-eid (assoc :transaction/partner partner-eid))
+        contra-posting (cond-> {:kontor.posting/account contra-account
+                                :kontor.posting/amount contra-amount
+                                :kontor.posting/commodity commodity-eid
+                                :kontor.posting/partner partner-eid}
+                         entity-eid (assoc :kontor.posting/entity entity-eid)
+                         ledger-eid (assoc :kontor.posting/ledger ledger-eid))]
+    {:transaction (cond-> {:kontor.transaction/journal journal-ref
+                           :kontor.transaction/effective-date posted-at
+                           :kontor.transaction/state :posted
+                           :kontor.transaction/posted-at posted-at
+                           :kontor.transaction/external-id (:invoice/external-id invoice)}
+                    partner-eid (assoc :kontor.transaction/partner partner-eid))
      :postings (conj line-postings contra-posting)}))
 
 ;; ============================================================================
@@ -262,7 +262,7 @@
         _ (when-not journal-ref
             (throw (ex-info "post-to-ledger! requires :journal-ref opt"
                             {:type :invoice/missing-journal
-                             :remediation "Pass :journal-ref [:journal/code \"GL\"] (or your tenant's journal code) to post-to-ledger!. The kernel posting invariant rejects journal-less transactions per ADR-021."})))
+                             :remediation "Pass :journal-ref [:kontor.journal/code \"GL\"] (or your tenant's journal code) to post-to-ledger!. The kernel posting invariant rejects journal-less transactions per ADR-021."})))
         pa (or posted-at (java.util.Date.))
         input (build-input db invoice-eid
                            {:journal-ref journal-ref

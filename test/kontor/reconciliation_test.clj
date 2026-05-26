@@ -8,7 +8,7 @@
      - run ingest → suggest-match → commit-match! per line
      - verify open-receivables-by-tx returns empty after, the bank
        account balance reflects the inflows, and audit links
-       (:transaction/settles) are correctly populated."
+       (:kontor.transaction/settles) are correctly populated."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
             [kontor.core :as core]
@@ -27,14 +27,14 @@
     (v/install-invariants! conn)
     (chart/install! conn)
     (d/transact conn
-                [{:journal/code "INV"
-                  :journal/name "Sales invoices"
-                  :journal/type :sale
-                  :journal/active true}
-                 {:journal/code "BANK"
-                  :journal/name "Bank movements"
-                  :journal/type :bank
-                  :journal/active true}
+                [{:kontor.journal/code "INV"
+                  :kontor.journal/name "Sales invoices"
+                  :kontor.journal/type :sale
+                  :kontor.journal/active true}
+                 {:kontor.journal/code "BANK"
+                  :kontor.journal/name "Bank movements"
+                  :kontor.journal/type :bank
+                  :kontor.journal/active true}
                  ;; Three partners
                  {:kontor.partner/external-id "ACME"  :kontor.partner/name "ACME GmbH"
                   :kontor.partner/kind :customer :kontor.partner/country-code "DE"}
@@ -55,7 +55,7 @@
         recv (ace db "1400")
         rev (ace db "4400")
         ust (ace db "3801")
-        jnl (:db/id (d/entity db [:journal/code "INV"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         partner (:db/id (d/entity db [:kontor.partner/external-id partner-extid]))
         net-bd (bigdec net)
         vat (.setScale (.multiply net-bd (bigdec "0.19"))
@@ -63,20 +63,20 @@
         gross (.add net-bd vat)
         tx (-> (posting/build-transaction
                 {:transaction
-                 {:transaction/external-id external-id
-                  :transaction/journal jnl
-                  :transaction/effective-date jan-15
-                  :transaction/narration external-id
-                  :transaction/partner partner
-                  :transaction/state :posted
-                  :transaction/posted-at jan-15}
+                 {:kontor.transaction/external-id external-id
+                  :kontor.transaction/journal jnl
+                  :kontor.transaction/effective-date jan-15
+                  :kontor.transaction/narration external-id
+                  :kontor.transaction/partner partner
+                  :kontor.transaction/state :posted
+                  :kontor.transaction/posted-at jan-15}
                  :postings
-                 [{:posting/account recv :posting/amount gross
-                   :posting/commodity eur :posting/posted-at jan-15}
-                  {:posting/account rev :posting/amount (.negate net-bd)
-                   :posting/commodity eur :posting/posted-at jan-15}
-                  {:posting/account ust :posting/amount (.negate vat)
-                   :posting/commodity eur :posting/posted-at jan-15}]}))]
+                 [{:kontor.posting/account recv :kontor.posting/amount gross
+                   :kontor.posting/commodity eur :kontor.posting/posted-at jan-15}
+                  {:kontor.posting/account rev :kontor.posting/amount (.negate net-bd)
+                   :kontor.posting/commodity eur :kontor.posting/posted-at jan-15}
+                  {:kontor.posting/account ust :kontor.posting/amount (.negate vat)
+                   :kontor.posting/commodity eur :kontor.posting/posted-at jan-15}]}))]
     (v/transact-with-validation conn tx)
     gross))
 
@@ -228,8 +228,8 @@
           "expected 2 settled transactions")
       (let [settled-ext-ids
             (set (map (fn [eid]
-                        (:transaction/external-id
-                         (d/pull db [:transaction/external-id] eid)))
+                        (:kontor.transaction/external-id
+                         (d/pull db [:kontor.transaction/external-id] eid)))
                       (:transactions (:match best))))]
         (is (= #{"INV-2026-001" "INV-2026-003"} settled-ext-ids)
             (str "expected ACME's two invoices; got: " settled-ext-ids))))))
@@ -244,7 +244,7 @@
           db0 (d/db conn)
           bank-acct (ace db0 "1200")
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
-          bank-jnl (:db/id (d/entity db0 [:journal/code "BANK"]))
+          bank-jnl (:db/id (d/entity db0 [:kontor.journal/code "BANK"]))
           _ (recon/ingest-statement! conn
                                      [{:bank :test :date feb-5 :amount 1785.00M
                                        :counterparty "ACME GmbH"
@@ -296,14 +296,14 @@
   (testing "After committing a :settle match for ACME, open-
             receivables-by-tx no longer includes INV-2026-001, the
             bank account balance increased by 1190, and the
-            payment transaction has :transaction/settles → INV-001."
+            payment transaction has :kontor.transaction/settles → INV-001."
     (let [conn (bootstrap)
           _ (seed-three-invoices conn)
           db0 (d/db conn)
           bank-acct (ace db0 "1200")
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
-          inv-jnl (:db/id (d/entity db0 [:journal/code "INV"]))
-          bank-jnl (:db/id (d/entity db0 [:journal/code "BANK"]))
+          inv-jnl (:db/id (d/entity db0 [:kontor.journal/code "INV"]))
+          bank-jnl (:db/id (d/entity db0 [:kontor.journal/code "BANK"]))
           _ (recon/ingest-statement! conn (bank-candidates)
                                      {:source-account-eid bank-acct
                                       :commodity-eid eur})
@@ -317,9 +317,9 @@
           db (d/db conn)
           opens (recon/open-receivables-by-tx db #{"1400"})
           ext-ids (set (map :external-id opens))
-          payment-tx (d/pull db [:transaction/external-id
-                                 {:transaction/settles
-                                  [:transaction/external-id]}]
+          payment-tx (d/pull db [:kontor.transaction/external-id
+                                 {:kontor.transaction/settles
+                                  [:kontor.transaction/external-id]}]
                              payment-tx-eid)
           bank-balance (reduce
                         (fn [^java.math.BigDecimal acc [_ amt]]
@@ -328,8 +328,8 @@
                         (d/q '[:find ?p ?amt
                                :in $ ?bank-acct
                                :where
-                               [?p :posting/account ?bank-acct]
-                               [?p :posting/amount ?amt]]
+                               [?p :kontor.posting/account ?bank-acct]
+                               [?p :kontor.posting/amount ?amt]]
                              db bank-acct))]
       ;; Open AR no longer includes INV-001
       (is (not (contains? ext-ids "INV-2026-001")))
@@ -338,7 +338,7 @@
       (is (contains? ext-ids "INV-2026-003"))
       ;; Payment links to settled invoice
       (is (= "INV-2026-001"
-             (-> payment-tx :transaction/settles first :transaction/external-id)))
+             (-> payment-tx :kontor.transaction/settles first :kontor.transaction/external-id)))
       ;; Bank balance = 1190
       (is (= 1190.00M bank-balance)))))
 
@@ -351,7 +351,7 @@
           db0 (d/db conn)
           bank-acct (ace db0 "1200")
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
-          bank-jnl (:db/id (d/entity db0 [:journal/code "BANK"]))
+          bank-jnl (:db/id (d/entity db0 [:kontor.journal/code "BANK"]))
           _ (recon/ingest-statement! conn (bank-candidates)
                                      {:source-account-eid bank-acct
                                       :commodity-eid eur})
@@ -372,7 +372,7 @@
           db0 (d/db conn)
           bank-acct (ace db0 "1200")
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
-          bank-jnl (:db/id (d/entity db0 [:journal/code "BANK"]))
+          bank-jnl (:db/id (d/entity db0 [:kontor.journal/code "BANK"]))
           _ (recon/ingest-statement! conn (bank-candidates)
                                      {:source-account-eid bank-acct
                                       :commodity-eid eur})]

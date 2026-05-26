@@ -13,7 +13,7 @@
 ;;
 ;; Per ADR-018 NF-e issuance flows through :pending-attestation; the
 ;; resulting SEFAZ 44-digit access key (chave de acesso) lands in
-;; :transaction/clearance-token.
+;; :kontor.transaction/clearance-token.
 
 [
  ;; ---------- 1.01.xx.xx.xx Ativo Circulante (Current Assets) ----------

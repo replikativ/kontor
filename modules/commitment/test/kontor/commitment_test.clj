@@ -19,8 +19,8 @@
     (commitment/install! conn)
     (d/transact conn
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
-                 {:journal/code "SALE" :journal/type :sale}
-                 {:journal/code "CASH" :journal/type :cash}
+                 {:kontor.journal/code "SALE" :kontor.journal/type :sale}
+                 {:kontor.journal/code "CASH" :kontor.journal/type :cash}
                  {:kontor.partner/external-id "CUST" :kontor.partner/name "A Customer"}
                  {:kontor.partner/external-id "U-alice" :kontor.partner/name "Alice (actor)"}
                  {:kontor.account/path "Assets:Receivable" :kontor.account/type :asset}
@@ -33,7 +33,7 @@
 (def ^:private alice [:kontor.partner/external-id "U-alice"])
 
 (defn- tx-by-xid [conn xid]
-  (d/q '[:find ?t . :in $ ?x :where [?t :transaction/external-id ?x]]
+  (d/q '[:find ?t . :in $ ?x :where [?t :kontor.transaction/external-id ?x]]
        (d/db conn) xid))
 
 ;; ============================================================================

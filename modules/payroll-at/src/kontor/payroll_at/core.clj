@@ -90,7 +90,7 @@
    Required opts:
      :engine                  :bmd | :rzl
      :source                  anything io/reader accepts
-     :journal                 ref (lookup-ref [:journal/code \"PAYROLL\"])
+     :journal                 ref (lookup-ref [:kontor.journal/code \"PAYROLL\"])
      :commodity               ref (lookup-ref [:kontor.commodity/symbol \"EUR\"])
      :effective-date          period-end #inst
      :dienstgeber-beitragskonto  string

@@ -36,10 +36,10 @@
     (chart/install! conn)
     (pt/install-standard-terms! conn)
     (d/transact conn
-                [{:journal/code "INV"
-                  :journal/name "Sales invoices"
-                  :journal/type :sale
-                  :journal/active true}
+                [{:kontor.journal/code "INV"
+                  :kontor.journal/name "Sales invoices"
+                  :kontor.journal/type :sale
+                  :kontor.journal/active true}
                  {:kontor.partner/external-id "ACME"  :kontor.partner/name "ACME GmbH"
                   :kontor.partner/kind :customer :kontor.partner/country-code "DE"}
                  {:kontor.partner/external-id "BETA"  :kontor.partner/name "Beta AG"
@@ -56,7 +56,7 @@
   (let [db (d/db conn)
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         recv (ace db "1400") rev (ace db "4400") ust (ace db "3801")
-        jnl (:db/id (d/entity db [:journal/code "INV"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         partner-eid (:db/id (d/entity db [:kontor.partner/external-id partner]))
         net30 (pt/by-code db "NET30")
         net-bd (bigdec net)
@@ -64,23 +64,23 @@
                        2 java.math.RoundingMode/HALF_EVEN)
         gross (.add net-bd vat)
         term-frag (pt/apply-term date net30)
-        tx-map (-> {:transaction/external-id ext-id
-                    :transaction/journal jnl
-                    :transaction/effective-date date
-                    :transaction/narration ext-id
-                    :transaction/partner partner-eid
-                    :transaction/state :posted
-                    :transaction/posted-at date}
+        tx-map (-> {:kontor.transaction/external-id ext-id
+                    :kontor.transaction/journal jnl
+                    :kontor.transaction/effective-date date
+                    :kontor.transaction/narration ext-id
+                    :kontor.transaction/partner partner-eid
+                    :kontor.transaction/state :posted
+                    :kontor.transaction/posted-at date}
                    (merge term-frag))
         tx (-> (posting/build-transaction
                 {:transaction tx-map
                  :postings
-                 [{:posting/account recv :posting/amount gross
-                   :posting/commodity eur :posting/posted-at date}
-                  {:posting/account rev :posting/amount (.negate net-bd)
-                   :posting/commodity eur :posting/posted-at date}
-                  {:posting/account ust :posting/amount (.negate vat)
-                   :posting/commodity eur :posting/posted-at date}]}))]
+                 [{:kontor.posting/account recv :kontor.posting/amount gross
+                   :kontor.posting/commodity eur :kontor.posting/posted-at date}
+                  {:kontor.posting/account rev :kontor.posting/amount (.negate net-bd)
+                   :kontor.posting/commodity eur :kontor.posting/posted-at date}
+                  {:kontor.posting/account ust :kontor.posting/amount (.negate vat)
+                   :kontor.posting/commodity eur :kontor.posting/posted-at date}]}))]
     (v/transact-with-validation conn tx)))
 
 (defn- seed-fixtures [conn]
@@ -140,32 +140,32 @@
 (deftest aging-honours-due-date-when-payment-term-omitted
   (testing "If a transaction has no :payment-term but DOES have an
             explicit :due-date, the aging still works. Conversely,
-            no :due-date at all falls back to :transaction/effective-
+            no :due-date at all falls back to :kontor.transaction/effective-
             date (treats it as due-on-receipt)."
     (let [conn (bootstrap)
           db (d/db conn)
           eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           recv (ace db "1400") rev (ace db "4400") ust (ace db "3801")
-          jnl (:db/id (d/entity db [:journal/code "INV"]))
+          jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
           part (:db/id (d/entity db [:kontor.partner/external-id "ACME"]))
           ;; Manual transaction with explicit due-date but no payment-term
           tx (-> (posting/build-transaction
                   {:transaction
-                   {:transaction/external-id "INV-MAN"
-                    :transaction/journal jnl
-                    :transaction/effective-date #inst "2026-01-01T00:00:00Z"
-                    :transaction/due-date #inst "2026-04-15T00:00:00Z"
-                    :transaction/narration "manual due date"
-                    :transaction/partner part
-                    :transaction/state :posted
-                    :transaction/posted-at #inst "2026-01-01T00:00:00Z"}
+                   {:kontor.transaction/external-id "INV-MAN"
+                    :kontor.transaction/journal jnl
+                    :kontor.transaction/effective-date #inst "2026-01-01T00:00:00Z"
+                    :kontor.transaction/due-date #inst "2026-04-15T00:00:00Z"
+                    :kontor.transaction/narration "manual due date"
+                    :kontor.transaction/partner part
+                    :kontor.transaction/state :posted
+                    :kontor.transaction/posted-at #inst "2026-01-01T00:00:00Z"}
                    :postings
-                   [{:posting/account recv :posting/amount 119.00M
-                     :posting/commodity eur :posting/posted-at #inst "2026-01-01T00:00:00Z"}
-                    {:posting/account rev :posting/amount -100.00M
-                     :posting/commodity eur :posting/posted-at #inst "2026-01-01T00:00:00Z"}
-                    {:posting/account ust :posting/amount -19.00M
-                     :posting/commodity eur :posting/posted-at #inst "2026-01-01T00:00:00Z"}]}))
+                   [{:kontor.posting/account recv :kontor.posting/amount 119.00M
+                     :kontor.posting/commodity eur :kontor.posting/posted-at #inst "2026-01-01T00:00:00Z"}
+                    {:kontor.posting/account rev :kontor.posting/amount -100.00M
+                     :kontor.posting/commodity eur :kontor.posting/posted-at #inst "2026-01-01T00:00:00Z"}
+                    {:kontor.posting/account ust :kontor.posting/amount -19.00M
+                     :kontor.posting/commodity eur :kontor.posting/posted-at #inst "2026-01-01T00:00:00Z"}]}))
           _ (v/transact-with-validation conn tx)
           rows (aging/aging-rows (d/db conn) #{"1400"} :as-of as-of)
           inv-man (first (filter #(= "INV-MAN" (:external-id %)) rows))]

@@ -44,7 +44,7 @@
 
    This builder accepts an optional `:invoice/fapiao-type` (∈
    #{:special :general :electronic-general :fully-digital}) and maps
-   it to the kernel-level `:transaction/clearance-format` keyword
+   it to the kernel-level `:kontor.transaction/clearance-format` keyword
    (`:cn/fapiao-special-18` / `:cn/fapiao-general-20` /
    `:cn/fapiao-digital-20`) so downstream STA platform integrations
    can route the issuance request to the correct fapiao-issuing API.
@@ -104,8 +104,8 @@
 
 (def ^:private fapiao-type->clearance-format
   "Map `:invoice/fapiao-type` to the kernel-level
-   `:transaction/clearance-format` keyword (per schema docstring at
-   `:transaction/clearance-format` — ADR-020). The general/digital
+   `:kontor.transaction/clearance-format` keyword (per schema docstring at
+   `:kontor.transaction/clearance-format` — ADR-020). The general/digital
    forms both use the 20-character clearance-token format and we
    distinguish them by clearance-format keyword."
   {:special            :cn/fapiao-special-18
@@ -127,7 +127,7 @@
                        :code code}))))
 
 (defn- journal-by-code [db code]
-  (:db/id (d/entity db [:journal/code code])))
+  (:db/id (d/entity db [:kontor.journal/code code])))
 
 (defn- commodity-by-symbol [db sym]
   (:db/id (d/entity db [:kontor.commodity/symbol sym])))
@@ -220,10 +220,10 @@
                                (.add acc (line-net l)))
                              0M ls)
                  acct (require-account db acct-code)]]
-       {:posting/account acct
-        :posting/amount (.negate (bd net))
-        :posting/commodity commodity-eid
-        :posting/posted-at date}))))
+       {:kontor.posting/account acct
+        :kontor.posting/amount (.negate (bd net))
+        :kontor.posting/commodity commodity-eid
+        :kontor.posting/posted-at date}))))
 
 (defn- cn-output-vat-postings
   "Per-invoice output-VAT postings, via the ADR-071 tax provider +
@@ -279,7 +279,7 @@
      :invoice/cash-sale?       when true, post Dr cash (1002 by default)
                                 instead of AR (1122).
      :invoice/cash-code        account-code override for the cash leg.
-     :invoice/buyer            partner ref (kernel :transaction/partner).
+     :invoice/buyer            partner ref (kernel :kontor.transaction/partner).
      :invoice/journal          journal code override (default INV).
 
    Opts:
@@ -328,25 +328,25 @@
                         0M lines)
         ;; Output-VAT postings are credits (negative); gross = net − Σ(vat).
         gross (reduce (fn [^java.math.BigDecimal a p]
-                        (.subtract a ^java.math.BigDecimal (:posting/amount p)))
+                        (.subtract a ^java.math.BigDecimal (:kontor.posting/amount p)))
                       net-sum vat-posts)
         debit-code (if cash-sale?
                      (get codes :cash-code default-cash-code)
                      (get codes :ar-code default-ar-code))
         debit-acct (require-account db debit-code)
-        debit-post {:posting/account debit-acct
-                    :posting/amount gross
-                    :posting/commodity commodity-eid
-                    :posting/posted-at issue-date}
-        tx-base (cond-> {:transaction/external-id external-id
-                         :transaction/journal jnl
-                         :transaction/effective-date issue-date
-                         :transaction/narration (or (:invoice/narration invoice)
+        debit-post {:kontor.posting/account debit-acct
+                    :kontor.posting/amount gross
+                    :kontor.posting/commodity commodity-eid
+                    :kontor.posting/posted-at issue-date}
+        tx-base (cond-> {:kontor.transaction/external-id external-id
+                         :kontor.transaction/journal jnl
+                         :kontor.transaction/effective-date issue-date
+                         :kontor.transaction/narration (or (:invoice/narration invoice)
                                                     external-id)
-                         :transaction/state :posted
-                         :transaction/posted-at issue-date}
-                  buyer       (assoc :transaction/partner buyer)
-                  fapiao-type (assoc :transaction/clearance-format
+                         :kontor.transaction/state :posted
+                         :kontor.transaction/posted-at issue-date}
+                  buyer       (assoc :kontor.transaction/partner buyer)
+                  fapiao-type (assoc :kontor.transaction/clearance-format
                                      (fapiao-type->clearance-format fapiao-type)))
         input {:transaction tx-base
                :postings (into [debit-post] (into rev-posts vat-posts))}]

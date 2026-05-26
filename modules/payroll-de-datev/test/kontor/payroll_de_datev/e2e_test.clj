@@ -78,8 +78,8 @@
                  [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
                   {:db/id "ent-de" :kontor.entity/code "DE-GMBH" :kontor.entity/name "Acme DE GmbH"
                    :kontor.entity/kind :operating}
-                  {:db/id "journal-payroll" :journal/code "PAY-DE"
-                   :journal/name "Payroll (DE)" :journal/type :general}
+                  {:db/id "journal-payroll" :kontor.journal/code "PAY-DE"
+                   :kontor.journal/name "Payroll (DE)" :kontor.journal/type :general}
                   {:db/id "period-2025-11" :period/name "2025-11"
                    :period/start #inst "2025-11-01"
                    :period/end   #inst "2025-12-01"}]
@@ -104,7 +104,7 @@
         ent (ref-eid db :kontor.entity/code "DE-GMBH")
         eur (ref-eid db :kontor.commodity/symbol "EUR")
         period (ref-eid db :period/name "2025-11")
-        journal (ref-eid db :journal/code "PAY-DE")
+        journal (ref-eid db :kontor.journal/code "PAY-DE")
         _ (employment/hire! conn {:code "EMP-DE-mueller"
                                   :person person
                                   :entity ent
@@ -177,10 +177,10 @@
                      db "RUN-DE-2025-11-001")
         run (d/pull db
                     '[* {:payroll-run/payroll-transaction
-                         [:transaction/external-id
-                          {:posting/_transaction
-                           [:posting/amount
-                            {:posting/account [:kontor.account/code]}]}]}]
+                         [:kontor.transaction/external-id
+                          {:kontor.posting/_transaction
+                           [:kontor.posting/amount
+                            {:kontor.posting/account [:kontor.account/code]}]}]}]
                     run-eid)
         ;; Note 86 P0-86-1 fix: substrate orchestrator now links
         ;; emit-docs via :payroll-run/emit-docs. Query through the
@@ -197,17 +197,17 @@
       (is (= :datev-lodas (:payroll-run/provider-id run))))
     (testing "transaction posted with the 10-leg Bruttomethode shape"
       (let [tx (:payroll-run/payroll-transaction run)
-            postings (:posting/_transaction tx)]
-        (is (= "TX-PAYROLL-DE-2025-11" (:transaction/external-id tx)))
+            postings (:kontor.posting/_transaction tx)]
+        (is (= "TX-PAYROLL-DE-2025-11" (:kontor.transaction/external-id tx)))
         (is (= 10 (count postings)))
-        (let [sum (reduce (fn [^java.math.BigDecimal a {:keys [posting/amount]}]
+        (let [sum (reduce (fn [^java.math.BigDecimal a {:kontor.posting/keys [amount]}]
                             (.add a ^java.math.BigDecimal amount))
                           0M postings)]
           (is (zero? (.compareTo ^java.math.BigDecimal sum 0M))))
         (testing "expected amounts on each SKR04 account"
-          (let [by-code (group-by (comp :kontor.account/code :posting/account) postings)
+          (let [by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)
                 amounts (fn [code]
-                          (sort (map :posting/amount (get by-code code []))))]
+                          (sort (map :kontor.posting/amount (get by-code code []))))]
             (is (= [4000.00M]               (amounts "6020")))   ; gross expense
             (is (= [800.00M]                (amounts "6110")))   ; AG-SV
             (is (= [-2500.00M]              (amounts "3720")))   ; Verb. Lohn
@@ -217,7 +217,7 @@
             ;; +700 (LSt), +800 (AN-SV), +2500 (Net), and -4000 (against gross expense).
             ;; Sum = -4000 + 700 + 800 + 2500 = 0.
             (let [v (->> (get by-code "3790")
-                         (map :posting/amount)
+                         (map :kontor.posting/amount)
                          (reduce (fn [^java.math.BigDecimal a ^java.math.BigDecimal x]
                                    (.add a x))
                                  0M))]

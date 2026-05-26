@@ -23,37 +23,37 @@
      :kontor.account/type :asset :kontor.account/active true}
     {:db/id -3 :kontor.account/path "Income:Sales" :kontor.account/name "Sales"
      :kontor.account/type :income :kontor.account/active true}
-    {:db/id -4 :journal/code "INV" :journal/name "J"
-     :journal/type :sale :journal/active true}])
+    {:db/id -4 :kontor.journal/code "INV" :kontor.journal/name "J"
+     :kontor.journal/type :sale :kontor.journal/active true}])
   (let [db (d/db conn)
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         rec (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
         rev (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
-        jnl (:db/id (d/entity db [:journal/code "INV"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         ;; Build, mark posted *in the same tx*, transact.
         tx-data (-> (posting/build-transaction
                      {:transaction
-                      {:transaction/external-id    "INV-2026-0001"
-                       :transaction/journal        jnl
-                       :transaction/effective-date some-date
-                       :transaction/narration      "ACME"}
+                      {:kontor.transaction/external-id    "INV-2026-0001"
+                       :kontor.transaction/journal        jnl
+                       :kontor.transaction/effective-date some-date
+                       :kontor.transaction/narration      "ACME"}
                       :postings
-                      [{:posting/account rec :posting/amount  100M :posting/commodity eur}
-                       {:posting/account rev :posting/amount -100M :posting/commodity eur}]})
+                      [{:kontor.posting/account rec :kontor.posting/amount  100M :kontor.posting/commodity eur}
+                       {:kontor.posting/account rev :kontor.posting/amount -100M :kontor.posting/commodity eur}]})
                     (->> (mapv (fn [m]
                                  (cond-> m
-                                   (some? (:posting/account m))
-                                   (assoc :posting/posted-at some-date)
-                                   (some? (:transaction/journal m))
-                                   (assoc :transaction/posted-at some-date
-                                          :transaction/state    :posted))))))
+                                   (some? (:kontor.posting/account m))
+                                   (assoc :kontor.posting/posted-at some-date)
+                                   (some? (:kontor.transaction/journal m))
+                                   (assoc :kontor.transaction/posted-at some-date
+                                          :kontor.transaction/state    :posted))))))
         report (d/transact conn tx-data)
         db-after (:db-after report)
         a-posting-eid (-> (d/q '[:find ?p .
                                  :in $ ?tx-eid
-                                 :where [?p :posting/transaction ?tx-eid]]
+                                 :where [?p :kontor.posting/transaction ?tx-eid]]
                                db-after
-                               (:db/id (d/entity db-after [:transaction/external-id "INV-2026-0001"]))))]
+                               (:db/id (d/entity db-after [:kontor.transaction/external-id "INV-2026-0001"]))))]
     {:db-after db-after :posting-eid a-posting-eid}))
 
 ;; ============================================================================
@@ -71,13 +71,13 @@
 (deftest find-silent-retracts-flags-retract-of-posted
   (let [conn (core/create-test-db)
         {:keys [db-after posting-eid]} (seed-and-post! conn)
-        retracts [[:db/retract posting-eid :posting/amount 100M]]
+        retracts [[:db/retract posting-eid :kontor.posting/amount 100M]]
         violations (sealing/find-silent-retracts db-after retracts)]
     (is (= 1 (count violations)))
     (is (= posting-eid (-> violations first :eid)))))
 
 (deftest find-silent-retracts-ignores-retract-of-unposted
-  (testing "Retracting attrs on a draft entity (no :posting/posted-at)
+  (testing "Retracting attrs on a draft entity (no :kontor.posting/posted-at)
             is fine — only posted entities are sealed."
     (let [conn (core/create-test-db)
           _ (d/transact conn [{:db/id -1 :kontor.commodity/symbol "EUR"
@@ -99,7 +99,7 @@
          clojure.lang.ExceptionInfo #"Sealing violation"
          (sealing/assert-no-silent-retracts!
           db-after
-          [[:db/retract posting-eid :posting/amount 100M]]))
+          [[:db/retract posting-eid :kontor.posting/amount 100M]]))
         "Silent retract of posted-at-marked entity must throw.")))
 
 (deftest assert-throws-on-retract-entity-of-posted
@@ -132,5 +132,5 @@
          clojure.lang.ExceptionInfo #"Sealing violation"
          (v/transact-with-validation
           conn
-          [[:db/retract posting-eid :posting/amount 100M]]))
+          [[:db/retract posting-eid :kontor.posting/amount 100M]]))
         "transact-with-validation surfaces the sealing violation.")))

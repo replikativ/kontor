@@ -61,38 +61,38 @@
       ;; gross expense (2), withholding (2), employee-si (2), net (2), employer-si (2)
       (is (= 10 (count postings))))
     (testing "every leg uses EUR commodity + BigDecimal amounts"
-      (is (every? #(= eur (:posting/commodity %)) postings))
-      (is (every? #(instance? BigDecimal (:posting/amount %)) postings)))
+      (is (every? #(= eur (:kontor.posting/commodity %)) postings))
+      (is (every? #(instance? BigDecimal (:kontor.posting/amount %)) postings)))
     (testing "amounts sum to zero (balanced)"
-      (let [sum (reduce (fn [^BigDecimal a {:posting/keys [amount]}]
+      (let [sum (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                           (.add a ^BigDecimal amount))
                         0M postings)]
         (is (zero? (.compareTo ^BigDecimal sum 0M)))))
     (testing "Verrechnung (3790) net-zero per fact"
       (let [verr-sum (->> postings
-                          (filter #(= [:kontor.account/code "3790"] (:posting/account %)))
-                          (map :posting/amount)
+                          (filter #(= [:kontor.account/code "3790"] (:kontor.posting/account %)))
+                          (map :kontor.posting/amount)
                           (reduce (fn [^BigDecimal a ^BigDecimal v] (.add a v)) 0M))]
         (is (zero? (.compareTo ^BigDecimal verr-sum 0M)))))
     (testing "gross expense lands on 6020 (Gehälter)"
       (let [gross-dr (->> postings
-                          (filter #(= [:kontor.account/code "6020"] (:posting/account %)))
-                          (map :posting/amount))]
+                          (filter #(= [:kontor.account/code "6020"] (:kontor.posting/account %)))
+                          (map :kontor.posting/amount))]
         (is (= [4000.00M] gross-dr))))
     (testing "employer SI lands on 6110 (Soziale Aufwendungen)"
       (let [agsv (->> postings
-                      (filter #(= [:kontor.account/code "6110"] (:posting/account %)))
-                      (map :posting/amount))]
+                      (filter #(= [:kontor.account/code "6110"] (:kontor.posting/account %)))
+                      (map :kontor.posting/amount))]
         (is (= [800.00M] agsv))))
     (testing "verb-lohn (3720) carries the net as credit"
       (let [vl (->> postings
-                    (filter #(= [:kontor.account/code "3720"] (:posting/account %)))
-                    (map :posting/amount))]
+                    (filter #(= [:kontor.account/code "3720"] (:kontor.posting/account %)))
+                    (map :kontor.posting/amount))]
         (is (= [-2500.00M] vl))))
     (testing "verb-lohnsteuer (3730) carries the withholding"
       (let [vlst (->> postings
-                      (filter #(= [:kontor.account/code "3730"] (:posting/account %)))
-                      (map :posting/amount))]
+                      (filter #(= [:kontor.account/code "3730"] (:kontor.posting/account %)))
+                      (map :kontor.posting/amount))]
         (is (= [-700.00M] vlst))))))
 
 (deftest build-postings-skr03-routes-to-skr03-accounts
@@ -101,7 +101,7 @@
         builder (pb/make-builder {:catalog skr03-catalog :commodity eur})
         postings (pp/build-postings builder [sample-fact]
                                     {:accounts {} :ledger nil :fx-provider nil})
-        codes (set (map (comp second :posting/account) postings))]
+        codes (set (map (comp second :kontor.posting/account) postings))]
     (testing "SKR03 codes appear in place of SKR04"
       (is (contains? codes "4124"))  ; Gehälter SKR03
       (is (contains? codes "1755"))  ; Verb. SV / Verrechnung
@@ -115,7 +115,7 @@
         postings (pp/build-postings builder [sample-fact]
                                     {:accounts {} :ledger :de-handelsrecht
                                      :fx-provider nil})]
-    (is (every? #(= :de-handelsrecht (:posting/ledger %)) postings))))
+    (is (every? #(= :de-handelsrecht (:kontor.posting/ledger %)) postings))))
 
 ;; ============================================================================
 ;; Urlaubsrückstellung — HGB §249 simplified accrual
@@ -159,9 +159,9 @@
                    :narration "Urlaubsrückstellung 2026-12-31"})]
     (is (= 2 (count postings)))
     (is (= [:kontor.account/code "6035"]
-           (-> postings first :posting/account)))    ; aufw
+           (-> postings first :kontor.posting/account)))    ; aufw
     (is (= [:kontor.account/code "3066"]
-           (-> postings second :posting/account)))   ; rückstellung
-    (is (= 3300.00M  (-> postings first  :posting/amount)))
-    (is (= -3300.00M (-> postings second :posting/amount)))
-    (is (every? #(= :de-handelsrecht (:posting/ledger %)) postings))))
+           (-> postings second :kontor.posting/account)))   ; rückstellung
+    (is (= 3300.00M  (-> postings first  :kontor.posting/amount)))
+    (is (= -3300.00M (-> postings second :kontor.posting/amount)))
+    (is (every? #(= :de-handelsrecht (:kontor.posting/ledger %)) postings))))

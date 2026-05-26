@@ -49,17 +49,17 @@
                  {:kontor.account/code "206.07" :kontor.account/path "Pasivos:ProvisionAguinaldo"
                   :kontor.account/name "Provisión Aguinaldo"
                   :kontor.account/type :liability :kontor.account/active true}
-                 {:journal/code "NOM"
-                  :journal/name "Nómina"
-                  :journal/type :general
-                  :journal/active true}])
+                 {:kontor.journal/code "NOM"
+                  :kontor.journal/name "Nómina"
+                  :kontor.journal/type :general
+                  :kontor.journal/active true}])
     conn))
 
 (defn- ref-eid [db a v]
   (d/q '[:find ?e . :in $ ?a ?v :where [?e ?a ?v]] db a v))
 
 (defn- mxn [db] (ref-eid db :kontor.commodity/symbol "MXN"))
-(defn- journal [db] (ref-eid db :journal/code "NOM"))
+(defn- journal [db] (ref-eid db :kontor.journal/code "NOM"))
 (defn- acct [db code] (ref-eid db :kontor.account/code code))
 
 (def sample-facts
@@ -129,12 +129,12 @@
                            :end   #inst "2026-05-15"
                            :payment-date #inst "2026-05-15"}
                   :facts sample-facts})
-        ;; Sum :posting/amount across all posting rows. They must
+        ;; Sum :kontor.posting/amount across all posting rows. They must
         ;; cancel — that's `kontor.posting/build-transaction`'s
         ;; sum-to-zero invariant.
-        posting-rows (filter :posting/amount tx-data)
+        posting-rows (filter :kontor.posting/amount tx-data)
         sum (reduce (fn [acc r] (.add ^java.math.BigDecimal acc
-                                      ^java.math.BigDecimal (:posting/amount r)))
+                                      ^java.math.BigDecimal (:kontor.posting/amount r)))
                     0M
                     posting-rows)]
     (is (zero? (.compareTo ^java.math.BigDecimal sum 0M))
@@ -151,11 +151,11 @@
                            :end   #inst "2026-05-15"
                            :payment-date #inst "2026-05-15"}
                   :facts sample-facts})
-        rows (filter :posting/amount tx-data)
-        by-acct (group-by :posting/account rows)
+        rows (filter :kontor.posting/amount tx-data)
+        by-acct (group-by :kontor.posting/account rows)
         sum-of (fn [code]
                  (->> (get by-acct (acct db code))
-                      (map :posting/amount)
+                      (map :kontor.posting/amount)
                       (reduce (fn [a b] (.add ^java.math.BigDecimal a
                                               ^java.math.BigDecimal b)) 0M)))]
     (testing "Dr 601.01 = 7500 + 250 + 6000 = 13750"
@@ -191,8 +191,8 @@
     (d/transact conn [{:db/id "mxn" :kontor.commodity/symbol "MXN"
                        :kontor.commodity/name "Peso" :kontor.commodity/precision 2
                        :kontor.commodity/iso-4217 "MXN"}
-                      {:journal/code "NOM" :journal/name "Nómina"
-                       :journal/type :general :journal/active true}])
+                      {:kontor.journal/code "NOM" :kontor.journal/name "Nómina"
+                       :kontor.journal/type :general :kontor.journal/active true}])
     (let [db (d/db conn)]
       (is (thrown-with-msg? clojure.lang.ExceptionInfo
                             #"Missing GL account"

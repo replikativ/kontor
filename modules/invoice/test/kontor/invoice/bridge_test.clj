@@ -79,9 +79,9 @@
   "Seed a sales journal for posting."
   []
   (d/transact *conn*
-              [{:journal/code "SALES"
-                :journal/name "Sales Journal"
-                :journal/type :sale}]))
+              [{:kontor.journal/code "SALES"
+                :kontor.journal/name "Sales Journal"
+                :kontor.journal/type :sale}]))
 
 (defn- minimal-order! []
   (seed-commodity!)
@@ -275,14 +275,14 @@
     (let [{:keys [transaction-eid invoice-eid]}
           (inv/post-to-ledger! *conn* "INV-POST-1"
                                {:posted-at #inst "2026-05-10"
-                                :journal-ref [:journal/code "SALES"]})
+                                :journal-ref [:kontor.journal/code "SALES"]})
           db (d/db *conn*)
           postings (->> (d/q '[:find [?p ...]
                                :in $ ?tx
-                               :where [?p :posting/transaction ?tx]]
+                               :where [?p :kontor.posting/transaction ?tx]]
                              db transaction-eid)
                         (map #(d/pull db '[*] %)))
-          sum (reduce (fn [acc {:posting/keys [amount]}]
+          sum (reduce (fn [acc {:kontor.posting/keys [amount]}]
                         (.add ^java.math.BigDecimal acc
                               ^java.math.BigDecimal amount))
                       0M postings)]
@@ -304,10 +304,10 @@
         _ (seed-journal!)
         _ (inv/make-invoice-from-order! *conn* "ORD-1"
                                         {:external-id "INV-POST-2"})]
-    (inv/post-to-ledger! *conn* "INV-POST-2" {:journal-ref [:journal/code "SALES"]})
+    (inv/post-to-ledger! *conn* "INV-POST-2" {:journal-ref [:kontor.journal/code "SALES"]})
     (testing "posting an already-:sent invoice throws"
       (is (thrown? Exception
-                   (inv/post-to-ledger! *conn* "INV-POST-2" {:journal-ref [:journal/code "SALES"]}))))))
+                   (inv/post-to-ledger! *conn* "INV-POST-2" {:journal-ref [:kontor.journal/code "SALES"]}))))))
 
 (deftest post-then-mark-paid
   (let [_ (minimal-order!)
@@ -316,7 +316,7 @@
         _ (seed-journal!)
         _ (inv/make-invoice-from-order! *conn* "ORD-1"
                                         {:external-id "INV-PAID-1"})]
-    (inv/post-to-ledger! *conn* "INV-PAID-1" {:journal-ref [:journal/code "SALES"]})
+    (inv/post-to-ledger! *conn* "INV-PAID-1" {:journal-ref [:kontor.journal/code "SALES"]})
     (inv/mark-paid! *conn* "INV-PAID-1" {:reason :reconciliation-match
                                           :reason-note "bank reconciled"})
     (let [db (d/db *conn*)
@@ -383,12 +383,12 @@
       (is (thrown? Exception
                    (inv/post-to-ledger! *conn* "INV-LOCKED-1"
                                         {:posted-at #inst "2026-04-15"
-                                         :journal-ref [:journal/code "SALES"]}))))
+                                         :journal-ref [:kontor.journal/code "SALES"]}))))
     (testing "posting after the locked period succeeds"
       (let [{:keys [transaction-eid]}
             (inv/post-to-ledger! *conn* "INV-LOCKED-1"
                                  {:posted-at #inst "2026-05-15"
-                                  :journal-ref [:journal/code "SALES"]})]
+                                  :journal-ref [:kontor.journal/code "SALES"]})]
         (is (some? transaction-eid))))))
 
 (deftest cancel-draft-invoice
@@ -457,22 +457,22 @@
                     :invoice-line/recognition :deferred}])
       ;; Post and verify the credit went to the deferred-revenue account
       (inv/post-to-ledger! *conn* "INV-REC-1"
-                           {:journal-ref [:journal/code "SALES"]
+                           {:journal-ref [:kontor.journal/code "SALES"]
                             :posted-at #inst "2026-05-15"})
       (let [db (d/db *conn*)
             inv (inv/pull-invoice db "INV-REC-1")
             tx-eid (get-in inv [:invoice/transaction :db/id])
             postings (->> (d/q '[:find [?p ...]
                                  :in $ ?tx
-                                 :where [?p :posting/transaction ?tx]]
+                                 :where [?p :kontor.posting/transaction ?tx]]
                                db tx-eid)
-                          (map #(d/pull db '[* {:posting/account [:kontor.account/path]}] %)))
+                          (map #(d/pull db '[* {:kontor.posting/account [:kontor.account/path]}] %)))
             credit-line (->> postings
                              (filter #(neg? (.signum ^java.math.BigDecimal
-                                                     (:posting/amount %))))
+                                                     (:kontor.posting/amount %))))
                              first)]
         (testing "deferred-revenue line credits the liability account"
-          (is (= "2900" (-> credit-line :posting/account :kontor.account/path))))))))
+          (is (= "2900" (-> credit-line :kontor.posting/account :kontor.account/path))))))))
 
 (deftest invoice-clearance-transitions-seeded
   (let [db (d/db *conn*)]

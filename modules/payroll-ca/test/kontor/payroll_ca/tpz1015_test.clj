@@ -74,9 +74,9 @@
     (pca-chart/install! conn)
     (d/transact conn
                 [{:db/id "journal-pay"
-                  :journal/code "PAY-CA"
-                  :journal/name "Payroll (CA)"
-                  :journal/type :general}
+                  :kontor.journal/code "PAY-CA"
+                  :kontor.journal/name "Payroll (CA)"
+                  :kontor.journal/type :general}
                  {:period/name "2026-05"
                   :period/start #inst "2026-05-01"
                   :period/end #inst "2026-06-01"}])
@@ -93,7 +93,7 @@
         qpip-acc   (d/q '[:find ?e . :where [?e :kontor.account/code "2531"]] db)
         fss-acc    (d/q '[:find ?e . :where [?e :kontor.account/code "2532"]] db)
         net-acc    (d/q '[:find ?e . :where [?e :kontor.account/code "2550"]] db)
-        journal (d/q '[:find ?e . :where [?e :journal/code "PAY-CA"]] db)
+        journal (d/q '[:find ?e . :where [?e :kontor.journal/code "PAY-CA"]] db)
         cad (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "CAD"]] db)
         gross (.add ^BigDecimal qc-itx
                     (.add ^BigDecimal qpp
@@ -102,17 +102,17 @@
         net-amt 1000M
         tag (when rp-tag [[:kontor.account-tag/name rp-tag]])
         mk-post (fn [acct amount narration]
-                  (cond-> {:posting/account acct
-                           :posting/amount amount
-                           :posting/commodity cad
-                           :posting/narration narration}
-                    tag (assoc :posting/account-tags tag)))
+                  (cond-> {:kontor.posting/account acct
+                           :kontor.posting/amount amount
+                           :kontor.posting/commodity cad
+                           :kontor.posting/narration narration}
+                    tag (assoc :kontor.posting/account-tags tag)))
         tx-data (posting/build-transaction
                  {:transaction
-                  {:transaction/journal journal
-                   :transaction/effective-date effective-date
-                   :transaction/narration "test QC payroll"
-                   :transaction/state :draft}
+                  {:kontor.transaction/journal journal
+                   :kontor.transaction/effective-date effective-date
+                   :kontor.transaction/narration "test QC payroll"
+                   :kontor.transaction/state :draft}
                   :postings [(mk-post wages gross "wages")
                              (mk-post qc-itx-acc (.negate ^BigDecimal qc-itx) "qc-itx")
                              (mk-post qpp-acc    (.negate ^BigDecimal qpp) "qpp")

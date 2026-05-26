@@ -9,12 +9,12 @@
         balance to the presentation commodity per IAS 21 (closing rate
         for monetary BS items, average for P&L, historical for equity).
         Emits ONE consolidation transaction stamped with
-        `:posting/entity = consolidation-entity`. The cumulative
+        `:kontor.posting/entity = consolidation-entity`. The cumulative
         translation adjustment (CTA) is the plug that makes the entry
         balance per commodity.
 
      2. [[eliminate-intercompany-pair-tx-data]]
-        Given a `:transaction/intercompany-pair-id` shared by two (or
+        Given a `:kontor.transaction/intercompany-pair-id` shared by two (or
         more) transactions on different :operating entities, emit
         reversing entries on the elimination entity that offset each
         side's intercompany postings. Sum-to-zero per (entity, commodity)
@@ -131,7 +131,7 @@
   "Pure tx-data builder. Translate one :operating entity's trial balance
    into the consolidation entity's functional commodity per IAS 21 /
    ASC 830 rate-types, and emit ONE balanced consolidation transaction
-   stamped with :posting/entity = consolidation-entity-eid.
+   stamped with :kontor.posting/entity = consolidation-entity-eid.
 
    The CTA (cumulative translation adjustment) is the plug — it absorbs
    the difference between the translated debits and credits per
@@ -248,30 +248,30 @@
              (map-indexed
               (fn [i [acct m]]
                 {:db/id              (tempid i)
-                 :posting/transaction tx-tempid
-                 :posting/account    acct
-                 :posting/amount     (:amount m)
-                 :posting/commodity  pres-eid
-                 :posting/entity     consolidation-entity
-                 :posting/display-type :product})))
+                 :kontor.posting/transaction tx-tempid
+                 :kontor.posting/account    acct
+                 :kontor.posting/amount     (:amount m)
+                 :kontor.posting/commodity  pres-eid
+                 :kontor.posting/entity     consolidation-entity
+                 :kontor.posting/display-type :product})))
         plug-posting (when-not (zero? (.signum ^java.math.BigDecimal plug-amount))
                        {:db/id               (tempid (count line-postings))
-                        :posting/transaction tx-tempid
-                        :posting/account     cta-account
-                        :posting/amount      plug-amount
-                        :posting/commodity   pres-eid
-                        :posting/entity      consolidation-entity
-                        :posting/display-type :product})]
+                        :kontor.posting/transaction tx-tempid
+                        :kontor.posting/account     cta-account
+                        :kontor.posting/amount      plug-amount
+                        :kontor.posting/commodity   pres-eid
+                        :kontor.posting/entity      consolidation-entity
+                        :kontor.posting/display-type :product})]
     (when (empty? line-postings)
       (throw (ex-info "translate-trial-balance-tx-data: empty trial balance — nothing to translate"
                       {:source-entity source-entity})))
     (let [base (into [{:db/id                                    tx-tempid
-                       :transaction/journal                      journal
-                       :transaction/effective-date               at-date
-                       :transaction/consolidation-source-entity  source-entity
-                       :transaction/consolidation-kind           :translation
-                       :transaction/state                        :draft
-                       :transaction/narration
+                       :kontor.transaction/journal                      journal
+                       :kontor.transaction/effective-date               at-date
+                       :kontor.transaction/consolidation-source-entity  source-entity
+                       :kontor.transaction/consolidation-kind           :translation
+                       :kontor.transaction/state                        :draft
+                       :kontor.transaction/narration
                        (str "Consolidation translation — source entity "
                             (or (:kontor.entity/code (d/pull db [:kontor.entity/code] source-entity))
                                 source-entity))}]
@@ -291,45 +291,45 @@
 
 (defn- find-pair-postings
   "Pull every posting from every POSTED SOURCE tx tagged with the given
-   :transaction/intercompany-pair-id. **Excludes consolidation txs**
-   (those with a :transaction/consolidation-kind attr) — without this
+   :kontor.transaction/intercompany-pair-id. **Excludes consolidation txs**
+   (those with a :kontor.transaction/consolidation-kind attr) — without this
    exclusion a re-run of consolidate! would pick up the prior
    elimination tx (which we tag with the same pair-id for audit) and
    re-negate it, doubling the elimination on every cycle.
 
-   Per ADR-073 review P1-73-3 we also filter `:transaction/state :posted`
+   Per ADR-073 review P1-73-3 we also filter `:kontor.transaction/state :posted`
    — drafts can still be edited (ADR-007 sealing story), and silently
    eliminating an in-flight draft would surprise the consumer.
 
    Returns a sequence of pulled posting maps with at least :db/id,
-   :posting/account, :posting/amount, :posting/commodity, :posting/entity."
+   :kontor.posting/account, :kontor.posting/amount, :kontor.posting/commodity, :kontor.posting/entity."
   [db pair-id]
   (let [tx-eids (d/q '[:find [?t ...]
                        :in $ ?pid
                        :where
-                       [?t :transaction/intercompany-pair-id ?pid]
-                       [?t :transaction/state :posted]
-                       [(missing? $ ?t :transaction/consolidation-kind)]]
+                       [?t :kontor.transaction/intercompany-pair-id ?pid]
+                       [?t :kontor.transaction/state :posted]
+                       [(missing? $ ?t :kontor.transaction/consolidation-kind)]]
                      db pair-id)]
     (when (empty? tx-eids)
       (throw (ex-info "eliminate-intercompany-pair-tx-data: no POSTED source transactions found with pair-id"
                       {:pair-id pair-id})))
     (->> (d/q '[:find [?p ...]
                 :in $ [?tx ...]
-                :where [?p :posting/transaction ?tx]]
+                :where [?p :kontor.posting/transaction ?tx]]
               db tx-eids)
          (mapv #(d/pull db [:db/id
-                            :posting/amount
-                            :posting/commodity
-                            :posting/entity
-                            {:posting/account [:db/id]}]
+                            :kontor.posting/amount
+                            :kontor.posting/commodity
+                            :kontor.posting/entity
+                            {:kontor.posting/account [:db/id]}]
                         %)))))
 
 (defn eliminate-intercompany-pair-tx-data
-  "Pure tx-data builder. Given a `:transaction/intercompany-pair-id`,
+  "Pure tx-data builder. Given a `:kontor.transaction/intercompany-pair-id`,
    emit one elimination tx whose postings exactly negate the postings
    of all paired transactions — stamped with
-   `:posting/entity = elimination-entity`.
+   `:kontor.posting/entity = elimination-entity`.
 
    The math is straightforward: the source txs each balance per
    (entity, commodity), so the union of their negated postings balances
@@ -339,7 +339,7 @@
 
    Inputs:
      :db                  — db value
-     :pair-id             — string :transaction/intercompany-pair-id
+     :pair-id             — string :kontor.transaction/intercompany-pair-id
                             (matches at least 2 txs)
      :elimination-entity  — :db/id of the elimination entity
      :journal             — :db/id of the journal to post to
@@ -362,22 +362,22 @@
         elim-postings
         (mapv (fn [i p]
                 {:db/id                (tempid i)
-                 :posting/transaction  tx-tempid
-                 :posting/account      (-> p :posting/account :db/id)
-                 :posting/amount       (.negate ^java.math.BigDecimal
-                                        (:posting/amount p))
-                 :posting/commodity    (:posting/commodity p)
-                 :posting/entity       elimination-entity
-                 :posting/display-type :product})
+                 :kontor.posting/transaction  tx-tempid
+                 :kontor.posting/account      (-> p :kontor.posting/account :db/id)
+                 :kontor.posting/amount       (.negate ^java.math.BigDecimal
+                                        (:kontor.posting/amount p))
+                 :kontor.posting/commodity    (:kontor.posting/commodity p)
+                 :kontor.posting/entity       elimination-entity
+                 :kontor.posting/display-type :product})
               (range)
               pair-postings)]
     (let [base (into [{:db/id                              tx-tempid
-                       :transaction/journal                journal
-                       :transaction/effective-date         date
-                       :transaction/intercompany-pair-id   pair-id
-                       :transaction/consolidation-kind     :elimination
-                       :transaction/state                  :draft
-                       :transaction/narration              (str "Intercompany elimination (pair " pair-id ")")}]
+                       :kontor.transaction/journal                journal
+                       :kontor.transaction/effective-date         date
+                       :kontor.transaction/intercompany-pair-id   pair-id
+                       :kontor.transaction/consolidation-kind     :elimination
+                       :kontor.transaction/state                  :draft
+                       :kontor.transaction/narration              (str "Intercompany elimination (pair " pair-id ")")}]
                      elim-postings)]
       (cond
         (and vt-from vt-to) (conj base {:db/id "datomic.tx"
@@ -476,18 +476,18 @@
                        sort)
         ;; P0-73-3: per (source-entity, at-date) idempotency — skip
         ;; producing a new translation entry if one already exists for
-        ;; this date. Detects via :transaction/consolidation-kind
-        ;; :translation + :transaction/consolidation-source-entity +
-        ;; :transaction/effective-date.
+        ;; this date. Detects via :kontor.transaction/consolidation-kind
+        ;; :translation + :kontor.transaction/consolidation-source-entity +
+        ;; :kontor.transaction/effective-date.
         translation-exists?
         (fn [source-eid]
           (boolean
            (d/q '[:find ?t .
                   :in $ ?src ?date
                   :where
-                  [?t :transaction/consolidation-kind :translation]
-                  [?t :transaction/consolidation-source-entity ?src]
-                  [?t :transaction/effective-date ?date]]
+                  [?t :kontor.transaction/consolidation-kind :translation]
+                  [?t :kontor.transaction/consolidation-source-entity ?src]
+                  [?t :kontor.transaction/effective-date ?date]]
                 db source-eid at-date)))
         ;; Similarly for eliminations — one per (pair-id, at-date,
         ;; elimination-entity). The elim tx also carries the pair-id;
@@ -500,11 +500,11 @@
            (d/q '[:find ?t .
                   :in $ ?pid ?date ?elim
                   :where
-                  [?t :transaction/consolidation-kind :elimination]
-                  [?t :transaction/intercompany-pair-id ?pid]
-                  [?t :transaction/effective-date ?date]
-                  [?p :posting/transaction ?t]
-                  [?p :posting/entity ?elim]]
+                  [?t :kontor.transaction/consolidation-kind :elimination]
+                  [?t :kontor.transaction/intercompany-pair-id ?pid]
+                  [?t :kontor.transaction/effective-date ?date]
+                  [?p :kontor.posting/transaction ?t]
+                  [?p :kontor.posting/entity ?elim]]
                 db pair-id at-date elimination-entity)))
         translations
         (vec
@@ -530,10 +530,10 @@
         pair-ids (->> (d/q '[:find [?pid ...]
                              :in $ [?e ...]
                              :where
-                             [?p :posting/entity ?e]
-                             [?p :posting/transaction ?tx]
-                             [?tx :transaction/intercompany-pair-id ?pid]
-                             [(missing? $ ?tx :transaction/consolidation-kind)]]
+                             [?p :kontor.posting/entity ?e]
+                             [?p :kontor.posting/transaction ?tx]
+                             [?tx :kontor.transaction/intercompany-pair-id ?pid]
+                             [(missing? $ ?tx :kontor.transaction/consolidation-kind)]]
                            db (vec family))
                       sort)
         eliminations
@@ -565,7 +565,7 @@
    `post-transaction!` semantics (`posting.clj:371-373`).
 
    Returns the `run-process` result map (per `kontor.process`).
-   The consolidation transactions land with `:transaction/state :draft`
+   The consolidation transactions land with `:kontor.transaction/state :draft`
    by default; callers post them via subsequent
    `kontor.posting/post-transaction!` cycles."
   [{:keys [conn at-date] :as input}]

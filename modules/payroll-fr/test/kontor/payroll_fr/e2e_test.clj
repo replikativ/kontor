@@ -30,9 +30,9 @@
                   :kontor.entity/name "Acme France SAS"
                   :kontor.entity/kind :operating}
                  {:db/id "journal-pay"
-                  :journal/code "PAY-FR"
-                  :journal/name "Paie (FR)"
-                  :journal/type :general}
+                  :kontor.journal/code "PAY-FR"
+                  :kontor.journal/name "Paie (FR)"
+                  :kontor.journal/type :general}
                  {:db/id "period-2026-05"
                   :period/name "2026-05"
                   :period/start #inst "2026-05-01"
@@ -112,7 +112,7 @@
         db (d/db conn)
         eur (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "EUR"]] db)
         ent (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-FR"]] db)
-        journal (d/q '[:find ?e . :where [?e :journal/code "PAY-FR"]] db)
+        journal (d/q '[:find ?e . :where [?e :kontor.journal/code "PAY-FR"]] db)
         period (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)
         ;; Persons + employments
         _ (person/create-person!
@@ -195,10 +195,10 @@
                        :where [?r :payroll-run/code ?c]]
                      db "ACME-2026-05-001")
         run (d/pull db '[* {:payroll-run/payroll-transaction
-                            [:transaction/external-id
-                             {:posting/_transaction
-                              [:posting/amount
-                               {:posting/account [:kontor.account/code]}]}]}]
+                            [:kontor.transaction/external-id
+                             {:kontor.posting/_transaction
+                              [:kontor.posting/amount
+                               {:kontor.posting/account [:kontor.account/code]}]}]}]
                     run-eid)]
     (testing "payroll-run row created"
       (is (some? run-eid))
@@ -209,16 +209,16 @@
       (is (= 7200M (:payroll-run/control-total-gross run))))
     (testing "Posting legs sum to zero per ledger × commodity"
       (let [postings (-> run :payroll-run/payroll-transaction
-                         :posting/_transaction)
-            sum (reduce (fn [a {:keys [posting/amount]}]
+                         :kontor.posting/_transaction)
+            sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                           (.add ^BigDecimal a ^BigDecimal amount))
                         0M postings)]
         (is (zero? (.compareTo ^BigDecimal sum 0M)))))
     (testing "PCG 431 (URSSAF) accumulates all URSSAF flow for both employees"
       (let [postings (-> run :payroll-run/payroll-transaction
-                         :posting/_transaction)
-            by-code (group-by (comp :kontor.account/code :posting/account) postings)
-            urssaf-431 (reduce (fn [a {:keys [posting/amount]}]
+                         :kontor.posting/_transaction)
+            by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)
+            urssaf-431 (reduce (fn [a {:kontor.posting/keys [amount]}]
                                  (.add ^BigDecimal a ^BigDecimal amount))
                                0M (get by-code "431"))]
         ;; Dupont: employee URSSAF -305 + CSG-ded -343.95 + CSG-nded -154.78
@@ -229,27 +229,27 @@
         (is (= -3403.86M urssaf-431))))
     (testing "PCG 421 (Net wages payable) totals both employees' net"
       (let [postings (-> run :payroll-run/payroll-transaction
-                         :posting/_transaction)
-            by-code (group-by (comp :kontor.account/code :posting/account) postings)
-            net-421 (reduce (fn [a {:keys [posting/amount]}]
+                         :kontor.posting/_transaction)
+            by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)
+            net-421 (reduce (fn [a {:kontor.posting/keys [amount]}]
                               (.add ^BigDecimal a ^BigDecimal amount))
                             0M (get by-code "421"))]
         ;; -(3514.02 + 1620.32) = -5134.34
         (is (= -5134.34M net-421))))
     (testing "PCG 4421 (PAS withholding) is non-zero"
       (let [postings (-> run :payroll-run/payroll-transaction
-                         :posting/_transaction)
-            by-code (group-by (comp :kontor.account/code :posting/account) postings)
-            pas-4421 (reduce (fn [a {:keys [posting/amount]}]
+                         :kontor.posting/_transaction)
+            by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)
+            pas-4421 (reduce (fn [a {:kontor.posting/keys [amount]}]
                                (.add ^BigDecimal a ^BigDecimal amount))
                              0M (get by-code "4421"))]
         ;; Dupont -400 + Martin -171.80 = -571.80
         (is (= -571.80M pas-4421))))
     (testing "Congés payés accrual lands on both 6412 (DR) and 4282 (CR)"
       (let [postings (-> run :payroll-run/payroll-transaction
-                         :posting/_transaction)
-            by-code (group-by (comp :kontor.account/code :posting/account) postings)
-            cp-4282 (reduce (fn [a {:keys [posting/amount]}]
+                         :kontor.posting/_transaction)
+            by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)
+            cp-4282 (reduce (fn [a {:kontor.posting/keys [amount]}]
                               (.add ^BigDecimal a ^BigDecimal amount))
                             0M (get by-code "4282"))]
         ;; Only Dupont accrual: -416.66

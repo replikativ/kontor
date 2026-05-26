@@ -5,7 +5,7 @@
      - Wage-type → GL-account routing (consumer-supplied
        :accounts map).
      - Multi-state allocation: per-row :state → analytic-distribution
-       on :posting/analytic-distributions, NOT :posting/entity
+       on :kontor.posting/analytic-distributions, NOT :kontor.posting/entity
        (note 83 §4).
      - Parallel-ledger split: each component routes to all
        declared :ledgers (book + tax, or book-only for accruals).
@@ -79,18 +79,18 @@
                    :commodity usd-eid})]
     (testing "every posting has account + amount + commodity + ledger"
       (doseq [p postings]
-        (is (some? (:posting/account p)) (str "missing account on " p))
-        (is (some? (:posting/amount p)) (str "missing amount on " p))
-        (is (some? (:posting/commodity p)) (str "missing commodity on " p))
-        (is (some? (:posting/ledger p)) (str "missing ledger on " p))))
+        (is (some? (:kontor.posting/account p)) (str "missing account on " p))
+        (is (some? (:kontor.posting/amount p)) (str "missing amount on " p))
+        (is (some? (:kontor.posting/commodity p)) (str "missing commodity on " p))
+        (is (some? (:kontor.posting/ledger p)) (str "missing ledger on " p))))
     (testing "wage-expense postings route to :wages-expense account"
       (let [wage-postings (filter #(= (:wages-expense basic-accounts)
-                                      (:posting/account %)) postings)]
+                                      (:kontor.posting/account %)) postings)]
         ;; 3 employees × 2 ledgers (us-gaap + us-tax) = 6.
         (is (= 6 (count wage-postings)))))
     (testing "ee-state-withheld routes to :ee-state-withheld account"
       (let [state-postings (filter #(= (:ee-state-withheld basic-accounts)
-                                       (:posting/account %)) postings)]
+                                       (:kontor.posting/account %)) postings)]
         ;; E101 (CA) + E102 (NY) emit a state-withholding line each on
         ;; both ledgers; E103 (TX, no state tax) does not. 2 × 2 = 4.
         (is (= 4 (count state-postings)))))))
@@ -117,26 +117,26 @@
                    :accounts basic-accounts
                    :ledgers-map {:us-gaap book-ledger-eid}
                    :commodity usd-eid})]
-    (testing "no posting carries :posting/entity (single legal entity)"
+    (testing "no posting carries :kontor.posting/entity (single legal entity)"
       ;; Per note 83 §4: kontor uses :analytic-account/state, NOT
-      ;; :posting/entity. The substrate-level :posting/entity is
+      ;; :kontor.posting/entity. The substrate-level :kontor.posting/entity is
       ;; reserved for multi-LLC / cross-border / PEO secondment.
       (doseq [p postings]
-        (is (nil? (:posting/entity p))
-            (str "Posting unexpectedly carries :posting/entity: " p))))
+        (is (nil? (:kontor.posting/entity p))
+            (str "Posting unexpectedly carries :kontor.posting/entity: " p))))
     (testing "every wage-side posting carries a :state analytic distribution"
-      (let [wage-side (filter #(some? (:posting/analytic-distributions %))
+      (let [wage-side (filter #(some? (:kontor.posting/analytic-distributions %))
                               postings)]
         (is (seq wage-side))
         (doseq [p wage-side
-                d (:posting/analytic-distributions p)]
+                d (:kontor.posting/analytic-distributions p)]
           (is (= [:analytic-plan/code "state"]
                  (:analytic-distribution/plan d)))
           (is (= 100M (:analytic-distribution/percent d)))
           (is (some? (:analytic-distribution/account d))))))
     (testing "three distinct states appear in the distributions"
       (let [states (->> postings
-                        (mapcat :posting/analytic-distributions)
+                        (mapcat :kontor.posting/analytic-distributions)
                         (map :analytic-distribution/account)
                         (map second) ; the path string
                         distinct
@@ -161,8 +161,8 @@
       ;; (CA 60, CO 40).
       (let [wage-e101 (some (fn [p]
                               (when (and (= (:wages-expense basic-accounts)
-                                            (:posting/account p))
-                                         (let [dists (:posting/analytic-distributions p)]
+                                            (:kontor.posting/account p))
+                                         (let [dists (:kontor.posting/analytic-distributions p)]
                                            (and (= 2 (count dists))
                                                 (some #(= "state:CA"
                                                           (second (:analytic-distribution/account %)))
@@ -174,7 +174,7 @@
                             postings)]
         (is (some? wage-e101))
         (when wage-e101
-          (let [dists (:posting/analytic-distributions wage-e101)
+          (let [dists (:kontor.posting/analytic-distributions wage-e101)
                 pcts (sort (map :analytic-distribution/percent dists))]
             (is (= [40M 60M] pcts))))))))
 
@@ -190,8 +190,8 @@
                    :ledgers-map {:us-gaap book-ledger-eid
                                  :us-tax  tax-ledger-eid}
                    :commodity usd-eid})
-        gaap (filter #(= book-ledger-eid (:posting/ledger %)) postings)
-        tax  (filter #(= tax-ledger-eid  (:posting/ledger %)) postings)]
+        gaap (filter #(= book-ledger-eid (:kontor.posting/ledger %)) postings)
+        tax  (filter #(= tax-ledger-eid  (:kontor.posting/ledger %)) postings)]
     (testing "every ledger receives postings"
       (is (seq gaap))
       (is (seq tax)))
@@ -201,7 +201,7 @@
 (deftest per-ledger-sum-to-zero-holds
   ;; ADR-021 + ADR-031 + ADR-077: substrate sum-to-zero invariant runs
   ;; per (entity, ledger, commodity). For this run we don't tag
-  ;; :posting/entity so it's per (ledger, commodity). The posting set
+  ;; :kontor.posting/entity so it's per (ledger, commodity). The posting set
   ;; must balance on EACH ledger independently.
   (let [facts (compute-3-state-facts)
         postings (pb/build-payroll-postings
@@ -210,7 +210,7 @@
                    :ledgers-map {:us-gaap book-ledger-eid
                                  :us-tax  tax-ledger-eid}
                    :commodity usd-eid})
-        sum-by-ledger (reduce (fn [acc {:keys [posting/ledger posting/amount]}]
+        sum-by-ledger (reduce (fn [acc {:kontor.posting/keys [ledger amount]}]
                                 (update acc ledger
                                         (fn [^BigDecimal a] (.add (or a 0M) ^BigDecimal amount))))
                               {} postings)]
@@ -252,11 +252,11 @@
                                  :us-tax  tax-ledger-eid}
                    :commodity usd-eid})
         match-postings (filter #(= (:er-401k-match basic-accounts)
-                                   (:posting/account %)) postings)]
+                                   (:kontor.posting/account %)) postings)]
     (testing "ER 401K MATCH appears on :us-gaap"
-      (is (some #(= book-ledger-eid (:posting/ledger %)) match-postings)))
+      (is (some #(= book-ledger-eid (:kontor.posting/ledger %)) match-postings)))
     (testing "ER 401K MATCH does NOT appear on :us-tax"
-      (is (not-any? #(= tax-ledger-eid (:posting/ledger %)) match-postings)))))
+      (is (not-any? #(= tax-ledger-eid (:kontor.posting/ledger %)) match-postings)))))
 
 ;; ============================================================================
 ;; UsPayrollPostingBuilder protocol record

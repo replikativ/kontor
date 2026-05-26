@@ -87,7 +87,7 @@
 (def base-opts
   {:commodity :kontor.commodity/brl
    :ledger :ledger/br-ifrs
-   :journal :journal/payroll
+   :journal :kontor.journal/payroll
    :effective-date #inst "2026-05-31"
    :tx-code "FERIAS-ACCRUAL-2026-05"})
 
@@ -102,14 +102,14 @@
       (is (seq tx-data)))
     (testing "Postings inside the transaction balance to zero"
       ;; build-transaction returns the full :db/add ops + the
-      ;; entity-shaped maps with :posting/* keys. We can scan for the
-      ;; :posting/amount values regardless of how they're nested.
+      ;; entity-shaped maps with :kontor.posting/* keys. We can scan for the
+      ;; :kontor.posting/amount values regardless of how they're nested.
       (let [amounts (->> tx-data
                          (mapcat (fn [op]
                                    (cond
-                                     (map? op) [(:posting/amount op)]
+                                     (map? op) [(:kontor.posting/amount op)]
                                      (vector? op) (when (= :db/add (first op))
-                                                    [(when (= :posting/amount
+                                                    [(when (= :kontor.posting/amount
                                                               (nth op 2 nil))
                                                        (nth op 3 nil))])
                                      :else nil)))

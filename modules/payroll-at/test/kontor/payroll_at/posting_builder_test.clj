@@ -88,10 +88,10 @@
     (chart/install! conn)
     ;; install the payroll wage accounts on top
     (d/transact conn payroll-wage-accounts)
-    (d/transact conn [{:journal/code "PAYROLL"
-                       :journal/name "Lohn- und Gehaltsabrechnung"
-                       :journal/type :general
-                       :journal/active true}])
+    (d/transact conn [{:kontor.journal/code "PAYROLL"
+                       :kontor.journal/name "Lohn- und Gehaltsabrechnung"
+                       :kontor.journal/type :general
+                       :kontor.journal/active true}])
     conn))
 
 (defn- fixture [name]
@@ -104,7 +104,7 @@
 (deftest jan-payroll-posts-and-balances
   (let [conn (bootstrap)
         db0 (d/db conn)
-        jnl (:db/id (d/entity db0 [:journal/code "PAYROLL"]))
+        jnl (:db/id (d/entity db0 [:kontor.journal/code "PAYROLL"]))
         eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
         result (compute/parse :bmd (fixture "bmd-2026-01.csv"))
         report (pb/post! conn
@@ -118,12 +118,12 @@
     (let [db (d/db conn)
           tx-id (some-> (d/q '[:find ?t .
                                :in $ ?ext
-                               :where [?t :transaction/external-id ?ext]]
+                               :where [?t :kontor.transaction/external-id ?ext]]
                              db "payroll-at-2026-01"))]
       (is (some? tx-id) "transaction landed with the expected external-id")
       (let [postings (d/q '[:find ?p
                             :in $ ?t
-                            :where [?p :posting/transaction ?t]]
+                            :where [?p :kontor.posting/transaction ?t]]
                           db tx-id)]
         (is (<= 6 (count postings))
             (str "got " (count postings) " postings"))))))
@@ -132,7 +132,7 @@
   (testing "the GL transaction lands the expected per-account balances"
     (let [conn (bootstrap)
           db0 (d/db conn)
-          jnl (:db/id (d/entity db0 [:journal/code "PAYROLL"]))
+          jnl (:db/id (d/entity db0 [:kontor.journal/code "PAYROLL"]))
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           result (compute/parse :bmd (fixture "bmd-2026-01.csv"))
           _ (pb/post! conn
@@ -148,8 +148,8 @@
                              postings (d/q '[:find [?amt ...]
                                              :in $ ?a
                                              :where
-                                             [?p :posting/account ?a]
-                                             [?p :posting/amount ?amt]]
+                                             [?p :kontor.posting/account ?a]
+                                             [?p :kontor.posting/amount ?amt]]
                                            db a)]
                          (reduce (fn [^java.math.BigDecimal acc
                                       ^java.math.BigDecimal x]
@@ -173,7 +173,7 @@
   (testing "June period posts the 13th Sonderzahlung onto 6400"
     (let [conn (bootstrap)
           db0 (d/db conn)
-          jnl (:db/id (d/entity db0 [:journal/code "PAYROLL"]))
+          jnl (:db/id (d/entity db0 [:kontor.journal/code "PAYROLL"]))
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           result (compute/parse :bmd (fixture "bmd-2026-06.csv"))
           _ (pb/post! conn
@@ -189,8 +189,8 @@
                              postings (d/q '[:find [?amt ...]
                                              :in $ ?a
                                              :where
-                                             [?p :posting/account ?a]
-                                             [?p :posting/amount ?amt]]
+                                             [?p :kontor.posting/account ?a]
+                                             [?p :kontor.posting/amount ?amt]]
                                            db a)]
                          (reduce (fn [^java.math.BigDecimal acc
                                       ^java.math.BigDecimal x]

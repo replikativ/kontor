@@ -7,7 +7,7 @@
 ;;   https://www.economie.gouv.fr/files/files/directions_services/dgfip/Plan_Comptable_General.pdf
 ;;
 ;; Per-établissement routing (multi-SIRET businesses): use
-;; :posting/account-tags with a SIRET-keyed tag (e.g.
+;; :kontor.posting/account-tags with a SIRET-keyed tag (e.g.
 ;; "fr-etab-12345678900012") OR duplicate this chart with code-suffix
 ;; discrimination, same convention as note 84 §4.2 (CA RP routing).
 

@@ -27,7 +27,7 @@
           (is (contains? paths "Verbindlichkeiten:Dividenden-Zahlbar"))
           (is (contains? paths "Verbindlichkeiten:KESt-Zahlbar"))))
       (testing "default 5 journals are present"
-        (let [n (count (d/q '[:find [?c ...] :where [_ :journal/code ?c]] db))]
+        (let [n (count (d/q '[:find [?c ...] :where [_ :kontor.journal/code ?c]] db))]
           (is (= 5 n))))
       (testing "EUR commodity is present"
         (is (some? (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "EUR"]] db))))
@@ -46,9 +46,9 @@
   (testing "Hans-Tech UG year on a preset DB — post via kontor.book,
             produce GuV + Bilanz, no chart-setup ceremony"
     (let [conn (preset/create-de-db)
-          gj   {:journal [:journal/code "GJ"]}
-          cr   {:journal [:journal/code "CR"]}
-          cd   {:journal [:journal/code "CD"]}
+          gj   {:journal [:kontor.journal/code "GJ"]}
+          cr   {:journal [:kontor.journal/code "CR"]}
+          cd   {:journal [:kontor.journal/code "CD"]}
           e    (fn [opts] (book/entry! conn (assoc opts :commodity eur)))]
       ;; Opening capital
       (e (merge gj {:effective-date #inst "2026-01-02"

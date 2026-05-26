@@ -405,10 +405,10 @@
           :kontor.account/commodity eur}
          {:kontor.account/path "Income:Dividends"          :kontor.account/type :income
           :kontor.account/commodity eur}
-         {:journal/code "CR" :journal/type :cash :journal/name "Cash Receipts"}])
+         {:kontor.journal/code "CR" :kontor.journal/type :cash :kontor.journal/name "Cash Receipts"}])
       ;; Record €4,000 of dividend income.
       (book/entry! conn
-        {:journal [:journal/code "CR"]
+        {:journal [:kontor.journal/code "CR"]
          :effective-date #inst "2026-06-15"
          :commodity eur
          :narration "Acme dividend"

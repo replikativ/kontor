@@ -7,7 +7,7 @@
    - simulate a bank receipt + reconciliation; verify the invoice
      flips to :paid via flip-paid-on-settlement
    - cancel! a sent invoice; verify the reversal tx exists and
-     points back via :transaction/reverses"
+     points back via :kontor.transaction/reverses"
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
             [kontor.core :as core]
@@ -31,10 +31,10 @@
     (chart/install! conn)
     (pt/install-standard-terms! conn)
     (d/transact conn
-                [{:journal/code "INV"  :journal/name "Sales invoices"
-                  :journal/type :sale  :journal/active true}
-                 {:journal/code "BANK" :journal/name "Bank movements"
-                  :journal/type :bank  :journal/active true}
+                [{:kontor.journal/code "INV"  :kontor.journal/name "Sales invoices"
+                  :kontor.journal/type :sale  :kontor.journal/active true}
+                 {:kontor.journal/code "BANK" :kontor.journal/name "Bank movements"
+                  :kontor.journal/type :bank  :kontor.journal/active true}
                  {:kontor.partner/external-id "OWN"  :kontor.partner/name "Self GmbH"
                   :kontor.partner/kind :company :kontor.partner/country-code "DE"
                   :kontor.partner/tax-id "DE123456789"}
@@ -125,10 +125,10 @@
         rows (d/q '[:find ?code ?amt
                     :in $ ?tx
                     :where
-                    [?p :posting/transaction ?tx]
-                    [?p :posting/account ?a]
+                    [?p :kontor.posting/transaction ?tx]
+                    [?p :kontor.posting/account ?a]
                     [?a :kontor.account/code ?code]
-                    [?p :posting/amount ?amt]]
+                    [?p :kontor.posting/amount ?amt]]
                   db transaction-eid)
         by-code (into {} (map (juxt first second) rows))]
     (is (= :sent (:invoice/status inv)))
@@ -175,7 +175,7 @@
           db (d/db conn)
           bank-acct (ace db "1200")
           eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-          bank-jnl (:db/id (d/entity db [:journal/code "BANK"]))
+          bank-jnl (:db/id (d/entity db [:kontor.journal/code "BANK"]))
           ;; Ingest a matching bank line
           _ (recon/ingest-statement! conn
                                      [{:bank :test :date feb-5 :amount 1891.50M
@@ -221,10 +221,10 @@
         {:keys [transaction-eid]} (inv/send! conn inv-eid builder)
         _ (inv/cancel! conn inv-eid)
         db (d/db conn)
-        ;; Find the reversal — it has :transaction/reverses → original
+        ;; Find the reversal — it has :kontor.transaction/reverses → original
         reversal-eid (d/q '[:find ?r .
                             :in $ ?orig
-                            :where [?r :transaction/reverses ?orig]]
+                            :where [?r :kontor.transaction/reverses ?orig]]
                           db transaction-eid)
         ;; Sum all postings on AR — should be net zero (orig +1891.50, reversal -1891.50)
         ar-eid (ace db "1400")
@@ -234,9 +234,9 @@
                 (d/q '[:find ?p ?amt
                        :in $ ?ar [?tx ...]
                        :where
-                       [?p :posting/transaction ?tx]
-                       [?p :posting/account ?ar]
-                       [?p :posting/amount ?amt]]
+                       [?p :kontor.posting/transaction ?tx]
+                       [?p :kontor.posting/account ?ar]
+                       [?p :kontor.posting/amount ?amt]]
                      db ar-eid [transaction-eid reversal-eid]))]
     (is (some? reversal-eid))
     (is (= 0M ar-sum) "reversal cancels out the original on AR")

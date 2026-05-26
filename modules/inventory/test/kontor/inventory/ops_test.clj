@@ -52,8 +52,8 @@
                  {:db/id "book" :valuation-book/code "primary"
                   :valuation-book/name "Primary" :valuation-book/cost-method :fifo
                   :valuation-book/active true}
-                 {:db/id "journal-gen" :journal/code "GEN" :journal/name "General"
-                  :journal/type :general}])
+                 {:db/id "journal-gen" :kontor.journal/code "GEN" :kontor.journal/name "General"
+                  :kontor.journal/type :general}])
     conn))
 
 (defn- ref-eid [db a v]
@@ -62,7 +62,7 @@
 (defn- p       [db code] (ref-eid db :kontor.partner/external-id code))
 (defn- acct    [db code] (ref-eid db :kontor.account/code code))
 (defn- book    [db] (ref-eid db :valuation-book/code "primary"))
-(defn- journal [db] (ref-eid db :journal/code "GEN"))
+(defn- journal [db] (ref-eid db :kontor.journal/code "GEN"))
 
 ;; account-fn for plan-stock-move's stock-move roles.
 (defn- account-fn [db]
@@ -79,7 +79,7 @@
 (defn- gl-postings
   "All :posting eids referencing `account` — a quick GL probe."
   [db account]
-  (d/q '[:find [?p ...] :in $ ?a :where [?p :posting/account ?a]] db account))
+  (d/q '[:find [?p ...] :in $ ?a :where [?p :kontor.posting/account ?a]] db account))
 
 ;; ============================================================================
 ;; receive!

@@ -45,8 +45,8 @@
                   :ledger/type :primary :ledger/framework :HGB
                   :ledger/active true}
                  {:db/id "journal-gen"
-                  :journal/code "GEN" :journal/name "General"
-                  :journal/type :general}
+                  :kontor.journal/code "GEN" :kontor.journal/name "General"
+                  :kontor.journal/type :general}
                  {:db/id "class-machinery"
                   :asset-class/code "machinery"
                   :asset-class/name "Machinery & Equipment"
@@ -60,7 +60,7 @@
 (defn- commodity [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- acct      [db code] (ref-eid db :kontor.account/code code))
 (defn- hgb       [db] (ref-eid db :ledger/code "hgb"))
-(defn- journal   [db] (ref-eid db :journal/code "GEN"))
+(defn- journal   [db] (ref-eid db :kontor.journal/code "GEN"))
 (defn- class-eid [db] (ref-eid db :asset-class/code "machinery"))
 
 (defn- acquire-machine!
@@ -128,11 +128,11 @@
             posted (d/q '[:find [?p ...]
                           :in $ ?acct
                           :where
-                          [?p :posting/account ?acct]
-                          [?p :posting/posted-at _]]
+                          [?p :kontor.posting/account ?acct]
+                          [?p :kontor.posting/posted-at _]]
                         db (acct db "6220"))]
         (is (= 120 (count posted)) "120 sealed depreciation-expense postings")
-        (is (every? #(= (hgb db) (:db/id (:posting/ledger (d/pull db [:posting/ledger] %))))
+        (is (every? #(= (hgb db) (:db/id (:kontor.posting/ledger (d/pull db [:kontor.posting/ledger] %))))
                     posted))))
     (testing "re-running fires nothing — record-occurrence! is idempotent"
       (let [again (runner/run-depreciation! conn book

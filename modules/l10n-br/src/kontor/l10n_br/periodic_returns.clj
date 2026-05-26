@@ -347,7 +347,7 @@
 
    ISS is collected per município; the kernel-level aggregation
    sums all ISS-tagged postings. Per-municipality split is an
-   extension dimension the consumer adds via :posting/partner →
+   extension dimension the consumer adds via :kontor.posting/partner →
    municipality routing or a per-municipality sub-account tag."
   {:report/name    "ISS — Imposto sobre Serviços (municipal)"
    :report/country "BR"

@@ -1,13 +1,13 @@
 (ns kontor.report-test
   "Stages 3a + 3b of research note 99 — the report engine as a family
-   of quotient epimorphisms σ_E (ADR-096), and `:posting/dimensions`
+   of quotient epimorphisms σ_E (ADR-096), and `:kontor.posting/dimensions`
    classification axes (ADR-097). `marginalize` is the σ_E primitive;
    the `run-engine` methods (`:account-codes`, `:tax-tags`, the new
    generic `:dimension`) are per-line views of it. Acceptance:
    `marginalize` over `:account-type` reproduces the balance sheet
    (the classes sum to zero — Ker σ — and each class is correct), the
    historical engines stay behaviour-identical, and a posting booked
-   with `:posting/dimensions` aggregates over its custom axis."
+   with `:kontor.posting/dimensions` aggregates over its custom axis."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
             [kontor.book :as book]
@@ -27,8 +27,8 @@
   (let [conn (core/create-test-db)]
     (d/transact conn
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
-                 {:journal/code "SALE" :journal/type :sale}
-                 {:journal/code "CASH" :journal/type :cash}
+                 {:kontor.journal/code "SALE" :kontor.journal/type :sale}
+                 {:kontor.journal/code "CASH" :kontor.journal/type :cash}
                  {:kontor.account-tag/name "revenue-box" :kontor.account-tag/applicability :account}
                  {:kontor.account/path "Assets:Cash"        :kontor.account/code "1000" :kontor.account/type :asset}
                  {:kontor.account/path "Assets:Receivable"  :kontor.account/code "1200" :kontor.account/type :asset}
@@ -68,7 +68,7 @@
   (let [conn (fresh-book)
         ps   (report/report-postings conn)
         ;; partition by sign of the stored amount
-        m    (report/marginalize ps #(if (neg? (:posting/amount %)) :cr :dr)
+        m    (report/marginalize ps #(if (neg? (:kontor.posting/amount %)) :cr :dr)
                                  {:sign :raw})]
     (is (== 1300M  (amt (:dr m))) "AR 1000 + Expense 300")
     (is (== -1300M (amt (:cr m))) "Revenue -1000 + Cash -300")))
@@ -134,14 +134,14 @@
         ar-eid (d/q '[:find ?a . :where [?a :kontor.account/path "Assets:Receivable"]]
                     (d/db conn))
         all    (report/report-postings conn)
-        narrow (report/report-postings conn {:posting-filter [['?p :posting/account ar-eid]]})]
+        narrow (report/report-postings conn {:posting-filter [['?p :kontor.posting/account ar-eid]]})]
     (is (= 4 (count all)))
     (is (= 1 (count narrow)) "only the AR leg")
     (is (== 1000M (-> (report/marginalize narrow :account-type {:sign :raw})
                       :asset amt)))))
 
 ;; ============================================================================
-;; Stage 3b — :posting/dimensions classification axes (ADR-097)
+;; Stage 3b — :kontor.posting/dimensions classification axes (ADR-097)
 ;; ============================================================================
 
 (defn- fresh-dimensioned-book
@@ -151,7 +151,7 @@
   (let [conn (core/create-test-db)]
     (d/transact conn
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
-                 {:journal/code "GEN" :journal/type :general}
+                 {:kontor.journal/code "GEN" :kontor.journal/type :general}
                  {:kontor.account/path "Expenses:Travel"  :kontor.account/type :expense}
                  {:kontor.account/path "Expenses:Meals"   :kontor.account/type :expense}
                  {:kontor.account/path "Assets:Cash"      :kontor.account/type :asset}])

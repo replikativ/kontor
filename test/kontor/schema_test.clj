@@ -6,7 +6,7 @@
         validation errors.
      2. Every documented kernel namespace shows up in the resulting
         schema (catches accidental deletions).
-     3. The bitemporal :posting/temporal-key tuple is correctly
+     3. The bitemporal :kontor.posting/temporal-key tuple is correctly
         derived from its component attributes (catches misuse of
         datahike's tuple feature)."
   (:require [clojure.test :refer [deftest is testing]]
@@ -21,10 +21,10 @@
   #{"create" "write"
     "kontor.commodity" "lot"
     "kontor.account" "kontor.account-tag"
-    "journal" "kontor.partner" "fiscal-position"
+    "kontor.journal" "kontor.partner" "fiscal-position"
     "tax" "tax-rep" "tax-group"
     "period" "balance-assertion"
-    "transaction" "posting"
+    "kontor.transaction" "kontor.posting"
     "analytic-plan" "analytic-account" "analytic-distribution"
     "ledger"
     "kontor.country" "kontor.country-code" "kontor.country-group"
@@ -74,8 +74,8 @@
   (testing "Per ADR-048, valid-time lives on the writing tx via
             upstream `:db.valid/from` / `:db.valid/to` (pre-installed
             by datahike's feature/bitemporal-v1). There is no per-
-            posting valid-from. :posting/valid-to and the
-            :posting/temporal-key tuple were dropped per research
+            posting valid-from. :kontor.posting/valid-to and the
+            :kontor.posting/temporal-key tuple were dropped per research
             note 08 — corrections use reverse-and-repost, not
             valid-time supersession."
     (let [conn (core/create-test-db)
@@ -83,11 +83,11 @@
           present (set (d/q '[:find [?ident ...]
                               :where [_ :db/ident ?ident]]
                             db))]
-      (is (not (contains? present :posting/valid-from))
+      (is (not (contains? present :kontor.posting/valid-from))
           "per-posting valid-from is removed (ADR-048 normalization).")
-      (is (not (contains? present :posting/temporal-key))
+      (is (not (contains? present :kontor.posting/temporal-key))
           "temporal-key tuple should NOT be in the schema (ADR-008 revised).")
-      (is (not (contains? present :posting/valid-to))
+      (is (not (contains? present :kontor.posting/valid-to))
           "valid-to should NOT be in the schema (ADR-008 revised).")
       (testing "valid-from anchor :db.valid/from is upstream-implicit and usable"
         ;; Datahike's :db.valid/from / :db.valid/to are pre-installed in the

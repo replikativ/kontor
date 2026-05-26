@@ -30,10 +30,10 @@
     (v/install-invariants! conn)
     (chart/install! conn)
     (d/transact conn
-                [{:journal/code "INV" :journal/name "Verkaufsrechnungen"
-                  :journal/type :sale :journal/active true}
-                 {:journal/code "EXP" :journal/name "Aufwendungen"
-                  :journal/type :purchase :journal/active true}
+                [{:kontor.journal/code "INV" :kontor.journal/name "Verkaufsrechnungen"
+                  :kontor.journal/type :sale :kontor.journal/active true}
+                 {:kontor.journal/code "EXP" :kontor.journal/name "Aufwendungen"
+                  :kontor.journal/type :purchase :kontor.journal/active true}
                  {:period/start jan-1
                   :period/end   jan-1-26
                   :period/tag   :normal
@@ -54,22 +54,22 @@
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         kassa  (ace db "2700")          ; Kassa
         office (ace db "7400")          ; Bürobedarf
-        exp-jnl (:db/id (d/entity db [:journal/code "EXP"]))]
+        exp-jnl (:db/id (d/entity db [:kontor.journal/code "EXP"]))]
     (v/transact-with-validation
      conn
      (posting/build-transaction
       {:transaction
-       {:transaction/external-id "EXP-2025-1"
-        :transaction/journal exp-jnl
-        :transaction/effective-date feb-15
-        :transaction/narration "Bürobedarf Feb"
-        :transaction/state :posted
-        :transaction/posted-at feb-15}
+       {:kontor.transaction/external-id "EXP-2025-1"
+        :kontor.transaction/journal exp-jnl
+        :kontor.transaction/effective-date feb-15
+        :kontor.transaction/narration "Bürobedarf Feb"
+        :kontor.transaction/state :posted
+        :kontor.transaction/posted-at feb-15}
        :postings
-       [{:posting/account office :posting/amount 600M
-         :posting/commodity eur :posting/posted-at feb-15}
-        {:posting/account kassa :posting/amount -600M
-         :posting/commodity eur :posting/posted-at feb-15}]})))
+       [{:kontor.posting/account office :kontor.posting/amount 600M
+         :kontor.posting/commodity eur :kontor.posting/posted-at feb-15}
+        {:kontor.posting/account kassa :kontor.posting/amount -600M
+         :kontor.posting/commodity eur :kontor.posting/posted-at feb-15}]})))
   ;; Second sales invoice: €500 net @ 20% USt → €600 gross on Jun 1.
   (at-invoice/post-at-invoice! conn
                                {:invoice/external-id "INV-2025-2"
@@ -181,22 +181,22 @@
           _ (v/install-invariants! conn)
           _ (chart/install! conn)
           ;; INV + EXP for seeding; deliberately no CLOSE journal
-          _ (d/transact conn [{:journal/code "INV" :journal/name "Verkaufsrechnungen"
-                               :journal/type :sale :journal/active true}
-                              {:journal/code "EXP" :journal/name "Aufwendungen"
-                               :journal/type :purchase :journal/active true}
+          _ (d/transact conn [{:kontor.journal/code "INV" :kontor.journal/name "Verkaufsrechnungen"
+                               :kontor.journal/type :sale :kontor.journal/active true}
+                              {:kontor.journal/code "EXP" :kontor.journal/name "Aufwendungen"
+                               :kontor.journal/type :purchase :kontor.journal/active true}
                               {:period/start jan-1
                                :period/end jan-1-26
                                :period/tag :normal
                                :period/name "FY2025"}])
           _ (seed-fy2025! conn)
           period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] (d/db conn))]
-      (is (nil? (:db/id (d/entity (d/db conn) [:journal/code "CLOSE"])))
+      (is (nil? (:db/id (d/entity (d/db conn) [:kontor.journal/code "CLOSE"])))
           "CLOSE journal not present before close")
       (at-closing/close-at-fiscal-year! conn
                                         {:period-eid period-eid
                                          :external-id "AUTO-J-CLOSE"})
-      (is (some? (:db/id (d/entity (d/db conn) [:journal/code "CLOSE"])))
+      (is (some? (:db/id (d/entity (d/db conn) [:kontor.journal/code "CLOSE"])))
           "CLOSE journal auto-created"))))
 
 ;; ============================================================================
@@ -289,7 +289,7 @@
       ;; under datalog's set semantics.
       (let [db (d/db conn)
             pairs (d/q '[:find ?p ?amt
-                         :where [?p :posting/amount ?amt]] db)
+                         :where [?p :kontor.posting/amount ?amt]] db)
             total (reduce (fn [^java.math.BigDecimal acc [_ ^java.math.BigDecimal x]]
                             (.add acc x))
                           0M pairs)]

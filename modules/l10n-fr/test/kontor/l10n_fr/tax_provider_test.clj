@@ -75,13 +75,13 @@
                           {:db db :date d1}))]
     (testing "taux normal 20% → one credit of 200 to 44571"
       (let [p (first (post {:rate :std}))]
-        (is (= a44571 (:posting/account p)))
-        (is (== -200M (:posting/amount p)) "output VAT is a credit")
-        (is (= :tax (:posting/display-type p)))))
+        (is (= a44571 (:kontor.posting/account p)))
+        (is (== -200M (:kontor.posting/amount p)) "output VAT is a credit")
+        (is (= :tax (:kontor.posting/display-type p)))))
     (testing "taux réduit 5,5% → 55 to 44573"
       (let [p (first (post {:rate :red}))]
-        (is (= a44573 (:posting/account p)))
-        (is (== -55M (:posting/amount p)))))
+        (is (= a44573 (:kontor.posting/account p)))
+        (is (== -55M (:kontor.posting/amount p)))))
     (testing "intra-EU B2B → no leg (FR seller-side reverse charge)"
       (is (= [] (post {:tax-status :intra-eu-b2b}))))
     (testing "zero / exempt / export → no leg"
@@ -103,4 +103,4 @@
         agg  (tpb/aggregate-postings raw)]
     (is (= 3 (count raw)) "three lines → three raw TVA postings")
     (is (= 1 (count agg)) "aggregated to one 44571 posting")
-    (is (== -120M (:posting/amount (first agg))) "20% of 600")))
+    (is (== -120M (:kontor.posting/amount (first agg))) "20% of 600")))

@@ -319,7 +319,7 @@
      or     {:year YYYY :quarter 1..4}      ; QRMP filers
 
    Optional:
-     :entity   — :transaction/entity scope (multi-entity setups, ADR-031)
+     :entity   — :kontor.transaction/entity scope (multi-entity setups, ADR-031)
      :as-of-tx — bitemporal tx-snapshot (default now)
 
    Returns:

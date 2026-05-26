@@ -57,7 +57,7 @@
 
 (deftest postings-balance-to-zero
   (let [postings (build {} (tanaka-fact))
-        sum (reduce (fn [a {:keys [posting/amount]}]
+        sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                       (.add ^java.math.BigDecimal a
                             ^java.math.BigDecimal amount))
                     0M postings)]
@@ -66,14 +66,14 @@
 
 (deftest one-wages-debit-for-gross
   (let [postings (build {} (tanaka-fact))
-        wages-leg (first (filter #(= :acct/wages (:posting/account %)) postings))]
+        wages-leg (first (filter #(= :acct/wages (:kontor.posting/account %)) postings))]
     (testing "Single wages-expense leg for the gross"
-      (is (= 340000M (:posting/amount wages-leg)))
+      (is (= 340000M (:kontor.posting/amount wages-leg)))
       (is (some? wages-leg)))))
 
 (deftest no-bonus-leg-on-monthly-only
   (let [postings (build {} (tanaka-fact))
-        bonus-legs (filter #(= :acct/bonus (:posting/account %)) postings)]
+        bonus-legs (filter #(= :acct/bonus (:kontor.posting/account %)) postings)]
     (testing "No 賞与 leg when the fact carries no :bonus component"
       (is (empty? bonus-legs)))))
 
@@ -88,43 +88,43 @@
                                  {:kind :employee-pension    :amount -50000M :employer-side? false}
                                  {:kind :income-tax-withheld :amount -26000M :employer-side? false}]}
         postings (build {} bonus-fact)
-        by-acct (group-by :posting/account postings)]
+        by-acct (group-by :kontor.posting/account postings)]
     (testing "Wages leg debits the base-wage subtotal only"
-      (is (= 300000M (:posting/amount (first (get by-acct :acct/wages))))))
+      (is (= 300000M (:kontor.posting/amount (first (get by-acct :acct/wages))))))
     (testing "Bonus leg debits the bonus subtotal separately"
-      (is (= 300000M (:posting/amount (first (get by-acct :acct/bonus))))))))
+      (is (= 300000M (:kontor.posting/amount (first (get by-acct :acct/bonus))))))))
 
 (deftest deduction-legs-route-to-azukari-kin
   (let [postings (build {} (tanaka-fact))
-        by-acct (group-by :posting/account postings)]
+        by-acct (group-by :kontor.posting/account postings)]
     (testing "Income tax credited to :acct/itx"
       (let [legs (get by-acct :acct/itx)]
         (is (= 1 (count legs)))
-        (is (= -8000M (:posting/amount (first legs))))))
+        (is (= -8000M (:kontor.posting/amount (first legs))))))
     (testing "Health insurance bucket receives employee deduction AND employer match"
       (let [legs (get by-acct :acct/health)]
         (is (= 2 (count legs)))
         ;; -16500 (employee) + -16500 (employer payable) = -33000
         (is (= -33000M
-               (.add ^java.math.BigDecimal (:posting/amount (first legs))
-                     ^java.math.BigDecimal (:posting/amount (second legs)))))))
+               (.add ^java.math.BigDecimal (:kontor.posting/amount (first legs))
+                     ^java.math.BigDecimal (:kontor.posting/amount (second legs)))))))
     (testing "Pension bucket receives BOTH employee deduction and employer match"
       (let [legs (get by-acct :acct/pension)]
         (is (= 2 (count legs)))
         (is (= -61000M
-               (.add ^java.math.BigDecimal (:posting/amount (first legs))
-                     ^java.math.BigDecimal (:posting/amount (second legs)))))))
+               (.add ^java.math.BigDecimal (:kontor.posting/amount (first legs))
+                     ^java.math.BigDecimal (:kontor.posting/amount (second legs)))))))
     (testing "Resident tax credited to :acct/resident-tax (NOT itx — different liability)"
       (let [legs (get by-acct :acct/resident-tax)]
         (is (= 1 (count legs)))
-        (is (= -18000M (:posting/amount (first legs))))))))
+        (is (= -18000M (:kontor.posting/amount (first legs))))))))
 
 (deftest employer-side-emits-paired-legs
   (let [postings (build {} (tanaka-fact))
-        by-acct (group-by :posting/account postings)]
+        by-acct (group-by :kontor.posting/account postings)]
     (testing "Employer SI rolled into 法定福利費 expense"
       (let [legs (get by-acct :acct/er-si)
-            sum (reduce (fn [a {:keys [posting/amount]}]
+            sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                           (.add ^java.math.BigDecimal a
                                 ^java.math.BigDecimal amount))
                         0M legs)]
@@ -133,10 +133,10 @@
 
 (deftest net-wages-payable-credit
   (let [postings (build {} (tanaka-fact))
-        net-legs (filter #(= :acct/net-wages (:posting/account %)) postings)]
+        net-legs (filter #(= :acct/net-wages (:kontor.posting/account %)) postings)]
     (testing "Single net-wages credit matching the fact's :net"
       (is (= 1 (count net-legs)))
-      (is (= -264960M (:posting/amount (first net-legs)))))))
+      (is (= -264960M (:kontor.posting/amount (first net-legs)))))))
 
 (deftest missing-account-tag-throws
   (let [partial (dissoc accounts :jp-payroll-income-tax)
@@ -161,10 +161,10 @@
                                   {:kind :resident-tax-withheld      :amount -23000M  :employer-side? false}
                                   {:kind :employer-long-term-care    :amount 3540M    :employer-side? true}]}
         postings (build {} suzuki-fact)
-        by-acct (group-by :posting/account postings)]
+        by-acct (group-by :kontor.posting/account postings)]
     (testing "介護保険料 credit posts to :acct/kaigo"
       (let [legs (get by-acct :acct/kaigo)
-            sum (reduce (fn [a {:keys [posting/amount]}]
+            sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                           (.add ^java.math.BigDecimal a
                                 ^java.math.BigDecimal amount))
                         0M legs)]
@@ -181,16 +181,16 @@
                          :components [{:kind :base-wage              :amount 300000.5M :employer-side? false}
                                       {:kind :income-tax-withheld    :amount -13000.1M :employer-side? false}]}
         postings (build {} fractional-fact)
-        sum (reduce (fn [a {:keys [posting/amount]}]
+        sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                       (.add ^java.math.BigDecimal a
                             ^java.math.BigDecimal amount))
                     0M postings)]
     (testing "All legs round to whole yen"
       (is (every? (fn [p]
                     (zero? (.compareTo ^java.math.BigDecimal
-                            (:posting/amount p)
+                            (:kontor.posting/amount p)
                                        (.setScale ^java.math.BigDecimal
-                                        (:posting/amount p) 0))))
+                                        (:kontor.posting/amount p) 0))))
                   postings)))
     (testing "Sum still zero after rounding"
       (is (zero? (.compareTo ^java.math.BigDecimal sum 0M))))))
@@ -201,5 +201,5 @@
                                     {:accounts accounts
                                      :ledger :ledger/jp-jgaap})]
     (testing "Every posting carries the supplied :ledger"
-      (is (every? (fn [p] (= :ledger/jp-jgaap (:posting/ledger p)))
+      (is (every? (fn [p] (= :ledger/jp-jgaap (:kontor.posting/ledger p)))
                   postings)))))

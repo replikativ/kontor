@@ -12,8 +12,8 @@
        own scale.
 
    Money is the type the kernel uses internally. At the datahike
-   boundary, Money decomposes into the existing :posting/amount
-   (bigdec) + :posting/commodity (ref) attribute pair — see
+   boundary, Money decomposes into the existing :kontor.posting/amount
+   (bigdec) + :kontor.posting/commodity (ref) attribute pair — see
    `posting->money` and `money->posting-fragment` below.
 
    Naked BigDecimals are a smell. Every kernel fn that takes a monetary
@@ -328,11 +328,11 @@
 ;; ============================================================================
 
 (defn money->posting-fragment
-  "Decompose a Money into the {:posting/amount :posting/commodity}
+  "Decompose a Money into the {:kontor.posting/amount :kontor.posting/commodity}
    fragment that goes into a posting entity map."
   [^Money m]
-  {:posting/amount    (:amount m)
-   :posting/commodity (:commodity m)})
+  {:kontor.posting/amount    (:amount m)
+   :kontor.posting/commodity (:commodity m)})
 
 (defn- normalize-commodity
   "Datahike returns refs from `d/pull` as `{:db/id N}`; from `d/q` as
@@ -348,7 +348,7 @@
 
 (defn posting->money
   "Inverse: pull a Money out of a posting entity map. Returns nil if
-   the posting is missing either :posting/amount or :posting/commodity
+   the posting is missing either :kontor.posting/amount or :kontor.posting/commodity
    (e.g. a UI-only :note / :section line, or a structurally-broken
    posting that hasn't been validated yet).
 
@@ -356,10 +356,10 @@
    normalized to bare eids so that summing across pulled and
    constructor-built Monies works without the caller pre-flattening."
   [posting]
-  (when (and (:posting/amount posting)
-             (:posting/commodity posting))
-    (->Money (:posting/amount posting)
-             (normalize-commodity (:posting/commodity posting)))))
+  (when (and (:kontor.posting/amount posting)
+             (:kontor.posting/commodity posting))
+    (->Money (:kontor.posting/amount posting)
+             (normalize-commodity (:kontor.posting/commodity posting)))))
 
 ;; ============================================================================
 ;; Equality (record-based) — note

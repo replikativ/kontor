@@ -10,7 +10,7 @@
        employee block).
      - Multi-state per-state allocation via
        `:analytic-distribution/plan \"state\"`, NOT
-       `:posting/entity` (mirror ADR-077).
+       `:kontor.posting/entity` (mirror ADR-077).
      - Hybrid employee allocation via `:state-allocations` override.
      - Salary-sacrifice routes to the SS-clearing payable (NOT the
        wages tag — does not reduce gross-wage-DR)."
@@ -73,29 +73,29 @@
                                      :ledger book-ledger-eid})]
     (testing "every posting carries account + amount + commodity + ledger"
       (doseq [p postings]
-        (is (some? (:posting/account p)))
-        (is (some? (:posting/amount p)))
-        (is (= aud-eid (:posting/commodity p)))
-        (is (= book-ledger-eid (:posting/ledger p)))))
+        (is (some? (:kontor.posting/account p)))
+        (is (some? (:kontor.posting/amount p)))
+        (is (= aud-eid (:kontor.posting/commodity p)))
+        (is (= book-ledger-eid (:kontor.posting/ledger p)))))
     (testing "wage-expense lines route to the :au-payroll-wages account"
       (let [wages (filter #(= (:au-payroll-wages basic-accounts)
-                              (:posting/account %)) postings)]
+                              (:kontor.posting/account %)) postings)]
         ;; 3 employees → 3 gross-wage-expense lines.
         (is (= 3 (count wages)))))
     (testing "PAYGW lines route to the ATO payable account"
       (let [paygw (filter #(= (:au-payroll-paygw basic-accounts)
-                              (:posting/account %)) postings)]
+                              (:kontor.posting/account %)) postings)]
         (is (= 3 (count paygw)))))
     (testing "employer SG produces both an expense Dr AND a payable Cr"
       (let [sg-exp (filter #(= (:au-payroll-er-super basic-accounts)
-                               (:posting/account %)) postings)
+                               (:kontor.posting/account %)) postings)
             sg-pay (filter #(= (:au-payroll-super basic-accounts)
-                               (:posting/account %)) postings)]
+                               (:kontor.posting/account %)) postings)]
         (is (= 3 (count sg-exp)))
         (is (= 3 (count sg-pay)))))
     (testing "net-wages payable for each employee"
       (let [net (filter #(= (:au-payroll-net-wages basic-accounts)
-                            (:posting/account %)) postings)]
+                            (:kontor.posting/account %)) postings)]
         (is (= 3 (count net)))))))
 
 (deftest missing-account-tag-throws-loud
@@ -119,7 +119,7 @@
         postings (pp/build-postings builder facts
                                     {:accounts basic-accounts
                                      :ledger book-ledger-eid})
-        sum (reduce (fn [^BigDecimal a {:keys [posting/amount]}]
+        sum (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                       (.add a ^BigDecimal amount))
                     0M postings)]
     (testing "the full posting set balances (sum of amounts is zero)"
@@ -136,9 +136,9 @@
         sg-postings (filter (fn [p]
                               (#{(:au-payroll-er-super basic-accounts)
                                  (:au-payroll-super basic-accounts)}
-                               (:posting/account p)))
+                               (:kontor.posting/account p)))
                             postings)
-        sg-sum (reduce (fn [^BigDecimal a {:keys [posting/amount]}]
+        sg-sum (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                          (.add a ^BigDecimal amount))
                        0M sg-postings)]
     (testing "SG postings net to zero across all employees"
@@ -154,23 +154,23 @@
         postings (pp/build-postings builder facts
                                     {:accounts basic-accounts
                                      :ledger book-ledger-eid})]
-    (testing "no posting carries :posting/entity (single Pty Ltd)"
+    (testing "no posting carries :kontor.posting/entity (single Pty Ltd)"
       ;; Per ADR-080 + mirror of ADR-077: per-state lives on
-      ;; :analytic-distribution, NOT :posting/entity.
+      ;; :analytic-distribution, NOT :kontor.posting/entity.
       (doseq [p postings]
-        (is (nil? (:posting/entity p))
-            (str "Unexpected :posting/entity on " p))))
+        (is (nil? (:kontor.posting/entity p))
+            (str "Unexpected :kontor.posting/entity on " p))))
     (testing "wage-side postings carry an analytic-distribution to a state"
-      (let [with-dist (filter #(some? (:posting/analytic-distributions %)) postings)]
+      (let [with-dist (filter #(some? (:kontor.posting/analytic-distributions %)) postings)]
         (is (seq with-dist))
         (doseq [p with-dist
-                d (:posting/analytic-distributions p)]
+                d (:kontor.posting/analytic-distributions p)]
           (is (= [:analytic-plan/code "state"]
                  (:analytic-distribution/plan d)))
           (is (some? (:analytic-distribution/account d))))))
     (testing "the three states from the fixture appear"
       (let [paths (->> postings
-                       (mapcat :posting/analytic-distributions)
+                       (mapcat :kontor.posting/analytic-distributions)
                        (map :analytic-distribution/account)
                        (map second)
                        distinct
@@ -188,15 +188,15 @@
                                                                :VIC 40M}}})
         e101-wage (some (fn [p]
                           (when (and (= (:au-payroll-wages basic-accounts)
-                                        (:posting/account p))
-                                     (let [dists (:posting/analytic-distributions p)]
+                                        (:kontor.posting/account p))
+                                     (let [dists (:kontor.posting/analytic-distributions p)]
                                        (and (= 2 (count dists)))))
                             p))
                         postings)]
     (testing "the override produces two distribution rows for E101's wage line"
       (is (some? e101-wage))
       (when e101-wage
-        (let [dists (:posting/analytic-distributions e101-wage)
+        (let [dists (:kontor.posting/analytic-distributions e101-wage)
               pcts (sort (map :analytic-distribution/percent dists))]
           (is (= [40M 60M] pcts)))))))
 

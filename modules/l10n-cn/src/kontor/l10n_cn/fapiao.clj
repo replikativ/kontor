@@ -1,12 +1,12 @@
 (ns kontor.l10n-cn.fapiao
   "Fapiao (发票) — Chinese VAT invoice tracking.
 
-   Per ADR-018 the fapiao lifecycle uses `:transaction/state` value
+   Per ADR-018 the fapiao lifecycle uses `:kontor.transaction/state` value
    `:pending-attestation` for transactions whose invoice has been
    submitted to the State Taxation Administration (STA / 国家税务总局)
    electronic invoice service platform but not yet returned with an
    e-fapiao number. On successful response the state advances to
-   `:posted` and `:transaction/clearance-token` holds the e-fapiao
+   `:posted` and `:kontor.transaction/clearance-token` holds the e-fapiao
    number (32-character QR signature in the fully-digital regime,
    8-digit number in legacy paper/electronic fapiao).
 

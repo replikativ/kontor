@@ -52,8 +52,8 @@
                  {:kontor.account/code "206.06" :kontor.account/path "Pasivos:INFONAVITPorPagar"
                   :kontor.account/name "INFONAVIT por pagar" :kontor.account/type :liability
                   :kontor.account/active true}
-                 {:journal/code "NOM" :journal/name "Nómina"
-                  :journal/type :general :journal/active true}])
+                 {:kontor.journal/code "NOM" :kontor.journal/name "Nómina"
+                  :kontor.journal/type :general :kontor.journal/active true}])
     conn))
 
 (defn- ref-eid [db a v]
@@ -83,7 +83,7 @@
           ;; (2) Post: one balanced journal aggregating both employees.
           db (d/db conn)
           mxn-eid (ref-eid db :kontor.commodity/symbol "MXN")
-          journal-eid (ref-eid db :journal/code "NOM")
+          journal-eid (ref-eid db :kontor.journal/code "NOM")
           tx-data (pb/build-period-tx-data
                    {:db db :journal journal-eid :commodity mxn-eid
                     :period {:start #inst "2026-05-01"
@@ -160,7 +160,7 @@
                  (io/resource "kontor/payroll_mx/fixtures/aspel-sample.csv"))
           db (d/db conn)
           mxn-eid (ref-eid db :kontor.commodity/symbol "MXN")
-          journal-eid (ref-eid db :journal/code "NOM")
+          journal-eid (ref-eid db :kontor.journal/code "NOM")
           tx-data (pb/build-period-tx-data
                    {:db db :journal journal-eid :commodity mxn-eid
                     :period {:start #inst "2026-05-01"

@@ -49,8 +49,8 @@
                   :kontor.entity/functional-commodity usd}
                  ;; Journals: GEN for wages, SALE for proceeds (not used —
                  ;; book.sell! infers the journal automatically).
-                 {:journal/code "GEN"  :journal/type :general :journal/active true}
-                 {:journal/code "SALE" :journal/type :sale    :journal/active true}
+                 {:kontor.journal/code "GEN"  :kontor.journal/type :general :kontor.journal/active true}
+                 {:kontor.journal/code "SALE" :kontor.journal/type :sale    :kontor.journal/active true}
                  ;; Account skeleton (minimal for Form 1040 + cap gains story).
                  {:kontor.account/path "Income:Wages-W2"       :kontor.account/type :income
                   :kontor.account/commodity usd}
@@ -155,7 +155,7 @@
 
 (defn- run-pit [conn cgt-base-additions]
   ;; NOTE: we omit `:entity` here because `book/sell!` does not tag
-  ;; postings with `:posting/entity` (that's an ADR-031 multi-entity
+  ;; postings with `:kontor.posting/entity` (that's an ADR-031 multi-entity
   ;; mode concern). In single-entity mode the PIT provider aggregates
   ;; every income posting in the period.
   (let [provider (us-pit/us-personal-income-tax-provider {})]

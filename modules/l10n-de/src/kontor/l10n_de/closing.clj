@@ -40,13 +40,13 @@
                                  retained-code " not found — install the chart first")
                             {:code retained-code})))
         ;; Auto-create the CLOSE journal if it doesn't exist.
-        jnl (or (:db/id (d/entity db [:journal/code journal-code]))
+        jnl (or (:db/id (d/entity db [:kontor.journal/code journal-code]))
                 (do (d/transact conn
-                                [{:journal/code journal-code
-                                  :journal/name "Year-end closing entries"
-                                  :journal/type :closing
-                                  :journal/active true}])
-                    (:db/id (d/entity (d/db conn) [:journal/code journal-code]))))]
+                                [{:kontor.journal/code journal-code
+                                  :kontor.journal/name "Year-end closing entries"
+                                  :kontor.journal/type :closing
+                                  :kontor.journal/active true}])
+                    (:db/id (d/entity (d/db conn) [:kontor.journal/code journal-code]))))]
     (closing/close-fiscal-year!
      conn
      (-> opts

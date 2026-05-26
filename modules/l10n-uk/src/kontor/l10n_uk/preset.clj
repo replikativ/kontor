@@ -30,11 +30,11 @@
     :kontor.commodity/precision 2}])
 
 (def ^:private default-journals
-  [{:journal/code "GJ" :journal/type :general :journal/name "General Journal"}
-   {:journal/code "CR" :journal/type :cash    :journal/name "Cash Receipts"}
-   {:journal/code "CD" :journal/type :cash    :journal/name "Cash Disbursements"}
-   {:journal/code "SJ" :journal/type :sale    :journal/name "Sales Journal"}
-   {:journal/code "PJ" :journal/type :purchase :journal/name "Purchase Journal"}])
+  [{:kontor.journal/code "GJ" :kontor.journal/type :general :kontor.journal/name "General Journal"}
+   {:kontor.journal/code "CR" :kontor.journal/type :cash    :kontor.journal/name "Cash Receipts"}
+   {:kontor.journal/code "CD" :kontor.journal/type :cash    :kontor.journal/name "Cash Disbursements"}
+   {:kontor.journal/code "SJ" :kontor.journal/type :sale    :kontor.journal/name "Sales Journal"}
+   {:kontor.journal/code "PJ" :kontor.journal/type :purchase :kontor.journal/name "Purchase Journal"}])
 
 (defn install-all!
   "Install everything a UK consumer needs to start booking + producing

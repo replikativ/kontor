@@ -234,10 +234,10 @@ eol        = #'[ \\t]*\\n'
    We synthesize a single :general journal so the schema's NOT-NULL
    journal ref is satisfied."
   []
-  {:journal/code "BEAN"
-   :journal/name "Beancount import"
-   :journal/type :general
-   :journal/active true})
+  {:kontor.journal/code "BEAN"
+   :kontor.journal/name "Beancount import"
+   :kontor.journal/type :general
+   :kontor.journal/active true})
 
 (defn- transaction-tx
   "Build the kernel tx-data for one Beancount transaction directive.
@@ -250,21 +250,21 @@ eol        = #'[ \\t]*\\n'
         (map-indexed
          (fn [idx {:keys [account amount currency]}]
            {:db/id              (str "p-" tx-id "-" idx)
-            :posting/account    [:kontor.account/path account]
-            :posting/amount     amount
-            :posting/commodity  [:kontor.commodity/symbol currency]
-            :posting/posted-at  date
-            :posting/transaction tx-id
-            :posting/display-type :product})
+            :kontor.posting/account    [:kontor.account/path account]
+            :kontor.posting/amount     amount
+            :kontor.posting/commodity  [:kontor.commodity/symbol currency]
+            :kontor.posting/posted-at  date
+            :kontor.posting/transaction tx-id
+            :kontor.posting/display-type :product})
          postings)]
     (kbt/with-vt
       (into [{:db/id                       tx-id
-              :transaction/external-id     external-id
-              :transaction/journal         [:journal/code "BEAN"]
-              :transaction/effective-date  date
-              :transaction/narration       (str payee " — " narration)
-              :transaction/state           :posted
-              :transaction/posted-at       date}]
+              :kontor.transaction/external-id     external-id
+              :kontor.transaction/journal         [:kontor.journal/code "BEAN"]
+              :kontor.transaction/effective-date  date
+              :kontor.transaction/narration       (str payee " — " narration)
+              :kontor.transaction/state           :posted
+              :kontor.transaction/posted-at       date}]
             posting-entities)
       date kbt/forever)))
 
@@ -442,7 +442,7 @@ eol        = #'[ \\t]*\\n'
      (for [path (sort paths)]
        (let [eid (:db/id (d/entity db [:kontor.account/path path]))
              ;; Derive the open date heuristically: earliest of
-             ;; (a) min :transaction/effective-date for postings on
+             ;; (a) min :kontor.transaction/effective-date for postings on
              ;; this account, (b) min :balance-assertion/at for
              ;; assertions on this account. `min-date` returns nil
              ;; for empty seqs so the cond below picks correctly.
@@ -454,9 +454,9 @@ eol        = #'[ \\t]*\\n'
              tx-min (->> (d/q '[:find ?d
                                 :in $ ?a
                                 :where
-                                [?p :posting/account ?a]
-                                [?p :posting/transaction ?t]
-                                [?t :transaction/effective-date ?d]]
+                                [?p :kontor.posting/account ?a]
+                                [?p :kontor.posting/transaction ?t]
+                                [?t :kontor.transaction/effective-date ?d]]
                               db eid)
                          (map first)
                          (filter some?)
@@ -481,8 +481,8 @@ eol        = #'[ \\t]*\\n'
              currencies (->> (d/q '[:find [?sym ...]
                                     :in $ ?a
                                     :where
-                                    [?p :posting/account ?a]
-                                    [?p :posting/commodity ?c]
+                                    [?p :kontor.posting/account ?a]
+                                    [?p :kontor.posting/commodity ?c]
                                     [?c :kontor.commodity/symbol ?sym]]
                                   db eid)
                              distinct
@@ -497,33 +497,33 @@ eol        = #'[ \\t]*\\n'
 (defn- transaction-rows
   [db]
   (let [tx-eids (d/q '[:find [?t ...]
-                       :where [?t :transaction/external-id _]]
+                       :where [?t :kontor.transaction/external-id _]]
                      db)]
     (vec
      (for [t (sort-by (fn [eid]
-                        (.getTime ^Date (:transaction/effective-date (d/entity db eid))))
+                        (.getTime ^Date (:kontor.transaction/effective-date (d/entity db eid))))
                       tx-eids)]
-       (let [tx (d/pull db [:transaction/effective-date :transaction/narration] t)
+       (let [tx (d/pull db [:kontor.transaction/effective-date :kontor.transaction/narration] t)
              postings (d/q '[:find ?p
                              :in $ ?t
-                             :where [?p :posting/transaction ?t]]
+                             :where [?p :kontor.posting/transaction ?t]]
                            db t)
              ps (vec
                  (for [[pid] (sort-by first postings)]
-                   (let [pe (d/pull db [:posting/account :posting/amount
-                                        :posting/commodity] pid)
-                         apath (-> pe :posting/account :db/id
+                   (let [pe (d/pull db [:kontor.posting/account :kontor.posting/amount
+                                        :kontor.posting/commodity] pid)
+                         apath (-> pe :kontor.posting/account :db/id
                                    (#(:kontor.account/path (d/entity db %))))
-                         csym (-> pe :posting/commodity :db/id
+                         csym (-> pe :kontor.posting/commodity :db/id
                                   (#(:kontor.commodity/symbol (d/entity db %))))]
                      {:account apath
-                      :amount  (:posting/amount pe)
+                      :amount  (:kontor.posting/amount pe)
                       :currency csym})))
-             [payee narration] (let [n (:transaction/narration tx)]
+             [payee narration] (let [n (:kontor.transaction/narration tx)]
                                  (if (re-find #" — " n)
                                    (str/split n #" — " 2)
                                    ["" n]))]
-         {:date (:transaction/effective-date tx)
+         {:date (:kontor.transaction/effective-date tx)
           :payee payee
           :narration narration
           :postings ps})))))

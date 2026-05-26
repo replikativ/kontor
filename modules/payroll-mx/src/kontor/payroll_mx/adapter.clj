@@ -310,10 +310,10 @@
 
 (defn- post-leg
   [{:keys [account amount commodity narration]}]
-  (cond-> {:posting/account account
-           :posting/amount amount
-           :posting/commodity commodity}
-    narration (assoc :posting/narration narration)))
+  (cond-> {:kontor.posting/account account
+           :kontor.posting/amount amount
+           :kontor.posting/commodity commodity}
+    narration (assoc :kontor.posting/narration narration)))
 
 (defn- fact->mx-postings
   "Per-fact balanced postings, routed by SAT Código Agrupador."
@@ -494,7 +494,7 @@
                                         {:accounts accounts
                                          :commodity commodity})]
             (cond->> legs
-              ledger (mapv #(assoc % :posting/ledger ledger)))))
+              ledger (mapv #(assoc % :kontor.posting/ledger ledger)))))
         payroll-facts)))))
 
 (defn make-mx-kontor-posting-builder

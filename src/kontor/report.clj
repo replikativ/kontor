@@ -10,7 +10,7 @@
                       uses this for boxes that key off konto-number
                       patterns (e.g. \"all 4400/4410/4420 sales 19%\").
 
-     :tax-tags      — sum postings whose `:posting/account-tags`
+     :tax-tags      — sum postings whose `:kontor.posting/account-tags`
                       (or whose account's `:kontor.account/tags`) include
                       any of the given tag keywords. Used by the
                       DE UStVA for box-keyed aggregations
@@ -74,32 +74,32 @@
    Returns a flat map suitable for predicate filtering. Adds
    `:valid-from` derived from the creating tx's `:tx/valid-from`
    (kontor.bitemporal) and `:ledger-eid` for the optional :ledger
-   filter (ADR-021 — a nil :posting/ledger is the primary book)."
+   filter (ADR-021 — a nil :kontor.posting/ledger is the primary book)."
   [db p]
   (let [pulled (d/pull db
                        [:db/id
-                        :posting/amount
-                        :posting/commodity
-                        :posting/transaction
-                        {:posting/ledger [:db/id]}
-                        {:posting/entity [:db/id]}
-                        {:posting/partner [:db/id]}
-                        {:posting/account [:kontor.account/code
+                        :kontor.posting/amount
+                        :kontor.posting/commodity
+                        :kontor.posting/transaction
+                        {:kontor.posting/ledger [:db/id]}
+                        {:kontor.posting/entity [:db/id]}
+                        {:kontor.posting/partner [:db/id]}
+                        {:kontor.posting/account [:kontor.account/code
                                            :kontor.account/path
                                            :kontor.account/type
                                            :kontor.account/tags]}
-                        {:posting/account-tags [:kontor.account-tag/name]}
-                        {:posting/dimensions [:posting-dimension/axis
-                                              :posting-dimension/value]}]
+                        {:kontor.posting/account-tags [:kontor.account-tag/name]}
+                        {:kontor.posting/dimensions [:kontor.posting-dimension/axis
+                                              :kontor.posting-dimension/value]}]
                        p)
-        tx-state (some-> (-> pulled :posting/transaction :db/id)
-                         (#(d/pull db [:transaction/state] %))
-                         :transaction/state)
-        account (:posting/account pulled)
+        tx-state (some-> (-> pulled :kontor.posting/transaction :db/id)
+                         (#(d/pull db [:kontor.transaction/state] %))
+                         :kontor.transaction/state)
+        account (:kontor.posting/account pulled)
         vf (d/q '[:find ?vf .
                   :in $ ?p
                   :where
-                  [?p :posting/transaction _ ?tx]
+                  [?p :kontor.posting/transaction _ ?tx]
                   [?tx :db/txInstant ?ti]
                   [(get-else $ ?tx :db.valid/from ?ti) ?vf]]
                 db p)
@@ -112,23 +112,23 @@
                             (map keyword)
                             set)
         ;; Posting-level tags (materialized at posting time)
-        posting-tag-names (->> (:posting/account-tags pulled)
+        posting-tag-names (->> (:kontor.posting/account-tags pulled)
                                (map :kontor.account-tag/name)
                                (filter some?)
                                (map keyword)
                                set)
         ;; ADR-097 classification dimensions → {axis #{values}}
         dimensions (reduce (fn [acc d]
-                             (update acc (:posting-dimension/axis d)
-                                     (fnil conj #{}) (:posting-dimension/value d)))
+                             (update acc (:kontor.posting-dimension/axis d)
+                                     (fnil conj #{}) (:kontor.posting-dimension/value d)))
                            {}
-                           (:posting/dimensions pulled))]
+                           (:kontor.posting/dimensions pulled))]
     (assoc pulled
            :valid-from vf
            :tx-state tx-state
-           :ledger-eid (:db/id (:posting/ledger pulled))
-           :entity-eid (:db/id (:posting/entity pulled))
-           :partner-eid (:db/id (:posting/partner pulled))
+           :ledger-eid (:db/id (:kontor.posting/ledger pulled))
+           :entity-eid (:db/id (:kontor.posting/entity pulled))
+           :partner-eid (:db/id (:kontor.posting/partner pulled))
            :account-code (:kontor.account/code account)
            :account-path (:kontor.account/path account)
            :account-type (:kontor.account/type account)
@@ -174,7 +174,7 @@
   "The signed BigDecimal a posting contributes under `sign`
    (`:raw` = stored; `:inflow` = natural-increase side)."
   [p sign]
-  (let [stored (:posting/amount p)]
+  (let [stored (:kontor.posting/amount p)]
     (case sign
       :inflow (natural-sign (:account-type p) stored)
       :raw    stored)))
@@ -201,7 +201,7 @@
    :account-path :account-path
    :ledger       :ledger-eid
    :entity       :entity-eid
-   :commodity    :posting/commodity
+   :commodity    :kontor.posting/commodity
    :partner      :partner-eid
    :account-tags :all-tags})
 
@@ -211,7 +211,7 @@
   "Resolve a `dimension` argument to `[extract-fn set-valued?]`.
    `dimension` is a `posting→class` function, a built-in axis keyword
    (see `dimension-extractors`), or — for any other keyword — a
-   `:posting/dimensions` classification axis (ADR-097), which is
+   `:kontor.posting/dimensions` classification axis (ADR-097), which is
    set-valued (a posting may carry several values on one axis)."
   [dimension]
   (cond
@@ -230,13 +230,13 @@
 (defn marginalize
   "The quotient epimorphism σ_E (note 97 §3): partition `postings` by
    `dimension` and sum within each class. `dimension` is a built-in
-   axis keyword (see `dimension-extractors`), a `:posting/dimensions`
+   axis keyword (see `dimension-extractors`), a `:kontor.posting/dimensions`
    classification axis keyword (ADR-097), or a function posting→class.
    Returns `{class {:value Money :postings [eid…]}}`.
 
    For a scalar axis this is a true partition — every posting lands in
    exactly one class, and the classes' values sum to the grand total.
-   For a set-valued axis (`:account-tags` and any `:posting/dimensions`
+   For a set-valued axis (`:account-tags` and any `:kontor.posting/dimensions`
    axis) a posting contributes to each class it carries (a covering).
 
    Opts: `:sign` (`:raw` | `:inflow`, default `:raw`) and `:commodity`
@@ -288,7 +288,7 @@
 
 (defmethod run-engine :dimension
   ;; The generic σ_E line: sum the postings of one class under a
-  ;; built-in axis OR a `:posting/dimensions` axis (ADR-097). `:match`
+  ;; built-in axis OR a `:kontor.posting/dimensions` axis (ADR-097). `:match`
   ;; is the class value (or a collection — any of). For a set-valued
   ;; axis, `:match` is matched by intersection.
   [postings {:keys [dimension match sign commodity] :or {sign :raw commodity :EUR}} _opts]
@@ -316,7 +316,7 @@
 (defn- ledger-filter-pred
   "Build a posting predicate for the optional `:ledger` report
    filter. `ledger-spec` is an eid or lookup-ref. Per ADR-021 a
-   posting with no `:posting/ledger` is conceptually in the PRIMARY
+   posting with no `:kontor.posting/ledger` is conceptually in the PRIMARY
    book — so when the requested ledger is `:ledger/type :primary`,
    nil-ledger postings pass too. Returns `(constantly true)` when no
    ledger filter is requested."
@@ -335,7 +335,7 @@
 (defn- entity-filter-pred
   "Build a posting predicate for the optional `:entity` report filter.
    `entity-spec` is an eid or lookup-ref. Per ADR-031 every balance-
-   affecting posting in multi-entity mode carries `:posting/entity`; in
+   affecting posting in multi-entity mode carries `:kontor.posting/entity`; in
    single-entity mode no posting does. A posting without an entity is
    *not* matched by an entity filter (it represents the global single-
    entity book, which doesn't belong to any specific entity). Returns
@@ -389,7 +389,7 @@
          db          (-> conn d/db (d/as-of as-of-tx))
          ledger-pred (ledger-filter-pred db ledger)
          entity-pred (entity-filter-pred db entity)
-         all-pids    (d/q (into '[:find [?p ...] :where [?p :posting/account _]]
+         all-pids    (d/q (into '[:find [?p ...] :where [?p :kontor.posting/account _]]
                                 (or posting-filter []))
                           db)]
      (into []
@@ -421,14 +421,14 @@
                        reads natural. Mutually exclusive with :to.
                        Note 160 §I-10.
      :as-of-tx       — datahike snapshot timestamp (default: now)
-     :include-states — set of :transaction/state values to include
+     :include-states — set of :kontor.transaction/state values to include
                        (default: #{:posted}). Drafts excluded so the
                        report reflects what's actually been posted.
      :posting-filter — optional vector of extra datalog :where clauses
                        (the posting is bound to `?p`) appended to the
                        candidate-posting query. Lets a consumer narrow
                        the pull-all-postings scan at the datalog level
-                       — e.g. `[[?p :posting/posted-at ?pa]
+                       — e.g. `[[?p :kontor.posting/posted-at ?pa]
                        [(< ?pa #inst \"2027-01-01\")]]`, or by a
                        literal ledger/entity eid. nil = scan all.
                        (A materialized / incremental report is a
@@ -439,7 +439,7 @@
                        prerequisite). A nil-ledger posting counts as
                        the primary book.
      :entity         — optional entity eid / lookup-ref (ADR-031). When
-                       set, only postings with that `:posting/entity`
+                       set, only postings with that `:kontor.posting/entity`
                        are summed — trans-national per-entity reports.
      :translate-to   — optional ISO-4217 string (e.g. \"EUR\"). When
                        set, each line's `:line/value` Money is

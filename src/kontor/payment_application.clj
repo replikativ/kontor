@@ -442,11 +442,11 @@
                 (let [open (open-amount-of-invoice db eid {:as-of-valid as-of-valid})
                       pulled (d/pull db
                                      [{:invoice/transaction
-                                       [:transaction/due-date]}]
+                                       [:kontor.transaction/due-date]}]
                                      eid)
                       due (or (get-in pulled
                                       [:invoice/transaction
-                                       :transaction/due-date])
+                                       :kontor.transaction/due-date])
                               (java.util.Date. 0))]
                   {:invoice-eid eid
                    :open-amount open

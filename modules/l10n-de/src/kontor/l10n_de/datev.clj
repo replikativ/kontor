@@ -18,7 +18,7 @@
    the rest stay empty unless the consumer fills them in via
    per-posting metadata maps.
 
-   The exporter reads :posting/* entities directly and projects
+   The exporter reads :kontor.posting/* entities directly and projects
    them to DATEV rows. It does NOT use the report engine — DATEV
    is an *export* format (per-posting), not a report aggregation.
 
@@ -193,32 +193,32 @@
    the largest-magnitude posting points at."
   [db {:keys [from to]}]
   (let [posting-ids (d/q '[:find [?p ...]
-                           :where [?p :posting/account _]
-                                  [?p :posting/transaction ?t]
-                                  [?t :transaction/state :posted]]
+                           :where [?p :kontor.posting/account _]
+                                  [?p :kontor.posting/transaction ?t]
+                                  [?t :kontor.transaction/state :posted]]
                          db)
         pulled (mapv (fn [p]
                        (let [pe (d/pull db
-                                        [:posting/amount
-                                         {:posting/account [:kontor.account/code :kontor.account/type]}
-                                         {:posting/transaction
-                                          [:db/id :transaction/effective-date :transaction/narration]}]
+                                        [:kontor.posting/amount
+                                         {:kontor.posting/account [:kontor.account/code :kontor.account/type]}
+                                         {:kontor.posting/transaction
+                                          [:db/id :kontor.transaction/effective-date :kontor.transaction/narration]}]
                                         p)
-                             tx (:posting/transaction pe)
+                             tx (:kontor.posting/transaction pe)
                              vf (d/q '[:find ?vf .
                                        :in $ ?p
                                        :where
-                                       [?p :posting/transaction _ ?tx]
+                                       [?p :kontor.posting/transaction _ ?tx]
                                        [?tx :db/txInstant ?ti]
                                        [(get-else $ ?tx :db.valid/from ?ti) ?vf]]
                                      db p)]
                          {:posting-eid p
-                          :amount (:posting/amount pe)
+                          :amount (:kontor.posting/amount pe)
                           :valid-from vf
-                          :account-code (-> pe :posting/account :kontor.account/code)
-                          :account-type (-> pe :posting/account :kontor.account/type)
+                          :account-code (-> pe :kontor.posting/account :kontor.account/code)
+                          :account-type (-> pe :kontor.posting/account :kontor.account/type)
                           :tx-eid (:db/id tx)
-                          :tx-text (:transaction/narration tx)}))
+                          :tx-text (:kontor.transaction/narration tx)}))
                      posting-ids)
         in-window (filter (fn [{:keys [valid-from]}]
                             (and valid-from

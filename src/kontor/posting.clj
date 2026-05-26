@@ -43,7 +43,7 @@
 ;; ============================================================================
 
 (def ^:private allowed-display-types
-  "Per the schema doc on :posting/display-type:
+  "Per the schema doc on :kontor.posting/display-type:
      :product       — real posting against a real account
      :tax           — auto-generated tax line
      :payment-term  — placeholder for the receivable/payable from terms
@@ -63,7 +63,7 @@
    when the caller omits it. Used by both validate and build-transaction
    so the two stay consistent."
   [posting]
-  (or (:posting/display-type posting) default-display-type))
+  (or (:kontor.posting/display-type posting) default-display-type))
 
 (defn- balance-affecting?
   "True iff this posting affects the double-entry balance. UI-only
@@ -84,22 +84,22 @@
                            " not in " allowed-display-types)})
 
       (and (balance-affecting? posting)
-           (nil? (:posting/account posting)))
+           (nil? (:kontor.posting/account posting)))
       (conj {:posting posting
              :error :missing-account
-             :message "balance-affecting posting requires :posting/account"})
+             :message "balance-affecting posting requires :kontor.posting/account"})
 
       (and (balance-affecting? posting)
-           (nil? (:posting/amount posting)))
+           (nil? (:kontor.posting/amount posting)))
       (conj {:posting posting
              :error :missing-amount
-             :message "balance-affecting posting requires :posting/amount"})
+             :message "balance-affecting posting requires :kontor.posting/amount"})
 
       (and (balance-affecting? posting)
-           (nil? (:posting/commodity posting)))
+           (nil? (:kontor.posting/commodity posting)))
       (conj {:posting posting
              :error :missing-commodity
-             :message "balance-affecting posting requires :posting/commodity"}))))
+             :message "balance-affecting posting requires :kontor.posting/commodity"}))))
 
 ;; ============================================================================
 ;; Sum-to-zero (per ledger, per commodity) — ADR-021
@@ -107,23 +107,23 @@
 
 (defn- ledger-key
   "Grouping key for a posting's ledger membership. Returns the raw
-   :posting/ledger value (eid, lookup-ref like [:ledger/code \"ifrs\"],
+   :kontor.posting/ledger value (eid, lookup-ref like [:ledger/code \"ifrs\"],
    or ident) so postings written with the same reference form group
-   together. Returns nil when :posting/ledger is absent —
+   together. Returns nil when :kontor.posting/ledger is absent —
    build-transaction defaults missing ledgers to the primary-ledger
    lookup-ref before validation, so well-formed inputs never group
    under nil."
   [posting]
-  (:posting/ledger posting))
+  (:kontor.posting/ledger posting))
 
 (defn balance-by-ledger-and-commodity
   "Return {ledger-key => {commodity => Money}} of the balance-affecting
-   postings' net amount, grouped first by :posting/ledger then summed
+   postings' net amount, grouped first by :kontor.posting/ledger then summed
    per commodity within each ledger. A balanced transaction has every
    inner Money zero.
 
-   ledger-key is the raw :posting/ledger value as supplied; postings
-   missing :posting/ledger group under nil (see `ledger-key`)."
+   ledger-key is the raw :kontor.posting/ledger value as supplied; postings
+   missing :kontor.posting/ledger group under nil (see `ledger-key`)."
   [postings]
   (->> postings
        (filter balance-affecting?)
@@ -158,21 +158,21 @@
 
 (defn- entity-key
   "Grouping key for a posting's entity scope. Returns the raw
-   :posting/entity value (eid, lookup-ref like
+   :kontor.posting/entity value (eid, lookup-ref like
    [:kontor.entity/code \"acme-de\"], etc.). nil when the attribute is absent."
   [posting]
-  (:posting/entity posting))
+  (:kontor.posting/entity posting))
 
 (defn multi-entity-mode?
   "True iff any balance-affecting posting in the collection carries
-   :posting/entity. Drives the choice between per-(ledger, commodity)
+   :kontor.posting/entity. Drives the choice between per-(ledger, commodity)
    and per-(entity, ledger, commodity) sum-to-zero invariants."
   [postings]
   (boolean (some (every-pred balance-affecting? entity-key) postings)))
 
 (defn mixed-entity-mode?
   "True iff SOME but not ALL balance-affecting postings carry
-   :posting/entity. Mixed mode is a validation error — the invariant
+   :kontor.posting/entity. Mixed mode is a validation error — the invariant
    it implies is ambiguous (does the un-tagged posting belong to a
    default entity? to no entity? to all of them?). Reject."
   [postings]
@@ -184,7 +184,7 @@
 (defn balance-by-entity-ledger-and-commodity
   "Return {entity-key => {ledger-key => {commodity => Money}}} of the
    balance-affecting postings' net amount. Used only in multi-entity
-   mode (every posting carries :posting/entity). The single-entity
+   mode (every posting carries :kontor.posting/entity). The single-entity
    case is handled by `balance-by-ledger-and-commodity`."
   [postings]
   (->> postings
@@ -221,13 +221,13 @@
 (defn- header-validation-errors
   [{:keys [transaction]}]
   (cond-> []
-    (nil? (:transaction/journal transaction))
+    (nil? (:kontor.transaction/journal transaction))
     (conj {:error :missing-journal
-           :message ":transaction/journal is required"})
+           :message ":kontor.transaction/journal is required"})
 
-    (nil? (:transaction/effective-date transaction))
+    (nil? (:kontor.transaction/effective-date transaction))
     (conj {:error :missing-effective-date
-           :message ":transaction/effective-date is required (the
+           :message ":kontor.transaction/effective-date is required (the
                      bitemporal valid-time of this entry)"})))
 
 ;; ============================================================================
@@ -249,9 +249,9 @@
    Per ADR-021 the sum-to-zero invariant is enforced per (ledger,
    commodity) pair. Per ADR-031 this extends to per
    (entity, ledger, commodity) when any posting carries
-   :posting/entity. Mixed-mode (some tagged, some not) is rejected.
+   :kontor.posting/entity. Mixed-mode (some tagged, some not) is rejected.
 
-   Postings without :posting/ledger group under nil — this nil-group
+   Postings without :kontor.posting/ledger group under nil — this nil-group
    conceptually IS the primary book, so readers should treat it the
    same as a posting explicitly tagged with the primary-ledger ref.
    The kernel does NOT auto-inject a lookup-ref at build time
@@ -275,7 +275,7 @@
         all-errors (cond-> all-errors
                      mixed?
                      (conj {:error :mixed-entity-mode
-                            :message "transaction has SOME postings with :posting/entity and SOME without; multi-entity mode requires all balance-affecting postings to carry an entity ref"})
+                            :message "transaction has SOME postings with :kontor.posting/entity and SOME without; multi-entity mode requires all balance-affecting postings to carry an entity ref"})
 
                      too-few?
                      (conj {:error :too-few-postings
@@ -300,22 +300,22 @@
   "Build a tx-data vector ready for `datahike.api/transact`, raising on
    structural problems. Input shape:
 
-     {:transaction { :transaction/journal         <ref or external-id>
-                     :transaction/effective-date  <#inst>
-                     :transaction/narration       <string>
-                     :transaction/external-id     <string>      ; optional
-                     :transaction/partner         <ref>         ; optional
-                     :transaction/state           <kw>          ; defaults :draft
-                     :transaction/source          <string>      ; optional
+     {:transaction { :kontor.transaction/journal         <ref or external-id>
+                     :kontor.transaction/effective-date  <#inst>
+                     :kontor.transaction/narration       <string>
+                     :kontor.transaction/external-id     <string>      ; optional
+                     :kontor.transaction/partner         <ref>         ; optional
+                     :kontor.transaction/state           <kw>          ; defaults :draft
+                     :kontor.transaction/source          <string>      ; optional
                      ...other transaction/* attrs }
-      :postings    [ { :posting/account          <ref>
-                       :posting/amount           <bigdec>
-                       :posting/commodity        <ref>
-                       :posting/display-type     <kw>           ; defaults :product
-                       :posting/partner          <ref>          ; optional
-                       :posting/narration        <string>       ; optional
-                       :posting/taxes-applied    [<refs>]       ; optional
-                       :posting/account-tags     [<refs>]       ; optional
+      :postings    [ { :kontor.posting/account          <ref>
+                       :kontor.posting/amount           <bigdec>
+                       :kontor.posting/commodity        <ref>
+                       :kontor.posting/display-type     <kw>           ; defaults :product
+                       :kontor.posting/partner          <ref>          ; optional
+                       :kontor.posting/narration        <string>       ; optional
+                       :kontor.posting/taxes-applied    [<refs>]       ; optional
+                       :kontor.posting/account-tags     [<refs>]       ; optional
                        ...other posting/* attrs }
                      ... ]}
 
@@ -329,7 +329,7 @@
 
    Use `validate` for non-throwing inspection.
 
-   Per ADR-021 (revised), `:posting/ledger` is fully optional. A
+   Per ADR-021 (revised), `:kontor.posting/ledger` is fully optional. A
    posting without the attribute is conceptually in the *primary*
    book; readers and validators treat the nil-keyed group as the
    primary ledger. Multi-ledger users explicitly tag their postings
@@ -353,45 +353,45 @@
                          (fn [i] (str tx-tempid "-p" i))
                          (fn [i] (- -100 i)))
         tx-base   (cond-> (assoc transaction :db/id tx-tempid)
-                    (nil? (:transaction/state transaction))
-                    (assoc :transaction/state :draft))
+                    (nil? (:kontor.transaction/state transaction))
+                    (assoc :kontor.transaction/state :draft))
         ;; Each posting becomes its own entity referencing the
         ;; transaction. Default display-type :product. Valid-time is
         ;; carried on the tx via :tx/valid-from (kontor.bitemporal),
-        ;; defaulting to :transaction/effective-date.
+        ;; defaulting to :kontor.transaction/effective-date.
         posting-entities
         (mapv (fn [i posting]
                 (cond-> (assoc posting
                                :db/id (posting-tempid i)
-                               :posting/transaction tx-tempid)
-                  (nil? (:posting/display-type posting))
-                  (assoc :posting/display-type :product)))
+                               :kontor.posting/transaction tx-tempid)
+                  (nil? (:kontor.posting/display-type posting))
+                  (assoc :kontor.posting/display-type :product)))
               (range)
               postings)]
     (kbt/with-vt (into [tx-base] posting-entities)
-      (:transaction/effective-date transaction)
+      (:kontor.transaction/effective-date transaction)
       kbt/forever)))
 
 (defn post-transaction-tx-data
   "Pure tx-data builder for `post-transaction!` (ADR-068). Stamps
-   `:transaction/state :posted` + `:posted-at` (default now),
+   `:kontor.transaction/state :posted` + `:posted-at` (default now),
    propagates `:posted-at` onto each posting, builds via
    `build-transaction`, and applies `kbt/with-vt` (vt-from defaults
-   to `:transaction/effective-date`)."
+   to `:kontor.transaction/effective-date`)."
   ([input] (post-transaction-tx-data input {}))
   ([input {:keys [posted-at vt-from vt-to]}]
    (let [pa (or posted-at (java.util.Date.))
          input' (-> input
-                    (assoc-in [:transaction :transaction/state] :posted)
-                    (assoc-in [:transaction :transaction/posted-at] pa)
+                    (assoc-in [:transaction :kontor.transaction/state] :posted)
+                    (assoc-in [:transaction :kontor.transaction/posted-at] pa)
                     (update :postings
                             (fn [ps]
-                              (mapv #(if (:posting/posted-at %)
+                              (mapv #(if (:kontor.posting/posted-at %)
                                        %
-                                       (assoc % :posting/posted-at pa))
+                                       (assoc % :kontor.posting/posted-at pa))
                                     ps))))
          tx-data (build-transaction input')
-         vf (or vt-from (-> input :transaction :transaction/effective-date))]
+         vf (or vt-from (-> input :transaction :kontor.transaction/effective-date))]
      (kbt/with-vt tx-data vf (or vt-to kbt/forever)))))
 
 (defn post-transaction!
@@ -400,7 +400,7 @@
 
    Input shape mirrors `build-transaction`. Opts:
      :posted-at  — sealing timestamp (default = now)
-     :vt-from    — valid-time start (default = :transaction/effective-date)
+     :vt-from    — valid-time start (default = :kontor.transaction/effective-date)
      :vt-to      — valid-time end (default = kbt/forever)
 
    This is the kernel-level kernel-pure way to build + seal in one
@@ -451,7 +451,7 @@
    match `plan-spec`. Other plans' distributions ride along on each
    child unchanged. See `expand-distribution`."
   [posting plan-spec]
-  (let [all-dists (:posting/analytic-distributions posting)
+  (let [all-dists (:kontor.posting/analytic-distributions posting)
         matching  (filterv (partial distribution-matches-plan? plan-spec) all-dists)
         others    (filterv (complement (partial distribution-matches-plan? plan-spec))
                            all-dists)]
@@ -468,8 +468,8 @@
                                        0M))))
              (mapv (fn [[dist split-money]]
                      (-> posting
-                         (assoc :posting/amount (:amount split-money))
-                         (assoc :posting/analytic-distributions
+                         (assoc :kontor.posting/amount (:amount split-money))
+                         (assoc :kontor.posting/analytic-distributions
                                 (into [{:analytic-distribution/plan plan-spec
                                         :analytic-distribution/account
                                         (:analytic-distribution/account dist)
@@ -487,9 +487,9 @@
    the caller used to tag the distribution).
 
    Each child posting inherits:
-     - :posting/account, :posting/commodity, :posting/ledger
-     - :posting/partner, :posting/narration
-     - :posting/display-type, :posting/period-tag
+     - :kontor.posting/account, :kontor.posting/commodity, :kontor.posting/ledger
+     - :kontor.posting/partner, :kontor.posting/narration
+     - :kontor.posting/display-type, :kontor.posting/period-tag
      - other plans' distributions (they ride along unchanged on each
        child — the default semantic). Pass :strategy :cartesian to
        split across all plans simultaneously (rare; not yet implemented).
@@ -560,11 +560,11 @@
   (.setScale ^java.math.BigDecimal bd 2 java.math.RoundingMode/HALF_EVEN))
 
 (defn- ledger-assoc
-  "Conditionally tag a posting map with :posting/ledger. Omits the key
+  "Conditionally tag a posting map with :kontor.posting/ledger. Omits the key
    when `ledger` is nil so the kernel defaults apply (ADR-021)."
   [posting ledger]
   (cond-> posting
-    ledger (assoc :posting/ledger ledger)))
+    ledger (assoc :kontor.posting/ledger ledger)))
 
 (defn- receipt-postings
   "Build the GL postings for a receipt: Dr inventory / Cr GR-IR-clearing
@@ -578,24 +578,24 @@
                      (money-amount (.add total ^java.math.BigDecimal variance))
                      total)
         base       [(ledger-assoc
-                     {:posting/account     (account-fn move :inventory)
-                      :posting/amount      total
-                      :posting/commodity   commodity
-                      :posting/transaction tx-tempid}
+                     {:kontor.posting/account     (account-fn move :inventory)
+                      :kontor.posting/amount      total
+                      :kontor.posting/commodity   commodity
+                      :kontor.posting/transaction tx-tempid}
                      ledger)
                     (ledger-assoc
-                     {:posting/account     (account-fn move :gr-ir-clearing)
-                      :posting/amount      (.negate ^java.math.BigDecimal gr-ir-amt)
-                      :posting/commodity   commodity
-                      :posting/transaction tx-tempid}
+                     {:kontor.posting/account     (account-fn move :gr-ir-clearing)
+                      :kontor.posting/amount      (.negate ^java.math.BigDecimal gr-ir-amt)
+                      :kontor.posting/commodity   commodity
+                      :kontor.posting/transaction tx-tempid}
                      ledger)]]
     (if (and variance (not (zero? (.signum ^java.math.BigDecimal variance))))
       (conj base
             (ledger-assoc
-             {:posting/account     (account-fn move :price-variance)
-              :posting/amount      ^java.math.BigDecimal variance
-              :posting/commodity   commodity
-              :posting/transaction tx-tempid}
+             {:kontor.posting/account     (account-fn move :price-variance)
+              :kontor.posting/amount      ^java.math.BigDecimal variance
+              :kontor.posting/commodity   commodity
+              :kontor.posting/transaction tx-tempid}
              ledger))
       base)))
 
@@ -622,16 +622,16 @@
                       consumptions)
         total (money-amount total)]
     [(ledger-assoc
-      {:posting/account     (account-fn move :cogs)
-       :posting/amount      total
-       :posting/commodity   commodity
-       :posting/transaction tx-tempid}
+      {:kontor.posting/account     (account-fn move :cogs)
+       :kontor.posting/amount      total
+       :kontor.posting/commodity   commodity
+       :kontor.posting/transaction tx-tempid}
       ledger)
      (ledger-assoc
-      {:posting/account     (account-fn move :inventory)
-       :posting/amount      (.negate total)
-       :posting/commodity   commodity
-       :posting/transaction tx-tempid}
+      {:kontor.posting/account     (account-fn move :inventory)
+       :kontor.posting/amount      (.negate total)
+       :kontor.posting/commodity   commodity
+       :kontor.posting/transaction tx-tempid}
       ledger)]))
 
 (defn plan-stock-move
@@ -693,10 +693,10 @@
                             {:book book})))
         tx-tempid -1
         tx-base   (cond-> {:db/id                       tx-tempid
-                           :transaction/journal         journal
-                           :transaction/effective-date  effective-date
-                           :transaction/state           transaction-state}
-                    narration (assoc :transaction/narration narration))]
+                           :kontor.transaction/journal         journal
+                           :kontor.transaction/effective-date  effective-date
+                           :kontor.transaction/state           transaction-state}
+                    narration (assoc :kontor.transaction/narration narration))]
     (case direction
 
       :in
@@ -735,8 +735,8 @@
             posting-entities
             (mapv (fn [i p]
                     (cond-> (assoc p :db/id (- -300 i))
-                      (nil? (:posting/display-type p))
-                      (assoc :posting/display-type :product)))
+                      (nil? (:kontor.posting/display-type p))
+                      (assoc :kontor.posting/display-type :product)))
                   (range)
                   postings)
             _ (assert-balanced! tx-base posting-entities)]
@@ -775,8 +775,8 @@
               posting-entities
               (mapv (fn [i p]
                       (cond-> (assoc p :db/id (- -300 i))
-                        (nil? (:posting/display-type p))
-                        (assoc :posting/display-type :product)))
+                        (nil? (:kontor.posting/display-type p))
+                        (assoc :kontor.posting/display-type :product)))
                     (range)
                     postings)
               _ (assert-balanced! tx-base posting-entities)]

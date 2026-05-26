@@ -16,17 +16,17 @@
                         {:bonus-expense-account :exp
                          :bonus-payable-account :pay
                          :amount 5000M}))
-        postings (filter :posting/account tx-data)]
+        postings (filter :kontor.posting/account tx-data)]
     (testing "Two posting legs"
       (is (= 2 (count postings))))
     (testing "Dr expense"
-      (let [exp (first (filter #(= :exp (:posting/account %)) postings))]
-        (is (= 5000M (:posting/amount exp)))))
+      (let [exp (first (filter #(= :exp (:kontor.posting/account %)) postings))]
+        (is (= 5000M (:kontor.posting/amount exp)))))
     (testing "Cr liability"
-      (let [pay (first (filter #(= :pay (:posting/account %)) postings))]
-        (is (= -5000M (:posting/amount pay)))))
+      (let [pay (first (filter #(= :pay (:kontor.posting/account %)) postings))]
+        (is (= -5000M (:kontor.posting/amount pay)))))
     (testing "Sums to zero"
-      (let [sum (reduce (fn [a {:keys [posting/amount]}]
+      (let [sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                           (.add ^java.math.BigDecimal a
                                 ^java.math.BigDecimal amount))
                         0M postings)]
@@ -38,11 +38,11 @@
                         {:bonus-expense-account :exp
                          :bonus-payable-account :pay
                          :amount 1234.5678M}))
-        postings (filter :posting/account tx-data)]
+        postings (filter :kontor.posting/account tx-data)]
     (testing "HALF-EVEN rounding to 2 decimals"
       ;; 1234.5678 with HALF-EVEN → 1234.57
-      (let [exp (first (filter #(= :exp (:posting/account %)) postings))]
-        (is (= 1234.57M (:posting/amount exp)))))))
+      (let [exp (first (filter #(= :exp (:kontor.posting/account %)) postings))]
+        (is (= 1234.57M (:kontor.posting/amount exp)))))))
 
 (deftest leave-encashment-accrual-symmetric
   (let [tx-data (accrual/leave-encashment-accrual-tx-data
@@ -51,9 +51,9 @@
                          :leave-liability-account :pay
                          :amount 12345M
                          :tx-code "TX-LEAVE-001"}))
-        postings (filter :posting/account tx-data)]
+        postings (filter :kontor.posting/account tx-data)]
     (is (= 2 (count postings)))
-    (let [sum (reduce (fn [a {:keys [posting/amount]}]
+    (let [sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                         (.add ^java.math.BigDecimal a
                               ^java.math.BigDecimal amount))
                       0M postings)]
@@ -67,13 +67,13 @@
                          :amount 50000M
                          :tx-code "TX-GR-001"
                          :audit-doc-code "ACT-VAL-2026-Q1"}))
-        postings (filter :posting/account tx-data)
-        tx-row (first (filter :transaction/external-id tx-data))]
+        postings (filter :kontor.posting/account tx-data)
+        tx-row (first (filter :kontor.transaction/external-id tx-data))]
     (testing "Standard accrual shape"
       (is (= 2 (count postings))))
     (testing "Audit-doc-code surfaces in transaction/source for trace"
       (is (re-find #"audit-doc:ACT-VAL-2026-Q1"
-                   (or (:transaction/source tx-row) ""))))))
+                   (or (:kontor.transaction/source tx-row) ""))))))
 
 (deftest required-keys-fail-loud
   (testing "Missing :amount throws"
@@ -99,10 +99,10 @@
                         {:bonus-expense-account :exp
                          :bonus-payable-account :pay
                          :amount -2000M}))
-        postings (filter :posting/account tx-data)
-        exp (first (filter #(= :exp (:posting/account %)) postings))
-        pay (first (filter #(= :pay (:posting/account %)) postings))]
+        postings (filter :kontor.posting/account tx-data)
+        exp (first (filter #(= :exp (:kontor.posting/account %)) postings))
+        pay (first (filter #(= :pay (:kontor.posting/account %)) postings))]
     (testing "Expense leg flips to credit"
-      (is (= -2000M (:posting/amount exp))))
+      (is (= -2000M (:kontor.posting/amount exp))))
     (testing "Liability leg flips to debit"
-      (is (= 2000M (:posting/amount pay))))))
+      (is (= 2000M (:kontor.posting/amount pay))))))

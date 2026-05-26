@@ -109,10 +109,10 @@
                                (wt/account-tag (:kind c) extras-map))))))
         gross (to-whole-yen (sum-bd (map :amount wage-comps)))]
     (when (pos? (compare gross 0M))
-      [{:posting/account (account-for-tag! accounts :jp-payroll-wages)
-        :posting/amount gross
-        :posting/commodity commodity
-        :posting/narration "Wages and salaries (gross) / 給料手当"}])))
+      [{:kontor.posting/account (account-for-tag! accounts :jp-payroll-wages)
+        :kontor.posting/amount gross
+        :kontor.posting/commodity commodity
+        :kontor.posting/narration "Wages and salaries (gross) / 給料手当"}])))
 
 (defn- bonus-leg
   "DR bonus expense (賞与) for the bonus components. Per ADR-084 §5,
@@ -129,10 +129,10 @@
                                (wt/account-tag (:kind c) extras-map))))))
         bonus (to-whole-yen (sum-bd (map :amount bonus-comps)))]
     (when (pos? (compare bonus 0M))
-      [{:posting/account (account-for-tag! accounts :jp-payroll-bonus)
-        :posting/amount bonus
-        :posting/commodity commodity
-        :posting/narration "Bonus / 賞与"}])))
+      [{:kontor.posting/account (account-for-tag! accounts :jp-payroll-bonus)
+        :kontor.posting/amount bonus
+        :kontor.posting/commodity commodity
+        :kontor.posting/narration "Bonus / 賞与"}])))
 
 (defn- deduction-legs
   "For each negative employee-side deduction component, CR the
@@ -151,10 +151,10 @@
                      amt (to-whole-yen amount)]
                  ;; amount is already negative; CR is negative in
                  ;; kontor's sign convention.
-                 {:posting/account acct
-                  :posting/amount amt
-                  :posting/commodity commodity
-                  :posting/narration (str "Payroll deduction: "
+                 {:kontor.posting/account acct
+                  :kontor.posting/amount amt
+                  :kontor.posting/commodity commodity
+                  :kontor.posting/narration (str "Payroll deduction: "
                                           (narration-for kind extras-map))})))))
 
 (defn- employer-side-legs
@@ -175,16 +175,16 @@
                        exp-acct (account-for-tag! accounts exp-tag)
                        pay-acct (when pay-tag (account-for-tag! accounts pay-tag))
                        amt (to-whole-yen amount)]
-                   (cond-> [{:posting/account exp-acct
-                             :posting/amount amt
-                             :posting/commodity commodity
-                             :posting/narration (str "Employer statutory benefit: "
+                   (cond-> [{:kontor.posting/account exp-acct
+                             :kontor.posting/amount amt
+                             :kontor.posting/commodity commodity
+                             :kontor.posting/narration (str "Employer statutory benefit: "
                                                      (narration-for kind extras-map))}]
                      pay-acct
-                     (conj {:posting/account pay-acct
-                            :posting/amount (.negate ^BigDecimal amt)
-                            :posting/commodity commodity
-                            :posting/narration (str "Employer payable: "
+                     (conj {:kontor.posting/account pay-acct
+                            :kontor.posting/amount (.negate ^BigDecimal amt)
+                            :kontor.posting/commodity commodity
+                            :kontor.posting/narration (str "Employer payable: "
                                                     (narration-for kind extras-map))})))))))
 
 (defn- net-wages-leg
@@ -211,10 +211,10 @@
                      ;; Fallback: use the fact's :net as-given.
                      :else (to-whole-yen net))]
     (when (pos? (compare ^BigDecimal net-amount 0M))
-      [{:posting/account (account-for-tag! accounts :jp-payroll-net-wages)
-        :posting/amount (.negate ^BigDecimal net-amount)
-        :posting/commodity commodity
-        :posting/narration "Wages payable (net) / 未払金"}])))
+      [{:kontor.posting/account (account-for-tag! accounts :jp-payroll-net-wages)
+        :kontor.posting/amount (.negate ^BigDecimal net-amount)
+        :kontor.posting/commodity commodity
+        :kontor.posting/narration "Wages payable (net) / 未払金"}])))
 
 (defn fact->postings
   "Translate one PayrollFact into a balanced set of posting maps.
@@ -247,5 +247,5 @@
         (fn [fact]
           (let [postings (fact->postings fact base-opts)]
             (cond->> postings
-              ledger (mapv #(assoc % :posting/ledger ledger)))))
+              ledger (mapv #(assoc % :kontor.posting/ledger ledger)))))
         payroll-facts)))))

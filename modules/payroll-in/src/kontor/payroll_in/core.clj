@@ -61,7 +61,7 @@
 ;; IN sub-jurisdiction analytic plan + per-state analytic accounts
 ;; ============================================================================
 ;; Per note 79 §5.3 + ADR-077 note 83 §4 — multi-state allocation uses
-;; :analytic-account, NOT :posting/entity. An IN company with employees
+;; :analytic-account, NOT :kontor.posting/entity. An IN company with employees
 ;; across MH + KA + TN is ONE legal entity (one PAN); per-state lives
 ;; on ADR-022 analytic distributions.
 ;;

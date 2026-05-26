@@ -2,7 +2,7 @@
   "Legal entity / accounting unit helpers — ADR-031.
 
    The kernel ships *no* default entity. Single-entity tenants opt
-   out by never assigning `:posting/entity`; the per-(ledger,
+   out by never assigning `:kontor.posting/entity`; the per-(ledger,
    commodity) sum-to-zero invariant from ADR-021 covers them.
    Multi-entity tenants install their entity tree as data — typically
    alongside chart-of-accounts setup at deployment time.

@@ -19,7 +19,7 @@
    SKR04 2900 (Gewinnvortrag).
 
    Opening balance carry-forward is *not* a separate posting in this
-   model: balance.clj computes balances cumulatively over `:posting/
+   model: balance.clj computes balances cumulatively over `:kontor.posting/
    valid-from`, so the new period's opening BS balances are simply
    the previous period's closing BS balances. Only P&L gets explicitly
    reset by the closing entry.
@@ -32,7 +32,7 @@
 
    Calling close-fiscal-year! is idempotent in spirit but not in fact:
    it refuses if the period already has a closing transaction
-   (`:transaction/closes-period`)."
+   (`:kontor.transaction/closes-period`)."
   (:require [datahike.api :as d]
             [kontor.balance :as balance]
             [kontor.period :as period]
@@ -97,28 +97,28 @@
                           (fnil #(.add ^java.math.BigDecimal % amount) 0M)))
                 {} non-zero)
         zero-out (mapv (fn [{:keys [account-eid commodity-eid amount]}]
-                         {:posting/account account-eid
-                          :posting/commodity commodity-eid
-                          :posting/amount (.negate ^java.math.BigDecimal amount)
-                          :posting/posted-at period-end-date})
+                         {:kontor.posting/account account-eid
+                          :kontor.posting/commodity commodity-eid
+                          :kontor.posting/amount (.negate ^java.math.BigDecimal amount)
+                          :kontor.posting/posted-at period-end-date})
                        non-zero)
         retained (mapv (fn [[c net]]
-                         {:posting/account retained-eid
-                          :posting/commodity c
-                          :posting/amount net
-                          :posting/posted-at period-end-date})
+                         {:kontor.posting/account retained-eid
+                          :kontor.posting/commodity c
+                          :kontor.posting/amount net
+                          :kontor.posting/posted-at period-end-date})
                        per-commodity-net)]
     (into zero-out retained)))
 
 (defn- closing-tx-already-posted?
-  "True iff a `:transaction/closes-period` referencing `period-eid`
+  "True iff a `:kontor.transaction/closes-period` referencing `period-eid`
    already exists in the DB. Used to make close-period! refuse a
    second close attempt."
   [db period-eid]
   (boolean
    (d/q '[:find ?t .
           :in $ ?p
-          :where [?t :transaction/closes-period ?p]]
+          :where [?t :kontor.transaction/closes-period ?p]]
         db period-eid)))
 
 ;; ============================================================================
@@ -139,15 +139,15 @@
      :journal-eid            — journal under which to file the tx
 
    Optional:
-     :external-id   — :transaction/external-id (default
+     :external-id   — :kontor.transaction/external-id (default
                       \"CLOSE-<period-eid>\")
-     :narration     — :transaction/narration (default
+     :narration     — :kontor.transaction/narration (default
                       \"Period close\")
      :at            — when to post; default = period's :period/end - 1ms
                       (i.e. on the last instant of the period)
 
    Idempotent-ish: refuses if a closing transaction already exists for
-   `period-eid` (look up via `:transaction/closes-period`)."
+   `period-eid` (look up via `:kontor.transaction/closes-period`)."
   [conn {:keys [period-eid retained-earnings-eid journal-eid
                 external-id narration at]
          :or {narration "Period close"}}]
@@ -179,13 +179,13 @@
               ext (or external-id (str "CLOSE-" period-eid))
               tx-input
               {:transaction
-               {:transaction/external-id ext
-                :transaction/journal journal-eid
-                :transaction/effective-date posted-at
-                :transaction/narration narration
-                :transaction/state :posted
-                :transaction/posted-at posted-at
-                :transaction/closes-period period-eid}
+               {:kontor.transaction/external-id ext
+                :kontor.transaction/journal journal-eid
+                :kontor.transaction/effective-date posted-at
+                :kontor.transaction/narration narration
+                :kontor.transaction/state :posted
+                :kontor.transaction/posted-at posted-at
+                :kontor.transaction/closes-period period-eid}
                :postings postings}
               tx-data (posting/build-transaction tx-input)
               ;; Route through transact-with-validation so the closing
@@ -202,7 +202,7 @@
                                tempids)
                          (d/q '[:find ?t .
                                 :in $ ?ext
-                                :where [?t :transaction/external-id ?ext]]
+                                :where [?t :kontor.transaction/external-id ?ext]]
                               (d/db conn) ext))
               per-c (reduce (fn [acc {:keys [commodity-eid money]}]
                               (update acc commodity-eid

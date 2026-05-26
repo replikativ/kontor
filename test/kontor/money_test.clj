@@ -164,13 +164,13 @@
   (let [m1 (m/money "42.50" :EUR)
         frag (m/money->posting-fragment m1)
         m2 (m/posting->money frag)]
-    (is (= {:posting/amount    (BigDecimal. "42.50")
-            :posting/commodity :EUR}
+    (is (= {:kontor.posting/amount    (BigDecimal. "42.50")
+            :kontor.posting/commodity :EUR}
            frag))
     (is (m/equiv? m1 m2))))
 
 (deftest posting-without-amount-yields-nil
-  (is (nil? (m/posting->money {:posting/display-type :note}))))
+  (is (nil? (m/posting->money {:kontor.posting/display-type :note}))))
 
 ;; ============================================================================
 ;; Equality / equiv

@@ -21,7 +21,7 @@
      mark-paid!  — :sent → :paid (reconciliation calls this when a
                    bank-line settles the invoice's transaction)
      cancel!     — :sent → :cancelled, creates a reversal transaction
-                   pointing at the original via :transaction/reverses
+                   pointing at the original via :kontor.transaction/reverses
 
    Totals: caller may supply :invoice/total-net etc. directly, OR
    leave them blank and call `materialize-totals` to derive from
@@ -94,10 +94,10 @@
                                            :payment-term/discount-days]
                                        term-eid)
                           frag (pt/apply-term (:invoice/issue-date invoice-map) term)
-                          ;; pt/apply-term returns :transaction/* keys; rename to :invoice/*
-                          rename {:transaction/payment-term :invoice/payment-term
-                                  :transaction/due-date     :invoice/due-date
-                                  :transaction/discount-deadline :invoice/discount-deadline}]
+                          ;; pt/apply-term returns :kontor.transaction/* keys; rename to :invoice/*
+                          rename {:kontor.transaction/payment-term :invoice/payment-term
+                                  :kontor.transaction/due-date     :invoice/due-date
+                                  :kontor.transaction/discount-deadline :invoice/discount-deadline}]
                       (into {} (map (fn [[k v]] [(rename k k) v])) frag)))
         ;; Build line-item entity maps with sequential tempids and a
         ;; :invoice-line/invoice backref to the parent.
@@ -236,7 +236,7 @@
 
    `opts`:
      :vt-from / :vt-to  — valid-time bounds; default :vt-from is the
-                          posting's `:transaction/effective-date`
+                          posting's `:kontor.transaction/effective-date`
                           (matching build-transaction's convention),
                           fallback to `now`.
      :changed-by-uid    — actor recorded on the :status-history row
@@ -261,10 +261,10 @@
                                 :supporting-doc supporting-doc
                                 :changed-at now})
          ;; Preserve build-transaction's vt-from convention: default
-         ;; to the posting's :transaction/effective-date. Find it by
+         ;; to the posting's :kontor.transaction/effective-date. Find it by
          ;; scanning the composed tx-data for the transaction row
-         ;; (the only entity carrying :transaction/effective-date).
-         eff-date (some :transaction/effective-date tx-data)
+         ;; (the only entity carrying :kontor.transaction/effective-date).
+         eff-date (some :kontor.transaction/effective-date tx-data)
          report (validation/transact-with-validation
                  conn (kbt/with-vt tx-data
                         (or vt-from eff-date now)
@@ -329,8 +329,8 @@
               changed-at]}]
   (let [inv (d/pull db [:invoice/status :invoice/external-id
                         {:invoice/transaction
-                         [:db/id :transaction/external-id
-                          {:transaction/journal [:db/id]}]}]
+                         [:db/id :kontor.transaction/external-id
+                          {:kontor.transaction/journal [:db/id]}]}]
                     invoice-eid)
         now (or changed-at (Date.))
         status-change-opts (cond-> {:entity invoice-eid
@@ -352,26 +352,26 @@
             postings (->> (d/q '[:find ?p ?acct ?amt ?cur
                                  :in $ ?tx
                                  :where
-                                 [?p :posting/transaction ?tx]
-                                 [?p :posting/account ?acct]
-                                 [?p :posting/amount ?amt]
-                                 [?p :posting/commodity ?cur]]
+                                 [?p :kontor.posting/transaction ?tx]
+                                 [?p :kontor.posting/account ?acct]
+                                 [?p :kontor.posting/amount ?amt]
+                                 [?p :kontor.posting/commodity ?cur]]
                                db original-tx-eid)
                           (mapv (fn [[_p acct amt cur]]
-                                  {:posting/account acct
-                                   :posting/amount (.negate ^java.math.BigDecimal amt)
-                                   :posting/commodity cur
-                                   :posting/posted-at now})))
+                                  {:kontor.posting/account acct
+                                   :kontor.posting/amount (.negate ^java.math.BigDecimal amt)
+                                   :kontor.posting/commodity cur
+                                   :kontor.posting/posted-at now})))
             reversal-ext (str (:invoice/external-id inv) "-REV")
             reversal-tx (posting/build-transaction
                          {:transaction
-                          {:transaction/external-id reversal-ext
-                           :transaction/journal (:db/id (:transaction/journal original-tx))
-                           :transaction/effective-date now
-                           :transaction/narration (str "Reversal of " (:invoice/external-id inv))
-                           :transaction/state :posted
-                           :transaction/posted-at now
-                           :transaction/reverses original-tx-eid}
+                          {:kontor.transaction/external-id reversal-ext
+                           :kontor.transaction/journal (:db/id (:kontor.transaction/journal original-tx))
+                           :kontor.transaction/effective-date now
+                           :kontor.transaction/narration (str "Reversal of " (:invoice/external-id inv))
+                           :kontor.transaction/state :posted
+                           :kontor.transaction/posted-at now
+                           :kontor.transaction/reverses original-tx-eid}
                           :postings postings})]
         (vec (concat reversal-tx
                      (sm/record-status-change-tx-data db status-change-opts))))
@@ -383,7 +383,7 @@
   "Cancel a :sent or :draft invoice via the status machine.
    For :draft, just flips status :draft → :cancelled.
    For :sent, also creates a reversal transaction that negates each
-   posting and points at the original via :transaction/reverses
+   posting and points at the original via :kontor.transaction/reverses
    (kernel ADR-007: never edit posted entries; reverse + re-post).
    Routes through the gate (ADR-068).
 

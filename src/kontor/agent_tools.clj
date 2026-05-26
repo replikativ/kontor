@@ -228,7 +228,7 @@
                    :as-of-tx    {:type "string"
                                  :description "ISO-8601 date. Default: now."}
                    :entity      {:type "object"
-                                 :description "Optional eid OR lookup-ref to restrict to one :posting/entity."}}
+                                 :description "Optional eid OR lookup-ref to restrict to one :kontor.posting/entity."}}
                   :required ["account"]}
    :side-effects? false
    :handler (fn [{:keys [conn db args]}]
@@ -390,19 +390,19 @@
               ;; BigDecimal coercion + Date parsing + lookup-ref
               ;; resolution before passing to the kernel builder.
               (let [tx-header (cond-> (:transaction args)
-                                (:transaction/journal (:transaction args))
-                                (update :transaction/journal #(resolve-eid db %))
-                                (string? (:transaction/effective-date (:transaction args)))
-                                (update :transaction/effective-date ->date))
+                                (:kontor.transaction/journal (:transaction args))
+                                (update :kontor.transaction/journal #(resolve-eid db %))
+                                (string? (:kontor.transaction/effective-date (:transaction args)))
+                                (update :kontor.transaction/effective-date ->date))
                     postings (mapv
                               (fn [p]
                                 (cond-> p
-                                  (:posting/amount p)    (update :posting/amount ->bigdec)
-                                  (:posting/account p)   (update :posting/account #(resolve-eid db %))
-                                  (:posting/commodity p) (update :posting/commodity #(resolve-eid db %))
-                                  (:posting/partner p)   (update :posting/partner #(resolve-eid db %))
-                                  (:posting/entity p)    (update :posting/entity #(resolve-eid db %))
-                                  (:posting/ledger p)    (update :posting/ledger #(resolve-eid db %))))
+                                  (:kontor.posting/amount p)    (update :kontor.posting/amount ->bigdec)
+                                  (:kontor.posting/account p)   (update :kontor.posting/account #(resolve-eid db %))
+                                  (:kontor.posting/commodity p) (update :kontor.posting/commodity #(resolve-eid db %))
+                                  (:kontor.posting/partner p)   (update :kontor.posting/partner #(resolve-eid db %))
+                                  (:kontor.posting/entity p)    (update :kontor.posting/entity #(resolve-eid db %))
+                                  (:kontor.posting/ledger p)    (update :kontor.posting/ledger #(resolve-eid db %))))
                               (:postings args))
                     tx-data (posting/post-transaction-tx-data
                              {:transaction tx-header

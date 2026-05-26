@@ -141,17 +141,17 @@
 (defn- sum-postings-by-tag
   "Sum (as positive numbers) the absolute amount of TDS-payable
    postings in [period-start, period-end), optionally filtered by an
-   account-tag-name applied via :posting/account-tags."
+   account-tag-name applied via :kontor.posting/account-tags."
   [db {:keys [tag period-start period-end tan-account-tag]}]
   (let [q '[:find ?p ?amount
             :in $ ?tag ?start ?end
             :where
             [?acct :kontor.account/tags ?at]
             [?at :kontor.account-tag/name ?tag]
-            [?p :posting/account ?acct]
-            [?p :posting/amount ?amount]
-            [?p :posting/transaction ?tx]
-            [?tx :transaction/effective-date ?ed]
+            [?p :kontor.posting/account ?acct]
+            [?p :kontor.posting/amount ?amount]
+            [?p :kontor.posting/transaction ?tx]
+            [?tx :kontor.transaction/effective-date ?ed]
             [(.before ^java.util.Date ?ed ?end)]
             [(.after ^java.util.Date ?ed ?start)]]
         q-with-tan '[:find ?p ?amount
@@ -159,12 +159,12 @@
                      :where
                      [?acct :kontor.account/tags ?at]
                      [?at :kontor.account-tag/name ?tag]
-                     [?p :posting/account ?acct]
-                     [?p :posting/amount ?amount]
-                     [?p :posting/account-tags ?rt]
+                     [?p :kontor.posting/account ?acct]
+                     [?p :kontor.posting/amount ?amount]
+                     [?p :kontor.posting/account-tags ?rt]
                      [?rt :kontor.account-tag/name ?tan]
-                     [?p :posting/transaction ?tx]
-                     [?tx :transaction/effective-date ?ed]
+                     [?p :kontor.posting/transaction ?tx]
+                     [?tx :kontor.transaction/effective-date ?ed]
                      [(.before ^java.util.Date ?ed ?end)]
                      [(.after ^java.util.Date ?ed ?start)]]
         rows (if (and tan-account-tag (not (str/blank? tan-account-tag)))

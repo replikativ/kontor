@@ -52,7 +52,7 @@
 
 (deftest postings-balance-to-zero
   (let [postings (build {} (jane-fact))
-        sum (reduce (fn [a {:keys [posting/amount]}]
+        sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                       (.add ^java.math.BigDecimal a
                             ^java.math.BigDecimal amount))
                     0M postings)]
@@ -61,39 +61,39 @@
 
 (deftest one-wages-debit-for-gross
   (let [postings (build {} (jane-fact))
-        wages-leg (first (filter #(= :acct/wages (:posting/account %)) postings))]
+        wages-leg (first (filter #(= :acct/wages (:kontor.posting/account %)) postings))]
     (testing "Single wages-expense leg for the gross"
-      (is (= 5000M (:posting/amount wages-leg))))))
+      (is (= 5000M (:kontor.posting/amount wages-leg))))))
 
 (deftest deduction-legs-target-statutory-payable-buckets
   (let [postings (build {} (jane-fact))
-        by-acct (group-by :posting/account postings)]
+        by-acct (group-by :kontor.posting/account postings)]
     (testing "INSS empregado credited to :acct/inss-employee (distinct bucket!)"
       (let [legs (get by-acct :acct/inss-employee)]
         (is (= 1 (count legs)))
-        (is (= -400M (:posting/amount (first legs))))))
+        (is (= -400M (:kontor.posting/amount (first legs))))))
     (testing "IRRF credited to :acct/irrf"
       (let [legs (get by-acct :acct/irrf)]
         (is (= 1 (count legs)))
-        (is (= -247.50M (:posting/amount (first legs))))))))
+        (is (= -247.50M (:kontor.posting/amount (first legs))))))))
 
 (deftest employer-side-emits-paired-legs
   (let [postings (build {} (jane-fact))
-        by-acct (group-by :posting/account postings)]
+        by-acct (group-by :kontor.posting/account postings)]
     (testing "Employer INSS expense debit"
-      (is (= 1000M (:posting/amount (first (get by-acct :acct/er-inss))))))
+      (is (= 1000M (:kontor.posting/amount (first (get by-acct :acct/er-inss))))))
     (testing "Employer INSS payable credit (paired, NOT collapsed with INSS-EE)"
-      (is (= -1000M (:posting/amount (first (get by-acct :acct/inss-employer))))))
+      (is (= -1000M (:kontor.posting/amount (first (get by-acct :acct/inss-employer))))))
     (testing "Employer FGTS expense debit"
-      (is (= 400M (:posting/amount (first (get by-acct :acct/er-fgts))))))
+      (is (= 400M (:kontor.posting/amount (first (get by-acct :acct/er-fgts))))))
     (testing "Employer FGTS payable credit"
-      (is (= -400M (:posting/amount (first (get by-acct :acct/fgts))))))))
+      (is (= -400M (:kontor.posting/amount (first (get by-acct :acct/fgts))))))))
 
 (deftest four-statutory-buckets-never-collapsed
   ;; Per ADR-081 §3.2: INSS-EE / INSS-ER / FGTS / IRRF are four distinct
   ;; payable buckets — collapsing them breaks GFIP + eSocial S-1210.
   (let [postings (build {} (jane-fact))
-        accounts-touched (set (map :posting/account postings))]
+        accounts-touched (set (map :kontor.posting/account postings))]
     (is (contains? accounts-touched :acct/inss-employee))
     (is (contains? accounts-touched :acct/inss-employer))
     (is (contains? accounts-touched :acct/fgts))
@@ -103,10 +103,10 @@
 
 (deftest net-wages-payable-credit
   (let [postings (build {} (jane-fact))
-        net-legs (filter #(= :acct/net-wages (:posting/account %)) postings)]
+        net-legs (filter #(= :acct/net-wages (:kontor.posting/account %)) postings)]
     (testing "Single salários-a-pagar credit equal to the fact's :net"
       (is (= 1 (count net-legs)))
-      (is (= -4352.50M (:posting/amount (first net-legs)))))))
+      (is (= -4352.50M (:kontor.posting/amount (first net-legs)))))))
 
 (deftest cnpj-routing-tag-applies-to-every-posting
   (let [postings (build {:cnpj-account-tag "br-cnpj-12345678000195"}
@@ -114,7 +114,7 @@
     (testing "Every posting carries the CNPJ routing tag"
       (is (every? (fn [p]
                     (some #(= % [:kontor.account-tag/name "br-cnpj-12345678000195"])
-                          (:posting/account-tags p)))
+                          (:kontor.posting/account-tags p)))
                   postings)))))
 
 (deftest missing-account-tag-throws
@@ -144,18 +144,18 @@
                            {:kind :severance-fgts-accrual :amount 160M
                             :employer-side? true}]}
         postings (build {} fact)
-        by-acct (group-by :posting/account postings)]
+        by-acct (group-by :kontor.posting/account postings)]
     (testing "Férias DR expense + CR liability paired"
-      (is (= 555.55M (:posting/amount (first (get by-acct :acct/ferias-accrual)))))
-      (is (= -555.55M (:posting/amount (first (get by-acct :acct/ferias-liability))))))
+      (is (= 555.55M (:kontor.posting/amount (first (get by-acct :acct/ferias-accrual)))))
+      (is (= -555.55M (:kontor.posting/amount (first (get by-acct :acct/ferias-liability))))))
     (testing "13º DR expense + CR liability paired"
-      (is (= 416.67M (:posting/amount (first (get by-acct :acct/thirteenth-accrual)))))
-      (is (= -416.67M (:posting/amount (first (get by-acct :acct/thirteenth-liability))))))
+      (is (= 416.67M (:kontor.posting/amount (first (get by-acct :acct/thirteenth-accrual)))))
+      (is (= -416.67M (:kontor.posting/amount (first (get by-acct :acct/thirteenth-liability))))))
     (testing "Severance DR expense + CR liability paired"
-      (is (= 160M (:posting/amount (first (get by-acct :acct/severance-accrual)))))
-      (is (= -160M (:posting/amount (first (get by-acct :acct/severance-liability))))))
+      (is (= 160M (:kontor.posting/amount (first (get by-acct :acct/severance-accrual)))))
+      (is (= -160M (:kontor.posting/amount (first (get by-acct :acct/severance-liability))))))
     (testing "Postings still balance to zero"
-      (let [sum (reduce (fn [a {:keys [posting/amount]}]
+      (let [sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                           (.add ^java.math.BigDecimal a
                                 ^java.math.BigDecimal amount))
                         0M postings)]
@@ -174,11 +174,11 @@
                            {:kind :irrf-employee  :amount -247.50M :employer-side? false}]
               :jurisdiction-specific-codes {}}
         postings (build {} fact)
-        by-acct (group-by :posting/account postings)]
+        by-acct (group-by :kontor.posting/account postings)]
     (testing "Base wages route to :acct/wages"
-      (is (= 5000M (:posting/amount (first (get by-acct :acct/wages))))))
+      (is (= 5000M (:kontor.posting/amount (first (get by-acct :acct/wages))))))
     (testing "Meal voucher routes to :acct/vr-vt (distinct expense)"
-      (is (= 500M (:posting/amount (first (get by-acct :acct/vr-vt))))))))
+      (is (= 500M (:kontor.posting/amount (first (get by-acct :acct/vr-vt))))))))
 
 (deftest ledger-tagging-when-supplied
   (let [postings (build {} (jane-fact))
@@ -187,6 +187,6 @@
                                        {:accounts accounts
                                         :ledger :ledger/br-ifrs})]
     (testing "Without :ledger no ledger tagging"
-      (is (every? #(not (contains? % :posting/ledger)) postings)))
+      (is (every? #(not (contains? % :kontor.posting/ledger)) postings)))
     (testing "With :ledger every posting tagged"
-      (is (every? #(= :ledger/br-ifrs (:posting/ledger %)) with-ledger)))))
+      (is (every? #(= :ledger/br-ifrs (:kontor.posting/ledger %)) with-ledger)))))

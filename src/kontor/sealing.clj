@@ -1,9 +1,9 @@
 (ns kontor.sealing
-  "Sealing: refuse silent retraction of `:posting/posted-at`-marked
+  "Sealing: refuse silent retraction of `:kontor.posting/posted-at`-marked
    datoms. Per ADR-007 in doc/decisions.md:
 
      - A posting transitions from draft to posted by setting
-       `:posting/posted-at`.
+       `:kontor.posting/posted-at`.
      - Once posted, the data may NOT be silently changed: a
        `[:db/retract eid attr v]` on any attribute of a posted entity
        is rejected.
@@ -18,7 +18,7 @@
 
    Implementation note: we inspect the proposed `tx-data` BEFORE
    handing it to `d/transact`. We treat any `[:db/retract eid attr v]`
-   tuple where the entity has `:posting/posted-at` set as a violation.
+   tuple where the entity has `:kontor.posting/posted-at` set as a violation.
    We do NOT inspect entity-map updates that *retract* by re-asserting
    a different value — datahike does not support that shape against
    a unique attribute, and our posted lifecycle uses tuple-form retracts
@@ -39,7 +39,7 @@
     (second tx)))
 
 (defn- posted? [db eid]
-  (some? (:posting/posted-at (d/pull db [:posting/posted-at] eid))))
+  (some? (:kontor.posting/posted-at (d/pull db [:kontor.posting/posted-at] eid))))
 
 (defn find-silent-retracts
   "Return a vector of {:tx <tx-form> :eid <eid>} for every retract in
@@ -72,6 +72,6 @@
                         chain documents the deletion (ADR-007). To
                         correct an erroneous posting, write a reversing
                         transaction (a new transaction with
-                        :transaction/reverses pointing back at the
+                        :kontor.transaction/reverses pointing back at the
                         original) — never an in-place edit."}))))
   nil)

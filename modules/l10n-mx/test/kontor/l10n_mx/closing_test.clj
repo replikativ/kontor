@@ -31,10 +31,10 @@
     (v/install-invariants! conn)
     (chart/install! conn)
     (d/transact conn
-                [{:journal/code "INV" :journal/name "Ventas"
-                  :journal/type :sale :journal/active true}
-                 {:journal/code "EXP" :journal/name "Gastos"
-                  :journal/type :purchase :journal/active true}
+                [{:kontor.journal/code "INV" :kontor.journal/name "Ventas"
+                  :kontor.journal/type :sale :kontor.journal/active true}
+                 {:kontor.journal/code "EXP" :kontor.journal/name "Gastos"
+                  :kontor.journal/type :purchase :kontor.journal/active true}
                  {:period/start jan-1
                   :period/end   jan-1-26
                   :period/tag   :normal
@@ -59,38 +59,38 @@
         cash (ace db chart/cash-code)
         office (ace db "601.08.001")    ; Papelería
         rent (ace db "601.03.001")      ; Renta
-        exp-jnl (:db/id (d/entity db [:journal/code "EXP"]))]
+        exp-jnl (:db/id (d/entity db [:kontor.journal/code "EXP"]))]
     (v/transact-with-validation
      conn
      (posting/build-transaction
       {:transaction
-       {:transaction/external-id "EXP-2025-1"
-        :transaction/journal exp-jnl
-        :transaction/effective-date feb-15
-        :transaction/narration "Papelería febrero"
-        :transaction/state :posted
-        :transaction/posted-at feb-15}
+       {:kontor.transaction/external-id "EXP-2025-1"
+        :kontor.transaction/journal exp-jnl
+        :kontor.transaction/effective-date feb-15
+        :kontor.transaction/narration "Papelería febrero"
+        :kontor.transaction/state :posted
+        :kontor.transaction/posted-at feb-15}
        :postings
-       [{:posting/account office :posting/amount 300M
-         :posting/commodity mxn :posting/posted-at feb-15}
-        {:posting/account cash :posting/amount -300M
-         :posting/commodity mxn :posting/posted-at feb-15}]}))
+       [{:kontor.posting/account office :kontor.posting/amount 300M
+         :kontor.posting/commodity mxn :kontor.posting/posted-at feb-15}
+        {:kontor.posting/account cash :kontor.posting/amount -300M
+         :kontor.posting/commodity mxn :kontor.posting/posted-at feb-15}]}))
     ;; Rent expense: $400 paid from bank on Jun 1.
     (v/transact-with-validation
      conn
      (posting/build-transaction
       {:transaction
-       {:transaction/external-id "EXP-2025-2"
-        :transaction/journal exp-jnl
-        :transaction/effective-date jun-1
-        :transaction/narration "Renta junio"
-        :transaction/state :posted
-        :transaction/posted-at jun-1}
+       {:kontor.transaction/external-id "EXP-2025-2"
+        :kontor.transaction/journal exp-jnl
+        :kontor.transaction/effective-date jun-1
+        :kontor.transaction/narration "Renta junio"
+        :kontor.transaction/state :posted
+        :kontor.transaction/posted-at jun-1}
        :postings
-       [{:posting/account rent :posting/amount 400M
-         :posting/commodity mxn :posting/posted-at jun-1}
-        {:posting/account bank :posting/amount -400M
-         :posting/commodity mxn :posting/posted-at jun-1}]})))
+       [{:kontor.posting/account rent :kontor.posting/amount 400M
+         :kontor.posting/commodity mxn :kontor.posting/posted-at jun-1}
+        {:kontor.posting/account bank :kontor.posting/amount -400M
+         :kontor.posting/commodity mxn :kontor.posting/posted-at jun-1}]})))
   ;; Net P&L = revenue -1000 + office 300 + rent 400 = -300 (profit 300)
   nil)
 
@@ -195,22 +195,22 @@
     (let [conn (core/create-test-db)
           _ (v/install-invariants! conn)
           _ (chart/install! conn)
-          _ (d/transact conn [{:journal/code "INV" :journal/name "Ventas"
-                               :journal/type :sale :journal/active true}
-                              {:journal/code "EXP" :journal/name "Gastos"
-                               :journal/type :purchase :journal/active true}
+          _ (d/transact conn [{:kontor.journal/code "INV" :kontor.journal/name "Ventas"
+                               :kontor.journal/type :sale :kontor.journal/active true}
+                              {:kontor.journal/code "EXP" :kontor.journal/name "Gastos"
+                               :kontor.journal/type :purchase :kontor.journal/active true}
                               {:period/start jan-1
                                :period/end jan-1-26
                                :period/tag :normal
                                :period/name "FY2025"}])
           _ (seed-fy2025! conn)
           period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] (d/db conn))]
-      (is (nil? (:db/id (d/entity (d/db conn) [:journal/code "CLOSE"])))
+      (is (nil? (:db/id (d/entity (d/db conn) [:kontor.journal/code "CLOSE"])))
           "CLOSE journal not present before close")
       (mx-closing/close-mx-fiscal-year!
        conn {:period-eid period-eid
              :external-id "AUTO-J-CLOSE"})
-      (is (some? (:db/id (d/entity (d/db conn) [:journal/code "CLOSE"])))
+      (is (some? (:db/id (d/entity (d/db conn) [:kontor.journal/code "CLOSE"])))
           "CLOSE journal auto-created"))))
 
 ;; ============================================================================
@@ -299,7 +299,7 @@
          conn {:period-eid period-eid :external-id "FY25-Z"}))
       (let [db (d/db conn)
             pairs (d/q '[:find ?p ?amt
-                         :where [?p :posting/amount ?amt]] db)
+                         :where [?p :kontor.posting/amount ?amt]] db)
             total (reduce (fn [^java.math.BigDecimal acc [_ ^java.math.BigDecimal x]]
                             (.add acc x))
                           0M pairs)]

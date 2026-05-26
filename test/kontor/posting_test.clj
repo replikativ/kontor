@@ -25,17 +25,17 @@
   [& {:as overrides}]
   (merge
    {:transaction
-    {:transaction/external-id    "INV-2026-0001"
-     :transaction/journal        :journal/sales
-     :transaction/effective-date some-date
-     :transaction/narration      "Test invoice"}
+    {:kontor.transaction/external-id    "INV-2026-0001"
+     :kontor.transaction/journal        :kontor.journal/sales
+     :kontor.transaction/effective-date some-date
+     :kontor.transaction/narration      "Test invoice"}
     :postings
-    [{:posting/account   :kontor.account/receivable
-      :posting/amount    100.00M
-      :posting/commodity :EUR}
-     {:posting/account   :kontor.account/revenue
-      :posting/amount    -100.00M
-      :posting/commodity :EUR}]}
+    [{:kontor.posting/account   :kontor.account/receivable
+      :kontor.posting/amount    100.00M
+      :kontor.posting/commodity :EUR}
+     {:kontor.posting/account   :kontor.account/revenue
+      :kontor.posting/amount    -100.00M
+      :kontor.posting/commodity :EUR}]}
    overrides))
 
 (deftest validate-balanced-passes
@@ -47,11 +47,11 @@
 (deftest validate-unbalanced-fails
   (let [r (posting/validate
            (assoc-in (balanced-sample)
-                     [:postings 1 :posting/amount]
+                     [:postings 1 :kontor.posting/amount]
                      -99.00M))]
     (is (not (:ok? r)))
     (is (some #(= :unbalanced (:error %)) (:errors r)))
-    ;; Postings carry no :posting/ledger, so they group under nil.
+    ;; Postings carry no :kontor.posting/ledger, so they group under nil.
     ;; (build-transaction would default to [:ledger/code "primary"].)
     (is (= #{nil} (set (keys (:unbalanced r)))))
     (is (= #{:EUR} (set (keys (get (:unbalanced r) nil)))))
@@ -66,10 +66,10 @@
     (let [r (posting/validate
              {:transaction (-> (balanced-sample) :transaction)
               :postings
-              [{:posting/account :kontor.account/usd-bank :posting/amount 50.00M  :posting/commodity :USD}
-               {:posting/account :kontor.account/usd-bank :posting/amount -50.00M :posting/commodity :USD}
-               {:posting/account :kontor.account/eur-bank :posting/amount 100.00M :posting/commodity :EUR}
-               {:posting/account :kontor.account/eur-bank :posting/amount -100.00M :posting/commodity :EUR}]})]
+              [{:kontor.posting/account :kontor.account/usd-bank :kontor.posting/amount 50.00M  :kontor.posting/commodity :USD}
+               {:kontor.posting/account :kontor.account/usd-bank :kontor.posting/amount -50.00M :kontor.posting/commodity :USD}
+               {:kontor.posting/account :kontor.account/eur-bank :kontor.posting/amount 100.00M :kontor.posting/commodity :EUR}
+               {:kontor.posting/account :kontor.account/eur-bank :kontor.posting/amount -100.00M :kontor.posting/commodity :EUR}]})]
       (is (:ok? r))
       (is (empty? (:unbalanced r))))))
 
@@ -77,10 +77,10 @@
   (let [r (posting/validate
            {:transaction (-> (balanced-sample) :transaction)
             :postings
-            [{:posting/account :kontor.account/usd-bank :posting/amount 50.00M  :posting/commodity :USD}
-             {:posting/account :kontor.account/usd-bank :posting/amount -50.00M :posting/commodity :USD}
-             {:posting/account :kontor.account/eur-bank :posting/amount 100.00M :posting/commodity :EUR}
-             {:posting/account :kontor.account/eur-bank :posting/amount -99.00M :posting/commodity :EUR}]})]
+            [{:kontor.posting/account :kontor.account/usd-bank :kontor.posting/amount 50.00M  :kontor.posting/commodity :USD}
+             {:kontor.posting/account :kontor.account/usd-bank :kontor.posting/amount -50.00M :kontor.posting/commodity :USD}
+             {:kontor.posting/account :kontor.account/eur-bank :kontor.posting/amount 100.00M :kontor.posting/commodity :EUR}
+             {:kontor.posting/account :kontor.account/eur-bank :kontor.posting/amount -99.00M :kontor.posting/commodity :EUR}]})]
     (is (not (:ok? r)))
     ;; Only EUR is unbalanced in the nil-ledger group; USD nets to zero.
     (is (= #{nil} (set (keys (:unbalanced r)))))
@@ -90,7 +90,7 @@
   (let [r (posting/validate
            {:transaction (-> (balanced-sample) :transaction)
             :postings
-            [{:posting/account :kontor.account/x :posting/amount 0.00M :posting/commodity :EUR}]})]
+            [{:kontor.posting/account :kontor.account/x :kontor.posting/amount 0.00M :kontor.posting/commodity :EUR}]})]
     (is (not (:ok? r)))
     (is (some #(= :too-few-postings (:error %)) (:errors r)))))
 
@@ -100,16 +100,16 @@
     (let [r (posting/validate
              {:transaction (-> (balanced-sample) :transaction)
               :postings
-              [{:posting/display-type :section :posting/narration "Header"}
-               {:posting/account :kontor.account/x :posting/amount 100.00M :posting/commodity :EUR}
-               {:posting/display-type :note :posting/narration "Footer note"}
-               {:posting/account :kontor.account/y :posting/amount -100.00M :posting/commodity :EUR}]})]
+              [{:kontor.posting/display-type :section :kontor.posting/narration "Header"}
+               {:kontor.posting/account :kontor.account/x :kontor.posting/amount 100.00M :kontor.posting/commodity :EUR}
+               {:kontor.posting/display-type :note :kontor.posting/narration "Footer note"}
+               {:kontor.posting/account :kontor.account/y :kontor.posting/amount -100.00M :kontor.posting/commodity :EUR}]})]
       (is (:ok? r) (str "errors=" (:errors r))))))
 
 (deftest validate-rejects-unknown-display-type
   (let [r (posting/validate
            (assoc-in (balanced-sample)
-                     [:postings 0 :posting/display-type]
+                     [:postings 0 :kontor.posting/display-type]
                      :bogus))]
     (is (not (:ok? r)))
     (is (some #(= :invalid-display-type (:error %)) (:errors r)))))
@@ -118,9 +118,9 @@
   (let [r (posting/validate
            {:transaction (-> (balanced-sample) :transaction)
             :postings
-            [{:posting/amount 100.00M :posting/commodity :EUR}     ;; missing account
-             {:posting/account :kontor.account/x :posting/commodity :EUR} ;; missing amount
-             {:posting/account :kontor.account/y :posting/amount 1.00M}]}) ;; missing commodity
+            [{:kontor.posting/amount 100.00M :kontor.posting/commodity :EUR}     ;; missing account
+             {:kontor.posting/account :kontor.account/x :kontor.posting/commodity :EUR} ;; missing amount
+             {:kontor.posting/account :kontor.account/y :kontor.posting/amount 1.00M}]}) ;; missing commodity
         codes (set (map :error (:errors r)))]
     (is (not (:ok? r)))
     (is (codes :missing-account))
@@ -129,7 +129,7 @@
 
 (deftest validate-rejects-missing-header
   (let [r (posting/validate
-           {:transaction {:transaction/external-id "X"}
+           {:transaction {:kontor.transaction/external-id "X"}
             :postings (-> (balanced-sample) :postings)})
         codes (set (map :error (:errors r)))]
     (is (not (:ok? r)))
@@ -151,17 +151,17 @@
           ok (posting/validate
               {:transaction (-> (balanced-sample) :transaction)
                :postings
-               [{:posting/account :a :posting/amount  100.00M :posting/commodity :EUR :posting/ledger ifrs-ref}
-                {:posting/account :b :posting/amount -100.00M :posting/commodity :EUR :posting/ledger ifrs-ref}
-                {:posting/account :a :posting/amount  100.00M :posting/commodity :EUR :posting/ledger hgb-ref}
-                {:posting/account :b :posting/amount -100.00M :posting/commodity :EUR :posting/ledger hgb-ref}]})
+               [{:kontor.posting/account :a :kontor.posting/amount  100.00M :kontor.posting/commodity :EUR :kontor.posting/ledger ifrs-ref}
+                {:kontor.posting/account :b :kontor.posting/amount -100.00M :kontor.posting/commodity :EUR :kontor.posting/ledger ifrs-ref}
+                {:kontor.posting/account :a :kontor.posting/amount  100.00M :kontor.posting/commodity :EUR :kontor.posting/ledger hgb-ref}
+                {:kontor.posting/account :b :kontor.posting/amount -100.00M :kontor.posting/commodity :EUR :kontor.posting/ledger hgb-ref}]})
           bad (posting/validate
                {:transaction (-> (balanced-sample) :transaction)
                 :postings
-                [{:posting/account :a :posting/amount  100.00M :posting/commodity :EUR :posting/ledger ifrs-ref}
-                 {:posting/account :b :posting/amount -100.00M :posting/commodity :EUR :posting/ledger ifrs-ref}
-                 {:posting/account :a :posting/amount  100.00M :posting/commodity :EUR :posting/ledger hgb-ref}
-                 {:posting/account :b :posting/amount  -99.00M :posting/commodity :EUR :posting/ledger hgb-ref}]})]
+                [{:kontor.posting/account :a :kontor.posting/amount  100.00M :kontor.posting/commodity :EUR :kontor.posting/ledger ifrs-ref}
+                 {:kontor.posting/account :b :kontor.posting/amount -100.00M :kontor.posting/commodity :EUR :kontor.posting/ledger ifrs-ref}
+                 {:kontor.posting/account :a :kontor.posting/amount  100.00M :kontor.posting/commodity :EUR :kontor.posting/ledger hgb-ref}
+                 {:kontor.posting/account :b :kontor.posting/amount  -99.00M :kontor.posting/commodity :EUR :kontor.posting/ledger hgb-ref}]})]
       (is (:ok? ok))
       (is (empty? (:unbalanced ok)))
       (is (not (:ok? bad)))
@@ -178,35 +178,35 @@
           r (posting/validate
              {:transaction (-> (balanced-sample) :transaction)
               :postings
-              [{:posting/account :a :posting/amount    5.00M :posting/commodity :EUR :posting/ledger ifrs-ref}
-               {:posting/account :b :posting/amount   -5.00M :posting/commodity :EUR :posting/ledger hgb-ref}]})]
+              [{:kontor.posting/account :a :kontor.posting/amount    5.00M :kontor.posting/commodity :EUR :kontor.posting/ledger ifrs-ref}
+               {:kontor.posting/account :b :kontor.posting/amount   -5.00M :kontor.posting/commodity :EUR :kontor.posting/ledger hgb-ref}]})]
       (is (not (:ok? r)))
       (is (= #{ifrs-ref hgb-ref} (set (keys (:unbalanced r))))
           "Both ledgers must be flagged — neither one self-balances."))))
 
 (deftest build-transaction-leaves-ledger-absent-by-default
-  (testing "Per ADR-021 revised, :posting/ledger stays absent unless
+  (testing "Per ADR-021 revised, :kontor.posting/ledger stays absent unless
             the caller sets it. Absent means 'primary book' at read
             time; we don't inject a lookup-ref because invariant
             speculative-applies run against an empty schema-only DB
             that cannot resolve unique-identity lookups for
             non-schema entities."
     (let [tx-data (posting/build-transaction (balanced-sample))
-          posting-entities (filter :posting/account tx-data)]
-      (is (every? #(nil? (:posting/ledger %)) posting-entities)
-          "No :posting/ledger should be auto-injected"))))
+          posting-entities (filter :kontor.posting/account tx-data)]
+      (is (every? #(nil? (:kontor.posting/ledger %)) posting-entities)
+          "No :kontor.posting/ledger should be auto-injected"))))
 
 (deftest build-transaction-preserves-explicit-ledger
-  (testing "An explicitly-set :posting/ledger is not overwritten."
+  (testing "An explicitly-set :kontor.posting/ledger is not overwritten."
     (let [tx-data (posting/build-transaction
                    {:transaction (-> (balanced-sample) :transaction)
                     :postings
-                    [{:posting/account :a :posting/amount  10.00M
-                      :posting/commodity :EUR :posting/ledger [:ledger/code "ifrs"]}
-                     {:posting/account :b :posting/amount -10.00M
-                      :posting/commodity :EUR :posting/ledger [:ledger/code "ifrs"]}]})
-          posting-entities (filter :posting/account tx-data)]
-      (is (every? #(= [:ledger/code "ifrs"] (:posting/ledger %))
+                    [{:kontor.posting/account :a :kontor.posting/amount  10.00M
+                      :kontor.posting/commodity :EUR :kontor.posting/ledger [:ledger/code "ifrs"]}
+                     {:kontor.posting/account :b :kontor.posting/amount -10.00M
+                      :kontor.posting/commodity :EUR :kontor.posting/ledger [:ledger/code "ifrs"]}]})
+          posting-entities (filter :kontor.posting/account tx-data)]
+      (is (every? #(= [:ledger/code "ifrs"] (:kontor.posting/ledger %))
                   posting-entities)))))
 
 ;; ============================================================================
@@ -227,32 +227,32 @@
    :analytic-distribution/percent pct})
 
 (def ^:private one-posting-with-cc-60-40
-  {:posting/account   :kontor.account/cogs
-   :posting/amount    100.00M
-   :posting/commodity :EUR
-   :posting/analytic-distributions [(cc "Eng" 60M) (cc "Sales" 40M)]})
+  {:kontor.posting/account   :kontor.account/cogs
+   :kontor.posting/amount    100.00M
+   :kontor.posting/commodity :EUR
+   :kontor.posting/analytic-distributions [(cc "Eng" 60M) (cc "Sales" 40M)]})
 
 (deftest expand-splits-amount-per-percent
   (let [children (posting/expand-distribution one-posting-with-cc-60-40 cc-plan)]
     (is (= 2 (count children)))
-    (is (= 60.00M (:posting/amount (nth children 0))))
-    (is (= 40.00M (:posting/amount (nth children 1))))))
+    (is (= 60.00M (:kontor.posting/amount (nth children 0))))
+    (is (= 40.00M (:kontor.posting/amount (nth children 1))))))
 
 (deftest expand-preserves-inherited-fields
   (let [parent (assoc one-posting-with-cc-60-40
-                      :posting/partner    :p/acme
-                      :posting/narration  "ACME services"
-                      :posting/ledger     [:ledger/code "ifrs"])
+                      :kontor.posting/partner    :p/acme
+                      :kontor.posting/narration  "ACME services"
+                      :kontor.posting/ledger     [:ledger/code "ifrs"])
         children (posting/expand-distribution parent cc-plan)]
-    (is (every? #(= :p/acme (:posting/partner %)) children))
-    (is (every? #(= "ACME services" (:posting/narration %)) children))
-    (is (every? #(= [:ledger/code "ifrs"] (:posting/ledger %)) children))
-    (is (every? #(= :kontor.account/cogs (:posting/account %)) children))))
+    (is (every? #(= :p/acme (:kontor.posting/partner %)) children))
+    (is (every? #(= "ACME services" (:kontor.posting/narration %)) children))
+    (is (every? #(= [:ledger/code "ifrs"] (:kontor.posting/ledger %)) children))
+    (is (every? #(= :kontor.account/cogs (:kontor.posting/account %)) children))))
 
 (deftest expand-each-child-carries-single-distribution-at-100
   (let [children (posting/expand-distribution one-posting-with-cc-60-40 cc-plan)]
     (doseq [c children]
-      (let [dists (:posting/analytic-distributions c)]
+      (let [dists (:kontor.posting/analytic-distributions c)]
         (is (= 1 (count dists)))
         (is (= 100M (:analytic-distribution/percent (first dists))))
         (is (= cc-plan (:analytic-distribution/plan (first dists))))))))
@@ -261,14 +261,14 @@
   (testing "Distributions in plans other than the expansion target
             ride along on each child unchanged (per-plan default)."
     (let [parent (assoc one-posting-with-cc-60-40
-                        :posting/analytic-distributions
+                        :kontor.posting/analytic-distributions
                         [(cc "Eng" 60M) (cc "Sales" 40M)
                          (proj "Alpha" 70M) (proj "Beta" 30M)])
           children (posting/expand-distribution parent cc-plan)]
       (is (= 2 (count children)) "Only the cost-center plan splits")
       (doseq [c children]
         (let [proj-dists (filterv #(= proj-plan (:analytic-distribution/plan %))
-                                  (:posting/analytic-distributions c))]
+                                  (:kontor.posting/analytic-distributions c))]
           (is (= 2 (count proj-dists)))
           (is (= #{70M 30M}
                  (set (map :analytic-distribution/percent proj-dists)))))))))
@@ -277,30 +277,30 @@
   (testing "100.00 EUR split 33.333333 / 33.333333 / 33.333334 → sum
             bit-exact to 100.00"
     (let [parent (assoc one-posting-with-cc-60-40
-                        :posting/analytic-distributions
+                        :kontor.posting/analytic-distributions
                         [(cc "A" 33.333333M) (cc "B" 33.333333M) (cc "C" 33.333334M)])
           children (posting/expand-distribution parent cc-plan)
           sum-bd (reduce #(.add ^java.math.BigDecimal %1 ^java.math.BigDecimal %2)
                          java.math.BigDecimal/ZERO
-                         (map :posting/amount children))]
+                         (map :kontor.posting/amount children))]
       (is (= 3 (count children)))
       (is (= 0 (.compareTo (bigdec "100.00") sum-bd))
           "Sum of children must be bit-exact to parent"))))
 
 (deftest expand-drops-zero-percent
   (let [parent (assoc one-posting-with-cc-60-40
-                      :posting/analytic-distributions
+                      :kontor.posting/analytic-distributions
                       [(cc "A" 60M) (cc "B" 0M) (cc "C" 40M)])
         children (posting/expand-distribution parent cc-plan)]
     (is (= 2 (count children))
         "Zero-percent slot must not produce a zero-amount child")
-    (is (= #{60.00M 40.00M} (set (map :posting/amount children))))))
+    (is (= #{60.00M 40.00M} (set (map :kontor.posting/amount children))))))
 
 (deftest expand-no-matching-plan-returns-input
   (testing "Posting without distributions in the named plan is
             returned unchanged as a single-element vector"
     (let [parent (assoc one-posting-with-cc-60-40
-                        :posting/analytic-distributions
+                        :kontor.posting/analytic-distributions
                         [(proj "Alpha" 100M)])
           children (posting/expand-distribution parent cc-plan)]
       (is (= [parent] children)))))
@@ -308,13 +308,13 @@
 (deftest expand-negative-amount-symmetric
   (testing "Negative parent amount splits symmetrically with bit-exact total"
     (let [parent (assoc one-posting-with-cc-60-40
-                        :posting/amount -100.00M
-                        :posting/analytic-distributions
+                        :kontor.posting/amount -100.00M
+                        :kontor.posting/analytic-distributions
                         [(cc "A" 33.333333M) (cc "B" 33.333333M) (cc "C" 33.333334M)])
           children (posting/expand-distribution parent cc-plan)
           sum-bd (reduce #(.add ^java.math.BigDecimal %1 ^java.math.BigDecimal %2)
                          java.math.BigDecimal/ZERO
-                         (map :posting/amount children))]
+                         (map :kontor.posting/amount children))]
       (is (= 0 (.compareTo (bigdec "-100.00") sum-bd))))))
 
 (deftest expand-cartesian-not-yet-implemented
@@ -335,26 +335,26 @@
     (is (= 4 (count tx-data)))
     (let [[txn p1 p2 tx-meta] tx-data]
       (is (= -1 (:db/id txn)))
-      (is (= :draft (:transaction/state txn))) ;; defaulted
-      (is (= -1 (:posting/transaction p1)))
-      (is (= -1 (:posting/transaction p2)))
-      (is (= :product (:posting/display-type p1))) ;; defaulted
+      (is (= :draft (:kontor.transaction/state txn))) ;; defaulted
+      (is (= -1 (:kontor.posting/transaction p1)))
+      (is (= -1 (:kontor.posting/transaction p2)))
+      (is (= :product (:kontor.posting/display-type p1))) ;; defaulted
       (is (= "datomic.tx" (:db/id tx-meta)))
-      (is (= some-date (:db.valid/from tx-meta)))))) ;; from :transaction/effective-date
+      (is (= some-date (:db.valid/from tx-meta)))))) ;; from :kontor.transaction/effective-date
 
 (deftest build-transaction-throws-on-unbalanced
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"failed structural validation"
        (posting/build-transaction
         (assoc-in (balanced-sample)
-                  [:postings 1 :posting/amount]
+                  [:postings 1 :kontor.posting/amount]
                   -1.00M)))))
 
 (deftest build-preserves-explicit-state
   (let [tx-data (posting/build-transaction
                  (-> (balanced-sample)
-                     (assoc-in [:transaction :transaction/state] :posted)))]
-    (is (= :posted (:transaction/state (first tx-data))))))
+                     (assoc-in [:transaction :kontor.transaction/state] :posted)))]
+    (is (= :posted (:kontor.transaction/state (first tx-data))))))
 
 ;; ============================================================================
 ;; End-to-end against a real datahike DB
@@ -373,8 +373,8 @@
                {:db/id -3 :kontor.account/path "Income:Sales"
                 :kontor.account/name "Sales revenue"
                 :kontor.account/type :income :kontor.account/active true}
-               {:db/id -4 :journal/code "INV" :journal/name "Customer invoices"
-                :journal/type :sale :journal/active true}])
+               {:db/id -4 :kontor.journal/code "INV" :kontor.journal/name "Customer invoices"
+                :kontor.journal/type :sale :kontor.journal/active true}])
   (d/db conn))
 
 (deftest end-to-end-balanced-tx-transacts
@@ -383,29 +383,29 @@
         eur (:db/id (d/entity (d/db conn) [:kontor.commodity/symbol "EUR"]))
         rec (:db/id (d/entity (d/db conn) [:kontor.account/path "Assets:Receivable"]))
         rev (:db/id (d/entity (d/db conn) [:kontor.account/path "Income:Sales"]))
-        jnl (:db/id (d/entity (d/db conn) [:journal/code "INV"]))
+        jnl (:db/id (d/entity (d/db conn) [:kontor.journal/code "INV"]))
         tx-data (posting/build-transaction
                  {:transaction
-                  {:transaction/external-id    "INV-2026-0001"
-                   :transaction/journal        jnl
-                   :transaction/effective-date some-date
-                   :transaction/narration      "ACME services"}
+                  {:kontor.transaction/external-id    "INV-2026-0001"
+                   :kontor.transaction/journal        jnl
+                   :kontor.transaction/effective-date some-date
+                   :kontor.transaction/narration      "ACME services"}
                   :postings
-                  [{:posting/account rec :posting/amount  100.00M :posting/commodity eur}
-                   {:posting/account rev :posting/amount -100.00M :posting/commodity eur}]})
+                  [{:kontor.posting/account rec :kontor.posting/amount  100.00M :kontor.posting/commodity eur}
+                   {:kontor.posting/account rev :kontor.posting/amount -100.00M :kontor.posting/commodity eur}]})
         report (d/transact conn tx-data)
         db-after (:db-after report)]
     (is (some? report))
-    (let [tx-eid (:db/id (d/entity db-after [:transaction/external-id "INV-2026-0001"]))]
+    (let [tx-eid (:db/id (d/entity db-after [:kontor.transaction/external-id "INV-2026-0001"]))]
       (is tx-eid)
       ;; Two postings reference it
       (let [posting-eids (d/q '[:find [?p ...]
                                 :in $ ?tx
-                                :where [?p :posting/transaction ?tx]]
+                                :where [?p :kontor.posting/transaction ?tx]]
                               db-after tx-eid)]
         (is (= 2 (count posting-eids)))
         ;; And they sum to zero in EUR
-        (let [postings (mapv #(d/pull db-after '[:posting/amount :posting/commodity] %)
+        (let [postings (mapv #(d/pull db-after '[:kontor.posting/amount :kontor.posting/commodity] %)
                              posting-eids)
               monies (mapv m/posting->money postings)]
           (is (m/zero? (m/sum monies eur))))))))
@@ -416,27 +416,27 @@
         eur (:db/id (d/entity (d/db conn) [:kontor.commodity/symbol "EUR"]))
         rec (:db/id (d/entity (d/db conn) [:kontor.account/path "Assets:Receivable"]))
         rev (:db/id (d/entity (d/db conn) [:kontor.account/path "Income:Sales"]))
-        jnl (:db/id (d/entity (d/db conn) [:journal/code "INV"]))
+        jnl (:db/id (d/entity (d/db conn) [:kontor.journal/code "INV"]))
         tx-data (posting/build-transaction
                  {:transaction
-                  {:transaction/external-id    "INV-2026-0002"
-                   :transaction/journal        jnl
-                   :transaction/effective-date some-date
-                   :transaction/narration      "Defaults check"}
+                  {:kontor.transaction/external-id    "INV-2026-0002"
+                   :kontor.transaction/journal        jnl
+                   :kontor.transaction/effective-date some-date
+                   :kontor.transaction/narration      "Defaults check"}
                   :postings
-                  [{:posting/account rec :posting/amount  50.00M :posting/commodity eur}
-                   {:posting/account rev :posting/amount -50.00M :posting/commodity eur}]})
+                  [{:kontor.posting/account rec :kontor.posting/amount  50.00M :kontor.posting/commodity eur}
+                   {:kontor.posting/account rev :kontor.posting/amount -50.00M :kontor.posting/commodity eur}]})
         _ (d/transact conn tx-data)
         db-after (d/db conn)
-        tx-eid (:db/id (d/entity db-after [:transaction/external-id "INV-2026-0002"]))
+        tx-eid (:db/id (d/entity db-after [:kontor.transaction/external-id "INV-2026-0002"]))
         ;; ADR-048: valid-from lives on the writing tx, not per-posting.
         ;; Both postings derive their vf from the same :db.valid/from
         ;; (upstream datahike).
         posting-rows (d/q '[:find ?p ?vf
                             :in $ ?tx
                             :where
-                            [?p :posting/transaction ?tx]
-                            [?p :posting/transaction _ ?ptx]
+                            [?p :kontor.posting/transaction ?tx]
+                            [?p :kontor.posting/transaction _ ?ptx]
                             [?ptx :db/txInstant ?ti]
                             [(get-else $ ?ptx :db.valid/from ?ti) ?vf]]
                           db-after tx-eid)]
@@ -455,29 +455,29 @@
         eur (:db/id (d/entity (d/db conn) [:kontor.commodity/symbol "EUR"]))
         rec (:db/id (d/entity (d/db conn) [:kontor.account/path "Assets:Receivable"]))
         rev (:db/id (d/entity (d/db conn) [:kontor.account/path "Income:Sales"]))
-        jnl (:db/id (d/entity (d/db conn) [:journal/code "INV"]))
+        jnl (:db/id (d/entity (d/db conn) [:kontor.journal/code "INV"]))
         posted-at #inst "2026-05-13T10:00:00Z"
         _ (posting/post-transaction!
            conn
-           {:transaction {:transaction/external-id     "INV-POST-1"
-                          :transaction/journal         jnl
-                          :transaction/effective-date  some-date
-                          :transaction/narration       "post-transaction! roundtrip"}
-            :postings    [{:posting/account rec :posting/amount  50.00M :posting/commodity eur}
-                          {:posting/account rev :posting/amount -50.00M :posting/commodity eur}]}
+           {:transaction {:kontor.transaction/external-id     "INV-POST-1"
+                          :kontor.transaction/journal         jnl
+                          :kontor.transaction/effective-date  some-date
+                          :kontor.transaction/narration       "post-transaction! roundtrip"}
+            :postings    [{:kontor.posting/account rec :kontor.posting/amount  50.00M :kontor.posting/commodity eur}
+                          {:kontor.posting/account rev :kontor.posting/amount -50.00M :kontor.posting/commodity eur}]}
            {:posted-at posted-at})
         db (d/db conn)
-        tx-eid (:db/id (d/entity db [:transaction/external-id "INV-POST-1"]))
-        tx (d/pull db [:transaction/state :transaction/posted-at] tx-eid)
+        tx-eid (:db/id (d/entity db [:kontor.transaction/external-id "INV-POST-1"]))
+        tx (d/pull db [:kontor.transaction/state :kontor.transaction/posted-at] tx-eid)
         post-pa (d/q '[:find ?p ?pa
                        :in $ ?tx
                        :where
-                       [?p :posting/transaction ?tx]
-                       [?p :posting/posted-at ?pa]]
+                       [?p :kontor.posting/transaction ?tx]
+                       [?p :kontor.posting/posted-at ?pa]]
                      db tx-eid)]
-    (is (= :posted (:transaction/state tx)))
-    (is (= posted-at (:transaction/posted-at tx)))
+    (is (= :posted (:kontor.transaction/state tx)))
+    (is (= posted-at (:kontor.transaction/posted-at tx)))
     (is (= 2 (count post-pa))
-        "Both postings carry :posting/posted-at after post-transaction!")
+        "Both postings carry :kontor.posting/posted-at after post-transaction!")
     (is (every? #(= posted-at (second %)) post-pa)
         "Children inherit parent's :posted-at (sealing invariant).")))

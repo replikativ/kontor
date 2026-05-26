@@ -9,7 +9,7 @@
    broken entry throws at build time.
 
    Sign convention (kernel-wide): a debit is a positive
-   `:posting/amount`, a credit is negative.
+   `:kontor.posting/amount`, a credit is negative.
 
    ## Composition with ADR-053
 
@@ -76,13 +76,13 @@
              {:expense-account ovr}))))
 
 (defn- posting*
-  "Build one posting map, tagging :posting/ledger only when `ledger`
+  "Build one posting map, tagging :kontor.posting/ledger only when `ledger`
    is non-nil (ADR-021 — a nil ledger is the primary book)."
   [account amount commodity ledger]
-  (cond-> {:posting/account   account
-           :posting/amount    amount
-           :posting/commodity commodity}
-    ledger (assoc :posting/ledger ledger)))
+  (cond-> {:kontor.posting/account   account
+           :kontor.posting/amount    amount
+           :kontor.posting/commodity commodity}
+    ledger (assoc :kontor.posting/ledger ledger)))
 
 (defn- build
   "Assemble + build a transaction from a journal/date/narration header
@@ -90,8 +90,8 @@
    zero-value journal lines).
 
    When the header carries `:posted-at`, the entry is built *sealed*:
-   `:transaction/state :posted` + `:transaction/posted-at`, and every
-   posting is stamped `:posting/posted-at` (the propagation the
+   `:kontor.transaction/state :posted` + `:kontor.transaction/posted-at`, and every
+   posting is stamped `:kontor.posting/posted-at` (the propagation the
    `kontor.sealing` middleware enforces). Omit `:posted-at` for a
    draft entry the caller seals later.
 
@@ -103,18 +103,18 @@
   (when-not date    (throw (ex-info ":date required" {})))
   (let [nonzero (filterv (fn [p]
                            (not (zero? (.signum ^java.math.BigDecimal
-                                        (:posting/amount p)))))
+                                        (:kontor.posting/amount p)))))
                          postings)
         nonzero (if posted-at
-                  (mapv #(assoc % :posting/posted-at posted-at) nonzero)
+                  (mapv #(assoc % :kontor.posting/posted-at posted-at) nonzero)
                   nonzero)]
     (posting/build-transaction
-     (cond-> {:transaction (cond-> {:transaction/journal journal
-                                    :transaction/effective-date date}
-                             narration   (assoc :transaction/narration narration)
-                             external-id (assoc :transaction/external-id external-id)
-                             posted-at   (assoc :transaction/state :posted
-                                                :transaction/posted-at posted-at))
+     (cond-> {:transaction (cond-> {:kontor.transaction/journal journal
+                                    :kontor.transaction/effective-date date}
+                             narration   (assoc :kontor.transaction/narration narration)
+                             external-id (assoc :kontor.transaction/external-id external-id)
+                             posted-at   (assoc :kontor.transaction/state :posted
+                                                :kontor.transaction/posted-at posted-at))
               :postings nonzero}
        tx-tempid (assoc :tx-tempid tx-tempid)))))
 

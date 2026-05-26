@@ -7,12 +7,12 @@
   (:import [java.math BigDecimal]))
 
 (defn- sum-amounts ^BigDecimal [postings]
-  (reduce (fn [^BigDecimal a {:keys [posting/amount]}]
+  (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
             (.add a ^BigDecimal amount))
           0M postings))
 
 ;; Stand-in account refs. The builder doesn't care what shape the
-;; values are — they're passed through to :posting/account — so for
+;; values are — they're passed through to :kontor.posting/account — so for
 ;; unit tests we use keyword stand-ins.
 (def accounts
   {:in-payroll-salaries-wages    :acct/wages
@@ -58,37 +58,37 @@
     (testing "Posting set sums to zero (substrate invariant)"
       (is (zero? (.signum (sum-amounts postings)))))
     (testing "Wages-expense leg gets positive amount (Dr gross)"
-      (let [wages (filter #(= :acct/wages (:posting/account %)) postings)]
+      (let [wages (filter #(= :acct/wages (:kontor.posting/account %)) postings)]
         (is (= 1 (count wages)))
-        (is (= 75000M (:posting/amount (first wages))))))
+        (is (= 75000M (:kontor.posting/amount (first wages))))))
     (testing "TDS deduction lands on TDS-payable as credit (negative)"
-      (let [tds (filter #(= :acct/tds (:posting/account %)) postings)]
+      (let [tds (filter #(= :acct/tds (:kontor.posting/account %)) postings)]
         (is (= 1 (count tds)))
-        (is (= -4000M (:posting/amount (first tds))))))
+        (is (= -4000M (:kontor.posting/amount (first tds))))))
     (testing "Employer PF produces TWO legs (Dr expense, Cr payable)"
-      (let [er-pf-exp (filter #(= :acct/er-pf (:posting/account %)) postings)
-            er-pf-pay (filter #(= :acct/pf (:posting/account %)) postings)]
+      (let [er-pf-exp (filter #(= :acct/er-pf (:kontor.posting/account %)) postings)
+            er-pf-pay (filter #(= :acct/pf (:kontor.posting/account %)) postings)]
         (is (= 1 (count er-pf-exp)))
         ;; PF payable: employee -1800 + employer payable -1800 = -3600
         (is (= 2 (count er-pf-pay)))
-        (is (= 1800M (:posting/amount (first er-pf-exp))))
+        (is (= 1800M (:kontor.posting/amount (first er-pf-exp))))
         (is (= -3600M (sum-amounts er-pf-pay)))))
     (testing "Net wages payable = 69000 (negative leg)"
-      (let [net (filter #(= :acct/net (:posting/account %)) postings)]
+      (let [net (filter #(= :acct/net (:kontor.posting/account %)) postings)]
         (is (= 1 (count net)))
-        (is (= -69000M (:posting/amount (first net))))))))
+        (is (= -69000M (:kontor.posting/amount (first net))))))))
 
 (deftest pt-posting-carries-state-distribution
   (let [postings (pb/build-payroll-postings
                   {:facts [simple-fact]
                    :accounts accounts
                    :commodity :INR})
-        pt-posting (first (filter #(= :acct/pt (:posting/account %)) postings))]
+        pt-posting (first (filter #(= :acct/pt (:kontor.posting/account %)) postings))]
     (testing "PT posting present"
       (is (some? pt-posting)))
     (testing "PT carries analytic-distribution on in-state plan"
-      (is (seq (:posting/analytic-distributions pt-posting)))
-      (let [d (first (:posting/analytic-distributions pt-posting))]
+      (is (seq (:kontor.posting/analytic-distributions pt-posting)))
+      (let [d (first (:kontor.posting/analytic-distributions pt-posting))]
         (is (= [:analytic-plan/code "in-state"]
                (:analytic-distribution/plan d)))
         (is (= [:analytic-account/path "in-state:IN-MH"]
@@ -100,9 +100,9 @@
                   {:facts [simple-fact]
                    :accounts accounts
                    :commodity :INR})
-        wages (first (filter #(= :acct/wages (:posting/account %)) postings))]
+        wages (first (filter #(= :acct/wages (:kontor.posting/account %)) postings))]
     (testing "Wages-expense carries analytic-distribution on in-state plan"
-      (is (seq (:posting/analytic-distributions wages))))))
+      (is (seq (:kontor.posting/analytic-distributions wages))))))
 
 (deftest multi-state-allocation-overrides-fact-state
   (let [postings (pb/build-payroll-postings
@@ -110,8 +110,8 @@
                    :accounts accounts
                    :commodity :INR
                    :state-allocations {1 {"IN-MH" 60M "IN-KA" 40M}}})
-        wages (first (filter #(= :acct/wages (:posting/account %)) postings))
-        dists (:posting/analytic-distributions wages)]
+        wages (first (filter #(= :acct/wages (:kontor.posting/account %)) postings))
+        dists (:kontor.posting/analytic-distributions wages)]
     (testing "Two state distributions emitted"
       (is (= 2 (count dists))))
     (testing "Both states appear"
@@ -148,7 +148,7 @@
                                     {:accounts accounts
                                      :ledger :ifrs})]
     (testing "Every posting carries the ledger ref"
-      (is (every? #(= :ifrs (:posting/ledger %)) postings)))))
+      (is (every? #(= :ifrs (:kontor.posting/ledger %)) postings)))))
 
 (deftest pf-employer-split-into-eps-and-epf-balances
   (let [fact (assoc simple-fact
@@ -171,7 +171,7 @@
     (testing "Posting set sums to zero (with EPS + EPF + EDLI split)"
       (is (zero? (.signum (sum-amounts postings)))))
     (testing "All three employer-side splits route to same payable bucket"
-      (let [pf-pay (filter #(= :acct/pf (:posting/account %)) postings)]
+      (let [pf-pay (filter #(= :acct/pf (:kontor.posting/account %)) postings)]
         ;; employee -1800 + employer-eps -1250 + employer-epf -550 + edli -75 = -3675
         (is (= -3675M (sum-amounts pf-pay)))))))
 
@@ -188,17 +188,17 @@
                   {:facts [fact-with-bonus-accrual]
                    :accounts accounts
                    :commodity :INR})
-        bonus-acc-exp (first (filter #(= :acct/bonus-accrual (:posting/account %)) postings))
-        bonus-pay (first (filter #(= :acct/bonus-payable (:posting/account %)) postings))]
+        bonus-acc-exp (first (filter #(= :acct/bonus-accrual (:kontor.posting/account %)) postings))
+        bonus-pay (first (filter #(= :acct/bonus-payable (:kontor.posting/account %)) postings))]
     (testing "Bonus accrual produces Dr expense + Cr payable"
       (is (some? bonus-acc-exp))
       (is (some? bonus-pay))
-      (is (= 2500M (:posting/amount bonus-acc-exp)))
-      (is (= -2500M (:posting/amount bonus-pay))))
+      (is (= 2500M (:kontor.posting/amount bonus-acc-exp)))
+      (is (= -2500M (:kontor.posting/amount bonus-pay))))
     (testing "Set still balances"
       (is (zero? (.signum (sum-amounts postings)))))
     (testing "Delhi employee — no PT routing (UP/Delhi/Haryana etc. don't levy PT)"
       ;; The fact doesn't have a :professional-tax component, so the
       ;; PT-payable account isn't touched. Sanity check.
-      (let [pt-posting (filter #(= :acct/pt (:posting/account %)) postings)]
+      (let [pt-posting (filter #(= :acct/pt (:kontor.posting/account %)) postings)]
         (is (empty? pt-posting))))))

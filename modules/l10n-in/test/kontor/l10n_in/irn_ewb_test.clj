@@ -154,14 +154,14 @@
                 :kontor.account/name "AR" :kontor.account/type :asset :kontor.account/active true}
                {:db/id -3 :kontor.account/path "Income:Sales"
                 :kontor.account/name "Sales" :kontor.account/type :income :kontor.account/active true}
-               {:db/id -4 :journal/code "INV-IN" :journal/name "Sales India"
-                :journal/type :sale :journal/active true}
+               {:db/id -4 :kontor.journal/code "INV-IN" :kontor.journal/name "Sales India"
+                :kontor.journal/type :sale :kontor.journal/active true}
                {:db/id -10
-                :transaction/external-id    "INV-2026-IN-0001"
-                :transaction/journal        -4
-                :transaction/effective-date #inst "2026-05-11"
-                :transaction/narration      "MH → KA inter-state sale"}])
-  (:db/id (d/entity (d/db conn) [:transaction/external-id "INV-2026-IN-0001"])))
+                :kontor.transaction/external-id    "INV-2026-IN-0001"
+                :kontor.transaction/journal        -4
+                :kontor.transaction/effective-date #inst "2026-05-11"
+                :kontor.transaction/narration      "MH → KA inter-state sale"}])
+  (:db/id (d/entity (d/db conn) [:kontor.transaction/external-id "INV-2026-IN-0001"])))
 
 (deftest end-to-end-irn-plus-ewb-multi-attestation
   (testing "The canonical India case: one transaction carrying both
@@ -191,7 +191,7 @@
                           :attestation/issued-at     irn-issued-at
                           :attestation/payload       irn-json
                           :attestation/payload-hash  irn-hash}
-                         {:db/id tx :transaction/attestations -100}])
+                         {:db/id tx :kontor.transaction/attestations -100}])
           irn-eid (d/q '[:find ?a . :in $ ?t :where
                          [?a :attestation/transaction ?t]
                          [?a :attestation/format :in/irn]]
@@ -223,7 +223,7 @@
                           :attestation/issued-at   ewb-a-issued-at
                           :attestation/payload     (json/write-str ewb-a)
                           :attestation/depends-on  [irn-eid]}
-                         {:db/id tx :transaction/attestations -200}])
+                         {:db/id tx :kontor.transaction/attestations -200}])
           ewb-a-eid (d/q '[:find ?a . :in $ ?t :where
                            [?a :attestation/transaction ?t]
                            [?a :attestation/format :in/ewb-part-a]]
@@ -249,10 +249,10 @@
                           :attestation/valid-until v-until
                           :attestation/payload     (json/write-str ewb-b)
                           :attestation/depends-on  [ewb-a-eid]}
-                         {:db/id tx :transaction/attestations -300}])
+                         {:db/id tx :kontor.transaction/attestations -300}])
           db (d/db conn)
           tx-entity (d/entity db tx)
-          attestations (:transaction/attestations tx-entity)
+          attestations (:kontor.transaction/attestations tx-entity)
           by-format (into {} (map (juxt :attestation/format identity) attestations))]
       (testing "Transaction now carries 3 attestations"
         (is (= 3 (count attestations)))

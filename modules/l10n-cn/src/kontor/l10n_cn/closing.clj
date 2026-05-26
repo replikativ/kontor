@@ -83,13 +83,13 @@
   "Resolve the closing journal eid, auto-creating it if missing.
    Mirrors the CA / DE l10n closing module's bootstrap behaviour."
   [conn code]
-  (or (:db/id (d/entity (d/db conn) [:journal/code code]))
+  (or (:db/id (d/entity (d/db conn) [:kontor.journal/code code]))
       (do
-        (d/transact conn [{:journal/code code
-                           :journal/name "Year-end closing entries / 年终结账"
-                           :journal/type :closing
-                           :journal/active true}])
-        (:db/id (d/entity (d/db conn) [:journal/code code])))))
+        (d/transact conn [{:kontor.journal/code code
+                           :kontor.journal/name "Year-end closing entries / 年终结账"
+                           :kontor.journal/type :closing
+                           :kontor.journal/active true}])
+        (:db/id (d/entity (d/db conn) [:kontor.journal/code code])))))
 
 (defn plan-cn-fiscal-year-close-tx-data
   "Resolve the opts a CN fiscal-year close needs (ADR-068 pure form).

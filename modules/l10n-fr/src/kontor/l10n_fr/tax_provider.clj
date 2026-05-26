@@ -129,11 +129,11 @@
                     acct     (some->> (get codes tva-rate) (account-by-code db))
                     amt      (:amount c)]
              :when (and acct (not (zero? (.signum ^java.math.BigDecimal amt))))]
-         {:posting/account      acct
-          :posting/amount       (.negate ^java.math.BigDecimal amt)
-          :posting/commodity    (:commodity tax-facts)
-          :posting/display-type :tax
-          :posting/posted-at    date})))))
+         {:kontor.posting/account      acct
+          :kontor.posting/amount       (.negate ^java.math.BigDecimal amt)
+          :kontor.posting/commodity    (:commodity tax-facts)
+          :kontor.posting/display-type :tax
+          :kontor.posting/posted-at    date})))))
 
 (defn make-fr-tax-posting-builder
   "Construct the French `TaxPostingBuilder`. `opts` may carry

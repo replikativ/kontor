@@ -5,7 +5,7 @@
      - Aging method choice (`:method :due-date | :invoice-date |
        :statement-date`) — pain #1 in research note 15.
      - Open-amount from `:payment-application` rows (kernel
-       `open-receivables-by-tx` only looks at `:transaction/settles`
+       `open-receivables-by-tx` only looks at `:kontor.transaction/settles`
        offsets; doesn't see partial payments).
      - Per-customer term-relative buckets (`:partner-payment-terms`
        opt) — pain #1 again.
@@ -81,7 +81,7 @@
                                        :invoice/currency
                                        {:invoice/buyer [:db/id :kontor.partner/name]}
                                        {:invoice/transaction
-                                        [:transaction/due-date]}]
+                                        [:kontor.transaction/due-date]}]
                                      eid)
                       open (papp/open-amount-of-invoice
                             db eid {:as-of-valid as-of-valid})]
@@ -91,7 +91,7 @@
                    :gross (:invoice/total-gross pulled)
                    :issue-date (:invoice/issue-date pulled)
                    :due-date (get-in pulled [:invoice/transaction
-                                             :transaction/due-date])
+                                             :kontor.transaction/due-date])
                    :partner-eid (get-in pulled [:invoice/buyer :db/id])
                    :partner-name (get-in pulled [:invoice/buyer :kontor.partner/name])
                    :currency (:invoice/currency pulled)})))

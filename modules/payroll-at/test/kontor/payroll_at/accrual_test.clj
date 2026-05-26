@@ -27,10 +27,10 @@
     (v/install-invariants! conn)
     (chart/install! conn)
     (d/transact conn accrual-rueck-accounts)
-    (d/transact conn [{:journal/code "PAYROLL"
-                       :journal/name "Lohn"
-                       :journal/type :general
-                       :journal/active true}])
+    (d/transact conn [{:kontor.journal/code "PAYROLL"
+                       :kontor.journal/name "Lohn"
+                       :kontor.journal/type :general
+                       :kontor.journal/active true}])
     conn))
 
 (deftest urlaubs-formula
@@ -52,7 +52,7 @@
   (testing "accrue-urlaubsrueckstellung! produces a balanced 2-line tx"
     (let [conn (bootstrap)
           db0 (d/db conn)
-          jnl (:db/id (d/entity db0 [:journal/code "PAYROLL"]))
+          jnl (:db/id (d/entity db0 [:kontor.journal/code "PAYROLL"]))
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           report (accrual/accrue-urlaubsrueckstellung!
                   conn
@@ -68,8 +68,8 @@
                              postings (d/q '[:find [?amt ...]
                                              :in $ ?a
                                              :where
-                                             [?p :posting/account ?a]
-                                             [?p :posting/amount ?amt]]
+                                             [?p :kontor.posting/account ?a]
+                                             [?p :kontor.posting/amount ?amt]]
                                            db a)]
                          (reduce (fn [^java.math.BigDecimal acc
                                       ^java.math.BigDecimal x]
@@ -83,7 +83,7 @@
   (testing "accrue-sonderzahlung! produces a balanced 2-line tx"
     (let [conn (bootstrap)
           db0 (d/db conn)
-          jnl (:db/id (d/entity db0 [:journal/code "PAYROLL"]))
+          jnl (:db/id (d/entity db0 [:kontor.journal/code "PAYROLL"]))
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           _ (accrual/accrue-sonderzahlung!
              conn
@@ -99,8 +99,8 @@
                              postings (d/q '[:find [?amt ...]
                                              :in $ ?a
                                              :where
-                                             [?p :posting/account ?a]
-                                             [?p :posting/amount ?amt]]
+                                             [?p :kontor.posting/account ?a]
+                                             [?p :kontor.posting/amount ?amt]]
                                            db a)]
                          (reduce (fn [^java.math.BigDecimal acc
                                       ^java.math.BigDecimal x]

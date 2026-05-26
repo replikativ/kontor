@@ -147,9 +147,9 @@
    Returns BigDecimal. Positive = remittance sitting in suspense.
 
    ADR-043 P0-3 fix. Bitemporal via :payment-application/applied-at
-   and :transaction/effective-date (per ADR-048 the kernel valid-time
+   and :kontor.transaction/effective-date (per ADR-048 the kernel valid-time
    anchor is :tx/valid-from on the writing tx, which equals
-   :transaction/effective-date for kernel builders)."
+   :kontor.transaction/effective-date for kernel builders)."
   ([db {:keys [partner cash-account-eid as-of-valid commodity-eid]}]
    (when-not partner          (throw (ex-info ":partner required" {})))
    (when-not cash-account-eid (throw (ex-info ":cash-account-eid required
@@ -157,30 +157,30 @@
    or AR-cash account eid." {})))
    (let [as-of-valid (or as-of-valid (java.util.Date.))
          as-of-ms (.getTime ^java.util.Date as-of-valid)
-         ;; Sum :posting/amount on cash account for this partner up
-         ;; to as-of-valid, anchored on :transaction/effective-date
+         ;; Sum :kontor.posting/amount on cash account for this partner up
+         ;; to as-of-valid, anchored on :kontor.transaction/effective-date
          ;; (equal to the writing tx's :tx/valid-from per ADR-048).
          received (or (if commodity-eid
                         (d/q '[:find (sum ?amt) .
                                :in $ ?acct ?p ?c ?as-of-ms
                                :where
-                               [?ps :posting/account ?acct]
-                               [?ps :posting/amount ?amt]
-                               [?ps :posting/partner ?p]
-                               [?ps :posting/commodity ?c]
-                               [?ps :posting/transaction ?tx]
-                               [?tx :transaction/effective-date ?eff]
+                               [?ps :kontor.posting/account ?acct]
+                               [?ps :kontor.posting/amount ?amt]
+                               [?ps :kontor.posting/partner ?p]
+                               [?ps :kontor.posting/commodity ?c]
+                               [?ps :kontor.posting/transaction ?tx]
+                               [?tx :kontor.transaction/effective-date ?eff]
                                [(.getTime ^java.util.Date ?eff) ?eff-ms]
                                [(<= ?eff-ms ?as-of-ms)]]
                              db cash-account-eid partner commodity-eid as-of-ms)
                         (d/q '[:find (sum ?amt) .
                                :in $ ?acct ?p ?as-of-ms
                                :where
-                               [?ps :posting/account ?acct]
-                               [?ps :posting/amount ?amt]
-                               [?ps :posting/partner ?p]
-                               [?ps :posting/transaction ?tx]
-                               [?tx :transaction/effective-date ?eff]
+                               [?ps :kontor.posting/account ?acct]
+                               [?ps :kontor.posting/amount ?amt]
+                               [?ps :kontor.posting/partner ?p]
+                               [?ps :kontor.posting/transaction ?tx]
+                               [?tx :kontor.transaction/effective-date ?eff]
                                [(.getTime ^java.util.Date ?eff) ?eff-ms]
                                [(<= ?eff-ms ?as-of-ms)]]
                              db cash-account-eid partner as-of-ms))
@@ -190,7 +190,7 @@
                             :in $ ?p ?cutoff-ms
                             :where
                             [?app :payment-application/payment ?tx]
-                            [?tx :transaction/partner ?p]
+                            [?tx :kontor.transaction/partner ?p]
                             [?app :payment-application/amount ?amt]
                             [?app :payment-application/applied-at ?when]
                             [(.getTime ^java.util.Date ?when) ?when-ms]

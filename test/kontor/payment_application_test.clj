@@ -74,13 +74,13 @@
   (let [db (d/db *conn*)
         buyer (d/q '[:find ?p . :where [?p :kontor.partner/external-id "ACME"]] db)]
     (d/transact *conn*
-                [{:transaction/external-id external-id
-                  :transaction/state :posted
-                  :transaction/effective-date #inst "2026-05-01"
-                  :transaction/posted-at #inst "2026-05-01"
-                  :transaction/partner buyer}])
+                [{:kontor.transaction/external-id external-id
+                  :kontor.transaction/state :posted
+                  :kontor.transaction/effective-date #inst "2026-05-01"
+                  :kontor.transaction/posted-at #inst "2026-05-01"
+                  :kontor.transaction/partner buyer}])
     (d/q '[:find ?e . :in $ ?xid
-           :where [?e :transaction/external-id ?xid]]
+           :where [?e :kontor.transaction/external-id ?xid]]
          (d/db *conn*) external-id)))
 
 (defn- actor [] "actor-1")
@@ -258,24 +258,24 @@
             on the next when cash runs out"
     (let [inv-old (make-invoice! "INV-OLD" 300M)
           _ (d/transact *conn*
-                        [{:transaction/external-id "T-OLD"
-                          :transaction/state :posted
-                          :transaction/effective-date #inst "2026-04-01"
-                          :transaction/due-date #inst "2026-04-30"}])
+                        [{:kontor.transaction/external-id "T-OLD"
+                          :kontor.transaction/state :posted
+                          :kontor.transaction/effective-date #inst "2026-04-01"
+                          :kontor.transaction/due-date #inst "2026-04-30"}])
           _ (d/transact *conn*
                         [{:db/id inv-old
                           :invoice/transaction
-                          [:transaction/external-id "T-OLD"]}])
+                          [:kontor.transaction/external-id "T-OLD"]}])
           inv-new (make-invoice! "INV-NEW" 500M)
           _ (d/transact *conn*
-                        [{:transaction/external-id "T-NEW"
-                          :transaction/state :posted
-                          :transaction/effective-date #inst "2026-04-15"
-                          :transaction/due-date #inst "2026-05-15"}])
+                        [{:kontor.transaction/external-id "T-NEW"
+                          :kontor.transaction/state :posted
+                          :kontor.transaction/effective-date #inst "2026-04-15"
+                          :kontor.transaction/due-date #inst "2026-05-15"}])
           _ (d/transact *conn*
                         [{:db/id inv-new
                           :invoice/transaction
-                          [:transaction/external-id "T-NEW"]}])
+                          [:kontor.transaction/external-id "T-NEW"]}])
           pay     (make-payment! "PAY-E")
           buyer   (d/q '[:find ?p . :where [?p :kontor.partner/external-id "ACME"]]
                        (d/db *conn*))]

@@ -189,7 +189,7 @@
                                  consumer-driven entry)
      :journal                  — ref to :journal
      :effective-date           — #inst
-     :tx-code                  — string for :transaction/external-id
+     :tx-code                  — string for :kontor.transaction/external-id
      :pay-period               — ref to :pay-period (optional linkage)
 
    Optional keys:
@@ -211,24 +211,24 @@
                  :tx-code tx-code}]
     (when (nil? v) (throw (ex-info (str (subs (str k) 1) " required") {}))))
   (let [amt (round-half-even amount)
-        postings [{:posting/account ferias-expense-account
-                   :posting/amount amt
-                   :posting/commodity commodity
-                   :posting/ledger ledger
-                   :posting/narration "Provisão de férias — despesa"}
-                  {:posting/account ferias-liability-account
-                   :posting/amount (.negate ^BigDecimal amt)
-                   :posting/commodity commodity
-                   :posting/ledger ledger
-                   :posting/narration "Provisão de férias — passivo"}]
+        postings [{:kontor.posting/account ferias-expense-account
+                   :kontor.posting/amount amt
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger ledger
+                   :kontor.posting/narration "Provisão de férias — despesa"}
+                  {:kontor.posting/account ferias-liability-account
+                   :kontor.posting/amount (.negate ^BigDecimal amt)
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger ledger
+                   :kontor.posting/narration "Provisão de férias — passivo"}]
         tx-input {:tx-tempid tx-tempid
-                  :transaction (cond-> {:transaction/external-id tx-code
-                                        :transaction/effective-date effective-date
-                                        :transaction/narration narration
-                                        :transaction/journal journal
-                                        :transaction/state :draft}
+                  :transaction (cond-> {:kontor.transaction/external-id tx-code
+                                        :kontor.transaction/effective-date effective-date
+                                        :kontor.transaction/narration narration
+                                        :kontor.transaction/journal journal
+                                        :kontor.transaction/state :draft}
                                  pay-period
-                                 (assoc :transaction/source
+                                 (assoc :kontor.transaction/source
                                         (str "pay-period:" pay-period)))
                   :postings postings}]
     (posting/build-transaction tx-input)))
@@ -266,24 +266,24 @@
                  :tx-code tx-code}]
     (when (nil? v) (throw (ex-info (str (subs (str k) 1) " required") {}))))
   (let [amt (round-half-even amount)
-        postings [{:posting/account thirteenth-expense-account
-                   :posting/amount amt
-                   :posting/commodity commodity
-                   :posting/ledger ledger
-                   :posting/narration "Provisão 13º salário — despesa"}
-                  {:posting/account thirteenth-liability-account
-                   :posting/amount (.negate ^BigDecimal amt)
-                   :posting/commodity commodity
-                   :posting/ledger ledger
-                   :posting/narration "Provisão 13º salário — passivo"}]
+        postings [{:kontor.posting/account thirteenth-expense-account
+                   :kontor.posting/amount amt
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger ledger
+                   :kontor.posting/narration "Provisão 13º salário — despesa"}
+                  {:kontor.posting/account thirteenth-liability-account
+                   :kontor.posting/amount (.negate ^BigDecimal amt)
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger ledger
+                   :kontor.posting/narration "Provisão 13º salário — passivo"}]
         tx-input {:tx-tempid tx-tempid
-                  :transaction (cond-> {:transaction/external-id tx-code
-                                        :transaction/effective-date effective-date
-                                        :transaction/narration narration
-                                        :transaction/journal journal
-                                        :transaction/state :draft}
+                  :transaction (cond-> {:kontor.transaction/external-id tx-code
+                                        :kontor.transaction/effective-date effective-date
+                                        :kontor.transaction/narration narration
+                                        :kontor.transaction/journal journal
+                                        :kontor.transaction/state :draft}
                                  pay-period
-                                 (assoc :transaction/source
+                                 (assoc :kontor.transaction/source
                                         (str "pay-period:" pay-period)))
                   :postings postings}]
     (posting/build-transaction tx-input)))
@@ -316,24 +316,24 @@
                  :tx-code tx-code}]
     (when (nil? v) (throw (ex-info (str (subs (str k) 1) " required") {}))))
   (let [amt (round-half-even amount)
-        postings [{:posting/account severance-expense-account
-                   :posting/amount amt
-                   :posting/commodity commodity
-                   :posting/ledger ledger
-                   :posting/narration "Multa rescisória 40% FGTS — despesa"}
-                  {:posting/account severance-liability-account
-                   :posting/amount (.negate ^BigDecimal amt)
-                   :posting/commodity commodity
-                   :posting/ledger ledger
-                   :posting/narration "Multa rescisória 40% FGTS — passivo"}]
+        postings [{:kontor.posting/account severance-expense-account
+                   :kontor.posting/amount amt
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger ledger
+                   :kontor.posting/narration "Multa rescisória 40% FGTS — despesa"}
+                  {:kontor.posting/account severance-liability-account
+                   :kontor.posting/amount (.negate ^BigDecimal amt)
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger ledger
+                   :kontor.posting/narration "Multa rescisória 40% FGTS — passivo"}]
         tx-input {:tx-tempid tx-tempid
-                  :transaction (cond-> {:transaction/external-id tx-code
-                                        :transaction/effective-date effective-date
-                                        :transaction/narration narration
-                                        :transaction/journal journal
-                                        :transaction/state :draft}
+                  :transaction (cond-> {:kontor.transaction/external-id tx-code
+                                        :kontor.transaction/effective-date effective-date
+                                        :kontor.transaction/narration narration
+                                        :kontor.transaction/journal journal
+                                        :kontor.transaction/state :draft}
                                  pay-period
-                                 (assoc :transaction/source
+                                 (assoc :kontor.transaction/source
                                         (str "pay-period:" pay-period)))
                   :postings postings}]
     (posting/build-transaction tx-input)))

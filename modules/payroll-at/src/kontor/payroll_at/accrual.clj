@@ -108,25 +108,25 @@
                      (.format fmt ^java.util.Date effective-date))
         narr (or narration (str "Urlaubsrückstellung " period-str))
         amt ^BigDecimal (->cents amount)
-        postings [{:posting/account pa-acct :posting/amount amt
-                   :posting/commodity commodity
-                   :posting/narration narr}
-                  {:posting/account rs-acct :posting/amount (.negate amt)
-                   :posting/commodity commodity
-                   :posting/narration narr}]
+        postings [{:kontor.posting/account pa-acct :kontor.posting/amount amt
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/narration narr}
+                  {:kontor.posting/account rs-acct :kontor.posting/amount (.negate amt)
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/narration narr}]
         postings (if (= state :posted)
-                   (mapv #(assoc % :posting/posted-at effective-date) postings)
+                   (mapv #(assoc % :kontor.posting/posted-at effective-date) postings)
                    postings)]
     (posting/build-transaction
-     {:transaction (cond-> {:transaction/journal journal
-                            :transaction/effective-date effective-date
-                            :transaction/external-id
+     {:transaction (cond-> {:kontor.transaction/journal journal
+                            :kontor.transaction/effective-date effective-date
+                            :kontor.transaction/external-id
                             (str "urlaubsrueck-" period-str)
-                            :transaction/narration narr
-                            :transaction/source (str "payroll-at:accrual:urlaub:" period-str)
-                            :transaction/state state}
+                            :kontor.transaction/narration narr
+                            :kontor.transaction/source (str "payroll-at:accrual:urlaub:" period-str)
+                            :kontor.transaction/state state}
                      (= state :posted)
-                     (assoc :transaction/posted-at effective-date))
+                     (assoc :kontor.transaction/posted-at effective-date))
       :postings postings})))
 
 (defn accrue-urlaubsrueckstellung!
@@ -178,25 +178,25 @@
                      (.format fmt ^java.util.Date effective-date))
         narr (or narration (str "Sonderzahlungs-Rückstellung " period-str))
         amt ^BigDecimal (->cents amount)
-        postings [{:posting/account pa-acct :posting/amount amt
-                   :posting/commodity commodity
-                   :posting/narration narr}
-                  {:posting/account rs-acct :posting/amount (.negate amt)
-                   :posting/commodity commodity
-                   :posting/narration narr}]
+        postings [{:kontor.posting/account pa-acct :kontor.posting/amount amt
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/narration narr}
+                  {:kontor.posting/account rs-acct :kontor.posting/amount (.negate amt)
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/narration narr}]
         postings (if (= state :posted)
-                   (mapv #(assoc % :posting/posted-at effective-date) postings)
+                   (mapv #(assoc % :kontor.posting/posted-at effective-date) postings)
                    postings)]
     (posting/build-transaction
-     {:transaction (cond-> {:transaction/journal journal
-                            :transaction/effective-date effective-date
-                            :transaction/external-id
+     {:transaction (cond-> {:kontor.transaction/journal journal
+                            :kontor.transaction/effective-date effective-date
+                            :kontor.transaction/external-id
                             (str "sonderzahl-rueck-" period-str)
-                            :transaction/narration narr
-                            :transaction/source (str "payroll-at:accrual:sonder:" period-str)
-                            :transaction/state state}
+                            :kontor.transaction/narration narr
+                            :kontor.transaction/source (str "payroll-at:accrual:sonder:" period-str)
+                            :kontor.transaction/state state}
                      (= state :posted)
-                     (assoc :transaction/posted-at effective-date))
+                     (assoc :kontor.transaction/posted-at effective-date))
       :postings postings})))
 
 (defn accrue-sonderzahlung!

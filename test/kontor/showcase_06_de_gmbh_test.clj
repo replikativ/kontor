@@ -55,8 +55,8 @@
      [{:kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
       {:kontor.entity/code "ACME-DE" :kontor.entity/name "Acme Manufacturing GmbH"
        :kontor.entity/active true}
-      {:journal/code "PAY-DE" :journal/name "Payroll DE" :journal/type :general}
-      {:journal/code "GEN-DE" :journal/name "General DE" :journal/type :general}
+      {:kontor.journal/code "PAY-DE" :kontor.journal/name "Payroll DE" :kontor.journal/type :general}
+      {:kontor.journal/code "GEN-DE" :kontor.journal/name "General DE" :kontor.journal/type :general}
       {:period/name "2026" :period/start #inst "2026-01-01"
        :period/end #inst "2027-01-01"}
       ;; SKR04 payroll accounts (matching the fixture)
@@ -80,7 +80,7 @@
   (let [conn (bootstrap)
         eur (ref-eid (d/db conn) :kontor.commodity/symbol "EUR")
         ent (ref-eid (d/db conn) :kontor.entity/code "ACME-DE")
-        j-gen (ref-eid (d/db conn) :journal/code "GEN-DE")]
+        j-gen (ref-eid (d/db conn) :kontor.journal/code "GEN-DE")]
 
     ;; ===== Year 1 setup =====
     (person/create-person! conn {:external-id "P-mueller"
@@ -134,17 +134,17 @@
                        conn
                        (kbt/with-vt
                          (posting/post-transaction-tx-data
-                          {:transaction {:transaction/external-id "TX-DINNER-2026"
-                                         :transaction/journal j-gen
-                                         :transaction/effective-date #inst "2026-11-22"
-                                         :transaction/narration "Misclassified business dinner"}
+                          {:transaction {:kontor.transaction/external-id "TX-DINNER-2026"
+                                         :kontor.transaction/journal j-gen
+                                         :kontor.transaction/effective-date #inst "2026-11-22"
+                                         :kontor.transaction/narration "Misclassified business dinner"}
                            :postings
-                           [{:posting/account (ref-eid (d/db conn) :kontor.account/code "4660")
-                             :posting/amount 1200.00M
-                             :posting/commodity eur}
-                            {:posting/account (ref-eid (d/db conn) :kontor.account/code "1000")
-                             :posting/amount -1200.00M
-                             :posting/commodity eur}]})
+                           [{:kontor.posting/account (ref-eid (d/db conn) :kontor.account/code "4660")
+                             :kontor.posting/amount 1200.00M
+                             :kontor.posting/commodity eur}
+                            {:kontor.posting/account (ref-eid (d/db conn) :kontor.account/code "1000")
+                             :kontor.posting/amount -1200.00M
+                             :kontor.posting/commodity eur}]})
                          #inst "2026-11-22"))
             misclassified-tx-eid (kbt/commit-tx-eid tx-report)]
 
@@ -154,8 +154,8 @@
                 (d/q '[:find ?amt
                        :in $ ?a
                        :where
-                       [?p :posting/account ?a]
-                       [?p :posting/amount ?amt]]
+                       [?p :kontor.posting/account ?a]
+                       [?p :kontor.posting/amount ?amt]]
                      db (ref-eid (d/db conn) :kontor.account/code "4660"))]
             (is (= #{[1200.00M]} postings)
                 "original Reisekosten posting visible at 2026-12-31")))
@@ -194,17 +194,17 @@
          conn
          (kbt/with-vt
            (posting/post-transaction-tx-data
-            {:transaction {:transaction/external-id "TX-DINNER-2026-CORR"
-                           :transaction/journal j-gen
-                           :transaction/effective-date #inst "2026-11-22"
-                           :transaction/narration "Bewirtungskosten correction Oct 2027"}
+            {:transaction {:kontor.transaction/external-id "TX-DINNER-2026-CORR"
+                           :kontor.transaction/journal j-gen
+                           :kontor.transaction/effective-date #inst "2026-11-22"
+                           :kontor.transaction/narration "Bewirtungskosten correction Oct 2027"}
              :postings
-             [{:posting/account (ref-eid (d/db conn) :kontor.account/code "4650")
-               :posting/amount 1200.00M
-               :posting/commodity eur}
-              {:posting/account (ref-eid (d/db conn) :kontor.account/code "1000")
-               :posting/amount -1200.00M
-               :posting/commodity eur}]})
+             [{:kontor.posting/account (ref-eid (d/db conn) :kontor.account/code "4650")
+               :kontor.posting/amount 1200.00M
+               :kontor.posting/commodity eur}
+              {:kontor.posting/account (ref-eid (d/db conn) :kontor.account/code "1000")
+               :kontor.posting/amount -1200.00M
+               :kontor.posting/commodity eur}]})
            #inst "2027-10-15"))
 
         (testing "Bitemporal correction story end-to-end"
@@ -212,11 +212,11 @@
             (let [db (d/valid-at (d/db conn) #inst "2026-12-31")]
               (is (= #{[1200.00M]}
                      (d/q '[:find ?amt :in $ ?a
-                            :where [?p :posting/account ?a] [?p :posting/amount ?amt]]
+                            :where [?p :kontor.posting/account ?a] [?p :kontor.posting/amount ?amt]]
                           db (ref-eid (d/db conn) :kontor.account/code "4660"))))
               (is (= #{}
                      (d/q '[:find ?amt :in $ ?a
-                            :where [?p :posting/account ?a] [?p :posting/amount ?amt]]
+                            :where [?p :kontor.posting/account ?a] [?p :kontor.posting/amount ?amt]]
                           db (ref-eid (d/db conn) :kontor.account/code "4650")))
                   "the Bewirtungskosten correction wasn't recorded yet at Y1 end")))
 
@@ -224,12 +224,12 @@
             (let [db (d/valid-at (d/db conn) #inst "2027-11-01")]
               (is (= #{}
                      (d/q '[:find ?amt :in $ ?a
-                            :where [?p :posting/account ?a] [?p :posting/amount ?amt]]
+                            :where [?p :kontor.posting/account ?a] [?p :kontor.posting/amount ?amt]]
                           db (ref-eid (d/db conn) :kontor.account/code "4660")))
                   "the original misclassified posting is no longer authoritative")
               (is (= #{[1200.00M]}
                      (d/q '[:find ?amt :in $ ?a
-                            :where [?p :posting/account ?a] [?p :posting/amount ?amt]]
+                            :where [?p :kontor.posting/account ?a] [?p :kontor.posting/amount ?amt]]
                           db (ref-eid (d/db conn) :kontor.account/code "4650")))
                   "the corrected posting IS authoritative"))))
 

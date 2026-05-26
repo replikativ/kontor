@@ -28,35 +28,35 @@
      :kontor.account/type :asset :kontor.account/active true}
     {:db/id -4 :kontor.account/path "Income:Sales" :kontor.account/name "Sales"
      :kontor.account/type :income :kontor.account/active true}
-    {:db/id -5 :journal/code "INV" :journal/name "J"
-     :journal/type :sale :journal/active true}])
+    {:db/id -5 :kontor.journal/code "INV" :kontor.journal/name "J"
+     :kontor.journal/type :sale :kontor.journal/active true}])
   (let [db (d/db conn)]
     {:eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
      :usd (:db/id (d/entity db [:kontor.commodity/symbol "USD"]))
      :rec (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
      :rev (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
-     :jnl (:db/id (d/entity db [:journal/code "INV"]))}))
+     :jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))}))
 
 (defn- post-pair!
   "Two-line balanced tx: AR debit + Sales credit, both EUR, both posted."
   [conn {:keys [eur rec rev jnl]} effective amount-debit external-id]
   (let [tx (-> (posting/build-transaction
                 {:transaction
-                 {:transaction/external-id    external-id
-                  :transaction/journal        jnl
-                  :transaction/effective-date effective
-                  :transaction/narration      external-id
-                  :transaction/state          :posted
-                  :transaction/posted-at      effective}
+                 {:kontor.transaction/external-id    external-id
+                  :kontor.transaction/journal        jnl
+                  :kontor.transaction/effective-date effective
+                  :kontor.transaction/narration      external-id
+                  :kontor.transaction/state          :posted
+                  :kontor.transaction/posted-at      effective}
                  :postings
-                 [{:posting/account rec :posting/amount    amount-debit
-                   :posting/commodity eur}
-                  {:posting/account rev :posting/amount    (.negate ^java.math.BigDecimal amount-debit)
-                   :posting/commodity eur}]})
+                 [{:kontor.posting/account rec :kontor.posting/amount    amount-debit
+                   :kontor.posting/commodity eur}
+                  {:kontor.posting/account rev :kontor.posting/amount    (.negate ^java.math.BigDecimal amount-debit)
+                   :kontor.posting/commodity eur}]})
                (->> (mapv (fn [m]
                             (cond-> m
-                              (some? (:posting/account m))
-                              (assoc :posting/posted-at effective))))))]
+                              (some? (:kontor.posting/account m))
+                              (assoc :kontor.posting/posted-at effective))))))]
     (v/transact-with-validation conn tx)))
 
 ;; ============================================================================
@@ -148,17 +148,17 @@
         _ (v/install-invariants! conn)
         {:keys [eur rec] :as cat} (catalog! conn)
         _ (post-pair! conn cat jan-15 100M "POSTED-1")
-        ;; A draft tx — no :transaction/state :posted, no posted-at
+        ;; A draft tx — no :kontor.transaction/state :posted, no posted-at
         draft-tx (posting/build-transaction
                   {:transaction
-                   {:transaction/external-id    "DRAFT-1"
-                    :transaction/journal        (:jnl cat)
-                    :transaction/effective-date feb-15
-                    :transaction/narration      "Draft"
-                    :transaction/state          :draft}
+                   {:kontor.transaction/external-id    "DRAFT-1"
+                    :kontor.transaction/journal        (:jnl cat)
+                    :kontor.transaction/effective-date feb-15
+                    :kontor.transaction/narration      "Draft"
+                    :kontor.transaction/state          :draft}
                    :postings
-                   [{:posting/account rec :posting/amount  900M :posting/commodity eur}
-                    {:posting/account (:rev cat) :posting/amount -900M :posting/commodity eur}]})
+                   [{:kontor.posting/account rec :kontor.posting/amount  900M :kontor.posting/commodity eur}
+                    {:kontor.posting/account (:rev cat) :kontor.posting/amount -900M :kontor.posting/commodity eur}]})
         _ (v/transact-with-validation conn draft-tx)]
     (is (money/equiv? (money/money "100" eur) (get (balance/account-balance conn rec) eur))
         "Default include-states is #{:posted}; draft excluded.")

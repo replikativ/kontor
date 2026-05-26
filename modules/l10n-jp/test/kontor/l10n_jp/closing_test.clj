@@ -43,10 +43,10 @@
     (v/install-invariants! conn)
     (chart/install! conn)
     (d/transact conn
-                [{:journal/code "INV" :journal/name "Sales"
-                  :journal/type :sale :journal/active true}
-                 {:journal/code "EXP" :journal/name "Expenses"
-                  :journal/type :purchase :journal/active true}
+                [{:kontor.journal/code "INV" :kontor.journal/name "Sales"
+                  :kontor.journal/type :sale :kontor.journal/active true}
+                 {:kontor.journal/code "EXP" :kontor.journal/name "Expenses"
+                  :kontor.journal/type :purchase :kontor.journal/active true}
                  {:period/start period-start
                   :period/end   period-end
                   :period/tag   :normal
@@ -61,7 +61,7 @@
         rec (ace db "121000")       ; AR
         rev (ace db "411000")       ; Sales 10%
         out-tax (ace db "215100")   ; Output JCT 10%
-        jnl (:db/id (d/entity db [:journal/code "INV"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         net (bigdec net-amount)
         tax (.setScale (.multiply net 0.10M) 0 java.math.RoundingMode/HALF_EVEN)
         gross (.add net tax)]
@@ -69,19 +69,19 @@
      conn
      (posting/build-transaction
       {:transaction
-       {:transaction/external-id external-id
-        :transaction/journal jnl
-        :transaction/effective-date date
-        :transaction/narration external-id
-        :transaction/state :posted
-        :transaction/posted-at date}
+       {:kontor.transaction/external-id external-id
+        :kontor.transaction/journal jnl
+        :kontor.transaction/effective-date date
+        :kontor.transaction/narration external-id
+        :kontor.transaction/state :posted
+        :kontor.transaction/posted-at date}
        :postings
-       [{:posting/account rec :posting/amount gross
-         :posting/commodity jpy :posting/posted-at date}
-        {:posting/account rev :posting/amount (.negate net)
-         :posting/commodity jpy :posting/posted-at date}
-        {:posting/account out-tax :posting/amount (.negate tax)
-         :posting/commodity jpy :posting/posted-at date}]}))))
+       [{:kontor.posting/account rec :kontor.posting/amount gross
+         :kontor.posting/commodity jpy :kontor.posting/posted-at date}
+        {:kontor.posting/account rev :kontor.posting/amount (.negate net)
+         :kontor.posting/commodity jpy :kontor.posting/posted-at date}
+        {:kontor.posting/account out-tax :kontor.posting/amount (.negate tax)
+         :kontor.posting/commodity jpy :kontor.posting/posted-at date}]}))))
 
 (defn- post-expense!
   "Operating expense (no JCT for simplicity — exempt category)."
@@ -90,23 +90,23 @@
         jpy (:db/id (d/entity db [:kontor.commodity/symbol "JPY"]))
         bank (ace db "110200")
         exp (ace db expense-code)
-        jnl (:db/id (d/entity db [:journal/code "EXP"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "EXP"]))
         amt (bigdec amount)]
     (v/transact-with-validation
      conn
      (posting/build-transaction
       {:transaction
-       {:transaction/external-id external-id
-        :transaction/journal jnl
-        :transaction/effective-date date
-        :transaction/narration external-id
-        :transaction/state :posted
-        :transaction/posted-at date}
+       {:kontor.transaction/external-id external-id
+        :kontor.transaction/journal jnl
+        :kontor.transaction/effective-date date
+        :kontor.transaction/narration external-id
+        :kontor.transaction/state :posted
+        :kontor.transaction/posted-at date}
        :postings
-       [{:posting/account exp :posting/amount amt
-         :posting/commodity jpy :posting/posted-at date}
-        {:posting/account bank :posting/amount (.negate amt)
-         :posting/commodity jpy :posting/posted-at date}]}))))
+       [{:kontor.posting/account exp :kontor.posting/amount amt
+         :kontor.posting/commodity jpy :kontor.posting/posted-at date}
+        {:kontor.posting/account bank :kontor.posting/amount (.negate amt)
+         :kontor.posting/commodity jpy :kontor.posting/posted-at date}]}))))
 
 ;; ============================================================================
 ;; March-31 fiscal year — the common JP pattern
@@ -267,10 +267,10 @@
     (let [conn (core/create-test-db)
           _ (v/install-invariants! conn)
           _ (chart/install! conn)
-          _ (d/transact conn [{:journal/code "INV" :journal/name "Sales"
-                               :journal/type :sale :journal/active true}
-                              {:journal/code "EXP" :journal/name "Expenses"
-                               :journal/type :purchase :journal/active true}
+          _ (d/transact conn [{:kontor.journal/code "INV" :kontor.journal/name "Sales"
+                               :kontor.journal/type :sale :kontor.journal/active true}
+                              {:kontor.journal/code "EXP" :kontor.journal/name "Expenses"
+                               :kontor.journal/type :purchase :kontor.journal/active true}
                               {:period/start apr-1
                                :period/end apr-1-26
                                :period/tag :normal
@@ -278,12 +278,12 @@
           _ (seed-march31-fy! conn)
           period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025-Mar"]]
                           (d/db conn))]
-      (is (nil? (:db/id (d/entity (d/db conn) [:journal/code "CLOSE"])))
+      (is (nil? (:db/id (d/entity (d/db conn) [:kontor.journal/code "CLOSE"])))
           "CLOSE journal not present before close")
       (jp-closing/close-jp-fiscal-year!
        conn {:period-eid period-eid
              :external-id "AUTO-J-JP-CLOSE"})
-      (is (some? (:db/id (d/entity (d/db conn) [:journal/code "CLOSE"])))
+      (is (some? (:db/id (d/entity (d/db conn) [:kontor.journal/code "CLOSE"])))
           "CLOSE journal auto-created"))))
 
 ;; ============================================================================
@@ -354,7 +354,7 @@
                :external-id "FY25-JP-Z"}))
       (let [db (d/db conn)
             pairs (d/q '[:find ?p ?amt
-                         :where [?p :posting/amount ?amt]] db)
+                         :where [?p :kontor.posting/amount ?amt]] db)
             total (reduce (fn [^java.math.BigDecimal acc [_ ^java.math.BigDecimal x]]
                             (.add acc x))
                           0M pairs)]

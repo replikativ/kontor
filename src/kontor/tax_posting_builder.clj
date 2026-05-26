@@ -10,7 +10,7 @@
 
    ## Sign
 
-   `:posting/amount` is signed; positive = debit (note 97 §2). A tax
+   `:kontor.posting/amount` is signed; positive = debit (note 97 §2). A tax
    posting must combine with the base/gross postings to net to zero:
 
      :sale     — gross AR is the debit; net revenue + output tax are
@@ -47,7 +47,7 @@
     "A keyword identifying the implementation — :static-table, or a
      per-country id (:de-skr04, :br-ncm-cst, …).")
   (tax-postings [this tax-facts opts]
-    "Return a vector of `:posting/*` maps (the tax legs only — the
+    "Return a vector of `:kontor.posting/*` maps (the tax legs only — the
      caller merges them into a transaction alongside the base
      postings). `opts` may carry `:document-type` (:invoice |
      :refund, default :invoice). Returns `[]` for non-taxable facts."))
@@ -103,14 +103,14 @@
                 amount  (* (:amount component) (/ factor 100M) sign)
                 account (get-in rep [:tax-rep/account :db/id])]
           :when account]
-      (cond-> {:posting/account      account
-               :posting/amount       amount
-               :posting/commodity    commodity
-               :posting/display-type :tax
-               :posting/tax-rep      (:db/id rep)
-               :posting/tax-base     (:base component)}
+      (cond-> {:kontor.posting/account      account
+               :kontor.posting/amount       amount
+               :kontor.posting/commodity    commodity
+               :kontor.posting/display-type :tax
+               :kontor.posting/tax-rep      (:db/id rep)
+               :kontor.posting/tax-base     (:base component)}
         (seq (:tax-rep/tags rep))
-        (assoc :posting/account-tags (mapv :db/id (:tax-rep/tags rep)))))))
+        (assoc :kontor.posting/account-tags (mapv :db/id (:tax-rep/tags rep)))))))
 
 (defn- reverse-charge-postings
   "G1 (ADR-071 P1-71-2). Seller-side (`:sale`) reverse charge has NO
@@ -132,14 +132,14 @@
           payable    (get-in grp [:tax-group/payable-account :db/id])
           receivable (get-in grp [:tax-group/receivable-account :db/id])
           amt        (:amount component)
-          base       {:posting/commodity    commodity
-                      :posting/display-type :tax
-                      :posting/tax-base     (:base component)}]
+          base       {:kontor.posting/commodity    commodity
+                      :kontor.posting/display-type :tax
+                      :kontor.posting/tax-base     (:base component)}]
       (when-not (and payable receivable)
         (throw (ex-info "reverse-charge: backing :tax needs a :tax-group with both payable + receivable accounts"
                         {:tax-eid (:tax-eid component)})))
-      [(assoc base :posting/account receivable :posting/amount amt)      ;; Dr input-VAT
-       (assoc base :posting/account payable    :posting/amount (- amt))]))) ;; Cr output-VAT
+      [(assoc base :kontor.posting/account receivable :kontor.posting/amount amt)      ;; Dr input-VAT
+       (assoc base :kontor.posting/account payable    :kontor.posting/amount (- amt))]))) ;; Cr output-VAT
 
 (defn- component-postings
   "Tax postings for one `TaxFacts` component, dispatched on `:kind`.
@@ -188,7 +188,7 @@
 (defn compute-tax-postings
   "Run the full ADR-071 trio for one transaction line: ask
    `rate-provider` for `TaxFacts`, then ask `posting-builder` to
-   materialize the tax postings. Returns a vector of `:posting/*` maps
+   materialize the tax postings. Returns a vector of `:kontor.posting/*` maps
    (`[]` when no tax applies)."
   ([rate-provider posting-builder context]
    (compute-tax-postings rate-provider posting-builder context {}))
@@ -210,24 +210,24 @@
 
 (defn aggregate-postings
   "Collapse tax postings that target the same account into one per
-   account. Postings are grouped by `[:posting/account :posting/commodity
-   :posting/display-type]`; `:posting/amount` is summed; the first
-   posting's remaining keys are kept and `:posting/account-tags` are
+   account. Postings are grouped by `[:kontor.posting/account :kontor.posting/commodity
+   :kontor.posting/display-type]`; `:kontor.posting/amount` is summed; the first
+   posting's remaining keys are kept and `:kontor.posting/account-tags` are
    unioned. Groups whose summed amount is zero are dropped.
 
-   NOTE: a posting's `:posting/tax-rep` is taken from the first member
+   NOTE: a posting's `:kontor.posting/tax-rep` is taken from the first member
    of its group — lossless for the bespoke per-l10n builders (no
    `:tax-rep` refs), lossy for `StaticTablePostingBuilder` output;
    aggregate per-rate there, not across rates."
   [postings]
   (->> postings
-       (group-by (juxt :posting/account :posting/commodity :posting/display-type))
+       (group-by (juxt :kontor.posting/account :kontor.posting/commodity :kontor.posting/display-type))
        vals
        (keep (fn [group]
-               (let [sum (reduce + 0M (map :posting/amount group))]
+               (let [sum (reduce + 0M (map :kontor.posting/amount group))]
                  (when-not (zero? sum)
-                   (cond-> (assoc (first group) :posting/amount sum)
-                     (some :posting/account-tags group)
-                     (assoc :posting/account-tags
-                            (vec (distinct (mapcat :posting/account-tags group)))))))))
+                   (cond-> (assoc (first group) :kontor.posting/amount sum)
+                     (some :kontor.posting/account-tags group)
+                     (assoc :kontor.posting/account-tags
+                            (vec (distinct (mapcat :kontor.posting/account-tags group)))))))))
        vec))

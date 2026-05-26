@@ -88,7 +88,7 @@
                                   typically)
      :journal                  — ref to :journal
      :effective-date           — #inst
-     :tx-code                  — string for :transaction/external-id
+     :tx-code                  — string for :kontor.transaction/external-id
 
    Optional keys:
      :narration                — string; default '年终奖累计 (Annual bonus accrual)'
@@ -110,24 +110,24 @@
                  :tx-code tx-code}]
     (when (nil? v) (throw (ex-info (str (subs (str k) 1) " required") {}))))
   (let [amt (round-half-even amount)
-        postings [{:posting/account wage-expense-account
-                   :posting/amount amt
-                   :posting/commodity commodity
-                   :posting/ledger ledger
-                   :posting/narration "年终奖累计费用 (Bonus accrual expense)"}
-                  {:posting/account bonus-payable-account
-                   :posting/amount (.negate ^BigDecimal amt)
-                   :posting/commodity commodity
-                   :posting/ledger ledger
-                   :posting/narration "应付年终奖 (Bonus accrual payable)"}]
+        postings [{:kontor.posting/account wage-expense-account
+                   :kontor.posting/amount amt
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger ledger
+                   :kontor.posting/narration "年终奖累计费用 (Bonus accrual expense)"}
+                  {:kontor.posting/account bonus-payable-account
+                   :kontor.posting/amount (.negate ^BigDecimal amt)
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/ledger ledger
+                   :kontor.posting/narration "应付年终奖 (Bonus accrual payable)"}]
         tx-input {:tx-tempid tx-tempid
-                  :transaction (cond-> {:transaction/external-id tx-code
-                                        :transaction/effective-date effective-date
-                                        :transaction/narration narration
-                                        :transaction/journal journal
-                                        :transaction/state :draft}
+                  :transaction (cond-> {:kontor.transaction/external-id tx-code
+                                        :kontor.transaction/effective-date effective-date
+                                        :kontor.transaction/narration narration
+                                        :kontor.transaction/journal journal
+                                        :kontor.transaction/state :draft}
                                  pay-period
-                                 (assoc :transaction/source
+                                 (assoc :kontor.transaction/source
                                         (str "pay-period:" pay-period)))
                   :postings postings}]
     (posting/build-transaction tx-input)))

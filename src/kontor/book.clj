@@ -48,7 +48,7 @@
      :partner         — partner ref                 (optional)
      :external-id     — string                      (optional)
      :entity          — entity ref (ADR-031)        (optional)
-                        Stamped on every posting as :posting/entity;
+                        Stamped on every posting as :kontor.posting/entity;
                         required for per-entity trial-balance / BS /
                         GuV filters to scope correctly.
 
@@ -62,7 +62,7 @@
    - `:partner`    overrides the entry-level one — multi-counterparty
                    pattern (e.g. dividend declaration to several
                    shareholders, where each leg carries its own
-                   `:posting/partner`). Note 160 §I-15.
+                   `:kontor.posting/partner`). Note 160 §I-15.
    - `:dimensions` `{axis value}` map of ADR-097 classification tags
                    (cost-centre, project, segment); the report engine
                    `marginalize`s over any such axis (ADR-096).
@@ -76,7 +76,7 @@
    facade audience is Clojure developers, not end users (ADR-010 —
    no UI), and a two-leg entry has exactly two slots. Each verb's
    docstring teaches the convention (`sell`: debit the receivable or
-   cash, credit revenue). Per note 97 §2, `:posting/amount` is a
+   cash, credit revenue). Per note 97 §2, `:kontor.posting/amount` is a
    signed BigDecimal — positive = debit — so the facade simply
    negates the amount on the credit leg; sum-to-zero (`Ker(σ)`)
    holds by construction."
@@ -125,13 +125,13 @@
   [dimensions]
   (vec (for [[axis v] dimensions
              one      (if (coll? v) v [v])]
-         {:posting-dimension/axis  axis
-          :posting-dimension/value (->dimension-value one)})))
+         {:kontor.posting-dimension/axis  axis
+          :kontor.posting-dimension/value (->dimension-value one)})))
 
 (defn- ->posting
   "Map a friendly `{:account :amount :commodity? :entity? :partner?
    :dimensions?}` posting (used in `:postings` for multi-leg entries)
-   into the kernel `:posting/*` shape, defaulting commodity + entity +
+   into the kernel `:kontor.posting/*` shape, defaulting commodity + entity +
    partner to the entry-level ones. Per-posting overrides:
    - `:entity`  — ADR-031 intercompany pattern (per-entity sum-to-zero)
    - `:partner` — per-leg counterparty (e.g. multi-shareholder dividend
@@ -148,12 +148,12 @@
     (when (nil? c)
       (throw (ex-info "kontor.book: posting needs :commodity (or an entry-level :commodity)"
                       {:posting p})))
-    (cond-> {:posting/account   account
-             :posting/amount    (->bigdec amount)
-             :posting/commodity c}
-      e                (assoc :posting/entity e)
-      pa               (assoc :posting/partner pa)
-      (seq dimensions) (assoc :posting/dimensions (->dimensions dimensions)))))
+    (cond-> {:kontor.posting/account   account
+             :kontor.posting/amount    (->bigdec amount)
+             :kontor.posting/commodity c}
+      e                (assoc :kontor.posting/entity e)
+      pa               (assoc :kontor.posting/partner pa)
+      (seq dimensions) (assoc :kontor.posting/dimensions (->dimensions dimensions)))))
 
 (defn- build-input
   "Translate a verb options map into the `{:transaction … :postings …}`
@@ -161,7 +161,7 @@
    throws `ex-info` on a missing required field.
 
    `:entity` (optional, ADR-031) is stamped on every posting via
-   `:posting/entity` — required for per-entity trial-balance / BS / GuV
+   `:kontor.posting/entity` — required for per-entity trial-balance / BS / GuV
    filters to scope correctly. Per-posting `:entity` overrides the
    entry-level one (intercompany)."
   [{:keys [debit-account credit-account amount commodity journal
@@ -185,19 +185,19 @@
                  (throw (ex-info "kontor.book: :amount is required" {})))
                (when (nil? c)
                  (throw (ex-info "kontor.book: :commodity is required" {})))
-               [(cond-> {:posting/account   debit-account
-                         :posting/amount    amt
-                         :posting/commodity c}
-                  entity (assoc :posting/entity entity))
-                (cond-> {:posting/account   credit-account
-                         :posting/amount    (- amt)
-                         :posting/commodity c}
-                  entity (assoc :posting/entity entity))]))]
-    {:transaction (cond-> {:transaction/journal        journal
-                           :transaction/effective-date effective-date}
-                    narration   (assoc :transaction/narration narration)
-                    partner     (assoc :transaction/partner partner)
-                    external-id (assoc :transaction/external-id external-id))
+               [(cond-> {:kontor.posting/account   debit-account
+                         :kontor.posting/amount    amt
+                         :kontor.posting/commodity c}
+                  entity (assoc :kontor.posting/entity entity))
+                (cond-> {:kontor.posting/account   credit-account
+                         :kontor.posting/amount    (- amt)
+                         :kontor.posting/commodity c}
+                  entity (assoc :kontor.posting/entity entity))]))]
+    {:transaction (cond-> {:kontor.transaction/journal        journal
+                           :kontor.transaction/effective-date effective-date}
+                    narration   (assoc :kontor.transaction/narration narration)
+                    partner     (assoc :kontor.transaction/partner partner)
+                    external-id (assoc :kontor.transaction/external-id external-id))
      :postings    ps}))
 
 (defn- post-opts
@@ -207,14 +207,14 @@
   (select-keys opts [:posted-at :vt-from :vt-to]))
 
 (defn- resolve-journal
-  "Resolve a journal entity from a `:journal/type` keyword, for the
+  "Resolve a journal entity from a `:kontor.journal/type` keyword, for the
    `!`-side verb conveniences. Returns the eid when exactly one
    journal of that type exists; throws a clear error otherwise so the
    caller knows to pass `:journal` explicitly."
   [db journal-type]
   (let [js (d/q '[:find [?j ...]
                   :in $ ?t
-                  :where [?j :journal/type ?t]]
+                  :where [?j :kontor.journal/type ?t]]
                 db journal-type)]
     (cond
       (= 1 (count js)) (first js)
@@ -266,7 +266,7 @@
 ;; The verbs — `!`-side conveniences over `entry!`
 ;; ============================================================================
 ;;
-;; Each verb bakes in a `:journal/type`. The journal is resolved from
+;; Each verb bakes in a `:kontor.journal/type`. The journal is resolved from
 ;; the db when `:journal` is not passed explicitly. The signature is
 ;; uniform (see the ns docstring); only the journal type, the name,
 ;; and the teaching docstring differ.
@@ -351,7 +351,7 @@
      :credit-account  Liabilities:Dividends-Payable
 
    The shareholder is `:partner` (a `:partner` ref) — the GL stamps
-   `:transaction/partner` so the dividend liability is shareholder-
+   `:kontor.transaction/partner` so the dividend liability is shareholder-
    traceable.
 
    Note 107 §2.6."

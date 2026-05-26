@@ -127,7 +127,7 @@
   "Attach analytic-distribution refs to a posting when dists is non-nil."
   [posting dists]
   (cond-> posting
-    (seq dists) (assoc :posting/analytic-distributions dists)))
+    (seq dists) (assoc :kontor.posting/analytic-distributions dists)))
 
 ;; ============================================================================
 ;; Per-fact posting legs
@@ -154,10 +154,10 @@
            (mapv (fn [[tag comps]]
                    (let [total (sum-bd (map :amount comps))]
                      (attach-distribution
-                      {:posting/account (account-for-tag! accounts tag)
-                       :posting/amount total
-                       :posting/commodity commodity
-                       :posting/narration
+                      {:kontor.posting/account (account-for-tag! accounts tag)
+                       :kontor.posting/amount total
+                       :kontor.posting/commodity commodity
+                       :kontor.posting/narration
                        (or narration
                            (str (name tag) " (gross — "
                                 (str/join ", " (distinct (map (comp name :kind) comps)))
@@ -184,10 +184,10 @@
                              (state-distribution fact employee-allocations
                                                  default-state))]
                  (attach-distribution
-                  {:posting/account acct
-                   :posting/amount amount        ; already negative
-                   :posting/commodity commodity
-                   :posting/narration (str "Payroll deduction: " (name kind))}
+                  {:kontor.posting/account acct
+                   :kontor.posting/amount amount        ; already negative
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/narration (str "Payroll deduction: " (name kind))}
                   dists))))))
 
 (defn- employer-side-legs
@@ -211,15 +211,15 @@
                                            {:kind kind})))
                        exp-acct (account-for-tag! accounts exp-tag)
                        pay-acct (when pay-tag (account-for-tag! accounts pay-tag))]
-                   (cond-> [{:posting/account exp-acct
-                             :posting/amount amount
-                             :posting/commodity commodity
-                             :posting/narration (str "Employer expense: " (name kind))}]
+                   (cond-> [{:kontor.posting/account exp-acct
+                             :kontor.posting/amount amount
+                             :kontor.posting/commodity commodity
+                             :kontor.posting/narration (str "Employer expense: " (name kind))}]
                      pay-acct
-                     (conj {:posting/account pay-acct
-                            :posting/amount (.negate ^BigDecimal amount)
-                            :posting/commodity commodity
-                            :posting/narration (str "Employer payable: " (name kind))})))))))
+                     (conj {:kontor.posting/account pay-acct
+                            :kontor.posting/amount (.negate ^BigDecimal amount)
+                            :kontor.posting/commodity commodity
+                            :kontor.posting/narration (str "Employer payable: " (name kind))})))))))
 
 (defn- net-wages-leg
   "CR wages-payable for the net (gross + Σ deductions, all
@@ -227,10 +227,10 @@
   [{:keys [net]}
    {:keys [accounts commodity]}]
   (when (and net (pos? (compare ^BigDecimal net 0M)))
-    [{:posting/account (account-for-tag! accounts :in-payroll-net-wages)
-      :posting/amount (.negate ^BigDecimal net)
-      :posting/commodity commodity
-      :posting/narration "Wages payable (net)"}]))
+    [{:kontor.posting/account (account-for-tag! accounts :in-payroll-net-wages)
+      :kontor.posting/amount (.negate ^BigDecimal net)
+      :kontor.posting/commodity commodity
+      :kontor.posting/narration "Wages payable (net)"}]))
 
 (defn fact->postings
   "Translate one PayrollFact into a balanced set of posting maps. The
@@ -281,7 +281,7 @@
                                  :employee-allocations per-emp-allocs)
                      postings (fact->postings fact opts)]
                  (cond->> postings
-                   ledger (mapv #(assoc % :posting/ledger ledger)))))
+                   ledger (mapv #(assoc % :kontor.posting/ledger ledger)))))
              facts)]
     (vec all)))
 

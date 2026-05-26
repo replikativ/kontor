@@ -8,7 +8,7 @@
    temporal multi-role relationships.
 
    This namespace extends the kernel's existing `:kontor.partner/*`
-   namespace and adds the new namespaces; the kernel's `:posting/
+   namespace and adds the new namespaces; the kernel's `:kontor.posting/
    partner` ref continues to point at the same `:partner` root
    entity. Kernel-only consumers never call `install!` here and
    are unaffected.

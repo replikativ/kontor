@@ -53,9 +53,9 @@
                   :kontor.entity/name "Acme Australia Pty Ltd"
                   :kontor.entity/kind :operating}
                  {:db/id "journal-pay"
-                  :journal/code "PAY-AU"
-                  :journal/name "Payroll (AU)"
-                  :journal/type :general}
+                  :kontor.journal/code "PAY-AU"
+                  :kontor.journal/name "Payroll (AU)"
+                  :kontor.journal/type :general}
                  {:db/id "period-2026-05"
                   :period/name "2026-05"
                   :period/start #inst "2026-05-01"
@@ -117,7 +117,7 @@
         db (d/db conn)
         ent (ref-eid db :kontor.entity/code "ACME-AU")
         aud (ref-eid db :kontor.commodity/symbol "AUD")
-        journal (ref-eid db :journal/code "PAY-AU")
+        journal (ref-eid db :kontor.journal/code "PAY-AU")
         period (ref-eid db :period/name "2026-05")
         e101 (hr/employment-by-code db "E101")
         e102 (hr/employment-by-code db "E102")
@@ -180,16 +180,16 @@
                        :where [?r :payroll-run/code ?c]]
                      db' "ACME-2026-05-001")
         run (d/pull db' '[* {:payroll-run/payroll-transaction
-                             [:transaction/external-id
-                              {:posting/_transaction
-                               [:posting/amount
-                                {:posting/account [:kontor.account/code]}
-                                {:posting/analytic-distributions
+                             [:kontor.transaction/external-id
+                              {:kontor.posting/_transaction
+                               [:kontor.posting/amount
+                                {:kontor.posting/account [:kontor.account/code]}
+                                {:kontor.posting/analytic-distributions
                                  [:analytic-distribution/percent
                                   {:analytic-distribution/account
                                    [:analytic-account/code]}]}]}]}]
                     run-eid)
-        postings (-> run :payroll-run/payroll-transaction :posting/_transaction)]
+        postings (-> run :payroll-run/payroll-transaction :kontor.posting/_transaction)]
     (testing "the payroll-run row is created"
       (is (some? run-eid))
       (is (= :xero-gl (:payroll-run/provider-id run))))
@@ -199,15 +199,15 @@
       ;; Net: 4650 + 5900 + 5200 = 15,750
       (is (= 15750.00M (:payroll-run/control-total-net run))))
     (testing "the linked transaction balances per-(ledger, commodity)"
-      (let [sum (reduce (fn [^BigDecimal a {:keys [posting/amount]}]
+      (let [sum (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                           (.add a ^BigDecimal amount))
                         0M postings)]
         (is (zero? (.signum sum)))))
     (testing "every wage-side posting carries a :state analytic distribution"
-      (let [with-dist (filter #(seq (:posting/analytic-distributions %)) postings)]
+      (let [with-dist (filter #(seq (:kontor.posting/analytic-distributions %)) postings)]
         (is (seq with-dist))
         (let [state-codes (->> with-dist
-                               (mapcat :posting/analytic-distributions)
+                               (mapcat :kontor.posting/analytic-distributions)
                                (map :analytic-distribution/account)
                                (map :analytic-account/code)
                                distinct

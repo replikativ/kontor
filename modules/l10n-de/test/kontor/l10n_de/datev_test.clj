@@ -25,10 +25,10 @@
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
     (chart/install! conn)
-    (d/transact conn [{:journal/code "INV"
-                       :journal/name "Sales"
-                       :journal/type :sale
-                       :journal/active true}])
+    (d/transact conn [{:kontor.journal/code "INV"
+                       :kontor.journal/name "Sales"
+                       :kontor.journal/type :sale
+                       :kontor.journal/active true}])
     conn))
 
 (defn- account-eid [db code]
@@ -41,7 +41,7 @@
   [conn]
   (let [db (d/db conn)
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-        jnl (:db/id (d/entity db [:journal/code "INV"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         rec (account-eid db "1400") rev (account-eid db "4400")
         ust (account-eid db "3801")
         exp (account-eid db "6800") vor (account-eid db "1576")
@@ -50,34 +50,34 @@
      conn
      (-> (posting/build-transaction
           {:transaction
-           {:transaction/external-id "INV-1"
-            :transaction/journal jnl
-            :transaction/effective-date jan-15
-            :transaction/narration "INV-1"
-            :transaction/state :posted
-            :transaction/posted-at jan-15}
+           {:kontor.transaction/external-id "INV-1"
+            :kontor.transaction/journal jnl
+            :kontor.transaction/effective-date jan-15
+            :kontor.transaction/narration "INV-1"
+            :kontor.transaction/state :posted
+            :kontor.transaction/posted-at jan-15}
            :postings
-           [{:posting/account rec :posting/amount 1190M :posting/commodity eur}
-            {:posting/account rev :posting/amount -1000M :posting/commodity eur}
-            {:posting/account ust :posting/amount -190M :posting/commodity eur}]})
-         (->> (mapv #(if (some? (:posting/account %))
-                       (assoc % :posting/posted-at jan-15) %)))))
+           [{:kontor.posting/account rec :kontor.posting/amount 1190M :kontor.posting/commodity eur}
+            {:kontor.posting/account rev :kontor.posting/amount -1000M :kontor.posting/commodity eur}
+            {:kontor.posting/account ust :kontor.posting/amount -190M :kontor.posting/commodity eur}]})
+         (->> (mapv #(if (some? (:kontor.posting/account %))
+                       (assoc % :kontor.posting/posted-at jan-15) %)))))
     (v/transact-with-validation
      conn
      (-> (posting/build-transaction
           {:transaction
-           {:transaction/external-id "BILL-1"
-            :transaction/journal jnl
-            :transaction/effective-date jan-25
-            :transaction/narration "BILL-1"
-            :transaction/state :posted
-            :transaction/posted-at jan-25}
+           {:kontor.transaction/external-id "BILL-1"
+            :kontor.transaction/journal jnl
+            :kontor.transaction/effective-date jan-25
+            :kontor.transaction/narration "BILL-1"
+            :kontor.transaction/state :posted
+            :kontor.transaction/posted-at jan-25}
            :postings
-           [{:posting/account exp :posting/amount  200M :posting/commodity eur}
-            {:posting/account vor :posting/amount   38M :posting/commodity eur}
-            {:posting/account pay :posting/amount -238M :posting/commodity eur}]})
-         (->> (mapv #(if (some? (:posting/account %))
-                       (assoc % :posting/posted-at jan-25) %)))))))
+           [{:kontor.posting/account exp :kontor.posting/amount  200M :kontor.posting/commodity eur}
+            {:kontor.posting/account vor :kontor.posting/amount   38M :kontor.posting/commodity eur}
+            {:kontor.posting/account pay :kontor.posting/amount -238M :kontor.posting/commodity eur}]})
+         (->> (mapv #(if (some? (:kontor.posting/account %))
+                       (assoc % :kontor.posting/posted-at jan-25) %)))))))
 
 ;; ============================================================================
 ;; Smoke

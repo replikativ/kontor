@@ -50,7 +50,7 @@
     (d/transact conn
                 [{:kontor.commodity/symbol "INR" :kontor.commodity/name "Indian Rupee"
                   :kontor.commodity/precision 2}
-                 {:journal/code "SALE" :journal/type :sale}
+                 {:kontor.journal/code "SALE" :kontor.journal/type :sale}
                  {:kontor.account/path "Income:Salary" :kontor.account/type :income}
                  {:kontor.account/path "Assets:Bank"   :kontor.account/type :asset}])
     conn))
@@ -131,7 +131,7 @@
       (d/transact conn
                   [{:kontor.commodity/symbol "INR" :kontor.commodity/name "Indian Rupee"
                     :kontor.commodity/precision 2}
-                   {:journal/code "SALE" :journal/type :sale}
+                   {:kontor.journal/code "SALE" :kontor.journal/type :sale}
                    {:kontor.account/path "Income:Salary" :kontor.account/type :income}
                    {:kontor.account/path "Assets:Bank"   :kontor.account/type :asset}])
       (book/sell! conn {:debit-account  [:kontor.account/path "Assets:Bank"]
@@ -172,7 +172,7 @@
         _    (d/transact conn
                          [{:kontor.commodity/symbol "INR" :kontor.commodity/name "Rupee"
                            :kontor.commodity/precision 2}
-                          {:journal/code "SALE" :journal/type :sale}
+                          {:kontor.journal/code "SALE" :kontor.journal/type :sale}
                           {:kontor.account/path "Income:Salary" :kontor.account/type :income}
                           {:kontor.account/path "Assets:Bank"   :kontor.account/type :asset}])
         _    (book/sell! conn {:debit-account  [:kontor.account/path "Assets:Bank"]

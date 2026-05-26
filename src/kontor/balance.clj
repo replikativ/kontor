@@ -56,7 +56,7 @@
    that wrote the posting (upstream `:db.valid/from`)."
   [as-of-valid included-states posting]
   (let [vf (:valid-from posting)
-        st (:transaction/state posting)]
+        st (:kontor.transaction/state posting)]
     (and (some? vf)
          (or (nil? as-of-valid) (before-or-eq? vf as-of-valid))
          (contains? included-states st))))
@@ -69,40 +69,40 @@
    `:db.valid/from` (upstream datahike).
 
    When `entity-eid` is non-nil, restricts to postings whose
-   `:posting/entity` matches — supports multi-entity / trans-national
+   `:kontor.posting/entity` matches — supports multi-entity / trans-national
    queries against per-entity sum-to-zero books (ADR-031)."
   [db account-eid entity-eid]
   (->> (if entity-eid
          (d/q '[:find ?p ?vf
                 :in $ ?account ?entity
                 :where
-                [?p :posting/account ?account]
-                [?p :posting/entity ?entity]
-                [?p :posting/transaction _ ?tx]
+                [?p :kontor.posting/account ?account]
+                [?p :kontor.posting/entity ?entity]
+                [?p :kontor.posting/transaction _ ?tx]
                 [?tx :db/txInstant ?ti]
                 [(get-else $ ?tx :db.valid/from ?ti) ?vf]]
               db account-eid entity-eid)
          (d/q '[:find ?p ?vf
                 :in $ ?account
                 :where
-                [?p :posting/account ?account]
-                [?p :posting/transaction _ ?tx]
+                [?p :kontor.posting/account ?account]
+                [?p :kontor.posting/transaction _ ?tx]
                 [?tx :db/txInstant ?ti]
                 [(get-else $ ?tx :db.valid/from ?ti) ?vf]]
               db account-eid))
        (mapv (fn [[p vf]]
                (let [pulled (d/pull db
-                                    [:posting/amount
-                                     :posting/commodity
-                                     :posting/transaction
-                                     :posting/entity]
+                                    [:kontor.posting/amount
+                                     :kontor.posting/commodity
+                                     :kontor.posting/transaction
+                                     :kontor.posting/entity]
                                     p)
-                     tx-state (-> (d/pull db [:transaction/state]
-                                          (-> pulled :posting/transaction :db/id))
-                                  :transaction/state)]
+                     tx-state (-> (d/pull db [:kontor.transaction/state]
+                                          (-> pulled :kontor.posting/transaction :db/id))
+                                  :kontor.transaction/state)]
                  (assoc pulled
                         :valid-from vf
-                        :transaction/state tx-state))))))
+                        :kontor.transaction/state tx-state))))))
 
 ;; ============================================================================
 ;; Public
@@ -122,9 +122,9 @@
                        which silently broke simulations and forward-
                        looking accruals.
      :as-of-tx       — java.util.Date  (defaults to now)
-     :include-states — set of :transaction/state values to include
+     :include-states — set of :kontor.transaction/state values to include
                        (defaults to #{:posted})
-     :entity         — restrict to postings of a given :posting/entity
+     :entity         — restrict to postings of a given :kontor.posting/entity
                        (eid or lookup-ref). Default: all entities. Per
                        ADR-031 books are per-(entity, ledger, commodity)
                        sum-to-zero, so entity-filtered balances are

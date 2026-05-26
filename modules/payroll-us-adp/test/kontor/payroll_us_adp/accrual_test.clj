@@ -50,8 +50,8 @@
                  {:db/id "acct-match-payable" :kontor.account/code "2210"
                   :kontor.account/name "401(k) Match Payable"
                   :kontor.account/type :liability :kontor.account/active true}
-                 {:db/id "journal-payroll" :journal/code "PAY-US"
-                  :journal/name "Payroll (US)" :journal/type :general}
+                 {:db/id "journal-payroll" :kontor.journal/code "PAY-US"
+                  :kontor.journal/name "Payroll (US)" :kontor.journal/type :general}
                  {:db/id "period-2026-04" :period/name "2026-04"
                   :period/start #inst "2026-04-01"
                   :period/end #inst "2026-05-01"}])
@@ -86,7 +86,7 @@
         pto-acc (by-code db :kontor.account/code "2290")
         gaap (by-code db :ledger/code "us-gaap")
         usd  (by-code db :kontor.commodity/symbol "USD")
-        journal (by-code db :journal/code "PAY-US")
+        journal (by-code db :kontor.journal/code "PAY-US")
         tx-data (accrual/asc-710-pto-accrual-tx-data
                  {:pto-expense-account pto-exp
                   :pto-accrual-account pto-acc
@@ -96,8 +96,8 @@
                   :journal journal
                   :effective-date #inst "2026-04-30"
                   :tx-code "PTO-ACCR-2026-04"})
-        postings (filter #(some? (:posting/account %)) tx-data)
-        sum (reduce (fn [^BigDecimal a {:keys [posting/amount]}]
+        postings (filter #(some? (:kontor.posting/account %)) tx-data)
+        sum (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                       (.add a ^BigDecimal amount))
                     0M postings)]
     (testing "produces two postings"
@@ -105,13 +105,13 @@
     (testing "balances per-ledger to zero"
       (is (zero? (.signum sum))))
     (testing "Dr expense + Cr liability"
-      (let [expense-leg (first (filter #(= pto-exp (:posting/account %)) postings))
-            liability-leg (first (filter #(= pto-acc (:posting/account %)) postings))]
-        (is (= 1250.00M (:posting/amount expense-leg)))
-        (is (= -1250.00M (:posting/amount liability-leg)))))
+      (let [expense-leg (first (filter #(= pto-exp (:kontor.posting/account %)) postings))
+            liability-leg (first (filter #(= pto-acc (:kontor.posting/account %)) postings))]
+        (is (= 1250.00M (:kontor.posting/amount expense-leg)))
+        (is (= -1250.00M (:kontor.posting/amount liability-leg)))))
     (testing "both legs ride on :us-gaap (not :us-tax — IRC §461(h))"
       (doseq [p postings]
-        (is (= gaap (:posting/ledger p)))))))
+        (is (= gaap (:kontor.posting/ledger p)))))))
 
 (deftest asc-710-pto-tx-data-rejects-missing-fields
   (testing "missing :amount throws"
@@ -136,7 +136,7 @@
         pto-acc (by-code db :kontor.account/code "2290")
         gaap (by-code db :ledger/code "us-gaap")
         usd  (by-code db :kontor.commodity/symbol "USD")
-        journal (by-code db :journal/code "PAY-US")
+        journal (by-code db :kontor.journal/code "PAY-US")
         report (accrual/asc-710-pto-accrual!
                 conn
                 {:pto-expense-account pto-exp
@@ -151,7 +151,7 @@
       (let [db' (:db-after report)
             tx-eid (d/q '[:find ?t .
                           :in $ ?c
-                          :where [?t :transaction/external-id ?c]]
+                          :where [?t :kontor.transaction/external-id ?c]]
                         db' "PTO-ACCR-LIVE")]
         (is (some? tx-eid))))))
 
@@ -166,7 +166,7 @@
         match-pay (by-code db :kontor.account/code "2210")
         gaap (by-code db :ledger/code "us-gaap")
         usd  (by-code db :kontor.commodity/symbol "USD")
-        journal (by-code db :journal/code "PAY-US")
+        journal (by-code db :kontor.journal/code "PAY-US")
         tx-data (accrual/er-401k-match-accrual-tx-data
                  {:match-expense-account match-exp
                   :match-payable-account match-pay
@@ -174,14 +174,14 @@
                   :commodity usd :ledger gaap :journal journal
                   :effective-date #inst "2026-04-30"
                   :tx-code "401K-MATCH-2026-04"})
-        postings (filter #(some? (:posting/account %)) tx-data)]
+        postings (filter #(some? (:kontor.posting/account %)) tx-data)]
     (testing "book-only: both legs on :us-gaap"
-      (is (every? #(= gaap (:posting/ledger %)) postings)))
+      (is (every? #(= gaap (:kontor.posting/ledger %)) postings)))
     (testing "Dr 5310 expense / Cr 2210 payable"
-      (let [exp-leg (first (filter #(= match-exp (:posting/account %)) postings))
-            pay-leg (first (filter #(= match-pay (:posting/account %)) postings))]
-        (is (= 425.00M (:posting/amount exp-leg)))
-        (is (= -425.00M (:posting/amount pay-leg)))))))
+      (let [exp-leg (first (filter #(= match-exp (:kontor.posting/account %)) postings))
+            pay-leg (first (filter #(= match-pay (:kontor.posting/account %)) postings))]
+        (is (= 425.00M (:kontor.posting/amount exp-leg)))
+        (is (= -425.00M (:kontor.posting/amount pay-leg)))))))
 
 ;; ============================================================================
 ;; Tax-ledger recognition of 401(k) match (IRC §404(a)(6))
@@ -198,7 +198,7 @@
         match-pay (by-code db :kontor.account/code "2210")
         tax (by-code db :ledger/code "us-tax")
         usd  (by-code db :kontor.commodity/symbol "USD")
-        journal (by-code db :journal/code "PAY-US")
+        journal (by-code db :kontor.journal/code "PAY-US")
         tx-data (accrual/tax-recognize-401k-match-tx-data
                  {:match-expense-account match-exp
                   :match-payable-account match-pay
@@ -206,11 +206,11 @@
                   :commodity usd :tax-ledger tax :journal journal
                   :effective-date #inst "2026-12-31"
                   :tx-code "401K-MATCH-TAX-2026"})
-        postings (filter #(some? (:posting/account %)) tx-data)]
+        postings (filter #(some? (:kontor.posting/account %)) tx-data)]
     (testing "both legs land on :us-tax"
-      (is (every? #(= tax (:posting/ledger %)) postings)))
+      (is (every? #(= tax (:kontor.posting/ledger %)) postings)))
     (testing "balances per-(ledger, commodity)"
-      (let [sum (reduce (fn [^BigDecimal a {:keys [posting/amount]}]
+      (let [sum (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                           (.add a ^BigDecimal amount))
                         0M postings)]
         (is (zero? (.signum sum)))))))
@@ -228,10 +228,10 @@
                   :commodity 300 :ledger 400 :journal 500
                   :effective-date #inst "2026-06-30"
                   :tx-code "PTO-TRUEUP-Q2"})
-        postings (filter #(some? (:posting/account %)) tx-data)
-        exp-leg (first (filter #(= 100 (:posting/account %)) postings))
-        liability-leg (first (filter #(= 200 (:posting/account %)) postings))]
+        postings (filter #(some? (:kontor.posting/account %)) tx-data)
+        exp-leg (first (filter #(= 100 (:kontor.posting/account %)) postings))
+        liability-leg (first (filter #(= 200 (:kontor.posting/account %)) postings))]
     (testing "expense leg has -delta"
-      (is (= -300.00M (:posting/amount exp-leg))))
+      (is (= -300.00M (:kontor.posting/amount exp-leg))))
     (testing "liability leg has +delta (reduces the liability)"
-      (is (= 300.00M (:posting/amount liability-leg))))))
+      (is (= 300.00M (:kontor.posting/amount liability-leg))))))

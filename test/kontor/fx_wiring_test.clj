@@ -48,10 +48,10 @@
                           :kontor.account/active true
                           :kontor.account/tags ["tag"]}
                          {:db/id "journal"
-                          :journal/code "INV"
-                          :journal/name "Invoices"
-                          :journal/type :sale
-                          :journal/active true}
+                          :kontor.journal/code "INV"
+                          :kontor.journal/name "Invoices"
+                          :kontor.journal/type :sale
+                          :kontor.journal/active true}
                          {:db/id "cash"
                           :kontor.account/path "Assets:Cash"
                           :kontor.account/code "1200"
@@ -62,21 +62,21 @@
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           income-eid (:db/id (d/entity db0 [:kontor.account/path "Income:Test"]))
           cash-eid (:db/id (d/entity db0 [:kontor.account/path "Assets:Cash"]))
-          journal-eid (:db/id (d/entity db0 [:journal/code "INV"]))
+          journal-eid (:db/id (d/entity db0 [:kontor.journal/code "INV"]))
           ;; Post a balanced 100-EUR sale (debit cash, credit income)
           ;; via the canonical post-transaction! → with-vt sets the
-          ;; tx's :db.valid/from from :transaction/effective-date, which
+          ;; tx's :db.valid/from from :kontor.transaction/effective-date, which
           ;; is what compute-report's :from / :to window filters on.
           _ (posting/post-transaction!
              conn
-             {:transaction {:transaction/journal journal-eid
-                            :transaction/effective-date jan-2}
-              :postings    [{:posting/account cash-eid
-                             :posting/commodity eur
-                             :posting/amount 100M}
-                            {:posting/account income-eid
-                             :posting/commodity eur
-                             :posting/amount -100M}]})
+             {:transaction {:kontor.transaction/journal journal-eid
+                            :kontor.transaction/effective-date jan-2}
+              :postings    [{:kontor.posting/account cash-eid
+                             :kontor.posting/commodity eur
+                             :kontor.posting/amount 100M}
+                            {:kontor.posting/account income-eid
+                             :kontor.posting/commodity eur
+                             :kontor.posting/amount -100M}]})
           provider (fxp/make-static-table-provider conn)
           rpt {:report/name "Sales (EUR)"
                :report/lines [{:line/code "S"
@@ -156,7 +156,7 @@
           amounts (fn [tx-data]
                     (->> tx-data
                          (filter map?)
-                         (keep :posting/amount)
+                         (keep :kontor.posting/amount)
                          set))]
       (is (= (amounts provider-tx) (amounts manual-tx))
           "provider-mode :gain-loss = manual :gain-loss when math agrees")
@@ -197,7 +197,7 @@
                :rate-type         :closing
                :journal           997
                :date              jan-2})
-          amounts (->> tx (filter map?) (keep :posting/amount) set)]
+          amounts (->> tx (filter map?) (keep :kontor.posting/amount) set)]
       ;; new-rc = 100,000 × 1.00 = 100,000; gain-loss = 100,000 - 105,000 = -5,000
       (is (contains? amounts -5000M) "FX GAIN posts -5000 to fx-account")
       (is (contains? amounts 5000M)  "and +5000 to liability-account"))))

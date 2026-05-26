@@ -9,7 +9,7 @@
 ;;       ("2310-RP0001" + "2310-RP0002") and tag-name discrimination
 ;;       (:ca-cra-rp-RP0001 / :ca-cra-rp-RP0002 added to :tags), OR
 ;;   (b) keep one chart and tag postings with the RP at posting time
-;;       via :posting/account-tags.
+;;       via :kontor.posting/account-tags.
 ;;
 ;; Either way, the PD7A helper + T4 builder filter by an RP-routing
 ;; tag (note 84 §4.2).

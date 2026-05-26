@@ -78,13 +78,13 @@
   "Resolve the closing journal eid, auto-creating it if missing.
    Mirrors the DE / CA l10n closing modules' bootstrap behaviour."
   [conn code]
-  (or (:db/id (d/entity (d/db conn) [:journal/code code]))
+  (or (:db/id (d/entity (d/db conn) [:kontor.journal/code code]))
       (do
-        (d/transact conn [{:journal/code code
-                           :journal/name "Asientos de cierre del ejercicio"
-                           :journal/type :closing
-                           :journal/active true}])
-        (:db/id (d/entity (d/db conn) [:journal/code code])))))
+        (d/transact conn [{:kontor.journal/code code
+                           :kontor.journal/name "Asientos de cierre del ejercicio"
+                           :kontor.journal/type :closing
+                           :kontor.journal/active true}])
+        (:db/id (d/entity (d/db conn) [:kontor.journal/code code])))))
 
 (defn plan-mx-fiscal-year-close-tx-data
   "Resolve the opts a MX fiscal-year close needs (ADR-068 pure form).
@@ -142,7 +142,7 @@
       :period-close-tx-report …}
 
    Idempotent-ish: refuses if the period already has a closing
-   transaction (`:transaction/closes-period`)."
+   transaction (`:kontor.transaction/closes-period`)."
   [conn {:keys [retained-code journal-code]
          :or {retained-code default-retained-code
               journal-code default-journal-code}

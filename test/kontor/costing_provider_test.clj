@@ -27,20 +27,20 @@
                        {:db/id -2 :kontor.account/path "Item:Widget"
                         :kontor.account/name "Widget" :kontor.account/type :asset
                         :kontor.account/active true}
-                       {:db/id -3 :journal/code "STOCK"
-                        :journal/name "Stock" :journal/type :general
-                        :journal/active true}])
+                       {:db/id -3 :kontor.journal/code "STOCK"
+                        :kontor.journal/name "Stock" :kontor.journal/type :general
+                        :kontor.journal/active true}])
         db0 (d/db conn)
         eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
         itm (:db/id (d/entity db0 [:kontor.account/path "Item:Widget"]))
-        jnl (:db/id (d/entity db0 [:journal/code "STOCK"]))
+        jnl (:db/id (d/entity db0 [:kontor.journal/code "STOCK"]))
         book (valuation/primary db0)
         receipt! (fn [qty unit-cost date]
                    (d/transact conn
                                [{:db/id -1
-                                 :transaction/journal jnl
-                                 :transaction/effective-date date
-                                 :transaction/narration "Receipt"}
+                                 :kontor.transaction/journal jnl
+                                 :kontor.transaction/effective-date date
+                                 :kontor.transaction/narration "Receipt"}
                                 {:db/id -2
                                  :valuation-layer/book book
                                  :valuation-layer/item itm

@@ -60,12 +60,12 @@
                  {:kontor.account/code "206.07" :kontor.account/path "Pasivos:ProvisionAguinaldo"
                   :kontor.account/name "Provisión Aguinaldo"
                   :kontor.account/type :liability :kontor.account/active true}
-                 {:journal/code "NOM" :journal/name "Nómina"
-                  :journal/type :general :journal/active true}])
+                 {:kontor.journal/code "NOM" :kontor.journal/name "Nómina"
+                  :kontor.journal/type :general :kontor.journal/active true}])
     conn))
 
 (defn- mxn [db] (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "MXN"]] db))
-(defn- journal [db] (d/q '[:find ?e . :where [?e :journal/code "NOM"]] db))
+(defn- journal [db] (d/q '[:find ?e . :where [?e :kontor.journal/code "NOM"]] db))
 
 (deftest aguinaldo-accrual-tx-is-balanced-and-transacts
   (let [conn (bootstrap)
@@ -78,8 +78,8 @@
              :date #inst "2026-05-31"
              :amount amount})
         sum (reduce (fn [a r] (.add ^java.math.BigDecimal a
-                                    ^java.math.BigDecimal (:posting/amount r)))
+                                    ^java.math.BigDecimal (:kontor.posting/amount r)))
                     0M
-                    (filter :posting/amount tx))]
+                    (filter :kontor.posting/amount tx))]
     (is (zero? (.compareTo ^java.math.BigDecimal sum 0M)))
     (is (some? (validation/transact-with-validation conn tx)))))

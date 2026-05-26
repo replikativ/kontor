@@ -83,13 +83,13 @@
                         {:db db :date d1}))]
     (testing "standard → one credit of 10,000 to 215100"
       (let [p (first (post :standard))]
-        (is (= a215100 (:posting/account p)))
-        (is (== -10000M (:posting/amount p)) "output JCT is a credit")
-        (is (= :tax (:posting/display-type p)))))
+        (is (= a215100 (:kontor.posting/account p)))
+        (is (== -10000M (:kontor.posting/amount p)) "output JCT is a credit")
+        (is (= :tax (:kontor.posting/display-type p)))))
     (testing "reduced → 8,000 to 215200"
       (let [p (first (post :reduced))]
-        (is (= a215200 (:posting/account p)))
-        (is (== -8000M (:posting/amount p)))))
+        (is (= a215200 (:kontor.posting/account p)))
+        (is (== -8000M (:kontor.posting/amount p)))))
     (testing "non-taxable → no leg"
       (is (= [] (post :non-taxable))))
     (testing "export-exempt → no leg"
@@ -111,7 +111,7 @@
         agg  (tpb/aggregate-postings raw)]
     (is (= 3 (count raw)) "three lines → three raw JCT postings")
     (is (= 1 (count agg)) "aggregated to one 215100 posting")
-    (is (== -6000M (:posting/amount (first agg))) "10% of 60,000")))
+    (is (== -6000M (:kontor.posting/amount (first agg))) "10% of 60,000")))
 
 (deftest mixed-rate-lines-aggregate-per-account
   (testing "10% + 8% lines collapse to two postings, one per account"
@@ -127,7 +127,7 @@
                  prov bld {:base 50000M :jct-class :reduced :commodity jpy}
                  {:db db :date d1}))
           agg  (tpb/aggregate-postings raw)
-          by-acct (into {} (map (juxt :posting/account :posting/amount)) agg)
+          by-acct (into {} (map (juxt :kontor.posting/account :kontor.posting/amount)) agg)
           a215100 (d/q '[:find ?a . :where [?a :kontor.account/code "215100"]] db)
           a215200 (d/q '[:find ?a . :where [?a :kontor.account/code "215200"]] db)]
       (is (= 2 (count agg)))

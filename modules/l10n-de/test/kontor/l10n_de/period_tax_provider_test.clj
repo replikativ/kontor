@@ -30,7 +30,7 @@
     (d/transact conn
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                   :kontor.commodity/precision 2}
-                 {:journal/code "SALE" :journal/type :sale}
+                 {:kontor.journal/code "SALE" :kontor.journal/type :sale}
                  {:kontor.account/path "Income:Gehalt" :kontor.account/type :income}
                  {:kontor.account/path "Aktiva:Bank"   :kontor.account/type :asset}])
     (book/sell! conn {:debit-account  [:kontor.account/path "Aktiva:Bank"]

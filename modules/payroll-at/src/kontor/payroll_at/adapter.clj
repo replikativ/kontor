@@ -345,11 +345,11 @@
    {:keys [accounts commodity ledger use-default-rlg-1?] :as _opts}]
   (let [neg #(.negate ^BigDecimal %)
         post (fn [account amount narration]
-               (cond-> {:posting/account account
-                        :posting/amount amount
-                        :posting/commodity commodity
-                        :posting/narration narration}
-                 ledger (assoc :posting/ledger ledger)))
+               (cond-> {:kontor.posting/account account
+                        :kontor.posting/amount amount
+                        :kontor.posting/commodity commodity
+                        :kontor.posting/narration narration}
+                 ledger (assoc :kontor.posting/ledger ledger)))
         ;; Employee-side: positive earnings → DR expense; negative
         ;; deductions → CR payable.
         emp-legs

@@ -22,8 +22,8 @@
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
     (chart/install! conn)
-    (d/transact conn [{:journal/code "INV" :journal/name "Sales"
-                       :journal/type :sale :journal/active true}])
+    (d/transact conn [{:kontor.journal/code "INV" :kontor.journal/name "Sales"
+                       :kontor.journal/type :sale :kontor.journal/active true}])
     conn))
 
 ;; ============================================================================

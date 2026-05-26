@@ -80,12 +80,12 @@
                 :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
                {:db/id -2 :kontor.account/path "Item:Widget" :kontor.account/name "Widget item"
                 :kontor.account/type :asset :kontor.account/active true}
-               {:db/id -3 :journal/code "STOCK" :journal/name "Stock movements"
-                :journal/type :general :journal/active true}])
+               {:db/id -3 :kontor.journal/code "STOCK" :kontor.journal/name "Stock movements"
+                :kontor.journal/type :general :kontor.journal/active true}])
   (let [db (d/db conn)]
     {:commodity (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
      :item      (:db/id (d/entity db [:kontor.account/path "Item:Widget"]))
-     :journal   (:db/id (d/entity db [:journal/code "STOCK"]))
+     :journal   (:db/id (d/entity db [:kontor.journal/code "STOCK"]))
      :book      (valuation/primary db)}))
 
 (defn- transact-receipt!
@@ -94,9 +94,9 @@
   [conn {:keys [book item commodity qty unit-cost received-at journal]}]
   (let [_ (d/transact conn
                       [{:db/id -1
-                        :transaction/journal        journal
-                        :transaction/effective-date received-at
-                        :transaction/narration      "Receipt"}
+                        :kontor.transaction/journal        journal
+                        :kontor.transaction/effective-date received-at
+                        :kontor.transaction/narration      "Receipt"}
                        {:db/id                              -2
                         :valuation-layer/book               book
                         :valuation-layer/item               item
@@ -117,9 +117,9 @@
   [conn layer qty unit-cost issued-at journal]
   (d/transact conn
               [{:db/id -1
-                :transaction/journal        journal
-                :transaction/effective-date issued-at
-                :transaction/narration      "Issue"}
+                :kontor.transaction/journal        journal
+                :kontor.transaction/effective-date issued-at
+                :kontor.transaction/narration      "Issue"}
                {:layer-consumption/layer                    layer
                 :layer-consumption/qty                      qty
                 :layer-consumption/unit-cost-at-consumption unit-cost
@@ -131,9 +131,9 @@
   [conn layer amount reason applied-at journal]
   (d/transact conn
               [{:db/id -1
-                :transaction/journal        journal
-                :transaction/effective-date applied-at
-                :transaction/narration      (str "Adjustment " (name reason))}
+                :kontor.transaction/journal        journal
+                :kontor.transaction/effective-date applied-at
+                :kontor.transaction/narration      (str "Adjustment " (name reason))}
                {:layer-adjustment/layer              layer
                 :layer-adjustment/amount             amount
                 :layer-adjustment/reason             reason
@@ -374,7 +374,7 @@
                            [?l :valuation-layer/origin-transaction ?tx]]
                          db l-cancel)
           _ (d/transact conn [{:db/id cancel-tx
-                               :transaction/state :cancelled}])
+                               :kontor.transaction/state :cancelled}])
           db2 (d/db conn)]
       (is (= [l-keep] (valuation/available-layers db2 (:book cat) (:item cat)))
           "Only the non-cancelled receipt is visible by default")
@@ -403,7 +403,7 @@
                           [?c :layer-consumption/layer ?l]
                           [?c :layer-consumption/issue-transaction ?tx]]
                         db layer)
-          _ (d/transact conn [{:db/id issue-tx :transaction/state :cancelled}])
+          _ (d/transact conn [{:db/id issue-tx :kontor.transaction/state :cancelled}])
           db2 (d/db conn)]
       (is (= 100M (valuation/qty-remaining db2 layer))
           "Cancelled issue does not deplete the layer")

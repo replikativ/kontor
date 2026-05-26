@@ -21,8 +21,8 @@
     (d/transact conn
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                   :kontor.commodity/precision 2}
-                 {:journal/code "SALE" :journal/type :sale}
-                 {:journal/code "GEN"  :journal/type :general}
+                 {:kontor.journal/code "SALE" :kontor.journal/type :sale}
+                 {:kontor.journal/code "GEN"  :kontor.journal/type :general}
                  {:kontor.account/path "Income:Salary"        :kontor.account/type :income}
                  {:kontor.account/path "Assets:Bank"          :kontor.account/type :asset}
                  {:kontor.account/path "Expenses:Income-Tax"  :kontor.account/type :expense}
@@ -38,8 +38,8 @@
 (defn- sum-account [conn path]
   (reduce + 0M
           (d/q '[:find [?amt ...] :in $ ?p
-                 :where [?a :kontor.account/path ?p] [?pp :posting/account ?a]
-                 [?pp :posting/amount ?amt]]
+                 :where [?a :kontor.account/path ?p] [?pp :kontor.posting/account ?a]
+                 [?pp :kontor.posting/amount ?amt]]
                (d/db conn) path)))
 
 ;; a synthetic 2-band schedule: 0% to 10,000, then 25%.
@@ -123,7 +123,7 @@
           builder  (trpb/make-static-tax-return-posting-builder
                     {:expense-account [:kontor.account/path "Expenses:Income-Tax"]
                      :payable-account [:kontor.account/path "Liabilities:Tax-Payable"]
-                     :journal   [:journal/code "GEN"]
+                     :journal   [:kontor.journal/code "GEN"]
                      :commodity eur})
           facts    (ptp/period-tax-facts provider {:period fy :conn conn})]
       (validation/transact-with-validation

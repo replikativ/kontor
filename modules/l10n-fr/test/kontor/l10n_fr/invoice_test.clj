@@ -27,10 +27,10 @@
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
     (chart/install! conn)
-    (d/transact conn [{:journal/code "VTE"
-                       :journal/name "Journal des ventes"
-                       :journal/type :sale
-                       :journal/active true}])
+    (d/transact conn [{:kontor.journal/code "VTE"
+                       :kontor.journal/name "Journal des ventes"
+                       :kontor.journal/type :sale
+                       :kontor.journal/active true}])
     conn))
 
 (defn- ace [db code]
@@ -45,8 +45,8 @@
       (d/q '[:find [?amt ...]
              :in $ ?a
              :where
-             [?p :posting/account ?a]
-             [?p :posting/amount ?amt]]
+             [?p :kontor.posting/account ?a]
+             [?p :kontor.posting/amount ?amt]]
            db a))))
 
 (defn- sum-account [db code]
@@ -228,7 +228,7 @@
           tx-data (inv/plan-fr-invoice-tx-data db inv-map {})]
       (is (vector? tx-data))
       (is (every? map? (filter map? tx-data)))
-      (is (zero? (count (d/q '[:find [?p ...] :where [?p :posting/account _]] db)))
+      (is (zero? (count (d/q '[:find [?p ...] :where [?p :kontor.posting/account _]] db)))
           "Pure planner does not transact"))))
 
 ;; ============================================================================
@@ -285,7 +285,7 @@
         (inv/post-fr-invoice! conn inv-map)
         (let [db (d/db conn)
               all-amounts (d/q '[:find [?amt ...]
-                                 :where [_ :posting/amount ?amt]]
+                                 :where [_ :kontor.posting/amount ?amt]]
                                db)
               total (reduce (fn [^java.math.BigDecimal acc ^java.math.BigDecimal x]
                               (.add acc x))

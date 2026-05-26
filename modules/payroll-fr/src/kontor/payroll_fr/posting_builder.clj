@@ -35,7 +35,7 @@
    Per ADR-079: multi-SIRET businesses route via `:kontor.account-tag/name`
    convention (e.g. `\"fr-etab-12345678900012\"`); the consumer's
    `:etab-account-tag` opt is a string the builder appends to every
-   posting via `:posting/account-tags`, letting downstream DSN
+   posting via `:kontor.posting/account-tags`, letting downstream DSN
    aggregators filter by établissement cheaply.
 
    ## Accounts map shape
@@ -88,11 +88,11 @@
 
 (defn- with-etab-tag
   "Optionally attach the établissement routing tag to a posting via
-   :posting/account-tags. The kernel's :posting/account-tags is a
+   :kontor.posting/account-tags. The kernel's :kontor.posting/account-tags is a
    ref-many to :account-tag entities (looked up by name)."
   [posting etab-account-tag]
   (if (and etab-account-tag (not (str/blank? etab-account-tag)))
-    (update posting :posting/account-tags
+    (update posting :kontor.posting/account-tags
             (fnil conj [])
             [:kontor.account-tag/name etab-account-tag])
     posting))
@@ -128,13 +128,13 @@
        (mapv (fn [[tag comps]]
                (let [amount (sum-bd (map :amount comps))]
                  (cond->
-                  {:posting/account (account-for-tag! accounts tag)
-                   :posting/amount amount
-                   :posting/commodity commodity
-                   :posting/narration
+                  {:kontor.posting/account (account-for-tag! accounts tag)
+                   :kontor.posting/amount amount
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/narration
                    (str "Rémunérations brutes — " (name tag))}
                    etab-account-tag
-                   (update :posting/account-tags
+                   (update :kontor.posting/account-tags
                            (fnil conj [])
                            [:kontor.account-tag/name etab-account-tag])))))))
 
@@ -155,12 +155,12 @@
                  (cond->
                   ;; amount is already negative; CR is negative in
                   ;; kontor's sign convention.
-                  {:posting/account acct
-                   :posting/amount amount
-                   :posting/commodity commodity
-                   :posting/narration (str "Retenue salariale: " (name kind))}
+                  {:kontor.posting/account acct
+                   :kontor.posting/amount amount
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/narration (str "Retenue salariale: " (name kind))}
                    etab-account-tag
-                   (update :posting/account-tags
+                   (update :kontor.posting/account-tags
                            (fnil conj [])
                            [:kontor.account-tag/name etab-account-tag])))))))
 
@@ -182,24 +182,24 @@
                        pay-acct (when pay-tag
                                   (account-for-tag! accounts pay-tag))]
                    (cond-> [(cond->
-                             {:posting/account exp-acct
-                              :posting/amount amount
-                              :posting/commodity commodity
-                              :posting/narration
+                             {:kontor.posting/account exp-acct
+                              :kontor.posting/amount amount
+                              :kontor.posting/commodity commodity
+                              :kontor.posting/narration
                               (str "Charges patronales: " (name kind))}
                               etab-account-tag
-                              (update :posting/account-tags
+                              (update :kontor.posting/account-tags
                                       (fnil conj [])
                                       [:kontor.account-tag/name etab-account-tag]))]
                      pay-acct
                      (conj (cond->
-                            {:posting/account pay-acct
-                             :posting/amount (.negate ^BigDecimal amount)
-                             :posting/commodity commodity
-                             :posting/narration
+                            {:kontor.posting/account pay-acct
+                             :kontor.posting/amount (.negate ^BigDecimal amount)
+                             :kontor.posting/commodity commodity
+                             :kontor.posting/narration
                              (str "Dette charges patronales: " (name kind))}
                              etab-account-tag
-                             (update :posting/account-tags
+                             (update :kontor.posting/account-tags
                                      (fnil conj [])
                                      [:kontor.account-tag/name etab-account-tag])))))))))
 
@@ -210,12 +210,12 @@
    {:keys [accounts commodity etab-account-tag]}]
   (when (pos? (compare ^BigDecimal net 0M))
     [(cond->
-      {:posting/account (account-for-tag! accounts :fr-payroll-personnel-net)
-       :posting/amount (.negate ^BigDecimal net)
-       :posting/commodity commodity
-       :posting/narration "Personnel — Rémunérations dues (net)"}
+      {:kontor.posting/account (account-for-tag! accounts :fr-payroll-personnel-net)
+       :kontor.posting/amount (.negate ^BigDecimal net)
+       :kontor.posting/commodity commodity
+       :kontor.posting/narration "Personnel — Rémunérations dues (net)"}
        etab-account-tag
-       (update :posting/account-tags
+       (update :kontor.posting/account-tags
                (fnil conj [])
                [:kontor.account-tag/name etab-account-tag]))]))
 
@@ -253,7 +253,7 @@
         (fn [fact]
           (let [postings (fact->postings fact base-opts)]
             (cond->> postings
-              ledger (mapv #(assoc % :posting/ledger ledger)))))
+              ledger (mapv #(assoc % :kontor.posting/ledger ledger)))))
         payroll-facts)))))
 
 ;; ============================================================================

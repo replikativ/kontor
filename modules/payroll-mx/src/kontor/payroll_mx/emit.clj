@@ -22,7 +22,7 @@
 
    The caller persists the XML, hashes it, and creates an
    :audit-doc via `kontor.audit-doc/create-doc!`. The :audit-doc
-   eid is then attached to the :transaction (`:transaction/audit-
+   eid is then attached to the :transaction (`:kontor.transaction/audit-
    docs`) or the :status-history row that records the period close.
 
    This module does NOT submit to a PAC; that is partner-side."

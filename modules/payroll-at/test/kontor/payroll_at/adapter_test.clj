@@ -45,10 +45,10 @@
                        :kontor.entity/name "Acme GmbH"
                        :kontor.entity/kind :operating}
                       {:db/id "journal-pay"
-                       :journal/code "PAYROLL-AT"
-                       :journal/name "Lohn- und Gehaltsabrechnung"
-                       :journal/type :general
-                       :journal/active true}
+                       :kontor.journal/code "PAYROLL-AT"
+                       :kontor.journal/name "Lohn- und Gehaltsabrechnung"
+                       :kontor.journal/type :general
+                       :kontor.journal/active true}
                       {:db/id "period-2026-01"
                        :period/name "2026-01"
                        :period/start #inst "2026-01-01"
@@ -64,7 +64,7 @@
         db (d/db conn)
         eur (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "EUR"]] db)
         ent (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-AT"]] db)
-        journal (d/q '[:find ?e . :where [?e :journal/code "PAYROLL-AT"]] db)
+        journal (d/q '[:find ?e . :where [?e :kontor.journal/code "PAYROLL-AT"]] db)
         period (d/q '[:find ?e . :where [?e :period/name "2026-01"]] db)
         _ (person/create-person!
            conn {:external-id "P-max" :given-name "Max" :family-name "Mustermann"})
@@ -134,10 +134,10 @@
                        :where [?r :payroll-run/code ?c]]
                      db "ACME-2026-01-001")
         run (d/pull db '[* {:payroll-run/payroll-transaction
-                            [:transaction/external-id
-                             {:posting/_transaction
-                              [:posting/amount
-                               {:posting/account [:kontor.account/code]}]}]}]
+                            [:kontor.transaction/external-id
+                             {:kontor.posting/_transaction
+                              [:kontor.posting/amount
+                               {:kontor.posting/account [:kontor.account/code]}]}]}]
                     run-eid)]
     (testing ":payroll-run row was created and tagged with :at/bmd"
       (is (some? run-eid))
@@ -148,18 +148,18 @@
                            ^BigDecimal (:payroll-run/control-total-gross run)))))
     (testing "Posting legs sum to zero per ledger × commodity"
       (let [postings (-> run :payroll-run/payroll-transaction
-                         :posting/_transaction)
-            sum (reduce (fn [^BigDecimal a {:keys [posting/amount]}]
+                         :kontor.posting/_transaction)
+            sum (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                           (.add a ^BigDecimal amount))
                         0M postings)]
         (is (zero? (.compareTo ^BigDecimal sum 0M))
             (str "expected balanced postings, got sum=" sum))))
     (testing "Per-account balances match the AT RLG-1 fixture totals"
       (let [postings (-> run :payroll-run/payroll-transaction
-                         :posting/_transaction)
-            by-code (group-by (comp :kontor.account/code :posting/account) postings)
+                         :kontor.posting/_transaction)
+            by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)
             sum-of (fn [code]
-                     (reduce (fn [^BigDecimal a {:keys [posting/amount]}]
+                     (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                                (.add a ^BigDecimal amount))
                              0M (get by-code code [])))]
         ;; Grundgehalt expense: 3000 + 2500 = 5500

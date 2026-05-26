@@ -40,9 +40,9 @@
                   :kontor.entity/name "Acme do Brasil Ltda"
                   :kontor.entity/kind :operating}
                  {:db/id "journal-pay-br"
-                  :journal/code "PAY-BR"
-                  :journal/name "Folha de Pagamento (BR)"
-                  :journal/type :general}
+                  :kontor.journal/code "PAY-BR"
+                  :kontor.journal/name "Folha de Pagamento (BR)"
+                  :kontor.journal/type :general}
                  {:db/id "period-2026-05-br"
                   :period/name "2026-05-br"
                   :period/start #inst "2026-05-01"
@@ -89,7 +89,7 @@
         db (d/db conn)
         brl (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "BRL"]] db)
         ent (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-BR"]] db)
-        journal (d/q '[:find ?e . :where [?e :journal/code "PAY-BR"]] db)
+        journal (d/q '[:find ?e . :where [?e :kontor.journal/code "PAY-BR"]] db)
         period (d/q '[:find ?e . :where [?e :period/name "2026-05-br"]] db)
         ;; Create persons + employments
         _ (person/create-person!
@@ -176,10 +176,10 @@
                        :where [?r :payroll-run/code ?c]]
                      db "ACME-BR-2026-05-001")
         run (d/pull db '[* {:payroll-run/payroll-transaction
-                            [:transaction/external-id
-                             {:posting/_transaction
-                              [:posting/amount
-                               {:posting/account [:kontor.account/code]}]}]}]
+                            [:kontor.transaction/external-id
+                             {:kontor.posting/_transaction
+                              [:kontor.posting/amount
+                               {:kontor.posting/account [:kontor.account/code]}]}]}]
                     run-eid)]
     (testing "payroll-run row created"
       (is (some? run-eid))
@@ -190,33 +190,33 @@
       (is (= 10000M (:payroll-run/control-total-gross run))))
     (testing "Posting legs sum to zero per (ledger × commodity)"
       (let [postings (-> run :payroll-run/payroll-transaction
-                         :posting/_transaction)
-            sum (reduce (fn [a {:keys [posting/amount]}]
+                         :kontor.posting/_transaction)
+            sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                           (.add ^BigDecimal a ^BigDecimal amount))
                         0M postings)]
         (is (zero? (.compareTo ^BigDecimal sum 0M)))))
     (testing "Four canonical BR statutory buckets land on DISTINCT accounts"
       (let [postings (-> run :payroll-run/payroll-transaction
-                         :posting/_transaction)
-            by-code (group-by (comp :kontor.account/code :posting/account) postings)]
+                         :kontor.posting/_transaction)
+            by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)]
         ;; INSS empregado (2.1.1.05): -800 (2 × -400)
         (is (= -800M
-               (reduce (fn [a {:keys [posting/amount]}]
+               (reduce (fn [a {:kontor.posting/keys [amount]}]
                          (.add ^BigDecimal a ^BigDecimal amount))
                        0M (get by-code "2.1.1.05"))))
         ;; INSS empregador (2.1.1.06): -2000 (2 × -1000, paired credit)
         (is (= -2000M
-               (reduce (fn [a {:keys [posting/amount]}]
+               (reduce (fn [a {:kontor.posting/keys [amount]}]
                          (.add ^BigDecimal a ^BigDecimal amount))
                        0M (get by-code "2.1.1.06"))))
         ;; FGTS (2.1.1.10): -800 (2 × -400)
         (is (= -800M
-               (reduce (fn [a {:keys [posting/amount]}]
+               (reduce (fn [a {:kontor.posting/keys [amount]}]
                          (.add ^BigDecimal a ^BigDecimal amount))
                        0M (get by-code "2.1.1.10"))))
         ;; IRRF (2.1.1.15): -495 (2 × -247.50)
         (is (= -495M
-               (reduce (fn [a {:keys [posting/amount]}]
+               (reduce (fn [a {:kontor.posting/keys [amount]}]
                          (.add ^BigDecimal a ^BigDecimal amount))
                        0M (get by-code "2.1.1.15"))))))
     (testing "eSocial emit-docs produced with :payroll-filing category"

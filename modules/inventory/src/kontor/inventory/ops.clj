@@ -54,19 +54,19 @@
 
 (defn seal-stock-move
   "Stamp a `plan-stock-move` tx-data vector as posted + sealed: the
-   transaction gets `:transaction/state :posted` + `:posted-at`, and
-   every posting gets `:posting/posted-at` — the propagation the
+   transaction gets `:kontor.transaction/state :posted` + `:posted-at`, and
+   every posting gets `:kontor.posting/posted-at` — the propagation the
    `kontor.sealing` model expects. A goods receipt / issue / count
    adjustment is a real posted GL event, not a draft."
   [tx-data ^Date posted-at]
   (mapv (fn [m]
           (cond
             (not (map? m)) m
-            (contains? m :transaction/journal)
-            (assoc m :transaction/state :posted
-                   :transaction/posted-at posted-at)
-            (contains? m :posting/account)
-            (assoc m :posting/posted-at posted-at)
+            (contains? m :kontor.transaction/journal)
+            (assoc m :kontor.transaction/state :posted
+                   :kontor.transaction/posted-at posted-at)
+            (contains? m :kontor.posting/account)
+            (assoc m :kontor.posting/posted-at posted-at)
             :else m))
         tx-data))
 
@@ -213,11 +213,11 @@
                        {:product product :facility facility :location location
                         :lot lot :owner-entity owner-entity :received-at eff}))
         origin-tx {:db/id "nf-tx"
-                   :transaction/journal journal
-                   :transaction/effective-date eff
-                   :transaction/state :posted
-                   :transaction/posted-at eff
-                   :transaction/narration "Negative-fill layer (estimated cost)"}
+                   :kontor.transaction/journal journal
+                   :kontor.transaction/effective-date eff
+                   :kontor.transaction/state :posted
+                   :kontor.transaction/posted-at eff
+                   :kontor.transaction/narration "Negative-fill layer (estimated cost)"}
         layer (cond-> {:db/id "nf-layer"
                        :valuation-layer/book book-eid
                        :valuation-layer/item product
@@ -466,15 +466,15 @@
         ;; delta (the estimate under-stated cost); reversed when
         ;; negative. build-transaction enforces sum-to-zero.
         gl (posting/build-transaction
-            {:transaction {:transaction/journal journal
-                           :transaction/effective-date eff
-                           :transaction/narration "Negative-fill true-up"}
-             :postings [{:posting/account variance-account
-                         :posting/amount delta-total
-                         :posting/commodity commodity}
-                        {:posting/account inventory-account
-                         :posting/amount (.negate ^java.math.BigDecimal delta-total)
-                         :posting/commodity commodity}]})
+            {:transaction {:kontor.transaction/journal journal
+                           :kontor.transaction/effective-date eff
+                           :kontor.transaction/narration "Negative-fill true-up"}
+             :postings [{:kontor.posting/account variance-account
+                         :kontor.posting/amount delta-total
+                         :kontor.posting/commodity commodity}
+                        {:kontor.posting/account inventory-account
+                         :kontor.posting/amount (.negate ^java.math.BigDecimal delta-total)
+                         :kontor.posting/commodity commodity}]})
         adjustment {:db/id "adj"
                     :layer-adjustment/layer layer
                     :layer-adjustment/amount delta-total

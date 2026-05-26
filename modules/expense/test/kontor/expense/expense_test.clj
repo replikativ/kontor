@@ -44,8 +44,8 @@
                   :kontor.account/type :liability :kontor.account/active true}
                  {:db/id "acct-cash" :kontor.account/code "1800" :kontor.account/name "Bank"
                   :kontor.account/type :asset :kontor.account/active true}
-                 {:db/id "journal-gen" :journal/code "GEN" :journal/name "General"
-                  :journal/type :general}
+                 {:db/id "journal-gen" :kontor.journal/code "GEN" :kontor.journal/name "General"
+                  :kontor.journal/type :general}
                  ;; Receipts.
                  {:db/id "doc-r1" :audit-doc/code "RCPT-1"
                   :audit-doc/type :receipt :audit-doc/storage-uri "s3://r/1"
@@ -62,7 +62,7 @@
 (defn- acct    [db code] (ref-eid db :kontor.account/code code))
 (defn- doc     [db code] (ref-eid db :audit-doc/code code))
 (defn- eur     [db] (ref-eid db :kontor.commodity/symbol "EUR"))
-(defn- journal [db] (ref-eid db :journal/code "GEN"))
+(defn- journal [db] (ref-eid db :kontor.journal/code "GEN"))
 
 ;; An EXP-1 report with two own-account lines (travel 200 + meals 50).
 (defn- two-line-report! [conn]
@@ -230,9 +230,9 @@
 ;; ============================================================================
 
 (defn- posting-amounts [db tx-eid]
-  (->> (d/q '[:find [?p ...] :in $ ?t :where [?p :posting/transaction ?t]] db tx-eid)
-       (map #(d/pull db [:posting/amount {:posting/account [:kontor.account/code]}] %))
-       (map (juxt #(:kontor.account/code (:posting/account %)) :posting/amount))
+  (->> (d/q '[:find [?p ...] :in $ ?t :where [?p :kontor.posting/transaction ?t]] db tx-eid)
+       (map #(d/pull db [:kontor.posting/amount {:kontor.posting/account [:kontor.account/code]}] %))
+       (map (juxt #(:kontor.account/code (:kontor.posting/account %)) :kontor.posting/amount))
        set))
 
 (deftest post-report-builds-the-gl-and-reimburse-settles
@@ -258,11 +258,11 @@
              (posting-amounts (d/db conn)
                               (:db/id (:expense-report/transaction r))))))
     (testing "the posting is sealed"
-      (is (every? #(some? (:posting/posted-at %))
+      (is (every? #(some? (:kontor.posting/posted-at %))
                   (->> (d/q '[:find [?p ...] :in $ ?t
-                              :where [?p :posting/transaction ?t]]
+                              :where [?p :kontor.posting/transaction ?t]]
                             (d/db conn) (:db/id (:expense-report/transaction r)))
-                       (map #(d/pull (d/db conn) [:posting/posted-at] %))))))
+                       (map #(d/pull (d/db conn) [:kontor.posting/posted-at] %))))))
     (testing "reimburse! settles the own-account total → :reimbursed"
       (expense/reimburse! conn {:expense-report "EXP-1"
                                 :journal (journal (d/db conn))

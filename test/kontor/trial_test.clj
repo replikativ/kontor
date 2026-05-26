@@ -27,8 +27,8 @@
      :kontor.account/type :asset :kontor.account/active true}
     {:db/id -6 :kontor.account/path "Income:USD-Sales" :kontor.account/name "USD Sales"
      :kontor.account/type :income :kontor.account/active true}
-    {:db/id -7 :journal/code "INV" :journal/name "J"
-     :journal/type :sale :journal/active true}])
+    {:db/id -7 :kontor.journal/code "INV" :kontor.journal/name "J"
+     :kontor.journal/type :sale :kontor.journal/active true}])
   (let [db (d/db conn)]
     {:eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
      :usd (:db/id (d/entity db [:kontor.commodity/symbol "USD"]))
@@ -36,48 +36,48 @@
      :rev (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
      :usd-bank (:db/id (d/entity db [:kontor.account/path "Assets:USD-Bank"]))
      :usd-rev  (:db/id (d/entity db [:kontor.account/path "Income:USD-Sales"]))
-     :jnl (:db/id (d/entity db [:journal/code "INV"]))}))
+     :jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))}))
 
 (defn- post-pair!
   [conn {:keys [eur rec rev jnl]} effective amount external-id]
   (let [tx (-> (posting/build-transaction
                 {:transaction
-                 {:transaction/external-id    external-id
-                  :transaction/journal        jnl
-                  :transaction/effective-date effective
-                  :transaction/narration      external-id
-                  :transaction/state          :posted
-                  :transaction/posted-at      effective}
+                 {:kontor.transaction/external-id    external-id
+                  :kontor.transaction/journal        jnl
+                  :kontor.transaction/effective-date effective
+                  :kontor.transaction/narration      external-id
+                  :kontor.transaction/state          :posted
+                  :kontor.transaction/posted-at      effective}
                  :postings
-                 [{:posting/account rec :posting/amount    amount
-                   :posting/commodity eur}
-                  {:posting/account rev :posting/amount    (.negate ^java.math.BigDecimal amount)
-                   :posting/commodity eur}]})
+                 [{:kontor.posting/account rec :kontor.posting/amount    amount
+                   :kontor.posting/commodity eur}
+                  {:kontor.posting/account rev :kontor.posting/amount    (.negate ^java.math.BigDecimal amount)
+                   :kontor.posting/commodity eur}]})
                (->> (mapv (fn [m]
                             (cond-> m
-                              (some? (:posting/account m))
-                              (assoc :posting/posted-at effective))))))]
+                              (some? (:kontor.posting/account m))
+                              (assoc :kontor.posting/posted-at effective))))))]
     (v/transact-with-validation conn tx)))
 
 (defn- post-pair-usd!
   [conn {:keys [usd usd-bank usd-rev jnl]} effective amount external-id]
   (let [tx (-> (posting/build-transaction
                 {:transaction
-                 {:transaction/external-id    external-id
-                  :transaction/journal        jnl
-                  :transaction/effective-date effective
-                  :transaction/narration      external-id
-                  :transaction/state          :posted
-                  :transaction/posted-at      effective}
+                 {:kontor.transaction/external-id    external-id
+                  :kontor.transaction/journal        jnl
+                  :kontor.transaction/effective-date effective
+                  :kontor.transaction/narration      external-id
+                  :kontor.transaction/state          :posted
+                  :kontor.transaction/posted-at      effective}
                  :postings
-                 [{:posting/account usd-bank :posting/amount    amount
-                   :posting/commodity usd}
-                  {:posting/account usd-rev  :posting/amount    (.negate ^java.math.BigDecimal amount)
-                   :posting/commodity usd}]})
+                 [{:kontor.posting/account usd-bank :kontor.posting/amount    amount
+                   :kontor.posting/commodity usd}
+                  {:kontor.posting/account usd-rev  :kontor.posting/amount    (.negate ^java.math.BigDecimal amount)
+                   :kontor.posting/commodity usd}]})
                (->> (mapv (fn [m]
                             (cond-> m
-                              (some? (:posting/account m))
-                              (assoc :posting/posted-at effective))))))]
+                              (some? (:kontor.posting/account m))
+                              (assoc :kontor.posting/posted-at effective))))))]
     (v/transact-with-validation conn tx)))
 
 ;; ============================================================================

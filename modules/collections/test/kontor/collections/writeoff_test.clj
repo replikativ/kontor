@@ -47,8 +47,8 @@
                  {:gl-account-default/account-type :bad-debt-expense
                   :gl-account-default/account [:kontor.account/path "6900"]}
                  ;; Journal
-                 {:journal/code "SALES" :journal/name "Sales Journal"
-                  :journal/type :sales}])
+                 {:kontor.journal/code "SALES" :kontor.journal/name "Sales Journal"
+                  :kontor.journal/type :sales}])
     (f)))
 
 (use-fixtures :each bootstrap)
@@ -124,7 +124,7 @@
                     *conn*
                     {:case "CASE-WO"
                      :written-off-by (actor "bob")
-                     :journal-ref [:journal/code "SALES"]
+                     :journal-ref [:kontor.journal/code "SALES"]
                      :reason :uncollectible-90-days
                      :supporting-doc doc-eid})]
         (testing ":case-eid + :invoices-written-off + :total-written-off returned"
@@ -146,21 +146,21 @@
                                  (d/q '[:find (sum ?amt) .
                                         :where
                                         [?a :kontor.account/path "6900"]
-                                        [?p :posting/account ?a]
-                                        [?p :posting/amount ?amt]]
+                                        [?p :kontor.posting/account ?a]
+                                        [?p :kontor.posting/amount ?amt]]
                                       db)))))
           (testing "Cr AR = -1000"
             (is (= 0 (.compareTo (bigdec "-1000")
                                  (d/q '[:find (sum ?amt) .
                                         :where
                                         [?a :kontor.account/path "1200"]
-                                        [?p :posting/account ?a]
-                                        [?p :posting/amount ?amt]]
+                                        [?p :kontor.posting/account ?a]
+                                        [?p :kontor.posting/amount ?amt]]
                                       db)))))
           (testing "balance = 0"
             (is (= 0 (.compareTo 0M
                                  (d/q '[:find (sum ?amt) .
-                                        :where [_ :posting/amount ?amt]]
+                                        :where [_ :kontor.posting/amount ?amt]]
                                       db))))))))))
 
 (deftest write-off-rejects-missing-supporting-doc
@@ -177,7 +177,7 @@
           *conn*
           {:case "CASE-WO-NO-DOC"
            :written-off-by (actor "bob")
-           :journal-ref [:journal/code "SALES"]
+           :journal-ref [:kontor.journal/code "SALES"]
            :reason :uncollectible})))))
 
 (deftest end-to-end-collection-case-full-cycle
@@ -219,7 +219,7 @@
        *conn*
        {:case "CASE-E2E"
         :written-off-by (actor "bob")
-        :journal-ref [:journal/code "SALES"]
+        :journal-ref [:kontor.journal/code "SALES"]
         :reason :uncollectible-by-counsel
         :supporting-doc doc}))
     (let [db (d/db *conn*)
@@ -239,5 +239,5 @@
       (testing "GL = 0 (balanced posting)"
         (is (= 0 (.compareTo 0M
                              (d/q '[:find (sum ?amt) .
-                                    :where [_ :posting/amount ?amt]]
+                                    :where [_ :kontor.posting/amount ?amt]]
                                   db))))))))

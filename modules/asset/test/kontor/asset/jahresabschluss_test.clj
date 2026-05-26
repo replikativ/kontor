@@ -62,8 +62,8 @@
                   :ledger/type :secondary :ledger/framework :IFRS
                   :ledger/active true}
                  {:db/id "journal-gen"
-                  :journal/code "GEN" :journal/name "General"
-                  :journal/type :general}
+                  :kontor.journal/code "GEN" :kontor.journal/name "General"
+                  :kontor.journal/type :general}
                  {:db/id "class-machinery"
                   :asset-class/code "machinery"
                   :asset-class/name "Machinery & Equipment"
@@ -77,7 +77,7 @@
 (defn- commodity [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- acct      [db code] (ref-eid db :kontor.account/code code))
 (defn- ledger    [db code] (ref-eid db :ledger/code code))
-(defn- journal   [db] (ref-eid db :journal/code "GEN"))
+(defn- journal   [db] (ref-eid db :kontor.journal/code "GEN"))
 (defn- class-eid [db] (ref-eid db :asset-class/code "machinery"))
 
 (defn- post!
@@ -86,14 +86,14 @@
   [conn {:keys [dr cr amount date ledger]}]
   (let [db (d/db conn)
         line (fn [a amt]
-               (cond-> {:posting/account a
-                        :posting/amount amt
-                        :posting/commodity (commodity db)}
-                 ledger (assoc :posting/ledger ledger)))]
+               (cond-> {:kontor.posting/account a
+                        :kontor.posting/amount amt
+                        :kontor.posting/commodity (commodity db)}
+                 ledger (assoc :kontor.posting/ledger ledger)))]
     (posting/post-transaction!
      conn
-     {:transaction {:transaction/journal (journal db)
-                    :transaction/effective-date date}
+     {:transaction {:kontor.transaction/journal (journal db)
+                    :kontor.transaction/effective-date date}
       :postings [(line dr amount) (line cr (.negate ^java.math.BigDecimal amount))]})))
 
 ;; ============================================================================
@@ -103,7 +103,7 @@
 (deftest ledger-filter-on-compute-statement
   (let [conn (bootstrap)
         db (d/db conn)
-        ;; Tx A → IFRS ledger; Tx B → primary (no :posting/ledger).
+        ;; Tx A → IFRS ledger; Tx B → primary (no :kontor.posting/ledger).
         _ (post! conn {:dr (acct db "1800") :cr (acct db "8000")
                        :amount 1000.00M :date #inst "2026-06-01"
                        :ledger (ledger db "ifrs")})

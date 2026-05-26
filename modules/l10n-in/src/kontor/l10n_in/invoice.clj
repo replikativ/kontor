@@ -115,7 +115,7 @@
                        :code code}))))
 
 (defn- journal-by-code [db code]
-  (:db/id (d/entity db [:journal/code code])))
+  (:db/id (d/entity db [:kontor.journal/code code])))
 
 (defn- commodity-by-symbol [db sym]
   (:db/id (d/entity db [:kontor.commodity/symbol sym])))
@@ -250,20 +250,20 @@
                                (bd-add acc (:net r)))
                              0M rows)
                  acct (require-account db acct-code)]]
-       {:posting/account acct
-        :posting/amount (.negate ^java.math.BigDecimal net)
-        :posting/commodity commodity-eid
-        :posting/posted-at date}))))
+       {:kontor.posting/account acct
+        :kontor.posting/amount (.negate ^java.math.BigDecimal net)
+        :kontor.posting/commodity commodity-eid
+        :kontor.posting/posted-at date}))))
 
 (defn- tax-posting
   "Build a single credit posting for one tax component. Returns nil
    when the amount is zero (so the caller can filter)."
   [db code ^java.math.BigDecimal amount commodity-eid date]
   (when (nonzero? amount)
-    {:posting/account (require-account db code)
-     :posting/amount (.negate amount)
-     :posting/commodity commodity-eid
-     :posting/posted-at date}))
+    {:kontor.posting/account (require-account db code)
+     :kontor.posting/amount (.negate amount)
+     :kontor.posting/commodity commodity-eid
+     :kontor.posting/posted-at date}))
 
 (defn- tax-postings
   "Build the per-component output-tax postings by summing the
@@ -339,7 +339,7 @@
      :invoice/bank-sale?              debit bank (122200) instead of AR
      :invoice/export?                 use export AR (121200)
      :invoice/buyer                   partner ref (kernel
-                                       :transaction/partner)
+                                       :kontor.transaction/partner)
      :invoice/journal                 journal code override (default INV)
 
    Opts:
@@ -388,18 +388,18 @@
         debit-code (debit-account-code invoice merged-codes)
         debit-acct (require-account db debit-code)
         gross (gross-amount breakdown)
-        debit-post {:posting/account debit-acct
-                    :posting/amount gross
-                    :posting/commodity commodity-eid
-                    :posting/posted-at issue-date}
-        tx-base (cond-> {:transaction/external-id external-id
-                         :transaction/journal jnl
-                         :transaction/effective-date issue-date
-                         :transaction/narration (or (:invoice/narration invoice)
+        debit-post {:kontor.posting/account debit-acct
+                    :kontor.posting/amount gross
+                    :kontor.posting/commodity commodity-eid
+                    :kontor.posting/posted-at issue-date}
+        tx-base (cond-> {:kontor.transaction/external-id external-id
+                         :kontor.transaction/journal jnl
+                         :kontor.transaction/effective-date issue-date
+                         :kontor.transaction/narration (or (:invoice/narration invoice)
                                                     external-id)
-                         :transaction/state :posted
-                         :transaction/posted-at issue-date}
-                  buyer (assoc :transaction/partner buyer))
+                         :kontor.transaction/state :posted
+                         :kontor.transaction/posted-at issue-date}
+                  buyer (assoc :kontor.transaction/partner buyer))
         input {:transaction tx-base
                :postings (into [debit-post] (into rev-posts tax-posts))}]
     (posting/build-transaction input)))

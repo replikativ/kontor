@@ -18,7 +18,7 @@
         (let [n (count (d/q '[:find [?path ...] :where [_ :kontor.account/path ?path]] db))]
           (is (pos? n) "expected the CA chart to be installed")))
       (testing "default 5 journals are present"
-        (let [n (count (d/q '[:find [?c ...] :where [_ :journal/code ?c]] db))]
+        (let [n (count (d/q '[:find [?c ...] :where [_ :kontor.journal/code ?c]] db))]
           (is (= 5 n))))
       (testing "CAD commodity is present"
         (is (some? (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "CAD"]] db))))

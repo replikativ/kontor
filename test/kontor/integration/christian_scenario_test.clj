@@ -89,18 +89,18 @@
   (let [ug [:kontor.entity/code "HANS-TECH-UG"]
         e  (fn [opts] (book/entry! conn (assoc opts :commodity :EUR :entity ug)))]
     ;; Opening capital
-    (e {:journal [:journal/code "GJ"] :effective-date #inst "2026-01-02"
+    (e {:journal [:kontor.journal/code "GJ"] :effective-date #inst "2026-01-02"
         :narration "Eröffnungsbilanz Bank"
         :postings [{:account [:kontor.account/path "Umlaufvermögen:Bank"]            :amount 25000M}
                    {:account [:kontor.account/path "Eigenkapital:Privateinlagen"]   :amount -25000M}]})
     ;; Service revenue €40k + USt 7,600
-    (e {:journal [:journal/code "CR"] :effective-date #inst "2026-06-30"
+    (e {:journal [:kontor.journal/code "CR"] :effective-date #inst "2026-06-30"
         :narration "Beratung Kunde X H1 2026"
         :postings [{:account [:kontor.account/path "Umlaufvermögen:Bank"]                   :amount 47600M}
                    {:account [:kontor.account/path "Erträge:Erlöse:19%"]                    :amount -40000M}
                    {:account [:kontor.account/path "Verbindlichkeiten:Umsatzsteuer:19%"]    :amount -7600M}]})
     ;; Opex: rent 5k + tax-adv 4k + other 6k + Vorsteuer 2.85k = cash out 17.85k
-    (e {:journal [:journal/code "CD"] :effective-date #inst "2026-12-15"
+    (e {:journal [:kontor.journal/code "CD"] :effective-date #inst "2026-12-15"
         :narration "Jahresopex 2026 (zusammengefasst)"
         :postings [{:account [:kontor.account/path "Aufwendungen:Raum:Miete"]               :amount 5000M}
                    {:account [:kontor.account/path "Aufwendungen:Steuerberater"]            :amount 4000M}
@@ -108,14 +108,14 @@
                    {:account [:kontor.account/path "Umlaufvermögen:Vorsteuer:19%"]           :amount 2850M}
                    {:account [:kontor.account/path "Umlaufvermögen:Bank"]                    :amount -17850M}]})
     ;; Year-end CIT accrual: KSt+Soli + GewSt (numbers from de-cit-provider)
-    (e {:journal [:journal/code "GJ"] :effective-date #inst "2026-12-31"
+    (e {:journal [:kontor.journal/code "GJ"] :effective-date #inst "2026-12-31"
         :narration "Steuerrückstellung 2026"
         :postings [{:account [:kontor.account/path "Aufwendungen:Steuern:KSt"]              :amount 3956.25M}
                    {:account [:kontor.account/path "Aufwendungen:Steuern:GewSt"]            :amount 4287.50M}
                    {:account [:kontor.account/path "Verbindlichkeiten:Steuern:KSt-Rückstellung"]  :amount -3956.25M}
                    {:account [:kontor.account/path "Verbindlichkeiten:Steuern:GewSt-Rückstellung"] :amount -4287.50M}]})
     ;; Dividend declaration €15k 60/40 — exercises I-15 per-posting :partner
-    (e {:journal [:journal/code "GJ"] :effective-date #inst "2026-12-31"
+    (e {:journal [:kontor.journal/code "GJ"] :effective-date #inst "2026-12-31"
         :narration "Gewinnverwendung 2026: €15k Ausschüttung 60/40"
         :postings [{:account [:kontor.account/path "Eigenkapital:Gewinnvortrag"]            :amount 15000M}
                    {:account [:kontor.account/path "Verbindlichkeiten:Dividenden-Zahlbar"] :amount -9000M
@@ -123,14 +123,14 @@
                    {:account [:kontor.account/path "Verbindlichkeiten:Dividenden-Zahlbar"] :amount -6000M
                     :partner [:kontor.partner/external-id "PB"]}]})
     ;; Distribute to CW (KESt+Soli 26.375 % withheld at source)
-    (e {:journal [:journal/code "CD"] :effective-date #inst "2027-01-15"
+    (e {:journal [:kontor.journal/code "CD"] :effective-date #inst "2027-01-15"
         :narration "Dividende CW gezahlt"
         :partner  [:kontor.partner/external-id "CW"]
         :postings [{:account [:kontor.account/path "Verbindlichkeiten:Dividenden-Zahlbar"] :amount 9000M}
                    {:account [:kontor.account/path "Umlaufvermögen:Bank"]                   :amount -6626.25M}
                    {:account [:kontor.account/path "Verbindlichkeiten:KESt-Zahlbar"]        :amount -2373.75M}]})
     ;; Distribute to PB
-    (e {:journal [:journal/code "CD"] :effective-date #inst "2027-01-15"
+    (e {:journal [:kontor.journal/code "CD"] :effective-date #inst "2027-01-15"
         :narration "Dividende PB gezahlt"
         :partner  [:kontor.partner/external-id "PB"]
         :postings [{:account [:kontor.account/path "Verbindlichkeiten:Dividenden-Zahlbar"] :amount 6000M}
@@ -183,26 +183,26 @@
   ;; silently lost from the GL.
   (let [conn (ug-db)
         _    (book-ug-year! conn)
-        ;; Find the 2 dividend-payable Cr postings + their :posting/partner refs
+        ;; Find the 2 dividend-payable Cr postings + their :kontor.posting/partner refs
         pairs (set (d/q '[:find ?path ?amt ?pc
-                          :where [?p :posting/account ?a]
+                          :where [?p :kontor.posting/account ?a]
                                  [?a :kontor.account/path ?path]
                                  [(= ?path "Verbindlichkeiten:Dividenden-Zahlbar")]
-                                 [?p :posting/amount ?amt]
-                                 [?p :posting/partner ?part]
+                                 [?p :kontor.posting/amount ?amt]
+                                 [?p :kontor.posting/partner ?part]
                                  [?part :kontor.partner/external-id ?pc]]
                         (d/db conn)))]
     (is (contains? pairs ["Verbindlichkeiten:Dividenden-Zahlbar" -9000M "CW"])
-        "Christian's Cr leg carries :posting/partner CW")
+        "Christian's Cr leg carries :kontor.posting/partner CW")
     (is (contains? pairs ["Verbindlichkeiten:Dividenden-Zahlbar" -6000M "PB"])
-        "Partner B's Cr leg carries :posting/partner PB")))
+        "Partner B's Cr leg carries :kontor.posting/partner PB")))
 
 (deftest hans-side-cross-db-dividend-via-treaty-helper
   ;; The companion-to-the-corp side. Christian's CA DB receives the
   ;; €9000 dividend gross at FX 1.50 CAD/EUR via the treaty helper.
   (let [conn (hans-db)
         _    (book/entry! conn   ; First the sole-prop revenue (CAD 60k + 5 % GST)
-               {:journal [:journal/code "CR"] :effective-date #inst "2026-09-30"
+               {:journal [:kontor.journal/code "CR"] :effective-date #inst "2026-09-30"
                 :commodity :CAD :entity [:kontor.entity/code "CW-PERSONAL"]
                 :narration "Q3 BC consulting CAD 60k + 5% GST"
                 :postings [{:account [:kontor.account/path "Assets:Bank:CAD"]              :amount 63000M}

@@ -175,7 +175,7 @@
                    {:keys [accounts ledger fx-provider]}]
     "Returns a vector of posting maps shaped per the ADR-068 *-tx-data
      builder convention. Each posting map is a flat map of
-     :posting/* attrs, ready for kontor.posting/build-transaction-tx-data.
+     :kontor.posting/* attrs, ready for kontor.posting/build-transaction-tx-data.
 
      `:accounts` is a per-component-kind → :account-ref map. The
      consumer supplies it from the company's chart of accounts.

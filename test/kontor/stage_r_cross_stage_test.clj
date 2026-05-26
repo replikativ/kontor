@@ -72,14 +72,14 @@
     (let [commodity (:commodity opts)]
       (mapcat
        (fn [{:keys [gross]}]
-         [{:posting/account (:wages-expense accounts)
-           :posting/amount gross
-           :posting/commodity commodity
-           :posting/narration "Gross wages"}
-          {:posting/account (:wages-payable accounts)
-           :posting/amount (.negate ^java.math.BigDecimal gross)
-           :posting/commodity commodity
-           :posting/narration "Wages payable"}])
+         [{:kontor.posting/account (:wages-expense accounts)
+           :kontor.posting/amount gross
+           :kontor.posting/commodity commodity
+           :kontor.posting/narration "Gross wages"}
+          {:kontor.posting/account (:wages-payable accounts)
+           :kontor.posting/amount (.negate ^java.math.BigDecimal gross)
+           :kontor.posting/commodity commodity
+           :kontor.posting/narration "Wages payable"}])
        facts))))
 
 ;; ============================================================================
@@ -125,12 +125,12 @@
        :kontor.account/name "Wages Payable"
        :kontor.account/type :liability :kontor.account/active true}
       ;; One journal per country.
-      {:db/id "j-de" :journal/code "PAY-DE"
-       :journal/name "Payroll DE" :journal/type :general}
-      {:db/id "j-us" :journal/code "PAY-US"
-       :journal/name "Payroll US" :journal/type :general}
-      {:db/id "j-ca" :journal/code "PAY-CA"
-       :journal/name "Payroll CA" :journal/type :general}
+      {:db/id "j-de" :kontor.journal/code "PAY-DE"
+       :kontor.journal/name "Payroll DE" :kontor.journal/type :general}
+      {:db/id "j-us" :kontor.journal/code "PAY-US"
+       :kontor.journal/name "Payroll US" :kontor.journal/type :general}
+      {:db/id "j-ca" :kontor.journal/code "PAY-CA"
+       :kontor.journal/name "Payroll CA" :kontor.journal/type :general}
       ;; Periods for May 2026 in each country.
       {:db/id "p-2026-05" :period/name "2026-05"
        :period/start #inst "2026-05-01"
@@ -227,9 +227,9 @@
         {:keys [jane emp-de emp-us emp-ca de us ca eur usd cad]} (setup-jane! conn)
         db (d/db conn)
         p-2026-05 (ref-eid db :period/name "2026-05")
-        j-de (ref-eid db :journal/code "PAY-DE")
-        j-us (ref-eid db :journal/code "PAY-US")
-        j-ca (ref-eid db :journal/code "PAY-CA")
+        j-de (ref-eid db :kontor.journal/code "PAY-DE")
+        j-us (ref-eid db :kontor.journal/code "PAY-US")
+        j-ca (ref-eid db :kontor.journal/code "PAY-CA")
         de-wages-exp (ref-eid db :kontor.account/code "4120")
         de-wages-pay (ref-eid db :kontor.account/code "1741")
         us-wages-exp (ref-eid db :kontor.account/code "6100")
@@ -340,8 +340,8 @@
                          (d/q '[:find ?amt
                                 :in $ ?t
                                 :where
-                                [?p :posting/transaction ?t]
-                                [?p :posting/amount ?amt]]
+                                [?p :kontor.posting/transaction ?t]
+                                [?p :kontor.posting/amount ?amt]]
                               (d/db conn) tx))
               sum (reduce (fn [a [v]]
                             (.add ^java.math.BigDecimal a
@@ -385,8 +385,8 @@
                                     :with ?p
                                     :in $ ?a
                                     :where
-                                    [?p :posting/account ?a]
-                                    [?p :posting/amount ?amt]]
+                                    [?p :kontor.posting/account ?a]
+                                    [?p :kontor.posting/amount ?amt]]
                                   (d/db conn) account-eid))]
         ;; Each "wages-expense" account holds the gross debit only —
         ;; the corresponding "wages-payable" account holds the negative.
@@ -488,12 +488,12 @@
        {:db/id "ca-wages-payable" :kontor.account/code "2110"
         :kontor.account/name "Wages Payable"
         :kontor.account/type :liability :kontor.account/active true}
-       {:db/id "j-de" :journal/code "PAY-DE"
-        :journal/name "Payroll DE" :journal/type :general}
-       {:db/id "j-us" :journal/code "PAY-US"
-        :journal/name "Payroll US" :journal/type :general}
-       {:db/id "j-ca" :journal/code "PAY-CA"
-        :journal/name "Payroll CA" :journal/type :general}
+       {:db/id "j-de" :kontor.journal/code "PAY-DE"
+        :kontor.journal/name "Payroll DE" :kontor.journal/type :general}
+       {:db/id "j-us" :kontor.journal/code "PAY-US"
+        :kontor.journal/name "Payroll US" :kontor.journal/type :general}
+       {:db/id "j-ca" :kontor.journal/code "PAY-CA"
+        :kontor.journal/name "Payroll CA" :kontor.journal/type :general}
        ;; The fixture's posting dates are 2025-11; align period.
        {:db/id "p-2025-11" :period/name "2025-11"
         :period/start #inst "2025-11-01"
@@ -558,9 +558,9 @@
                  :components [{:kind :base-wage :amount 4000M :period :monthly}]})
         db2 (d/db conn)
         period (ref-eid db2 :period/name "2025-11")
-        j-de (ref-eid db2 :journal/code "PAY-DE")
-        j-us (ref-eid db2 :journal/code "PAY-US")
-        j-ca (ref-eid db2 :journal/code "PAY-CA")
+        j-de (ref-eid db2 :kontor.journal/code "PAY-DE")
+        j-us (ref-eid db2 :kontor.journal/code "PAY-US")
+        j-ca (ref-eid db2 :kontor.journal/code "PAY-CA")
         ;; DE — real provider trio + fixture.
         catalog (datev-wt/validate-catalog
                  {:catalog/version 1
@@ -658,10 +658,10 @@
                         db "JANE-DE-REAL-2025-11")
         de-run (d/pull db
                        '[* {:payroll-run/payroll-transaction
-                            [:transaction/external-id
-                             {:posting/_transaction
-                              [:posting/amount
-                               {:posting/account [:kontor.account/code]}]}]}
+                            [:kontor.transaction/external-id
+                             {:kontor.posting/_transaction
+                              [:kontor.posting/amount
+                               {:kontor.posting/account [:kontor.account/code]}]}]}
                          {:payroll-run/emit-docs [:db/id :audit-doc/code
                                                   :audit-doc/category
                                                   :audit-doc/inline-payload]}]
@@ -673,17 +673,17 @@
 
     (testing "DE transaction posted with the 10-leg Bruttomethode shape (real provider)"
       (let [tx (:payroll-run/payroll-transaction de-run)
-            postings (:posting/_transaction tx)]
-        (is (= "TX-JANE-DE-REAL-2025-11" (:transaction/external-id tx)))
+            postings (:kontor.posting/_transaction tx)]
+        (is (= "TX-JANE-DE-REAL-2025-11" (:kontor.transaction/external-id tx)))
         (is (= 10 (count postings))
             "the real DATEV posting-builder emits exactly 10 legs")
-        (let [sum (reduce (fn [^java.math.BigDecimal a {:keys [posting/amount]}]
+        (let [sum (reduce (fn [^java.math.BigDecimal a {:kontor.posting/keys [amount]}]
                             (.add a ^java.math.BigDecimal amount))
                           0M postings)]
           (is (zero? (.compareTo ^java.math.BigDecimal sum 0M))
               "the cross-stage DE transaction balances under the real adapter"))
-        (let [by-code (group-by (comp :kontor.account/code :posting/account) postings)
-              amounts (fn [code] (sort (map :posting/amount (get by-code code []))))]
+        (let [by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)
+              amounts (fn [code] (sort (map :kontor.posting/amount (get by-code code []))))]
           ;; Same SKR04 amounts as the module's own e2e test — the
           ;; cross-stage substrate must not perturb the per-account
           ;; distribution.
@@ -727,8 +727,8 @@
                                     :with ?p
                                     :in $ ?a
                                     :where
-                                    [?p :posting/account ?a]
-                                    [?p :posting/amount ?amt]]
+                                    [?p :kontor.posting/account ?a]
+                                    [?p :kontor.posting/amount ?amt]]
                                   db account-eid))]
         (is (= 4000.00M (account-totals (ref-eid db :kontor.account/code "6020"))))
         (is (= 3200M    (account-totals us-wages-exp)))

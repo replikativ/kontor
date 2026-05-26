@@ -223,11 +223,11 @@
                     acct (some->> code (account-by-code db))
                     amt  (bd (:amount c))]
              :when (and acct (nonzero? amt))]
-         {:posting/account      acct
-          :posting/amount       (.negate amt)
-          :posting/commodity    (:commodity tax-facts)
-          :posting/display-type :tax
-          :posting/posted-at    date})))))
+         {:kontor.posting/account      acct
+          :kontor.posting/amount       (.negate amt)
+          :kontor.posting/commodity    (:commodity tax-facts)
+          :kontor.posting/display-type :tax
+          :kontor.posting/posted-at    date})))))
 
 (defn make-ca-tax-posting-builder
   "Construct the Canadian `TaxPostingBuilder`. `opts` may carry

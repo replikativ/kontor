@@ -49,7 +49,7 @@
    its own CNPJ-raiz/0002, /0003, etc.) the consumer routes per-CNPJ
    via the `:kontor.account-tag/name` convention. Pass `:cnpj-account-tag` opt
    (e.g. `\"br-cnpj-12345678000190\"`); the builder appends this tag
-   to every posting via `:posting/account-tags`, letting downstream
+   to every posting via `:kontor.posting/account-tags`, letting downstream
    GFIP + eSocial aggregators filter by CNPJ cheaply.
 
    ## Accounts map shape
@@ -104,10 +104,10 @@
 
 (defn- with-cnpj-tag
   "Optionally attach the CNPJ routing tag to a posting via
-   :posting/account-tags."
+   :kontor.posting/account-tags."
   [posting cnpj-account-tag]
   (if (and cnpj-account-tag (not (str/blank? cnpj-account-tag)))
-    (update posting :posting/account-tags
+    (update posting :kontor.posting/account-tags
             (fnil conj [])
             [:kontor.account-tag/name cnpj-account-tag])
     posting))
@@ -145,15 +145,15 @@
          (mapv (fn [[tag comps]]
                  (let [sum (sum-bd (map :amount comps))]
                    (cond->
-                    {:posting/account (account-for-tag! accounts tag)
-                     :posting/amount sum
-                     :posting/commodity commodity
-                     :posting/narration (str "Folha — " (name tag))}
+                    {:kontor.posting/account (account-for-tag! accounts tag)
+                     :kontor.posting/amount sum
+                     :kontor.posting/commodity commodity
+                     :kontor.posting/narration (str "Folha — " (name tag))}
                      cnpj-account-tag
-                     (update :posting/account-tags
+                     (update :kontor.posting/account-tags
                              (fnil conj [])
                              [:kontor.account-tag/name cnpj-account-tag])))))
-         (filter (fn [{:keys [posting/amount]}]
+         (filter (fn [{:kontor.posting/keys [amount]}]
                    (pos? (compare ^BigDecimal amount 0M))))
          vec)))
 
@@ -172,12 +172,12 @@
                                          {:kind kind})))
                      acct (account-for-tag! accounts tag)]
                  (cond->
-                  {:posting/account acct
-                   :posting/amount amount
-                   :posting/commodity commodity
-                   :posting/narration (str "Folha desconto: " (name kind))}
+                  {:kontor.posting/account acct
+                   :kontor.posting/amount amount
+                   :kontor.posting/commodity commodity
+                   :kontor.posting/narration (str "Folha desconto: " (name kind))}
                    cnpj-account-tag
-                   (update :posting/account-tags
+                   (update :kontor.posting/account-tags
                            (fnil conj [])
                            [:kontor.account-tag/name cnpj-account-tag])))))))
 
@@ -198,22 +198,22 @@
                        exp-acct (account-for-tag! accounts exp-tag)
                        pay-acct (when pay-tag (account-for-tag! accounts pay-tag))]
                    (cond-> [(cond->
-                             {:posting/account exp-acct
-                              :posting/amount amount
-                              :posting/commodity commodity
-                              :posting/narration (str "Encargo empregador: " (name kind))}
+                             {:kontor.posting/account exp-acct
+                              :kontor.posting/amount amount
+                              :kontor.posting/commodity commodity
+                              :kontor.posting/narration (str "Encargo empregador: " (name kind))}
                               cnpj-account-tag
-                              (update :posting/account-tags
+                              (update :kontor.posting/account-tags
                                       (fnil conj [])
                                       [:kontor.account-tag/name cnpj-account-tag]))]
                      pay-acct
                      (conj (cond->
-                            {:posting/account pay-acct
-                             :posting/amount (.negate ^BigDecimal amount)
-                             :posting/commodity commodity
-                             :posting/narration (str "Encargo a recolher: " (name kind))}
+                            {:kontor.posting/account pay-acct
+                             :kontor.posting/amount (.negate ^BigDecimal amount)
+                             :kontor.posting/commodity commodity
+                             :kontor.posting/narration (str "Encargo a recolher: " (name kind))}
                              cnpj-account-tag
-                             (update :posting/account-tags
+                             (update :kontor.posting/account-tags
                                      (fnil conj [])
                                      [:kontor.account-tag/name cnpj-account-tag])))))))))
 
@@ -224,12 +224,12 @@
    {:keys [accounts commodity cnpj-account-tag]}]
   (when (pos? (compare ^BigDecimal net 0M))
     [(cond->
-      {:posting/account (account-for-tag! accounts :br-payroll-net-wages)
-       :posting/amount (.negate ^BigDecimal net)
-       :posting/commodity commodity
-       :posting/narration "Salários a pagar (líquido)"}
+      {:kontor.posting/account (account-for-tag! accounts :br-payroll-net-wages)
+       :kontor.posting/amount (.negate ^BigDecimal net)
+       :kontor.posting/commodity commodity
+       :kontor.posting/narration "Salários a pagar (líquido)"}
        cnpj-account-tag
-       (update :posting/account-tags
+       (update :kontor.posting/account-tags
                (fnil conj [])
                [:kontor.account-tag/name cnpj-account-tag]))]))
 
@@ -267,7 +267,7 @@
         (fn [fact]
           (let [postings (fact->postings fact base-opts)]
             (cond->> postings
-              ledger (mapv #(assoc % :posting/ledger ledger)))))
+              ledger (mapv #(assoc % :kontor.posting/ledger ledger)))))
         payroll-facts)))))
 
 (defn make-posting-builder [opts]

@@ -7,7 +7,7 @@
         as datalog queries in `resources/invariants/*.edn`, registered
         on the connection, evaluated automatically on every
         `transact-with-validation` call. Currently:
-          - account-active: every :posting/account refers to an active
+          - account-active: every :kontor.posting/account refers to an active
             account.
           - commodity-match: posting commodity matches the account's
             commodity when the account specifies one.
@@ -15,12 +15,12 @@
      2. **Behavior / lifecycle constraints** as hand-rolled middleware.
         Currently:
           - sealing (`sealing.clj`): no silent retract of
-            :posting/posted-at-marked entities (ADR-007).
+            :kontor.posting/posted-at-marked entities (ADR-007).
           - period-locked (`period.clj`): no posting whose tx's
             :tx/valid-from (kontor.bitemporal) falls inside a closed
             :period/locked-at period.
         Planned:
-          - state-machine: :transaction/state transitions follow
+          - state-machine: :kontor.transaction/state transitions follow
             draft → posted → cancelled, no skipping or regressing."
   (:require [clojure.java.io :as io]
             [datahike.api :as d]
@@ -44,7 +44,7 @@
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Attribute keyword that triggers this invariant
-                     when present in a tx (e.g. :posting/account).
+                     when present in a tx (e.g. :kontor.posting/account).
                      Identity attribute — one query per rule keyword."}
    {:db/ident       :invariant/query
     :db/valueType   :db.type/string
@@ -76,9 +76,9 @@
 
    Two invariants on different rule attrs both fire when a typical
    posting tx touches both attributes."
-  [{:rule  :posting/account
+  [{:rule  :kontor.posting/account
     :query (read-invariant "account_active")}
-   {:rule  :posting/commodity
+   {:rule  :kontor.posting/commodity
     :query (read-invariant "commodity_match")}])
 
 (defn install-invariants!
@@ -105,9 +105,9 @@
 
 (defn- posting-entries-by-tx
   "Walk tx-data, return {transaction-eid {commodity-eid total}}.
-   Handles both entity-map shape (`{:posting/account … :posting/amount …}`)
-   and tuple shape (`[:db/add eid :posting/amount v]`).
-   Tx-data without :posting/amount entries returns {} (no postings)."
+   Handles both entity-map shape (`{:kontor.posting/account … :kontor.posting/amount …}`)
+   and tuple shape (`[:db/add eid :kontor.posting/amount v]`).
+   Tx-data without :kontor.posting/amount entries returns {} (no postings)."
   [tx-data]
   (let [add-amt
         (fn [acc tx-eid commodity amount]
@@ -117,24 +117,24 @@
      (fn [acc entry]
        (cond
          ;; Entity map with posting attrs.
-         (and (map? entry) (:posting/amount entry))
-         (let [tx-eid (:posting/transaction entry)
-               commodity (:posting/commodity entry)
-               amount (:posting/amount entry)]
+         (and (map? entry) (:kontor.posting/amount entry))
+         (let [tx-eid (:kontor.posting/transaction entry)
+               commodity (:kontor.posting/commodity entry)
+               amount (:kontor.posting/amount entry)]
            (cond-> acc
              (and tx-eid amount)
              (add-amt tx-eid commodity amount)))
 
-         ;; [:db/add eid :posting/amount v]
+         ;; [:db/add eid :kontor.posting/amount v]
          (and (vector? entry) (= 4 (count entry))
               (= :db/add (first entry))
-              (= :posting/amount (nth entry 2)))
+              (= :kontor.posting/amount (nth entry 2)))
          ;; We don't know the tx-eid from this tuple alone, so we
          ;; group by the posting eid (`(second entry)`) — datalog
          ;; later associates it with the transaction. Postings without
          ;; an explicit transaction at INSERT time would mis-group;
          ;; for SQL INSERTs this is fine because the posting INSERT
-         ;; sets :posting/transaction in the same entity map.
+         ;; sets :kontor.posting/transaction in the same entity map.
          (add-amt acc :__by-posting-eid__ (second entry) (nth entry 3))
 
          :else acc))

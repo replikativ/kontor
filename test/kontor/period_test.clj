@@ -31,16 +31,16 @@
      :kontor.account/type :asset :kontor.account/active true}
     {:db/id -3 :kontor.account/path "Income:Sales" :kontor.account/name "Sales"
      :kontor.account/type :income :kontor.account/active true}
-    {:db/id -4 :journal/code "INV" :journal/name "Sales invoices"
-     :journal/type :sale :journal/active true}
-    {:db/id -5 :journal/code "GEN" :journal/name "General journal"
-     :journal/type :general :journal/active true}])
+    {:db/id -4 :kontor.journal/code "INV" :kontor.journal/name "Sales invoices"
+     :kontor.journal/type :sale :kontor.journal/active true}
+    {:db/id -5 :kontor.journal/code "GEN" :kontor.journal/name "General journal"
+     :kontor.journal/type :general :kontor.journal/active true}])
   (let [db (d/db conn)]
     {:eur       (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
      :rec       (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
      :rev       (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
-     :sales-jnl (:db/id (d/entity db [:journal/code "INV"]))
-     :gen-jnl   (:db/id (d/entity db [:journal/code "GEN"]))}))
+     :sales-jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
+     :gen-jnl   (:db/id (d/entity db [:kontor.journal/code "GEN"]))}))
 
 (defn- open-period!
   "Create an OPEN period covering [start, end), optionally scoped to
@@ -68,13 +68,13 @@
   [{:keys [eur rec rev sales-jnl]} effective-date]
   (posting/build-transaction
    {:transaction
-    {:transaction/external-id    (str "TX-" (.getTime ^java.util.Date effective-date))
-     :transaction/journal        sales-jnl
-     :transaction/effective-date effective-date
-     :transaction/narration      "test"}
+    {:kontor.transaction/external-id    (str "TX-" (.getTime ^java.util.Date effective-date))
+     :kontor.transaction/journal        sales-jnl
+     :kontor.transaction/effective-date effective-date
+     :kontor.transaction/narration      "test"}
     :postings
-    [{:posting/account rec :posting/amount  100M :posting/commodity eur}
-     {:posting/account rev :posting/amount -100M :posting/commodity eur}]}))
+    [{:kontor.posting/account rec :kontor.posting/amount  100M :kontor.posting/commodity eur}
+     {:kontor.posting/account rev :kontor.posting/amount -100M :kontor.posting/commodity eur}]}))
 
 ;; ============================================================================
 ;; find-violations (pure)
@@ -122,13 +122,13 @@
           _    (closed-period! conn feb-1 mar-1 sales-jnl)
           gen-tx (posting/build-transaction
                   {:transaction
-                   {:transaction/external-id    "GEN-1"
-                    :transaction/journal        gen-jnl
-                    :transaction/effective-date feb-15
-                    :transaction/narration      "general entry in Feb"}
+                   {:kontor.transaction/external-id    "GEN-1"
+                    :kontor.transaction/journal        gen-jnl
+                    :kontor.transaction/effective-date feb-15
+                    :kontor.transaction/narration      "general entry in Feb"}
                    :postings
-                   [{:posting/account rec :posting/amount  100M :posting/commodity eur}
-                    {:posting/account rev :posting/amount -100M :posting/commodity eur}]})
+                   [{:kontor.posting/account rec :kontor.posting/amount  100M :kontor.posting/commodity eur}
+                    {:kontor.posting/account rev :kontor.posting/amount -100M :kontor.posting/commodity eur}]})
           sales-tx (mk-tx cat feb-15)]
       (is (= [] (period/find-violations (d/db conn) gen-tx))
           "General-journal posting is not locked by sales-only period.")
@@ -293,14 +293,14 @@
         period-eid (open-period! conn feb-1 mar-1)
         tx (posting/build-transaction
             {:transaction
-             {:transaction/external-id    "DRAFT-INV"
-              :transaction/journal        sales-jnl
-              :transaction/effective-date feb-15
-              :transaction/narration      "Pending"
-              :transaction/state          :draft}
+             {:kontor.transaction/external-id    "DRAFT-INV"
+              :kontor.transaction/journal        sales-jnl
+              :kontor.transaction/effective-date feb-15
+              :kontor.transaction/narration      "Pending"
+              :kontor.transaction/state          :draft}
              :postings
-             [{:posting/account rec :posting/amount  100M :posting/commodity eur}
-              {:posting/account rev :posting/amount -100M :posting/commodity eur}]})]
+             [{:kontor.posting/account rec :kontor.posting/amount  100M :kontor.posting/commodity eur}
+              {:kontor.posting/account rev :kontor.posting/amount -100M :kontor.posting/commodity eur}]})]
     (v/transact-with-validation conn tx)
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo #"pre-close"
@@ -323,17 +323,17 @@
         period-eid (open-period! conn feb-1 mar-1)
         tx (-> (posting/build-transaction
                 {:transaction
-                 {:transaction/external-id    "FEB-CLEAN"
-                  :transaction/journal        sales-jnl
-                  :transaction/effective-date feb-15
-                  :transaction/narration      "Clean"
-                  :transaction/state          :posted
-                  :transaction/posted-at      feb-15}
+                 {:kontor.transaction/external-id    "FEB-CLEAN"
+                  :kontor.transaction/journal        sales-jnl
+                  :kontor.transaction/effective-date feb-15
+                  :kontor.transaction/narration      "Clean"
+                  :kontor.transaction/state          :posted
+                  :kontor.transaction/posted-at      feb-15}
                  :postings
-                 [{:posting/account rec :posting/amount  100M :posting/commodity eur}
-                  {:posting/account rev :posting/amount -100M :posting/commodity eur}]})
-               (->> (mapv #(if (some? (:posting/account %))
-                             (assoc % :posting/posted-at feb-15)
+                 [{:kontor.posting/account rec :kontor.posting/amount  100M :kontor.posting/commodity eur}
+                  {:kontor.posting/account rev :kontor.posting/amount -100M :kontor.posting/commodity eur}]})
+               (->> (mapv #(if (some? (:kontor.posting/account %))
+                             (assoc % :kontor.posting/posted-at feb-15)
                              %))))
         _ (v/transact-with-validation conn tx)]
     (is (some? (period/close! conn period-eid))

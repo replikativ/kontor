@@ -106,7 +106,7 @@
                        :code code}))))
 
 (defn- journal-by-code [db code]
-  (:db/id (d/entity db [:journal/code code])))
+  (:db/id (d/entity db [:kontor.journal/code code])))
 
 (defn- commodity-by-symbol [db sym]
   (:db/id (d/entity db [:kontor.commodity/symbol sym])))
@@ -164,10 +164,10 @@
                                (.add acc (line-net l)))
                              0M ls)
                  acct (require-account db acct-code)]]
-       {:posting/account acct
-        :posting/amount (.negate (bd net))
-        :posting/commodity commodity-eid
-        :posting/posted-at date}))))
+       {:kontor.posting/account acct
+        :kontor.posting/amount (.negate (bd net))
+        :kontor.posting/commodity commodity-eid
+        :kontor.posting/posted-at date}))))
 
 (defn- ust-codes-from
   "Translate the per-call `:codes` override map into the
@@ -227,7 +227,7 @@
                              instead of AR (2000).
      :invoice/cash-code     account-code override for the cash leg
                              (e.g. \"2800\" for bank).
-     :invoice/buyer         partner ref (kernel :transaction/partner).
+     :invoice/buyer         partner ref (kernel :kontor.transaction/partner).
      :invoice/journal       journal code override (default INV).
      :invoice/narration     transaction narration (default external-id).
 
@@ -272,24 +272,24 @@
                           0M lines)
         ;; USt postings are credits (negative); gross = net − Σ(ust).
         gross     (reduce (fn [^java.math.BigDecimal a p]
-                            (.subtract a ^java.math.BigDecimal (:posting/amount p)))
+                            (.subtract a ^java.math.BigDecimal (:kontor.posting/amount p)))
                           net-sum ust-posts)
         debit-code (if cash-sale?
                      (get codes :cash-code default-cash-code)
                      (get codes :ar-code default-ar-code))
         debit-acct (require-account db debit-code)
-        debit-post {:posting/account debit-acct
-                    :posting/amount gross
-                    :posting/commodity commodity-eid
-                    :posting/posted-at issue-date}
-        tx-base (cond-> {:transaction/external-id external-id
-                         :transaction/journal jnl
-                         :transaction/effective-date issue-date
-                         :transaction/narration (or (:invoice/narration invoice)
+        debit-post {:kontor.posting/account debit-acct
+                    :kontor.posting/amount gross
+                    :kontor.posting/commodity commodity-eid
+                    :kontor.posting/posted-at issue-date}
+        tx-base (cond-> {:kontor.transaction/external-id external-id
+                         :kontor.transaction/journal jnl
+                         :kontor.transaction/effective-date issue-date
+                         :kontor.transaction/narration (or (:invoice/narration invoice)
                                                     external-id)
-                         :transaction/state :posted
-                         :transaction/posted-at issue-date}
-                  buyer (assoc :transaction/partner buyer))
+                         :kontor.transaction/state :posted
+                         :kontor.transaction/posted-at issue-date}
+                  buyer (assoc :kontor.transaction/partner buyer))
         input {:transaction tx-base
                :postings (into [debit-post] (into rev-posts ust-posts))}]
     (posting/build-transaction input)))
