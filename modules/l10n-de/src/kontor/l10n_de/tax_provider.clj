@@ -57,7 +57,7 @@
 ;; ============================================================================
 
 (def vat-rate->ust-class
-  "DE USt rate (BigDecimal, as carried on `:invoice-line/vat-rate`) →
+  "DE USt rate (BigDecimal, as carried on `:kontor.invoice-line/vat-rate`) →
    a stable class keyword stashed in `:jurisdiction-specific-codes`."
   {19.0M :standard
    7.0M  :reduced

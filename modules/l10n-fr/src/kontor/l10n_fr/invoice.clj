@@ -25,7 +25,7 @@
 
    The default `:line-account-by-rate` table routes lines to the
    `:service` columns (706/7065/7066/7067) since most French SMBs are
-   service-providers. Override per-line via `:invoice-line/account`
+   service-providers. Override per-line via `:kontor.invoice-line/account`
    when a line is a `:goods` sale that should hit `707`.
 
    TVA collectée is split by rate per CA3 reporting:
@@ -41,7 +41,7 @@
    `:exempt`             — revenue only, no TVA (services bancaires,
                            location nue, santé, enseignement).
                            Routed to 706 by default (caller can
-                           override via :invoice-line/account).
+                           override via :kontor.invoice-line/account).
    `:intra-eu-b2b`       — revenue only, routed to 7081 (livraisons
                            intra-UE exonérées). Reverse-charge: buyer
                            self-assesses TVA in destination country.
@@ -84,7 +84,7 @@
 
 (def default-revenue-by-rate
   "Default revenue (Produits) account per TVA rate. Caller can
-   override per-line via :invoice-line/account."
+   override per-line via :kontor.invoice-line/account."
   {:std   "706"     ; Prestations de services
    :inter "7065"    ; Prestations à 10%
    :red   "7066"    ; Prestations à 5,5%
@@ -127,10 +127,10 @@
 
 (defn- revenue-code-for-line
   "Resolve the revenue account code for one line. Precedence:
-     1. :invoice-line/account override (a code string)
+     1. :kontor.invoice-line/account override (a code string)
      2. status-based default (:exempt / :intra-eu-b2b / :export)
      3. rate-based default for :taxable lines (:std/:inter/:red/...)."
-  [{:invoice-line/keys [account tax-status rate]
+  [{:kontor.invoice-line/keys [account tax-status rate]
     :or {tax-status :taxable rate :std}}
    {:keys [revenue-by-rate revenue-by-status]}]
   (or (when (string? account) account)
@@ -148,19 +148,19 @@
 
 (defn- line-net
   "Per-line net amount = qty × unit-price, rounded HALF-EVEN to 2dp.
-   Tolerates :invoice-line/line-total when caller pre-computed it."
-  ^java.math.BigDecimal [{:invoice-line/keys [quantity unit-price line-total]}]
+   Tolerates :kontor.invoice-line/line-total when caller pre-computed it."
+  ^java.math.BigDecimal [{:kontor.invoice-line/keys [quantity unit-price line-total]}]
   (cond
     line-total (bigdec line-total)
     (and quantity unit-price)
     (.setScale (.multiply (bigdec quantity) (bigdec unit-price))
                2 java.math.RoundingMode/HALF_EVEN)
     :else
-    (throw (ex-info "Invoice line needs either :invoice-line/line-total or both :invoice-line/quantity + :invoice-line/unit-price"
+    (throw (ex-info "Invoice line needs either :kontor.invoice-line/line-total or both :kontor.invoice-line/quantity + :kontor.invoice-line/unit-price"
                     {:line (select-keys
-                            {:invoice-line/quantity quantity
-                             :invoice-line/unit-price unit-price}
-                            [:invoice-line/quantity :invoice-line/unit-price])}))))
+                            {:kontor.invoice-line/quantity quantity
+                             :kontor.invoice-line/unit-price unit-price}
+                            [:kontor.invoice-line/quantity :kontor.invoice-line/unit-price])}))))
 
 (defn- revenue-postings
   "Per-line revenue credit postings. Groups by revenue-account so two
@@ -198,8 +198,8 @@
                (tpb/compute-tax-postings
                 provider builder
                 {:base       (line-net l)
-                 :rate       (or (:invoice-line/rate l) :std)
-                 :tax-status (or (:invoice-line/tax-status l) :taxable)
+                 :rate       (or (:kontor.invoice-line/rate l) :std)
+                 :tax-status (or (:kontor.invoice-line/tax-status l) :taxable)
                  :commodity  commodity-eid}
                 {:db db :date date}))
              lines))))
@@ -208,26 +208,26 @@
   "Pure tx-data builder for a French sales invoice (ADR-068).
 
    Required input:
-     {:invoice/external-id <string>
-      :invoice/issue-date  <java.util.Date>
-      :invoice/lines       [<invoice-line>]}
+     {:kontor.invoice/external-id <string>
+      :kontor.invoice/issue-date  <java.util.Date>
+      :kontor.invoice/lines       [<invoice-line>]}
 
    Each invoice-line:
-     {:invoice-line/quantity   <number-or-bigdec>      ; OR
-      :invoice-line/unit-price <number-or-bigdec>      ; OR pre-computed:
-      :invoice-line/line-total <bigdec>                ; net per line
-      :invoice-line/rate       <keyword>               ; :std :inter :red :spec :zero
-      :invoice-line/tax-status <keyword>               ; default :taxable
-      :invoice-line/account    <code>                  ; optional override
+     {:kontor.invoice-line/quantity   <number-or-bigdec>      ; OR
+      :kontor.invoice-line/unit-price <number-or-bigdec>      ; OR pre-computed:
+      :kontor.invoice-line/line-total <bigdec>                ; net per line
+      :kontor.invoice-line/rate       <keyword>               ; :std :inter :red :spec :zero
+      :kontor.invoice-line/tax-status <keyword>               ; default :taxable
+      :kontor.invoice-line/account    <code>                  ; optional override
       ...}
 
    Optional top-level fields:
-     :invoice/cash-sale?     when true, post Dr cash (5121) instead of
+     :kontor.invoice/cash-sale?     when true, post Dr cash (5121) instead of
                               AR (411).
-     :invoice/cash-code      account-code override for the cash leg.
-     :invoice/ar-code        account-code override for the AR leg.
-     :invoice/buyer          partner ref (kernel :kontor.transaction/partner).
-     :invoice/journal        journal code override (default VTE).
+     :kontor.invoice/cash-code      account-code override for the cash leg.
+     :kontor.invoice/ar-code        account-code override for the AR leg.
+     :kontor.invoice/buyer          partner ref (kernel :kontor.transaction/partner).
+     :kontor.invoice/journal        journal code override (default VTE).
 
    Opts:
      :codes        — map of code overrides
@@ -242,14 +242,14 @@
   [db invoice {:keys [codes commodity journal-code]
                :or {codes {} commodity default-commodity
                     journal-code default-journal-code}}]
-  (let [{:invoice/keys [external-id issue-date lines buyer cash-sale? journal
+  (let [{:kontor.invoice/keys [external-id issue-date lines buyer cash-sale? journal
                         ar-code cash-code]} invoice
         _ (when-not external-id
-            (throw (ex-info "Invoice missing :invoice/external-id" {:invoice invoice})))
+            (throw (ex-info "Invoice missing :kontor.invoice/external-id" {:invoice invoice})))
         _ (when-not issue-date
-            (throw (ex-info "Invoice missing :invoice/issue-date" {:invoice invoice})))
+            (throw (ex-info "Invoice missing :kontor.invoice/issue-date" {:invoice invoice})))
         _ (when (empty? lines)
-            (throw (ex-info "Invoice has no :invoice/lines" {:invoice invoice})))
+            (throw (ex-info "Invoice has no :kontor.invoice/lines" {:invoice invoice})))
         commodity-eid (or (commodity-by-symbol db commodity)
                           (throw (ex-info (str "Commodity " commodity " not found")
                                           {:commodity commodity})))
@@ -289,7 +289,7 @@
         tx-base (cond-> {:kontor.transaction/external-id external-id
                          :kontor.transaction/journal jnl
                          :kontor.transaction/effective-date issue-date
-                         :kontor.transaction/narration (or (:invoice/narration invoice)
+                         :kontor.transaction/narration (or (:kontor.invoice/narration invoice)
                                                     external-id)
                          :kontor.transaction/state :posted
                          :kontor.transaction/posted-at issue-date}
@@ -333,11 +333,11 @@
    Used by consumers to surface input issues *before* hitting the
    gate."
   [invoice]
-  (let [{:invoice/keys [external-id issue-date lines]} invoice]
+  (let [{:kontor.invoice/keys [external-id issue-date lines]} invoice]
     (cond-> []
       (or (nil? external-id) (and (string? external-id) (str/blank? external-id)))
-      (conj {:field :invoice/external-id :issue :missing-or-blank})
+      (conj {:field :kontor.invoice/external-id :issue :missing-or-blank})
       (nil? issue-date)
-      (conj {:field :invoice/issue-date :issue :missing})
+      (conj {:field :kontor.invoice/issue-date :issue :missing})
       (empty? lines)
-      (conj {:field :invoice/lines :issue :empty}))))
+      (conj {:field :kontor.invoice/lines :issue :empty}))))

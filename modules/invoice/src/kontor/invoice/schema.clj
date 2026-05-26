@@ -1,8 +1,8 @@
 (ns kontor.invoice.schema
   "Companion schema for `kontor-invoice` — see ADR-036.
 
-   Extends the kernel's existing :invoice/* + :invoice-line/* with
-   order-bridge fields, :invoice/type discriminator, sealing marker,
+   Extends the kernel's existing :kontor.invoice/* + :kontor.invoice-line/* with
+   order-bridge fields, :kontor.invoice/type discriminator, sealing marker,
    multi-entity scope, and per-line GL routing metadata. Introduces
    two new entity namespaces:
      :order-item-billing/* — junction tracking invoiced quantity per
@@ -17,11 +17,11 @@
   (:require [datahike.api :as d]))
 
 ;; ============================================================================
-;; Invoice extensions (additive to kernel :invoice/*)
+;; Invoice extensions (additive to kernel :kontor.invoice/*)
 ;; ============================================================================
 
 (def ^:private invoice-ext-attrs
-  [{:db/ident       :invoice/type
+  [{:db/ident       :kontor.invoice/type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":sales | :purchase | :credit-memo | :debit-memo.
@@ -29,36 +29,36 @@
                      debits vs credits. kontor-procurement (Stage K)
                      uses :purchase for vendor invoices."}
 
-   {:db/ident       :invoice/order
+   {:db/ident       :kontor.invoice/order
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional back-ref to the :order this invoice was
                      created from. Nil for standalone bills not tied
                      to a sales order."}
 
-   {:db/ident       :invoice/invoice-per-shipment-of
+   {:db/ident       :kontor.invoice/invoice-per-shipment-of
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ref to a :ship-group. When set, this
                      invoice is for one specific ship group (the
                      OFBiz invoicePerShipment pattern). When nil and
-                     :invoice/order is set, the invoice covers the
+                     :kontor.invoice/order is set, the invoice covers the
                      whole order."}
 
-   ;; NOTE: :invoice/posted-at removed — the presence of
-   ;; :invoice/transaction is the canonical "posted to GL" sentinel.
+   ;; NOTE: :kontor.invoice/posted-at removed — the presence of
+   ;; :kontor.invoice/transaction is the canonical "posted to GL" sentinel.
    ;; For the posted-at instant query, walk :status-history (the tx
-   ;; that wrote :invoice/transaction also drove :invoice/status →
+   ;; that wrote :kontor.invoice/transaction also drove :kontor.invoice/status →
    ;; :sent) or read the :tx/valid-from on its tx.
 
-   {:db/ident       :invoice/entity
+   {:db/ident       :kontor.invoice/entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Multi-entity scope per ADR-031. Required for
                      multi-entity tenants; optional for single-entity."}
 
    ;; ADR-040: jurisdiction primitives.
-   {:db/ident       :invoice/tax-inclusive?
+   {:db/ident       :kontor.invoice/tax-inclusive?
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "Default false. When true, line :unit-price is
@@ -72,7 +72,7 @@
 ;; ============================================================================
 
 (def ^:private invoice-line-ext-attrs
-  [{:db/ident       :invoice-line/parent-line
+  [{:db/ident       :kontor.invoice-line/parent-line
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Self-ref. When set, this line is a derived line
@@ -81,7 +81,7 @@
                      a ship-group line. Posting groups parent + its
                      children together for line-level audit."}
 
-   {:db/ident       :invoice-line/order-item
+   {:db/ident       :kontor.invoice-line/order-item
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The kontor-sales :order-item this invoice line
@@ -90,13 +90,13 @@
                      quantity from order-item quantity on the next
                      invoice)."}
 
-   {:db/ident       :invoice-line/order-adjustment
+   {:db/ident       :kontor.invoice-line/order-adjustment
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The :order-adjustment this line was derived from.
                      Set for adjustment lines (tax, discount, shipping)."}
 
-   {:db/ident       :invoice-line/gl-account-type
+   {:db/ident       :kontor.invoice-line/gl-account-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":sales-revenue | :sales-tax-payable | :shipping-
@@ -104,18 +104,18 @@
                      … Posting-time discriminator for the GL account
                      lookup via :gl-account-default."}
 
-   {:db/ident       :invoice-line/tax-auth-party
+   {:db/ident       :kontor.invoice-line/tax-auth-party
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Tax authority :partner (e.g. the German
                      Finanzamt). Used by ADR-016."}
 
-   {:db/ident       :invoice-line/tax-auth-geo-id
+   {:db/ident       :kontor.invoice-line/tax-auth-geo-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Jurisdiction code (\"DE\", \"US-CA\")."}
 
-   {:db/ident       :invoice-line/amount
+   {:db/ident       :kontor.invoice-line/amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Line total. For goods lines: quantity × unit-price.
@@ -123,7 +123,7 @@
                      (where quantity doesn't apply)."}
 
    ;; ADR-040: jurisdiction primitives.
-   {:db/ident       :invoice-line/reverse-charge?
+   {:db/ident       :kontor.invoice-line/reverse-charge?
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "Default false. When true, bridge emits dual
@@ -132,7 +132,7 @@
                      side invoice doesn't charge VAT. EU B2B
                      intracommunity + ViDA 2028. ADR-040."}
 
-   {:db/ident       :invoice-line/recognition
+   {:db/ident       :kontor.invoice-line/recognition
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":direct | :deferred. Default :direct. :deferred
@@ -141,7 +141,7 @@
                      when it lands) emits a :schedule (ADR-032) row
                      to release over the obligation period. ADR-040."}
 
-   {:db/ident       :invoice-line/withholding-on-payment?
+   {:db/ident       :kontor.invoice-line/withholding-on-payment?
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "Default false. When true, the withholding-tax
@@ -227,92 +227,92 @@
    The :ready intermediate is optional — :draft → :sent is also
    permitted for batch flows."
   [{:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :nil
     :kontor.status-transition/to :draft
     :kontor.status-transition/active true
     :kontor.status-transition/name "Create Invoice"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :draft
     :kontor.status-transition/to :ready
     :kontor.status-transition/active true
     :kontor.status-transition/name "Finalize (lock edits)"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :draft
     :kontor.status-transition/to :sent
     :kontor.status-transition/active true
     :kontor.status-transition/name "Post (skip-ready batch flow)"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :draft
     :kontor.status-transition/to :cancelled
     :kontor.status-transition/active true
     :kontor.status-transition/name "Abandon Draft"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :ready
     :kontor.status-transition/to :sent
     :kontor.status-transition/active true
     :kontor.status-transition/name "Post"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :ready
     :kontor.status-transition/to :cancelled
     :kontor.status-transition/active true
     :kontor.status-transition/name "Cancel Ready"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :sent
     :kontor.status-transition/to :paid
     :kontor.status-transition/active true
     :kontor.status-transition/name "Settle (full)"}
    ;; ADR-043: partial-payment lifecycle.
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :sent
     :kontor.status-transition/to :partially-paid
     :kontor.status-transition/active true
     :kontor.status-transition/name "First Partial Application"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :partially-paid
     :kontor.status-transition/to :partially-paid
     :kontor.status-transition/active true
     :kontor.status-transition/name "Additional Partial Application"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :partially-paid
     :kontor.status-transition/to :paid
     :kontor.status-transition/active true
     :kontor.status-transition/name "Final Application Closes the Invoice"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :partially-paid
     :kontor.status-transition/to :sent
     :kontor.status-transition/active true
     :kontor.status-transition/name "Allocation Reversal (back to fully-open)"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :paid
     :kontor.status-transition/to :sent
     :kontor.status-transition/active true
     :kontor.status-transition/name "Reversal of Final Application (full reopen)"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :paid
     :kontor.status-transition/to :partially-paid
     :kontor.status-transition/active true
     :kontor.status-transition/name "Reversal Leaves Partial Balance"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :sent
     :kontor.status-transition/to :cancelled
     :kontor.status-transition/active true
     :kontor.status-transition/name "Void (creates reversal tx)"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :paid
     :kontor.status-transition/to :cancelled
     :kontor.status-transition/active true
@@ -322,31 +322,31 @@
    ;; (IT SdI, IN IRN, BR NF-e, ES Verifactu). Opt-in — non-clearance
    ;; jurisdictions go :draft → :sent directly.
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :draft
     :kontor.status-transition/to :pending-attestation
     :kontor.status-transition/active true
     :kontor.status-transition/name "Submit for Clearance"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :ready
     :kontor.status-transition/to :pending-attestation
     :kontor.status-transition/active true
     :kontor.status-transition/name "Submit Finalized for Clearance"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :pending-attestation
     :kontor.status-transition/to :sent
     :kontor.status-transition/active true
     :kontor.status-transition/name "Cleared by Authority"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :pending-attestation
     :kontor.status-transition/to :rejected
     :kontor.status-transition/active true
     :kontor.status-transition/name "Rejected by Authority"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/facet :kontor.invoice/status
     :kontor.status-transition/from :rejected
     :kontor.status-transition/to :draft
     :kontor.status-transition/active true

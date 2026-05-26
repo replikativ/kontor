@@ -116,23 +116,23 @@
 (deftest schema-attrs-and-seeds-present
   (let [db (d/db *conn*)
         idents (set (d/q '[:find [?i ...] :where [_ :db/ident ?i]] db))]
-    (doseq [a [:invoice/type :invoice/order :invoice/entity
-               :invoice-line/parent-line :invoice-line/order-item
-               :invoice-line/gl-account-type :invoice-line/tax-auth-party
-               :invoice-line/amount
+    (doseq [a [:kontor.invoice/type :kontor.invoice/order :kontor.invoice/entity
+               :kontor.invoice-line/parent-line :kontor.invoice-line/order-item
+               :kontor.invoice-line/gl-account-type :kontor.invoice-line/tax-auth-party
+               :kontor.invoice-line/amount
                :order-item-billing/order-item :order-item-billing/invoice-line
                :order-item-billing/quantity :order-item-billing/identity
                :gl-account-default/account-type :gl-account-default/entity
                :gl-account-default/account :gl-account-default/identity]]
       (is (contains? idents a) (str "missing: " a)))
     (testing "invoice status transitions are seeded"
-      (is (true? (sm/legal-transition? db :invoice :invoice/status
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/status
                                        :draft :ready)))
-      (is (true? (sm/legal-transition? db :invoice :invoice/status
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/status
                                        :ready :sent)))
-      (is (true? (sm/legal-transition? db :invoice :invoice/status
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/status
                                        :draft :sent)))
-      (is (true? (sm/legal-transition? db :invoice :invoice/status
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/status
                                        :sent :paid))))))
 
 ;; ============================================================================
@@ -195,9 +195,9 @@
           lines (inv/lines-of db inv-eid)]
       (testing "invoice was created with order back-ref"
         (is (some? inv-eid))
-        (is (= :sales (:invoice/type invoice)))
-        (is (= "ORD-1" (-> invoice :invoice/order :order/external-id)))
-        (is (= :draft (:invoice/status invoice))))
+        (is (= :sales (:kontor.invoice/type invoice)))
+        (is (= "ORD-1" (-> invoice :kontor.invoice/order :order/external-id)))
+        (is (= :draft (:kontor.invoice/status invoice))))
       (testing "one line per order-item, with order-item ref + amount"
         (is (= 1 (count lines)))
         (let [line (first lines)
@@ -205,11 +205,11 @@
                                     :where [?i :order-item/order ?o]
                                             [?i :order-item/seq-id "00001"]]
                                   db order-eid)]
-          (is (= order-item-eid (-> line :invoice-line/order-item :db/id)))
-          (is (= 10M (:invoice-line/quantity line)))
-          (is (= 25M (:invoice-line/unit-price line)))
-          (is (= 250M (:invoice-line/amount line)))
-          (is (= :sales-revenue (:invoice-line/gl-account-type line)))))
+          (is (= order-item-eid (-> line :kontor.invoice-line/order-item :db/id)))
+          (is (= 10M (:kontor.invoice-line/quantity line)))
+          (is (= 25M (:kontor.invoice-line/unit-price line)))
+          (is (= 250M (:kontor.invoice-line/amount line)))
+          (is (= :sales-revenue (:kontor.invoice-line/gl-account-type line)))))
       (testing ":order-item-billing junction was created"
         (let [order-item-eid (d/q '[:find ?i . :in $ ?o
                                     :where [?i :order-item/order ?o]]
@@ -232,9 +232,9 @@
                                   {:external-id "INV-2026-0002"})
     (let [lines-2 (inv/lines-of (d/db *conn*) "INV-2026-0002")]
       (is (= 1 (count lines-2)))
-      (is (= 0M (-> lines-2 first :invoice-line/quantity))
+      (is (= 0M (-> lines-2 first :kontor.invoice-line/quantity))
           "second invoice has zero remaining quantity")
-      (is (= 0M (-> lines-2 first :invoice-line/amount))))))
+      (is (= 0M (-> lines-2 first :kontor.invoice-line/amount))))))
 
 (deftest adjustment-lines-include-tax-discount-shipping
   (let [order-eid (minimal-order!)
@@ -257,7 +257,7 @@
                                   {:external-id "INV-ADJ-1"})
     (let [db (d/db *conn*)
           lines (inv/lines-of db "INV-ADJ-1")
-          types (set (map :invoice-line/gl-account-type lines))]
+          types (set (map :kontor.invoice-line/gl-account-type lines))]
       (is (= 3 (count lines)) "1 product + 1 discount + 1 tax line")
       (is (= #{:sales-revenue :discount-given :sales-tax-payable} types)))))
 
@@ -288,10 +288,10 @@
                       0M postings)]
       (testing "invoice transitioned to :sent + has posted transaction"
         (let [inv (inv/pull-invoice db invoice-eid)]
-          (is (= :sent (:invoice/status inv)))
-          ;; :invoice/transaction presence is the 'posted to GL' sentinel
+          (is (= :sent (:kontor.invoice/status inv)))
+          ;; :kontor.invoice/transaction presence is the 'posted to GL' sentinel
           ;; (the posted-at timestamp lives in :status-history + :tx/valid-from)
-          (is (some? (:invoice/transaction inv)))))
+          (is (some? (:kontor.invoice/transaction inv)))))
       (testing "postings sum to zero (sum-to-zero invariant)"
         (is (= 0 (.compareTo ^java.math.BigDecimal sum 0M))))
       (testing "one product line (credit revenue) + one AR (debit)"
@@ -321,7 +321,7 @@
                                           :reason-note "bank reconciled"})
     (let [db (d/db *conn*)
           inv (inv/pull-invoice db "INV-PAID-1")]
-      (is (= :paid (:invoice/status inv))))))
+      (is (= :paid (:kontor.invoice/status inv))))))
 
 ;; ============================================================================
 ;; P0 regression tests
@@ -339,17 +339,17 @@
     ;; first partial invoice) — bypasses make-invoice-from-order!
     ;; to keep the setup focused.
     (d/transact *conn*
-                [{:invoice/external-id "INV-PRE-1"
-                  :invoice/status :sent
-                  :invoice/issue-date #inst "2026-04-15"
-                  :invoice/type :sales
+                [{:kontor.invoice/external-id "INV-PRE-1"
+                  :kontor.invoice/status :sent
+                  :kontor.invoice/issue-date #inst "2026-04-15"
+                  :kontor.invoice/type :sales
                   :db/id "inv-pre"}
-                 {:invoice-line/invoice "inv-pre"
-                  :invoice-line/sequence 1
-                  :invoice-line/order-item item-eid
-                  :invoice-line/quantity 7M
-                  :invoice-line/unit-price 25M
-                  :invoice-line/amount 175M
+                 {:kontor.invoice-line/invoice "inv-pre"
+                  :kontor.invoice-line/sequence 1
+                  :kontor.invoice-line/order-item item-eid
+                  :kontor.invoice-line/quantity 7M
+                  :kontor.invoice-line/unit-price 25M
+                  :kontor.invoice-line/amount 175M
                   :db/id "line-pre"}
                  {:order-item-billing/order-item item-eid
                   :order-item-billing/invoice-line "line-pre"
@@ -358,7 +358,7 @@
     (d/transact *conn*
                 [{:db/id item-eid
                   :order-item/cancel-quantity 5M}])
-    (testing "negative bill-qty raises :invoice/over-billed-or-over-cancelled"
+    (testing "negative bill-qty raises :kontor.invoice/over-billed-or-over-cancelled"
       (is (thrown-with-msg? Exception #"negative quantity"
                             (inv/make-invoice-from-order! *conn* "ORD-1"
                                                           {:external-id "INV-NEG-1"}))))))
@@ -398,7 +398,7 @@
     (inv/cancel! *conn* "INV-CANCEL-1" {:reason :customer-request
                                          :reason-note "customer abandoned"})
     (is (= :cancelled
-           (:invoice/status (inv/pull-invoice (d/db *conn*) "INV-CANCEL-1"))))))
+           (:kontor.invoice/status (inv/pull-invoice (d/db *conn*) "INV-CANCEL-1"))))))
 
 ;; ============================================================================
 ;; Totals
@@ -423,8 +423,8 @@
     ;; Default is false (kernel attr unset; bridge doesn't set it)
     (testing "default :tax-inclusive? is nil/false"
       (let [inv (inv/pull-invoice (d/db *conn*) "INV-TI-1")]
-        (is (or (nil? (:invoice/tax-inclusive? inv))
-                (false? (:invoice/tax-inclusive? inv))))))))
+        (is (or (nil? (:kontor.invoice/tax-inclusive? inv))
+                (false? (:kontor.invoice/tax-inclusive? inv))))))))
 
 (deftest invoice-line-recognition-deferred-routes-to-deferred-revenue
   (let [_order-eid (minimal-order!)]
@@ -447,21 +447,21 @@
     ;; Mark the invoice line as :deferred (post-bridge)
     (let [line-eid (d/q '[:find ?l . :in $ ?xid ?seq
                           :where
-                          [?inv :invoice/external-id ?xid]
-                          [?l :invoice-line/invoice ?inv]
-                          [?l :invoice-line/sequence ?seq]]
+                          [?inv :kontor.invoice/external-id ?xid]
+                          [?l :kontor.invoice-line/invoice ?inv]
+                          [?l :kontor.invoice-line/sequence ?seq]]
                         (d/db *conn*) "INV-REC-1" 1)]
       (d/transact *conn*
                   [{:db/id line-eid
-                    :invoice-line/gl-account-type :sales-revenue-deferred
-                    :invoice-line/recognition :deferred}])
+                    :kontor.invoice-line/gl-account-type :sales-revenue-deferred
+                    :kontor.invoice-line/recognition :deferred}])
       ;; Post and verify the credit went to the deferred-revenue account
       (inv/post-to-ledger! *conn* "INV-REC-1"
                            {:journal-ref [:kontor.journal/code "SALES"]
                             :posted-at #inst "2026-05-15"})
       (let [db (d/db *conn*)
             inv (inv/pull-invoice db "INV-REC-1")
-            tx-eid (get-in inv [:invoice/transaction :db/id])
+            tx-eid (get-in inv [:kontor.invoice/transaction :db/id])
             postings (->> (d/q '[:find [?p ...]
                                  :in $ ?tx
                                  :where [?p :kontor.posting/transaction ?tx]]
@@ -477,16 +477,16 @@
 (deftest invoice-clearance-transitions-seeded
   (let [db (d/db *conn*)]
     (testing ":draft → :pending-attestation is legal"
-      (is (true? (sm/legal-transition? db :invoice :invoice/status
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/status
                                        :draft :pending-attestation))))
     (testing ":pending-attestation → :sent is legal"
-      (is (true? (sm/legal-transition? db :invoice :invoice/status
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/status
                                        :pending-attestation :sent))))
     (testing ":pending-attestation → :rejected is legal"
-      (is (true? (sm/legal-transition? db :invoice :invoice/status
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/status
                                        :pending-attestation :rejected))))
     (testing ":rejected → :draft (resubmit) is legal"
-      (is (true? (sm/legal-transition? db :invoice :invoice/status
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/status
                                        :rejected :draft))))))
 
 ;; ============================================================================
@@ -513,20 +513,20 @@
       (is (seq cancel-tx)))
     (testing "builders are pure (no side effects on conn)"
       (is (= tx-before (:max-tx (d/db *conn*)))))
-    (testing "transacting the make-ready-tx-data flips :invoice/status to :ready"
+    (testing "transacting the make-ready-tx-data flips :kontor.invoice/status to :ready"
       (d/transact *conn* ready-tx)
-      (is (= :ready (:invoice/status (inv/pull-invoice (d/db *conn*)
+      (is (= :ready (:kontor.invoice/status (inv/pull-invoice (d/db *conn*)
                                                        "INV-TXD-1")))))
     (testing "mark-paid-tx-data composes once the invoice reaches :sent"
       ;; :ready → :sent → :paid path; the builder validates against
       ;; the supplied db, so we read after the prior transact.
       (sm/record-status-change! *conn* {:entity inv-eid
                                         :entity-type :invoice
-                                        :facet :invoice/status
+                                        :facet :kontor.invoice/status
                                         :to :sent})
       (let [paid-tx (inv/mark-paid-tx-data (d/db *conn*) inv-eid nil)]
         (is (vector? paid-tx))
         (is (seq paid-tx))
         (d/transact *conn* paid-tx)
-        (is (= :paid (:invoice/status (inv/pull-invoice (d/db *conn*)
+        (is (= :paid (:kontor.invoice/status (inv/pull-invoice (d/db *conn*)
                                                         "INV-TXD-1"))))))))

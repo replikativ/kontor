@@ -52,112 +52,112 @@
 
 (def parameters
   "JP CGT parameter definitions. Values live in `parameter-values`,
-   keyed by `:effective-from`. One row per `:parameter/code`."
+   keyed by `:effective-from`. One row per `:kontor.parameter/code`."
   [;; --- Listed securities (上場株式等) ---------------------------------------
-   {:parameter/code         "JP.CGT.listed.national-rate"
-    :parameter/label        "Listed securities — national income-tax rate"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026"}
-   {:parameter/code         "JP.CGT.listed.local-rate"
-    :parameter/label        "Listed securities — inhabitants (local) rate"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=325AC0000000226"}
+   {:kontor.parameter/code         "JP.CGT.listed.national-rate"
+    :kontor.parameter/label        "Listed securities — national income-tax rate"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026"}
+   {:kontor.parameter/code         "JP.CGT.listed.local-rate"
+    :kontor.parameter/label        "Listed securities — inhabitants (local) rate"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=325AC0000000226"}
 
    ;; --- Unlisted securities (一般株式等) ------------------------------------
-   {:parameter/code         "JP.CGT.unlisted.national-rate"
-    :parameter/label        "Unlisted securities — national income-tax rate"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026"}
-   {:parameter/code         "JP.CGT.unlisted.local-rate"
-    :parameter/label        "Unlisted securities — inhabitants (local) rate"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=325AC0000000226"}
+   {:kontor.parameter/code         "JP.CGT.unlisted.national-rate"
+    :kontor.parameter/label        "Unlisted securities — national income-tax rate"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026"}
+   {:kontor.parameter/code         "JP.CGT.unlisted.local-rate"
+    :kontor.parameter/label        "Unlisted securities — inhabitants (local) rate"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=325AC0000000226"}
 
    ;; --- Real-estate short (短期, ≤5 yrs at Jan 1, §32) -----------------------
-   {:parameter/code         "JP.CGT.realestate-short.national-rate"
-    :parameter/label        "Real estate short-term — national rate (租税特別措置法 §32)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026#Mp-At_32"}
-   {:parameter/code         "JP.CGT.realestate-short.local-rate"
-    :parameter/label        "Real estate short-term — inhabitants rate"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/joto/3211.htm"}
+   {:kontor.parameter/code         "JP.CGT.realestate-short.national-rate"
+    :kontor.parameter/label        "Real estate short-term — national rate (租税特別措置法 §32)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026#Mp-At_32"}
+   {:kontor.parameter/code         "JP.CGT.realestate-short.local-rate"
+    :kontor.parameter/label        "Real estate short-term — inhabitants rate"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/joto/3211.htm"}
 
    ;; --- Real-estate long (長期, >5 yrs at Jan 1, §31) -----------------------
-   {:parameter/code         "JP.CGT.realestate-long.national-rate"
-    :parameter/label        "Real estate long-term — national rate (租税特別措置法 §31)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026#Mp-At_31"}
-   {:parameter/code         "JP.CGT.realestate-long.local-rate"
-    :parameter/label        "Real estate long-term — inhabitants rate"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/joto/3208.htm"}
+   {:kontor.parameter/code         "JP.CGT.realestate-long.national-rate"
+    :kontor.parameter/label        "Real estate long-term — national rate (租税特別措置法 §31)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026#Mp-At_31"}
+   {:kontor.parameter/code         "JP.CGT.realestate-long.local-rate"
+    :kontor.parameter/label        "Real estate long-term — inhabitants rate"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/joto/3208.htm"}
 
    ;; --- Real-estate long-residence preferential (§31-3) ---------------------
    ;; The 軽減税率 (preferential rate) is a two-bracket progressive on the
    ;; NATIONAL side: 10 % on the first ¥60M of taxable gain (after the §35
    ;; deduction), 15 % above. Inhabitants' side: 4 % on the first ¥60M,
    ;; 5 % above. The 復興 surtax is 2.1 % × national.
-   {:parameter/code         "JP.CGT.realestate-long-residence.national-low-rate"
-    :parameter/label        "§31-3 residence preferential — national low rate (≤¥60M slice)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026#Mp-At_31_3"}
-   {:parameter/code         "JP.CGT.realestate-long-residence.national-high-rate"
-    :parameter/label        "§31-3 residence preferential — national high rate (>¥60M slice)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026#Mp-At_31_3"}
-   {:parameter/code         "JP.CGT.realestate-long-residence.local-low-rate"
-    :parameter/label        "§31-3 residence preferential — inhabitants low rate (≤¥60M)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/joto/3305.htm"}
-   {:parameter/code         "JP.CGT.realestate-long-residence.local-high-rate"
-    :parameter/label        "§31-3 residence preferential — inhabitants high rate (>¥60M)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/joto/3305.htm"}
-   {:parameter/code         "JP.CGT.realestate-long-residence.kink"
-    :parameter/label        "§31-3 residence preferential — bracket boundary (¥60 000 000)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026#Mp-At_31_3"}
+   {:kontor.parameter/code         "JP.CGT.realestate-long-residence.national-low-rate"
+    :kontor.parameter/label        "§31-3 residence preferential — national low rate (≤¥60M slice)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026#Mp-At_31_3"}
+   {:kontor.parameter/code         "JP.CGT.realestate-long-residence.national-high-rate"
+    :kontor.parameter/label        "§31-3 residence preferential — national high rate (>¥60M slice)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026#Mp-At_31_3"}
+   {:kontor.parameter/code         "JP.CGT.realestate-long-residence.local-low-rate"
+    :kontor.parameter/label        "§31-3 residence preferential — inhabitants low rate (≤¥60M)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/joto/3305.htm"}
+   {:kontor.parameter/code         "JP.CGT.realestate-long-residence.local-high-rate"
+    :kontor.parameter/label        "§31-3 residence preferential — inhabitants high rate (>¥60M)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/joto/3305.htm"}
+   {:kontor.parameter/code         "JP.CGT.realestate-long-residence.kink"
+    :kontor.parameter/label        "§31-3 residence preferential — bracket boundary (¥60 000 000)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026#Mp-At_31_3"}
 
    ;; --- §35 ¥30M principal-residence deduction ------------------------------
-   {:parameter/code         "JP.CGT.§35.residence-deduction"
-    :parameter/label        "§35 principal-residence special deduction (¥30 000 000)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026#Mp-At_35"}
+   {:kontor.parameter/code         "JP.CGT.§35.residence-deduction"
+    :kontor.parameter/label        "§35 principal-residence special deduction (¥30 000 000)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026#Mp-At_35"}
 
    ;; --- 復興特別所得税 2.1 % (effective until 2037) -------------------------
-   {:parameter/code         "JP.CGT.reconstruction-surtax-rate"
-    :parameter/label        "復興特別所得税 — Special Reconstruction Income Tax (2.1 % × national)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=423AC0000000117"}
+   {:kontor.parameter/code         "JP.CGT.reconstruction-surtax-rate"
+    :kontor.parameter/label        "復興特別所得税 — Special Reconstruction Income Tax (2.1 % × national)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=423AC0000000117"}
 
    ;; --- 長期 (>5 yr) holding-period cutoff for §31/§32 (in WHOLE YEARS) ----
    ;; Jan-1 measurement rule: (disposed-year - acquired-year) > 5 ⇒ long.
-   {:parameter/code         "JP.CGT.realestate.long-cutoff-years"
-    :parameter/label        "Real estate long-term cutoff (years at Jan 1 of disposal year)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :years
-    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/joto/3202.htm"}
-   {:parameter/code         "JP.CGT.realestate.long-residence-cutoff-years"
-    :parameter/label        "Real estate §31-3 long-residence cutoff (years at Jan 1)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :years
-    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/joto/3305.htm"}])
+   {:kontor.parameter/code         "JP.CGT.realestate.long-cutoff-years"
+    :kontor.parameter/label        "Real estate long-term cutoff (years at Jan 1 of disposal year)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :years
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/joto/3202.htm"}
+   {:kontor.parameter/code         "JP.CGT.realestate.long-residence-cutoff-years"
+    :kontor.parameter/label        "Real estate §31-3 long-residence cutoff (years at Jan 1)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :years
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/joto/3305.htm"}])
 
 ;; ============================================================================
 ;; Parameter values — current rates with statutory effective windows
@@ -167,89 +167,89 @@
   "JP CGT parameter values. Stable 2013-2037 values; the 復興 surtax
    sunsets 2037-12-31 (the 復興 statute's 25-year window from 2013)."
   [;; --- Listed securities — 15 % national + 5 % local -----------------------
-   {:parameter-value/parameter      [:parameter/code "JP.CGT.listed.national-rate"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  0.15M
-    :parameter-value/citation       "租税特別措置法 §37-10 — listed-securities national rate 15 % from 2014"}
-   {:parameter-value/parameter      [:parameter/code "JP.CGT.listed.local-rate"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  0.05M
-    :parameter-value/citation       "地方税法 — listed-securities inhabitants rate 5 % from 2014"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CGT.listed.national-rate"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  0.15M
+    :kontor.parameter-value/citation       "租税特別措置法 §37-10 — listed-securities national rate 15 % from 2014"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CGT.listed.local-rate"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  0.05M
+    :kontor.parameter-value/citation       "地方税法 — listed-securities inhabitants rate 5 % from 2014"}
 
    ;; --- Unlisted — same 15 % + 5 % ------------------------------------------
-   {:parameter-value/parameter      [:parameter/code "JP.CGT.unlisted.national-rate"]
-    :parameter-value/effective-from #inst "2003-01-01"
-    :parameter-value/decimal-value  0.15M
-    :parameter-value/citation       "租税特別措置法 §37-10 — unlisted-securities national rate 15 %"}
-   {:parameter-value/parameter      [:parameter/code "JP.CGT.unlisted.local-rate"]
-    :parameter-value/effective-from #inst "2003-01-01"
-    :parameter-value/decimal-value  0.05M
-    :parameter-value/citation       "地方税法 — unlisted-securities inhabitants rate 5 %"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CGT.unlisted.national-rate"]
+    :kontor.parameter-value/effective-from #inst "2003-01-01"
+    :kontor.parameter-value/decimal-value  0.15M
+    :kontor.parameter-value/citation       "租税特別措置法 §37-10 — unlisted-securities national rate 15 %"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CGT.unlisted.local-rate"]
+    :kontor.parameter-value/effective-from #inst "2003-01-01"
+    :kontor.parameter-value/decimal-value  0.05M
+    :kontor.parameter-value/citation       "地方税法 — unlisted-securities inhabitants rate 5 %"}
 
    ;; --- Real-estate short — 30 % national + 9 % local -----------------------
-   {:parameter-value/parameter      [:parameter/code "JP.CGT.realestate-short.national-rate"]
-    :parameter-value/effective-from #inst "2004-01-01"
-    :parameter-value/decimal-value  0.30M
-    :parameter-value/citation       "租税特別措置法 §32 — short-term real-estate national rate 30 %"}
-   {:parameter-value/parameter      [:parameter/code "JP.CGT.realestate-short.local-rate"]
-    :parameter-value/effective-from #inst "2004-01-01"
-    :parameter-value/decimal-value  0.09M
-    :parameter-value/citation       "地方税法 — short-term real-estate inhabitants rate 9 %"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CGT.realestate-short.national-rate"]
+    :kontor.parameter-value/effective-from #inst "2004-01-01"
+    :kontor.parameter-value/decimal-value  0.30M
+    :kontor.parameter-value/citation       "租税特別措置法 §32 — short-term real-estate national rate 30 %"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CGT.realestate-short.local-rate"]
+    :kontor.parameter-value/effective-from #inst "2004-01-01"
+    :kontor.parameter-value/decimal-value  0.09M
+    :kontor.parameter-value/citation       "地方税法 — short-term real-estate inhabitants rate 9 %"}
 
    ;; --- Real-estate long — 15 % national + 5 % local ------------------------
-   {:parameter-value/parameter      [:parameter/code "JP.CGT.realestate-long.national-rate"]
-    :parameter-value/effective-from #inst "2004-01-01"
-    :parameter-value/decimal-value  0.15M
-    :parameter-value/citation       "租税特別措置法 §31 — long-term real-estate national rate 15 %"}
-   {:parameter-value/parameter      [:parameter/code "JP.CGT.realestate-long.local-rate"]
-    :parameter-value/effective-from #inst "2004-01-01"
-    :parameter-value/decimal-value  0.05M
-    :parameter-value/citation       "地方税法 — long-term real-estate inhabitants rate 5 %"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CGT.realestate-long.national-rate"]
+    :kontor.parameter-value/effective-from #inst "2004-01-01"
+    :kontor.parameter-value/decimal-value  0.15M
+    :kontor.parameter-value/citation       "租税特別措置法 §31 — long-term real-estate national rate 15 %"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CGT.realestate-long.local-rate"]
+    :kontor.parameter-value/effective-from #inst "2004-01-01"
+    :kontor.parameter-value/decimal-value  0.05M
+    :kontor.parameter-value/citation       "地方税法 — long-term real-estate inhabitants rate 5 %"}
 
    ;; --- §31-3 residence preferential ----------------------------------------
-   {:parameter-value/parameter      [:parameter/code "JP.CGT.realestate-long-residence.national-low-rate"]
-    :parameter-value/effective-from #inst "2004-01-01"
-    :parameter-value/decimal-value  0.10M
-    :parameter-value/citation       "租税特別措置法 §31-3 — residence preferential national rate (≤¥60M) 10 %"}
-   {:parameter-value/parameter      [:parameter/code "JP.CGT.realestate-long-residence.national-high-rate"]
-    :parameter-value/effective-from #inst "2004-01-01"
-    :parameter-value/decimal-value  0.15M
-    :parameter-value/citation       "租税特別措置法 §31-3 — residence preferential national rate (>¥60M) 15 %"}
-   {:parameter-value/parameter      [:parameter/code "JP.CGT.realestate-long-residence.local-low-rate"]
-    :parameter-value/effective-from #inst "2004-01-01"
-    :parameter-value/decimal-value  0.04M
-    :parameter-value/citation       "地方税法 — §31-3 residence preferential inhabitants rate (≤¥60M) 4 %"}
-   {:parameter-value/parameter      [:parameter/code "JP.CGT.realestate-long-residence.local-high-rate"]
-    :parameter-value/effective-from #inst "2004-01-01"
-    :parameter-value/decimal-value  0.05M
-    :parameter-value/citation       "地方税法 — §31-3 residence preferential inhabitants rate (>¥60M) 5 %"}
-   {:parameter-value/parameter      [:parameter/code "JP.CGT.realestate-long-residence.kink"]
-    :parameter-value/effective-from #inst "2004-01-01"
-    :parameter-value/decimal-value  60000000M
-    :parameter-value/citation       "租税特別措置法 §31-3 — bracket boundary ¥60 000 000"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CGT.realestate-long-residence.national-low-rate"]
+    :kontor.parameter-value/effective-from #inst "2004-01-01"
+    :kontor.parameter-value/decimal-value  0.10M
+    :kontor.parameter-value/citation       "租税特別措置法 §31-3 — residence preferential national rate (≤¥60M) 10 %"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CGT.realestate-long-residence.national-high-rate"]
+    :kontor.parameter-value/effective-from #inst "2004-01-01"
+    :kontor.parameter-value/decimal-value  0.15M
+    :kontor.parameter-value/citation       "租税特別措置法 §31-3 — residence preferential national rate (>¥60M) 15 %"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CGT.realestate-long-residence.local-low-rate"]
+    :kontor.parameter-value/effective-from #inst "2004-01-01"
+    :kontor.parameter-value/decimal-value  0.04M
+    :kontor.parameter-value/citation       "地方税法 — §31-3 residence preferential inhabitants rate (≤¥60M) 4 %"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CGT.realestate-long-residence.local-high-rate"]
+    :kontor.parameter-value/effective-from #inst "2004-01-01"
+    :kontor.parameter-value/decimal-value  0.05M
+    :kontor.parameter-value/citation       "地方税法 — §31-3 residence preferential inhabitants rate (>¥60M) 5 %"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CGT.realestate-long-residence.kink"]
+    :kontor.parameter-value/effective-from #inst "2004-01-01"
+    :kontor.parameter-value/decimal-value  60000000M
+    :kontor.parameter-value/citation       "租税特別措置法 §31-3 — bracket boundary ¥60 000 000"}
 
    ;; --- §35 ¥30M deduction --------------------------------------------------
-   {:parameter-value/parameter      [:parameter/code "JP.CGT.§35.residence-deduction"]
-    :parameter-value/effective-from #inst "1969-01-01"
-    :parameter-value/decimal-value  30000000M
-    :parameter-value/citation       "租税特別措置法 §35 — principal-residence ¥30 000 000 deduction"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CGT.§35.residence-deduction"]
+    :kontor.parameter-value/effective-from #inst "1969-01-01"
+    :kontor.parameter-value/decimal-value  30000000M
+    :kontor.parameter-value/citation       "租税特別措置法 §35 — principal-residence ¥30 000 000 deduction"}
 
    ;; --- 復興特別所得税 2.1 % ------------------------------------------------
-   {:parameter-value/parameter      [:parameter/code "JP.CGT.reconstruction-surtax-rate"]
-    :parameter-value/effective-from #inst "2013-01-01"
-    :parameter-value/effective-until #inst "2038-01-01"
-    :parameter-value/decimal-value  0.021M
-    :parameter-value/citation       "東日本大震災復興特別措置法 §13 — 2.1 % × national tax, 2013-2037"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CGT.reconstruction-surtax-rate"]
+    :kontor.parameter-value/effective-from #inst "2013-01-01"
+    :kontor.parameter-value/effective-until #inst "2038-01-01"
+    :kontor.parameter-value/decimal-value  0.021M
+    :kontor.parameter-value/citation       "東日本大震災復興特別措置法 §13 — 2.1 % × national tax, 2013-2037"}
 
    ;; --- Holding-period cutoffs ----------------------------------------------
-   {:parameter-value/parameter      [:parameter/code "JP.CGT.realestate.long-cutoff-years"]
-    :parameter-value/effective-from #inst "2004-01-01"
-    :parameter-value/decimal-value  5M
-    :parameter-value/citation       "租税特別措置法 §31 — >5 years at Jan 1 = long-term"}
-   {:parameter-value/parameter      [:parameter/code "JP.CGT.realestate.long-residence-cutoff-years"]
-    :parameter-value/effective-from #inst "2004-01-01"
-    :parameter-value/decimal-value  10M
-    :parameter-value/citation       "租税特別措置法 §31-3 — >10 years at Jan 1 = §31-3 eligible"}])
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CGT.realestate.long-cutoff-years"]
+    :kontor.parameter-value/effective-from #inst "2004-01-01"
+    :kontor.parameter-value/decimal-value  5M
+    :kontor.parameter-value/citation       "租税特別措置法 §31 — >5 years at Jan 1 = long-term"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CGT.realestate.long-residence-cutoff-years"]
+    :kontor.parameter-value/effective-from #inst "2004-01-01"
+    :kontor.parameter-value/decimal-value  10M
+    :kontor.parameter-value/citation       "租税特別措置法 §31-3 — >10 years at Jan 1 = §31-3 eligible"}])
 
 ;; ============================================================================
 ;; Provisions — the 復興 surtax (sole provision; remaining logic is provider)
@@ -274,16 +274,16 @@
   [;; --------------------------------------------------------------------
    ;; 復興特別所得税 — 2.1 % × national CGT
    ;; --------------------------------------------------------------------
-   {:provision/code            "JP-FUKKO-§13-reconstruction-surtax"
-    :provision/jurisdiction    :jp
-    :provision/concept         [:kontor.tax-concept/code :surtax]
-    :provision/title           "復興特別所得税 — 2.1 % × the national CGT amount (2013-2037)"
-    :provision/citation        "https://elaws.e-gov.go.jp/document?lawid=423AC0000000117"
-    :provision/effective-from  #inst "2013-01-01"
-    :provision/effective-until #inst "2038-01-01"
-    :provision/priority        100
-    :provision/condition       (pr-str [:eq :pass :national])
-    :provision/consequence     (pr-str {:op          :surtax
+   {:kontor.provision/code            "JP-FUKKO-§13-reconstruction-surtax"
+    :kontor.provision/jurisdiction    :jp
+    :kontor.provision/concept         [:kontor.tax-concept/code :surtax]
+    :kontor.provision/title           "復興特別所得税 — 2.1 % × the national CGT amount (2013-2037)"
+    :kontor.provision/citation        "https://elaws.e-gov.go.jp/document?lawid=423AC0000000117"
+    :kontor.provision/effective-from  #inst "2013-01-01"
+    :kontor.provision/effective-until #inst "2038-01-01"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:eq :pass :national])
+    :kontor.provision/consequence     (pr-str {:op          :surtax
                                         :code        :reconstruction-surtax
                                         :label       "復興特別所得税 (Special Reconstruction Income Tax)"
                                         :amount-from :compute-fn
@@ -295,7 +295,7 @@
 
 (defn install!
   "Install JP CGT statute (parameters + provisions) into `conn`.
-   Idempotent — `:parameter/code` and `:provision/code` are unique
+   Idempotent — `:kontor.parameter/code` and `:kontor.provision/code` are unique
    identity attrs."
   [conn]
   (d/transact conn parameters)

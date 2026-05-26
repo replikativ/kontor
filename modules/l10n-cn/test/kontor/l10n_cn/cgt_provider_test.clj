@@ -100,9 +100,9 @@
     (let [conn (fresh)
           db   (d/db conn)]
       (let [param (fn [c] (d/q '[:find ?v . :in $ ?c :where
-                                 [?p :parameter/code ?c]
-                                 [?pv :parameter-value/parameter ?p]
-                                 [?pv :parameter-value/decimal-value ?v]]
+                                 [?p :kontor.parameter/code ?c]
+                                 [?pv :kontor.parameter-value/parameter ?p]
+                                 [?pv :kontor.parameter-value/decimal-value ?v]]
                                db c))]
         (is (= 0.20M (param "CN.IIT.CGT.flat-rate")))
         (is (= 0.25M (param "CN.EIT.standard-rate")))

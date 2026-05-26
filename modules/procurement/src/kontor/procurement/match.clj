@@ -4,7 +4,7 @@
    3-way match is a referential invariant: for each PO line,
    `(received-qty - returned-qty) ≈ (invoiced-qty - credited-qty)`
    within tolerance bands. The match-status state machine on
-   `:invoice/match-status` (ADR-034 facet) captures the operational
+   `:kontor.invoice/match-status` (ADR-034 facet) captures the operational
    view; the FKs (`:order-item-billing`, `:receipt-invoice-billing`,
    `:return-item-billing`) ARE the source of truth.
 
@@ -97,28 +97,28 @@
    Tolerance applied per-(entity, supplier, product-id) lookup."
   [db invoice-eid]
   (let [invoice (d/pull db
-                        '[* {:invoice/order [:db/id]
-                             :invoice/entity [:db/id]
-                             :invoice/seller [:db/id]}]
+                        '[* {:kontor.invoice/order [:db/id]
+                             :kontor.invoice/entity [:db/id]
+                             :kontor.invoice/seller [:db/id]}]
                         invoice-eid)
-        entity-eid (get-in invoice [:invoice/entity :db/id])
-        supplier-eid (get-in invoice [:invoice/seller :db/id])
+        entity-eid (get-in invoice [:kontor.invoice/entity :db/id])
+        supplier-eid (get-in invoice [:kontor.invoice/seller :db/id])
         lines (->> (d/q '[:find [?l ...]
                           :in $ ?inv
-                          :where [?l :invoice-line/invoice ?inv]]
+                          :where [?l :kontor.invoice-line/invoice ?inv]]
                         db invoice-eid)
-                   (map #(d/pull db '[* {:invoice-line/order-item [:db/id
+                   (map #(d/pull db '[* {:kontor.invoice-line/order-item [:db/id
                                                                     :order-item/product-id
                                                                     :order-item/quantity
                                                                     :order-item/unit-price
                                                                     :order-item/requires-receipt?]}] %)))]
     (mapv (fn [line]
-            (let [oi (:invoice-line/order-item line)
+            (let [oi (:kontor.invoice-line/order-item line)
                   oi-eid (:db/id oi)
                   ordered-qty (or (:order-item/quantity oi) 0M)
                   ordered-price (or (:order-item/unit-price oi) 0M)
-                  invoiced-qty (or (:invoice-line/quantity line) 0M)
-                  invoiced-price (or (:invoice-line/unit-price line) 0M)
+                  invoiced-qty (or (:kontor.invoice-line/quantity line) 0M)
+                  invoiced-price (or (:kontor.invoice-line/unit-price line) 0M)
                   received-qty (if (false? (:order-item/requires-receipt? oi))
                                  ;; service line — use service-acceptance
                                  (or (d/q '[:find (sum ?q) .
@@ -193,19 +193,19 @@
    (let [db (d/db conn)
          report (three-way-report db invoice-eid)
          verdict (invoice-verdict report)
-         current (sm/current-status db invoice-eid :invoice/match-status)]
+         current (sm/current-status db invoice-eid :kontor.invoice/match-status)]
      (when (and (not= :nil verdict)
-                (sm/legal-transition? db :invoice :invoice/match-status
+                (sm/legal-transition? db :invoice :kontor.invoice/match-status
                                       current verdict))
        (sm/record-status-change! conn
                                  (merge {:entity invoice-eid
                                          :entity-type :invoice
-                                         :facet :invoice/match-status
+                                         :facet :kontor.invoice/match-status
                                          :to verdict}
                                         opts)))
      verdict)))
 
 (defn match-status-of-invoice
-  "Read the current :invoice/match-status (denormalized)."
+  "Read the current :kontor.invoice/match-status (denormalized)."
   [db invoice-eid]
-  (sm/current-status db invoice-eid :invoice/match-status))
+  (sm/current-status db invoice-eid :kontor.invoice/match-status))

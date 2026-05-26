@@ -305,7 +305,7 @@
      :line-items      (vec (concat base-line-items credit-line-items))
      :provenance      {:provider-id        :ca-inv-income
                        :statute            "ITA §82 / §121 / §126"
-                       :provisions-applied (mapv :provision/code provisions)
+                       :provisions-applied (mapv :kontor.provision/code provisions)
                        :as-of              as-of}
      :jurisdiction-specific-codes
      (cond-> {:lane            (if federal? :ca-fed-inv-income :ca-prov-inv-income)

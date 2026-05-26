@@ -279,7 +279,7 @@
      :regime          (get-in ctx [:tax-unit :regime])
      :provenance      {:provider-id        :in-cit
                        :statute            "Income-tax Act 1961 (Regular CIT)"
-                       :provisions-applied (mapv :provision/code provisions)
+                       :provisions-applied (mapv :kontor.provision/code provisions)
                        :as-of              as-of}}))
 
 (defn- mat-component
@@ -308,7 +308,7 @@
          :regime          (get-in ctx [:tax-unit :regime])
          :provenance      {:provider-id        :in-cit
                            :statute            "§115JB Minimum Alternate Tax"
-                           :provisions-applied (mapv :provision/code provisions)
+                           :provisions-applied (mapv :kontor.provision/code provisions)
                            :as-of              as-of}}))))
 
 (defn- annotate-mat-credit

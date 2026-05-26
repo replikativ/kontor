@@ -62,37 +62,37 @@
   [conn]
   (inv/post-br-invoice!
    conn
-   {:invoice/external-id "INV-1"
-    :invoice/issue-date  jan-10
-    :invoice/from-state  "SP" :invoice/to-state "SP"
-    :invoice/lines [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 1000M
-                     :invoice-line/tax-classification :goods}]})
+   {:kontor.invoice/external-id "INV-1"
+    :kontor.invoice/issue-date  jan-10
+    :kontor.invoice/from-state  "SP" :kontor.invoice/to-state "SP"
+    :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 1000M
+                     :kontor.invoice-line/tax-classification :goods}]})
   (inv/post-br-invoice!
    conn
-   {:invoice/external-id "INV-2"
-    :invoice/issue-date  jan-15
-    :invoice/from-state  "SP" :invoice/to-state "SP"
-    :invoice/lines [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 2000M
-                     :invoice-line/tax-classification :goods}]})
+   {:kontor.invoice/external-id "INV-2"
+    :kontor.invoice/issue-date  jan-15
+    :kontor.invoice/from-state  "SP" :kontor.invoice/to-state "SP"
+    :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 2000M
+                     :kontor.invoice-line/tax-classification :goods}]})
   (inv/post-br-invoice!
    conn
-   {:invoice/external-id "INV-3"
-    :invoice/issue-date  jan-20
-    :invoice/lines [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 500M
-                     :invoice-line/tax-classification :services
-                     :invoice-line/iss-rate 0.05M}]})
+   {:kontor.invoice/external-id "INV-3"
+    :kontor.invoice/issue-date  jan-20
+    :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 500M
+                     :kontor.invoice-line/tax-classification :services
+                     :kontor.invoice-line/iss-rate 0.05M}]})
   (inv/post-br-invoice!
    conn
-   {:invoice/external-id "INV-4"
-    :invoice/issue-date  jan-25
-    :invoice/from-state  "SP" :invoice/to-state "SP"
-    :invoice/lines [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 1000M
-                     :invoice-line/tax-classification :goods-manufactured
-                     :invoice-line/ipi-rate 0.10M}]}))
+   {:kontor.invoice/external-id "INV-4"
+    :kontor.invoice/issue-date  jan-25
+    :kontor.invoice/from-state  "SP" :kontor.invoice/to-state "SP"
+    :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 1000M
+                     :kontor.invoice-line/tax-classification :goods-manufactured
+                     :kontor.invoice-line/ipi-rate 0.10M}]}))
 
 ;; ============================================================================
 ;; Period helpers
@@ -254,12 +254,12 @@
           _ (seed-january! conn)
           _ (inv/post-br-invoice!
              conn
-             {:invoice/external-id "INV-FEB-1"
-              :invoice/issue-date  feb-15
-              :invoice/from-state  "SP" :invoice/to-state "SP"
-              :invoice/lines [{:invoice-line/quantity 1
-                               :invoice-line/unit-price 10000M
-                               :invoice-line/tax-classification :goods}]})
+             {:kontor.invoice/external-id "INV-FEB-1"
+              :kontor.invoice/issue-date  feb-15
+              :kontor.invoice/from-state  "SP" :kontor.invoice/to-state "SP"
+              :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                               :kontor.invoice-line/unit-price 10000M
+                               :kontor.invoice-line/tax-classification :goods}]})
           jan (pr/generate-icms-return conn {:year 2026 :month 1})
           feb (pr/generate-icms-return conn {:year 2026 :month 2})]
       (is (≈ (brl "738")  (:return/icms-net jan))

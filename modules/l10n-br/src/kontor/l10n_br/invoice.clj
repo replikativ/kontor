@@ -57,7 +57,7 @@
    (3.01.01.02.01) so the gross-revenue split for ECF / DIPJ already
    reflects the export carve-out. `:services` lines route to
    `Income:Sales:Services-Domestic` (3.01.01.01.02). Callers can
-   override per-line via `:invoice-line/account`.
+   override per-line via `:kontor.invoice-line/account`.
 
    ## ADR-068 — tx-data builder + side-effecting wrapper
 
@@ -123,7 +123,7 @@
 
 (defn- revenue-code-for-classification
   "Choose the revenue account based on the line's tax-classification.
-   Callers can pin a different account via :invoice-line/account."
+   Callers can pin a different account via :kontor.invoice-line/account."
   [classification codes]
   (case classification
     :services    (:sales-services-code codes default-sales-services-code)
@@ -142,67 +142,67 @@
 
 (defn- line-net
   "Per-line net amount = qty × unit-price, rounded HALF-EVEN to 2dp.
-   Tolerates :invoice-line/line-total when caller pre-computed it."
-  ^java.math.BigDecimal [{:invoice-line/keys [quantity unit-price line-total]}]
+   Tolerates :kontor.invoice-line/line-total when caller pre-computed it."
+  ^java.math.BigDecimal [{:kontor.invoice-line/keys [quantity unit-price line-total]}]
   (cond
     line-total (bigdec line-total)
     (and quantity unit-price)
     (.setScale (.multiply (bigdec quantity) (bigdec unit-price))
                2 java.math.RoundingMode/HALF_EVEN)
     :else
-    (throw (ex-info "Invoice line needs either :invoice-line/line-total or both :invoice-line/quantity + :invoice-line/unit-price"
+    (throw (ex-info "Invoice line needs either :kontor.invoice-line/line-total or both :kontor.invoice-line/quantity + :kontor.invoice-line/unit-price"
                     {:line (select-keys
-                            {:invoice-line/quantity quantity
-                             :invoice-line/unit-price unit-price}
-                            [:invoice-line/quantity :invoice-line/unit-price])}))))
+                            {:kontor.invoice-line/quantity quantity
+                             :kontor.invoice-line/unit-price unit-price}
+                            [:kontor.invoice-line/quantity :kontor.invoice-line/unit-price])}))))
 
 (defn- line->tax-input
   "Build the per-line compute-tax input from an invoice-line map.
    Inherits invoice-level :from-state / :to-state when the line omits
    them — every line on one NF-e normally shares the shipment."
   [line invoice]
-  (let [classification (or (:invoice-line/tax-classification line) :goods)]
+  (let [classification (or (:kontor.invoice-line/tax-classification line) :goods)]
     (cond-> {:line (line-net line)
              :tax-classification classification}
-      (or (:invoice-line/from-state line) (:invoice/from-state invoice))
-      (assoc :from-state (or (:invoice-line/from-state line)
-                             (:invoice/from-state invoice)))
+      (or (:kontor.invoice-line/from-state line) (:kontor.invoice/from-state invoice))
+      (assoc :from-state (or (:kontor.invoice-line/from-state line)
+                             (:kontor.invoice/from-state invoice)))
 
-      (or (:invoice-line/to-state line) (:invoice/to-state invoice))
-      (assoc :to-state (or (:invoice-line/to-state line)
-                           (:invoice/to-state invoice)))
+      (or (:kontor.invoice-line/to-state line) (:kontor.invoice/to-state invoice))
+      (assoc :to-state (or (:kontor.invoice-line/to-state line)
+                           (:kontor.invoice/to-state invoice)))
 
-      (or (:invoice-line/pis-regime line) (:invoice/pis-regime invoice))
-      (assoc :pis-regime (or (:invoice-line/pis-regime line)
-                             (:invoice/pis-regime invoice)))
+      (or (:kontor.invoice-line/pis-regime line) (:kontor.invoice/pis-regime invoice))
+      (assoc :pis-regime (or (:kontor.invoice-line/pis-regime line)
+                             (:kontor.invoice/pis-regime invoice)))
 
-      (or (:invoice-line/cofins-regime line) (:invoice/cofins-regime invoice))
-      (assoc :cofins-regime (or (:invoice-line/cofins-regime line)
-                                (:invoice/cofins-regime invoice)))
+      (or (:kontor.invoice-line/cofins-regime line) (:kontor.invoice/cofins-regime invoice))
+      (assoc :cofins-regime (or (:kontor.invoice-line/cofins-regime line)
+                                (:kontor.invoice/cofins-regime invoice)))
 
-      (:invoice-line/ipi-rate line)
-      (assoc :ipi-rate (:invoice-line/ipi-rate line))
+      (:kontor.invoice-line/ipi-rate line)
+      (assoc :ipi-rate (:kontor.invoice-line/ipi-rate line))
 
-      (:invoice-line/iss-rate line)
-      (assoc :iss-rate (:invoice-line/iss-rate line))
+      (:kontor.invoice-line/iss-rate line)
+      (assoc :iss-rate (:kontor.invoice-line/iss-rate line))
 
-      (:invoice-line/icms-rate line)
-      (assoc :icms-rate (:invoice-line/icms-rate line))
+      (:kontor.invoice-line/icms-rate line)
+      (assoc :icms-rate (:kontor.invoice-line/icms-rate line))
 
-      (or (:invoice-line/buyer-type line) (:invoice/buyer-type invoice))
-      (assoc :buyer-type (or (:invoice-line/buyer-type line)
-                             (:invoice/buyer-type invoice)))
+      (or (:kontor.invoice-line/buyer-type line) (:kontor.invoice/buyer-type invoice))
+      (assoc :buyer-type (or (:kontor.invoice-line/buyer-type line)
+                             (:kontor.invoice/buyer-type invoice)))
 
-      (or (:invoice-line/purpose line) (:invoice/purpose invoice))
-      (assoc :purpose (or (:invoice-line/purpose line)
-                          (:invoice/purpose invoice)))
+      (or (:kontor.invoice-line/purpose line) (:kontor.invoice/purpose invoice))
+      (assoc :purpose (or (:kontor.invoice-line/purpose line)
+                          (:kontor.invoice/purpose invoice)))
 
-      (some? (:invoice-line/imported? line))
-      (assoc :imported? (:invoice-line/imported? line))
+      (some? (:kontor.invoice-line/imported? line))
+      (assoc :imported? (:kontor.invoice-line/imported? line))
 
-      (or (:invoice-line/fcp-rate line) (:invoice/fcp-rate invoice))
-      (assoc :fcp-rate (or (:invoice-line/fcp-rate line)
-                           (:invoice/fcp-rate invoice))))))
+      (or (:kontor.invoice-line/fcp-rate line) (:kontor.invoice/fcp-rate invoice))
+      (assoc :fcp-rate (or (:kontor.invoice-line/fcp-rate line)
+                           (:kontor.invoice/fcp-rate invoice))))))
 
 (defn- revenue-postings
   "Per-line revenue credit postings, grouped by (revenue-account,
@@ -211,8 +211,8 @@
   [db lines codes commodity-eid date]
   (let [grouped (group-by
                  (fn [line]
-                   (let [classification (or (:invoice-line/tax-classification line) :goods)
-                         override (:invoice-line/account line)]
+                   (let [classification (or (:kontor.invoice-line/tax-classification line) :goods)
+                         override (:kontor.invoice-line/account line)]
                      [(or override (revenue-code-for-classification classification codes))
                       classification]))
                  lines)]
@@ -294,44 +294,44 @@
   "Pure tx-data builder for a Brazilian sales invoice (ADR-068).
 
    Required input:
-     {:invoice/external-id   <string>
-      :invoice/issue-date    <java.util.Date>
-      :invoice/lines         [<invoice-line>]
+     {:kontor.invoice/external-id   <string>
+      :kontor.invoice/issue-date    <java.util.Date>
+      :kontor.invoice/lines         [<invoice-line>]
       ...}
 
    For goods invoices (`:tax-classification :goods` or
    `:goods-manufactured`):
-     :invoice/from-state    <string>   ; 2-letter origin state e.g. \"SP\"
-     :invoice/to-state      <string>   ; 2-letter destination state
+     :kontor.invoice/from-state    <string>   ; 2-letter origin state e.g. \"SP\"
+     :kontor.invoice/to-state      <string>   ; 2-letter destination state
 
    For services invoices: from-state/to-state are optional (services
    ISS is municipality-keyed, not state-keyed). Each services line
-   must carry `:invoice-line/iss-rate` (e.g. 0.05M for 5%).
+   must carry `:kontor.invoice-line/iss-rate` (e.g. 0.05M for 5%).
 
    Each invoice-line:
-     {:invoice-line/quantity         <number-or-bigdec>           ; OR
-      :invoice-line/unit-price       <number-or-bigdec>           ; OR pre-computed:
-      :invoice-line/line-total       <bigdec>                     ; net per line
-      :invoice-line/tax-classification <keyword>                  ; default :goods
-      :invoice-line/iss-rate         <bigdec>                     ; required for :services
-      :invoice-line/ipi-rate         <bigdec>                     ; required for :goods-manufactured
-      :invoice-line/icms-rate        <bigdec>                     ; override (rare)
-      :invoice-line/imported?        <boolean>                    ; CST origem 1/2/3/6/7/8
-      :invoice-line/buyer-type       :non-contributor|:contributor
-      :invoice-line/purpose          :consumption|:fixed-asset|:resale|:industrialization
-      :invoice-line/from-state       <string>                     ; per-line override
-      :invoice-line/to-state         <string>                     ; per-line override
-      :invoice-line/pis-regime       :cumulative|:non-cumulative
-      :invoice-line/cofins-regime    :cumulative|:non-cumulative
-      :invoice-line/fcp-rate         <bigdec>
-      :invoice-line/account          <code-or-eid>                ; revenue acct override
+     {:kontor.invoice-line/quantity         <number-or-bigdec>           ; OR
+      :kontor.invoice-line/unit-price       <number-or-bigdec>           ; OR pre-computed:
+      :kontor.invoice-line/line-total       <bigdec>                     ; net per line
+      :kontor.invoice-line/tax-classification <keyword>                  ; default :goods
+      :kontor.invoice-line/iss-rate         <bigdec>                     ; required for :services
+      :kontor.invoice-line/ipi-rate         <bigdec>                     ; required for :goods-manufactured
+      :kontor.invoice-line/icms-rate        <bigdec>                     ; override (rare)
+      :kontor.invoice-line/imported?        <boolean>                    ; CST origem 1/2/3/6/7/8
+      :kontor.invoice-line/buyer-type       :non-contributor|:contributor
+      :kontor.invoice-line/purpose          :consumption|:fixed-asset|:resale|:industrialization
+      :kontor.invoice-line/from-state       <string>                     ; per-line override
+      :kontor.invoice-line/to-state         <string>                     ; per-line override
+      :kontor.invoice-line/pis-regime       :cumulative|:non-cumulative
+      :kontor.invoice-line/cofins-regime    :cumulative|:non-cumulative
+      :kontor.invoice-line/fcp-rate         <bigdec>
+      :kontor.invoice-line/account          <code-or-eid>                ; revenue acct override
       ...}
 
    Optional top-level fields:
-     :invoice/cash-sale?    when true, debit Caixa instead of AR.
-     :invoice/cash-code     account-code override for the cash leg.
-     :invoice/buyer         partner ref (kernel :kontor.transaction/partner).
-     :invoice/journal       journal code override (default INV).
+     :kontor.invoice/cash-sale?    when true, debit Caixa instead of AR.
+     :kontor.invoice/cash-code     account-code override for the cash leg.
+     :kontor.invoice/buyer         partner ref (kernel :kontor.transaction/partner).
+     :kontor.invoice/journal       journal code override (default INV).
 
    Opts:
      :codes        map of code overrides:
@@ -351,13 +351,13 @@
   [db invoice {:keys [codes commodity journal-code]
                :or {codes {} commodity default-commodity
                     journal-code default-journal-code}}]
-  (let [{:invoice/keys [external-id issue-date lines buyer cash-sale? journal]} invoice
+  (let [{:kontor.invoice/keys [external-id issue-date lines buyer cash-sale? journal]} invoice
         _ (when-not external-id
-            (throw (ex-info "Invoice missing :invoice/external-id" {:invoice invoice})))
+            (throw (ex-info "Invoice missing :kontor.invoice/external-id" {:invoice invoice})))
         _ (when-not issue-date
-            (throw (ex-info "Invoice missing :invoice/issue-date" {:invoice invoice})))
+            (throw (ex-info "Invoice missing :kontor.invoice/issue-date" {:invoice invoice})))
         _ (when (empty? lines)
-            (throw (ex-info "Invoice has no :invoice/lines" {:invoice invoice})))
+            (throw (ex-info "Invoice has no :kontor.invoice/lines" {:invoice invoice})))
         commodity-eid (or (commodity-by-symbol db commodity)
                           (throw (ex-info (str "Commodity " commodity " not found")
                                           {:commodity commodity})))
@@ -368,14 +368,14 @@
         ;; Compute tax via the rate-table fn, line by line.
         compute-input
         {:lines (mapv (fn [l] (line->tax-input l invoice)) lines)
-         :from-state    (:invoice/from-state invoice)
-         :to-state      (:invoice/to-state invoice)
-         :buyer-type    (:invoice/buyer-type invoice)
-         :purpose       (:invoice/purpose invoice)
-         :pis-regime    (:invoice/pis-regime invoice)
-         :cofins-regime (:invoice/cofins-regime invoice)
-         :imported?     (:invoice/imported? invoice)
-         :fcp-rate      (:invoice/fcp-rate invoice)}
+         :from-state    (:kontor.invoice/from-state invoice)
+         :to-state      (:kontor.invoice/to-state invoice)
+         :buyer-type    (:kontor.invoice/buyer-type invoice)
+         :purpose       (:kontor.invoice/purpose invoice)
+         :pis-regime    (:kontor.invoice/pis-regime invoice)
+         :cofins-regime (:kontor.invoice/cofins-regime invoice)
+         :imported?     (:kontor.invoice/imported? invoice)
+         :fcp-rate      (:kontor.invoice/fcp-rate invoice)}
         tax-r (tax/compute-invoice-tax compute-input)
         per-line (:per-line tax-r)
         gross (:total-gross tax-r)
@@ -392,7 +392,7 @@
         tx-base (cond-> {:kontor.transaction/external-id external-id
                          :kontor.transaction/journal jnl
                          :kontor.transaction/effective-date issue-date
-                         :kontor.transaction/narration (or (:invoice/narration invoice)
+                         :kontor.transaction/narration (or (:kontor.invoice/narration invoice)
                                                     external-id)
                          :kontor.transaction/state :posted
                          :kontor.transaction/posted-at issue-date}
@@ -440,47 +440,47 @@
    the gate.
 
    Checks (non-exhaustive):
-     - :invoice/external-id present + non-blank
-     - :invoice/issue-date present
-     - :invoice/lines present + non-empty
-     - For goods-classified invoices: :invoice/from-state +
-       :invoice/to-state present (or each line carries its own)
-     - For services lines: :invoice-line/iss-rate present"
+     - :kontor.invoice/external-id present + non-blank
+     - :kontor.invoice/issue-date present
+     - :kontor.invoice/lines present + non-empty
+     - For goods-classified invoices: :kontor.invoice/from-state +
+       :kontor.invoice/to-state present (or each line carries its own)
+     - For services lines: :kontor.invoice-line/iss-rate present"
   [invoice]
-  (let [{:invoice/keys [external-id issue-date lines from-state to-state]} invoice
+  (let [{:kontor.invoice/keys [external-id issue-date lines from-state to-state]} invoice
         any-goods?    (some (fn [l]
-                              (let [c (or (:invoice-line/tax-classification l) :goods)]
+                              (let [c (or (:kontor.invoice-line/tax-classification l) :goods)]
                                 (contains? #{:goods :goods-manufactured :export} c)))
                             lines)
         ;; A goods invoice must have origin+destination either at the
         ;; invoice level or on every goods line.
         all-goods-lines-have-states?
         (every? (fn [l]
-                  (let [c (or (:invoice-line/tax-classification l) :goods)]
+                  (let [c (or (:kontor.invoice-line/tax-classification l) :goods)]
                     (or (not (contains? #{:goods :goods-manufactured :export} c))
-                        (and (or (:invoice-line/from-state l) from-state)
-                             (or (:invoice-line/to-state l)   to-state)))))
+                        (and (or (:kontor.invoice-line/from-state l) from-state)
+                             (or (:kontor.invoice-line/to-state l)   to-state)))))
                 lines)
         services-without-iss
         (filter (fn [l]
-                  (and (= :services (:invoice-line/tax-classification l))
-                       (nil? (:invoice-line/iss-rate l))))
+                  (and (= :services (:kontor.invoice-line/tax-classification l))
+                       (nil? (:kontor.invoice-line/iss-rate l))))
                 lines)]
     (cond-> []
       (or (nil? external-id) (and (string? external-id) (str/blank? external-id)))
-      (conj {:field :invoice/external-id :issue :missing-or-blank})
+      (conj {:field :kontor.invoice/external-id :issue :missing-or-blank})
 
       (nil? issue-date)
-      (conj {:field :invoice/issue-date :issue :missing})
+      (conj {:field :kontor.invoice/issue-date :issue :missing})
 
       (empty? lines)
-      (conj {:field :invoice/lines :issue :empty})
+      (conj {:field :kontor.invoice/lines :issue :empty})
 
       (and any-goods? (not all-goods-lines-have-states?))
-      (conj {:field :invoice/from-state-to-state
+      (conj {:field :kontor.invoice/from-state-to-state
              :issue :missing-for-goods-line})
 
       (seq services-without-iss)
-      (conj {:field :invoice-line/iss-rate
+      (conj {:field :kontor.invoice-line/iss-rate
              :issue :missing-for-services-line
              :count (count services-without-iss)}))))

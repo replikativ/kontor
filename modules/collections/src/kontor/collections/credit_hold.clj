@@ -113,10 +113,10 @@
          eids (d/q '[:find [?i ...]
                      :in $ ?b ?e
                      :where
-                     [?i :invoice/buyer ?b]
-                     [?i :invoice/entity ?e]
-                     (or [?i :invoice/status :sent]
-                         [?i :invoice/status :partially-paid])]
+                     [?i :kontor.invoice/buyer ?b]
+                     [?i :kontor.invoice/entity ?e]
+                     (or [?i :kontor.invoice/status :sent]
+                         [?i :kontor.invoice/status :partially-paid])]
                    db partner entity)]
      (reduce (fn [^java.math.BigDecimal acc eid]
                (let [o (papp/open-amount-of-invoice

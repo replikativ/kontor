@@ -317,10 +317,10 @@
       (cit-statute/install! conn)
       (cit-statute/install! conn)
       (let [params (d/q '[:find [?code ...]
-                          :where [_ :parameter/code ?code]]
+                          :where [_ :kontor.parameter/code ?code]]
                         (d/db conn))
             provs  (d/q '[:find [?code ...]
-                          :where [_ :provision/code ?code]]
+                          :where [_ :kontor.provision/code ?code]]
                         (d/db conn))
             ;; restrict to JP-prefixed only (other modules may seed their own)
             jp-params (filter #(.startsWith ^String % "JP.") params)

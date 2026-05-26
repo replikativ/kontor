@@ -40,7 +40,7 @@
   (when-let [eid (resolve-promise db spec)]
     (d/pull db
             '[* {:payment-promise/case [:collection-case/code]
-                 :payment-promise/invoice [:invoice/external-id]
+                 :payment-promise/invoice [:kontor.invoice/external-id]
                  :payment-promise/commodity [:kontor.commodity/symbol]
                  :payment-promise/captured-by-uid [:kontor.audit/create-uid]
                  :payment-promise/supporting-doc [:audit-doc/code]}]

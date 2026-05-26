@@ -241,15 +241,15 @@
           cm (inv/pull-invoice db cm-eid)
           lines (inv/lines-of db cm-eid)]
       (testing "credit memo created with :type :credit-memo"
-        (is (= :credit-memo (:invoice/type cm))))
+        (is (= :credit-memo (:kontor.invoice/type cm))))
       (testing "seller = acme, buyer = customer (org issues credit to customer)"
-        (is (= "ACME-ORG" (-> cm :invoice/seller :kontor.partner/external-id)))
-        (is (= "CUSTOMER" (-> cm :invoice/buyer :kontor.partner/external-id))))
+        (is (= "ACME-ORG" (-> cm :kontor.invoice/seller :kontor.partner/external-id)))
+        (is (= "CUSTOMER" (-> cm :kontor.invoice/buyer :kontor.partner/external-id))))
       (testing "one line per return-item"
         (is (= 1 (count lines)))
-        (is (= 3M (-> lines first :invoice-line/quantity)))
-        (is (= 75M (-> lines first :invoice-line/amount)))
-        (is (= :sales-revenue (-> lines first :invoice-line/gl-account-type))))
+        (is (= 3M (-> lines first :kontor.invoice-line/quantity)))
+        (is (= 75M (-> lines first :kontor.invoice-line/amount)))
+        (is (= :sales-revenue (-> lines first :kontor.invoice-line/gl-account-type))))
       (testing "return-item-billing junction created"
         (let [billing-count (d/q '[:find (count ?b) .
                                    :where [?b :return-item-billing/invoice-line]]
@@ -283,16 +283,16 @@
           dm (inv/pull-invoice db "DM-VEND-1")
           lines (inv/lines-of db "DM-VEND-1")]
       (testing "debit memo created with :type :debit-memo"
-        (is (= :debit-memo (:invoice/type dm))))
+        (is (= :debit-memo (:kontor.invoice/type dm))))
       (testing "seller = supplier, buyer = acme (supplier issues credit to us)"
-        (is (= "SUPPLIER" (-> dm :invoice/seller :kontor.partner/external-id)))
-        (is (= "ACME-ORG" (-> dm :invoice/buyer :kontor.partner/external-id))))
+        (is (= "SUPPLIER" (-> dm :kontor.invoice/seller :kontor.partner/external-id)))
+        (is (= "ACME-ORG" (-> dm :kontor.invoice/buyer :kontor.partner/external-id))))
       (testing "GL routes to :inventory (PO line is :direct material)"
         ;; debit-memo lines dispatch on :order-item/category — the
         ;; reversal hits the same account the original purchase debited.
-        (is (= :inventory (-> lines first :invoice-line/gl-account-type))))
+        (is (= :inventory (-> lines first :kontor.invoice-line/gl-account-type))))
       (testing "amount derived from return-quantity × return-price"
-        (is (= 24M (-> lines first :invoice-line/amount)))))))
+        (is (= 24M (-> lines first :kontor.invoice-line/amount)))))))
 
 (deftest credit-memo-uses-received-quantity-when-different
   ;; Customer requests return of 5; we receive only 3 back; credit
@@ -326,5 +326,5 @@
                                             {:external-id "CM-PARTIAL"})
     (let [lines (inv/lines-of (d/db *conn*) "CM-PARTIAL")]
       (testing "credit-memo line uses :received-quantity (3) not :return-quantity (5)"
-        (is (= 3M (-> lines first :invoice-line/quantity)))
-        (is (= 75M (-> lines first :invoice-line/amount)))))))
+        (is (= 3M (-> lines first :kontor.invoice-line/quantity)))
+        (is (= 75M (-> lines first :kontor.invoice-line/amount)))))))

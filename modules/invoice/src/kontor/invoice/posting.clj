@@ -2,12 +2,12 @@
   "Order → Invoice → AcctgTrans posting bridge — ADR-036.
 
    Three-tier GL resolution:
-     1. Explicit override on the invoice line (:invoice-line/account
+     1. Explicit override on the invoice line (:kontor.invoice-line/account
         — kernel attribute).
      2. Entity-specific default — :gl-account-default with
-        :gl-account-default/entity = :invoice/entity.
+        :gl-account-default/entity = :kontor.invoice/entity.
      3. Tenant-wide default — :gl-account-default with no entity.
-     4. Throw :invoice/missing-gl-default if all miss.
+     4. Throw :kontor.invoice/missing-gl-default if all miss.
 
    The bridge builds one kernel :transaction per invoice (the invoice
    IS the posting unit; per-line :posting entries reference the same
@@ -52,13 +52,13 @@
 
 (defn resolve-gl-account
   "Three-tier resolve. Returns the :account entity-id, or throws
-   ex-info :type :invoice/missing-gl-default if all three tiers
+   ex-info :type :kontor.invoice/missing-gl-default if all three tiers
    miss.
 
    Args:
      db          — datahike db value
      opts        — map with:
-       :override-account  optional :account ref (kernel :invoice-line/account)
+       :override-account  optional :account ref (kernel :kontor.invoice-line/account)
        :account-type      keyword (e.g. :sales-revenue)
        :entity            optional :entity ref"
   [db {:keys [override-account account-type entity]}]
@@ -66,12 +66,12 @@
       (entity-default-account db account-type entity)
       (tenant-wide-default-account db account-type)
       (throw (ex-info "No GL account configured for account-type"
-                      {:type           :invoice/missing-gl-default
+                      {:type           :kontor.invoice/missing-gl-default
                        :account-type   account-type
                        :entity         entity
                        :remediation    "Seed a :gl-account-default row
                                         for this (account-type, entity)
-                                        OR set :invoice-line/account
+                                        OR set :kontor.invoice-line/account
                                         explicitly on the line."}))))
 
 ;; ============================================================================
@@ -130,7 +130,7 @@
            db invoice-type account-type)
       (default-direction-for invoice-type account-type)
       (throw (ex-info "Unknown (invoice-type, account-type) for debit/credit"
-                      {:type :invoice/unknown-account-type-direction
+                      {:type :kontor.invoice/unknown-account-type-direction
                        :invoice-type invoice-type
                        :account-type account-type
                        :remediation "Seed a :account-type-direction
@@ -143,7 +143,7 @@
 ;; ============================================================================
 
 (defn- resolve-commodity-eid
-  "Resolve the :commodity eid from the kernel `:invoice/currency`
+  "Resolve the :commodity eid from the kernel `:kontor.invoice/currency`
    string (an ISO-4217 code or commodity symbol)."
   [db currency-str]
   (when currency-str
@@ -160,41 +160,41 @@
      and optionally :entity + :ledger"
   [db invoice-eid {:keys [journal-ref ledger-ref posted-at]}]
   (let [invoice (d/pull db
-                        '[* {:invoice/entity [:db/id]
-                             :invoice/buyer  [:db/id]
-                             :invoice/seller [:db/id]}]
+                        '[* {:kontor.invoice/entity [:db/id]
+                             :kontor.invoice/buyer  [:db/id]
+                             :kontor.invoice/seller [:db/id]}]
                         invoice-eid)
-        invoice-type (:invoice/type invoice)
-        entity-eid   (get-in invoice [:invoice/entity :db/id])
+        invoice-type (:kontor.invoice/type invoice)
+        entity-eid   (get-in invoice [:kontor.invoice/entity :db/id])
         partner-eid  (case invoice-type
-                       :sales       (get-in invoice [:invoice/buyer :db/id])
-                       :purchase    (get-in invoice [:invoice/seller :db/id])
-                       :credit-memo (get-in invoice [:invoice/buyer :db/id])
-                       :debit-memo  (get-in invoice [:invoice/seller :db/id]))
-        commodity-eid (resolve-commodity-eid db (:invoice/currency invoice))
+                       :sales       (get-in invoice [:kontor.invoice/buyer :db/id])
+                       :purchase    (get-in invoice [:kontor.invoice/seller :db/id])
+                       :credit-memo (get-in invoice [:kontor.invoice/buyer :db/id])
+                       :debit-memo  (get-in invoice [:kontor.invoice/seller :db/id]))
+        commodity-eid (resolve-commodity-eid db (:kontor.invoice/currency invoice))
         _ (when-not commodity-eid
             (throw (ex-info "Invoice currency not resolvable to :commodity"
-                            {:type :invoice/unknown-commodity
+                            {:type :kontor.invoice/unknown-commodity
                              :invoice-eid invoice-eid
-                             :currency (:invoice/currency invoice)
+                             :currency (:kontor.invoice/currency invoice)
                              :remediation "Seed a :commodity with the
                                           matching :kontor.commodity/symbol
                                           before posting."})))
         ledger-eid (or ledger-ref (ledger/primary db))
         lines (->> (d/q '[:find [?l ...]
                           :in $ ?inv
-                          :where [?l :invoice-line/invoice ?inv]]
+                          :where [?l :kontor.invoice-line/invoice ?inv]]
                         db invoice-eid)
                    (map #(d/pull db '[*] %))
-                   (sort-by :invoice-line/sequence)
+                   (sort-by :kontor.invoice-line/sequence)
                    ;; Skip zero-amount lines (e.g. fully-billed remainder).
                    (remove (fn [l] (zero? (.signum ^java.math.BigDecimal
-                                                   (or (:invoice-line/amount l) 0M))))))
+                                                   (or (:kontor.invoice-line/amount l) 0M))))))
         line-postings
         (mapv (fn [line]
-                (let [account-type (:invoice-line/gl-account-type line)
-                      override     (get-in line [:invoice-line/account :db/id])
-                      amount       (:invoice-line/amount line)
+                (let [account-type (:kontor.invoice-line/gl-account-type line)
+                      override     (get-in line [:kontor.invoice-line/account :db/id])
+                      amount       (:kontor.invoice-line/amount line)
                       account      (resolve-gl-account
                                     db {:override-account override
                                         :account-type account-type
@@ -232,7 +232,7 @@
                            :kontor.transaction/effective-date posted-at
                            :kontor.transaction/state :posted
                            :kontor.transaction/posted-at posted-at
-                           :kontor.transaction/external-id (:invoice/external-id invoice)}
+                           :kontor.transaction/external-id (:kontor.invoice/external-id invoice)}
                     partner-eid (assoc :kontor.transaction/partner partner-eid))
      :postings (conj line-postings contra-posting)}))
 
@@ -254,14 +254,14 @@
   (let [invoice-eid (cond
                       (string? invoice-spec)
                       (d/q '[:find ?e . :in $ ?xid
-                             :where [?e :invoice/external-id ?xid]]
+                             :where [?e :kontor.invoice/external-id ?xid]]
                            db invoice-spec)
                       :else invoice-spec)
         _ (when-not invoice-eid
             (throw (ex-info "Invoice not found" {:spec invoice-spec})))
         _ (when-not journal-ref
             (throw (ex-info "post-to-ledger! requires :journal-ref opt"
-                            {:type :invoice/missing-journal
+                            {:type :kontor.invoice/missing-journal
                              :remediation "Pass :journal-ref [:kontor.journal/code \"GL\"] (or your tenant's journal code) to post-to-ledger!. The kernel posting invariant rejects journal-less transactions per ADR-021."})))
         pa (or posted-at (java.util.Date.))
         input (build-input db invoice-eid
@@ -273,15 +273,15 @@
         tx-tempid -1
         ;; Compose the bridge tx atomically: kernel posting tx-data +
         ;; invoice update (transaction ref; no :posted-at denorm —
-        ;; presence of :invoice/transaction is the sentinel) + status-
+        ;; presence of :kontor.invoice/transaction is the sentinel) + status-
         ;; history row for :draft|:ready → :sent.
         invoice-update {:db/id invoice-eid
-                        :invoice/transaction tx-tempid}
+                        :kontor.invoice/transaction tx-tempid}
         status-tx (sm/record-status-change-tx-data
                    db
                    (cond-> {:entity invoice-eid
                             :entity-type :invoice
-                            :facet :invoice/status
+                            :facet :kontor.invoice/status
                             :to :sent
                             :changed-at pa
                             :origin-transaction tx-tempid}
@@ -303,7 +303,7 @@
      3. Builds a :transaction (state :posted, posted-at set) + per-
         line :posting entries via kontor.posting/build-transaction
         (commodity required, ledger explicit, sum-to-zero enforced).
-     4. Sets :invoice/transaction on the invoice (presence is the
+     4. Sets :kontor.invoice/transaction on the invoice (presence is the
         canonical 'posted to GL' sentinel; the posted-at timestamp
         lives in :status-history + :tx/valid-from).
      5. Writes a :status-history row for the :draft|:ready → :sent

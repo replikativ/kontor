@@ -17,7 +17,7 @@
    sales (TX, PA, OH, …) — the rate is determined by where the
    seller is located — and the rest are destination-based — rate by
    ship-to. The kernel substrate does NOT resolve this; the caller
-   passes a single :invoice/ship-to-state and a pre-resolved :rate
+   passes a single :kontor.invoice/ship-to-state and a pre-resolved :rate
    (or rate-table). The compute function returns the right number;
    the invoice builder just routes that number to the right
    liability account.
@@ -52,7 +52,7 @@
 
    ## Origin-state vs nexus-state revenue split
 
-   `:invoice/out-of-state?` true routes the revenue leg to
+   `:kontor.invoice/out-of-state?` true routes the revenue leg to
    `default-out-of-state-revenue-code` (4200) for SMBs that want to
    surface the no-nexus / no-tax revenue separately. The state tax
    liability is still zero in that case (no nexus → no collection
@@ -148,15 +148,15 @@
 
 (defn- revenue-code-for-line
   "Choose the revenue account for one line.
-     - :invoice-line/account on the line overrides
-     - :invoice/out-of-state? at the top-level routes everything to
+     - :kontor.invoice-line/account on the line overrides
+     - :kontor.invoice/out-of-state? at the top-level routes everything to
        the out-of-state revenue account (4200)
      - default: :sales-code (4000)"
   [{:keys [sales-code out-of-state-revenue-code out-of-state?]
     :or {sales-code default-sales-code
          out-of-state-revenue-code default-out-of-state-revenue-code}}
    line]
-  (or (:invoice-line/account line)
+  (or (:kontor.invoice-line/account line)
       (if out-of-state? out-of-state-revenue-code sales-code)))
 
 ;; ============================================================================
@@ -167,19 +167,19 @@
 
 (defn- line-net
   "Per-line net amount = qty × unit-price, rounded HALF-EVEN to 2dp.
-   Tolerates :invoice-line/line-total when caller pre-computed it."
-  ^java.math.BigDecimal [{:invoice-line/keys [quantity unit-price line-total]}]
+   Tolerates :kontor.invoice-line/line-total when caller pre-computed it."
+  ^java.math.BigDecimal [{:kontor.invoice-line/keys [quantity unit-price line-total]}]
   (cond
     line-total (bigdec line-total)
     (and quantity unit-price)
     (.setScale (.multiply (bigdec quantity) (bigdec unit-price))
                2 java.math.RoundingMode/HALF_EVEN)
     :else
-    (throw (ex-info "Invoice line needs either :invoice-line/line-total or both :invoice-line/quantity + :invoice-line/unit-price"
+    (throw (ex-info "Invoice line needs either :kontor.invoice-line/line-total or both :kontor.invoice-line/quantity + :kontor.invoice-line/unit-price"
                     {:line (select-keys
-                            {:invoice-line/quantity quantity
-                             :invoice-line/unit-price unit-price}
-                            [:invoice-line/quantity :invoice-line/unit-price])}))))
+                            {:kontor.invoice-line/quantity quantity
+                             :kontor.invoice-line/unit-price unit-price}
+                            [:kontor.invoice-line/quantity :kontor.invoice-line/unit-price])}))))
 
 (defn- nonzero? [^java.math.BigDecimal x]
   (not (zero? (.compareTo x 0M))))
@@ -231,31 +231,31 @@
   "Pure tx-data builder for a US sales invoice (ADR-068).
 
    Required input:
-     {:invoice/external-id      <string>
-      :invoice/issue-date       <java.util.Date>
-      :invoice/ship-to-state    <keyword>   ; :CA :NY :TX :OR ...
-      :invoice/lines            [<invoice-line>]
+     {:kontor.invoice/external-id      <string>
+      :kontor.invoice/issue-date       <java.util.Date>
+      :kontor.invoice/ship-to-state    <keyword>   ; :CA :NY :TX :OR ...
+      :kontor.invoice/lines            [<invoice-line>]
       ...}
 
    Each invoice-line:
-     {:invoice-line/quantity    <number-or-bigdec>      ; OR
-      :invoice-line/unit-price  <number-or-bigdec>      ; OR pre-computed:
-      :invoice-line/line-total  <bigdec>                ; net per line
-      :invoice-line/tax-status  <keyword>               ; default :taxable
-      :invoice-line/rate        <bigdec>                ; per-line rate override
-      :invoice-line/product-class <keyword>             ; :default :clothing ...
-      :invoice-line/account     <code>                  ; revenue-account override
+     {:kontor.invoice-line/quantity    <number-or-bigdec>      ; OR
+      :kontor.invoice-line/unit-price  <number-or-bigdec>      ; OR pre-computed:
+      :kontor.invoice-line/line-total  <bigdec>                ; net per line
+      :kontor.invoice-line/tax-status  <keyword>               ; default :taxable
+      :kontor.invoice-line/rate        <bigdec>                ; per-line rate override
+      :kontor.invoice-line/product-class <keyword>             ; :default :clothing ...
+      :kontor.invoice-line/account     <code>                  ; revenue-account override
       ...}
 
    Optional top-level fields:
-     :invoice/cash-sale?           debit cash (1100) instead of AR (1200)
-     :invoice/cash-code            account-code override for the cash leg
-     :invoice/buyer                partner ref (kernel :kontor.transaction/partner)
-     :invoice/journal              journal code override (default INV)
-     :invoice/out-of-state?        route revenue to 4200 (no-nexus state)
-     :invoice/rate                 invoice-level rate (applied to taxable lines
+     :kontor.invoice/cash-sale?           debit cash (1100) instead of AR (1200)
+     :kontor.invoice/cash-code            account-code override for the cash leg
+     :kontor.invoice/buyer                partner ref (kernel :kontor.transaction/partner)
+     :kontor.invoice/journal              journal code override (default INV)
+     :kontor.invoice/out-of-state?        route revenue to 4200 (no-nexus state)
+     :kontor.invoice/rate                 invoice-level rate (applied to taxable lines
                                    unless the line has its own rate)
-     :invoice/rate-table           invoice-level rate-table for compute-tax
+     :kontor.invoice/rate-table           invoice-level rate-table for compute-tax
 
    Opts:
      :track-by-state?      default true; false → all tax to :single-tax-code
@@ -274,20 +274,20 @@
    The builder enforces sum-to-zero per the kernel rules (via
    `kontor.posting/build-transaction`)."
   [db invoice opts]
-  (let [{:invoice/keys [external-id issue-date ship-to-state
+  (let [{:kontor.invoice/keys [external-id issue-date ship-to-state
                         lines buyer cash-sale? journal out-of-state?
                         rate rate-table]} invoice
         _ (when-not external-id
-            (throw (ex-info "Invoice missing :invoice/external-id" {:invoice invoice})))
+            (throw (ex-info "Invoice missing :kontor.invoice/external-id" {:invoice invoice})))
         _ (when-not issue-date
-            (throw (ex-info "Invoice missing :invoice/issue-date" {:invoice invoice})))
+            (throw (ex-info "Invoice missing :kontor.invoice/issue-date" {:invoice invoice})))
         _ (when-not ship-to-state
-            (throw (ex-info "Invoice missing :invoice/ship-to-state" {:invoice invoice})))
+            (throw (ex-info "Invoice missing :kontor.invoice/ship-to-state" {:invoice invoice})))
         _ (when-not (keyword? ship-to-state)
-            (throw (ex-info ":invoice/ship-to-state must be a keyword (e.g. :CA)"
+            (throw (ex-info ":kontor.invoice/ship-to-state must be a keyword (e.g. :CA)"
                             {:invoice invoice})))
         _ (when (empty? lines)
-            (throw (ex-info "Invoice has no :invoice/lines" {:invoice invoice})))
+            (throw (ex-info "Invoice has no :kontor.invoice/lines" {:invoice invoice})))
         commodity (or (:commodity opts) default-commodity)
         commodity-eid (or (commodity-by-symbol db commodity)
                           (throw (ex-info (str "Commodity " commodity " not found")
@@ -301,12 +301,12 @@
         (cond-> {:state ship-to-state
                  :lines (mapv (fn [l]
                                 (cond-> {:line (line-net l)
-                                         :tax-status (or (:invoice-line/tax-status l) :taxable)
-                                         :product-class (or (:invoice-line/product-class l) :default)}
-                                  (:invoice-line/rate l)
-                                  (assoc :rate (:invoice-line/rate l))
-                                  (and rate (not (:invoice-line/rate l))
-                                       (= (or (:invoice-line/tax-status l) :taxable) :taxable))
+                                         :tax-status (or (:kontor.invoice-line/tax-status l) :taxable)
+                                         :product-class (or (:kontor.invoice-line/product-class l) :default)}
+                                  (:kontor.invoice-line/rate l)
+                                  (assoc :rate (:kontor.invoice-line/rate l))
+                                  (and rate (not (:kontor.invoice-line/rate l))
+                                       (= (or (:kontor.invoice-line/tax-status l) :taxable) :taxable))
                                   (assoc :rate rate)))
                               lines)}
           rate-table (assoc :rate-table rate-table))
@@ -315,7 +315,7 @@
         gross (:total-gross tax-r)
         ;; Resolve debit (AR or cash)
         debit-code (if cash-sale?
-                     (or (:invoice/cash-code invoice)
+                     (or (:kontor.invoice/cash-code invoice)
                          (:cash-code opts)
                          default-cash-code)
                      (or (:ar-code opts) default-ar-code))
@@ -333,7 +333,7 @@
         tx-base (cond-> {:kontor.transaction/external-id external-id
                          :kontor.transaction/journal jnl
                          :kontor.transaction/effective-date issue-date
-                         :kontor.transaction/narration (or (:invoice/narration invoice)
+                         :kontor.transaction/narration (or (:kontor.invoice/narration invoice)
                                                     external-id)
                          :kontor.transaction/state :posted
                          :kontor.transaction/posted-at issue-date}
@@ -379,13 +379,13 @@
   "Return a vector of complaints; empty when ready to post. Used by
    consumers to surface input issues *before* hitting the gate."
   [invoice]
-  (let [{:invoice/keys [external-id issue-date ship-to-state lines]} invoice]
+  (let [{:kontor.invoice/keys [external-id issue-date ship-to-state lines]} invoice]
     (cond-> []
       (or (nil? external-id) (and (string? external-id) (str/blank? external-id)))
-      (conj {:field :invoice/external-id :issue :missing-or-blank})
+      (conj {:field :kontor.invoice/external-id :issue :missing-or-blank})
       (nil? issue-date)
-      (conj {:field :invoice/issue-date :issue :missing})
+      (conj {:field :kontor.invoice/issue-date :issue :missing})
       (or (nil? ship-to-state) (not (keyword? ship-to-state)))
-      (conj {:field :invoice/ship-to-state :issue :invalid-or-missing})
+      (conj {:field :kontor.invoice/ship-to-state :issue :invalid-or-missing})
       (empty? lines)
-      (conj {:field :invoice/lines :issue :empty}))))
+      (conj {:field :kontor.invoice/lines :issue :empty}))))

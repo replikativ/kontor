@@ -102,7 +102,7 @@
    federal — Ontario's Bill 12 (royal assent Nov 2025) raises ON's
    small-business limit to $600k from 2026-01-01, breaking the
    prior alignment with the federal $500k. Callers now pass the
-   per-province `:parameter/code` (`CA.ON.CIT.sbd-limit` etc.); the
+   per-province `:kontor.parameter/code` (`CA.ON.CIT.sbd-limit` etc.); the
    federal caller passes `CA.Federal.CIT.sbd-business-limit`."
   ^java.math.BigDecimal [db as-of ^java.math.BigDecimal share limit-parameter-code]
   (let [limit (statute/parameter-value-at db limit-parameter-code as-of)]
@@ -318,7 +318,7 @@
      :regime          (if (get-in ctx [:tax-unit :ccpc?]) :ccpc :general)
      :provenance      {:provider-id :ca-cit
                        :statute "Income Tax Act (Canada) — Part I"
-                       :provisions-applied (mapv :provision/code provisions)
+                       :provisions-applied (mapv :kontor.provision/code provisions)
                        :as-of as-of}}))
 
 (defn- province-component
@@ -362,7 +362,7 @@
      :regime          (if (get-in ctx [:tax-unit :ccpc?]) :ccpc :general)
      :provenance      {:provider-id :ca-cit
                        :statute (str "CA " label " corporate income tax statute")
-                       :provisions-applied (mapv :provision/code provisions)
+                       :provisions-applied (mapv :kontor.provision/code provisions)
                        :as-of as-of}}))
 
 (defrecord CACITProvider [id commodity]

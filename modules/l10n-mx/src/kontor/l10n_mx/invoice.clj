@@ -29,7 +29,7 @@
    roadmap for the AR-settlement / pago-complemento story.
 
    For a true **cash-sale** (invoice + cash receipt in one step,
-   `:invoice/cash-sale?` true), IVA is recognised immediately and
+   `:kontor.invoice/cash-sale?` true), IVA is recognised immediately and
    lands directly on 208.01 (cobrado). The :cash-sale? flag drives
    this routing.
 
@@ -57,7 +57,7 @@
    Lines marked `:zero-rated`, `:exempt`, or `:non-resident` land on
    the dedicated revenue accounts (401.01.003 zero-rated /
    401.01.004 exempt / 401.02.001 exportación) and emit no IVA
-   posting. Caller can override per-line with `:invoice-line/account`.
+   posting. Caller can override per-line with `:kontor.invoice-line/account`.
 
    ## ADR-068 — pure builder + side-effecting wrapper
 
@@ -88,7 +88,7 @@
    :ar-export-code        chart/ar-export-code
    :cash-code             chart/cash-code
    :bank-code             chart/bank-code
-   ;; Revenue per rate (caller chooses via :invoice-line/account override
+   ;; Revenue per rate (caller chooses via :kontor.invoice-line/account override
    ;; or via tax-status routing; default goes to 16% domestic).
    :sales-16-code         chart/sales-domestic-16-code
    :sales-8-code          chart/sales-domestic-8-code
@@ -145,7 +145,7 @@
      :taxable + 8%  → 401.01.002 ventas frontera 8%
      :taxable + 0%  → 401.01.003 ventas 0% (rare; :zero-rated normally)
 
-   Callers can pin a different account via `:invoice-line/account`."
+   Callers can pin a different account via `:kontor.invoice-line/account`."
   [status effective-iva-rate codes]
   (cond
     (= status :zero-rated)   (:sales-0-code codes)
@@ -180,19 +180,19 @@
 
 (defn- line-net
   "Per-line net amount = qty × unit-price, rounded HALF-EVEN to 2dp.
-   Tolerates `:invoice-line/line-total` when caller pre-computed it."
-  ^java.math.BigDecimal [{:invoice-line/keys [quantity unit-price line-total]}]
+   Tolerates `:kontor.invoice-line/line-total` when caller pre-computed it."
+  ^java.math.BigDecimal [{:kontor.invoice-line/keys [quantity unit-price line-total]}]
   (cond
     line-total (bigdec line-total)
     (and quantity unit-price)
     (.setScale (.multiply (bigdec quantity) (bigdec unit-price))
                2 java.math.RoundingMode/HALF_EVEN)
     :else
-    (throw (ex-info "Invoice line needs either :invoice-line/line-total or both :invoice-line/quantity + :invoice-line/unit-price"
+    (throw (ex-info "Invoice line needs either :kontor.invoice-line/line-total or both :kontor.invoice-line/quantity + :kontor.invoice-line/unit-price"
                     {:line (select-keys
-                            {:invoice-line/quantity quantity
-                             :invoice-line/unit-price unit-price}
-                            [:invoice-line/quantity :invoice-line/unit-price])}))))
+                            {:kontor.invoice-line/quantity quantity
+                             :kontor.invoice-line/unit-price unit-price}
+                            [:kontor.invoice-line/quantity :kontor.invoice-line/unit-price])}))))
 
 (defn- nonzero? [^java.math.BigDecimal x]
   (not (zero? (.compareTo x 0M))))
@@ -209,7 +209,7 @@
    components the posting-assembly step needs:
      {:net :iva :ieps :retencion-iva :retencion-isr
       :iva-rate :status :line}"
-  [{:invoice-line/keys [tax-status iva-rate ieps-rate
+  [{:kontor.invoice-line/keys [tax-status iva-rate ieps-rate
                         retencion-iva-rate retencion-isr-rate]
     :as line}
    region]
@@ -242,7 +242,7 @@
   [db breakdown codes commodity-eid date]
   (let [grouped (group-by
                  (fn [{:keys [status iva-rate line]}]
-                   [(or (:invoice-line/account line)
+                   [(or (:kontor.invoice-line/account line)
                         (revenue-code-for-line status iva-rate codes))
                     status])
                  breakdown)]
@@ -320,7 +320,7 @@
 (defn- debit-account-code
   "Resolve the debit-leg account code: cash / bank / export-AR / AR
    based on invoice flags."
-  [{:invoice/keys [cash-sale? bank-sale? export?]} codes]
+  [{:kontor.invoice/keys [cash-sale? bank-sale? export?]} codes]
   (cond
     cash-sale?  (:cash-code codes)
     bank-sale?  (:bank-code codes)
@@ -349,33 +349,33 @@
   "Pure tx-data builder for a Mexican sales invoice (ADR-068).
 
    Required input:
-     {:invoice/external-id  <string>
-      :invoice/issue-date   <java.util.Date>
-      :invoice/lines        [<invoice-line>]
+     {:kontor.invoice/external-id  <string>
+      :kontor.invoice/issue-date   <java.util.Date>
+      :kontor.invoice/lines        [<invoice-line>]
       ...}
 
    Each invoice-line:
-     {:invoice-line/quantity    <number-or-bigdec>     ; OR
-      :invoice-line/unit-price  <number-or-bigdec>     ; OR pre-computed:
-      :invoice-line/line-total  <bigdec>               ; net per line
-      :invoice-line/iva-rate    <bigdec>               ; optional override
-      :invoice-line/ieps-rate   <bigdec>               ; optional, default 0
-      :invoice-line/retencion-iva-rate <bigdec>        ; optional
-      :invoice-line/retencion-isr-rate <bigdec>        ; optional
-      :invoice-line/tax-status  <keyword>              ; default :taxable
-      :invoice-line/account     <code-or-eid>          ; optional override}
+     {:kontor.invoice-line/quantity    <number-or-bigdec>     ; OR
+      :kontor.invoice-line/unit-price  <number-or-bigdec>     ; OR pre-computed:
+      :kontor.invoice-line/line-total  <bigdec>               ; net per line
+      :kontor.invoice-line/iva-rate    <bigdec>               ; optional override
+      :kontor.invoice-line/ieps-rate   <bigdec>               ; optional, default 0
+      :kontor.invoice-line/retencion-iva-rate <bigdec>        ; optional
+      :kontor.invoice-line/retencion-isr-rate <bigdec>        ; optional
+      :kontor.invoice-line/tax-status  <keyword>              ; default :taxable
+      :kontor.invoice-line/account     <code-or-eid>          ; optional override}
 
    Optional top-level fields:
-     :invoice/region        keyword (:general | :border-norte | :border-sur)
+     :kontor.invoice/region        keyword (:general | :border-norte | :border-sur)
                             — applies to ALL lines (default :general)
-     :invoice/cash-sale?    when true, debit Caja (101) AND route IVA
+     :kontor.invoice/cash-sale?    when true, debit Caja (101) AND route IVA
                             directly to cobrado (208.01) — payment
                             recognised at issuance
-     :invoice/bank-sale?    when true, debit Bancos (102) instead of AR
-     :invoice/export?       when true, debit Clientes Extranjero (105.02)
-     :invoice/buyer         partner ref (kernel :kontor.transaction/partner)
-     :invoice/journal       journal code override (default \"INV\")
-     :invoice/narration     transaction narration (default = external-id)
+     :kontor.invoice/bank-sale?    when true, debit Bancos (102) instead of AR
+     :kontor.invoice/export?       when true, debit Clientes Extranjero (105.02)
+     :kontor.invoice/buyer         partner ref (kernel :kontor.transaction/partner)
+     :kontor.invoice/journal       journal code override (default \"INV\")
+     :kontor.invoice/narration     transaction narration (default = external-id)
 
    Opts:
      :codes        — map of code overrides (any of the default-codes keys)
@@ -388,14 +388,14 @@
   [db invoice {:keys [codes commodity journal-code]
                :or {codes {} commodity default-commodity
                     journal-code default-journal-code}}]
-  (let [{:invoice/keys [external-id issue-date lines buyer cash-sale?
+  (let [{:kontor.invoice/keys [external-id issue-date lines buyer cash-sale?
                         journal region]} invoice
         _ (when-not external-id
-            (throw (ex-info "Invoice missing :invoice/external-id" {:invoice invoice})))
+            (throw (ex-info "Invoice missing :kontor.invoice/external-id" {:invoice invoice})))
         _ (when-not issue-date
-            (throw (ex-info "Invoice missing :invoice/issue-date" {:invoice invoice})))
+            (throw (ex-info "Invoice missing :kontor.invoice/issue-date" {:invoice invoice})))
         _ (when (empty? lines)
-            (throw (ex-info "Invoice has no :invoice/lines" {:invoice invoice})))
+            (throw (ex-info "Invoice has no :kontor.invoice/lines" {:invoice invoice})))
         merged-codes (merge (default-codes) codes)
         region (or region :general)
         commodity-eid (or (commodity-by-symbol db commodity)
@@ -426,7 +426,7 @@
         tx-base (cond-> {:kontor.transaction/external-id external-id
                          :kontor.transaction/journal jnl
                          :kontor.transaction/effective-date issue-date
-                         :kontor.transaction/narration (or (:invoice/narration invoice)
+                         :kontor.transaction/narration (or (:kontor.invoice/narration invoice)
                                                     external-id)
                          :kontor.transaction/state :posted
                          :kontor.transaction/posted-at issue-date}
@@ -460,17 +460,17 @@
   "Return a vector of complaints; empty when ready to post. Used by
    consumers to surface input issues *before* hitting the gate."
   [invoice]
-  (let [{:invoice/keys [external-id issue-date lines region]} invoice]
+  (let [{:kontor.invoice/keys [external-id issue-date lines region]} invoice]
     (cond-> []
       (or (nil? external-id) (and (string? external-id) (str/blank? external-id)))
-      (conj {:field :invoice/external-id :issue :missing-or-blank})
+      (conj {:field :kontor.invoice/external-id :issue :missing-or-blank})
 
       (nil? issue-date)
-      (conj {:field :invoice/issue-date :issue :missing})
+      (conj {:field :kontor.invoice/issue-date :issue :missing})
 
       (empty? lines)
-      (conj {:field :invoice/lines :issue :empty})
+      (conj {:field :kontor.invoice/lines :issue :empty})
 
       (and (some? region) (not (contains? tax/regions region)))
-      (conj {:field :invoice/region :issue :invalid
+      (conj {:field :kontor.invoice/region :issue :invalid
              :valid tax/regions}))))

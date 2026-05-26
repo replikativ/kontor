@@ -258,11 +258,11 @@
     (let [conn (core/create-test-db)]
       (cit-statute/install! conn)
       (cit-statute/install! conn)
-      (let [n-params   (count (d/q '[:find ?p :where [?p :parameter/code _]]
+      (let [n-params   (count (d/q '[:find ?p :where [?p :kontor.parameter/code _]]
                                    (d/db conn)))
-            n-provs    (count (d/q '[:find ?p :where [?p :provision/code _]]
+            n-provs    (count (d/q '[:find ?p :where [?p :kontor.provision/code _]]
                                    (d/db conn)))
-            n-brackets (count (d/q '[:find ?b :where [?b :parameter-bracket/index _]]
+            n-brackets (count (d/q '[:find ?b :where [?b :kontor.parameter-bracket/index _]]
                                    (d/db conn)))]
         (is (= (count cit-statute/parameters) n-params))
         (is (= (count cit-statute/provisions) n-provs))

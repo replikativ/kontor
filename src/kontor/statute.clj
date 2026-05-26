@@ -45,7 +45,7 @@
        → [{:rate ... :upper ...} ...] sorted by :index.
 
    Predicate vocabulary (closed; escape hatch via
-   `:provision/compute-fn`): `:and` `:or` `:not` `:eq` `:in` `:leq`
+   `:kontor.provision/compute-fn`): `:and` `:or` `:not` `:eq` `:in` `:leq`
    `:geq` `:lt` `:gt` `:between` `:status-is` `true` `false`.
 
    See ADR-101 + research notes 117 / 118 / 119."
@@ -57,7 +57,7 @@
 
 (def predicate-vocab
   "The closed v1 predicate set. Adding a predicate is an ADR-101 §D2
-   decision; the alternative is the `:provision/compute-fn` escape hatch."
+   decision; the alternative is the `:kontor.provision/compute-fn` escape hatch."
   #{:and :or :not :eq :in :leq :geq :lt :gt :between :status-is})
 
 (defn- fact
@@ -148,25 +148,25 @@
   (.getTime d))
 
 (defn parameter-value-at
-  "Look up the scalar value of `:parameter/code` effective at `as-of`.
-   Returns the BigDecimal (`:parameter-value/decimal-value`) or nil if
+  "Look up the scalar value of `:kontor.parameter/code` effective at `as-of`.
+   Returns the BigDecimal (`:kontor.parameter-value/decimal-value`) or nil if
    no value is in effect at the asked instant. The chosen value is the
    one whose `[:effective-from, :effective-until)` half-open range
    contains as-of (open `:effective-until` ⇒ still in effect)."
   [db parameter-code ^java.util.Date as-of]
   (let [param-eid (d/q '[:find ?p .
                          :in $ ?code
-                         :where [?p :parameter/code ?code]]
+                         :where [?p :kontor.parameter/code ?code]]
                        db parameter-code)]
     (when param-eid
       (let [as-ms  (instant-ms as-of)
-            values (d/q '[:find (pull ?v [:parameter-value/effective-from
-                                          :parameter-value/effective-until
-                                          :parameter-value/decimal-value])
+            values (d/q '[:find (pull ?v [:kontor.parameter-value/effective-from
+                                          :kontor.parameter-value/effective-until
+                                          :kontor.parameter-value/decimal-value])
                           :in $ ?p
-                          :where [?v :parameter-value/parameter ?p]]
+                          :where [?v :kontor.parameter-value/parameter ?p]]
                         db param-eid)]
-        (some (fn [[{:parameter-value/keys [effective-from effective-until decimal-value]}]]
+        (some (fn [[{:kontor.parameter-value/keys [effective-from effective-until decimal-value]}]]
                 (when (and (<= (instant-ms effective-from) as-ms)
                            (or (nil? effective-until)
                                (< as-ms (instant-ms effective-until))))
@@ -183,22 +183,22 @@
 
      [:geq [:period :from] cutover]
 
-   For use inside `:provision/condition`:
+   For use inside `:kontor.provision/condition`:
 
-     :provision/condition (pr-str (statute/period-from-on-or-after
+     :kontor.provision/condition (pr-str (statute/period-from-on-or-after
                                     #inst \"2026-04-01\"))
 
    Combine with `:and` for compound conditions:
 
-     :provision/condition (pr-str
+     :kontor.provision/condition (pr-str
                             [:and
                              (statute/period-from-on-or-after
                                #inst \"2026-04-01\")
                              [:eq :component :national]])
 
-   ## When to use vs `:provision/effective-from`
+   ## When to use vs `:kontor.provision/effective-from`
 
-   - **`:provision/effective-from`** gates on `:as-of` (the
+   - **`:kontor.provision/effective-from`** gates on `:as-of` (the
      `applicable-provisions` filter). Use for event-date-based
      statutes (CGT disposal rules, sales-tax rate changes, parameter
      value cutovers).
@@ -219,27 +219,27 @@
   [:lt [:period :from] cutover])
 
 (defn parameter-brackets-at
-  "Look up the bracket scale of `:parameter/code` (parent parameter
-   must have `:parameter/unit :bracket-scale`) effective at `as-of`.
+  "Look up the bracket scale of `:kontor.parameter/code` (parent parameter
+   must have `:kontor.parameter/unit :bracket-scale`) effective at `as-of`.
    Returns a vector `[{:rate <bigdec> :upper <bigdec>|nil} …]` sorted
-   by `:parameter-bracket/index`, ready to feed
+   by `:kontor.parameter-bracket/index`, ready to feed
    `kontor.tax-schedule/progressive`."
   [db parameter-code ^java.util.Date as-of]
   (let [param-eid (d/q '[:find ?p .
                          :in $ ?code
-                         :where [?p :parameter/code ?code]]
+                         :where [?p :kontor.parameter/code ?code]]
                        db parameter-code)]
     (when param-eid
       (let [as-ms    (instant-ms as-of)
-            brackets (d/q '[:find (pull ?b [:parameter-bracket/index
-                                            :parameter-bracket/rate
-                                            :parameter-bracket/upper
-                                            :parameter-bracket/effective-from
-                                            :parameter-bracket/effective-until])
+            brackets (d/q '[:find (pull ?b [:kontor.parameter-bracket/index
+                                            :kontor.parameter-bracket/rate
+                                            :kontor.parameter-bracket/upper
+                                            :kontor.parameter-bracket/effective-from
+                                            :kontor.parameter-bracket/effective-until])
                             :in $ ?p
-                            :where [?b :parameter-bracket/parameter ?p]]
+                            :where [?b :kontor.parameter-bracket/parameter ?p]]
                           db param-eid)
-            in-effect (filter (fn [[{:parameter-bracket/keys [effective-from effective-until]}]]
+            in-effect (filter (fn [[{:kontor.parameter-bracket/keys [effective-from effective-until]}]]
                                 (and (<= (instant-ms effective-from) as-ms)
                                      (or (nil? effective-until)
                                          (< as-ms (instant-ms effective-until)))))
@@ -247,8 +247,8 @@
         (when (seq in-effect)
           (->> in-effect
                (map first)
-               (sort-by :parameter-bracket/index)
-               (mapv (fn [{:parameter-bracket/keys [rate upper]}]
+               (sort-by :kontor.parameter-bracket/index)
+               (mapv (fn [{:kontor.parameter-bracket/keys [rate upper]}]
                        {:rate rate :upper upper}))))))))
 
 ;; ============================================================================
@@ -256,8 +256,8 @@
 ;; ============================================================================
 
 (defn- read-edn
-  "Parse a stringified-EDN attr (`:provision/condition` /
-   `:provision/consequence`) — returns nil for nil/empty. Uses
+  "Parse a stringified-EDN attr (`:kontor.provision/condition` /
+   `:kontor.provision/consequence`) — returns nil for nil/empty. Uses
    `read-string` since the producer is trusted (kernel writes these)."
   [s]
   (when (and s (not= "" s))
@@ -273,7 +273,7 @@
 
 (defn regime-chain
   "Compute the closure of regimes reachable from `regime-code` via
-   `:regime/extends`. Returns a set of `:regime/code` keywords (always
+   `:kontor.regime/extends`. Returns a set of `:kontor.regime/code` keywords (always
    including `regime-code` itself when it exists in db). Raises
    `kontor.tax/cyclic-regime` if the chain has a cycle.
 
@@ -281,7 +281,7 @@
    to any regime A transitively extends apply (the OpenFisca reform-
    overlay pattern — a reform regime that extends current law inherits
    all current-law provisions except those it explicitly overrides via
-   `:provision/exception-of`)."
+   `:kontor.provision/exception-of`)."
   [db regime-code]
   (when regime-code
     (loop [chain     #{}
@@ -296,9 +296,9 @@
               parent (d/q '[:find ?parent-code .
                             :in $ ?code
                             :where
-                            [?r :regime/code ?code]
-                            [?r :regime/extends ?p]
-                            [?p :regime/code ?parent-code]]
+                            [?r :kontor.regime/code ?code]
+                            [?r :kontor.regime/extends ?p]
+                            [?p :kontor.regime/code ?parent-code]]
                           db code)]
           (recur (conj chain code)
                  (cond-> (rest to-visit)
@@ -307,42 +307,42 @@
 (defn applicable-provisions
   "Find provisions matching `concept` + `jurisdiction`, in effect at
    `as-of`, gated by the elected `regime` (nil = no regime elected; only
-   regime-free provisions are candidates), whose `:provision/condition`
+   regime-free provisions are candidates), whose `:kontor.provision/condition`
    evaluates true against `ctx`. Returns provisions sorted by
-   `:provision/priority` ascending.
+   `:kontor.provision/priority` ascending.
 
    `:exception-of` pairs are NOT yet pruned here — that's
    `apply-provisions`'s job (a default is suppressed only when its
    exception is also in the applicable set)."
   [db {:keys [concept jurisdiction as-of regime]} ctx]
-  (let [candidates (->> (d/q '[:find (pull ?p [* {:provision/concept [:kontor.tax-concept/code]
-                                                  :provision/regime  [:regime/code]
-                                                  :provision/exception-of [:db/id :provision/code]}])
+  (let [candidates (->> (d/q '[:find (pull ?p [* {:kontor.provision/concept [:kontor.tax-concept/code]
+                                                  :kontor.provision/regime  [:kontor.regime/code]
+                                                  :kontor.provision/exception-of [:db/id :kontor.provision/code]}])
                                :in $ ?concept-code ?juris
                                :where
-                               [?p :provision/concept ?c]
+                               [?p :kontor.provision/concept ?c]
                                [?c :kontor.tax-concept/code ?concept-code]
-                               [?p :provision/jurisdiction ?juris]]
+                               [?p :kontor.provision/jurisdiction ?juris]]
                              db concept jurisdiction)
                         (mapv first))]
     (->> candidates
          (filter (fn [p]
-                   (in-effect? (:provision/effective-from p)
-                               (:provision/effective-until p)
+                   (in-effect? (:kontor.provision/effective-from p)
+                               (:kontor.provision/effective-until p)
                                as-of)))
          (filter (let [chain (regime-chain db regime)]
                    (fn [p]
-                     (let [pr (some-> p :provision/regime :regime/code)]
+                     (let [pr (some-> p :kontor.provision/regime :kontor.regime/code)]
                        (cond
                          (nil? pr)     true        ; regime-free provision always candidate
                          (nil? regime) false       ; no regime elected: regime-bound provisions skip
                          :else         (contains? chain pr)))))) ; pr in elected regime's chain
-         (filter (fn [{cond-str :provision/condition}]
+         (filter (fn [{cond-str :kontor.provision/condition}]
                    (eval-condition (read-edn cond-str) ctx)))
-         (sort-by :provision/priority))))
+         (sort-by :kontor.provision/priority))))
 
 ;; ============================================================================
-;; Consequence resolution — turn :provision/consequence into a fold-ready item
+;; Consequence resolution — turn :kontor.provision/consequence into a fold-ready item
 ;; ============================================================================
 
 (defn- resolve-amount
@@ -387,7 +387,7 @@
      {:schedule/type :formula :fn <kw>}                 (resolves via compute-fn)
      other schedule shapes pass through unchanged
 
-   Lets a `:provision/consequence` express \"swap the schedule based
+   Lets a `:kontor.provision/consequence` express \"swap the schedule based
    on a parameter\" cleanly — CN HNTE 15%, FR PME progressive, IN
    §115BAA new-regime flat 22%."
   [template db ^java.util.Date as-of]
@@ -417,7 +417,7 @@
     template))
 
 (defn resolve-consequence
-  "Turn a `:provision/consequence` EDN map into a fold-ready item the
+  "Turn a `:kontor.provision/consequence` EDN map into a fold-ready item the
    `kontor.tax-schedule` adjustment folds will consume.
 
    For amount-bearing ops (`:credit` / `:surtax` / `:base-add` /
@@ -433,13 +433,13 @@
    map (rate / brackets / formula fn baked in). Provider picks the
    highest-priority schedule-override to replace the default schedule.
 
-   `:provenance` is `{:provision/code <id> :provision/citation <url>}`
+   `:provenance` is `{:kontor.provision/code <id> :kontor.provision/citation <url>}`
    so the auditable resolved-items list traces every applied effect
    back to the statute."
   [db provision ctx ^java.util.Date as-of]
-  (let [consequence (read-edn (:provision/consequence provision))
-        provenance  {:provision/code     (:provision/code provision)
-                     :provision/citation (:provision/citation provision)}]
+  (let [consequence (read-edn (:kontor.provision/consequence provision))
+        provenance  {:kontor.provision/code     (:kontor.provision/code provision)
+                     :kontor.provision/citation (:kontor.provision/citation provision)}]
     (case (:op consequence)
       :schedule-override
       (-> consequence
@@ -460,10 +460,10 @@
   "Suppress default provisions whose exceptions also apply.
 
    For each provision in `applicable`, if some OTHER provision in
-   `applicable` names it as its `:provision/exception-of` target, the
+   `applicable` names it as its `:kontor.provision/exception-of` target, the
    default is dropped. The exception fires instead."
   [applicable]
-  (let [excepted-ids (set (keep #(some-> % :provision/exception-of :db/id) applicable))]
+  (let [excepted-ids (set (keep #(some-> % :kontor.provision/exception-of :db/id) applicable))]
     (remove (fn [p] (contains? excepted-ids (:db/id p))) applicable)))
 
 (defn- assert-no-ambiguity!
@@ -471,14 +471,14 @@
    `provisions` share the same `:priority`. The exception carries both
    citations so a user can resolve by editing one provision's priority."
   [provisions]
-  (let [groups (group-by :provision/priority provisions)
+  (let [groups (group-by :kontor.provision/priority provisions)
         ambiguous (filter #(> (count (second %)) 1) groups)]
     (when (seq ambiguous)
       (throw (ex-info "kontor.tax/ambiguous-provision"
                       {:ambiguities (mapv (fn [[priority ps]]
                                             {:priority priority
-                                             :provisions (mapv #(select-keys % [:provision/code
-                                                                                :provision/citation])
+                                             :provisions (mapv #(select-keys % [:kontor.provision/code
+                                                                                :kontor.provision/citation])
                                                                ps)})
                                           ambiguous)})))))
 

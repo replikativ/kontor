@@ -47,7 +47,7 @@
     (is (attr-known? :dunning-event/case))
     (is (attr-known? :dunning-event/level))
     (is (attr-known? :dunning-pause/case))
-    (is (attr-known? :invoice/collections-status))))
+    (is (attr-known? :kontor.invoice/collections-status))))
 
 ;; ============================================================================
 ;; State-machine seeds
@@ -119,23 +119,23 @@
 
 (deftest invoice-collections-status-transitions-seeded
   (let [db (d/db *conn*)]
-    (is (sm/legal-transition? db :invoice :invoice/collections-status
+    (is (sm/legal-transition? db :invoice :kontor.invoice/collections-status
                               :nil :current))
-    (is (sm/legal-transition? db :invoice :invoice/collections-status
+    (is (sm/legal-transition? db :invoice :kontor.invoice/collections-status
                               :current :overdue))
-    (is (sm/legal-transition? db :invoice :invoice/collections-status
+    (is (sm/legal-transition? db :invoice :kontor.invoice/collections-status
                               :overdue :in-collection))
-    (is (sm/legal-transition? db :invoice :invoice/collections-status
+    (is (sm/legal-transition? db :invoice :kontor.invoice/collections-status
                               :current :disputed))
-    (is (sm/legal-transition? db :invoice :invoice/collections-status
+    (is (sm/legal-transition? db :invoice :kontor.invoice/collections-status
                               :overdue :disputed))
-    (is (sm/legal-transition? db :invoice :invoice/collections-status
+    (is (sm/legal-transition? db :invoice :kontor.invoice/collections-status
                               :in-collection :disputed))
-    (is (sm/legal-transition? db :invoice :invoice/collections-status
+    (is (sm/legal-transition? db :invoice :kontor.invoice/collections-status
                               :disputed :overdue))
-    (is (sm/legal-transition? db :invoice :invoice/collections-status
+    (is (sm/legal-transition? db :invoice :kontor.invoice/collections-status
                               :in-collection :paid))
-    (is (sm/legal-transition? db :invoice :invoice/collections-status
+    (is (sm/legal-transition? db :invoice :kontor.invoice/collections-status
                               :in-collection :written-off))))
 
 ;; ============================================================================
@@ -144,23 +144,23 @@
 
 (deftest invoice-collections-status-is-independent-of-invoice-status
   ;; ADR-034 multi-facet: :invoice can carry independent state
-  ;; machines for :invoice/status (the kernel lifecycle) AND
-  ;; :invoice/collections-status (sales/AR collections workflow).
+  ;; machines for :kontor.invoice/status (the kernel lifecycle) AND
+  ;; :kontor.invoice/collections-status (sales/AR collections workflow).
   ;; They don't interfere.
   (testing "An invoice can have both facets set"
     (d/transact *conn*
                 [{:db/id "inv"
-                  :invoice/external-id "INV-MF"
-                  :invoice/type :sales
-                  :invoice/status :sent
-                  :invoice/collections-status :overdue
-                  :invoice/issue-date #inst "2026-04-01"
-                  :invoice/currency "EUR"}])
+                  :kontor.invoice/external-id "INV-MF"
+                  :kontor.invoice/type :sales
+                  :kontor.invoice/status :sent
+                  :kontor.invoice/collections-status :overdue
+                  :kontor.invoice/issue-date #inst "2026-04-01"
+                  :kontor.invoice/currency "EUR"}])
     (let [db (d/db *conn*)
-          inv (d/pull db [:invoice/collections-status :invoice/status]
-                      [:invoice/external-id "INV-MF"])]
-      (is (= :overdue (:invoice/collections-status inv)))
-      (is (= :sent (:invoice/status inv))))))
+          inv (d/pull db [:kontor.invoice/collections-status :kontor.invoice/status]
+                      [:kontor.invoice/external-id "INV-MF"])]
+      (is (= :overdue (:kontor.invoice/collections-status inv)))
+      (is (= :sent (:kontor.invoice/status inv))))))
 
 ;; ============================================================================
 ;; Seed counts (sanity)
@@ -184,5 +184,5 @@
       (is (= 12 (d/q '[:find (count ?t) .
                        :where
                        [?t :kontor.status-transition/entity-type :invoice]
-                       [?t :kontor.status-transition/facet :invoice/collections-status]]
+                       [?t :kontor.status-transition/facet :kontor.invoice/collections-status]]
                      db))))))

@@ -17,11 +17,11 @@
             [kontor.einvoice-de.factur-x :as fx]))
 
 (def sample-invoice
-  {:invoice/number     "RG-2026-0001"
-   :invoice/issue-date #inst "2026-01-15T00:00:00Z"
-   :invoice/due-date   #inst "2026-02-14T00:00:00Z"
-   :invoice/currency   "EUR"
-   :invoice/seller     {:party/name    "ACME GmbH"
+  {:kontor.invoice/number     "RG-2026-0001"
+   :kontor.invoice/issue-date #inst "2026-01-15T00:00:00Z"
+   :kontor.invoice/due-date   #inst "2026-02-14T00:00:00Z"
+   :kontor.invoice/currency   "EUR"
+   :kontor.invoice/seller     {:party/name    "ACME GmbH"
                         :party/street  "Musterstraße 1"
                         :party/zip     "10115"
                         :party/city    "Berlin"
@@ -29,13 +29,13 @@
                         :party/vat-id  "DE123456789"
                         :party/email   "rechnung@acme.example"
                         :party/contact-name "Buchhaltung"}
-   :invoice/buyer      {:party/name    "Kunden AG"
+   :kontor.invoice/buyer      {:party/name    "Kunden AG"
                         :party/street  "Beispielallee 42"
                         :party/zip     "80331"
                         :party/city    "München"
                         :party/country "DE"
                         :party/vat-id  "DE987654321"}
-   :invoice/items      [{:item/name      "Strategieberatung"
+   :kontor.invoice/items      [{:item/name      "Strategieberatung"
                          :item/description "10 h Beratung Q1 2026"
                          :item/quantity  10
                          :item/unit-code "HUR"
@@ -49,11 +49,11 @@
                          :item/unit-price 89.50M
                          :item/vat-rate  19.0M
                          :item/vat-category "S"}]
-   :invoice/payment    {:payment/iban "DE89370400440532013000"
+   :kontor.invoice/payment    {:payment/iban "DE89370400440532013000"
                         :payment/bic  "COBADEFFXXX"
                         :payment/account-name "ACME GmbH"}
-   :invoice/notes      ["Zahlbar innerhalb 30 Tage ohne Abzug."]
-   :invoice/payment-terms "Zahlungsziel: 30 Tage netto"})
+   :kontor.invoice/notes      ["Zahlbar innerhalb 30 Tage ohne Abzug."]
+   :kontor.invoice/payment-terms "Zahlungsziel: 30 Tage netto"})
 
 ;; ============================================================================
 ;; invoice.clj — validation + totals
@@ -70,7 +70,7 @@
   (is (= sample-invoice (inv/validate! sample-invoice))))
 
 (deftest line-totals-correct
-  (let [items (:invoice/items sample-invoice)
+  (let [items (:kontor.invoice/items sample-invoice)
         beratung (first items)
         reise    (second items)]
     (is (= 1500.00M (inv/line-net beratung)))
@@ -83,11 +83,11 @@
 
 (deftest invoice-totals-correct
   (let [t (inv/invoice-totals sample-invoice)]
-    (is (= 1589.50M (:invoice/total-net t))   "1500 + 89.50")
-    (is (= 302.00M  (:invoice/total-vat t))   "285.00 + 17.00")
-    (is (= 1891.50M (:invoice/total-gross t)) "1589.50 + 302.00")
-    (is (= 1 (count (:invoice/vat-breakdown t))) "single 19% bucket")
-    (let [bucket (first (:invoice/vat-breakdown t))]
+    (is (= 1589.50M (:kontor.invoice/total-net t))   "1500 + 89.50")
+    (is (= 302.00M  (:kontor.invoice/total-vat t))   "285.00 + 17.00")
+    (is (= 1891.50M (:kontor.invoice/total-gross t)) "1589.50 + 302.00")
+    (is (= 1 (count (:kontor.invoice/vat-breakdown t))) "single 19% bucket")
+    (let [bucket (first (:kontor.invoice/vat-breakdown t))]
       (is (= 19.0M (:vat/rate bucket)))
       (is (= "S"   (:vat/category bucket)))
       (is (= 1589.50M (:vat/base bucket)))
@@ -132,7 +132,7 @@
             handing a half-built object to Mustang and getting a cryptic
             NPE back."
     (is (thrown? clojure.lang.ExceptionInfo
-                 (fx/generate-xml {:invoice/number "X"})))))
+                 (fx/generate-xml {:kontor.invoice/number "X"})))))
 
 ;; ============================================================================
 ;; Multi-rate VAT (e.g., German Regelsatz 19% + ermäßigt 7%)
@@ -141,14 +141,14 @@
 (deftest mixed-vat-rates-bucketed
   (testing "Mixed 19% + 7% VAT — one bucket per rate, ordered ascending."
     (let [inv (-> sample-invoice
-                  (update :invoice/items conj
+                  (update :kontor.invoice/items conj
                           {:item/name "Fachbuch"
                            :item/quantity 2
                            :item/unit-code "EA"
                            :item/unit-price 24.95M
                            :item/vat-rate 7.0M
                            :item/vat-category "AA"}))
-          buckets (:invoice/vat-breakdown (inv/invoice-totals inv))]
+          buckets (:kontor.invoice/vat-breakdown (inv/invoice-totals inv))]
       (is (= 2 (count buckets)))
       (is (= 7.0M  (:vat/rate (first buckets)))  "ermäßigter Steuersatz first")
       (is (= 19.0M (:vat/rate (second buckets))) "Regelsatz second")

@@ -24,8 +24,8 @@
         (is (some? (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "CAD"]] db))))
       (testing "CA tax statutes are installed"
         (let [provisions (set (d/q '[:find [?code ...]
-                                     :where [?p :provision/jurisdiction :ca]
-                                            [?p :provision/code ?code]] db))]
+                                     :where [?p :kontor.provision/jurisdiction :ca]
+                                            [?p :kontor.provision/code ?code]] db))]
           (is (pos? (count provisions))
               "CIT + CGT + IC provisions present"))))))
 

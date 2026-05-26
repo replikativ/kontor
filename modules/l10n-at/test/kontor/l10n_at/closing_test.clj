@@ -45,10 +45,10 @@
   [conn]
   ;; First sales invoice: €1000 net @ 20% USt → €1200 gross on Feb 15.
   (at-invoice/post-at-invoice! conn
-                               {:invoice/external-id "INV-2025-1"
-                                :invoice/issue-date feb-15
-                                :invoice/lines [{:invoice-line/quantity 1
-                                                 :invoice-line/unit-price 1000M}]})
+                               {:kontor.invoice/external-id "INV-2025-1"
+                                :kontor.invoice/issue-date feb-15
+                                :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                                 :kontor.invoice-line/unit-price 1000M}]})
   ;; Office expense: €600 paid in cash on Feb 15.
   (let [db (d/db conn)
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
@@ -72,10 +72,10 @@
          :kontor.posting/commodity eur :kontor.posting/posted-at feb-15}]})))
   ;; Second sales invoice: €500 net @ 20% USt → €600 gross on Jun 1.
   (at-invoice/post-at-invoice! conn
-                               {:invoice/external-id "INV-2025-2"
-                                :invoice/issue-date jun-1
-                                :invoice/lines [{:invoice-line/quantity 1
-                                                 :invoice-line/unit-price 500M}]})
+                               {:kontor.invoice/external-id "INV-2025-2"
+                                :kontor.invoice/issue-date jun-1
+                                :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                                 :kontor.invoice-line/unit-price 500M}]})
   ;; Expected end-of-year (before close):
   ;;   Erlöse 20% (4000) = -1500 (credit balance)
   ;;   Bürobedarf (7400) = +600

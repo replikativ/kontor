@@ -62,11 +62,11 @@
   (testing "Taux normal 20%: €1000 net → €200 TVA → €1200 gross.
               Dr 411 1200, Cr 706 1000, Cr 44571 200."
     (let [conn (bootstrap)
-          inv-map {:invoice/external-id "INV-FR-1"
-                   :invoice/issue-date jan-15
-                   :invoice/lines
-                   [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 1000M}]}]
+          inv-map {:kontor.invoice/external-id "INV-FR-1"
+                   :kontor.invoice/issue-date jan-15
+                   :kontor.invoice/lines
+                   [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 1000M}]}]
       (inv/post-fr-invoice! conn inv-map)
       (let [db (d/db conn)]
         (is (= 1200M (sum-account db "411"))
@@ -83,12 +83,12 @@
 (deftest inter-10pct-invoice-posts
   (testing "Taux intermédiaire 10%: €1000 net restaurant bill → €100 TVA."
     (let [conn (bootstrap)
-          inv-map {:invoice/external-id "INV-FR-RST-1"
-                   :invoice/issue-date jan-15
-                   :invoice/lines
-                   [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 1000M
-                     :invoice-line/rate :inter}]}]
+          inv-map {:kontor.invoice/external-id "INV-FR-RST-1"
+                   :kontor.invoice/issue-date jan-15
+                   :kontor.invoice/lines
+                   [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 1000M
+                     :kontor.invoice-line/rate :inter}]}]
       (inv/post-fr-invoice! conn inv-map)
       (let [db (d/db conn)]
         (is (= 1100M  (sum-account db "411")))
@@ -104,12 +104,12 @@
 (deftest red-5-5pct-invoice-posts
   (testing "Taux réduit 5,5%: €1000 of books → €55 TVA."
     (let [conn (bootstrap)
-          inv-map {:invoice/external-id "INV-FR-BK-1"
-                   :invoice/issue-date jan-15
-                   :invoice/lines
-                   [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 1000M
-                     :invoice-line/rate :red}]}]
+          inv-map {:kontor.invoice/external-id "INV-FR-BK-1"
+                   :kontor.invoice/issue-date jan-15
+                   :kontor.invoice/lines
+                   [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 1000M
+                     :kontor.invoice-line/rate :red}]}]
       (inv/post-fr-invoice! conn inv-map)
       (let [db (d/db conn)]
         (is (= 1055M  (sum-account db "411")))
@@ -127,12 +127,12 @@
               FR invoice carries no TVA. Posts:
                 Dr 411 1000, Cr 7081 1000."
     (let [conn (bootstrap)
-          inv-map {:invoice/external-id "INV-FR-EU-1"
-                   :invoice/issue-date jan-15
-                   :invoice/lines
-                   [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 1000M
-                     :invoice-line/tax-status :intra-eu-b2b}]}]
+          inv-map {:kontor.invoice/external-id "INV-FR-EU-1"
+                   :kontor.invoice/issue-date jan-15
+                   :kontor.invoice/lines
+                   [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 1000M
+                     :kontor.invoice-line/tax-status :intra-eu-b2b}]}]
       (inv/post-fr-invoice! conn inv-map)
       (let [db (d/db conn)]
         (is (= 1000M  (sum-account db "411"))
@@ -151,12 +151,12 @@
 (deftest export-zero-rated
   (testing "Export hors-UE (CGI art.262 I) — zero-rated."
     (let [conn (bootstrap)
-          inv-map {:invoice/external-id "INV-FR-EXP-1"
-                   :invoice/issue-date jan-15
-                   :invoice/lines
-                   [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 500M
-                     :invoice-line/tax-status :export}]}]
+          inv-map {:kontor.invoice/external-id "INV-FR-EXP-1"
+                   :kontor.invoice/issue-date jan-15
+                   :kontor.invoice/lines
+                   [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 500M
+                     :kontor.invoice-line/tax-status :export}]}]
       (inv/post-fr-invoice! conn inv-map)
       (let [db (d/db conn)]
         (is (= 500M  (sum-account db "411")))
@@ -172,15 +172,15 @@
               Revenue splits across 7065 and 706; TVA splits across
               44572 and 44571."
     (let [conn (bootstrap)
-          inv-map {:invoice/external-id "INV-FR-MIX-1"
-                   :invoice/issue-date jan-15
-                   :invoice/lines
-                   [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 100M
-                     :invoice-line/rate :inter}
-                    {:invoice-line/quantity 1
-                     :invoice-line/unit-price 50M
-                     :invoice-line/rate :std}]}]
+          inv-map {:kontor.invoice/external-id "INV-FR-MIX-1"
+                   :kontor.invoice/issue-date jan-15
+                   :kontor.invoice/lines
+                   [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 100M
+                     :kontor.invoice-line/rate :inter}
+                    {:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 50M
+                     :kontor.invoice-line/rate :std}]}]
       (inv/post-fr-invoice! conn inv-map)
       (let [db (d/db conn)]
         ;; Net 150, TVA 10 + 10 = 20, gross 170
@@ -195,15 +195,15 @@
 ;; ============================================================================
 
 (deftest cash-sale-debits-bank-not-ar
-  (testing ":invoice/cash-sale? true → debit goes to 5121 (Banque)
+  (testing ":kontor.invoice/cash-sale? true → debit goes to 5121 (Banque)
               instead of 411 (Clients)."
     (let [conn (bootstrap)
-          inv-map {:invoice/external-id "INV-FR-CASH-1"
-                   :invoice/issue-date jan-15
-                   :invoice/cash-sale? true
-                   :invoice/lines
-                   [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 100M}]}]
+          inv-map {:kontor.invoice/external-id "INV-FR-CASH-1"
+                   :kontor.invoice/issue-date jan-15
+                   :kontor.invoice/cash-sale? true
+                   :kontor.invoice/lines
+                   [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 100M}]}]
       (inv/post-fr-invoice! conn inv-map)
       (let [db (d/db conn)]
         (is (= 120M (sum-account db "5121"))
@@ -220,11 +220,11 @@
               the DB. Result is suitable for kontor.process composition."
     (let [conn (bootstrap)
           db (d/db conn)
-          inv-map {:invoice/external-id "INV-PLAN-1"
-                   :invoice/issue-date jan-15
-                   :invoice/lines
-                   [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 100M}]}
+          inv-map {:kontor.invoice/external-id "INV-PLAN-1"
+                   :kontor.invoice/issue-date jan-15
+                   :kontor.invoice/lines
+                   [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 100M}]}
           tx-data (inv/plan-fr-invoice-tx-data db inv-map {})]
       (is (vector? tx-data))
       (is (every? map? (filter map? tx-data)))
@@ -241,10 +241,10 @@
       (is (>= (count missing) 3))))
   (testing "Complete invoice → no complaints"
     (is (empty? (inv/validate-invoice
-                 {:invoice/external-id "X"
-                  :invoice/issue-date jan-15
-                  :invoice/lines [{:invoice-line/quantity 1
-                                   :invoice-line/unit-price 100M}]})))))
+                 {:kontor.invoice/external-id "X"
+                  :kontor.invoice/issue-date jan-15
+                  :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                   :kontor.invoice-line/unit-price 100M}]})))))
 
 (deftest rate-predicate
   (is (inv/rate? :std))
@@ -269,19 +269,19 @@
   (testing "Every FR invoice we post must satisfy the kernel sum-to-
               zero rule. Sample the five flagship cases."
     (doseq [{:keys [name lines]}
-            [{:name "std" :lines [{:invoice-line/quantity 1 :invoice-line/unit-price 1000M}]}
-             {:name "inter" :lines [{:invoice-line/quantity 1 :invoice-line/unit-price 1000M
-                                     :invoice-line/rate :inter}]}
-             {:name "red" :lines [{:invoice-line/quantity 1 :invoice-line/unit-price 1000M
-                                   :invoice-line/rate :red}]}
-             {:name "intra-eu" :lines [{:invoice-line/quantity 1 :invoice-line/unit-price 1000M
-                                        :invoice-line/tax-status :intra-eu-b2b}]}
-             {:name "export" :lines [{:invoice-line/quantity 1 :invoice-line/unit-price 500M
-                                      :invoice-line/tax-status :export}]}]]
+            [{:name "std" :lines [{:kontor.invoice-line/quantity 1 :kontor.invoice-line/unit-price 1000M}]}
+             {:name "inter" :lines [{:kontor.invoice-line/quantity 1 :kontor.invoice-line/unit-price 1000M
+                                     :kontor.invoice-line/rate :inter}]}
+             {:name "red" :lines [{:kontor.invoice-line/quantity 1 :kontor.invoice-line/unit-price 1000M
+                                   :kontor.invoice-line/rate :red}]}
+             {:name "intra-eu" :lines [{:kontor.invoice-line/quantity 1 :kontor.invoice-line/unit-price 1000M
+                                        :kontor.invoice-line/tax-status :intra-eu-b2b}]}
+             {:name "export" :lines [{:kontor.invoice-line/quantity 1 :kontor.invoice-line/unit-price 500M
+                                      :kontor.invoice-line/tax-status :export}]}]]
       (let [conn (bootstrap)
-            inv-map {:invoice/external-id (str "INV-Z-" name)
-                     :invoice/issue-date jan-15
-                     :invoice/lines lines}]
+            inv-map {:kontor.invoice/external-id (str "INV-Z-" name)
+                     :kontor.invoice/issue-date jan-15
+                     :kontor.invoice/lines lines}]
         (inv/post-fr-invoice! conn inv-map)
         (let [db (d/db conn)
               all-amounts (d/q '[:find [?amt ...]

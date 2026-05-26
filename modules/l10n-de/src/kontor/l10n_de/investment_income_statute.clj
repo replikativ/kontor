@@ -45,29 +45,29 @@
   "DE investment-income parameter definitions. The §20 flat-rate,
    §17 inclusion-rate, and Soli rate are owned by the CGT + CIT
    statutes; this file adds only what's unique to the income side."
-  [{:parameter/code         "DE.EStG.§20.sparer-pauschbetrag.single"
-    :parameter/label        "§20 Abs. 9 S. 1 EStG — Sparer-Pauschbetrag (single filer)"
-    :parameter/jurisdiction :de
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.gesetze-im-internet.de/estg/__20.html"}
+  [{:kontor.parameter/code         "DE.EStG.§20.sparer-pauschbetrag.single"
+    :kontor.parameter/label        "§20 Abs. 9 S. 1 EStG — Sparer-Pauschbetrag (single filer)"
+    :kontor.parameter/jurisdiction :de
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.gesetze-im-internet.de/estg/__20.html"}
 
-   {:parameter/code         "DE.EStG.§20.sparer-pauschbetrag.joint"
-    :parameter/label        "§20 Abs. 9 S. 2 EStG — Sparer-Pauschbetrag (joint filers)"
-    :parameter/jurisdiction :de
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.gesetze-im-internet.de/estg/__20.html"}
+   {:kontor.parameter/code         "DE.EStG.§20.sparer-pauschbetrag.joint"
+    :kontor.parameter/label        "§20 Abs. 9 S. 2 EStG — Sparer-Pauschbetrag (joint filers)"
+    :kontor.parameter/jurisdiction :de
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.gesetze-im-internet.de/estg/__20.html"}
 
-   {:parameter/code         "DE.KiSt.rate.by-bw"
-    :parameter/label        "KiStG BY/BW — Kirchensteuer 8 % (Bayern + Baden-Württemberg)"
-    :parameter/jurisdiction :de
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.bzst.de/DE/Unternehmen/Kapitalertraege/KirchensteuerAbgeltungsteuer/kirchensteuerabgeltungsteuer_node.html"}
+   {:kontor.parameter/code         "DE.KiSt.rate.by-bw"
+    :kontor.parameter/label        "KiStG BY/BW — Kirchensteuer 8 % (Bayern + Baden-Württemberg)"
+    :kontor.parameter/jurisdiction :de
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.bzst.de/DE/Unternehmen/Kapitalertraege/KirchensteuerAbgeltungsteuer/kirchensteuerabgeltungsteuer_node.html"}
 
-   {:parameter/code         "DE.KiSt.rate.other"
-    :parameter/label        "KiStG übrige Länder — Kirchensteuer 9 % (standard)"
-    :parameter/jurisdiction :de
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.bzst.de/DE/Unternehmen/Kapitalertraege/KirchensteuerAbgeltungsteuer/kirchensteuerabgeltungsteuer_node.html"}])
+   {:kontor.parameter/code         "DE.KiSt.rate.other"
+    :kontor.parameter/label        "KiStG übrige Länder — Kirchensteuer 9 % (standard)"
+    :kontor.parameter/jurisdiction :de
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.bzst.de/DE/Unternehmen/Kapitalertraege/KirchensteuerAbgeltungsteuer/kirchensteuerabgeltungsteuer_node.html"}])
 
 ;; ============================================================================
 ;; Parameter values — date-keyed value history
@@ -81,39 +81,39 @@
    (Zinsanpassungsgesetz, BGBl. I 2022 Nr. 384). The KiSt rates are
    stable since 1995."
   [;; --- Sparer-Pauschbetrag — single (€801 → €1 000) ---------------------
-   {:parameter-value/parameter       [:parameter/code "DE.EStG.§20.sparer-pauschbetrag.single"]
-    :parameter-value/effective-from  #inst "2009-01-01"
-    :parameter-value/effective-until #inst "2023-01-01"
-    :parameter-value/decimal-value   801M
-    :parameter-value/citation        "§20 Abs. 9 S. 1 EStG (Unternehmenssteuerreform 2008) — €801 from 2009"}
+   {:kontor.parameter-value/parameter       [:kontor.parameter/code "DE.EStG.§20.sparer-pauschbetrag.single"]
+    :kontor.parameter-value/effective-from  #inst "2009-01-01"
+    :kontor.parameter-value/effective-until #inst "2023-01-01"
+    :kontor.parameter-value/decimal-value   801M
+    :kontor.parameter-value/citation        "§20 Abs. 9 S. 1 EStG (Unternehmenssteuerreform 2008) — €801 from 2009"}
 
-   {:parameter-value/parameter      [:parameter/code "DE.EStG.§20.sparer-pauschbetrag.single"]
-    :parameter-value/effective-from #inst "2023-01-01"
-    :parameter-value/decimal-value  1000M
-    :parameter-value/citation       "§20 Abs. 9 S. 1 EStG (Zinsanpassungsgesetz, BGBl. I 2022 Nr. 384) — €1 000 ab 2023"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "DE.EStG.§20.sparer-pauschbetrag.single"]
+    :kontor.parameter-value/effective-from #inst "2023-01-01"
+    :kontor.parameter-value/decimal-value  1000M
+    :kontor.parameter-value/citation       "§20 Abs. 9 S. 1 EStG (Zinsanpassungsgesetz, BGBl. I 2022 Nr. 384) — €1 000 ab 2023"}
 
    ;; --- Sparer-Pauschbetrag — joint (€1 602 → €2 000) --------------------
-   {:parameter-value/parameter       [:parameter/code "DE.EStG.§20.sparer-pauschbetrag.joint"]
-    :parameter-value/effective-from  #inst "2009-01-01"
-    :parameter-value/effective-until #inst "2023-01-01"
-    :parameter-value/decimal-value   1602M
-    :parameter-value/citation        "§20 Abs. 9 S. 2 EStG (Unternehmenssteuerreform 2008) — €1 602 from 2009"}
+   {:kontor.parameter-value/parameter       [:kontor.parameter/code "DE.EStG.§20.sparer-pauschbetrag.joint"]
+    :kontor.parameter-value/effective-from  #inst "2009-01-01"
+    :kontor.parameter-value/effective-until #inst "2023-01-01"
+    :kontor.parameter-value/decimal-value   1602M
+    :kontor.parameter-value/citation        "§20 Abs. 9 S. 2 EStG (Unternehmenssteuerreform 2008) — €1 602 from 2009"}
 
-   {:parameter-value/parameter      [:parameter/code "DE.EStG.§20.sparer-pauschbetrag.joint"]
-    :parameter-value/effective-from #inst "2023-01-01"
-    :parameter-value/decimal-value  2000M
-    :parameter-value/citation       "§20 Abs. 9 S. 2 EStG (Zinsanpassungsgesetz, BGBl. I 2022 Nr. 384) — €2 000 ab 2023"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "DE.EStG.§20.sparer-pauschbetrag.joint"]
+    :kontor.parameter-value/effective-from #inst "2023-01-01"
+    :kontor.parameter-value/decimal-value  2000M
+    :kontor.parameter-value/citation       "§20 Abs. 9 S. 2 EStG (Zinsanpassungsgesetz, BGBl. I 2022 Nr. 384) — €2 000 ab 2023"}
 
    ;; --- KiSt rates --------------------------------------------------------
-   {:parameter-value/parameter      [:parameter/code "DE.KiSt.rate.by-bw"]
-    :parameter-value/effective-from #inst "1995-01-01"
-    :parameter-value/decimal-value  0.08M
-    :parameter-value/citation       "KiStG BY Art. 22 + KiStG BW § 5 — 8 % stable rate"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "DE.KiSt.rate.by-bw"]
+    :kontor.parameter-value/effective-from #inst "1995-01-01"
+    :kontor.parameter-value/decimal-value  0.08M
+    :kontor.parameter-value/citation       "KiStG BY Art. 22 + KiStG BW § 5 — 8 % stable rate"}
 
-   {:parameter-value/parameter      [:parameter/code "DE.KiSt.rate.other"]
-    :parameter-value/effective-from #inst "1995-01-01"
-    :parameter-value/decimal-value  0.09M
-    :parameter-value/citation       "KiStG der übrigen Länder — 9 % standard rate"}])
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "DE.KiSt.rate.other"]
+    :kontor.parameter-value/effective-from #inst "1995-01-01"
+    :kontor.parameter-value/decimal-value  0.09M
+    :kontor.parameter-value/citation       "KiStG der übrigen Länder — 9 % standard rate"}])
 
 ;; ============================================================================
 ;; Provisions
@@ -149,29 +149,29 @@
   [;; Soli on §20-income Abgeltungsteuer — sibling of cgt-statute's
    ;; DE-SolZG-§4-on-§20 (gains side). Lives in the IC statute so that
    ;; `install!` here ships the full Soli+KiSt stack.
-   {:provision/code            "DE-SolZG-§4-on-§20-income"
-    :provision/jurisdiction    :de
-    :provision/concept         [:kontor.tax-concept/code :surtax]
-    :provision/title           "§4 SolZG — Solidaritätszuschlag (5.5 %) on §20 Abgeltungsteuer (income side)"
-    :provision/citation        "https://www.gesetze-im-internet.de/solzg_1995/__4.html"
-    :provision/effective-from  #inst "2009-01-01"
-    :provision/priority        100
-    :provision/condition       (pr-str [:eq :component :de-§20-income])
-    :provision/consequence     (pr-str {:op :surtax
+   {:kontor.provision/code            "DE-SolZG-§4-on-§20-income"
+    :kontor.provision/jurisdiction    :de
+    :kontor.provision/concept         [:kontor.tax-concept/code :surtax]
+    :kontor.provision/title           "§4 SolZG — Solidaritätszuschlag (5.5 %) on §20 Abgeltungsteuer (income side)"
+    :kontor.provision/citation        "https://www.gesetze-im-internet.de/solzg_1995/__4.html"
+    :kontor.provision/effective-from  #inst "2009-01-01"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:eq :component :de-§20-income])
+    :kontor.provision/consequence     (pr-str {:op :surtax
                                         :code :soli-on-§20-income
                                         :label "Solidaritätszuschlag (5.5 %) auf §20 Abgeltungsteuer"
                                         :amount-from :compute-fn
                                         :fn :de-soli-on-§20-income})}
 
-   {:provision/code            "DE-KiStG-on-§20"
-    :provision/jurisdiction    :de
-    :provision/concept         [:kontor.tax-concept/code :surtax]
-    :provision/title           "KiStG — Kirchensteuer (8 %/9 %) auf §20 Abgeltungsteuer"
-    :provision/citation        "https://www.gesetze-im-internet.de/estg/__32d.html (formula); KiStG der Länder (rates)"
-    :provision/effective-from  #inst "1995-01-01"
-    :provision/priority        110
-    :provision/condition       (pr-str [:eq :component :de-§20-income])
-    :provision/consequence     (pr-str {:op :surtax
+   {:kontor.provision/code            "DE-KiStG-on-§20"
+    :kontor.provision/jurisdiction    :de
+    :kontor.provision/concept         [:kontor.tax-concept/code :surtax]
+    :kontor.provision/title           "KiStG — Kirchensteuer (8 %/9 %) auf §20 Abgeltungsteuer"
+    :kontor.provision/citation        "https://www.gesetze-im-internet.de/estg/__32d.html (formula); KiStG der Länder (rates)"
+    :kontor.provision/effective-from  #inst "1995-01-01"
+    :kontor.provision/priority        110
+    :kontor.provision/condition       (pr-str [:eq :component :de-§20-income])
+    :kontor.provision/consequence     (pr-str {:op :surtax
                                         :code :kist-on-§20
                                         :label "Kirchensteuer auf §20 Abgeltungsteuer"
                                         :amount-from :compute-fn
@@ -183,7 +183,7 @@
 
 (defn install!
   "Install DE investment-income statute (parameters + provisions) into
-   `conn`. Idempotent via `:parameter/code` + `:provision/code` unique
+   `conn`. Idempotent via `:kontor.parameter/code` + `:kontor.provision/code` unique
    identity attrs.
 
    ASSUMES the DE CIT statute (for `DE.Soli.rate`) AND the DE CGT

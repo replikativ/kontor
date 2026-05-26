@@ -307,7 +307,7 @@
       (let [db (d/db *conn*)
             inv-line-eid (d/q '[:find ?l .
                                 :in $ ?inv-eid
-                                :where [?l :invoice-line/invoice ?inv-eid]]
+                                :where [?l :kontor.invoice-line/invoice ?inv-eid]]
                               db (inv/by-external-id db "INV-J"))
             junctions (->> (d/q '[:find [?j ...]
                                   :in $ ?l
@@ -363,7 +363,7 @@
           (is (= :sent
                  (sm/current-status db
                                     (inv/by-external-id db "INV-E2E")
-                                    :invoice/status))))
+                                    :kontor.invoice/status))))
         (testing "GR-IR residual = 0 (Cr 250 at receipt + Dr 250 at invoice)"
           (is (= 0 (.compareTo (bigdec "0")
                                (d/q '[:find (sum ?amt) .
@@ -425,10 +425,10 @@
       ;; Compute match → should be :exception-qty
       (match/recompute-match-status!
        *conn* (inv/by-external-id (d/db *conn*) "INV-EXC"))
-      ;; Seed the policy for :invoice/status :draft → :sent
+      ;; Seed the policy for :kontor.invoice/status :draft → :sent
       (d/transact *conn*
                   [{:approval-policy/entity-type :invoice
-                    :approval-policy/facet :invoice/status
+                    :approval-policy/facet :kontor.invoice/status
                     :approval-policy/transition-from :draft
                     :approval-policy/transition-to :sent
                     :approval-policy/rule :requires-three-way-match-pass
@@ -461,7 +461,7 @@
        *conn* (inv/by-external-id (d/db *conn*) "INV-OK"))
       (d/transact *conn*
                   [{:approval-policy/entity-type :invoice
-                    :approval-policy/facet :invoice/status
+                    :approval-policy/facet :kontor.invoice/status
                     :approval-policy/transition-from :draft
                     :approval-policy/transition-to :sent
                     :approval-policy/rule :requires-three-way-match-pass
@@ -473,10 +473,10 @@
       (is (= :sent
              (sm/current-status (d/db *conn*)
                                 (inv/by-external-id (d/db *conn*) "INV-OK")
-                                :invoice/status))))))
+                                :kontor.invoice/status))))))
 
 (deftest match-pass-policy-passthrough-for-sales-invoice
-  (testing "P0-2: sales invoice has nil :invoice/match-status; the
+  (testing "P0-2: sales invoice has nil :kontor.invoice/match-status; the
             policy passes through (sales invoices have no match
             concept)"
     (seed!)
@@ -504,7 +504,7 @@
      {:external-id "INV-SALES" :type :sales})
     (d/transact *conn*
                 [{:approval-policy/entity-type :invoice
-                  :approval-policy/facet :invoice/status
+                  :approval-policy/facet :kontor.invoice/status
                   :approval-policy/transition-from :draft
                   :approval-policy/transition-to :sent
                   :approval-policy/rule :requires-three-way-match-pass
@@ -516,7 +516,7 @@
     (is (= :sent
            (sm/current-status (d/db *conn*)
                               (inv/by-external-id (d/db *conn*) "INV-SALES")
-                              :invoice/status)))))
+                              :kontor.invoice/status)))))
 
 ;; ============================================================================
 ;; P0-3: credit-memo / debit-memo GL polarity

@@ -57,71 +57,71 @@
   "CN CGT parameter definitions. Values live in `parameter-values`,
    keyed by `:effective-from`."
   [;; --- IIT category 9 flat rate -------------------------------------------
-   {:parameter/code         "CN.IIT.CGT.flat-rate"
-    :parameter/label        "IIT category 9 (财产转让所得) flat rate — 20 %"
-    :parameter/jurisdiction :cn
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://fgk.chinatax.gov.cn/zcfgk/c100009/c5193028/content.html"}
+   {:kontor.parameter/code         "CN.IIT.CGT.flat-rate"
+    :kontor.parameter/label        "IIT category 9 (财产转让所得) flat rate — 20 %"
+    :kontor.parameter/jurisdiction :cn
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://fgk.chinatax.gov.cn/zcfgk/c100009/c5193028/content.html"}
 
    ;; --- EIT standard rate ---------------------------------------------------
-   {:parameter/code         "CN.EIT.standard-rate"
-    :parameter/label        "EIT standard rate — 25 % (企业所得税法 §4)"
-    :parameter/jurisdiction :cn
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://fgk.chinatax.gov.cn/zcfgk/c100009/"}
+   {:kontor.parameter/code         "CN.EIT.standard-rate"
+    :kontor.parameter/label        "EIT standard rate — 25 % (企业所得税法 §4)"
+    :kontor.parameter/jurisdiction :cn
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://fgk.chinatax.gov.cn/zcfgk/c100009/"}
 
    ;; --- EIT non-resident WHT on gross gain ---------------------------------
-   {:parameter/code         "CN.EIT.non-resident-wht-rate"
-    :parameter/label        "Non-resident enterprise WHT on equity-transfer gross gain — 10 %"
-    :parameter/jurisdiction :cn
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.chinatax.gov.cn/chinatax/n810341/n810755/c101434/index.html"}
+   {:kontor.parameter/code         "CN.EIT.non-resident-wht-rate"
+    :kontor.parameter/label        "Non-resident enterprise WHT on equity-transfer gross gain — 10 %"
+    :kontor.parameter/jurisdiction :cn
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.chinatax.gov.cn/chinatax/n810341/n810755/c101434/index.html"}
 
    ;; --- Special-restructuring eligibility thresholds (Caishui [2014] 109) --
-   {:parameter/code         "CN.EIT.special-restructuring.equity-threshold"
-    :parameter/label        "Caishui [2014] 109 §1: ≥ 50 % equity/asset share threshold"
-    :parameter/jurisdiction :cn
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://fgk.chinatax.gov.cn/zcfgk/c100012/"}
+   {:kontor.parameter/code         "CN.EIT.special-restructuring.equity-threshold"
+    :kontor.parameter/label        "Caishui [2014] 109 §1: ≥ 50 % equity/asset share threshold"
+    :kontor.parameter/jurisdiction :cn
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://fgk.chinatax.gov.cn/zcfgk/c100012/"}
 
-   {:parameter/code         "CN.EIT.special-restructuring.equity-payment-threshold"
-    :parameter/label        "Caishui [2009] 59 §5: ≥ 85 % equity-consideration share"
-    :parameter/jurisdiction :cn
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://fgk.chinatax.gov.cn/zcfgk/c100012/"}
+   {:kontor.parameter/code         "CN.EIT.special-restructuring.equity-payment-threshold"
+    :kontor.parameter/label        "Caishui [2009] 59 §5: ≥ 85 % equity-consideration share"
+    :kontor.parameter/jurisdiction :cn
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://fgk.chinatax.gov.cn/zcfgk/c100012/"}
 
-   {:parameter/code         "CN.EIT.special-restructuring.lockup-months"
-    :parameter/label        "Caishui [2009] 59 §5: 12-month transferor lockup + business continuity"
-    :parameter/jurisdiction :cn
-    :parameter/unit         :months
-    :parameter/concept-iri  "https://fgk.chinatax.gov.cn/zcfgk/c100012/"}
+   {:kontor.parameter/code         "CN.EIT.special-restructuring.lockup-months"
+    :kontor.parameter/label        "Caishui [2009] 59 §5: 12-month transferor lockup + business continuity"
+    :kontor.parameter/jurisdiction :cn
+    :kontor.parameter/unit         :months
+    :kontor.parameter/concept-iri  "https://fgk.chinatax.gov.cn/zcfgk/c100012/"}
 
    ;; --- 滿五唯一 residential exemption ---------------------------------------
-   {:parameter/code         "CN.IIT.manwuweiyi.years"
-    :parameter/label        "Guoshuifa [2006] 108 §1: 5-year self-occupation prong"
-    :parameter/jurisdiction :cn
-    :parameter/unit         :years
-    :parameter/concept-iri  "https://www.chinatax.gov.cn/chinatax/n810341/n810765/n812183/200607/c1197073/content.html"}
+   {:kontor.parameter/code         "CN.IIT.manwuweiyi.years"
+    :kontor.parameter/label        "Guoshuifa [2006] 108 §1: 5-year self-occupation prong"
+    :kontor.parameter/jurisdiction :cn
+    :kontor.parameter/unit         :years
+    :kontor.parameter/concept-iri  "https://www.chinatax.gov.cn/chinatax/n810341/n810765/n812183/200607/c1197073/content.html"}
 
    ;; --- Real-estate deemed-rate band (provincial, 1-3 %) -------------------
-   {:parameter/code         "CN.IIT.CGT.real-estate.deemed-rate-floor"
-    :parameter/label        "Guoshuifa [2006] 108 deemed-rate floor — 1 %"
-    :parameter/jurisdiction :cn
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.chinatax.gov.cn/chinatax/n810341/n810765/n812183/200607/c1197073/content.html"}
+   {:kontor.parameter/code         "CN.IIT.CGT.real-estate.deemed-rate-floor"
+    :kontor.parameter/label        "Guoshuifa [2006] 108 deemed-rate floor — 1 %"
+    :kontor.parameter/jurisdiction :cn
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.chinatax.gov.cn/chinatax/n810341/n810765/n812183/200607/c1197073/content.html"}
 
-   {:parameter/code         "CN.IIT.CGT.real-estate.deemed-rate-ceiling"
-    :parameter/label        "Guoshuifa [2006] 108 deemed-rate ceiling — 3 %"
-    :parameter/jurisdiction :cn
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.chinatax.gov.cn/chinatax/n810341/n810765/n812183/200607/c1197073/content.html"}
+   {:kontor.parameter/code         "CN.IIT.CGT.real-estate.deemed-rate-ceiling"
+    :kontor.parameter/label        "Guoshuifa [2006] 108 deemed-rate ceiling — 3 %"
+    :kontor.parameter/jurisdiction :cn
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.chinatax.gov.cn/chinatax/n810341/n810765/n812183/200607/c1197073/content.html"}
 
    ;; --- Stock Connect exemption window end-date -----------------------------
-   {:parameter/code         "CN.IIT.stock-connect.exemption-until"
-    :parameter/label        "Stock Connect mainland-individual IIT exemption end date — Caishui [2014] 81 (extended)"
-    :parameter/jurisdiction :cn
-    :parameter/unit         :days
-    :parameter/concept-iri  "https://www.chinatax.gov.cn/chinatax/n810341/n810755/c5210255/content.html"}])
+   {:kontor.parameter/code         "CN.IIT.stock-connect.exemption-until"
+    :kontor.parameter/label        "Stock Connect mainland-individual IIT exemption end date — Caishui [2014] 81 (extended)"
+    :kontor.parameter/jurisdiction :cn
+    :kontor.parameter/unit         :days
+    :kontor.parameter/concept-iri  "https://www.chinatax.gov.cn/chinatax/n810341/n810755/c5210255/content.html"}])
 
 ;; ============================================================================
 ;; Parameter values — current statutory windows
@@ -132,75 +132,75 @@
    windows (note 133 §7 sources)."
   [;; --- IIT 20 % flat rate — Caishui [1998] 61 effective; rate stable
    ;;     since the 1980 IIT Law promulgated 20 % for category 9.
-   {:parameter-value/parameter      [:parameter/code "CN.IIT.CGT.flat-rate"]
-    :parameter-value/effective-from #inst "1980-09-10"
-    :parameter-value/decimal-value  0.20M
-    :parameter-value/citation       "中华人民共和国个人所得税法 §3 — 20 % flat for category 9"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "CN.IIT.CGT.flat-rate"]
+    :kontor.parameter-value/effective-from #inst "1980-09-10"
+    :kontor.parameter-value/decimal-value  0.20M
+    :kontor.parameter-value/citation       "中华人民共和国个人所得税法 §3 — 20 % flat for category 9"}
 
    ;; --- EIT 25 % standard — 2008 EIT Law promulgated rate, stable
    ;;     through subsequent 2017/2018 amendments.
-   {:parameter-value/parameter      [:parameter/code "CN.EIT.standard-rate"]
-    :parameter-value/effective-from #inst "2008-01-01"
-    :parameter-value/decimal-value  0.25M
-    :parameter-value/citation       "中华人民共和国企业所得税法 §4 — 25 % standard rate"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "CN.EIT.standard-rate"]
+    :kontor.parameter-value/effective-from #inst "2008-01-01"
+    :kontor.parameter-value/decimal-value  0.25M
+    :kontor.parameter-value/citation       "中华人民共和国企业所得税法 §4 — 25 % standard rate"}
 
    ;; --- Non-resident WHT 10 % — SAT Announcement [2017] No. 37 +
    ;;     EIT Law Article 4 (reduced rate for non-resident WHT income).
-   {:parameter-value/parameter      [:parameter/code "CN.EIT.non-resident-wht-rate"]
-    :parameter-value/effective-from #inst "2017-12-01"
-    :parameter-value/decimal-value  0.10M
-    :parameter-value/citation       "SAT Announcement [2017] No. 37; EIT Law §4 reduced-rate WHT"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "CN.EIT.non-resident-wht-rate"]
+    :kontor.parameter-value/effective-from #inst "2017-12-01"
+    :kontor.parameter-value/decimal-value  0.10M
+    :kontor.parameter-value/citation       "SAT Announcement [2017] No. 37; EIT Law §4 reduced-rate WHT"}
 
    ;; --- Special-restructuring thresholds.
    ;; Caishui [2009] 59 originally set 75% / 85% equity criteria;
    ;; Caishui [2014] 109 §1 LOWERED the asset/equity criterion from
    ;; 75% to 50%, effective 2014-01-01.
-   {:parameter-value/parameter      [:parameter/code "CN.EIT.special-restructuring.equity-threshold"]
-    :parameter-value/effective-from #inst "2009-01-01"
-    :parameter-value/effective-until #inst "2014-01-01"
-    :parameter-value/decimal-value  0.75M
-    :parameter-value/citation       "Caishui [2009] 59 §5 — original 75% equity/asset criterion"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "CN.EIT.special-restructuring.equity-threshold"]
+    :kontor.parameter-value/effective-from #inst "2009-01-01"
+    :kontor.parameter-value/effective-until #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  0.75M
+    :kontor.parameter-value/citation       "Caishui [2009] 59 §5 — original 75% equity/asset criterion"}
 
-   {:parameter-value/parameter      [:parameter/code "CN.EIT.special-restructuring.equity-threshold"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  0.50M
-    :parameter-value/citation       "Caishui [2014] 109 §1 — threshold lowered 75 % → 50 %"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "CN.EIT.special-restructuring.equity-threshold"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  0.50M
+    :kontor.parameter-value/citation       "Caishui [2014] 109 §1 — threshold lowered 75 % → 50 %"}
 
-   {:parameter-value/parameter      [:parameter/code "CN.EIT.special-restructuring.equity-payment-threshold"]
-    :parameter-value/effective-from #inst "2009-01-01"
-    :parameter-value/decimal-value  0.85M
-    :parameter-value/citation       "Caishui [2009] 59 §5 — ≥ 85 % equity consideration (cash ≤ 15 %)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "CN.EIT.special-restructuring.equity-payment-threshold"]
+    :kontor.parameter-value/effective-from #inst "2009-01-01"
+    :kontor.parameter-value/decimal-value  0.85M
+    :kontor.parameter-value/citation       "Caishui [2009] 59 §5 — ≥ 85 % equity consideration (cash ≤ 15 %)"}
 
-   {:parameter-value/parameter      [:parameter/code "CN.EIT.special-restructuring.lockup-months"]
-    :parameter-value/effective-from #inst "2009-01-01"
-    :parameter-value/decimal-value  12M
-    :parameter-value/citation       "Caishui [2009] 59 §5 — 12 consecutive months of business continuity + lockup"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "CN.EIT.special-restructuring.lockup-months"]
+    :kontor.parameter-value/effective-from #inst "2009-01-01"
+    :kontor.parameter-value/decimal-value  12M
+    :kontor.parameter-value/citation       "Caishui [2009] 59 §5 — 12 consecutive months of business continuity + lockup"}
 
    ;; --- 滿五唯一 5-year prong.
-   {:parameter-value/parameter      [:parameter/code "CN.IIT.manwuweiyi.years"]
-    :parameter-value/effective-from #inst "2006-07-18"
-    :parameter-value/decimal-value  5M
-    :parameter-value/citation       "Guoshuifa [2006] 108 §1 — 5-year self-occupation prong of 滿五唯一"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "CN.IIT.manwuweiyi.years"]
+    :kontor.parameter-value/effective-from #inst "2006-07-18"
+    :kontor.parameter-value/decimal-value  5M
+    :kontor.parameter-value/citation       "Guoshuifa [2006] 108 §1 — 5-year self-occupation prong of 滿五唯一"}
 
    ;; --- Deemed-rate band 1-3 %.
-   {:parameter-value/parameter      [:parameter/code "CN.IIT.CGT.real-estate.deemed-rate-floor"]
-    :parameter-value/effective-from #inst "2006-07-18"
-    :parameter-value/decimal-value  0.01M
-    :parameter-value/citation       "Guoshuifa [2006] 108 — deemed-rate floor 1 % (provincial)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "CN.IIT.CGT.real-estate.deemed-rate-floor"]
+    :kontor.parameter-value/effective-from #inst "2006-07-18"
+    :kontor.parameter-value/decimal-value  0.01M
+    :kontor.parameter-value/citation       "Guoshuifa [2006] 108 — deemed-rate floor 1 % (provincial)"}
 
-   {:parameter-value/parameter      [:parameter/code "CN.IIT.CGT.real-estate.deemed-rate-ceiling"]
-    :parameter-value/effective-from #inst "2006-07-18"
-    :parameter-value/decimal-value  0.03M
-    :parameter-value/citation       "Guoshuifa [2006] 108 — deemed-rate ceiling 3 % (provincial)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "CN.IIT.CGT.real-estate.deemed-rate-ceiling"]
+    :kontor.parameter-value/effective-from #inst "2006-07-18"
+    :kontor.parameter-value/decimal-value  0.03M
+    :kontor.parameter-value/citation       "Guoshuifa [2006] 108 — deemed-rate ceiling 3 % (provincial)"}
 
    ;; --- Stock Connect exemption window end (currently 2027-12-31 per
    ;;     the 2024 MOF/SAT/CSRC joint notice extending Caishui [2014]
    ;;     81). Encoded as :days millisecond epoch (substrate's
    ;;     :amount-money/days slots both take BigDecimal).
-   {:parameter-value/parameter      [:parameter/code "CN.IIT.stock-connect.exemption-until"]
-    :parameter-value/effective-from #inst "2014-11-17"
-    :parameter-value/decimal-value  (bigdec (.getTime #inst "2027-12-31"))
-    :parameter-value/citation       "Caishui [2014] 81 + 2024 MOF/SAT/CSRC extension to 2027-12-31"}])
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "CN.IIT.stock-connect.exemption-until"]
+    :kontor.parameter-value/effective-from #inst "2014-11-17"
+    :kontor.parameter-value/decimal-value  (bigdec (.getTime #inst "2027-12-31"))
+    :kontor.parameter-value/citation       "Caishui [2014] 81 + 2024 MOF/SAT/CSRC extension to 2027-12-31"}])
 
 ;; ============================================================================
 ;; Provisions — IIT exemptions + EIT exception family
@@ -233,17 +233,17 @@
    ;; The provider verifies the routing in code (returns NO component
    ;; rather than fold a deduction).
    ;; --------------------------------------------------------------------
-   {:provision/code            "CN-Caishui-1998-61-listed-A-share-exemption"
-    :provision/jurisdiction    :cn
-    :provision/concept         [:kontor.tax-concept/code :participation-exemption]
-    :provision/title           "Caishui [1998] 61 — Listed A-/B-share temporary exemption for individuals"
-    :provision/citation        "https://www.chinatax.gov.cn/chinatax/n810341/n810765/n812183/199803/c1197999/content.html"
-    :provision/effective-from  #inst "1998-03-30"
-    :provision/priority        100
-    :provision/condition       (pr-str [:and
+   {:kontor.provision/code            "CN-Caishui-1998-61-listed-A-share-exemption"
+    :kontor.provision/jurisdiction    :cn
+    :kontor.provision/concept         [:kontor.tax-concept/code :participation-exemption]
+    :kontor.provision/title           "Caishui [1998] 61 — Listed A-/B-share temporary exemption for individuals"
+    :kontor.provision/citation        "https://www.chinatax.gov.cn/chinatax/n810341/n810765/n812183/199803/c1197999/content.html"
+    :kontor.provision/effective-from  #inst "1998-03-30"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:and
                                         [:in :asset-class [:cn-listed-a-share :cn-listed-b-share]]
                                         [:eq [:tax-unit :tax-residency] :resident-individual]])
-    :provision/consequence     (pr-str {:op :base-deduct
+    :kontor.provision/consequence     (pr-str {:op :base-deduct
                                         :code :cn-caishui-1998-61
                                         :label "Listed A-/B-share temporary IIT exemption"
                                         :amount-from :tax-context-fact
@@ -252,18 +252,18 @@
    ;; --------------------------------------------------------------------
    ;; Caishui [2014] 81 — Stock Connect mainland-individual exemption.
    ;; --------------------------------------------------------------------
-   {:provision/code            "CN-Caishui-2014-81-stock-connect-exemption"
-    :provision/jurisdiction    :cn
-    :provision/concept         [:kontor.tax-concept/code :participation-exemption]
-    :provision/title           "Caishui [2014] 81 — Stock Connect H-share IIT exemption (mainland residents)"
-    :provision/citation        "https://www.chinatax.gov.cn/chinatax/n810341/n810755/c5210255/content.html"
-    :provision/effective-from  #inst "2014-11-17"
-    :provision/effective-until #inst "2028-01-01"
-    :provision/priority        110
-    :provision/condition       (pr-str [:and
+   {:kontor.provision/code            "CN-Caishui-2014-81-stock-connect-exemption"
+    :kontor.provision/jurisdiction    :cn
+    :kontor.provision/concept         [:kontor.tax-concept/code :participation-exemption]
+    :kontor.provision/title           "Caishui [2014] 81 — Stock Connect H-share IIT exemption (mainland residents)"
+    :kontor.provision/citation        "https://www.chinatax.gov.cn/chinatax/n810341/n810755/c5210255/content.html"
+    :kontor.provision/effective-from  #inst "2014-11-17"
+    :kontor.provision/effective-until #inst "2028-01-01"
+    :kontor.provision/priority        110
+    :kontor.provision/condition       (pr-str [:and
                                         [:eq :asset-class :cn-listed-h-share-via-connect]
                                         [:eq [:tax-unit :tax-residency] :resident-individual]])
-    :provision/consequence     (pr-str {:op :base-deduct
+    :kontor.provision/consequence     (pr-str {:op :base-deduct
                                         :code :cn-stock-connect
                                         :label "Stock Connect H-share exemption (through 2027-12-31)"
                                         :amount-from :tax-context-fact
@@ -273,19 +273,19 @@
    ;; Guoshuifa [2006] 108 §1 — 滿五唯一 exemption.
    ;; Audit-trail provision; provider verifies the prongs.
    ;; --------------------------------------------------------------------
-   {:provision/code            "CN-Guoshuifa-2006-108-manwuweiyi"
-    :provision/jurisdiction    :cn
-    :provision/concept         [:kontor.tax-concept/code :holding-period-preference]
-    :provision/title           "Guoshuifa [2006] 108 §1 — 滿五唯一 residential exemption"
-    :provision/citation        "https://www.chinatax.gov.cn/chinatax/n810341/n810765/n812183/200607/c1197073/content.html"
-    :provision/effective-from  #inst "2006-07-18"
-    :provision/priority        120
-    :provision/condition       (pr-str [:and
+   {:kontor.provision/code            "CN-Guoshuifa-2006-108-manwuweiyi"
+    :kontor.provision/jurisdiction    :cn
+    :kontor.provision/concept         [:kontor.tax-concept/code :holding-period-preference]
+    :kontor.provision/title           "Guoshuifa [2006] 108 §1 — 滿五唯一 residential exemption"
+    :kontor.provision/citation        "https://www.chinatax.gov.cn/chinatax/n810341/n810765/n812183/200607/c1197073/content.html"
+    :kontor.provision/effective-from  #inst "2006-07-18"
+    :kontor.provision/priority        120
+    :kontor.provision/condition       (pr-str [:and
                                         [:eq :asset-class :cn-residential]
                                         [:eq :residence? true]
                                         [:eq [:tax-unit :family-sole-residence?] true]
                                         [:geq [:inputs :holding-years] 5M]])
-    :provision/consequence     (pr-str {:op :base-deduct
+    :kontor.provision/consequence     (pr-str {:op :base-deduct
                                         :code :cn-manwuweiyi
                                         :label "滿五唯一 residential IIT exemption"
                                         :amount-from :tax-context-fact
@@ -296,17 +296,17 @@
    ;; Audit-trail provision; provider applies the carry-over basis
    ;; treatment in code.
    ;; --------------------------------------------------------------------
-   {:provision/code            "CN-Caishui-2009-59-special-restructuring"
-    :provision/jurisdiction    :cn
-    :provision/concept         [:kontor.tax-concept/code :rollover-relief]
-    :provision/title           "Caishui [2009] 59 + [2014] 109 — special-restructuring tax deferral"
-    :provision/citation        "https://fgk.chinatax.gov.cn/zcfgk/c100012/"
-    :provision/effective-from  #inst "2009-01-01"
-    :provision/priority        130
-    :provision/condition       (pr-str [:and
+   {:kontor.provision/code            "CN-Caishui-2009-59-special-restructuring"
+    :kontor.provision/jurisdiction    :cn
+    :kontor.provision/concept         [:kontor.tax-concept/code :rollover-relief]
+    :kontor.provision/title           "Caishui [2009] 59 + [2014] 109 — special-restructuring tax deferral"
+    :kontor.provision/citation        "https://fgk.chinatax.gov.cn/zcfgk/c100012/"
+    :kontor.provision/effective-from  #inst "2009-01-01"
+    :kontor.provision/priority        130
+    :kontor.provision/condition       (pr-str [:and
                                         [:eq :elective-regime :cn-special-restructuring]
                                         [:eq [:tax-unit :tax-residency] :resident-corporation]])
-    :provision/consequence     (pr-str {:op :base-deduct
+    :kontor.provision/consequence     (pr-str {:op :base-deduct
                                         :code :cn-special-restructuring
                                         :label "Special-restructuring equity-paid deferral"
                                         :amount-from :tax-context-fact
@@ -318,7 +318,7 @@
 
 (defn install!
   "Install CN CGT statute (parameters + provisions) into `conn`.
-   Idempotent — `:parameter/code` and `:provision/code` are unique."
+   Idempotent — `:kontor.parameter/code` and `:kontor.provision/code` are unique."
   [conn]
   (d/transact conn parameters)
   (d/transact conn parameter-values)

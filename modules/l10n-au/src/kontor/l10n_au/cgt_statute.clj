@@ -53,54 +53,54 @@
   "AU CGT parameter definitions. Values live in `parameter-values`,
    keyed by `:effective-from`."
   [;; --- Holding-period cutoff -----------------------------------------------
-   {:parameter/code         "AU.CGT.holding-period-cutoff-days"
-    :parameter/label        "Discount-method holding cutoff — ITAA 1997 s115-25 (> 12 months)"
-    :parameter/jurisdiction :au
-    :parameter/unit         :days
-    :parameter/concept-iri  "https://www.legislation.gov.au/C2004A05138/asmade/text"}
+   {:kontor.parameter/code         "AU.CGT.holding-period-cutoff-days"
+    :kontor.parameter/label        "Discount-method holding cutoff — ITAA 1997 s115-25 (> 12 months)"
+    :kontor.parameter/jurisdiction :au
+    :kontor.parameter/unit         :days
+    :kontor.parameter/concept-iri  "https://www.legislation.gov.au/C2004A05138/asmade/text"}
 
    ;; --- Discount rates (s115-100) ------------------------------------------
-   {:parameter/code         "AU.CGT.discount-rate.individual"
-    :parameter/label        "Discount % — individual / trust (Div 115)"
-    :parameter/jurisdiction :au
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legislation.gov.au/C2004A05138/asmade/text"}
-   {:parameter/code         "AU.CGT.discount-rate.super-fund"
-    :parameter/label        "Discount % — complying super fund (Div 115)"
-    :parameter/jurisdiction :au
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legislation.gov.au/C2004A05138/asmade/text"}
-   {:parameter/code         "AU.CGT.discount-rate.company"
-    :parameter/label        "Discount % — company (none — frozen at 0)"
-    :parameter/jurisdiction :au
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legislation.gov.au/C2004A05138/asmade/text"}
+   {:kontor.parameter/code         "AU.CGT.discount-rate.individual"
+    :kontor.parameter/label        "Discount % — individual / trust (Div 115)"
+    :kontor.parameter/jurisdiction :au
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legislation.gov.au/C2004A05138/asmade/text"}
+   {:kontor.parameter/code         "AU.CGT.discount-rate.super-fund"
+    :kontor.parameter/label        "Discount % — complying super fund (Div 115)"
+    :kontor.parameter/jurisdiction :au
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legislation.gov.au/C2004A05138/asmade/text"}
+   {:kontor.parameter/code         "AU.CGT.discount-rate.company"
+    :kontor.parameter/label        "Discount % — company (none — frozen at 0)"
+    :kontor.parameter/jurisdiction :au
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legislation.gov.au/C2004A05138/asmade/text"}
 
    ;; --- 1 July 2027 sunset cutover -----------------------------------------
-   {:parameter/code         "AU.CGT.discount-sunset-date"
-    :parameter/label        "Discount-method sunset for individuals / trusts (2026-27 budget)"
-    :parameter/jurisdiction :au
-    :parameter/unit         :date
-    :parameter/concept-iri  "https://budget.gov.au/content/04-tax-reform.htm"}
+   {:kontor.parameter/code         "AU.CGT.discount-sunset-date"
+    :kontor.parameter/label        "Discount-method sunset for individuals / trusts (2026-27 budget)"
+    :kontor.parameter/jurisdiction :au
+    :kontor.parameter/unit         :date
+    :kontor.parameter/concept-iri  "https://budget.gov.au/content/04-tax-reform.htm"}
 
    ;; --- Retirement cap (Subdiv 152-D) --------------------------------------
-   {:parameter/code         "AU.CGT.§152-D.retirement-cap-lifetime"
-    :parameter/label        "Lifetime retirement-exemption cap per CGT concession stakeholder (s152-305)"
-    :parameter/jurisdiction :au
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legislation.gov.au/C2004A05138/asmade/text"}
+   {:kontor.parameter/code         "AU.CGT.§152-D.retirement-cap-lifetime"
+    :kontor.parameter/label        "Lifetime retirement-exemption cap per CGT concession stakeholder (s152-305)"
+    :kontor.parameter/jurisdiction :au
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.legislation.gov.au/C2004A05138/asmade/text"}
 
    ;; --- Collectables / personal-use thresholds (s118-10) -------------------
-   {:parameter/code         "AU.CGT.§118-10.collectable-threshold"
-    :parameter/label        "Collectables 1st-element exemption — s118-10(1)"
-    :parameter/jurisdiction :au
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legislation.gov.au/C2004A05138/asmade/text"}
-   {:parameter/code         "AU.CGT.§118-10.personal-use-threshold"
-    :parameter/label        "Personal-use assets 1st-element exemption — s118-10(3)"
-    :parameter/jurisdiction :au
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legislation.gov.au/C2004A05138/asmade/text"}])
+   {:kontor.parameter/code         "AU.CGT.§118-10.collectable-threshold"
+    :kontor.parameter/label        "Collectables 1st-element exemption — s118-10(1)"
+    :kontor.parameter/jurisdiction :au
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.legislation.gov.au/C2004A05138/asmade/text"}
+   {:kontor.parameter/code         "AU.CGT.§118-10.personal-use-threshold"
+    :kontor.parameter/label        "Personal-use assets 1st-element exemption — s118-10(3)"
+    :kontor.parameter/jurisdiction :au
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.legislation.gov.au/C2004A05138/asmade/text"}])
 
 ;; ============================================================================
 ;; Parameter values — current rates with their statutory effective windows
@@ -116,51 +116,51 @@
      - s118-10 thresholds — stable since CGT introduction (1985-09-20).
      - Discount sunset — 1 July 2027 (2026-27 budget announcement)."
   [;; Holding period — > 12 months → discount-eligible. 365 days exclusive cutoff.
-   {:parameter-value/parameter      [:parameter/code "AU.CGT.holding-period-cutoff-days"]
-    :parameter-value/effective-from #inst "1999-09-21"
-    :parameter-value/decimal-value  365M
-    :parameter-value/citation       "ITAA 1997 s115-25 — discount requires > 12 months holding"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "AU.CGT.holding-period-cutoff-days"]
+    :kontor.parameter-value/effective-from #inst "1999-09-21"
+    :kontor.parameter-value/decimal-value  365M
+    :kontor.parameter-value/citation       "ITAA 1997 s115-25 — discount requires > 12 months holding"}
 
    ;; Discount rates.
-   {:parameter-value/parameter      [:parameter/code "AU.CGT.discount-rate.individual"]
-    :parameter-value/effective-from #inst "1999-09-21"
-    :parameter-value/decimal-value  0.50M
-    :parameter-value/citation       "ITAA 1997 s115-100(a) — individual / trust 50 %"}
-   {:parameter-value/parameter      [:parameter/code "AU.CGT.discount-rate.super-fund"]
-    :parameter-value/effective-from #inst "1999-09-21"
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "AU.CGT.discount-rate.individual"]
+    :kontor.parameter-value/effective-from #inst "1999-09-21"
+    :kontor.parameter-value/decimal-value  0.50M
+    :kontor.parameter-value/citation       "ITAA 1997 s115-100(a) — individual / trust 50 %"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "AU.CGT.discount-rate.super-fund"]
+    :kontor.parameter-value/effective-from #inst "1999-09-21"
     ;; 1/3 = 0.33333... — provider applies as `gain × (1 − rate)` so we ship
     ;; 1/3 directly. BigDecimal-stored as the closest 6dp; multiplication is
     ;; immediate, so we choose 6dp for explicitness in the audit trail.
-    :parameter-value/decimal-value  0.333333M
-    :parameter-value/citation       "ITAA 1997 s115-100(b) — complying super fund 1/3"}
-   {:parameter-value/parameter      [:parameter/code "AU.CGT.discount-rate.company"]
-    :parameter-value/effective-from #inst "1999-09-21"
-    :parameter-value/decimal-value  0.00M
-    :parameter-value/citation       "ITAA 1997 s115-100 — no discount for companies"}
+    :kontor.parameter-value/decimal-value  0.333333M
+    :kontor.parameter-value/citation       "ITAA 1997 s115-100(b) — complying super fund 1/3"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "AU.CGT.discount-rate.company"]
+    :kontor.parameter-value/effective-from #inst "1999-09-21"
+    :kontor.parameter-value/decimal-value  0.00M
+    :kontor.parameter-value/citation       "ITAA 1997 s115-100 — no discount for companies"}
 
    ;; 1 July 2027 sunset for individuals + trusts. Stored as milliseconds since
    ;; epoch in a BigDecimal slot (the parameter-value carrier is bigdec). The
    ;; provider coerces back to a Date.
-   {:parameter-value/parameter      [:parameter/code "AU.CGT.discount-sunset-date"]
-    :parameter-value/effective-from #inst "2026-05-13"
-    :parameter-value/decimal-value  (bigdec (.getTime #inst "2027-07-01"))
-    :parameter-value/citation       "2026-27 Federal Budget — Tax Reform package, announced 2026-05-13"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "AU.CGT.discount-sunset-date"]
+    :kontor.parameter-value/effective-from #inst "2026-05-13"
+    :kontor.parameter-value/decimal-value  (bigdec (.getTime #inst "2027-07-01"))
+    :kontor.parameter-value/citation       "2026-27 Federal Budget — Tax Reform package, announced 2026-05-13"}
 
    ;; Retirement cap (frozen since 2007).
-   {:parameter-value/parameter      [:parameter/code "AU.CGT.§152-D.retirement-cap-lifetime"]
-    :parameter-value/effective-from #inst "2007-07-01"
-    :parameter-value/decimal-value  500000M
-    :parameter-value/citation       "ITAA 1997 s152-305 — $500 000 lifetime cap (Tax Laws Amendment (Simplified Super) Act 2007)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "AU.CGT.§152-D.retirement-cap-lifetime"]
+    :kontor.parameter-value/effective-from #inst "2007-07-01"
+    :kontor.parameter-value/decimal-value  500000M
+    :kontor.parameter-value/citation       "ITAA 1997 s152-305 — $500 000 lifetime cap (Tax Laws Amendment (Simplified Super) Act 2007)"}
 
    ;; s118-10 thresholds.
-   {:parameter-value/parameter      [:parameter/code "AU.CGT.§118-10.collectable-threshold"]
-    :parameter-value/effective-from #inst "1985-09-20"
-    :parameter-value/decimal-value  500M
-    :parameter-value/citation       "ITAA 1997 s118-10(1) — collectables 1st-element $500"}
-   {:parameter-value/parameter      [:parameter/code "AU.CGT.§118-10.personal-use-threshold"]
-    :parameter-value/effective-from #inst "1985-09-20"
-    :parameter-value/decimal-value  10000M
-    :parameter-value/citation       "ITAA 1997 s118-10(3) — personal-use assets 1st-element $10 000"}])
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "AU.CGT.§118-10.collectable-threshold"]
+    :kontor.parameter-value/effective-from #inst "1985-09-20"
+    :kontor.parameter-value/decimal-value  500M
+    :kontor.parameter-value/citation       "ITAA 1997 s118-10(1) — collectables 1st-element $500"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "AU.CGT.§118-10.personal-use-threshold"]
+    :kontor.parameter-value/effective-from #inst "1985-09-20"
+    :kontor.parameter-value/decimal-value  10000M
+    :kontor.parameter-value/citation       "ITAA 1997 s118-10(3) — personal-use assets 1st-element $10 000"}])
 
 ;; ============================================================================
 ;; Provisions — none (v1)
@@ -189,7 +189,7 @@
 
 (defn install!
   "Install AU CGT statute (parameters + values) into `conn`. Idempotent —
-   `:parameter/code` is a unique identity attr."
+   `:kontor.parameter/code` is a unique identity attr."
   [conn]
   (d/transact conn parameters)
   (d/transact conn parameter-values)

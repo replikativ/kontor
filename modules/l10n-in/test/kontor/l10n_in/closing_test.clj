@@ -53,13 +53,13 @@
   ;; Sales: ₹10,000 net @ 18% intra-state on Jun 15 2024
   (in-invoice/post-in-invoice!
    conn
-   {:invoice/external-id "INV-FY25-1"
-    :invoice/issue-date jun-15-2024
-    :invoice/supplier-state "MH"
-    :invoice/place-of-supply "MH"
-    :invoice/lines [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 10000M
-                     :invoice-line/tax-rate 0.18M}]})
+   {:kontor.invoice/external-id "INV-FY25-1"
+    :kontor.invoice/issue-date jun-15-2024
+    :kontor.invoice/supplier-state "MH"
+    :kontor.invoice/place-of-supply "MH"
+    :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 10000M
+                     :kontor.invoice-line/tax-rate 0.18M}]})
   ;; Expense: ₹6,000 office expense paid from bank, Sep 1
   (let [db (d/db conn)
         inr (:db/id (d/entity db [:kontor.commodity/symbol "INR"]))

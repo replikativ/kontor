@@ -26,10 +26,10 @@
 
 (deftest provider-emits-draft-xml
   (let [p (fapiao/provider)
-        inv {:invoice/external-id "INV-2026-0001"
-             :invoice/issue-date #inst "2026-01-15"
-             :invoice/currency "CNY"
-             :invoice/total-gross "11300.00"}
+        inv {:kontor.invoice/external-id "INV-2026-0001"
+             :kontor.invoice/issue-date #inst "2026-01-15"
+             :kontor.invoice/currency "CNY"
+             :kontor.invoice/total-gross "11300.00"}
         result (einvoice/emit p inv)]
     (is (= :cn/draft-fapiao (:einvoice/format result)))
     (is (= :keep-on-file (:einvoice/intended-for result)))

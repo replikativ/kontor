@@ -241,13 +241,13 @@
   (let [db (d/db *conn*)
         inv (inv/pull-invoice db "INV-PURCH-DIRECT")
         lines (inv/lines-of db "INV-PURCH-DIRECT")]
-    (testing ":invoice/type defaults to :purchase when order is :purchase"
-      (is (= :purchase (:invoice/type inv))))
+    (testing ":kontor.invoice/type defaults to :purchase when order is :purchase"
+      (is (= :purchase (:kontor.invoice/type inv))))
     (testing "direct purchase line clears GR-IR (receipt Dr'd inventory)"
       ;; Per ADR-042 receipt-first flow: inventory was debited at
       ;; receipt time via post-receipt-with-inventory!; the invoice
       ;; clears the GR-IR credit.
-      (is (= :gr-ir-clearing (-> lines first :invoice-line/gl-account-type))))))
+      (is (= :gr-ir-clearing (-> lines first :kontor.invoice-line/gl-account-type))))))
 
 (deftest bridge-routes-purchase-indirect-to-expense
   (seed-base!)
@@ -259,7 +259,7 @@
   (inv/make-invoice-from-order! *conn* "PO-INDIRECT"
                                 {:external-id "INV-PURCH-INDIRECT"})
   (let [lines (inv/lines-of (d/db *conn*) "INV-PURCH-INDIRECT")]
-    (is (= :purchase-expense (-> lines first :invoice-line/gl-account-type)))))
+    (is (= :purchase-expense (-> lines first :kontor.invoice-line/gl-account-type)))))
 
 (deftest bridge-routes-purchase-asset-to-asset-acquisition
   (seed-base!)
@@ -271,7 +271,7 @@
   (inv/make-invoice-from-order! *conn* "PO-ASSET"
                                 {:external-id "INV-PURCH-ASSET"})
   (let [lines (inv/lines-of (d/db *conn*) "INV-PURCH-ASSET")]
-    (is (= :asset-acquisition (-> lines first :invoice-line/gl-account-type)))))
+    (is (= :asset-acquisition (-> lines first :kontor.invoice-line/gl-account-type)))))
 
 (deftest bridge-still-routes-sales-to-revenue
   ;; Regression: existing :sales orders must still route to :sales-revenue
@@ -298,7 +298,7 @@
                                 {:external-id "INV-SALES-REGR"})
   (let [lines (inv/lines-of (d/db *conn*) "INV-SALES-REGR")]
     (testing "sales order still routes to :sales-revenue (no regression)"
-      (is (= :sales-revenue (-> lines first :invoice-line/gl-account-type))))))
+      (is (= :sales-revenue (-> lines first :kontor.invoice-line/gl-account-type))))))
 
 ;; ============================================================================
 ;; 3-way match
@@ -393,7 +393,7 @@
                                   {:external-id "INV-RECOMP"})
     (let [verdict (match/recompute-match-status! *conn*
                                                   (inv/by-external-id (d/db *conn*) "INV-RECOMP"))]
-      (testing "recompute writes the verdict to :invoice/match-status"
+      (testing "recompute writes the verdict to :kontor.invoice/match-status"
         (is (= :auto-matched verdict))
         (is (= :auto-matched
                (match/match-status-of-invoice (d/db *conn*)

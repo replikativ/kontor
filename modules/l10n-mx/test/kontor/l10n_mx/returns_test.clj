@@ -60,33 +60,33 @@
   [conn]
   (inv/post-mx-invoice!
    conn
-   {:invoice/external-id "INV-CASH-16"
-    :invoice/issue-date  jan-10
-    :invoice/cash-sale?  true
-    :invoice/lines [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 1000M}]})
+   {:kontor.invoice/external-id "INV-CASH-16"
+    :kontor.invoice/issue-date  jan-10
+    :kontor.invoice/cash-sale?  true
+    :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 1000M}]})
   (inv/post-mx-invoice!
    conn
-   {:invoice/external-id "INV-CASH-8"
-    :invoice/issue-date  jan-15
-    :invoice/cash-sale?  true
-    :invoice/region      :border-norte
-    :invoice/lines [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 500M}]})
+   {:kontor.invoice/external-id "INV-CASH-8"
+    :kontor.invoice/issue-date  jan-15
+    :kontor.invoice/cash-sale?  true
+    :kontor.invoice/region      :border-norte
+    :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 500M}]})
   (inv/post-mx-invoice!
    conn
-   {:invoice/external-id "INV-CASH-0"
-    :invoice/issue-date  jan-20
-    :invoice/cash-sale?  true
-    :invoice/lines [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 200M
-                     :invoice-line/tax-status :zero-rated}]})
+   {:kontor.invoice/external-id "INV-CASH-0"
+    :kontor.invoice/issue-date  jan-20
+    :kontor.invoice/cash-sale?  true
+    :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 200M
+                     :kontor.invoice-line/tax-status :zero-rated}]})
   (inv/post-mx-invoice!
    conn
-   {:invoice/external-id "INV-CREDIT-16"
-    :invoice/issue-date  jan-20
-    :invoice/lines [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 3000M}]}))
+   {:kontor.invoice/external-id "INV-CREDIT-16"
+    :kontor.invoice/issue-date  jan-20
+    :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 3000M}]}))
 
 ;; ============================================================================
 ;; Period helpers
@@ -210,11 +210,11 @@
           _ (seed-january! conn)
           _ (inv/post-mx-invoice!
              conn
-             {:invoice/external-id "INV-FEB"
-              :invoice/issue-date  feb-15
-              :invoice/cash-sale?  true
-              :invoice/lines [{:invoice-line/quantity 1
-                               :invoice-line/unit-price 5000M}]})
+             {:kontor.invoice/external-id "INV-FEB"
+              :kontor.invoice/issue-date  feb-15
+              :kontor.invoice/cash-sale?  true
+              :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                               :kontor.invoice-line/unit-price 5000M}]})
           jan (ret/generate-dpi-return conn {:year 2026 :month 1})
           feb (ret/generate-dpi-return conn {:year 2026 :month 2})]
       (is (≈ (mxn "200") (:return/iva-net jan))
@@ -246,12 +246,12 @@
     (let [conn (bootstrap)
           _ (inv/post-mx-invoice!
              conn
-             {:invoice/external-id "INV-IEPS"
-              :invoice/issue-date jan-10
-              :invoice/cash-sale? true
-              :invoice/lines [{:invoice-line/quantity 1
-                               :invoice-line/unit-price 1000M
-                               :invoice-line/ieps-rate 0.265M}]})
+             {:kontor.invoice/external-id "INV-IEPS"
+              :kontor.invoice/issue-date jan-10
+              :kontor.invoice/cash-sale? true
+              :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                               :kontor.invoice-line/unit-price 1000M
+                               :kontor.invoice-line/ieps-rate 0.265M}]})
           r (ret/generate-dpi-return conn {:year 2026 :month 1})]
       (is (≈ (mxn "265") (-> r :return/lines :ieps-cobrado))
           "IEPS 26.5% × 1000 = 265 on 209.01 cobrado")

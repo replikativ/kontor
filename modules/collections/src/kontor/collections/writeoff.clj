@@ -71,17 +71,17 @@
         eids (d/q '[:find [?i ...]
                     :in $ ?b ?e
                     :where
-                    [?i :invoice/buyer ?b]
-                    [?i :invoice/entity ?e]
-                    (or [?i :invoice/status :sent]
-                        [?i :invoice/status :partially-paid])]
+                    [?i :kontor.invoice/buyer ?b]
+                    [?i :kontor.invoice/entity ?e]
+                    (or [?i :kontor.invoice/status :sent]
+                        [?i :kontor.invoice/status :partially-paid])]
                   db partner-eid entity-eid)]
     (->> eids
          (map (fn [eid]
                 {:invoice-eid eid
                  :open-amount (papp/open-amount-of-invoice db eid)
-                 :commodity-sym (:invoice/currency
-                                 (d/pull db [:invoice/currency] eid))}))
+                 :commodity-sym (:kontor.invoice/currency
+                                 (d/pull db [:kontor.invoice/currency] eid))}))
          (filter #(pos? (.signum ^java.math.BigDecimal (:open-amount %))))
          vec)))
 

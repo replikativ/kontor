@@ -46,103 +46,103 @@
    cgt-statute (`JP.CGT.reconstruction-surtax-rate`); we do NOT
    re-declare it here."
   [;; --- Listed-dividend rates (措置法 §9-3) ---------------------------------
-   {:parameter/code         "JP.InvIncome.listed.national-rate"
-    :parameter/label        "Listed dividend — national income-tax rate (措置法 §9-3)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026#Mp-At_9_3"}
-   {:parameter/code         "JP.InvIncome.listed.local-rate"
-    :parameter/label        "Listed dividend — inhabitants (local) rate"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=325AC0000000226"}
+   {:kontor.parameter/code         "JP.InvIncome.listed.national-rate"
+    :kontor.parameter/label        "Listed dividend — national income-tax rate (措置法 §9-3)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026#Mp-At_9_3"}
+   {:kontor.parameter/code         "JP.InvIncome.listed.local-rate"
+    :kontor.parameter/label        "Listed dividend — inhabitants (local) rate"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=325AC0000000226"}
 
    ;; --- Major-shareholder (≥3 %) WHT — no 復興 reduction --------------------
    ;; A 3 %+ shareholder cannot use 申告不要 / 申告分離 — must use 総合課税.
    ;; The paying agent's WHT on these dividends is 20.42 % (20 % nat × 1.021
    ;; 復興), NOT 20.315 %, because the base is the un-reduced 20 % rate.
-   {:parameter/code         "JP.InvIncome.major-shareholder.national-rate"
-    :parameter/label        "≥3 % shareholder dividend — national base WHT rate (措置法 §9-3-2 N/A)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1330.htm"}
-   {:parameter/code         "JP.InvIncome.major-shareholder.threshold"
-    :parameter/label        "大口株主 cliff threshold — ≥3 % of issued shares (措置法 §8-4)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026#Mp-At_8_4"}
+   {:kontor.parameter/code         "JP.InvIncome.major-shareholder.national-rate"
+    :kontor.parameter/label        "≥3 % shareholder dividend — national base WHT rate (措置法 §9-3-2 N/A)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1330.htm"}
+   {:kontor.parameter/code         "JP.InvIncome.major-shareholder.threshold"
+    :kontor.parameter/label        "大口株主 cliff threshold — ≥3 % of issued shares (措置法 §8-4)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=332AC0000000026#Mp-At_8_4"}
 
    ;; --- 配当控除 (所得税法 §92) — standard cash dividend ---------------------
-   {:parameter/code         "JP.InvIncome.haitō-kōjo.standard-rate"
-    :parameter/label        "配当控除 standard rate — 10 % on dividend slice ≤ ¥10M (national)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=340AC0000000033#Mp-At_92"}
-   {:parameter/code         "JP.InvIncome.haitō-kōjo.high-income-rate"
-    :parameter/label        "配当控除 high-income rate — 5 % on dividend slice > ¥10M (national)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=340AC0000000033#Mp-At_92"}
-   {:parameter/code         "JP.InvIncome.haitō-kōjo.threshold"
-    :parameter/label        "配当控除 income threshold — ¥10,000,000 (課税総所得金額)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
-   {:parameter/code         "JP.InvIncome.haitō-kōjo.jūmin-standard-rate"
-    :parameter/label        "配当控除 standard rate — 2.8 % on dividend slice ≤ ¥10M (inhabitants)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
-   {:parameter/code         "JP.InvIncome.haitō-kōjo.jūmin-high-income-rate"
-    :parameter/label        "配当控除 high-income rate — 1.4 % on dividend slice > ¥10M (inhabitants)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
+   {:kontor.parameter/code         "JP.InvIncome.haitō-kōjo.standard-rate"
+    :kontor.parameter/label        "配当控除 standard rate — 10 % on dividend slice ≤ ¥10M (national)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=340AC0000000033#Mp-At_92"}
+   {:kontor.parameter/code         "JP.InvIncome.haitō-kōjo.high-income-rate"
+    :kontor.parameter/label        "配当控除 high-income rate — 5 % on dividend slice > ¥10M (national)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=340AC0000000033#Mp-At_92"}
+   {:kontor.parameter/code         "JP.InvIncome.haitō-kōjo.threshold"
+    :kontor.parameter/label        "配当控除 income threshold — ¥10,000,000 (課税総所得金額)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
+   {:kontor.parameter/code         "JP.InvIncome.haitō-kōjo.jūmin-standard-rate"
+    :kontor.parameter/label        "配当控除 standard rate — 2.8 % on dividend slice ≤ ¥10M (inhabitants)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
+   {:kontor.parameter/code         "JP.InvIncome.haitō-kōjo.jūmin-high-income-rate"
+    :kontor.parameter/label        "配当控除 high-income rate — 1.4 % on dividend slice > ¥10M (inhabitants)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
    ;; Investment-trust variants — half / quarter of the cash dividend.
    ;; Per note 151 §1.3 table: trust-domestic is HALF of cash rate;
    ;; trust-foreign is HALF of trust-domestic (quarter of cash).
-   {:parameter/code         "JP.InvIncome.haitō-kōjo.trust-domestic-rate"
-    :parameter/label        "配当控除 domestic investment-trust rate — 5 % ≤¥10M (national)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
-   {:parameter/code         "JP.InvIncome.haitō-kōjo.trust-domestic-high-rate"
-    :parameter/label        "配当控除 domestic investment-trust rate — 2.5 % >¥10M (national)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
-   {:parameter/code         "JP.InvIncome.haitō-kōjo.trust-foreign-rate"
-    :parameter/label        "配当控除 foreign-asset investment-trust rate — 2.5 % ≤¥10M (national)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
-   {:parameter/code         "JP.InvIncome.haitō-kōjo.trust-foreign-high-rate"
-    :parameter/label        "配当控除 foreign-asset investment-trust rate — 1.25 % >¥10M (national)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
+   {:kontor.parameter/code         "JP.InvIncome.haitō-kōjo.trust-domestic-rate"
+    :kontor.parameter/label        "配当控除 domestic investment-trust rate — 5 % ≤¥10M (national)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
+   {:kontor.parameter/code         "JP.InvIncome.haitō-kōjo.trust-domestic-high-rate"
+    :kontor.parameter/label        "配当控除 domestic investment-trust rate — 2.5 % >¥10M (national)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
+   {:kontor.parameter/code         "JP.InvIncome.haitō-kōjo.trust-foreign-rate"
+    :kontor.parameter/label        "配当控除 foreign-asset investment-trust rate — 2.5 % ≤¥10M (national)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
+   {:kontor.parameter/code         "JP.InvIncome.haitō-kōjo.trust-foreign-high-rate"
+    :kontor.parameter/label        "配当控除 foreign-asset investment-trust rate — 1.25 % >¥10M (national)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
    ;; Trust × inhabitants (local) rates — half / quarter of the cash
    ;; inhabitants rate (2.8 % / 1.4 %).
-   {:parameter/code         "JP.InvIncome.haitō-kōjo.jūmin-trust-domestic-rate"
-    :parameter/label        "配当控除 domestic-trust rate — 1.4 % ≤¥10M (inhabitants)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
-   {:parameter/code         "JP.InvIncome.haitō-kōjo.jūmin-trust-domestic-high-rate"
-    :parameter/label        "配当控除 domestic-trust rate — 0.7 % >¥10M (inhabitants)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
-   {:parameter/code         "JP.InvIncome.haitō-kōjo.jūmin-trust-foreign-rate"
-    :parameter/label        "配当控除 foreign-trust rate — 0.7 % ≤¥10M (inhabitants)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
-   {:parameter/code         "JP.InvIncome.haitō-kōjo.jūmin-trust-foreign-high-rate"
-    :parameter/label        "配当控除 foreign-trust rate — 0.35 % >¥10M (inhabitants)"
-    :parameter/jurisdiction :jp
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}])
+   {:kontor.parameter/code         "JP.InvIncome.haitō-kōjo.jūmin-trust-domestic-rate"
+    :kontor.parameter/label        "配当控除 domestic-trust rate — 1.4 % ≤¥10M (inhabitants)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
+   {:kontor.parameter/code         "JP.InvIncome.haitō-kōjo.jūmin-trust-domestic-high-rate"
+    :kontor.parameter/label        "配当控除 domestic-trust rate — 0.7 % >¥10M (inhabitants)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
+   {:kontor.parameter/code         "JP.InvIncome.haitō-kōjo.jūmin-trust-foreign-rate"
+    :kontor.parameter/label        "配当控除 foreign-trust rate — 0.7 % ≤¥10M (inhabitants)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}
+   {:kontor.parameter/code         "JP.InvIncome.haitō-kōjo.jūmin-trust-foreign-high-rate"
+    :kontor.parameter/label        "配当控除 foreign-trust rate — 0.35 % >¥10M (inhabitants)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"}])
 
 ;; ============================================================================
 ;; Parameter values
@@ -152,81 +152,81 @@
   "JP investment-income parameter values. Stable post-2014 values; the
    復興 surtax sunsets 2037-12-31 and is governed by the CGT statute."
   [;; --- Listed-dividend rates -----------------------------------------------
-   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.listed.national-rate"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  0.15M
-    :parameter-value/citation       "措置法 §9-3 — 上場株式等 配当 national rate 15 % from 2014"}
-   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.listed.local-rate"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  0.05M
-    :parameter-value/citation       "地方税法 — 上場株式等 配当 inhabitants rate 5 % from 2014"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.InvIncome.listed.national-rate"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  0.15M
+    :kontor.parameter-value/citation       "措置法 §9-3 — 上場株式等 配当 national rate 15 % from 2014"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.InvIncome.listed.local-rate"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  0.05M
+    :kontor.parameter-value/citation       "地方税法 — 上場株式等 配当 inhabitants rate 5 % from 2014"}
 
    ;; --- Major-shareholder (≥3 %) -------------------------------------------
-   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.major-shareholder.national-rate"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  0.20M
-    :parameter-value/citation       "措置法 §9-3-2 — 大口株主 (≥3 %) national WHT base 20 % (no 措置法 reduction)"}
-   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.major-shareholder.threshold"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  0.03M
-    :parameter-value/citation       "措置法 §8-4 — 大口株主 cliff at 3 % of issued shares / voting rights"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.InvIncome.major-shareholder.national-rate"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  0.20M
+    :kontor.parameter-value/citation       "措置法 §9-3-2 — 大口株主 (≥3 %) national WHT base 20 % (no 措置法 reduction)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.InvIncome.major-shareholder.threshold"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  0.03M
+    :kontor.parameter-value/citation       "措置法 §8-4 — 大口株主 cliff at 3 % of issued shares / voting rights"}
 
    ;; --- 配当控除 — cash dividend (所得税法 §92) ------------------------------
-   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.standard-rate"]
-    :parameter-value/effective-from #inst "1965-04-01"
-    :parameter-value/decimal-value  0.10M
-    :parameter-value/citation       "所得税法 §92 — 配当控除 10 % on national-tax of dividend slice ≤ ¥10M"}
-   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.high-income-rate"]
-    :parameter-value/effective-from #inst "1965-04-01"
-    :parameter-value/decimal-value  0.05M
-    :parameter-value/citation       "所得税法 §92 — 配当控除 5 % on national-tax of dividend slice > ¥10M"}
-   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.threshold"]
-    :parameter-value/effective-from #inst "1965-04-01"
-    :parameter-value/decimal-value  10000000M
-    :parameter-value/citation       "所得税法 §92 — ¥10,000,000 課税総所得金額 threshold"}
-   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.jūmin-standard-rate"]
-    :parameter-value/effective-from #inst "1965-04-01"
-    :parameter-value/decimal-value  0.028M
-    :parameter-value/citation       "地方税法 — 配当控除 2.8 % on inhabitants tax of dividend slice ≤ ¥10M"}
-   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.jūmin-high-income-rate"]
-    :parameter-value/effective-from #inst "1965-04-01"
-    :parameter-value/decimal-value  0.014M
-    :parameter-value/citation       "地方税法 — 配当控除 1.4 % on inhabitants tax of dividend slice > ¥10M"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.InvIncome.haitō-kōjo.standard-rate"]
+    :kontor.parameter-value/effective-from #inst "1965-04-01"
+    :kontor.parameter-value/decimal-value  0.10M
+    :kontor.parameter-value/citation       "所得税法 §92 — 配当控除 10 % on national-tax of dividend slice ≤ ¥10M"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.InvIncome.haitō-kōjo.high-income-rate"]
+    :kontor.parameter-value/effective-from #inst "1965-04-01"
+    :kontor.parameter-value/decimal-value  0.05M
+    :kontor.parameter-value/citation       "所得税法 §92 — 配当控除 5 % on national-tax of dividend slice > ¥10M"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.InvIncome.haitō-kōjo.threshold"]
+    :kontor.parameter-value/effective-from #inst "1965-04-01"
+    :kontor.parameter-value/decimal-value  10000000M
+    :kontor.parameter-value/citation       "所得税法 §92 — ¥10,000,000 課税総所得金額 threshold"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.InvIncome.haitō-kōjo.jūmin-standard-rate"]
+    :kontor.parameter-value/effective-from #inst "1965-04-01"
+    :kontor.parameter-value/decimal-value  0.028M
+    :kontor.parameter-value/citation       "地方税法 — 配当控除 2.8 % on inhabitants tax of dividend slice ≤ ¥10M"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.InvIncome.haitō-kōjo.jūmin-high-income-rate"]
+    :kontor.parameter-value/effective-from #inst "1965-04-01"
+    :kontor.parameter-value/decimal-value  0.014M
+    :kontor.parameter-value/citation       "地方税法 — 配当控除 1.4 % on inhabitants tax of dividend slice > ¥10M"}
 
    ;; --- 配当控除 — investment-trust variants (national, low + high) --------
-   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.trust-domestic-rate"]
-    :parameter-value/effective-from #inst "1965-04-01"
-    :parameter-value/decimal-value  0.05M
-    :parameter-value/citation       "所得税法 §92 + 措置法 — 投資信託 (domestic asset) 配当控除 5 % ≤¥10M"}
-   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.trust-domestic-high-rate"]
-    :parameter-value/effective-from #inst "1965-04-01"
-    :parameter-value/decimal-value  0.025M
-    :parameter-value/citation       "所得税法 §92 + 措置法 — 投資信託 (domestic asset) 配当控除 2.5 % >¥10M"}
-   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.trust-foreign-rate"]
-    :parameter-value/effective-from #inst "1965-04-01"
-    :parameter-value/decimal-value  0.025M
-    :parameter-value/citation       "所得税法 §92 + 措置法 — 投資信託 (foreign asset) 配当控除 2.5 % ≤¥10M"}
-   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.trust-foreign-high-rate"]
-    :parameter-value/effective-from #inst "1965-04-01"
-    :parameter-value/decimal-value  0.0125M
-    :parameter-value/citation       "所得税法 §92 + 措置法 — 投資信託 (foreign asset) 配当控除 1.25 % >¥10M"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.InvIncome.haitō-kōjo.trust-domestic-rate"]
+    :kontor.parameter-value/effective-from #inst "1965-04-01"
+    :kontor.parameter-value/decimal-value  0.05M
+    :kontor.parameter-value/citation       "所得税法 §92 + 措置法 — 投資信託 (domestic asset) 配当控除 5 % ≤¥10M"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.InvIncome.haitō-kōjo.trust-domestic-high-rate"]
+    :kontor.parameter-value/effective-from #inst "1965-04-01"
+    :kontor.parameter-value/decimal-value  0.025M
+    :kontor.parameter-value/citation       "所得税法 §92 + 措置法 — 投資信託 (domestic asset) 配当控除 2.5 % >¥10M"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.InvIncome.haitō-kōjo.trust-foreign-rate"]
+    :kontor.parameter-value/effective-from #inst "1965-04-01"
+    :kontor.parameter-value/decimal-value  0.025M
+    :kontor.parameter-value/citation       "所得税法 §92 + 措置法 — 投資信託 (foreign asset) 配当控除 2.5 % ≤¥10M"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.InvIncome.haitō-kōjo.trust-foreign-high-rate"]
+    :kontor.parameter-value/effective-from #inst "1965-04-01"
+    :kontor.parameter-value/decimal-value  0.0125M
+    :kontor.parameter-value/citation       "所得税法 §92 + 措置法 — 投資信託 (foreign asset) 配当控除 1.25 % >¥10M"}
    ;; --- 配当控除 — investment-trust variants (inhabitants, low + high) -----
-   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.jūmin-trust-domestic-rate"]
-    :parameter-value/effective-from #inst "1965-04-01"
-    :parameter-value/decimal-value  0.014M
-    :parameter-value/citation       "地方税法 — 投資信託 (domestic) 配当控除 1.4 % ≤¥10M (inhabitants)"}
-   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.jūmin-trust-domestic-high-rate"]
-    :parameter-value/effective-from #inst "1965-04-01"
-    :parameter-value/decimal-value  0.007M
-    :parameter-value/citation       "地方税法 — 投資信託 (domestic) 配当控除 0.7 % >¥10M (inhabitants)"}
-   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.jūmin-trust-foreign-rate"]
-    :parameter-value/effective-from #inst "1965-04-01"
-    :parameter-value/decimal-value  0.007M
-    :parameter-value/citation       "地方税法 — 投資信託 (foreign) 配当控除 0.7 % ≤¥10M (inhabitants)"}
-   {:parameter-value/parameter      [:parameter/code "JP.InvIncome.haitō-kōjo.jūmin-trust-foreign-high-rate"]
-    :parameter-value/effective-from #inst "1965-04-01"
-    :parameter-value/decimal-value  0.0035M
-    :parameter-value/citation       "地方税法 — 投資信託 (foreign) 配当控除 0.35 % >¥10M (inhabitants)"}])
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.InvIncome.haitō-kōjo.jūmin-trust-domestic-rate"]
+    :kontor.parameter-value/effective-from #inst "1965-04-01"
+    :kontor.parameter-value/decimal-value  0.014M
+    :kontor.parameter-value/citation       "地方税法 — 投資信託 (domestic) 配当控除 1.4 % ≤¥10M (inhabitants)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.InvIncome.haitō-kōjo.jūmin-trust-domestic-high-rate"]
+    :kontor.parameter-value/effective-from #inst "1965-04-01"
+    :kontor.parameter-value/decimal-value  0.007M
+    :kontor.parameter-value/citation       "地方税法 — 投資信託 (domestic) 配当控除 0.7 % >¥10M (inhabitants)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.InvIncome.haitō-kōjo.jūmin-trust-foreign-rate"]
+    :kontor.parameter-value/effective-from #inst "1965-04-01"
+    :kontor.parameter-value/decimal-value  0.007M
+    :kontor.parameter-value/citation       "地方税法 — 投資信託 (foreign) 配当控除 0.7 % ≤¥10M (inhabitants)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.InvIncome.haitō-kōjo.jūmin-trust-foreign-high-rate"]
+    :kontor.parameter-value/effective-from #inst "1965-04-01"
+    :kontor.parameter-value/decimal-value  0.0035M
+    :kontor.parameter-value/citation       "地方税法 — 投資信託 (foreign) 配当控除 0.35 % >¥10M (inhabitants)"}])
 
 ;; ============================================================================
 ;; Provisions
@@ -261,34 +261,34 @@
    ;; threshold gate is implemented inside the compute-fn to handle the
    ;; slice-above-threshold case cleanly).
    ;; --------------------------------------------------------------------
-   {:provision/code            "JP-Shotokuzeihō-§92-haitō-kōjo-national"
-    :provision/jurisdiction    :jp
-    :provision/concept         [:kontor.tax-concept/code :non-refundable-credit]
-    :provision/title           "配当控除 — 所得税法 §92 dividend tax credit (national income tax)"
-    :provision/citation        "https://elaws.e-gov.go.jp/document?lawid=340AC0000000033#Mp-At_92"
-    :provision/effective-from  #inst "1965-04-01"
-    :provision/priority        100
-    :provision/condition       (pr-str [:and
+   {:kontor.provision/code            "JP-Shotokuzeihō-§92-haitō-kōjo-national"
+    :kontor.provision/jurisdiction    :jp
+    :kontor.provision/concept         [:kontor.tax-concept/code :non-refundable-credit]
+    :kontor.provision/title           "配当控除 — 所得税法 §92 dividend tax credit (national income tax)"
+    :kontor.provision/citation        "https://elaws.e-gov.go.jp/document?lawid=340AC0000000033#Mp-At_92"
+    :kontor.provision/effective-from  #inst "1965-04-01"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:and
                                         [:eq [:election] :sogo]
                                         [:eq [:pass] :national]])
-    :provision/consequence     (pr-str {:op          :credit
+    :kontor.provision/consequence     (pr-str {:op          :credit
                                         :refundable? false
                                         :code        :jp-haitō-kōjo-national
                                         :label       "配当控除 (national) — 所得税法 §92"
                                         :amount-from :compute-fn
                                         :fn          :jp-haitō-kōjo-national})}
 
-   {:provision/code            "JP-Chihōzeihō-haitō-kōjo-jūmin"
-    :provision/jurisdiction    :jp
-    :provision/concept         [:kontor.tax-concept/code :non-refundable-credit]
-    :provision/title           "配当控除 — 地方税法 dividend tax credit (inhabitants tax)"
-    :provision/citation        "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"
-    :provision/effective-from  #inst "1965-04-01"
-    :provision/priority        100
-    :provision/condition       (pr-str [:and
+   {:kontor.provision/code            "JP-Chihōzeihō-haitō-kōjo-jūmin"
+    :kontor.provision/jurisdiction    :jp
+    :kontor.provision/concept         [:kontor.tax-concept/code :non-refundable-credit]
+    :kontor.provision/title           "配当控除 — 地方税法 dividend tax credit (inhabitants tax)"
+    :kontor.provision/citation        "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"
+    :kontor.provision/effective-from  #inst "1965-04-01"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:and
                                         [:eq [:election] :sogo]
                                         [:eq [:pass] :local]])
-    :provision/consequence     (pr-str {:op          :credit
+    :kontor.provision/consequence     (pr-str {:op          :credit
                                         :refundable? false
                                         :code        :jp-haitō-kōjo-jūmin
                                         :label       "配当控除 (inhabitants) — 地方税法"
@@ -301,7 +301,7 @@
 
 (defn install!
   "Install JP investment-income statute (parameters + provisions) into
-   `conn`. Idempotent — `:parameter/code` and `:provision/code` are
+   `conn`. Idempotent — `:kontor.parameter/code` and `:kontor.provision/code` are
    unique identity attrs.
 
    ASSUMES the JP CGT statute has ALREADY been installed (the

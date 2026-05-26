@@ -216,19 +216,19 @@
   "Build a UBL Peppol PINT JP <Invoice> element from an invoice map.
 
    Input:
-     {:invoice/number       string
-      :invoice/issue-date   #inst | LocalDate | YYYY-MM-DD string
-      :invoice/due-date     same                          (optional)
-      :invoice/currency     \"JPY\"                          (default \"JPY\")
-      :invoice/invoice-type-code  \"380\"                  (default 380 = commercial invoice)
-      :invoice/supplier {:name … :registration-number … :address {…} :contact {…}}
-      :invoice/customer {:name … :registration-number … :address {…}}
-      :invoice/lines      [<line-map> …]
-      :invoice/tax-totals [{:rate … :taxable Money :tax Money :category \"S\"}]
-      :invoice/totals     {:net Money :tax Money :gross Money}}
+     {:kontor.invoice/number       string
+      :kontor.invoice/issue-date   #inst | LocalDate | YYYY-MM-DD string
+      :kontor.invoice/due-date     same                          (optional)
+      :kontor.invoice/currency     \"JPY\"                          (default \"JPY\")
+      :kontor.invoice/invoice-type-code  \"380\"                  (default 380 = commercial invoice)
+      :kontor.invoice/supplier {:name … :registration-number … :address {…} :contact {…}}
+      :kontor.invoice/customer {:name … :registration-number … :address {…}}
+      :kontor.invoice/lines      [<line-map> …]
+      :kontor.invoice/tax-totals [{:rate … :taxable Money :tax Money :category \"S\"}]
+      :kontor.invoice/totals     {:net Money :tax Money :gross Money}}
 
    Line maps use the :line/* shape consumed by `invoice-line-el`."
-  [{:invoice/keys [number issue-date due-date currency invoice-type-code
+  [{:kontor.invoice/keys [number issue-date due-date currency invoice-type-code
                    supplier customer lines tax-totals totals]
     :or {currency "JPY"
          invoice-type-code "380"}}]

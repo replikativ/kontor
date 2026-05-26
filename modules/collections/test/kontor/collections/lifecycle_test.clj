@@ -249,24 +249,24 @@
         line-tempid "line-1"]
     (d/transact *conn*
                 [{:db/id inv-tempid
-                  :invoice/external-id external-id
-                  :invoice/type :sales
-                  :invoice/status :sent
-                  :invoice/issue-date #inst "2026-04-01"
-                  :invoice/seller seller
-                  :invoice/buyer  buyer
-                  :invoice/currency "EUR"
-                  :invoice/total-gross gross
-                  :invoice/lines [line-tempid]}
+                  :kontor.invoice/external-id external-id
+                  :kontor.invoice/type :sales
+                  :kontor.invoice/status :sent
+                  :kontor.invoice/issue-date #inst "2026-04-01"
+                  :kontor.invoice/seller seller
+                  :kontor.invoice/buyer  buyer
+                  :kontor.invoice/currency "EUR"
+                  :kontor.invoice/total-gross gross
+                  :kontor.invoice/lines [line-tempid]}
                  {:db/id line-tempid
-                  :invoice-line/invoice inv-tempid
-                  :invoice-line/sequence 1
-                  :invoice-line/name "Widget"
-                  :invoice-line/quantity 1M
-                  :invoice-line/unit-price gross
-                  :invoice-line/amount gross}])
+                  :kontor.invoice-line/invoice inv-tempid
+                  :kontor.invoice-line/sequence 1
+                  :kontor.invoice-line/name "Widget"
+                  :kontor.invoice-line/quantity 1M
+                  :kontor.invoice-line/unit-price gross
+                  :kontor.invoice-line/amount gross}])
     (d/q '[:find ?e . :in $ ?xid
-           :where [?e :invoice/external-id ?xid]]
+           :where [?e :kontor.invoice/external-id ?xid]]
          (d/db *conn*) external-id)))
 
 (deftest raise-and-resolve-dispute
@@ -304,7 +304,7 @@
 (deftest line-level-dispute-via-scope
   (let [inv (make-invoice! "INV-LINE" 2000M)
         line-eid (d/q '[:find ?l . :in $ ?inv
-                        :where [?l :invoice-line/invoice ?inv]]
+                        :where [?l :kontor.invoice-line/invoice ?inv]]
                       (d/db *conn*) inv)]
     (kdispute/raise-dispute! *conn*
                              {:external-id "DIS-LINE"

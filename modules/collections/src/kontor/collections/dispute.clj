@@ -35,10 +35,10 @@
   [db spec]
   (when-let [eid (resolve-dispute db spec)]
     (d/pull db
-            '[* {:dispute/invoice [:invoice/external-id]
+            '[* {:dispute/invoice [:kontor.invoice/external-id]
                  :dispute/scope   [:db/id
-                                   :invoice-line/sequence
-                                   :invoice-line/name]
+                                   :kontor.invoice-line/sequence
+                                   :kontor.invoice-line/name]
                  :dispute/opened-by-uid [:kontor.partner/external-id]
                  :dispute/resolved-by-uid [:kontor.partner/external-id]
                  :dispute/supporting-doc [:audit-doc/code]}]

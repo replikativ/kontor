@@ -46,10 +46,10 @@
   [conn]
   ;; Sales invoice 1: €1000 net @ 20% TVA → €1200 gross on Feb 15.
   (fr-invoice/post-fr-invoice! conn
-                               {:invoice/external-id "INV-2025-1"
-                                :invoice/issue-date feb-15
-                                :invoice/lines [{:invoice-line/quantity 1
-                                                 :invoice-line/unit-price 1000M}]})
+                               {:kontor.invoice/external-id "INV-2025-1"
+                                :kontor.invoice/issue-date feb-15
+                                :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                                 :kontor.invoice-line/unit-price 1000M}]})
   ;; Expense: €600 office supplies paid from bank on Feb 15.
   (let [db (d/db conn)
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
@@ -91,10 +91,10 @@
   ;; Add a second sales invoice to push revenue past expenses
   ;; (we want a meaningful non-zero close).
   (fr-invoice/post-fr-invoice! conn
-                               {:invoice/external-id "INV-2025-2"
-                                :invoice/issue-date jun-1
-                                :invoice/lines [{:invoice-line/quantity 1
-                                                 :invoice-line/unit-price 500M}]})
+                               {:kontor.invoice/external-id "INV-2025-2"
+                                :kontor.invoice/issue-date jun-1
+                                :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                                 :kontor.invoice-line/unit-price 500M}]})
   ;; Final P&L: revenue 706 = -1500, office 606 = +600, rent 613 = +400
   ;; → net P&L = -500 (i.e. €500 profit, credit balance)
   nil)

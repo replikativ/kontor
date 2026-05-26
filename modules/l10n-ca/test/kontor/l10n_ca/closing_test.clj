@@ -46,11 +46,11 @@
   [conn]
   ;; Sales invoice: $1000 net @ 13% HST → $1130 gross on Feb 15.
   (ca-invoice/post-ca-invoice! conn
-                               {:invoice/external-id "INV-2025-1"
-                                :invoice/issue-date feb-15
-                                :invoice/ship-to-province :ON
-                                :invoice/lines [{:invoice-line/quantity 1
-                                                 :invoice-line/unit-price 1000M}]})
+                               {:kontor.invoice/external-id "INV-2025-1"
+                                :kontor.invoice/issue-date feb-15
+                                :kontor.invoice/ship-to-province :ON
+                                :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                                 :kontor.invoice-line/unit-price 1000M}]})
   ;; Expense: $600 office expense paid from bank on Feb 15.
   (let [db (d/db conn)
         cad (:db/id (d/entity db [:kontor.commodity/symbol "CAD"]))
@@ -98,11 +98,11 @@
   ;; a non-zero profit. We'll add a second sales invoice to push
   ;; revenue past expenses.
   (ca-invoice/post-ca-invoice! conn
-                               {:invoice/external-id "INV-2025-2"
-                                :invoice/issue-date jun-1
-                                :invoice/ship-to-province :ON
-                                :invoice/lines [{:invoice-line/quantity 1
-                                                 :invoice-line/unit-price 500M}]})
+                               {:kontor.invoice/external-id "INV-2025-2"
+                                :kontor.invoice/issue-date jun-1
+                                :kontor.invoice/ship-to-province :ON
+                                :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                                 :kontor.invoice-line/unit-price 500M}]})
   ;; New P&L: revenue -1500, office +600, rent +400 → net -500 (profit 500)
   nil)
 

@@ -34,8 +34,8 @@
    `:vt-from` (and optional `:vt-to`) opts: when present the entire
    tx is stamped with kontor.bitemporal's `:tx/valid-from`. This
    propagates the same valid-time onto the status-history record(s)
-   the tx writes, so `(:invoice/status (d/pull (d/valid-at db vt) [...] invoice))`
-   reproduces what `:invoice/status` was at any historical valid-
+   the tx writes, so `(:kontor.invoice/status (d/pull (d/valid-at db vt) [...] invoice))`
+   reproduces what `:kontor.invoice/status` was at any historical valid-
    time. Defaults to `:applied-at` when `:vt-from` is omitted, so
    existing callers keep their semantics."
   (:require [datahike.api :as d]
@@ -53,15 +53,15 @@
     (nil? spec)    nil
     (string? spec) (d/q '[:find ?e .
                           :in $ ?xid
-                          :where [?e :invoice/external-id ?xid]]
+                          :where [?e :kontor.invoice/external-id ?xid]]
                         db spec)
     :else          spec))
 
 (defn- pull-invoice-min [db invoice-eid]
   (d/pull db
-          [:db/id :invoice/external-id :invoice/status :invoice/currency
-           {:invoice/seller [:db/id]}
-           {:invoice/buyer [:db/id]}]
+          [:db/id :kontor.invoice/external-id :kontor.invoice/status :kontor.invoice/currency
+           {:kontor.invoice/seller [:db/id]}
+           {:kontor.invoice/buyer [:db/id]}]
           invoice-eid))
 
 ;; ============================================================================
@@ -104,21 +104,21 @@
 
 (defn open-amount-of-invoice
   "Bitemporal open-amount = (invoice gross − applied). The invoice
-   gross is `:invoice/total-gross` if present, else the sum of
-   `:invoice-line/amount` across lines.
+   gross is `:kontor.invoice/total-gross` if present, else the sum of
+   `:kontor.invoice-line/amount` across lines.
 
    Returns BigDecimal."
   ([db invoice-spec] (open-amount-of-invoice db invoice-spec nil))
   ([db invoice-spec {:keys [as-of-valid] :as opts}]
    (when-let [invoice-eid (resolve-invoice db invoice-spec)]
-     (let [gross (or (:invoice/total-gross
-                      (d/pull db [:invoice/total-gross] invoice-eid))
+     (let [gross (or (:kontor.invoice/total-gross
+                      (d/pull db [:kontor.invoice/total-gross] invoice-eid))
                      (or (d/q '[:find (sum ?amt) .
                                 :with ?l
                                 :in $ ?inv
                                 :where
-                                [?l :invoice-line/invoice ?inv]
-                                [?l :invoice-line/amount ?amt]]
+                                [?l :kontor.invoice-line/invoice ?inv]
+                                [?l :kontor.invoice-line/amount ?amt]]
                               db invoice-eid)
                          0M))
            applied (applied-amount-of-invoice db invoice-eid opts)]
@@ -136,7 +136,7 @@
 ;; ============================================================================
 
 (defn invoice-status-at
-  "Resolve `:invoice/status` at valid-time `cutoff` using kontor.
+  "Resolve `:kontor.invoice/status` at valid-time `cutoff` using kontor.
    bitemporal. Requires the kontor.bitemporal schema to be installed
    AND the txs that drove the status change to have been stamped
    with `:tx/valid-from` (which `apply-payment!` /
@@ -152,14 +152,14 @@
    Returns the keyword status or nil if no assertion applies."
   [db invoice-spec cutoff]
   (when-let [eid (resolve-invoice db invoice-spec)]
-    (:invoice/status (d/pull (d/valid-at db cutoff) [:invoice/status] eid))))
+    (:kontor.invoice/status (d/pull (d/valid-at db cutoff) [:kontor.invoice/status] eid))))
 
 ;; ============================================================================
 ;; Transactors
 ;; ============================================================================
 
 (defn- next-status-for-application
-  "Decide the invoice's new `:invoice/status` given the current
+  "Decide the invoice's new `:kontor.invoice/status` given the current
    status, the open-amount after this application, and whether
    reversals were involved."
   [current-status open-after-amount]
@@ -188,7 +188,7 @@
 
 (defn apply-payment!
   "Record a `:payment-application` row + drive the invoice's
-   `:invoice/status` facet accordingly.
+   `:kontor.invoice/status` facet accordingly.
 
    Required opts:
      :payment        ref or eid to the cash-receipt :transaction.
@@ -252,7 +252,7 @@
         _ (when-not invoice-eid
             (throw (ex-info "Invoice not found" {:spec invoice})))
         inv (pull-invoice-min db invoice-eid)
-        current-status (:invoice/status inv)
+        current-status (:kontor.invoice/status inv)
         applied-at (or applied-at (java.util.Date.))
         app-tempid (str "pay-app" tempid-suffix)
         app-row (cond-> {:db/id app-tempid
@@ -267,14 +267,14 @@
                   reason-note    (assoc :payment-application/reason-note reason-note)
                   supporting-doc (assoc :payment-application/supporting-doc supporting-doc))
         already-applied (applied-amount-of-invoice db invoice-eid nil)
-        gross (or (:invoice/total-gross
-                   (d/pull db [:invoice/total-gross] invoice-eid))
+        gross (or (:kontor.invoice/total-gross
+                   (d/pull db [:kontor.invoice/total-gross] invoice-eid))
                   (or (d/q '[:find (sum ?amt) .
                              :with ?l
                              :in $ ?inv
                              :where
-                             [?l :invoice-line/invoice ?inv]
-                             [?l :invoice-line/amount ?amt]]
+                             [?l :kontor.invoice-line/invoice ?inv]
+                             [?l :kontor.invoice-line/amount ?amt]]
                            db invoice-eid)
                       0M))
         open-after (.subtract ^java.math.BigDecimal gross
@@ -285,13 +285,13 @@
         status-tx (when (and next-status
                              (not= next-status current-status)
                              (sm/legal-transition? db :invoice
-                                                   :invoice/status
+                                                   :kontor.invoice/status
                                                    current-status next-status))
                     (sm/record-status-change-tx-data
                      db
                      (cond-> {:entity invoice-eid
                               :entity-type :invoice
-                              :facet :invoice/status
+                              :facet :kontor.invoice/status
                               :from current-status
                               :to next-status
                               :changed-at applied-at
@@ -344,14 +344,14 @@
        :or {tempid-suffix ""}}]
   (when-not application-eid (throw (ex-info ":application-eid required" {})))
   (when-not applied-by-uid  (throw (ex-info ":applied-by-uid required" {})))
-  (let [original (d/pull db '[* {:payment-application/invoice [:db/id :invoice/status]
+  (let [original (d/pull db '[* {:payment-application/invoice [:db/id :kontor.invoice/status]
                                  :payment-application/payment [:db/id]
                                  :payment-application/commodity [:db/id]}]
                          application-eid)
         _ (when-not (:db/id original)
             (throw (ex-info "Application not found" {:eid application-eid})))
         invoice-eid (get-in original [:payment-application/invoice :db/id])
-        current-status (get-in original [:payment-application/invoice :invoice/status])
+        current-status (get-in original [:payment-application/invoice :kontor.invoice/status])
         original-amount (:payment-application/amount original)
         negated (.negate ^java.math.BigDecimal original-amount)
         applied-at (or applied-at (java.util.Date.))
@@ -374,14 +374,14 @@
         prior-applied (applied-amount-of-invoice db invoice-eid nil)
         new-applied (.add ^java.math.BigDecimal prior-applied
                           ^java.math.BigDecimal negated)
-        gross (or (:invoice/total-gross
-                   (d/pull db [:invoice/total-gross] invoice-eid))
+        gross (or (:kontor.invoice/total-gross
+                   (d/pull db [:kontor.invoice/total-gross] invoice-eid))
                   (or (d/q '[:find (sum ?amt) .
                              :with ?l
                              :in $ ?inv
                              :where
-                             [?l :invoice-line/invoice ?inv]
-                             [?l :invoice-line/amount ?amt]]
+                             [?l :kontor.invoice-line/invoice ?inv]
+                             [?l :kontor.invoice-line/amount ?amt]]
                            db invoice-eid)
                       0M))
         open-after (.subtract ^java.math.BigDecimal gross
@@ -404,13 +404,13 @@
         status-tx (when (and next-status
                              (not= next-status current-status)
                              (sm/legal-transition? db :invoice
-                                                   :invoice/status
+                                                   :kontor.invoice/status
                                                    current-status next-status))
                     (sm/record-status-change-tx-data
                      db
                      (cond-> {:entity invoice-eid
                               :entity-type :invoice
-                              :facet :invoice/status
+                              :facet :kontor.invoice/status
                               :from current-status
                               :to next-status
                               :changed-at applied-at
@@ -433,19 +433,19 @@
         eids (d/q '[:find [?i ...]
                     :in $ ?p
                     :where
-                    [?i :invoice/buyer ?p]
-                    (or [?i :invoice/status :sent]
-                        [?i :invoice/status :partially-paid])]
+                    [?i :kontor.invoice/buyer ?p]
+                    (or [?i :kontor.invoice/status :sent]
+                        [?i :kontor.invoice/status :partially-paid])]
                   db partner-eid)]
     (->> eids
          (map (fn [eid]
                 (let [open (open-amount-of-invoice db eid {:as-of-valid as-of-valid})
                       pulled (d/pull db
-                                     [{:invoice/transaction
+                                     [{:kontor.invoice/transaction
                                        [:kontor.transaction/due-date]}]
                                      eid)
                       due (or (get-in pulled
-                                      [:invoice/transaction
+                                      [:kontor.invoice/transaction
                                        :kontor.transaction/due-date])
                               (java.util.Date. 0))]
                   {:invoice-eid eid
@@ -461,7 +461,7 @@
    Required opts:
      :payment         ref/eid to the cash-receipt :transaction.
      :partner         ref/eid to :partner (the payer; matches
-                      :invoice/buyer).
+                      :kontor.invoice/buyer).
      :total-amount    BigDecimal — the cash to allocate.
      :commodity       ref to :commodity.
      :applied-by-uid  ref to :kontor.audit/create-uid.

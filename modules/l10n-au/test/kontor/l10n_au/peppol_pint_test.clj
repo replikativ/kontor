@@ -6,11 +6,11 @@
 (defn- aud [s] (money/money (bigdec s) :AUD))
 
 (def sample-invoice
-  {:invoice/number     "INV-2026-0001"
-   :invoice/issue-date #inst "2026-01-15"
-   :invoice/due-date   #inst "2026-02-14"
-   :invoice/currency   "AUD"
-   :invoice/supplier
+  {:kontor.invoice/number     "INV-2026-0001"
+   :kontor.invoice/issue-date #inst "2026-01-15"
+   :kontor.invoice/due-date   #inst "2026-02-14"
+   :kontor.invoice/currency   "AUD"
+   :kontor.invoice/supplier
    {:name "Acme Pty Ltd"
     :abn "12345678901"
     :address {:street "100 Burrard St"
@@ -19,23 +19,23 @@
               :country-code "AU"}
     :contact {:name "Sales" :phone "+61-2-0000-0000"
               :email "sales@acme.example.au"}}
-   :invoice/customer
+   :kontor.invoice/customer
    {:name "Beta Pty Ltd"
     :abn "98765432109"
     :address {:street "200 George St"
               :city "Sydney"
               :postal-code "2000"
               :country-code "AU"}}
-   :invoice/lines
+   :kontor.invoice/lines
    [{:line/id 1 :line/name "Widget A"
      :line/quantity 10 :line/unit-code "EA"
      :line/unit-price (aud "100.00")
      :line/net (aud "1000.00")
      :line/tax-rate 10
      :line/tax-category "S"}]
-   :invoice/tax-totals
+   :kontor.invoice/tax-totals
    [{:rate 10 :taxable (aud "1000.00") :tax (aud "100.00") :category "S"}]
-   :invoice/totals
+   :kontor.invoice/totals
    {:net (aud "1000.00") :tax (aud "100.00") :gross (aud "1100.00")}})
 
 (deftest abn-validation

@@ -40,7 +40,7 @@
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":direct | :indirect | :services | :asset.
-                     Drives :invoice-line/gl-account-type dispatch
+                     Drives :kontor.invoice-line/gl-account-type dispatch
                      in kontor.invoice.bridge for :order/type :purchase.
                      Direct = goods for resale or raw materials;
                      indirect = office supplies; services = consulting/
@@ -48,7 +48,7 @@
 
 (def ^:private invoice-ext-attrs
   ;; Stage K extensions to :invoice (originally ADR-036/ADR-040).
-  [{:db/ident       :invoice/match-status
+  [{:db/ident       :kontor.invoice/match-status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "3-way match state. Driven by ADR-034 :status-
@@ -638,7 +638,7 @@
    {:db/ident       :return-response/credit-memo
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
-    :db/doc         "Kernel :invoice with :invoice/type :credit-memo
+    :db/doc         "Kernel :invoice with :kontor.invoice/type :credit-memo
                      or :debit-memo."}
 
    {:db/ident       :return-response/payment-ref
@@ -787,105 +787,105 @@
     :kontor.status-transition/active true
     :kontor.status-transition/name "Post-Inspection Reject"}
 
-   ;; --- :invoice/match-status -------------------------------------
+   ;; --- :kontor.invoice/match-status -------------------------------------
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/facet :kontor.invoice/match-status
     :kontor.status-transition/from :nil
     :kontor.status-transition/to :auto-matched
     :kontor.status-transition/active true
     :kontor.status-transition/name "Auto-Match (within tolerance)"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/facet :kontor.invoice/match-status
     :kontor.status-transition/from :nil
     :kontor.status-transition/to :exception-price
     :kontor.status-transition/active true
     :kontor.status-transition/name "Flag Price Exception"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/facet :kontor.invoice/match-status
     :kontor.status-transition/from :nil
     :kontor.status-transition/to :exception-qty
     :kontor.status-transition/active true
     :kontor.status-transition/name "Flag Quantity Exception"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/facet :kontor.invoice/match-status
     :kontor.status-transition/from :nil
     :kontor.status-transition/to :exception-missing-receipt
     :kontor.status-transition/active true
     :kontor.status-transition/name "Flag Missing Receipt"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/facet :kontor.invoice/match-status
     :kontor.status-transition/from :nil
     :kontor.status-transition/to :exception-missing-po
     :kontor.status-transition/active true
     :kontor.status-transition/name "Flag Missing PO"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/facet :kontor.invoice/match-status
     :kontor.status-transition/from :exception-price
     :kontor.status-transition/to :manual-approved
     :kontor.status-transition/active true
     :kontor.status-transition/name "Override Price Exception"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/facet :kontor.invoice/match-status
     :kontor.status-transition/from :exception-qty
     :kontor.status-transition/to :manual-approved
     :kontor.status-transition/active true
     :kontor.status-transition/name "Override Qty Exception"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/facet :kontor.invoice/match-status
     :kontor.status-transition/from :exception-missing-receipt
     :kontor.status-transition/to :manual-approved
     :kontor.status-transition/active true
     :kontor.status-transition/name "Override Missing Receipt"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/facet :kontor.invoice/match-status
     :kontor.status-transition/from :exception-missing-po
     :kontor.status-transition/to :manual-approved
     :kontor.status-transition/active true
     :kontor.status-transition/name "Override Missing PO"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/facet :kontor.invoice/match-status
     :kontor.status-transition/from :exception-price
     :kontor.status-transition/to :disputed
     :kontor.status-transition/active true
     :kontor.status-transition/name "Dispute Price Exception"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/facet :kontor.invoice/match-status
     :kontor.status-transition/from :exception-qty
     :kontor.status-transition/to :disputed
     :kontor.status-transition/active true
     :kontor.status-transition/name "Dispute Qty Exception"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/facet :kontor.invoice/match-status
     :kontor.status-transition/from :exception-missing-receipt
     :kontor.status-transition/to :disputed
     :kontor.status-transition/active true
     :kontor.status-transition/name "Dispute Missing-Receipt Exception"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/facet :kontor.invoice/match-status
     :kontor.status-transition/from :exception-missing-po
     :kontor.status-transition/to :disputed
     :kontor.status-transition/active true
     :kontor.status-transition/name "Dispute Missing-PO Exception"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/facet :kontor.invoice/match-status
     :kontor.status-transition/from :disputed
     :kontor.status-transition/to :manual-approved
     :kontor.status-transition/active true
     :kontor.status-transition/name "Resolve Dispute"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/facet :kontor.invoice/match-status
     :kontor.status-transition/from :disputed
     :kontor.status-transition/to :auto-matched
     :kontor.status-transition/active true
     :kontor.status-transition/name "Re-Match After Vendor Correction"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/facet :kontor.invoice/match-status
     :kontor.status-transition/from :auto-matched
     :kontor.status-transition/to :cleared
     :kontor.status-transition/active true
     :kontor.status-transition/name "Clear (post-payment)"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/facet :kontor.invoice/match-status
     :kontor.status-transition/from :manual-approved
     :kontor.status-transition/to :cleared
     :kontor.status-transition/active true

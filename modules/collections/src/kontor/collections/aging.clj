@@ -59,42 +59,42 @@
                (d/q '[:find [?i ...]
                       :in $ ?e ?p
                       :where
-                      [?i :invoice/buyer ?p]
-                      [?i :invoice/entity ?e]
-                      (or [?i :invoice/status :sent]
-                          [?i :invoice/status :partially-paid])]
+                      [?i :kontor.invoice/buyer ?p]
+                      [?i :kontor.invoice/entity ?e]
+                      (or [?i :kontor.invoice/status :sent]
+                          [?i :kontor.invoice/status :partially-paid])]
                     db entity-eid partner-eid)
                (d/q '[:find [?i ...]
                       :in $ ?e
                       :where
-                      [?i :invoice/entity ?e]
-                      (or [?i :invoice/status :sent]
-                          [?i :invoice/status :partially-paid])]
+                      [?i :kontor.invoice/entity ?e]
+                      (or [?i :kontor.invoice/status :sent]
+                          [?i :kontor.invoice/status :partially-paid])]
                     db entity-eid))]
     (->> eids
          (map (fn [eid]
                 (let [pulled (d/pull db
                                      '[:db/id
-                                       :invoice/external-id
-                                       :invoice/total-gross
-                                       :invoice/issue-date
-                                       :invoice/currency
-                                       {:invoice/buyer [:db/id :kontor.partner/name]}
-                                       {:invoice/transaction
+                                       :kontor.invoice/external-id
+                                       :kontor.invoice/total-gross
+                                       :kontor.invoice/issue-date
+                                       :kontor.invoice/currency
+                                       {:kontor.invoice/buyer [:db/id :kontor.partner/name]}
+                                       {:kontor.invoice/transaction
                                         [:kontor.transaction/due-date]}]
                                      eid)
                       open (papp/open-amount-of-invoice
                             db eid {:as-of-valid as-of-valid})]
                   {:invoice-eid (:db/id pulled)
-                   :external-id (:invoice/external-id pulled)
+                   :external-id (:kontor.invoice/external-id pulled)
                    :open-amount open
-                   :gross (:invoice/total-gross pulled)
-                   :issue-date (:invoice/issue-date pulled)
-                   :due-date (get-in pulled [:invoice/transaction
+                   :gross (:kontor.invoice/total-gross pulled)
+                   :issue-date (:kontor.invoice/issue-date pulled)
+                   :due-date (get-in pulled [:kontor.invoice/transaction
                                              :kontor.transaction/due-date])
-                   :partner-eid (get-in pulled [:invoice/buyer :db/id])
-                   :partner-name (get-in pulled [:invoice/buyer :kontor.partner/name])
-                   :currency (:invoice/currency pulled)})))
+                   :partner-eid (get-in pulled [:kontor.invoice/buyer :db/id])
+                   :partner-name (get-in pulled [:kontor.invoice/buyer :kontor.partner/name])
+                   :currency (:kontor.invoice/currency pulled)})))
          (filter #(pos? (.signum ^java.math.BigDecimal (:open-amount %))))
          vec)))
 

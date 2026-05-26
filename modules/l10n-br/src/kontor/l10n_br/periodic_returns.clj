@@ -378,7 +378,7 @@
    returned as an empty map at the substrate tier; a future
    extension can populate it via partner-municipality mapping
    (ADR-019-style account-tag refinement, or a per-line
-   `:invoice-line/municipality` attribute that materialises as a
+   `:kontor.invoice-line/municipality` attribute that materialises as a
    posting tag).
 
    Required:

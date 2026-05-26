@@ -63,88 +63,88 @@
   "MX CGT parameter definitions. Values live in `parameter-values`,
    keyed by `:effective-from`."
   [;; --- Casa habitación 700k UDIS cap ---------------------------------------
-   {:parameter/code         "MX.CGT.casa-habitacion-cap-udis"
-    :parameter/label        "Casa habitación exemption — proceeds cap (UDIS)"
-    :parameter/jurisdiction :mx
-    :parameter/unit         :amount-udis
-    :parameter/concept-iri  "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-iv/capitulo-i/"}
+   {:kontor.parameter/code         "MX.CGT.casa-habitacion-cap-udis"
+    :kontor.parameter/label        "Casa habitación exemption — proceeds cap (UDIS)"
+    :kontor.parameter/jurisdiction :mx
+    :kontor.parameter/unit         :amount-udis
+    :kontor.parameter/concept-iri  "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-iv/capitulo-i/"}
 
-   {:parameter/code         "MX.CGT.casa-habitacion-cooling-off-years"
-    :parameter/label        "Casa habitación exemption — once-every-N-years"
-    :parameter/jurisdiction :mx
-    :parameter/unit         :years
-    :parameter/concept-iri  "https://www.sat.gob.mx/articulo/31901/articulo-93"}
+   {:kontor.parameter/code         "MX.CGT.casa-habitacion-cooling-off-years"
+    :kontor.parameter/label        "Casa habitación exemption — once-every-N-years"
+    :kontor.parameter/jurisdiction :mx
+    :kontor.parameter/unit         :years
+    :kontor.parameter/concept-iri  "https://www.sat.gob.mx/articulo/31901/articulo-93"}
 
    ;; --- Art. 120 averaging caps ---------------------------------------------
-   {:parameter/code         "MX.CGT.art-120.gain-years-cap"
-    :parameter/label        "Art. 120 averaging — divisor cap for gains (years)"
-    :parameter/jurisdiction :mx
-    :parameter/unit         :years
-    :parameter/concept-iri  "https://www.sat.gob.mx/articulo/31901/articulo-120"}
+   {:kontor.parameter/code         "MX.CGT.art-120.gain-years-cap"
+    :kontor.parameter/label        "Art. 120 averaging — divisor cap for gains (years)"
+    :kontor.parameter/jurisdiction :mx
+    :kontor.parameter/unit         :years
+    :kontor.parameter/concept-iri  "https://www.sat.gob.mx/articulo/31901/articulo-120"}
 
-   {:parameter/code         "MX.CGT.art-122.loss-years-cap"
-    :parameter/label        "Art. 122 — loss-divisor cap (years)"
-    :parameter/jurisdiction :mx
-    :parameter/unit         :years
-    :parameter/concept-iri  "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-iv/capitulo-iv/seccion-i/"}
+   {:kontor.parameter/code         "MX.CGT.art-122.loss-years-cap"
+    :kontor.parameter/label        "Art. 122 — loss-divisor cap (years)"
+    :kontor.parameter/jurisdiction :mx
+    :kontor.parameter/unit         :years
+    :kontor.parameter/concept-iri  "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-iv/capitulo-iv/seccion-i/"}
 
-   {:parameter/code         "MX.CGT.art-122.loss-carry-years"
-    :parameter/label        "Art. 122 — capital-loss carry-forward years (general)"
-    :parameter/jurisdiction :mx
-    :parameter/unit         :years
-    :parameter/concept-iri  "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-iv/capitulo-iv/seccion-i/"}
+   {:kontor.parameter/code         "MX.CGT.art-122.loss-carry-years"
+    :kontor.parameter/label        "Art. 122 — capital-loss carry-forward years (general)"
+    :kontor.parameter/jurisdiction :mx
+    :kontor.parameter/unit         :years
+    :kontor.parameter/concept-iri  "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-iv/capitulo-iv/seccion-i/"}
 
-   {:parameter/code         "MX.CGT.art-129.bolsa-loss-carry-years"
-    :parameter/label        "Art. 129 — bolsa-lane loss carry-forward years"
-    :parameter/jurisdiction :mx
-    :parameter/unit         :years
-    :parameter/concept-iri  "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-iv/capitulo-iv/seccion-ii/"}
+   {:kontor.parameter/code         "MX.CGT.art-129.bolsa-loss-carry-years"
+    :kontor.parameter/label        "Art. 129 — bolsa-lane loss carry-forward years"
+    :kontor.parameter/jurisdiction :mx
+    :kontor.parameter/unit         :years
+    :kontor.parameter/concept-iri  "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-iv/capitulo-iv/seccion-ii/"}
 
    ;; --- Art. 129 BMV/BIVA broker withholding (10 %) -------------------------
-   {:parameter/code         "MX.CGT.art-129.bolsa-rate"
-    :parameter/label        "Art. 129 — bolsa lane definitive flat rate"
-    :parameter/jurisdiction :mx
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-iv/capitulo-iv/seccion-ii/"}
+   {:kontor.parameter/code         "MX.CGT.art-129.bolsa-rate"
+    :kontor.parameter/label        "Art. 129 — bolsa lane definitive flat rate"
+    :kontor.parameter/jurisdiction :mx
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-iv/capitulo-iv/seccion-ii/"}
 
    ;; --- Art. 9 personas-morales rate (30 %) ---------------------------------
-   {:parameter/code         "MX.CGT.art-9.pm-rate"
-    :parameter/label        "Art. 9 LISR — personas morales flat CIT rate"
-    :parameter/jurisdiction :mx
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-ii/capitulo-i/"}
+   {:kontor.parameter/code         "MX.CGT.art-9.pm-rate"
+    :kontor.parameter/label        "Art. 9 LISR — personas morales flat CIT rate"
+    :kontor.parameter/jurisdiction :mx
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-ii/capitulo-i/"}
 
    ;; --- Title V non-resident rates ------------------------------------------
-   {:parameter/code         "MX.CGT.art-160.nr-real-estate-gross-rate"
-    :parameter/label        "Art. 160 — non-resident real estate, gross-proceeds rate"
-    :parameter/jurisdiction :mx
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-v/"}
+   {:kontor.parameter/code         "MX.CGT.art-160.nr-real-estate-gross-rate"
+    :kontor.parameter/label        "Art. 160 — non-resident real estate, gross-proceeds rate"
+    :kontor.parameter/jurisdiction :mx
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-v/"}
 
-   {:parameter/code         "MX.CGT.art-160.nr-real-estate-net-rate"
-    :parameter/label        "Art. 160 — non-resident real estate, net-gain rate (dictamen)"
-    :parameter/jurisdiction :mx
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-v/"}
+   {:kontor.parameter/code         "MX.CGT.art-160.nr-real-estate-net-rate"
+    :kontor.parameter/label        "Art. 160 — non-resident real estate, net-gain rate (dictamen)"
+    :kontor.parameter/jurisdiction :mx
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-v/"}
 
-   {:parameter/code         "MX.CGT.art-161.nr-shares-gross-rate"
-    :parameter/label        "Art. 161 — non-resident shares, gross-proceeds rate"
-    :parameter/jurisdiction :mx
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.sat.gob.mx/articulo/88443/articulo-161"}
+   {:kontor.parameter/code         "MX.CGT.art-161.nr-shares-gross-rate"
+    :kontor.parameter/label        "Art. 161 — non-resident shares, gross-proceeds rate"
+    :kontor.parameter/jurisdiction :mx
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.sat.gob.mx/articulo/88443/articulo-161"}
 
-   {:parameter/code         "MX.CGT.art-161.nr-shares-net-rate"
-    :parameter/label        "Art. 161 — non-resident shares, net-gain rate (dictamen)"
-    :parameter/jurisdiction :mx
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.sat.gob.mx/articulo/88443/articulo-161"}
+   {:kontor.parameter/code         "MX.CGT.art-161.nr-shares-net-rate"
+    :kontor.parameter/label        "Art. 161 — non-resident shares, net-gain rate (dictamen)"
+    :kontor.parameter/jurisdiction :mx
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.sat.gob.mx/articulo/88443/articulo-161"}
 
    ;; --- Art. 127 state notary 5 % --------------------------------------------
-   {:parameter/code         "MX.CGT.art-127.state-notary-rate"
-    :parameter/label        "Art. 127 — state notary withholding rate on real-estate gain"
-    :parameter/jurisdiction :mx
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-iv/capitulo-iv/seccion-i/"}])
+   {:kontor.parameter/code         "MX.CGT.art-127.state-notary-rate"
+    :kontor.parameter/label        "Art. 127 — state notary withholding rate on real-estate gain"
+    :kontor.parameter/jurisdiction :mx
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-iv/capitulo-iv/seccion-i/"}])
 
 ;; ============================================================================
 ;; Parameter values
@@ -155,70 +155,70 @@
    10 % bolsa rate and 30 % PM rate have been stable since the 2014
    ISR reform; the loss-divisor and carry caps come from arts 120 /
    122 / 129 which the 2014 reform left intact."
-  [{:parameter-value/parameter      [:parameter/code "MX.CGT.casa-habitacion-cap-udis"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  700000M
-    :parameter-value/citation       "LISR art. 93-XIX-a — 700 000 UDIS cap (2014 reform tightened from 1.5M UDIS)"}
+  [{:kontor.parameter-value/parameter      [:kontor.parameter/code "MX.CGT.casa-habitacion-cap-udis"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  700000M
+    :kontor.parameter-value/citation       "LISR art. 93-XIX-a — 700 000 UDIS cap (2014 reform tightened from 1.5M UDIS)"}
 
-   {:parameter-value/parameter      [:parameter/code "MX.CGT.casa-habitacion-cooling-off-years"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  3M
-    :parameter-value/citation       "LISR art. 93-XIX-a — once every 3 calendar years"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "MX.CGT.casa-habitacion-cooling-off-years"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  3M
+    :kontor.parameter-value/citation       "LISR art. 93-XIX-a — once every 3 calendar years"}
 
-   {:parameter-value/parameter      [:parameter/code "MX.CGT.art-120.gain-years-cap"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  20M
-    :parameter-value/citation       "LISR art. 120 — averaging divisor capped at 20 years"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "MX.CGT.art-120.gain-years-cap"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  20M
+    :kontor.parameter-value/citation       "LISR art. 120 — averaging divisor capped at 20 years"}
 
-   {:parameter-value/parameter      [:parameter/code "MX.CGT.art-122.loss-years-cap"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  10M
-    :parameter-value/citation       "LISR art. 122 — loss divisor capped at 10 years"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "MX.CGT.art-122.loss-years-cap"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  10M
+    :kontor.parameter-value/citation       "LISR art. 122 — loss divisor capped at 10 years"}
 
-   {:parameter-value/parameter      [:parameter/code "MX.CGT.art-122.loss-carry-years"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  3M
-    :parameter-value/citation       "LISR art. 122 — capital-loss carry forward 3 calendar years"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "MX.CGT.art-122.loss-carry-years"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  3M
+    :kontor.parameter-value/citation       "LISR art. 122 — capital-loss carry forward 3 calendar years"}
 
-   {:parameter-value/parameter      [:parameter/code "MX.CGT.art-129.bolsa-loss-carry-years"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  10M
-    :parameter-value/citation       "LISR art. 129 — bolsa-lane loss carry 10 years within lane"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "MX.CGT.art-129.bolsa-loss-carry-years"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  10M
+    :kontor.parameter-value/citation       "LISR art. 129 — bolsa-lane loss carry 10 years within lane"}
 
-   {:parameter-value/parameter      [:parameter/code "MX.CGT.art-129.bolsa-rate"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  0.10M
-    :parameter-value/citation       "LISR art. 129 — 10 % definitive flat on BMV/BIVA listed-share net gains"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "MX.CGT.art-129.bolsa-rate"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  0.10M
+    :kontor.parameter-value/citation       "LISR art. 129 — 10 % definitive flat on BMV/BIVA listed-share net gains"}
 
-   {:parameter-value/parameter      [:parameter/code "MX.CGT.art-9.pm-rate"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  0.30M
-    :parameter-value/citation       "LISR art. 9 — personas morales flat 30 % CIT"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "MX.CGT.art-9.pm-rate"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  0.30M
+    :kontor.parameter-value/citation       "LISR art. 9 — personas morales flat 30 % CIT"}
 
-   {:parameter-value/parameter      [:parameter/code "MX.CGT.art-160.nr-real-estate-gross-rate"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  0.25M
-    :parameter-value/citation       "LISR art. 160 — non-resident real estate, 25 % on gross consideration"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "MX.CGT.art-160.nr-real-estate-gross-rate"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  0.25M
+    :kontor.parameter-value/citation       "LISR art. 160 — non-resident real estate, 25 % on gross consideration"}
 
-   {:parameter-value/parameter      [:parameter/code "MX.CGT.art-160.nr-real-estate-net-rate"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  0.35M
-    :parameter-value/citation       "LISR art. 160 — non-resident real estate, 35 % on net gain (dictamen + rep)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "MX.CGT.art-160.nr-real-estate-net-rate"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  0.35M
+    :kontor.parameter-value/citation       "LISR art. 160 — non-resident real estate, 35 % on net gain (dictamen + rep)"}
 
-   {:parameter-value/parameter      [:parameter/code "MX.CGT.art-161.nr-shares-gross-rate"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  0.25M
-    :parameter-value/citation       "LISR art. 161 (SAT canonical) — 25 % on gross share proceeds"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "MX.CGT.art-161.nr-shares-gross-rate"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  0.25M
+    :kontor.parameter-value/citation       "LISR art. 161 (SAT canonical) — 25 % on gross share proceeds"}
 
-   {:parameter-value/parameter      [:parameter/code "MX.CGT.art-161.nr-shares-net-rate"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  0.35M
-    :parameter-value/citation       "LISR art. 161 (SAT canonical) — 35 % on net gain (dictamen + rep)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "MX.CGT.art-161.nr-shares-net-rate"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  0.35M
+    :kontor.parameter-value/citation       "LISR art. 161 (SAT canonical) — 35 % on net gain (dictamen + rep)"}
 
-   {:parameter-value/parameter      [:parameter/code "MX.CGT.art-127.state-notary-rate"]
-    :parameter-value/effective-from #inst "2014-01-01"
-    :parameter-value/decimal-value  0.05M
-    :parameter-value/citation       "LISR art. 127 — 5 % state withholding on real-estate gain at notarisation"}])
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "MX.CGT.art-127.state-notary-rate"]
+    :kontor.parameter-value/effective-from #inst "2014-01-01"
+    :kontor.parameter-value/decimal-value  0.05M
+    :kontor.parameter-value/citation       "LISR art. 127 — 5 % state withholding on real-estate gain at notarisation"}])
 
 ;; ============================================================================
 ;; Provisions
@@ -242,15 +242,15 @@
    ;; provision to lift the cap value (rather than the parameter
    ;; directly), giving statute-as-data provenance to the cap.
    ;; --------------------------------------------------------------------
-   {:provision/code            "MX-LISR-art-93-XIX-a-casa-habitacion"
-    :provision/jurisdiction    :mx
-    :provision/concept         [:kontor.tax-concept/code :holding-period-preference]
-    :provision/title           "Art. 93 fr. XIX a) — casa habitación exemption (700 000 UDIS)"
-    :provision/citation        "https://www.sat.gob.mx/articulo/31901/articulo-93"
-    :provision/effective-from  #inst "2014-01-01"
-    :provision/priority        100
-    :provision/condition       (pr-str [:eq [:tax-unit :mx-residence-status] :resident])
-    :provision/consequence     (pr-str {:op :base-deduct
+   {:kontor.provision/code            "MX-LISR-art-93-XIX-a-casa-habitacion"
+    :kontor.provision/jurisdiction    :mx
+    :kontor.provision/concept         [:kontor.tax-concept/code :holding-period-preference]
+    :kontor.provision/title           "Art. 93 fr. XIX a) — casa habitación exemption (700 000 UDIS)"
+    :kontor.provision/citation        "https://www.sat.gob.mx/articulo/31901/articulo-93"
+    :kontor.provision/effective-from  #inst "2014-01-01"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:eq [:tax-unit :mx-residence-status] :resident])
+    :kontor.provision/consequence     (pr-str {:op :base-deduct
                                         :code :mx-casa-habitacion-cap-udis
                                         :label "Casa habitación cap (700 000 UDIS)"
                                         :amount-from :parameter
@@ -261,15 +261,15 @@
    ;; provider folds this as a parallel computation against the
    ;; real-estate gain (credited against the federal provisional).
    ;; --------------------------------------------------------------------
-   {:provision/code            "MX-LISR-art-127-state-5pct"
-    :provision/jurisdiction    :mx
-    :provision/concept         [:kontor.tax-concept/code :surtax]
-    :provision/title           "Art. 127 — 5 % state notary remittance on real-estate gain"
-    :provision/citation        "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-iv/capitulo-iv/seccion-i/"
-    :provision/effective-from  #inst "2014-01-01"
-    :provision/priority        200
-    :provision/condition       (pr-str [:eq :asset-class :mx-inmueble])
-    :provision/consequence     (pr-str {:op :surtax
+   {:kontor.provision/code            "MX-LISR-art-127-state-5pct"
+    :kontor.provision/jurisdiction    :mx
+    :kontor.provision/concept         [:kontor.tax-concept/code :surtax]
+    :kontor.provision/title           "Art. 127 — 5 % state notary remittance on real-estate gain"
+    :kontor.provision/citation        "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-iv/capitulo-iv/seccion-i/"
+    :kontor.provision/effective-from  #inst "2014-01-01"
+    :kontor.provision/priority        200
+    :kontor.provision/condition       (pr-str [:eq :asset-class :mx-inmueble])
+    :kontor.provision/consequence     (pr-str {:op :surtax
                                         :code :mx-art-127-state-5pct
                                         :label "State notary 5 % (art. 127)"
                                         :amount-from :parameter
@@ -281,7 +281,7 @@
 
 (defn install!
   "Install MX CGT statute (parameters + provisions) into `conn`.
-   Idempotent — `:parameter/code` and `:provision/code` are unique
+   Idempotent — `:kontor.parameter/code` and `:kontor.provision/code` are unique
    identity attrs."
   [conn]
   (d/transact conn parameters)

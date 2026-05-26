@@ -109,7 +109,7 @@
 
 (defn- ^Invoice invoice->mustang
   "Translate a validated invoice-map to a Mustang Invoice object."
-  [{:invoice/keys [number issue-date due-date delivery-date currency seller buyer
+  [{:kontor.invoice/keys [number issue-date due-date delivery-date currency seller buyer
                    items payment notes payment-terms reference] :as inv}]
   (let [invoice (Invoice.)]
     (.setNumber invoice ^String number)

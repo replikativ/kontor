@@ -31,7 +31,7 @@
    supplied, the builder routes to 5001.0 (the catch-all) — this
    makes the export-by-rate breakdown incomplete for small-scale
    but keeps the posting balanced. Callers can override via
-   `:invoice-line/account` per-line.
+   `:kontor.invoice-line/account` per-line.
 
    ## Fapiao type — seller-side equivalence
 
@@ -42,7 +42,7 @@
    general fapiao does not. **From the SELLER's side, all three
    fapiao types post identically** — output VAT to 2221.01.01.
 
-   This builder accepts an optional `:invoice/fapiao-type` (∈
+   This builder accepts an optional `:kontor.invoice/fapiao-type` (∈
    #{:special :general :electronic-general :fully-digital}) and maps
    it to the kernel-level `:kontor.transaction/clearance-format` keyword
    (`:cn/fapiao-special-18` / `:cn/fapiao-general-20` /
@@ -96,14 +96,14 @@
 (def ^:const default-commodity "CNY")
 
 (def fapiao-types
-  "Permitted `:invoice/fapiao-type` values — the four STA-recognised
+  "Permitted `:kontor.invoice/fapiao-type` values — the four STA-recognised
    fapiao shapes. The kernel posting is identical for all four (see
    namespace docstring); the field exists so downstream platform
    integrations can route correctly."
   #{:special :general :electronic-general :fully-digital})
 
 (def ^:private fapiao-type->clearance-format
-  "Map `:invoice/fapiao-type` to the kernel-level
+  "Map `:kontor.invoice/fapiao-type` to the kernel-level
    `:kontor.transaction/clearance-format` keyword (per schema docstring at
    `:kontor.transaction/clearance-format` — ADR-020). The general/digital
    forms both use the 20-character clearance-token format and we
@@ -141,7 +141,7 @@
    Zero-rated / exempt lines route to the export account (5001.0).
    Lines outside the default per-rate accounts (e.g. small-scale 1%)
    fall through to the export account as a catch-all; the caller
-   should override via :invoice-line/account when those rates are in
+   should override via :kontor.invoice-line/account when those rates are in
    active use."
   [rate tax-status codes]
   (cond
@@ -163,7 +163,7 @@
     :else
     ;; Rates outside the default per-rate accounts (e.g. small-scale
     ;; 1% / 3% / 5%). Fall back to the export catch-all so the
-    ;; posting balances; consumer should set :invoice-line/account
+    ;; posting balances; consumer should set :kontor.invoice-line/account
     ;; explicitly for these.
     (:revenue-export-code codes default-revenue-export-code)))
 
@@ -175,29 +175,29 @@
 
 (defn- line-net
   "Per-line net amount = qty × unit-price, rounded HALF-EVEN to 2dp.
-   Tolerates :invoice-line/line-total when caller pre-computed it."
-  ^java.math.BigDecimal [{:invoice-line/keys [quantity unit-price line-total]}]
+   Tolerates :kontor.invoice-line/line-total when caller pre-computed it."
+  ^java.math.BigDecimal [{:kontor.invoice-line/keys [quantity unit-price line-total]}]
   (cond
     line-total (bigdec line-total)
     (and quantity unit-price)
     (.setScale (.multiply (bigdec quantity) (bigdec unit-price))
                2 java.math.RoundingMode/HALF_EVEN)
     :else
-    (throw (ex-info "Invoice line needs either :invoice-line/line-total or both :invoice-line/quantity + :invoice-line/unit-price"
+    (throw (ex-info "Invoice line needs either :kontor.invoice-line/line-total or both :kontor.invoice-line/quantity + :kontor.invoice-line/unit-price"
                     {:line (select-keys
-                            {:invoice-line/quantity quantity
-                             :invoice-line/unit-price unit-price}
-                            [:invoice-line/quantity :invoice-line/unit-price])}))))
+                            {:kontor.invoice-line/quantity quantity
+                             :kontor.invoice-line/unit-price unit-price}
+                            [:kontor.invoice-line/quantity :kontor.invoice-line/unit-price])}))))
 
 (defn- line-rate
   "Resolve the effective rate for a line. Honours an explicit
-   `:invoice-line/rate`; otherwise defaults to the taxpayer-status
+   `:kontor.invoice-line/rate`; otherwise defaults to the taxpayer-status
    default. Zero-rated / exempt lines force rate to 0."
   ^java.math.BigDecimal [line taxpayer-status]
-  (let [status (or (:invoice-line/tax-status line) :taxable)]
+  (let [status (or (:kontor.invoice-line/tax-status line) :taxable)]
     (cond
       (contains? #{:zero-rated :exempt} status) 0M
-      (:invoice-line/rate line) (bigdec (:invoice-line/rate line))
+      (:kontor.invoice-line/rate line) (bigdec (:kontor.invoice-line/rate line))
       :else (tax/default-rate taxpayer-status))))
 
 (defn- revenue-postings
@@ -208,9 +208,9 @@
   [db lines taxpayer-status codes commodity-eid date]
   (let [grouped (group-by
                  (fn [line]
-                   (let [status (or (:invoice-line/tax-status line) :taxable)
+                   (let [status (or (:kontor.invoice-line/tax-status line) :taxable)
                          rate (line-rate line taxpayer-status)
-                         override (:invoice-line/account line)]
+                         override (:kontor.invoice-line/account line)]
                      [(or override (revenue-code-for-line rate status codes))
                       rate status]))
                  lines)]
@@ -243,7 +243,7 @@
                 {:base            (line-net l)
                  :rate            (line-rate l taxpayer-status)
                  :taxpayer-status taxpayer-status
-                 :tax-status      (or (:invoice-line/tax-status l) :taxable)
+                 :tax-status      (or (:kontor.invoice-line/tax-status l) :taxable)
                  :commodity       commodity-eid}
                 {:db db :date date}))
              lines))))
@@ -252,35 +252,35 @@
   "Pure tx-data builder for a Chinese sales invoice / fapiao (ADR-068).
 
    Required input:
-     {:invoice/external-id      <string>
-      :invoice/issue-date       <java.util.Date>
-      :invoice/lines            [<invoice-line>]
+     {:kontor.invoice/external-id      <string>
+      :kontor.invoice/issue-date       <java.util.Date>
+      :kontor.invoice/lines            [<invoice-line>]
       ...}
 
    Each invoice-line:
-     {:invoice-line/quantity    <number-or-bigdec>      ; OR
-      :invoice-line/unit-price  <number-or-bigdec>      ; OR pre-computed:
-      :invoice-line/line-total  <bigdec>                ; net per line
-      :invoice-line/rate        <bigdec>                ; 0.13 / 0.09 / 0.06 / 0
+     {:kontor.invoice-line/quantity    <number-or-bigdec>      ; OR
+      :kontor.invoice-line/unit-price  <number-or-bigdec>      ; OR pre-computed:
+      :kontor.invoice-line/line-total  <bigdec>                ; net per line
+      :kontor.invoice-line/rate        <bigdec>                ; 0.13 / 0.09 / 0.06 / 0
                                                          ;   defaults to
                                                          ;   tax/default-rate
                                                          ;   for the taxpayer
-      :invoice-line/tax-status  <keyword>               ; default :taxable
+      :kontor.invoice-line/tax-status  <keyword>               ; default :taxable
                                                          ; :zero-rated / :exempt force rate=0
-      :invoice-line/account     <code-or-eid>           ; optional override
+      :kontor.invoice-line/account     <code-or-eid>           ; optional override
       ...}
 
    Optional top-level fields:
-     :invoice/taxpayer-status  :general | :small-scale (default :general)
-     :invoice/fapiao-type      :special | :general |
+     :kontor.invoice/taxpayer-status  :general | :small-scale (default :general)
+     :kontor.invoice/fapiao-type      :special | :general |
                                 :electronic-general | :fully-digital
                                 — recorded on the transaction; the
                                   postings are identical regardless.
-     :invoice/cash-sale?       when true, post Dr cash (1002 by default)
+     :kontor.invoice/cash-sale?       when true, post Dr cash (1002 by default)
                                 instead of AR (1122).
-     :invoice/cash-code        account-code override for the cash leg.
-     :invoice/buyer            partner ref (kernel :kontor.transaction/partner).
-     :invoice/journal          journal code override (default INV).
+     :kontor.invoice/cash-code        account-code override for the cash leg.
+     :kontor.invoice/buyer            partner ref (kernel :kontor.transaction/partner).
+     :kontor.invoice/journal          journal code override (default INV).
 
    Opts:
      :codes        — map of code overrides (`:ar-code`, `:cash-code`,
@@ -298,17 +298,17 @@
   [db invoice {:keys [codes commodity journal-code]
                :or {codes {} commodity default-commodity
                     journal-code default-journal-code}}]
-  (let [{:invoice/keys [external-id issue-date lines buyer cash-sale?
+  (let [{:kontor.invoice/keys [external-id issue-date lines buyer cash-sale?
                         journal taxpayer-status fapiao-type]
          :or {taxpayer-status :general}} invoice
         _ (when-not external-id
-            (throw (ex-info "Invoice missing :invoice/external-id" {:invoice invoice})))
+            (throw (ex-info "Invoice missing :kontor.invoice/external-id" {:invoice invoice})))
         _ (when-not issue-date
-            (throw (ex-info "Invoice missing :invoice/issue-date" {:invoice invoice})))
+            (throw (ex-info "Invoice missing :kontor.invoice/issue-date" {:invoice invoice})))
         _ (when (empty? lines)
-            (throw (ex-info "Invoice has no :invoice/lines" {:invoice invoice})))
+            (throw (ex-info "Invoice has no :kontor.invoice/lines" {:invoice invoice})))
         _ (when (and fapiao-type (not (contains? fapiao-types fapiao-type)))
-            (throw (ex-info "Invalid :invoice/fapiao-type"
+            (throw (ex-info "Invalid :kontor.invoice/fapiao-type"
                             {:value fapiao-type :valid fapiao-types})))
         commodity-eid (or (commodity-by-symbol db commodity)
                           (throw (ex-info (str "Commodity " commodity " not found")
@@ -341,7 +341,7 @@
         tx-base (cond-> {:kontor.transaction/external-id external-id
                          :kontor.transaction/journal jnl
                          :kontor.transaction/effective-date issue-date
-                         :kontor.transaction/narration (or (:invoice/narration invoice)
+                         :kontor.transaction/narration (or (:kontor.invoice/narration invoice)
                                                     external-id)
                          :kontor.transaction/state :posted
                          :kontor.transaction/posted-at issue-date}
@@ -387,20 +387,20 @@
    Used by consumers to surface input issues *before* hitting the
    gate."
   [invoice]
-  (let [{:invoice/keys [external-id issue-date lines taxpayer-status
+  (let [{:kontor.invoice/keys [external-id issue-date lines taxpayer-status
                         fapiao-type]} invoice]
     (cond-> []
       (or (nil? external-id) (and (string? external-id) (str/blank? external-id)))
-      (conj {:field :invoice/external-id :issue :missing-or-blank})
+      (conj {:field :kontor.invoice/external-id :issue :missing-or-blank})
 
       (nil? issue-date)
-      (conj {:field :invoice/issue-date :issue :missing})
+      (conj {:field :kontor.invoice/issue-date :issue :missing})
 
       (empty? lines)
-      (conj {:field :invoice/lines :issue :empty})
+      (conj {:field :kontor.invoice/lines :issue :empty})
 
       (and taxpayer-status (not (contains? tax/taxpayer-statuses taxpayer-status)))
-      (conj {:field :invoice/taxpayer-status :issue :invalid})
+      (conj {:field :kontor.invoice/taxpayer-status :issue :invalid})
 
       (and fapiao-type (not (contains? fapiao-types fapiao-type)))
-      (conj {:field :invoice/fapiao-type :issue :invalid}))))
+      (conj {:field :kontor.invoice/fapiao-type :issue :invalid}))))

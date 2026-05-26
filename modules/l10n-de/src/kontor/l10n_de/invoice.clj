@@ -4,7 +4,7 @@
 
      debit-side:
        receivable account (1400 default, override per line via
-                          :invoice-line/account, or :seller's
+                          :kontor.invoice-line/account, or :seller's
                           configured AR account)
 
      credit-side (per VAT-rate bucket):
@@ -35,7 +35,7 @@
 
 (def ^:private rev-account-by-rate
   "VAT rate (BigDecimal) → SKR04 revenue account code. Caller can
-   override per-line via :invoice-line/account. Revenue is a base
+   override per-line via :kontor.invoice-line/account. Revenue is a base
    posting (not tax) so this routing stays in invoice.clj."
   {19.0M "4400"  ; Erlöse 19% USt
    7.0M  "4300"  ; Erlöse 7% USt
@@ -55,13 +55,13 @@
    HALF-EVEN to 2dp; the bucket net is the sum of those."
   [lines]
   (->> lines
-       (group-by :invoice-line/vat-rate)
+       (group-by :kontor.invoice-line/vat-rate)
        (reduce-kv
         (fn [acc rate group]
           (let [net (reduce
                      (fn [^java.math.BigDecimal a l]
-                       (.add a (.setScale (.multiply (bigdec (:invoice-line/quantity l))
-                                                     (bigdec (:invoice-line/unit-price l)))
+                       (.add a (.setScale (.multiply (bigdec (:kontor.invoice-line/quantity l))
+                                                     (bigdec (:kontor.invoice-line/unit-price l)))
                                           2 java.math.RoundingMode/HALF_EVEN)))
                      0M group)]
             (assoc acc rate net)))
@@ -81,7 +81,7 @@
                     Default \"1400\".
      :journal-code — journal to file under. Default \"INV\".
      :commodity-symbol — commodity to use. Default the invoice's
-                         :invoice/currency.
+                         :kontor.invoice/currency.
 
    Pass via the third arg of `invoice/send!`'s posting-builder
    closure.
@@ -91,22 +91,22 @@
   [{:keys [ar-code journal-code commodity-symbol]
     :or {ar-code "1400" journal-code "INV"}}
    db invoice]
-  (let [ext-id    (:invoice/external-id invoice)
-        date      (:invoice/issue-date invoice)
-        currency  (or commodity-symbol (:invoice/currency invoice) "EUR")
+  (let [ext-id    (:kontor.invoice/external-id invoice)
+        date      (:kontor.invoice/issue-date invoice)
+        currency  (or commodity-symbol (:kontor.invoice/currency invoice) "EUR")
         commodity (:db/id (d/entity db [:kontor.commodity/symbol currency]))
         recv      (ace db ar-code)
         jnl       (:db/id (d/entity db [:kontor.journal/code journal-code]))
-        partner   (:db/id (:invoice/buyer invoice))
-        gross     (:invoice/total-gross invoice)
+        partner   (:db/id (:kontor.invoice/buyer invoice))
+        gross     (:kontor.invoice/total-gross invoice)
         ;; Net per VAT-rate bucket — VAT is computed by the provider
         ;; per bucket, so the bucket-level rounding the legacy code
         ;; performed is preserved byte-for-byte.
-        buckets   (bucket-net-by-rate (:invoice/lines invoice))
+        buckets   (bucket-net-by-rate (:kontor.invoice/lines invoice))
         provider  (tax-provider/make-de-tax-rate-provider)
         tax-bld   (tax-provider/make-de-tax-posting-builder)
         ;; Revenue credits: one per VAT-rate bucket. Lines' explicit
-        ;; :invoice-line/account override the default revenue account
+        ;; :kontor.invoice-line/account override the default revenue account
         ;; when present (rare; usually the rate-driven default is
         ;; right). Revenue is a base posting, not tax.
         revenue-postings

@@ -76,14 +76,14 @@
               CGST 90 + SGST 90 → gross 1180.
               Dr AR 1180, Cr Sales 1000, Cr CGST 90, Cr SGST 90."
     (let [conn (bootstrap)
-          inv-map {:invoice/external-id "INV-INTRA-1"
-                   :invoice/issue-date jan-15
-                   :invoice/supplier-state "MH"
-                   :invoice/place-of-supply "MH"
-                   :invoice/lines
-                   [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 1000M
-                     :invoice-line/tax-rate 0.18M}]}]
+          inv-map {:kontor.invoice/external-id "INV-INTRA-1"
+                   :kontor.invoice/issue-date jan-15
+                   :kontor.invoice/supplier-state "MH"
+                   :kontor.invoice/place-of-supply "MH"
+                   :kontor.invoice/lines
+                   [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 1000M
+                     :kontor.invoice-line/tax-rate 0.18M}]}]
       (inv/post-in-invoice! conn inv-map)
       (let [db (d/db conn)]
         (is (= 1180M (sum-account db chart/ar-code))
@@ -106,14 +106,14 @@
   (testing "MH→KA (inter-state), 18%, ₹1000 net → IGST 180 → gross 1180.
               Dr AR 1180, Cr Sales 1000, Cr IGST 180."
     (let [conn (bootstrap)
-          inv-map {:invoice/external-id "INV-INTER-1"
-                   :invoice/issue-date jan-15
-                   :invoice/supplier-state "MH"
-                   :invoice/place-of-supply "KA"
-                   :invoice/lines
-                   [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 1000M
-                     :invoice-line/tax-rate 0.18M}]}]
+          inv-map {:kontor.invoice/external-id "INV-INTER-1"
+                   :kontor.invoice/issue-date jan-15
+                   :kontor.invoice/supplier-state "MH"
+                   :kontor.invoice/place-of-supply "KA"
+                   :kontor.invoice/lines
+                   [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 1000M
+                     :kontor.invoice-line/tax-rate 0.18M}]}]
       (inv/post-in-invoice! conn inv-map)
       (let [db (d/db conn)]
         (is (= 1180M (sum-account db chart/ar-code)))
@@ -133,15 +133,15 @@
   (testing "CH→CH (Chandigarh, UT without legislature), 18%, ₹1000 net
               → CGST 90 + UTGST 90 → gross 1180."
     (let [conn (bootstrap)
-          inv-map {:invoice/external-id "INV-UT-1"
-                   :invoice/issue-date jan-15
-                   :invoice/supplier-state "CH"
-                   :invoice/place-of-supply "CH"
-                   :invoice/place-of-supply-is-ut? true
-                   :invoice/lines
-                   [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 1000M
-                     :invoice-line/tax-rate 0.18M}]}]
+          inv-map {:kontor.invoice/external-id "INV-UT-1"
+                   :kontor.invoice/issue-date jan-15
+                   :kontor.invoice/supplier-state "CH"
+                   :kontor.invoice/place-of-supply "CH"
+                   :kontor.invoice/place-of-supply-is-ut? true
+                   :kontor.invoice/lines
+                   [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 1000M
+                     :kontor.invoice-line/tax-rate 0.18M}]}]
       (inv/post-in-invoice! conn inv-map)
       (let [db (d/db conn)]
         (is (= 1180M (sum-account db chart/ar-code)))
@@ -164,15 +164,15 @@
               only — receivable = net, no output-tax postings (the
               buyer pays GST direct to govt and self-invoices)."
     (let [conn (bootstrap)
-          inv-map {:invoice/external-id "INV-RCM-1"
-                   :invoice/issue-date jan-15
-                   :invoice/supplier-state "MH"
-                   :invoice/place-of-supply "KA"
-                   :invoice/reverse-charge? true
-                   :invoice/lines
-                   [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 1000M
-                     :invoice-line/tax-rate 0.18M}]}]
+          inv-map {:kontor.invoice/external-id "INV-RCM-1"
+                   :kontor.invoice/issue-date jan-15
+                   :kontor.invoice/supplier-state "MH"
+                   :kontor.invoice/place-of-supply "KA"
+                   :kontor.invoice/reverse-charge? true
+                   :kontor.invoice/lines
+                   [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 1000M
+                     :kontor.invoice-line/tax-rate 0.18M}]}]
       (inv/post-in-invoice! conn inv-map)
       (let [db (d/db conn)]
         (is (= 1000M (sum-account db chart/ar-code))
@@ -194,15 +194,15 @@
   (testing "Export sale (out-of-country, zero-rated): revenue lands
               on 410200 Sales — Exports, no tax postings."
     (let [conn (bootstrap)
-          inv-map {:invoice/external-id "INV-EXP-1"
-                   :invoice/issue-date jan-15
-                   :invoice/supplier-state "MH"
-                   :invoice/place-of-supply "MH"
-                   :invoice/export? true
-                   :invoice/lines
-                   [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 1000M
-                     :invoice-line/tax-status :non-resident}]}]
+          inv-map {:kontor.invoice/external-id "INV-EXP-1"
+                   :kontor.invoice/issue-date jan-15
+                   :kontor.invoice/supplier-state "MH"
+                   :kontor.invoice/place-of-supply "MH"
+                   :kontor.invoice/export? true
+                   :kontor.invoice/lines
+                   [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 1000M
+                     :kontor.invoice-line/tax-status :non-resident}]}]
       (inv/post-in-invoice! conn inv-map)
       (let [db (d/db conn)]
         (is (= 1000M (sum-account db chart/ar-export-code))
@@ -221,15 +221,15 @@
   (testing "Aerated drinks at 40% luxury + 12% Compensation Cess,
               inter-state, ₹1000 net → IGST 400 + Cess 120 → gross 1520."
     (let [conn (bootstrap)
-          inv-map {:invoice/external-id "INV-CESS-1"
-                   :invoice/issue-date jan-15
-                   :invoice/supplier-state "MH"
-                   :invoice/place-of-supply "KA"
-                   :invoice/lines
-                   [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 1000M
-                     :invoice-line/tax-rate 0.40M
-                     :invoice-line/cess-rate 0.12M}]}]
+          inv-map {:kontor.invoice/external-id "INV-CESS-1"
+                   :kontor.invoice/issue-date jan-15
+                   :kontor.invoice/supplier-state "MH"
+                   :kontor.invoice/place-of-supply "KA"
+                   :kontor.invoice/lines
+                   [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 1000M
+                     :kontor.invoice-line/tax-rate 0.40M
+                     :kontor.invoice-line/cess-rate 0.12M}]}]
       (inv/post-in-invoice! conn inv-map)
       (let [db (d/db conn)]
         (is (= 1520M (sum-account db chart/ar-code)))
@@ -244,17 +244,17 @@
 ;; ============================================================================
 
 (deftest cash-sale-debits-cash
-  (testing "`:invoice/cash-sale? true` → debit cash (122100) not AR."
+  (testing "`:kontor.invoice/cash-sale? true` → debit cash (122100) not AR."
     (let [conn (bootstrap)
-          inv-map {:invoice/external-id "INV-CASH-1"
-                   :invoice/issue-date jan-15
-                   :invoice/supplier-state "MH"
-                   :invoice/place-of-supply "MH"
-                   :invoice/cash-sale? true
-                   :invoice/lines
-                   [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 100M
-                     :invoice-line/tax-rate 0.18M}]}]
+          inv-map {:kontor.invoice/external-id "INV-CASH-1"
+                   :kontor.invoice/issue-date jan-15
+                   :kontor.invoice/supplier-state "MH"
+                   :kontor.invoice/place-of-supply "MH"
+                   :kontor.invoice/cash-sale? true
+                   :kontor.invoice/lines
+                   [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 100M
+                     :kontor.invoice-line/tax-rate 0.18M}]}]
       (inv/post-in-invoice! conn inv-map)
       (let [db (d/db conn)]
         (is (= 118M (sum-account db chart/cash-code))
@@ -272,14 +272,14 @@
               the DB. Suitable for kontor.process composition."
     (let [conn (bootstrap)
           db (d/db conn)
-          inv-map {:invoice/external-id "INV-PLAN-1"
-                   :invoice/issue-date jan-15
-                   :invoice/supplier-state "MH"
-                   :invoice/place-of-supply "MH"
-                   :invoice/lines
-                   [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 100M
-                     :invoice-line/tax-rate 0.18M}]}
+          inv-map {:kontor.invoice/external-id "INV-PLAN-1"
+                   :kontor.invoice/issue-date jan-15
+                   :kontor.invoice/supplier-state "MH"
+                   :kontor.invoice/place-of-supply "MH"
+                   :kontor.invoice/lines
+                   [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 100M
+                     :kontor.invoice-line/tax-rate 0.18M}]}
           tx-data (inv/plan-in-invoice-tx-data db inv-map {})]
       (is (vector? tx-data))
       (is (every? map? (filter map? tx-data))
@@ -297,13 +297,13 @@
       (is (>= (count missing) 5))))
   (testing "Complete invoice → no complaints."
     (is (empty? (inv/validate-invoice
-                 {:invoice/external-id "X"
-                  :invoice/issue-date jan-15
-                  :invoice/supplier-state "MH"
-                  :invoice/place-of-supply "MH"
-                  :invoice/lines [{:invoice-line/quantity 1
-                                   :invoice-line/unit-price 100M
-                                   :invoice-line/tax-rate 0.18M}]})))))
+                 {:kontor.invoice/external-id "X"
+                  :kontor.invoice/issue-date jan-15
+                  :kontor.invoice/supplier-state "MH"
+                  :kontor.invoice/place-of-supply "MH"
+                  :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                   :kontor.invoice-line/unit-price 100M
+                                   :kontor.invoice-line/tax-rate 0.18M}]})))))
 
 ;; ============================================================================
 ;; Multi-line invoice — multiple components in one tx
@@ -313,17 +313,17 @@
   (testing "Two intra-state lines, different rates: 18% on ₹1000 +
               5% on ₹500. CGST = 90 + 12.50 = 102.50; SGST same."
     (let [conn (bootstrap)
-          inv-map {:invoice/external-id "INV-MULTI-1"
-                   :invoice/issue-date jan-15
-                   :invoice/supplier-state "MH"
-                   :invoice/place-of-supply "MH"
-                   :invoice/lines
-                   [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 1000M
-                     :invoice-line/tax-rate 0.18M}
-                    {:invoice-line/quantity 1
-                     :invoice-line/unit-price 500M
-                     :invoice-line/tax-rate 0.05M}]}]
+          inv-map {:kontor.invoice/external-id "INV-MULTI-1"
+                   :kontor.invoice/issue-date jan-15
+                   :kontor.invoice/supplier-state "MH"
+                   :kontor.invoice/place-of-supply "MH"
+                   :kontor.invoice/lines
+                   [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 1000M
+                     :kontor.invoice-line/tax-rate 0.18M}
+                    {:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 500M
+                     :kontor.invoice-line/tax-rate 0.05M}]}]
       (inv/post-in-invoice! conn inv-map)
       (let [db (d/db conn)]
         ;; AR = 1500 + 102.50 + 102.50 = 1705
@@ -342,14 +342,14 @@
         db (d/db conn)]
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
-         #":invoice/supplier-state"
+         #":kontor.invoice/supplier-state"
          (inv/plan-in-invoice-tx-data
-          db {:invoice/external-id "X"
-              :invoice/issue-date jan-15
-              :invoice/place-of-supply "MH"
-              :invoice/lines [{:invoice-line/quantity 1
-                               :invoice-line/unit-price 100M
-                               :invoice-line/tax-rate 0.18M}]}
+          db {:kontor.invoice/external-id "X"
+              :kontor.invoice/issue-date jan-15
+              :kontor.invoice/place-of-supply "MH"
+              :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                               :kontor.invoice-line/unit-price 100M
+                               :kontor.invoice-line/tax-rate 0.18M}]}
           {})))))
 
 (deftest missing-place-of-supply-throws
@@ -357,14 +357,14 @@
         db (d/db conn)]
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
-         #":invoice/place-of-supply"
+         #":kontor.invoice/place-of-supply"
          (inv/plan-in-invoice-tx-data
-          db {:invoice/external-id "X"
-              :invoice/issue-date jan-15
-              :invoice/supplier-state "MH"
-              :invoice/lines [{:invoice-line/quantity 1
-                               :invoice-line/unit-price 100M
-                               :invoice-line/tax-rate 0.18M}]}
+          db {:kontor.invoice/external-id "X"
+              :kontor.invoice/issue-date jan-15
+              :kontor.invoice/supplier-state "MH"
+              :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                               :kontor.invoice-line/unit-price 100M
+                               :kontor.invoice-line/tax-rate 0.18M}]}
           {})))))
 
 (deftest missing-tax-rate-on-taxable-line-throws
@@ -372,12 +372,12 @@
         db (d/db conn)]
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
-         #":invoice-line/tax-rate"
+         #":kontor.invoice-line/tax-rate"
          (inv/plan-in-invoice-tx-data
-          db {:invoice/external-id "X"
-              :invoice/issue-date jan-15
-              :invoice/supplier-state "MH"
-              :invoice/place-of-supply "MH"
-              :invoice/lines [{:invoice-line/quantity 1
-                               :invoice-line/unit-price 100M}]}
+          db {:kontor.invoice/external-id "X"
+              :kontor.invoice/issue-date jan-15
+              :kontor.invoice/supplier-state "MH"
+              :kontor.invoice/place-of-supply "MH"
+              :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                               :kontor.invoice-line/unit-price 100M}]}
           {})))))

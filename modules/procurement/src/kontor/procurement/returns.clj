@@ -9,7 +9,7 @@
    State machine: :requested → :accepted → :received → :completed
    (plus :cancelled and :rejected escapes).
 
-   Credit memos are kernel `:invoice/type :credit-memo` (for
+   Credit memos are kernel `:kontor.invoice/type :credit-memo` (for
    :customer returns) or `:debit-memo` (for :vendor returns), linked
    via `:return-item-billing` junction.
 
@@ -274,16 +274,16 @@
                                             :asset    :asset-acquisition
                                             :purchase-expense))]
                             {:db/id line-tempid
-                             :invoice-line/invoice invoice-tempid
-                             :invoice-line/sequence (inc idx)
-                             :invoice-line/order-item (:db/id
+                             :kontor.invoice-line/invoice invoice-tempid
+                             :kontor.invoice-line/sequence (inc idx)
+                             :kontor.invoice-line/order-item (:db/id
                                                        (:return-item/order-item item))
-                             :invoice-line/name (or (:return-item/product-id item)
+                             :kontor.invoice-line/name (or (:return-item/product-id item)
                                                      "Return")
-                             :invoice-line/quantity qty
-                             :invoice-line/unit-price price
-                             :invoice-line/amount amount
-                             :invoice-line/gl-account-type gl-type}))
+                             :kontor.invoice-line/quantity qty
+                             :kontor.invoice-line/unit-price price
+                             :kontor.invoice-line/amount amount
+                             :kontor.invoice-line/gl-account-type gl-type}))
                         items line-tempids (range))
         billing-rows (mapv (fn [item line-tempid]
                              {:return-item-billing/return-item (:db/id item)
@@ -300,21 +300,21 @@
                                (or (:return-item/return-price item) 0M))})
                            items line-tempids)
         invoice-row (cond-> {:db/id invoice-tempid
-                             :invoice/external-id external-id
-                             :invoice/type invoice-type
-                             :invoice/status :draft
-                             :invoice/issue-date (or issue-date (java.util.Date.))
-                             :invoice/seller seller-eid
-                             :invoice/buyer buyer-eid
-                             :invoice/order (get-in return [:return/order :db/id])
-                             :invoice/lines (mapv :db/id line-rows)}
-                      currency (assoc :invoice/currency currency)
+                             :kontor.invoice/external-id external-id
+                             :kontor.invoice/type invoice-type
+                             :kontor.invoice/status :draft
+                             :kontor.invoice/issue-date (or issue-date (java.util.Date.))
+                             :kontor.invoice/seller seller-eid
+                             :kontor.invoice/buyer buyer-eid
+                             :kontor.invoice/order (get-in return [:return/order :db/id])
+                             :kontor.invoice/lines (mapv :db/id line-rows)}
+                      currency (assoc :kontor.invoice/currency currency)
                       (get-in return [:return/entity :db/id])
-                      (assoc :invoice/entity (get-in return [:return/entity :db/id])))]
+                      (assoc :kontor.invoice/entity (get-in return [:return/entity :db/id])))]
     (vec (concat [invoice-row] line-rows billing-rows))))
 
 (defn make-credit-memo-from-return!
-  "Build a kernel :invoice (with :invoice/type :credit-memo or
+  "Build a kernel :invoice (with :kontor.invoice/type :credit-memo or
    :debit-memo per return-type) + :invoice-line rows + :return-item-
    billing junctions atomically. Routes through the gate (ADR-068).
    Returns the tx-report.

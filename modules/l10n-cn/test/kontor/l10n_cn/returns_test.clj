@@ -39,10 +39,10 @@
     (let [conn (bootstrap)
           _ (inv/post-cn-invoice!
              conn
-             {:invoice/external-id "INV-G-1"
-              :invoice/issue-date jan-15
-              :invoice/lines [{:invoice-line/quantity 1
-                               :invoice-line/unit-price 10000M}]})
+             {:kontor.invoice/external-id "INV-G-1"
+              :kontor.invoice/issue-date jan-15
+              :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                               :kontor.invoice-line/unit-price 10000M}]})
           r (ret/compute-return conn {:year 2026 :month 1
                                       :compute-surcharges? false})]
       (is (= "VAT-PRC-General" (:return/form r)))
@@ -67,15 +67,15 @@
     (let [conn (bootstrap)
           _ (inv/post-cn-invoice!
              conn
-             {:invoice/external-id "INV-G-MIX-1"
-              :invoice/issue-date jan-15
-              :invoice/lines
-              [{:invoice-line/quantity 1 :invoice-line/unit-price 5000M
-                :invoice-line/rate 0.13M}
-               {:invoice-line/quantity 1 :invoice-line/unit-price 3000M
-                :invoice-line/rate 0.09M}
-               {:invoice-line/quantity 1 :invoice-line/unit-price 2000M
-                :invoice-line/rate 0.06M}]})
+             {:kontor.invoice/external-id "INV-G-MIX-1"
+              :kontor.invoice/issue-date jan-15
+              :kontor.invoice/lines
+              [{:kontor.invoice-line/quantity 1 :kontor.invoice-line/unit-price 5000M
+                :kontor.invoice-line/rate 0.13M}
+               {:kontor.invoice-line/quantity 1 :kontor.invoice-line/unit-price 3000M
+                :kontor.invoice-line/rate 0.09M}
+               {:kontor.invoice-line/quantity 1 :kontor.invoice-line/unit-price 2000M
+                :kontor.invoice-line/rate 0.06M}]})
           r (ret/compute-return conn {:year 2026 :month 1
                                       :compute-surcharges? false})]
       (let [lines (:return/lines r)]
@@ -96,13 +96,13 @@
     (let [conn (bootstrap)
           _ (inv/post-cn-invoice!
              conn
-             {:invoice/external-id "INV-G-EX-1"
-              :invoice/issue-date jan-15
-              :invoice/lines
-              [{:invoice-line/quantity 1 :invoice-line/unit-price 5000M
-                :invoice-line/rate 0.13M}
-               {:invoice-line/quantity 1 :invoice-line/unit-price 1000M
-                :invoice-line/tax-status :zero-rated}]})
+             {:kontor.invoice/external-id "INV-G-EX-1"
+              :kontor.invoice/issue-date jan-15
+              :kontor.invoice/lines
+              [{:kontor.invoice-line/quantity 1 :kontor.invoice-line/unit-price 5000M
+                :kontor.invoice-line/rate 0.13M}
+               {:kontor.invoice-line/quantity 1 :kontor.invoice-line/unit-price 1000M
+                :kontor.invoice-line/tax-status :zero-rated}]})
           r (ret/compute-return conn {:year 2026 :month 1
                                       :compute-surcharges? false})]
       (let [lines (:return/lines r)]
@@ -130,10 +130,10 @@
     (let [conn (bootstrap)
           _ (inv/post-cn-invoice!
              conn
-             {:invoice/external-id "INV-G-MUN-1"
-              :invoice/issue-date jan-15
-              :invoice/lines [{:invoice-line/quantity 1
-                               :invoice-line/unit-price 10000M}]})
+             {:kontor.invoice/external-id "INV-G-MUN-1"
+              :kontor.invoice/issue-date jan-15
+              :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                               :kontor.invoice-line/unit-price 10000M}]})
           r (ret/compute-return conn {:year 2026 :month 1
                                       :location-tier :municipal})]
       (is (money/equiv? (cny "91.00")  (:return/umct-payable r)))
@@ -153,11 +153,11 @@
     (let [conn (bootstrap)
           _ (inv/post-cn-invoice!
              conn
-             {:invoice/external-id "INV-SS-1"
-              :invoice/issue-date jan-15
-              :invoice/taxpayer-status :small-scale
-              :invoice/lines [{:invoice-line/quantity 1
-                               :invoice-line/unit-price 50000M}]})
+             {:kontor.invoice/external-id "INV-SS-1"
+              :kontor.invoice/issue-date jan-15
+              :kontor.invoice/taxpayer-status :small-scale
+              :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                               :kontor.invoice-line/unit-price 50000M}]})
           ;; Substrate doesn't auto-aggregate small-scale per-rate
           ;; totals (default chart has no per-rate small-scale
           ;; revenue accounts); the consumer supplies them.

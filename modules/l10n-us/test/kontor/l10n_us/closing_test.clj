@@ -46,12 +46,12 @@
   [conn]
   ;; Sales invoice: $1000 net @ 7.25% (CA) → $1072.50 gross on Feb 15.
   (us-invoice/post-us-invoice! conn
-                               {:invoice/external-id "INV-2025-1"
-                                :invoice/issue-date feb-15
-                                :invoice/ship-to-state :CA
-                                :invoice/rate 0.0725M
-                                :invoice/lines [{:invoice-line/quantity 1
-                                                 :invoice-line/unit-price 1000M}]})
+                               {:kontor.invoice/external-id "INV-2025-1"
+                                :kontor.invoice/issue-date feb-15
+                                :kontor.invoice/ship-to-state :CA
+                                :kontor.invoice/rate 0.0725M
+                                :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                                 :kontor.invoice-line/unit-price 1000M}]})
   ;; Expense: $600 office expense paid from bank on Feb 15.
   (let [db (d/db conn)
         usd (:db/id (d/entity db [:kontor.commodity/symbol "USD"]))
@@ -92,12 +92,12 @@
          :kontor.posting/commodity usd :kontor.posting/posted-at jun-1}]})))
   ;; Second sales invoice to push revenue past expenses ($500 net @ 7.25%).
   (us-invoice/post-us-invoice! conn
-                               {:invoice/external-id "INV-2025-2"
-                                :invoice/issue-date jun-1
-                                :invoice/ship-to-state :CA
-                                :invoice/rate 0.0725M
-                                :invoice/lines [{:invoice-line/quantity 1
-                                                 :invoice-line/unit-price 500M}]})
+                               {:kontor.invoice/external-id "INV-2025-2"
+                                :kontor.invoice/issue-date jun-1
+                                :kontor.invoice/ship-to-state :CA
+                                :kontor.invoice/rate 0.0725M
+                                :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                                 :kontor.invoice-line/unit-price 500M}]})
   ;; Net P&L: revenue -1500 (Cr), office +600 (Dr), rent +400 (Dr)
   ;;         → -500 (profit of 500)
   nil)

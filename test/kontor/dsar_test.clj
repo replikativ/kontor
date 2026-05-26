@@ -94,16 +94,16 @@
         subject (pe (d/db conn) "SUBJECT")
         ;; Two entities referencing the subject via different attrs.
         _ (d/transact conn
-                      [{:invoice/external-id "INV-SUBJ-1" :invoice/buyer subject}
+                      [{:kontor.invoice/external-id "INV-SUBJ-1" :kontor.invoice/buyer subject}
                        {:partner-bank-account/partner subject}])
         result (dsar/collect (d/db conn) subject {})]
     (testing "collect surfaces the subject + the referencing entities"
       (is (= subject (:db/id (:partner result))))
-      (is (contains? (:references result) :invoice/buyer))
+      (is (contains? (:references result) :kontor.invoice/buyer))
       (is (contains? (:references result) :partner-bank-account/partner))
-      (is (= 1 (count (get-in result [:references :invoice/buyer]))))
+      (is (= 1 (count (get-in result [:references :kontor.invoice/buyer]))))
       (is (= "INV-SUBJ-1"
-             (-> result :references :invoice/buyer first :invoice/external-id))))
+             (-> result :references :kontor.invoice/buyer first :kontor.invoice/external-id))))
     (testing "a partner with no referencing data has empty :references"
       (is (empty? (:references (dsar/collect (d/db conn)
                                              (pe (d/db conn) "U-dpo") {})))))))
@@ -150,13 +150,13 @@
         subject (pe (d/db conn) "SUBJECT")
         ;; Snapshot the db BEFORE any invoice exists.
         db-before (d/db conn)
-        _ (d/transact conn [{:invoice/external-id "INV-LATE" :invoice/buyer subject}])
+        _ (d/transact conn [{:kontor.invoice/external-id "INV-LATE" :kontor.invoice/buyer subject}])
         db-after (d/db conn)]
     (testing "collect on the older db value does not see later-added data"
       (is (empty? (:references (dsar/collect db-before subject {})))))
     (testing "collect on the current db value sees it"
       (is (= 1 (count (get-in (dsar/collect db-after subject {})
-                              [:references :invoice/buyer])))))))
+                              [:references :kontor.invoice/buyer])))))))
 
 (deftest collect-folds-in-merged-from-partners
   (let [conn (bootstrap)
@@ -165,8 +165,8 @@
         ;; an invoice that still references the duplicate.
         _ (d/transact conn
                       [{:kontor.partner/external-id "SUBJECT-DUP" :kontor.partner/name "Jane Dup"}
-                       {:invoice/external-id "INV-DUP-1"
-                        :invoice/buyer [:kontor.partner/external-id "SUBJECT-DUP"]}])
+                       {:kontor.invoice/external-id "INV-DUP-1"
+                        :kontor.invoice/buyer [:kontor.partner/external-id "SUBJECT-DUP"]}])
         dup (pe (d/db conn) "SUBJECT-DUP")
         _ (d/transact conn
                       [{:partner-merge/duplicate-of subject
@@ -174,11 +174,11 @@
     (testing ":include-merged? true folds the duplicate's data into the package"
       (let [result (dsar/collect (d/db conn) subject {:include-merged? true})]
         (is (= [dup] (:merged-from result)))
-        (is (= 1 (count (get-in result [:references :invoice/buyer]))))))
+        (is (= 1 (count (get-in result [:references :kontor.invoice/buyer]))))))
     (testing ":include-merged? false ignores the merge chain"
       (let [result (dsar/collect (d/db conn) subject {:include-merged? false})]
         (is (empty? (:merged-from result)))
-        (is (not (contains? (:references result) :invoice/buyer)))))))
+        (is (not (contains? (:references result) :kontor.invoice/buyer)))))))
 
 (deftest collect-reports-legal-holds
   (let [conn (bootstrap)

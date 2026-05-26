@@ -27,29 +27,29 @@
 (def parameters
   "US investment-income parameter definitions. Most are reused from
    `cgt-statute.clj`; only §163(d) + §103 anchor here."
-  [{:parameter/code         "US.INV.§163d.deduction-rate"
-    :parameter/label        "§163(d) investment-interest deduction cap rate (always 100% of NII)"
-    :parameter/jurisdiction :us
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.law.cornell.edu/uscode/text/26/163#d"}
+  [{:kontor.parameter/code         "US.INV.§163d.deduction-rate"
+    :kontor.parameter/label        "§163(d) investment-interest deduction cap rate (always 100% of NII)"
+    :kontor.parameter/jurisdiction :us
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.law.cornell.edu/uscode/text/26/163#d"}
 
-   {:parameter/code         "US.INV.§103.exempt-account-pattern"
-    :parameter/label        "§103 municipal-interest exempt-account chart prefix (documentation)"
-    :parameter/jurisdiction :us
-    :parameter/unit         :rate                ; placeholder unit — provider doesn't read this
-    :parameter/concept-iri  "https://www.law.cornell.edu/uscode/text/26/103"}])
+   {:kontor.parameter/code         "US.INV.§103.exempt-account-pattern"
+    :kontor.parameter/label        "§103 municipal-interest exempt-account chart prefix (documentation)"
+    :kontor.parameter/jurisdiction :us
+    :kontor.parameter/unit         :rate                ; placeholder unit — provider doesn't read this
+    :kontor.parameter/concept-iri  "https://www.law.cornell.edu/uscode/text/26/103"}])
 
 (def parameter-values
   "US investment-income parameter values."
-  [{:parameter-value/parameter      [:parameter/code "US.INV.§163d.deduction-rate"]
-    :parameter-value/effective-from #inst "1986-10-22"  ; TRA 1986
-    :parameter-value/decimal-value  1.00M
-    :parameter-value/citation       "IRC §163(d)(1) — deduction limited to net investment income"}
+  [{:kontor.parameter-value/parameter      [:kontor.parameter/code "US.INV.§163d.deduction-rate"]
+    :kontor.parameter-value/effective-from #inst "1986-10-22"  ; TRA 1986
+    :kontor.parameter-value/decimal-value  1.00M
+    :kontor.parameter-value/citation       "IRC §163(d)(1) — deduction limited to net investment income"}
 
-   {:parameter-value/parameter      [:parameter/code "US.INV.§103.exempt-account-pattern"]
-    :parameter-value/effective-from #inst "1986-10-22"
-    :parameter-value/decimal-value  0M    ; sentinel — documentation only
-    :parameter-value/citation       "IRC §103 — interest on State + local bonds exempt from gross income"}])
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "US.INV.§103.exempt-account-pattern"]
+    :kontor.parameter-value/effective-from #inst "1986-10-22"
+    :kontor.parameter-value/decimal-value  0M    ; sentinel — documentation only
+    :kontor.parameter-value/citation       "IRC §103 — interest on State + local bonds exempt from gross income"}])
 
 ;; ============================================================================
 ;; Provisions
@@ -61,15 +61,15 @@
    investment-interest deduction on net investment income."
 
   [;; §163(d) investment-interest deduction cap — limited to NII.
-   {:provision/code            "US-IRC-§163d-investment-interest-cap"
-    :provision/jurisdiction    :us
-    :provision/concept         [:kontor.tax-concept/code :base-transform-deduct]
-    :provision/title           "§163(d) — investment-interest deduction limited to net investment income"
-    :provision/citation        "https://www.law.cornell.edu/uscode/text/26/163#d"
-    :provision/effective-from  #inst "1986-10-22"
-    :provision/priority        100
-    :provision/condition       (pr-str [:gt [:inputs :investment-interest-paid] 0M])
-    :provision/consequence     (pr-str {:op :base-deduct
+   {:kontor.provision/code            "US-IRC-§163d-investment-interest-cap"
+    :kontor.provision/jurisdiction    :us
+    :kontor.provision/concept         [:kontor.tax-concept/code :base-transform-deduct]
+    :kontor.provision/title           "§163(d) — investment-interest deduction limited to net investment income"
+    :kontor.provision/citation        "https://www.law.cornell.edu/uscode/text/26/163#d"
+    :kontor.provision/effective-from  #inst "1986-10-22"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:gt [:inputs :investment-interest-paid] 0M])
+    :kontor.provision/consequence     (pr-str {:op :base-deduct
                                         :code :§163d-deduction
                                         :label "§163(d) investment-interest deduction"
                                         :amount-from :compute-fn
@@ -81,7 +81,7 @@
 
 (defn install!
   "Install US investment-income statute (parameters + provisions)
-   into `conn`. Idempotent via `:parameter/code` + `:provision/code`
+   into `conn`. Idempotent via `:kontor.parameter/code` + `:kontor.provision/code`
    unique identity attrs.
 
    ASSUMES the US CGT statute has already been installed (the bracket

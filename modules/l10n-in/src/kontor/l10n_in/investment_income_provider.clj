@@ -328,7 +328,7 @@
      :line-items      (vec (concat base-lines deduction-lines))
      :provenance      {:provider-id        :in-inv-income
                        :statute            "IT Act 1961 §194A / §80TTA / §80TTB"
-                       :provisions-applied (mapv :provision/code provisions)
+                       :provisions-applied (mapv :kontor.provision/code provisions)
                        :as-of              as-of}
      :jurisdiction-specific-codes
      {:lane                  :in-interest-resident-slab

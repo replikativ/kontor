@@ -57,7 +57,7 @@
    `:tax-context-fact` keyed by `:inputs` keys works for facts the
    consumer supplies as-is. Computed shares (mère-fille 5 %, CIR
    piecewise, CGE 3.3 % on excess over €763 000) are expressed via the
-   `:provision/compute-fn` escape hatch — see `register!` below.
+   `:kontor.provision/compute-fn` escape hatch — see `register!` below.
 
    ## Limitations (note 109 §3-§4)
 
@@ -236,7 +236,7 @@
                         (:code (first schedule-overrides)))
      :provenance      {:provider-id        :fr-cit
                        :statute            "CGI Art. 219 + 216 + 235 ter ZC + 244 quater B"
-                       :provisions-applied (mapv :provision/code provisions)
+                       :provisions-applied (mapv :kontor.provision/code provisions)
                        :as-of              as-of}}))
 
 (defrecord FRCITProvider [id commodity]

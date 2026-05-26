@@ -76,7 +76,7 @@
         (or 0M))))
 
 (defn- bootstrap! [conn]
-  (inv-schema/install! conn)   ; :invoice/status state-machine seeds (P0-4α)
+  (inv-schema/install! conn)   ; :kontor.invoice/status state-machine seeds (P0-4α)
   (chart/install! conn)
   (pt/install-standard-terms! conn)
   (d/transact conn
@@ -110,15 +110,15 @@
         acme (:db/id (d/entity db [:kontor.partner/external-id "ACME"]))
         net30 (:db/id (pt/by-code db "NET30"))
         _ (invoice/create! conn
-                           {:invoice/external-id ext-id
-                            :invoice/issue-date issue-date
-                            :invoice/seller own
-                            :invoice/buyer acme
-                            :invoice/payment-term net30
-                            :invoice/currency "EUR"
-                            :invoice/lines lines})
+                           {:kontor.invoice/external-id ext-id
+                            :kontor.invoice/issue-date issue-date
+                            :kontor.invoice/seller own
+                            :kontor.invoice/buyer acme
+                            :kontor.invoice/payment-term net30
+                            :kontor.invoice/currency "EUR"
+                            :kontor.invoice/lines lines})
         inv-eid (d/q '[:find ?e . :in $ ?ext
-                       :where [?e :invoice/external-id ?ext]]
+                       :where [?e :kontor.invoice/external-id ?ext]]
                      (d/db conn) ext-id)
         builder (partial inv-de/posting-builder {})
         {:keys [transaction-eid]} (invoice/send! conn inv-eid builder)]
@@ -186,20 +186,20 @@
       (let [{:keys [invoice-eid]}
             (create-and-send-invoice!
              conn "INV-2025-001" feb-15
-             [{:invoice-line/sequence 1 :invoice-line/name "Beratung Q1"
-               :invoice-line/quantity 10M :invoice-line/unit-code "HUR"
-               :invoice-line/unit-price 200M
-               :invoice-line/vat-rate 19.0M :invoice-line/vat-category "S"}])]
+             [{:kontor.invoice-line/sequence 1 :kontor.invoice-line/name "Beratung Q1"
+               :kontor.invoice-line/quantity 10M :kontor.invoice-line/unit-code "HUR"
+               :kontor.invoice-line/unit-price 200M
+               :kontor.invoice-line/vat-rate 19.0M :kontor.invoice-line/vat-category "S"}])]
         (is (some? invoice-eid))))
 
     (testing "Invoice 2 — Q3 (Sep 15) — 20h consulting @ 200€/h, 19% VAT"
       (let [{:keys [invoice-eid]}
             (create-and-send-invoice!
              conn "INV-2025-002" sep-15
-             [{:invoice-line/sequence 1 :invoice-line/name "Beratung Q3"
-               :invoice-line/quantity 20M :invoice-line/unit-code "HUR"
-               :invoice-line/unit-price 200M
-               :invoice-line/vat-rate 19.0M :invoice-line/vat-category "S"}])]
+             [{:kontor.invoice-line/sequence 1 :kontor.invoice-line/name "Beratung Q3"
+               :kontor.invoice-line/quantity 20M :kontor.invoice-line/unit-code "HUR"
+               :kontor.invoice-line/unit-price 200M
+               :kontor.invoice-line/vat-rate 19.0M :kontor.invoice-line/vat-category "S"}])]
         (is (some? invoice-eid))))
 
     (testing "Operating expenses paid from bank"
@@ -226,9 +226,9 @@
       (ingest-and-reconcile-payment! conn mar-20 2380M
                                      "ACME GmbH" "Rechnung INV-2025-001 v 15.02.2025")
       (let [db (d/db conn)
-            inv (d/pull db [:invoice/status]
-                        [:invoice/external-id "INV-2025-001"])]
-        (is (= :paid (:invoice/status inv)))))
+            inv (d/pull db [:kontor.invoice/status]
+                        [:kontor.invoice/external-id "INV-2025-001"])]
+        (is (= :paid (:kontor.invoice/status inv)))))
 
     (testing "After payment 1 — bitemporal valid-time semantics: at
               Apr 1, only invoice 1 exists (Sep invoice is future);
@@ -257,9 +257,9 @@
       (ingest-and-reconcile-payment! conn oct-15 4760M
                                      "ACME GmbH" "Rechnung INV-2025-002 v 15.09.2025")
       (let [db (d/db conn)
-            inv (d/pull db [:invoice/status]
-                        [:invoice/external-id "INV-2025-002"])]
-        (is (= :paid (:invoice/status inv)))))
+            inv (d/pull db [:kontor.invoice/status]
+                        [:kontor.invoice/external-id "INV-2025-002"])]
+        (is (= :paid (:kontor.invoice/status inv)))))
 
     ;; --------------------------------------------------------------
     ;; 6. AR aging at year-end — empty (everyone paid)

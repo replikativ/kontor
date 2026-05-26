@@ -55,7 +55,7 @@
    `:tax-context-fact` keyed by `:inputs` keys works for facts the
    consumer supplies as-is. Computed shares (interest × 25%, rental ×
    12.5%, real-estate × 1.2%) are expressed via the
-   `:provision/compute-fn` escape hatch — see `register!` below.
+   `:kontor.provision/compute-fn` escape hatch — see `register!` below.
    Soli (5.5% × running KSt tax) is also a compute-fn, registered
    under `:de-soli-on-kst`."
   (:require [kontor.l10n-de.cit-statute :as cit-statute]
@@ -201,7 +201,7 @@
      :regime          nil
      :provenance      {:provider-id :de-cit
                        :statute "KStG + SolZG"
-                       :provisions-applied (mapv :provision/code provisions)
+                       :provisions-applied (mapv :kontor.provision/code provisions)
                        :as-of as-of}}))
 
 (defn- gewst-formula
@@ -240,7 +240,7 @@
      :regime          nil
      :provenance      {:provider-id :de-cit
                        :statute "GewStG"
-                       :provisions-applied (mapv :provision/code provisions)
+                       :provisions-applied (mapv :kontor.provision/code provisions)
                        :as-of as-of}}))
 
 (defrecord DECITProvider [id commodity]

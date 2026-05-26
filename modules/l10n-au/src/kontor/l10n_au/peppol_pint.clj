@@ -190,15 +190,15 @@
   "Build a UBL Peppol PINT A-NZ <Invoice> element.
 
    Input:
-     {:invoice/number / issue-date / due-date / currency
+     {:kontor.invoice/number / issue-date / due-date / currency
                                   (default \"AUD\")
-      :invoice/invoice-type-code  (default \"380\")
-      :invoice/supplier {:name … :abn … :address {…} :contact {…}}
-      :invoice/customer {:name … :abn … :address {…}}
-      :invoice/lines [<line-map> …]
-      :invoice/tax-totals [{:rate :taxable :tax :category}]
-      :invoice/totals {:net :tax :gross}}"
-  [{:invoice/keys [number issue-date due-date currency invoice-type-code
+      :kontor.invoice/invoice-type-code  (default \"380\")
+      :kontor.invoice/supplier {:name … :abn … :address {…} :contact {…}}
+      :kontor.invoice/customer {:name … :abn … :address {…}}
+      :kontor.invoice/lines [<line-map> …]
+      :kontor.invoice/tax-totals [{:rate :taxable :tax :category}]
+      :kontor.invoice/totals {:net :tax :gross}}"
+  [{:kontor.invoice/keys [number issue-date due-date currency invoice-type-code
                    supplier customer lines tax-totals totals]
     :or {currency "AUD"
          invoice-type-code "380"}}]

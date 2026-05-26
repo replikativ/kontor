@@ -27,7 +27,7 @@
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
-    (inv-schema/install! conn)   ; modules/invoice schema + :invoice/status state-machine seeds (P0-4α)
+    (inv-schema/install! conn)   ; modules/invoice schema + :kontor.invoice/status state-machine seeds (P0-4α)
     (chart/install! conn)
     (pt/install-standard-terms! conn)
     (d/transact conn
@@ -52,31 +52,31 @@
         acme (:db/id (d/entity db [:kontor.partner/external-id "ACME"]))
         net30 (:db/id (pt/by-code db "NET30"))]
     (inv/create! conn
-                 {:invoice/external-id "INV-2026-0001"
-                  :invoice/issue-date  jan-1
-                  :invoice/seller      own
-                  :invoice/buyer       acme
-                  :invoice/payment-term net30
-                  :invoice/currency    "EUR"
-                  :invoice/buyer-reference "PO-12345"
-                  :invoice/notes       ["Zahlbar 30 Tage netto."]
-                  :invoice/lines
-                  [{:invoice-line/sequence 1
-                    :invoice-line/name "Strategieberatung"
-                    :invoice-line/description "10 h Beratung Q1 2026"
-                    :invoice-line/quantity 10M
-                    :invoice-line/unit-code "HUR"
-                    :invoice-line/unit-price 150M
-                    :invoice-line/vat-rate 19.0M
-                    :invoice-line/vat-category "S"}
-                   {:invoice-line/sequence 2
-                    :invoice-line/name "Reisekosten"
-                    :invoice-line/description "Bahnticket Berlin-München"
-                    :invoice-line/quantity 1M
-                    :invoice-line/unit-code "EA"
-                    :invoice-line/unit-price 89.50M
-                    :invoice-line/vat-rate 19.0M
-                    :invoice-line/vat-category "S"}]})))
+                 {:kontor.invoice/external-id "INV-2026-0001"
+                  :kontor.invoice/issue-date  jan-1
+                  :kontor.invoice/seller      own
+                  :kontor.invoice/buyer       acme
+                  :kontor.invoice/payment-term net30
+                  :kontor.invoice/currency    "EUR"
+                  :kontor.invoice/buyer-reference "PO-12345"
+                  :kontor.invoice/notes       ["Zahlbar 30 Tage netto."]
+                  :kontor.invoice/lines
+                  [{:kontor.invoice-line/sequence 1
+                    :kontor.invoice-line/name "Strategieberatung"
+                    :kontor.invoice-line/description "10 h Beratung Q1 2026"
+                    :kontor.invoice-line/quantity 10M
+                    :kontor.invoice-line/unit-code "HUR"
+                    :kontor.invoice-line/unit-price 150M
+                    :kontor.invoice-line/vat-rate 19.0M
+                    :kontor.invoice-line/vat-category "S"}
+                   {:kontor.invoice-line/sequence 2
+                    :kontor.invoice-line/name "Reisekosten"
+                    :kontor.invoice-line/description "Bahnticket Berlin-München"
+                    :kontor.invoice-line/quantity 1M
+                    :kontor.invoice-line/unit-code "EA"
+                    :kontor.invoice-line/unit-price 89.50M
+                    :kontor.invoice-line/vat-rate 19.0M
+                    :kontor.invoice-line/vat-category "S"}]})))
 
 ;; ============================================================================
 ;; create!
@@ -86,24 +86,24 @@
   (let [conn (bootstrap)
         _ (make-draft! conn)
         db (d/db conn)
-        inv (d/pull db '[*] [:invoice/external-id "INV-2026-0001"])]
-    (is (= :draft (:invoice/status inv)))
-    (is (= "EUR"  (:invoice/currency inv)))
-    (is (= 1589.50M (:invoice/total-net inv))   "10×150 + 89.50")
-    (is (= 302.00M  (:invoice/total-vat inv))   "1589.50 × 19% bankers-rounded")
-    (is (= 1891.50M (:invoice/total-gross inv)))
-    (is (= jan-31 (:invoice/due-date inv))      "Jan 1 + 30 days")
-    (is (= 2 (count (:invoice/lines inv))))))
+        inv (d/pull db '[*] [:kontor.invoice/external-id "INV-2026-0001"])]
+    (is (= :draft (:kontor.invoice/status inv)))
+    (is (= "EUR"  (:kontor.invoice/currency inv)))
+    (is (= 1589.50M (:kontor.invoice/total-net inv))   "10×150 + 89.50")
+    (is (= 302.00M  (:kontor.invoice/total-vat inv))   "1589.50 × 19% bankers-rounded")
+    (is (= 1891.50M (:kontor.invoice/total-gross inv)))
+    (is (= jan-31 (:kontor.invoice/due-date inv))      "Jan 1 + 30 days")
+    (is (= 2 (count (:kontor.invoice/lines inv))))))
 
 (deftest create-rejects-missing-required-fields
   (let [conn (bootstrap)]
     (is (thrown? clojure.lang.ExceptionInfo
-                 (inv/create! conn {:invoice/issue-date jan-1
-                                    :invoice/lines []})))
+                 (inv/create! conn {:kontor.invoice/issue-date jan-1
+                                    :kontor.invoice/lines []})))
     (is (thrown? clojure.lang.ExceptionInfo
-                 (inv/create! conn {:invoice/external-id "X"
-                                    :invoice/issue-date jan-1
-                                    :invoice/lines []})))))
+                 (inv/create! conn {:kontor.invoice/external-id "X"
+                                    :kontor.invoice/issue-date jan-1
+                                    :kontor.invoice/lines []})))))
 
 ;; ============================================================================
 ;; send!
@@ -114,7 +114,7 @@
         _ (make-draft! conn)
         db (d/db conn)
         inv-eid (d/q '[:find ?e .
-                       :where [?e :invoice/external-id "INV-2026-0001"]]
+                       :where [?e :kontor.invoice/external-id "INV-2026-0001"]]
                      db)
         builder (partial inv-de/posting-builder {})
         {:keys [transaction-eid]} (inv/send! conn inv-eid builder)
@@ -131,9 +131,9 @@
                     [?p :kontor.posting/amount ?amt]]
                   db transaction-eid)
         by-code (into {} (map (juxt first second) rows))]
-    (is (= :sent (:invoice/status inv)))
+    (is (= :sent (:kontor.invoice/status inv)))
     ;; Transition timestamp now lives in :status-history via kbt
-    (is (= transaction-eid (-> inv :invoice/transaction :db/id)))
+    (is (= transaction-eid (-> inv :kontor.invoice/transaction :db/id)))
     ;; Receivable +1891.50, Revenue -1589.50, USt -302.00
     (is (= 1891.50M (get by-code "1400")))
     (is (= -1589.50M (get by-code "4400")))
@@ -148,7 +148,7 @@
         _ (make-draft! conn)
         db (d/db conn)
         inv-eid (d/q '[:find ?e .
-                       :where [?e :invoice/external-id "INV-2026-0001"]]
+                       :where [?e :kontor.invoice/external-id "INV-2026-0001"]]
                      db)
         builder (partial inv-de/posting-builder {})]
     (inv/send! conn inv-eid builder)
@@ -168,7 +168,7 @@
           _ (make-draft! conn)
           db (d/db conn)
           inv-eid (d/q '[:find ?e .
-                         :where [?e :invoice/external-id "INV-2026-0001"]]
+                         :where [?e :kontor.invoice/external-id "INV-2026-0001"]]
                        db)
           builder (partial inv-de/posting-builder {})
           {:keys [transaction-eid]} (inv/send! conn inv-eid builder)
@@ -192,8 +192,8 @@
           settled-tx-eids (:transactions (:match best))
           _ (inv/flip-paid-on-settlement conn settled-tx-eids)
           db (d/db conn)
-          inv (d/pull db [:invoice/status] inv-eid)]
-      (is (= :paid (:invoice/status inv))))))
+          inv (d/pull db [:kontor.invoice/status] inv-eid)]
+      (is (= :paid (:kontor.invoice/status inv))))))
 
 ;; ============================================================================
 ;; cancel!
@@ -204,18 +204,18 @@
         _ (make-draft! conn)
         db (d/db conn)
         inv-eid (d/q '[:find ?e .
-                       :where [?e :invoice/external-id "INV-2026-0001"]]
+                       :where [?e :kontor.invoice/external-id "INV-2026-0001"]]
                      db)]
     (inv/cancel! conn inv-eid)
-    (let [inv (d/pull (d/db conn) [:invoice/status] inv-eid)]
-      (is (= :cancelled (:invoice/status inv))))))
+    (let [inv (d/pull (d/db conn) [:kontor.invoice/status] inv-eid)]
+      (is (= :cancelled (:kontor.invoice/status inv))))))
 
 (deftest cancel-sent-creates-reversal-transaction
   (let [conn (bootstrap)
         _ (make-draft! conn)
         db (d/db conn)
         inv-eid (d/q '[:find ?e .
-                       :where [?e :invoice/external-id "INV-2026-0001"]]
+                       :where [?e :kontor.invoice/external-id "INV-2026-0001"]]
                      db)
         builder (partial inv-de/posting-builder {})
         {:keys [transaction-eid]} (inv/send! conn inv-eid builder)
@@ -240,5 +240,5 @@
                      db ar-eid [transaction-eid reversal-eid]))]
     (is (some? reversal-eid))
     (is (= 0M ar-sum) "reversal cancels out the original on AR")
-    (let [inv (d/pull (d/db conn) [:invoice/status] inv-eid)]
-      (is (= :cancelled (:invoice/status inv))))))
+    (let [inv (d/pull (d/db conn) [:kontor.invoice/status] inv-eid)]
+      (is (= :cancelled (:kontor.invoice/status inv))))))

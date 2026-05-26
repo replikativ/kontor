@@ -33,8 +33,8 @@
         (is (some? (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "EUR"]] db))))
       (testing "DE tax statutes are installed"
         (let [provisions (set (d/q '[:find [?code ...]
-                                     :where [?p :provision/jurisdiction :de]
-                                            [?p :provision/code ?code]] db))]
+                                     :where [?p :kontor.provision/jurisdiction :de]
+                                            [?p :kontor.provision/code ?code]] db))]
           ;; Soli + KiSt on §20-income (F8 regression — both shipped by IC statute)
           (is (contains? provisions "DE-SolZG-§4-on-§20-income"))
           (is (contains? provisions "DE-KiStG-on-§20"))

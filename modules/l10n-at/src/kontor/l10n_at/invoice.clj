@@ -119,23 +119,23 @@
 
 (defn- line-net
   "Per-line net amount = qty × unit-price, rounded HALF-EVEN to 2dp.
-   Tolerates :invoice-line/line-total when caller pre-computed it."
-  ^java.math.BigDecimal [{:invoice-line/keys [quantity unit-price line-total]}]
+   Tolerates :kontor.invoice-line/line-total when caller pre-computed it."
+  ^java.math.BigDecimal [{:kontor.invoice-line/keys [quantity unit-price line-total]}]
   (cond
     line-total (bigdec line-total)
     (and quantity unit-price)
     (.setScale (.multiply (bigdec quantity) (bigdec unit-price))
                2 java.math.RoundingMode/HALF_EVEN)
     :else
-    (throw (ex-info "Invoice line needs either :invoice-line/line-total or both :invoice-line/quantity + :invoice-line/unit-price"
+    (throw (ex-info "Invoice line needs either :kontor.invoice-line/line-total or both :kontor.invoice-line/quantity + :kontor.invoice-line/unit-price"
                     {:line (select-keys
-                            {:invoice-line/quantity quantity
-                             :invoice-line/unit-price unit-price}
-                            [:invoice-line/quantity :invoice-line/unit-price])}))))
+                            {:kontor.invoice-line/quantity quantity
+                             :kontor.invoice-line/unit-price unit-price}
+                            [:kontor.invoice-line/quantity :kontor.invoice-line/unit-price])}))))
 
 (defn- revenue-code-for-class
   "Choose the revenue account for a line's VAT class. Callers can
-   pin a different account via :invoice-line/account."
+   pin a different account via :kontor.invoice-line/account."
   [vat-class codes]
   (or (get codes vat-class)
       (get vat-class->revenue-code vat-class)
@@ -153,8 +153,8 @@
   [db lines codes commodity-eid date]
   (let [grouped (group-by
                  (fn [line]
-                   (let [vat-class (or (:invoice-line/vat-class line) :standard)
-                         override (:invoice-line/account line)]
+                   (let [vat-class (or (:kontor.invoice-line/vat-class line) :standard)
+                         override (:kontor.invoice-line/account line)]
                      [(or override (revenue-code-for-class vat-class codes))
                       vat-class]))
                  lines)]
@@ -193,7 +193,7 @@
                (tpb/compute-tax-postings
                 provider builder
                 {:base      (line-net l)
-                 :vat-class (or (:invoice-line/vat-class l) :standard)
+                 :vat-class (or (:kontor.invoice-line/vat-class l) :standard)
                  :commodity commodity-eid}
                 {:db db :date date}))
              lines))))
@@ -202,16 +202,16 @@
   "Pure tx-data builder for an Austrian sales invoice (ADR-068).
 
    Required input:
-     {:invoice/external-id   <string>
-      :invoice/issue-date    <java.util.Date>
-      :invoice/lines         [<invoice-line>]
+     {:kontor.invoice/external-id   <string>
+      :kontor.invoice/issue-date    <java.util.Date>
+      :kontor.invoice/lines         [<invoice-line>]
       ...}
 
    Each invoice-line:
-     {:invoice-line/quantity    <number-or-bigdec>      ; OR
-      :invoice-line/unit-price  <number-or-bigdec>      ; OR pre-computed:
-      :invoice-line/line-total  <bigdec>                ; net per line
-      :invoice-line/vat-class   <keyword>               ; default :standard
+     {:kontor.invoice-line/quantity    <number-or-bigdec>      ; OR
+      :kontor.invoice-line/unit-price  <number-or-bigdec>      ; OR pre-computed:
+      :kontor.invoice-line/line-total  <bigdec>                ; net per line
+      :kontor.invoice-line/vat-class   <keyword>               ; default :standard
                                                         ; one of
                                                         ; #{:standard
                                                         ;   :reduced-13
@@ -219,17 +219,17 @@
                                                         ;   :zero
                                                         ;   :exempt
                                                         ;   :reverse-charge}
-      :invoice-line/account     <code-or-eid>           ; optional override
+      :kontor.invoice-line/account     <code-or-eid>           ; optional override
       ...}
 
    Optional top-level fields:
-     :invoice/cash-sale?    when true, post Dr cash (2700 by default)
+     :kontor.invoice/cash-sale?    when true, post Dr cash (2700 by default)
                              instead of AR (2000).
-     :invoice/cash-code     account-code override for the cash leg
+     :kontor.invoice/cash-code     account-code override for the cash leg
                              (e.g. \"2800\" for bank).
-     :invoice/buyer         partner ref (kernel :kontor.transaction/partner).
-     :invoice/journal       journal code override (default INV).
-     :invoice/narration     transaction narration (default external-id).
+     :kontor.invoice/buyer         partner ref (kernel :kontor.transaction/partner).
+     :kontor.invoice/journal       journal code override (default INV).
+     :kontor.invoice/narration     transaction narration (default external-id).
 
    Opts:
      :codes        — map of code overrides (`:ar-code`, `:cash-code`,
@@ -248,14 +248,14 @@
   [db invoice {:keys [codes commodity journal-code]
                :or {codes {} commodity default-commodity
                     journal-code default-journal-code}}]
-  (let [{:invoice/keys [external-id issue-date lines buyer
+  (let [{:kontor.invoice/keys [external-id issue-date lines buyer
                         cash-sale? journal]} invoice
         _ (when-not external-id
-            (throw (ex-info "Invoice missing :invoice/external-id" {:invoice invoice})))
+            (throw (ex-info "Invoice missing :kontor.invoice/external-id" {:invoice invoice})))
         _ (when-not issue-date
-            (throw (ex-info "Invoice missing :invoice/issue-date" {:invoice invoice})))
+            (throw (ex-info "Invoice missing :kontor.invoice/issue-date" {:invoice invoice})))
         _ (when (empty? lines)
-            (throw (ex-info "Invoice has no :invoice/lines" {:invoice invoice})))
+            (throw (ex-info "Invoice has no :kontor.invoice/lines" {:invoice invoice})))
         commodity-eid (or (commodity-by-symbol db commodity)
                           (throw (ex-info (str "Commodity " commodity " not found")
                                           {:commodity commodity})))
@@ -285,7 +285,7 @@
         tx-base (cond-> {:kontor.transaction/external-id external-id
                          :kontor.transaction/journal jnl
                          :kontor.transaction/effective-date issue-date
-                         :kontor.transaction/narration (or (:invoice/narration invoice)
+                         :kontor.transaction/narration (or (:kontor.invoice/narration invoice)
                                                     external-id)
                          :kontor.transaction/state :posted
                          :kontor.transaction/posted-at issue-date}
@@ -315,17 +315,17 @@
    Used by consumers to surface input issues *before* hitting the
    gate."
   [invoice]
-  (let [{:invoice/keys [external-id issue-date lines]} invoice
-        line-classes (map #(or (:invoice-line/vat-class %) :standard) lines)]
+  (let [{:kontor.invoice/keys [external-id issue-date lines]} invoice
+        line-classes (map #(or (:kontor.invoice-line/vat-class %) :standard) lines)]
     (cond-> []
       (or (nil? external-id) (and (string? external-id) (str/blank? external-id)))
-      (conj {:field :invoice/external-id :issue :missing-or-blank})
+      (conj {:field :kontor.invoice/external-id :issue :missing-or-blank})
       (nil? issue-date)
-      (conj {:field :invoice/issue-date :issue :missing})
+      (conj {:field :kontor.invoice/issue-date :issue :missing})
       (empty? lines)
-      (conj {:field :invoice/lines :issue :empty})
+      (conj {:field :kontor.invoice/lines :issue :empty})
       (some #(not (contains? tax/vat-classes %)) line-classes)
-      (conj {:field :invoice-line/vat-class :issue :invalid-class
+      (conj {:field :kontor.invoice-line/vat-class :issue :invalid-class
              :seen (vec line-classes)}))))
 
 (defn reverse-charge?
@@ -335,8 +335,8 @@
    §11 Abs.1 Z.6 disclosure obligation."
   [invoice]
   (boolean
-   (some #(= :reverse-charge (or (:invoice-line/vat-class %) :standard))
-         (:invoice/lines invoice))))
+   (some #(= :reverse-charge (or (:kontor.invoice-line/vat-class %) :standard))
+         (:kontor.invoice/lines invoice))))
 
 (defn intra-eu?
   "True iff this invoice contains any zero-rated line (intra-EU
@@ -345,5 +345,5 @@
    the consumer to gather both."
   [invoice]
   (boolean
-   (some #(= :zero (or (:invoice-line/vat-class %) :standard))
-         (:invoice/lines invoice))))
+   (some #(= :zero (or (:kontor.invoice-line/vat-class %) :standard))
+         (:kontor.invoice/lines invoice))))

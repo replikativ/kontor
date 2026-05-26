@@ -389,21 +389,21 @@
             "standard-regime provisions did NOT fire")))))
 
 (deftest installable-is-idempotent
-  (testing "install! is idempotent on identity attrs (:parameter/code, :regime/code, :provision/code)"
+  (testing "install! is idempotent on identity attrs (:kontor.parameter/code, :kontor.regime/code, :kontor.provision/code)"
     (let [conn (core/create-test-db)]
       (cit-statute/install! conn)
       (cit-statute/install! conn)
       (let [in-params (->> (d/q '[:find [?code ...]
-                                  :where [_ :parameter/code ?code]]
+                                  :where [_ :kontor.parameter/code ?code]]
                                 (d/db conn))
                            (filter #(.startsWith ^String % "IN.")))
             in-provs  (->> (d/q '[:find [?code ...]
-                                  :where [_ :provision/code ?code]]
+                                  :where [_ :kontor.provision/code ?code]]
                                 (d/db conn))
                            (filter #(or (.startsWith ^String % "IN-")
                                         (.startsWith ^String % "IN-CIT"))))
             in-regs   (->> (d/q '[:find [?code ...]
-                                  :where [_ :regime/code ?code]]
+                                  :where [_ :kontor.regime/code ?code]]
                                 (d/db conn))
                            (filter #(#{:in-cit-standard :in-cit-115BAA :in-cit-115BAB} %)))]
         (is (= (count cit-statute/parameters) (count in-params)))

@@ -53,120 +53,120 @@
    uses `:effective-until` on the OLD parameter row + `:effective-from`
    on the NEW row to express the half-open window cleanly."
   [;; --- Holding-period cutoffs (post-FA-2024 two-tier) -----------------------
-   {:parameter/code         "IN.CGT.holding-period-cutoff-listed-equity-months"
-    :parameter/label        "Listed equity / equity-MF / BT-units LTCG cutoff (months)"
-    :parameter/jurisdiction :in
-    :parameter/unit         :months
-    :parameter/concept-iri  "https://incometaxindia.gov.in/_layouts/15/dit/pages/viewer.aspx?path=https://www.incometaxindia.gov.in/acts/income-tax%20act,%201961/2024/102120000000089006.htm"}
+   {:kontor.parameter/code         "IN.CGT.holding-period-cutoff-listed-equity-months"
+    :kontor.parameter/label        "Listed equity / equity-MF / BT-units LTCG cutoff (months)"
+    :kontor.parameter/jurisdiction :in
+    :kontor.parameter/unit         :months
+    :kontor.parameter/concept-iri  "https://incometaxindia.gov.in/_layouts/15/dit/pages/viewer.aspx?path=https://www.incometaxindia.gov.in/acts/income-tax%20act,%201961/2024/102120000000089006.htm"}
 
-   {:parameter/code         "IN.CGT.holding-period-cutoff-other-months"
-    :parameter/label        "All other assets LTCG cutoff (months) — post-FA-2024"
-    :parameter/jurisdiction :in
-    :parameter/unit         :months
-    :parameter/concept-iri  "https://incometaxindia.gov.in/tutorials/14-%20stcg.pdf"}
+   {:kontor.parameter/code         "IN.CGT.holding-period-cutoff-other-months"
+    :kontor.parameter/label        "All other assets LTCG cutoff (months) — post-FA-2024"
+    :kontor.parameter/jurisdiction :in
+    :kontor.parameter/unit         :months
+    :kontor.parameter/concept-iri  "https://incometaxindia.gov.in/tutorials/14-%20stcg.pdf"}
 
    ;; --- Rates (post-FA-2024 uniformised) -------------------------------------
-   {:parameter/code         "IN.CGT.§112A.rate"
-    :parameter/label        "§112A — listed STT-paid equity LTCG rate"
-    :parameter/jurisdiction :in
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://incometaxindia.gov.in/tutorials/65.exemptions-from-capital-gains.pdf"}
+   {:kontor.parameter/code         "IN.CGT.§112A.rate"
+    :kontor.parameter/label        "§112A — listed STT-paid equity LTCG rate"
+    :kontor.parameter/jurisdiction :in
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://incometaxindia.gov.in/tutorials/65.exemptions-from-capital-gains.pdf"}
 
-   {:parameter/code         "IN.CGT.§111A.rate"
-    :parameter/label        "§111A — listed STT-paid equity STCG rate"
-    :parameter/jurisdiction :in
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://cleartax.in/s/short-term-capital-gain-on-shares"}
+   {:kontor.parameter/code         "IN.CGT.§111A.rate"
+    :kontor.parameter/label        "§111A — listed STT-paid equity STCG rate"
+    :kontor.parameter/jurisdiction :in
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://cleartax.in/s/short-term-capital-gain-on-shares"}
 
-   {:parameter/code         "IN.CGT.§112.rate"
-    :parameter/label        "§112 — default LTCG rate (no indexation, post-FA-2024)"
-    :parameter/jurisdiction :in
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://incometaxindia.gov.in/tutorials/65.exemptions-from-capital-gains.pdf"}
+   {:kontor.parameter/code         "IN.CGT.§112.rate"
+    :kontor.parameter/label        "§112 — default LTCG rate (no indexation, post-FA-2024)"
+    :kontor.parameter/jurisdiction :in
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://incometaxindia.gov.in/tutorials/65.exemptions-from-capital-gains.pdf"}
 
-   {:parameter/code         "IN.CGT.§112.rate-with-indexation"
-    :parameter/label        "§112 proviso — LTCG rate with indexation (resident indiv/HUF, pre-23-Jul-2024 immovable)"
-    :parameter/jurisdiction :in
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://incometaxindia.gov.in/tutorials/65.exemptions-from-capital-gains.pdf"}
+   {:kontor.parameter/code         "IN.CGT.§112.rate-with-indexation"
+    :kontor.parameter/label        "§112 proviso — LTCG rate with indexation (resident indiv/HUF, pre-23-Jul-2024 immovable)"
+    :kontor.parameter/jurisdiction :in
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://incometaxindia.gov.in/tutorials/65.exemptions-from-capital-gains.pdf"}
 
    ;; --- §112A floor (FA 2024 raised ₹1 L → ₹1.25 L) -------------------------
-   {:parameter/code         "IN.CGT.§112A.floor"
-    :parameter/label        "§112A — annual LTCG exemption floor for STT-paid listed equity"
-    :parameter/jurisdiction :in
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://incometaxindia.gov.in/tutorials/65.exemptions-from-capital-gains.pdf"}
+   {:kontor.parameter/code         "IN.CGT.§112A.floor"
+    :kontor.parameter/label        "§112A — annual LTCG exemption floor for STT-paid listed equity"
+    :kontor.parameter/jurisdiction :in
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://incometaxindia.gov.in/tutorials/65.exemptions-from-capital-gains.pdf"}
 
    ;; --- §54EC bond cap -------------------------------------------------------
-   {:parameter/code         "IN.CGT.§54EC.cap-per-fy"
-    :parameter/label        "§54EC — annual ₹50 L cap on REC/NHAI/PFC/IRFC bond reinvestment"
-    :parameter/jurisdiction :in
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://cleartax.in/s/section-54ec-bonds"}
+   {:kontor.parameter/code         "IN.CGT.§54EC.cap-per-fy"
+    :kontor.parameter/label        "§54EC — annual ₹50 L cap on REC/NHAI/PFC/IRFC bond reinvestment"
+    :kontor.parameter/jurisdiction :in
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://cleartax.in/s/section-54ec-bonds"}
 
    ;; --- §54 / §54F new-residential-house cost cap (FA 2023) -----------------
-   {:parameter/code         "IN.CGT.§54.cost-cap"
-    :parameter/label        "§54 / §54F — ₹10 crore cap on the new residential house cost (FA 2023, AY 2024-25+)"
-    :parameter/jurisdiction :in
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.bajajfinserv.in/understanding-sec-54-of-the-income-tax-act"}
+   {:kontor.parameter/code         "IN.CGT.§54.cost-cap"
+    :kontor.parameter/label        "§54 / §54F — ₹10 crore cap on the new residential house cost (FA 2023, AY 2024-25+)"
+    :kontor.parameter/jurisdiction :in
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.bajajfinserv.in/understanding-sec-54-of-the-income-tax-act"}
 
    ;; --- §194-IA TDS rate + threshold ----------------------------------------
-   {:parameter/code         "IN.CGT.§194-IA.rate"
-    :parameter/label        "§194-IA — buyer-side TDS rate on immovable-property purchase"
-    :parameter/jurisdiction :in
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.incometaxindia.gov.in/w/tds-purchase-of-immovable-property"}
+   {:kontor.parameter/code         "IN.CGT.§194-IA.rate"
+    :kontor.parameter/label        "§194-IA — buyer-side TDS rate on immovable-property purchase"
+    :kontor.parameter/jurisdiction :in
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.incometaxindia.gov.in/w/tds-purchase-of-immovable-property"}
 
-   {:parameter/code         "IN.CGT.§194-IA.threshold"
-    :parameter/label        "§194-IA — consideration threshold below which TDS does not apply"
-    :parameter/jurisdiction :in
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.incometaxindia.gov.in/w/tds-purchase-of-immovable-property"}
+   {:kontor.parameter/code         "IN.CGT.§194-IA.threshold"
+    :kontor.parameter/label        "§194-IA — consideration threshold below which TDS does not apply"
+    :kontor.parameter/jurisdiction :in
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.incometaxindia.gov.in/w/tds-purchase-of-immovable-property"}
 
    ;; --- §50C anti-undervaluation tolerance ----------------------------------
-   {:parameter/code         "IN.CGT.§50C.safe-harbour-ratio"
-    :parameter/label        "§50C — SDV-vs-consideration safe-harbour ratio (FA 2020: SDV must exceed 110 %)"
-    :parameter/jurisdiction :in
-    :parameter/unit         :ratio
-    :parameter/concept-iri  "https://cleartax.in/s/taxability-sale-land-building-section-50c"}
+   {:kontor.parameter/code         "IN.CGT.§50C.safe-harbour-ratio"
+    :kontor.parameter/label        "§50C — SDV-vs-consideration safe-harbour ratio (FA 2020: SDV must exceed 110 %)"
+    :kontor.parameter/jurisdiction :in
+    :kontor.parameter/unit         :ratio
+    :kontor.parameter/concept-iri  "https://cleartax.in/s/taxability-sale-land-building-section-50c"}
 
    ;; --- 4 % Health & Education cess (rides on standalone CGT) ---------------
-   {:parameter/code         "IN.CGT.cess.rate"
-    :parameter/label        "Health & Education cess — 4 % surtax on standalone CGT liability"
-    :parameter/jurisdiction :in
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://incometaxindia.gov.in/tutorials/65.exemptions-from-capital-gains.pdf"}
+   {:kontor.parameter/code         "IN.CGT.cess.rate"
+    :kontor.parameter/label        "Health & Education cess — 4 % surtax on standalone CGT liability"
+    :kontor.parameter/jurisdiction :in
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://incometaxindia.gov.in/tutorials/65.exemptions-from-capital-gains.pdf"}
 
    ;; --- CII table — base FY 2001-02 = 100 -----------------------------------
-   {:parameter/code         "IN.CGT.cii.fy-2001-02"
-    :parameter/label        "CII — Cost Inflation Index, FY 2001-02 (base)"
-    :parameter/jurisdiction :in :parameter/unit :index
-    :parameter/concept-iri  "https://incometaxindia.gov.in/charts%20%20tables/cost-inflation-index.htm"}
-   {:parameter/code "IN.CGT.cii.fy-2002-03" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2003-04" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2004-05" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2005-06" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2006-07" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2007-08" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2008-09" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2009-10" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2010-11" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2011-12" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2012-13" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2013-14" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2014-15" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2015-16" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2016-17" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2017-18" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2018-19" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2019-20" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2020-21" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2021-22" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2022-23" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2023-24" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2024-25" :parameter/jurisdiction :in :parameter/unit :index}
-   {:parameter/code "IN.CGT.cii.fy-2025-26" :parameter/jurisdiction :in :parameter/unit :index}])
+   {:kontor.parameter/code         "IN.CGT.cii.fy-2001-02"
+    :kontor.parameter/label        "CII — Cost Inflation Index, FY 2001-02 (base)"
+    :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index
+    :kontor.parameter/concept-iri  "https://incometaxindia.gov.in/charts%20%20tables/cost-inflation-index.htm"}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2002-03" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2003-04" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2004-05" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2005-06" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2006-07" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2007-08" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2008-09" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2009-10" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2010-11" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2011-12" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2012-13" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2013-14" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2014-15" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2015-16" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2016-17" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2017-18" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2018-19" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2019-20" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2020-21" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2021-22" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2022-23" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2023-24" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2024-25" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}
+   {:kontor.parameter/code "IN.CGT.cii.fy-2025-26" :kontor.parameter/jurisdiction :in :kontor.parameter/unit :index}])
 
 ;; ============================================================================
 ;; Parameter values — current rates with their statutory effective windows
@@ -179,135 +179,135 @@
    instant reads the old rate — the bitemporal axis carries the law as
    it stood (ADR-008 + the wider kontor bitemporal posture)."
   [;; --- Holding-period cutoffs ----------------------------------------------
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.holding-period-cutoff-listed-equity-months"]
-    :parameter-value/effective-from #inst "2018-04-01"
-    :parameter-value/decimal-value  12M
-    :parameter-value/citation       "Income-tax Act §2(42A) — 12-month cutoff for listed equity / equity MF / BT units"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.holding-period-cutoff-listed-equity-months"]
+    :kontor.parameter-value/effective-from #inst "2018-04-01"
+    :kontor.parameter-value/decimal-value  12M
+    :kontor.parameter-value/citation       "Income-tax Act §2(42A) — 12-month cutoff for listed equity / equity MF / BT units"}
 
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.holding-period-cutoff-other-months"]
-    :parameter-value/effective-from #inst "2024-07-23"
-    :parameter-value/decimal-value  24M
-    :parameter-value/citation       "Finance (No. 2) Act 2024 — collapsed the 36-mo bucket to 24 months for all other assets"}
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.holding-period-cutoff-other-months"]
-    :parameter-value/effective-from #inst "1962-04-01"
-    :parameter-value/effective-until #inst "2024-07-23"
-    :parameter-value/decimal-value  36M
-    :parameter-value/citation       "Pre-FA-2024 §2(42A) — 36-month cutoff for other assets"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.holding-period-cutoff-other-months"]
+    :kontor.parameter-value/effective-from #inst "2024-07-23"
+    :kontor.parameter-value/decimal-value  24M
+    :kontor.parameter-value/citation       "Finance (No. 2) Act 2024 — collapsed the 36-mo bucket to 24 months for all other assets"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.holding-period-cutoff-other-months"]
+    :kontor.parameter-value/effective-from #inst "1962-04-01"
+    :kontor.parameter-value/effective-until #inst "2024-07-23"
+    :kontor.parameter-value/decimal-value  36M
+    :kontor.parameter-value/citation       "Pre-FA-2024 §2(42A) — 36-month cutoff for other assets"}
 
    ;; --- §112A — listed STT-paid LTCG rate (FA 2024 cliff) -------------------
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.§112A.rate"]
-    :parameter-value/effective-from #inst "2024-07-23"
-    :parameter-value/decimal-value  0.125M
-    :parameter-value/citation       "Finance (No. 2) Act 2024 — §112A raised to 12.5 % from 10 %"}
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.§112A.rate"]
-    :parameter-value/effective-from #inst "2018-04-01"
-    :parameter-value/effective-until #inst "2024-07-23"
-    :parameter-value/decimal-value  0.10M
-    :parameter-value/citation       "Finance Act 2018 — §112A introduced at 10 %"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.§112A.rate"]
+    :kontor.parameter-value/effective-from #inst "2024-07-23"
+    :kontor.parameter-value/decimal-value  0.125M
+    :kontor.parameter-value/citation       "Finance (No. 2) Act 2024 — §112A raised to 12.5 % from 10 %"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.§112A.rate"]
+    :kontor.parameter-value/effective-from #inst "2018-04-01"
+    :kontor.parameter-value/effective-until #inst "2024-07-23"
+    :kontor.parameter-value/decimal-value  0.10M
+    :kontor.parameter-value/citation       "Finance Act 2018 — §112A introduced at 10 %"}
 
    ;; --- §111A — listed STT-paid STCG rate (FA 2024 cliff) -------------------
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.§111A.rate"]
-    :parameter-value/effective-from #inst "2024-07-23"
-    :parameter-value/decimal-value  0.20M
-    :parameter-value/citation       "Finance (No. 2) Act 2024 — §111A raised to 20 % from 15 %"}
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.§111A.rate"]
-    :parameter-value/effective-from #inst "2008-10-01"
-    :parameter-value/effective-until #inst "2024-07-23"
-    :parameter-value/decimal-value  0.15M
-    :parameter-value/citation       "Pre-FA-2024 §111A — 15 %"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.§111A.rate"]
+    :kontor.parameter-value/effective-from #inst "2024-07-23"
+    :kontor.parameter-value/decimal-value  0.20M
+    :kontor.parameter-value/citation       "Finance (No. 2) Act 2024 — §111A raised to 20 % from 15 %"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.§111A.rate"]
+    :kontor.parameter-value/effective-from #inst "2008-10-01"
+    :kontor.parameter-value/effective-until #inst "2024-07-23"
+    :kontor.parameter-value/decimal-value  0.15M
+    :kontor.parameter-value/citation       "Pre-FA-2024 §111A — 15 %"}
 
    ;; --- §112 — default LTCG rate (post-FA-2024 uniform 12.5 %) --------------
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.§112.rate"]
-    :parameter-value/effective-from #inst "2024-07-23"
-    :parameter-value/decimal-value  0.125M
-    :parameter-value/citation       "Finance (No. 2) Act 2024 — §112 uniformised to 12.5 % without indexation"}
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.§112.rate"]
-    :parameter-value/effective-from #inst "1992-04-01"
-    :parameter-value/effective-until #inst "2024-07-23"
-    :parameter-value/decimal-value  0.20M
-    :parameter-value/citation       "Pre-FA-2024 §112 — 20 % with indexation (now elective for resident indiv/HUF pre-2024 immovable only)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.§112.rate"]
+    :kontor.parameter-value/effective-from #inst "2024-07-23"
+    :kontor.parameter-value/decimal-value  0.125M
+    :kontor.parameter-value/citation       "Finance (No. 2) Act 2024 — §112 uniformised to 12.5 % without indexation"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.§112.rate"]
+    :kontor.parameter-value/effective-from #inst "1992-04-01"
+    :kontor.parameter-value/effective-until #inst "2024-07-23"
+    :kontor.parameter-value/decimal-value  0.20M
+    :kontor.parameter-value/citation       "Pre-FA-2024 §112 — 20 % with indexation (now elective for resident indiv/HUF pre-2024 immovable only)"}
 
    ;; --- §112 proviso — 20 % with indexation (FA 2024 election) --------------
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.§112.rate-with-indexation"]
-    :parameter-value/effective-from #inst "2024-07-23"
-    :parameter-value/decimal-value  0.20M
-    :parameter-value/citation       "Finance (No. 2) Act 2024 — §112 proviso — resident indiv/HUF election on pre-23-Jul-2024 immovable property"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.§112.rate-with-indexation"]
+    :kontor.parameter-value/effective-from #inst "2024-07-23"
+    :kontor.parameter-value/decimal-value  0.20M
+    :kontor.parameter-value/citation       "Finance (No. 2) Act 2024 — §112 proviso — resident indiv/HUF election on pre-23-Jul-2024 immovable property"}
 
    ;; --- §112A floor (FA 2024 raised) ----------------------------------------
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.§112A.floor"]
-    :parameter-value/effective-from #inst "2024-07-23"
-    :parameter-value/decimal-value  125000M
-    :parameter-value/citation       "Finance (No. 2) Act 2024 — §112A floor raised to ₹1.25 L (from ₹1 L)"}
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.§112A.floor"]
-    :parameter-value/effective-from #inst "2018-04-01"
-    :parameter-value/effective-until #inst "2024-07-23"
-    :parameter-value/decimal-value  100000M
-    :parameter-value/citation       "Pre-FA-2024 §112A floor — ₹1 L"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.§112A.floor"]
+    :kontor.parameter-value/effective-from #inst "2024-07-23"
+    :kontor.parameter-value/decimal-value  125000M
+    :kontor.parameter-value/citation       "Finance (No. 2) Act 2024 — §112A floor raised to ₹1.25 L (from ₹1 L)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.§112A.floor"]
+    :kontor.parameter-value/effective-from #inst "2018-04-01"
+    :kontor.parameter-value/effective-until #inst "2024-07-23"
+    :kontor.parameter-value/decimal-value  100000M
+    :kontor.parameter-value/citation       "Pre-FA-2024 §112A floor — ₹1 L"}
 
    ;; --- §54EC bond cap (₹50 L since 2014) ------------------------------------
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.§54EC.cap-per-fy"]
-    :parameter-value/effective-from #inst "2014-04-01"
-    :parameter-value/decimal-value  5000000M
-    :parameter-value/citation       "Finance Act 2014 — §54EC capped at ₹50 L per FY across all eligible bonds"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.§54EC.cap-per-fy"]
+    :kontor.parameter-value/effective-from #inst "2014-04-01"
+    :kontor.parameter-value/decimal-value  5000000M
+    :kontor.parameter-value/citation       "Finance Act 2014 — §54EC capped at ₹50 L per FY across all eligible bonds"}
 
    ;; --- §54 / §54F new-house cost cap (FA 2023, AY 2024-25+) ---------------
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.§54.cost-cap"]
-    :parameter-value/effective-from #inst "2023-04-01"
-    :parameter-value/decimal-value  100000000M
-    :parameter-value/citation       "Finance Act 2023 — §54 / §54F cap on new-residential-house cost (₹10 crore) AY 2024-25+"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.§54.cost-cap"]
+    :kontor.parameter-value/effective-from #inst "2023-04-01"
+    :kontor.parameter-value/decimal-value  100000000M
+    :kontor.parameter-value/citation       "Finance Act 2023 — §54 / §54F cap on new-residential-house cost (₹10 crore) AY 2024-25+"}
 
    ;; --- §194-IA TDS rate + threshold ----------------------------------------
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.§194-IA.rate"]
-    :parameter-value/effective-from #inst "2013-06-01"
-    :parameter-value/decimal-value  0.01M
-    :parameter-value/citation       "Finance Act 2013 — §194-IA: 1 % TDS on immovable-property purchase (FA 2024: applied to max(consideration, SDV))"}
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.§194-IA.threshold"]
-    :parameter-value/effective-from #inst "2013-06-01"
-    :parameter-value/decimal-value  5000000M
-    :parameter-value/citation       "§194-IA — TDS triggers when consideration ≥ ₹50 L"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.§194-IA.rate"]
+    :kontor.parameter-value/effective-from #inst "2013-06-01"
+    :kontor.parameter-value/decimal-value  0.01M
+    :kontor.parameter-value/citation       "Finance Act 2013 — §194-IA: 1 % TDS on immovable-property purchase (FA 2024: applied to max(consideration, SDV))"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.§194-IA.threshold"]
+    :kontor.parameter-value/effective-from #inst "2013-06-01"
+    :kontor.parameter-value/decimal-value  5000000M
+    :kontor.parameter-value/citation       "§194-IA — TDS triggers when consideration ≥ ₹50 L"}
 
    ;; --- §50C safe-harbour ratio (FA 2020: 110 %) ----------------------------
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.§50C.safe-harbour-ratio"]
-    :parameter-value/effective-from #inst "2020-04-01"
-    :parameter-value/decimal-value  1.10M
-    :parameter-value/citation       "Finance Act 2020 — §50C safe-harbour raised to 110 % (from 105 %)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.§50C.safe-harbour-ratio"]
+    :kontor.parameter-value/effective-from #inst "2020-04-01"
+    :kontor.parameter-value/decimal-value  1.10M
+    :kontor.parameter-value/citation       "Finance Act 2020 — §50C safe-harbour raised to 110 % (from 105 %)"}
 
    ;; --- 4 % cess (long-standing since FA 2018) ------------------------------
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.cess.rate"]
-    :parameter-value/effective-from #inst "2018-04-01"
-    :parameter-value/decimal-value  0.04M
-    :parameter-value/citation       "Finance Act 2018 — 4 % Health & Education cess on total tax"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.cess.rate"]
+    :kontor.parameter-value/effective-from #inst "2018-04-01"
+    :kontor.parameter-value/decimal-value  0.04M
+    :kontor.parameter-value/citation       "Finance Act 2018 — 4 % Health & Education cess on total tax"}
 
    ;; --- CII table (FY 2001-02 = 100, base since FA 2017) --------------------
    ;; Source: https://incometaxindia.gov.in/charts%20%20tables/cost-inflation-index.htm
-   {:parameter-value/parameter      [:parameter/code "IN.CGT.cii.fy-2001-02"]
-    :parameter-value/effective-from #inst "2001-04-01"
-    :parameter-value/decimal-value  100M
-    :parameter-value/citation       "CBDT Notification — CII base FY 2001-02 = 100 (FA 2017 rebase)"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2002-03"] :parameter-value/effective-from #inst "2002-04-01" :parameter-value/decimal-value 105M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2003-04"] :parameter-value/effective-from #inst "2003-04-01" :parameter-value/decimal-value 109M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2004-05"] :parameter-value/effective-from #inst "2004-04-01" :parameter-value/decimal-value 113M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2005-06"] :parameter-value/effective-from #inst "2005-04-01" :parameter-value/decimal-value 117M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2006-07"] :parameter-value/effective-from #inst "2006-04-01" :parameter-value/decimal-value 122M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2007-08"] :parameter-value/effective-from #inst "2007-04-01" :parameter-value/decimal-value 129M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2008-09"] :parameter-value/effective-from #inst "2008-04-01" :parameter-value/decimal-value 137M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2009-10"] :parameter-value/effective-from #inst "2009-04-01" :parameter-value/decimal-value 148M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2010-11"] :parameter-value/effective-from #inst "2010-04-01" :parameter-value/decimal-value 167M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2011-12"] :parameter-value/effective-from #inst "2011-04-01" :parameter-value/decimal-value 184M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2012-13"] :parameter-value/effective-from #inst "2012-04-01" :parameter-value/decimal-value 200M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2013-14"] :parameter-value/effective-from #inst "2013-04-01" :parameter-value/decimal-value 220M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2014-15"] :parameter-value/effective-from #inst "2014-04-01" :parameter-value/decimal-value 240M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2015-16"] :parameter-value/effective-from #inst "2015-04-01" :parameter-value/decimal-value 254M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2016-17"] :parameter-value/effective-from #inst "2016-04-01" :parameter-value/decimal-value 264M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2017-18"] :parameter-value/effective-from #inst "2017-04-01" :parameter-value/decimal-value 272M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2018-19"] :parameter-value/effective-from #inst "2018-04-01" :parameter-value/decimal-value 280M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2019-20"] :parameter-value/effective-from #inst "2019-04-01" :parameter-value/decimal-value 289M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2020-21"] :parameter-value/effective-from #inst "2020-04-01" :parameter-value/decimal-value 301M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2021-22"] :parameter-value/effective-from #inst "2021-04-01" :parameter-value/decimal-value 317M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2022-23"] :parameter-value/effective-from #inst "2022-04-01" :parameter-value/decimal-value 331M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2023-24"] :parameter-value/effective-from #inst "2023-04-01" :parameter-value/decimal-value 348M :parameter-value/citation "CBDT CII"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2024-25"] :parameter-value/effective-from #inst "2024-04-01" :parameter-value/decimal-value 363M :parameter-value/citation "CBDT CII FY 2024-25"}
-   {:parameter-value/parameter [:parameter/code "IN.CGT.cii.fy-2025-26"] :parameter-value/effective-from #inst "2025-04-01" :parameter-value/decimal-value 376M :parameter-value/citation "CBDT CII FY 2025-26"}])
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "IN.CGT.cii.fy-2001-02"]
+    :kontor.parameter-value/effective-from #inst "2001-04-01"
+    :kontor.parameter-value/decimal-value  100M
+    :kontor.parameter-value/citation       "CBDT Notification — CII base FY 2001-02 = 100 (FA 2017 rebase)"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2002-03"] :kontor.parameter-value/effective-from #inst "2002-04-01" :kontor.parameter-value/decimal-value 105M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2003-04"] :kontor.parameter-value/effective-from #inst "2003-04-01" :kontor.parameter-value/decimal-value 109M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2004-05"] :kontor.parameter-value/effective-from #inst "2004-04-01" :kontor.parameter-value/decimal-value 113M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2005-06"] :kontor.parameter-value/effective-from #inst "2005-04-01" :kontor.parameter-value/decimal-value 117M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2006-07"] :kontor.parameter-value/effective-from #inst "2006-04-01" :kontor.parameter-value/decimal-value 122M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2007-08"] :kontor.parameter-value/effective-from #inst "2007-04-01" :kontor.parameter-value/decimal-value 129M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2008-09"] :kontor.parameter-value/effective-from #inst "2008-04-01" :kontor.parameter-value/decimal-value 137M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2009-10"] :kontor.parameter-value/effective-from #inst "2009-04-01" :kontor.parameter-value/decimal-value 148M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2010-11"] :kontor.parameter-value/effective-from #inst "2010-04-01" :kontor.parameter-value/decimal-value 167M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2011-12"] :kontor.parameter-value/effective-from #inst "2011-04-01" :kontor.parameter-value/decimal-value 184M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2012-13"] :kontor.parameter-value/effective-from #inst "2012-04-01" :kontor.parameter-value/decimal-value 200M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2013-14"] :kontor.parameter-value/effective-from #inst "2013-04-01" :kontor.parameter-value/decimal-value 220M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2014-15"] :kontor.parameter-value/effective-from #inst "2014-04-01" :kontor.parameter-value/decimal-value 240M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2015-16"] :kontor.parameter-value/effective-from #inst "2015-04-01" :kontor.parameter-value/decimal-value 254M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2016-17"] :kontor.parameter-value/effective-from #inst "2016-04-01" :kontor.parameter-value/decimal-value 264M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2017-18"] :kontor.parameter-value/effective-from #inst "2017-04-01" :kontor.parameter-value/decimal-value 272M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2018-19"] :kontor.parameter-value/effective-from #inst "2018-04-01" :kontor.parameter-value/decimal-value 280M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2019-20"] :kontor.parameter-value/effective-from #inst "2019-04-01" :kontor.parameter-value/decimal-value 289M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2020-21"] :kontor.parameter-value/effective-from #inst "2020-04-01" :kontor.parameter-value/decimal-value 301M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2021-22"] :kontor.parameter-value/effective-from #inst "2021-04-01" :kontor.parameter-value/decimal-value 317M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2022-23"] :kontor.parameter-value/effective-from #inst "2022-04-01" :kontor.parameter-value/decimal-value 331M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2023-24"] :kontor.parameter-value/effective-from #inst "2023-04-01" :kontor.parameter-value/decimal-value 348M :kontor.parameter-value/citation "CBDT CII"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2024-25"] :kontor.parameter-value/effective-from #inst "2024-04-01" :kontor.parameter-value/decimal-value 363M :kontor.parameter-value/citation "CBDT CII FY 2024-25"}
+   {:kontor.parameter-value/parameter [:kontor.parameter/code "IN.CGT.cii.fy-2025-26"] :kontor.parameter-value/effective-from #inst "2025-04-01" :kontor.parameter-value/decimal-value 376M :kontor.parameter-value/citation "CBDT CII FY 2025-26"}])
 
 ;; ============================================================================
 ;; Provisions — minimal v1 set (most IN CGT logic lives in the provider)
@@ -329,15 +329,15 @@
   [;; --------------------------------------------------------------------
    ;; 4 % cess — surtax on standalone CGT liability
    ;; --------------------------------------------------------------------
-   {:provision/code            "IN-FA-2018-cess-cgt"
-    :provision/jurisdiction    :in
-    :provision/concept         [:kontor.tax-concept/code :surtax]
-    :provision/title           "Health & Education cess — 4 % on standalone CGT tax"
-    :provision/citation        "https://incometaxindia.gov.in/tutorials/65.exemptions-from-capital-gains.pdf"
-    :provision/effective-from  #inst "2018-04-01"
-    :provision/priority        100
-    :provision/condition       (pr-str [:gt [:inputs :standalone-cgt-running-tax] 0M])
-    :provision/consequence     (pr-str {:op :surtax
+   {:kontor.provision/code            "IN-FA-2018-cess-cgt"
+    :kontor.provision/jurisdiction    :in
+    :kontor.provision/concept         [:kontor.tax-concept/code :surtax]
+    :kontor.provision/title           "Health & Education cess — 4 % on standalone CGT tax"
+    :kontor.provision/citation        "https://incometaxindia.gov.in/tutorials/65.exemptions-from-capital-gains.pdf"
+    :kontor.provision/effective-from  #inst "2018-04-01"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:gt [:inputs :standalone-cgt-running-tax] 0M])
+    :kontor.provision/consequence     (pr-str {:op :surtax
                                         :code :health-education-cess
                                         :label "§ 2(11) Finance Act — Health & Education cess (4 %)"
                                         :amount-from :compute-fn
@@ -349,7 +349,7 @@
 
 (defn install!
   "Install IN CGT statute (parameters + provisions) into `conn`.
-   Idempotent — `:parameter/code` and `:provision/code` are unique
+   Idempotent — `:kontor.parameter/code` and `:kontor.provision/code` are unique
    identity attrs."
   [conn]
   (d/transact conn parameters)

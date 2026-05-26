@@ -47,11 +47,11 @@
   ;; Cash sale: $1000 net @ 16% IVA = 1160 gross on Feb 15.
   ;; (Using cash-sale so IVA recognised immediately on 208.01.)
   (mx-invoice/post-mx-invoice! conn
-                               {:invoice/external-id "INV-2025-1"
-                                :invoice/issue-date feb-15
-                                :invoice/cash-sale? true
-                                :invoice/lines [{:invoice-line/quantity 1
-                                                 :invoice-line/unit-price 1000M}]})
+                               {:kontor.invoice/external-id "INV-2025-1"
+                                :kontor.invoice/issue-date feb-15
+                                :kontor.invoice/cash-sale? true
+                                :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                                 :kontor.invoice-line/unit-price 1000M}]})
   ;; Office supplies expense: $300 paid from bank Feb 15.
   (let [db (d/db conn)
         mxn (:db/id (d/entity db [:kontor.commodity/symbol "MXN"]))

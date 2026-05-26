@@ -17,7 +17,7 @@
      :dispute/state
      :credit-hold/state           (P0-5 review fix, 2026-05-13)
      :dunning-pause/state         (P0-5 review fix, 2026-05-13)
-     :invoice/collections-status  (facet on the kernel :invoice)
+     :kontor.invoice/collections-status  (facet on the kernel :invoice)
 
    Idempotent: composite-tuple identities prevent duplicate seeds
    on re-install."
@@ -504,18 +504,18 @@
     :db/cardinality :db.cardinality/one}])
 
 ;; ============================================================================
-;; Invoice extensions — :invoice/collections-status facet
+;; Invoice extensions — :kontor.invoice/collections-status facet
 ;; ============================================================================
 
 (def ^:private invoice-extensions
   ;; ADR-043 + ADR-034 multi-facet: collections-status is independent
-  ;; of procurement's :invoice/match-status.
-  [{:db/ident       :invoice/collections-status
+  ;; of procurement's :kontor.invoice/match-status.
+  [{:db/ident       :kontor.invoice/collections-status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-043 facet. Sales/AR invoices flow through
                      this state machine; purchase invoices ignore
-                     it. Distinct from procurement's :invoice/match-
+                     it. Distinct from procurement's :kontor.invoice/match-
                      status.
                      #{:current :overdue :in-collection :disputed
                        :paid :written-off}"}])
@@ -537,7 +537,7 @@
 (def status-transition-seeds
   "ADR-034 :status-transition rows for all four state machines:
    :collection-case/state, :payment-promise/status, :dispute/state,
-   :invoice/collections-status."
+   :kontor.invoice/collections-status."
   [;; --- :collection-case/state ------------------------------------
    {:kontor.status-transition/entity-type :collection-case
     :kontor.status-transition/facet :collection-case/state
@@ -736,75 +736,75 @@
     :kontor.status-transition/active true
     :kontor.status-transition/name "Manager Resolution"}
 
-   ;; --- :invoice/collections-status (sales-side facet) -----------
+   ;; --- :kontor.invoice/collections-status (sales-side facet) -----------
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/facet :kontor.invoice/collections-status
     :kontor.status-transition/from :nil
     :kontor.status-transition/to :current
     :kontor.status-transition/active true
     :kontor.status-transition/name "Invoice Sent (current)"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/facet :kontor.invoice/collections-status
     :kontor.status-transition/from :current
     :kontor.status-transition/to :overdue
     :kontor.status-transition/active true
     :kontor.status-transition/name "Past Grace — Now Overdue"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/facet :kontor.invoice/collections-status
     :kontor.status-transition/from :overdue
     :kontor.status-transition/to :in-collection
     :kontor.status-transition/active true
     :kontor.status-transition/name "Routed to Collections (case opened)"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/facet :kontor.invoice/collections-status
     :kontor.status-transition/from :current
     :kontor.status-transition/to :disputed
     :kontor.status-transition/active true
     :kontor.status-transition/name "Customer Disputes While Current"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/facet :kontor.invoice/collections-status
     :kontor.status-transition/from :overdue
     :kontor.status-transition/to :disputed
     :kontor.status-transition/active true
     :kontor.status-transition/name "Customer Disputes While Overdue"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/facet :kontor.invoice/collections-status
     :kontor.status-transition/from :in-collection
     :kontor.status-transition/to :disputed
     :kontor.status-transition/active true
     :kontor.status-transition/name "Customer Disputes In Collection"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/facet :kontor.invoice/collections-status
     :kontor.status-transition/from :disputed
     :kontor.status-transition/to :overdue
     :kontor.status-transition/active true
     :kontor.status-transition/name "Dispute Resolved (back to overdue)"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/facet :kontor.invoice/collections-status
     :kontor.status-transition/from :disputed
     :kontor.status-transition/to :paid
     :kontor.status-transition/active true
     :kontor.status-transition/name "Dispute Resolved (paid)"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/facet :kontor.invoice/collections-status
     :kontor.status-transition/from :current
     :kontor.status-transition/to :paid
     :kontor.status-transition/active true
     :kontor.status-transition/name "Paid While Current"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/facet :kontor.invoice/collections-status
     :kontor.status-transition/from :overdue
     :kontor.status-transition/to :paid
     :kontor.status-transition/active true
     :kontor.status-transition/name "Paid While Overdue"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/facet :kontor.invoice/collections-status
     :kontor.status-transition/from :in-collection
     :kontor.status-transition/to :paid
     :kontor.status-transition/active true
     :kontor.status-transition/name "Paid From Collections"}
    {:kontor.status-transition/entity-type :invoice
-    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/facet :kontor.invoice/collections-status
     :kontor.status-transition/from :in-collection
     :kontor.status-transition/to :written-off
     :kontor.status-transition/active true

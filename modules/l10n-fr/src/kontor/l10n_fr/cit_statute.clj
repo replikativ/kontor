@@ -59,62 +59,62 @@
 ;; ============================================================================
 
 (def parameters
-  "FR CIT parameter definitions — one row per `:parameter/code`.
+  "FR CIT parameter definitions — one row per `:kontor.parameter/code`.
    Values live in `parameter-values` / `parameter-brackets` keyed by
    `:effective-from`."
-  [{:parameter/code         "FR.IS.standard-rate"
-    :parameter/label        "Impôt sur les sociétés (IS) — taux normal (flat rate when not PME)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046868562"}
+  [{:kontor.parameter/code         "FR.IS.standard-rate"
+    :kontor.parameter/label        "Impôt sur les sociétés (IS) — taux normal (flat rate when not PME)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046868562"}
 
-   {:parameter/code         "FR.IS.pme-brackets"
-    :parameter/label        "IS PME progressive bracket scale (CGI Art. 219 I-b) — 15 % then 25 %"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :bracket-scale
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046868562"}
+   {:kontor.parameter/code         "FR.IS.pme-brackets"
+    :kontor.parameter/label        "IS PME progressive bracket scale (CGI Art. 219 I-b) — 15 % then 25 %"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :bracket-scale
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046868562"}
 
-   {:parameter/code         "FR.IS.pme-bracket-upper"
-    :parameter/label        "IS PME reduced-rate bracket upper (CGI Art. 219 I-b) — €42 500"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046868562"}
+   {:kontor.parameter/code         "FR.IS.pme-bracket-upper"
+    :kontor.parameter/label        "IS PME reduced-rate bracket upper (CGI Art. 219 I-b) — €42 500"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046868562"}
 
-   {:parameter/code         "FR.CGE.rate"
-    :parameter/label        "Contribution sociale sur l'IS (CGE) — 3.3 % surtax (CGI Art. 235 ter ZC)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000031011715"}
+   {:kontor.parameter/code         "FR.CGE.rate"
+    :kontor.parameter/label        "Contribution sociale sur l'IS (CGE) — 3.3 % surtax (CGI Art. 235 ter ZC)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000031011715"}
 
-   {:parameter/code         "FR.CGE.abattement"
-    :parameter/label        "CGE abattement — IS amount below which CGE is 0 (€763 000)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000031011715"}
+   {:kontor.parameter/code         "FR.CGE.abattement"
+    :kontor.parameter/label        "CGE abattement — IS amount below which CGE is 0 (€763 000)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000031011715"}
 
-   {:parameter/code         "FR.MereFille.quote-part"
-    :parameter/label        "Régime mère-fille — quote-part de frais et charges (5 % réintégration sur dividendes exonérés)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000048831340"}
+   {:kontor.parameter/code         "FR.MereFille.quote-part"
+    :kontor.parameter/label        "Régime mère-fille — quote-part de frais et charges (5 % réintégration sur dividendes exonérés)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000048831340"}
 
-   {:parameter/code         "FR.CIR.rate-base"
-    :parameter/label        "Crédit d'Impôt Recherche (CIR) — base rate on first €100 M (30 %)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051215816"}
+   {:kontor.parameter/code         "FR.CIR.rate-base"
+    :kontor.parameter/label        "Crédit d'Impôt Recherche (CIR) — base rate on first €100 M (30 %)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051215816"}
 
-   {:parameter/code         "FR.CIR.rate-above"
-    :parameter/label        "Crédit d'Impôt Recherche (CIR) — reduced rate above €100 M (5 %)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051215816"}
+   {:kontor.parameter/code         "FR.CIR.rate-above"
+    :kontor.parameter/label        "Crédit d'Impôt Recherche (CIR) — reduced rate above €100 M (5 %)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051215816"}
 
-   {:parameter/code         "FR.CIR.threshold"
-    :parameter/label        "Crédit d'Impôt Recherche (CIR) — €100 M kink between base + above rates"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051215816"}])
+   {:kontor.parameter/code         "FR.CIR.threshold"
+    :kontor.parameter/label        "Crédit d'Impôt Recherche (CIR) — €100 M kink between base + above rates"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051215816"}])
 
 (def parameter-values
   "FR CIT scalar parameter values with their statutory effective
@@ -122,45 +122,45 @@
    stable since 2022-01-01 (loi de finances 2018 staged reduction
    landed at 25 % on 2022-01-01). Mère-fille 5 % stable since 2000;
    CIR rates stable since 2008 (the 30 % / 5 % structure)."
-  [{:parameter-value/parameter      [:parameter/code "FR.IS.standard-rate"]
-    :parameter-value/effective-from #inst "2022-01-01"
-    :parameter-value/decimal-value  0.25M
-    :parameter-value/citation       "CGI Art. 219 I — taux normal 25 % (loi de finances 2018 staged reduction landed 2022-01-01)"}
+  [{:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.IS.standard-rate"]
+    :kontor.parameter-value/effective-from #inst "2022-01-01"
+    :kontor.parameter-value/decimal-value  0.25M
+    :kontor.parameter-value/citation       "CGI Art. 219 I — taux normal 25 % (loi de finances 2018 staged reduction landed 2022-01-01)"}
 
-   {:parameter-value/parameter      [:parameter/code "FR.IS.pme-bracket-upper"]
-    :parameter-value/effective-from #inst "2023-01-01"
-    :parameter-value/decimal-value  42500M
-    :parameter-value/citation       "CGI Art. 219 I-b — PME upper raised from €38 120 to €42 500 by LF 2023 Art. 37"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.IS.pme-bracket-upper"]
+    :kontor.parameter-value/effective-from #inst "2023-01-01"
+    :kontor.parameter-value/decimal-value  42500M
+    :kontor.parameter-value/citation       "CGI Art. 219 I-b — PME upper raised from €38 120 to €42 500 by LF 2023 Art. 37"}
 
-   {:parameter-value/parameter      [:parameter/code "FR.CGE.rate"]
-    :parameter-value/effective-from #inst "2000-01-01"
-    :parameter-value/decimal-value  0.033M
-    :parameter-value/citation       "CGI Art. 235 ter ZC — Contribution sociale 3.3 % stable since 2000"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGE.rate"]
+    :kontor.parameter-value/effective-from #inst "2000-01-01"
+    :kontor.parameter-value/decimal-value  0.033M
+    :kontor.parameter-value/citation       "CGI Art. 235 ter ZC — Contribution sociale 3.3 % stable since 2000"}
 
-   {:parameter-value/parameter      [:parameter/code "FR.CGE.abattement"]
-    :parameter-value/effective-from #inst "2000-01-01"
-    :parameter-value/decimal-value  763000M
-    :parameter-value/citation       "CGI Art. 235 ter ZC — abattement €763 000 stable since enactment"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGE.abattement"]
+    :kontor.parameter-value/effective-from #inst "2000-01-01"
+    :kontor.parameter-value/decimal-value  763000M
+    :kontor.parameter-value/citation       "CGI Art. 235 ter ZC — abattement €763 000 stable since enactment"}
 
-   {:parameter-value/parameter      [:parameter/code "FR.MereFille.quote-part"]
-    :parameter-value/effective-from #inst "2000-01-01"
-    :parameter-value/decimal-value  0.05M
-    :parameter-value/citation       "CGI Art. 216 I al. 2 — quote-part de frais et charges 5 % (stable since enactment)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.MereFille.quote-part"]
+    :kontor.parameter-value/effective-from #inst "2000-01-01"
+    :kontor.parameter-value/decimal-value  0.05M
+    :kontor.parameter-value/citation       "CGI Art. 216 I al. 2 — quote-part de frais et charges 5 % (stable since enactment)"}
 
-   {:parameter-value/parameter      [:parameter/code "FR.CIR.rate-base"]
-    :parameter-value/effective-from #inst "2008-01-01"
-    :parameter-value/decimal-value  0.30M
-    :parameter-value/citation       "CGI Art. 244 quater B I — 30 % sur dépenses ≤ €100 M (stable since LF 2008)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CIR.rate-base"]
+    :kontor.parameter-value/effective-from #inst "2008-01-01"
+    :kontor.parameter-value/decimal-value  0.30M
+    :kontor.parameter-value/citation       "CGI Art. 244 quater B I — 30 % sur dépenses ≤ €100 M (stable since LF 2008)"}
 
-   {:parameter-value/parameter      [:parameter/code "FR.CIR.rate-above"]
-    :parameter-value/effective-from #inst "2008-01-01"
-    :parameter-value/decimal-value  0.05M
-    :parameter-value/citation       "CGI Art. 244 quater B I — 5 % sur dépenses > €100 M (stable since LF 2008)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CIR.rate-above"]
+    :kontor.parameter-value/effective-from #inst "2008-01-01"
+    :kontor.parameter-value/decimal-value  0.05M
+    :kontor.parameter-value/citation       "CGI Art. 244 quater B I — 5 % sur dépenses > €100 M (stable since LF 2008)"}
 
-   {:parameter-value/parameter      [:parameter/code "FR.CIR.threshold"]
-    :parameter-value/effective-from #inst "2008-01-01"
-    :parameter-value/decimal-value  100000000M
-    :parameter-value/citation       "CGI Art. 244 quater B I — €100 M kink between 30 % and 5 % rates"}])
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CIR.threshold"]
+    :kontor.parameter-value/effective-from #inst "2008-01-01"
+    :kontor.parameter-value/decimal-value  100000000M
+    :kontor.parameter-value/citation       "CGI Art. 244 quater B I — €100 M kink between 30 % and 5 % rates"}])
 
 (def parameter-brackets
   "FR PME bracket scale — the two-bracket ladder swapped in by the
@@ -169,16 +169,16 @@
    value €42 500 mirrors the `FR.IS.pme-bracket-upper` scalar parameter
    (kept as a separate scalar for citation / display) — both move
    together if LF amends the cap."
-  [{:parameter-bracket/parameter      [:parameter/code "FR.IS.pme-brackets"]
-    :parameter-bracket/index          0
-    :parameter-bracket/rate           0.15M
-    :parameter-bracket/upper          42500M
-    :parameter-bracket/effective-from #inst "2023-01-01"}
+  [{:kontor.parameter-bracket/parameter      [:kontor.parameter/code "FR.IS.pme-brackets"]
+    :kontor.parameter-bracket/index          0
+    :kontor.parameter-bracket/rate           0.15M
+    :kontor.parameter-bracket/upper          42500M
+    :kontor.parameter-bracket/effective-from #inst "2023-01-01"}
 
-   {:parameter-bracket/parameter      [:parameter/code "FR.IS.pme-brackets"]
-    :parameter-bracket/index          1
-    :parameter-bracket/rate           0.25M
-    :parameter-bracket/effective-from #inst "2023-01-01"}])
+   {:kontor.parameter-bracket/parameter      [:kontor.parameter/code "FR.IS.pme-brackets"]
+    :kontor.parameter-bracket/index          1
+    :kontor.parameter-bracket/rate           0.25M
+    :kontor.parameter-bracket/effective-from #inst "2023-01-01"}])
 
 ;; ============================================================================
 ;; Provisions — FR IS statute as :provision data
@@ -204,17 +204,17 @@
    ;; ≤ €10 M + capital libéré + ≥75 % individual ownership per CGI
    ;; Art. 219 I-b) lives OUTSIDE the substrate per note 109 §3.1 — the
    ;; consumer adjudicates and signals via `:tax-unit :pme?`.
-   {:provision/code            "FR-CGI-219-I-b-PME"
-    :provision/jurisdiction    :fr
-    :provision/concept         [:kontor.tax-concept/code :elective-regime]
-    :provision/title           "CGI Art. 219 I-b — Taux réduit PME (15 % puis 25 %)"
-    :provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046868562"
-    :provision/effective-from  #inst "2023-01-01"
-    :provision/priority        100
-    :provision/condition       (pr-str [:and
+   {:kontor.provision/code            "FR-CGI-219-I-b-PME"
+    :kontor.provision/jurisdiction    :fr
+    :kontor.provision/concept         [:kontor.tax-concept/code :elective-regime]
+    :kontor.provision/title           "CGI Art. 219 I-b — Taux réduit PME (15 % puis 25 %)"
+    :kontor.provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046868562"
+    :kontor.provision/effective-from  #inst "2023-01-01"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:and
                                         [:eq :component :is]
                                         [:eq [:tax-unit :pme?] true]])
-    :provision/consequence     (pr-str {:op       :schedule-override
+    :kontor.provision/consequence     (pr-str {:op       :schedule-override
                                         :code     :fr-is-pme
                                         :label    "FR IS PME — 15 % puis 25 %"
                                         :schedule {:schedule/type :progressive-bracket
@@ -234,17 +234,17 @@
    ;;
    ;; Consumer supplies `:inputs :participation-dividends` as the GROSS
    ;; dividend amount received from qualifying subsidiaries.
-   {:provision/code            "FR-CGI-145-216-mere-fille"
-    :provision/jurisdiction    :fr
-    :provision/concept         [:kontor.tax-concept/code :base-transform-add]
-    :provision/title           "CGI Art. 145 + 216 I — Régime mère-fille (5 % quote-part de frais et charges)"
-    :provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000048831340"
-    :provision/effective-from  #inst "2000-01-01"
-    :provision/priority        200
-    :provision/condition       (pr-str [:and
+   {:kontor.provision/code            "FR-CGI-145-216-mere-fille"
+    :kontor.provision/jurisdiction    :fr
+    :kontor.provision/concept         [:kontor.tax-concept/code :base-transform-add]
+    :kontor.provision/title           "CGI Art. 145 + 216 I — Régime mère-fille (5 % quote-part de frais et charges)"
+    :kontor.provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000048831340"
+    :kontor.provision/effective-from  #inst "2000-01-01"
+    :kontor.provision/priority        200
+    :kontor.provision/condition       (pr-str [:and
                                         [:eq :component :is]
                                         [:gt [:inputs :participation-dividends] 0M]])
-    :provision/consequence     (pr-str {:op          :base-add
+    :kontor.provision/consequence     (pr-str {:op          :base-add
                                         :code        :fr-mere-fille-quote-part
                                         :label       "Quote-part 5 % (mère-fille)"
                                         :amount-from :compute-fn
@@ -257,17 +257,17 @@
    ;; capital tests) suppresses the surtax entirely — consumer signals
    ;; via `:tax-unit :cge-exempt?`. The €763 000 abattement is built
    ;; into the compute-fn (reads `:running` IS).
-   {:provision/code            "FR-CGI-235-ter-ZC-CGE"
-    :provision/jurisdiction    :fr
-    :provision/concept         [:kontor.tax-concept/code :surtax]
-    :provision/title           "CGI Art. 235 ter ZC — Contribution sociale 3.3 % sur IS (au-delà de €763 000)"
-    :provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000031011715"
-    :provision/effective-from  #inst "2000-01-01"
-    :provision/priority        100
-    :provision/condition       (pr-str [:and
+   {:kontor.provision/code            "FR-CGI-235-ter-ZC-CGE"
+    :kontor.provision/jurisdiction    :fr
+    :kontor.provision/concept         [:kontor.tax-concept/code :surtax]
+    :kontor.provision/title           "CGI Art. 235 ter ZC — Contribution sociale 3.3 % sur IS (au-delà de €763 000)"
+    :kontor.provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000031011715"
+    :kontor.provision/effective-from  #inst "2000-01-01"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:and
                                         [:eq :component :is]
                                         [:not [:eq [:tax-unit :cge-exempt?] true]]])
-    :provision/consequence     (pr-str {:op          :surtax
+    :kontor.provision/consequence     (pr-str {:op          :surtax
                                         :code        :fr-cge
                                         :label       "Contribution sociale 3.3 % (CGE)"
                                         :amount-from :compute-fn
@@ -282,17 +282,17 @@
    ;; a transfer to the taxpayer; false ⇒ credit floors liability at
    ;; zero and carries forward 3 years, out-of-substrate inter-period
    ;; carry).
-   {:provision/code            "FR-CGI-244-quater-B-CIR"
-    :provision/jurisdiction    :fr
-    :provision/concept         [:kontor.tax-concept/code :refundable-credit]
-    :provision/title           "CGI Art. 244 quater B — Crédit d'Impôt Recherche (30 % / 5 %)"
-    :provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051215816"
-    :provision/effective-from  #inst "2008-01-01"
-    :provision/priority        200
-    :provision/condition       (pr-str [:and
+   {:kontor.provision/code            "FR-CGI-244-quater-B-CIR"
+    :kontor.provision/jurisdiction    :fr
+    :kontor.provision/concept         [:kontor.tax-concept/code :refundable-credit]
+    :kontor.provision/title           "CGI Art. 244 quater B — Crédit d'Impôt Recherche (30 % / 5 %)"
+    :kontor.provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051215816"
+    :kontor.provision/effective-from  #inst "2008-01-01"
+    :kontor.provision/priority        200
+    :kontor.provision/condition       (pr-str [:and
                                         [:eq :component :is]
                                         [:gt [:inputs :cir-qualifying-expenses] 0M]])
-    :provision/consequence     (pr-str {:op          :credit
+    :kontor.provision/consequence     (pr-str {:op          :credit
                                         :code        :fr-cir
                                         :label       "Crédit d'Impôt Recherche (CIR)"
                                         :refundable? true
@@ -308,25 +308,25 @@
    index, effective-from)` triple is already in `db`. Used to make the
    bracket install idempotent — `:parameter-bracket` carries no
    `:db/unique :db.unique/identity` attr in the kernel schema (the
-   parent `:parameter/code` is the natural-key seam; the bracket's
+   parent `:kontor.parameter/code` is the natural-key seam; the bracket's
    identity is the `(parent, index, effective-from)` triple), so the
    provider must do the dedup itself."
-  [db {:parameter-bracket/keys [parameter index effective-from]}]
+  [db {:kontor.parameter-bracket/keys [parameter index effective-from]}]
   (boolean
    (seq
     (d/q '[:find ?b
            :in $ ?code ?idx ?from
            :where
-           [?p :parameter/code ?code]
-           [?b :parameter-bracket/parameter ?p]
-           [?b :parameter-bracket/index ?idx]
-           [?b :parameter-bracket/effective-from ?from]]
+           [?p :kontor.parameter/code ?code]
+           [?b :kontor.parameter-bracket/parameter ?p]
+           [?b :kontor.parameter-bracket/index ?idx]
+           [?b :kontor.parameter-bracket/effective-from ?from]]
          db (second parameter) index effective-from))))
 
 (defn install!
   "Install FR CIT statute (parameters + parameter-values +
    parameter-brackets + provisions) into `conn`. Idempotent —
-   `:parameter/code` and `:provision/code` are unique identity attrs
+   `:kontor.parameter/code` and `:kontor.provision/code` are unique identity attrs
    (upsert on re-install); parameter-brackets get explicit dedup via
    `bracket-row-already-present?` since the kernel schema does not
    carry a `:db/unique` on them."

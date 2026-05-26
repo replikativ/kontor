@@ -42,11 +42,11 @@
    stake/holding thresholds + CIT rate are owned by `cgt-statute`; this
    file adds only the §10 Abs 4 low-tax threshold that gates the
    switch-over to taxable for foreign-source participation income."
-  [{:parameter/code         "AT.KStG.§10-Abs-4.low-tax-threshold"
-    :parameter/label        "§10 Abs 4 KStG — Switch-over effective-tax-rate threshold for foreign portfolio / Schachtel income (12.5 % pre-2026 → 15 % from 2026 per Mindestbesteuerungsgesetz)"
-    :parameter/jurisdiction :at
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.jusline.at/gesetz/kstg/paragraf/10"}])
+  [{:kontor.parameter/code         "AT.KStG.§10-Abs-4.low-tax-threshold"
+    :kontor.parameter/label        "§10 Abs 4 KStG — Switch-over effective-tax-rate threshold for foreign portfolio / Schachtel income (12.5 % pre-2026 → 15 % from 2026 per Mindestbesteuerungsgesetz)"
+    :kontor.parameter/jurisdiction :at
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.jusline.at/gesetz/kstg/paragraf/10"}])
 
 ;; ============================================================================
 ;; Parameter values — date-keyed value history
@@ -59,16 +59,16 @@
    aligning AT's switch-over trigger with the OECD Pillar Two GloBE
    15 % effective minimum. Bitemporal cliff — `parameter-value-at`
    selects the rate effective at the asked `:as-of` instant."
-  [{:parameter-value/parameter       [:parameter/code "AT.KStG.§10-Abs-4.low-tax-threshold"]
-    :parameter-value/effective-from  #inst "2014-01-01"
-    :parameter-value/effective-until #inst "2026-01-01"
-    :parameter-value/decimal-value   0.125M
-    :parameter-value/citation        "§10 Abs 4 KStG (AbgÄG 2014, BGBl I 2014/13) — 12.5 % low-tax threshold for switch-over to taxable on foreign-portfolio and Schachtel income (2014-01-01 to 2025-12-31)"}
+  [{:kontor.parameter-value/parameter       [:kontor.parameter/code "AT.KStG.§10-Abs-4.low-tax-threshold"]
+    :kontor.parameter-value/effective-from  #inst "2014-01-01"
+    :kontor.parameter-value/effective-until #inst "2026-01-01"
+    :kontor.parameter-value/decimal-value   0.125M
+    :kontor.parameter-value/citation        "§10 Abs 4 KStG (AbgÄG 2014, BGBl I 2014/13) — 12.5 % low-tax threshold for switch-over to taxable on foreign-portfolio and Schachtel income (2014-01-01 to 2025-12-31)"}
 
-   {:parameter-value/parameter      [:parameter/code "AT.KStG.§10-Abs-4.low-tax-threshold"]
-    :parameter-value/effective-from #inst "2026-01-01"
-    :parameter-value/decimal-value  0.15M
-    :parameter-value/citation       "§10 Abs 4 KStG (Mindestbesteuerungsgesetz, BGBl I 2023/187) — 15 % low-tax threshold ab 2026-01-01 (Pillar Two / GloBE alignment)"}])
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "AT.KStG.§10-Abs-4.low-tax-threshold"]
+    :kontor.parameter-value/effective-from #inst "2026-01-01"
+    :kontor.parameter-value/decimal-value  0.15M
+    :kontor.parameter-value/citation       "§10 Abs 4 KStG (Mindestbesteuerungsgesetz, BGBl I 2023/187) — 15 % low-tax threshold ab 2026-01-01 (Pillar Two / GloBE alignment)"}])
 
 ;; ============================================================================
 ;; Provisions — empty for v1
@@ -111,7 +111,7 @@
 
 (defn install!
   "Install AT investment-income statute (parameters + provisions) into
-   `conn`. Idempotent via `:parameter/code` + `:provision/code` unique
+   `conn`. Idempotent via `:kontor.parameter/code` + `:kontor.provision/code` unique
    identity attrs.
 
    ASSUMES the AT CGT statute has already been installed — this

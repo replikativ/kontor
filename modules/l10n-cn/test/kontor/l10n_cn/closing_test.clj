@@ -48,10 +48,10 @@
   [conn]
   ;; Sales invoice — CNY 10,000 net @ 13% → CNY 11,300 gross on Feb 15.
   (cn-invoice/post-cn-invoice! conn
-                               {:invoice/external-id "INV-CN-2025-1"
-                                :invoice/issue-date feb-15
-                                :invoice/lines [{:invoice-line/quantity 1
-                                                 :invoice-line/unit-price 10000M}]})
+                               {:kontor.invoice/external-id "INV-CN-2025-1"
+                                :kontor.invoice/issue-date feb-15
+                                :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                                 :kontor.invoice-line/unit-price 10000M}]})
   ;; Selling expense — CNY 6,000 paid from bank on Feb 15.
   (let [db (d/db conn)
         cny (:db/id (d/entity db [:kontor.commodity/symbol "CNY"]))
@@ -92,10 +92,10 @@
          :kontor.posting/commodity cny :kontor.posting/posted-at jun-1}]})))
   ;; Add a second sales invoice to push net P&L away from break-even.
   (cn-invoice/post-cn-invoice! conn
-                               {:invoice/external-id "INV-CN-2025-2"
-                                :invoice/issue-date jun-1
-                                :invoice/lines [{:invoice-line/quantity 1
-                                                 :invoice-line/unit-price 5000M}]})
+                               {:kontor.invoice/external-id "INV-CN-2025-2"
+                                :kontor.invoice/issue-date jun-1
+                                :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                                 :kontor.invoice-line/unit-price 5000M}]})
   ;; Expected end-of-year (before close):
   ;;   revenue 5001.13   = -15,000 (credit; income natural)
   ;;   selling 5602      =  +6,000

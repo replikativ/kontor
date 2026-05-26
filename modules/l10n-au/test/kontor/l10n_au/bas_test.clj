@@ -104,10 +104,10 @@
     (let [conn (bootstrap)
           ;; Post in FY26 Q3 (Jan-Mar 2026).
           _ (inv/post-au-invoice! conn
-                                  {:invoice/external-id "INV-Q3-1"
-                                   :invoice/issue-date #inst "2026-02-15T00:00:00Z"
-                                   :invoice/lines [{:invoice-line/quantity 1
-                                                    :invoice-line/unit-price 10000M}]})
+                                  {:kontor.invoice/external-id "INV-Q3-1"
+                                   :kontor.invoice/issue-date #inst "2026-02-15T00:00:00Z"
+                                   :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                                    :kontor.invoice-line/unit-price 10000M}]})
           r (bas/compute-bas conn {:fy 2026 :quarter 3})]
       (is (= :quarterly (:bas/cadence r)))
       (is (money/equiv? (aud "10000.00") (get-in r [:bas/labels :G1]))
@@ -122,10 +122,10 @@
               isolation)."
     (let [conn (bootstrap)
           _ (inv/post-au-invoice! conn
-                                  {:invoice/external-id "INV-Q3-EX"
-                                   :invoice/issue-date #inst "2026-02-15T00:00:00Z"
-                                   :invoice/lines [{:invoice-line/quantity 1
-                                                    :invoice-line/unit-price 5000M}]})
+                                  {:kontor.invoice/external-id "INV-Q3-EX"
+                                   :kontor.invoice/issue-date #inst "2026-02-15T00:00:00Z"
+                                   :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                                    :kontor.invoice-line/unit-price 5000M}]})
           r (bas/compute-bas conn {:fy 2026 :quarter 4})]
       (is (money/equiv? (aud "0.00") (get-in r [:bas/labels :1A]))
           "FY26 Q4 = Apr-Jun 2026, sale on Feb 15 not included")
@@ -139,10 +139,10 @@
   (testing "Simpler-BAS mode publishes G1, 1A, 1B and drops the rest"
     (let [conn (bootstrap)
           _ (inv/post-au-invoice! conn
-                                  {:invoice/external-id "INV-SIMPLER"
-                                   :invoice/issue-date #inst "2026-02-15T00:00:00Z"
-                                   :invoice/lines [{:invoice-line/quantity 1
-                                                    :invoice-line/unit-price 100M}]})
+                                  {:kontor.invoice/external-id "INV-SIMPLER"
+                                   :kontor.invoice/issue-date #inst "2026-02-15T00:00:00Z"
+                                   :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                                    :kontor.invoice-line/unit-price 100M}]})
           r (bas/compute-bas conn {:fy 2026 :quarter 3
                                    :bas/mode :simpler})]
       (is (= :simpler (:bas/mode r)))
@@ -166,10 +166,10 @@
     (let [conn (bootstrap)
           ;; Post in FY26 month 8 (Feb 2026).
           _ (inv/post-au-invoice! conn
-                                  {:invoice/external-id "INV-MON-1"
-                                   :invoice/issue-date #inst "2026-02-15T00:00:00Z"
-                                   :invoice/lines [{:invoice-line/quantity 1
-                                                    :invoice-line/unit-price 1000M}]})
+                                  {:kontor.invoice/external-id "INV-MON-1"
+                                   :kontor.invoice/issue-date #inst "2026-02-15T00:00:00Z"
+                                   :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                                    :kontor.invoice-line/unit-price 1000M}]})
           r (bas/compute-bas conn {:fy 2026 :month 8})]
       (is (= :monthly (:bas/cadence r)))
       (is (money/equiv? (aud "100.00") (get-in r [:bas/labels :1A]))))))

@@ -49,10 +49,10 @@
   [conn]
   ;; Sales invoice: A$1000 net @ 10% GST → A$1100 gross on Aug 15 2025.
   (au-invoice/post-au-invoice! conn
-                               {:invoice/external-id "INV-2026-1"
-                                :invoice/issue-date aug-15-2025
-                                :invoice/lines [{:invoice-line/quantity 1
-                                                 :invoice-line/unit-price 1000M}]})
+                               {:kontor.invoice/external-id "INV-2026-1"
+                                :kontor.invoice/issue-date aug-15-2025
+                                :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                                 :kontor.invoice-line/unit-price 1000M}]})
   (let [db (d/db conn)
         aud (:db/id (d/entity db [:kontor.commodity/symbol "AUD"]))
         bank (ace db "11100")
@@ -93,10 +93,10 @@
          :kontor.posting/commodity aud :kontor.posting/posted-at feb-15-2026}]})))
   ;; Add a second invoice in Feb to push revenue past expenses.
   (au-invoice/post-au-invoice! conn
-                               {:invoice/external-id "INV-2026-2"
-                                :invoice/issue-date feb-15-2026
-                                :invoice/lines [{:invoice-line/quantity 1
-                                                 :invoice-line/unit-price 500M}]})
+                               {:kontor.invoice/external-id "INV-2026-2"
+                                :kontor.invoice/issue-date feb-15-2026
+                                :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                                                 :kontor.invoice-line/unit-price 500M}]})
   ;; New P&L: revenue -1500 (Cr), rent +300, telecom +200 → net -1000 (profit 1000)
   nil)
 

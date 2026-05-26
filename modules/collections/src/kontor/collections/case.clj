@@ -42,7 +42,7 @@
                  :collection-case/entity [:kontor.entity/code]
                  :collection-case/opened-by-uid [:kontor.audit/create-uid]
                  :collection-case/assigned-collector [:kontor.audit/create-uid]
-                 :collection-case/oldest-invoice [:invoice/external-id]
+                 :collection-case/oldest-invoice [:kontor.invoice/external-id]
                  :collection-case/supporting-doc [:audit-doc/code :audit-doc/type]}]
             eid)))
 

@@ -139,10 +139,10 @@
        "<DraftFapiao>\n"
        "  <!-- This is a kernel-side draft envelope. The partner adapter\n"
        "       overlays STA-required fields, signs, and submits. -->\n"
-       "  <InvoiceNumber>" (:invoice/external-id invoice) "</InvoiceNumber>\n"
-       "  <IssueDate>" (str (:invoice/issue-date invoice)) "</IssueDate>\n"
-       "  <Currency>" (:invoice/currency invoice) "</Currency>\n"
-       "  <TotalGross>" (str (:invoice/total-gross invoice)) "</TotalGross>\n"
+       "  <InvoiceNumber>" (:kontor.invoice/external-id invoice) "</InvoiceNumber>\n"
+       "  <IssueDate>" (str (:kontor.invoice/issue-date invoice)) "</IssueDate>\n"
+       "  <Currency>" (:kontor.invoice/currency invoice) "</Currency>\n"
+       "  <TotalGross>" (str (:kontor.invoice/total-gross invoice)) "</TotalGross>\n"
        "</DraftFapiao>\n"))
 
 (defn provider

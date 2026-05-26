@@ -392,7 +392,7 @@
                             resolved)
      :provenance      {:provider-id :jp-cgt
                        :statute     (regime-statute-label regime)
-                       :provisions-applied (mapv :provision/code provisions)
+                       :provisions-applied (mapv :kontor.provision/code provisions)
                        :as-of       as-of}
      :jurisdiction-specific-codes {:regime regime
                                    :compartment regime

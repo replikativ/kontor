@@ -40,47 +40,47 @@
    parameters anchor here."
 
   [;; --- 40 % abattement sur dividendes (barème only) -----------------
-   {:parameter/code         "FR.INV.bareme.abattement-dividendes"
-    :parameter/label        "Abattement 40 % sur dividendes éligibles — applicable UNIQUEMENT sous l'option barème (CGI Art. 158-3-2°)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051765203"}
+   {:kontor.parameter/code         "FR.INV.bareme.abattement-dividendes"
+    :kontor.parameter/label        "Abattement 40 % sur dividendes éligibles — applicable UNIQUEMENT sous l'option barème (CGI Art. 158-3-2°)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051765203"}
 
    ;; --- CSG déductible (barème only) ---------------------------------
-   {:parameter/code         "FR.INV.bareme.CSG-deductible-share"
-    :parameter/label        "Part de CSG déductible sur revenus du capital sous option barème — 6,8 points sur 10,6 (CGI Art. 154 quinquies)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000047288608"}
+   {:kontor.parameter/code         "FR.INV.bareme.CSG-deductible-share"
+    :kontor.parameter/label        "Part de CSG déductible sur revenus du capital sous option barème — 6,8 points sur 10,6 (CGI Art. 154 quinquies)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000047288608"}
 
    ;; --- Régime mère-fille — 5 % QPFC ---------------------------------
-   {:parameter/code         "FR.INV.mere-fille.QPFC-rate"
-    :parameter/label        "Régime mère-fille — quote-part de frais et charges 5 % réintégrée à l'IS (CGI Art. 216)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGITEXT000006069577/LEGISCTA000006197185/"}
+   {:kontor.parameter/code         "FR.INV.mere-fille.QPFC-rate"
+    :kontor.parameter/label        "Régime mère-fille — quote-part de frais et charges 5 % réintégrée à l'IS (CGI Art. 216)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGITEXT000006069577/LEGISCTA000006197185/"}
 
-   {:parameter/code         "FR.INV.mere-fille.minimum-holding-fraction"
-    :parameter/label        "Régime mère-fille — seuil minimal de détention (5 %, CGI Art. 145)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000038589881"}
+   {:kontor.parameter/code         "FR.INV.mere-fille.minimum-holding-fraction"
+    :kontor.parameter/label        "Régime mère-fille — seuil minimal de détention (5 %, CGI Art. 145)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000038589881"}
 
-   {:parameter/code         "FR.INV.mere-fille.minimum-holding-period-years"
-    :parameter/label        "Régime mère-fille — engagement de détention minimum (2 ans, CGI Art. 145)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :years
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000038589881"}
+   {:kontor.parameter/code         "FR.INV.mere-fille.minimum-holding-period-years"
+    :kontor.parameter/label        "Régime mère-fille — engagement de détention minimum (2 ans, CGI Art. 145)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :years
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000038589881"}
 
    ;; --- Régime intégration fiscale — 1 % QPFC ------------------------
    ;; Not modelled by v1 provider (note 149 §1.5 — multi-entity construct);
    ;; the parameter is shipped for citation completeness, the consumer can
    ;; override via :inputs :mere-fille {:integration-fiscale? true}.
-   {:parameter/code         "FR.INV.integration-fiscale.QPFC-rate"
-    :parameter/label        "Régime intégration fiscale — QPFC 1 % sur dividendes intra-groupe (CGI Art. 223 A)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGITEXT000006069577"}])
+   {:kontor.parameter/code         "FR.INV.integration-fiscale.QPFC-rate"
+    :kontor.parameter/label        "Régime intégration fiscale — QPFC 1 % sur dividendes intra-groupe (CGI Art. 223 A)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGITEXT000006069577"}])
 
 ;; ============================================================================
 ;; Parameter values
@@ -91,39 +91,39 @@
    respective introductions; no LFSS 2026 amendments."
 
   [;; 40 % abattement on dividends — stable since loi 2008
-   {:parameter-value/parameter      [:parameter/code "FR.INV.bareme.abattement-dividendes"]
-    :parameter-value/effective-from #inst "2008-01-01"
-    :parameter-value/decimal-value  0.40M
-    :parameter-value/citation       "CGI Art. 158-3-2° — abattement 40 % sur dividendes versés par sociétés FR/UE/État conventionné soumises à l'IS, applicable UNIQUEMENT sous option barème"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.INV.bareme.abattement-dividendes"]
+    :kontor.parameter-value/effective-from #inst "2008-01-01"
+    :kontor.parameter-value/decimal-value  0.40M
+    :kontor.parameter-value/citation       "CGI Art. 158-3-2° — abattement 40 % sur dividendes versés par sociétés FR/UE/État conventionné soumises à l'IS, applicable UNIQUEMENT sous option barème"}
 
    ;; CSG déductible — historically 5.1 pp / 6.8 pp depending on era;
    ;; current value 6.8 pp confirmed at CGI 154 quinquies (LEGIARTI000047288608).
-   {:parameter-value/parameter      [:parameter/code "FR.INV.bareme.CSG-deductible-share"]
-    :parameter-value/effective-from #inst "2018-01-01"
-    :parameter-value/decimal-value  0.068M
-    :parameter-value/citation       "CGI Art. 154 quinquies — 6,8 points de CSG déductibles sur revenus du capital sous option barème (Indy / Legifrance)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.INV.bareme.CSG-deductible-share"]
+    :kontor.parameter-value/effective-from #inst "2018-01-01"
+    :kontor.parameter-value/decimal-value  0.068M
+    :kontor.parameter-value/citation       "CGI Art. 154 quinquies — 6,8 points de CSG déductibles sur revenus du capital sous option barème (Indy / Legifrance)"}
 
    ;; Régime mère-fille — 5 % QPFC stable since 2011 (loi 2010-1657)
-   {:parameter-value/parameter      [:parameter/code "FR.INV.mere-fille.QPFC-rate"]
-    :parameter-value/effective-from #inst "2011-01-01"
-    :parameter-value/decimal-value  0.05M
-    :parameter-value/citation       "CGI Art. 216 I — QPFC 5 % stable depuis LF 2011 (relevée de 5 % à 5 % par LF 2011 ; resté à 5 %)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.INV.mere-fille.QPFC-rate"]
+    :kontor.parameter-value/effective-from #inst "2011-01-01"
+    :kontor.parameter-value/decimal-value  0.05M
+    :kontor.parameter-value/citation       "CGI Art. 216 I — QPFC 5 % stable depuis LF 2011 (relevée de 5 % à 5 % par LF 2011 ; resté à 5 %)"}
 
-   {:parameter-value/parameter      [:parameter/code "FR.INV.mere-fille.minimum-holding-fraction"]
-    :parameter-value/effective-from #inst "2001-01-01"
-    :parameter-value/decimal-value  0.05M
-    :parameter-value/citation       "CGI Art. 145 — détention minimale 5 % du capital de la filiale"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.INV.mere-fille.minimum-holding-fraction"]
+    :kontor.parameter-value/effective-from #inst "2001-01-01"
+    :kontor.parameter-value/decimal-value  0.05M
+    :kontor.parameter-value/citation       "CGI Art. 145 — détention minimale 5 % du capital de la filiale"}
 
-   {:parameter-value/parameter      [:parameter/code "FR.INV.mere-fille.minimum-holding-period-years"]
-    :parameter-value/effective-from #inst "2001-01-01"
-    :parameter-value/decimal-value  2M
-    :parameter-value/citation       "CGI Art. 145 — engagement de détention 2 ans"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.INV.mere-fille.minimum-holding-period-years"]
+    :kontor.parameter-value/effective-from #inst "2001-01-01"
+    :kontor.parameter-value/decimal-value  2M
+    :kontor.parameter-value/citation       "CGI Art. 145 — engagement de détention 2 ans"}
 
    ;; Régime intégration fiscale — 1 % QPFC stable since LFR 2016
-   {:parameter-value/parameter      [:parameter/code "FR.INV.integration-fiscale.QPFC-rate"]
-    :parameter-value/effective-from #inst "2016-01-01"
-    :parameter-value/decimal-value  0.01M
-    :parameter-value/citation       "CGI Art. 223 B — QPFC 1 % sur dividendes intra-groupe sous régime d'intégration fiscale (LFR 2015 art. 40)"}])
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.INV.integration-fiscale.QPFC-rate"]
+    :kontor.parameter-value/effective-from #inst "2016-01-01"
+    :kontor.parameter-value/decimal-value  0.01M
+    :kontor.parameter-value/citation       "CGI Art. 223 B — QPFC 1 % sur dividendes intra-groupe sous régime d'intégration fiscale (LFR 2015 art. 40)"}])
 
 ;; ============================================================================
 ;; Provisions — v1 is empty (note 149 §3 motivates provider-internal math)
@@ -156,7 +156,7 @@
 
 (defn install!
   "Install FR investment-income statute (parameters + provisions) into
-   `conn`. Idempotent — `:parameter/code` and `:provision/code` are
+   `conn`. Idempotent — `:kontor.parameter/code` and `:kontor.provision/code` are
    unique identity attrs.
 
    ASSUMES the FR CGT statute has already been installed (this statute

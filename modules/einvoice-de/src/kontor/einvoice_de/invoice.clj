@@ -5,20 +5,20 @@
    60+ transitive deps onto the classpath unless they actually need
    to render Factur-X.
 
-   Schema (keys are namespaced under :invoice/* / :party/* / :item/*):
+   Schema (keys are namespaced under :kontor.invoice/* / :party/* / :item/*):
 
-       {:invoice/number       String       — invoice number / Rechnungsnummer
-        :invoice/issue-date   #inst        — Ausstellungsdatum
-        :invoice/due-date     #inst        — Fälligkeitsdatum (optional)
-        :invoice/delivery-date #inst       — Leistungsdatum (optional)
-        :invoice/currency     String       — ISO 4217, e.g. \"EUR\"
-        :invoice/seller       <party-map>  — required (Verkäufer / Lieferant)
-        :invoice/buyer        <party-map>  — required (Käufer / Kunde)
-        :invoice/items        [<item-map>] — at least one
-        :invoice/payment      <pay-map>    — bank details (optional)
-        :invoice/notes        [String]     — free-text remarks (optional)
-        :invoice/payment-terms String      — Zahlungsbedingungen (optional)
-        :invoice/reference    String       — Buyer's reference / Leitweg-ID (B2G)}
+       {:kontor.invoice/number       String       — invoice number / Rechnungsnummer
+        :kontor.invoice/issue-date   #inst        — Ausstellungsdatum
+        :kontor.invoice/due-date     #inst        — Fälligkeitsdatum (optional)
+        :kontor.invoice/delivery-date #inst       — Leistungsdatum (optional)
+        :kontor.invoice/currency     String       — ISO 4217, e.g. \"EUR\"
+        :kontor.invoice/seller       <party-map>  — required (Verkäufer / Lieferant)
+        :kontor.invoice/buyer        <party-map>  — required (Käufer / Kunde)
+        :kontor.invoice/items        [<item-map>] — at least one
+        :kontor.invoice/payment      <pay-map>    — bank details (optional)
+        :kontor.invoice/notes        [String]     — free-text remarks (optional)
+        :kontor.invoice/payment-terms String      — Zahlungsbedingungen (optional)
+        :kontor.invoice/reference    String       — Buyer's reference / Leitweg-ID (B2G)}
 
        <party-map>
        {:party/name      String   — required
@@ -76,22 +76,22 @@
   [invoice]
   (-> []
       (into (cond-> []
-              (missing? (:invoice/number invoice))
-              (conj ":invoice/number is required")
-              (missing? (:invoice/issue-date invoice))
-              (conj ":invoice/issue-date is required")
-              (missing? (:invoice/currency invoice))
-              (conj ":invoice/currency is required (ISO 4217)")
-              (missing? (:invoice/seller invoice))
-              (conj ":invoice/seller is required")
-              (missing? (:invoice/buyer invoice))
-              (conj ":invoice/buyer is required")
-              (missing? (:invoice/items invoice))
-              (conj ":invoice/items must be a non-empty seq")))
-      (into (party-errors "seller" (:invoice/seller invoice)))
-      (into (party-errors "buyer"  (:invoice/buyer invoice)))
+              (missing? (:kontor.invoice/number invoice))
+              (conj ":kontor.invoice/number is required")
+              (missing? (:kontor.invoice/issue-date invoice))
+              (conj ":kontor.invoice/issue-date is required")
+              (missing? (:kontor.invoice/currency invoice))
+              (conj ":kontor.invoice/currency is required (ISO 4217)")
+              (missing? (:kontor.invoice/seller invoice))
+              (conj ":kontor.invoice/seller is required")
+              (missing? (:kontor.invoice/buyer invoice))
+              (conj ":kontor.invoice/buyer is required")
+              (missing? (:kontor.invoice/items invoice))
+              (conj ":kontor.invoice/items must be a non-empty seq")))
+      (into (party-errors "seller" (:kontor.invoice/seller invoice)))
+      (into (party-errors "buyer"  (:kontor.invoice/buyer invoice)))
       (into (mapcat (fn [[i it]] (item-errors i it))
-                    (map-indexed vector (or (:invoice/items invoice) []))))))
+                    (map-indexed vector (or (:kontor.invoice/items invoice) []))))))
 
 (defn validate!
   "Throw `ex-info` if `validate` returns errors; return invoice otherwise."
@@ -125,7 +125,7 @@
 
 (defn vat-summary
   "Per-VAT-rate breakdown: returns vec of {:rate %, :base-net €, :tax €}."
-  [{:invoice/keys [items]}]
+  [{:kontor.invoice/keys [items]}]
   (->> items
        (group-by :item/vat-rate)
        (map (fn [[rate group]]
@@ -139,13 +139,13 @@
        vec))
 
 (defn invoice-totals
-  "Compute :invoice/total-net, :invoice/total-vat, :invoice/total-gross
+  "Compute :kontor.invoice/total-net, :kontor.invoice/total-vat, :kontor.invoice/total-gross
    from the items list, returning a map you can merge onto the invoice."
   [invoice]
   (let [breakdown (vat-summary invoice)
         total-net (reduce #(.add ^java.math.BigDecimal %1 (:vat/base %2)) 0M breakdown)
         total-vat (reduce #(.add ^java.math.BigDecimal %1 (:vat/tax %2))  0M breakdown)]
-    {:invoice/total-net   total-net
-     :invoice/total-vat   total-vat
-     :invoice/total-gross (.add total-net total-vat)
-     :invoice/vat-breakdown breakdown}))
+    {:kontor.invoice/total-net   total-net
+     :kontor.invoice/total-vat   total-vat
+     :kontor.invoice/total-gross (.add total-net total-vat)
+     :kontor.invoice/vat-breakdown breakdown}))

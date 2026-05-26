@@ -4,7 +4,7 @@
    Every attribute is namespaced under one of the kernel namespaces
    (see CLAUDE.md and ADR-002). The intent is that this schema can be
    transacted into a datahike connection that already holds other
-   namespaces (e.g. beleg's :invoice/* :customer/*) without any
+   namespaces (e.g. beleg's :kontor.invoice/* :customer/*) without any
    collision. That cohabitation is an architectural invariant — see
    ADR-002 in doc/decisions.md.
 
@@ -770,7 +770,7 @@
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "EDN-encoded datalog query (e.g.
-                     '[:find ?e :where [?e :invoice/buyer ?p]]') that
+                     '[:find ?e :where [?e :kontor.invoice/buyer ?p]]') that
                      selects entities under this hold. Evaluated
                      against the speculative txdb at :db/purge time
                      and by sweepers refreshing :scope-eids.
@@ -1106,10 +1106,10 @@
    declares its consequence (a credit, surtax, base adjustment, schedule
    override, …) for the evaluator to fold in priority order. Default +
    exception semantics ride `:priority` + `:exception-of` (Catala-
-   inspired). The escape hatch `:provision/compute-fn` resolves to a
+   inspired). The escape hatch `:kontor.provision/compute-fn` resolves to a
    registered Clojure fn for the rare provision that exceeds the closed
    predicate vocabulary. ADR-101 + note 119."
-  [{:db/ident       :provision/code
+  [{:db/ident       :kontor.provision/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
@@ -1117,35 +1117,35 @@
                      \"US-IRC-§1031-2024\"). Identity attribute — one row
                      per (statute-section × law-version) combination."}
 
-   {:db/ident       :provision/jurisdiction
+   {:db/ident       :kontor.provision/jurisdiction
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Jurisdiction code (:de, :fr, :jp, :us-fed, :ca-on, …).
                      Indexed; lets the evaluator filter applicable provisions
                      by jurisdiction in one datalog clause."}
 
-   {:db/ident       :provision/concept
+   {:db/ident       :kontor.provision/concept
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Reference to the `:tax-concept` this provision
                      instantiates. The evaluator queries by concept first;
                      a provision without a concept is invalid."}
 
-   {:db/ident       :provision/title
+   {:db/ident       :kontor.provision/title
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Human-readable provision title — typically the
                      statute section title (\"Beteiligungsertragsbefreiung\"
                      for DE KStG §8b)."}
 
-   {:db/ident       :provision/citation
+   {:db/ident       :kontor.provision/citation
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "URL to the authoritative statute text. Lets the
                      audit trail link a computed liability back to the
                      official source."}
 
-   {:db/ident       :provision/concept-iri
+   {:db/ident       :kontor.provision/concept-iri
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ADR-090 IRI to the provision in an external
@@ -1153,7 +1153,7 @@
                      `:kontor.tax-concept/concept-iri` — that's the abstract
                      concept; this is the specific provision."}
 
-   {:db/ident       :provision/effective-from
+   {:db/ident       :kontor.provision/effective-from
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Statutory effective-from date — when the law applies
@@ -1163,13 +1163,13 @@
                      amendments can have `:effective-from` earlier than
                      `:tx/valid-from`."}
 
-   {:db/ident       :provision/effective-until
+   {:db/ident       :kontor.provision/effective-until
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Statutory effective-until date (open if absent — the
                      provision is still in force)."}
 
-   {:db/ident       :provision/priority
+   {:db/ident       :kontor.provision/priority
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "Application priority. Lower numbers fire first. Same-
@@ -1178,7 +1178,7 @@
                      Conventional ranges: 0-99 base-level defaults;
                      100-999 normal provisions; 1000+ overrides."}
 
-   {:db/ident       :provision/exception-of
+   {:db/ident       :kontor.provision/exception-of
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ref to another `:provision` this one is an
@@ -1187,7 +1187,7 @@
                      is suppressed; when the exception doesn't apply, the
                      default fires."}
 
-   {:db/ident       :provision/condition
+   {:db/ident       :kontor.provision/condition
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Closed-vocabulary EDN predicate expression stored as
@@ -1197,7 +1197,7 @@
                      `:status-is`/`true`/`false` over `:tax-context` facts.
                      `nil` ⇒ always applicable."}
 
-   {:db/ident       :provision/consequence
+   {:db/ident       :kontor.provision/consequence
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "EDN consequence map stored as string. Shape depends
@@ -1210,7 +1210,7 @@
                        \"DE.Soli.rate\"}`,
                      `{:op :schedule-override :schedule {...}}`."}
 
-   {:db/ident       :provision/compute-fn
+   {:db/ident       :kontor.provision/compute-fn
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional escape-hatch fn-key resolving to a Clojure
@@ -1223,7 +1223,7 @@
                      amount. Use sparingly — every use is a documented
                      deviation from data-only provisions."}
 
-   {:db/ident       :provision/regime
+   {:db/ident       :kontor.provision/regime
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional `:regime` ref. If absent, the provision
@@ -1232,7 +1232,7 @@
                      regime (election rides ADR-034 status-machine — see
                      ADR-101 §D5)."}
 
-   {:db/ident       :provision/audit-doc
+   {:db/ident       :kontor.provision/audit-doc
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Per ADR-038 audit-doc refs (Beck commentary, BMF
@@ -1244,44 +1244,44 @@
    standard IS, US's itemized vs standard deduction). The election event
    itself rides ADR-034's `:status-transition` + `:status-history` — no
    parallel `:regime-election` namespace; see ADR-101 §D5.
-   `:regime/extends` supports counterfactual / amendment overlay (OpenFisca
+   `:kontor.regime/extends` supports counterfactual / amendment overlay (OpenFisca
    reform pattern). ADR-101 + note 118."
-  [{:db/ident       :regime/code
+  [{:db/ident       :kontor.regime/code
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Regime code (e.g. :in-pit-new, :in-pit-old, :fr-is-pme).
                      Identity attribute."}
 
-   {:db/ident       :regime/label
+   {:db/ident       :kontor.regime/label
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Human-readable label."}
 
-   {:db/ident       :regime/jurisdiction
+   {:db/ident       :kontor.regime/jurisdiction
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Jurisdiction code (:in, :fr, …)."}
 
-   {:db/ident       :regime/concept-iri
+   {:db/ident       :kontor.regime/concept-iri
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ADR-090 IRI."}
 
-   {:db/ident       :regime/extends
+   {:db/ident       :kontor.regime/extends
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional parent regime — the OpenFisca reform pattern
                      for counterfactual overlay. A `:regime` that extends
                      another inherits its provisions, may add new ones,
-                     and may override (via `:provision/exception-of`).
+                     and may override (via `:kontor.provision/exception-of`).
                      Cycles raise `kontor.tax/cyclic-regime`."}
 
-   {:db/ident       :regime/effective-from
+   {:db/ident       :kontor.regime/effective-from
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :regime/effective-until
+   {:db/ident       :kontor.regime/effective-until
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}])
 
@@ -1292,7 +1292,7 @@
    (scalar parameters) or `:parameter-bracket` rows (bracket scales).
    Replaces the pattern of editing a defrecord config to update a rate.
    ADR-101 + note 118 §1.1."
-  [{:db/ident       :parameter/code
+  [{:db/ident       :kontor.parameter/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
@@ -1301,16 +1301,16 @@
                      \"de.gewst.messzahl\", \"fr.is.pme-brackets\").
                      Identity attribute."}
 
-   {:db/ident       :parameter/label
+   {:db/ident       :kontor.parameter/label
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Human-readable label."}
 
-   {:db/ident       :parameter/jurisdiction
+   {:db/ident       :kontor.parameter/jurisdiction
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :parameter/unit
+   {:db/ident       :kontor.parameter/unit
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "What this parameter measures: :rate (decimal 0-1),
@@ -1320,76 +1320,76 @@
                      unbounded), :bracket-scale (collection of
                      `:parameter-bracket` rows refer to this parent)."}
 
-   {:db/ident       :parameter/commodity
+   {:db/ident       :kontor.parameter/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional commodity ref — when `:unit` is :amount-money
                      or :threshold, the commodity the value is denominated
                      in. nil for :rate / :ratio / :bracket-scale."}
 
-   {:db/ident       :parameter/concept-iri
+   {:db/ident       :kontor.parameter/concept-iri
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ADR-090 IRI."}
 
-   {:db/ident       :parameter-value/parameter
+   {:db/ident       :kontor.parameter-value/parameter
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to the `:parameter` this value belongs to. One
                      `:parameter` typically has many `:parameter-value`
                      rows, each effective in a different period."}
 
-   {:db/ident       :parameter-value/effective-from
+   {:db/ident       :kontor.parameter-value/effective-from
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Statutory effective-from date of this value. The
                      resolver picks the value whose effective range
                      contains the as-of instant."}
 
-   {:db/ident       :parameter-value/effective-until
+   {:db/ident       :kontor.parameter-value/effective-until
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :parameter-value/decimal-value
+   {:db/ident       :kontor.parameter-value/decimal-value
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "The scalar value (BigDecimal). v1 ships only the
                      decimal shape; non-scalar values (instant, boolean,
                      string) deferred per ADR-101 §D9."}
 
-   {:db/ident       :parameter-value/citation
+   {:db/ident       :kontor.parameter-value/citation
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional URL to the authority publication asserting
                      this value (BMF Schreiben, IRS Rev. Proc., …)."}
 
-   {:db/ident       :parameter-bracket/parameter
+   {:db/ident       :kontor.parameter-bracket/parameter
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to the parent `:parameter` (must have
-                     `:parameter/unit :bracket-scale`)."}
+                     `:kontor.parameter/unit :bracket-scale`)."}
 
-   {:db/ident       :parameter-bracket/index
+   {:db/ident       :kontor.parameter-bracket/index
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "Position in the scale (0-indexed, ordered)."}
 
-   {:db/ident       :parameter-bracket/rate
+   {:db/ident       :kontor.parameter-bracket/rate
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Marginal rate for this bracket (decimal 0-1)."}
 
-   {:db/ident       :parameter-bracket/upper
+   {:db/ident       :kontor.parameter-bracket/upper
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Upper threshold (exclusive) for this bracket. Absent
                      ⇒ open top band."}
 
-   {:db/ident       :parameter-bracket/effective-from
+   {:db/ident       :kontor.parameter-bracket/effective-from
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :parameter-bracket/effective-until
+   {:db/ident       :kontor.parameter-bracket/effective-until
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}])
 
@@ -1712,7 +1712,7 @@
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "GL routing key; same vocabulary as
-                     :invoice-line/gl-account-type."}
+                     :kontor.invoice-line/gl-account-type."}
 
    {:db/ident       :kontor.account-type-direction/direction
     :db/valueType   :db.type/keyword
@@ -2170,7 +2170,7 @@
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Stable caller-supplied id (\"INV-2026-0001\",
-                     a beleg :invoice/id stringified, etc.). Identity."}
+                     a beleg :kontor.invoice/id stringified, etc.). Identity."}
 
    {:db/ident       :kontor.transaction/journal
     :db/valueType   :db.type/ref
@@ -2649,79 +2649,79 @@
 ;;     einvoice-de generates them
 ;;
 ;; The actual accounting transaction (per HGB / SKR04 conventions)
-;; lives in :transaction; :invoice points to it via :invoice/transaction.
+;; lives in :transaction; :invoice points to it via :kontor.invoice/transaction.
 ;; Line items live in :invoice-line entities (cardinality-many ref
 ;; from :invoice) and carry the per-line VAT rate the country module
 ;; uses to split postings.
 ;; ============================================================================
 
 (def ^:private invoice-attrs
-  [{:db/ident       :invoice/external-id
+  [{:db/ident       :kontor.invoice/external-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Invoice number (\"INV-2026-0001\"). Stable
                      identity across status transitions."}
 
-   {:db/ident       :invoice/issue-date
+   {:db/ident       :kontor.invoice/issue-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "Ausstellungsdatum / invoice date."}
 
-   {:db/ident       :invoice/seller
+   {:db/ident       :kontor.invoice/seller
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to the :partner entity issuing the invoice
                      (typically the user's own company partner)."}
 
-   {:db/ident       :invoice/buyer
+   {:db/ident       :kontor.invoice/buyer
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to the :partner entity being invoiced
                      (the customer)."}
 
-   {:db/ident       :invoice/payment-term
+   {:db/ident       :kontor.invoice/payment-term
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :invoice/due-date
+   {:db/ident       :kontor.invoice/due-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "Materialized from issue-date + payment-term, OR
                      supplied directly. Aging reports filter on this."}
 
-   {:db/ident       :invoice/discount-deadline
+   {:db/ident       :kontor.invoice/discount-deadline
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :invoice/currency
+   {:db/ident       :kontor.invoice/currency
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "ISO 4217 currency code (\"EUR\", \"USD\")."}
 
-   {:db/ident       :invoice/total-net
+   {:db/ident       :kontor.invoice/total-net
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :invoice/total-vat
+   {:db/ident       :kontor.invoice/total-vat
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :invoice/total-gross
+   {:db/ident       :kontor.invoice/total-gross
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Sum the customer owes. Reconciliation matches
                      bank-line amount against this for AR settlement."}
 
-   {:db/ident       :invoice/lines
+   {:db/ident       :kontor.invoice/lines
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Line items. Cardinality many; ordered via
-                     :invoice-line/sequence."}
+                     :kontor.invoice-line/sequence."}
 
-   {:db/ident       :invoice/status
+   {:db/ident       :kontor.invoice/status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -2730,94 +2730,94 @@
                        sent  → paid (set by reconciliation settle)
                        sent  → cancelled (creates reversal tx)"}
 
-   ;; NOTE: :invoice/sent-at / :paid-at / :cancelled-at / :posted-at
+   ;; NOTE: :kontor.invoice/sent-at / :paid-at / :cancelled-at / :posted-at
    ;; (the status-transition timestamp denorms) were removed —
    ;; resolvable from :status-history + :tx/valid-from via
-   ;; (d/pull (d/valid-at db now) [:invoice/status] inv). The presence
-   ;; of :invoice/transaction is the canonical "posted to GL"
+   ;; (d/pull (d/valid-at db now) [:kontor.invoice/status] inv). The presence
+   ;; of :kontor.invoice/transaction is the canonical "posted to GL"
    ;; sentinel; no separate :posted-at needed.
 
-   {:db/ident       :invoice/transaction
+   {:db/ident       :kontor.invoice/transaction
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The accounting :transaction created on :sent.
                      Reconciliation walks back from this to flip the
                      invoice's status to :paid."}
 
-   {:db/ident       :invoice/factur-x-xml
+   {:db/ident       :kontor.invoice/factur-x-xml
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "The EN16931 / Factur-X / XRechnung XML payload
                      (UTF-8). Generated by einvoice-de.factur-x at
                      :sent transition when configured."}
 
-   {:db/ident       :invoice/factur-x-pdf
+   {:db/ident       :kontor.invoice/factur-x-pdf
     :db/valueType   :db.type/bytes
     :db/cardinality :db.cardinality/one
     :db/doc         "The Factur-X PDF/A-3 with embedded XML. Set
                      when the invoice was rendered to PDF (caller
                      supplies the PDF/A-3 input)."}
 
-   {:db/ident       :invoice/buyer-reference
+   {:db/ident       :kontor.invoice/buyer-reference
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Buyer-side reference / Leitweg-ID for B2G
                      XRechnung. Embeds in the EN16931 payload."}
 
-   {:db/ident       :invoice/notes
+   {:db/ident       :kontor.invoice/notes
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/many
     :db/doc         "Free-text remarks (one entry per note)."}])
 
 (def ^:private invoice-line-attrs
-  [{:db/ident       :invoice-line/invoice
+  [{:db/ident       :kontor.invoice-line/invoice
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "Backref to parent :invoice. Redundant with
-                     :invoice/lines but indexed for query."}
+                     :kontor.invoice/lines but indexed for query."}
 
-   {:db/ident       :invoice-line/sequence
+   {:db/ident       :kontor.invoice-line/sequence
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "Display ordering (1, 2, 3 …)."}
 
-   {:db/ident       :invoice-line/name
+   {:db/ident       :kontor.invoice-line/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :invoice-line/description
+   {:db/ident       :kontor.invoice-line/description
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :invoice-line/quantity
+   {:db/ident       :kontor.invoice-line/quantity
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :invoice-line/unit-code
+   {:db/ident       :kontor.invoice-line/unit-code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "UN/CEFACT unit code (\"HUR\"=hour, \"EA\"=each,
                      \"KGM\"=kg, \"DAY\"=day)."}
 
-   {:db/ident       :invoice-line/unit-price
+   {:db/ident       :kontor.invoice-line/unit-price
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Net unit price."}
 
-   {:db/ident       :invoice-line/vat-rate
+   {:db/ident       :kontor.invoice-line/vat-rate
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "VAT percentage (e.g. 19.0M for German Regelsatz,
                      7.0M for ermäßigt, 0M for steuerfrei)."}
 
-   {:db/ident       :invoice-line/vat-category
+   {:db/ident       :kontor.invoice-line/vat-category
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "UNTDID 5305 code: S=standard, AA=reduced,
                      Z=zero, E=exempt, etc. Used by Factur-X."}
 
-   {:db/ident       :invoice-line/account
+   {:db/ident       :kontor.invoice-line/account
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional explicit revenue account override.
@@ -4011,7 +4011,7 @@
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "The attribute on the entity carrying this state.
-                     Typically :order/status, :invoice/status, etc.
+                     Typically :order/status, :kontor.invoice/status, etc.
                      One entity can have multiple facets — multiple
                      concurrent state machines on the same row."}
 

@@ -14,7 +14,7 @@
    ## Vocabulary conventions
 
    - **Facet**: the attribute carrying state on the entity (e.g.
-     `:order/status`, `:invoice/status`, `:order-item/status`). One
+     `:order/status`, `:kontor.invoice/status`, `:order-item/status`). One
      entity can have multiple facets — multiple independent state
      machines on the same row.
    - **From-state `nil` pseudo-state**: when a transition represents
@@ -211,7 +211,7 @@
        :reason ":reason-note string is required on this transition"})
 
     :requires-three-way-match-pass
-    ;; ADR-042 — gate :invoice/status transitions on the procurement
+    ;; ADR-042 — gate :kontor.invoice/status transitions on the procurement
     ;; 3-way match outcome. Allowed match-statuses for posting:
     ;;   :auto-matched   — qty + price within tolerance
     ;;   :manual-approved — exception explicitly overridden
@@ -219,8 +219,8 @@
     ;; nil match-status is allowed (sales invoices have no match
     ;; concept; rule passes through). Any :exception-* or :disputed
     ;; rejects.
-    (let [match-status (:invoice/match-status
-                        (d/pull db [:invoice/match-status] entity))]
+    (let [match-status (:kontor.invoice/match-status
+                        (d/pull db [:kontor.invoice/match-status] entity))]
       (when-not (or (nil? match-status)
                     (#{:auto-matched :manual-approved :cleared} match-status))
         {:rule rule

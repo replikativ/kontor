@@ -55,8 +55,8 @@
    `register-partner-attr!`."
   #{:kontor.transaction/partner
     :kontor.posting/partner
-    :invoice/buyer
-    :invoice/seller
+    :kontor.invoice/buyer
+    :kontor.invoice/seller
     :partner-bank-account/partner
     :partner-tax-id/partner
     :partner-tag/partner

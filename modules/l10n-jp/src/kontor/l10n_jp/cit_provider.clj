@@ -292,7 +292,7 @@
      :regime          nil
      :provenance      {:provider-id :jp-cit
                        :statute     "法人税法 §66 + 地方法人税法 + 防衛特別法人税"
-                       :provisions-applied (mapv :provision/code provisions)
+                       :provisions-applied (mapv :kontor.provision/code provisions)
                        :as-of       as-of}}))
 
 (defn- enterprise-component
@@ -323,7 +323,7 @@
      :regime          nil
      :provenance      {:provider-id :jp-cit
                        :statute     "地方税法 §72 + 特別法人事業税及び特別法人事業譲与税に関する法律"
-                       :provisions-applied (mapv :provision/code provisions)
+                       :provisions-applied (mapv :kontor.provision/code provisions)
                        :as-of       as-of}}))
 
 (defn- inhabitant-component
@@ -356,7 +356,7 @@
      :regime          nil
      :provenance      {:provider-id :jp-cit
                        :statute     "地方税法 §51 + §52 + §312 + §314-4 (法人住民税 法人税割 + 均等割)"
-                       :provisions-applied (mapv :provision/code provisions)
+                       :provisions-applied (mapv :kontor.provision/code provisions)
                        :depends-on  {:component :national
                                      :national-cit-amount national-cit-amount}
                        :as-of       as-of}}))

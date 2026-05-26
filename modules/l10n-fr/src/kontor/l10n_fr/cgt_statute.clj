@@ -92,11 +92,11 @@
    for real estate / life insurance (17.2 %); the provider picks
    per `:disposal/asset-class`."
   [;; --- Mobilière PFU layer (CGI Art. 200 A) -------------------------
-   {:parameter/code         "FR.CGT.PFU.IR-rate"
-    :parameter/label        "PFU IR component (12.8 % flat tax) — CGI Art. 200 A 1°"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000045760882"}
+   {:kontor.parameter/code         "FR.CGT.PFU.IR-rate"
+    :kontor.parameter/label        "PFU IR component (12.8 % flat tax) — CGI Art. 200 A 1°"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000045760882"}
 
    ;; PS split per LFSS 2026 effective-date semantics (note 141 P0-1):
    ;; - revenus du PATRIMOINE (plus-values mobilières, revenus fonciers,
@@ -106,100 +106,100 @@
    ;;   du 1er janvier 2026.
    ;; Mobilière disposals route via :patrimoine-rate; PEA pool / dividend
    ;; income / placement income route via :placement-rate.
-   {:parameter/code         "FR.CGT.PS.patrimoine-rate"
-    :parameter/label        "Prélèvements sociaux — revenus du patrimoine (plus-values mobilières + revenus fonciers + rentes viagères constituées à titre onéreux) — CSG 10.6 % + CRDS 0.5 % + prélèvement solidarité 7.5 % = 18.6 % post-LFSS 2026, RÉTROACTIF aux revenus 2025"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article/LEGITEXT000006073189/LEGIARTI000006740051/"}
+   {:kontor.parameter/code         "FR.CGT.PS.patrimoine-rate"
+    :kontor.parameter/label        "Prélèvements sociaux — revenus du patrimoine (plus-values mobilières + revenus fonciers + rentes viagères constituées à titre onéreux) — CSG 10.6 % + CRDS 0.5 % + prélèvement solidarité 7.5 % = 18.6 % post-LFSS 2026, RÉTROACTIF aux revenus 2025"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article/LEGITEXT000006073189/LEGIARTI000006740051/"}
 
-   {:parameter/code         "FR.CGT.PS.placement-rate"
-    :parameter/label        "Prélèvements sociaux — revenus de placement (dividendes, intérêts, produits d'assurance-vie, certains gains soumis au PFLU) — CSG 10.6 % + CRDS 0.5 % + prélèvement solidarité 7.5 % = 18.6 % post-LFSS 2026, applicable aux revenus versés à compter du 1er janvier 2026"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article/LEGITEXT000006073189/LEGIARTI000006740051/"}
+   {:kontor.parameter/code         "FR.CGT.PS.placement-rate"
+    :kontor.parameter/label        "Prélèvements sociaux — revenus de placement (dividendes, intérêts, produits d'assurance-vie, certains gains soumis au PFLU) — CSG 10.6 % + CRDS 0.5 % + prélèvement solidarité 7.5 % = 18.6 % post-LFSS 2026, applicable aux revenus versés à compter du 1er janvier 2026"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article/LEGITEXT000006073189/LEGIARTI000006740051/"}
 
-   {:parameter/code         "FR.CGT.PS.real-estate-rate"
-    :parameter/label        "Prélèvements sociaux carve-out rate — real estate / life insurance / PEL / CEL / PEP / revenus fonciers (STAYS at 17.2 % per LFSS 2026 exclusion)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.hagnere-patrimoine.fr/guides-patrimoine/comment-payer-moins-impots/csg-crds-prelevements-sociaux-2026"}
+   {:kontor.parameter/code         "FR.CGT.PS.real-estate-rate"
+    :kontor.parameter/label        "Prélèvements sociaux carve-out rate — real estate / life insurance / PEL / CEL / PEP / revenus fonciers (STAYS at 17.2 % per LFSS 2026 exclusion)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.hagnere-patrimoine.fr/guides-patrimoine/comment-payer-moins-impots/csg-crds-prelevements-sociaux-2026"}
 
    ;; --- Immobilière (CGI Art. 150 U + 200 B + 1609 nonies G) ----------
-   {:parameter/code         "FR.CGT.Immo.IR-rate"
-    :parameter/label        "Plus-values immobilières — IR taux fixe (19 %)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006304108"}
+   {:kontor.parameter/code         "FR.CGT.Immo.IR-rate"
+    :kontor.parameter/label        "Plus-values immobilières — IR taux fixe (19 %)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006304108"}
 
-   {:parameter/code         "FR.CGT.Immo.surtaxe-floor"
-    :parameter/label        "Surtaxe plus-values immobilières (CGI Art. 1609 nonies G) — floor below which surtaxe = 0 (€50 000)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article/LEGITEXT000006069577/LEGIARTI000027577763/"}
+   {:kontor.parameter/code         "FR.CGT.Immo.surtaxe-floor"
+    :kontor.parameter/label        "Surtaxe plus-values immobilières (CGI Art. 1609 nonies G) — floor below which surtaxe = 0 (€50 000)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article/LEGITEXT000006069577/LEGIARTI000027577763/"}
 
    ;; Abattement-durée ladder values for immobilière. The provider folds;
    ;; the parameters here are for citation + future amendment audit.
-   {:parameter/code         "FR.CGT.Immo.abat-IR-y6to21"
-    :parameter/label        "Abattement IR plus-value immobilière — années 6 à 21 (6 %/an)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://bofip.impots.gouv.fr/bofip/2841-PGP.html/identifiant=BOI-RFPI-PVI-20-20-20250410"}
+   {:kontor.parameter/code         "FR.CGT.Immo.abat-IR-y6to21"
+    :kontor.parameter/label        "Abattement IR plus-value immobilière — années 6 à 21 (6 %/an)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://bofip.impots.gouv.fr/bofip/2841-PGP.html/identifiant=BOI-RFPI-PVI-20-20-20250410"}
 
-   {:parameter/code         "FR.CGT.Immo.abat-IR-y22"
-    :parameter/label        "Abattement IR plus-value immobilière — année 22 (4 %, terminale)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://bofip.impots.gouv.fr/bofip/2841-PGP.html/identifiant=BOI-RFPI-PVI-20-20-20250410"}
+   {:kontor.parameter/code         "FR.CGT.Immo.abat-IR-y22"
+    :kontor.parameter/label        "Abattement IR plus-value immobilière — année 22 (4 %, terminale)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://bofip.impots.gouv.fr/bofip/2841-PGP.html/identifiant=BOI-RFPI-PVI-20-20-20250410"}
 
-   {:parameter/code         "FR.CGT.Immo.abat-PS-y6to21"
-    :parameter/label        "Abattement PS plus-value immobilière — années 6 à 21 (1.65 %/an)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://bofip.impots.gouv.fr/bofip/2841-PGP.html/identifiant=BOI-RFPI-PVI-20-20-20250410"}
+   {:kontor.parameter/code         "FR.CGT.Immo.abat-PS-y6to21"
+    :kontor.parameter/label        "Abattement PS plus-value immobilière — années 6 à 21 (1.65 %/an)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://bofip.impots.gouv.fr/bofip/2841-PGP.html/identifiant=BOI-RFPI-PVI-20-20-20250410"}
 
-   {:parameter/code         "FR.CGT.Immo.abat-PS-y22"
-    :parameter/label        "Abattement PS plus-value immobilière — année 22 (1.6 %)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://bofip.impots.gouv.fr/bofip/2841-PGP.html/identifiant=BOI-RFPI-PVI-20-20-20250410"}
+   {:kontor.parameter/code         "FR.CGT.Immo.abat-PS-y22"
+    :kontor.parameter/label        "Abattement PS plus-value immobilière — année 22 (1.6 %)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://bofip.impots.gouv.fr/bofip/2841-PGP.html/identifiant=BOI-RFPI-PVI-20-20-20250410"}
 
-   {:parameter/code         "FR.CGT.Immo.abat-PS-y23to30"
-    :parameter/label        "Abattement PS plus-value immobilière — années 23 à 30 (9 %/an)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://bofip.impots.gouv.fr/bofip/2841-PGP.html/identifiant=BOI-RFPI-PVI-20-20-20250410"}
+   {:kontor.parameter/code         "FR.CGT.Immo.abat-PS-y23to30"
+    :kontor.parameter/label        "Abattement PS plus-value immobilière — années 23 à 30 (9 %/an)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://bofip.impots.gouv.fr/bofip/2841-PGP.html/identifiant=BOI-RFPI-PVI-20-20-20250410"}
 
    ;; --- Plus-values professionnelles long-terme ---------------------
-   {:parameter/code         "FR.CGT.ProLT.IR-rate"
-    :parameter/label        "Plus-values pro long-terme — IR (12.8 %, CGI Art. 39 quindecies)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGITEXT000006069577/LEGISCTA000006197185/"}
+   {:kontor.parameter/code         "FR.CGT.ProLT.IR-rate"
+    :kontor.parameter/label        "Plus-values pro long-terme — IR (12.8 %, CGI Art. 39 quindecies)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGITEXT000006069577/LEGISCTA000006197185/"}
 
    ;; --- §151 septies revenue-tested exemption -----------------------
-   {:parameter/code         "FR.CGT.§151-septies.threshold-services-full"
-    :parameter/label        "§151 septies — services BIC/BNC: full-exemption ceiling (€90 000 turnover)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000036591469"}
+   {:kontor.parameter/code         "FR.CGT.§151-septies.threshold-services-full"
+    :kontor.parameter/label        "§151 septies — services BIC/BNC: full-exemption ceiling (€90 000 turnover)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000036591469"}
 
-   {:parameter/code         "FR.CGT.§151-septies.threshold-services-degressive"
-    :parameter/label        "§151 septies — services BIC/BNC: degressive ceiling (€126 000 turnover)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000036591469"}
+   {:kontor.parameter/code         "FR.CGT.§151-septies.threshold-services-degressive"
+    :kontor.parameter/label        "§151 septies — services BIC/BNC: degressive ceiling (€126 000 turnover)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000036591469"}
 
-   {:parameter/code         "FR.CGT.§151-septies.threshold-goods-full"
-    :parameter/label        "§151 septies — ventes marchandises / hébergement: full-exemption ceiling (€250 000 turnover)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000036591469"}
+   {:kontor.parameter/code         "FR.CGT.§151-septies.threshold-goods-full"
+    :kontor.parameter/label        "§151 septies — ventes marchandises / hébergement: full-exemption ceiling (€250 000 turnover)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000036591469"}
 
-   {:parameter/code         "FR.CGT.§151-septies.threshold-goods-degressive"
-    :parameter/label        "§151 septies — ventes marchandises: degressive ceiling (€350 000 turnover)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000036591469"}
+   {:kontor.parameter/code         "FR.CGT.§151-septies.threshold-goods-degressive"
+    :kontor.parameter/label        "§151 septies — ventes marchandises: degressive ceiling (€350 000 turnover)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000036591469"}
 
    ;; --- §238 quindecies transmission-d'entreprise exemption ----------
    ;; Note 141 P0-2 split: the LFI 2024 raise to €700k/€1.2M is reserved
@@ -209,49 +209,49 @@
    ;; routes per consumer-supplied
    ;;   :inputs :238-quindecies {:activity :agricultural | :standard}
    ;; defaulting to :standard.
-   {:parameter/code         "FR.CGT.§238-quindecies.threshold-full"
-    :parameter/label        "§238 quindecies — STANDARD non-agricultural full-exemption value cliff (€500 000, stable)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051216496"}
+   {:kontor.parameter/code         "FR.CGT.§238-quindecies.threshold-full"
+    :kontor.parameter/label        "§238 quindecies — STANDARD non-agricultural full-exemption value cliff (€500 000, stable)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051216496"}
 
-   {:parameter/code         "FR.CGT.§238-quindecies.threshold-degressive"
-    :parameter/label        "§238 quindecies — STANDARD non-agricultural degressive-band upper cliff (€1 000 000, stable)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051216496"}
+   {:kontor.parameter/code         "FR.CGT.§238-quindecies.threshold-degressive"
+    :kontor.parameter/label        "§238 quindecies — STANDARD non-agricultural degressive-band upper cliff (€1 000 000, stable)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051216496"}
 
-   {:parameter/code         "FR.CGT.§238-quindecies.agri-threshold-full"
-    :parameter/label        "§238 quindecies VII bis — AGRICULTURAL transmissions full-exemption value cliff (€700 000 from FY-2025; €500 000 prior)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051216496"}
+   {:kontor.parameter/code         "FR.CGT.§238-quindecies.agri-threshold-full"
+    :kontor.parameter/label        "§238 quindecies VII bis — AGRICULTURAL transmissions full-exemption value cliff (€700 000 from FY-2025; €500 000 prior)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051216496"}
 
-   {:parameter/code         "FR.CGT.§238-quindecies.agri-threshold-degressive"
-    :parameter/label        "§238 quindecies VII bis — AGRICULTURAL transmissions degressive-band upper cliff (€1 200 000 from FY-2025; €1 000 000 prior)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051216496"}
+   {:kontor.parameter/code         "FR.CGT.§238-quindecies.agri-threshold-degressive"
+    :kontor.parameter/label        "§238 quindecies VII bis — AGRICULTURAL transmissions degressive-band upper cliff (€1 200 000 from FY-2025; €1 000 000 prior)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051216496"}
 
    ;; --- IS-side titres de participation (CGI Art. 219 I a quinquies) -
-   {:parameter/code         "FR.CGT.§219.QPFC-rate"
-    :parameter/label        "Titres de participation — quote-part de frais et charges (CGI Art. 219, I a quinquies — 12 %)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046868562"}
+   {:kontor.parameter/code         "FR.CGT.§219.QPFC-rate"
+    :kontor.parameter/label        "Titres de participation — quote-part de frais et charges (CGI Art. 219, I a quinquies — 12 %)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046868562"}
 
-   {:parameter/code         "FR.CGT.§219.holding-period-years"
-    :parameter/label        "Titres de participation — minimum holding period for the régime (2 years)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :years
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046868562"}
+   {:kontor.parameter/code         "FR.CGT.§219.holding-period-years"
+    :kontor.parameter/label        "Titres de participation — minimum holding period for the régime (2 years)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :years
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046868562"}
 
    ;; --- Brevets / IP box (CGI Art. 238) ------------------------------
-   {:parameter/code         "FR.CGT.§238.IP-box-rate"
-    :parameter/label        "Régime IP box (brevets, logiciels, COV, certificats) — taux réduit 10 % (CGI Art. 238)"
-    :parameter/jurisdiction :fr
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000037946060"}])
+   {:kontor.parameter/code         "FR.CGT.§238.IP-box-rate"
+    :kontor.parameter/label        "Régime IP box (brevets, logiciels, COV, certificats) — taux réduit 10 % (CGI Art. 238)"
+    :kontor.parameter/jurisdiction :fr
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000037946060"}])
 
 ;; ============================================================================
 ;; Parameter values — current rates with their statutory effective windows
@@ -266,155 +266,155 @@
    €1.2 M) is the FY-2025 LFI change, same pattern."
 
   [;; PFU IR — 12.8 % stable since 2018
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.PFU.IR-rate"]
-    :parameter-value/effective-from #inst "2018-01-01"
-    :parameter-value/decimal-value  0.128M
-    :parameter-value/citation       "CGI Art. 200 A 1° — PFU 12.8 % stable since loi de finances 2018"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.PFU.IR-rate"]
+    :kontor.parameter-value/effective-from #inst "2018-01-01"
+    :kontor.parameter-value/decimal-value  0.128M
+    :kontor.parameter-value/citation       "CGI Art. 200 A 1° — PFU 12.8 % stable since loi de finances 2018"}
 
    ;; PS revenus du patrimoine (mobilière + revenus fonciers + rentes
    ;; viagères à titre onéreux) — 17.2 % through 2024-12-31, then 18.6 %
    ;; RÉTROACTIF aux revenus 2025 (LFSS 2026 — DLA Piper / Actu-Juridique /
    ;; TGS France; note 141 §1.2 P0-1).
-   {:parameter-value/parameter       [:parameter/code "FR.CGT.PS.patrimoine-rate"]
-    :parameter-value/effective-from  #inst "2018-01-01"
-    :parameter-value/effective-until #inst "2025-01-01"
-    :parameter-value/decimal-value   0.172M
-    :parameter-value/citation        "CSG 9.2 % + CRDS 0.5 % + prélèvement solidarité 7.5 % = 17.2 % (2018-2024)"}
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.PS.patrimoine-rate"]
-    :parameter-value/effective-from #inst "2025-01-01"
-    :parameter-value/decimal-value  0.186M
-    :parameter-value/citation       "LFSS 2026 (loi 2025-1403) — CSG 9.2 → 10.6 % → PS 18.6 %, application RÉTROACTIVE aux revenus du patrimoine perçus dès 2025 (DLA Piper / TGS France / Actu-Juridique commentary)"}
+   {:kontor.parameter-value/parameter       [:kontor.parameter/code "FR.CGT.PS.patrimoine-rate"]
+    :kontor.parameter-value/effective-from  #inst "2018-01-01"
+    :kontor.parameter-value/effective-until #inst "2025-01-01"
+    :kontor.parameter-value/decimal-value   0.172M
+    :kontor.parameter-value/citation        "CSG 9.2 % + CRDS 0.5 % + prélèvement solidarité 7.5 % = 17.2 % (2018-2024)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.PS.patrimoine-rate"]
+    :kontor.parameter-value/effective-from #inst "2025-01-01"
+    :kontor.parameter-value/decimal-value  0.186M
+    :kontor.parameter-value/citation       "LFSS 2026 (loi 2025-1403) — CSG 9.2 → 10.6 % → PS 18.6 %, application RÉTROACTIVE aux revenus du patrimoine perçus dès 2025 (DLA Piper / TGS France / Actu-Juridique commentary)"}
 
    ;; PS revenus de placement (dividendes, intérêts, AV, gains PFLU) —
    ;; 17.2 % through 2025-12-31, then 18.6 % from 2026-01-01 (forward,
    ;; date-of-payment semantics).
-   {:parameter-value/parameter       [:parameter/code "FR.CGT.PS.placement-rate"]
-    :parameter-value/effective-from  #inst "2018-01-01"
-    :parameter-value/effective-until #inst "2026-01-01"
-    :parameter-value/decimal-value   0.172M
-    :parameter-value/citation        "CSG 9.2 % + CRDS 0.5 % + prélèvement solidarité 7.5 % = 17.2 % (2018-2025)"}
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.PS.placement-rate"]
-    :parameter-value/effective-from #inst "2026-01-01"
-    :parameter-value/decimal-value  0.186M
-    :parameter-value/citation       "LFSS 2026 (loi 2025-1403) — CSG 9.2 → 10.6 % → PS 18.6 % sur revenus de placement versés à compter du 1er janvier 2026"}
+   {:kontor.parameter-value/parameter       [:kontor.parameter/code "FR.CGT.PS.placement-rate"]
+    :kontor.parameter-value/effective-from  #inst "2018-01-01"
+    :kontor.parameter-value/effective-until #inst "2026-01-01"
+    :kontor.parameter-value/decimal-value   0.172M
+    :kontor.parameter-value/citation        "CSG 9.2 % + CRDS 0.5 % + prélèvement solidarité 7.5 % = 17.2 % (2018-2025)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.PS.placement-rate"]
+    :kontor.parameter-value/effective-from #inst "2026-01-01"
+    :kontor.parameter-value/decimal-value  0.186M
+    :kontor.parameter-value/citation       "LFSS 2026 (loi 2025-1403) — CSG 9.2 → 10.6 % → PS 18.6 % sur revenus de placement versés à compter du 1er janvier 2026"}
 
    ;; PS real-estate carve-out — stays at 17.2 %
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.PS.real-estate-rate"]
-    :parameter-value/effective-from #inst "2018-01-01"
-    :parameter-value/decimal-value  0.172M
-    :parameter-value/citation       "LFSS 2026 EXCLUDES real estate / life insurance / PEL / CEL / PEP / revenus fonciers from the CSG raise — PS stays 17.2 %"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.PS.real-estate-rate"]
+    :kontor.parameter-value/effective-from #inst "2018-01-01"
+    :kontor.parameter-value/decimal-value  0.172M
+    :kontor.parameter-value/citation       "LFSS 2026 EXCLUDES real estate / life insurance / PEL / CEL / PEP / revenus fonciers from the CSG raise — PS stays 17.2 %"}
 
    ;; Immobilière IR — 19 % flat
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.Immo.IR-rate"]
-    :parameter-value/effective-from #inst "2012-02-01"
-    :parameter-value/decimal-value  0.19M
-    :parameter-value/citation       "CGI Art. 200 B — 19 % stable since 2012"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.Immo.IR-rate"]
+    :kontor.parameter-value/effective-from #inst "2012-02-01"
+    :kontor.parameter-value/decimal-value  0.19M
+    :kontor.parameter-value/citation       "CGI Art. 200 B — 19 % stable since 2012"}
 
    ;; Immobilière surtaxe — €50 k threshold
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.Immo.surtaxe-floor"]
-    :parameter-value/effective-from #inst "2013-01-01"
-    :parameter-value/decimal-value  50000M
-    :parameter-value/citation       "CGI Art. 1609 nonies G — surtaxe progressive 2 → 6 % au-dessus de €50 000 stable"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.Immo.surtaxe-floor"]
+    :kontor.parameter-value/effective-from #inst "2013-01-01"
+    :kontor.parameter-value/decimal-value  50000M
+    :kontor.parameter-value/citation       "CGI Art. 1609 nonies G — surtaxe progressive 2 → 6 % au-dessus de €50 000 stable"}
 
    ;; Immobilière abattement ladder rates (the provider folds)
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.Immo.abat-IR-y6to21"]
-    :parameter-value/effective-from #inst "2014-09-01"
-    :parameter-value/decimal-value  0.06M
-    :parameter-value/citation       "BOI-RFPI-PVI-20-20 — abattement IR 6 %/an années 6 à 21 (loi 2014)"}
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.Immo.abat-IR-y22"]
-    :parameter-value/effective-from #inst "2014-09-01"
-    :parameter-value/decimal-value  0.04M
-    :parameter-value/citation       "BOI-RFPI-PVI-20-20 — abattement IR 4 % année 22 (terminale → exonération IR à 22 ans)"}
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.Immo.abat-PS-y6to21"]
-    :parameter-value/effective-from #inst "2014-09-01"
-    :parameter-value/decimal-value  0.0165M
-    :parameter-value/citation       "BOI-RFPI-PVI-20-20 — abattement PS 1.65 %/an années 6 à 21"}
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.Immo.abat-PS-y22"]
-    :parameter-value/effective-from #inst "2014-09-01"
-    :parameter-value/decimal-value  0.016M
-    :parameter-value/citation       "BOI-RFPI-PVI-20-20 — abattement PS 1.6 % année 22"}
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.Immo.abat-PS-y23to30"]
-    :parameter-value/effective-from #inst "2014-09-01"
-    :parameter-value/decimal-value  0.09M
-    :parameter-value/citation       "BOI-RFPI-PVI-20-20 — abattement PS 9 %/an années 23 à 30 (→ exonération PS à 30 ans)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.Immo.abat-IR-y6to21"]
+    :kontor.parameter-value/effective-from #inst "2014-09-01"
+    :kontor.parameter-value/decimal-value  0.06M
+    :kontor.parameter-value/citation       "BOI-RFPI-PVI-20-20 — abattement IR 6 %/an années 6 à 21 (loi 2014)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.Immo.abat-IR-y22"]
+    :kontor.parameter-value/effective-from #inst "2014-09-01"
+    :kontor.parameter-value/decimal-value  0.04M
+    :kontor.parameter-value/citation       "BOI-RFPI-PVI-20-20 — abattement IR 4 % année 22 (terminale → exonération IR à 22 ans)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.Immo.abat-PS-y6to21"]
+    :kontor.parameter-value/effective-from #inst "2014-09-01"
+    :kontor.parameter-value/decimal-value  0.0165M
+    :kontor.parameter-value/citation       "BOI-RFPI-PVI-20-20 — abattement PS 1.65 %/an années 6 à 21"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.Immo.abat-PS-y22"]
+    :kontor.parameter-value/effective-from #inst "2014-09-01"
+    :kontor.parameter-value/decimal-value  0.016M
+    :kontor.parameter-value/citation       "BOI-RFPI-PVI-20-20 — abattement PS 1.6 % année 22"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.Immo.abat-PS-y23to30"]
+    :kontor.parameter-value/effective-from #inst "2014-09-01"
+    :kontor.parameter-value/decimal-value  0.09M
+    :kontor.parameter-value/citation       "BOI-RFPI-PVI-20-20 — abattement PS 9 %/an années 23 à 30 (→ exonération PS à 30 ans)"}
 
    ;; Plus-values pro long-terme — IR 12.8 %
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.ProLT.IR-rate"]
-    :parameter-value/effective-from #inst "2018-01-01"
-    :parameter-value/decimal-value  0.128M
-    :parameter-value/citation       "CGI Art. 39 quindecies — IR plus-value pro LT 12.8 % (aligné PFU)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.ProLT.IR-rate"]
+    :kontor.parameter-value/effective-from #inst "2018-01-01"
+    :kontor.parameter-value/decimal-value  0.128M
+    :kontor.parameter-value/citation       "CGI Art. 39 quindecies — IR plus-value pro LT 12.8 % (aligné PFU)"}
 
    ;; §151 septies thresholds — stable since 2008
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.§151-septies.threshold-services-full"]
-    :parameter-value/effective-from #inst "2008-01-01"
-    :parameter-value/decimal-value  90000M
-    :parameter-value/citation       "CGI Art. 151 septies II — services BIC/BNC exonération totale CA ≤ €90 000"}
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.§151-septies.threshold-services-degressive"]
-    :parameter-value/effective-from #inst "2008-01-01"
-    :parameter-value/decimal-value  126000M
-    :parameter-value/citation       "CGI Art. 151 septies II — services BIC/BNC band supérieure €90 001-€126 000"}
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.§151-septies.threshold-goods-full"]
-    :parameter-value/effective-from #inst "2008-01-01"
-    :parameter-value/decimal-value  250000M
-    :parameter-value/citation       "CGI Art. 151 septies II — marchandises / hébergement exonération totale CA ≤ €250 000"}
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.§151-septies.threshold-goods-degressive"]
-    :parameter-value/effective-from #inst "2008-01-01"
-    :parameter-value/decimal-value  350000M
-    :parameter-value/citation       "CGI Art. 151 septies II — marchandises band supérieure €250 001-€350 000"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.§151-septies.threshold-services-full"]
+    :kontor.parameter-value/effective-from #inst "2008-01-01"
+    :kontor.parameter-value/decimal-value  90000M
+    :kontor.parameter-value/citation       "CGI Art. 151 septies II — services BIC/BNC exonération totale CA ≤ €90 000"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.§151-septies.threshold-services-degressive"]
+    :kontor.parameter-value/effective-from #inst "2008-01-01"
+    :kontor.parameter-value/decimal-value  126000M
+    :kontor.parameter-value/citation       "CGI Art. 151 septies II — services BIC/BNC band supérieure €90 001-€126 000"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.§151-septies.threshold-goods-full"]
+    :kontor.parameter-value/effective-from #inst "2008-01-01"
+    :kontor.parameter-value/decimal-value  250000M
+    :kontor.parameter-value/citation       "CGI Art. 151 septies II — marchandises / hébergement exonération totale CA ≤ €250 000"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.§151-septies.threshold-goods-degressive"]
+    :kontor.parameter-value/effective-from #inst "2008-01-01"
+    :kontor.parameter-value/decimal-value  350000M
+    :kontor.parameter-value/citation       "CGI Art. 151 septies II — marchandises band supérieure €250 001-€350 000"}
 
    ;; §238 quindecies STANDARD non-agricultural — €500k / €1M, stable
    ;; since 2006 (NOT raised by LFI 2024 — the €700k / €1.2M raise is
    ;; reserved to agricultural transmissions per VII bis; note 141 §1.8
    ;; P0-2 + Bpifrance Création + Légifrance current text).
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.§238-quindecies.threshold-full"]
-    :parameter-value/effective-from #inst "2006-01-01"
-    :parameter-value/decimal-value  500000M
-    :parameter-value/citation       "CGI Art. 238 quindecies I — full-exemption cliff €500 000 pour les transmissions non-agricoles (stable depuis 2006 ; le relèvement LFI 2024 ne concerne que les transmissions agricoles VII bis)"}
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.§238-quindecies.threshold-degressive"]
-    :parameter-value/effective-from #inst "2006-01-01"
-    :parameter-value/decimal-value  1000000M
-    :parameter-value/citation       "CGI Art. 238 quindecies I — degressive cliff €1 000 000 pour les transmissions non-agricoles (stable)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.§238-quindecies.threshold-full"]
+    :kontor.parameter-value/effective-from #inst "2006-01-01"
+    :kontor.parameter-value/decimal-value  500000M
+    :kontor.parameter-value/citation       "CGI Art. 238 quindecies I — full-exemption cliff €500 000 pour les transmissions non-agricoles (stable depuis 2006 ; le relèvement LFI 2024 ne concerne que les transmissions agricoles VII bis)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.§238-quindecies.threshold-degressive"]
+    :kontor.parameter-value/effective-from #inst "2006-01-01"
+    :kontor.parameter-value/decimal-value  1000000M
+    :kontor.parameter-value/citation       "CGI Art. 238 quindecies I — degressive cliff €1 000 000 pour les transmissions non-agricoles (stable)"}
 
    ;; §238 quindecies VII bis AGRICULTURAL — pre-2025 €500k / €1M,
    ;; post-2025 €700k / €1.2M (LFI 2024, exercices ouverts à compter
    ;; du 1er janvier 2025 — aide à la transmission agricole / installation
    ;; jeunes agriculteurs).
-   {:parameter-value/parameter       [:parameter/code "FR.CGT.§238-quindecies.agri-threshold-full"]
-    :parameter-value/effective-from  #inst "2006-01-01"
-    :parameter-value/effective-until #inst "2025-01-01"
-    :parameter-value/decimal-value   500000M
-    :parameter-value/citation        "CGI Art. 238 quindecies VII bis — transmissions agricoles, cliff €500 000 (pré-LFI 2024)"}
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.§238-quindecies.agri-threshold-full"]
-    :parameter-value/effective-from #inst "2025-01-01"
-    :parameter-value/decimal-value  700000M
-    :parameter-value/citation       "CGI Art. 238 quindecies VII bis — transmissions agricoles, cliff relevée à €700 000 par LFI 2024 (exercices ouverts à compter du 1er janvier 2025)"}
+   {:kontor.parameter-value/parameter       [:kontor.parameter/code "FR.CGT.§238-quindecies.agri-threshold-full"]
+    :kontor.parameter-value/effective-from  #inst "2006-01-01"
+    :kontor.parameter-value/effective-until #inst "2025-01-01"
+    :kontor.parameter-value/decimal-value   500000M
+    :kontor.parameter-value/citation        "CGI Art. 238 quindecies VII bis — transmissions agricoles, cliff €500 000 (pré-LFI 2024)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.§238-quindecies.agri-threshold-full"]
+    :kontor.parameter-value/effective-from #inst "2025-01-01"
+    :kontor.parameter-value/decimal-value  700000M
+    :kontor.parameter-value/citation       "CGI Art. 238 quindecies VII bis — transmissions agricoles, cliff relevée à €700 000 par LFI 2024 (exercices ouverts à compter du 1er janvier 2025)"}
 
-   {:parameter-value/parameter       [:parameter/code "FR.CGT.§238-quindecies.agri-threshold-degressive"]
-    :parameter-value/effective-from  #inst "2006-01-01"
-    :parameter-value/effective-until #inst "2025-01-01"
-    :parameter-value/decimal-value   1000000M
-    :parameter-value/citation        "CGI Art. 238 quindecies VII bis — transmissions agricoles, degressive cliff €1 000 000 (pré-LFI 2024)"}
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.§238-quindecies.agri-threshold-degressive"]
-    :parameter-value/effective-from #inst "2025-01-01"
-    :parameter-value/decimal-value  1200000M
-    :parameter-value/citation       "CGI Art. 238 quindecies VII bis — transmissions agricoles, degressive cliff relevée à €1 200 000 par LFI 2024"}
+   {:kontor.parameter-value/parameter       [:kontor.parameter/code "FR.CGT.§238-quindecies.agri-threshold-degressive"]
+    :kontor.parameter-value/effective-from  #inst "2006-01-01"
+    :kontor.parameter-value/effective-until #inst "2025-01-01"
+    :kontor.parameter-value/decimal-value   1000000M
+    :kontor.parameter-value/citation        "CGI Art. 238 quindecies VII bis — transmissions agricoles, degressive cliff €1 000 000 (pré-LFI 2024)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.§238-quindecies.agri-threshold-degressive"]
+    :kontor.parameter-value/effective-from #inst "2025-01-01"
+    :kontor.parameter-value/decimal-value  1200000M
+    :kontor.parameter-value/citation       "CGI Art. 238 quindecies VII bis — transmissions agricoles, degressive cliff relevée à €1 200 000 par LFI 2024"}
 
    ;; QPFC 12 % titres de participation — stable since 2013
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.§219.QPFC-rate"]
-    :parameter-value/effective-from #inst "2013-01-01"
-    :parameter-value/decimal-value  0.12M
-    :parameter-value/citation       "CGI Art. 219 I a quinquies — QPFC 12 % stable depuis LF 2013 (relevée de 10 %; CE 2017-06-14 n° 400855 confirme base brute)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.§219.QPFC-rate"]
+    :kontor.parameter-value/effective-from #inst "2013-01-01"
+    :kontor.parameter-value/decimal-value  0.12M
+    :kontor.parameter-value/citation       "CGI Art. 219 I a quinquies — QPFC 12 % stable depuis LF 2013 (relevée de 10 %; CE 2017-06-14 n° 400855 confirme base brute)"}
 
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.§219.holding-period-years"]
-    :parameter-value/effective-from #inst "2007-01-01"
-    :parameter-value/decimal-value  2M
-    :parameter-value/citation       "CGI Art. 219 I a quinquies — détention minimale 2 ans (stable)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.§219.holding-period-years"]
+    :kontor.parameter-value/effective-from #inst "2007-01-01"
+    :kontor.parameter-value/decimal-value  2M
+    :kontor.parameter-value/citation       "CGI Art. 219 I a quinquies — détention minimale 2 ans (stable)"}
 
    ;; IP box brevets — 10 % flat since 2019 reform (Art. 14 LF 2019)
-   {:parameter-value/parameter      [:parameter/code "FR.CGT.§238.IP-box-rate"]
-    :parameter-value/effective-from #inst "2019-01-01"
-    :parameter-value/decimal-value  0.10M
-    :parameter-value/citation       "CGI Art. 238 — IP box 10 % (loi de finances 2019 — passage de 15 % à 10 % + introduction du ratio nexus)"}])
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "FR.CGT.§238.IP-box-rate"]
+    :kontor.parameter-value/effective-from #inst "2019-01-01"
+    :kontor.parameter-value/decimal-value  0.10M
+    :kontor.parameter-value/citation       "CGI Art. 238 — IP box 10 % (loi de finances 2019 — passage de 15 % à 10 % + introduction du ratio nexus)"}])
 
 ;; ============================================================================
 ;; Provisions — v1 is empty
@@ -446,7 +446,7 @@
 
 (defn install!
   "Install FR CGT statute (parameters + provisions) into `conn`.
-   Idempotent — `:parameter/code` and `:provision/code` are unique
+   Idempotent — `:kontor.parameter/code` and `:kontor.provision/code` are unique
    identity attrs."
   [conn]
   (d/transact conn parameters)

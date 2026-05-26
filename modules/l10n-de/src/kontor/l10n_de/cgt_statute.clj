@@ -27,7 +27,7 @@
      DE.EStG.§23.movable-cutoff-days (365 = 1 y).
    - **Soli on Abgeltungsteuer** — DE.Soli.rate (5.5 %) is already
      installed by the CIT statute; we re-reference rather than re-add
-     (parameters are idempotent on `:parameter/code`).
+     (parameters are idempotent on `:kontor.parameter/code`).
    - **KSt rate** — same observation; the CIT statute installs
      DE.KSt.rate (15 %).
 
@@ -54,62 +54,62 @@
   "DE CGT parameter definitions. Values live in `parameter-values`
    keyed by `:effective-from`."
   [;; --- §8b KStG — 95/5 participation exemption ----------------------------
-   {:parameter/code         "DE.KStG.§8b.cgt-exemption-rate"
-    :parameter/label        "§8b Abs. 2 KStG — fraction of corporate share-disposal gain exempt (95 %)"
-    :parameter/jurisdiction :de
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.gesetze-im-internet.de/kstg_1977/__8b.html"}
+   {:kontor.parameter/code         "DE.KStG.§8b.cgt-exemption-rate"
+    :kontor.parameter/label        "§8b Abs. 2 KStG — fraction of corporate share-disposal gain exempt (95 %)"
+    :kontor.parameter/jurisdiction :de
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.gesetze-im-internet.de/kstg_1977/__8b.html"}
 
-   {:parameter/code         "DE.KStG.§8b.cgt-addback-rate"
-    :parameter/label        "§8b Abs. 3 KStG — fraction of corporate share-disposal gain treated as fiktive Betriebsausgaben (5 %)"
-    :parameter/jurisdiction :de
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.gesetze-im-internet.de/kstg_1977/__8b.html"}
+   {:kontor.parameter/code         "DE.KStG.§8b.cgt-addback-rate"
+    :kontor.parameter/label        "§8b Abs. 3 KStG — fraction of corporate share-disposal gain treated as fiktive Betriebsausgaben (5 %)"
+    :kontor.parameter/jurisdiction :de
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.gesetze-im-internet.de/kstg_1977/__8b.html"}
 
    ;; --- §17 EStG — Teileinkünfteverfahren + Freibetrag --------------------
-   {:parameter/code         "DE.EStG.§17.inclusion-rate"
-    :parameter/label        "§3 Nr. 40 / §3c Abs. 2 EStG — Teileinkünfte inclusion rate (60 % of gain taxable)"
-    :parameter/jurisdiction :de
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.gesetze-im-internet.de/estg/__17.html"}
+   {:kontor.parameter/code         "DE.EStG.§17.inclusion-rate"
+    :kontor.parameter/label        "§3 Nr. 40 / §3c Abs. 2 EStG — Teileinkünfte inclusion rate (60 % of gain taxable)"
+    :kontor.parameter/jurisdiction :de
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.gesetze-im-internet.de/estg/__17.html"}
 
-   {:parameter/code         "DE.EStG.§17.freibetrag"
-    :parameter/label        "§17 Abs. 3 S. 1 EStG — Freibetrag on Teileinkünfte-veranlagter gain (€9 060)"
-    :parameter/jurisdiction :de
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.gesetze-im-internet.de/estg/__17.html"}
+   {:kontor.parameter/code         "DE.EStG.§17.freibetrag"
+    :kontor.parameter/label        "§17 Abs. 3 S. 1 EStG — Freibetrag on Teileinkünfte-veranlagter gain (€9 060)"
+    :kontor.parameter/jurisdiction :de
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.gesetze-im-internet.de/estg/__17.html"}
 
-   {:parameter/code         "DE.EStG.§17.taper-start"
-    :parameter/label        "§17 Abs. 3 S. 2 EStG — Freibetrag taper-start (Abschmelzungsgrenze, €36 100)"
-    :parameter/jurisdiction :de
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.gesetze-im-internet.de/estg/__17.html"}
+   {:kontor.parameter/code         "DE.EStG.§17.taper-start"
+    :kontor.parameter/label        "§17 Abs. 3 S. 2 EStG — Freibetrag taper-start (Abschmelzungsgrenze, €36 100)"
+    :kontor.parameter/jurisdiction :de
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.gesetze-im-internet.de/estg/__17.html"}
 
    ;; --- §20 EStG — Abgeltungsteuer ---------------------------------------
-   {:parameter/code         "DE.EStG.§20.flat-rate"
-    :parameter/label        "§32d Abs. 1 EStG — Abgeltungsteuer flat rate (25 %)"
-    :parameter/jurisdiction :de
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.gesetze-im-internet.de/estg/__32d.html"}
+   {:kontor.parameter/code         "DE.EStG.§20.flat-rate"
+    :kontor.parameter/label        "§32d Abs. 1 EStG — Abgeltungsteuer flat rate (25 %)"
+    :kontor.parameter/jurisdiction :de
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.gesetze-im-internet.de/estg/__32d.html"}
 
    ;; --- §23 EStG — private speculation -----------------------------------
-   {:parameter/code         "DE.EStG.§23.freigrenze"
-    :parameter/label        "§23 Abs. 3 S. 5 EStG — Freigrenze (€1 000 — hard threshold, not a Freibetrag)"
-    :parameter/jurisdiction :de
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.gesetze-im-internet.de/estg/__23.html"}
+   {:kontor.parameter/code         "DE.EStG.§23.freigrenze"
+    :kontor.parameter/label        "§23 Abs. 3 S. 5 EStG — Freigrenze (€1 000 — hard threshold, not a Freibetrag)"
+    :kontor.parameter/jurisdiction :de
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.gesetze-im-internet.de/estg/__23.html"}
 
-   {:parameter/code         "DE.EStG.§23.real-estate-cutoff-days"
-    :parameter/label        "§23 Abs. 1 Nr. 1 EStG — real-estate Spekulationsfrist (10 y = 3650 d)"
-    :parameter/jurisdiction :de
-    :parameter/unit         :ratio
-    :parameter/concept-iri  "https://www.gesetze-im-internet.de/estg/__23.html"}
+   {:kontor.parameter/code         "DE.EStG.§23.real-estate-cutoff-days"
+    :kontor.parameter/label        "§23 Abs. 1 Nr. 1 EStG — real-estate Spekulationsfrist (10 y = 3650 d)"
+    :kontor.parameter/jurisdiction :de
+    :kontor.parameter/unit         :ratio
+    :kontor.parameter/concept-iri  "https://www.gesetze-im-internet.de/estg/__23.html"}
 
-   {:parameter/code         "DE.EStG.§23.movable-cutoff-days"
-    :parameter/label        "§23 Abs. 1 Nr. 2 EStG — movable-property Spekulationsfrist (1 y = 365 d)"
-    :parameter/jurisdiction :de
-    :parameter/unit         :ratio
-    :parameter/concept-iri  "https://www.gesetze-im-internet.de/estg/__23.html"}])
+   {:kontor.parameter/code         "DE.EStG.§23.movable-cutoff-days"
+    :kontor.parameter/label        "§23 Abs. 1 Nr. 2 EStG — movable-property Spekulationsfrist (1 y = 365 d)"
+    :kontor.parameter/jurisdiction :de
+    :kontor.parameter/unit         :ratio
+    :kontor.parameter/concept-iri  "https://www.gesetze-im-internet.de/estg/__23.html"}])
 
 ;; ============================================================================
 ;; Parameter values — current rates with their statutory effective windows
@@ -123,59 +123,59 @@
    for many years; the §23 €1 000 Freigrenze was raised from €600 via
    the WtChancenG (BGBl. I 2023 Nr. 412) effective 2024-01-01."
   [;; --- §8b KStG ---------------------------------------------------------
-   {:parameter-value/parameter      [:parameter/code "DE.KStG.§8b.cgt-exemption-rate"]
-    :parameter-value/effective-from #inst "2004-01-01"
-    :parameter-value/decimal-value  0.95M
-    :parameter-value/citation       "§8b Abs. 2 + Abs. 3 KStG — 95 % exemption stable since SEStEG"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "DE.KStG.§8b.cgt-exemption-rate"]
+    :kontor.parameter-value/effective-from #inst "2004-01-01"
+    :kontor.parameter-value/decimal-value  0.95M
+    :kontor.parameter-value/citation       "§8b Abs. 2 + Abs. 3 KStG — 95 % exemption stable since SEStEG"}
 
-   {:parameter-value/parameter      [:parameter/code "DE.KStG.§8b.cgt-addback-rate"]
-    :parameter-value/effective-from #inst "2004-01-01"
-    :parameter-value/decimal-value  0.05M
-    :parameter-value/citation       "§8b Abs. 3 S. 1 KStG — 5 % Pauschalzuschlag fiktive Betriebsausgaben"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "DE.KStG.§8b.cgt-addback-rate"]
+    :kontor.parameter-value/effective-from #inst "2004-01-01"
+    :kontor.parameter-value/decimal-value  0.05M
+    :kontor.parameter-value/citation       "§8b Abs. 3 S. 1 KStG — 5 % Pauschalzuschlag fiktive Betriebsausgaben"}
 
    ;; --- §17 EStG ---------------------------------------------------------
-   {:parameter-value/parameter      [:parameter/code "DE.EStG.§17.inclusion-rate"]
-    :parameter-value/effective-from #inst "2009-01-01"
-    :parameter-value/decimal-value  0.60M
-    :parameter-value/citation       "§3 Nr. 40 lit. c EStG + §3c Abs. 2 EStG — Teileinkünfteverfahren 60 % seit Abgeltungsteuer 2009"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "DE.EStG.§17.inclusion-rate"]
+    :kontor.parameter-value/effective-from #inst "2009-01-01"
+    :kontor.parameter-value/decimal-value  0.60M
+    :kontor.parameter-value/citation       "§3 Nr. 40 lit. c EStG + §3c Abs. 2 EStG — Teileinkünfteverfahren 60 % seit Abgeltungsteuer 2009"}
 
-   {:parameter-value/parameter      [:parameter/code "DE.EStG.§17.freibetrag"]
-    :parameter-value/effective-from #inst "2009-01-01"
-    :parameter-value/decimal-value  9060M
-    :parameter-value/citation       "§17 Abs. 3 S. 1 EStG — €9 060 Freibetrag stable since Unternehmenssteuerreform 2008"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "DE.EStG.§17.freibetrag"]
+    :kontor.parameter-value/effective-from #inst "2009-01-01"
+    :kontor.parameter-value/decimal-value  9060M
+    :kontor.parameter-value/citation       "§17 Abs. 3 S. 1 EStG — €9 060 Freibetrag stable since Unternehmenssteuerreform 2008"}
 
-   {:parameter-value/parameter      [:parameter/code "DE.EStG.§17.taper-start"]
-    :parameter-value/effective-from #inst "2009-01-01"
-    :parameter-value/decimal-value  36100M
-    :parameter-value/citation       "§17 Abs. 3 S. 2 EStG — €36 100 Abschmelzungsgrenze (1:1 taper above)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "DE.EStG.§17.taper-start"]
+    :kontor.parameter-value/effective-from #inst "2009-01-01"
+    :kontor.parameter-value/decimal-value  36100M
+    :kontor.parameter-value/citation       "§17 Abs. 3 S. 2 EStG — €36 100 Abschmelzungsgrenze (1:1 taper above)"}
 
    ;; --- §20 EStG ---------------------------------------------------------
-   {:parameter-value/parameter      [:parameter/code "DE.EStG.§20.flat-rate"]
-    :parameter-value/effective-from #inst "2009-01-01"
-    :parameter-value/decimal-value  0.25M
-    :parameter-value/citation       "§32d Abs. 1 EStG — 25 % Abgeltungsteuer seit Unternehmenssteuerreform 2008"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "DE.EStG.§20.flat-rate"]
+    :kontor.parameter-value/effective-from #inst "2009-01-01"
+    :kontor.parameter-value/decimal-value  0.25M
+    :kontor.parameter-value/citation       "§32d Abs. 1 EStG — 25 % Abgeltungsteuer seit Unternehmenssteuerreform 2008"}
 
    ;; --- §23 EStG ---------------------------------------------------------
-   {:parameter-value/parameter       [:parameter/code "DE.EStG.§23.freigrenze"]
-    :parameter-value/effective-from  #inst "2008-01-01"
-    :parameter-value/effective-until #inst "2024-01-01"
-    :parameter-value/decimal-value   600M
-    :parameter-value/citation        "§23 Abs. 3 S. 5 EStG pre-WtChancenG (€600 Freigrenze)"}
+   {:kontor.parameter-value/parameter       [:kontor.parameter/code "DE.EStG.§23.freigrenze"]
+    :kontor.parameter-value/effective-from  #inst "2008-01-01"
+    :kontor.parameter-value/effective-until #inst "2024-01-01"
+    :kontor.parameter-value/decimal-value   600M
+    :kontor.parameter-value/citation        "§23 Abs. 3 S. 5 EStG pre-WtChancenG (€600 Freigrenze)"}
 
-   {:parameter-value/parameter      [:parameter/code "DE.EStG.§23.freigrenze"]
-    :parameter-value/effective-from #inst "2024-01-01"
-    :parameter-value/decimal-value  1000M
-    :parameter-value/citation       "§23 Abs. 3 S. 5 EStG (WtChancenG, BGBl. I 2023 Nr. 412 — €1 000 ab 2024)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "DE.EStG.§23.freigrenze"]
+    :kontor.parameter-value/effective-from #inst "2024-01-01"
+    :kontor.parameter-value/decimal-value  1000M
+    :kontor.parameter-value/citation       "§23 Abs. 3 S. 5 EStG (WtChancenG, BGBl. I 2023 Nr. 412 — €1 000 ab 2024)"}
 
-   {:parameter-value/parameter      [:parameter/code "DE.EStG.§23.real-estate-cutoff-days"]
-    :parameter-value/effective-from #inst "1999-01-01"
-    :parameter-value/decimal-value  3650M
-    :parameter-value/citation       "§23 Abs. 1 Nr. 1 EStG — 10-Jahres-Frist seit Steuerentlastungsgesetz 1999"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "DE.EStG.§23.real-estate-cutoff-days"]
+    :kontor.parameter-value/effective-from #inst "1999-01-01"
+    :kontor.parameter-value/decimal-value  3650M
+    :kontor.parameter-value/citation       "§23 Abs. 1 Nr. 1 EStG — 10-Jahres-Frist seit Steuerentlastungsgesetz 1999"}
 
-   {:parameter-value/parameter      [:parameter/code "DE.EStG.§23.movable-cutoff-days"]
-    :parameter-value/effective-from #inst "1999-01-01"
-    :parameter-value/decimal-value  365M
-    :parameter-value/citation       "§23 Abs. 1 Nr. 2 EStG — 1-Jahres-Frist für andere Wirtschaftsgüter"}])
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "DE.EStG.§23.movable-cutoff-days"]
+    :kontor.parameter-value/effective-from #inst "1999-01-01"
+    :kontor.parameter-value/decimal-value  365M
+    :kontor.parameter-value/citation       "§23 Abs. 1 Nr. 2 EStG — 1-Jahres-Frist für andere Wirtschaftsgüter"}])
 
 ;; ============================================================================
 ;; Provisions — Soli on §20 Abgeltungsteuer
@@ -200,15 +200,15 @@
   [;; --------------------------------------------------------------------
    ;; §4 SolZG on §20 Abgeltungsteuer — 5.5 % surtax on the §20 component
    ;; --------------------------------------------------------------------
-   {:provision/code            "DE-SolZG-§4-on-§20"
-    :provision/jurisdiction    :de
-    :provision/concept         [:kontor.tax-concept/code :surtax]
-    :provision/title           "§4 SolZG — Solidaritätszuschlag (5.5 %) on §20 Abgeltungsteuer"
-    :provision/citation        "https://www.gesetze-im-internet.de/solzg_1995/__4.html"
-    :provision/effective-from  #inst "2009-01-01"
-    :provision/priority        100
-    :provision/condition       (pr-str [:eq :component :de-§20])
-    :provision/consequence     (pr-str {:op :surtax
+   {:kontor.provision/code            "DE-SolZG-§4-on-§20"
+    :kontor.provision/jurisdiction    :de
+    :kontor.provision/concept         [:kontor.tax-concept/code :surtax]
+    :kontor.provision/title           "§4 SolZG — Solidaritätszuschlag (5.5 %) on §20 Abgeltungsteuer"
+    :kontor.provision/citation        "https://www.gesetze-im-internet.de/solzg_1995/__4.html"
+    :kontor.provision/effective-from  #inst "2009-01-01"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:eq :component :de-§20])
+    :kontor.provision/consequence     (pr-str {:op :surtax
                                         :code :soli-on-§20
                                         :label "Solidaritätszuschlag (5.5 %) auf §20 Abgeltungsteuer"
                                         :amount-from :compute-fn
@@ -220,7 +220,7 @@
 
 (defn install!
   "Install DE CGT statute (parameters + provisions) into `conn`.
-   Idempotent — `:parameter/code` and `:provision/code` are unique
+   Idempotent — `:kontor.parameter/code` and `:kontor.provision/code` are unique
    identity attrs, so re-running the install is a no-op on unchanged
    rows. Note that DE.Soli.rate + DE.KSt.rate are owned by the CIT
    statute; this installer references but does NOT re-add them."

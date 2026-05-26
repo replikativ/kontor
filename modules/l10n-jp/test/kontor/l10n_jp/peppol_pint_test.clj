@@ -14,11 +14,11 @@
 (defn- jpy [s] (money/money (bigdec s) :JPY))
 
 (def sample-invoice
-  {:invoice/number     "INV-2026-0001"
-   :invoice/issue-date #inst "2026-01-15"
-   :invoice/due-date   #inst "2026-02-14"
-   :invoice/currency   "JPY"
-   :invoice/supplier
+  {:kontor.invoice/number     "INV-2026-0001"
+   :kontor.invoice/issue-date #inst "2026-01-15"
+   :kontor.invoice/due-date   #inst "2026-02-14"
+   :kontor.invoice/currency   "JPY"
+   :kontor.invoice/supplier
    {:name "Acme KK"
     :registration-number "T1234567890123"
     :address {:street "1-2-3 Shibuya"
@@ -27,14 +27,14 @@
               :country-code "JP"}
     :contact {:name "Sales" :phone "+81-3-1234-5678"
               :email "sales@acme.example.jp"}}
-   :invoice/customer
+   :kontor.invoice/customer
    {:name "Beta KK"
     :registration-number "T9876543210987"
     :address {:street "4-5 Marunouchi"
               :city "Tokyo"
               :postal-code "100-0005"
               :country-code "JP"}}
-   :invoice/lines
+   :kontor.invoice/lines
    [{:line/id 1 :line/name "Widget A"
      :line/quantity 10 :line/unit-code "EA"
      :line/unit-price (jpy "1000")
@@ -47,10 +47,10 @@
      :line/net (jpy "2500")
      :line/tax-rate 8
      :line/tax-category "AA"}]
-   :invoice/tax-totals
+   :kontor.invoice/tax-totals
    [{:rate 10 :taxable (jpy "10000") :tax (jpy "1000") :category "S"}
     {:rate 8  :taxable (jpy "2500")  :tax (jpy "200")  :category "AA"}]
-   :invoice/totals
+   :kontor.invoice/totals
    {:net (jpy "12500") :tax (jpy "1200") :gross (jpy "13700")}})
 
 (deftest emits-pint-jp-customization
@@ -95,8 +95,8 @@
 
 (deftest non-jpy-currency-uses-2-decimals
   (testing "If currency=EUR, amounts emit with 2 decimals"
-    (let [inv-eur (assoc sample-invoice :invoice/currency "EUR"
-                        :invoice/totals
+    (let [inv-eur (assoc sample-invoice :kontor.invoice/currency "EUR"
+                        :kontor.invoice/totals
                         {:net (money/money "12500.00" :EUR)
                          :tax (money/money "1200.00" :EUR)
                          :gross (money/money "13700.00" :EUR)})

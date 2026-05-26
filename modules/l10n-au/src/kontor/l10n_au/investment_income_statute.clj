@@ -46,45 +46,45 @@
   "AU investment-income parameter definitions. Values live in
    `parameter-values`, keyed by `:effective-from`."
   [;; --- Corporate rates (drive franking-credit gross-up formula) -----------
-   {:parameter/code         "AU.InvIncome.corporate-rate.large"
-    :parameter/label        "Corporate tax rate — large companies (≥ $50M aggregated turnover)"
-    :parameter/jurisdiction :au
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legislation.gov.au/C2004A02904/latest/text"}
+   {:kontor.parameter/code         "AU.InvIncome.corporate-rate.large"
+    :kontor.parameter/label        "Corporate tax rate — large companies (≥ $50M aggregated turnover)"
+    :kontor.parameter/jurisdiction :au
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legislation.gov.au/C2004A02904/latest/text"}
 
-   {:parameter/code         "AU.InvIncome.corporate-rate.base-rate-entity"
-    :parameter/label        "Corporate tax rate — base rate entity (BRE) (< $50M aggregated turnover, ≤ 80% passive)"
-    :parameter/jurisdiction :au
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legislation.gov.au/C2004A02904/latest/text"}
+   {:kontor.parameter/code         "AU.InvIncome.corporate-rate.base-rate-entity"
+    :kontor.parameter/label        "Corporate tax rate — base rate entity (BRE) (< $50M aggregated turnover, ≤ 80% passive)"
+    :kontor.parameter/jurisdiction :au
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legislation.gov.au/C2004A02904/latest/text"}
 
    ;; --- 45-day holding-period rule (ITAA 1936 former Pt IIIAA Div 1A) ------
-   {:parameter/code         "AU.InvIncome.holding-period-days"
-    :parameter/label        "At-risk holding-period — s.160APHO ITAA 1936 (45 days for ordinary shares)"
-    :parameter/jurisdiction :au
-    :parameter/unit         :days
-    :parameter/concept-iri  "https://www.legislation.gov.au/C1936A00027/latest/text"}
+   {:kontor.parameter/code         "AU.InvIncome.holding-period-days"
+    :kontor.parameter/label        "At-risk holding-period — s.160APHO ITAA 1936 (45 days for ordinary shares)"
+    :kontor.parameter/jurisdiction :au
+    :kontor.parameter/unit         :days
+    :kontor.parameter/concept-iri  "https://www.legislation.gov.au/C1936A00027/latest/text"}
 
    ;; --- Small-shareholder exemption (s.160APHT ITAA 1936) ------------------
-   {:parameter/code         "AU.InvIncome.small-shareholder-exemption"
-    :parameter/label        "Small shareholder exemption — s.160APHT ITAA 1936 ($5,000 annual franking-credit cap)"
-    :parameter/jurisdiction :au
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://www.legislation.gov.au/C1936A00027/latest/text"}
+   {:kontor.parameter/code         "AU.InvIncome.small-shareholder-exemption"
+    :kontor.parameter/label        "Small shareholder exemption — s.160APHT ITAA 1936 ($5,000 annual franking-credit cap)"
+    :kontor.parameter/jurisdiction :au
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.legislation.gov.au/C1936A00027/latest/text"}
 
    ;; --- TFN withholding rate (Pt VA ITAA 1936) -----------------------------
-   {:parameter/code         "AU.InvIncome.tfn-withholding-rate"
-    :parameter/label        "TFN withholding rate — Pt VA ITAA 1936 (top marginal, no-TFN penalty)"
-    :parameter/jurisdiction :au
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legislation.gov.au/C1936A00027/latest/text"}
+   {:kontor.parameter/code         "AU.InvIncome.tfn-withholding-rate"
+    :kontor.parameter/label        "TFN withholding rate — Pt VA ITAA 1936 (top marginal, no-TFN penalty)"
+    :kontor.parameter/jurisdiction :au
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legislation.gov.au/C1936A00027/latest/text"}
 
    ;; --- Non-resident interest WHT (s.128B ITAA 1936) -----------------------
-   {:parameter/code         "AU.InvIncome.non-resident-interest-wht-rate"
-    :parameter/label        "Non-resident interest withholding tax — s.128B ITAA 1936"
-    :parameter/jurisdiction :au
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://www.legislation.gov.au/C1936A00027/latest/text"}])
+   {:kontor.parameter/code         "AU.InvIncome.non-resident-interest-wht-rate"
+    :kontor.parameter/label        "Non-resident interest withholding tax — s.128B ITAA 1936"
+    :kontor.parameter/jurisdiction :au
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.legislation.gov.au/C1936A00027/latest/text"}])
 
 ;; ============================================================================
 ;; Parameter values — current rates with their statutory effective windows
@@ -103,39 +103,39 @@
        the Temporary Budget Repair Levy years 2014-2017).
      - s.128B — 10 % interest WHT, stable; some treaty rates lower."
   [;; Corporate rates.
-   {:parameter-value/parameter      [:parameter/code "AU.InvIncome.corporate-rate.large"]
-    :parameter-value/effective-from #inst "2001-07-01"
-    :parameter-value/decimal-value  0.30M
-    :parameter-value/citation       "s.23(2) ITAA 1936 — 30 % large-company rate since 2001-07-01"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "AU.InvIncome.corporate-rate.large"]
+    :kontor.parameter-value/effective-from #inst "2001-07-01"
+    :kontor.parameter-value/decimal-value  0.30M
+    :kontor.parameter-value/citation       "s.23(2) ITAA 1936 — 30 % large-company rate since 2001-07-01"}
 
-   {:parameter-value/parameter      [:parameter/code "AU.InvIncome.corporate-rate.base-rate-entity"]
-    :parameter-value/effective-from #inst "2021-07-22"
-    :parameter-value/decimal-value  0.25M
-    :parameter-value/citation       "s.23 ITAA 1936 — 25 % BRE since 2021-07-22 (Treasury Laws Amendment (Enterprise Tax Plan Base Rate Entities) Act 2018)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "AU.InvIncome.corporate-rate.base-rate-entity"]
+    :kontor.parameter-value/effective-from #inst "2021-07-22"
+    :kontor.parameter-value/decimal-value  0.25M
+    :kontor.parameter-value/citation       "s.23 ITAA 1936 — 25 % BRE since 2021-07-22 (Treasury Laws Amendment (Enterprise Tax Plan Base Rate Entities) Act 2018)"}
 
    ;; Holding period.
-   {:parameter-value/parameter      [:parameter/code "AU.InvIncome.holding-period-days"]
-    :parameter-value/effective-from #inst "1999-07-01"
-    :parameter-value/decimal-value  45M
-    :parameter-value/citation       "s.160APHO ITAA 1936 — 45-day at-risk holding period for ordinary shares (90 days preference; preserved as savings provision when Pt IIIAA repealed)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "AU.InvIncome.holding-period-days"]
+    :kontor.parameter-value/effective-from #inst "1999-07-01"
+    :kontor.parameter-value/decimal-value  45M
+    :kontor.parameter-value/citation       "s.160APHO ITAA 1936 — 45-day at-risk holding period for ordinary shares (90 days preference; preserved as savings provision when Pt IIIAA repealed)"}
 
    ;; Small-shareholder exemption.
-   {:parameter-value/parameter      [:parameter/code "AU.InvIncome.small-shareholder-exemption"]
-    :parameter-value/effective-from #inst "1999-07-01"
-    :parameter-value/decimal-value  5000M
-    :parameter-value/citation       "s.160APHT ITAA 1936 — $5,000 annual franking-credit cap below which the 45-day rule does not apply (individuals only)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "AU.InvIncome.small-shareholder-exemption"]
+    :kontor.parameter-value/effective-from #inst "1999-07-01"
+    :kontor.parameter-value/decimal-value  5000M
+    :kontor.parameter-value/citation       "s.160APHT ITAA 1936 — $5,000 annual franking-credit cap below which the 45-day rule does not apply (individuals only)"}
 
    ;; TFN withholding (47 % since temporary-levy repeal).
-   {:parameter-value/parameter      [:parameter/code "AU.InvIncome.tfn-withholding-rate"]
-    :parameter-value/effective-from #inst "2017-07-01"
-    :parameter-value/decimal-value  0.47M
-    :parameter-value/citation       "Pt VA ITAA 1936 + Tax Administration Regulations — 47 % top marginal rate; no-TFN-supplied penalty (refundable prepayment, not final tax)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "AU.InvIncome.tfn-withholding-rate"]
+    :kontor.parameter-value/effective-from #inst "2017-07-01"
+    :kontor.parameter-value/decimal-value  0.47M
+    :kontor.parameter-value/citation       "Pt VA ITAA 1936 + Tax Administration Regulations — 47 % top marginal rate; no-TFN-supplied penalty (refundable prepayment, not final tax)"}
 
    ;; Non-resident interest WHT.
-   {:parameter-value/parameter      [:parameter/code "AU.InvIncome.non-resident-interest-wht-rate"]
-    :parameter-value/effective-from #inst "1973-09-26"
-    :parameter-value/decimal-value  0.10M
-    :parameter-value/citation       "s.128B(5A) ITAA 1936 — 10 % non-resident interest WHT (final tax; treaty rates may differ)"}])
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "AU.InvIncome.non-resident-interest-wht-rate"]
+    :kontor.parameter-value/effective-from #inst "1973-09-26"
+    :kontor.parameter-value/decimal-value  0.10M
+    :kontor.parameter-value/citation       "s.128B(5A) ITAA 1936 — 10 % non-resident interest WHT (final tax; treaty rates may differ)"}])
 
 ;; ============================================================================
 ;; Provisions — none (v1)
@@ -163,7 +163,7 @@
 
 (defn install!
   "Install AU investment-income statute (parameters + values) into
-   `conn`. Idempotent — `:parameter/code` is a unique identity attr."
+   `conn`. Idempotent — `:kontor.parameter/code` is a unique identity attr."
   [conn]
   (d/transact conn parameters)
   (d/transact conn parameter-values)

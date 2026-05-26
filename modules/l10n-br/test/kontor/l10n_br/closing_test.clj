@@ -49,13 +49,13 @@
   ;;   Revenue (Receita Bruta Mercadorias) credit 1000.
   (br-invoice/post-br-invoice!
    conn
-   {:invoice/external-id "INV-2025-1"
-    :invoice/issue-date feb-15
-    :invoice/from-state "SP"
-    :invoice/to-state "SP"
-    :invoice/lines [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 1000M
-                     :invoice-line/tax-classification :goods}]})
+   {:kontor.invoice/external-id "INV-2025-1"
+    :kontor.invoice/issue-date feb-15
+    :kontor.invoice/from-state "SP"
+    :kontor.invoice/to-state "SP"
+    :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 1000M
+                     :kontor.invoice-line/tax-classification :goods}]})
   ;; Expense: R$600 rent paid from bank on Feb 15.
   (let [db (d/db conn)
         brl (:db/id (d/entity db [:kontor.commodity/symbol "BRL"]))
@@ -98,13 +98,13 @@
   ;; first invoice's revenue 1000 vs expenses 1000 would zero-out).
   (br-invoice/post-br-invoice!
    conn
-   {:invoice/external-id "INV-2025-2"
-    :invoice/issue-date jun-1
-    :invoice/from-state "SP"
-    :invoice/to-state "SP"
-    :invoice/lines [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 500M
-                     :invoice-line/tax-classification :goods}]})
+   {:kontor.invoice/external-id "INV-2025-2"
+    :kontor.invoice/issue-date jun-1
+    :kontor.invoice/from-state "SP"
+    :kontor.invoice/to-state "SP"
+    :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 500M
+                     :kontor.invoice-line/tax-classification :goods}]})
   ;; Net P&L (P&L accounts only, ignoring balance-sheet tax payables):
   ;;   Receita Bruta Mercadorias    = -1500 (credit-natural)
   ;;   Aluguéis                     = +600

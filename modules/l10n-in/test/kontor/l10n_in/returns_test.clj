@@ -50,41 +50,41 @@
   [conn]
   (inv/post-in-invoice!
    conn
-   {:invoice/external-id "INV-INTRA-1"
-    :invoice/issue-date jan-15
-    :invoice/supplier-state "MH"
-    :invoice/place-of-supply "MH"
-    :invoice/lines [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 1000M
-                     :invoice-line/tax-rate 0.18M}]})
+   {:kontor.invoice/external-id "INV-INTRA-1"
+    :kontor.invoice/issue-date jan-15
+    :kontor.invoice/supplier-state "MH"
+    :kontor.invoice/place-of-supply "MH"
+    :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 1000M
+                     :kontor.invoice-line/tax-rate 0.18M}]})
   (inv/post-in-invoice!
    conn
-   {:invoice/external-id "INV-INTER-1"
-    :invoice/issue-date jan-20
-    :invoice/supplier-state "MH"
-    :invoice/place-of-supply "KA"
-    :invoice/lines [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 500M
-                     :invoice-line/tax-rate 0.18M}]})
+   {:kontor.invoice/external-id "INV-INTER-1"
+    :kontor.invoice/issue-date jan-20
+    :kontor.invoice/supplier-state "MH"
+    :kontor.invoice/place-of-supply "KA"
+    :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 500M
+                     :kontor.invoice-line/tax-rate 0.18M}]})
   (inv/post-in-invoice!
    conn
-   {:invoice/external-id "INV-EXP-1"
-    :invoice/issue-date jan-25
-    :invoice/supplier-state "MH"
-    :invoice/place-of-supply "MH"
-    :invoice/export? true
-    :invoice/lines [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 400M
-                     :invoice-line/tax-status :non-resident}]})
+   {:kontor.invoice/external-id "INV-EXP-1"
+    :kontor.invoice/issue-date jan-25
+    :kontor.invoice/supplier-state "MH"
+    :kontor.invoice/place-of-supply "MH"
+    :kontor.invoice/export? true
+    :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 400M
+                     :kontor.invoice-line/tax-status :non-resident}]})
   (inv/post-in-invoice!
    conn
-   {:invoice/external-id "INV-EXEMPT-1"
-    :invoice/issue-date jan-30
-    :invoice/supplier-state "MH"
-    :invoice/place-of-supply "MH"
-    :invoice/lines [{:invoice-line/quantity 1
-                     :invoice-line/unit-price 200M
-                     :invoice-line/tax-status :exempt}]})
+   {:kontor.invoice/external-id "INV-EXEMPT-1"
+    :kontor.invoice/issue-date jan-30
+    :kontor.invoice/supplier-state "MH"
+    :kontor.invoice/place-of-supply "MH"
+    :kontor.invoice/lines [{:kontor.invoice-line/quantity 1
+                     :kontor.invoice-line/unit-price 200M
+                     :kontor.invoice-line/tax-status :exempt}]})
   nil)
 
 ;; ============================================================================

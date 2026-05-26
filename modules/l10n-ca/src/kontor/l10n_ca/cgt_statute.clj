@@ -59,32 +59,32 @@
   "CA CGT parameter definitions. Values live in `parameter-values`,
    keyed by `:effective-from`."
   [;; --- Inclusion rate (ITA s.38(a)) ---------------------------------------
-   {:parameter/code         "CA.CGT.inclusion-rate"
-    :parameter/label        "ITA s.38(a) — taxable capital gain inclusion rate (1/2)"
-    :parameter/jurisdiction :ca
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://laws-lois.justice.gc.ca/eng/acts/I-3.3/section-38.html"}
+   {:kontor.parameter/code         "CA.CGT.inclusion-rate"
+    :kontor.parameter/label        "ITA s.38(a) — taxable capital gain inclusion rate (1/2)"
+    :kontor.parameter/jurisdiction :ca
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://laws-lois.justice.gc.ca/eng/acts/I-3.3/section-38.html"}
 
    ;; --- ABIL rate (ITA s.38(c)) --------------------------------------------
-   {:parameter/code         "CA.CGT.abil-rate"
-    :parameter/label        "ITA s.38(c) — allowable business investment loss rate (1/2)"
-    :parameter/jurisdiction :ca
-    :parameter/unit         :rate
-    :parameter/concept-iri  "https://laws-lois.justice.gc.ca/eng/acts/I-3.3/section-38.html"}
+   {:kontor.parameter/code         "CA.CGT.abil-rate"
+    :kontor.parameter/label        "ITA s.38(c) — allowable business investment loss rate (1/2)"
+    :kontor.parameter/jurisdiction :ca
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://laws-lois.justice.gc.ca/eng/acts/I-3.3/section-38.html"}
 
    ;; --- LCGE — Lifetime Capital Gains Exemption (s.110.6) ------------------
-   {:parameter/code         "CA.CGT.lcge-cap"
-    :parameter/label        "ITA s.110.6 — Lifetime Capital Gains Exemption cap (QSBC + QFP/QFishing shared pool)"
-    :parameter/jurisdiction :ca
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://laws-lois.justice.gc.ca/eng/acts/i-3.3/section-110.6.html"}
+   {:kontor.parameter/code         "CA.CGT.lcge-cap"
+    :kontor.parameter/label        "ITA s.110.6 — Lifetime Capital Gains Exemption cap (QSBC + QFP/QFishing shared pool)"
+    :kontor.parameter/jurisdiction :ca
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://laws-lois.justice.gc.ca/eng/acts/i-3.3/section-110.6.html"}
 
    ;; --- Personal-use property floor (s.46(1)) ------------------------------
-   {:parameter/code         "CA.CGT.pup-floor"
-    :parameter/label        "ITA s.46(1) — $1,000 floor on ACB and proceeds for personal-use property"
-    :parameter/jurisdiction :ca
-    :parameter/unit         :amount-money
-    :parameter/concept-iri  "https://laws-lois.justice.gc.ca/eng/acts/I-3.3/section-46.html"}])
+   {:kontor.parameter/code         "CA.CGT.pup-floor"
+    :kontor.parameter/label        "ITA s.46(1) — $1,000 floor on ACB and proceeds for personal-use property"
+    :kontor.parameter/jurisdiction :ca
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://laws-lois.justice.gc.ca/eng/acts/I-3.3/section-46.html"}])
 
 ;; ============================================================================
 ;; Parameter values — current rates with their statutory effective windows
@@ -96,36 +96,36 @@
   [;; Inclusion rate — stable 1/2 since 1972 reform. The proposed 2/3
    ;; increase above $250k (Budget 2024) was cancelled by the
    ;; Department of Finance on 2025-03-21; no parameter row for it.
-   {:parameter-value/parameter      [:parameter/code "CA.CGT.inclusion-rate"]
-    :parameter-value/effective-from #inst "1972-01-01"
-    :parameter-value/decimal-value  0.5M
-    :parameter-value/citation       "ITA s.38(a) — 1/2 inclusion stable since 1972 reform; proposed 2/3 above $250k (Bill C-69) cancelled by Dept. of Finance 2025-03-21"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "CA.CGT.inclusion-rate"]
+    :kontor.parameter-value/effective-from #inst "1972-01-01"
+    :kontor.parameter-value/decimal-value  0.5M
+    :kontor.parameter-value/citation       "ITA s.38(a) — 1/2 inclusion stable since 1972 reform; proposed 2/3 above $250k (Bill C-69) cancelled by Dept. of Finance 2025-03-21"}
 
    ;; ABIL — 1/2 of a business investment loss per s.38(c).
-   {:parameter-value/parameter      [:parameter/code "CA.CGT.abil-rate"]
-    :parameter-value/effective-from #inst "1972-01-01"
-    :parameter-value/decimal-value  0.5M
-    :parameter-value/citation       "ITA s.38(c) — 1/2 of a business investment loss (allowable business investment loss)"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "CA.CGT.abil-rate"]
+    :kontor.parameter-value/effective-from #inst "1972-01-01"
+    :kontor.parameter-value/decimal-value  0.5M
+    :kontor.parameter-value/citation       "ITA s.38(c) — 1/2 of a business investment loss (allowable business investment loss)"}
 
    ;; LCGE — the indexed values. 2025 = 1,250,000; 2026 = 1,275,000.
    ;; The June-25-2024 jump from 1,016,836 was retained even after the
    ;; inclusion-rate increase was cancelled (Bill C-69 §10).
-   {:parameter-value/parameter       [:parameter/code "CA.CGT.lcge-cap"]
-    :parameter-value/effective-from  #inst "2024-06-25"
-    :parameter-value/effective-until #inst "2026-01-01"
-    :parameter-value/decimal-value   1250000M
-    :parameter-value/citation        "ITA s.110.6(2) — LCGE raised to $1,250,000 effective 2024-06-25 (Bill C-69 §10; retained when inclusion-rate increase was cancelled)"}
+   {:kontor.parameter-value/parameter       [:kontor.parameter/code "CA.CGT.lcge-cap"]
+    :kontor.parameter-value/effective-from  #inst "2024-06-25"
+    :kontor.parameter-value/effective-until #inst "2026-01-01"
+    :kontor.parameter-value/decimal-value   1250000M
+    :kontor.parameter-value/citation        "ITA s.110.6(2) — LCGE raised to $1,250,000 effective 2024-06-25 (Bill C-69 §10; retained when inclusion-rate increase was cancelled)"}
 
-   {:parameter-value/parameter      [:parameter/code "CA.CGT.lcge-cap"]
-    :parameter-value/effective-from #inst "2026-01-01"
-    :parameter-value/decimal-value  1275000M
-    :parameter-value/citation       "ITA s.110.6(2) — LCGE indexed to $1,275,000 for 2026 disposals (s.117.1 indexation resumed); per TaxTips.ca LCGE history"}
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "CA.CGT.lcge-cap"]
+    :kontor.parameter-value/effective-from #inst "2026-01-01"
+    :kontor.parameter-value/decimal-value  1275000M
+    :kontor.parameter-value/citation       "ITA s.110.6(2) — LCGE indexed to $1,275,000 for 2026 disposals (s.117.1 indexation resumed); per TaxTips.ca LCGE history"}
 
    ;; PUP floor — $1,000 since the floor was established.
-   {:parameter-value/parameter      [:parameter/code "CA.CGT.pup-floor"]
-    :parameter-value/effective-from #inst "1972-01-01"
-    :parameter-value/decimal-value  1000M
-    :parameter-value/citation       "ITA s.46(1) — $1,000 floor on ACB and proceeds for personal-use property"}])
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "CA.CGT.pup-floor"]
+    :kontor.parameter-value/effective-from #inst "1972-01-01"
+    :kontor.parameter-value/decimal-value  1000M
+    :kontor.parameter-value/citation       "ITA s.46(1) — $1,000 floor on ACB and proceeds for personal-use property"}])
 
 ;; ============================================================================
 ;; Provisions — none in v1 (see ns docstring §"Why no :provisions")
@@ -146,7 +146,7 @@
 
 (defn install!
   "Install CA CGT statute (parameters + parameter-values) into `conn`.
-   Idempotent — `:parameter/code` is a unique identity attr."
+   Idempotent — `:kontor.parameter/code` is a unique identity attr."
   [conn]
   (d/transact conn parameters)
   (d/transact conn parameter-values)

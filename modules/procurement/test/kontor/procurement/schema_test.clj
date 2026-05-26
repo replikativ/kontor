@@ -33,7 +33,7 @@
       (doseq [a [:order-item/requires-receipt? :order-item/category]]
         (is (contains? idents a) (str "missing: " a))))
     (testing "extensions to :invoice"
-      (is (contains? idents :invoice/match-status)))
+      (is (contains? idents :kontor.invoice/match-status)))
     (testing "requirement attrs"
       (doseq [a [:requirement/external-id :requirement/type :requirement/status
                  :requirement/product-id :requirement/quantity :requirement/uom
@@ -160,28 +160,28 @@
 (deftest match-status-transitions-seeded
   (let [db (d/db *conn*)]
     (testing "exception flagging"
-      (is (true? (sm/legal-transition? db :invoice :invoice/match-status
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/match-status
                                        :nil :auto-matched)))
-      (is (true? (sm/legal-transition? db :invoice :invoice/match-status
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/match-status
                                        :nil :exception-price)))
-      (is (true? (sm/legal-transition? db :invoice :invoice/match-status
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/match-status
                                        :nil :exception-qty)))
-      (is (true? (sm/legal-transition? db :invoice :invoice/match-status
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/match-status
                                        :nil :exception-missing-receipt))))
     (testing "override paths"
-      (is (true? (sm/legal-transition? db :invoice :invoice/match-status
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/match-status
                                        :exception-price :manual-approved)))
-      (is (true? (sm/legal-transition? db :invoice :invoice/match-status
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/match-status
                                        :exception-qty :manual-approved))))
     (testing "dispute paths"
-      (is (true? (sm/legal-transition? db :invoice :invoice/match-status
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/match-status
                                        :exception-price :disputed)))
-      (is (true? (sm/legal-transition? db :invoice :invoice/match-status
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/match-status
                                        :disputed :manual-approved))))
     (testing "clearing"
-      (is (true? (sm/legal-transition? db :invoice :invoice/match-status
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/match-status
                                        :auto-matched :cleared)))
-      (is (true? (sm/legal-transition? db :invoice :invoice/match-status
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/match-status
                                        :manual-approved :cleared))))))
 
 (deftest return-status-transitions-seeded

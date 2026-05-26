@@ -77,10 +77,10 @@
     (let [conn (bootstrap)
           tx   (inv/plan-jp-invoice-tx-data
                 (d/db conn)
-                {:invoice/external-id "INV-1"
-                 :invoice/issue-date jan-15
-                 :invoice/lines [{:invoice-line/line-total 100000M
-                                  :invoice-line/jct-class :standard}]}
+                {:kontor.invoice/external-id "INV-1"
+                 :kontor.invoice/issue-date jan-15
+                 :kontor.invoice/lines [{:kontor.invoice-line/line-total 100000M
+                                  :kontor.invoice-line/jct-class :standard}]}
                 {})]
       (is (vector? tx))
       (v/transact-with-validation conn tx)
@@ -93,11 +93,11 @@
     (let [conn (bootstrap)]
       (inv/post-jp-invoice!
        conn
-       {:invoice/external-id "INV-2"
-        :invoice/issue-date jan-15
-        :invoice/lines [{:invoice-line/quantity 2
-                         :invoice-line/unit-price 500M
-                         :invoice-line/jct-class :reduced}]})
+       {:kontor.invoice/external-id "INV-2"
+        :kontor.invoice/issue-date jan-15
+        :kontor.invoice/lines [{:kontor.invoice-line/quantity 2
+                         :kontor.invoice-line/unit-price 500M
+                         :kontor.invoice-line/jct-class :reduced}]})
       (is (== 1080M (bal conn "121000")) "AR gross 1,000 + 80")
       (is (== -1000M (bal conn "412000")) "reduced revenue")
       (is (== -80M (bal conn "215200")) "output JCT 8%"))))
@@ -107,14 +107,14 @@
     (let [conn (bootstrap)]
       (inv/post-jp-invoice!
        conn
-       {:invoice/external-id "INV-3"
-        :invoice/issue-date jan-15
-        :invoice/lines [{:invoice-line/line-total 100000M
-                         :invoice-line/jct-class :standard}
-                        {:invoice-line/line-total 100000M
-                         :invoice-line/jct-class :standard}
-                        {:invoice-line/line-total 50000M
-                         :invoice-line/jct-class :reduced}]})
+       {:kontor.invoice/external-id "INV-3"
+        :kontor.invoice/issue-date jan-15
+        :kontor.invoice/lines [{:kontor.invoice-line/line-total 100000M
+                         :kontor.invoice-line/jct-class :standard}
+                        {:kontor.invoice-line/line-total 100000M
+                         :kontor.invoice-line/jct-class :standard}
+                        {:kontor.invoice-line/line-total 50000M
+                         :kontor.invoice-line/jct-class :reduced}]})
       ;; gross = 200,000 + 50,000 + 20,000 + 4,000 = 274,000
       (is (== 274000M (bal conn "121000")))
       (is (== -200000M (bal conn "411000")) "two 10% lines summed")
@@ -127,10 +127,10 @@
     (let [conn (bootstrap)]
       (inv/post-jp-invoice!
        conn
-       {:invoice/external-id "INV-4"
-        :invoice/issue-date jan-15
-        :invoice/lines [{:invoice-line/line-total 300000M
-                         :invoice-line/jct-class :export-exempt}]})
+       {:kontor.invoice/external-id "INV-4"
+        :kontor.invoice/issue-date jan-15
+        :kontor.invoice/lines [{:kontor.invoice-line/line-total 300000M
+                         :kontor.invoice-line/jct-class :export-exempt}]})
       (is (== 300000M (bal conn "121000")) "no JCT added")
       (is (== -300000M (bal conn "414000")) "zero-rated export revenue")
       (is (== 0M (bal conn "215100")))
@@ -141,10 +141,10 @@
     (let [conn (bootstrap)]
       (inv/post-jp-invoice!
        conn
-       {:invoice/external-id "INV-5"
-        :invoice/issue-date jan-15
-        :invoice/lines [{:invoice-line/line-total 50000M
-                         :invoice-line/jct-class :non-taxable}]})
+       {:kontor.invoice/external-id "INV-5"
+        :kontor.invoice/issue-date jan-15
+        :kontor.invoice/lines [{:kontor.invoice-line/line-total 50000M
+                         :kontor.invoice-line/jct-class :non-taxable}]})
       (is (== 50000M (bal conn "121000")))
       (is (== -50000M (bal conn "413000")) "non-taxable revenue")
       (is (== 0M (bal conn "215100"))))))
@@ -152,8 +152,8 @@
 (deftest validate-invoice-flags-bad-class
   (testing "validate-invoice rejects an unknown JCT class"
     (let [complaints (inv/validate-invoice
-                      {:invoice/external-id "INV-6"
-                       :invoice/issue-date jan-15
-                       :invoice/lines [{:invoice-line/line-total 100M
-                                        :invoice-line/jct-class :bogus}]})]
-      (is (some #(= :invoice-line/jct-class (:field %)) complaints)))))
+                      {:kontor.invoice/external-id "INV-6"
+                       :kontor.invoice/issue-date jan-15
+                       :kontor.invoice/lines [{:kontor.invoice-line/line-total 100M
+                                        :kontor.invoice-line/jct-class :bogus}]})]
+      (is (some #(= :kontor.invoice-line/jct-class (:field %)) complaints)))))

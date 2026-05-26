@@ -252,7 +252,7 @@
 
 (defn- presumido-ratio-code
   "Map an `:atividade-codigo` keyword to the IRPJ presunção
-   `:parameter/code`. Per note 162 §1.2 — Presumido routing is
+   `:kontor.parameter/code`. Per note 162 §1.2 — Presumido routing is
    provider-side (P2-2 in note 162 §4)."
   [atividade kind]
   (case [kind atividade]
@@ -344,7 +344,7 @@
              :regime          regime
              :provenance      {:provider-id        :br-cit
                                :statute            "IRPJ — Lei 9.249/95 + Lei 9.430/96"
-                               :provisions-applied (mapv :provision/code provisions)
+                               :provisions-applied (mapv :kontor.provision/code provisions)
                                :as-of              as-of}}
       prepaid (assoc :prepaid prepaid))))
 
@@ -383,7 +383,7 @@
              :regime          regime
              :provenance      {:provider-id        :br-cit
                                :statute            "CSLL — Lei 7.689/88 + Lei 9.249/95"
-                               :provisions-applied (mapv :provision/code provisions)
+                               :provisions-applied (mapv :kontor.provision/code provisions)
                                :as-of              as-of}}
       prepaid (assoc :prepaid prepaid))))
 

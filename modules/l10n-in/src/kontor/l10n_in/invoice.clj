@@ -26,8 +26,8 @@
      supplier state = POS state, POS IS a UT-without-legislature
         → UT supply      → CGST + UTGST  (half each)
 
-   The caller passes `:invoice/supplier-state` + `:invoice/place-of-
-   supply` + `:invoice/place-of-supply-is-ut?`; the builder asks
+   The caller passes `:kontor.invoice/supplier-state` + `:kontor.invoice/place-of-
+   supply` + `:kontor.invoice/place-of-supply-is-ut?`; the builder asks
    `taxes/dispatch-supply` for the routing and `taxes/component-
    split` for the per-component rates, then `taxes/compute-tax` for
    the Money figures (so this builder doesn't duplicate the rate
@@ -35,7 +35,7 @@
 
    ## Reverse Charge (RCM)
 
-   When `:invoice/reverse-charge?` is true the supplier-side journal
+   When `:kontor.invoice/reverse-charge?` is true the supplier-side journal
    entry posts the net to revenue but the GST liability NEVER lands
    on the supplier's books — the *buyer* pays GST direct to govt.
    So the revenue is credited, the receivable equals the net (NOT
@@ -51,7 +51,7 @@
 
    Specific items (aerated drinks, luxury cars, tobacco products)
    carry a per-item Compensation Cess rate on top of the headline
-   slab. The invoice-line carries `:invoice-line/cess-rate` (a
+   slab. The invoice-line carries `:kontor.invoice-line/cess-rate` (a
    BigDecimal, e.g. 0.12M for 12%); when present, the per-line
    cess amount lands on Output Cess (`331500`).
 
@@ -64,7 +64,7 @@
 
    no tax is computed and the line lands on the relevant special-
    revenue account (Exports `410200` or Exempt `410300`) by default.
-   Callers can override per-line via `:invoice-line/account`.
+   Callers can override per-line via `:kontor.invoice-line/account`.
 
    ## ADR-068 — tx-data builder + side-effecting wrapper
 
@@ -126,7 +126,7 @@
 
 (defn- revenue-code-for-status
   "Choose the revenue account based on the line's tax-status. Callers
-   can pin a different account via `:invoice-line/account`.
+   can pin a different account via `:kontor.invoice-line/account`.
 
    Mapping:
      :taxable      → 410000 Sales — domestic taxable
@@ -146,8 +146,8 @@
 
 (defn- line-net
   "Per-line net amount = qty × unit-price, rounded HALF-EVEN to 2dp.
-   Tolerates `:invoice-line/line-total` when caller pre-computed it."
-  ^java.math.BigDecimal [{:invoice-line/keys [quantity unit-price line-total]}]
+   Tolerates `:kontor.invoice-line/line-total` when caller pre-computed it."
+  ^java.math.BigDecimal [{:kontor.invoice-line/keys [quantity unit-price line-total]}]
   (cond
     line-total (bigdec line-total)
 
@@ -156,11 +156,11 @@
                2 java.math.RoundingMode/HALF_EVEN)
 
     :else
-    (throw (ex-info "Invoice line needs either :invoice-line/line-total or both :invoice-line/quantity + :invoice-line/unit-price"
+    (throw (ex-info "Invoice line needs either :kontor.invoice-line/line-total or both :kontor.invoice-line/quantity + :kontor.invoice-line/unit-price"
                     {:line (select-keys
-                            {:invoice-line/quantity quantity
-                             :invoice-line/unit-price unit-price}
-                            [:invoice-line/quantity :invoice-line/unit-price])}))))
+                            {:kontor.invoice-line/quantity quantity
+                             :kontor.invoice-line/unit-price unit-price}
+                            [:kontor.invoice-line/quantity :kontor.invoice-line/unit-price])}))))
 
 (defn- nonzero? [^java.math.BigDecimal x]
   (not (zero? (.compareTo x 0M))))
@@ -187,10 +187,10 @@
      }"
   [line dispatch]
   (let [net (line-net line)
-        headline (:invoice-line/tax-rate line)
-        cess-rate (:invoice-line/cess-rate line)
+        headline (:kontor.invoice-line/tax-rate line)
+        cess-rate (:kontor.invoice-line/cess-rate line)
         _ (when (nil? headline)
-            (throw (ex-info "Taxable invoice line needs :invoice-line/tax-rate"
+            (throw (ex-info "Taxable invoice line needs :kontor.invoice-line/tax-rate"
                             {:line line})))
         r (taxes/compute-tax (inr-money net) headline dispatch cess-rate)
         amt (fn [m] (:amount m))
@@ -213,7 +213,7 @@
   [lines dispatch reverse-charge?]
   (vec
    (for [l lines]
-     (let [status (or (:invoice-line/tax-status l) :taxable)]
+     (let [status (or (:kontor.invoice-line/tax-status l) :taxable)]
        (cond
          (contains? #{:zero-rated :exempt :non-resident} status)
          {:status status
@@ -240,7 +240,7 @@
   [db breakdown codes commodity-eid date]
   (let [grouped (group-by
                  (fn [{:keys [status line]}]
-                   [(or (:invoice-line/account line)
+                   [(or (:kontor.invoice-line/account line)
                         (revenue-code-for-status status codes))
                     status])
                  breakdown)]
@@ -300,7 +300,7 @@
 (defn- debit-account-code
   "Resolve the debit-leg account code: cash/bank/export-AR/AR based
    on invoice flags."
-  [{:invoice/keys [cash-sale? bank-sale? export?]} codes]
+  [{:kontor.invoice/keys [cash-sale? bank-sale? export?]} codes]
   (cond
     cash-sale?  (:cash-code codes)
     bank-sale?  (:bank-code codes)
@@ -311,36 +311,36 @@
   "Pure tx-data builder for an Indian sales invoice (ADR-068).
 
    Required input:
-     {:invoice/external-id            <string>
-      :invoice/issue-date             <java.util.Date>
-      :invoice/supplier-state         <string>   ; e.g. \"MH\"
-      :invoice/place-of-supply        <string>   ; e.g. \"KA\"
-      :invoice/lines                  [<invoice-line>]
+     {:kontor.invoice/external-id            <string>
+      :kontor.invoice/issue-date             <java.util.Date>
+      :kontor.invoice/supplier-state         <string>   ; e.g. \"MH\"
+      :kontor.invoice/place-of-supply        <string>   ; e.g. \"KA\"
+      :kontor.invoice/lines                  [<invoice-line>]
       ...}
 
    Each invoice-line:
-     {:invoice-line/quantity    <number-or-bigdec>     ; OR
-      :invoice-line/unit-price  <number-or-bigdec>     ; OR pre-computed:
-      :invoice-line/line-total  <bigdec>               ; net per line
-      :invoice-line/tax-rate    <bigdec>               ; e.g. 0.18M
-      :invoice-line/cess-rate   <bigdec>               ; optional, e.g. 0.12M
-      :invoice-line/tax-status  <keyword>              ; default :taxable
-      :invoice-line/account     <code-or-eid>          ; optional override
+     {:kontor.invoice-line/quantity    <number-or-bigdec>     ; OR
+      :kontor.invoice-line/unit-price  <number-or-bigdec>     ; OR pre-computed:
+      :kontor.invoice-line/line-total  <bigdec>               ; net per line
+      :kontor.invoice-line/tax-rate    <bigdec>               ; e.g. 0.18M
+      :kontor.invoice-line/cess-rate   <bigdec>               ; optional, e.g. 0.12M
+      :kontor.invoice-line/tax-status  <keyword>              ; default :taxable
+      :kontor.invoice-line/account     <code-or-eid>          ; optional override
       ...}
 
    Optional top-level fields:
-     :invoice/place-of-supply-is-ut?  boolean — true when POS is a UT
+     :kontor.invoice/place-of-supply-is-ut?  boolean — true when POS is a UT
                                        *without legislature* (CH, LD,
                                        AN, LA, DD). Delhi & Puducherry
                                        have legislatures → false.
-     :invoice/reverse-charge?         when true, no output-tax
+     :kontor.invoice/reverse-charge?         when true, no output-tax
                                        postings on the seller side.
-     :invoice/cash-sale?              debit cash (122100) instead of AR
-     :invoice/bank-sale?              debit bank (122200) instead of AR
-     :invoice/export?                 use export AR (121200)
-     :invoice/buyer                   partner ref (kernel
+     :kontor.invoice/cash-sale?              debit cash (122100) instead of AR
+     :kontor.invoice/bank-sale?              debit bank (122200) instead of AR
+     :kontor.invoice/export?                 use export AR (121200)
+     :kontor.invoice/buyer                   partner ref (kernel
                                        :kontor.transaction/partner)
-     :invoice/journal                 journal code override (default INV)
+     :kontor.invoice/journal                 journal code override (default INV)
 
    Opts:
      :codes        — map of code overrides (`:ar-code`, `:cash-code`,
@@ -359,19 +359,19 @@
   [db invoice {:keys [codes commodity journal-code]
                :or {codes {} commodity default-commodity
                     journal-code default-journal-code}}]
-  (let [{:invoice/keys [external-id issue-date supplier-state place-of-supply
+  (let [{:kontor.invoice/keys [external-id issue-date supplier-state place-of-supply
                         place-of-supply-is-ut? reverse-charge?
                         lines buyer journal]} invoice
         _ (when-not external-id
-            (throw (ex-info "Invoice missing :invoice/external-id" {:invoice invoice})))
+            (throw (ex-info "Invoice missing :kontor.invoice/external-id" {:invoice invoice})))
         _ (when-not issue-date
-            (throw (ex-info "Invoice missing :invoice/issue-date" {:invoice invoice})))
+            (throw (ex-info "Invoice missing :kontor.invoice/issue-date" {:invoice invoice})))
         _ (when-not supplier-state
-            (throw (ex-info "Invoice missing :invoice/supplier-state" {:invoice invoice})))
+            (throw (ex-info "Invoice missing :kontor.invoice/supplier-state" {:invoice invoice})))
         _ (when-not place-of-supply
-            (throw (ex-info "Invoice missing :invoice/place-of-supply" {:invoice invoice})))
+            (throw (ex-info "Invoice missing :kontor.invoice/place-of-supply" {:invoice invoice})))
         _ (when (empty? lines)
-            (throw (ex-info "Invoice has no :invoice/lines" {:invoice invoice})))
+            (throw (ex-info "Invoice has no :kontor.invoice/lines" {:invoice invoice})))
         merged-codes (merge (default-codes) codes)
         commodity-eid (or (commodity-by-symbol db commodity)
                           (throw (ex-info (str "Commodity " commodity " not found")
@@ -395,7 +395,7 @@
         tx-base (cond-> {:kontor.transaction/external-id external-id
                          :kontor.transaction/journal jnl
                          :kontor.transaction/effective-date issue-date
-                         :kontor.transaction/narration (or (:invoice/narration invoice)
+                         :kontor.transaction/narration (or (:kontor.invoice/narration invoice)
                                                     external-id)
                          :kontor.transaction/state :posted
                          :kontor.transaction/posted-at issue-date}
@@ -424,20 +424,20 @@
   "Return a vector of complaints; empty when ready to post. Used by
    consumers to surface input issues *before* hitting the gate."
   [invoice]
-  (let [{:invoice/keys [external-id issue-date supplier-state place-of-supply
+  (let [{:kontor.invoice/keys [external-id issue-date supplier-state place-of-supply
                         lines]} invoice]
     (cond-> []
       (or (nil? external-id) (and (string? external-id) (str/blank? external-id)))
-      (conj {:field :invoice/external-id :issue :missing-or-blank})
+      (conj {:field :kontor.invoice/external-id :issue :missing-or-blank})
 
       (nil? issue-date)
-      (conj {:field :invoice/issue-date :issue :missing})
+      (conj {:field :kontor.invoice/issue-date :issue :missing})
 
       (or (nil? supplier-state) (and (string? supplier-state) (str/blank? supplier-state)))
-      (conj {:field :invoice/supplier-state :issue :missing-or-blank})
+      (conj {:field :kontor.invoice/supplier-state :issue :missing-or-blank})
 
       (or (nil? place-of-supply) (and (string? place-of-supply) (str/blank? place-of-supply)))
-      (conj {:field :invoice/place-of-supply :issue :missing-or-blank})
+      (conj {:field :kontor.invoice/place-of-supply :issue :missing-or-blank})
 
       (empty? lines)
-      (conj {:field :invoice/lines :issue :empty}))))
+      (conj {:field :kontor.invoice/lines :issue :empty}))))

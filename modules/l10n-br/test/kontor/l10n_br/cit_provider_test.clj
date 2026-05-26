@@ -236,7 +236,7 @@
 
 (deftest regime-scope-isolation-p1-1
   (testing "Real provisions do NOT fire under Presumido and vice versa.
-            First substrate test of `:provision/regime` filter end-to-end —
+            First substrate test of `:kontor.provision/regime` filter end-to-end —
             BR is the lead exerciser (note 162 §4 P1-1)."
     (let [conn (fresh)
           db   (d/db conn)
@@ -251,7 +251,7 @@
                           db {:concept :base-transform-add :jurisdiction :br
                               :as-of #inst "2025-06-30" :regime :br-lucro-real}
                           base-ctx)
-                         (map :provision/code) set)]
+                         (map :kontor.provision/code) set)]
           (is (contains? codes "BR-IRPJ-Real-multas-indedutiveis"))
           (is (contains? codes "BR-IRPJ-Real-csll-addback"))))
       (testing "Presumido-elected → NO Real provisions fire"
@@ -259,7 +259,7 @@
                           db {:concept :base-transform-add :jurisdiction :br
                               :as-of #inst "2025-06-30" :regime :br-lucro-presumido}
                           base-ctx)
-                         (map :provision/code) set)]
+                         (map :kontor.provision/code) set)]
           (is (empty? codes)
               "no BR-IRPJ-Real-* provisions should fire under Presumido")))
       (testing "IRPJ adicional surtax is regime-AGNOSTIC — fires under all regimes"
@@ -268,7 +268,7 @@
                             db {:concept :surtax :jurisdiction :br
                                 :as-of #inst "2025-06-30" :regime regime}
                             base-ctx)
-                           (map :provision/code) set)]
+                           (map :kontor.provision/code) set)]
             (is (contains? codes "BR-IRPJ-adicional-10pct")
                 (str "adicional must fire under " regime))))))))
 
@@ -317,14 +317,14 @@
       (cit-statute/install! conn)
       (cit-statute/install! conn)
       (let [db (d/db conn)
-            n-params (count (d/q '[:find ?p :where [?p :parameter/code _]
-                                   [?p :parameter/jurisdiction :br]]
+            n-params (count (d/q '[:find ?p :where [?p :kontor.parameter/code _]
+                                   [?p :kontor.parameter/jurisdiction :br]]
                                  db))
-            n-provs  (count (d/q '[:find ?p :where [?p :provision/code _]
-                                   [?p :provision/jurisdiction :br]]
+            n-provs  (count (d/q '[:find ?p :where [?p :kontor.provision/code _]
+                                   [?p :kontor.provision/jurisdiction :br]]
                                  db))
-            n-regimes (count (d/q '[:find ?r :where [?r :regime/code _]
-                                    [?r :regime/jurisdiction :br]]
+            n-regimes (count (d/q '[:find ?r :where [?r :kontor.regime/code _]
+                                    [?r :kontor.regime/jurisdiction :br]]
                                   db))]
         ;; Final counts (note 162 blueprint estimated 18+14; the
         ;; IRPJ-Real dividendos-excluidos provision was implicit in
