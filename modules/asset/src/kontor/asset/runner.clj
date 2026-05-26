@@ -100,7 +100,7 @@
      truncated the run.
    - Each charge is checked against `kontor.period` — firing into a
      soft-closed or sealed period throws
-     `:period/locked-period-violation`, surfaced to the caller
+     `:kontor.period/locked-period-violation`, surfaced to the caller
      (research note 31 §5.3; market-pain P0-2). Occurrences already
      fired earlier in the same run stay (they were in open periods);
      `:fired-before-violation` carries the partial progress."
@@ -172,7 +172,7 @@
                          :vt-to kbt/forever})
                   (catch clojure.lang.ExceptionInfo e
                     (let [data (ex-data e)]
-                      (if (= :period/locked-period-violation (:type data))
+                      (if (= :kontor.period/locked-period-violation (:type data))
                         (throw (ex-info (.getMessage e)
                                         (assoc data
                                                :book book-eid

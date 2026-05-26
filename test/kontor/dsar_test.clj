@@ -76,8 +76,8 @@
         history (d/q '[:find [?h ...]
                        :in $ ?e
                        :where
-                       [?h :status-history/entity ?e]
-                       [?h :status-history/facet :dsar-request/state]]
+                       [?h :kontor.status-history/entity ?e]
+                       [?h :kontor.status-history/facet :dsar-request/state]]
                      db req-eid)]
     (is (= :received (:dsar-request/state req)))
     (is (= :access (:dsar-request/kind req)))
@@ -121,20 +121,20 @@
                             ;; …and a :status-history row that references
                             ;; that tx via :origin-transaction — it does
                             ;; NOT reference the :partner directly.
-                            {:status-history/entity "subj-tx"
-                             :status-history/entity-type :transaction
-                             :status-history/facet :kontor.transaction/state
-                             :status-history/to :posted
-                             :status-history/changed-at #inst "2026-05-14"
-                             :status-history/origin-transaction "subj-tx"}])
+                            {:kontor.status-history/entity "subj-tx"
+                             :kontor.status-history/entity-type :transaction
+                             :kontor.status-history/facet :kontor.transaction/state
+                             :kontor.status-history/to :posted
+                             :kontor.status-history/changed-at #inst "2026-05-14"
+                             :kontor.status-history/origin-transaction "subj-tx"}])
         result (dsar/collect (d/db conn) subject {})]
     (testing "the transaction itself is in the direct :references"
       (is (= 1 (count (get-in result [:references :kontor.transaction/partner])))))
     (testing "the status-history row surfaces in :indirect-references"
       (is (contains? (:indirect-references result)
-                     :status-history/origin-transaction))
+                     :kontor.status-history/origin-transaction))
       (is (= 1 (count (get-in result [:indirect-references
-                                      :status-history/origin-transaction])))))
+                                      :kontor.status-history/origin-transaction])))))
     (testing "register-tx-attr! extends the indirect walk"
       ;; :kontor.transaction/reverses is kernel-seeded; confirm a freshly-
       ;; registered tx-attr is also walked.

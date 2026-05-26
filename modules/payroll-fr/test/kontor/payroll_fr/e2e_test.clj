@@ -34,9 +34,9 @@
                   :kontor.journal/name "Paie (FR)"
                   :kontor.journal/type :general}
                  {:db/id "period-2026-05"
-                  :period/name "2026-05"
-                  :period/start #inst "2026-05-01"
-                  :period/end #inst "2026-06-01"}])
+                  :kontor.period/name "2026-05"
+                  :kontor.period/start #inst "2026-05-01"
+                  :kontor.period/end #inst "2026-06-01"}])
     conn))
 
 (defn- get-account-eid [db code]
@@ -113,7 +113,7 @@
         eur (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "EUR"]] db)
         ent (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-FR"]] db)
         journal (d/q '[:find ?e . :where [?e :kontor.journal/code "PAY-FR"]] db)
-        period (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)
+        period (d/q '[:find ?e . :where [?e :kontor.period/name "2026-05"]] db)
         ;; Persons + employments
         _ (person/create-person!
            conn {:external-id "P-dupont"

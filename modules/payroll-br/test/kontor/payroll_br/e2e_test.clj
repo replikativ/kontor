@@ -44,9 +44,9 @@
                   :kontor.journal/name "Folha de Pagamento (BR)"
                   :kontor.journal/type :general}
                  {:db/id "period-2026-05-br"
-                  :period/name "2026-05-br"
-                  :period/start #inst "2026-05-01"
-                  :period/end #inst "2026-06-01"}])
+                  :kontor.period/name "2026-05-br"
+                  :kontor.period/start #inst "2026-05-01"
+                  :kontor.period/end #inst "2026-06-01"}])
     conn))
 
 (defn- get-account-eid [db code]
@@ -90,7 +90,7 @@
         brl (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "BRL"]] db)
         ent (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-BR"]] db)
         journal (d/q '[:find ?e . :where [?e :kontor.journal/code "PAY-BR"]] db)
-        period (d/q '[:find ?e . :where [?e :period/name "2026-05-br"]] db)
+        period (d/q '[:find ?e . :where [?e :kontor.period/name "2026-05-br"]] db)
         ;; Create persons + employments
         _ (person/create-person!
            conn {:external-id "P-jane"

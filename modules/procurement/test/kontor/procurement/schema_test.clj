@@ -236,15 +236,15 @@
 (deftest expected-seed-counts
   (let [db (d/db *conn*)]
     (is (= 8 (d/q '[:find (count ?t) .
-                    :where [?t :status-transition/entity-type :requirement]]
+                    :where [?t :kontor.status-transition/entity-type :requirement]]
                   db))
         "requirement seeds: nil→proposed, proposed→approved, proposed→rejected, proposed→cancelled, approved→ordered, approved→cancelled, approved→proposed, ordered→received")
     (is (= 4 (d/q '[:find (count ?t) .
-                    :where [?t :status-transition/entity-type :receipt]]
+                    :where [?t :kontor.status-transition/entity-type :receipt]]
                   db))
         "receipt seeds: nil→pending, pending→accepted, pending→rejected, accepted→rejected")
     (is (= 7 (d/q '[:find (count ?t) .
-                    :where [?t :status-transition/entity-type :return]]
+                    :where [?t :kontor.status-transition/entity-type :return]]
                   db))
         "return seeds: nil→requested, requested→accepted, requested→rejected, requested→cancelled, accepted→received, accepted→cancelled, received→completed")))
 

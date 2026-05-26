@@ -21,7 +21,7 @@
      entity creation (no prior state), use a `:*/nil` sentinel keyword
      by convention (e.g. `:order.status/nil`). Datahike treats nil
      values awkwardly for keyword attributes.
-   - **Org scope**: a transition with `:status-transition/applies-to-
+   - **Org scope**: a transition with `:kontor.status-transition/applies-to-
      org` set scopes to that org; one without it applies tenant-wide.
      The predicate prefers an org-specific match but falls back to
      the global row, so a tenant override doesn't require deleting
@@ -56,7 +56,7 @@
    Lookup:
      1. Match an org-specific row (applies-to-org = org), OR
      2. Match a tenant-wide row (applies-to-org absent / nil).
-   Either suffices. Inactive rows (`:status-transition/active false`)
+   Either suffices. Inactive rows (`:kontor.status-transition/active false`)
    are ignored."
   ([db entity-type facet from to] (legal-transition? db entity-type facet from to nil))
   ([db entity-type facet from to org]
@@ -74,23 +74,23 @@
          (d/q '[:find ?t .
                 :in $ ?et ?facet ?from ?to ?org
                 :where
-                [?t :status-transition/entity-type ?et]
-                [?t :status-transition/facet ?facet]
-                [?t :status-transition/from ?from]
-                [?t :status-transition/to ?to]
-                [?t :status-transition/applies-to-org ?org]
-                [?t :status-transition/active true]]
+                [?t :kontor.status-transition/entity-type ?et]
+                [?t :kontor.status-transition/facet ?facet]
+                [?t :kontor.status-transition/from ?from]
+                [?t :kontor.status-transition/to ?to]
+                [?t :kontor.status-transition/applies-to-org ?org]
+                [?t :kontor.status-transition/active true]]
               db entity-type facet from to org-eid))
        ;; Tenant-wide row (applies-to-org absent)
        (d/q '[:find ?t .
               :in $ ?et ?facet ?from ?to
               :where
-              [?t :status-transition/entity-type ?et]
-              [?t :status-transition/facet ?facet]
-              [?t :status-transition/from ?from]
-              [?t :status-transition/to ?to]
-              [?t :status-transition/active true]
-              [(missing? $ ?t :status-transition/applies-to-org)]]
+              [?t :kontor.status-transition/entity-type ?et]
+              [?t :kontor.status-transition/facet ?facet]
+              [?t :kontor.status-transition/from ?from]
+              [?t :kontor.status-transition/to ?to]
+              [?t :kontor.status-transition/active true]
+              [(missing? $ ?t :kontor.status-transition/applies-to-org)]]
             db entity-type facet from to))))))
 
 (defn legal-transitions-from
@@ -108,23 +108,23 @@
          tenant-wide (d/q '[:find [?to ...]
                             :in $ ?et ?facet ?from
                             :where
-                            [?t :status-transition/entity-type ?et]
-                            [?t :status-transition/facet ?facet]
-                            [?t :status-transition/from ?from]
-                            [?t :status-transition/to ?to]
-                            [?t :status-transition/active true]
-                            [(missing? $ ?t :status-transition/applies-to-org)]]
+                            [?t :kontor.status-transition/entity-type ?et]
+                            [?t :kontor.status-transition/facet ?facet]
+                            [?t :kontor.status-transition/from ?from]
+                            [?t :kontor.status-transition/to ?to]
+                            [?t :kontor.status-transition/active true]
+                            [(missing? $ ?t :kontor.status-transition/applies-to-org)]]
                           db entity-type facet from)
          org-specific (when org-eid
                         (d/q '[:find [?to ...]
                                :in $ ?et ?facet ?from ?org
                                :where
-                               [?t :status-transition/entity-type ?et]
-                               [?t :status-transition/facet ?facet]
-                               [?t :status-transition/from ?from]
-                               [?t :status-transition/to ?to]
-                               [?t :status-transition/applies-to-org ?org]
-                               [?t :status-transition/active true]]
+                               [?t :kontor.status-transition/entity-type ?et]
+                               [?t :kontor.status-transition/facet ?facet]
+                               [?t :kontor.status-transition/from ?from]
+                               [?t :kontor.status-transition/to ?to]
+                               [?t :kontor.status-transition/applies-to-org ?org]
+                               [?t :kontor.status-transition/active true]]
                              db entity-type facet from org-eid))]
      (into (set tenant-wide) org-specific))))
 
@@ -192,7 +192,7 @@
     :as change-spec}]
   (case rule
     :no-self-approval
-    (let [creator (->eid (:create/uid (d/pull db [:create/uid] entity)))
+    (let [creator (->eid (:kontor.audit/create-uid (d/pull db [:kontor.audit/create-uid] entity)))
           actor   (->eid changed-by-uid)]
       (when (and creator actor (= creator actor))
         {:rule rule
@@ -334,22 +334,22 @@
     (when (and (= reason :other)
                (or (nil? reason-note) (= "" reason-note)))
       (throw (ex-info ":reason :other requires a non-empty :reason-note"
-                      {:type :status-history/reason-note-required
+                      {:type :kontor.status-history/reason-note-required
                        :entity entity
                        :facet facet})))
     ;; ADR-038: apply applicable approval-policy rules.
     (check-policies db change-spec)
-    (let [history (cond-> {:status-history/entity      entity
-                           :status-history/entity-type entity-type
-                           :status-history/facet       facet
-                           :status-history/to          to
-                           :status-history/changed-at  (or changed-at (java.util.Date.))}
-                    from               (assoc :status-history/from from)
-                    changed-by-uid     (assoc :status-history/changed-by-uid changed-by-uid)
-                    reason             (assoc :status-history/reason reason)
-                    reason-note        (assoc :status-history/reason-note reason-note)
-                    supporting-doc     (assoc :status-history/supporting-doc supporting-doc)
-                    origin-transaction (assoc :status-history/origin-transaction origin-transaction))]
+    (let [history (cond-> {:kontor.status-history/entity      entity
+                           :kontor.status-history/entity-type entity-type
+                           :kontor.status-history/facet       facet
+                           :kontor.status-history/to          to
+                           :kontor.status-history/changed-at  (or changed-at (java.util.Date.))}
+                    from               (assoc :kontor.status-history/from from)
+                    changed-by-uid     (assoc :kontor.status-history/changed-by-uid changed-by-uid)
+                    reason             (assoc :kontor.status-history/reason reason)
+                    reason-note        (assoc :kontor.status-history/reason-note reason-note)
+                    supporting-doc     (assoc :kontor.status-history/supporting-doc supporting-doc)
+                    origin-transaction (assoc :kontor.status-history/origin-transaction origin-transaction))]
       [[:db/add entity facet to]
        history])))
 
@@ -372,7 +372,7 @@
      :org                — :entity ref or code; scopes the legality
                            check.
      :changed-at         — instant, default now.
-     :changed-by-uid     — ref to :create/uid; recommended.
+     :changed-by-uid     — ref to :kontor.audit/create-uid; recommended.
      :reason             — keyword codified reason (ADR-038).
      :reason-note        — free-text note alongside :reason (ADR-038).
      :supporting-doc     — ref to :audit-doc (ADR-038).
@@ -418,18 +418,18 @@
    Uses :status-history rows: the entity is in from-state iff its
    latest history row to from-state is more recent than any later
    transition out of from-state. Bitemporal: counts wall-clock time
-   from :status-history/changed-at, not datahike tx-time."
+   from :kontor.status-history/changed-at, not datahike tx-time."
   [db entity-type facet from-state millis]
   (let [threshold (java.util.Date. (- (System/currentTimeMillis) millis))
         rows (d/q '[:find ?entity ?from-when
                     :in $ ?et ?facet ?from
                     :where
                     [?entity ?facet ?from]
-                    [?h :status-history/entity ?entity]
-                    [?h :status-history/entity-type ?et]
-                    [?h :status-history/facet ?facet]
-                    [?h :status-history/to ?from]
-                    [?h :status-history/changed-at ?from-when]]
+                    [?h :kontor.status-history/entity ?entity]
+                    [?h :kontor.status-history/entity-type ?et]
+                    [?h :kontor.status-history/facet ?facet]
+                    [?h :kontor.status-history/to ?from]
+                    [?h :kontor.status-history/changed-at ?from-when]]
                   db entity-type facet from-state)]
     (->> rows
          (filter (fn [[_ from-when]] (.before from-when threshold)))
@@ -448,12 +448,12 @@
   (let [db (d/db conn)
         transitions (d/q '[:find ?t ?et ?facet ?from ?to ?millis
                            :where
-                           [?t :status-transition/auto-after-millis ?millis]
-                           [?t :status-transition/active true]
-                           [?t :status-transition/entity-type ?et]
-                           [?t :status-transition/facet ?facet]
-                           [?t :status-transition/from ?from]
-                           [?t :status-transition/to ?to]]
+                           [?t :kontor.status-transition/auto-after-millis ?millis]
+                           [?t :kontor.status-transition/active true]
+                           [?t :kontor.status-transition/entity-type ?et]
+                           [?t :kontor.status-transition/facet ?facet]
+                           [?t :kontor.status-transition/from ?from]
+                           [?t :kontor.status-transition/to ?to]]
                          db)]
     (mapv (fn [[_ et facet from to millis]]
             (let [eligible (entities-eligible-for db et facet from millis)
@@ -484,23 +484,23 @@
 
 (defn status-history-of
   "Pulled :status-history rows for `entity`, ordered oldest-first by
-   `:status-history/changed-at`. Optionally restrict to a single
+   `:kontor.status-history/changed-at`. Optionally restrict to a single
    facet via the 3-arity."
   ([db entity]
    (->> (d/q '[:find [?h ...]
                :in $ ?entity
-               :where [?h :status-history/entity ?entity]]
+               :where [?h :kontor.status-history/entity ?entity]]
              db entity)
         (map #(d/pull db '[*] %))
-        (sort-by :status-history/changed-at)
+        (sort-by :kontor.status-history/changed-at)
         vec))
   ([db entity facet]
    (->> (d/q '[:find [?h ...]
                :in $ ?entity ?facet
                :where
-               [?h :status-history/entity ?entity]
-               [?h :status-history/facet ?facet]]
+               [?h :kontor.status-history/entity ?entity]
+               [?h :kontor.status-history/facet ?facet]]
              db entity facet)
         (map #(d/pull db '[*] %))
-        (sort-by :status-history/changed-at)
+        (sort-by :kontor.status-history/changed-at)
         vec)))

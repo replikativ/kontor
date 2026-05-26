@@ -52,7 +52,7 @@
     (is (not (:ok? r)))
     (is (some #(= :unbalanced (:error %)) (:errors r)))
     ;; Postings carry no :kontor.posting/ledger, so they group under nil.
-    ;; (build-transaction would default to [:ledger/code "primary"].)
+    ;; (build-transaction would default to [:kontor.ledger/code "primary"].)
     (is (= #{nil} (set (keys (:unbalanced r)))))
     (is (= #{:EUR} (set (keys (get (:unbalanced r) nil)))))
     ;; The 1 EUR shortfall surfaces as the residual in the nil ledger group.
@@ -146,8 +146,8 @@
             transaction posting 100/-100 to IFRS and 100/-99 to HGB
             fails because HGB is unbalanced even though the aggregate
             sums to zero."
-    (let [ifrs-ref [:ledger/code "ifrs"]
-          hgb-ref  [:ledger/code "hgb"]
+    (let [ifrs-ref [:kontor.ledger/code "ifrs"]
+          hgb-ref  [:kontor.ledger/code "hgb"]
           ok (posting/validate
               {:transaction (-> (balanced-sample) :transaction)
                :postings
@@ -173,8 +173,8 @@
 (deftest validate-cross-ledger-cancellation-does-not-balance
   (testing "Per ADR-021, a 5 EUR debit on IFRS does NOT net against
             a 5 EUR credit on HGB — each ledger must self-balance."
-    (let [ifrs-ref [:ledger/code "ifrs"]
-          hgb-ref  [:ledger/code "hgb"]
+    (let [ifrs-ref [:kontor.ledger/code "ifrs"]
+          hgb-ref  [:kontor.ledger/code "hgb"]
           r (posting/validate
              {:transaction (-> (balanced-sample) :transaction)
               :postings
@@ -202,11 +202,11 @@
                    {:transaction (-> (balanced-sample) :transaction)
                     :postings
                     [{:kontor.posting/account :a :kontor.posting/amount  10.00M
-                      :kontor.posting/commodity :EUR :kontor.posting/ledger [:ledger/code "ifrs"]}
+                      :kontor.posting/commodity :EUR :kontor.posting/ledger [:kontor.ledger/code "ifrs"]}
                      {:kontor.posting/account :b :kontor.posting/amount -10.00M
-                      :kontor.posting/commodity :EUR :kontor.posting/ledger [:ledger/code "ifrs"]}]})
+                      :kontor.posting/commodity :EUR :kontor.posting/ledger [:kontor.ledger/code "ifrs"]}]})
           posting-entities (filter :kontor.posting/account tx-data)]
-      (is (every? #(= [:ledger/code "ifrs"] (:kontor.posting/ledger %))
+      (is (every? #(= [:kontor.ledger/code "ifrs"] (:kontor.posting/ledger %))
                   posting-entities)))))
 
 ;; ============================================================================
@@ -242,11 +242,11 @@
   (let [parent (assoc one-posting-with-cc-60-40
                       :kontor.posting/partner    :p/acme
                       :kontor.posting/narration  "ACME services"
-                      :kontor.posting/ledger     [:ledger/code "ifrs"])
+                      :kontor.posting/ledger     [:kontor.ledger/code "ifrs"])
         children (posting/expand-distribution parent cc-plan)]
     (is (every? #(= :p/acme (:kontor.posting/partner %)) children))
     (is (every? #(= "ACME services" (:kontor.posting/narration %)) children))
-    (is (every? #(= [:ledger/code "ifrs"] (:kontor.posting/ledger %)) children))
+    (is (every? #(= [:kontor.ledger/code "ifrs"] (:kontor.posting/ledger %)) children))
     (is (every? #(= :kontor.account/cogs (:kontor.posting/account %)) children))))
 
 (deftest expand-each-child-carries-single-distribution-at-100

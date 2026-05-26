@@ -60,24 +60,24 @@
 (def status-transition-seeds
   "ADR-034 :status-transition rows for the :retention-policy/state
    facet."
-  [{:status-transition/entity-type :retention-policy
-    :status-transition/facet :retention-policy/state
-    :status-transition/from :nil
-    :status-transition/to :draft
-    :status-transition/active true
-    :status-transition/name "Draft Retention Policy"}
-   {:status-transition/entity-type :retention-policy
-    :status-transition/facet :retention-policy/state
-    :status-transition/from :draft
-    :status-transition/to :active
-    :status-transition/active true
-    :status-transition/name "Activate Retention Policy"}
-   {:status-transition/entity-type :retention-policy
-    :status-transition/facet :retention-policy/state
-    :status-transition/from :active
-    :status-transition/to :superseded
-    :status-transition/active true
-    :status-transition/name "Supersede Retention Policy"}])
+  [{:kontor.status-transition/entity-type :retention-policy
+    :kontor.status-transition/facet :retention-policy/state
+    :kontor.status-transition/from :nil
+    :kontor.status-transition/to :draft
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Draft Retention Policy"}
+   {:kontor.status-transition/entity-type :retention-policy
+    :kontor.status-transition/facet :retention-policy/state
+    :kontor.status-transition/from :draft
+    :kontor.status-transition/to :active
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Activate Retention Policy"}
+   {:kontor.status-transition/entity-type :retention-policy
+    :kontor.status-transition/facet :retention-policy/state
+    :kontor.status-transition/from :active
+    :kontor.status-transition/to :superseded
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Supersede Retention Policy"}])
 
 (def approval-policy-seeds
   "ADR-038 :approval-policy rows. Both `:draft → :active` (a
@@ -107,7 +107,7 @@
         already? (boolean
                   (d/q '[:find ?e .
                          :where
-                         [?e :status-transition/entity-type :retention-policy]]
+                         [?e :kontor.status-transition/entity-type :retention-policy]]
                        db))]
     (when-not already?
       (d/transact conn (vec (concat status-transition-seeds
@@ -246,7 +246,7 @@
    attribute whose namespace is in `applies-to` (a set of entity-type
    keywords). Used to guard the sweeper against a cross-namespace
    `:triggered-by` anchor (a policy `:applies-to [:audit-doc]` anchored
-   on `:status-history/changed-at` must NOT sweep `:status-history`
+   on `:kontor.status-history/changed-at` must NOT sweep `:status-history`
    rows — research note 32 P1-2)."
   [db eid applies-to]
   (let [ns-strs (set (map name applies-to))]
@@ -493,7 +493,7 @@
                        sweep-time :category opt matches; nil = the
                        policy applies regardless of category (legacy).
      :anonymize-fields coll of attribute keywords (for :anonymize)
-     :changed-by-uid   ref to :create/uid
+     :changed-by-uid   ref to :kontor.audit/create-uid
      :vt-from / :vt-to valid-time bounds (default :vt-from = now)
 
    The pure tx-data builder is `define-policy-tx-data` (ADR-068)."

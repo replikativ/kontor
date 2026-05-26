@@ -105,7 +105,7 @@
 
    Required opts:
      :case            ref/eid/code
-     :written-off-by  ref to :create/uid
+     :written-off-by  ref to :kontor.audit/create-uid
      :journal-ref     [:kontor.journal/code \"..\"]
      :reason          keyword (e.g. :uncollectible-90-days)
      :supporting-doc  ref to :audit-doc (provide a pre-uploaded doc

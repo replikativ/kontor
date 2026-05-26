@@ -94,8 +94,8 @@
                 :kontor.partner/tax-id "DE222222222"}
                {:kontor.partner/external-id "VERMIETER" :kontor.partner/name "Vermieter Müller"
                 :kontor.partner/kind :supplier :kontor.partner/country-code "DE"}
-               {:period/start jan-1 :period/end jan-1-26
-                :period/tag :normal :period/name "FY2025"}]))
+               {:kontor.period/start jan-1 :kontor.period/end jan-1-26
+                :kontor.period/tag :normal :kontor.period/name "FY2025"}]))
 
 ;; ============================================================================
 ;; Scenario step bricks
@@ -296,7 +296,7 @@
     ;; --------------------------------------------------------------
     (testing "Year-end close: P&L → retained, period soft-closed"
       (let [db (d/db conn)
-            period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] db)
+            period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025"]] db)
             {:keys [close-result period-close-tx-report]}
             (de-closing/close-fiscal-year! conn {:period-eid period-eid})]
         (is (some? (:transaction-eid close-result)))

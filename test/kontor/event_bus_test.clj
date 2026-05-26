@@ -65,7 +65,7 @@
                {:filter (fn [ev] (= :kontor.transaction/committed (:event/kind ev)))})
         _no   (bus/register-handler!
                (fn [ev] (swap! calls conj [:no (:event/kind ev)]))
-               {:filter (fn [ev] (= :status-history/changed (:event/kind ev)))})
+               {:filter (fn [ev] (= :kontor.status-history/changed (:event/kind ev)))})
         r     (bus/dispatch {:event/kind :kontor.transaction/committed})]
     (is (= 1 (:invoked r)))
     (is (= [[:yes :kontor.transaction/committed]] @calls))))

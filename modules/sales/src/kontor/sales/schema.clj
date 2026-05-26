@@ -541,115 +541,115 @@
    :status-transition table (ADR-034). Idempotent via composite
    identity tuple."
   [;; Order facet
-   {:status-transition/entity-type :order
-    :status-transition/facet :order/status
-    :status-transition/from :order.status/nil
-    :status-transition/to :order.status/created
-    :status-transition/active true
-    :status-transition/name "Create Order"}
-   {:status-transition/entity-type :order
-    :status-transition/facet :order/status
-    :status-transition/from :order.status/created
-    :status-transition/to :order.status/approved
-    :status-transition/active true
-    :status-transition/name "Approve Order"}
-   {:status-transition/entity-type :order
-    :status-transition/facet :order/status
-    :status-transition/from :order.status/created
-    :status-transition/to :order.status/hold
-    :status-transition/active true
-    :status-transition/name "Place Order On Hold"}
-   {:status-transition/entity-type :order
-    :status-transition/facet :order/status
-    :status-transition/from :order.status/created
-    :status-transition/to :order.status/cancelled
-    :status-transition/active true
-    :status-transition/name "Cancel Created Order"}
-   {:status-transition/entity-type :order
-    :status-transition/facet :order/status
-    :status-transition/from :order.status/created
-    :status-transition/to :order.status/rejected
-    :status-transition/active true
-    :status-transition/name "Reject Order"}
-   {:status-transition/entity-type :order
-    :status-transition/facet :order/status
-    :status-transition/from :order.status/hold
-    :status-transition/to :order.status/approved
-    :status-transition/active true
-    :status-transition/name "Release From Hold"}
-   {:status-transition/entity-type :order
-    :status-transition/facet :order/status
-    :status-transition/from :order.status/hold
-    :status-transition/to :order.status/cancelled
-    :status-transition/active true
-    :status-transition/name "Cancel Held Order"}
-   {:status-transition/entity-type :order
-    :status-transition/facet :order/status
-    :status-transition/from :order.status/approved
-    :status-transition/to :order.status/completed
-    :status-transition/active true
-    :status-transition/name "Complete Order"}
-   {:status-transition/entity-type :order
-    :status-transition/facet :order/status
-    :status-transition/from :order.status/approved
-    :status-transition/to :order.status/cancelled
-    :status-transition/active true
-    :status-transition/name "Cancel Approved Order"}
-   {:status-transition/entity-type :order
-    :status-transition/facet :order/status
-    :status-transition/from :order.status/completed
-    :status-transition/to :order.status/approved
-    :status-transition/active true
-    :status-transition/name "Re-open Completed Order"}
+   {:kontor.status-transition/entity-type :order
+    :kontor.status-transition/facet :order/status
+    :kontor.status-transition/from :order.status/nil
+    :kontor.status-transition/to :order.status/created
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Create Order"}
+   {:kontor.status-transition/entity-type :order
+    :kontor.status-transition/facet :order/status
+    :kontor.status-transition/from :order.status/created
+    :kontor.status-transition/to :order.status/approved
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Approve Order"}
+   {:kontor.status-transition/entity-type :order
+    :kontor.status-transition/facet :order/status
+    :kontor.status-transition/from :order.status/created
+    :kontor.status-transition/to :order.status/hold
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Place Order On Hold"}
+   {:kontor.status-transition/entity-type :order
+    :kontor.status-transition/facet :order/status
+    :kontor.status-transition/from :order.status/created
+    :kontor.status-transition/to :order.status/cancelled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Cancel Created Order"}
+   {:kontor.status-transition/entity-type :order
+    :kontor.status-transition/facet :order/status
+    :kontor.status-transition/from :order.status/created
+    :kontor.status-transition/to :order.status/rejected
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Reject Order"}
+   {:kontor.status-transition/entity-type :order
+    :kontor.status-transition/facet :order/status
+    :kontor.status-transition/from :order.status/hold
+    :kontor.status-transition/to :order.status/approved
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Release From Hold"}
+   {:kontor.status-transition/entity-type :order
+    :kontor.status-transition/facet :order/status
+    :kontor.status-transition/from :order.status/hold
+    :kontor.status-transition/to :order.status/cancelled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Cancel Held Order"}
+   {:kontor.status-transition/entity-type :order
+    :kontor.status-transition/facet :order/status
+    :kontor.status-transition/from :order.status/approved
+    :kontor.status-transition/to :order.status/completed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Complete Order"}
+   {:kontor.status-transition/entity-type :order
+    :kontor.status-transition/facet :order/status
+    :kontor.status-transition/from :order.status/approved
+    :kontor.status-transition/to :order.status/cancelled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Cancel Approved Order"}
+   {:kontor.status-transition/entity-type :order
+    :kontor.status-transition/facet :order/status
+    :kontor.status-transition/from :order.status/completed
+    :kontor.status-transition/to :order.status/approved
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Re-open Completed Order"}
 
    ;; Order-item facet
-   {:status-transition/entity-type :order-item
-    :status-transition/facet :order-item/status
-    :status-transition/from :order-item.status/nil
-    :status-transition/to :order-item.status/created
-    :status-transition/active true
-    :status-transition/name "Create Item"}
-   {:status-transition/entity-type :order-item
-    :status-transition/facet :order-item/status
-    :status-transition/from :order-item.status/created
-    :status-transition/to :order-item.status/approved
-    :status-transition/active true
-    :status-transition/name "Approve Item"}
-   {:status-transition/entity-type :order-item
-    :status-transition/facet :order-item/status
-    :status-transition/from :order-item.status/created
-    :status-transition/to :order-item.status/cancelled
-    :status-transition/active true
-    :status-transition/name "Cancel Created Item"}
-   {:status-transition/entity-type :order-item
-    :status-transition/facet :order-item/status
-    :status-transition/from :order-item.status/created
-    :status-transition/to :order-item.status/rejected
-    :status-transition/active true
-    :status-transition/name "Reject Item"}
-   {:status-transition/entity-type :order-item
-    :status-transition/facet :order-item/status
-    :status-transition/from :order-item.status/approved
-    :status-transition/to :order-item.status/completed
-    :status-transition/active true
-    :status-transition/name "Complete Item"}
-   {:status-transition/entity-type :order-item
-    :status-transition/facet :order-item/status
-    :status-transition/from :order-item.status/approved
-    :status-transition/to :order-item.status/cancelled
-    :status-transition/active true
-    :status-transition/name "Cancel Approved Item"}
-   {:status-transition/entity-type :order-item
-    :status-transition/facet :order-item/status
-    :status-transition/from :order-item.status/completed
-    :status-transition/to :order-item.status/approved
-    :status-transition/active true
-    :status-transition/name "Re-open Completed Item"}])
+   {:kontor.status-transition/entity-type :order-item
+    :kontor.status-transition/facet :order-item/status
+    :kontor.status-transition/from :order-item.status/nil
+    :kontor.status-transition/to :order-item.status/created
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Create Item"}
+   {:kontor.status-transition/entity-type :order-item
+    :kontor.status-transition/facet :order-item/status
+    :kontor.status-transition/from :order-item.status/created
+    :kontor.status-transition/to :order-item.status/approved
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Approve Item"}
+   {:kontor.status-transition/entity-type :order-item
+    :kontor.status-transition/facet :order-item/status
+    :kontor.status-transition/from :order-item.status/created
+    :kontor.status-transition/to :order-item.status/cancelled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Cancel Created Item"}
+   {:kontor.status-transition/entity-type :order-item
+    :kontor.status-transition/facet :order-item/status
+    :kontor.status-transition/from :order-item.status/created
+    :kontor.status-transition/to :order-item.status/rejected
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Reject Item"}
+   {:kontor.status-transition/entity-type :order-item
+    :kontor.status-transition/facet :order-item/status
+    :kontor.status-transition/from :order-item.status/approved
+    :kontor.status-transition/to :order-item.status/completed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Complete Item"}
+   {:kontor.status-transition/entity-type :order-item
+    :kontor.status-transition/facet :order-item/status
+    :kontor.status-transition/from :order-item.status/approved
+    :kontor.status-transition/to :order-item.status/cancelled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Cancel Approved Item"}
+   {:kontor.status-transition/entity-type :order-item
+    :kontor.status-transition/facet :order-item/status
+    :kontor.status-transition/from :order-item.status/completed
+    :kontor.status-transition/to :order-item.status/approved
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Re-open Completed Item"}])
 
 (defn install!
   "Install the kontor-sales companion: schema + state-machine seeds.
    Idempotent — composite identities on :order/external-id, :order-
-   item/identity, :status-transition/identity ensure re-runs are no-ops
+   item/identity, :kontor.status-transition/identity ensure re-runs are no-ops
    for unchanged data.
 
    Returns the resulting tx-report from the final transact."

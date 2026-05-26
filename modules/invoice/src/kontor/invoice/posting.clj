@@ -299,7 +299,7 @@
      1. Verifies the invoice is :draft or :ready (status-machine
         legality check will reject otherwise).
      2. Verifies the target effective-date is not in a locked period
-        (ADR-014; raises :period/locked).
+        (ADR-014; raises :kontor.period/locked).
      3. Builds a :transaction (state :posted, posted-at set) + per-
         line :posting entries via kontor.posting/build-transaction
         (commodity required, ledger explicit, sum-to-zero enforced).
@@ -320,7 +320,7 @@
      :ledger-ref         specific :ledger ref. Defaults to the
                          kernel's primary ledger.
      :posted-at          instant (default now).
-     :changed-by-uid     optional ref to :create/uid.
+     :changed-by-uid     optional ref to :kontor.audit/create-uid.
      :reason             optional rationale (status-history).
      :vt-from            optional kontor.bitemporal valid-from for
                          the tx. Default `:posted-at`.

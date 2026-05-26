@@ -57,9 +57,9 @@
                   :kontor.journal/name "Payroll (CA)"
                   :kontor.journal/type :general}
                  {:db/id "period-2026-05"
-                  :period/name "2026-05"
-                  :period/start #inst "2026-05-01"
-                  :period/end #inst "2026-06-01"}])
+                  :kontor.period/name "2026-05"
+                  :kontor.period/start #inst "2026-05-01"
+                  :kontor.period/end #inst "2026-06-01"}])
     conn))
 
 (defn- get-account-eid [db code]
@@ -134,7 +134,7 @@
         cad (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "CAD"]] db)
         ent (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-CA"]] db)
         journal (d/q '[:find ?e . :where [?e :kontor.journal/code "PAY-CA"]] db)
-        period (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)
+        period (d/q '[:find ?e . :where [?e :kontor.period/name "2026-05"]] db)
         ;; Persons + employments
         _ (person/create-person!
            conn {:external-id "P-james"
@@ -321,7 +321,7 @@
         cad (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "CAD"]] db)
         ent (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-CA"]] db)
         journal (d/q '[:find ?e . :where [?e :kontor.journal/code "PAY-CA"]] db)
-        period (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)
+        period (d/q '[:find ?e . :where [?e :kontor.period/name "2026-05"]] db)
         _ (person/create-person!
            conn {:external-id "P-james"
                  :given-name "James" :family-name "MacDonald"})

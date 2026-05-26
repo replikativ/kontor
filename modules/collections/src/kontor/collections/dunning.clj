@@ -268,7 +268,7 @@
      :provider    DunningTemplateProvider impl
 
    Optional opts:
-     :acting-uid  ref to :create/uid (audit field on the side-effect-
+     :acting-uid  ref to :kontor.audit/create-uid (audit field on the side-effect-
                   intent if your runtime uses it)
      :now         instant (default now)
 

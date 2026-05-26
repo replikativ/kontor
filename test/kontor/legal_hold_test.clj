@@ -25,7 +25,7 @@
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
-    ;; "Actors" are seeded as partner records — :create/uid is
+    ;; "Actors" are seeded as partner records — :kontor.audit/create-uid is
     ;; :db.type/ref, so it needs an entity to point at; per the
     ;; convention in modules/collections/.../lifecycle_test.clj we
     ;; reuse :partner entities as actor stand-ins.
@@ -78,8 +78,8 @@
         history (d/q '[:find ?h
                        :in $ ?e
                        :where
-                       [?h :status-history/entity ?e]
-                       [?h :status-history/facet :legal-hold/state]]
+                       [?h :kontor.status-history/entity ?e]
+                       [?h :kontor.status-history/facet :legal-hold/state]]
                      db' hold-eid)]
     (is (= :placed (:legal-hold/state hold)))
     (is (= "Acme v. Doe 24-CV-1234" (:legal-hold/matter-name hold)))

@@ -99,7 +99,7 @@
                      :expense-report/total 0M
                      ;; The employee IS the creator — :no-self-approval
                      ;; compares the approver's :changed-by-uid to this.
-                     :create/uid employee}
+                     :kontor.audit/create-uid employee}
               note (assoc :expense-report/note note))
         status-tx (sm/record-status-change-tx-data
                    db {:entity tempid
@@ -113,7 +113,7 @@
 
 (defn create-report!
   "Create an :expense-report in `:draft`. The employee is stamped as
-   `:create/uid` so the ADR-038 :no-self-approval rule fires on
+   `:kontor.audit/create-uid` so the ADR-038 :no-self-approval rule fires on
    approval. Routes through the gate (ADR-068). Returns the tx-report.
 
    Required opts: :code, :employee (ref/eid of :partner),
@@ -258,7 +258,7 @@
   "Approve a `:submitted` report (`:submitted → :approved`). The
    ADR-038 `:no-self-approval` policy fires — `:changed-by-uid` must
    differ from the employee (`create-report!` stamped the employee
-   as `:create/uid`).
+   as `:kontor.audit/create-uid`).
 
    Required: :expense-report, :changed-by-uid.
    Optional: :reason-note, :supporting-doc, :vt-from, :vt-to."

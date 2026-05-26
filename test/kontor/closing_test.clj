@@ -37,10 +37,10 @@
                   :kontor.journal/type :sale  :kontor.journal/active true}
                  {:kontor.journal/code "EXP"  :kontor.journal/name "Expense bookings"
                   :kontor.journal/type :purchase :kontor.journal/active true}
-                 {:period/start jan-1
-                  :period/end   jan-1-26
-                  :period/tag   :normal
-                  :period/name  "FY2025"}])
+                 {:kontor.period/start jan-1
+                  :kontor.period/end   jan-1-26
+                  :kontor.period/tag   :normal
+                  :kontor.period/name  "FY2025"}])
     conn))
 
 ;; Helper: post a couple of revenue + expense entries inside FY2025.
@@ -155,7 +155,7 @@
   (let [conn (bootstrap)]
     (seed-pnl-activity! conn)
     (let [db (d/db conn)
-          period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] db)
+          period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025"]] db)
           retained (ace db "2900")
           inv-jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
           {:keys [transaction-eid postings-count net-by-commodity]}
@@ -207,7 +207,7 @@
   (let [conn (bootstrap)]
     (seed-pnl-activity! conn)
     (let [db (d/db conn)
-          period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] db)
+          period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025"]] db)
           retained (ace db "2900")
           inv-jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))]
       (closing/close-period! conn
@@ -223,7 +223,7 @@
 (deftest close-period-noop-when-no-pnl-activity
   (let [conn (bootstrap)
         db (d/db conn)
-        period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] db)
+        period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025"]] db)
         retained (ace db "2900")
         inv-jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         result (closing/close-period! conn
@@ -241,7 +241,7 @@
   (let [conn (bootstrap)]
     (seed-pnl-activity! conn)
     (let [db (d/db conn)
-          period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] db)
+          period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025"]] db)
           {:keys [close-result period-close-tx-report]}
           (de-closing/close-fiscal-year! conn {:period-eid period-eid})
           db (d/db conn)
@@ -250,9 +250,9 @@
           ret-bal (-> (balance/account-balance conn retained
                                                {:as-of-valid jan-1-26})
                       (get eur))
-          period (d/pull db [:period/locked-at] period-eid)]
+          period (d/pull db [:kontor.period/locked-at] period-eid)]
       (is (some? (:transaction-eid close-result)))
       (is (= -2300M (:amount ret-bal)))
-      (is (some? (:period/locked-at period))
+      (is (some? (:kontor.period/locked-at period))
           "DE wrapper soft-closes the period after posting the close tx")
       (is (some? period-close-tx-report)))))

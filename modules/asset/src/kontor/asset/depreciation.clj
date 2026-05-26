@@ -70,7 +70,7 @@
     (d/pull db
             '[* {:asset-depreciation/asset [:asset/code :asset/name
                                             :asset/acquisition-cost]
-                 :asset-depreciation/ledger [:ledger/code :ledger/framework]
+                 :asset-depreciation/ledger [:kontor.ledger/code :kontor.ledger/framework]
                  :asset-depreciation/method-params [*]
                  :asset-depreciation/schedule [:db/id :schedule/code
                                                :schedule/kind :schedule/state
@@ -245,7 +245,7 @@
         _ (when-not start
             (throw (ex-info "open-book!: no :start-date and the asset has no :in-service-date — place it in service first or pass :start-date"
                             {:asset asset})))
-        ledger-code (:ledger/code (d/pull db [:ledger/code] ledger))
+        ledger-code (:kontor.ledger/code (d/pull db [:kontor.ledger/code] ledger))
         sched-code (or schedule-code
                        (str (:asset/code a) "-dep-" (or ledger-code ledger)))
         n-periods (periods-for useful-life-months frequency)

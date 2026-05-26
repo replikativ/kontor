@@ -120,7 +120,7 @@
                          supporting-doc fires; the gate REJECTS the
                          tx if absent. Pass an audit-doc eid or a
                          lookup-ref.
-     :changed-by-uid   — ref to :create/uid stamping the operator
+     :changed-by-uid   — ref to :kontor.audit/create-uid stamping the operator
 
    Optional:
      :changed-at       — instant; defaults to (Date.)

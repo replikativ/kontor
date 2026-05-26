@@ -50,9 +50,9 @@
                  ;; Journal + period (kernel-required by build-transaction).
                  {:db/id "journal-payroll-de" :kontor.journal/code "PAY-DE"
                   :kontor.journal/name "Payroll (DE)" :kontor.journal/type :general}
-                 {:db/id "period-2026-05" :period/name "2026-05"
-                  :period/start #inst "2026-05-01"
-                  :period/end #inst "2026-06-01"}
+                 {:db/id "period-2026-05" :kontor.period/name "2026-05"
+                  :kontor.period/start #inst "2026-05-01"
+                  :kontor.period/end #inst "2026-06-01"}
                  ;; A contract audit-doc, carrying the new :audit-doc/category
                  ;; (ADR-075).
                  {:db/id "doc-contract-1" :audit-doc/code "CONTRACT-jane"
@@ -301,8 +301,8 @@
       (let [history (d/q '[:find [?h ...]
                            :in $ ?e
                            :where
-                           [?h :status-history/entity ?e]
-                           [?h :status-history/to :terminated]]
+                           [?h :kontor.status-history/entity ?e]
+                           [?h :kontor.status-history/to :terminated]]
                          (d/db conn) emp-eid)]
         (is (= 1 (count history))
             "exactly one :terminated history row per employment")))))
@@ -374,7 +374,7 @@
         jane (hr/person-by-external-id db "P-jane")
         de (ref-eid db :kontor.entity/code "DE-GMBH")
         eur (ref-eid db :kontor.commodity/symbol "EUR")
-        period (ref-eid db :period/name "2026-05")
+        period (ref-eid db :kontor.period/name "2026-05")
         journal (ref-eid db :kontor.journal/code "PAY-DE")
         wages-exp (ref-eid db :kontor.account/code "4120")
         wages-pay (ref-eid db :kontor.account/code "1741")
@@ -455,7 +455,7 @@
         jane (hr/person-by-external-id db "P-jane")
         de (ref-eid db :kontor.entity/code "DE-GMBH")
         eur (ref-eid db :kontor.commodity/symbol "EUR")
-        period (ref-eid db :period/name "2026-05")
+        period (ref-eid db :kontor.period/name "2026-05")
         journal (ref-eid db :kontor.journal/code "PAY-DE")
         wages-exp (ref-eid db :kontor.account/code "4120")
         wages-pay (ref-eid db :kontor.account/code "1741")

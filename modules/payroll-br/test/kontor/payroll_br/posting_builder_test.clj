@@ -185,8 +185,8 @@
         builder (pb/->BrPayrollPostingBuilder {:commodity commodity})
         with-ledger (pp/build-postings builder [(jane-fact)]
                                        {:accounts accounts
-                                        :ledger :ledger/br-ifrs})]
+                                        :ledger :kontor.ledger/br-ifrs})]
     (testing "Without :ledger no ledger tagging"
       (is (every? #(not (contains? % :kontor.posting/ledger)) postings)))
     (testing "With :ledger every posting tagged"
-      (is (every? #(= :ledger/br-ifrs (:kontor.posting/ledger %)) with-ledger)))))
+      (is (every? #(= :kontor.ledger/br-ifrs (:kontor.posting/ledger %)) with-ledger)))))

@@ -199,7 +199,7 @@
   (let [builder (pb/->JpPayrollPostingBuilder {:commodity commodity})
         postings (pp/build-postings builder [(tanaka-fact)]
                                     {:accounts accounts
-                                     :ledger :ledger/jp-jgaap})]
+                                     :ledger :kontor.ledger/jp-jgaap})]
     (testing "Every posting carries the supplied :ledger"
-      (is (every? (fn [p] (= :ledger/jp-jgaap (:kontor.posting/ledger p)))
+      (is (every? (fn [p] (= :kontor.ledger/jp-jgaap (:kontor.posting/ledger p)))
                   postings)))))

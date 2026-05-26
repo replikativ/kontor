@@ -47,10 +47,10 @@
                   :kontor.journal/type :sale :kontor.journal/active true}
                  {:kontor.journal/code "EXP" :kontor.journal/name "Expenses"
                   :kontor.journal/type :purchase :kontor.journal/active true}
-                 {:period/start period-start
-                  :period/end   period-end
-                  :period/tag   :normal
-                  :period/name  period-name}])
+                 {:kontor.period/start period-start
+                  :kontor.period/end   period-end
+                  :kontor.period/tag   :normal
+                  :kontor.period/name  period-name}])
     conn))
 
 (defn- post-sale!
@@ -152,7 +152,7 @@
                            :period-start apr-1
                            :period-end   apr-1-26})]
       (seed-march31-fy! conn)
-      (let [period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025-Mar"]]
+      (let [period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025-Mar"]]
                             (d/db conn))
             {:keys [close-result period-close-tx-report]}
             (jp-closing/close-jp-fiscal-year!
@@ -216,7 +216,7 @@
                            :period-start jan-1
                            :period-end   jan-1-26})]
       (seed-calendar-year! conn)
-      (let [period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025-Cal"]]
+      (let [period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025-Cal"]]
                             (d/db conn))
             {:keys [close-result]}
             (jp-closing/close-jp-fiscal-year!
@@ -246,7 +246,7 @@
                          :period-start apr-1
                          :period-end   apr-1-26})]
     (seed-march31-fy! conn)
-    (let [period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025-Mar"]]
+    (let [period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025-Mar"]]
                           (d/db conn))]
       (jp-closing/close-jp-fiscal-year!
        conn {:period-eid period-eid
@@ -271,12 +271,12 @@
                                :kontor.journal/type :sale :kontor.journal/active true}
                               {:kontor.journal/code "EXP" :kontor.journal/name "Expenses"
                                :kontor.journal/type :purchase :kontor.journal/active true}
-                              {:period/start apr-1
-                               :period/end apr-1-26
-                               :period/tag :normal
-                               :period/name "FY2025-Mar"}])
+                              {:kontor.period/start apr-1
+                               :kontor.period/end apr-1-26
+                               :kontor.period/tag :normal
+                               :kontor.period/name "FY2025-Mar"}])
           _ (seed-march31-fy! conn)
-          period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025-Mar"]]
+          period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025-Mar"]]
                           (d/db conn))]
       (is (nil? (:db/id (d/entity (d/db conn) [:kontor.journal/code "CLOSE"])))
           "CLOSE journal not present before close")
@@ -295,11 +295,11 @@
             throws a clear error."
     (let [conn (core/create-test-db)]
       (v/install-invariants! conn)
-      (d/transact conn [{:period/start apr-1
-                         :period/end apr-1-26
-                         :period/tag :normal
-                         :period/name "FY2025-Mar"}])
-      (let [period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025-Mar"]]
+      (d/transact conn [{:kontor.period/start apr-1
+                         :kontor.period/end apr-1-26
+                         :kontor.period/tag :normal
+                         :kontor.period/name "FY2025-Mar"}])
+      (let [period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025-Mar"]]
                             (d/db conn))]
         (is (thrown-with-msg?
              clojure.lang.ExceptionInfo
@@ -316,7 +316,7 @@
                          :period-start apr-1
                          :period-end   apr-1-26})
         db (d/db conn)
-        period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025-Mar"]] db)
+        period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025-Mar"]] db)
         planned (jp-closing/plan-jp-fiscal-year-close-tx-data
                  db {:period-eid period-eid
                      :external-id "PLAN-JP-1"})]
@@ -347,7 +347,7 @@
                            :period-start apr-1
                            :period-end   apr-1-26})]
       (seed-march31-fy! conn)
-      (let [period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025-Mar"]]
+      (let [period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025-Mar"]]
                             (d/db conn))]
         (jp-closing/close-jp-fiscal-year!
          conn {:period-eid period-eid

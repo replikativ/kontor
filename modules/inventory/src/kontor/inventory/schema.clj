@@ -529,34 +529,34 @@
            [:available :defective  "Flag defective"]
            [:defective :available  "Re-inspected OK"]
            [:available :consumed   "Fully consumed"]]]
-      {:status-transition/entity-type :inventory-item
-       :status-transition/facet :inventory-item/status
-       :status-transition/from from
-       :status-transition/to to
-       :status-transition/active true
-       :status-transition/name name})
+      {:kontor.status-transition/entity-type :inventory-item
+       :kontor.status-transition/facet :inventory-item/status
+       :kontor.status-transition/from from
+       :kontor.status-transition/to to
+       :kontor.status-transition/active true
+       :kontor.status-transition/name name})
     (for [[from to name]
           [[:nil         :in-transit "Send transfer"]
            [:in-transit  :complete   "Receive transfer"]
            [:in-transit  :cancelled  "Cancel transfer"]]]
-      {:status-transition/entity-type :inventory-transfer
-       :status-transition/facet :inventory-transfer/status
-       :status-transition/from from
-       :status-transition/to to
-       :status-transition/active true
-       :status-transition/name name})
+      {:kontor.status-transition/entity-type :inventory-transfer
+       :kontor.status-transition/facet :inventory-transfer/status
+       :kontor.status-transition/from from
+       :kontor.status-transition/to to
+       :kontor.status-transition/active true
+       :kontor.status-transition/name name})
     (for [[from to name]
           [[:nil       :open      "Open count"]
            [:open      :counting  "Begin counting"]
            [:counting  :review    "Submit for review"]
            [:review    :counting  "Send back for recount"]
            [:review    :posted    "Post count adjustments"]]]
-      {:status-transition/entity-type :physical-inventory
-       :status-transition/facet :physical-inventory/status
-       :status-transition/from from
-       :status-transition/to to
-       :status-transition/active true
-       :status-transition/name name}))))
+      {:kontor.status-transition/entity-type :physical-inventory
+       :kontor.status-transition/facet :physical-inventory/status
+       :kontor.status-transition/from from
+       :kontor.status-transition/to to
+       :kontor.status-transition/active true
+       :kontor.status-transition/name name}))))
 
 ;; ============================================================================
 ;; Installer
@@ -575,7 +575,7 @@
   (let [db (d/db conn)
         already? (boolean
                   (d/q '[:find ?e .
-                         :where [?e :status-transition/entity-type :inventory-item]]
+                         :where [?e :kontor.status-transition/entity-type :inventory-item]]
                        db))]
     (when-not already?
       (d/transact conn status-transition-seeds))))

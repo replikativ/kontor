@@ -143,7 +143,7 @@
                       \"CLOSE-<period-eid>\")
      :narration     — :kontor.transaction/narration (default
                       \"Period close\")
-     :at            — when to post; default = period's :period/end - 1ms
+     :at            — when to post; default = period's :kontor.period/end - 1ms
                       (i.e. on the last instant of the period)
 
    Idempotent-ish: refuses if a closing transaction already exists for
@@ -162,8 +162,8 @@
       (throw (ex-info "Period already has a closing transaction"
                       {:type :closing/already-posted
                        :period-eid period-eid})))
-    (let [period (d/pull db [:period/start :period/end] period-eid)
-          end (:period/end period)
+    (let [period (d/pull db [:kontor.period/start :kontor.period/end] period-eid)
+          end (:kontor.period/end period)
           ;; Last instant inside [start, end). end is exclusive, so we
           ;; subtract 1ms to land on the period's actual close moment.
           posted-at (or at (Date. (- (.getTime ^Date end) 1)))

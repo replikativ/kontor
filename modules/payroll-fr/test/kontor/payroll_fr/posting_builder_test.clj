@@ -185,9 +185,9 @@
     (let [builder (pb/->FrPayrollPostingBuilder {:commodity :eur})
           postings (pp/build-postings
                     builder [dupont-fact]
-                    {:accounts synthetic-accounts :ledger :ledger/main})]
+                    {:accounts synthetic-accounts :ledger :kontor.ledger/main})]
       (is (seq postings))
-      (is (every? #(= :ledger/main (:kontor.posting/ledger %)) postings))
+      (is (every? #(= :kontor.ledger/main (:kontor.posting/ledger %)) postings))
       (is (zero? (compare ^BigDecimal (bd-sum postings) 0M))))))
 
 (deftest fr-posting-builder-missing-commodity

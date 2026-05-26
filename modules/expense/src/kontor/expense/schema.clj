@@ -31,7 +31,7 @@
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :partner — the employee who incurred the
-                     expenses. Also stamped as :create/uid by
+                     expenses. Also stamped as :kontor.audit/create-uid by
                      `create-report!` so the ADR-038
                      :no-self-approval rule fires (an employee
                      cannot approve their own report)."}
@@ -167,18 +167,18 @@
           [:rejected   :draft       "Reopen for correction"]
           [:approved   :posted      "Post to the GL"]
           [:posted     :reimbursed  "Reimburse (own-account)"]]]
-     {:status-transition/entity-type :expense-report
-      :status-transition/facet :expense-report/status
-      :status-transition/from from
-      :status-transition/to to
-      :status-transition/active true
-      :status-transition/name name})))
+     {:kontor.status-transition/entity-type :expense-report
+      :kontor.status-transition/facet :expense-report/status
+      :kontor.status-transition/from from
+      :kontor.status-transition/to to
+      :kontor.status-transition/active true
+      :kontor.status-transition/name name})))
 
 (def approval-policy-seeds
   "ADR-038 :approval-policy rows. Approval is the consequential
    transition — `:no-self-approval` (an employee cannot approve
    their own report; `create-report!` stamps the employee as
-   `:create/uid`). Both `:rejected` edges require a non-empty
+   `:kontor.audit/create-uid`). Both `:rejected` edges require a non-empty
    reason note."
   [{:approval-policy/entity-type     :expense-report
     :approval-policy/facet           :expense-report/status
@@ -211,13 +211,13 @@
 
    Run after kontor.core/install-schema! — kontor-expense references
    kernel attrs (:partner, :account, :analytic-account, :commodity,
-   :audit-doc, :transaction, :create/uid, :status-transition)."
+   :audit-doc, :transaction, :kontor.audit/create-uid, :status-transition)."
   [conn]
   (d/transact conn all)
   (let [db (d/db conn)
         already? (boolean
                   (d/q '[:find ?e .
-                         :where [?e :status-transition/entity-type :expense-report]]
+                         :where [?e :kontor.status-transition/entity-type :expense-report]]
                        db))]
     (when-not already?
       (d/transact conn (vec (concat status-transition-seeds

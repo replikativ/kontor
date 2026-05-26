@@ -662,12 +662,12 @@
            [:active    :deceased  "Mark deceased"]
            [:active    :purged    "Purge (GDPR Art. 17)"]
            [:deceased  :purged    "Purge after death (retention floor met)"]]]
-      {:status-transition/entity-type :person
-       :status-transition/facet :kontor.person/state
-       :status-transition/from from
-       :status-transition/to to
-       :status-transition/active true
-       :status-transition/name name})
+      {:kontor.status-transition/entity-type :person
+       :kontor.status-transition/facet :kontor.person/state
+       :kontor.status-transition/from from
+       :kontor.status-transition/to to
+       :kontor.status-transition/active true
+       :kontor.status-transition/name name})
 
     ;; :employment/state — Workday-style lifecycle. :rehired creates
     ;; a NEW :employment row (per Call 2), but the prior row may
@@ -684,12 +684,12 @@
            [:active       :terminated  "Terminate employment"]
            [:on-leave     :terminated  "Terminate during leave"]
            [:terminated   :rehired     "Re-hire (audit pointer)"]]]
-      {:status-transition/entity-type :employment
-       :status-transition/facet :employment/state
-       :status-transition/from from
-       :status-transition/to to
-       :status-transition/active true
-       :status-transition/name name})
+      {:kontor.status-transition/entity-type :employment
+       :kontor.status-transition/facet :employment/state
+       :kontor.status-transition/from from
+       :kontor.status-transition/to to
+       :kontor.status-transition/active true
+       :kontor.status-transition/name name})
 
     ;; :compensation/state — :proposed → :active → :superseded.
     (for [[from to name]
@@ -698,12 +698,12 @@
            [:proposed     :active      "Activate"]
            [:active       :superseded  "Supersede with new envelope"]
            [:proposed     :superseded  "Discard (proposed)"]]]
-      {:status-transition/entity-type :compensation
-       :status-transition/facet :compensation/state
-       :status-transition/from from
-       :status-transition/to to
-       :status-transition/active true
-       :status-transition/name name})
+      {:kontor.status-transition/entity-type :compensation
+       :kontor.status-transition/facet :compensation/state
+       :kontor.status-transition/from from
+       :kontor.status-transition/to to
+       :kontor.status-transition/active true
+       :kontor.status-transition/name name})
 
     ;; :pay-period/state — :open → :computed → :approved → :posted → :paid.
     (for [[from to name]
@@ -713,12 +713,12 @@
            [:computed     :approved    "Approve computed run"]
            [:approved     :posted      "Post to GL"]
            [:posted       :paid        "Mark paid (bank settled)"]]]
-      {:status-transition/entity-type :pay-period
-       :status-transition/facet :pay-period/state
-       :status-transition/from from
-       :status-transition/to to
-       :status-transition/active true
-       :status-transition/name name})
+      {:kontor.status-transition/entity-type :pay-period
+       :kontor.status-transition/facet :pay-period/state
+       :kontor.status-transition/from from
+       :kontor.status-transition/to to
+       :kontor.status-transition/active true
+       :kontor.status-transition/name name})
 
     ;; :payroll-run/state.
     (for [[from to name]
@@ -730,12 +730,12 @@
            [:posted       :emitted     "Emit jurisdictional events"]
            [:emitted      :reconciled  "Reconcile against engine output"]
            [:posted       :reconciled  "Reconcile (no emit jurisdiction)"]]]
-      {:status-transition/entity-type :payroll-run
-       :status-transition/facet :payroll-run/state
-       :status-transition/from from
-       :status-transition/to to
-       :status-transition/active true
-       :status-transition/name name})
+      {:kontor.status-transition/entity-type :payroll-run
+       :kontor.status-transition/facet :payroll-run/state
+       :kontor.status-transition/from from
+       :kontor.status-transition/to to
+       :kontor.status-transition/active true
+       :kontor.status-transition/name name})
 
     ;; :consent/state — ADR-094 (note 93 §5). :proposed = DPIA drafted
     ;; but not yet effective; :active = in force; :withdrawn = subject
@@ -752,12 +752,12 @@
            [:proposed  :superseded  "Discard (proposed)"]
            [:active    :withdrawn   "Subject withdraws"]
            [:active    :superseded  "Supersede with new scope / basis"]]]
-      {:status-transition/entity-type :consent
-       :status-transition/facet :consent/state
-       :status-transition/from from
-       :status-transition/to to
-       :status-transition/active true
-       :status-transition/name name}))))
+      {:kontor.status-transition/entity-type :consent
+       :kontor.status-transition/facet :consent/state
+       :kontor.status-transition/from from
+       :kontor.status-transition/to to
+       :kontor.status-transition/active true
+       :kontor.status-transition/name name}))))
 
 ;; ============================================================================
 ;; Approval-policy seeds (ADR-038)
@@ -826,7 +826,7 @@
   (let [db (d/db conn)
         already? (boolean
                   (d/q '[:find ?e .
-                         :where [?e :status-transition/entity-type :person]]
+                         :where [?e :kontor.status-transition/entity-type :person]]
                        db))]
     (when-not already?
       (d/transact conn (vec (concat status-transition-seeds

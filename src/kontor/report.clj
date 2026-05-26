@@ -317,13 +317,13 @@
   "Build a posting predicate for the optional `:ledger` report
    filter. `ledger-spec` is an eid or lookup-ref. Per ADR-021 a
    posting with no `:kontor.posting/ledger` is conceptually in the PRIMARY
-   book — so when the requested ledger is `:ledger/type :primary`,
+   book — so when the requested ledger is `:kontor.ledger/type :primary`,
    nil-ledger postings pass too. Returns `(constantly true)` when no
    ledger filter is requested."
   [db ledger-spec]
   (if (nil? ledger-spec)
     (constantly true)
-    (let [{:keys [db/id ledger/type]} (d/pull db [:db/id :ledger/type] ledger-spec)]
+    (let [{:keys [db/id] :kontor.ledger/keys [type]} (d/pull db [:db/id :kontor.ledger/type] ledger-spec)]
       (when-not id
         (throw (ex-info "compute-report: :ledger not found" {:ledger ledger-spec})))
       (let [primary? (= :primary type)]

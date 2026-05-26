@@ -39,7 +39,7 @@
          :where [?e :kontor.partner/external-id ?xid]]
        db (str "U-" actor)))
 
-;; Create an :audit-doc whose creator (:create/uid) is the paralegal.
+;; Create an :audit-doc whose creator (:kontor.audit/create-uid) is the paralegal.
 (defn- seed-doc! [conn code]
   (adoc/create-doc! conn
                     {:code code
@@ -70,8 +70,8 @@
       (let [history (d/q '[:find [?h ...]
                            :in $ ?e
                            :where
-                           [?h :status-history/entity ?e]
-                           [?h :status-history/facet :audit-doc/privilege]]
+                           [?h :kontor.status-history/entity ?e]
+                           [?h :kontor.status-history/facet :audit-doc/privilege]]
                          (d/db conn) doc)]
         (is (= 1 (count history)))))))
 
@@ -107,7 +107,7 @@
            clojure.lang.ExceptionInfo #"(?i)approval-policy"
            (adoc/reclassify-privilege! conn
                                        {:doc doc :to :none
-                                        :changed-by-uid paralegal   ; = :create/uid!
+                                        :changed-by-uid paralegal   ; = :kontor.audit/create-uid!
                                         :reason :privilege-waived
                                         :reason-note "Trying to self-waive."
                                         :supporting-doc (adoc/by-code (d/db conn)

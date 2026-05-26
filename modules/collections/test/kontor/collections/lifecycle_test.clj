@@ -35,7 +35,7 @@
                   :kontor.partner/name "Small Customer"
                   :kontor.partner/kind :customer
                   :kontor.partner/credit-status :review}
-                 ;; Actor entities — :create/uid is :db.type/ref so we
+                 ;; Actor entities — :kontor.audit/create-uid is :db.type/ref so we
                  ;; reuse the partner shape for fake users (the same
                  ;; pattern as test/kontor/status_machine_test.clj:344).
                  {:kontor.partner/external-id "U-alice" :kontor.partner/name "Alice"}
@@ -57,7 +57,7 @@
 
 (defn- actor [uid]
   ;; "Actors" are seeded as partner records with :kontor.partner/external-id
-  ;; "U-<uid>" so :create/uid (ref) has something to point at.
+  ;; "U-<uid>" so :kontor.audit/create-uid (ref) has something to point at.
   (d/q '[:find ?a . :in $ ?xid
          :where [?a :kontor.partner/external-id ?xid]]
        (d/db *conn*) (str "U-" uid)))
@@ -88,8 +88,8 @@
       (let [eid (kcase/by-code db "CASE-1")
             history (sm/status-history-of db eid :collection-case/state)]
         (is (= 1 (count history)))
-        (is (= :open (:status-history/to (first history))))
-        (is (= :case-opened (:status-history/reason (first history))))))))
+        (is (= :open (:kontor.status-history/to (first history))))
+        (is (= :case-opened (:kontor.status-history/reason (first history))))))))
 
 (deftest cannot-open-second-case-for-same-pair
   (kcase/open-case! *conn*

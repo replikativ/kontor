@@ -117,9 +117,9 @@
               serial-number       (assoc :asset/serial-number serial-number)
               location            (assoc :asset/location location)
               note                (assoc :asset/note note)
-              ;; The acquirer IS the creator — stamp :create/uid so
+              ;; The acquirer IS the creator — stamp :kontor.audit/create-uid so
               ;; ADR-038 :no-self-approval can fire on disposal.
-              changed-by-uid      (assoc :create/uid changed-by-uid))
+              changed-by-uid      (assoc :kontor.audit/create-uid changed-by-uid))
         status-tx (sm/record-status-change-tx-data
                    db
                    (cond-> {:entity asset-tempid
@@ -136,7 +136,7 @@
 (defn acquire!
   "Create an :asset. Status nil → :planned (default) or nil →
    :in-service when `:in-service?` is true. The acquirer is stamped
-   as `:create/uid` so the ADR-038 :no-self-approval rule can fire
+   as `:kontor.audit/create-uid` so the ADR-038 :no-self-approval rule can fire
    on a later disposal.
 
    Required opts:
@@ -160,7 +160,7 @@
      :origin-transaction    ref/eid of :transaction
      :origin-document       ref/eid of :audit-doc
      :serial-number / :location / :note  strings
-     :changed-by-uid        ref/eid of :create/uid
+     :changed-by-uid        ref/eid of :kontor.audit/create-uid
      :vt-from / :vt-to      valid-time bounds (default :vt-from =
                             :acquisition-date)
 
@@ -256,7 +256,7 @@
    Required opts:
      :asset           code or eid
      :date            instant (disposal date)
-     :changed-by-uid  ref to :create/uid (must differ from the
+     :changed-by-uid  ref to :kontor.audit/create-uid (must differ from the
                       acquirer per :no-self-approval)
      :justification   ref to :audit-doc (the disposal authorisation)
 

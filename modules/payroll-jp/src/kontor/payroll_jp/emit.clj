@@ -209,7 +209,7 @@
                       keys, OR a consumer-extended kw
      :attested-at     #inst — when the HR officer verified the
                       My Number against the document
-     :attested-by-uid ref to the operator (:create/uid)
+     :attested-by-uid ref to the operator (:kontor.audit/create-uid)
 
    Optional:
      :storage-uri     URI to the consumer's privileged store record

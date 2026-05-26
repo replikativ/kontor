@@ -50,14 +50,14 @@
                   :kontor.journal/name "Payroll (IN)"
                   :kontor.journal/type :general}
                  {:db/id "ledger-ifrs-in"
-                  :ledger/code "ind-as"
-                  :ledger/name "Ind AS"
-                  :ledger/framework :ifrs
-                  :ledger/active true}
+                  :kontor.ledger/code "ind-as"
+                  :kontor.ledger/name "Ind AS"
+                  :kontor.ledger/framework :ifrs
+                  :kontor.ledger/active true}
                  {:db/id "period-2026-05"
-                  :period/name "2026-05"
-                  :period/start #inst "2026-05-01"
-                  :period/end #inst "2026-06-01"}])
+                  :kontor.period/name "2026-05"
+                  :kontor.period/start #inst "2026-05-01"
+                  :kontor.period/end #inst "2026-06-01"}])
     conn))
 
 (defn- setup-employees [conn]
@@ -132,9 +132,9 @@
         db (d/db conn)
         acme    (ref-eid db :kontor.entity/code "ACME-IN")
         inr     (ref-eid db :kontor.commodity/symbol "INR")
-        ledger  (ref-eid db :ledger/code "ind-as")
+        ledger  (ref-eid db :kontor.ledger/code "ind-as")
         journal (ref-eid db :kontor.journal/code "PAY-IN")
-        period  (ref-eid db :period/name "2026-05")
+        period  (ref-eid db :kontor.period/name "2026-05")
         e001 (hr/employment-by-code db "E001")
         e002 (hr/employment-by-code db "E002")
         e003 (hr/employment-by-code db "E003")

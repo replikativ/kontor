@@ -110,7 +110,7 @@
   "Record a :lease at `:draft` — the contract facts, before
    balance-sheet recognition. ADR-063's `commence!` moves it
    `:draft → :active`. The `:changed-by-uid` actor is stamped as
-   `:create/uid` so the ADR-038 `:no-self-approval` rule can fire on
+   `:kontor.audit/create-uid` so the ADR-038 `:no-self-approval` rule can fire on
    a later termination. Returns the tx-report.
 
    Required opts: :code, :name, :lessor, :asset-class,
@@ -207,9 +207,9 @@
               imported-original-term-months
               (assoc :lease/imported-original-term-months
                      imported-original-term-months)
-              ;; The recording actor IS the creator — stamp :create/uid
+              ;; The recording actor IS the creator — stamp :kontor.audit/create-uid
               ;; so ADR-038 :no-self-approval can fire on termination.
-              changed-by-uid          (assoc :create/uid changed-by-uid))
+              changed-by-uid          (assoc :kontor.audit/create-uid changed-by-uid))
         ;; status-tx needs `db` for the legal-transition check; we
         ;; pass nil because `:from :nil :to :draft` is the very first
         ;; entry — record-status-change-tx-data tolerates this when

@@ -57,12 +57,12 @@
                 :kontor.partner/kind :customer
                 :kontor.partner/concept-iri "https://gleif.org/lei/254900XYZ0000000ACME"}
                ;; status-transition: nil → :reviewed for our test facet
-               {:status-transition/entity-type :transaction
-                :status-transition/facet :tx-test/review-status
-                :status-transition/from :nil
-                :status-transition/to :reviewed
-                :status-transition/active true
-                :status-transition/name "Mark transaction reviewed"}])
+               {:kontor.status-transition/entity-type :transaction
+                :kontor.status-transition/facet :tx-test/review-status
+                :kontor.status-transition/from :nil
+                :kontor.status-transition/to :reviewed
+                :kontor.status-transition/active true
+                :kontor.status-transition/name "Mark transaction reviewed"}])
   (d/db conn))
 
 (defn- post-invoice!
@@ -182,7 +182,7 @@
       (let [r (explain/explain-posting conn p1)]
         (is (some? (:status-history r)))
         (is (= 1 (count (:status-history r))))
-        (is (= :reviewed (-> r :status-history first :status-history/to)))))))
+        (is (= :reviewed (-> r :status-history first :kontor.status-history/to)))))))
 
 (deftest explain-posting-pulls-audit-docs-via-status-history
   (testing "An audit-doc attached to a status-history row surfaces as :audit-docs."

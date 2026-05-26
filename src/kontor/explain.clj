@@ -134,41 +134,41 @@
 
 (defn- status-history-for
   "Pull the status-history rows for `entity-eid` ordered by
-   :status-history/changed-at ascending. Each row carries
+   :kontor.status-history/changed-at ascending. Each row carries
    {:from :to :facet :changed-at :reason :reason-note :supporting-doc
     :changed-by-uid :origin-transaction}."
   [db entity-eid]
   (->> (d/q '[:find [?h ...]
               :in $ ?e
-              :where [?h :status-history/entity ?e]]
+              :where [?h :kontor.status-history/entity ?e]]
             db entity-eid)
        (mapv (fn [eid]
                (d/pull db
                        [:db/id
-                        :status-history/entity-type
-                        :status-history/facet
-                        :status-history/from
-                        :status-history/to
-                        :status-history/changed-at
-                        :status-history/changed-by-uid
-                        :status-history/reason
-                        :status-history/reason-note
-                        :status-history/supporting-doc
-                        :status-history/origin-transaction]
+                        :kontor.status-history/entity-type
+                        :kontor.status-history/facet
+                        :kontor.status-history/from
+                        :kontor.status-history/to
+                        :kontor.status-history/changed-at
+                        :kontor.status-history/changed-by-uid
+                        :kontor.status-history/reason
+                        :kontor.status-history/reason-note
+                        :kontor.status-history/supporting-doc
+                        :kontor.status-history/origin-transaction]
                        eid)))
-       (sort-by :status-history/changed-at)
+       (sort-by :kontor.status-history/changed-at)
        vec))
 
 (defn- audit-docs-for
   "All :audit-doc entities referenced from `entity-eid`'s status-history
-   rows via :status-history/supporting-doc — i.e., the supporting
+   rows via :kontor.status-history/supporting-doc — i.e., the supporting
    evidence chain. Deduped + ordered by :audit-doc/uploaded-at."
   [db entity-eid]
   (->> (d/q '[:find [?d ...]
               :in $ ?e
               :where
-              [?h :status-history/entity ?e]
-              [?h :status-history/supporting-doc ?d]]
+              [?h :kontor.status-history/entity ?e]
+              [?h :kontor.status-history/supporting-doc ?d]]
             db entity-eid)
        set
        (mapv (fn [eid]
@@ -290,8 +290,8 @@
               (d/q '[:find [?caused ...]
                      :in $ ?tx
                      :where
-                     [?h :status-history/origin-transaction ?tx]
-                     [?h :status-history/entity ?caused]]
+                     [?h :kontor.status-history/origin-transaction ?tx]
+                     [?h :kontor.status-history/entity ?caused]]
                    tx-snap tx-eid))
              holds       (legal-holds-for tx-snap
                                           (cond-> #{posting-eid tx-eid}

@@ -29,7 +29,7 @@
     (asset-schema/install! conn)
     (d/transact conn
                 [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
-                 ;; Actors — :create/uid is :db.type/ref, reuse :partner
+                 ;; Actors — :kontor.audit/create-uid is :db.type/ref, reuse :partner
                  ;; entities as actor stand-ins (the kernel convention).
                  {:kontor.partner/external-id "U-buyer"    :kontor.partner/name "Asset Buyer"}
                  {:kontor.partner/external-id "U-manager"  :kontor.partner/name "Asset Manager"}
@@ -123,8 +123,8 @@
       (is (= 1 (count (d/q '[:find [?h ...]
                              :in $ ?e
                              :where
-                             [?h :status-history/entity ?e]
-                             [?h :status-history/facet :asset/status]]
+                             [?h :kontor.status-history/entity ?e]
+                             [?h :kontor.status-history/facet :asset/status]]
                            (d/db conn) (asset/by-code (d/db conn) "MACH-PLAN"))))))
     (testing "place-in-service! → :in-service, stamps :in-service-date"
       (asset/place-in-service! conn

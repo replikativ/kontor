@@ -56,13 +56,13 @@
             :no-certificado no-certificado
             :certificado certificado})
           title (str "CFDI Nómina " (:employee/code facts)
-                     " " (:period/start facts) ".." (:period/end facts))
+                     " " (:kontor.period/start facts) ".." (:kontor.period/end facts))
           desc (str "Recibo de nómina " (or (get cfdi-nomina/tipos-nomina
                                                  (or tipo :ordinary))
                                             "O")
                     " — empleado " (:employee/code facts)
-                    " periodo " (:period/start facts)
-                    " a " (:period/end facts))]
+                    " periodo " (:kontor.period/start facts)
+                    " a " (:kontor.period/end facts))]
       {:xml envelope-xml
        :complemento-xml complemento-xml
        :emit-format :mx/cfdi-nomina-1.2

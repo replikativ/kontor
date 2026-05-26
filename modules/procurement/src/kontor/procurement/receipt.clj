@@ -319,7 +319,7 @@
      :effective-date  instant (default now). Also drives the tx's
                       `:tx/valid-from` for kontor.bitemporal when
                       `:vt-from` is omitted.
-     :changed-by-uid  ref to :create/uid for the status-history row.
+     :changed-by-uid  ref to :kontor.audit/create-uid for the status-history row.
      :reason          status-history :reason keyword.
      :vt-from         kontor.bitemporal valid-from (default
                       `:effective-date`).

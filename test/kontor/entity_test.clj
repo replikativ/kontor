@@ -125,7 +125,7 @@
 ;; Multi-entity mode — intercompany
 ;; ============================================================================
 
-(def ifrs-ref [:ledger/code "ifrs"])
+(def ifrs-ref [:kontor.ledger/code "ifrs"])
 (def de-ref   [:kontor.entity/code "acme-de"])
 (def us-ref   [:kontor.entity/code "acme-us"])
 
@@ -281,8 +281,8 @@
       (let [a (d/pull db '[*] :kontor.entity/code)]
         (is (= :db.type/string (:db/valueType a)))
         (is (= :db.unique/identity (:db/unique a)))))
-    (testing ":kontor.posting/entity / :ledger/entity / :valuation-book/entity all refs"
-      (doseq [k [:kontor.posting/entity :ledger/entity :valuation-book/entity]]
+    (testing ":kontor.posting/entity / :kontor.ledger/entity / :valuation-book/entity all refs"
+      (doseq [k [:kontor.posting/entity :kontor.ledger/entity :valuation-book/entity]]
         (let [a (d/pull db '[*] k)]
           (is (= :db.type/ref (:db/valueType a)) (str k))
           (is (= :db.cardinality/one (:db/cardinality a)) (str k)))))))

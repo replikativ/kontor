@@ -205,9 +205,9 @@
               :rfc rfc
               :curp (:employee/curp mx-facts)
               :employee-code (:employee/code mx-facts)
-              :period-start  (:period/start mx-facts)
-              :period-end    (:period/end mx-facts)
-              :period-payment-date (:period/payment-date mx-facts)
+              :period-start  (:kontor.period/start mx-facts)
+              :period-end    (:kontor.period/end mx-facts)
+              :period-payment-date (:kontor.period/payment-date mx-facts)
               ;; Round-trip the MX-shape facts so the emit-provider
               ;; bridge can reach them later in run-payroll! without
               ;; re-parsing.

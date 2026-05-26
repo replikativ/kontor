@@ -71,7 +71,7 @@
    Required opts:
      :lease                   code or eid — must be `:draft`
      :journal                 journal ref for the recognition entries
-     :changed-by-uid          ref to `:create/uid` — drives the status
+     :changed-by-uid          ref to `:kontor.audit/create-uid` — drives the status
                               change (`:requires-supporting-doc` is
                               met by the lease's `:origin-document`)
      :rou-asset-account       eid — the ROU asset's BS account
@@ -176,8 +176,8 @@
         ;; does not pull the (not-yet-committed) asset.
         ledger-codes (into {} (map (fn [bk]
                                      [(:ledger bk)
-                                      (:ledger/code
-                                       (d/pull db [:ledger/code] (:ledger bk)))]))
+                                      (:kontor.ledger/code
+                                       (d/pull db [:kontor.ledger/code] (:ledger bk)))]))
                            books)
         ;; The :asset's single :acquisition-cost — the first (usually
         ;; primary) book's ROU cost; each :asset-depreciation book
@@ -351,7 +351,7 @@
 
    Required opts (same shape as `commence!`):
      :lease                   code or eid — must be `:draft` + imported?
-     :changed-by-uid          ref to :create/uid
+     :changed-by-uid          ref to :kontor.audit/create-uid
      :rou-asset-account       eid — ROU asset BS account
      :rou-accumulated-account eid — ROU accumulated-amortisation account
      :books                   non-empty vector of per-ledger specs:
@@ -431,8 +431,8 @@
                        (schedule/date-of-occurrence imported-as-of freq 2))
         ledger-codes (into {} (map (fn [bk]
                                      [(:ledger bk)
-                                      (:ledger/code
-                                       (d/pull db [:ledger/code] (:ledger bk)))]))
+                                      (:kontor.ledger/code
+                                       (d/pull db [:kontor.ledger/code] (:ledger bk)))]))
                            books)
         ;; Like commence! (see the comment at primary-rou-cost there),
         ;; the :asset's single :acquisition-cost matches only the primary
@@ -603,7 +603,7 @@
    Returns {:lease :ledger :liability {…} :rou {…} :completed?}.
 
    Each charge is checked against `kontor.period` — firing into a
-   soft-closed / sealed period throws `:period/locked-period-
+   soft-closed / sealed period throws `:kontor.period/locked-period-
    violation`, carrying the partial progress."
   [conn {:keys [lease ledger journal cash-account as-of posted?
                 changed-by-uid mark-expired?]
@@ -701,7 +701,7 @@
                         :vt-to kbt/forever})
                  (catch clojure.lang.ExceptionInfo e
                    (let [data (ex-data e)]
-                     (if (= :period/locked-period-violation (:type data))
+                     (if (= :kontor.period/locked-period-violation (:type data))
                        (throw (ex-info (.getMessage e)
                                        (assoc data
                                               :book liab-book

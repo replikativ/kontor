@@ -25,9 +25,9 @@
                   :kontor.account/type :expense :kontor.account/active true}
                  {:kontor.journal/code "GEN" :kontor.journal/name "General"
                   :kontor.journal/type :general}
-                 {:period/name "2026-01"
-                  :period/start #inst "2026-01-01"
-                  :period/end #inst "2026-02-01"}])
+                 {:kontor.period/name "2026-01"
+                  :kontor.period/start #inst "2026-01-01"
+                  :kontor.period/end #inst "2026-02-01"}])
     conn))
 
 ;; ============================================================================

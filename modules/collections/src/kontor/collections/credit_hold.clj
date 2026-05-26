@@ -217,10 +217,10 @@
      :partner          ref/eid
      :entity           ref/eid
      :reason-code      keyword
-     :placed-by-uid    ref to :create/uid
+     :placed-by-uid    ref to :kontor.audit/create-uid
 
    Optional opts:
-     :approver-uid    ref to :create/uid (distinct from :placed-by-
+     :approver-uid    ref to :kontor.audit/create-uid (distinct from :placed-by-
                       uid for ADR-038 :no-self-approval enforcement
                       at the policy layer)
      :expires-at      instant (auto-release boundary; nil = manual)
@@ -285,8 +285,8 @@
    Required opts:
      :hold-eid          the :credit-hold eid (resolve via
                         `current-hold` or `active-holds-for`)
-     :released-by-uid   ref to :create/uid (recorded as
-                        :status-history/changed-by-uid)
+     :released-by-uid   ref to :kontor.audit/create-uid (recorded as
+                        :kontor.status-history/changed-by-uid)
 
    Optional:
      :reason           transition reason keyword (default :hold-released)

@@ -91,7 +91,7 @@
      :invoice         ref/eid
      :disputed-amount BigDecimal (subset of invoice or line total)
      :reason-code     keyword
-     :opened-by-uid   ref to :create/uid
+     :opened-by-uid   ref to :kontor.audit/create-uid
 
    Optional opts:
      :scope          ref to :invoice-line for line-level scope

@@ -17,9 +17,9 @@
     :employee/curp "ABCD800101HDFRRR01"
     :employee/code "E001"
     :employee/name "Juan Pérez García"
-    :period/start #inst "2026-05-01"
-    :period/end   #inst "2026-05-15"
-    :period/payment-date #inst "2026-05-15"
+    :kontor.period/start #inst "2026-05-01"
+    :kontor.period/end   #inst "2026-05-15"
+    :kontor.period/payment-date #inst "2026-05-15"
     :wage-types [{:wage-type :sueldo            :amount 7500.00M :commodity "MXN"}
                  {:wage-type :hora-extra-doble  :amount 250.00M  :commodity "MXN"}
                  {:wage-type :vales-de-despensa :amount 1000.00M :commodity "MXN"}

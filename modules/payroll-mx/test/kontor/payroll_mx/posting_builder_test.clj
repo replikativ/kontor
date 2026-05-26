@@ -68,9 +68,9 @@
   [{:employee/rfc "ABCD800101AB1"
     :employee/curp "ABCD800101HDFRRR01"
     :employee/code "E001"
-    :period/start #inst "2026-05-01"
-    :period/end   #inst "2026-05-15"
-    :period/payment-date #inst "2026-05-15"
+    :kontor.period/start #inst "2026-05-01"
+    :kontor.period/end   #inst "2026-05-15"
+    :kontor.period/payment-date #inst "2026-05-15"
     :payroll-facts/version 1
     :wage-types [{:wage-type :sueldo            :amount 7500.00M}
                  {:wage-type :hora-extra-doble  :amount 250.00M}
@@ -81,9 +81,9 @@
    {:employee/rfc "EFGH900202EF2"
     :employee/curp "EFGH900202MDFRRR02"
     :employee/code "E002"
-    :period/start #inst "2026-05-01"
-    :period/end   #inst "2026-05-15"
-    :period/payment-date #inst "2026-05-15"
+    :kontor.period/start #inst "2026-05-01"
+    :kontor.period/end   #inst "2026-05-15"
+    :kontor.period/payment-date #inst "2026-05-15"
     :payroll-facts/version 1
     :wage-types [{:wage-type :sueldo          :amount 6000.00M}
                  {:wage-type :isr-retencion   :amount 600.00M}

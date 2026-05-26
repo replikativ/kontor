@@ -148,36 +148,36 @@
 ;; ============================================================================
 
 (def ^:private status-transition-seeds
-  [{:status-transition/entity-type :commitment
-    :status-transition/facet :commitment/state
-    :status-transition/from :nil :status-transition/to :open
-    :status-transition/active true
-    :status-transition/name "Record Commitment"}
-   {:status-transition/entity-type :commitment
-    :status-transition/facet :commitment/state
-    :status-transition/from :open :status-transition/to :partially-fulfilled
-    :status-transition/active true
-    :status-transition/name "Partially Fulfill Commitment"}
-   {:status-transition/entity-type :commitment
-    :status-transition/facet :commitment/state
-    :status-transition/from :open :status-transition/to :fulfilled
-    :status-transition/active true
-    :status-transition/name "Fulfill Commitment"}
-   {:status-transition/entity-type :commitment
-    :status-transition/facet :commitment/state
-    :status-transition/from :partially-fulfilled :status-transition/to :fulfilled
-    :status-transition/active true
-    :status-transition/name "Complete Partially-Fulfilled Commitment"}
-   {:status-transition/entity-type :commitment
-    :status-transition/facet :commitment/state
-    :status-transition/from :open :status-transition/to :cancelled
-    :status-transition/active true
-    :status-transition/name "Cancel Commitment"}
-   {:status-transition/entity-type :commitment
-    :status-transition/facet :commitment/state
-    :status-transition/from :partially-fulfilled :status-transition/to :cancelled
-    :status-transition/active true
-    :status-transition/name "Cancel Partially-Fulfilled Commitment"}])
+  [{:kontor.status-transition/entity-type :commitment
+    :kontor.status-transition/facet :commitment/state
+    :kontor.status-transition/from :nil :kontor.status-transition/to :open
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Record Commitment"}
+   {:kontor.status-transition/entity-type :commitment
+    :kontor.status-transition/facet :commitment/state
+    :kontor.status-transition/from :open :kontor.status-transition/to :partially-fulfilled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Partially Fulfill Commitment"}
+   {:kontor.status-transition/entity-type :commitment
+    :kontor.status-transition/facet :commitment/state
+    :kontor.status-transition/from :open :kontor.status-transition/to :fulfilled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Fulfill Commitment"}
+   {:kontor.status-transition/entity-type :commitment
+    :kontor.status-transition/facet :commitment/state
+    :kontor.status-transition/from :partially-fulfilled :kontor.status-transition/to :fulfilled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Complete Partially-Fulfilled Commitment"}
+   {:kontor.status-transition/entity-type :commitment
+    :kontor.status-transition/facet :commitment/state
+    :kontor.status-transition/from :open :kontor.status-transition/to :cancelled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Cancel Commitment"}
+   {:kontor.status-transition/entity-type :commitment
+    :kontor.status-transition/facet :commitment/state
+    :kontor.status-transition/from :partially-fulfilled :kontor.status-transition/to :cancelled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Cancel Partially-Fulfilled Commitment"}])
 
 ;; ============================================================================
 ;; Installer

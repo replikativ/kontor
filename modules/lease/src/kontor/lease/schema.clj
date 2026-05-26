@@ -459,12 +459,12 @@
           [:active  :expired     "Expire (end of term)"]
           [:active  :terminated  "Terminate early"]
           [:active  :purchased   "Purchase option exercised"]]]
-     {:status-transition/entity-type :lease
-      :status-transition/facet :lease/status
-      :status-transition/from from
-      :status-transition/to to
-      :status-transition/active true
-      :status-transition/name name})))
+     {:kontor.status-transition/entity-type :lease
+      :kontor.status-transition/facet :lease/status
+      :kontor.status-transition/from from
+      :kontor.status-transition/to to
+      :kontor.status-transition/active true
+      :kontor.status-transition/name name})))
 
 (def approval-policy-seeds
   "ADR-038 :approval-policy rows. Commencement (`:draft → :active`)
@@ -509,7 +509,7 @@
   (let [db (d/db conn)
         already? (boolean
                   (d/q '[:find ?e .
-                         :where [?e :status-transition/entity-type :lease]]
+                         :where [?e :kontor.status-transition/entity-type :lease]]
                        db))]
     (when-not already?
       (d/transact conn (vec (concat status-transition-seeds

@@ -31,12 +31,12 @@
                  {:db/id "ent-us" :kontor.entity/code "US-LLC" :kontor.entity/name "Acme US LLC"
                   :kontor.entity/kind :operating}
                  ;; Two ledgers — book + tax — for the parallel-ledger split.
-                 {:db/id "us-gaap" :ledger/code "us-gaap"
-                  :ledger/name "US GAAP (book)" :ledger/framework :us-gaap
-                  :ledger/active true}
-                 {:db/id "us-tax" :ledger/code "us-tax"
-                  :ledger/name "US Federal Tax basis" :ledger/framework :us-tax
-                  :ledger/active true}
+                 {:db/id "us-gaap" :kontor.ledger/code "us-gaap"
+                  :kontor.ledger/name "US GAAP (book)" :kontor.ledger/framework :us-gaap
+                  :kontor.ledger/active true}
+                 {:db/id "us-tax" :kontor.ledger/code "us-tax"
+                  :kontor.ledger/name "US Federal Tax basis" :kontor.ledger/framework :us-tax
+                  :kontor.ledger/active true}
                  ;; CoA — minimal payroll chart.
                  {:db/id "acct-pto-expense" :kontor.account/code "5040"
                   :kontor.account/name "PTO Expense" :kontor.account/type :expense
@@ -52,9 +52,9 @@
                   :kontor.account/type :liability :kontor.account/active true}
                  {:db/id "journal-payroll" :kontor.journal/code "PAY-US"
                   :kontor.journal/name "Payroll (US)" :kontor.journal/type :general}
-                 {:db/id "period-2026-04" :period/name "2026-04"
-                  :period/start #inst "2026-04-01"
-                  :period/end #inst "2026-05-01"}])
+                 {:db/id "period-2026-04" :kontor.period/name "2026-04"
+                  :kontor.period/start #inst "2026-04-01"
+                  :kontor.period/end #inst "2026-05-01"}])
     conn))
 
 (defn- by-code [db ident code]
@@ -84,7 +84,7 @@
         db (d/db conn)
         pto-exp (by-code db :kontor.account/code "5040")
         pto-acc (by-code db :kontor.account/code "2290")
-        gaap (by-code db :ledger/code "us-gaap")
+        gaap (by-code db :kontor.ledger/code "us-gaap")
         usd  (by-code db :kontor.commodity/symbol "USD")
         journal (by-code db :kontor.journal/code "PAY-US")
         tx-data (accrual/asc-710-pto-accrual-tx-data
@@ -134,7 +134,7 @@
         db (d/db conn)
         pto-exp (by-code db :kontor.account/code "5040")
         pto-acc (by-code db :kontor.account/code "2290")
-        gaap (by-code db :ledger/code "us-gaap")
+        gaap (by-code db :kontor.ledger/code "us-gaap")
         usd  (by-code db :kontor.commodity/symbol "USD")
         journal (by-code db :kontor.journal/code "PAY-US")
         report (accrual/asc-710-pto-accrual!
@@ -164,7 +164,7 @@
         db (d/db conn)
         match-exp (by-code db :kontor.account/code "5310")
         match-pay (by-code db :kontor.account/code "2210")
-        gaap (by-code db :ledger/code "us-gaap")
+        gaap (by-code db :kontor.ledger/code "us-gaap")
         usd  (by-code db :kontor.commodity/symbol "USD")
         journal (by-code db :kontor.journal/code "PAY-US")
         tx-data (accrual/er-401k-match-accrual-tx-data
@@ -196,7 +196,7 @@
         db (d/db conn)
         match-exp (by-code db :kontor.account/code "5310")
         match-pay (by-code db :kontor.account/code "2210")
-        tax (by-code db :ledger/code "us-tax")
+        tax (by-code db :kontor.ledger/code "us-tax")
         usd  (by-code db :kontor.commodity/symbol "USD")
         journal (by-code db :kontor.journal/code "PAY-US")
         tx-data (accrual/tax-recognize-401k-match-tx-data

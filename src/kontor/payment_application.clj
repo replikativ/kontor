@@ -197,7 +197,7 @@
                      balance. Negative is a reversal — but prefer
                      `reverse-application!` which sets :reversal-of.
      :commodity      ref to :commodity. Must match invoice currency.
-     :applied-by-uid ref to :create/uid.
+     :applied-by-uid ref to :kontor.audit/create-uid.
 
    Optional opts:
      :applied-at        instant, default now (also drives the tx's
@@ -314,7 +314,7 @@
 
    Required opts:
      :application-eid  ref/eid of the prior row.
-     :applied-by-uid   ref to :create/uid (whoever's reversing).
+     :applied-by-uid   ref to :kontor.audit/create-uid (whoever's reversing).
 
    Optional opts:
      :applied-at      instant, default now.
@@ -464,7 +464,7 @@
                       :invoice/buyer).
      :total-amount    BigDecimal — the cash to allocate.
      :commodity       ref to :commodity.
-     :applied-by-uid  ref to :create/uid.
+     :applied-by-uid  ref to :kontor.audit/create-uid.
 
    Optional opts:
      :applied-at         instant, default now.

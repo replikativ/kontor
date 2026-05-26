@@ -41,9 +41,9 @@
                   :kontor.account/code "6220" :kontor.account/name "Depreciation Expense"
                   :kontor.account/type :expense :kontor.account/active true}
                  {:db/id "ledger-hgb"
-                  :ledger/code "hgb" :ledger/name "Handelsbilanz"
-                  :ledger/type :primary :ledger/framework :HGB
-                  :ledger/active true}
+                  :kontor.ledger/code "hgb" :kontor.ledger/name "Handelsbilanz"
+                  :kontor.ledger/type :primary :kontor.ledger/framework :HGB
+                  :kontor.ledger/active true}
                  {:db/id "journal-gen"
                   :kontor.journal/code "GEN" :kontor.journal/name "General"
                   :kontor.journal/type :general}
@@ -59,7 +59,7 @@
 (defn- uid       [db] (ref-eid db :kontor.partner/external-id "U-buyer"))
 (defn- commodity [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- acct      [db code] (ref-eid db :kontor.account/code code))
-(defn- hgb       [db] (ref-eid db :ledger/code "hgb"))
+(defn- hgb       [db] (ref-eid db :kontor.ledger/code "hgb"))
 (defn- journal   [db] (ref-eid db :kontor.journal/code "GEN"))
 (defn- class-eid [db] (ref-eid db :asset-class/code "machinery"))
 
@@ -355,9 +355,9 @@
                                 :useful-life-months 120})
         book (dep/book-for (d/db conn) "RUN-LOCK" (hgb (d/db conn)))
         ;; A soft-closed period covering all of 2026, no journal scope.
-        _ (d/transact conn [{:period/start #inst "2026-01-01"
-                             :period/end #inst "2027-01-01"
-                             :period/locked-at #inst "2027-01-15"}])]
+        _ (d/transact conn [{:kontor.period/start #inst "2026-01-01"
+                             :kontor.period/end #inst "2027-01-01"
+                             :kontor.period/locked-at #inst "2027-01-15"}])]
     (testing "firing a depreciation charge into a soft-closed period throws"
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo #"closed period"

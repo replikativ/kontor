@@ -54,13 +54,13 @@
                   :kontor.account/code "2900" :kontor.account/name "Subscribed Capital"
                   :kontor.account/type :equity :kontor.account/active true}
                  {:db/id "ledger-hgb"
-                  :ledger/code "hgb" :ledger/name "Handelsbilanz"
-                  :ledger/type :primary :ledger/framework :HGB
-                  :ledger/active true}
+                  :kontor.ledger/code "hgb" :kontor.ledger/name "Handelsbilanz"
+                  :kontor.ledger/type :primary :kontor.ledger/framework :HGB
+                  :kontor.ledger/active true}
                  {:db/id "ledger-ifrs"
-                  :ledger/code "ifrs" :ledger/name "IFRS"
-                  :ledger/type :secondary :ledger/framework :IFRS
-                  :ledger/active true}
+                  :kontor.ledger/code "ifrs" :kontor.ledger/name "IFRS"
+                  :kontor.ledger/type :secondary :kontor.ledger/framework :IFRS
+                  :kontor.ledger/active true}
                  {:db/id "journal-gen"
                   :kontor.journal/code "GEN" :kontor.journal/name "General"
                   :kontor.journal/type :general}
@@ -76,7 +76,7 @@
 (defn- uid       [db] (ref-eid db :kontor.partner/external-id "U-buyer"))
 (defn- commodity [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- acct      [db code] (ref-eid db :kontor.account/code code))
-(defn- ledger    [db code] (ref-eid db :ledger/code code))
+(defn- ledger    [db code] (ref-eid db :kontor.ledger/code code))
 (defn- journal   [db] (ref-eid db :kontor.journal/code "GEN"))
 (defn- class-eid [db] (ref-eid db :asset-class/code "machinery"))
 

@@ -80,9 +80,9 @@
                    :kontor.entity/kind :operating}
                   {:db/id "journal-payroll" :kontor.journal/code "PAY-DE"
                    :kontor.journal/name "Payroll (DE)" :kontor.journal/type :general}
-                  {:db/id "period-2025-11" :period/name "2025-11"
-                   :period/start #inst "2025-11-01"
-                   :period/end   #inst "2025-12-01"}]
+                  {:db/id "period-2025-11" :kontor.period/name "2025-11"
+                   :kontor.period/start #inst "2025-11-01"
+                   :kontor.period/end   #inst "2025-12-01"}]
                  skr04-payroll-accounts))
     conn))
 
@@ -103,7 +103,7 @@
         person (hr/person-by-external-id db "P-mueller")
         ent (ref-eid db :kontor.entity/code "DE-GMBH")
         eur (ref-eid db :kontor.commodity/symbol "EUR")
-        period (ref-eid db :period/name "2025-11")
+        period (ref-eid db :kontor.period/name "2025-11")
         journal (ref-eid db :kontor.journal/code "PAY-DE")
         _ (employment/hire! conn {:code "EMP-DE-mueller"
                                   :person person

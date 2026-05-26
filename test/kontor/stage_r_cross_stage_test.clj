@@ -132,9 +132,9 @@
       {:db/id "j-ca" :kontor.journal/code "PAY-CA"
        :kontor.journal/name "Payroll CA" :kontor.journal/type :general}
       ;; Periods for May 2026 in each country.
-      {:db/id "p-2026-05" :period/name "2026-05"
-       :period/start #inst "2026-05-01"
-       :period/end #inst "2026-06-01"}])
+      {:db/id "p-2026-05" :kontor.period/name "2026-05"
+       :kontor.period/start #inst "2026-05-01"
+       :kontor.period/end #inst "2026-06-01"}])
     conn))
 
 (defn- ref-eid [db a v]
@@ -226,7 +226,7 @@
   (let [conn (bootstrap)
         {:keys [jane emp-de emp-us emp-ca de us ca eur usd cad]} (setup-jane! conn)
         db (d/db conn)
-        p-2026-05 (ref-eid db :period/name "2026-05")
+        p-2026-05 (ref-eid db :kontor.period/name "2026-05")
         j-de (ref-eid db :kontor.journal/code "PAY-DE")
         j-us (ref-eid db :kontor.journal/code "PAY-US")
         j-ca (ref-eid db :kontor.journal/code "PAY-CA")
@@ -495,9 +495,9 @@
        {:db/id "j-ca" :kontor.journal/code "PAY-CA"
         :kontor.journal/name "Payroll CA" :kontor.journal/type :general}
        ;; The fixture's posting dates are 2025-11; align period.
-       {:db/id "p-2025-11" :period/name "2025-11"
-        :period/start #inst "2025-11-01"
-        :period/end   #inst "2025-12-01"}]
+       {:db/id "p-2025-11" :kontor.period/name "2025-11"
+        :kontor.period/start #inst "2025-11-01"
+        :kontor.period/end   #inst "2025-12-01"}]
       skr04-payroll-accounts-fixture))
     conn))
 
@@ -557,7 +557,7 @@
                  :commodity cad
                  :components [{:kind :base-wage :amount 4000M :period :monthly}]})
         db2 (d/db conn)
-        period (ref-eid db2 :period/name "2025-11")
+        period (ref-eid db2 :kontor.period/name "2025-11")
         j-de (ref-eid db2 :kontor.journal/code "PAY-DE")
         j-us (ref-eid db2 :kontor.journal/code "PAY-US")
         j-ca (ref-eid db2 :kontor.journal/code "PAY-CA")

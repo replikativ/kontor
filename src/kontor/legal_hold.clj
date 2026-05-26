@@ -65,48 +65,48 @@
 
 (def status-transition-seeds
   "ADR-034 :status-transition rows for the :legal-hold/state facet."
-  [{:status-transition/entity-type :legal-hold
-    :status-transition/facet :legal-hold/state
-    :status-transition/from :nil
-    :status-transition/to :placed
-    :status-transition/active true
-    :status-transition/name "Place Legal Hold"}
-   {:status-transition/entity-type :legal-hold
-    :status-transition/facet :legal-hold/state
-    :status-transition/from :placed
-    :status-transition/to :pending-review
-    :status-transition/active true
-    :status-transition/name "Pending Review"}
-   {:status-transition/entity-type :legal-hold
-    :status-transition/facet :legal-hold/state
-    :status-transition/from :pending-review
-    :status-transition/to :placed
-    :status-transition/active true
-    :status-transition/name "Reaffirm"}
-   {:status-transition/entity-type :legal-hold
-    :status-transition/facet :legal-hold/state
-    :status-transition/from :pending-review
-    :status-transition/to :released
-    :status-transition/active true
-    :status-transition/name "Release After Review"}
-   {:status-transition/entity-type :legal-hold
-    :status-transition/facet :legal-hold/state
-    :status-transition/from :placed
-    :status-transition/to :released
-    :status-transition/active true
-    :status-transition/name "Release Hold"}
-   {:status-transition/entity-type :legal-hold
-    :status-transition/facet :legal-hold/state
-    :status-transition/from :placed
-    :status-transition/to :expired
-    :status-transition/active true
-    :status-transition/name "Auto-Expire Hold"}
-   {:status-transition/entity-type :legal-hold
-    :status-transition/facet :legal-hold/state
-    :status-transition/from :expired
-    :status-transition/to :released
-    :status-transition/active true
-    :status-transition/name "Confirm Expiry"}])
+  [{:kontor.status-transition/entity-type :legal-hold
+    :kontor.status-transition/facet :legal-hold/state
+    :kontor.status-transition/from :nil
+    :kontor.status-transition/to :placed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Place Legal Hold"}
+   {:kontor.status-transition/entity-type :legal-hold
+    :kontor.status-transition/facet :legal-hold/state
+    :kontor.status-transition/from :placed
+    :kontor.status-transition/to :pending-review
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Pending Review"}
+   {:kontor.status-transition/entity-type :legal-hold
+    :kontor.status-transition/facet :legal-hold/state
+    :kontor.status-transition/from :pending-review
+    :kontor.status-transition/to :placed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Reaffirm"}
+   {:kontor.status-transition/entity-type :legal-hold
+    :kontor.status-transition/facet :legal-hold/state
+    :kontor.status-transition/from :pending-review
+    :kontor.status-transition/to :released
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Release After Review"}
+   {:kontor.status-transition/entity-type :legal-hold
+    :kontor.status-transition/facet :legal-hold/state
+    :kontor.status-transition/from :placed
+    :kontor.status-transition/to :released
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Release Hold"}
+   {:kontor.status-transition/entity-type :legal-hold
+    :kontor.status-transition/facet :legal-hold/state
+    :kontor.status-transition/from :placed
+    :kontor.status-transition/to :expired
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Auto-Expire Hold"}
+   {:kontor.status-transition/entity-type :legal-hold
+    :kontor.status-transition/facet :legal-hold/state
+    :kontor.status-transition/from :expired
+    :kontor.status-transition/to :released
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Confirm Expiry"}])
 
 (def approval-policy-seeds
   "ADR-038 :approval-policy rows for legal-hold transitions."
@@ -198,7 +198,7 @@
         already? (boolean
                   (d/q '[:find ?e .
                          :where
-                         [?e :status-transition/entity-type :legal-hold]]
+                         [?e :kontor.status-transition/entity-type :legal-hold]]
                        db))]
     (when-not already?
       (d/transact conn (vec (concat status-transition-seeds
@@ -449,10 +449,10 @@
                      :legal-hold/supporting-doc supporting-doc
                      :legal-hold/state :placed
                      ;; ADR-038 :no-self-approval compares
-                     ;; :changed-by-uid against :create/uid on the
+                     ;; :changed-by-uid against :kontor.audit/create-uid on the
                      ;; entity. Stamp it so the release-side SoD check
                      ;; can fire.
-                     :create/uid issued-by-uid}
+                     :kontor.audit/create-uid issued-by-uid}
               (seq scope-eids)        (assoc :legal-hold/scope-eids (vec scope-eids))
               scope-query             (assoc :legal-hold/scope-query scope-query)
               scope-query-as-of       (assoc :legal-hold/scope-query-as-of scope-query-as-of)
@@ -461,7 +461,7 @@
               note                    (assoc :legal-hold/note note))
         ;; P1-3: no :legal-hold/placed-at denorm — the placement
         ;; instant is the :tx/valid-from of the wrapping tx and the
-        ;; :status-history/changed-at of the nil → :placed row.
+        ;; :kontor.status-history/changed-at of the nil → :placed row.
         ;; Resolve via kbt/value-at if needed.
         status-tx (sm/record-status-change-tx-data
                    db
@@ -486,7 +486,7 @@
    Required opts:
      :code             string (unique identity)
      :matter-name      string (human-readable matter description)
-     :issued-by-uid    ref to :create/uid (the counsel)
+     :issued-by-uid    ref to :kontor.audit/create-uid (the counsel)
      :issued-at        instant (when the preservation order issued)
      :supporting-doc   ref to :audit-doc (preservation order PDF)
                        — ADR-038 :requires-supporting-doc enforces
@@ -542,7 +542,7 @@
 
    Required opts:
      :hold-eid         the :legal-hold eid (or use :code lookup-ref)
-     :released-by-uid  ref to :create/uid (must differ from
+     :released-by-uid  ref to :kontor.audit/create-uid (must differ from
                        :issued-by-uid per :no-self-approval)
      :supporting-doc   ref to :audit-doc (the release order)
      :reason-note      free-text justification

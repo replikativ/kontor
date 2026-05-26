@@ -62,13 +62,13 @@
                   :kontor.account/type :equity :kontor.account/active true}
                  ;; Two ledgers — the two depreciation areas.
                  {:db/id "ledger-hgb"
-                  :ledger/code "hgb" :ledger/name "Handelsbilanz"
-                  :ledger/type :primary :ledger/framework :HGB
-                  :ledger/active true}
+                  :kontor.ledger/code "hgb" :kontor.ledger/name "Handelsbilanz"
+                  :kontor.ledger/type :primary :kontor.ledger/framework :HGB
+                  :kontor.ledger/active true}
                  {:db/id "ledger-tax"
-                  :ledger/code "tax-de" :ledger/name "Steuerbilanz"
-                  :ledger/type :secondary :ledger/framework :tax-de
-                  :ledger/active true}
+                  :kontor.ledger/code "tax-de" :kontor.ledger/name "Steuerbilanz"
+                  :kontor.ledger/type :secondary :kontor.ledger/framework :tax-de
+                  :kontor.ledger/active true}
                  ;; Journal.
                  {:db/id "journal-gen"
                   :kontor.journal/code "GEN" :kontor.journal/name "General"
@@ -86,7 +86,7 @@
 (defn- uid       [db] (ref-eid db :kontor.partner/external-id "U-buyer"))
 (defn- commodity [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- acct      [db code] (ref-eid db :kontor.account/code code))
-(defn- ledger    [db code] (ref-eid db :ledger/code code))
+(defn- ledger    [db code] (ref-eid db :kontor.ledger/code code))
 (defn- journal   [db] (ref-eid db :kontor.journal/code "GEN"))
 (defn- class-eid [db] (ref-eid db :asset-class/code "machinery"))
 

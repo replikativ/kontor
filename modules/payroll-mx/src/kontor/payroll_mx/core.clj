@@ -136,9 +136,9 @@
      :employee/rfc       — 13-char RFC
      :employee/curp      — 18-char CURP
      :employee/code      — employer-internal employee id
-     :period/start       — #inst start of pay period
-     :period/end         — #inst end of pay period
-     :period/payment-date — #inst when wages are actually paid
+     :kontor.period/start       — #inst start of pay period
+     :kontor.period/end         — #inst end of pay period
+     :kontor.period/payment-date — #inst when wages are actually paid
      :wage-types         — vector of {:wage-type :sueldo
                                        :amount 12345.67M
                                        :commodity \"MXN\"}
@@ -158,10 +158,10 @@
   [m]
   (when-not (:employee/rfc m)
     (throw (ex-info ":employee/rfc required on :payroll-facts" {:input m})))
-  (when-not (:period/start m)
-    (throw (ex-info ":period/start required on :payroll-facts" {:input m})))
-  (when-not (:period/end m)
-    (throw (ex-info ":period/end required on :payroll-facts" {:input m})))
+  (when-not (:kontor.period/start m)
+    (throw (ex-info ":kontor.period/start required on :payroll-facts" {:input m})))
+  (when-not (:kontor.period/end m)
+    (throw (ex-info ":kontor.period/end required on :payroll-facts" {:input m})))
   (when-not (vector? (:wage-types m))
     (throw (ex-info ":wage-types must be a vector" {:input m})))
   (assoc m :payroll-facts/version 1))

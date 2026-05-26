@@ -170,19 +170,19 @@
   (let [db (d/db *conn*)]
     (testing "collection-case state machine"
       (is (= 20 (d/q '[:find (count ?t) .
-                       :where [?t :status-transition/entity-type :collection-case]]
+                       :where [?t :kontor.status-transition/entity-type :collection-case]]
                      db))))
     (testing "payment-promise state machine"
       (is (= 6 (d/q '[:find (count ?t) .
-                      :where [?t :status-transition/entity-type :payment-promise]]
+                      :where [?t :kontor.status-transition/entity-type :payment-promise]]
                     db))))
     (testing "dispute state machine"
       (is (= 6 (d/q '[:find (count ?t) .
-                      :where [?t :status-transition/entity-type :dispute]]
+                      :where [?t :kontor.status-transition/entity-type :dispute]]
                     db))))
     (testing "invoice/collections-status facet"
       (is (= 12 (d/q '[:find (count ?t) .
                        :where
-                       [?t :status-transition/entity-type :invoice]
-                       [?t :status-transition/facet :invoice/collections-status]]
+                       [?t :kontor.status-transition/entity-type :invoice]
+                       [?t :kontor.status-transition/facet :invoice/collections-status]]
                      db))))))

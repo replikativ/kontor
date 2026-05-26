@@ -8,7 +8,7 @@
    stores the ref + content-hash + URI for integrity verification;
    the bytes live wherever the consumer chooses.
 
-   Used by :status-history/supporting-doc on sensitive transitions
+   Used by :kontor.status-history/supporting-doc on sensitive transitions
    (cancel posted invoice, GDPR redaction, etc.) — the auditor's
    answer to 'where's the proof?'.
 
@@ -132,12 +132,12 @@
      content-hash    (assoc :audit-doc/content-hash content-hash)
      category        (assoc :audit-doc/category category)
      language        (assoc :audit-doc/language language)
-     ;; The uploader IS the creator — stamp :create/uid too
+     ;; The uploader IS the creator — stamp :kontor.audit/create-uid too
      ;; so ADR-038 :no-self-approval can fire on privilege
      ;; waivers (ADR-051): the doc creator can't waive its
      ;; privilege alone.
      uploaded-by-uid (assoc :audit-doc/uploaded-by-uid uploaded-by-uid
-                            :create/uid uploaded-by-uid))])
+                            :kontor.audit/create-uid uploaded-by-uid))])
 
 (defn create-doc!
   "Create an :audit-doc entity in one tx. Routes through the gate
@@ -166,7 +166,7 @@
                       {:type :audit-doc/not-found
                        :spec doc-spec})))
     [{:db/id history-eid
-      :status-history/supporting-doc doc-eid}]))
+      :kontor.status-history/supporting-doc doc-eid}]))
 
 (defn attach-supporting-doc!
   "Attach an :audit-doc to a specific :status-history row's
@@ -223,12 +223,12 @@
    (for [from privilege-vocab
          to   privilege-vocab
          :when (not= from to)]
-     {:status-transition/entity-type :audit-doc
-      :status-transition/facet :audit-doc/privilege
-      :status-transition/from from
-      :status-transition/to to
-      :status-transition/active true
-      :status-transition/name (str "Reclassify " (name from) " → " (name to))})))
+     {:kontor.status-transition/entity-type :audit-doc
+      :kontor.status-transition/facet :audit-doc/privilege
+      :kontor.status-transition/from from
+      :kontor.status-transition/to to
+      :kontor.status-transition/active true
+      :kontor.status-transition/name (str "Reclassify " (name from) " → " (name to))})))
 
 (def approval-policy-seeds
   "ADR-038 :approval-policy rows. Every <privileged> → :none edge —
@@ -259,8 +259,8 @@
         already? (boolean
                   (d/q '[:find ?e .
                          :where
-                         [?e :status-transition/entity-type :audit-doc]
-                         [?e :status-transition/facet :audit-doc/privilege]]
+                         [?e :kontor.status-transition/entity-type :audit-doc]
+                         [?e :kontor.status-transition/facet :audit-doc/privilege]]
                        db))]
     (when-not already?
       (d/transact conn (vec (concat status-transition-seeds
@@ -286,7 +286,7 @@
 
    SoD-ANCHOR CAVEAT (research note 32 P1-4): the kernel's
    `:no-self-approval` rule compares `:changed-by-uid` against the
-   entity's `:create/uid` — which `create-doc!` stamps to the doc's
+   entity's `:kontor.audit/create-uid` — which `create-doc!` stamps to the doc's
    *uploader*. So the waiver SoD enforced here is uploader ≠ waiver-
    actor, NOT classifier ≠ waiver-actor. The consequential act is
    classification (counsel determining a doc privileged), and a
@@ -299,7 +299,7 @@
    Required opts:
      :doc            :audit-doc code or eid
      :to             new privilege keyword
-     :changed-by-uid ref to :create/uid
+     :changed-by-uid ref to :kontor.audit/create-uid
      :reason         keyword (:privilege-determined |
                      :privilege-waived | :privilege-reclassified)
 

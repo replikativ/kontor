@@ -45,10 +45,10 @@
                 [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
                  {:kontor.partner/external-id "U-cfo"  :kontor.partner/name "CFO"}
                  {:kontor.partner/external-id "L-acme" :kontor.partner/name "Acme Properties"}
-                 {:db/id "led-ifrs"   :ledger/code "ifrs"    :ledger/name "IFRS 16"
-                  :ledger/framework :ifrs}
-                 {:db/id "led-usgaap" :ledger/code "us-gaap" :ledger/name "ASC 842"
-                  :ledger/framework :us-gaap}
+                 {:db/id "led-ifrs"   :kontor.ledger/code "ifrs"    :kontor.ledger/name "IFRS 16"
+                  :kontor.ledger/framework :ifrs}
+                 {:db/id "led-usgaap" :kontor.ledger/code "us-gaap" :kontor.ledger/name "ASC 842"
+                  :kontor.ledger/framework :us-gaap}
                  {:db/id "class-rou" :asset-class/code "rou-property"
                   :asset-class/name "Right-of-Use — Property"}
                  {:db/id "doc-lease" :audit-doc/code "LEASE-CONTRACT-1"
@@ -87,7 +87,7 @@
 (defn- journal    [db] (ref-eid db :kontor.journal/code "GEN"))
 (defn- class-eid  [db] (ref-eid db :asset-class/code "rou-property"))
 (defn- adoc       [db] (ref-eid db :audit-doc/code "LEASE-CONTRACT-1"))
-(defn- ledger     [db code] (ref-eid db :ledger/code code))
+(defn- ledger     [db code] (ref-eid db :kontor.ledger/code code))
 
 (defn- ledger-balance
   "Sum of `:kontor.posting/amount` for `account` on `ledger` over :posted

@@ -57,9 +57,9 @@
                   :kontor.journal/name "Payroll (AU)"
                   :kontor.journal/type :general}
                  {:db/id "period-2026-05"
-                  :period/name "2026-05"
-                  :period/start #inst "2026-05-01"
-                  :period/end #inst "2026-06-01"}])
+                  :kontor.period/name "2026-05"
+                  :kontor.period/start #inst "2026-05-01"
+                  :kontor.period/end #inst "2026-06-01"}])
     conn))
 
 (defn- setup-employees [conn]
@@ -118,7 +118,7 @@
         ent (ref-eid db :kontor.entity/code "ACME-AU")
         aud (ref-eid db :kontor.commodity/symbol "AUD")
         journal (ref-eid db :kontor.journal/code "PAY-AU")
-        period (ref-eid db :period/name "2026-05")
+        period (ref-eid db :kontor.period/name "2026-05")
         e101 (hr/employment-by-code db "E101")
         e102 (hr/employment-by-code db "E102")
         e103 (hr/employment-by-code db "E103")

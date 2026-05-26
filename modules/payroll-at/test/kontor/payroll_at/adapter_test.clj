@@ -50,9 +50,9 @@
                        :kontor.journal/type :general
                        :kontor.journal/active true}
                       {:db/id "period-2026-01"
-                       :period/name "2026-01"
-                       :period/start #inst "2026-01-01"
-                       :period/end #inst "2026-02-01"}])
+                       :kontor.period/name "2026-01"
+                       :kontor.period/start #inst "2026-01-01"
+                       :kontor.period/end #inst "2026-02-01"}])
     conn))
 
 ;; ============================================================================
@@ -65,7 +65,7 @@
         eur (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "EUR"]] db)
         ent (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-AT"]] db)
         journal (d/q '[:find ?e . :where [?e :kontor.journal/code "PAYROLL-AT"]] db)
-        period (d/q '[:find ?e . :where [?e :period/name "2026-01"]] db)
+        period (d/q '[:find ?e . :where [?e :kontor.period/name "2026-01"]] db)
         _ (person/create-person!
            conn {:external-id "P-max" :given-name "Max" :family-name "Mustermann"})
         _ (person/create-person!

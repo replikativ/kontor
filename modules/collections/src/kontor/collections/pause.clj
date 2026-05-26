@@ -75,7 +75,7 @@
      :case             ref/eid
      :reason-code      keyword #{:dispute :ptp-active :holiday-freeze
                                   :key-account-exception :legal-hold}
-     :placed-by-uid    ref to :create/uid
+     :placed-by-uid    ref to :kontor.audit/create-uid
 
    Optional opts:
      :expires-at       instant (auto-resume). nil = manual-only.

@@ -326,33 +326,33 @@
 
 (def ^:private status-transition-seeds
   "Seed `:disposal/state` lifecycle transitions per ADR-034.
-   `:status-transition/identity` is a composite tuple
+   `:kontor.status-transition/identity` is a composite tuple
    `[entity-type facet from to org]` → re-running install! on the SAME
    DB violates the unique-constraint; install once per DB."
-  [{:status-transition/entity-type :disposal
-    :status-transition/facet       :disposal/state
-    :status-transition/from        :nil
-    :status-transition/to          :recorded
-    :status-transition/active      true
-    :status-transition/name        "Record Disposal — initial create"}
-   {:status-transition/entity-type :disposal
-    :status-transition/facet       :disposal/state
-    :status-transition/from        :recorded
-    :status-transition/to          :recognized
-    :status-transition/active      true
-    :status-transition/name        "Recognize Disposal — posting committed"}
-   {:status-transition/entity-type :disposal
-    :status-transition/facet       :disposal/state
-    :status-transition/from        :recorded
-    :status-transition/to          :voided
-    :status-transition/active      true
-    :status-transition/name        "Void Disposal — pre-recognition correction"}
-   {:status-transition/entity-type :disposal
-    :status-transition/facet       :disposal/state
-    :status-transition/from        :recognized
-    :status-transition/to          :voided
-    :status-transition/active      true
-    :status-transition/name        "Void Disposal — post-recognition correction"}])
+  [{:kontor.status-transition/entity-type :disposal
+    :kontor.status-transition/facet       :disposal/state
+    :kontor.status-transition/from        :nil
+    :kontor.status-transition/to          :recorded
+    :kontor.status-transition/active      true
+    :kontor.status-transition/name        "Record Disposal — initial create"}
+   {:kontor.status-transition/entity-type :disposal
+    :kontor.status-transition/facet       :disposal/state
+    :kontor.status-transition/from        :recorded
+    :kontor.status-transition/to          :recognized
+    :kontor.status-transition/active      true
+    :kontor.status-transition/name        "Recognize Disposal — posting committed"}
+   {:kontor.status-transition/entity-type :disposal
+    :kontor.status-transition/facet       :disposal/state
+    :kontor.status-transition/from        :recorded
+    :kontor.status-transition/to          :voided
+    :kontor.status-transition/active      true
+    :kontor.status-transition/name        "Void Disposal — pre-recognition correction"}
+   {:kontor.status-transition/entity-type :disposal
+    :kontor.status-transition/facet       :disposal/state
+    :kontor.status-transition/from        :recognized
+    :kontor.status-transition/to          :voided
+    :kontor.status-transition/active      true
+    :kontor.status-transition/name        "Void Disposal — post-recognition correction"}])
 
 ;; ============================================================================
 ;; Installer

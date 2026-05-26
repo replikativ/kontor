@@ -48,9 +48,9 @@
   ([conn start end] (open-period! conn start end nil))
   ([conn start end journal-eid]
    (let [report (d/transact conn [(cond-> {:db/id        -1
-                                           :period/start start
-                                           :period/end   end}
-                                    journal-eid (assoc :period/journal journal-eid))])]
+                                           :kontor.period/start start
+                                           :kontor.period/end   end}
+                                    journal-eid (assoc :kontor.period/journal journal-eid))])]
      (-> report :tempids (get -1)))))
 
 (defn- closed-period!
@@ -172,9 +172,9 @@
         _    (catalog! conn)
         eid  (open-period! conn feb-1 mar-1)
         _    (period/close! conn eid {:pre-checks (constantly [])})
-        e    (d/pull (d/db conn) [:period/locked-at :period/lock-tx] eid)]
-    (is (some? (:period/locked-at e)))
-    (is (some? (:period/lock-tx e)) "lock-tx must be backfilled")))
+        e    (d/pull (d/db conn) [:kontor.period/locked-at :kontor.period/lock-tx] eid)]
+    (is (some? (:kontor.period/locked-at e)))
+    (is (some? (:kontor.period/lock-tx e)) "lock-tx must be backfilled")))
 
 (deftest close!-rejects-already-closed
   (let [conn (core/create-test-db)
@@ -265,7 +265,7 @@
         eid (closed-period! conn feb-1 mar-1)
         _ (period/seal! conn eid)
         ;; Try to silently mutate the sealed period entity
-        bad-write [{:db/id eid :period/start jan-15}]]
+        bad-write [{:db/id eid :kontor.period/start jan-15}]]
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo #"Sealing violation"
          (v/transact-with-validation conn bad-write))

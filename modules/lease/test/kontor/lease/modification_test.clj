@@ -45,8 +45,8 @@
                  {:kontor.partner/external-id "U-cfo"  :kontor.partner/name "CFO"}
                  {:kontor.partner/external-id "U-ctrl" :kontor.partner/name "Controller"}
                  {:kontor.partner/external-id "L-acme" :kontor.partner/name "Acme Properties"}
-                 {:db/id "led-ifrs" :ledger/code "ifrs" :ledger/name "IFRS 16"
-                  :ledger/framework :ifrs}
+                 {:db/id "led-ifrs" :kontor.ledger/code "ifrs" :kontor.ledger/name "IFRS 16"
+                  :kontor.ledger/framework :ifrs}
                  {:db/id "class-rou" :asset-class/code "rou-property"
                   :asset-class/name "Right-of-Use — Property"}
                  {:db/id "doc-lease" :audit-doc/code "LEASE-CONTRACT-1"
@@ -85,7 +85,7 @@
 (defn- journal   [db] (ref-eid db :kontor.journal/code "GEN"))
 (defn- class-eid [db] (ref-eid db :asset-class/code "rou-property"))
 (defn- adoc      [db] (ref-eid db :audit-doc/code "LEASE-CONTRACT-1"))
-(defn- ifrs      [db] (ref-eid db :ledger/code "ifrs"))
+(defn- ifrs      [db] (ref-eid db :kontor.ledger/code "ifrs"))
 
 (defn- ledger-balance [db account ledger-eid]
   (or (d/q '[:find (sum ?amt) .
@@ -432,9 +432,9 @@
         _ (run-through! conn "LSE-LK" #inst "2026-07-15")   ; fire 6 months
         db1 (d/db conn)]
     ;; Soft-close 2026 — a 2026-dated GL posting must now be refused.
-    (d/transact conn [{:period/start #inst "2026-01-01"
-                       :period/end #inst "2027-01-01"
-                       :period/locked-at #inst "2027-01-15"}])
+    (d/transact conn [{:kontor.period/start #inst "2026-01-01"
+                       :kontor.period/end #inst "2027-01-01"
+                       :kontor.period/locked-at #inst "2027-01-15"}])
     (testing "remeasure! into the soft-closed period is refused"
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo #"(?i)period"

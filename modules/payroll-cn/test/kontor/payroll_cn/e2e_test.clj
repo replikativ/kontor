@@ -111,9 +111,9 @@
                   :kontor.journal/name "Payroll (CN)"
                   :kontor.journal/type :general}
                  {:db/id "period-2026-04"
-                  :period/name "2026-04"
-                  :period/start #inst "2026-04-01"
-                  :period/end #inst "2026-05-01"}
+                  :kontor.period/name "2026-04"
+                  :kontor.period/start #inst "2026-04-01"
+                  :kontor.period/end #inst "2026-05-01"}
                  ;; Minimal payroll CoA — one account per :account-tag the
                  ;; posting builder needs.
                  {:db/id "acct-5603" :kontor.account/code "5603"
@@ -172,7 +172,7 @@
         db (d/db conn)
         ent (ref-eid db :kontor.entity/code "ACME-CN")
         cny (ref-eid db :kontor.commodity/symbol "CNY")
-        period (ref-eid db :period/name "2026-04")
+        period (ref-eid db :kontor.period/name "2026-04")
         journal (ref-eid db :kontor.journal/code "PAY-CN")
         e1 (hr/employment-by-code db "E001")
         e2 (hr/employment-by-code db "E002")

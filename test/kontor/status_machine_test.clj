@@ -23,36 +23,36 @@
    → :completed (plus :cancelled escape). Tenant-wide."
   [conn]
   (d/transact conn
-              [{:status-transition/entity-type :order
-                :status-transition/facet :order/status
-                :status-transition/from :order.status/nil
-                :status-transition/to :order.status/created
-                :status-transition/active true
-                :status-transition/name "Create Order"}
-               {:status-transition/entity-type :order
-                :status-transition/facet :order/status
-                :status-transition/from :order.status/created
-                :status-transition/to :order.status/approved
-                :status-transition/active true
-                :status-transition/name "Approve Order"}
-               {:status-transition/entity-type :order
-                :status-transition/facet :order/status
-                :status-transition/from :order.status/approved
-                :status-transition/to :order.status/completed
-                :status-transition/active true
-                :status-transition/name "Complete Order"}
-               {:status-transition/entity-type :order
-                :status-transition/facet :order/status
-                :status-transition/from :order.status/created
-                :status-transition/to :order.status/cancelled
-                :status-transition/active true
-                :status-transition/name "Cancel Order"}
-               {:status-transition/entity-type :order
-                :status-transition/facet :order/status
-                :status-transition/from :order.status/approved
-                :status-transition/to :order.status/cancelled
-                :status-transition/active true
-                :status-transition/name "Cancel Approved Order"}]))
+              [{:kontor.status-transition/entity-type :order
+                :kontor.status-transition/facet :order/status
+                :kontor.status-transition/from :order.status/nil
+                :kontor.status-transition/to :order.status/created
+                :kontor.status-transition/active true
+                :kontor.status-transition/name "Create Order"}
+               {:kontor.status-transition/entity-type :order
+                :kontor.status-transition/facet :order/status
+                :kontor.status-transition/from :order.status/created
+                :kontor.status-transition/to :order.status/approved
+                :kontor.status-transition/active true
+                :kontor.status-transition/name "Approve Order"}
+               {:kontor.status-transition/entity-type :order
+                :kontor.status-transition/facet :order/status
+                :kontor.status-transition/from :order.status/approved
+                :kontor.status-transition/to :order.status/completed
+                :kontor.status-transition/active true
+                :kontor.status-transition/name "Complete Order"}
+               {:kontor.status-transition/entity-type :order
+                :kontor.status-transition/facet :order/status
+                :kontor.status-transition/from :order.status/created
+                :kontor.status-transition/to :order.status/cancelled
+                :kontor.status-transition/active true
+                :kontor.status-transition/name "Cancel Order"}
+               {:kontor.status-transition/entity-type :order
+                :kontor.status-transition/facet :order/status
+                :kontor.status-transition/from :order.status/approved
+                :kontor.status-transition/to :order.status/cancelled
+                :kontor.status-transition/active true
+                :kontor.status-transition/name "Cancel Approved Order"}]))
 
 ;; To exercise the table without a real :order entity, we use a tiny
 ;; throwaway schema for an :ord entity with an :ord/status attr that
@@ -73,30 +73,30 @@
   "Same vocabulary, scoped to entity-type :ord and facet :ord/status."
   [conn]
   (d/transact conn
-              [{:status-transition/entity-type :ord
-                :status-transition/facet :ord/status
-                :status-transition/from :ord.status/nil
-                :status-transition/to :ord.status/created
-                :status-transition/active true
-                :status-transition/name "Create Ord"}
-               {:status-transition/entity-type :ord
-                :status-transition/facet :ord/status
-                :status-transition/from :ord.status/created
-                :status-transition/to :ord.status/approved
-                :status-transition/active true
-                :status-transition/name "Approve Ord"}
-               {:status-transition/entity-type :ord
-                :status-transition/facet :ord/status
-                :status-transition/from :ord.status/approved
-                :status-transition/to :ord.status/completed
-                :status-transition/active true
-                :status-transition/name "Complete Ord"}
-               {:status-transition/entity-type :ord
-                :status-transition/facet :ord/status
-                :status-transition/from :ord.status/created
-                :status-transition/to :ord.status/cancelled
-                :status-transition/active true
-                :status-transition/name "Cancel Ord"}]))
+              [{:kontor.status-transition/entity-type :ord
+                :kontor.status-transition/facet :ord/status
+                :kontor.status-transition/from :ord.status/nil
+                :kontor.status-transition/to :ord.status/created
+                :kontor.status-transition/active true
+                :kontor.status-transition/name "Create Ord"}
+               {:kontor.status-transition/entity-type :ord
+                :kontor.status-transition/facet :ord/status
+                :kontor.status-transition/from :ord.status/created
+                :kontor.status-transition/to :ord.status/approved
+                :kontor.status-transition/active true
+                :kontor.status-transition/name "Approve Ord"}
+               {:kontor.status-transition/entity-type :ord
+                :kontor.status-transition/facet :ord/status
+                :kontor.status-transition/from :ord.status/approved
+                :kontor.status-transition/to :ord.status/completed
+                :kontor.status-transition/active true
+                :kontor.status-transition/name "Complete Ord"}
+               {:kontor.status-transition/entity-type :ord
+                :kontor.status-transition/facet :ord/status
+                :kontor.status-transition/from :ord.status/created
+                :kontor.status-transition/to :ord.status/cancelled
+                :kontor.status-transition/active true
+                :kontor.status-transition/name "Cancel Ord"}]))
 
 ;; ============================================================================
 ;; Schema presence
@@ -105,22 +105,22 @@
 (deftest schema-attrs-present
   (let [db (d/db *conn*)
         idents (set (d/q '[:find [?i ...] :where [_ :db/ident ?i]] db))]
-    (doseq [a [:status-transition/entity-type
-               :status-transition/facet
-               :status-transition/from
-               :status-transition/to
-               :status-transition/applies-to-org
-               :status-transition/active
-               :status-transition/identity
-               :status-history/entity
-               :status-history/entity-type
-               :status-history/facet
-               :status-history/from
-               :status-history/to
-               :status-history/changed-at
-               :status-history/changed-by-uid
-               :status-history/reason
-               :status-history/origin-transaction]]
+    (doseq [a [:kontor.status-transition/entity-type
+               :kontor.status-transition/facet
+               :kontor.status-transition/from
+               :kontor.status-transition/to
+               :kontor.status-transition/applies-to-org
+               :kontor.status-transition/active
+               :kontor.status-transition/identity
+               :kontor.status-history/entity
+               :kontor.status-history/entity-type
+               :kontor.status-history/facet
+               :kontor.status-history/from
+               :kontor.status-history/to
+               :kontor.status-history/changed-at
+               :kontor.status-history/changed-by-uid
+               :kontor.status-history/reason
+               :kontor.status-history/origin-transaction]]
       (is (contains? idents a) (str "missing: " a)))))
 
 ;; ============================================================================
@@ -169,12 +169,12 @@
 
 (deftest inactive-transitions-are-ignored
   (d/transact *conn*
-              [{:status-transition/entity-type :order
-                :status-transition/facet :order/status
-                :status-transition/from :order.status/created
-                :status-transition/to :order.status/approved
-                :status-transition/active false
-                :status-transition/name "(deactivated)"}])
+              [{:kontor.status-transition/entity-type :order
+                :kontor.status-transition/facet :order/status
+                :kontor.status-transition/from :order.status/created
+                :kontor.status-transition/to :order.status/approved
+                :kontor.status-transition/active false
+                :kontor.status-transition/name "(deactivated)"}])
   (let [db (d/db *conn*)]
     (is (false? (sm/legal-transition? db :order :order/status
                                       :order.status/created
@@ -200,13 +200,13 @@
   ;; ACME allows :completed → :approved (re-open), which is NOT in the
   ;; tenant-wide vocabulary.
   (d/transact *conn*
-              [{:status-transition/entity-type :order
-                :status-transition/facet :order/status
-                :status-transition/from :order.status/completed
-                :status-transition/to :order.status/approved
-                :status-transition/applies-to-org [:kontor.entity/code "ACME"]
-                :status-transition/active true
-                :status-transition/name "Re-open ACME order"}])
+              [{:kontor.status-transition/entity-type :order
+                :kontor.status-transition/facet :order/status
+                :kontor.status-transition/from :order.status/completed
+                :kontor.status-transition/to :order.status/approved
+                :kontor.status-transition/applies-to-org [:kontor.entity/code "ACME"]
+                :kontor.status-transition/active true
+                :kontor.status-transition/name "Re-open ACME order"}])
   (let [db (d/db *conn*)]
     (testing "ACME can re-open completed orders (org override)"
       (is (true? (sm/legal-transition? db :order :order/status
@@ -251,10 +251,10 @@
       (is (= :ord.status/approved (sm/current-status db eid :ord/status)))
       (let [history (sm/status-history-of db eid)]
         (is (= 1 (count history)))
-        (is (= :ord.status/created (-> history first :status-history/from)))
-        (is (= :ord.status/approved (-> history first :status-history/to)))
-        (is (= :approved (-> history first :status-history/reason)))
-        (is (= "passed fraud check" (-> history first :status-history/reason-note)))))))
+        (is (= :ord.status/created (-> history first :kontor.status-history/from)))
+        (is (= :ord.status/approved (-> history first :kontor.status-history/to)))
+        (is (= :approved (-> history first :kontor.status-history/reason)))
+        (is (= "passed fraud check" (-> history first :kontor.status-history/reason-note)))))))
 
 (deftest record-status-change-rejects-illegal-transition
   (install-ord-attr! *conn*)
@@ -292,10 +292,10 @@
                                :reason-note "passes fraud check"})
     (let [history (sm/status-history-of (d/db *conn*) eid)]
       (testing "reason stored as keyword"
-        (is (= :approved (-> history first :status-history/reason))))
+        (is (= :approved (-> history first :kontor.status-history/reason))))
       (testing "reason-note stored as separate string field"
         (is (= "passes fraud check"
-               (-> history first :status-history/reason-note)))))))
+               (-> history first :kontor.status-history/reason-note)))))))
 
 (deftest other-reason-requires-reason-note
   (install-ord-attr! *conn*)
@@ -352,7 +352,7 @@
                  (d/db *conn*) "U-bob")
         _ (d/transact *conn* [{:ord/code "O-SELF"
                                :ord/status :ord.status/created
-                               :create/uid alice}])
+                               :kontor.audit/create-uid alice}])
         eid (d/q '[:find ?e . :where [?e :ord/code "O-SELF"]] (d/db *conn*))]
     (testing "self-approval rejected"
       (is (thrown-with-msg? Exception #"Approval-policy violation"
@@ -417,7 +417,7 @@
         (testing ":supporting-doc ref captured in history row"
           (let [history (sm/status-history-of (d/db *conn*) eid)
                 last-row (last history)]
-            (is (= doc-eid (-> last-row :status-history/supporting-doc :db/id)))))))))
+            (is (= doc-eid (-> last-row :kontor.status-history/supporting-doc :db/id)))))))))
 
 (deftest record-status-change-history-respects-order
   (install-ord-attr! *conn*)
@@ -445,7 +445,7 @@
                                :reason-note "second"})
     (let [history (sm/status-history-of (d/db *conn*) eid)]
       (is (= 2 (count history)))
-      (is (= ["first" "second"] (map :status-history/reason-note history))
+      (is (= ["first" "second"] (map :kontor.status-history/reason-note history))
           "history is oldest-first by changed-at"))))
 
 ;; ============================================================================
@@ -480,8 +480,8 @@
       (testing "history rows written for each"
         (let [all-history (d/q '[:find [?h ...]
                                  :where
-                                 [?h :status-history/entity-type :ord]
-                                 [?h :status-history/to :ord.status/approved]]
+                                 [?h :kontor.status-history/entity-type :ord]
+                                 [?h :kontor.status-history/to :ord.status/approved]]
                                db)]
           (is (= 5 (count all-history))))))))
 
@@ -492,23 +492,23 @@
   ;; without :auto-after-millis, and composite-tuple identity attrs
   ;; can't be written-to directly to upsert).
   (d/transact *conn*
-              [{:status-transition/entity-type :ord
-                :status-transition/facet :ord/status
-                :status-transition/from :ord.status/created
-                :status-transition/to :ord.status/cancelled
-                :status-transition/active true
-                :status-transition/auto-after-millis 1
-                :status-transition/name "Auto-cancel stale orders"}])
+              [{:kontor.status-transition/entity-type :ord
+                :kontor.status-transition/facet :ord/status
+                :kontor.status-transition/from :ord.status/created
+                :kontor.status-transition/to :ord.status/cancelled
+                :kontor.status-transition/active true
+                :kontor.status-transition/auto-after-millis 1
+                :kontor.status-transition/name "Auto-cancel stale orders"}])
   ;; Create an entity and a history row showing it entered :created
   ;; well in the past
   (d/transact *conn* [{:ord/code "O-STALE" :ord/status :ord.status/created}])
   (let [eid (d/q '[:find ?e . :where [?e :ord/code "O-STALE"]] (d/db *conn*))]
     (d/transact *conn*
-                [{:status-history/entity eid
-                  :status-history/entity-type :ord
-                  :status-history/facet :ord/status
-                  :status-history/to :ord.status/created
-                  :status-history/changed-at #inst "2025-01-01"}])
+                [{:kontor.status-history/entity eid
+                  :kontor.status-history/entity-type :ord
+                  :kontor.status-history/facet :ord/status
+                  :kontor.status-history/to :ord.status/created
+                  :kontor.status-history/changed-at #inst "2025-01-01"}])
     ;; Sleep briefly to ensure the threshold (now - 1ms) exceeds
     ;; the history's wall-clock time
     (Thread/sleep 10)

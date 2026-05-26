@@ -236,7 +236,7 @@
      :version        — defaults to \"1.2\"."
   [{:keys [facts employer employee tipo version]
     :or {version "1.2" tipo :ordinary}}]
-  (let [{:keys [period/start period/end period/payment-date wage-types]} facts
+  (let [{:kontor.period/keys [start end payment-date] :keys [wage-types]} facts
         worker-rows (wt/employee-side wage-types)
         percep (wt/percepciones worker-rows)
         deduc  (wt/deducciones worker-rows)
@@ -334,7 +334,7 @@
          (cond-> {:Version "4.0"
                   :Fecha (let [df (doto (SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ss")
                                     (.setTimeZone (TimeZone/getTimeZone "UTC")))]
-                           (.format df ^Date (or fecha (:period/payment-date facts))))
+                           (.format df ^Date (or fecha (:kontor.period/payment-date facts))))
                   :NoCertificado no-certificado
                   :Certificado   certificado
                   :SubTotal      (fmt-money total-percep)

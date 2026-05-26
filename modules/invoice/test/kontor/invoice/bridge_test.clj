@@ -372,11 +372,11 @@
         _ (seed-journal!)]
     ;; Seed a locked period covering 2026-04-01 → 2026-05-01 (range is [start, end))
     (d/transact *conn*
-                [{:period/name "2026-04"
-                  :period/start #inst "2026-04-01"
-                  :period/end #inst "2026-05-01"
-                  :period/locked-at #inst "2026-05-05"
-                  :period/tag :normal}])
+                [{:kontor.period/name "2026-04"
+                  :kontor.period/start #inst "2026-04-01"
+                  :kontor.period/end #inst "2026-05-01"
+                  :kontor.period/locked-at #inst "2026-05-05"
+                  :kontor.period/tag :normal}])
     (inv/make-invoice-from-order! *conn* "ORD-1"
                                   {:external-id "INV-LOCKED-1"})
     (testing "posting with :posted-at inside a locked period throws"

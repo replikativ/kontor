@@ -34,10 +34,10 @@
                   :kontor.journal/type :sale :kontor.journal/active true}
                  {:kontor.journal/code "EXP" :kontor.journal/name "Aufwendungen"
                   :kontor.journal/type :purchase :kontor.journal/active true}
-                 {:period/start jan-1
-                  :period/end   jan-1-26
-                  :period/tag   :normal
-                  :period/name  "FY2025"}])
+                 {:kontor.period/start jan-1
+                  :kontor.period/end   jan-1-26
+                  :kontor.period/tag   :normal
+                  :kontor.period/name  "FY2025"}])
     conn))
 
 (defn- seed-fy2025!
@@ -113,7 +113,7 @@
     (let [conn (bootstrap)]
       (seed-fy2025! conn)
       (let [db (d/db conn)
-            period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] db)
+            period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025"]] db)
             {:keys [close-result period-close-tx-report]}
             (at-closing/close-at-fiscal-year! conn
                                               {:period-eid period-eid
@@ -159,7 +159,7 @@
 (deftest cannot-close-period-twice
   (let [conn (bootstrap)]
     (seed-fy2025! conn)
-    (let [period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] (d/db conn))]
+    (let [period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025"]] (d/db conn))]
       (at-closing/close-at-fiscal-year! conn
                                         {:period-eid period-eid
                                          :external-id "FY25-AT-CLOSE-1"})
@@ -185,12 +185,12 @@
                                :kontor.journal/type :sale :kontor.journal/active true}
                               {:kontor.journal/code "EXP" :kontor.journal/name "Aufwendungen"
                                :kontor.journal/type :purchase :kontor.journal/active true}
-                              {:period/start jan-1
-                               :period/end jan-1-26
-                               :period/tag :normal
-                               :period/name "FY2025"}])
+                              {:kontor.period/start jan-1
+                               :kontor.period/end jan-1-26
+                               :kontor.period/tag :normal
+                               :kontor.period/name "FY2025"}])
           _ (seed-fy2025! conn)
-          period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] (d/db conn))]
+          period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025"]] (d/db conn))]
       (is (nil? (:db/id (d/entity (d/db conn) [:kontor.journal/code "CLOSE"])))
           "CLOSE journal not present before close")
       (at-closing/close-at-fiscal-year! conn
@@ -208,11 +208,11 @@
             throws a clear error."
     (let [conn (core/create-test-db)]
       (v/install-invariants! conn)
-      (d/transact conn [{:period/start jan-1
-                         :period/end jan-1-26
-                         :period/tag :normal
-                         :period/name "FY2025"}])
-      (let [period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] (d/db conn))]
+      (d/transact conn [{:kontor.period/start jan-1
+                         :kontor.period/end jan-1-26
+                         :kontor.period/tag :normal
+                         :kontor.period/name "FY2025"}])
+      (let [period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025"]] (d/db conn))]
         (is (thrown-with-msg?
              clojure.lang.ExceptionInfo
              #"Retained-earnings account"
@@ -226,7 +226,7 @@
 (deftest plan-at-fiscal-year-close-resolves-eids
   (let [conn (bootstrap)
         db (d/db conn)
-        period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] db)
+        period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025"]] db)
         planned (at-closing/plan-at-fiscal-year-close-tx-data
                  db {:period-eid period-eid
                      :external-id "PLAN-1"})]
@@ -254,7 +254,7 @@
             can override :retained-code."
     (let [conn (bootstrap)]
       (seed-fy2025! conn)
-      (let [period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] (d/db conn))]
+      (let [period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025"]] (d/db conn))]
         (at-closing/close-at-fiscal-year! conn
                                           {:period-eid period-eid
                                            :retained-code "9200"
@@ -281,7 +281,7 @@
             and all commodities after the close — kernel invariant."
     (let [conn (bootstrap)]
       (seed-fy2025! conn)
-      (let [period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] (d/db conn))]
+      (let [period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025"]] (d/db conn))]
         (at-closing/close-at-fiscal-year! conn
                                           {:period-eid period-eid
                                            :external-id "FY25-Z"}))

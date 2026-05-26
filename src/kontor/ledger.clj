@@ -30,12 +30,12 @@
 
 (def primary-seed
   "Seed data for the primary ledger. Idempotent under
-   `:db.unique/identity` on `:ledger/code`."
-  {:ledger/code      primary-code
-   :ledger/name      "Primary ledger"
-   :ledger/type      :primary
-   :ledger/framework :local
-   :ledger/active    true})
+   `:db.unique/identity` on `:kontor.ledger/code`."
+  {:kontor.ledger/code      primary-code
+   :kontor.ledger/name      "Primary ledger"
+   :kontor.ledger/type      :primary
+   :kontor.ledger/framework :local
+   :kontor.ledger/active    true})
 
 (defn install-defaults!
   "Idempotently transact the primary ledger. Re-running on a DB that
@@ -49,21 +49,21 @@
   [db]
   (d/q '[:find ?e .
          :in $ ?code
-         :where [?e :ledger/code ?code]]
+         :where [?e :kontor.ledger/code ?code]]
        db primary-code))
 
 (defn by-code
-  "Resolve a ledger entity-id by its `:ledger/code`. nil when missing."
+  "Resolve a ledger entity-id by its `:kontor.ledger/code`. nil when missing."
   [db code]
   (d/q '[:find ?e .
          :in $ ?code
-         :where [?e :ledger/code ?code]]
+         :where [?e :kontor.ledger/code ?code]]
        db code))
 
 (defn resolve-ledger
   "Coerce `ledger-spec` to an entity-id. Accepts:
      - nil           → primary ledger (or nil if not installed)
-     - a string      → looked up by `:ledger/code`
+     - a string      → looked up by `:kontor.ledger/code`
      - a long / map  → returned as-is (assumed eid or lookup ref)"
   [db ledger-spec]
   (cond

@@ -52,9 +52,9 @@
        :kontor.journal/type :general
        :kontor.journal/active true}
       {:db/id "period-2026-05"
-       :period/name "2026-05"
-       :period/start #inst "2026-05-01"
-       :period/end #inst "2026-06-01"}
+       :kontor.period/name "2026-05"
+       :kontor.period/start #inst "2026-05-01"
+       :kontor.period/end #inst "2026-06-01"}
       ;; SAT Código Agrupador chart fragments — the same set the
       ;; legacy MX e2e test installs.
       {:db/id "acct-601-01"
@@ -169,7 +169,7 @@
           mxn       (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "MXN"]] db)
           entity    (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-MX"]] db)
           journal   (d/q '[:find ?e . :where [?e :kontor.journal/code "NOM"]] db)
-          fiscal-pp (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)
+          fiscal-pp (d/q '[:find ?e . :where [?e :kontor.period/name "2026-05"]] db)
           ;; Persons + employments matching the CONTPAQi CSV fixture (E001 + E002).
           _ (person/create-person!
              conn {:external-id "P-E001"

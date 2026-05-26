@@ -24,7 +24,7 @@
    The close *mechanics* are jurisdiction-agnostic — the period
    bounds and the account convention are what's AU-shaped. The
    caller is responsible for creating the `:period` entity with
-   :period/start and :period/end set to the AU FY bounds (1 July
+   :kontor.period/start and :kontor.period/end set to the AU FY bounds (1 July
    00:00:00 → following 1 July 00:00:00); this module does not
    itself derive period bounds (that lives in
    `kontor.l10n-au.bas/fy-period-bounds`).

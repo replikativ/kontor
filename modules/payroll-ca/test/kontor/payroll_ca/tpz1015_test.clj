@@ -77,9 +77,9 @@
                   :kontor.journal/code "PAY-CA"
                   :kontor.journal/name "Payroll (CA)"
                   :kontor.journal/type :general}
-                 {:period/name "2026-05"
-                  :period/start #inst "2026-05-01"
-                  :period/end #inst "2026-06-01"}])
+                 {:kontor.period/name "2026-05"
+                  :kontor.period/start #inst "2026-05-01"
+                  :kontor.period/end #inst "2026-06-01"}])
     conn))
 
 (defn- post-qc-payroll-tx!

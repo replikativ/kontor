@@ -48,9 +48,9 @@
                 [{:db/id "usd" :kontor.commodity/symbol "USD" :kontor.commodity/precision 2}
                  {:db/id "ent-us" :kontor.entity/code "US-LLC" :kontor.entity/name "Acme US LLC"
                   :kontor.entity/kind :operating}
-                 {:db/id "us-gaap" :ledger/code "us-gaap"
-                  :ledger/name "US GAAP" :ledger/framework :us-gaap
-                  :ledger/active true}
+                 {:db/id "us-gaap" :kontor.ledger/code "us-gaap"
+                  :kontor.ledger/name "US GAAP" :kontor.ledger/framework :us-gaap
+                  :kontor.ledger/active true}
                  ;; Minimal payroll CoA (one account per wage-type-map
                  ;; account-key the fixture references).
                  {:db/id "acct-5010" :kontor.account/code "5010"
@@ -88,9 +88,9 @@
                   :kontor.account/type :asset :kontor.account/active true}
                  {:db/id "journal-payroll" :kontor.journal/code "PAY-US"
                   :kontor.journal/name "Payroll (US)" :kontor.journal/type :general}
-                 {:db/id "period-2026-04" :period/name "2026-04"
-                  :period/start #inst "2026-04-01"
-                  :period/end #inst "2026-05-01"}])
+                 {:db/id "period-2026-04" :kontor.period/name "2026-04"
+                  :kontor.period/start #inst "2026-04-01"
+                  :kontor.period/end #inst "2026-05-01"}])
     conn))
 
 (defn- setup-employees [conn]
@@ -139,8 +139,8 @@
         db (d/db conn)
         us-llc (ref-eid db :kontor.entity/code "US-LLC")
         usd (ref-eid db :kontor.commodity/symbol "USD")
-        gaap (ref-eid db :ledger/code "us-gaap")
-        period (ref-eid db :period/name "2026-04")
+        gaap (ref-eid db :kontor.ledger/code "us-gaap")
+        period (ref-eid db :kontor.period/name "2026-04")
         journal (ref-eid db :kontor.journal/code "PAY-US")
         e101 (hr/employment-by-code db "E101")
         e102 (hr/employment-by-code db "E102")

@@ -42,7 +42,7 @@
             '[* {:payment-promise/case [:collection-case/code]
                  :payment-promise/invoice [:invoice/external-id]
                  :payment-promise/commodity [:kontor.commodity/symbol]
-                 :payment-promise/captured-by-uid [:create/uid]
+                 :payment-promise/captured-by-uid [:kontor.audit/create-uid]
                  :payment-promise/supporting-doc [:audit-doc/code]}]
             eid)))
 

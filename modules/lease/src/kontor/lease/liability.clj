@@ -61,7 +61,7 @@
     (d/pull db
             '[* {:lease-liability/lease [:db/id :lease/code :lease/name
                                          :lease/status]
-                 :lease-liability/ledger [:db/id :ledger/code :ledger/framework]
+                 :lease-liability/ledger [:db/id :kontor.ledger/code :kontor.ledger/framework]
                  :lease-liability/commodity [:db/id]
                  :lease-liability/liability-account [:db/id]
                  :lease-liability/interest-account [:db/id]
@@ -184,7 +184,7 @@
                             {:type :lease/duplicate-book
                              :lease lease :ledger ledger})))
         lease-code  (:lease/code (d/pull db [:lease/code] lease-eid))
-        ledger-code (:ledger/code (d/pull db [:ledger/code] ledger))
+        ledger-code (:kontor.ledger/code (d/pull db [:kontor.ledger/code] ledger))
         sched-code  (or schedule-code
                         (str lease-code "-liab-" (or ledger-code ledger)))
         end-date    (schedule/date-of-occurrence start-date frequency n-periods)

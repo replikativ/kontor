@@ -33,7 +33,7 @@
             [kontor.validation :as v]))
 
 (defn- bootstrap
-  "Minimal seed: an 'actor' (a partner used as :create/uid stand-in,
+  "Minimal seed: an 'actor' (a partner used as :kontor.audit/create-uid stand-in,
    per the convention in legal_hold_test) and an :acme target to put
    under a hold."
   []

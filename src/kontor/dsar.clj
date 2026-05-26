@@ -85,7 +85,7 @@
 ;; The indirect axis: a great deal of subject data does not reference
 ;; the :partner directly — it references a :transaction that, in turn,
 ;; references the subject. A :status-history row's
-;; :status-history/origin-transaction, a companion :payment-application's
+;; :kontor.status-history/origin-transaction, a companion :payment-application's
 ;; :payment-application/payment, … all point at a :transaction. `collect`
 ;; walks BOTH axes: direct partner-refs, then — from the subject's
 ;; transactions — every registered tx-referencing attribute. Same
@@ -96,7 +96,7 @@
   "Transaction-referencing attributes the kernel ships. Companions
    register their own (`:payment-application/payment`,
    `:asset-event/transaction`, …) via `register-tx-attr!`."
-  #{:status-history/origin-transaction
+  #{:kontor.status-history/origin-transaction
     :kontor.transaction/reverses})
 
 (defonce ^{:doc "Atom holding the set of attributes referencing
@@ -154,54 +154,54 @@
 
 (def status-transition-seeds
   "ADR-034 :status-transition rows for the :dsar-request/state facet."
-  [{:status-transition/entity-type :dsar-request
-    :status-transition/facet :dsar-request/state
-    :status-transition/from :nil :status-transition/to :received
-    :status-transition/active true :status-transition/name "Receive Request"}
-   {:status-transition/entity-type :dsar-request
-    :status-transition/facet :dsar-request/state
-    :status-transition/from :received :status-transition/to :verifying-identity
-    :status-transition/active true :status-transition/name "Begin Identity Verification"}
-   {:status-transition/entity-type :dsar-request
-    :status-transition/facet :dsar-request/state
-    :status-transition/from :received :status-transition/to :withdrawn
-    :status-transition/active true :status-transition/name "Subject Withdrew Request"}
-   {:status-transition/entity-type :dsar-request
-    :status-transition/facet :dsar-request/state
-    :status-transition/from :received :status-transition/to :extended
-    :status-transition/active true :status-transition/name "Extend Deadline (GDPR 60-day)"}
-   {:status-transition/entity-type :dsar-request
-    :status-transition/facet :dsar-request/state
-    :status-transition/from :verifying-identity :status-transition/to :in-progress
-    :status-transition/active true :status-transition/name "Identity Verified"}
-   {:status-transition/entity-type :dsar-request
-    :status-transition/facet :dsar-request/state
-    :status-transition/from :verifying-identity :status-transition/to :denied
-    :status-transition/active true :status-transition/name "Identity Not Verified"}
-   {:status-transition/entity-type :dsar-request
-    :status-transition/facet :dsar-request/state
-    :status-transition/from :extended :status-transition/to :in-progress
-    :status-transition/active true :status-transition/name "Resume After Extension"}
-   {:status-transition/entity-type :dsar-request
-    :status-transition/facet :dsar-request/state
-    :status-transition/from :in-progress :status-transition/to :awaiting-legal-review
-    :status-transition/active true :status-transition/name "Privileged Data — Counsel Review"}
-   {:status-transition/entity-type :dsar-request
-    :status-transition/facet :dsar-request/state
-    :status-transition/from :in-progress :status-transition/to :fulfilled
-    :status-transition/active true :status-transition/name "Fulfill Request"}
-   {:status-transition/entity-type :dsar-request
-    :status-transition/facet :dsar-request/state
-    :status-transition/from :in-progress :status-transition/to :denied
-    :status-transition/active true :status-transition/name "Deny Request"}
-   {:status-transition/entity-type :dsar-request
-    :status-transition/facet :dsar-request/state
-    :status-transition/from :awaiting-legal-review :status-transition/to :fulfilled
-    :status-transition/active true :status-transition/name "Fulfill After Legal Review"}
-   {:status-transition/entity-type :dsar-request
-    :status-transition/facet :dsar-request/state
-    :status-transition/from :awaiting-legal-review :status-transition/to :denied
-    :status-transition/active true :status-transition/name "Deny After Legal Review"}])
+  [{:kontor.status-transition/entity-type :dsar-request
+    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/from :nil :kontor.status-transition/to :received
+    :kontor.status-transition/active true :kontor.status-transition/name "Receive Request"}
+   {:kontor.status-transition/entity-type :dsar-request
+    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/from :received :kontor.status-transition/to :verifying-identity
+    :kontor.status-transition/active true :kontor.status-transition/name "Begin Identity Verification"}
+   {:kontor.status-transition/entity-type :dsar-request
+    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/from :received :kontor.status-transition/to :withdrawn
+    :kontor.status-transition/active true :kontor.status-transition/name "Subject Withdrew Request"}
+   {:kontor.status-transition/entity-type :dsar-request
+    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/from :received :kontor.status-transition/to :extended
+    :kontor.status-transition/active true :kontor.status-transition/name "Extend Deadline (GDPR 60-day)"}
+   {:kontor.status-transition/entity-type :dsar-request
+    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/from :verifying-identity :kontor.status-transition/to :in-progress
+    :kontor.status-transition/active true :kontor.status-transition/name "Identity Verified"}
+   {:kontor.status-transition/entity-type :dsar-request
+    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/from :verifying-identity :kontor.status-transition/to :denied
+    :kontor.status-transition/active true :kontor.status-transition/name "Identity Not Verified"}
+   {:kontor.status-transition/entity-type :dsar-request
+    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/from :extended :kontor.status-transition/to :in-progress
+    :kontor.status-transition/active true :kontor.status-transition/name "Resume After Extension"}
+   {:kontor.status-transition/entity-type :dsar-request
+    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/from :in-progress :kontor.status-transition/to :awaiting-legal-review
+    :kontor.status-transition/active true :kontor.status-transition/name "Privileged Data — Counsel Review"}
+   {:kontor.status-transition/entity-type :dsar-request
+    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/from :in-progress :kontor.status-transition/to :fulfilled
+    :kontor.status-transition/active true :kontor.status-transition/name "Fulfill Request"}
+   {:kontor.status-transition/entity-type :dsar-request
+    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/from :in-progress :kontor.status-transition/to :denied
+    :kontor.status-transition/active true :kontor.status-transition/name "Deny Request"}
+   {:kontor.status-transition/entity-type :dsar-request
+    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/from :awaiting-legal-review :kontor.status-transition/to :fulfilled
+    :kontor.status-transition/active true :kontor.status-transition/name "Fulfill After Legal Review"}
+   {:kontor.status-transition/entity-type :dsar-request
+    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/from :awaiting-legal-review :kontor.status-transition/to :denied
+    :kontor.status-transition/active true :kontor.status-transition/name "Deny After Legal Review"}])
 
 (def approval-policy-seeds
   "ADR-038 :approval-policy rows. Fulfillment and denial are the
@@ -237,7 +237,7 @@
         already? (boolean
                   (d/q '[:find ?e .
                          :where
-                         [?e :status-transition/entity-type :dsar-request]]
+                         [?e :kontor.status-transition/entity-type :dsar-request]]
                        db))]
     (when-not already?
       (d/transact conn (vec (concat status-transition-seeds
@@ -326,7 +326,7 @@
    - `:indirect-references` — the INDIRECT walk: from the subject's
      transactions (anything with `:kontor.transaction/partner` = subject),
      every entity referencing those transactions via a registered
-     `tx-attrs` attribute (`:status-history/origin-transaction`, a
+     `tx-attrs` attribute (`:kontor.status-history/origin-transaction`, a
      companion `:payment-application/payment`, …). A great deal of
      subject data — payment applications, status-history of the
      subject's invoices — references a `:transaction`, not the
@@ -415,7 +415,7 @@
      :received-via   keyword (:email | :portal | :postal | :api)
      :supporting-doc ref to :audit-doc (the intake form)
      :notes          string
-     :changed-by-uid ref to :create/uid
+     :changed-by-uid ref to :kontor.audit/create-uid
      :vt-from / :vt-to  valid-time bounds (default :vt-from = now)"
   [conn {:keys [vt-from vt-to] :as opts}]
   (let [now (Date.)]
@@ -450,10 +450,10 @@
               received-via   (assoc :dsar-request/received-via received-via)
               supporting-doc (assoc :dsar-request/supporting-doc supporting-doc)
               notes          (assoc :dsar-request/notes notes)
-              ;; The intake person IS the creator — stamp :create/uid
+              ;; The intake person IS the creator — stamp :kontor.audit/create-uid
               ;; so ADR-038 :no-self-approval can fire on fulfillment
               ;; (the intake person can't also be the fulfiller).
-              changed-by-uid (assoc :create/uid changed-by-uid))
+              changed-by-uid (assoc :kontor.audit/create-uid changed-by-uid))
         status-tx (sm/record-status-change-tx-data
                    db
                    (cond-> {:entity tempid

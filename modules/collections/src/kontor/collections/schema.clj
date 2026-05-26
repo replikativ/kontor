@@ -66,7 +66,7 @@
    {:db/ident       :collection-case/assigned-collector
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
-    :db/doc         "Ref to :create/uid. Per-case (not per-partner)
+    :db/doc         "Ref to :kontor.audit/create-uid. Per-case (not per-partner)
                      because collectors specialize per overdue bucket."}
 
    {:db/ident       :collection-case/collections-segment
@@ -202,7 +202,7 @@
 
    ;; NOTE: :dispute/opened-at / :resolved-at removed — resolvable
    ;; via (kbt/timeline db dispute :dispute/state) — the first row's
-   ;; :status-history/changed-at is opened-at; the row that
+   ;; :kontor.status-history/changed-at is opened-at; the row that
    ;; transitioned to :resolved carries resolved-at.
 
    {:db/ident       :dispute/opened-by-uid
@@ -539,316 +539,316 @@
    :collection-case/state, :payment-promise/status, :dispute/state,
    :invoice/collections-status."
   [;; --- :collection-case/state ------------------------------------
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :nil
-    :status-transition/to :open
-    :status-transition/active true
-    :status-transition/name "Open Case"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :open
-    :status-transition/to :dunning-l1
-    :status-transition/active true
-    :status-transition/name "First Dunning Level"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :dunning-l1
-    :status-transition/to :dunning-l2
-    :status-transition/active true
-    :status-transition/name "Second Dunning Level"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :dunning-l2
-    :status-transition/to :final-notice
-    :status-transition/active true
-    :status-transition/name "Final Notice"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :open
-    :status-transition/to :promised
-    :status-transition/active true
-    :status-transition/name "PTP Accepted (suppresses dunning)"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :dunning-l1
-    :status-transition/to :promised
-    :status-transition/active true
-    :status-transition/name "PTP Accepted from L1"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :dunning-l2
-    :status-transition/to :promised
-    :status-transition/active true
-    :status-transition/name "PTP Accepted from L2"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :promised
-    :status-transition/to :open
-    :status-transition/active true
-    :status-transition/name "PTP Broken — reopen case"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :promised
-    :status-transition/to :paid
-    :status-transition/active true
-    :status-transition/name "PTP Kept — closed paid"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :open
-    :status-transition/to :disputed
-    :status-transition/active true
-    :status-transition/name "Dispute Opened (suppresses dunning)"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :dunning-l1
-    :status-transition/to :disputed
-    :status-transition/active true
-    :status-transition/name "Dispute Opened from L1"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :dunning-l2
-    :status-transition/to :disputed
-    :status-transition/active true
-    :status-transition/name "Dispute Opened from L2"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :disputed
-    :status-transition/to :open
-    :status-transition/active true
-    :status-transition/name "Dispute Resolved — reopen case"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :disputed
-    :status-transition/to :paid
-    :status-transition/active true
-    :status-transition/name "Dispute Resolved — closed paid"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :final-notice
-    :status-transition/to :legal
-    :status-transition/active true
-    :status-transition/name "Escalate to Legal (supporting-doc required)"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :legal
-    :status-transition/to :written-off
-    :status-transition/active true
-    :status-transition/name "Write Off (supporting-doc required)"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :open
-    :status-transition/to :paid
-    :status-transition/active true
-    :status-transition/name "Closed Paid"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :dunning-l1
-    :status-transition/to :paid
-    :status-transition/active true
-    :status-transition/name "Closed Paid from L1"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :dunning-l2
-    :status-transition/to :paid
-    :status-transition/active true
-    :status-transition/name "Closed Paid from L2"}
-   {:status-transition/entity-type :collection-case
-    :status-transition/facet :collection-case/state
-    :status-transition/from :final-notice
-    :status-transition/to :paid
-    :status-transition/active true
-    :status-transition/name "Closed Paid from Final Notice"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :nil
+    :kontor.status-transition/to :open
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Open Case"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :open
+    :kontor.status-transition/to :dunning-l1
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "First Dunning Level"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :dunning-l1
+    :kontor.status-transition/to :dunning-l2
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Second Dunning Level"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :dunning-l2
+    :kontor.status-transition/to :final-notice
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Final Notice"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :open
+    :kontor.status-transition/to :promised
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "PTP Accepted (suppresses dunning)"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :dunning-l1
+    :kontor.status-transition/to :promised
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "PTP Accepted from L1"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :dunning-l2
+    :kontor.status-transition/to :promised
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "PTP Accepted from L2"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :promised
+    :kontor.status-transition/to :open
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "PTP Broken — reopen case"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :promised
+    :kontor.status-transition/to :paid
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "PTP Kept — closed paid"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :open
+    :kontor.status-transition/to :disputed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Dispute Opened (suppresses dunning)"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :dunning-l1
+    :kontor.status-transition/to :disputed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Dispute Opened from L1"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :dunning-l2
+    :kontor.status-transition/to :disputed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Dispute Opened from L2"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :disputed
+    :kontor.status-transition/to :open
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Dispute Resolved — reopen case"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :disputed
+    :kontor.status-transition/to :paid
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Dispute Resolved — closed paid"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :final-notice
+    :kontor.status-transition/to :legal
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Escalate to Legal (supporting-doc required)"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :legal
+    :kontor.status-transition/to :written-off
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Write Off (supporting-doc required)"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :open
+    :kontor.status-transition/to :paid
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Closed Paid"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :dunning-l1
+    :kontor.status-transition/to :paid
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Closed Paid from L1"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :dunning-l2
+    :kontor.status-transition/to :paid
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Closed Paid from L2"}
+   {:kontor.status-transition/entity-type :collection-case
+    :kontor.status-transition/facet :collection-case/state
+    :kontor.status-transition/from :final-notice
+    :kontor.status-transition/to :paid
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Closed Paid from Final Notice"}
 
    ;; --- :payment-promise/status -----------------------------------
-   {:status-transition/entity-type :payment-promise
-    :status-transition/facet :payment-promise/status
-    :status-transition/from :nil
-    :status-transition/to :open
-    :status-transition/active true
-    :status-transition/name "Record Promise"}
-   {:status-transition/entity-type :payment-promise
-    :status-transition/facet :payment-promise/status
-    :status-transition/from :open
-    :status-transition/to :kept
-    :status-transition/active true
-    :status-transition/name "Promise Kept (payment matched)"}
-   {:status-transition/entity-type :payment-promise
-    :status-transition/facet :payment-promise/status
-    :status-transition/from :open
-    :status-transition/to :broken
-    :status-transition/active true
-    :status-transition/name "Promise Broken (sweeper)"}
-   {:status-transition/entity-type :payment-promise
-    :status-transition/facet :payment-promise/status
-    :status-transition/from :open
-    :status-transition/to :renegotiated
-    :status-transition/active true
-    :status-transition/name "Renegotiated (replaced by new promise)"}
-   {:status-transition/entity-type :payment-promise
-    :status-transition/facet :payment-promise/status
-    :status-transition/from :open
-    :status-transition/to :cancelled
-    :status-transition/active true
-    :status-transition/name "Cancelled"}
-   {:status-transition/entity-type :payment-promise
-    :status-transition/facet :payment-promise/status
-    :status-transition/from :broken
-    :status-transition/to :renegotiated
-    :status-transition/active true
-    :status-transition/name "Broken then Renegotiated"}
+   {:kontor.status-transition/entity-type :payment-promise
+    :kontor.status-transition/facet :payment-promise/status
+    :kontor.status-transition/from :nil
+    :kontor.status-transition/to :open
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Record Promise"}
+   {:kontor.status-transition/entity-type :payment-promise
+    :kontor.status-transition/facet :payment-promise/status
+    :kontor.status-transition/from :open
+    :kontor.status-transition/to :kept
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Promise Kept (payment matched)"}
+   {:kontor.status-transition/entity-type :payment-promise
+    :kontor.status-transition/facet :payment-promise/status
+    :kontor.status-transition/from :open
+    :kontor.status-transition/to :broken
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Promise Broken (sweeper)"}
+   {:kontor.status-transition/entity-type :payment-promise
+    :kontor.status-transition/facet :payment-promise/status
+    :kontor.status-transition/from :open
+    :kontor.status-transition/to :renegotiated
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Renegotiated (replaced by new promise)"}
+   {:kontor.status-transition/entity-type :payment-promise
+    :kontor.status-transition/facet :payment-promise/status
+    :kontor.status-transition/from :open
+    :kontor.status-transition/to :cancelled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Cancelled"}
+   {:kontor.status-transition/entity-type :payment-promise
+    :kontor.status-transition/facet :payment-promise/status
+    :kontor.status-transition/from :broken
+    :kontor.status-transition/to :renegotiated
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Broken then Renegotiated"}
 
    ;; --- :dispute/state --------------------------------------------
-   {:status-transition/entity-type :dispute
-    :status-transition/facet :dispute/state
-    :status-transition/from :nil
-    :status-transition/to :open
-    :status-transition/active true
-    :status-transition/name "Raise Dispute"}
-   {:status-transition/entity-type :dispute
-    :status-transition/facet :dispute/state
-    :status-transition/from :open
-    :status-transition/to :under-review
-    :status-transition/active true
-    :status-transition/name "Triage Dispute"}
-   {:status-transition/entity-type :dispute
-    :status-transition/facet :dispute/state
-    :status-transition/from :under-review
-    :status-transition/to :resolved
-    :status-transition/active true
-    :status-transition/name "Resolve Dispute"}
-   {:status-transition/entity-type :dispute
-    :status-transition/facet :dispute/state
-    :status-transition/from :open
-    :status-transition/to :resolved
-    :status-transition/active true
-    :status-transition/name "Fast Resolve (skip triage)"}
-   {:status-transition/entity-type :dispute
-    :status-transition/facet :dispute/state
-    :status-transition/from :under-review
-    :status-transition/to :escalated
-    :status-transition/active true
-    :status-transition/name "Escalate to Manager"}
-   {:status-transition/entity-type :dispute
-    :status-transition/facet :dispute/state
-    :status-transition/from :escalated
-    :status-transition/to :resolved
-    :status-transition/active true
-    :status-transition/name "Manager Resolution"}
+   {:kontor.status-transition/entity-type :dispute
+    :kontor.status-transition/facet :dispute/state
+    :kontor.status-transition/from :nil
+    :kontor.status-transition/to :open
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Raise Dispute"}
+   {:kontor.status-transition/entity-type :dispute
+    :kontor.status-transition/facet :dispute/state
+    :kontor.status-transition/from :open
+    :kontor.status-transition/to :under-review
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Triage Dispute"}
+   {:kontor.status-transition/entity-type :dispute
+    :kontor.status-transition/facet :dispute/state
+    :kontor.status-transition/from :under-review
+    :kontor.status-transition/to :resolved
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Resolve Dispute"}
+   {:kontor.status-transition/entity-type :dispute
+    :kontor.status-transition/facet :dispute/state
+    :kontor.status-transition/from :open
+    :kontor.status-transition/to :resolved
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Fast Resolve (skip triage)"}
+   {:kontor.status-transition/entity-type :dispute
+    :kontor.status-transition/facet :dispute/state
+    :kontor.status-transition/from :under-review
+    :kontor.status-transition/to :escalated
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Escalate to Manager"}
+   {:kontor.status-transition/entity-type :dispute
+    :kontor.status-transition/facet :dispute/state
+    :kontor.status-transition/from :escalated
+    :kontor.status-transition/to :resolved
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Manager Resolution"}
 
    ;; --- :invoice/collections-status (sales-side facet) -----------
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/collections-status
-    :status-transition/from :nil
-    :status-transition/to :current
-    :status-transition/active true
-    :status-transition/name "Invoice Sent (current)"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/collections-status
-    :status-transition/from :current
-    :status-transition/to :overdue
-    :status-transition/active true
-    :status-transition/name "Past Grace — Now Overdue"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/collections-status
-    :status-transition/from :overdue
-    :status-transition/to :in-collection
-    :status-transition/active true
-    :status-transition/name "Routed to Collections (case opened)"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/collections-status
-    :status-transition/from :current
-    :status-transition/to :disputed
-    :status-transition/active true
-    :status-transition/name "Customer Disputes While Current"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/collections-status
-    :status-transition/from :overdue
-    :status-transition/to :disputed
-    :status-transition/active true
-    :status-transition/name "Customer Disputes While Overdue"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/collections-status
-    :status-transition/from :in-collection
-    :status-transition/to :disputed
-    :status-transition/active true
-    :status-transition/name "Customer Disputes In Collection"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/collections-status
-    :status-transition/from :disputed
-    :status-transition/to :overdue
-    :status-transition/active true
-    :status-transition/name "Dispute Resolved (back to overdue)"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/collections-status
-    :status-transition/from :disputed
-    :status-transition/to :paid
-    :status-transition/active true
-    :status-transition/name "Dispute Resolved (paid)"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/collections-status
-    :status-transition/from :current
-    :status-transition/to :paid
-    :status-transition/active true
-    :status-transition/name "Paid While Current"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/collections-status
-    :status-transition/from :overdue
-    :status-transition/to :paid
-    :status-transition/active true
-    :status-transition/name "Paid While Overdue"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/collections-status
-    :status-transition/from :in-collection
-    :status-transition/to :paid
-    :status-transition/active true
-    :status-transition/name "Paid From Collections"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/collections-status
-    :status-transition/from :in-collection
-    :status-transition/to :written-off
-    :status-transition/active true
-    :status-transition/name "Written Off From Collections"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/from :nil
+    :kontor.status-transition/to :current
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Invoice Sent (current)"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/from :current
+    :kontor.status-transition/to :overdue
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Past Grace — Now Overdue"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/from :overdue
+    :kontor.status-transition/to :in-collection
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Routed to Collections (case opened)"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/from :current
+    :kontor.status-transition/to :disputed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Customer Disputes While Current"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/from :overdue
+    :kontor.status-transition/to :disputed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Customer Disputes While Overdue"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/from :in-collection
+    :kontor.status-transition/to :disputed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Customer Disputes In Collection"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/from :disputed
+    :kontor.status-transition/to :overdue
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Dispute Resolved (back to overdue)"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/from :disputed
+    :kontor.status-transition/to :paid
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Dispute Resolved (paid)"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/from :current
+    :kontor.status-transition/to :paid
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Paid While Current"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/from :overdue
+    :kontor.status-transition/to :paid
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Paid While Overdue"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/from :in-collection
+    :kontor.status-transition/to :paid
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Paid From Collections"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/collections-status
+    :kontor.status-transition/from :in-collection
+    :kontor.status-transition/to :written-off
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Written Off From Collections"}
 
    ;; --- :credit-hold/state (P0-5 review fix, 2026-05-13) ------------
-   {:status-transition/entity-type :credit-hold
-    :status-transition/facet :credit-hold/state
-    :status-transition/from :nil
-    :status-transition/to :placed
-    :status-transition/active true
-    :status-transition/name "Place Credit Hold"}
-   {:status-transition/entity-type :credit-hold
-    :status-transition/facet :credit-hold/state
-    :status-transition/from :placed
-    :status-transition/to :released
-    :status-transition/active true
-    :status-transition/name "Release Credit Hold"}
-   {:status-transition/entity-type :credit-hold
-    :status-transition/facet :credit-hold/state
-    :status-transition/from :placed
-    :status-transition/to :expired
-    :status-transition/active true
-    :status-transition/name "Credit Hold Expired"}
+   {:kontor.status-transition/entity-type :credit-hold
+    :kontor.status-transition/facet :credit-hold/state
+    :kontor.status-transition/from :nil
+    :kontor.status-transition/to :placed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Place Credit Hold"}
+   {:kontor.status-transition/entity-type :credit-hold
+    :kontor.status-transition/facet :credit-hold/state
+    :kontor.status-transition/from :placed
+    :kontor.status-transition/to :released
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Release Credit Hold"}
+   {:kontor.status-transition/entity-type :credit-hold
+    :kontor.status-transition/facet :credit-hold/state
+    :kontor.status-transition/from :placed
+    :kontor.status-transition/to :expired
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Credit Hold Expired"}
 
    ;; --- :dunning-pause/state (P0-5 review fix, 2026-05-13) ----------
-   {:status-transition/entity-type :dunning-pause
-    :status-transition/facet :dunning-pause/state
-    :status-transition/from :nil
-    :status-transition/to :placed
-    :status-transition/active true
-    :status-transition/name "Place Dunning Pause"}
-   {:status-transition/entity-type :dunning-pause
-    :status-transition/facet :dunning-pause/state
-    :status-transition/from :placed
-    :status-transition/to :released
-    :status-transition/active true
-    :status-transition/name "Release Dunning Pause"}
-   {:status-transition/entity-type :dunning-pause
-    :status-transition/facet :dunning-pause/state
-    :status-transition/from :placed
-    :status-transition/to :expired
-    :status-transition/active true
-    :status-transition/name "Dunning Pause Expired"}])
+   {:kontor.status-transition/entity-type :dunning-pause
+    :kontor.status-transition/facet :dunning-pause/state
+    :kontor.status-transition/from :nil
+    :kontor.status-transition/to :placed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Place Dunning Pause"}
+   {:kontor.status-transition/entity-type :dunning-pause
+    :kontor.status-transition/facet :dunning-pause/state
+    :kontor.status-transition/from :placed
+    :kontor.status-transition/to :released
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Release Dunning Pause"}
+   {:kontor.status-transition/entity-type :dunning-pause
+    :kontor.status-transition/facet :dunning-pause/state
+    :kontor.status-transition/from :placed
+    :kontor.status-transition/to :expired
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Dunning Pause Expired"}])
 
 ;; ============================================================================
 ;; Installer

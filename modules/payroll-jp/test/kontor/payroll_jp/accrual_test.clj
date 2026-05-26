@@ -176,7 +176,7 @@
              :journal :kontor.journal/payroll
              :effective-date #inst "2026-05-31"
              :tx-code "SI-TEST"
-             :ledger :ledger/jp-jgaap})
+             :ledger :kontor.ledger/jp-jgaap})
         postings (filter #(contains? % :kontor.posting/account) tx)]
     (testing "Every leg carries the supplied :ledger"
-      (is (every? #(= :ledger/jp-jgaap (:kontor.posting/ledger %)) postings)))))
+      (is (every? #(= :kontor.ledger/jp-jgaap (:kontor.posting/ledger %)) postings)))))

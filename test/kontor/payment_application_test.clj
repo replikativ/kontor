@@ -24,9 +24,9 @@
                  {:kontor.partner/external-id "OWN"
                   :kontor.partner/name "Self GmbH"
                   :kontor.partner/kind :company}
-                 ;; A fake :create/uid for actor refs.
+                 ;; A fake :kontor.audit/create-uid for actor refs.
                  {:db/id "actor-1"
-                  :create/uid "alice@example"}])
+                  :kontor.audit/create-uid "alice@example"}])
     (f)))
 
 (use-fixtures :each bootstrap)

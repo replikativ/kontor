@@ -231,7 +231,7 @@
         (is (= :written-off
                (sm/current-status db eid :collection-case/state))))
       (testing "Status-history captures reasons across the chain"
-        (let [reasons (mapv :status-history/reason history)]
+        (let [reasons (mapv :kontor.status-history/reason history)]
           (is (some #{:case-opened} reasons))
           (is (some #{:dunning-l1-sent} reasons))
           (is (some #{:legal-escalation} reasons))

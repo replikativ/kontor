@@ -432,34 +432,34 @@
 
 (def status-transition-seeds
   "ADR-034 :status-transition rows for the :asset/status lifecycle."
-  [{:status-transition/entity-type :asset
-    :status-transition/facet :asset/status
-    :status-transition/from :nil :status-transition/to :planned
-    :status-transition/active true :status-transition/name "Acquire (Planned)"}
-   {:status-transition/entity-type :asset
-    :status-transition/facet :asset/status
-    :status-transition/from :nil :status-transition/to :in-service
-    :status-transition/active true :status-transition/name "Acquire In-Service"}
-   {:status-transition/entity-type :asset
-    :status-transition/facet :asset/status
-    :status-transition/from :planned :status-transition/to :in-service
-    :status-transition/active true :status-transition/name "Place In Service"}
-   {:status-transition/entity-type :asset
-    :status-transition/facet :asset/status
-    :status-transition/from :in-service :status-transition/to :fully-depreciated
-    :status-transition/active true :status-transition/name "Fully Depreciated"}
-   {:status-transition/entity-type :asset
-    :status-transition/facet :asset/status
-    :status-transition/from :in-service :status-transition/to :disposed
-    :status-transition/active true :status-transition/name "Dispose"}
-   {:status-transition/entity-type :asset
-    :status-transition/facet :asset/status
-    :status-transition/from :fully-depreciated :status-transition/to :disposed
-    :status-transition/active true :status-transition/name "Scrap (Fully Depreciated)"}
-   {:status-transition/entity-type :asset
-    :status-transition/facet :asset/status
-    :status-transition/from :in-service :status-transition/to :transferred
-    :status-transition/active true :status-transition/name "Transfer To Another Entity"}])
+  [{:kontor.status-transition/entity-type :asset
+    :kontor.status-transition/facet :asset/status
+    :kontor.status-transition/from :nil :kontor.status-transition/to :planned
+    :kontor.status-transition/active true :kontor.status-transition/name "Acquire (Planned)"}
+   {:kontor.status-transition/entity-type :asset
+    :kontor.status-transition/facet :asset/status
+    :kontor.status-transition/from :nil :kontor.status-transition/to :in-service
+    :kontor.status-transition/active true :kontor.status-transition/name "Acquire In-Service"}
+   {:kontor.status-transition/entity-type :asset
+    :kontor.status-transition/facet :asset/status
+    :kontor.status-transition/from :planned :kontor.status-transition/to :in-service
+    :kontor.status-transition/active true :kontor.status-transition/name "Place In Service"}
+   {:kontor.status-transition/entity-type :asset
+    :kontor.status-transition/facet :asset/status
+    :kontor.status-transition/from :in-service :kontor.status-transition/to :fully-depreciated
+    :kontor.status-transition/active true :kontor.status-transition/name "Fully Depreciated"}
+   {:kontor.status-transition/entity-type :asset
+    :kontor.status-transition/facet :asset/status
+    :kontor.status-transition/from :in-service :kontor.status-transition/to :disposed
+    :kontor.status-transition/active true :kontor.status-transition/name "Dispose"}
+   {:kontor.status-transition/entity-type :asset
+    :kontor.status-transition/facet :asset/status
+    :kontor.status-transition/from :fully-depreciated :kontor.status-transition/to :disposed
+    :kontor.status-transition/active true :kontor.status-transition/name "Scrap (Fully Depreciated)"}
+   {:kontor.status-transition/entity-type :asset
+    :kontor.status-transition/facet :asset/status
+    :kontor.status-transition/from :in-service :kontor.status-transition/to :transferred
+    :kontor.status-transition/active true :kontor.status-transition/name "Transfer To Another Entity"}])
 
 (def approval-policy-seeds
   "ADR-038 :approval-policy rows. Disposal is the consequential
@@ -503,7 +503,7 @@
   (let [db (d/db conn)
         already? (boolean
                   (d/q '[:find ?e .
-                         :where [?e :status-transition/entity-type :asset]]
+                         :where [?e :kontor.status-transition/entity-type :asset]]
                        db))]
     (when-not already?
       (d/transact conn (vec (concat status-transition-seeds

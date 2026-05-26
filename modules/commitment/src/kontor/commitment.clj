@@ -106,10 +106,10 @@
   ;; sm/record-status-change-tx-data would throw a generic "Illegal
   ;; status transition" with no hint. Catch it here with a pointer.
   (when-not (d/q '[:find ?t .
-                   :where [?t :status-transition/entity-type :commitment]
-                          [?t :status-transition/from :nil]
-                          [?t :status-transition/to :open]
-                          [?t :status-transition/active true]]
+                   :where [?t :kontor.status-transition/entity-type :commitment]
+                          [?t :kontor.status-transition/from :nil]
+                          [?t :kontor.status-transition/to :open]
+                          [?t :kontor.status-transition/active true]]
                  db)
     (throw (ex-info
             (str "kontor.commitment: status-transition seeds not found in the DB. "

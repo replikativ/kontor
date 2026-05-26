@@ -194,7 +194,7 @@
     :db/doc         "Optional :entity scope. When nil = tenant-wide
                      default; when set = org-specific override that
                      coexists with the global. Same semantics as
-                     :status-transition/applies-to-org (ADR-034)."}
+                     :kontor.status-transition/applies-to-org (ADR-034)."}
 
    {:db/ident       :gl-account-default/account
     :db/valueType   :db.type/ref
@@ -226,131 +226,131 @@
 
    The :ready intermediate is optional — :draft → :sent is also
    permitted for batch flows."
-  [{:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :nil
-    :status-transition/to :draft
-    :status-transition/active true
-    :status-transition/name "Create Invoice"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :draft
-    :status-transition/to :ready
-    :status-transition/active true
-    :status-transition/name "Finalize (lock edits)"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :draft
-    :status-transition/to :sent
-    :status-transition/active true
-    :status-transition/name "Post (skip-ready batch flow)"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :draft
-    :status-transition/to :cancelled
-    :status-transition/active true
-    :status-transition/name "Abandon Draft"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :ready
-    :status-transition/to :sent
-    :status-transition/active true
-    :status-transition/name "Post"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :ready
-    :status-transition/to :cancelled
-    :status-transition/active true
-    :status-transition/name "Cancel Ready"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :sent
-    :status-transition/to :paid
-    :status-transition/active true
-    :status-transition/name "Settle (full)"}
+  [{:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :nil
+    :kontor.status-transition/to :draft
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Create Invoice"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :draft
+    :kontor.status-transition/to :ready
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Finalize (lock edits)"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :draft
+    :kontor.status-transition/to :sent
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Post (skip-ready batch flow)"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :draft
+    :kontor.status-transition/to :cancelled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Abandon Draft"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :ready
+    :kontor.status-transition/to :sent
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Post"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :ready
+    :kontor.status-transition/to :cancelled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Cancel Ready"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :sent
+    :kontor.status-transition/to :paid
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Settle (full)"}
    ;; ADR-043: partial-payment lifecycle.
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :sent
-    :status-transition/to :partially-paid
-    :status-transition/active true
-    :status-transition/name "First Partial Application"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :partially-paid
-    :status-transition/to :partially-paid
-    :status-transition/active true
-    :status-transition/name "Additional Partial Application"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :partially-paid
-    :status-transition/to :paid
-    :status-transition/active true
-    :status-transition/name "Final Application Closes the Invoice"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :partially-paid
-    :status-transition/to :sent
-    :status-transition/active true
-    :status-transition/name "Allocation Reversal (back to fully-open)"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :paid
-    :status-transition/to :sent
-    :status-transition/active true
-    :status-transition/name "Reversal of Final Application (full reopen)"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :paid
-    :status-transition/to :partially-paid
-    :status-transition/active true
-    :status-transition/name "Reversal Leaves Partial Balance"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :sent
-    :status-transition/to :cancelled
-    :status-transition/active true
-    :status-transition/name "Void (creates reversal tx)"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :paid
-    :status-transition/to :cancelled
-    :status-transition/active true
-    :status-transition/name "Refund"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :sent
+    :kontor.status-transition/to :partially-paid
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "First Partial Application"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :partially-paid
+    :kontor.status-transition/to :partially-paid
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Additional Partial Application"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :partially-paid
+    :kontor.status-transition/to :paid
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Final Application Closes the Invoice"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :partially-paid
+    :kontor.status-transition/to :sent
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Allocation Reversal (back to fully-open)"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :paid
+    :kontor.status-transition/to :sent
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Reversal of Final Application (full reopen)"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :paid
+    :kontor.status-transition/to :partially-paid
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Reversal Leaves Partial Balance"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :sent
+    :kontor.status-transition/to :cancelled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Void (creates reversal tx)"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :paid
+    :kontor.status-transition/to :cancelled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Refund"}
 
    ;; ADR-040: clearance lifecycle for e-invoicing jurisdictions
    ;; (IT SdI, IN IRN, BR NF-e, ES Verifactu). Opt-in — non-clearance
    ;; jurisdictions go :draft → :sent directly.
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :draft
-    :status-transition/to :pending-attestation
-    :status-transition/active true
-    :status-transition/name "Submit for Clearance"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :ready
-    :status-transition/to :pending-attestation
-    :status-transition/active true
-    :status-transition/name "Submit Finalized for Clearance"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :pending-attestation
-    :status-transition/to :sent
-    :status-transition/active true
-    :status-transition/name "Cleared by Authority"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :pending-attestation
-    :status-transition/to :rejected
-    :status-transition/active true
-    :status-transition/name "Rejected by Authority"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/status
-    :status-transition/from :rejected
-    :status-transition/to :draft
-    :status-transition/active true
-    :status-transition/name "Revise and resubmit"}])
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :draft
+    :kontor.status-transition/to :pending-attestation
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Submit for Clearance"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :ready
+    :kontor.status-transition/to :pending-attestation
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Submit Finalized for Clearance"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :pending-attestation
+    :kontor.status-transition/to :sent
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Cleared by Authority"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :pending-attestation
+    :kontor.status-transition/to :rejected
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Rejected by Authority"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/status
+    :kontor.status-transition/from :rejected
+    :kontor.status-transition/to :draft
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Revise and resubmit"}])
 
 (defn install!
   "Install the kontor-invoice companion schema + state-machine seeds.

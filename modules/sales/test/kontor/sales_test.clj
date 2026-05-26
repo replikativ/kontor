@@ -306,7 +306,7 @@
       (let [hist (sm/status-history-of (d/db *conn*) order-eid :order/status)]
         (is (= 2 (count hist)))
         (is (= [:order.status/approved :order.status/completed]
-               (map :status-history/to hist)))))))
+               (map :kontor.status-history/to hist)))))))
 
 (deftest order-status-illegal-transitions
   (let [order-eid (minimal-order!)]

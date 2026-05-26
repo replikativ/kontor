@@ -115,8 +115,8 @@
         history (d/q '[:find [?h ...]
                        :in $ ?e
                        :where
-                       [?h :status-history/entity ?e]
-                       [?h :status-history/facet :retention-policy/state]]
+                       [?h :kontor.status-history/entity ?e]
+                       [?h :kontor.status-history/facet :retention-policy/state]]
                      db policy-eid)]
     (is (= :draft (:retention-policy/state policy)))
     (is (= 10 (:retention-policy/duration-years policy)))
@@ -350,7 +350,7 @@
 
 (deftest cross-namespace-anchor-does-not-sweep-unintended-types
   ;; A policy :applies-to [:audit-doc] but :triggered-by an attribute
-  ;; in a DIFFERENT namespace (:status-history/changed-at). Without the
+  ;; in a DIFFERENT namespace (:kontor.status-history/changed-at). Without the
   ;; :applies-to cross-check, candidate-eids would enumerate every
   ;; :status-history row in the DB as a candidate. The guard filters
   ;; them out — a :status-history row carries no :audit-doc/* attr.
@@ -359,7 +359,7 @@
             {:code "P-CROSS-NS"
              :applies-to [:audit-doc]
              :duration-years 1
-             :triggered-by :status-history/changed-at
+             :triggered-by :kontor.status-history/changed-at
              :expiry-action :purge
              :effective-from #inst "2000-01-01"
              :legal-basis "Cross-namespace anchor test"

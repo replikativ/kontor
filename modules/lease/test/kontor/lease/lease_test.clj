@@ -3,7 +3,7 @@
    short-term / low-value exemption path.
 
    Covers:
-   - define-lease! records a :lease at :draft, stamps :create/uid,
+   - define-lease! records a :lease at :draft, stamps :kontor.audit/create-uid,
      validates :payment-frequency / :payment-timing.
    - register-exempt-lease! creates a :schedule/kind :lease-expense
      with no :lease entity; exempt-lease-period-amount straight-lines
@@ -83,16 +83,16 @@
       (is (= 60 (:lease/term-months l)))
       (is (= 0.05M (:lease/discount-rate l)))
       (is (= :in-arrears (:lease/payment-timing l))))
-    (testing ":create/uid is stamped to the recording actor"
+    (testing ":kontor.audit/create-uid is stamped to the recording actor"
       (is (= (p (d/db conn) "U-cfo")
-             (:db/id (:create/uid (d/pull (d/db conn) [:create/uid]
+             (:db/id (:kontor.audit/create-uid (d/pull (d/db conn) [:kontor.audit/create-uid]
                                           (lease/by-code (d/db conn) "LSE-1")))))))
     (testing "a status-history row records nil → :draft"
       (is (= 1 (count (d/q '[:find [?h ...]
                              :in $ ?e
                              :where
-                             [?h :status-history/entity ?e]
-                             [?h :status-history/facet :lease/status]]
+                             [?h :kontor.status-history/entity ?e]
+                             [?h :kontor.status-history/facet :lease/status]]
                            (d/db conn) (lease/by-code (d/db conn) "LSE-1"))))))))
 
 (deftest define-lease-validates-enums

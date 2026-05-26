@@ -40,10 +40,10 @@
                   :kontor.journal/type :sale :kontor.journal/active true}
                  {:kontor.journal/code "EXP" :kontor.journal/name "Expenses"
                   :kontor.journal/type :purchase :kontor.journal/active true}
-                 {:period/start apr-1-2024
-                  :period/end   apr-1-2025
-                  :period/tag   :normal
-                  :period/name  "FY24-25"}])
+                 {:kontor.period/start apr-1-2024
+                  :kontor.period/end   apr-1-2025
+                  :kontor.period/tag   :normal
+                  :kontor.period/name  "FY24-25"}])
     conn))
 
 (defn- seed-fy-24-25!
@@ -137,7 +137,7 @@
     (let [conn (bootstrap)]
       (seed-fy-24-25! conn)
       (let [db (d/db conn)
-            period-eid (d/q '[:find ?p . :where [?p :period/name "FY24-25"]] db)
+            period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY24-25"]] db)
             {:keys [close-result period-close-tx-report]}
             (in-closing/close-in-fiscal-year! conn
                                               {:period-eid period-eid
@@ -184,7 +184,7 @@
 (deftest cannot-close-period-twice
   (let [conn (bootstrap)]
     (seed-fy-24-25! conn)
-    (let [period-eid (d/q '[:find ?p . :where [?p :period/name "FY24-25"]] (d/db conn))]
+    (let [period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY24-25"]] (d/db conn))]
       (in-closing/close-in-fiscal-year! conn
                                         {:period-eid period-eid
                                          :external-id "FY25-IN-CLOSE-1"})
@@ -209,12 +209,12 @@
                                :kontor.journal/type :sale :kontor.journal/active true}
                               {:kontor.journal/code "EXP" :kontor.journal/name "Expenses"
                                :kontor.journal/type :purchase :kontor.journal/active true}
-                              {:period/start apr-1-2024
-                               :period/end   apr-1-2025
-                               :period/tag   :normal
-                               :period/name  "FY24-25"}])
+                              {:kontor.period/start apr-1-2024
+                               :kontor.period/end   apr-1-2025
+                               :kontor.period/tag   :normal
+                               :kontor.period/name  "FY24-25"}])
           _ (seed-fy-24-25! conn)
-          period-eid (d/q '[:find ?p . :where [?p :period/name "FY24-25"]] (d/db conn))]
+          period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY24-25"]] (d/db conn))]
       (is (nil? (:db/id (d/entity (d/db conn) [:kontor.journal/code "CLOSE"])))
           "CLOSE journal not present before close")
       (in-closing/close-in-fiscal-year! conn
@@ -232,11 +232,11 @@
             throws a clear error."
     (let [conn (core/create-test-db)]
       (v/install-invariants! conn)
-      (d/transact conn [{:period/start apr-1-2024
-                         :period/end apr-1-2025
-                         :period/tag :normal
-                         :period/name "FY24-25"}])
-      (let [period-eid (d/q '[:find ?p . :where [?p :period/name "FY24-25"]] (d/db conn))]
+      (d/transact conn [{:kontor.period/start apr-1-2024
+                         :kontor.period/end apr-1-2025
+                         :kontor.period/tag :normal
+                         :kontor.period/name "FY24-25"}])
+      (let [period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY24-25"]] (d/db conn))]
         (is (thrown-with-msg?
              clojure.lang.ExceptionInfo
              #"Retained-earnings account"
@@ -250,7 +250,7 @@
 (deftest plan-in-fiscal-year-close-resolves-eids
   (let [conn (bootstrap)
         db (d/db conn)
-        period-eid (d/q '[:find ?p . :where [?p :period/name "FY24-25"]] db)
+        period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY24-25"]] db)
         planned (in-closing/plan-in-fiscal-year-close-tx-data
                  db {:period-eid period-eid
                      :external-id "PLAN-1"})]
@@ -277,7 +277,7 @@
             after the FY24-25 close — kernel invariant."
     (let [conn (bootstrap)]
       (seed-fy-24-25! conn)
-      (let [period-eid (d/q '[:find ?p . :where [?p :period/name "FY24-25"]] (d/db conn))]
+      (let [period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY24-25"]] (d/db conn))]
         (in-closing/close-in-fiscal-year! conn
                                           {:period-eid period-eid
                                            :external-id "FY25-Z"}))
@@ -300,7 +300,7 @@
     (let [conn (bootstrap)]
       (seed-fy-24-25! conn)
       (let [db (d/db conn)
-            period-eid (d/q '[:find ?p . :where [?p :period/name "FY24-25"]] db)]
+            period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY24-25"]] db)]
         (in-closing/close-in-fiscal-year!
          conn {:period-eid period-eid
                :external-id "FY25-GR"

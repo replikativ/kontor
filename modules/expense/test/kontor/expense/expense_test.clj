@@ -2,7 +2,7 @@
   "ADR-061: kontor-expense — employee expense reports.
 
    Covers:
-   - create-report! → :draft, stamps :create/uid = employee.
+   - create-report! → :draft, stamps :kontor.audit/create-uid = employee.
    - add-line! bumps the cached total; rejects a non-:draft report.
    - submit! → :submitted; the inline receipt guard.
    - approve! → :approved; :no-self-approval rejects the employee.
@@ -25,7 +25,7 @@
     (expense-schema/install! conn)
     (d/transact conn
                 [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
-                 ;; Employee + approver (:partner stand-ins for :create/uid).
+                 ;; Employee + approver (:partner stand-ins for :kontor.audit/create-uid).
                  {:kontor.partner/external-id "E-alice" :kontor.partner/name "Alice (employee)"}
                  {:kontor.partner/external-id "M-bob"   :kontor.partner/name "Bob (manager)"}
                  ;; Expense categories — generic refs; :partner stand-ins.
@@ -95,9 +95,9 @@
     (testing "the report is :draft, owned by the employee"
       (is (= :draft (:expense-report/status r)))
       (is (= "E-alice" (:kontor.partner/external-id (:expense-report/employee r)))))
-    (testing ":create/uid is stamped to the employee (for :no-self-approval)"
+    (testing ":kontor.audit/create-uid is stamped to the employee (for :no-self-approval)"
       (is (= (p (d/db conn) "E-alice")
-             (:db/id (:create/uid (d/pull (d/db conn) [:create/uid]
+             (:db/id (:kontor.audit/create-uid (d/pull (d/db conn) [:kontor.audit/create-uid]
                                           (expense/by-code (d/db conn) "EXP-1")))))))
     (testing "the cached total tracks the lines"
       (is (= 250.00M (:expense-report/total r)))

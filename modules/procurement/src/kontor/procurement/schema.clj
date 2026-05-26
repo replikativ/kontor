@@ -712,228 +712,228 @@
   "Requirement + receipt + invoice match-status + return state
    machines, seeded into the kernel :status-transition table (ADR-034)."
   [;; --- :requirement/status ---------------------------------------
-   {:status-transition/entity-type :requirement
-    :status-transition/facet :requirement/status
-    :status-transition/from :nil
-    :status-transition/to :proposed
-    :status-transition/active true
-    :status-transition/name "Create Requirement"}
-   {:status-transition/entity-type :requirement
-    :status-transition/facet :requirement/status
-    :status-transition/from :proposed
-    :status-transition/to :approved
-    :status-transition/active true
-    :status-transition/name "Approve Requirement"}
-   {:status-transition/entity-type :requirement
-    :status-transition/facet :requirement/status
-    :status-transition/from :proposed
-    :status-transition/to :rejected
-    :status-transition/active true
-    :status-transition/name "Reject Requirement"}
-   {:status-transition/entity-type :requirement
-    :status-transition/facet :requirement/status
-    :status-transition/from :proposed
-    :status-transition/to :cancelled
-    :status-transition/active true
-    :status-transition/name "Cancel Proposed Requirement"}
-   {:status-transition/entity-type :requirement
-    :status-transition/facet :requirement/status
-    :status-transition/from :approved
-    :status-transition/to :ordered
-    :status-transition/active true
-    :status-transition/name "Commit to PO"}
-   {:status-transition/entity-type :requirement
-    :status-transition/facet :requirement/status
-    :status-transition/from :approved
-    :status-transition/to :cancelled
-    :status-transition/active true
-    :status-transition/name "Cancel Approved Requirement"}
-   {:status-transition/entity-type :requirement
-    :status-transition/facet :requirement/status
-    :status-transition/from :approved
-    :status-transition/to :proposed
-    :status-transition/active true
-    :status-transition/name "Revise Approval"}
-   {:status-transition/entity-type :requirement
-    :status-transition/facet :requirement/status
-    :status-transition/from :ordered
-    :status-transition/to :received
-    :status-transition/active true
-    :status-transition/name "Auto-Promote on Full Receipt"}
+   {:kontor.status-transition/entity-type :requirement
+    :kontor.status-transition/facet :requirement/status
+    :kontor.status-transition/from :nil
+    :kontor.status-transition/to :proposed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Create Requirement"}
+   {:kontor.status-transition/entity-type :requirement
+    :kontor.status-transition/facet :requirement/status
+    :kontor.status-transition/from :proposed
+    :kontor.status-transition/to :approved
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Approve Requirement"}
+   {:kontor.status-transition/entity-type :requirement
+    :kontor.status-transition/facet :requirement/status
+    :kontor.status-transition/from :proposed
+    :kontor.status-transition/to :rejected
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Reject Requirement"}
+   {:kontor.status-transition/entity-type :requirement
+    :kontor.status-transition/facet :requirement/status
+    :kontor.status-transition/from :proposed
+    :kontor.status-transition/to :cancelled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Cancel Proposed Requirement"}
+   {:kontor.status-transition/entity-type :requirement
+    :kontor.status-transition/facet :requirement/status
+    :kontor.status-transition/from :approved
+    :kontor.status-transition/to :ordered
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Commit to PO"}
+   {:kontor.status-transition/entity-type :requirement
+    :kontor.status-transition/facet :requirement/status
+    :kontor.status-transition/from :approved
+    :kontor.status-transition/to :cancelled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Cancel Approved Requirement"}
+   {:kontor.status-transition/entity-type :requirement
+    :kontor.status-transition/facet :requirement/status
+    :kontor.status-transition/from :approved
+    :kontor.status-transition/to :proposed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Revise Approval"}
+   {:kontor.status-transition/entity-type :requirement
+    :kontor.status-transition/facet :requirement/status
+    :kontor.status-transition/from :ordered
+    :kontor.status-transition/to :received
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Auto-Promote on Full Receipt"}
 
    ;; --- :receipt/status -------------------------------------------
-   {:status-transition/entity-type :receipt
-    :status-transition/facet :receipt/status
-    :status-transition/from :nil
-    :status-transition/to :pending
-    :status-transition/active true
-    :status-transition/name "Create Receipt"}
-   {:status-transition/entity-type :receipt
-    :status-transition/facet :receipt/status
-    :status-transition/from :pending
-    :status-transition/to :accepted
-    :status-transition/active true
-    :status-transition/name "Inspection Pass"}
-   {:status-transition/entity-type :receipt
-    :status-transition/facet :receipt/status
-    :status-transition/from :pending
-    :status-transition/to :rejected
-    :status-transition/active true
-    :status-transition/name "Inspection Fail"}
-   {:status-transition/entity-type :receipt
-    :status-transition/facet :receipt/status
-    :status-transition/from :accepted
-    :status-transition/to :rejected
-    :status-transition/active true
-    :status-transition/name "Post-Inspection Reject"}
+   {:kontor.status-transition/entity-type :receipt
+    :kontor.status-transition/facet :receipt/status
+    :kontor.status-transition/from :nil
+    :kontor.status-transition/to :pending
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Create Receipt"}
+   {:kontor.status-transition/entity-type :receipt
+    :kontor.status-transition/facet :receipt/status
+    :kontor.status-transition/from :pending
+    :kontor.status-transition/to :accepted
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Inspection Pass"}
+   {:kontor.status-transition/entity-type :receipt
+    :kontor.status-transition/facet :receipt/status
+    :kontor.status-transition/from :pending
+    :kontor.status-transition/to :rejected
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Inspection Fail"}
+   {:kontor.status-transition/entity-type :receipt
+    :kontor.status-transition/facet :receipt/status
+    :kontor.status-transition/from :accepted
+    :kontor.status-transition/to :rejected
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Post-Inspection Reject"}
 
    ;; --- :invoice/match-status -------------------------------------
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/match-status
-    :status-transition/from :nil
-    :status-transition/to :auto-matched
-    :status-transition/active true
-    :status-transition/name "Auto-Match (within tolerance)"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/match-status
-    :status-transition/from :nil
-    :status-transition/to :exception-price
-    :status-transition/active true
-    :status-transition/name "Flag Price Exception"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/match-status
-    :status-transition/from :nil
-    :status-transition/to :exception-qty
-    :status-transition/active true
-    :status-transition/name "Flag Quantity Exception"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/match-status
-    :status-transition/from :nil
-    :status-transition/to :exception-missing-receipt
-    :status-transition/active true
-    :status-transition/name "Flag Missing Receipt"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/match-status
-    :status-transition/from :nil
-    :status-transition/to :exception-missing-po
-    :status-transition/active true
-    :status-transition/name "Flag Missing PO"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/match-status
-    :status-transition/from :exception-price
-    :status-transition/to :manual-approved
-    :status-transition/active true
-    :status-transition/name "Override Price Exception"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/match-status
-    :status-transition/from :exception-qty
-    :status-transition/to :manual-approved
-    :status-transition/active true
-    :status-transition/name "Override Qty Exception"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/match-status
-    :status-transition/from :exception-missing-receipt
-    :status-transition/to :manual-approved
-    :status-transition/active true
-    :status-transition/name "Override Missing Receipt"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/match-status
-    :status-transition/from :exception-missing-po
-    :status-transition/to :manual-approved
-    :status-transition/active true
-    :status-transition/name "Override Missing PO"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/match-status
-    :status-transition/from :exception-price
-    :status-transition/to :disputed
-    :status-transition/active true
-    :status-transition/name "Dispute Price Exception"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/match-status
-    :status-transition/from :exception-qty
-    :status-transition/to :disputed
-    :status-transition/active true
-    :status-transition/name "Dispute Qty Exception"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/match-status
-    :status-transition/from :exception-missing-receipt
-    :status-transition/to :disputed
-    :status-transition/active true
-    :status-transition/name "Dispute Missing-Receipt Exception"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/match-status
-    :status-transition/from :exception-missing-po
-    :status-transition/to :disputed
-    :status-transition/active true
-    :status-transition/name "Dispute Missing-PO Exception"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/match-status
-    :status-transition/from :disputed
-    :status-transition/to :manual-approved
-    :status-transition/active true
-    :status-transition/name "Resolve Dispute"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/match-status
-    :status-transition/from :disputed
-    :status-transition/to :auto-matched
-    :status-transition/active true
-    :status-transition/name "Re-Match After Vendor Correction"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/match-status
-    :status-transition/from :auto-matched
-    :status-transition/to :cleared
-    :status-transition/active true
-    :status-transition/name "Clear (post-payment)"}
-   {:status-transition/entity-type :invoice
-    :status-transition/facet :invoice/match-status
-    :status-transition/from :manual-approved
-    :status-transition/to :cleared
-    :status-transition/active true
-    :status-transition/name "Clear after Manual Approval (post-payment)"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/from :nil
+    :kontor.status-transition/to :auto-matched
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Auto-Match (within tolerance)"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/from :nil
+    :kontor.status-transition/to :exception-price
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Flag Price Exception"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/from :nil
+    :kontor.status-transition/to :exception-qty
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Flag Quantity Exception"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/from :nil
+    :kontor.status-transition/to :exception-missing-receipt
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Flag Missing Receipt"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/from :nil
+    :kontor.status-transition/to :exception-missing-po
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Flag Missing PO"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/from :exception-price
+    :kontor.status-transition/to :manual-approved
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Override Price Exception"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/from :exception-qty
+    :kontor.status-transition/to :manual-approved
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Override Qty Exception"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/from :exception-missing-receipt
+    :kontor.status-transition/to :manual-approved
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Override Missing Receipt"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/from :exception-missing-po
+    :kontor.status-transition/to :manual-approved
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Override Missing PO"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/from :exception-price
+    :kontor.status-transition/to :disputed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Dispute Price Exception"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/from :exception-qty
+    :kontor.status-transition/to :disputed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Dispute Qty Exception"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/from :exception-missing-receipt
+    :kontor.status-transition/to :disputed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Dispute Missing-Receipt Exception"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/from :exception-missing-po
+    :kontor.status-transition/to :disputed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Dispute Missing-PO Exception"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/from :disputed
+    :kontor.status-transition/to :manual-approved
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Resolve Dispute"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/from :disputed
+    :kontor.status-transition/to :auto-matched
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Re-Match After Vendor Correction"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/from :auto-matched
+    :kontor.status-transition/to :cleared
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Clear (post-payment)"}
+   {:kontor.status-transition/entity-type :invoice
+    :kontor.status-transition/facet :invoice/match-status
+    :kontor.status-transition/from :manual-approved
+    :kontor.status-transition/to :cleared
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Clear after Manual Approval (post-payment)"}
 
    ;; --- :return/status --------------------------------------------
-   {:status-transition/entity-type :return
-    :status-transition/facet :return/status
-    :status-transition/from :nil
-    :status-transition/to :requested
-    :status-transition/active true
-    :status-transition/name "Request Return"}
-   {:status-transition/entity-type :return
-    :status-transition/facet :return/status
-    :status-transition/from :requested
-    :status-transition/to :accepted
-    :status-transition/active true
-    :status-transition/name "Accept RMA"}
-   {:status-transition/entity-type :return
-    :status-transition/facet :return/status
-    :status-transition/from :requested
-    :status-transition/to :rejected
-    :status-transition/active true
-    :status-transition/name "Deny RMA"}
-   {:status-transition/entity-type :return
-    :status-transition/facet :return/status
-    :status-transition/from :requested
-    :status-transition/to :cancelled
-    :status-transition/active true
-    :status-transition/name "Cancel Requested Return"}
-   {:status-transition/entity-type :return
-    :status-transition/facet :return/status
-    :status-transition/from :accepted
-    :status-transition/to :received
-    :status-transition/active true
-    :status-transition/name "Receive Returned Goods"}
-   {:status-transition/entity-type :return
-    :status-transition/facet :return/status
-    :status-transition/from :accepted
-    :status-transition/to :cancelled
-    :status-transition/active true
-    :status-transition/name "Cancel Accepted Return"}
-   {:status-transition/entity-type :return
-    :status-transition/facet :return/status
-    :status-transition/from :received
-    :status-transition/to :completed
-    :status-transition/active true
-    :status-transition/name "Complete Return (refund/replacement issued)"}])
+   {:kontor.status-transition/entity-type :return
+    :kontor.status-transition/facet :return/status
+    :kontor.status-transition/from :nil
+    :kontor.status-transition/to :requested
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Request Return"}
+   {:kontor.status-transition/entity-type :return
+    :kontor.status-transition/facet :return/status
+    :kontor.status-transition/from :requested
+    :kontor.status-transition/to :accepted
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Accept RMA"}
+   {:kontor.status-transition/entity-type :return
+    :kontor.status-transition/facet :return/status
+    :kontor.status-transition/from :requested
+    :kontor.status-transition/to :rejected
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Deny RMA"}
+   {:kontor.status-transition/entity-type :return
+    :kontor.status-transition/facet :return/status
+    :kontor.status-transition/from :requested
+    :kontor.status-transition/to :cancelled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Cancel Requested Return"}
+   {:kontor.status-transition/entity-type :return
+    :kontor.status-transition/facet :return/status
+    :kontor.status-transition/from :accepted
+    :kontor.status-transition/to :received
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Receive Returned Goods"}
+   {:kontor.status-transition/entity-type :return
+    :kontor.status-transition/facet :return/status
+    :kontor.status-transition/from :accepted
+    :kontor.status-transition/to :cancelled
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Cancel Accepted Return"}
+   {:kontor.status-transition/entity-type :return
+    :kontor.status-transition/facet :return/status
+    :kontor.status-transition/from :received
+    :kontor.status-transition/to :completed
+    :kontor.status-transition/active true
+    :kontor.status-transition/name "Complete Return (refund/replacement issued)"}])
 
 (def account-type-direction-seeds
   "Procurement-specific :account-type-direction rows (ADR-041

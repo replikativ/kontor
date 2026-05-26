@@ -274,11 +274,11 @@ eol        = #'[ \\t]*\\n'
   ;; assert-balances! fn (separate) walks the loaded book and
   ;; verifies each.
   [{:db/id                       (str (gensym "bal-"))
-    :balance-assertion/account   [:kontor.account/path account]
-    :balance-assertion/at        date
-    :balance-assertion/amount    amount
-    :balance-assertion/commodity [:kontor.commodity/symbol currency]
-    :balance-assertion/source    "Beancount import"}])
+    :kontor.balance-assertion/account   [:kontor.account/path account]
+    :kontor.balance-assertion/at        date
+    :kontor.balance-assertion/amount    amount
+    :kontor.balance-assertion/commodity [:kontor.commodity/symbol currency]
+    :kontor.balance-assertion/source    "Beancount import"}])
 
 ;; Beancount-specific schema fragments (just for option storage during
 ;; round-trip). Idempotent.
@@ -443,7 +443,7 @@ eol        = #'[ \\t]*\\n'
        (let [eid (:db/id (d/entity db [:kontor.account/path path]))
              ;; Derive the open date heuristically: earliest of
              ;; (a) min :kontor.transaction/effective-date for postings on
-             ;; this account, (b) min :balance-assertion/at for
+             ;; this account, (b) min :kontor.balance-assertion/at for
              ;; assertions on this account. `min-date` returns nil
              ;; for empty seqs so the cond below picks correctly.
              min-date (fn [^java.util.Collection coll]
@@ -464,8 +464,8 @@ eol        = #'[ \\t]*\\n'
              bal-min (->> (d/q '[:find ?d
                                  :in $ ?a
                                  :where
-                                 [?b :balance-assertion/account ?a]
-                                 [?b :balance-assertion/at ?d]]
+                                 [?b :kontor.balance-assertion/account ?a]
+                                 [?b :kontor.balance-assertion/at ?d]]
                                db eid)
                           (map first)
                           (filter some?)
@@ -530,20 +530,20 @@ eol        = #'[ \\t]*\\n'
 
 (defn- balance-rows
   [db]
-  (let [eids (d/q '[:find [?b ...] :where [?b :balance-assertion/at _]] db)]
+  (let [eids (d/q '[:find [?b ...] :where [?b :kontor.balance-assertion/at _]] db)]
     (->> eids
          (map (fn [eid]
-                (let [b (d/pull db [:balance-assertion/at
-                                    :balance-assertion/amount
-                                    :balance-assertion/account
-                                    :balance-assertion/commodity] eid)
+                (let [b (d/pull db [:kontor.balance-assertion/at
+                                    :kontor.balance-assertion/amount
+                                    :kontor.balance-assertion/account
+                                    :kontor.balance-assertion/commodity] eid)
                       apath (:kontor.account/path
-                             (d/entity db (-> b :balance-assertion/account :db/id)))
+                             (d/entity db (-> b :kontor.balance-assertion/account :db/id)))
                       csym (:kontor.commodity/symbol
-                            (d/entity db (-> b :balance-assertion/commodity :db/id)))]
-                  {:date (:balance-assertion/at b)
+                            (d/entity db (-> b :kontor.balance-assertion/commodity :db/id)))]
+                  {:date (:kontor.balance-assertion/at b)
                    :path apath
-                   :amount (:balance-assertion/amount b)
+                   :amount (:kontor.balance-assertion/amount b)
                    :currency csym})))
          (sort-by (juxt #(.getTime ^Date (:date %)) :path))
          vec)))

@@ -86,7 +86,7 @@
 
 (def base-opts
   {:commodity :kontor.commodity/brl
-   :ledger :ledger/br-ifrs
+   :ledger :kontor.ledger/br-ifrs
    :journal :kontor.journal/payroll
    :effective-date #inst "2026-05-31"
    :tx-code "FERIAS-ACCRUAL-2026-05"})

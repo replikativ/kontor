@@ -40,8 +40,8 @@
     (d/pull db
             '[* {:collection-case/partner [:kontor.partner/external-id :kontor.partner/name]
                  :collection-case/entity [:kontor.entity/code]
-                 :collection-case/opened-by-uid [:create/uid]
-                 :collection-case/assigned-collector [:create/uid]
+                 :collection-case/opened-by-uid [:kontor.audit/create-uid]
+                 :collection-case/assigned-collector [:kontor.audit/create-uid]
                  :collection-case/oldest-invoice [:invoice/external-id]
                  :collection-case/supporting-doc [:audit-doc/code :audit-doc/type]}]
             eid)))
@@ -99,13 +99,13 @@
      :code            string identity
      :partner         ref/eid
      :entity          ref/eid (ADR-031 scope)
-     :opened-by-uid   ref to :create/uid
+     :opened-by-uid   ref to :kontor.audit/create-uid
 
    Optional opts:
      :strategy           keyword (:reminder-only :phone :legal …)
      :segment            keyword (matches :collection-case/
                           collections-segment)
-     :assigned-collector ref to :create/uid
+     :assigned-collector ref to :kontor.audit/create-uid
      :notes              string
      :supporting-doc     ref to :audit-doc
 

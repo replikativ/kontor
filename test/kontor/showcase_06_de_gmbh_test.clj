@@ -57,8 +57,8 @@
        :kontor.entity/active true}
       {:kontor.journal/code "PAY-DE" :kontor.journal/name "Payroll DE" :kontor.journal/type :general}
       {:kontor.journal/code "GEN-DE" :kontor.journal/name "General DE" :kontor.journal/type :general}
-      {:period/name "2026" :period/start #inst "2026-01-01"
-       :period/end #inst "2027-01-01"}
+      {:kontor.period/name "2026" :kontor.period/start #inst "2026-01-01"
+       :kontor.period/end #inst "2027-01-01"}
       ;; SKR04 payroll accounts (matching the fixture)
       {:kontor.account/code "6010" :kontor.account/name "Löhne" :kontor.account/type :expense :kontor.account/active true}
       {:kontor.account/code "6020" :kontor.account/name "Gehälter" :kontor.account/type :expense :kontor.account/active true}

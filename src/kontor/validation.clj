@@ -18,7 +18,7 @@
             :kontor.posting/posted-at-marked entities (ADR-007).
           - period-locked (`period.clj`): no posting whose tx's
             :tx/valid-from (kontor.bitemporal) falls inside a closed
-            :period/locked-at period.
+            :kontor.period/locked-at period.
         Planned:
           - state-machine: :kontor.transaction/state transitions follow
             draft → posted → cancelled, no skipping or regressing."

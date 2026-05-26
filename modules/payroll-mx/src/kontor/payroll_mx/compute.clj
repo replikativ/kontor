@@ -62,16 +62,16 @@
    (employee, period)."
   [rows]
   (->> rows
-       (group-by (juxt :employee/rfc :period/start :period/end))
+       (group-by (juxt :employee/rfc :kontor.period/start :kontor.period/end))
        (mapv (fn [[[rfc start end] grp]]
                (let [first-row (first grp)]
                  (core/make-payroll-facts
                   {:employee/rfc rfc
                    :employee/curp (:employee/curp first-row)
                    :employee/code (:employee/code first-row)
-                   :period/start start
-                   :period/end end
-                   :period/payment-date (:period/payment-date first-row)
+                   :kontor.period/start start
+                   :kontor.period/end end
+                   :kontor.period/payment-date (:kontor.period/payment-date first-row)
                    :wage-types (mapv (fn [r]
                                        {:wage-type (:wage-type r)
                                         :amount (:amount r)
@@ -144,9 +144,9 @@
               {:employee/rfc        (col row "RFC")
                :employee/curp       (col row "CURP")
                :employee/code       (col row "EmpleadoCod")
-               :period/start        (parse-date (col row "FechaInicio"))
-               :period/end          (parse-date (col row "FechaFin"))
-               :period/payment-date (parse-date (col row "FechaPago"))
+               :kontor.period/start        (parse-date (col row "FechaInicio"))
+               :kontor.period/end          (parse-date (col row "FechaFin"))
+               :kontor.period/payment-date (parse-date (col row "FechaPago"))
                :wage-type           wt
                :amount              (parse-amount (col row "Importe"))})]
         (group-period-rows parsed)))))
@@ -187,9 +187,9 @@
               {:employee/rfc        (col row "rfc")
                :employee/curp       (col row "curp")
                :employee/code       (col row "codigo_emp")
-               :period/start        (parse-date (col row "periodo_ini"))
-               :period/end          (parse-date (col row "periodo_fin"))
-               :period/payment-date (parse-date (col row "fecha_pago"))
+               :kontor.period/start        (parse-date (col row "periodo_ini"))
+               :kontor.period/end          (parse-date (col row "periodo_fin"))
+               :kontor.period/payment-date (parse-date (col row "fecha_pago"))
                :wage-type           wt
                :amount              (parse-amount (col row "monto"))})]
         (group-period-rows parsed)))))

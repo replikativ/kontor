@@ -37,10 +37,10 @@
                   :kontor.journal/type :sale :kontor.journal/active true}
                  {:kontor.journal/code "EXP" :kontor.journal/name "Expenses"
                   :kontor.journal/type :purchase :kontor.journal/active true}
-                 {:period/start fy26-start
-                  :period/end   fy26-end
-                  :period/tag   :normal
-                  :period/name  "FY2026"}])
+                 {:kontor.period/start fy26-start
+                  :kontor.period/end   fy26-end
+                  :kontor.period/tag   :normal
+                  :kontor.period/name  "FY2026"}])
     conn))
 
 (defn- seed-fy2026!
@@ -135,7 +135,7 @@
     (let [conn (bootstrap)]
       (seed-fy2026! conn)
       (let [db (d/db conn)
-            period-eid (d/q '[:find ?p . :where [?p :period/name "FY2026"]] db)
+            period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2026"]] db)
             {:keys [close-result period-close-tx-report]}
             (au-closing/close-au-fiscal-year! conn
                                               {:period-eid period-eid
@@ -178,7 +178,7 @@
 (deftest cannot-close-period-twice
   (let [conn (bootstrap)]
     (seed-fy2026! conn)
-    (let [period-eid (d/q '[:find ?p . :where [?p :period/name "FY2026"]] (d/db conn))]
+    (let [period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2026"]] (d/db conn))]
       (au-closing/close-au-fiscal-year! conn
                                         {:period-eid period-eid
                                          :external-id "FY26-AU-CLOSE-1"})
@@ -204,12 +204,12 @@
                                :kontor.journal/type :sale :kontor.journal/active true}
                               {:kontor.journal/code "EXP" :kontor.journal/name "Expenses"
                                :kontor.journal/type :purchase :kontor.journal/active true}
-                              {:period/start fy26-start
-                               :period/end fy26-end
-                               :period/tag :normal
-                               :period/name "FY2026"}])
+                              {:kontor.period/start fy26-start
+                               :kontor.period/end fy26-end
+                               :kontor.period/tag :normal
+                               :kontor.period/name "FY2026"}])
           _ (seed-fy2026! conn)
-          period-eid (d/q '[:find ?p . :where [?p :period/name "FY2026"]] (d/db conn))]
+          period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2026"]] (d/db conn))]
       (is (nil? (:db/id (d/entity (d/db conn) [:kontor.journal/code "CLOSE"])))
           "CLOSE journal not present before close")
       (au-closing/close-au-fiscal-year! conn
@@ -227,11 +227,11 @@
             throws a clear error."
     (let [conn (core/create-test-db)]
       (v/install-invariants! conn)
-      (d/transact conn [{:period/start fy26-start
-                         :period/end fy26-end
-                         :period/tag :normal
-                         :period/name "FY2026"}])
-      (let [period-eid (d/q '[:find ?p . :where [?p :period/name "FY2026"]] (d/db conn))]
+      (d/transact conn [{:kontor.period/start fy26-start
+                         :kontor.period/end fy26-end
+                         :kontor.period/tag :normal
+                         :kontor.period/name "FY2026"}])
+      (let [period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2026"]] (d/db conn))]
         (is (thrown-with-msg?
              clojure.lang.ExceptionInfo
              #"Retained-earnings account"
@@ -245,7 +245,7 @@
 (deftest plan-au-fiscal-year-close-resolves-eids
   (let [conn (bootstrap)
         db (d/db conn)
-        period-eid (d/q '[:find ?p . :where [?p :period/name "FY2026"]] db)
+        period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2026"]] db)
         planned (au-closing/plan-au-fiscal-year-close-tx-data
                  db {:period-eid period-eid
                      :external-id "PLAN-1"})]
@@ -272,14 +272,14 @@
             inclusive as the last operational day)."
     (let [conn (bootstrap)
           db (d/db conn)
-          period (d/pull db [:period/start :period/end :period/name]
-                         (d/q '[:find ?p . :where [?p :period/name "FY2026"]] db))]
-      (is (= "FY2026" (:period/name period)))
-      (is (= fy26-start (:period/start period)))
-      (is (= fy26-end   (:period/end period)))
+          period (d/pull db [:kontor.period/start :kontor.period/end :kontor.period/name]
+                         (d/q '[:find ?p . :where [?p :kontor.period/name "FY2026"]] db))]
+      (is (= "FY2026" (:kontor.period/name period)))
+      (is (= fy26-start (:kontor.period/start period)))
+      (is (= fy26-end   (:kontor.period/end period)))
       (is (not= (java.time.LocalDate/of 2026 1 1)
                 (.toLocalDate
-                 (.atZone (.toInstant ^java.util.Date (:period/start period))
+                 (.atZone (.toInstant ^java.util.Date (:kontor.period/start period))
                           java.time.ZoneOffset/UTC)))
           "AU FY starts 1 July, NOT 1 January (the calendar-year quirk)"))))
 
@@ -292,7 +292,7 @@
             kernel invariant."
     (let [conn (bootstrap)]
       (seed-fy2026! conn)
-      (let [period-eid (d/q '[:find ?p . :where [?p :period/name "FY2026"]] (d/db conn))]
+      (let [period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2026"]] (d/db conn))]
         (au-closing/close-au-fiscal-year! conn
                                           {:period-eid period-eid
                                            :external-id "FY26-Z"}))

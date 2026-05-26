@@ -39,14 +39,14 @@
   "Audit attributes attached to every kernel entity. The :db/txInstant
    datahike already records covers the underlying tx-time; create-uid
    /write-uid are domain-level (who, not when)."
-  [{:db/ident       :create/uid
+  [{:db/ident       :kontor.audit/create-uid
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "User who created this entity. Domain-level audit
                      field; the actual tx timestamp lives on the datom
                      via :db/txInstant."}
 
-   {:db/ident       :write/uid
+   {:db/ident       :kontor.audit/write-uid
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "User who last wrote this entity at the application
@@ -727,7 +727,7 @@
    {:db/ident       :legal-hold/issued-by-uid
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
-    :db/doc         "Ref to :create/uid of inside or outside counsel
+    :db/doc         "Ref to :kontor.audit/create-uid of inside or outside counsel
                      who issued the preservation order."}
 
    {:db/ident       :legal-hold/issued-at
@@ -739,7 +739,7 @@
 
    ;; No :legal-hold/placed-at denorm (P1-3 review fix). The
    ;; placement instant IS the :tx/valid-from of the placing tx and
-   ;; the :status-history/changed-at of the nil → :placed row.
+   ;; the :kontor.status-history/changed-at of the nil → :placed row.
    ;; Resolve via (d/pull (d/valid-at db at) [:legal-hold/state] hold-eid) or
    ;; the status-history timeline. This matches the ADR-048
    ;; valid-time normalization and the Stage-L denorm-removal pattern.
@@ -834,7 +834,7 @@
                      governs — #{:transaction :invoice :partner
                      :audit-doc :status-history …}. Matches the bare-
                      keyword entity-type convention used by
-                     :status-history/entity-type."}
+                     :kontor.status-history/entity-type."}
 
    ;; ADR-075 — subject-matter category gate. Open-set keyword that
    ;; mirrors :audit-doc/category; nil = applies regardless of
@@ -875,7 +875,7 @@
                      retention clock starts at the value of this
                      attribute ON the entity (v1: direct-attribute
                      anchors only — e.g. :kontor.transaction/effective-date,
-                     :audit-doc/uploaded-at, :status-history/changed-
+                     :audit-doc/uploaded-at, :kontor.status-history/changed-
                      at). Entities lacking the attribute are skipped
                      by the sweeper."}
 
@@ -1661,7 +1661,7 @@
    {:db/ident       :payment-application/applied-by-uid
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
-    :db/doc         "Ref to :create/uid of the actor who applied."}
+    :db/doc         "Ref to :kontor.audit/create-uid of the actor who applied."}
 
    {:db/ident       :payment-application/strategy
     :db/valueType   :db.type/keyword
@@ -2033,7 +2033,7 @@
 ;; Period — open/closed accounting periods.
 ;;
 ;; A period covers a date range (typically a month or fiscal year).
-;; Once :period/locked-at is set, the sealing middleware refuses new
+;; Once :kontor.period/locked-at is set, the sealing middleware refuses new
 ;; postings whose effective-date falls within. Lock-tx records the
 ;; transaction id of the close so reports can identify the closing
 ;; entries explicitly.
@@ -2044,23 +2044,23 @@
 ;; ============================================================================
 
 (def ^:private period-attrs
-  [{:db/ident       :period/start
+  [{:db/ident       :kontor.period/start
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Inclusive start of the period (half-open with :end)."}
 
-   {:db/ident       :period/end
+   {:db/ident       :kontor.period/end
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Exclusive end of the period — the range is [start, end)."}
 
-   {:db/ident       :period/journal
+   {:db/ident       :kontor.period/journal
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional: scope the lock to a single journal.
                      nil = applies to all journals."}
 
-   {:db/ident       :period/locked-at
+   {:db/ident       :kontor.period/locked-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "SOFT close (ADR-014). Reopen-able via period/reopen!.
@@ -2070,7 +2070,7 @@
                      purchase_lock_date, NetSuite's 'Locked', Xero's
                      'Period Lock Date'."}
 
-   {:db/ident       :period/sealed-at
+   {:db/ident       :kontor.period/sealed-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "HARD close (ADR-014). Monotone — the date can only
@@ -2080,17 +2080,17 @@
                      hard_lock_date, Xero's 'End of Year Lock Date',
                      NetSuite's 'Closed', Sage Intacct's 'locked'."}
 
-   {:db/ident       :period/sealed-by
+   {:db/ident       :kontor.period/sealed-by
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "User ref recorded at the moment of sealing."}
 
-   {:db/ident       :period/lock-tx
+   {:db/ident       :kontor.period/lock-tx
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "Tx-id of the soft-close (or seal), for audit reference."}
 
-   {:db/ident       :period/adjustment?
+   {:db/ident       :kontor.period/adjustment?
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "If true, this period overlaps the same date range as
@@ -2101,7 +2101,7 @@
                      must NOT appear in January's reports. Postings opt
                      into the adjustment period via :kontor.posting/period-tag."}
 
-   {:db/ident       :period/tag
+   {:db/ident       :kontor.period/tag
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Discriminator within an effective-date range when
@@ -2109,7 +2109,7 @@
                      :normal (the default if absent), :adjustment-13 ..
                      :adjustment-16 for SAP-style special periods."}
 
-   {:db/ident       :period/name
+   {:db/ident       :kontor.period/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -2127,24 +2127,24 @@
 ;; ============================================================================
 
 (def ^:private balance-assertion-attrs
-  [{:db/ident       :balance-assertion/account
+  [{:db/ident       :kontor.balance-assertion/account
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :balance-assertion/at
+   {:db/ident       :kontor.balance-assertion/at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Valid-time at which the assertion was made."}
 
-   {:db/ident       :balance-assertion/amount
+   {:db/ident       :kontor.balance-assertion/amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :balance-assertion/commodity
+   {:db/ident       :kontor.balance-assertion/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :balance-assertion/source
+   {:db/ident       :kontor.balance-assertion/source
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Where this assertion came from (\"bank statement
@@ -2469,7 +2469,7 @@
                      range — e.g. a normal December and a year-end
                      adjustment :adjustment-13 — this tag picks which
                      one the posting routes into. Defaults to :normal
-                     (i.e. the period whose :period/tag is absent or
+                     (i.e. the period whose :kontor.period/tag is absent or
                      :normal)."}
 
    ;; ADR-016 — Multi-tax breakdown. A product line subject to one
@@ -3074,37 +3074,37 @@
 ;; ============================================================================
 
 (def ^:private ledger-attrs
-  [{:db/ident       :ledger/code
+  [{:db/ident       :kontor.ledger/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Stable identifier (\"primary\", \"ifrs\", \"hgb\",
                      \"budget\", \"statistical\")."}
 
-   {:db/ident       :ledger/name
+   {:db/ident       :kontor.ledger/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :ledger/type
+   {:db/ident       :kontor.ledger/type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":primary | :secondary | :adjustment
                      | :budget | :statistical"}
 
-   {:db/ident       :ledger/framework
+   {:db/ident       :kontor.ledger/framework
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Accounting framework keyword.
                      :IFRS | :US-GAAP | :HGB | :ASBE | :NCRF | :ind-AS
                      | :local | ... — free-form, l10n-defined."}
 
-   {:db/ident       :ledger/commodity
+   {:db/ident       :kontor.ledger/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Accounting currency for this ledger when it
                      differs from the transaction commodity."}
 
-   {:db/ident       :ledger/active
+   {:db/ident       :kontor.ledger/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}])
 
@@ -3810,7 +3810,7 @@
                      ADR-073."}])
 
 (def ^:private ledger-entity-attrs
-  [{:db/ident       :ledger/entity
+  [{:db/ident       :kontor.ledger/entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ref to :entity (ADR-031). Per-ERP
@@ -4000,14 +4000,14 @@
 ;; ============================================================================
 
 (def ^:private status-transition-attrs
-  [{:db/ident       :status-transition/entity-type
+  [{:db/ident       :kontor.status-transition/entity-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Discriminator: which entity type this transition
                      applies to. :order, :order-item, :invoice,
                      :requirement, :shipment, … Consumers extend."}
 
-   {:db/ident       :status-transition/facet
+   {:db/ident       :kontor.status-transition/facet
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "The attribute on the entity carrying this state.
@@ -4015,7 +4015,7 @@
                      One entity can have multiple facets — multiple
                      concurrent state machines on the same row."}
 
-   {:db/ident       :status-transition/from
+   {:db/ident       :kontor.status-transition/from
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "From-state keyword. Use a :*/nil sentinel keyword
@@ -4023,17 +4023,17 @@
                      pseudo-state — datahike's nil-handling is awkward
                      for tx values."}
 
-   {:db/ident       :status-transition/to
+   {:db/ident       :kontor.status-transition/to
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :status-transition/name
+   {:db/ident       :kontor.status-transition/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Human-readable transition name (\"Approve Order\",
                      \"Mark Paid\"). For UI / log rendering."}
 
-   {:db/ident       :status-transition/applies-to-org
+   {:db/ident       :kontor.status-transition/applies-to-org
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional :entity ref (ADR-031). When nil, the
@@ -4042,19 +4042,19 @@
                      the global row — both can coexist; the predicate
                      prefers the org-specific match."}
 
-   {:db/ident       :status-transition/active
+   {:db/ident       :kontor.status-transition/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "Soft-delete flag. Inactive transitions are
                      ignored by `legal-transition?` but retained for
                      audit-history queries."}
 
-   {:db/ident       :status-transition/note
+   {:db/ident       :kontor.status-transition/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
    ;; ADR-041: time-based transition extension.
-   {:db/ident       :status-transition/auto-after-millis
+   {:db/ident       :kontor.status-transition/auto-after-millis
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "Duration in milliseconds. When set, the
@@ -4063,46 +4063,46 @@
                      have been in the from-state longer than the
                      duration. Nil = manual-only. ADR-041."}
 
-   {:db/ident       :status-transition/identity
+   {:db/ident       :kontor.status-transition/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:status-transition/entity-type
-                     :status-transition/facet
-                     :status-transition/from
-                     :status-transition/to
-                     :status-transition/applies-to-org]
+    :db/tupleAttrs  [:kontor.status-transition/entity-type
+                     :kontor.status-transition/facet
+                     :kontor.status-transition/from
+                     :kontor.status-transition/to
+                     :kontor.status-transition/applies-to-org]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Composite identity — one row per (entity-type,
                      facet, from, to, applies-to-org) combination."}])
 
 (def ^:private status-history-attrs
-  [{:db/ident       :status-history/entity
+  [{:db/ident       :kontor.status-history/entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The entity that transitioned. Generic ref —
                      could be an order, invoice, requirement, etc."}
 
-   {:db/ident       :status-history/entity-type
+   {:db/ident       :kontor.status-history/entity-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Denormalized copy of the entity's type so cross-
                      entity queries don't need to dispatch on the
                      ref's namespace."}
 
-   {:db/ident       :status-history/facet
+   {:db/ident       :kontor.status-history/facet
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :status-history/from
+   {:db/ident       :kontor.status-history/from
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "From-state; nil-sentinel for entity creation."}
 
-   {:db/ident       :status-history/to
+   {:db/ident       :kontor.status-history/to
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :status-history/changed-at
+   {:db/ident       :kontor.status-history/changed-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Valid-time of the transition: when, semantically,
@@ -4110,13 +4110,13 @@
                      :db/txInstant which records when the datom was
                      written. ADR-008 bitemporality."}
 
-   {:db/ident       :status-history/changed-by-uid
+   {:db/ident       :kontor.status-history/changed-by-uid
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "User who triggered the transition; ref to a
-                     :create/uid entity. Optional but recommended."}
+                     :kontor.audit/create-uid entity. Optional but recommended."}
 
-   {:db/ident       :status-history/reason
+   {:db/ident       :kontor.status-history/reason
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Codified reason code (ADR-038). Auditor-friendly
@@ -4124,7 +4124,7 @@
                      starter set documented in kontor.status-machine
                      ns; consumers extend with domain-specific codes."}
 
-   {:db/ident       :status-history/reason-note
+   {:db/ident       :kontor.status-history/reason-note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional free-text human story alongside the
@@ -4132,7 +4132,7 @@
                      :other. Where :reason answers 'what kind,'
                      :reason-note answers 'what specifically.'"}
 
-   {:db/ident       :status-history/supporting-doc
+   {:db/ident       :kontor.status-history/supporting-doc
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ref to :audit-doc — the proof an
@@ -4141,7 +4141,7 @@
                      override note). Kernel doesn't store bytes;
                      consumer attaches whatever artifact."}
 
-   {:db/ident       :status-history/origin-transaction
+   {:db/ident       :kontor.status-history/origin-transaction
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ref to the kernel :transaction that
@@ -4268,7 +4268,7 @@
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Which entity type this policy applies to.
-                     Mirrors :status-transition/entity-type."}
+                     Mirrors :kontor.status-transition/entity-type."}
 
    {:db/ident       :approval-policy/facet
     :db/valueType   :db.type/keyword
@@ -4293,7 +4293,7 @@
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":no-self-approval — recorded actor must differ
-                     from :create/uid of the entity.
+                     from :kontor.audit/create-uid of the entity.
                      :requires-supporting-doc — :supporting-doc must
                      be set in the change-spec.
                      :requires-non-empty-reason-note — :reason-note

@@ -33,7 +33,7 @@
    The close *mechanics* are jurisdiction-agnostic — the period
    bounds and the retained-earnings account are what's JP-shaped.
    The wrapper does **not** enforce a March-31 end; it accepts any
-   `:period/end` the caller has set up.
+   `:kontor.period/end` the caller has set up.
 
    ## 繰越利益剰余金 (kurikoshi rieki jōyokin)
 
@@ -144,7 +144,7 @@
 (defn close-jp-fiscal-year!
   "Close a JP fiscal-year period using the starter J-GAAP-style chart.
 
-   The fiscal-year-end date is determined by the `:period/end` of the
+   The fiscal-year-end date is determined by the `:kontor.period/end` of the
    referenced period — the wrapper does **not** enforce March 31. JP
    businesses set their fiscal-year-end in their 定款 (articles of
    incorporation); common patterns include March 31, December 31,

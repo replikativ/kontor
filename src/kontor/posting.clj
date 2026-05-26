@@ -107,7 +107,7 @@
 
 (defn- ledger-key
   "Grouping key for a posting's ledger membership. Returns the raw
-   :kontor.posting/ledger value (eid, lookup-ref like [:ledger/code \"ifrs\"],
+   :kontor.posting/ledger value (eid, lookup-ref like [:kontor.ledger/code \"ifrs\"],
    or ident) so postings written with the same reference form group
    together. Returns nil when :kontor.posting/ledger is absent —
    build-transaction defaults missing ledgers to the primary-ledger

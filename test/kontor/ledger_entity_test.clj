@@ -15,11 +15,11 @@
       (is (some? eid)
           "Primary ledger eid must be resolvable after install-schema!")
       (let [pulled (d/pull db '[*] eid)]
-        (is (= "primary"        (:ledger/code pulled)))
-        (is (= "Primary ledger" (:ledger/name pulled)))
-        (is (= :primary         (:ledger/type pulled)))
-        (is (= :local           (:ledger/framework pulled)))
-        (is (true?              (:ledger/active pulled)))))))
+        (is (= "primary"        (:kontor.ledger/code pulled)))
+        (is (= "Primary ledger" (:kontor.ledger/name pulled)))
+        (is (= :primary         (:kontor.ledger/type pulled)))
+        (is (= :local           (:kontor.ledger/framework pulled)))
+        (is (true?              (:kontor.ledger/active pulled)))))))
 
 (deftest install-defaults-is-idempotent
   (testing "Re-running install-defaults! does not duplicate the
@@ -29,7 +29,7 @@
           _ (ledger/install-defaults! conn)
           db (d/db conn)
           eids (d/q '[:find [?e ...]
-                      :where [?e :ledger/code "primary"]]
+                      :where [?e :kontor.ledger/code "primary"]]
                     db)]
       (is (= 1 (count eids))
           "Idempotent install must keep exactly one primary entity"))))
@@ -38,16 +38,16 @@
   (testing "Consumers can add secondary ledgers; by-code resolves them"
     (let [conn (core/create-test-db)
           _ (d/transact conn
-                        [{:ledger/code      "ifrs"
-                          :ledger/name      "IFRS reporting ledger"
-                          :ledger/type      :secondary
-                          :ledger/framework :IFRS
-                          :ledger/active    true}
-                         {:ledger/code      "hgb"
-                          :ledger/name      "HGB statutory ledger"
-                          :ledger/type      :secondary
-                          :ledger/framework :HGB
-                          :ledger/active    true}])
+                        [{:kontor.ledger/code      "ifrs"
+                          :kontor.ledger/name      "IFRS reporting ledger"
+                          :kontor.ledger/type      :secondary
+                          :kontor.ledger/framework :IFRS
+                          :kontor.ledger/active    true}
+                         {:kontor.ledger/code      "hgb"
+                          :kontor.ledger/name      "HGB statutory ledger"
+                          :kontor.ledger/type      :secondary
+                          :kontor.ledger/framework :HGB
+                          :kontor.ledger/active    true}])
           db (d/db conn)]
       (is (some? (ledger/by-code db "ifrs")))
       (is (some? (ledger/by-code db "hgb")))
@@ -60,7 +60,7 @@
         prim (ledger/primary db)]
     (testing "nil → primary"
       (is (= prim (ledger/resolve-ledger db nil))))
-    (testing "string → looked up by :ledger/code"
+    (testing "string → looked up by :kontor.ledger/code"
       (is (= prim (ledger/resolve-ledger db "primary"))))
     (testing "long eid → returned as-is"
       (is (= prim (ledger/resolve-ledger db prim))))))
