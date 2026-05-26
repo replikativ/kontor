@@ -29,12 +29,12 @@
     (d/transact conn
                 [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
                  ;; Legal entity — the facility owner (ADR-031).
-                 {:db/id "entity-de" :entity/code "ACME-DE" :entity/name "Acme GmbH"}
+                 {:db/id "entity-de" :kontor.entity/code "ACME-DE" :kontor.entity/name "Acme GmbH"}
                  ;; Products — :inventory-item/product is a generic ref;
                  ;; reuse :partner entities as product stand-ins (the
                  ;; kernel test convention for caller-defined refs).
-                 {:partner/external-id "P-widget" :partner/name "Widget"}
-                 {:partner/external-id "P-gadget" :partner/name "Gadget"}
+                 {:kontor.partner/external-id "P-widget" :kontor.partner/name "Widget"}
+                 {:kontor.partner/external-id "P-gadget" :kontor.partner/name "Gadget"}
                  ;; Two lots of the widget.
                  {:db/id "lot-a" :lot/label "LOT-A" :lot/acquired-at #inst "2026-01-10"}
                  {:db/id "lot-b" :lot/label "LOT-B" :lot/acquired-at #inst "2026-02-10"}])
@@ -43,8 +43,8 @@
 (defn- ref-eid [db a v]
   (d/q '[:find ?e . :in $ ?a ?v :where [?e ?a ?v]] db a v))
 
-(defn- product [db code] (ref-eid db :partner/external-id code))
-(defn- entity  [db]      (ref-eid db :entity/code "ACME-DE"))
+(defn- product [db code] (ref-eid db :kontor.partner/external-id code))
+(defn- entity  [db]      (ref-eid db :kontor.entity/code "ACME-DE"))
 (defn- lot     [db label] (ref-eid db :lot/label label))
 
 ;; ============================================================================

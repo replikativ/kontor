@@ -32,7 +32,7 @@
    audit-doc machinery / status-machine / approval-policy / DSAR /
    legal-hold / retention / schedule / process / parallel-ledger / FX
    all ship in the kernel. kontor-hr adds the entities listed above
-   plus three minor refinements from note 81 §9.7 (:person/kind for
+   plus three minor refinements from note 81 §9.7 (:kontor.person/kind for
    Worker subtyping, :employment/work-time-fraction for FTE,
    :employment/work-relationship-kind for DE Beamter / apprentice /
    working-student that :exempt-flag can't represent).
@@ -41,7 +41,7 @@
    country HR data (DE Sozialversicherungsnummer, US SSN,
    CA SIN, etc.) lives in `kontor-l10n-<cc>` modules attaching
    their own attrs to :person via the open-set convention (mirrors
-   the per-country :partner/* extension pattern)."
+   the per-country :kontor.partner/* extension pattern)."
   (:require [datahike.api :as d]))
 
 ;; ============================================================================
@@ -49,7 +49,7 @@
 ;; ============================================================================
 
 (def ^:private person-attrs
-  [{:db/ident       :person/external-id
+  [{:db/ident       :kontor.person/external-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
@@ -58,31 +58,31 @@
                      Workday Worker ID / SuccessFactors PerPerson /
                      Oracle PERSON_ID."}
 
-   {:db/ident       :person/given-name
+   {:db/ident       :kontor.person/given-name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :person/family-name
+   {:db/ident       :kontor.person/family-name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   ;; :person/birth-date is owned by the kernel schema (audit note 95).
+   ;; :kontor.person/birth-date is owned by the kernel schema (audit note 95).
    ;; The HR-side audit-doc-backed storage for national-ID material lives
-   ;; under :hr-person/national-id-doc (refs to :audit-doc); the kernel's
-   ;; :person/national-id is the simpler plaintext scalar (partner's
+   ;; under :kontor.hr.person/national-id-doc (refs to :audit-doc); the kernel's
+   ;; :kontor.person/national-id is the simpler plaintext scalar (partner's
    ;; historic shape). Consumers needing both can write both.
 
-   {:db/ident       :hr-person/national-id-doc
+   {:db/ident       :kontor.hr.person/national-id-doc
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Refs to :audit-doc — storage for SSN / AHV /
                      SV-Nummer / SIN / national-ID scans when the
                      consumer wants :audit-doc/privilege +
                      :audit-doc/category machinery to apply. The
-                     kernel's plaintext :person/national-id stays
+                     kernel's plaintext :kontor.person/national-id stays
                      available for the simpler scalar case."}
 
-   {:db/ident       :person/citizenship
+   {:db/ident       :kontor.person/citizenship
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/many
     :db/doc         "ISO-3166 alpha-2 country codes. Many — a person
@@ -93,14 +93,14 @@
    ;; :board-member | :intern | <consumer extensions>. Supports
    ;; contingent-worker / contractor payroll without forcing a
    ;; schema migration when C5+ lands.
-   {:db/ident       :person/kind
+   {:db/ident       :kontor.person/kind
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Worker subtype (note 81 §9.7). Open-set keyword;
                      nil = :employee. Workday-style classification
                      (Worker = Employee + Contingent Worker)."}
 
-   {:db/ident       :person/state
+   {:db/ident       :kontor.person/state
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-034 status-machine facet.
@@ -108,14 +108,14 @@
                      terminal GDPR Art. 17 state."}])
 
 ;; ============================================================================
-;; :partner/person — kernel↔companion linker (note 79 Call 3)
+;; :kontor.partner/person — kernel↔companion linker (note 79 Call 3)
 ;; ============================================================================
 
 (def ^:private partner-person-link-attrs
-  [{:db/ident       :partner/person
+  [{:db/ident       :kontor.partner/person
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
-    :db/doc         "Ref to :person, set when :partner/kind is
+    :db/doc         "Ref to :person, set when :kontor.partner/kind is
                      :employee (or :contingent under the note 81
                      §9.7 refinement). The kernel never sees
                      :person directly; everything pointing at a
@@ -655,7 +655,7 @@
   "ADR-034 :status-transition rows for the kontor-hr facets."
   (vec
    (concat
-    ;; :person/state — :active is the default; :deceased + :purged
+    ;; :kontor.person/state — :active is the default; :deceased + :purged
     ;; are terminal.
     (for [[from to name]
           [[:nil       :active    "Create (active)"]
@@ -663,7 +663,7 @@
            [:active    :purged    "Purge (GDPR Art. 17)"]
            [:deceased  :purged    "Purge after death (retention floor met)"]]]
       {:status-transition/entity-type :person
-       :status-transition/facet :person/state
+       :status-transition/facet :kontor.person/state
        :status-transition/from from
        :status-transition/to to
        :status-transition/active true
@@ -797,13 +797,13 @@
    ;; legal basis). Two policies because the kernel supports one
    ;; rule per row.
    {:approval-policy/entity-type     :person
-    :approval-policy/facet           :person/state
+    :approval-policy/facet           :kontor.person/state
     :approval-policy/transition-from :active
     :approval-policy/transition-to   :purged
     :approval-policy/rule            :requires-supporting-doc
     :approval-policy/active          true}
    {:approval-policy/entity-type     :person
-    :approval-policy/facet           :person/state
+    :approval-policy/facet           :kontor.person/state
     :approval-policy/transition-from :active
     :approval-policy/transition-to   :purged
     :approval-policy/rule            :requires-non-empty-reason-note

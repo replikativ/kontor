@@ -31,13 +31,13 @@
     (cgt-statute/install! conn)
     (d/transact conn [{:kontor.commodity/symbol "BRL" :kontor.commodity/name "Brazilian Real"
                        :kontor.commodity/precision 2}
-                      {:entity/code "HOLDCO" :entity/name "HoldCo BR"
-                       :entity/kind :company :entity/country "BR"
-                       :entity/functional-commodity [:kontor.commodity/symbol "BRL"]}])
+                      {:kontor.entity/code "HOLDCO" :kontor.entity/name "HoldCo BR"
+                       :kontor.entity/kind :company :kontor.entity/country "BR"
+                       :kontor.entity/functional-commodity [:kontor.commodity/symbol "BRL"]}])
     conn))
 
 (def ^:private brl [:kontor.commodity/symbol "BRL"])
-(def ^:private holdco [:entity/code "HOLDCO"])
+(def ^:private holdco [:kontor.entity/code "HOLDCO"])
 
 (defn- record!
   [conn opts]
@@ -52,7 +52,7 @@
                opts)))
 
 (defn- holdco-eid [conn]
-  (d/q '[:find ?e . :where [?e :entity/code "HOLDCO"]] (d/db conn)))
+  (d/q '[:find ?e . :where [?e :kontor.entity/code "HOLDCO"]] (d/db conn)))
 
 (defn- run-provider
   [conn kind period & [extra-ctx]]

@@ -49,9 +49,9 @@
     (pca-chart/install! conn)
     (d/transact conn
                 [{:db/id "ent-acme"
-                  :entity/code "ACME-CA"
-                  :entity/name "Acme Canada Inc."
-                  :entity/kind :operating}
+                  :kontor.entity/code "ACME-CA"
+                  :kontor.entity/name "Acme Canada Inc."
+                  :kontor.entity/kind :operating}
                  {:db/id "journal-pay"
                   :journal/code "PAY-CA"
                   :journal/name "Payroll (CA)"
@@ -132,7 +132,7 @@
   (let [conn (bootstrap)
         db (d/db conn)
         cad (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "CAD"]] db)
-        ent (d/q '[:find ?e . :where [?e :entity/code "ACME-CA"]] db)
+        ent (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-CA"]] db)
         journal (d/q '[:find ?e . :where [?e :journal/code "PAY-CA"]] db)
         period (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)
         ;; Persons + employments
@@ -319,7 +319,7 @@
   (let [conn (bootstrap)
         db (d/db conn)
         cad (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "CAD"]] db)
-        ent (d/q '[:find ?e . :where [?e :entity/code "ACME-CA"]] db)
+        ent (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-CA"]] db)
         journal (d/q '[:find ?e . :where [?e :journal/code "PAY-CA"]] db)
         period (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)
         _ (person/create-person!

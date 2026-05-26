@@ -54,7 +54,7 @@
    record` so the kernel-canonical `kontor.dsar/collect` walk reaches
    the track-record bundle. Same pattern as `kontor.hr.core/install!`
    (note 86 P1-86-5): given a partner eid, we resolve the linked
-   `:person` (if any) via `:partner/person` and call `dsar-bundle`.
+   `:person` (if any) via `:kontor.partner/person` and call `dsar-bundle`.
    The kernel walker merges the result under `:extensions :people-
    record`.
 
@@ -69,7 +69,7 @@
    (fn [db partner-eid _opts]
      (when-let [person-eid (d/q '[:find ?p .
                                   :in $ ?pa
-                                  :where [?pa :partner/person ?p]]
+                                  :where [?pa :kontor.partner/person ?p]]
                                 db partner-eid)]
        (dsar-bundle db person-eid)))))
 

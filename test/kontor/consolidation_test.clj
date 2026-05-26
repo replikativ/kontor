@@ -41,28 +41,28 @@
                 [{:db/id "eur" :kontor.commodity/symbol "EUR"}
                  {:db/id "usd" :kontor.commodity/symbol "USD"}
                  {:db/id "acme-group"
-                  :entity/code "acme-group" :entity/name "ACME Group"
-                  :entity/kind :consolidation
-                  :entity/functional-commodity "eur"
-                  :entity/active true}
+                  :kontor.entity/code "acme-group" :kontor.entity/name "ACME Group"
+                  :kontor.entity/kind :consolidation
+                  :kontor.entity/functional-commodity "eur"
+                  :kontor.entity/active true}
                  {:db/id "acme-elim"
-                  :entity/code "acme-elim" :entity/name "ACME Eliminations"
-                  :entity/kind :elimination
-                  :entity/functional-commodity "eur"
-                  :entity/parent-entity "acme-group"
-                  :entity/active true}
+                  :kontor.entity/code "acme-elim" :kontor.entity/name "ACME Eliminations"
+                  :kontor.entity/kind :elimination
+                  :kontor.entity/functional-commodity "eur"
+                  :kontor.entity/parent-entity "acme-group"
+                  :kontor.entity/active true}
                  {:db/id "acme-de"
-                  :entity/code "acme-de" :entity/name "ACME GmbH"
-                  :entity/kind :operating
-                  :entity/functional-commodity "eur"
-                  :entity/parent-entity "acme-group"
-                  :entity/active true}
+                  :kontor.entity/code "acme-de" :kontor.entity/name "ACME GmbH"
+                  :kontor.entity/kind :operating
+                  :kontor.entity/functional-commodity "eur"
+                  :kontor.entity/parent-entity "acme-group"
+                  :kontor.entity/active true}
                  {:db/id "acme-us"
-                  :entity/code "acme-us" :entity/name "ACME LLC"
-                  :entity/kind :operating
-                  :entity/functional-commodity "usd"
-                  :entity/parent-entity "acme-group"
-                  :entity/active true}])
+                  :kontor.entity/code "acme-us" :kontor.entity/name "ACME LLC"
+                  :kontor.entity/kind :operating
+                  :kontor.entity/functional-commodity "usd"
+                  :kontor.entity/parent-entity "acme-group"
+                  :kontor.entity/active true}])
     ;; Chart: 4 accounts (AR-IC, AP-IC, Sales-IC, Purchases-IC) + CTA
     (d/transact conn
                 [{:db/id "ar-ic"
@@ -125,8 +125,8 @@
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         usd (:db/id (d/entity db [:kontor.commodity/symbol "USD"]))
         jnl (:db/id (d/entity db [:journal/code "GEN"]))
-        de (:db/id (d/entity db [:entity/code "acme-de"]))
-        us (:db/id (d/entity db [:entity/code "acme-us"]))]
+        de (:db/id (d/entity db [:kontor.entity/code "acme-de"]))
+        us (:db/id (d/entity db [:kontor.entity/code "acme-us"]))]
     (posting/post-transaction!
      conn
      {:transaction {:transaction/journal jnl
@@ -167,8 +167,8 @@
     (let [conn (bootstrap!)
           _ (book-intercompany-pair! conn)
           db (d/db conn)
-          de (:db/id (d/entity db [:entity/code "acme-de"]))
-          group (:db/id (d/entity db [:entity/code "acme-group"]))
+          de (:db/id (d/entity db [:kontor.entity/code "acme-de"]))
+          group (:db/id (d/entity db [:kontor.entity/code "acme-group"]))
           cta (:db/id (d/entity db [:account/path "Equity:CTA"]))
           jnl (:db/id (d/entity db [:journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
@@ -201,8 +201,8 @@
     (let [conn (bootstrap!)
           _ (book-intercompany-pair! conn)
           db (d/db conn)
-          us (:db/id (d/entity db [:entity/code "acme-us"]))
-          group (:db/id (d/entity db [:entity/code "acme-group"]))
+          us (:db/id (d/entity db [:kontor.entity/code "acme-us"]))
+          group (:db/id (d/entity db [:kontor.entity/code "acme-group"]))
           cta (:db/id (d/entity db [:account/path "Equity:CTA"]))
           jnl (:db/id (d/entity db [:journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
@@ -242,7 +242,7 @@
     (let [conn (bootstrap!)
           _ (book-intercompany-pair! conn)
           db (d/db conn)
-          elim (:db/id (d/entity db [:entity/code "acme-elim"]))
+          elim (:db/id (d/entity db [:kontor.entity/code "acme-elim"]))
           jnl (:db/id (d/entity db [:journal/code "GEN"]))
           tx-data (cons/eliminate-intercompany-pair-tx-data
                    {:db db
@@ -275,8 +275,8 @@
     (let [conn (bootstrap!)
           _ (book-intercompany-pair! conn)
           db (d/db conn)
-          group (:db/id (d/entity db [:entity/code "acme-group"]))
-          elim (:db/id (d/entity db [:entity/code "acme-elim"]))
+          group (:db/id (d/entity db [:kontor.entity/code "acme-group"]))
+          elim (:db/id (d/entity db [:kontor.entity/code "acme-elim"]))
           cta (:db/id (d/entity db [:account/path "Equity:CTA"]))
           jnl (:db/id (d/entity db [:journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
@@ -305,8 +305,8 @@
     (let [conn (bootstrap!)
           _ (book-intercompany-pair! conn)
           db0 (d/db conn)
-          group (:db/id (d/entity db0 [:entity/code "acme-group"]))
-          elim (:db/id (d/entity db0 [:entity/code "acme-elim"]))
+          group (:db/id (d/entity db0 [:kontor.entity/code "acme-group"]))
+          elim (:db/id (d/entity db0 [:kontor.entity/code "acme-elim"]))
           cta (:db/id (d/entity db0 [:account/path "Equity:CTA"]))
           jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
@@ -376,8 +376,8 @@
     (let [conn (bootstrap!)
           _ (book-intercompany-pair! conn)
           db0 (d/db conn)
-          group (:db/id (d/entity db0 [:entity/code "acme-group"]))
-          elim (:db/id (d/entity db0 [:entity/code "acme-elim"]))
+          group (:db/id (d/entity db0 [:kontor.entity/code "acme-group"]))
+          elim (:db/id (d/entity db0 [:kontor.entity/code "acme-elim"]))
           cta (:db/id (d/entity db0 [:account/path "Equity:CTA"]))
           jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
@@ -421,8 +421,8 @@
     (let [conn (bootstrap!)
           _ (book-intercompany-pair! conn)
           db0 (d/db conn)
-          group (:db/id (d/entity db0 [:entity/code "acme-group"]))
-          elim (:db/id (d/entity db0 [:entity/code "acme-elim"]))
+          group (:db/id (d/entity db0 [:kontor.entity/code "acme-group"]))
+          elim (:db/id (d/entity db0 [:kontor.entity/code "acme-elim"]))
           cta (:db/id (d/entity db0 [:account/path "Equity:CTA"]))
           jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
@@ -465,9 +465,9 @@
     (let [conn (bootstrap!)
           _ (book-intercompany-pair! conn)
           db (d/db conn)
-          de (:db/id (d/entity db [:entity/code "acme-de"]))
-          group (:db/id (d/entity db [:entity/code "acme-group"]))
-          elim (:db/id (d/entity db [:entity/code "acme-elim"]))
+          de (:db/id (d/entity db [:kontor.entity/code "acme-de"]))
+          group (:db/id (d/entity db [:kontor.entity/code "acme-group"]))
+          elim (:db/id (d/entity db [:kontor.entity/code "acme-elim"]))
           cta (:db/id (d/entity db [:account/path "Equity:CTA"]))
           jnl (:db/id (d/entity db [:journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
@@ -516,8 +516,8 @@
                           :account/monetary? false
                           :account/active true}])
           db0 (d/db conn)
-          de (:db/id (d/entity db0 [:entity/code "acme-de"]))
-          group (:db/id (d/entity db0 [:entity/code "acme-group"]))
+          de (:db/id (d/entity db0 [:kontor.entity/code "acme-de"]))
+          group (:db/id (d/entity db0 [:kontor.entity/code "acme-group"]))
           cta (:db/id (d/entity db0 [:account/path "Equity:CTA"]))
           jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
           ppe (:db/id (d/entity db0 [:account/path "Assets:PPE"]))
@@ -554,7 +554,7 @@
              {:conn conn
               :group-root group
               :consolidation-entity group
-              :elimination-entity (:db/id (d/entity db0 [:entity/code "acme-elim"]))
+              :elimination-entity (:db/id (d/entity db0 [:kontor.entity/code "acme-elim"]))
               :presentation-commodity "EUR"
               :fx-provider provider
               :at-date jan-2
@@ -588,8 +588,8 @@
     (let [conn (bootstrap!)
           _ (book-intercompany-pair! conn)
           db0 (d/db conn)
-          group (:db/id (d/entity db0 [:entity/code "acme-group"]))
-          elim (:db/id (d/entity db0 [:entity/code "acme-elim"]))
+          group (:db/id (d/entity db0 [:kontor.entity/code "acme-group"]))
+          elim (:db/id (d/entity db0 [:kontor.entity/code "acme-elim"]))
           cta (:db/id (d/entity db0 [:account/path "Equity:CTA"]))
           jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)

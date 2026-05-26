@@ -183,7 +183,7 @@
    one :transaction (kind :translation) and N :postings.
 
    Throws: when the input trial balance is empty, when the source
-   entity has no :entity/functional-commodity set, or when any
+   entity has no :kontor.entity/functional-commodity set, or when any
    account-type's rate-type lookup returns nil."
   [{:keys [db source-entity consolidation-entity presentation-commodity
            fx-provider at-date journal cta-account
@@ -273,7 +273,7 @@
                        :transaction/state                        :draft
                        :transaction/narration
                        (str "Consolidation translation — source entity "
-                            (or (:entity/code (d/pull db [:entity/code] source-entity))
+                            (or (:kontor.entity/code (d/pull db [:kontor.entity/code] source-entity))
                                 source-entity))}]
                      (cond-> line-postings
                        plug-posting (conj plug-posting)))]
@@ -450,7 +450,7 @@
   ;; in the translation loop, cascading duplicate postings.
   (let [db (d/db conn)
         kind-of (fn [e]
-                  (:entity/kind (d/pull db [:entity/kind] e)))
+                  (:kontor.entity/kind (d/pull db [:kontor.entity/kind] e)))
         cons-kind (kind-of consolidation-entity)
         elim-kind (kind-of elimination-entity)]
     (when (or (= :operating cons-kind) (nil? cons-kind))
@@ -470,8 +470,8 @@
                                  (and (not= e consolidation-entity)
                                       (not= e elimination-entity)
                                       (= :operating
-                                         (or (:entity/kind
-                                              (d/pull db [:entity/kind] e))
+                                         (or (:kontor.entity/kind
+                                              (d/pull db [:kontor.entity/kind] e))
                                              :operating)))))
                        sort)
         ;; P0-73-3: per (source-entity, at-date) idempotency — skip

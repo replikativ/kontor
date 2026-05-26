@@ -178,10 +178,10 @@
 
 (deftest entity-is-stamped-on-every-posting
   (let [conn (fresh-book)
-        _    (d/transact conn [{:entity/name "UG"   :entity/code "UG"}
-                               {:entity/name "Hans" :entity/code "HANS"}])
-        ug   [:entity/code "UG"]
-        hans [:entity/code "HANS"]]
+        _    (d/transact conn [{:kontor.entity/name "UG"   :kontor.entity/code "UG"}
+                               {:kontor.entity/name "Hans" :kontor.entity/code "HANS"}])
+        ug   [:kontor.entity/code "UG"]
+        hans [:kontor.entity/code "HANS"]]
 
     (testing "2-leg entry: top-level :entity stamps both postings"
       (book/sell! conn {:debit-account ar :credit-account rev
@@ -189,7 +189,7 @@
                         :entity ug})
       (let [ents (set (d/q '[:find [?ec ...]
                              :where [_ :posting/entity ?e]
-                                    [?e :entity/code ?ec]]
+                                    [?e :kontor.entity/code ?ec]]
                            (d/db conn)))]
         (is (contains? ents "UG"))))
 
@@ -210,7 +210,7 @@
                               :where [?p :posting/account ?a]
                                      [?a :account/path ?acct-path]
                                      [?p :posting/entity ?e]
-                                     [?e :entity/code ?ent-code]]
+                                     [?e :kontor.entity/code ?ent-code]]
                             (d/db conn)))]
         (is (contains? pairs ["Assets:Receivable"   "UG"]))
         (is (contains? pairs ["Liabilities:Payable" "HANS"]))))
@@ -219,10 +219,10 @@
               Multi-shareholder dividend declaration is the motivating case:
               one Dr Gewinnvortrag leg, N Cr Dividenden-Payable legs each
               tagged with a distinct shareholder."
-      (let [_ (d/transact conn [{:partner/name "Sarah" :partner/external-id "SARAH"}
-                                {:partner/name "Tomas" :partner/external-id "TOMAS"}])
-            sarah [:partner/external-id "SARAH"]
-            tomas [:partner/external-id "TOMAS"]]
+      (let [_ (d/transact conn [{:kontor.partner/name "Sarah" :kontor.partner/external-id "SARAH"}
+                                {:kontor.partner/name "Tomas" :kontor.partner/external-id "TOMAS"}])
+            sarah [:kontor.partner/external-id "SARAH"]
+            tomas [:kontor.partner/external-id "TOMAS"]]
         (book/entry! conn
           {:journal [:journal/code "GEN"] :effective-date d1
            :commodity eur
@@ -235,7 +235,7 @@
                                        [?a :account/path ?path]
                                        [?p :posting/amount ?amt]
                                        [?p :posting/partner ?pa]
-                                       [?pa :partner/external-id ?pa-code]]
+                                       [?pa :kontor.partner/external-id ?pa-code]]
                               (d/db conn)))]
           (is (contains? pairs ["Liabilities:Payable" -600M "SARAH"])
               "Sarah's leg carries her :posting/partner")

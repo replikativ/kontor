@@ -24,8 +24,8 @@
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:partner/external-id "U-paralegal" :partner/name "Paralegal P"}
-                 {:partner/external-id "U-counsel"   :partner/name "Counsel C"}
+                [{:kontor.partner/external-id "U-paralegal" :kontor.partner/name "Paralegal P"}
+                 {:kontor.partner/external-id "U-counsel"   :kontor.partner/name "Counsel C"}
                  ;; The waiver-determination memo.
                  {:db/id "doc-memo"
                   :audit-doc/code "WAIVER-MEMO-001"
@@ -36,7 +36,7 @@
 
 (defn- uid [db actor]
   (d/q '[:find ?e . :in $ ?xid
-         :where [?e :partner/external-id ?xid]]
+         :where [?e :kontor.partner/external-id ?xid]]
        db (str "U-" actor)))
 
 ;; Create an :audit-doc whose creator (:create/uid) is the paralegal.

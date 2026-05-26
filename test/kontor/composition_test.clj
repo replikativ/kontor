@@ -41,15 +41,15 @@
     (v/install-invariants! conn)
     (d/transact conn
                 [{:db/id "u-counsel"
-                  :partner/external-id "U-counsel"
-                  :partner/name "Counsel C"}
+                  :kontor.partner/external-id "U-counsel"
+                  :kontor.partner/name "Counsel C"}
                  {:db/id "p-acme"
-                  :partner/external-id "ACME"
-                  :partner/name "Acme Corp"}])
+                  :kontor.partner/external-id "ACME"
+                  :kontor.partner/name "Acme Corp"}])
     conn))
 
 (defn- partner-eid [db ext]
-  (d/q '[:find ?e . :in $ ?x :where [?e :partner/external-id ?x]] db ext))
+  (d/q '[:find ?e . :in $ ?x :where [?e :kontor.partner/external-id ?x]] db ext))
 
 ;; ============================================================================
 ;; 1. One run-process across two modules + cross-module tempid threading

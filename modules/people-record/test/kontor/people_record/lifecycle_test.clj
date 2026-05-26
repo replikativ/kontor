@@ -38,9 +38,9 @@
                   :kontor.commodity/symbol "EUR"
                   :kontor.commodity/precision 2}
                  {:db/id "ent"
-                  :entity/code "ACME-DE-GMBH"
-                  :entity/name "Acme DE GmbH"
-                  :entity/active true}])
+                  :kontor.entity/code "ACME-DE-GMBH"
+                  :kontor.entity/name "Acme DE GmbH"
+                  :kontor.entity/active true}])
     conn))
 
 (defn- ref-eid [db a v]
@@ -49,7 +49,7 @@
 (deftest three-year-employee-lifecycle
   (let [conn (bootstrap)
         eur (ref-eid (d/db conn) :kontor.commodity/symbol "EUR")
-        ent (ref-eid (d/db conn) :entity/code "ACME-DE-GMBH")
+        ent (ref-eid (d/db conn) :kontor.entity/code "ACME-DE-GMBH")
 
         ;; ===== Year 1 — hire =====
         _ (person/create-person! conn {:external-id "P-jane"

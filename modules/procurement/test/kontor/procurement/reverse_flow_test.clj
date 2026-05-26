@@ -32,14 +32,14 @@
   (d/transact *conn*
               [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                 :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
-               {:entity/code "ACME" :entity/name "Acme Inc"
-                :entity/kind :operating :entity/active true}
-               {:partner/external-id "ACME-ORG" :partner/type :org
-                :partner/status :enabled :partner/name "Acme Inc"}
-               {:partner/external-id "CUSTOMER" :partner/type :person
-                :partner/status :enabled :partner/name "Customer Jane"}
-               {:partner/external-id "SUPPLIER" :partner/type :org
-                :partner/status :enabled :partner/name "Supplier Co"}]))
+               {:kontor.entity/code "ACME" :kontor.entity/name "Acme Inc"
+                :kontor.entity/kind :operating :kontor.entity/active true}
+               {:kontor.partner/external-id "ACME-ORG" :kontor.partner/type :org
+                :kontor.partner/status :enabled :kontor.partner/name "Acme Inc"}
+               {:kontor.partner/external-id "CUSTOMER" :kontor.partner/type :person
+                :kontor.partner/status :enabled :kontor.partner/name "Customer Jane"}
+               {:kontor.partner/external-id "SUPPLIER" :kontor.partner/type :org
+                :kontor.partner/status :enabled :kontor.partner/name "Supplier Co"}]))
 
 (defn- create-sales-order!
   [{:keys [external-id qty unit-price]
@@ -51,9 +51,9 @@
                 :order/order-date #inst "2026-04-01"
                 :order/entry-date #inst "2026-04-01"
                 :order/currency [:kontor.commodity/symbol "EUR"]
-                :order/bill-from-partner [:partner/external-id "ACME-ORG"]
-                :order/bill-to-partner [:partner/external-id "CUSTOMER"]
-                :order/entity [:entity/code "ACME"]}
+                :order/bill-from-partner [:kontor.partner/external-id "ACME-ORG"]
+                :order/bill-to-partner [:kontor.partner/external-id "CUSTOMER"]
+                :order/entity [:kontor.entity/code "ACME"]}
                {:order-item/order [:order/external-id external-id]
                 :order-item/seq-id "00001"
                 :order-item/type :product
@@ -81,9 +81,9 @@
                 :order/order-date #inst "2026-04-01"
                 :order/entry-date #inst "2026-04-01"
                 :order/currency [:kontor.commodity/symbol "EUR"]
-                :order/bill-from-partner [:partner/external-id "SUPPLIER"]
-                :order/bill-to-partner [:partner/external-id "ACME-ORG"]
-                :order/entity [:entity/code "ACME"]}
+                :order/bill-from-partner [:kontor.partner/external-id "SUPPLIER"]
+                :order/bill-to-partner [:kontor.partner/external-id "ACME-ORG"]
+                :order/entity [:kontor.entity/code "ACME"]}
                {:order-item/order [:order/external-id external-id]
                 :order-item/seq-id "00001"
                 :order-item/type :product
@@ -110,9 +110,9 @@
   (seed-base!)
   (let [{:keys [order-eid item-eid]} (create-sales-order! {})
         db (d/db *conn*)
-        customer (d/q '[:find ?p . :where [?p :partner/external-id "CUSTOMER"]] db)
-        acme (d/q '[:find ?p . :where [?p :partner/external-id "ACME-ORG"]] db)
-        acme-entity (d/q '[:find ?e . :where [?e :entity/code "ACME"]] db)]
+        customer (d/q '[:find ?p . :where [?p :kontor.partner/external-id "CUSTOMER"]] db)
+        acme (d/q '[:find ?p . :where [?p :kontor.partner/external-id "ACME-ORG"]] db)
+        acme-entity (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME"]] db)]
     (returns/make-return! *conn*
                           {:external-id "RMA-CUST-1"
                            :type :customer
@@ -149,8 +149,8 @@
   (seed-base!)
   (let [{:keys [order-eid item-eid]} (create-sales-order! {:external-id "SO-REJ"})
         db (d/db *conn*)
-        customer (d/q '[:find ?p . :where [?p :partner/external-id "CUSTOMER"]] db)
-        acme (d/q '[:find ?p . :where [?p :partner/external-id "ACME-ORG"]] db)]
+        customer (d/q '[:find ?p . :where [?p :kontor.partner/external-id "CUSTOMER"]] db)
+        acme (d/q '[:find ?p . :where [?p :kontor.partner/external-id "ACME-ORG"]] db)]
     (returns/make-return! *conn*
                           {:external-id "RMA-REJ"
                            :type :customer
@@ -176,9 +176,9 @@
   (seed-base!)
   (let [{:keys [order-eid item-eid]} (create-purchase-order! {})
         db (d/db *conn*)
-        supplier (d/q '[:find ?p . :where [?p :partner/external-id "SUPPLIER"]] db)
-        acme (d/q '[:find ?p . :where [?p :partner/external-id "ACME-ORG"]] db)
-        acme-entity (d/q '[:find ?e . :where [?e :entity/code "ACME"]] db)]
+        supplier (d/q '[:find ?p . :where [?p :kontor.partner/external-id "SUPPLIER"]] db)
+        acme (d/q '[:find ?p . :where [?p :kontor.partner/external-id "ACME-ORG"]] db)
+        acme-entity (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME"]] db)]
     (returns/make-return! *conn*
                           {:external-id "RMA-VEND-1"
                            :type :vendor
@@ -199,8 +199,8 @@
           ret (returns/pull-return db return-eid)]
       (testing "vendor return created with role-inverted parties"
         (is (= :vendor (:return/type ret)))
-        (is (= "ACME-ORG" (-> ret :return/from-party :partner/external-id)))
-        (is (= "SUPPLIER" (-> ret :return/to-party :partner/external-id))))
+        (is (= "ACME-ORG" (-> ret :return/from-party :kontor.partner/external-id)))
+        (is (= "SUPPLIER" (-> ret :return/to-party :kontor.partner/external-id))))
       (testing "supplier-rma captured"
         (is (= "SUP-RMA-12345" (:return/supplier-rma ret))))
       ;; Progress through lifecycle
@@ -217,8 +217,8 @@
   (seed-base!)
   (let [{:keys [order-eid item-eid]} (create-sales-order! {})
         db (d/db *conn*)
-        customer (d/q '[:find ?p . :where [?p :partner/external-id "CUSTOMER"]] db)
-        acme (d/q '[:find ?p . :where [?p :partner/external-id "ACME-ORG"]] db)]
+        customer (d/q '[:find ?p . :where [?p :kontor.partner/external-id "CUSTOMER"]] db)
+        acme (d/q '[:find ?p . :where [?p :kontor.partner/external-id "ACME-ORG"]] db)]
     (returns/make-return! *conn*
                           {:external-id "RMA-CM"
                            :type :customer
@@ -243,8 +243,8 @@
       (testing "credit memo created with :type :credit-memo"
         (is (= :credit-memo (:invoice/type cm))))
       (testing "seller = acme, buyer = customer (org issues credit to customer)"
-        (is (= "ACME-ORG" (-> cm :invoice/seller :partner/external-id)))
-        (is (= "CUSTOMER" (-> cm :invoice/buyer :partner/external-id))))
+        (is (= "ACME-ORG" (-> cm :invoice/seller :kontor.partner/external-id)))
+        (is (= "CUSTOMER" (-> cm :invoice/buyer :kontor.partner/external-id))))
       (testing "one line per return-item"
         (is (= 1 (count lines)))
         (is (= 3M (-> lines first :invoice-line/quantity)))
@@ -260,8 +260,8 @@
   (seed-base!)
   (let [{:keys [order-eid item-eid]} (create-purchase-order! {})
         db (d/db *conn*)
-        supplier (d/q '[:find ?p . :where [?p :partner/external-id "SUPPLIER"]] db)
-        acme (d/q '[:find ?p . :where [?p :partner/external-id "ACME-ORG"]] db)]
+        supplier (d/q '[:find ?p . :where [?p :kontor.partner/external-id "SUPPLIER"]] db)
+        acme (d/q '[:find ?p . :where [?p :kontor.partner/external-id "ACME-ORG"]] db)]
     (returns/make-return! *conn*
                           {:external-id "RMA-VEND-CM"
                            :type :vendor
@@ -285,8 +285,8 @@
       (testing "debit memo created with :type :debit-memo"
         (is (= :debit-memo (:invoice/type dm))))
       (testing "seller = supplier, buyer = acme (supplier issues credit to us)"
-        (is (= "SUPPLIER" (-> dm :invoice/seller :partner/external-id)))
-        (is (= "ACME-ORG" (-> dm :invoice/buyer :partner/external-id))))
+        (is (= "SUPPLIER" (-> dm :invoice/seller :kontor.partner/external-id)))
+        (is (= "ACME-ORG" (-> dm :invoice/buyer :kontor.partner/external-id))))
       (testing "GL routes to :inventory (PO line is :direct material)"
         ;; debit-memo lines dispatch on :order-item/category — the
         ;; reversal hits the same account the original purchase debited.
@@ -300,8 +300,8 @@
   (seed-base!)
   (let [{:keys [order-eid item-eid]} (create-sales-order! {:external-id "SO-PARTIAL"})
         db (d/db *conn*)
-        customer (d/q '[:find ?p . :where [?p :partner/external-id "CUSTOMER"]] db)
-        acme (d/q '[:find ?p . :where [?p :partner/external-id "ACME-ORG"]] db)]
+        customer (d/q '[:find ?p . :where [?p :kontor.partner/external-id "CUSTOMER"]] db)
+        acme (d/q '[:find ?p . :where [?p :kontor.partner/external-id "ACME-ORG"]] db)]
     (returns/make-return! *conn*
                           {:external-id "RMA-PARTIAL"
                            :type :customer

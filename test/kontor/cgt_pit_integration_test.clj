@@ -44,9 +44,9 @@
                 [{:kontor.commodity/symbol "USD" :kontor.commodity/name "US Dollar"
                   :kontor.commodity/precision 2}
                  ;; Entity for Sarah.
-                 {:entity/code "SARAH" :entity/name "Sarah Chen (Individual)"
-                  :entity/kind :company :entity/country "US"
-                  :entity/functional-commodity usd}
+                 {:kontor.entity/code "SARAH" :kontor.entity/name "Sarah Chen (Individual)"
+                  :kontor.entity/kind :company :kontor.entity/country "US"
+                  :kontor.entity/functional-commodity usd}
                  ;; Journals: GEN for wages, SALE for proceeds (not used —
                  ;; book.sell! infers the journal automatically).
                  {:journal/code "GEN"  :journal/type :general :journal/active true}
@@ -67,7 +67,7 @@
     conn))
 
 (defn- holdco-eid [conn entity-code]
-  (d/q '[:find ?e . :in $ ?c :where [?e :entity/code ?c]]
+  (d/q '[:find ?e . :in $ ?c :where [?e :kontor.entity/code ?c]]
        (d/db conn) entity-code))
 
 ;; ============================================================================
@@ -75,7 +75,7 @@
 ;; ============================================================================
 
 (def ^:private fy-2026 {:from #inst "2026-01-01" :to #inst "2027-01-01"})
-(def ^:private sarah [:entity/code "SARAH"])
+(def ^:private sarah [:kontor.entity/code "SARAH"])
 
 (defn- book-wages! [conn]
   ;; W-2 wages: $180,000. Posted as a single year-end debit Bank /

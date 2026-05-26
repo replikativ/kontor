@@ -35,12 +35,12 @@
                   :journal/type :sale  :journal/active true}
                  {:journal/code "BANK" :journal/name "Bank movements"
                   :journal/type :bank  :journal/active true}
-                 {:partner/external-id "OWN"  :partner/name "Self GmbH"
-                  :partner/kind :company :partner/country-code "DE"
-                  :partner/tax-id "DE123456789"}
-                 {:partner/external-id "ACME" :partner/name "ACME GmbH"
-                  :partner/kind :customer :partner/country-code "DE"
-                  :partner/tax-id "DE987654321"}])
+                 {:kontor.partner/external-id "OWN"  :kontor.partner/name "Self GmbH"
+                  :kontor.partner/kind :company :kontor.partner/country-code "DE"
+                  :kontor.partner/tax-id "DE123456789"}
+                 {:kontor.partner/external-id "ACME" :kontor.partner/name "ACME GmbH"
+                  :kontor.partner/kind :customer :kontor.partner/country-code "DE"
+                  :kontor.partner/tax-id "DE987654321"}])
     conn))
 
 (defn- ace [db code]
@@ -48,8 +48,8 @@
 
 (defn- make-draft! [conn]
   (let [db (d/db conn)
-        own  (:db/id (d/entity db [:partner/external-id "OWN"]))
-        acme (:db/id (d/entity db [:partner/external-id "ACME"]))
+        own  (:db/id (d/entity db [:kontor.partner/external-id "OWN"]))
+        acme (:db/id (d/entity db [:kontor.partner/external-id "ACME"]))
         net30 (:db/id (pt/by-code db "NET30"))]
     (inv/create! conn
                  {:invoice/external-id "INV-2026-0001"

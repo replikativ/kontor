@@ -34,7 +34,7 @@
 
    The kernel-level `:transaction/place-of-supply` (ADR-023) is the
    POS state. The supplier state comes from the issuer entity
-   (typically `:partner/state` of the company itself in single-
+   (typically `:kontor.partner/state` of the company itself in single-
    establishment setups, or the establishment's state in multi-
    GSTIN setups)."
   (:require [clojure.string :as str]

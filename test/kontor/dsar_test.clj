@@ -26,11 +26,11 @@
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:partner/external-id "SUBJECT" :partner/name "Jane Subject"
-                  :partner/kind :customer}
-                 {:partner/external-id "U-intake" :partner/name "Intake Officer"}
-                 {:partner/external-id "U-dpo"    :partner/name "Data Protection Officer"}
-                 {:partner/external-id "U-counsel" :partner/name "Counsel C"}
+                [{:kontor.partner/external-id "SUBJECT" :kontor.partner/name "Jane Subject"
+                  :kontor.partner/kind :customer}
+                 {:kontor.partner/external-id "U-intake" :kontor.partner/name "Intake Officer"}
+                 {:kontor.partner/external-id "U-dpo"    :kontor.partner/name "Data Protection Officer"}
+                 {:kontor.partner/external-id "U-counsel" :kontor.partner/name "Counsel C"}
                  {:db/id "doc-intake"
                   :audit-doc/code "DSAR-INTAKE-001"
                   :audit-doc/type :dsar-intake-form
@@ -49,7 +49,7 @@
     conn))
 
 (defn- pe [db xid]
-  (d/q '[:find ?e . :in $ ?x :where [?e :partner/external-id ?x]] db xid))
+  (d/q '[:find ?e . :in $ ?x :where [?e :kontor.partner/external-id ?x]] db xid))
 
 (defn- adoc [db code]
   (d/q '[:find ?e . :in $ ?c :where [?e :audit-doc/code ?c]] db code))
@@ -164,9 +164,9 @@
         ;; A duplicate partner that was merged INTO the subject, with
         ;; an invoice that still references the duplicate.
         _ (d/transact conn
-                      [{:partner/external-id "SUBJECT-DUP" :partner/name "Jane Dup"}
+                      [{:kontor.partner/external-id "SUBJECT-DUP" :kontor.partner/name "Jane Dup"}
                        {:invoice/external-id "INV-DUP-1"
-                        :invoice/buyer [:partner/external-id "SUBJECT-DUP"]}])
+                        :invoice/buyer [:kontor.partner/external-id "SUBJECT-DUP"]}])
         dup (pe (d/db conn) "SUBJECT-DUP")
         _ (d/transact conn
                       [{:partner-merge/duplicate-of subject

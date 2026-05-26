@@ -36,13 +36,13 @@
     (cgt-statute/install! conn)
     (d/transact conn [{:kontor.commodity/symbol "CAD" :kontor.commodity/name "Canadian Dollar"
                        :kontor.commodity/precision 2}
-                      {:entity/code "HOLDCO" :entity/name "HoldCo"
-                       :entity/kind :company :entity/country "CA"
-                       :entity/functional-commodity [:kontor.commodity/symbol "CAD"]}])
+                      {:kontor.entity/code "HOLDCO" :kontor.entity/name "HoldCo"
+                       :kontor.entity/kind :company :kontor.entity/country "CA"
+                       :kontor.entity/functional-commodity [:kontor.commodity/symbol "CAD"]}])
     conn))
 
 (def ^:private cad [:kontor.commodity/symbol "CAD"])
-(def ^:private holdco [:entity/code "HOLDCO"])
+(def ^:private holdco [:kontor.entity/code "HOLDCO"])
 
 (defn- record!
   "Record a minimal disposal."
@@ -58,7 +58,7 @@
                opts)))
 
 (defn- holdco-eid [conn]
-  (d/q '[:find ?e . :where [?e :entity/code "HOLDCO"]] (d/db conn)))
+  (d/q '[:find ?e . :where [?e :kontor.entity/code "HOLDCO"]] (d/db conn)))
 
 (defn- run-provider
   "Build a provider, call `period-tax-facts`, return the resulting facts."

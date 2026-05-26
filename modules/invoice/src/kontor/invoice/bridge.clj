@@ -55,9 +55,9 @@
   (when-let [eid (resolve-invoice db spec)]
     (d/pull db
             '[* {:invoice/order   [:order/external-id :order/type]
-                 :invoice/entity  [:entity/code :entity/name]
-                 :invoice/buyer   [:partner/external-id :partner/name]
-                 :invoice/seller  [:partner/external-id :partner/name]
+                 :invoice/entity  [:kontor.entity/code :kontor.entity/name]
+                 :invoice/buyer   [:kontor.partner/external-id :kontor.partner/name]
+                 :invoice/seller  [:kontor.partner/external-id :kontor.partner/name]
                  :invoice/transaction [:db/id]}]
             eid)))
 

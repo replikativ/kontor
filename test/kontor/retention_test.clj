@@ -27,8 +27,8 @@
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
     (d/transact conn
-                [{:partner/external-id "U-counsel" :partner/name "Counsel C"}
-                 {:partner/external-id "U-records" :partner/name "Records Manager"}
+                [{:kontor.partner/external-id "U-counsel" :kontor.partner/name "Counsel C"}
+                 {:kontor.partner/external-id "U-records" :kontor.partner/name "Records Manager"}
                  ;; Two jurisdictions for the jurisdiction-precedence test.
                  {:db/id "country-de" :kontor.country/code "DE" :kontor.country/name "Germany"}
                  {:db/id "country-us" :kontor.country/code "US" :kontor.country/name "United States"}
@@ -50,7 +50,7 @@
 
 (defn- uid [db actor]
   (d/q '[:find ?e . :in $ ?xid
-         :where [?e :partner/external-id ?xid]]
+         :where [?e :kontor.partner/external-id ?xid]]
        db (str "U-" actor)))
 
 (defn- adoc-eid [db code]

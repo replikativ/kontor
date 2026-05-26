@@ -13,13 +13,13 @@
   (let [conn (core/create-test-db)]
     (edgar-schema/install! conn)
     (d/transact conn
-                [{:entity/code "APPLE"
-                  :entity/name "Apple Inc."
-                  :entity/active true}])
+                [{:kontor.entity/code "APPLE"
+                  :kontor.entity/name "Apple Inc."
+                  :kontor.entity/active true}])
     conn))
 
 (defn- apple-eid [conn]
-  (d/q '[:find ?e . :where [?e :entity/code "APPLE"]] (d/db conn)))
+  (d/q '[:find ?e . :where [?e :kontor.entity/code "APPLE"]] (d/db conn)))
 
 ;; ============================================================================
 ;; Parser tests

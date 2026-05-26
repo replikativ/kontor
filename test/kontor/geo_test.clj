@@ -235,15 +235,15 @@
                        {:db/id -2 :state/country -1 :state/code "MH"
                         :state/name "Maharashtra" :state/active true}
                        {:db/id -3
-                        :partner/external-id "CUST-001"
-                        :partner/name        "Acme India Pvt Ltd"
-                        :partner/kind        :customer
-                        :partner/country-code "IN"
-                        :partner/state       -2}])
+                        :kontor.partner/external-id "CUST-001"
+                        :kontor.partner/name        "Acme India Pvt Ltd"
+                        :kontor.partner/kind        :customer
+                        :kontor.partner/country-code "IN"
+                        :kontor.partner/state       -2}])
         db (d/db conn)
-        p  (d/entity db [:partner/external-id "CUST-001"])]
-    (is (= "Maharashtra" (-> p :partner/state :state/name)))
-    (is (= "IN"          (-> p :partner/state :state/country :kontor.country/code))
+        p  (d/entity db [:kontor.partner/external-id "CUST-001"])]
+    (is (= "Maharashtra" (-> p :kontor.partner/state :state/name)))
+    (is (= "IN"          (-> p :kontor.partner/state :state/country :kontor.country/code))
         "Country dereferences cleanly via the state ref")))
 
 (deftest transaction-place-of-supply-roundtrip
@@ -273,7 +273,7 @@
     (let [conn (core/create-test-db)
           db   (d/db conn)
           ;; refs
-          state-attr (d/pull db '[*] :partner/state)
+          state-attr (d/pull db '[*] :kontor.partner/state)
           pos-attr   (d/pull db '[*] :transaction/place-of-supply)
           ;; tuple composite
           state-id   (d/pull db '[*] :state/identity)

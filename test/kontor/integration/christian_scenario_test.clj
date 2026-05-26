@@ -51,14 +51,14 @@
   []
   (let [conn (de-preset/create-de-db)]
     (d/transact conn
-      [{:entity/name "Hans-Tech UG (haftungsbeschränkt)"
-        :entity/code "HANS-TECH-UG"
-        :entity/country "DE" :entity/legal-form "UG (haftungsbeschränkt)"
-        :entity/functional-commodity eur}
-       {:partner/name "Christian Weilbach" :partner/external-id "CW"
-        :partner/country-code "CA"}
-       {:partner/name "Partner B"          :partner/external-id "PB"
-        :partner/country-code "DE"}])
+      [{:kontor.entity/name "Hans-Tech UG (haftungsbeschränkt)"
+        :kontor.entity/code "HANS-TECH-UG"
+        :kontor.entity/country "DE" :kontor.entity/legal-form "UG (haftungsbeschränkt)"
+        :kontor.entity/functional-commodity eur}
+       {:kontor.partner/name "Christian Weilbach" :kontor.partner/external-id "CW"
+        :kontor.partner/country-code "CA"}
+       {:kontor.partner/name "Partner B"          :kontor.partner/external-id "PB"
+        :kontor.partner/country-code "DE"}])
     conn))
 
 (defn- hans-db
@@ -67,10 +67,10 @@
   []
   (let [conn (ca-preset/create-ca-db)]
     (d/transact conn
-      [{:entity/name "Christian (Individual)" :entity/code "CW-PERSONAL"
-        :entity/country "CA" :entity/functional-commodity cad}
-       {:partner/name "Hans-Tech UG" :partner/external-id "HT-UG"
-        :partner/country-code "DE"}
+      [{:kontor.entity/name "Christian (Individual)" :kontor.entity/code "CW-PERSONAL"
+        :kontor.entity/country "CA" :kontor.entity/functional-commodity cad}
+       {:kontor.partner/name "Hans-Tech UG" :kontor.partner/external-id "HT-UG"
+        :kontor.partner/country-code "DE"}
        {:account/path "Income:Dividends:Foreign:DE"   :account/type :income
         :account/commodity cad}
        {:account/path "Income:Self-Employment"        :account/type :income
@@ -86,7 +86,7 @@
 ;; ============================================================================
 
 (defn- book-ug-year! [conn]
-  (let [ug [:entity/code "HANS-TECH-UG"]
+  (let [ug [:kontor.entity/code "HANS-TECH-UG"]
         e  (fn [opts] (book/entry! conn (assoc opts :commodity :EUR :entity ug)))]
     ;; Opening capital
     (e {:journal [:journal/code "GJ"] :effective-date #inst "2026-01-02"
@@ -119,20 +119,20 @@
         :narration "Gewinnverwendung 2026: €15k Ausschüttung 60/40"
         :postings [{:account [:account/path "Eigenkapital:Gewinnvortrag"]            :amount 15000M}
                    {:account [:account/path "Verbindlichkeiten:Dividenden-Zahlbar"] :amount -9000M
-                    :partner [:partner/external-id "CW"]}
+                    :partner [:kontor.partner/external-id "CW"]}
                    {:account [:account/path "Verbindlichkeiten:Dividenden-Zahlbar"] :amount -6000M
-                    :partner [:partner/external-id "PB"]}]})
+                    :partner [:kontor.partner/external-id "PB"]}]})
     ;; Distribute to CW (KESt+Soli 26.375 % withheld at source)
     (e {:journal [:journal/code "CD"] :effective-date #inst "2027-01-15"
         :narration "Dividende CW gezahlt"
-        :partner  [:partner/external-id "CW"]
+        :partner  [:kontor.partner/external-id "CW"]
         :postings [{:account [:account/path "Verbindlichkeiten:Dividenden-Zahlbar"] :amount 9000M}
                    {:account [:account/path "Umlaufvermögen:Bank"]                   :amount -6626.25M}
                    {:account [:account/path "Verbindlichkeiten:KESt-Zahlbar"]        :amount -2373.75M}]})
     ;; Distribute to PB
     (e {:journal [:journal/code "CD"] :effective-date #inst "2027-01-15"
         :narration "Dividende PB gezahlt"
-        :partner  [:partner/external-id "PB"]
+        :partner  [:kontor.partner/external-id "PB"]
         :postings [{:account [:account/path "Verbindlichkeiten:Dividenden-Zahlbar"] :amount 6000M}
                    {:account [:account/path "Umlaufvermögen:Bank"]                   :amount -4417.50M}
                    {:account [:account/path "Verbindlichkeiten:KESt-Zahlbar"]        :amount -1582.50M}]})))
@@ -156,7 +156,7 @@
 
     (testing "DE CIT provider on €25k profit @ Hebesatz 490: KSt+Soli €3,956.25 + GewSt €4,287.50"
       (let [facts (ptp/period-tax-facts (de-cit/de-cit-provider {})
-                    {:db (d/db conn) :entity [:entity/code "HANS-TECH-UG"]
+                    {:db (d/db conn) :entity [:kontor.entity/code "HANS-TECH-UG"]
                      :period {:from #inst "2026-01-01" :to #inst "2027-01-01"}
                      :tax-unit {:hebesatz 490}
                      :inputs {:book-profit 25000M}})
@@ -190,7 +190,7 @@
                                  [(= ?path "Verbindlichkeiten:Dividenden-Zahlbar")]
                                  [?p :posting/amount ?amt]
                                  [?p :posting/partner ?part]
-                                 [?part :partner/external-id ?pc]]
+                                 [?part :kontor.partner/external-id ?pc]]
                         (d/db conn)))]
     (is (contains? pairs ["Verbindlichkeiten:Dividenden-Zahlbar" -9000M "CW"])
         "Christian's Cr leg carries :posting/partner CW")
@@ -203,7 +203,7 @@
   (let [conn (hans-db)
         _    (book/entry! conn   ; First the sole-prop revenue (CAD 60k + 5 % GST)
                {:journal [:journal/code "CR"] :effective-date #inst "2026-09-30"
-                :commodity :CAD :entity [:entity/code "CW-PERSONAL"]
+                :commodity :CAD :entity [:kontor.entity/code "CW-PERSONAL"]
                 :narration "Q3 BC consulting CAD 60k + 5% GST"
                 :postings [{:account [:account/path "Assets:Bank:CAD"]              :amount 63000M}
                            {:account [:account/path "Income:Self-Employment"]       :amount -60000M}
@@ -215,8 +215,8 @@
                 :income-kind     :dividend-portfolio
                 :fx-rate         1.50M
                 :effective-date  #inst "2027-01-20"
-                :payer-partner   [:partner/external-id "HT-UG"]
-                :entity          [:entity/code "CW-PERSONAL"]})
+                :payer-partner   [:kontor.partner/external-id "HT-UG"]
+                :entity          [:kontor.entity/code "CW-PERSONAL"]})
         tb   (trial/trial-balance conn)
         path-of (fn [eid] (:account/path (d/pull (d/db conn) [:account/path] eid)))
         sums (into {} (map (fn [[eid m]] [(path-of eid) (->> m vals first :amount)]) tb))]

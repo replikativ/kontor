@@ -36,12 +36,12 @@
                   :journal/type :bank
                   :journal/active true}
                  ;; Three partners
-                 {:partner/external-id "ACME"  :partner/name "ACME GmbH"
-                  :partner/kind :customer :partner/country-code "DE"}
-                 {:partner/external-id "BETA"  :partner/name "Beta AG"
-                  :partner/kind :customer :partner/country-code "DE"}
-                 {:partner/external-id "GAMMA" :partner/name "Gamma KG"
-                  :partner/kind :customer :partner/country-code "DE"}])
+                 {:kontor.partner/external-id "ACME"  :kontor.partner/name "ACME GmbH"
+                  :kontor.partner/kind :customer :kontor.partner/country-code "DE"}
+                 {:kontor.partner/external-id "BETA"  :kontor.partner/name "Beta AG"
+                  :kontor.partner/kind :customer :kontor.partner/country-code "DE"}
+                 {:kontor.partner/external-id "GAMMA" :kontor.partner/name "Gamma KG"
+                  :kontor.partner/kind :customer :kontor.partner/country-code "DE"}])
     conn))
 
 (defn- ace [db code]
@@ -56,7 +56,7 @@
         rev (ace db "4400")
         ust (ace db "3801")
         jnl (:db/id (d/entity db [:journal/code "INV"]))
-        partner (:db/id (d/entity db [:partner/external-id partner-extid]))
+        partner (:db/id (d/entity db [:kontor.partner/external-id partner-extid]))
         net-bd (bigdec net)
         vat (.setScale (.multiply net-bd (bigdec "0.19"))
                        2 java.math.RoundingMode/HALF_EVEN)

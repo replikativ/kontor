@@ -7,7 +7,7 @@
    Multi-entity tenants install their entity tree as data — typically
    alongside chart-of-accounts setup at deployment time.
 
-   Conventions for `:entity/kind`:
+   Conventions for `:kontor.entity/kind`:
      :operating     — a real legal entity that books real transactions
      :elimination   — a synthetic entity holding consolidation
                        eliminations (NetSuite's Elimination Subsidiary)
@@ -25,17 +25,17 @@
 ;; ============================================================================
 
 (defn by-code
-  "Resolve an entity entity-id by its `:entity/code`."
+  "Resolve an entity entity-id by its `:kontor.entity/code`."
   [db code]
   (d/q '[:find ?e .
          :in $ ?code
-         :where [?e :entity/code ?code]]
+         :where [?e :kontor.entity/code ?code]]
        db code))
 
 (defn resolve-entity
   "Coerce `entity-spec` to an entity-id. Accepts:
      - nil       → nil (no entity scope)
-     - a string  → looked up by `:entity/code`
+     - a string  → looked up by `:kontor.entity/code`
      - a long    → returned as-is (assumed eid)
      - a map     → assumed lookup ref or pulled entity"
   [db entity-spec]
@@ -53,12 +53,12 @@
   [db entity-eid]
   (d/q '[:find ?p .
          :in $ ?e
-         :where [?e :entity/parent-entity ?p]]
+         :where [?e :kontor.entity/parent-entity ?p]]
        db entity-eid))
 
 (defn ancestors
   "Set of ancestor entity-ids for `entity-eid`, walking
-   `:entity/parent-entity` to the root. Excludes the entity itself."
+   `:kontor.entity/parent-entity` to the root. Excludes the entity itself."
   [db entity-eid]
   (loop [acc #{}
          current entity-eid]
@@ -72,11 +72,11 @@
 
 (defn children
   "Direct children of an entity (entities whose
-   `:entity/parent-entity` = `entity-eid`)."
+   `:kontor.entity/parent-entity` = `entity-eid`)."
   [db entity-eid]
   (set (d/q '[:find [?c ...]
               :in $ ?p
-              :where [?c :entity/parent-entity ?p]]
+              :where [?c :kontor.entity/parent-entity ?p]]
             db entity-eid)))
 
 (defn descendants
@@ -102,13 +102,13 @@
 ;; ============================================================================
 
 (defn by-kind
-  "All active entities of the given `:entity/kind`."
+  "All active entities of the given `:kontor.entity/kind`."
   [db kind]
   (d/q '[:find [?e ...]
          :in $ ?kind
          :where
-         [?e :entity/kind ?kind]
-         [?e :entity/active true]]
+         [?e :kontor.entity/kind ?kind]
+         [?e :kontor.entity/active true]]
        db kind))
 
 (defn operating?
@@ -116,6 +116,6 @@
    transactional entity, not synthetic)."
   [db entity-eid]
   (= :operating
-     (or (d/q '[:find ?k . :in $ ?e :where [?e :entity/kind ?k]]
+     (or (d/q '[:find ?k . :in $ ?e :where [?e :kontor.entity/kind ?k]]
               db entity-eid)
          :operating)))

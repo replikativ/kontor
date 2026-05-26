@@ -33,15 +33,15 @@
     (inv-statute/install! conn)
     (d/transact conn [{:kontor.commodity/symbol "CNY" :kontor.commodity/name "Chinese Yuan"
                        :kontor.commodity/precision 2}
-                      {:entity/code "HOLDCO" :entity/name "HoldCo"
-                       :entity/kind :company :entity/country "CN"
-                       :entity/functional-commodity [:kontor.commodity/symbol "CNY"]}])
+                      {:kontor.entity/code "HOLDCO" :kontor.entity/name "HoldCo"
+                       :kontor.entity/kind :company :kontor.entity/country "CN"
+                       :kontor.entity/functional-commodity [:kontor.commodity/symbol "CNY"]}])
     conn))
 
 (def ^:private cny [:kontor.commodity/symbol "CNY"])
 
 (defn- holdco-eid [conn]
-  (d/q '[:find ?e . :where [?e :entity/code "HOLDCO"]] (d/db conn)))
+  (d/q '[:find ?e . :where [?e :kontor.entity/code "HOLDCO"]] (d/db conn)))
 
 (def ^:private p2026 {:from #inst "2026-01-01" :to #inst "2027-01-01"})
 (def ^:private p2028 {:from #inst "2028-01-01" :to #inst "2029-01-01"})

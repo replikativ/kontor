@@ -41,9 +41,9 @@
     (at-chart/install! conn)
     (d/transact conn pb-test/payroll-wage-accounts)
     (d/transact conn [{:db/id "ent-acme"
-                       :entity/code "ACME-AT"
-                       :entity/name "Acme GmbH"
-                       :entity/kind :operating}
+                       :kontor.entity/code "ACME-AT"
+                       :kontor.entity/name "Acme GmbH"
+                       :kontor.entity/kind :operating}
                       {:db/id "journal-pay"
                        :journal/code "PAYROLL-AT"
                        :journal/name "Lohn- und Gehaltsabrechnung"
@@ -63,7 +63,7 @@
   (let [conn (bootstrap)
         db (d/db conn)
         eur (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "EUR"]] db)
-        ent (d/q '[:find ?e . :where [?e :entity/code "ACME-AT"]] db)
+        ent (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-AT"]] db)
         journal (d/q '[:find ?e . :where [?e :journal/code "PAYROLL-AT"]] db)
         period (d/q '[:find ?e . :where [?e :period/name "2026-01"]] db)
         _ (person/create-person!

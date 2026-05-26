@@ -17,10 +17,10 @@
 (deftest entity-basic-crud
   (let [conn (core/create-test-db)
         _ (d/transact conn
-                      [{:entity/code  "acme-de"
-                        :entity/name  "Acme Germany GmbH"
-                        :entity/kind  :operating
-                        :entity/active true}])
+                      [{:kontor.entity/code  "acme-de"
+                        :kontor.entity/name  "Acme Germany GmbH"
+                        :kontor.entity/kind  :operating
+                        :kontor.entity/active true}])
         db (d/db conn)
         eid (entity/by-code db "acme-de")]
     (is (some? eid))
@@ -33,29 +33,29 @@
   (testing "Parent / ancestors / descendants over a 3-level tree"
     (let [conn (core/create-test-db)
           _ (d/transact conn
-                        [{:db/id -1 :entity/code "acme-group"
-                          :entity/name "Acme Group AG" :entity/kind :consolidation
-                          :entity/active true}
-                         {:db/id -2 :entity/code "acme-emea"
-                          :entity/name "Acme EMEA Holding" :entity/kind :operating
-                          :entity/parent-entity -1
-                          :entity/active true}
-                         {:db/id -3 :entity/code "acme-de"
-                          :entity/name "Acme Germany GmbH" :entity/kind :operating
-                          :entity/parent-entity -2
-                          :entity/active true}
-                         {:db/id -4 :entity/code "acme-fr"
-                          :entity/name "Acme France SARL" :entity/kind :operating
-                          :entity/parent-entity -2
-                          :entity/active true}
-                         {:db/id -5 :entity/code "acme-amer"
-                          :entity/name "Acme Americas Holding" :entity/kind :operating
-                          :entity/parent-entity -1
-                          :entity/active true}
-                         {:db/id -6 :entity/code "acme-us"
-                          :entity/name "Acme US Inc." :entity/kind :operating
-                          :entity/parent-entity -5
-                          :entity/active true}])
+                        [{:db/id -1 :kontor.entity/code "acme-group"
+                          :kontor.entity/name "Acme Group AG" :kontor.entity/kind :consolidation
+                          :kontor.entity/active true}
+                         {:db/id -2 :kontor.entity/code "acme-emea"
+                          :kontor.entity/name "Acme EMEA Holding" :kontor.entity/kind :operating
+                          :kontor.entity/parent-entity -1
+                          :kontor.entity/active true}
+                         {:db/id -3 :kontor.entity/code "acme-de"
+                          :kontor.entity/name "Acme Germany GmbH" :kontor.entity/kind :operating
+                          :kontor.entity/parent-entity -2
+                          :kontor.entity/active true}
+                         {:db/id -4 :kontor.entity/code "acme-fr"
+                          :kontor.entity/name "Acme France SARL" :kontor.entity/kind :operating
+                          :kontor.entity/parent-entity -2
+                          :kontor.entity/active true}
+                         {:db/id -5 :kontor.entity/code "acme-amer"
+                          :kontor.entity/name "Acme Americas Holding" :kontor.entity/kind :operating
+                          :kontor.entity/parent-entity -1
+                          :kontor.entity/active true}
+                         {:db/id -6 :kontor.entity/code "acme-us"
+                          :kontor.entity/name "Acme US Inc." :kontor.entity/kind :operating
+                          :kontor.entity/parent-entity -5
+                          :kontor.entity/active true}])
           db (d/db conn)
           group (entity/by-code db "acme-group")
           emea  (entity/by-code db "acme-emea")
@@ -86,10 +86,10 @@
 (deftest entity-kind-helpers
   (let [conn (core/create-test-db)
         _ (d/transact conn
-                      [{:entity/code "acme-de" :entity/name "DE" :entity/kind :operating :entity/active true}
-                       {:entity/code "acme-us" :entity/name "US" :entity/kind :operating :entity/active true}
-                       {:entity/code "acme-elims" :entity/name "Eliminations" :entity/kind :elimination :entity/active true}
-                       {:entity/code "acme-group" :entity/name "Group" :entity/kind :consolidation :entity/active true}])
+                      [{:kontor.entity/code "acme-de" :kontor.entity/name "DE" :kontor.entity/kind :operating :kontor.entity/active true}
+                       {:kontor.entity/code "acme-us" :kontor.entity/name "US" :kontor.entity/kind :operating :kontor.entity/active true}
+                       {:kontor.entity/code "acme-elims" :kontor.entity/name "Eliminations" :kontor.entity/kind :elimination :kontor.entity/active true}
+                       {:kontor.entity/code "acme-group" :kontor.entity/name "Group" :kontor.entity/kind :consolidation :kontor.entity/active true}])
         db (d/db conn)]
     (is (= 2 (count (entity/by-kind db :operating))))
     (is (= 1 (count (entity/by-kind db :elimination))))
@@ -126,8 +126,8 @@
 ;; ============================================================================
 
 (def ifrs-ref [:ledger/code "ifrs"])
-(def de-ref   [:entity/code "acme-de"])
-(def us-ref   [:entity/code "acme-us"])
+(def de-ref   [:kontor.entity/code "acme-de"])
+(def us-ref   [:kontor.entity/code "acme-us"])
 
 (deftest multi-entity-intercompany-balanced
   (testing "DE intercompany clearing 100 EUR → US intercompany clearing
@@ -277,8 +277,8 @@
 (deftest schema-attrs-installed
   (let [conn (core/create-test-db)
         db (d/db conn)]
-    (testing ":entity/code is unique-identity"
-      (let [a (d/pull db '[*] :entity/code)]
+    (testing ":kontor.entity/code is unique-identity"
+      (let [a (d/pull db '[*] :kontor.entity/code)]
         (is (= :db.type/string (:db/valueType a)))
         (is (= :db.unique/identity (:db/unique a)))))
     (testing ":posting/entity / :ledger/entity / :valuation-book/entity all refs"

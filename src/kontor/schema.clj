@@ -567,30 +567,30 @@
 ;; ============================================================================
 
 (def ^:private partner-attrs
-  [{:db/ident       :partner/external-id
+  [{:db/ident       :kontor.partner/external-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Caller-supplied stable identifier. For beleg
                      integration this is the :customer/id UUID stringified."}
 
-   {:db/ident       :partner/name
+   {:db/ident       :kontor.partner/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner/kind
+   {:db/ident       :kontor.partner/kind
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":customer | :vendor | :both"}
 
-   {:db/ident       :partner/country-code
+   {:db/ident       :kontor.partner/country-code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "ISO-3166 alpha-2; used for fiscal-position auto-
                      application and tax-provider routing."}
 
-   {:db/ident       :partner/tax-id
+   {:db/ident       :kontor.partner/tax-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "VAT ID, EIN, GST number, etc. Format is country-
@@ -599,20 +599,20 @@
                      jurisdiction partners; this scalar is the primary."}
 
    ;; ADR-039: credit limit + status (extends :partner additive).
-   {:db/ident       :partner/credit-limit
+   {:db/ident       :kontor.partner/credit-limit
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
-    :db/doc         "Credit limit amount in :partner/credit-commodity.
+    :db/doc         "Credit limit amount in :kontor.partner/credit-commodity.
                      Nil = unlimited. Consumer's responsibility to
                      define 'open' / 'pending' for credit-available
                      calculation (kontor.partner/credit-available)."}
 
-   {:db/ident       :partner/credit-commodity
+   {:db/ident       :kontor.partner/credit-commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
-    :db/doc         "Commodity (currency) of :partner/credit-limit."}
+    :db/doc         "Commodity (currency) of :kontor.partner/credit-limit."}
 
-   {:db/ident       :partner/credit-status
+   {:db/ident       :kontor.partner/credit-status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":open | :hold | :review | :closed. ADR-039.
@@ -623,18 +623,18 @@
    ;; ADR-039: KYC hooks. The actual sanctions-screening engine is a
    ;; future SanctionsProvider companion; these scalars capture the
    ;; latest result.
-   {:db/ident       :partner/kyc-status
+   {:db/ident       :kontor.partner/kyc-status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":not-required | :pending | :cleared | :flagged |
                      :blocked. Trade should be forbidden when
                      :blocked (consumer enforces)."}
 
-   {:db/ident       :partner/kyc-checked-at
+   {:db/ident       :kontor.partner/kyc-checked-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner/kyc-source
+   {:db/ident       :kontor.partner/kyc-source
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Provider name: LexisNexis, Refinitiv,
@@ -646,7 +646,7 @@
    ;; gist:Organization. LEI codes have canonical IRIs at gleif.org. The
    ;; substrate stores the IRI so a consumer can align with an external
    ;; party graph without re-doing the mapping at every consumer.
-   {:db/ident       :partner/concept-iri
+   {:db/ident       :kontor.partner/concept-iri
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -657,31 +657,31 @@
 ;; ============================================================================
 ;; Person — shared substrate for natural persons across kontor-partner +
 ;; kontor-hr (+ future companions). Per audit note 95 §2: previously each
-;; module re-defined :person/birth-date + :person/national-id with diverging
+;; module re-defined :kontor.person/birth-date + :kontor.person/national-id with diverging
 ;; shapes, so installing both schemas against the same conn silently
 ;; overwrote whichever module installed first. Hoisted here as one source
-;; of truth. Module-private attrs (HR-side :person/given-name vs partner-
-;; side :person/first-name, etc.) remain in the modules; only the genuinely
+;; of truth. Module-private attrs (HR-side :kontor.person/given-name vs partner-
+;; side :kontor.person/first-name, etc.) remain in the modules; only the genuinely
 ;; cross-cutting bits live here.
 ;;
 ;; Shape decisions:
-;;   - :person/national-id is :db.type/string (partner's historic shape) —
+;;   - :kontor.person/national-id is :db.type/string (partner's historic shape) —
 ;;     simpler default that doesn't drag in the :audit-doc dependency at
 ;;     the kernel level. Consumers needing audit-doc-backed storage of
 ;;     national-ID material can add a module-private ref attr (e.g.
-;;     :hr-person/national-id-doc) without redefining this ident.
-;;   - :person/birth-date is :db.type/instant (both modules agreed).
+;;     :kontor.hr.person/national-id-doc) without redefining this ident.
+;;   - :kontor.person/birth-date is :db.type/instant (both modules agreed).
 ;; ============================================================================
 
 (def ^:private person-attrs
-  [{:db/ident       :person/birth-date
+  [{:db/ident       :kontor.person/birth-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "PII; typical :audit-doc/category :hr-personnel.
                      DSAR collectors walk this attr; per-jurisdiction
                      :retention-policy governs erasure."}
 
-   {:db/ident       :person/national-id
+   {:db/ident       :kontor.person/national-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Plaintext national identifier (SSN / SV-Nummer /
@@ -689,7 +689,7 @@
                      consumer layer if subject to GDPR / HIPAA /
                      similar. Companions that prefer audit-doc-backed
                      storage should define their own ref attribute
-                     (e.g. :hr-person/national-id-doc) rather than
+                     (e.g. :kontor.hr.person/national-id-doc) rather than
                      re-defining this ident."}])
 
 ;; ============================================================================
@@ -1483,7 +1483,7 @@
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "On-the-account legal name (may differ from
-                     :partner/name when a partner uses a service
+                     :kontor.partner/name when a partner uses a service
                      intermediary)."}
 
    {:db/ident       :bank-account/active
@@ -3281,7 +3281,7 @@
     :db/cardinality :db.cardinality/one}])
 
 (def ^:private partner-state-attrs
-  [{:db/ident       :partner/state
+  [{:db/ident       :kontor.partner/state
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Partner's registered state — billing / address.
@@ -3648,44 +3648,44 @@
 ;; ============================================================================
 
 (def ^:private entity-attrs
-  [{:db/ident       :entity/code
+  [{:db/ident       :kontor.entity/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Stable identifier (\"acme-de\", \"acme-us\",
                      \"acme-group\", \"acme-eliminations\")."}
 
-   {:db/ident       :entity/name
+   {:db/ident       :kontor.entity/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :entity/country
+   {:db/ident       :kontor.entity/country
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ref to :country. Synthetic entities
                      (:elimination, :consolidation) may omit."}
 
-   {:db/ident       :entity/functional-commodity
+   {:db/ident       :kontor.entity/functional-commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Accounting currency for this entity's standalone
                      books. Optional — synthetic entities may run in
                      a group currency selected at consolidation time."}
 
-   {:db/ident       :entity/parent-entity
+   {:db/ident       :kontor.entity/parent-entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Group hierarchy. Self-reference; root entity has
                      no parent. Matches Odoo's :parent_id pattern."}
 
-   {:db/ident       :entity/accounting-standard
+   {:db/ident       :kontor.entity/accounting-standard
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":hgb | :us-gaap | :br-gaap | :ifrs | :local
                      | … free-form. Drives reporting + tax filing
                      choices; consumed by l10n modules."}
 
-   {:db/ident       :entity/kind
+   {:db/ident       :kontor.entity/kind
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":operating (default) — a real legal entity
@@ -3701,7 +3701,7 @@
                      for consolidated; \"consolidation\" for the
                      group lens."}
 
-   {:db/ident       :entity/active
+   {:db/ident       :kontor.entity/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}
 
@@ -3709,7 +3709,7 @@
    ;; The LEI is the global join key for cross-jurisdictional consolidations
    ;; (ADR-073). EDGAR ingest joins on CIK→LEI, Companies House on CRN→LEI,
    ;; Bundesanzeiger on HRB→LEI — and GLEIF carries every cross-reference.
-   {:db/ident       :entity/lei
+   {:db/ident       :kontor.entity/lei
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/value
@@ -3720,7 +3720,7 @@
                      LEI but uniqueness is enforced. ADR-073 +
                      research note 91 §6."}
 
-   {:db/ident       :entity/legal-form
+   {:db/ident       :kontor.entity/legal-form
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "GLEIF ELF (Entity Legal Form) code or local
@@ -3728,31 +3728,31 @@
                      'KK', etc. Free-string; consumers using the
                      ISO 20275 codes use those (e.g. '2HBR' for GmbH)."}
 
-   {:db/ident       :entity/registration-status
+   {:db/ident       :kontor.entity/registration-status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "GLEIF registration status. Open-set:
                      :issued | :lapsed | :merged | :retired
                      | :duplicate | :transferred | :annulled."}
 
-   {:db/ident       :entity/parent-lei
+   {:db/ident       :kontor.entity/parent-lei
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Direct parent LEI (GLEIF RR-CDF Level 2
                      IS_DIRECTLY_CONSOLIDATED_BY). Stored as the raw
                      LEI string for ingest-time + reingest-time
-                     debugging; the resolved :entity/parent-entity ref
+                     debugging; the resolved :kontor.entity/parent-entity ref
                      is the structural answer that
                      `kontor.entity/family` walks."}
 
-   {:db/ident       :entity/ultimate-parent-lei
+   {:db/ident       :kontor.entity/ultimate-parent-lei
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Ultimate parent LEI (GLEIF RR-CDF
                      IS_ULTIMATELY_CONSOLIDATED_BY). Same posture as
-                     :entity/parent-lei — provenance only."}
+                     :kontor.entity/parent-lei — provenance only."}
 
-   {:db/ident       :entity/source-id
+   {:db/ident       :kontor.entity/source-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Provenance opaque identifier — e.g.
@@ -4340,7 +4340,7 @@
     account-tag-attrs
     journal-attrs
     partner-attrs
-    person-attrs                         ; kernel-shared :person/* (note 95)
+    person-attrs                         ; kernel-shared :kontor.person/* (note 95)
     fiscal-position-attrs
     tax-attrs
     tax-rep-attrs

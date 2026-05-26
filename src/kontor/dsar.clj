@@ -51,7 +51,7 @@
 (def ^:private kernel-partner-attrs
   "Partner-referencing attributes the kernel itself ships. Companion
    modules register their own (`:collection-case/partner`,
-   `:order/bill-to-partner`, `:person/partner`, …) at load time via
+   `:order/bill-to-partner`, `:kontor.person/partner`, …) at load time via
    `register-partner-attr!`."
   #{:transaction/partner
     :posting/partner
@@ -64,7 +64,7 @@
     :partner-merge/superseded})
 
 (defonce ^{:doc "Atom holding the set of attributes referencing
-   :partner/* that `collect` walks. Seeded with the kernel attrs;
+   :kontor.partner/* that `collect` walks. Seeded with the kernel attrs;
    companions conj their own at load time via
    `register-partner-attr!`."}
   partner-attrs-registry
@@ -121,7 +121,7 @@
 ;; via the (entity → partner) registry (note 86 P1-86-5)
 ;; ============================================================================
 ;; Some companion data is reached via a partner-FROM link rather than a
-;; partner-TO ref. The canonical case is kontor-hr: `:partner/person`
+;; partner-TO ref. The canonical case is kontor-hr: `:kontor.partner/person`
 ;; lives ON the partner pointing AT the person, so the partner-attrs
 ;; registry (which matches `[?e ?attr <partner-eid>]`) can't see it.
 ;; Extension collectors close the gap — each is a pure fn
@@ -376,7 +376,7 @@
                    (refs-by-attr db @tx-attrs-registry subject-txs)
                    {})
         ;; Note 86 P1-86-5 — fire each companion's extension collector
-        ;; (HR walks partner → :partner/person → :person → employments;
+        ;; (HR walks partner → :kontor.partner/person → :person → employments;
         ;; future companions can add their own under their key).
         extensions (into {}
                          (keep (fn [[k collector-fn]]

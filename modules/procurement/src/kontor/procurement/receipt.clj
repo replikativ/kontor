@@ -51,7 +51,7 @@
     (d/pull db
             '[* {:receipt/order [:order/external-id :order/type]
                  :receipt/ship-group [:ship-group/seq-id]
-                 :receipt/carrier-partner [:partner/external-id :partner/name]
+                 :receipt/carrier-partner [:kontor.partner/external-id :kontor.partner/name]
                  :receipt/packing-slip-ref [:audit-doc/code :audit-doc/type]}]
             eid)))
 

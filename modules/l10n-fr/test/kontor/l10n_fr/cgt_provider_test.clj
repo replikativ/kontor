@@ -24,22 +24,22 @@
     (cgt-statute/install! conn)
     (d/transact conn [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                        :kontor.commodity/precision 2}
-                      {:entity/code "HOLDCO" :entity/name "HoldCo SAS"
-                       :entity/kind :company :entity/country "FR"
-                       :entity/functional-commodity [:kontor.commodity/symbol "EUR"]}
-                      {:entity/code "INDIV" :entity/name "Mlle Dupont"
-                       :entity/kind :company :entity/country "FR"
-                       :entity/functional-commodity [:kontor.commodity/symbol "EUR"]}])
+                      {:kontor.entity/code "HOLDCO" :kontor.entity/name "HoldCo SAS"
+                       :kontor.entity/kind :company :kontor.entity/country "FR"
+                       :kontor.entity/functional-commodity [:kontor.commodity/symbol "EUR"]}
+                      {:kontor.entity/code "INDIV" :kontor.entity/name "Mlle Dupont"
+                       :kontor.entity/kind :company :kontor.entity/country "FR"
+                       :kontor.entity/functional-commodity [:kontor.commodity/symbol "EUR"]}])
     conn))
 
 (def ^:private eur [:kontor.commodity/symbol "EUR"])
-(def ^:private holdco [:entity/code "HOLDCO"])
-(def ^:private indiv [:entity/code "INDIV"])
+(def ^:private holdco [:kontor.entity/code "HOLDCO"])
+(def ^:private indiv [:kontor.entity/code "INDIV"])
 
 (defn- entity-eid [conn code]
   (d/q '[:find ?e .
          :in $ ?code
-         :where [?e :entity/code ?code]] (d/db conn) code))
+         :where [?e :kontor.entity/code ?code]] (d/db conn) code))
 
 (defn- record!
   "Record a minimal disposal — entity defaults to INDIV."

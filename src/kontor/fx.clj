@@ -158,7 +158,7 @@
 ;;
 ;; Most accounting frameworks (IAS 21, ASC 830) distinguish:
 ;;   - functional currency — the entity's primary economic environment
-;;     (an :entity/functional-commodity in the schema)
+;;     (an :kontor.entity/functional-commodity in the schema)
 ;;   - presentation currency — what reports are denominated in
 ;;
 ;; This helper converts a *source* amount into an entity's functional
@@ -171,16 +171,16 @@
   "Translate a foreign-currency `Money` into the entity's functional
    currency.
 
-   `entity` is an entity map (or anything with `:entity/functional-commodity`
+   `entity` is an entity map (or anything with `:kontor.entity/functional-commodity`
    resolved to a commodity eid or symbol). If the entity has no
-   `:entity/functional-commodity`, the input is returned unchanged
+   `:kontor.entity/functional-commodity`, the input is returned unchanged
    (the entity hasn't opted into functional-currency accounting).
 
    The transaction-date is required because IAS 21 uses the *spot rate
    at the date of the transaction*."
   [m entity provider {:keys [at-date rate-type] :as opts}]
-  (let [fc (or (some-> entity :entity/functional-commodity :kontor.commodity/symbol)
-               (some-> entity :entity/functional-commodity)
+  (let [fc (or (some-> entity :kontor.entity/functional-commodity :kontor.commodity/symbol)
+               (some-> entity :kontor.entity/functional-commodity)
                (:functional-commodity entity))]
     (cond
       (nil? fc)             m       ; entity hasn't opted in

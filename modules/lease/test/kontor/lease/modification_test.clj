@@ -42,9 +42,9 @@
     (lease-schema/install! conn)
     (d/transact conn
                 [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
-                 {:partner/external-id "U-cfo"  :partner/name "CFO"}
-                 {:partner/external-id "U-ctrl" :partner/name "Controller"}
-                 {:partner/external-id "L-acme" :partner/name "Acme Properties"}
+                 {:kontor.partner/external-id "U-cfo"  :kontor.partner/name "CFO"}
+                 {:kontor.partner/external-id "U-ctrl" :kontor.partner/name "Controller"}
+                 {:kontor.partner/external-id "L-acme" :kontor.partner/name "Acme Properties"}
                  {:db/id "led-ifrs" :ledger/code "ifrs" :ledger/name "IFRS 16"
                   :ledger/framework :ifrs}
                  {:db/id "class-rou" :asset-class/code "rou-property"
@@ -80,7 +80,7 @@
   (d/q '[:find ?e . :in $ ?a ?v :where [?e ?a ?v]] db a v))
 
 (defn- commodity [db] (ref-eid db :kontor.commodity/symbol "EUR"))
-(defn- p         [db code] (ref-eid db :partner/external-id code))
+(defn- p         [db code] (ref-eid db :kontor.partner/external-id code))
 (defn- acct      [db code] (ref-eid db :account/code code))
 (defn- journal   [db] (ref-eid db :journal/code "GEN"))
 (defn- class-eid [db] (ref-eid db :asset-class/code "rou-property"))

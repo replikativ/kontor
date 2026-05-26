@@ -30,8 +30,8 @@
     ;; convention in modules/collections/.../lifecycle_test.clj we
     ;; reuse :partner entities as actor stand-ins.
     (d/transact conn
-                [{:partner/external-id "U-counsel" :partner/name "Counsel C"}
-                 {:partner/external-id "U-admin"   :partner/name "Admin A"}
+                [{:kontor.partner/external-id "U-counsel" :kontor.partner/name "Counsel C"}
+                 {:kontor.partner/external-id "U-admin"   :kontor.partner/name "Admin A"}
                  {:db/id "doc-place"
                   :audit-doc/code "DOC-PLACE-001"
                   :audit-doc/type :legal-hold-order
@@ -41,16 +41,16 @@
                   :audit-doc/type :legal-hold-release
                   :audit-doc/uploaded-at #inst "2026-06-01"}
                  {:db/id "partner-acme"
-                  :partner/external-id "ACME"
-                  :partner/name "Acme Corp"
-                  :partner/kind :customer}])
+                  :kontor.partner/external-id "ACME"
+                  :kontor.partner/name "Acme Corp"
+                  :kontor.partner/kind :customer}])
     conn))
 
 (defn- uid [db actor]
-  ;; Resolve the actor partner-eid by its :partner/external-id "U-<actor>".
+  ;; Resolve the actor partner-eid by its :kontor.partner/external-id "U-<actor>".
   (d/q '[:find ?e .
          :in $ ?xid
-         :where [?e :partner/external-id ?xid]]
+         :where [?e :kontor.partner/external-id ?xid]]
        db (str "U-" actor)))
 
 (defn- adoc-eid [db code]
@@ -63,7 +63,7 @@
 (deftest place-writes-hold-status-history-and-vt
   (let [conn (bootstrap)
         db (d/db conn)
-        held-target (d/q '[:find ?e . :where [?e :partner/external-id "ACME"]] db)
+        held-target (d/q '[:find ?e . :where [?e :kontor.partner/external-id "ACME"]] db)
         _ (lhold/place! conn
                         {:code "HOLD-ACME-001"
                          :matter-name "Acme v. Doe 24-CV-1234"
@@ -93,7 +93,7 @@
 (deftest eid-set-scope-blocks-purge
   (let [conn (bootstrap)
         db (d/db conn)
-        held (d/q '[:find ?e . :where [?e :partner/external-id "ACME"]] db)
+        held (d/q '[:find ?e . :where [?e :kontor.partner/external-id "ACME"]] db)
         _ (lhold/place! conn
                         {:code "HOLD-002"
                          :matter-name "Eid-set test"
@@ -122,14 +122,14 @@
                          :issued-at #inst "2026-05-13"
                          :supporting-doc (adoc-eid db "DOC-PLACE-001")
                          :reason-note "Preserve all customers under matter."
-                         :scope-query "[:find ?e :where [?e :partner/kind :customer]]"})
+                         :scope-query "[:find ?e :where [?e :kontor.partner/kind :customer]]"})
         ;; Add a NEW partner after the hold is placed.
         _ (d/transact conn
                       [{:db/id "new-cust"
-                        :partner/external-id "NEW-CUST"
-                        :partner/name "New Customer"
-                        :partner/kind :customer}])
-        new-eid (d/q '[:find ?e . :where [?e :partner/external-id "NEW-CUST"]]
+                        :kontor.partner/external-id "NEW-CUST"
+                        :kontor.partner/name "New Customer"
+                        :kontor.partner/kind :customer}])
+        new-eid (d/q '[:find ?e . :where [?e :kontor.partner/external-id "NEW-CUST"]]
                      (d/db conn))]
     (testing "purge of new entity matching scope-query is refused"
       (is (thrown-with-msg?
@@ -143,7 +143,7 @@
 (deftest release-allows-subsequent-purge
   (let [conn (bootstrap)
         db (d/db conn)
-        held (d/q '[:find ?e . :where [?e :partner/external-id "ACME"]] db)
+        held (d/q '[:find ?e . :where [?e :kontor.partner/external-id "ACME"]] db)
         _ (lhold/place! conn
                         {:code "HOLD-004"
                          :matter-name "Release-then-purge test"
@@ -178,7 +178,7 @@
   (let [conn (bootstrap)
         db (d/db conn)
         counsel-eid (uid db "counsel")
-        held (d/q '[:find ?e . :where [?e :partner/external-id "ACME"]] db)
+        held (d/q '[:find ?e . :where [?e :kontor.partner/external-id "ACME"]] db)
         _ (lhold/place! conn
                         {:code "HOLD-005"
                          :matter-name "SoD test"
@@ -200,7 +200,7 @@
 (deftest placement-without-supporting-doc-rejected
   (let [conn (bootstrap)
         db (d/db conn)
-        held (d/q '[:find ?e . :where [?e :partner/external-id "ACME"]] db)]
+        held (d/q '[:find ?e . :where [?e :kontor.partner/external-id "ACME"]] db)]
     (testing ":requires-supporting-doc enforced on placement"
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo #":supporting-doc required"
@@ -227,14 +227,14 @@
                          :issued-at #inst "2026-05-13"
                          :supporting-doc (adoc-eid db "DOC-PLACE-001")
                          :reason-note "Initial scope."
-                         :scope-query "[:find ?e :where [?e :partner/kind :customer]]"
+                         :scope-query "[:find ?e :where [?e :kontor.partner/kind :customer]]"
                          :vt-from #inst "2026-05-13"})
         hold-eid (lhold/by-code (d/db conn) "HOLD-007")
         original-query (:legal-hold/scope-query
                         (d/pull (d/valid-at (d/db conn) #inst "2026-05-14")
                                 [:legal-hold/scope-query] hold-eid))]
     (testing "d/valid-at resolves the hold's scope-query at a past valid-time"
-      (is (= "[:find ?e :where [?e :partner/kind :customer]]" original-query)))))
+      (is (= "[:find ?e :where [?e :kontor.partner/kind :customer]]" original-query)))))
 
 ;; ============================================================================
 ;; P0-1 review fix: full destructive-write surface (not just :db/purge)
@@ -243,7 +243,7 @@
 (deftest retract-entity-of-held-blocked
   (let [conn (bootstrap)
         db (d/db conn)
-        held (d/q '[:find ?e . :where [?e :partner/external-id "ACME"]] db)
+        held (d/q '[:find ?e . :where [?e :kontor.partner/external-id "ACME"]] db)
         _ (lhold/place! conn
                         {:code "HOLD-RE"
                          :matter-name "retractEntity coverage"
@@ -261,7 +261,7 @@
 (deftest purge-attribute-of-held-blocked
   (let [conn (bootstrap)
         db (d/db conn)
-        held (d/q '[:find ?e . :where [?e :partner/external-id "ACME"]] db)
+        held (d/q '[:find ?e . :where [?e :kontor.partner/external-id "ACME"]] db)
         _ (lhold/place! conn
                         {:code "HOLD-PA"
                          :matter-name "purgeAttribute coverage"
@@ -274,7 +274,7 @@
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo #"blocked by active legal hold"
            (d/transact conn [[:db.fn/call v/validate-and-apply
-                              [[:db.purge/attribute held :partner/name]]]]))))))
+                              [[:db.purge/attribute held :kontor.partner/name]]]]))))))
 
 ;; ============================================================================
 ;; P1-1 review fix: :pending-review → :released still SoD-gated
@@ -284,7 +284,7 @@
   (let [conn (bootstrap)
         db (d/db conn)
         counsel-eid (uid db "counsel")
-        held (d/q '[:find ?e . :where [?e :partner/external-id "ACME"]] db)
+        held (d/q '[:find ?e . :where [?e :kontor.partner/external-id "ACME"]] db)
         _ (lhold/place! conn
                         {:code "HOLD-PR"
                          :matter-name "pending-review SoD test"
@@ -331,7 +331,7 @@
 (deftest multi-hold-overlap
   (let [conn (bootstrap)
         db (d/db conn)
-        held (d/q '[:find ?e . :where [?e :partner/external-id "ACME"]] db)
+        held (d/q '[:find ?e . :where [?e :kontor.partner/external-id "ACME"]] db)
         ;; Two holds, both scoping the same entity.
         _ (lhold/place! conn
                         {:code "HOLD-OV-1"
@@ -407,14 +407,14 @@
                          :issued-at #inst "2026-05-13"
                          :supporting-doc (adoc-eid db "DOC-PLACE-001")
                          :reason-note "Query-scoped hold."
-                         :scope-query "[:find ?e :where [?e :partner/kind :customer]]"})
+                         :scope-query "[:find ?e :where [?e :kontor.partner/kind :customer]]"})
         hold-eid (lhold/by-code (d/db conn) "HOLD-REFRESH")
         ;; Initially: ACME is the only :customer partner.
         r1 (lhold/refresh-scope-eids! conn hold-eid)
         ;; Add a second customer.
-        _ (d/transact conn [{:partner/external-id "CUST-2"
-                             :partner/name "Customer Two"
-                             :partner/kind :customer}])
+        _ (d/transact conn [{:kontor.partner/external-id "CUST-2"
+                             :kontor.partner/name "Customer Two"
+                             :kontor.partner/kind :customer}])
         r2 (lhold/refresh-scope-eids! conn hold-eid)
         cached-after (set (map :db/id
                                (:legal-hold/scope-eids
@@ -436,7 +436,7 @@
 (deftest dsar-read-against-held-entity-succeeds
   (let [conn (bootstrap)
         db (d/db conn)
-        held (d/q '[:find ?e . :where [?e :partner/external-id "ACME"]] db)
+        held (d/q '[:find ?e . :where [?e :kontor.partner/external-id "ACME"]] db)
         _ (lhold/place! conn
                         {:code "HOLD-DSAR"
                          :matter-name "DSAR-read coverage"
@@ -449,6 +449,6 @@
       ;; ADR-052 (DSAR) will collect ALL data on a subject including
       ;; data under hold; the hold blocks erasure, not access.
       (let [pulled (d/pull (d/db conn) '[*] held)]
-        (is (= "Acme Corp" (:partner/name pulled)))
+        (is (= "Acme Corp" (:kontor.partner/name pulled)))
         (is (lhold/entity-held? (d/db conn) held)
             "…and the entity is confirmed held while still readable.")))))

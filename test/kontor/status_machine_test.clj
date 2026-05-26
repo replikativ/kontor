@@ -189,14 +189,14 @@
   (seed-order-status-transitions! *conn*)
   ;; Create two orgs and add an org-specific override on one.
   (d/transact *conn*
-              [{:entity/code "ACME"
-                :entity/name "Acme Corp"
-                :entity/kind :operating
-                :entity/active true}
-               {:entity/code "OTHER"
-                :entity/name "Other Co"
-                :entity/kind :operating
-                :entity/active true}])
+              [{:kontor.entity/code "ACME"
+                :kontor.entity/name "Acme Corp"
+                :kontor.entity/kind :operating
+                :kontor.entity/active true}
+               {:kontor.entity/code "OTHER"
+                :kontor.entity/name "Other Co"
+                :kontor.entity/kind :operating
+                :kontor.entity/active true}])
   ;; ACME allows :completed → :approved (re-open), which is NOT in the
   ;; tenant-wide vocabulary.
   (d/transact *conn*
@@ -204,7 +204,7 @@
                 :status-transition/facet :order/status
                 :status-transition/from :order.status/completed
                 :status-transition/to :order.status/approved
-                :status-transition/applies-to-org [:entity/code "ACME"]
+                :status-transition/applies-to-org [:kontor.entity/code "ACME"]
                 :status-transition/active true
                 :status-transition/name "Re-open ACME order"}])
   (let [db (d/db *conn*)]
@@ -340,15 +340,15 @@
                 :approval-policy/rule :no-self-approval
                 :approval-policy/active true}])
   ;; Seed two opaque user entities via partner records (which exist
-  ;; in the kernel schema with :partner/external-id identity).
+  ;; in the kernel schema with :kontor.partner/external-id identity).
   (d/transact *conn*
-              [{:partner/external-id "U-alice" :partner/name "Alice"}
-               {:partner/external-id "U-bob"   :partner/name "Bob"}])
+              [{:kontor.partner/external-id "U-alice" :kontor.partner/name "Alice"}
+               {:kontor.partner/external-id "U-bob"   :kontor.partner/name "Bob"}])
   (let [alice (d/q '[:find ?u . :in $ ?id
-                     :where [?u :partner/external-id ?id]]
+                     :where [?u :kontor.partner/external-id ?id]]
                    (d/db *conn*) "U-alice")
         bob (d/q '[:find ?u . :in $ ?id
-                   :where [?u :partner/external-id ?id]]
+                   :where [?u :kontor.partner/external-id ?id]]
                  (d/db *conn*) "U-bob")
         _ (d/transact *conn* [{:ord/code "O-SELF"
                                :ord/status :ord.status/created

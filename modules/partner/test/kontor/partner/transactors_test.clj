@@ -58,17 +58,17 @@
           partner (d/pull db '[*] eid)
           person  (p/person db "P-CREATE-1")]
       (is (pos-int? eid) "partner eid resolves")
-      (is (= "Jane Doe"   (:partner/name partner)))
-      (is (= :person      (:partner/type partner)))
-      (is (= :enabled     (:partner/status partner)) ":status defaults to :enabled")
-      (is (= :customer    (:partner/kind partner)))
-      (is (= "DE"         (:partner/country-code partner)))
-      (is (some? (:partner/created-at partner)) ":created-at is stamped")
-      (is (some? (:partner/modified-at partner)) ":modified-at is stamped")
-      (is (= "Jane" (:person/first-name person)))
-      (is (= "Doe"  (:person/last-name person)))
-      (is (= :female (:person/gender person)))
-      (is (= #inst "1990-04-12" (:person/birth-date person))))))
+      (is (= "Jane Doe"   (:kontor.partner/name partner)))
+      (is (= :person      (:kontor.partner/type partner)))
+      (is (= :enabled     (:kontor.partner/status partner)) ":status defaults to :enabled")
+      (is (= :customer    (:kontor.partner/kind partner)))
+      (is (= "DE"         (:kontor.partner/country-code partner)))
+      (is (some? (:kontor.partner/created-at partner)) ":created-at is stamped")
+      (is (some? (:kontor.partner/modified-at partner)) ":modified-at is stamped")
+      (is (= "Jane" (:kontor.person/first-name person)))
+      (is (= "Doe"  (:kontor.person/last-name person)))
+      (is (= :female (:kontor.person/gender person)))
+      (is (= #inst "1990-04-12" (:kontor.person/birth-date person))))))
 
 (deftest create-party!-org-branch
   (testing "Creates the :partner root + 1:1 :org subtype in one tx"
@@ -88,8 +88,8 @@
     (let [db (d/db *conn*)
           partner (d/pull db '[*] (p/by-external-id db "O-CREATE-1"))
           org (p/org db "O-CREATE-1")]
-      (is (= :org      (:partner/type partner)))
-      (is (= "DE123456789" (:partner/tax-id partner)))
+      (is (= :org      (:kontor.partner/type partner)))
+      (is (= "DE123456789" (:kontor.partner/tax-id partner)))
       (is (= :gmbh     (:org/legal-form org)))
       (is (= "HRB 12345" (:org/registration-number org)))
       (is (= 42        (:org/num-employees org))))))
@@ -110,7 +110,7 @@
     (p/create-party! *conn*
                      {:external-id "P-UNIQ" :type :person :name "First"})
     ;; :db.unique/identity → second tx upserts on the :partner root,
-    ;; but :person/partner with :db.unique/value rejects a second
+    ;; but :kontor.person/partner with :db.unique/value rejects a second
     ;; subtype row on the same partner. We only test the first half
     ;; here — the schema-uniqueness test in partner-test already
     ;; covers the subtype-clash case.
@@ -122,9 +122,9 @@
 
 (deftest update-party!-rewrites-fields
   (p/create-party! *conn* {:external-id "P-UPD" :type :person :name "Old Name"})
-  (let [before-modified (-> (d/pull (d/db *conn*) [:partner/modified-at]
+  (let [before-modified (-> (d/pull (d/db *conn*) [:kontor.partner/modified-at]
                                     (p/by-external-id (d/db *conn*) "P-UPD"))
-                            :partner/modified-at)]
+                            :kontor.partner/modified-at)]
     (Thread/sleep 5)
     (p/update-party! *conn* "P-UPD"
                      {:name        "New Name"
@@ -134,12 +134,12 @@
     (let [db (d/db *conn*)
           partner (d/pull db '[*] (p/by-external-id db "P-UPD"))]
       (testing "named fields are mutated"
-        (is (= "New Name" (:partner/name partner)))
-        (is (= :disabled  (:partner/status partner)))
-        (is (= "AT"       (:partner/country-code partner)))
-        (is (= "renamed during MDM cleanup" (:partner/description partner))))
+        (is (= "New Name" (:kontor.partner/name partner)))
+        (is (= :disabled  (:kontor.partner/status partner)))
+        (is (= "AT"       (:kontor.partner/country-code partner)))
+        (is (= "renamed during MDM cleanup" (:kontor.partner/description partner))))
       (testing ":modified-at is bumped on every update"
-        (is (.after ^java.util.Date (:partner/modified-at partner)
+        (is (.after ^java.util.Date (:kontor.partner/modified-at partner)
                     ^java.util.Date before-modified))))))
 
 (deftest update-party!-validation

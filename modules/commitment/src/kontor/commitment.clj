@@ -52,7 +52,7 @@
   [db spec]
   (when-let [eid (resolve-commitment db spec)]
     (d/pull db
-            '[* {:commitment/counterparty [:partner/external-id]}
+            '[* {:commitment/counterparty [:kontor.partner/external-id]}
               {:commitment/commodity [:kontor.commodity/symbol]}]
             eid)))
 

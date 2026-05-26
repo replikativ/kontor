@@ -35,10 +35,10 @@
     (inv-schema/install! conn)
     (d/transact conn
                 [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
-                 {:partner/external-id "P-widget" :partner/name "Widget"}
-                 {:partner/external-id "O-1"  :partner/name "Order 1"}
-                 {:partner/external-id "OI-1" :partner/name "Order line 1"}
-                 {:partner/external-id "SG-1" :partner/name "Ship group 1"}
+                 {:kontor.partner/external-id "P-widget" :kontor.partner/name "Widget"}
+                 {:kontor.partner/external-id "O-1"  :kontor.partner/name "Order 1"}
+                 {:kontor.partner/external-id "OI-1" :kontor.partner/name "Order line 1"}
+                 {:kontor.partner/external-id "SG-1" :kontor.partner/name "Ship group 1"}
                  ;; GL accounts.
                  {:db/id "acct-inv" :account/code "1400" :account/name "Inventory"
                   :account/type :asset :account/active true}
@@ -59,7 +59,7 @@
 (defn- ref-eid [db a v]
   (d/q '[:find ?e . :in $ ?a ?v :where [?e ?a ?v]] db a v))
 
-(defn- p       [db code] (ref-eid db :partner/external-id code))
+(defn- p       [db code] (ref-eid db :kontor.partner/external-id code))
 (defn- acct    [db code] (ref-eid db :account/code code))
 (defn- book    [db] (ref-eid db :valuation-book/code "primary"))
 (defn- journal [db] (ref-eid db :journal/code "GEN"))

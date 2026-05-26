@@ -35,10 +35,10 @@
                  ;; order-item,ship-group} are bare refs; reuse :partner
                  ;; entities as stand-ins (the kernel test convention —
                  ;; the real order aggregate lives in kontor-sales).
-                 {:partner/external-id "P-widget" :partner/name "Widget"}
-                 {:partner/external-id "O-1"  :partner/name "Order 1"}
-                 {:partner/external-id "OI-1" :partner/name "Order line 1"}
-                 {:partner/external-id "SG-1" :partner/name "Ship group 1"}
+                 {:kontor.partner/external-id "P-widget" :kontor.partner/name "Widget"}
+                 {:kontor.partner/external-id "O-1"  :kontor.partner/name "Order 1"}
+                 {:kontor.partner/external-id "OI-1" :kontor.partner/name "Order line 1"}
+                 {:kontor.partner/external-id "SG-1" :kontor.partner/name "Ship group 1"}
                  {:db/id "lot-a" :lot/label "LOT-A"}
                  {:db/id "lot-b" :lot/label "LOT-B"}])
     conn))
@@ -46,7 +46,7 @@
 (defn- ref-eid [db a v]
   (d/q '[:find ?e . :in $ ?a ?v :where [?e ?a ?v]] db a v))
 
-(defn- p   [db code] (ref-eid db :partner/external-id code))
+(defn- p   [db code] (ref-eid db :kontor.partner/external-id code))
 (defn- lot [db label] (ref-eid db :lot/label label))
 
 (defn- order-refs [db]

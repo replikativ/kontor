@@ -13,7 +13,7 @@
                                   trio from kontor.payroll-provider
      - kontor.hr.dsar          — collect-for-person walk (consumer
                                   drives this from a :dsar-request's
-                                  partner → :partner/person link)
+                                  partner → :kontor.partner/person link)
 
    Per ADR-002 the companion cohabits with the kernel + other
    companions in one DB. Per ADR-075 the only kernel additions are
@@ -36,7 +36,7 @@
 
    P1-86-5: registers an extension collector with `kontor.dsar` so
    the kernel-canonical `kontor.dsar/collect` walk reaches the HR
-   side. The :partner/person link is partner→person (not
+   side. The :kontor.partner/person link is partner→person (not
    person→partner like the rest of the partner-attrs registry), so
    it can't ride the standard partner-attrs mechanism; instead, HR
    registers a collector fn that, given a partner eid, pulls the
@@ -50,7 +50,7 @@
    (fn [db partner-eid opts]
      (when-let [person-eid (d/q '[:find ?p .
                                   :in $ ?pa
-                                  :where [?pa :partner/person ?p]]
+                                  :where [?pa :kontor.partner/person ?p]]
                                 db partner-eid)]
        ((requiring-resolve 'kontor.hr.dsar/collect-for-person)
         db person-eid
@@ -61,9 +61,9 @@
 ;; ============================================================================
 
 (defn person-by-external-id
-  "Resolve a :person eid by :person/external-id."
+  "Resolve a :person eid by :kontor.person/external-id."
   [db external-id]
-  (d/q '[:find ?e . :in $ ?x :where [?e :person/external-id ?x]] db external-id))
+  (d/q '[:find ?e . :in $ ?x :where [?e :kontor.person/external-id ?x]] db external-id))
 
 (defn employment-by-code
   "Resolve an :employment eid by :employment/code."

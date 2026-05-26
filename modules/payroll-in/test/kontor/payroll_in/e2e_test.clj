@@ -42,9 +42,9 @@
     ;; Test fixtures
     (d/transact conn
                 [{:db/id "ent-acme-in"
-                  :entity/code "ACME-IN"
-                  :entity/name "Acme India Pvt Ltd"
-                  :entity/kind :operating}
+                  :kontor.entity/code "ACME-IN"
+                  :kontor.entity/name "Acme India Pvt Ltd"
+                  :kontor.entity/kind :operating}
                  {:db/id "journal-pay"
                   :journal/code "PAY-IN"
                   :journal/name "Payroll (IN)"
@@ -62,7 +62,7 @@
 
 (defn- setup-employees [conn]
   (let [db (d/db conn)
-        acme (ref-eid db :entity/code "ACME-IN")]
+        acme (ref-eid db :kontor.entity/code "ACME-IN")]
     (doseq [[ext given family] [["P-E001" "Ravi" "Sharma"]    ; MH
                                 ["P-E002" "Anita" "Reddy"]    ; KA
                                 ["P-E003" "Kiran" "Kumar"]]]  ; TN
@@ -130,7 +130,7 @@
   (let [conn (bootstrap)
         _ (setup-employees conn)
         db (d/db conn)
-        acme    (ref-eid db :entity/code "ACME-IN")
+        acme    (ref-eid db :kontor.entity/code "ACME-IN")
         inr     (ref-eid db :kontor.commodity/symbol "INR")
         ledger  (ref-eid db :ledger/code "ind-as")
         journal (ref-eid db :journal/code "PAY-IN")

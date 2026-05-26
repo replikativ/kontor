@@ -53,8 +53,8 @@
     (d/transact
      conn
      [{:kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
-      {:entity/code "ACME-DE" :entity/name "Acme Manufacturing GmbH"
-       :entity/active true}
+      {:kontor.entity/code "ACME-DE" :kontor.entity/name "Acme Manufacturing GmbH"
+       :kontor.entity/active true}
       {:journal/code "PAY-DE" :journal/name "Payroll DE" :journal/type :general}
       {:journal/code "GEN-DE" :journal/name "General DE" :journal/type :general}
       {:period/name "2026" :period/start #inst "2026-01-01"
@@ -79,7 +79,7 @@
 (deftest multi-year-de-gmbh-end-to-end
   (let [conn (bootstrap)
         eur (ref-eid (d/db conn) :kontor.commodity/symbol "EUR")
-        ent (ref-eid (d/db conn) :entity/code "ACME-DE")
+        ent (ref-eid (d/db conn) :kontor.entity/code "ACME-DE")
         j-gen (ref-eid (d/db conn) :journal/code "GEN-DE")]
 
     ;; ===== Year 1 setup =====
@@ -235,11 +235,11 @@
 
         ;; ===== Year 3 DSAR + retention sweep =====
         (d/transact conn
-                    [{:partner/external-id "PARTNER-schmidt"
-                      :partner/name "Anna Schmidt"
-                      :partner/kind :employee
-                      :partner/person schmidt}])
-        (let [schmidt-partner (ref-eid (d/db conn) :partner/external-id "PARTNER-schmidt")
+                    [{:kontor.partner/external-id "PARTNER-schmidt"
+                      :kontor.partner/name "Anna Schmidt"
+                      :kontor.partner/kind :employee
+                      :kontor.partner/person schmidt}])
+        (let [schmidt-partner (ref-eid (d/db conn) :kontor.partner/external-id "PARTNER-schmidt")
               kernel-bundle (dsar/collect (d/db conn) schmidt-partner {})
               pr-bundle (pr/dsar-bundle (d/db conn) schmidt)]
 

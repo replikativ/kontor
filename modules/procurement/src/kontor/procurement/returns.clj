@@ -41,10 +41,10 @@
   [db spec]
   (when-let [eid (resolve-return db spec)]
     (d/pull db
-            '[* {:return/from-party [:partner/external-id :partner/name]
-                 :return/to-party [:partner/external-id :partner/name]
+            '[* {:return/from-party [:kontor.partner/external-id :kontor.partner/name]
+                 :return/to-party [:kontor.partner/external-id :kontor.partner/name]
                  :return/order [:order/external-id :order/type]
-                 :return/entity [:entity/code]
+                 :return/entity [:kontor.entity/code]
                  :return/supporting-doc [:audit-doc/code :audit-doc/type]}]
             eid)))
 

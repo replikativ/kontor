@@ -45,11 +45,11 @@
     (let [conn (ca-preset/create-ca-db)
           ;; Add the entity + partner the helper expects
           _ (d/transact conn
-              [{:entity/name "Christian (Individual)" :entity/code "CW"
-                :entity/country "CA"
-                :entity/functional-commodity cad}
-               {:partner/name "Hans-Tech UG" :partner/external-id "HT-UG"
-                :partner/country-code "DE"}
+              [{:kontor.entity/name "Christian (Individual)" :kontor.entity/code "CW"
+                :kontor.entity/country "CA"
+                :kontor.entity/functional-commodity cad}
+               {:kontor.partner/name "Hans-Tech UG" :kontor.partner/external-id "HT-UG"
+                :kontor.partner/country-code "DE"}
                ;; The 3 extra accounts the helper writes to
                {:account/path "Income:Dividends:Foreign:DE"  :account/type :income
                 :account/commodity cad}
@@ -64,8 +64,8 @@
                :income-kind      :dividend-portfolio
                :fx-rate          1.50M
                :effective-date   #inst "2027-01-20"
-               :payer-partner    [:partner/external-id "HT-UG"]
-               :entity           [:entity/code "CW"]})
+               :payer-partner    [:kontor.partner/external-id "HT-UG"]
+               :entity           [:kontor.entity/code "CW"]})
           tb (trial/trial-balance conn)
           pull-path (fn [eid] (:account/path
                                (d/pull (d/db conn) [:account/path] eid)))

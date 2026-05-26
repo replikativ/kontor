@@ -30,14 +30,14 @@
   (d/transact *conn*
               [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                 :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
-               {:entity/code "ACME" :entity/name "Acme Inc"
-                :entity/kind :operating :entity/active true}
-               {:partner/external-id "ACME-ORG" :partner/type :org
-                :partner/status :enabled :partner/name "Acme Inc"}
-               {:partner/external-id "CUSTOMER" :partner/type :person
-                :partner/status :enabled :partner/name "Customer Jane"}
-               {:partner/external-id "SUPPLIER" :partner/type :org
-                :partner/status :enabled :partner/name "Supplier Co"}]))
+               {:kontor.entity/code "ACME" :kontor.entity/name "Acme Inc"
+                :kontor.entity/kind :operating :kontor.entity/active true}
+               {:kontor.partner/external-id "ACME-ORG" :kontor.partner/type :org
+                :kontor.partner/status :enabled :kontor.partner/name "Acme Inc"}
+               {:kontor.partner/external-id "CUSTOMER" :kontor.partner/type :person
+                :kontor.partner/status :enabled :kontor.partner/name "Customer Jane"}
+               {:kontor.partner/external-id "SUPPLIER" :kontor.partner/type :org
+                :kontor.partner/status :enabled :kontor.partner/name "Supplier Co"}]))
 
 (defn- create-order!
   "Create an order + one item; returns {:order-eid :item-eid}."
@@ -51,9 +51,9 @@
                 :order/order-date #inst "2026-05-01"
                 :order/entry-date #inst "2026-05-01"
                 :order/currency [:kontor.commodity/symbol "EUR"]
-                :order/bill-from-partner [:partner/external-id bill-from]
-                :order/bill-to-partner [:partner/external-id bill-to]
-                :order/entity [:entity/code "ACME"]}
+                :order/bill-from-partner [:kontor.partner/external-id bill-from]
+                :order/bill-to-partner [:kontor.partner/external-id bill-to]
+                :order/entity [:kontor.entity/code "ACME"]}
                {:order-item/order [:order/external-id external-id]
                 :order-item/seq-id "00001"
                 :order-item/type :product

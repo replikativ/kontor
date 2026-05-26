@@ -30,7 +30,7 @@
     (asset-schema/install! conn)
     (d/transact conn
                 [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
-                 {:partner/external-id "U-buyer" :partner/name "Asset Buyer"}
+                 {:kontor.partner/external-id "U-buyer" :kontor.partner/name "Asset Buyer"}
                  {:db/id "acct-machinery"
                   :account/code "0210" :account/name "Machinery"
                   :account/type :asset :account/active true}
@@ -56,7 +56,7 @@
 (defn- ref-eid [db a v]
   (d/q '[:find ?e . :in $ ?a ?v :where [?e ?a ?v]] db a v))
 
-(defn- uid       [db] (ref-eid db :partner/external-id "U-buyer"))
+(defn- uid       [db] (ref-eid db :kontor.partner/external-id "U-buyer"))
 (defn- commodity [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- acct      [db code] (ref-eid db :account/code code))
 (defn- hgb       [db] (ref-eid db :ledger/code "hgb"))

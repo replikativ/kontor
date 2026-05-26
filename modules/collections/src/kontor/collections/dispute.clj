@@ -39,8 +39,8 @@
                  :dispute/scope   [:db/id
                                    :invoice-line/sequence
                                    :invoice-line/name]
-                 :dispute/opened-by-uid [:partner/external-id]
-                 :dispute/resolved-by-uid [:partner/external-id]
+                 :dispute/opened-by-uid [:kontor.partner/external-id]
+                 :dispute/resolved-by-uid [:kontor.partner/external-id]
                  :dispute/supporting-doc [:audit-doc/code]}]
             eid)))
 

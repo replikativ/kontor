@@ -28,25 +28,25 @@
     (d/transact *conn*
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                   :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
-                 {:entity/code "ACME-DE" :entity/name "Acme GmbH"
-                  :entity/kind :operating :entity/active true}
-                 {:partner/external-id "CUST"
-                  :partner/name "Customer"
-                  :partner/kind :customer
-                  :partner/credit-status :open
-                  :partner/credit-limit 10000M}
-                 {:partner/external-id "U-alice" :partner/name "Alice"}
-                 {:partner/external-id "U-bob"   :partner/name "Bob"}])
+                 {:kontor.entity/code "ACME-DE" :kontor.entity/name "Acme GmbH"
+                  :kontor.entity/kind :operating :kontor.entity/active true}
+                 {:kontor.partner/external-id "CUST"
+                  :kontor.partner/name "Customer"
+                  :kontor.partner/kind :customer
+                  :kontor.partner/credit-status :open
+                  :kontor.partner/credit-limit 10000M}
+                 {:kontor.partner/external-id "U-alice" :kontor.partner/name "Alice"}
+                 {:kontor.partner/external-id "U-bob"   :kontor.partner/name "Bob"}])
     (f)))
 
 (use-fixtures :each bootstrap)
 
 (defn- partner [xid]
-  (d/q '[:find ?p . :in $ ?x :where [?p :partner/external-id ?x]]
+  (d/q '[:find ?p . :in $ ?x :where [?p :kontor.partner/external-id ?x]]
        (d/db *conn*) xid))
 
 (defn- entity [c]
-  (d/q '[:find ?e . :in $ ?c :where [?e :entity/code ?c]] (d/db *conn*) c))
+  (d/q '[:find ?e . :in $ ?c :where [?e :kontor.entity/code ?c]] (d/db *conn*) c))
 
 (defn- actor [u] (partner (str "U-" u)))
 

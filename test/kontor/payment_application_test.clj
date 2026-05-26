@@ -18,12 +18,12 @@
     (d/transact *conn*
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                   :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
-                 {:partner/external-id "ACME"
-                  :partner/name "ACME GmbH"
-                  :partner/kind :customer}
-                 {:partner/external-id "OWN"
-                  :partner/name "Self GmbH"
-                  :partner/kind :company}
+                 {:kontor.partner/external-id "ACME"
+                  :kontor.partner/name "ACME GmbH"
+                  :kontor.partner/kind :customer}
+                 {:kontor.partner/external-id "OWN"
+                  :kontor.partner/name "Self GmbH"
+                  :kontor.partner/kind :company}
                  ;; A fake :create/uid for actor refs.
                  {:db/id "actor-1"
                   :create/uid "alice@example"}])
@@ -41,8 +41,8 @@
   [external-id gross]
   (let [db (d/db *conn*)
         eur (d/q '[:find ?c . :where [?c :kontor.commodity/symbol "EUR"]] db)
-        seller (d/q '[:find ?p . :where [?p :partner/external-id "OWN"]] db)
-        buyer  (d/q '[:find ?p . :where [?p :partner/external-id "ACME"]] db)
+        seller (d/q '[:find ?p . :where [?p :kontor.partner/external-id "OWN"]] db)
+        buyer  (d/q '[:find ?p . :where [?p :kontor.partner/external-id "ACME"]] db)
         invoice-tempid "inv-1"
         line-tempid "line-1"]
     (d/transact *conn*
@@ -72,7 +72,7 @@
    so multiple receipts can coexist."
   [external-id]
   (let [db (d/db *conn*)
-        buyer (d/q '[:find ?p . :where [?p :partner/external-id "ACME"]] db)]
+        buyer (d/q '[:find ?p . :where [?p :kontor.partner/external-id "ACME"]] db)]
     (d/transact *conn*
                 [{:transaction/external-id external-id
                   :transaction/state :posted
@@ -277,7 +277,7 @@
                           :invoice/transaction
                           [:transaction/external-id "T-NEW"]}])
           pay     (make-payment! "PAY-E")
-          buyer   (d/q '[:find ?p . :where [?p :partner/external-id "ACME"]]
+          buyer   (d/q '[:find ?p . :where [?p :kontor.partner/external-id "ACME"]]
                        (d/db *conn*))]
       (let [allocs (papp/allocate-fifo! *conn*
                                         {:payment pay

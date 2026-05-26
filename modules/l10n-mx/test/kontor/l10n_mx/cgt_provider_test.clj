@@ -30,13 +30,13 @@
     (cgt-statute/install! conn)
     (d/transact conn [{:kontor.commodity/symbol "MXN" :kontor.commodity/name "Mexican Peso"
                        :kontor.commodity/precision 2}
-                      {:entity/code "HOLDCO" :entity/name "HoldCo SA de CV"
-                       :entity/kind :company :entity/country "MX"
-                       :entity/functional-commodity [:kontor.commodity/symbol "MXN"]}])
+                      {:kontor.entity/code "HOLDCO" :kontor.entity/name "HoldCo SA de CV"
+                       :kontor.entity/kind :company :kontor.entity/country "MX"
+                       :kontor.entity/functional-commodity [:kontor.commodity/symbol "MXN"]}])
     conn))
 
 (def ^:private mxn [:kontor.commodity/symbol "MXN"])
-(def ^:private holdco [:entity/code "HOLDCO"])
+(def ^:private holdco [:kontor.entity/code "HOLDCO"])
 
 (defn- record!
   "Record a minimal MX disposal — proceeds + basis in MXN."
@@ -52,7 +52,7 @@
                opts)))
 
 (defn- holdco-eid [conn]
-  (d/q '[:find ?e . :where [?e :entity/code "HOLDCO"]] (d/db conn)))
+  (d/q '[:find ?e . :where [?e :kontor.entity/code "HOLDCO"]] (d/db conn)))
 
 (defn- run-provider
   "Build a provider, call `period-tax-facts`, return the facts."

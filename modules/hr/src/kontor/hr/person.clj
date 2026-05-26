@@ -41,13 +41,13 @@
   (when-not given-name  (throw (ex-info ":given-name required" {})))
   (when-not family-name (throw (ex-info ":family-name required" {})))
   [(cond-> {:db/id tempid
-            :person/external-id external-id
-            :person/given-name given-name
-            :person/family-name family-name
-            :person/state :active}
-     birth-date            (assoc :person/birth-date birth-date)
-     (seq citizenship)     (assoc :person/citizenship (vec citizenship))
-     kind                  (assoc :person/kind kind))])
+            :kontor.person/external-id external-id
+            :kontor.person/given-name given-name
+            :kontor.person/family-name family-name
+            :kontor.person/state :active}
+     birth-date            (assoc :kontor.person/birth-date birth-date)
+     (seq citizenship)     (assoc :kontor.person/citizenship (vec citizenship))
+     kind                  (assoc :kontor.person/kind kind))])
 
 (defn create-person!
   "Transact a new :person. Routes through transact-with-validation

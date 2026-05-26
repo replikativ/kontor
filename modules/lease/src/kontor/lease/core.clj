@@ -44,7 +44,7 @@
   [db spec]
   (when-let [eid (resolve-lease db spec)]
     (d/pull db
-            '[* {:lease/lessor [:db/id :partner/external-id :partner/name]
+            '[* {:lease/lessor [:db/id :kontor.partner/external-id :kontor.partner/name]
                  :lease/rou-asset [:db/id :asset/code :asset/status]
                  :lease/asset-class [:db/id :asset-class/code]}]
             eid)))

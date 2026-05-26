@@ -138,8 +138,8 @@
      `:tax-unit :pfu-or-bareme`.
    - The mère-fille 5 % QPFC is a single multiplier on qualifying
      gross dividends; the eligibility test (5 % stake + 2y hold) is a
-     consumer-supplied fact pair (`:partner/holding-fraction` +
-     `:partner/held-since` per note 149 G2), not a statute provision.
+     consumer-supplied fact pair (`:kontor.partner/holding-fraction` +
+     `:kontor.partner/held-since` per note 149 G2), not a statute provision.
    - PEA / assurance-vie exemptions ride per-disposal flags on the
      posting (`:account-tag :fr-investment-income/pea-*` family); the
      provider filters at component-build time.

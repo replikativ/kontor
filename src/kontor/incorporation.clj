@@ -45,7 +45,7 @@
    ## What this namespace does NOT do
 
    - **Validate corporate-law eligibility** — that's the consumer's
-     job (a US single-member LLC has different `:entity/legal-form`
+     job (a US single-member LLC has different `:kontor.entity/legal-form`
      than a DE GmbH).
    - **Compute the FMV / basis differences** — the consumer supplies
      `:basis` per contribution; FMV is inferred as `:amount`.
@@ -280,23 +280,23 @@
   (let [corp-tempid   (str tx-tempid "-corp-entity")
         ;; The corp-spec is mostly free-form — only the required attrs
         ;; (code, name, functional-commodity) are mandatory. Consumers
-        ;; needing `:entity/country` (which is a REF to a `:country`
+        ;; needing `:kontor.entity/country` (which is a REF to a `:country`
         ;; entity, not a string) pass an already-resolved ref.
         corp-row      (-> {:db/id                       corp-tempid
-                           :entity/code                 (:code corp-spec)
-                           :entity/name                 (:name corp-spec)
-                           :entity/functional-commodity (:functional-commodity corp-spec)
-                           :entity/kind                 (or (:kind corp-spec) :company)
-                           :entity/active               true}
+                           :kontor.entity/code                 (:code corp-spec)
+                           :kontor.entity/name                 (:name corp-spec)
+                           :kontor.entity/functional-commodity (:functional-commodity corp-spec)
+                           :kontor.entity/kind                 (or (:kind corp-spec) :company)
+                           :kontor.entity/active               true}
                           (cond->
                            (:legal-form corp-spec)
-                            (assoc :entity/legal-form (:legal-form corp-spec))
+                            (assoc :kontor.entity/legal-form (:legal-form corp-spec))
                             (:country corp-spec)
-                            (assoc :entity/country (:country corp-spec))
+                            (assoc :kontor.entity/country (:country corp-spec))
                             (:registration-status corp-spec)
-                            (assoc :entity/registration-status (:registration-status corp-spec))
+                            (assoc :kontor.entity/registration-status (:registration-status corp-spec))
                             (:parent-entity corp-spec)
-                            (assoc :entity/parent-entity (:parent-entity corp-spec))))
+                            (assoc :kontor.entity/parent-entity (:parent-entity corp-spec))))
         opts          {:corp-entity corp-tempid
                        :founder-entity founder-entity
                        :common-stock-account common-stock-account
@@ -344,7 +344,7 @@
    `kontor.validation`. See `incorporate-tx-data` for opts.
 
    Returns the transact result. The new corp's `:entity` eid is
-   reachable via `(d/entity (d/db conn) [:entity/code <corp-code>])`."
+   reachable via `(d/entity (d/db conn) [:kontor.entity/code <corp-code>])`."
   [conn {:keys [vt-from vt-to effective-date] :as opts}]
   (validation/transact-with-validation
    conn (kbt/with-vt (incorporate-tx-data (d/db conn) opts)

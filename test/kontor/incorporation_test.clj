@@ -21,9 +21,9 @@
                 [{:kontor.commodity/symbol "USD" :kontor.commodity/name "US Dollar"
                   :kontor.commodity/precision 2}
                  ;; Founder entity (Sarah's individual books).
-                 {:entity/code "SARAH"  :entity/name "Sarah Chen (Individual)"
-                  :entity/kind :individual :entity/country "US"
-                  :entity/functional-commodity usd}
+                 {:kontor.entity/code "SARAH"  :kontor.entity/name "Sarah Chen (Individual)"
+                  :kontor.entity/kind :individual :kontor.entity/country "US"
+                  :kontor.entity/functional-commodity usd}
                  ;; Journals.
                  {:journal/code "GEN"     :journal/type :general :journal/active true}
                  {:journal/code "CASH"    :journal/type :cash    :journal/active true}
@@ -55,7 +55,7 @@
                   :account/commodity usd}])
     conn))
 
-(def ^:private sarah [:entity/code "SARAH"])
+(def ^:private sarah [:kontor.entity/code "SARAH"])
 
 ;; ============================================================================
 ;; §1. Plumbing — incorporate-tx-data validation
@@ -106,12 +106,12 @@
         :shares-issued {:par 0.01M :count 5000M}})
 
       (let [db (d/db conn)
-            corp-eid (d/q '[:find ?e . :in $ ?c :where [?e :entity/code ?c]]
+            corp-eid (d/q '[:find ?e . :in $ ?c :where [?e :kontor.entity/code ?c]]
                           db "SARAHCO")]
         (testing "the new :entity is materialised"
           (is (some? corp-eid))
-          (is (= "SarahCo LLC" (:entity/name (d/entity db corp-eid))))
-          (is (= "LLC" (:entity/legal-form (d/entity db corp-eid)))))
+          (is (= "SarahCo LLC" (:kontor.entity/name (d/entity db corp-eid))))
+          (is (= "LLC" (:kontor.entity/legal-form (d/entity db corp-eid)))))
 
         (testing "no disposal emitted (basis = amount)"
           (is (empty? (disposal/disposals-in-period
@@ -139,7 +139,7 @@
         :founder-investment-account [:account/path "Assets:Investment-SARAHCO"]
         :shares-issued {:par 1M :count 1000M}})
       (let [db (d/db conn)]
-        (is (some? (d/q '[:find ?e . :in $ ?c :where [?e :entity/code ?c]]
+        (is (some? (d/q '[:find ?e . :in $ ?c :where [?e :kontor.entity/code ?c]]
                         db "DUO")))))))
 
 ;; ============================================================================

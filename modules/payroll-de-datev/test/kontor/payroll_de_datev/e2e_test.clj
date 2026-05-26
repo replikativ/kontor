@@ -76,8 +76,8 @@
     (d/transact conn
                 (concat
                  [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
-                  {:db/id "ent-de" :entity/code "DE-GMBH" :entity/name "Acme DE GmbH"
-                   :entity/kind :operating}
+                  {:db/id "ent-de" :kontor.entity/code "DE-GMBH" :kontor.entity/name "Acme DE GmbH"
+                   :kontor.entity/kind :operating}
                   {:db/id "journal-payroll" :journal/code "PAY-DE"
                    :journal/name "Payroll (DE)" :journal/type :general}
                   {:db/id "period-2025-11" :period/name "2025-11"
@@ -101,7 +101,7 @@
                                        :citizenship ["DE"]})
         db (d/db conn)
         person (hr/person-by-external-id db "P-mueller")
-        ent (ref-eid db :entity/code "DE-GMBH")
+        ent (ref-eid db :kontor.entity/code "DE-GMBH")
         eur (ref-eid db :kontor.commodity/symbol "EUR")
         period (ref-eid db :period/name "2025-11")
         journal (ref-eid db :journal/code "PAY-DE")

@@ -71,8 +71,8 @@
    status."
   [db report-spec]
   (when-let [eid (resolve-report db report-spec)]
-    (d/pull db '[* {:expense-report/employee [:partner/external-id
-                                              :partner/name]}]
+    (d/pull db '[* {:expense-report/employee [:kontor.partner/external-id
+                                              :kontor.partner/name]}]
             eid)))
 
 ;; ============================================================================

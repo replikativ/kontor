@@ -23,13 +23,13 @@
     (cgt-statute/install! conn)
     (d/transact conn [{:kontor.commodity/symbol "CNY" :kontor.commodity/name "Chinese Yuan"
                        :kontor.commodity/precision 2}
-                      {:entity/code "DEV" :entity/name "Developer"
-                       :entity/kind :company :entity/country "CN"
-                       :entity/functional-commodity [:kontor.commodity/symbol "CNY"]}])
+                      {:kontor.entity/code "DEV" :kontor.entity/name "Developer"
+                       :kontor.entity/kind :company :kontor.entity/country "CN"
+                       :kontor.entity/functional-commodity [:kontor.commodity/symbol "CNY"]}])
     conn))
 
 (def ^:private cny [:kontor.commodity/symbol "CNY"])
-(def ^:private dev [:entity/code "DEV"])
+(def ^:private dev [:kontor.entity/code "DEV"])
 
 (defn- record!
   [conn opts]
@@ -46,7 +46,7 @@
                opts)))
 
 (defn- dev-eid [conn]
-  (d/q '[:find ?e . :where [?e :entity/code "DEV"]] (d/db conn)))
+  (d/q '[:find ?e . :where [?e :kontor.entity/code "DEV"]] (d/db conn)))
 
 (defn- run-lat
   [conn period & [extra-ctx]]

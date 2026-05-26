@@ -382,7 +382,7 @@
              (mapv (fn [open]
                      (let [partner-name
                            (when (:partner-eid open)
-                             (:partner/name (d/pull db [:partner/name]
+                             (:kontor.partner/name (d/pull db [:kontor.partner/name]
                                                     (:partner-eid open))))
                            cp-overlap?
                            (counterparty-matches-partner? cp partner-name)]
@@ -401,7 +401,7 @@
                 (->> opens
                      (filter (fn [o]
                                (when-let [pid (:partner-eid o)]
-                                 (let [pn (:partner/name (d/pull db [:partner/name] pid))]
+                                 (let [pn (:kontor.partner/name (d/pull db [:kontor.partner/name] pid))]
                                    (counterparty-matches-partner? cp pn))))))
                 subsets (when (seq partner-opens)
                           (subsets-summing-to partner-opens amount))]

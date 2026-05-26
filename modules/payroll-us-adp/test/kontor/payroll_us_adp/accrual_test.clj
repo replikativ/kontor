@@ -28,8 +28,8 @@
     (hr/install! conn)
     (d/transact conn
                 [{:db/id "usd" :kontor.commodity/symbol "USD" :kontor.commodity/precision 2}
-                 {:db/id "ent-us" :entity/code "US-LLC" :entity/name "Acme US LLC"
-                  :entity/kind :operating}
+                 {:db/id "ent-us" :kontor.entity/code "US-LLC" :kontor.entity/name "Acme US LLC"
+                  :kontor.entity/kind :operating}
                  ;; Two ledgers — book + tax — for the parallel-ledger split.
                  {:db/id "us-gaap" :ledger/code "us-gaap"
                   :ledger/name "US GAAP (book)" :ledger/framework :us-gaap

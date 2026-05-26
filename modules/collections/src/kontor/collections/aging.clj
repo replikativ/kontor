@@ -79,7 +79,7 @@
                                        :invoice/total-gross
                                        :invoice/issue-date
                                        :invoice/currency
-                                       {:invoice/buyer [:db/id :partner/name]}
+                                       {:invoice/buyer [:db/id :kontor.partner/name]}
                                        {:invoice/transaction
                                         [:transaction/due-date]}]
                                      eid)
@@ -93,7 +93,7 @@
                    :due-date (get-in pulled [:invoice/transaction
                                              :transaction/due-date])
                    :partner-eid (get-in pulled [:invoice/buyer :db/id])
-                   :partner-name (get-in pulled [:invoice/buyer :partner/name])
+                   :partner-name (get-in pulled [:invoice/buyer :kontor.partner/name])
                    :currency (:invoice/currency pulled)})))
          (filter #(pos? (.signum ^java.math.BigDecimal (:open-amount %))))
          vec)))

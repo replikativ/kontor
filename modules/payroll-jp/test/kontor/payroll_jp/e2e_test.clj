@@ -42,9 +42,9 @@
     (pjp-chart/install! conn)
     (d/transact conn
                 [{:db/id "ent-acme-jp"
-                  :entity/code "ACME-JP"
-                  :entity/name "Acme株式会社"
-                  :entity/kind :operating}
+                  :kontor.entity/code "ACME-JP"
+                  :kontor.entity/name "Acme株式会社"
+                  :kontor.entity/kind :operating}
                  {:db/id "journal-pay"
                   :journal/code "PAY-JP"
                   :journal/name "Payroll (JP)"
@@ -137,7 +137,7 @@
   (let [conn (bootstrap)
         db (d/db conn)
         jpy (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "JPY"]] db)
-        ent (d/q '[:find ?e . :where [?e :entity/code "ACME-JP"]] db)
+        ent (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-JP"]] db)
         journal (d/q '[:find ?e . :where [?e :journal/code "PAY-JP"]] db)
         period (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)
         ;; Persons + employments

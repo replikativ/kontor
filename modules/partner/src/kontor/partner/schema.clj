@@ -7,7 +7,7 @@
    association + multi-purpose routing, capability roles, and
    temporal multi-role relationships.
 
-   This namespace extends the kernel's existing `:partner/*`
+   This namespace extends the kernel's existing `:kontor.partner/*`
    namespace and adds the new namespaces; the kernel's `:posting/
    partner` ref continues to point at the same `:partner` root
    entity. Kernel-only consumers never call `install!` here and
@@ -19,122 +19,122 @@
   (:require [datahike.api :as d]))
 
 ;; ============================================================================
-;; Root: partner extensions (additive to kernel :partner/*)
+;; Root: partner extensions (additive to kernel :kontor.partner/*)
 ;;
-;; The kernel already ships :partner/external-id (identity),
-;; :partner/name, :partner/kind, :partner/country-code,
-;; :partner/tax-id (see kontor.schema). The companion adds
+;; The kernel already ships :kontor.partner/external-id (identity),
+;; :kontor.partner/name, :kontor.partner/kind, :kontor.partner/country-code,
+;; :kontor.partner/tax-id (see kontor.schema). The companion adds
 ;; discriminator + status + audit + commodity preference.
 ;; ============================================================================
 
 (def ^:private partner-ext-attrs
-  [{:db/ident       :partner/type
+  [{:db/ident       :kontor.partner/type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Discriminator: :person or :org. Determines which
                      subtype entity (kontor.partner :person | :org)
                      carries the type-specific attributes."}
 
-   {:db/ident       :partner/status
+   {:db/ident       :kontor.partner/status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":enabled | :disabled | :archived. Soft-delete and
                      compliance-quiescent partners stay in the graph
                      for audit; queries scope by status."}
 
-   {:db/ident       :partner/preferred-commodity
+   {:db/ident       :kontor.partner/preferred-commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Default commodity (currency) for transactions
                      with this partner. Ref to :commodity."}
 
-   {:db/ident       :partner/created-at
+   {:db/ident       :kontor.partner/created-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Partner-record creation timestamp (domain-level;
                      distinct from datahike's :db/txInstant)."}
 
-   {:db/ident       :partner/modified-at
+   {:db/ident       :kontor.partner/modified-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Last logical modification of the partner record."}
 
-   {:db/ident       :partner/description
+   {:db/ident       :kontor.partner/description
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 
 ;; ============================================================================
 ;; Person subtype
 ;;
-;; 1:1 with :partner via :person/partner. PII fields are kept
+;; 1:1 with :partner via :kontor.person/partner. PII fields are kept
 ;; separate from :org to allow encryption / redaction policy to
-;; be applied to :person/* alone.
+;; be applied to :kontor.person/* alone.
 ;; ============================================================================
 
 (def ^:private person-attrs
-  [{:db/ident       :person/partner
+  [{:db/ident       :kontor.person/partner
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/value
     :db/doc         "FK to :partner. 1:1 — enforced by :db.unique/value."}
 
-   {:db/ident       :person/first-name
+   {:db/ident       :kontor.person/first-name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :person/middle-name
+   {:db/ident       :kontor.person/middle-name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :person/last-name
+   {:db/ident       :kontor.person/last-name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :person/salutation
+   {:db/ident       :kontor.person/salutation
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :person/suffix
+   {:db/ident       :kontor.person/suffix
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :person/nickname
+   {:db/ident       :kontor.person/nickname
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :person/first-name-local
+   {:db/ident       :kontor.person/first-name-local
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Localized first name in a non-Latin script
                      (e.g., 山田 for a Japanese partner whose
                      first-name is romanized to Yamada)."}
 
-   {:db/ident       :person/last-name-local
+   {:db/ident       :kontor.person/last-name-local
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :person/gender
+   {:db/ident       :kontor.person/gender
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":male | :female | :nonbinary | :unspecified.
                      Free-form keyword; consumers may extend."}
 
-   ;; :person/birth-date and :person/national-id are owned by the kernel
+   ;; :kontor.person/birth-date and :kontor.person/national-id are owned by the kernel
    ;; schema (audit note 95 — was duplicate-defined here + in kontor-hr
    ;; with diverging shapes, causing silent install-order-dependent
    ;; overwrite). Reach them via kernel install + the same idents.
 
-   {:db/ident       :person/deceased-date
+   {:db/ident       :kontor.person/deceased-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :person/marital-status
+   {:db/ident       :kontor.person/marital-status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":single | :married | :divorced | :widowed |
                      :partnered | :unspecified."}
 
-   {:db/ident       :person/national-id-type
+   {:db/ident       :kontor.person/national-id-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":ssn | :passport | :national-id | :tin | …
@@ -158,7 +158,7 @@
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Formally registered name (often differs from
-                     :partner/name which may be the trading name)."}
+                     :kontor.partner/name which may be the trading name)."}
 
    {:db/ident       :org/legal-form
     :db/valueType   :db.type/keyword

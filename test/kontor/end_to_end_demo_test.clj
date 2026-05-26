@@ -86,14 +86,14 @@
                 :journal/type :purchase :journal/active true}
                {:journal/code "BANK" :journal/name "Bank movements"
                 :journal/type :bank  :journal/active true}
-               {:partner/external-id "OWN"  :partner/name "Self GmbH"
-                :partner/kind :company :partner/country-code "DE"
-                :partner/tax-id "DE111111111"}
-               {:partner/external-id "ACME" :partner/name "ACME GmbH"
-                :partner/kind :customer :partner/country-code "DE"
-                :partner/tax-id "DE222222222"}
-               {:partner/external-id "VERMIETER" :partner/name "Vermieter Müller"
-                :partner/kind :supplier :partner/country-code "DE"}
+               {:kontor.partner/external-id "OWN"  :kontor.partner/name "Self GmbH"
+                :kontor.partner/kind :company :kontor.partner/country-code "DE"
+                :kontor.partner/tax-id "DE111111111"}
+               {:kontor.partner/external-id "ACME" :kontor.partner/name "ACME GmbH"
+                :kontor.partner/kind :customer :kontor.partner/country-code "DE"
+                :kontor.partner/tax-id "DE222222222"}
+               {:kontor.partner/external-id "VERMIETER" :kontor.partner/name "Vermieter Müller"
+                :kontor.partner/kind :supplier :kontor.partner/country-code "DE"}
                {:period/start jan-1 :period/end jan-1-26
                 :period/tag :normal :period/name "FY2025"}]))
 
@@ -106,8 +106,8 @@
    Returns {:invoice-eid :transaction-eid}."
   [conn ext-id issue-date lines]
   (let [db (d/db conn)
-        own  (:db/id (d/entity db [:partner/external-id "OWN"]))
-        acme (:db/id (d/entity db [:partner/external-id "ACME"]))
+        own  (:db/id (d/entity db [:kontor.partner/external-id "OWN"]))
+        acme (:db/id (d/entity db [:kontor.partner/external-id "ACME"]))
         net30 (:db/id (pt/by-code db "NET30"))
         _ (invoice/create! conn
                            {:invoice/external-id ext-id

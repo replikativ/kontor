@@ -49,23 +49,23 @@
 
       (testing "the entity carries name, legal-form, registration-status"
         (let [apple (d/pull db '[*] (gleif/by-lei db apple-lei))]
-          (is (= "APPLE INC." (:entity/name apple)))
-          (is (= "LLC" (:entity/legal-form apple)))
-          (is (= :issued (:entity/registration-status apple)))
-          (is (= "gleif://test/2026-05-18" (:entity/source-id apple)))
-          (is (true? (:entity/active apple)))))
+          (is (= "APPLE INC." (:kontor.entity/name apple)))
+          (is (= "LLC" (:kontor.entity/legal-form apple)))
+          (is (= :issued (:kontor.entity/registration-status apple)))
+          (is (= "gleif://test/2026-05-18" (:kontor.entity/source-id apple)))
+          (is (true? (:kontor.entity/active apple)))))
 
-      (testing ":entity/lei is unique-value — re-ingest does not duplicate"
+      (testing ":kontor.entity/lei is unique-value — re-ingest does not duplicate"
         (gleif/import-level-1! conn (fixture-resource "level1-sample.csv")
                                {:source-id "gleif://test/2026-05-19"})
         (let [db (d/db conn)
               n (count (d/q '[:find [?e ...]
-                              :where [?e :entity/lei]]
+                              :where [?e :kontor.entity/lei]]
                             db))]
           (is (= 6 n) "re-ingest preserved entity count"))
         (let [apple (d/pull (d/db conn) '[*] (gleif/by-lei (d/db conn) apple-lei))]
           (testing "the source-id is updated"
-            (is (= "gleif://test/2026-05-19" (:entity/source-id apple)))))))))
+            (is (= "gleif://test/2026-05-19" (:kontor.entity/source-id apple)))))))))
 
 (deftest level-1-validation-report-classifies-rows
   (let [rows [{:LEI apple-lei :EntityLegalName "Apple"}
@@ -84,25 +84,25 @@
         _ (gleif/import-level-1! conn (fixture-resource "level1-sample.csv"))
         _ (gleif/import-level-2! conn (fixture-resource "level2-rr-sample.csv"))
         db (d/db conn)
-        porsche (d/pull db '[* {:entity/parent-entity [:entity/lei :entity/name]}]
+        porsche (d/pull db '[* {:kontor.entity/parent-entity [:kontor.entity/lei :kontor.entity/name]}]
                         (gleif/by-lei db porsche-lei))
-        acme (d/pull db '[* {:entity/parent-entity [:entity/lei :entity/name]}]
+        acme (d/pull db '[* {:kontor.entity/parent-entity [:kontor.entity/lei :kontor.entity/name]}]
                      (gleif/by-lei db acme-lei))]
     (testing "Porsche has direct parent Volkswagen + raw parent-lei"
-      (is (= vw-lei (:entity/parent-lei porsche)))
-      (is (= vw-lei (-> porsche :entity/parent-entity :entity/lei)))
-      (is (= vw-lei (:entity/ultimate-parent-lei porsche))))
+      (is (= vw-lei (:kontor.entity/parent-lei porsche)))
+      (is (= vw-lei (-> porsche :kontor.entity/parent-entity :kontor.entity/lei)))
+      (is (= vw-lei (:kontor.entity/ultimate-parent-lei porsche))))
 
     (testing "Acme has direct parent BMW + raw parent-lei"
-      (is (= bmw-lei (:entity/parent-lei acme)))
-      (is (= bmw-lei (-> acme :entity/parent-entity :entity/lei))))
+      (is (= bmw-lei (:kontor.entity/parent-lei acme)))
+      (is (= bmw-lei (-> acme :kontor.entity/parent-entity :kontor.entity/lei))))
 
     (testing "Apple + Microsoft remain unparented (no RR rows)"
       (let [apple (d/pull db '[*] (gleif/by-lei db apple-lei))
             ms (d/pull db '[*] (gleif/by-lei db microsoft-lei))]
-        (is (nil? (:entity/parent-lei apple)))
-        (is (nil? (:entity/parent-entity apple)))
-        (is (nil? (:entity/parent-lei ms)))))))
+        (is (nil? (:kontor.entity/parent-lei apple)))
+        (is (nil? (:kontor.entity/parent-entity apple)))
+        (is (nil? (:kontor.entity/parent-lei ms)))))))
 
 (deftest forward-referenced-parent-keeps-raw-string-without-ref
   (let [conn (core/create-test-db)
@@ -119,7 +119,7 @@
                   (keyword "Relationship.RelationshipStatus")   "ACTIVE"}])
         db (d/db conn)
         porsche (d/pull db '[*] (gleif/by-lei db porsche-lei))]
-    (testing "the raw :entity/parent-lei string survives even when parent isn't loaded"
-      (is (= vw-lei (:entity/parent-lei porsche))))
-    (testing ":entity/parent-entity ref is NOT set (forward ref)"
-      (is (nil? (:entity/parent-entity porsche))))))
+    (testing "the raw :kontor.entity/parent-lei string survives even when parent isn't loaded"
+      (is (= vw-lei (:kontor.entity/parent-lei porsche))))
+    (testing ":kontor.entity/parent-entity ref is NOT set (forward ref)"
+      (is (nil? (:kontor.entity/parent-entity porsche))))))

@@ -26,11 +26,11 @@
     (d/transact conn
                 [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
                  ;; Employee + approver (:partner stand-ins for :create/uid).
-                 {:partner/external-id "E-alice" :partner/name "Alice (employee)"}
-                 {:partner/external-id "M-bob"   :partner/name "Bob (manager)"}
+                 {:kontor.partner/external-id "E-alice" :kontor.partner/name "Alice (employee)"}
+                 {:kontor.partner/external-id "M-bob"   :kontor.partner/name "Bob (manager)"}
                  ;; Expense categories — generic refs; :partner stand-ins.
-                 {:partner/external-id "CAT-travel" :partner/name "Travel"}
-                 {:partner/external-id "CAT-meals"  :partner/name "Meals"}
+                 {:kontor.partner/external-id "CAT-travel" :kontor.partner/name "Travel"}
+                 {:kontor.partner/external-id "CAT-meals"  :kontor.partner/name "Meals"}
                  ;; GL accounts.
                  {:db/id "acct-travel" :account/code "6700" :account/name "Travel Expense"
                   :account/type :expense :account/active true}
@@ -58,7 +58,7 @@
 (defn- ref-eid [db a v]
   (d/q '[:find ?e . :in $ ?a ?v :where [?e ?a ?v]] db a v))
 
-(defn- p       [db code] (ref-eid db :partner/external-id code))
+(defn- p       [db code] (ref-eid db :kontor.partner/external-id code))
 (defn- acct    [db code] (ref-eid db :account/code code))
 (defn- doc     [db code] (ref-eid db :audit-doc/code code))
 (defn- eur     [db] (ref-eid db :kontor.commodity/symbol "EUR"))
@@ -94,7 +94,7 @@
         r (expense/pull-report (d/db conn) "EXP-1")]
     (testing "the report is :draft, owned by the employee"
       (is (= :draft (:expense-report/status r)))
-      (is (= "E-alice" (:partner/external-id (:expense-report/employee r)))))
+      (is (= "E-alice" (:kontor.partner/external-id (:expense-report/employee r)))))
     (testing ":create/uid is stamped to the employee (for :no-self-approval)"
       (is (= (p (d/db conn) "E-alice")
              (:db/id (:create/uid (d/pull (d/db conn) [:create/uid]

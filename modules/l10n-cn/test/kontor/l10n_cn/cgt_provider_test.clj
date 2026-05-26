@@ -23,13 +23,13 @@
     (cgt-statute/install! conn)
     (d/transact conn [{:kontor.commodity/symbol "CNY" :kontor.commodity/name "Chinese Yuan"
                        :kontor.commodity/precision 2}
-                      {:entity/code "HOLDCO" :entity/name "HoldCo"
-                       :entity/kind :company :entity/country "CN"
-                       :entity/functional-commodity [:kontor.commodity/symbol "CNY"]}])
+                      {:kontor.entity/code "HOLDCO" :kontor.entity/name "HoldCo"
+                       :kontor.entity/kind :company :kontor.entity/country "CN"
+                       :kontor.entity/functional-commodity [:kontor.commodity/symbol "CNY"]}])
     conn))
 
 (def ^:private cny [:kontor.commodity/symbol "CNY"])
-(def ^:private holdco [:entity/code "HOLDCO"])
+(def ^:private holdco [:kontor.entity/code "HOLDCO"])
 
 (defn- record!
   "Record a minimal CN disposal."
@@ -45,7 +45,7 @@
                opts)))
 
 (defn- holdco-eid [conn]
-  (d/q '[:find ?e . :where [?e :entity/code "HOLDCO"]] (d/db conn)))
+  (d/q '[:find ?e . :where [?e :kontor.entity/code "HOLDCO"]] (d/db conn)))
 
 (defn- run-iit
   "Build the IIT provider, call `period-tax-facts`."

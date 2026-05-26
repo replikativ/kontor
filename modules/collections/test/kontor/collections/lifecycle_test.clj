@@ -21,45 +21,45 @@
     (d/transact *conn*
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                   :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
-                 {:entity/code "ACME-DE" :entity/name "Acme GmbH"
-                  :entity/kind :operating :entity/active true}
-                 {:entity/code "ACME-US" :entity/name "Acme LLC"
-                  :entity/kind :operating :entity/active true}
-                 {:partner/external-id "BIG-CUST"
-                  :partner/name "Big Customer Co"
-                  :partner/kind :customer
-                  :partner/credit-status :open
-                  :partner/credit-limit 100000M
-                  :partner/credit-commodity [:kontor.commodity/symbol "EUR"]}
-                 {:partner/external-id "SMALL-CUST"
-                  :partner/name "Small Customer"
-                  :partner/kind :customer
-                  :partner/credit-status :review}
+                 {:kontor.entity/code "ACME-DE" :kontor.entity/name "Acme GmbH"
+                  :kontor.entity/kind :operating :kontor.entity/active true}
+                 {:kontor.entity/code "ACME-US" :kontor.entity/name "Acme LLC"
+                  :kontor.entity/kind :operating :kontor.entity/active true}
+                 {:kontor.partner/external-id "BIG-CUST"
+                  :kontor.partner/name "Big Customer Co"
+                  :kontor.partner/kind :customer
+                  :kontor.partner/credit-status :open
+                  :kontor.partner/credit-limit 100000M
+                  :kontor.partner/credit-commodity [:kontor.commodity/symbol "EUR"]}
+                 {:kontor.partner/external-id "SMALL-CUST"
+                  :kontor.partner/name "Small Customer"
+                  :kontor.partner/kind :customer
+                  :kontor.partner/credit-status :review}
                  ;; Actor entities — :create/uid is :db.type/ref so we
                  ;; reuse the partner shape for fake users (the same
                  ;; pattern as test/kontor/status_machine_test.clj:344).
-                 {:partner/external-id "U-alice" :partner/name "Alice"}
-                 {:partner/external-id "U-bob"   :partner/name "Bob"}
-                 {:partner/external-id "U-sys"   :partner/name "System"}])
+                 {:kontor.partner/external-id "U-alice" :kontor.partner/name "Alice"}
+                 {:kontor.partner/external-id "U-bob"   :kontor.partner/name "Bob"}
+                 {:kontor.partner/external-id "U-sys"   :kontor.partner/name "System"}])
     (f)))
 
 (use-fixtures :each bootstrap)
 
 (defn- partner [xid]
   (d/q '[:find ?p . :in $ ?xid
-         :where [?p :partner/external-id ?xid]]
+         :where [?p :kontor.partner/external-id ?xid]]
        (d/db *conn*) xid))
 
 (defn- entity [code]
   (d/q '[:find ?e . :in $ ?c
-         :where [?e :entity/code ?c]]
+         :where [?e :kontor.entity/code ?c]]
        (d/db *conn*) code))
 
 (defn- actor [uid]
-  ;; "Actors" are seeded as partner records with :partner/external-id
+  ;; "Actors" are seeded as partner records with :kontor.partner/external-id
   ;; "U-<uid>" so :create/uid (ref) has something to point at.
   (d/q '[:find ?a . :in $ ?xid
-         :where [?a :partner/external-id ?xid]]
+         :where [?a :kontor.partner/external-id ?xid]]
        (d/db *conn*) (str "U-" uid)))
 
 (defn- commodity [sym]

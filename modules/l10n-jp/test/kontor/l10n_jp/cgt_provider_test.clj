@@ -34,13 +34,13 @@
     (cgt-statute/install! conn)
     (d/transact conn [{:kontor.commodity/symbol "JPY" :kontor.commodity/name "Japanese Yen"
                        :kontor.commodity/precision 0}
-                      {:entity/code "JP-CO" :entity/name "JP Co"
-                       :entity/kind :company :entity/country "JP"
-                       :entity/functional-commodity [:kontor.commodity/symbol "JPY"]}])
+                      {:kontor.entity/code "JP-CO" :kontor.entity/name "JP Co"
+                       :kontor.entity/kind :company :kontor.entity/country "JP"
+                       :kontor.entity/functional-commodity [:kontor.commodity/symbol "JPY"]}])
     conn))
 
 (def ^:private jpy [:kontor.commodity/symbol "JPY"])
-(def ^:private jp-co [:entity/code "JP-CO"])
+(def ^:private jp-co [:kontor.entity/code "JP-CO"])
 
 (defn- record!
   "Record a minimal JP disposal."
@@ -56,7 +56,7 @@
                opts)))
 
 (defn- jp-co-eid [conn]
-  (d/q '[:find ?e . :where [?e :entity/code "JP-CO"]] (d/db conn)))
+  (d/q '[:find ?e . :where [?e :kontor.entity/code "JP-CO"]] (d/db conn)))
 
 (defn- run-provider
   "Build a provider, call `period-tax-facts`, return the resulting

@@ -21,16 +21,16 @@
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
                  {:journal/code "SALE" :journal/type :sale}
                  {:journal/code "CASH" :journal/type :cash}
-                 {:partner/external-id "CUST" :partner/name "A Customer"}
-                 {:partner/external-id "U-alice" :partner/name "Alice (actor)"}
+                 {:kontor.partner/external-id "CUST" :kontor.partner/name "A Customer"}
+                 {:kontor.partner/external-id "U-alice" :kontor.partner/name "Alice (actor)"}
                  {:account/path "Assets:Receivable" :account/type :asset}
                  {:account/path "Assets:Cash"       :account/type :asset}
                  {:account/path "Income:Sales"      :account/type :income}])
     conn))
 
 (def ^:private eur   [:kontor.commodity/symbol "EUR"])
-(def ^:private cust  [:partner/external-id "CUST"])
-(def ^:private alice [:partner/external-id "U-alice"])
+(def ^:private cust  [:kontor.partner/external-id "CUST"])
+(def ^:private alice [:kontor.partner/external-id "U-alice"])
 
 (defn- tx-by-xid [conn xid]
   (d/q '[:find ?t . :in $ ?x :where [?t :transaction/external-id ?x]]

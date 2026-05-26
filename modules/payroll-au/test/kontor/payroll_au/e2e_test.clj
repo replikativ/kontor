@@ -49,9 +49,9 @@
     (pau-chart/install! conn)        ; payroll-extension chart + tags
     (au/install! conn)               ; :state analytic plan
     (d/transact conn
-                [{:db/id "ent-acme" :entity/code "ACME-AU"
-                  :entity/name "Acme Australia Pty Ltd"
-                  :entity/kind :operating}
+                [{:db/id "ent-acme" :kontor.entity/code "ACME-AU"
+                  :kontor.entity/name "Acme Australia Pty Ltd"
+                  :kontor.entity/kind :operating}
                  {:db/id "journal-pay"
                   :journal/code "PAY-AU"
                   :journal/name "Payroll (AU)"
@@ -64,7 +64,7 @@
 
 (defn- setup-employees [conn]
   (let [db (d/db conn)
-        ent (ref-eid db :entity/code "ACME-AU")]
+        ent (ref-eid db :kontor.entity/code "ACME-AU")]
     (doseq [[ext given family] [["P-E101" "Alice" "Outback"]
                                 ["P-E102" "Bob"   "Bondi"]
                                 ["P-E103" "Carol" "Cairns"]]]
@@ -115,7 +115,7 @@
   (let [conn (bootstrap)
         _ (setup-employees conn)
         db (d/db conn)
-        ent (ref-eid db :entity/code "ACME-AU")
+        ent (ref-eid db :kontor.entity/code "ACME-AU")
         aud (ref-eid db :kontor.commodity/symbol "AUD")
         journal (ref-eid db :journal/code "PAY-AU")
         period (ref-eid db :period/name "2026-05")

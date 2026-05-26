@@ -1,17 +1,17 @@
 (ns kontor.hr.dsar
   "kontor-hr DSAR collector — extends kontor.dsar/collect with the
-   :partner/person → :person → :employment → :compensation walk.
+   :kontor.partner/person → :person → :employment → :compensation walk.
 
    The kernel's `kontor.dsar/collect` is partner-keyed (it walks
    `partner-attrs-registry` and `tx-attrs-registry` from a `:partner`
-   subject). When the subject is a `:partner/kind :employee` partner,
+   subject). When the subject is a `:kontor.partner/kind :employee` partner,
    the consumer typically wants ALSO the HR-side facts: the :person
-   linked via :partner/person, that person's :employment rows, the
+   linked via :kontor.partner/person, that person's :employment rows, the
    :compensation envelopes and components under each.
 
    `collect-for-person` walks that secondary tree given a :person eid;
    `collect-employee` is the convenience that takes a :partner eid,
-   resolves :partner/person, and merges the kernel walk + the HR walk
+   resolves :kontor.partner/person, and merges the kernel walk + the HR walk
    into one DSAR bundle."
   (:require [datahike.api :as d]
             [kontor.dsar :as dsar]))
@@ -78,7 +78,7 @@
 (defn collect-employee
   "DSAR convenience: walk both the kernel side (partner-driven) and
    the HR side (person-driven) starting from a :partner eid that has
-   :partner/kind :employee + :partner/person link.
+   :kontor.partner/kind :employee + :kontor.partner/person link.
 
    Returns the kernel `collect` map MERGED with `{:hr <person-walk>}`.
 
@@ -88,7 +88,7 @@
    (let [kernel-bundle (dsar/collect db partner-eid opts)
          person-eid (d/q '[:find ?p .
                            :in $ ?pa
-                           :where [?pa :partner/person ?p]]
+                           :where [?pa :kontor.partner/person ?p]]
                          db partner-eid)]
      (cond-> kernel-bundle
        person-eid (assoc :hr (collect-for-person db person-eid

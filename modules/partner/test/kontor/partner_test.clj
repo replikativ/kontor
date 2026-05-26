@@ -52,9 +52,9 @@
   (testing "Every documented attribute is present"
     (let [db (d/db *conn*)
           idents (set (d/q '[:find [?i ...] :where [_ :db/ident ?i]] db))]
-      (doseq [a [:partner/type :partner/status :partner/preferred-commodity
-                 :person/partner :person/first-name :person/last-name
-                 :person/birth-date :person/national-id
+      (doseq [a [:kontor.partner/type :kontor.partner/status :kontor.partner/preferred-commodity
+                 :kontor.person/partner :kontor.person/first-name :kontor.person/last-name
+                 :kontor.person/birth-date :kontor.person/national-id
                  :org/partner :org/legal-name :org/legal-form
                  :org/registration-number :org/duns :org/lei
                  :contact-mech/code :contact-mech/type
@@ -94,14 +94,14 @@
 
 (deftest person-creation-and-resolution
   (transact! *conn*
-             [{:partner/external-id "P-1001"
-               :partner/type        :person
-               :partner/status      :enabled
-               :partner/name        "Jane Doe"}
-              {:person/partner    [:partner/external-id "P-1001"]
-               :person/first-name "Jane"
-               :person/last-name  "Doe"
-               :person/birth-date #inst "1985-03-12"}])
+             [{:kontor.partner/external-id "P-1001"
+               :kontor.partner/type        :person
+               :kontor.partner/status      :enabled
+               :kontor.partner/name        "Jane Doe"}
+              {:kontor.person/partner    [:kontor.partner/external-id "P-1001"]
+               :kontor.person/first-name "Jane"
+               :kontor.person/last-name  "Doe"
+               :kontor.person/birth-date #inst "1985-03-12"}])
   (let [db (d/db *conn*)]
     (testing "by-external-id resolves"
       (is (pos-int? (p/by-external-id db "P-1001")))
@@ -109,19 +109,19 @@
              (p/resolve-partner db "P-1001"))))
     (testing "person subtype pulls correctly"
       (let [pp (p/person db "P-1001")]
-        (is (= "Jane" (:person/first-name pp)))
-        (is (= "Doe" (:person/last-name pp)))
-        (is (= #inst "1985-03-12" (:person/birth-date pp)))))
+        (is (= "Jane" (:kontor.person/first-name pp)))
+        (is (= "Doe" (:kontor.person/last-name pp)))
+        (is (= #inst "1985-03-12" (:kontor.person/birth-date pp)))))
     (testing "org subtype is nil for a person partner"
       (is (nil? (p/org db "P-1001"))))))
 
 (deftest org-creation-with-registration-identifiers
   (transact! *conn*
-             [{:partner/external-id "O-2001"
-               :partner/type        :org
-               :partner/status      :enabled
-               :partner/name        "Acme GmbH"}
-              {:org/partner             [:partner/external-id "O-2001"]
+             [{:kontor.partner/external-id "O-2001"
+               :kontor.partner/type        :org
+               :kontor.partner/status      :enabled
+               :kontor.partner/name        "Acme GmbH"}
+              {:org/partner             [:kontor.partner/external-id "O-2001"]
                :org/legal-name          "Acme Gesellschaft mit beschränkter Haftung"
                :org/legal-form          :gmbh
                :org/trading-name        "Acme"
@@ -143,16 +143,16 @@
 (deftest subtype-fk-is-1-to-1
   (testing "A partner cannot have two :person rows (db.unique/value enforces it)"
     (transact! *conn*
-               [{:partner/external-id "P-DUP"
-                 :partner/type        :person
-                 :partner/name        "Original"}])
+               [{:kontor.partner/external-id "P-DUP"
+                 :kontor.partner/type        :person
+                 :kontor.partner/name        "Original"}])
     (transact! *conn*
-               [{:person/partner    [:partner/external-id "P-DUP"]
-                 :person/first-name "First"}])
+               [{:kontor.person/partner    [:kontor.partner/external-id "P-DUP"]
+                 :kontor.person/first-name "First"}])
     (is (thrown? Exception
                  (transact! *conn*
-                            [{:person/partner    [:partner/external-id "P-DUP"]
-                              :person/first-name "Second"}])))))
+                            [{:kontor.person/partner    [:kontor.partner/external-id "P-DUP"]
+                              :kontor.person/first-name "Second"}])))))
 
 ;; ============================================================================
 ;; Contact-mech polymorphism
@@ -160,10 +160,10 @@
 
 (deftest postal-address-roundtrip
   (transact! *conn*
-             [{:partner/external-id "P-3001"
-               :partner/type        :person
-               :partner/status      :enabled
-               :partner/name        "Postal Test"}
+             [{:kontor.partner/external-id "P-3001"
+               :kontor.partner/type        :person
+               :kontor.partner/status      :enabled
+               :kontor.partner/name        "Postal Test"}
               {:contact-mech/code "CM-postal-1"
                :contact-mech/type :postal}
               {:postal-address/contact-mech [:contact-mech/code "CM-postal-1"]
@@ -171,11 +171,11 @@
                :postal-address/city         "Berlin"
                :postal-address/postal-code  "10115"
                :postal-address/region       "Berlin"}
-              {:partner-contact-mech/partner      [:partner/external-id "P-3001"]
+              {:partner-contact-mech/partner      [:kontor.partner/external-id "P-3001"]
                :partner-contact-mech/contact-mech [:contact-mech/code "CM-postal-1"]
                :partner-contact-mech/from-date    jan-2025
                :partner-contact-mech/verified?    true}
-              {:partner-contact-mech-purpose/partner      [:partner/external-id "P-3001"]
+              {:partner-contact-mech-purpose/partner      [:kontor.partner/external-id "P-3001"]
                :partner-contact-mech-purpose/contact-mech [:contact-mech/code "CM-postal-1"]
                :partner-contact-mech-purpose/purpose-type :primary-location
                :partner-contact-mech-purpose/from-date    jan-2025}])
@@ -187,27 +187,27 @@
 
 (deftest one-email-serves-multiple-purposes
   (transact! *conn*
-             [{:partner/external-id "P-4001"
-               :partner/type        :person
-               :partner/status      :enabled
-               :partner/name        "Multi-Purpose"}
+             [{:kontor.partner/external-id "P-4001"
+               :kontor.partner/type        :person
+               :kontor.partner/status      :enabled
+               :kontor.partner/name        "Multi-Purpose"}
               {:contact-mech/code "CM-multi-1"
                :contact-mech/type :email}
               {:email-address/contact-mech [:contact-mech/code "CM-multi-1"]
                :email-address/address      "jane@example.com"
                :email-address/verified?    true}
-              {:partner-contact-mech/partner      [:partner/external-id "P-4001"]
+              {:partner-contact-mech/partner      [:kontor.partner/external-id "P-4001"]
                :partner-contact-mech/contact-mech [:contact-mech/code "CM-multi-1"]
                :partner-contact-mech/from-date    jan-2025}
-              {:partner-contact-mech-purpose/partner      [:partner/external-id "P-4001"]
+              {:partner-contact-mech-purpose/partner      [:kontor.partner/external-id "P-4001"]
                :partner-contact-mech-purpose/contact-mech [:contact-mech/code "CM-multi-1"]
                :partner-contact-mech-purpose/purpose-type :primary-email
                :partner-contact-mech-purpose/from-date    jan-2025}
-              {:partner-contact-mech-purpose/partner      [:partner/external-id "P-4001"]
+              {:partner-contact-mech-purpose/partner      [:kontor.partner/external-id "P-4001"]
                :partner-contact-mech-purpose/contact-mech [:contact-mech/code "CM-multi-1"]
                :partner-contact-mech-purpose/purpose-type :billing-email
                :partner-contact-mech-purpose/from-date    jan-2025}
-              {:partner-contact-mech-purpose/partner      [:partner/external-id "P-4001"]
+              {:partner-contact-mech-purpose/partner      [:kontor.partner/external-id "P-4001"]
                :partner-contact-mech-purpose/contact-mech [:contact-mech/code "CM-multi-1"]
                :partner-contact-mech-purpose/purpose-type :general-correspondence
                :partner-contact-mech-purpose/from-date    jan-2025}])
@@ -223,10 +223,10 @@
 
 (deftest contact-mechs-of-collects-across-types
   (transact! *conn*
-             [{:partner/external-id "P-5001"
-               :partner/type        :person
-               :partner/status      :enabled
-               :partner/name        "Multi-Mech"}
+             [{:kontor.partner/external-id "P-5001"
+               :kontor.partner/type        :person
+               :kontor.partner/status      :enabled
+               :kontor.partner/name        "Multi-Mech"}
               {:contact-mech/code "CM-5001-postal"
                :contact-mech/type :postal}
               {:postal-address/contact-mech [:contact-mech/code "CM-5001-postal"]
@@ -242,13 +242,13 @@
                :contact-mech/type :email}
               {:email-address/contact-mech [:contact-mech/code "CM-5001-email"]
                :email-address/address      "test@example.com"}
-              {:partner-contact-mech/partner      [:partner/external-id "P-5001"]
+              {:partner-contact-mech/partner      [:kontor.partner/external-id "P-5001"]
                :partner-contact-mech/contact-mech [:contact-mech/code "CM-5001-postal"]
                :partner-contact-mech/from-date    jan-2025}
-              {:partner-contact-mech/partner      [:partner/external-id "P-5001"]
+              {:partner-contact-mech/partner      [:kontor.partner/external-id "P-5001"]
                :partner-contact-mech/contact-mech [:contact-mech/code "CM-5001-phone"]
                :partner-contact-mech/from-date    jan-2025}
-              {:partner-contact-mech/partner      [:partner/external-id "P-5001"]
+              {:partner-contact-mech/partner      [:kontor.partner/external-id "P-5001"]
                :partner-contact-mech/contact-mech [:contact-mech/code "CM-5001-email"]
                :partner-contact-mech/from-date    jan-2025}])
   (let [db (d/db *conn*)
@@ -261,10 +261,10 @@
 
 (deftest partner-contact-mech-respects-thru-date
   (transact! *conn*
-             [{:partner/external-id "P-6001"
-               :partner/type        :person
-               :partner/status      :enabled
-               :partner/name        "Moved Person"}
+             [{:kontor.partner/external-id "P-6001"
+               :kontor.partner/type        :person
+               :kontor.partner/status      :enabled
+               :kontor.partner/name        "Moved Person"}
               {:contact-mech/code "CM-old"
                :contact-mech/type :postal}
               {:postal-address/contact-mech [:contact-mech/code "CM-old"]
@@ -273,11 +273,11 @@
                :contact-mech/type :postal}
               {:postal-address/contact-mech [:contact-mech/code "CM-new"]
                :postal-address/address1     "New Address"}
-              {:partner-contact-mech/partner      [:partner/external-id "P-6001"]
+              {:partner-contact-mech/partner      [:kontor.partner/external-id "P-6001"]
                :partner-contact-mech/contact-mech [:contact-mech/code "CM-old"]
                :partner-contact-mech/from-date    jan-2025
                :partner-contact-mech/thru-date    jan-2026}
-              {:partner-contact-mech/partner      [:partner/external-id "P-6001"]
+              {:partner-contact-mech/partner      [:kontor.partner/external-id "P-6001"]
                :partner-contact-mech/contact-mech [:contact-mech/code "CM-new"]
                :partner-contact-mech/from-date    jan-2026}])
   (let [db (d/db *conn*)]
@@ -307,14 +307,14 @@
 
 (deftest concurrent-roles
   (transact! *conn*
-             [{:partner/external-id "P-7001"
-               :partner/type        :person
-               :partner/status      :enabled
-               :partner/name        "Multi-Role"}
-              {:partner-role/partner   [:partner/external-id "P-7001"]
+             [{:kontor.partner/external-id "P-7001"
+               :kontor.partner/type        :person
+               :kontor.partner/status      :enabled
+               :kontor.partner/name        "Multi-Role"}
+              {:partner-role/partner   [:kontor.partner/external-id "P-7001"]
                :partner-role/role-type :customer
                :partner-role/from-date jan-01}
-              {:partner-role/partner   [:partner/external-id "P-7001"]
+              {:partner-role/partner   [:kontor.partner/external-id "P-7001"]
                :partner-role/role-type :employee
                :partner-role/from-date jun-01}])
   (let [db (d/db *conn*)]
@@ -331,11 +331,11 @@
 
 (deftest role-thru-date-ends-role
   (transact! *conn*
-             [{:partner/external-id "P-8001"
-               :partner/type        :person
-               :partner/status      :enabled
-               :partner/name        "Former Employee"}
-              {:partner-role/partner   [:partner/external-id "P-8001"]
+             [{:kontor.partner/external-id "P-8001"
+               :kontor.partner/type        :person
+               :kontor.partner/status      :enabled
+               :kontor.partner/name        "Former Employee"}
+              {:partner-role/partner   [:kontor.partner/external-id "P-8001"]
                :partner-role/role-type :employee
                :partner-role/from-date jan-01
                :partner-role/thru-date aug-01}])
@@ -345,17 +345,17 @@
 
 (deftest partners-with-role-lookup
   (transact! *conn*
-             [{:partner/external-id "P-9001"
-               :partner/type :person :partner/status :enabled :partner/name "A"}
-              {:partner/external-id "P-9002"
-               :partner/type :person :partner/status :enabled :partner/name "B"}
-              {:partner/external-id "P-9003"
-               :partner/type :org :partner/status :enabled :partner/name "Vendor Co"}
-              {:partner-role/partner [:partner/external-id "P-9001"]
+             [{:kontor.partner/external-id "P-9001"
+               :kontor.partner/type :person :kontor.partner/status :enabled :kontor.partner/name "A"}
+              {:kontor.partner/external-id "P-9002"
+               :kontor.partner/type :person :kontor.partner/status :enabled :kontor.partner/name "B"}
+              {:kontor.partner/external-id "P-9003"
+               :kontor.partner/type :org :kontor.partner/status :enabled :kontor.partner/name "Vendor Co"}
+              {:partner-role/partner [:kontor.partner/external-id "P-9001"]
                :partner-role/role-type :customer :partner-role/from-date jan-01}
-              {:partner-role/partner [:partner/external-id "P-9002"]
+              {:partner-role/partner [:kontor.partner/external-id "P-9002"]
                :partner-role/role-type :customer :partner-role/from-date jan-01}
-              {:partner-role/partner [:partner/external-id "P-9003"]
+              {:partner-role/partner [:kontor.partner/external-id "P-9003"]
                :partner-role/role-type :supplier :partner-role/from-date jan-01}])
   (let [db (d/db *conn*)
         customers (p/partners-with-role db :customer {:as-of jun-15})
@@ -372,20 +372,20 @@
 
 (deftest employment-relationship-traversal
   (transact! *conn*
-             [{:partner/external-id "P-employee"
-               :partner/type :person :partner/status :enabled
-               :partner/name "Jane Doe"}
-              {:partner/external-id "O-acme"
-               :partner/type :org :partner/status :enabled
-               :partner/name "Acme"}
-              {:partner-role/partner [:partner/external-id "P-employee"]
+             [{:kontor.partner/external-id "P-employee"
+               :kontor.partner/type :person :kontor.partner/status :enabled
+               :kontor.partner/name "Jane Doe"}
+              {:kontor.partner/external-id "O-acme"
+               :kontor.partner/type :org :kontor.partner/status :enabled
+               :kontor.partner/name "Acme"}
+              {:partner-role/partner [:kontor.partner/external-id "P-employee"]
                :partner-role/role-type :employee :partner-role/from-date jun-01}
-              {:partner-role/partner [:partner/external-id "O-acme"]
+              {:partner-role/partner [:kontor.partner/external-id "O-acme"]
                :partner-role/role-type :internal-organization
                :partner-role/from-date jan-01}
-              {:partner-relationship/partner-from      [:partner/external-id "P-employee"]
+              {:partner-relationship/partner-from      [:kontor.partner/external-id "P-employee"]
                :partner-relationship/role-type-from    :employee
-               :partner-relationship/partner-to        [:partner/external-id "O-acme"]
+               :partner-relationship/partner-to        [:kontor.partner/external-id "O-acme"]
                :partner-relationship/role-type-to      :internal-organization
                :partner-relationship/relationship-type :employment
                :partner-relationship/from-date         jun-01
@@ -404,13 +404,13 @@
 
 (deftest relationship-thru-date-ends-employment
   (transact! *conn*
-             [{:partner/external-id "P-former"
-               :partner/type :person :partner/status :enabled :partner/name "Former"}
-              {:partner/external-id "O-x"
-               :partner/type :org :partner/status :enabled :partner/name "X"}
-              {:partner-relationship/partner-from      [:partner/external-id "P-former"]
+             [{:kontor.partner/external-id "P-former"
+               :kontor.partner/type :person :kontor.partner/status :enabled :kontor.partner/name "Former"}
+              {:kontor.partner/external-id "O-x"
+               :kontor.partner/type :org :kontor.partner/status :enabled :kontor.partner/name "X"}
+              {:partner-relationship/partner-from      [:kontor.partner/external-id "P-former"]
                :partner-relationship/role-type-from    :employee
-               :partner-relationship/partner-to        [:partner/external-id "O-x"]
+               :partner-relationship/partner-to        [:kontor.partner/external-id "O-x"]
                :partner-relationship/role-type-to      :internal-organization
                :partner-relationship/relationship-type :employment
                :partner-relationship/from-date         jan-01
@@ -424,22 +424,22 @@
 
 (deftest relationships-of-type-filter
   (transact! *conn*
-             [{:partner/external-id "O-parent"
-               :partner/type :org :partner/status :enabled :partner/name "Parent"}
-              {:partner/external-id "O-sub1"
-               :partner/type :org :partner/status :enabled :partner/name "Sub 1"}
-              {:partner/external-id "O-sub2"
-               :partner/type :org :partner/status :enabled :partner/name "Sub 2"}
-              {:partner-relationship/partner-from [:partner/external-id "O-parent"]
+             [{:kontor.partner/external-id "O-parent"
+               :kontor.partner/type :org :kontor.partner/status :enabled :kontor.partner/name "Parent"}
+              {:kontor.partner/external-id "O-sub1"
+               :kontor.partner/type :org :kontor.partner/status :enabled :kontor.partner/name "Sub 1"}
+              {:kontor.partner/external-id "O-sub2"
+               :kontor.partner/type :org :kontor.partner/status :enabled :kontor.partner/name "Sub 2"}
+              {:partner-relationship/partner-from [:kontor.partner/external-id "O-parent"]
                :partner-relationship/role-type-from :internal-organization
-               :partner-relationship/partner-to [:partner/external-id "O-sub1"]
+               :partner-relationship/partner-to [:kontor.partner/external-id "O-sub1"]
                :partner-relationship/role-type-to :internal-organization
                :partner-relationship/relationship-type :subsidiary
                :partner-relationship/from-date jan-01
                :partner-relationship/status :active}
-              {:partner-relationship/partner-from [:partner/external-id "O-parent"]
+              {:partner-relationship/partner-from [:kontor.partner/external-id "O-parent"]
                :partner-relationship/role-type-from :internal-organization
-               :partner-relationship/partner-to [:partner/external-id "O-sub2"]
+               :partner-relationship/partner-to [:kontor.partner/external-id "O-sub2"]
                :partner-relationship/role-type-to :internal-organization
                :partner-relationship/relationship-type :subsidiary
                :partner-relationship/from-date jun-01
@@ -455,12 +455,12 @@
 
 (deftest merge-partners-resolves-canonical
   (d/transact *conn*
-              [{:partner/external-id "P-CANONICAL"
-                :partner/type :person :partner/status :enabled
-                :partner/name "Canonical Customer"}
-               {:partner/external-id "P-DUPLICATE"
-                :partner/type :person :partner/status :enabled
-                :partner/name "Duplicate Customer"}])
+              [{:kontor.partner/external-id "P-CANONICAL"
+                :kontor.partner/type :person :kontor.partner/status :enabled
+                :kontor.partner/name "Canonical Customer"}
+               {:kontor.partner/external-id "P-DUPLICATE"
+                :kontor.partner/type :person :kontor.partner/status :enabled
+                :kontor.partner/name "Duplicate Customer"}])
   (let [canonical (p/by-external-id (d/db *conn*) "P-CANONICAL")
         duplicate (p/by-external-id (d/db *conn*) "P-DUPLICATE")]
     (p/merge-partners! *conn* canonical duplicate
@@ -473,15 +473,15 @@
         (is (= canonical (p/resolve-canonical-partner db canonical))
             "canonical resolves to itself"))
       (testing "superseded partner is archived"
-        (is (= :archived (-> (d/pull db [:partner/status] duplicate)
-                             :partner/status))))
+        (is (= :archived (-> (d/pull db [:kontor.partner/status] duplicate)
+                             :kontor.partner/status))))
       (testing "duplicate's history preserved (not retracted)"
         (is (= "Duplicate Customer"
-               (-> (d/pull db [:partner/name] duplicate) :partner/name)))))))
+               (-> (d/pull db [:kontor.partner/name] duplicate) :kontor.partner/name)))))))
 
 (deftest merge-rejects-self-merge
-  (d/transact *conn* [{:partner/external-id "P-SELF" :partner/type :person
-                       :partner/status :enabled :partner/name "Self"}])
+  (d/transact *conn* [{:kontor.partner/external-id "P-SELF" :kontor.partner/type :person
+                       :kontor.partner/status :enabled :kontor.partner/name "Self"}])
   (let [eid (p/by-external-id (d/db *conn*) "P-SELF")]
     (is (thrown? Exception
                  (p/merge-partners! *conn* eid eid {:reason :duplicate})))))
@@ -490,9 +490,9 @@
   (d/transact *conn*
               [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                 :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
-               {:partner/external-id "P-SUPPLIER"
-                :partner/type :org :partner/status :enabled
-                :partner/name "Supplier Co"}
+               {:kontor.partner/external-id "P-SUPPLIER"
+                :kontor.partner/type :org :kontor.partner/status :enabled
+                :kontor.partner/name "Supplier Co"}
                {:bank-account/code "ACCT-EUR-1"
                 :bank-account/iban "DE89370400440532013000"
                 :bank-account/bic "COBADEFFXXX"
@@ -501,14 +501,14 @@
                 :bank-account/holder-name "Supplier Co GmbH"
                 :bank-account/active true}
                ;; Old account, thru-dated
-               {:partner-bank-account/partner [:partner/external-id "P-SUPPLIER"]
+               {:partner-bank-account/partner [:kontor.partner/external-id "P-SUPPLIER"]
                 :partner-bank-account/bank-account [:bank-account/code "ACCT-EUR-1"]
                 :partner-bank-account/from-date #inst "2023-01-01"
                 :partner-bank-account/thru-date #inst "2025-01-01"
                 :partner-bank-account/purpose :disbursement
                 :partner-bank-account/preferred? false}
                ;; New account, current
-               {:partner-bank-account/partner [:partner/external-id "P-SUPPLIER"]
+               {:partner-bank-account/partner [:kontor.partner/external-id "P-SUPPLIER"]
                 :partner-bank-account/bank-account [:bank-account/code "ACCT-EUR-1"]
                 :partner-bank-account/from-date #inst "2025-06-01"
                 :partner-bank-account/purpose :disbursement
@@ -527,14 +527,14 @@
 
 (deftest partner-tags-temporal
   (d/transact *conn*
-              [{:partner/external-id "P-TIER"
-                :partner/type :org :partner/status :enabled
-                :partner/name "Tier Customer"}
-               {:partner-tag/partner [:partner/external-id "P-TIER"]
+              [{:kontor.partner/external-id "P-TIER"
+                :kontor.partner/type :org :kontor.partner/status :enabled
+                :kontor.partner/name "Tier Customer"}
+               {:partner-tag/partner [:kontor.partner/external-id "P-TIER"]
                 :partner-tag/tag-type :gold-tier
                 :partner-tag/from-date #inst "2024-01-01"
                 :partner-tag/thru-date #inst "2025-06-15"}
-               {:partner-tag/partner [:partner/external-id "P-TIER"]
+               {:partner-tag/partner [:kontor.partner/external-id "P-TIER"]
                 :partner-tag/tag-type :silver-tier
                 :partner-tag/from-date #inst "2025-06-15"}])
   (let [db (d/db *conn*)]
@@ -550,21 +550,21 @@
   (d/transact *conn*
               [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                 :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
-               {:partner/external-id "P-CREDIT"
-                :partner/type :org :partner/status :enabled
-                :partner/name "Credit Customer"
-                :partner/credit-limit 50000M
-                :partner/credit-commodity [:kontor.commodity/symbol "EUR"]
-                :partner/credit-status :open
-                :partner/kyc-status :cleared
-                :partner/kyc-source "Manual"
-                :partner/kyc-checked-at #inst "2026-04-15"}])
+               {:kontor.partner/external-id "P-CREDIT"
+                :kontor.partner/type :org :kontor.partner/status :enabled
+                :kontor.partner/name "Credit Customer"
+                :kontor.partner/credit-limit 50000M
+                :kontor.partner/credit-commodity [:kontor.commodity/symbol "EUR"]
+                :kontor.partner/credit-status :open
+                :kontor.partner/kyc-status :cleared
+                :kontor.partner/kyc-source "Manual"
+                :kontor.partner/kyc-checked-at #inst "2026-04-15"}])
   (let [db (d/db *conn*)
         p (d/pull db '[*] (p/by-external-id db "P-CREDIT"))]
-    (is (= 50000M (:partner/credit-limit p)))
-    (is (= :open (:partner/credit-status p)))
-    (is (= :cleared (:partner/kyc-status p)))
-    (is (= "Manual" (:partner/kyc-source p)))))
+    (is (= 50000M (:kontor.partner/credit-limit p)))
+    (is (= :open (:kontor.partner/credit-status p)))
+    (is (= :cleared (:kontor.partner/kyc-status p)))
+    (is (= "Manual" (:kontor.partner/kyc-source p)))))
 
 ;; ============================================================================
 ;; ADR-040 — Multi-tax-id-per-jurisdiction
@@ -574,19 +574,19 @@
   (d/transact *conn*
               [{:kontor.country/code "DE" :kontor.country/name "Germany"}
                {:kontor.country/code "AT" :kontor.country/name "Austria"}
-               {:partner/external-id "P-MULTI-VAT"
-                :partner/type :org :partner/status :enabled
-                :partner/name "Multi-VAT Inc"
-                :partner/tax-id "DE123456789"}
+               {:kontor.partner/external-id "P-MULTI-VAT"
+                :kontor.partner/type :org :kontor.partner/status :enabled
+                :kontor.partner/name "Multi-VAT Inc"
+                :kontor.partner/tax-id "DE123456789"}
                ;; DE VAT
-               {:partner-tax-id/partner [:partner/external-id "P-MULTI-VAT"]
+               {:partner-tax-id/partner [:kontor.partner/external-id "P-MULTI-VAT"]
                 :partner-tax-id/country [:kontor.country/code "DE"]
                 :partner-tax-id/tax-id-type :vat-eu
                 :partner-tax-id/tax-id "DE123456789"
                 :partner-tax-id/from-date #inst "2024-01-01"
                 :partner-tax-id/verified? true}
                ;; AT VAT — separate jurisdiction
-               {:partner-tax-id/partner [:partner/external-id "P-MULTI-VAT"]
+               {:partner-tax-id/partner [:kontor.partner/external-id "P-MULTI-VAT"]
                 :partner-tax-id/country [:kontor.country/code "AT"]
                 :partner-tax-id/tax-id-type :vat-eu
                 :partner-tax-id/tax-id "ATU12345678"

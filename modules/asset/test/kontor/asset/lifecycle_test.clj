@@ -31,8 +31,8 @@
                 [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
                  ;; Actors — :create/uid is :db.type/ref, reuse :partner
                  ;; entities as actor stand-ins (the kernel convention).
-                 {:partner/external-id "U-buyer"    :partner/name "Asset Buyer"}
-                 {:partner/external-id "U-manager"  :partner/name "Asset Manager"}
+                 {:kontor.partner/external-id "U-buyer"    :kontor.partner/name "Asset Buyer"}
+                 {:kontor.partner/external-id "U-manager"  :kontor.partner/name "Asset Manager"}
                  ;; GL accounts for the asset's three legs (ADR-054 posts to them).
                  {:db/id "acct-machinery"
                   :account/code "0210" :account/name "Machinery"
@@ -50,7 +50,7 @@
                   :asset-class/default-useful-life-months 120}
                  ;; A second legal entity for the transfer test.
                  {:db/id "entity-sub"
-                  :entity/code "SUB-DE" :entity/name "Subsidiary GmbH"}
+                  :kontor.entity/code "SUB-DE" :kontor.entity/name "Subsidiary GmbH"}
                  ;; Supporting docs.
                  {:db/id "doc-invoice"
                   :audit-doc/code "ASSET-INV-001"
@@ -70,7 +70,7 @@
     conn))
 
 (defn- uid [db actor]
-  (d/q '[:find ?e . :in $ ?x :where [?e :partner/external-id ?x]]
+  (d/q '[:find ?e . :in $ ?x :where [?e :kontor.partner/external-id ?x]]
        db (str "U-" actor)))
 
 (defn- ref-eid [db tempid-attr v]
@@ -79,7 +79,7 @@
 (defn- commodity [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- adoc [db code] (ref-eid db :audit-doc/code code))
 (defn- acct [db code] (ref-eid db :account/code code))
-(defn- entity-eid [db code] (ref-eid db :entity/code code))
+(defn- entity-eid [db code] (ref-eid db :kontor.entity/code code))
 (defn- class-eid [db code] (ref-eid db :asset-class/code code))
 
 ;; Acquire a standard in-service machinery asset; returns the eid.

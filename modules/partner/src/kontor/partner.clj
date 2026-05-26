@@ -22,17 +22,17 @@
 ;; ============================================================================
 
 (defn by-external-id
-  "Resolve a partner entity-id by `:partner/external-id`."
+  "Resolve a partner entity-id by `:kontor.partner/external-id`."
   [db external-id]
   (d/q '[:find ?e .
          :in $ ?xid
-         :where [?e :partner/external-id ?xid]]
+         :where [?e :kontor.partner/external-id ?xid]]
        db external-id))
 
 (defn resolve-partner
   "Coerce `spec` to a partner entity-id:
      - nil       → nil
-     - string    → looked up by :partner/external-id
+     - string    → looked up by :kontor.partner/external-id
      - any other → returned as-is (assumed eid)."
   [db spec]
   (cond
@@ -46,19 +46,19 @@
 
 (defn person
   "Pull the :person subtype map associated with `partner` (entity-id
-   or string `:partner/external-id`). Returns nil if the partner has
+   or string `:kontor.partner/external-id`). Returns nil if the partner has
    no :person subtype (i.e. is an org)."
   [db partner]
   (when-let [pid (resolve-partner db partner)]
     (when-let [person-eid (d/q '[:find ?p .
                                  :in $ ?partner
-                                 :where [?p :person/partner ?partner]]
+                                 :where [?p :kontor.person/partner ?partner]]
                                db pid)]
       (d/pull db '[*] person-eid))))
 
 (defn org
   "Pull the :org subtype map associated with `partner` (entity-id or
-   string `:partner/external-id`). Returns nil if the partner has no
+   string `:kontor.partner/external-id`). Returns nil if the partner has no
    :org subtype (i.e. is a person)."
   [db partner]
   (when-let [pid (resolve-partner db partner)]
@@ -327,7 +327,7 @@
 ;; to-zero) fires uniformly.
 ;;
 ;; The schema does NOT install `:status-transition` seeds for
-;; `:partner/status` or `:partner-relationship/status`, so those are
+;; `:kontor.partner/status` or `:partner-relationship/status`, so those are
 ;; written as plain facet updates. If/when a future ADR adds the
 ;; seeds, `update-party!` + `end-relationship!` can switch to
 ;; `kontor.status-machine/record-status-change-tx-data` without a
@@ -345,13 +345,13 @@
 (defn create-party-tx-data
   "Pure tx-data builder for `create-party!`. Returns a vector of
    tx-ops: one `:partner` map plus, when `:type` is `:person` or
-   `:org`, a 1:1 subtype row joined by `:person/partner` or
+   `:org`, a 1:1 subtype row joined by `:kontor.person/partner` or
    `:org/partner`.
 
    Required:
-     :external-id  — string, unique :partner/external-id
+     :external-id  — string, unique :kontor.partner/external-id
      :type         — :person | :org (drives subtype + sub-attrs)
-     :name         — string :partner/name
+     :name         — string :kontor.partner/name
 
    Optional kernel attrs:
      :kind                — :customer | :vendor | :both
@@ -380,51 +380,51 @@
                status preferred-commodity description created-at
                person org tempid]
         :or   {tempid "partner-1"}}]
-  (when-not external-id (throw (ex-info ":external-id required" {:type :partner/missing-external-id})))
+  (when-not external-id (throw (ex-info ":external-id required" {:type :kontor.partner/missing-external-id})))
   (when-not type        (throw (ex-info ":type required (:person or :org)"
-                                        {:type :partner/missing-type})))
-  (when-not name        (throw (ex-info ":name required" {:type :partner/missing-name})))
+                                        {:type :kontor.partner/missing-type})))
+  (when-not name        (throw (ex-info ":name required" {:type :kontor.partner/missing-name})))
   (when-not (contains? #{:person :org} type)
     (throw (ex-info ":type must be :person or :org"
-                    {:type :partner/invalid-type :got type})))
+                    {:type :kontor.partner/invalid-type :got type})))
   (let [now (or created-at (now-instant))
         partner-row (cond-> {:db/id               tempid
-                             :partner/external-id external-id
-                             :partner/name        name
-                             :partner/type        type
-                             :partner/status      (or status :enabled)
-                             :partner/created-at  now
-                             :partner/modified-at now}
-                      kind                (assoc :partner/kind kind)
-                      country-code        (assoc :partner/country-code country-code)
-                      tax-id              (assoc :partner/tax-id tax-id)
-                      preferred-commodity (assoc :partner/preferred-commodity preferred-commodity)
-                      description         (assoc :partner/description description))
+                             :kontor.partner/external-id external-id
+                             :kontor.partner/name        name
+                             :kontor.partner/type        type
+                             :kontor.partner/status      (or status :enabled)
+                             :kontor.partner/created-at  now
+                             :kontor.partner/modified-at now}
+                      kind                (assoc :kontor.partner/kind kind)
+                      country-code        (assoc :kontor.partner/country-code country-code)
+                      tax-id              (assoc :kontor.partner/tax-id tax-id)
+                      preferred-commodity (assoc :kontor.partner/preferred-commodity preferred-commodity)
+                      description         (assoc :kontor.partner/description description))
         subtype-tempid (str tempid "-subtype")
         ;; Subtype rows are only emitted when the caller passes the
         ;; corresponding `:person` / `:org` sub-map. A `:partner` of
-        ;; `:type :person` without any `:person/*` attrs is valid —
+        ;; `:type :person` without any `:kontor.person/*` attrs is valid —
         ;; consumers may populate the subtype later via
         ;; `update-party!` (TODO) or a direct `add-person-attrs!`
         ;; transactor. This keeps the builder a strict 1-row
         ;; constructor when no subtype payload is supplied.
         person-row (when (and (= type :person) (seq person))
                      (cond-> {:db/id          subtype-tempid
-                              :person/partner tempid}
-                       (:first-name person)       (assoc :person/first-name (:first-name person))
-                       (:middle-name person)      (assoc :person/middle-name (:middle-name person))
-                       (:last-name person)        (assoc :person/last-name (:last-name person))
-                       (:salutation person)       (assoc :person/salutation (:salutation person))
-                       (:suffix person)           (assoc :person/suffix (:suffix person))
-                       (:nickname person)         (assoc :person/nickname (:nickname person))
-                       (:first-name-local person) (assoc :person/first-name-local (:first-name-local person))
-                       (:last-name-local person)  (assoc :person/last-name-local (:last-name-local person))
-                       (:gender person)           (assoc :person/gender (:gender person))
-                       (:birth-date person)       (assoc :person/birth-date (:birth-date person))
-                       (:deceased-date person)    (assoc :person/deceased-date (:deceased-date person))
-                       (:marital-status person)   (assoc :person/marital-status (:marital-status person))
-                       (:national-id-type person) (assoc :person/national-id-type (:national-id-type person))
-                       (:national-id person)      (assoc :person/national-id (:national-id person))))
+                              :kontor.person/partner tempid}
+                       (:first-name person)       (assoc :kontor.person/first-name (:first-name person))
+                       (:middle-name person)      (assoc :kontor.person/middle-name (:middle-name person))
+                       (:last-name person)        (assoc :kontor.person/last-name (:last-name person))
+                       (:salutation person)       (assoc :kontor.person/salutation (:salutation person))
+                       (:suffix person)           (assoc :kontor.person/suffix (:suffix person))
+                       (:nickname person)         (assoc :kontor.person/nickname (:nickname person))
+                       (:first-name-local person) (assoc :kontor.person/first-name-local (:first-name-local person))
+                       (:last-name-local person)  (assoc :kontor.person/last-name-local (:last-name-local person))
+                       (:gender person)           (assoc :kontor.person/gender (:gender person))
+                       (:birth-date person)       (assoc :kontor.person/birth-date (:birth-date person))
+                       (:deceased-date person)    (assoc :kontor.person/deceased-date (:deceased-date person))
+                       (:marital-status person)   (assoc :kontor.person/marital-status (:marital-status person))
+                       (:national-id-type person) (assoc :kontor.person/national-id-type (:national-id-type person))
+                       (:national-id person)      (assoc :kontor.person/national-id (:national-id person))))
         org-row (when (and (= type :org) (seq org))
                   (cond-> {:db/id       subtype-tempid
                            :org/partner tempid}
@@ -457,7 +457,7 @@
 (defn update-party-tx-data
   "Pure tx-data builder for `update-party!`. Rewrites the named fields
    on an existing `:partner` row (resolved by eid or
-   `:partner/external-id`). `:partner/modified-at` is stamped to
+   `:kontor.partner/external-id`). `:kontor.partner/modified-at` is stamped to
    `now` automatically unless `:modified-at` is supplied.
 
    Optional fields (each present-only-if-passed):
@@ -471,19 +471,19 @@
   (let [eid (resolve-partner db spec)]
     (when-not eid
       (throw (ex-info "Partner not found"
-                      {:type :partner/not-found :spec spec})))
+                      {:type :kontor.partner/not-found :spec spec})))
     (when (empty? (dissoc opts :modified-at))
       (throw (ex-info "update-party! requires at least one field to change"
-                      {:type :partner/empty-update :spec spec})))
+                      {:type :kontor.partner/empty-update :spec spec})))
     [(cond-> {:db/id eid
-              :partner/modified-at (or modified-at (now-instant))}
-       name                 (assoc :partner/name name)
-       kind                 (assoc :partner/kind kind)
-       status               (assoc :partner/status status)
-       country-code         (assoc :partner/country-code country-code)
-       tax-id               (assoc :partner/tax-id tax-id)
-       preferred-commodity  (assoc :partner/preferred-commodity preferred-commodity)
-       description          (assoc :partner/description description))]))
+              :kontor.partner/modified-at (or modified-at (now-instant))}
+       name                 (assoc :kontor.partner/name name)
+       kind                 (assoc :kontor.partner/kind kind)
+       status               (assoc :kontor.partner/status status)
+       country-code         (assoc :kontor.partner/country-code country-code)
+       tax-id               (assoc :kontor.partner/tax-id tax-id)
+       preferred-commodity  (assoc :kontor.partner/preferred-commodity preferred-commodity)
+       description          (assoc :kontor.partner/description description))]))
 
 (defn update-party!
   "Mutate fields on an existing partner. Routes through the gate
@@ -597,7 +597,7 @@
   (let [partner-eid (resolve-partner db partner)
         _ (when-not partner-eid
             (throw (ex-info "Partner not found"
-                            {:type :partner/not-found :spec partner})))
+                            {:type :kontor.partner/not-found :spec partner})))
         now           (now-instant)
         from          (or from-date now)
         cm-tempid     (contact-mech-tempid tempid)
@@ -672,7 +672,7 @@
   (let [partner-eid (resolve-partner db partner)
         _ (when-not partner-eid
             (throw (ex-info "Partner not found"
-                            {:type :partner/not-found :spec partner})))
+                            {:type :kontor.partner/not-found :spec partner})))
         cm-eid (if (string? contact-mech)
                  (d/q '[:find ?cm .
                         :in $ ?code
@@ -760,10 +760,10 @@
         to-eid   (resolve-partner db partner-to)
         _ (when-not from-eid
             (throw (ex-info "from-partner not found"
-                            {:type :partner/not-found :spec partner-from})))
+                            {:type :kontor.partner/not-found :spec partner-from})))
         _ (when-not to-eid
             (throw (ex-info "to-partner not found"
-                            {:type :partner/not-found :spec partner-to})))
+                            {:type :kontor.partner/not-found :spec partner-to})))
         from (or from-date (now-instant))]
     [(cond-> {:db/id                                  tempid
               :partner-relationship/partner-from      from-eid
@@ -842,7 +842,7 @@
   (let [partner-eid (resolve-partner db partner)
         _ (when-not partner-eid
             (throw (ex-info "Partner not found"
-                            {:type :partner/not-found :spec partner})))
+                            {:type :kontor.partner/not-found :spec partner})))
         from (or from-date (now-instant))]
     [(cond-> {:db/id                  tempid
               :partner-role/partner   partner-eid
@@ -913,7 +913,7 @@
                     supporting-doc (assoc :partner-merge/supporting-doc supporting-doc)
                     merged-by-uid  (assoc :partner-merge/merged-by-uid merged-by-uid))
         archive-row {:db/id superseded-eid
-                     :partner/status :archived}]
+                     :kontor.partner/status :archived}]
     [merge-row archive-row]))
 
 (defn merge-partners!

@@ -13,18 +13,18 @@
 
    Kernel schema grows ~6 attrs on `:entity`:
 
-   - `:entity/lei` — 20-character ISO 17442 identifier. Unique-value.
-   - `:entity/legal-form` — 'GmbH' / 'AG' / 'LLC' / etc.
-   - `:entity/registration-status` — `:issued :lapsed :merged :retired
+   - `:kontor.entity/lei` — 20-character ISO 17442 identifier. Unique-value.
+   - `:kontor.entity/legal-form` — 'GmbH' / 'AG' / 'LLC' / etc.
+   - `:kontor.entity/registration-status` — `:issued :lapsed :merged :retired
      :duplicate :transferred :annulled`.
-   - `:entity/parent-lei` — direct parent LEI string (debug + reingest).
-   - `:entity/ultimate-parent-lei` — ultimate parent LEI string.
-   - `:entity/source-id` — provenance opaque ID (e.g.
+   - `:kontor.entity/parent-lei` — direct parent LEI string (debug + reingest).
+   - `:kontor.entity/ultimate-parent-lei` — ultimate parent LEI string.
+   - `:kontor.entity/source-id` — provenance opaque ID (e.g.
      `\"gleif://Golden-Copy/2026-05-18\"`).
 
-   The resolved `:entity/parent-entity` ref (ADR-031, existing) is
+   The resolved `:kontor.entity/parent-entity` ref (ADR-031, existing) is
    what `kontor.entity/family` (ADR-073 consolidation) walks. The
-   `:entity/*-lei` raw-string slots are provenance — they survive
+   `:kontor.entity/*-lei` raw-string slots are provenance — they survive
    re-ingest + give debugging visibility.
 
    ## Two-phase ingest
@@ -33,12 +33,12 @@
    declare 'X IS_DIRECTLY_CONSOLIDATED_BY Y' where both X and Y are
    Level 1 entities, in any order. The clean approach:
 
-   1. `import-level-1!` — transact every entity with its `:entity/lei`,
-      `:entity/legal-form`, etc. After this, every LEI in the dataset
+   1. `import-level-1!` — transact every entity with its `:kontor.entity/lei`,
+      `:kontor.entity/legal-form`, etc. After this, every LEI in the dataset
       resolves to a kontor `:entity` eid.
    2. `import-level-2!` — for each relationship row, look up the start
-      + end LEIs in the DB + set `:entity/parent-entity` (direct
-      relation) or `:entity/ultimate-parent-lei` (the string slot
+      + end LEIs in the DB + set `:kontor.entity/parent-entity` (direct
+      relation) or `:kontor.entity/ultimate-parent-lei` (the string slot
       survives — useful when the ultimate parent is outside the
       ingested subset).
 
@@ -119,15 +119,15 @@
   (let [lei  (:LEI row)
         name (:EntityLegalName row)]
     (when (and (string? lei) (valid-lei? lei))
-      (cond-> {:entity/lei  lei
-               :entity/name name
-               :entity/code (str (or default-entity-code-prefix "GLEIF-") lei)
-               :entity/active true}
-        (:LegalForm row)            (assoc :entity/legal-form (:LegalForm row))
+      (cond-> {:kontor.entity/lei  lei
+               :kontor.entity/name name
+               :kontor.entity/code (str (or default-entity-code-prefix "GLEIF-") lei)
+               :kontor.entity/active true}
+        (:LegalForm row)            (assoc :kontor.entity/legal-form (:LegalForm row))
         (status->kw (:RegistrationStatus row))
-        (assoc :entity/registration-status
+        (assoc :kontor.entity/registration-status
                (status->kw (:RegistrationStatus row)))
-        source-id                   (assoc :entity/source-id source-id)))))
+        source-id                   (assoc :kontor.entity/source-id source-id)))))
 
 (defn import-level-1-tx-data
   "Pure tx-data builder. Returns a vector of `:entity` upsert maps
@@ -139,7 +139,7 @@
      :source-id                  — provenance string. Stamped onto
                                    every entity created.
      :default-entity-code-prefix — string prepended to LEI for the
-                                   :entity/code uniqueness key (the
+                                   :kontor.entity/code uniqueness key (the
                                    kontor convention; defaults to
                                    'GLEIF-')."
   ([rows] (import-level-1-tx-data rows {}))
@@ -178,7 +178,7 @@
   "Transact Level 1 entity master rows from a parsed CSV `rows` (or a
    file `source` consumable by `clojure.java.io/reader`).
 
-   Idempotent against `:entity/lei` (unique-value) — a re-ingest with
+   Idempotent against `:kontor.entity/lei` (unique-value) — a re-ingest with
    the same LEI updates the entity's attrs in place.
 
    Returns the tx-report."
@@ -190,7 +190,7 @@
                 (read-csv rows-or-source)
                 rows-or-source)]
      ;; ADR-068 carve-out: bulk master-data ingest. Kernel invariants
-     ;; (sum-to-zero, period-lock, sealing) don't apply to :entity/*
+     ;; (sum-to-zero, period-lock, sealing) don't apply to :kontor.entity/*
      ;; writes; routing through kontor.validation/transact-with-validation
      ;; would add per-row overhead with nothing to validate. See note 95
      ;; §2 (kontor-import-gleif) for the audit entry.
@@ -226,9 +226,9 @@
 
    Strategy: for each ACTIVE relationship, look up the child by LEI
    in `db`. If found:
-   - IS_DIRECTLY_CONSOLIDATED_BY  → set :entity/parent-entity (resolved
-                                     ref) AND :entity/parent-lei (raw string).
-   - IS_ULTIMATELY_CONSOLIDATED_BY → set :entity/ultimate-parent-lei
+   - IS_DIRECTLY_CONSOLIDATED_BY  → set :kontor.entity/parent-entity (resolved
+                                     ref) AND :kontor.entity/parent-lei (raw string).
+   - IS_ULTIMATELY_CONSOLIDATED_BY → set :kontor.entity/ultimate-parent-lei
                                      (raw string only — no resolved ref
                                      because chain might not be loaded).
 
@@ -244,30 +244,30 @@
         (fn [{:keys [start end type]}]
           (let [child-eid  (d/q '[:find ?e .
                                   :in $ ?lei
-                                  :where [?e :entity/lei ?lei]]
+                                  :where [?e :kontor.entity/lei ?lei]]
                                 db start)
                 parent-eid (d/q '[:find ?e .
                                   :in $ ?lei
-                                  :where [?e :entity/lei ?lei]]
+                                  :where [?e :kontor.entity/lei ?lei]]
                                 db end)]
             (when child-eid
               (case type
                 "IS_DIRECTLY_CONSOLIDATED_BY"
                 (cond-> {:db/id child-eid
-                         :entity/parent-lei end}
-                  parent-eid (assoc :entity/parent-entity parent-eid))
+                         :kontor.entity/parent-lei end}
+                  parent-eid (assoc :kontor.entity/parent-entity parent-eid))
 
                 "IS_ULTIMATELY_CONSOLIDATED_BY"
                 {:db/id child-eid
-                 :entity/ultimate-parent-lei end}
+                 :kontor.entity/ultimate-parent-lei end}
 
                 nil)))))
        vec))
 
 (defn import-level-2!
   "Transact Level 2 RR-CDF rows. Idempotent — re-ingest overwrites
-   `:entity/parent-entity` + `:entity/parent-lei` /
-   `:entity/ultimate-parent-lei` on the child entity.
+   `:kontor.entity/parent-entity` + `:kontor.entity/parent-lei` /
+   `:kontor.entity/ultimate-parent-lei` on the child entity.
 
    Returns the tx-report."
   [conn rows-or-source]
@@ -288,5 +288,5 @@
   [db lei]
   (d/q '[:find ?e .
          :in $ ?lei
-         :where [?e :entity/lei ?lei]]
+         :where [?e :kontor.entity/lei ?lei]]
        db lei))

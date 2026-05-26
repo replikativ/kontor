@@ -37,12 +37,12 @@
     (d/transact conn [{:kontor.commodity/symbol    "BRL"
                        :kontor.commodity/name      "Brazilian Real"
                        :kontor.commodity/precision 2}
-                      {:entity/code "PF-COSTA" :entity/name "Sra. Costa"
-                       :entity/kind :person :entity/country "BR"
-                       :entity/functional-commodity [:kontor.commodity/symbol "BRL"]}
-                      {:entity/code "PJ-CORPD" :entity/name "CorpD S.A."
-                       :entity/kind :company :entity/country "BR"
-                       :entity/functional-commodity [:kontor.commodity/symbol "BRL"]}])
+                      {:kontor.entity/code "PF-COSTA" :kontor.entity/name "Sra. Costa"
+                       :kontor.entity/kind :person :kontor.entity/country "BR"
+                       :kontor.entity/functional-commodity [:kontor.commodity/symbol "BRL"]}
+                      {:kontor.entity/code "PJ-CORPD" :kontor.entity/name "CorpD S.A."
+                       :kontor.entity/kind :company :kontor.entity/country "BR"
+                       :kontor.entity/functional-commodity [:kontor.commodity/symbol "BRL"]}])
     conn))
 
 (def ^:private p2026 {:from #inst "2026-01-01" :to #inst "2027-01-01"})
@@ -55,7 +55,7 @@
     (ptp/period-tax-facts
      provider
      (merge {:db     (d/db conn)
-             :entity [:entity/code "PF-COSTA"]
+             :entity [:kontor.entity/code "PF-COSTA"]
              :period period
              :inputs inputs}
             extra-ctx))))
@@ -66,7 +66,7 @@
     (ptp/period-tax-facts
      provider
      (merge {:db     (d/db conn)
-             :entity [:entity/code "PJ-CORPD"]
+             :entity [:kontor.entity/code "PJ-CORPD"]
              :period period
              :inputs inputs}
             extra-ctx))))
@@ -440,7 +440,7 @@
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #":kind must be"
                             (ptp/period-tax-facts
                              bad {:db (d/db conn)
-                                  :entity [:entity/code "PF-COSTA"]
+                                  :entity [:kontor.entity/code "PF-COSTA"]
                                   :period p2026
                                   :inputs {}}))))))
 

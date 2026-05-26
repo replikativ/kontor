@@ -182,10 +182,10 @@
                      :invoice/issue-date :invoice/currency
                      :invoice/total-net :invoice/total-vat :invoice/total-gross
                      :invoice/buyer-reference
-                     {:invoice/seller [:db/id :partner/external-id :partner/name
-                                       :partner/tax-id]}
-                     {:invoice/buyer  [:db/id :partner/external-id :partner/name
-                                       :partner/tax-id]}
+                     {:invoice/seller [:db/id :kontor.partner/external-id :kontor.partner/name
+                                       :kontor.partner/tax-id]}
+                     {:invoice/buyer  [:db/id :kontor.partner/external-id :kontor.partner/name
+                                       :kontor.partner/tax-id]}
                      {:invoice/lines [:invoice-line/sequence
                                       :invoice-line/name
                                       :invoice-line/description

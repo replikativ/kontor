@@ -2,14 +2,14 @@
   "Per-(partner, entity) credit-hold overlay — ADR-043, ported to the
    status machine per the 2026-05-13 P0-5 review fix.
 
-   Composes with ADR-039's `:partner/credit-status` scalar as the
+   Composes with ADR-039's `:kontor.partner/credit-status` scalar as the
    default. The resolver `credit-status-for` walks:
 
      1. Any active `:credit-hold` row for (partner, entity) at
         `:as-of-valid` — i.e. `:placed-at ≤ as-of` AND
         `:credit-hold/state == :placed` (or unreleased) at as-of AND
         not yet expired by `:expires-at`.
-     2. Otherwise the partner's `:partner/credit-status` scalar
+     2. Otherwise the partner's `:kontor.partner/credit-status` scalar
         (ADR-039 default — `:open | :hold | :review | :closed`).
 
    This makes single-entity tenants experience zero complexity (they
@@ -79,7 +79,7 @@
      :open | :hold | :review | :closed
 
    Walks per-(partner, entity) `:credit-hold` overlay first; falls
-   back to the `:partner/credit-status` scalar (ADR-039)."
+   back to the `:kontor.partner/credit-status` scalar (ADR-039)."
   [db {:keys [partner entity as-of-valid] :as opts}]
   (let [active (active-holds-for db opts)]
     (cond
@@ -88,7 +88,7 @@
       (seq active) :hold
 
       :else
-      (or (:partner/credit-status (d/pull db [:partner/credit-status] partner))
+      (or (:kontor.partner/credit-status (d/pull db [:kontor.partner/credit-status] partner))
           :open))))
 
 (defn current-hold
@@ -99,7 +99,7 @@
 
 (defn credit-utilization
   "Live AR + open-invoice balance for (partner, entity) at
-   :as-of-valid (default now). The `:partner/credit-limit` (ADR-039)
+   :as-of-valid (default now). The `:kontor.partner/credit-limit` (ADR-039)
    plus this number gives the utilization ratio.
 
    Returns BigDecimal — sum of open-amounts across all

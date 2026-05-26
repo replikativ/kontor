@@ -181,7 +181,7 @@
    (let [person-eid (if (number? person)
                       person
                       (d/q '[:find ?p . :in $ ?x :where
-                             [?p :person/external-id ?x]]
+                             [?p :kontor.person/external-id ?x]]
                            db person))]
      (or (d/q '[:find (sum ?ft) .
                 :with ?e

@@ -38,14 +38,14 @@
 
 (defn- seed-partners! []
   (d/transact *conn*
-              [{:partner/external-id "SELLER"
-                :partner/type :org
-                :partner/status :enabled
-                :partner/name "Seller Co"}
-               {:partner/external-id "BUYER"
-                :partner/type :person
-                :partner/status :enabled
-                :partner/name "Customer Person"}]))
+              [{:kontor.partner/external-id "SELLER"
+                :kontor.partner/type :org
+                :kontor.partner/status :enabled
+                :kontor.partner/name "Seller Co"}
+               {:kontor.partner/external-id "BUYER"
+                :kontor.partner/type :person
+                :kontor.partner/status :enabled
+                :kontor.partner/name "Customer Person"}]))
 
 (defn- seed-accounts!
   "Seed minimal accounts for sales-revenue, sales-tax-payable, AR."
@@ -93,8 +93,8 @@
                 :order/order-date #inst "2026-05-01"
                 :order/entry-date #inst "2026-05-01"
                 :order/currency [:kontor.commodity/symbol "EUR"]
-                :order/bill-from-partner [:partner/external-id "SELLER"]
-                :order/bill-to-partner [:partner/external-id "BUYER"]}
+                :order/bill-from-partner [:kontor.partner/external-id "SELLER"]
+                :order/bill-to-partner [:kontor.partner/external-id "BUYER"]}
                {:order-item/order [:order/external-id "ORD-1"]
                 :order-item/seq-id "00001"
                 :order-item/type :product

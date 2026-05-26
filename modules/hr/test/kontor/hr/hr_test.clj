@@ -36,10 +36,10 @@
                 [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
                  {:db/id "usd" :kontor.commodity/symbol "USD" :kontor.commodity/precision 2}
                  ;; Two entities — DE GmbH and US LLC — for multi-employment.
-                 {:db/id "ent-de" :entity/code "DE-GMBH" :entity/name "Acme DE GmbH"
-                  :entity/kind :operating}
-                 {:db/id "ent-us" :entity/code "US-LLC"  :entity/name "Acme US LLC"
-                  :entity/kind :operating}
+                 {:db/id "ent-de" :kontor.entity/code "DE-GMBH" :kontor.entity/name "Acme DE GmbH"
+                  :kontor.entity/kind :operating}
+                 {:db/id "ent-us" :kontor.entity/code "US-LLC"  :kontor.entity/name "Acme US LLC"
+                  :kontor.entity/kind :operating}
                  ;; GL accounts — minimal DE chart.
                  {:db/id "acct-wages-de" :account/code "4120"
                   :account/name "Löhne und Gehälter"
@@ -76,7 +76,7 @@
     (testing "schema attrs survive the second install"
       (is (some? (d/q '[:find ?a . :in $ ?ident
                         :where [?a :db/ident ?ident]]
-                      (d/db conn) :person/external-id))))))
+                      (d/db conn) :kontor.person/external-id))))))
 
 (deftest schema-attrs-present
   (let [conn (bootstrap)
@@ -84,7 +84,7 @@
     (testing "kontor-hr attrs are queryable"
       (is (some? (d/q '[:find ?a . :in $ ?ident
                         :where [?a :db/ident ?ident]]
-                      db :person/external-id)))
+                      db :kontor.person/external-id)))
       (is (some? (d/q '[:find ?a . :in $ ?ident
                         :where [?a :db/ident ?ident]]
                       db :employment/work-time-fraction)))
@@ -109,7 +109,7 @@
                                        :citizenship ["DE"]})
         db (d/db conn)
         jane (hr/person-by-external-id db "P-jane")
-        ent-de (ref-eid db :entity/code "DE-GMBH")
+        ent-de (ref-eid db :kontor.entity/code "DE-GMBH")
         contract (ref-eid db :audit-doc/code "CONTRACT-jane")
         _ (employment/hire! conn {:code "EMP-DE-jane"
                                   :person jane
@@ -120,19 +120,19 @@
                                   :contract-doc contract})
         db (d/db conn)
         emp (d/pull db '[* {:employment/person [*]
-                            :employment/entity [:entity/code]
+                            :employment/entity [:kontor.entity/code]
                             :employment/contract-doc [:audit-doc/code
                                                       :audit-doc/category]}]
                     (hr/employment-by-code db "EMP-DE-jane"))]
     (testing "person attrs round-trip"
-      (is (= "Jane" (-> emp :employment/person :person/given-name)))
-      (is (= "Doe"  (-> emp :employment/person :person/family-name)))
-      (is (= ["DE"] (vec (-> emp :employment/person :person/citizenship)))))
+      (is (= "Jane" (-> emp :employment/person :kontor.person/given-name)))
+      (is (= "Doe"  (-> emp :employment/person :kontor.person/family-name)))
+      (is (= ["DE"] (vec (-> emp :employment/person :kontor.person/citizenship)))))
     (testing "employment defaults are populated"
       (is (= :hired (:employment/state emp)))
       (is (= 1M     (:employment/work-time-fraction emp)))
       (is (= :standard (:employment/work-relationship-kind emp)))
-      (is (= "DE-GMBH" (-> emp :employment/entity :entity/code))))
+      (is (= "DE-GMBH" (-> emp :employment/entity :kontor.entity/code))))
     (testing "contract doc is linked with the kernel-side :hr-personnel category"
       (is (= "CONTRACT-jane" (-> emp :employment/contract-doc :audit-doc/code)))
       (is (= :hr-personnel   (-> emp :employment/contract-doc :audit-doc/category))))))
@@ -143,8 +143,8 @@
                                        :given-name "Jane" :family-name "Doe"})
         db (d/db conn)
         jane (hr/person-by-external-id db "P-jane")
-        de (ref-eid db :entity/code "DE-GMBH")
-        us (ref-eid db :entity/code "US-LLC")
+        de (ref-eid db :kontor.entity/code "DE-GMBH")
+        us (ref-eid db :kontor.entity/code "US-LLC")
         _ (employment/hire! conn {:code "EMP-DE-jane" :person jane :entity de
                                   :start-date #inst "2026-05-01"
                                   :job-title "Senior Eng (DE)"})
@@ -175,7 +175,7 @@
                                        :given-name "Jane" :family-name "Doe"})
         db (d/db conn)
         jane (hr/person-by-external-id db "P-jane")
-        de (ref-eid db :entity/code "DE-GMBH")
+        de (ref-eid db :kontor.entity/code "DE-GMBH")
         eur (ref-eid db :kontor.commodity/symbol "EUR")
         _ (employment/hire! conn {:code "EMP-DE-jane" :person jane :entity de
                                   :start-date #inst "2026-05-01"})
@@ -205,7 +205,7 @@
                                        :given-name "Jane" :family-name "Doe"})
         db (d/db conn)
         jane (hr/person-by-external-id db "P-jane")
-        de (ref-eid db :entity/code "DE-GMBH")
+        de (ref-eid db :kontor.entity/code "DE-GMBH")
         eur (ref-eid db :kontor.commodity/symbol "EUR")
         _ (employment/hire! conn {:code "EMP-DE-jane" :person jane :entity de
                                   :start-date #inst "2026-05-01"})
@@ -247,7 +247,7 @@
                                        :given-name "Bob" :family-name "Smith"})
         db (d/db conn)
         bob (hr/person-by-external-id db "P-bob")
-        de (ref-eid db :entity/code "DE-GMBH")
+        de (ref-eid db :kontor.entity/code "DE-GMBH")
         _ (employment/hire! conn {:code "EMP-bob" :person bob :entity de
                                   :start-date #inst "2026-05-01"})
         emp-eid (hr/employment-by-code (d/db conn) "EMP-bob")
@@ -270,7 +270,7 @@
                                        :given-name "Carol" :family-name "Jones"})
         db (d/db conn)
         carol (hr/person-by-external-id db "P-carol")
-        de (ref-eid db :entity/code "DE-GMBH")
+        de (ref-eid db :kontor.entity/code "DE-GMBH")
         contract (ref-eid db :audit-doc/code "CONTRACT-jane")
         _ (employment/hire! conn {:code "EMP-carol" :person carol :entity de
                                   :start-date #inst "2026-05-01"})
@@ -278,7 +278,7 @@
         _ (d/transact conn [[:db/add emp-eid :employment/state :active]])
         ;; Carol can't approve her own termination.
         approver (d/q '[:find ?p . :in $ ?x :where
-                        [?p :person/external-id ?x]]
+                        [?p :kontor.person/external-id ?x]]
                       (d/db conn) "P-bob")
         _ (when-not approver
             (person/create-person! conn {:external-id "P-mgr"
@@ -372,7 +372,7 @@
                                        :given-name "Jane" :family-name "Doe"})
         db (d/db conn)
         jane (hr/person-by-external-id db "P-jane")
-        de (ref-eid db :entity/code "DE-GMBH")
+        de (ref-eid db :kontor.entity/code "DE-GMBH")
         eur (ref-eid db :kontor.commodity/symbol "EUR")
         period (ref-eid db :period/name "2026-05")
         journal (ref-eid db :journal/code "PAY-DE")
@@ -453,7 +453,7 @@
                                        :given-name "Jane" :family-name "Doe"})
         db (d/db conn)
         jane (hr/person-by-external-id db "P-jane")
-        de (ref-eid db :entity/code "DE-GMBH")
+        de (ref-eid db :kontor.entity/code "DE-GMBH")
         eur (ref-eid db :kontor.commodity/symbol "EUR")
         period (ref-eid db :period/name "2026-05")
         journal (ref-eid db :journal/code "PAY-DE")
@@ -512,7 +512,7 @@
                                        :given-name "Jane" :family-name "Doe"})
         db (d/db conn)
         jane (hr/person-by-external-id db "P-jane")
-        de (ref-eid db :entity/code "DE-GMBH")
+        de (ref-eid db :kontor.entity/code "DE-GMBH")
         eur (ref-eid db :kontor.commodity/symbol "EUR")
         _ (employment/hire! conn {:code "EMP-DE-jane" :person jane :entity de
                                   :start-date #inst "2026-01-01"})

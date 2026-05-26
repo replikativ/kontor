@@ -295,7 +295,7 @@
    Two arities:
    - `[db period]` — all disposals in the window, across all entities.
    - `[db entity period]` — only disposals owned by `entity` (an eid
-     or `[:entity/code <code>]` lookup ref). The entity-scoped form
+     or `[:kontor.entity/code <code>]` lookup ref). The entity-scoped form
      is what CGT providers call — per-entity is the natural CGT
      unit of analysis."
   ([db period]

@@ -103,9 +103,9 @@
     (cn/install! conn)
     (d/transact conn
                 [{:db/id "ent-acme-cn"
-                  :entity/code "ACME-CN"
-                  :entity/name "Acme China Co., Ltd."
-                  :entity/kind :operating}
+                  :kontor.entity/code "ACME-CN"
+                  :kontor.entity/name "Acme China Co., Ltd."
+                  :kontor.entity/kind :operating}
                  {:db/id "journal-pay"
                   :journal/code "PAY-CN"
                   :journal/name "Payroll (CN)"
@@ -145,7 +145,7 @@
 
 (defn- setup-employees [conn]
   (let [db (d/db conn)
-        ent (ref-eid db :entity/code "ACME-CN")]
+        ent (ref-eid db :kontor.entity/code "ACME-CN")]
     (doseq [[ext given family] [["P-E001" "Wei"  "Zhang"]
                                 ["P-E002" "Li"   "Wang"]
                                 ["P-E003" "Min"  "Liu"]]]
@@ -170,7 +170,7 @@
   (let [conn (bootstrap)
         _ (setup-employees conn)
         db (d/db conn)
-        ent (ref-eid db :entity/code "ACME-CN")
+        ent (ref-eid db :kontor.entity/code "ACME-CN")
         cny (ref-eid db :kontor.commodity/symbol "CNY")
         period (ref-eid db :period/name "2026-04")
         journal (ref-eid db :journal/code "PAY-CN")

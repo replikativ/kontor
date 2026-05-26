@@ -96,12 +96,12 @@
       {:db/id "usd" :kontor.commodity/symbol "USD" :kontor.commodity/precision 2}
       {:db/id "cad" :kontor.commodity/symbol "CAD" :kontor.commodity/precision 2}
       ;; Three entities, one per country.
-      {:db/id "ent-de" :entity/code "ACME-DE-GMBH"
-       :entity/name "Acme DE GmbH" :entity/kind :operating}
-      {:db/id "ent-us" :entity/code "ACME-US-LLC"
-       :entity/name "Acme US LLC" :entity/kind :operating}
-      {:db/id "ent-ca" :entity/code "ACME-CA-CORP"
-       :entity/name "Acme CA Corp" :entity/kind :operating}
+      {:db/id "ent-de" :kontor.entity/code "ACME-DE-GMBH"
+       :kontor.entity/name "Acme DE GmbH" :kontor.entity/kind :operating}
+      {:db/id "ent-us" :kontor.entity/code "ACME-US-LLC"
+       :kontor.entity/name "Acme US LLC" :kontor.entity/kind :operating}
+      {:db/id "ent-ca" :kontor.entity/code "ACME-CA-CORP"
+       :kontor.entity/name "Acme CA Corp" :kontor.entity/kind :operating}
       ;; Per-country minimal payroll chart.
       ;; DE — SKR04 wage accounts.
       {:db/id "de-wages" :account/code "4120"
@@ -152,9 +152,9 @@
                                :kind :employee})
   (let [db (d/db conn)
         jane (hr/person-by-external-id db "P-jane")
-        de (ref-eid db :entity/code "ACME-DE-GMBH")
-        us (ref-eid db :entity/code "ACME-US-LLC")
-        ca (ref-eid db :entity/code "ACME-CA-CORP")
+        de (ref-eid db :kontor.entity/code "ACME-DE-GMBH")
+        us (ref-eid db :kontor.entity/code "ACME-US-LLC")
+        ca (ref-eid db :kontor.entity/code "ACME-CA-CORP")
         eur (ref-eid db :kontor.commodity/symbol "EUR")
         usd (ref-eid db :kontor.commodity/symbol "USD")
         cad (ref-eid db :kontor.commodity/symbol "CAD")]
@@ -366,12 +366,12 @@
       ;; model (note 79 §2.3), the partner side stays kernel-side; the
       ;; person side stays HR-side; the extension collector bridges.
       (d/transact conn [{:db/id "p-jane"
-                         :partner/external-id "PARTNER-jane"
-                         :partner/name "Jane Doe (employee)"
-                         :partner/kind :employee
-                         :partner/person jane}])
+                         :kontor.partner/external-id "PARTNER-jane"
+                         :kontor.partner/name "Jane Doe (employee)"
+                         :kontor.partner/kind :employee
+                         :kontor.partner/person jane}])
       (let [partner-eid (d/q '[:find ?p . :in $ ?x :where
-                               [?p :partner/external-id ?x]]
+                               [?p :kontor.partner/external-id ?x]]
                              (d/db conn) "PARTNER-jane")
             kernel-bundle (dsar/collect (d/db conn) partner-eid {})
             hr-ext (get-in kernel-bundle [:extensions :hr])]
@@ -469,12 +469,12 @@
       [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
        {:db/id "usd" :kontor.commodity/symbol "USD" :kontor.commodity/precision 2}
        {:db/id "cad" :kontor.commodity/symbol "CAD" :kontor.commodity/precision 2}
-       {:db/id "ent-de" :entity/code "ACME-DE-GMBH"
-        :entity/name "Acme DE GmbH" :entity/kind :operating}
-       {:db/id "ent-us" :entity/code "ACME-US-LLC"
-        :entity/name "Acme US LLC" :entity/kind :operating}
-       {:db/id "ent-ca" :entity/code "ACME-CA-CORP"
-        :entity/name "Acme CA Corp" :entity/kind :operating}
+       {:db/id "ent-de" :kontor.entity/code "ACME-DE-GMBH"
+        :kontor.entity/name "Acme DE GmbH" :kontor.entity/kind :operating}
+       {:db/id "ent-us" :kontor.entity/code "ACME-US-LLC"
+        :kontor.entity/name "Acme US LLC" :kontor.entity/kind :operating}
+       {:db/id "ent-ca" :kontor.entity/code "ACME-CA-CORP"
+        :kontor.entity/name "Acme CA Corp" :kontor.entity/kind :operating}
        ;; US + CA stay on the mock chart (one expense + one payable each).
        {:db/id "us-wages" :account/code "6100"
         :account/name "Wages Expense"
@@ -520,9 +520,9 @@
                  :citizenship ["DE" "US"] :kind :employee})
         db0 (d/db conn)
         jane (hr/person-by-external-id db0 "P-jane")
-        de (ref-eid db0 :entity/code "ACME-DE-GMBH")
-        us (ref-eid db0 :entity/code "ACME-US-LLC")
-        ca (ref-eid db0 :entity/code "ACME-CA-CORP")
+        de (ref-eid db0 :kontor.entity/code "ACME-DE-GMBH")
+        us (ref-eid db0 :kontor.entity/code "ACME-US-LLC")
+        ca (ref-eid db0 :kontor.entity/code "ACME-CA-CORP")
         eur (ref-eid db0 :kontor.commodity/symbol "EUR")
         usd (ref-eid db0 :kontor.commodity/symbol "USD")
         cad (ref-eid db0 :kontor.commodity/symbol "CAD")

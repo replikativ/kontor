@@ -46,8 +46,8 @@
         _ (adp/install! conn)]
     (d/transact conn
                 [{:db/id "usd" :kontor.commodity/symbol "USD" :kontor.commodity/precision 2}
-                 {:db/id "ent-us" :entity/code "US-LLC" :entity/name "Acme US LLC"
-                  :entity/kind :operating}
+                 {:db/id "ent-us" :kontor.entity/code "US-LLC" :kontor.entity/name "Acme US LLC"
+                  :kontor.entity/kind :operating}
                  {:db/id "us-gaap" :ledger/code "us-gaap"
                   :ledger/name "US GAAP" :ledger/framework :us-gaap
                   :ledger/active true}
@@ -95,7 +95,7 @@
 
 (defn- setup-employees [conn]
   (let [db (d/db conn)
-        us-llc (ref-eid db :entity/code "US-LLC")]
+        us-llc (ref-eid db :kontor.entity/code "US-LLC")]
     (doseq [[ext given family] [["P-E101" "Alice" "Pacific"]
                                 ["P-E102" "Bob"   "Empire"]
                                 ["P-E103" "Carol" "Lonestar"]]]
@@ -137,7 +137,7 @@
   (let [conn (bootstrap)
         _ (setup-employees conn)
         db (d/db conn)
-        us-llc (ref-eid db :entity/code "US-LLC")
+        us-llc (ref-eid db :kontor.entity/code "US-LLC")
         usd (ref-eid db :kontor.commodity/symbol "USD")
         gaap (ref-eid db :ledger/code "us-gaap")
         period (ref-eid db :period/name "2026-04")

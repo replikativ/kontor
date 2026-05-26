@@ -252,7 +252,7 @@
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-031 scope. The overlay row only applies to
                      this (partner, entity) pair; other entities fall
-                     back to the :partner/credit-status scalar."}
+                     back to the :kontor.partner/credit-status scalar."}
 
    {:db/ident       :credit-hold/reason-code
     :db/valueType   :db.type/keyword

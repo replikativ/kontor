@@ -23,13 +23,13 @@
     (disp/install! conn)
     (d/transact conn [{:kontor.commodity/symbol "USD" :kontor.commodity/name "US Dollar"
                        :kontor.commodity/precision 2}
-                      {:entity/code "HOLDCO" :entity/name "HoldCo"
-                       :entity/kind :company :entity/country "US"
-                       :entity/functional-commodity [:kontor.commodity/symbol "USD"]}])
+                      {:kontor.entity/code "HOLDCO" :kontor.entity/name "HoldCo"
+                       :kontor.entity/kind :company :kontor.entity/country "US"
+                       :kontor.entity/functional-commodity [:kontor.commodity/symbol "USD"]}])
     conn))
 
 (def ^:private usd [:kontor.commodity/symbol "USD"])
-(def ^:private holdco [:entity/code "HOLDCO"])
+(def ^:private holdco [:kontor.entity/code "HOLDCO"])
 
 (defn- record-basic
   "Record a minimal disposal with the named external-id; return the conn."
@@ -174,16 +174,16 @@
 (deftest disposals-in-period-entity-scoped
   (testing "two-arity form filters to the named entity (multi-tenant CGT)"
     (let [conn (fresh)
-          _    (d/transact conn [{:entity/code "OTHERCO" :entity/name "OtherCo"
-                                  :entity/kind :company :entity/country "US"
-                                  :entity/functional-commodity usd}])
-          other [:entity/code "OTHERCO"]
+          _    (d/transact conn [{:kontor.entity/code "OTHERCO" :kontor.entity/name "OtherCo"
+                                  :kontor.entity/kind :company :kontor.entity/country "US"
+                                  :kontor.entity/functional-commodity usd}])
+          other [:kontor.entity/code "OTHERCO"]
           db1   (d/db conn)
           holdco-eid (d/q '[:find ?e . :in $ ?c
-                            :where [?e :entity/code ?c]]
+                            :where [?e :kontor.entity/code ?c]]
                           db1 "HOLDCO")
           other-eid  (d/q '[:find ?e . :in $ ?c
-                            :where [?e :entity/code ?c]]
+                            :where [?e :kontor.entity/code ?c]]
                           db1 "OTHERCO")]
       (record-basic conn "d-holdco-1" 100M 50M)
       (record-basic conn "d-other-1"  100M 50M {:entity other

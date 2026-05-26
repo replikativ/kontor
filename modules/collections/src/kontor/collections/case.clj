@@ -38,8 +38,8 @@
   [db spec]
   (when-let [eid (resolve-case db spec)]
     (d/pull db
-            '[* {:collection-case/partner [:partner/external-id :partner/name]
-                 :collection-case/entity [:entity/code]
+            '[* {:collection-case/partner [:kontor.partner/external-id :kontor.partner/name]
+                 :collection-case/entity [:kontor.entity/code]
                  :collection-case/opened-by-uid [:create/uid]
                  :collection-case/assigned-collector [:create/uid]
                  :collection-case/oldest-invoice [:invoice/external-id]

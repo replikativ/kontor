@@ -34,16 +34,16 @@
                       {:kontor.commodity/symbol    "ROLLOVER-STUB"
                        :kontor.commodity/name      "Rollover Stub (test placeholder)"
                        :kontor.commodity/precision 0}
-                      {:entity/code                 "TAXPAYER"
-                       :entity/name                 "Resident Individual"
-                       :entity/kind                 :individual
-                       :entity/country              "IN"
-                       :entity/functional-commodity [:kontor.commodity/symbol "INR"]}])
+                      {:kontor.entity/code                 "TAXPAYER"
+                       :kontor.entity/name                 "Resident Individual"
+                       :kontor.entity/kind                 :individual
+                       :kontor.entity/country              "IN"
+                       :kontor.entity/functional-commodity [:kontor.commodity/symbol "INR"]}])
     conn))
 
 (def ^:private inr [:kontor.commodity/symbol "INR"])
 (def ^:private rollover-stub [:kontor.commodity/symbol "ROLLOVER-STUB"])
-(def ^:private taxpayer [:entity/code "TAXPAYER"])
+(def ^:private taxpayer [:kontor.entity/code "TAXPAYER"])
 
 (defn- record!
   "Record a minimal disposal — provider hooks the resolved id."
@@ -59,7 +59,7 @@
                opts)))
 
 (defn- taxpayer-eid [conn]
-  (d/q '[:find ?e . :where [?e :entity/code "TAXPAYER"]] (d/db conn)))
+  (d/q '[:find ?e . :where [?e :kontor.entity/code "TAXPAYER"]] (d/db conn)))
 
 (defn- run-provider
   "Build a provider, call `period-tax-facts`, return the resulting facts."

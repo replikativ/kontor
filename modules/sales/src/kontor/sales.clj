@@ -45,9 +45,9 @@
   (when-let [eid (resolve-order db spec)]
     (d/pull db
             '[* {:order/currency [*]
-                 :order/bill-from-partner [:partner/external-id :partner/name]
-                 :order/bill-to-partner   [:partner/external-id :partner/name]
-                 :order/entity            [:entity/code :entity/name]}]
+                 :order/bill-from-partner [:kontor.partner/external-id :kontor.partner/name]
+                 :order/bill-to-partner   [:kontor.partner/external-id :kontor.partner/name]
+                 :order/entity            [:kontor.entity/code :kontor.entity/name]}]
             eid)))
 
 (defn items-of
@@ -113,7 +113,7 @@
                 :in $ ?o
                 :where [?r :order-role/order ?o]]
               db oid)
-         (map #(d/pull db '[* {:order-role/partner [:partner/external-id :partner/name]}] %))
+         (map #(d/pull db '[* {:order-role/partner [:kontor.partner/external-id :kontor.partner/name]}] %))
          vec)))
 
 (defn partner-on-order

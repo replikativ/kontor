@@ -381,7 +381,7 @@
         ;; A US LLC subsidiary whose functional commodity is USD,
         ;; receiving a EUR-denominated invoice from its DE parent.
         p      (fxp/make-static-table-provider conn)
-        entity {:entity/functional-commodity "USD"}
+        entity {:kontor.entity/functional-commodity "USD"}
         in     (money/money 100M "EUR")
         out    (fx/to-functional-currency in entity p {:at-date jan-2})]
     (is (= "USD" (:commodity out)))
@@ -397,6 +397,6 @@
   (let [conn (setup)
         p    (fxp/make-static-table-provider conn)
         in   (money/money 100M "USD")
-        out  (fx/to-functional-currency in {:entity/functional-commodity "USD"}
+        out  (fx/to-functional-currency in {:kontor.entity/functional-commodity "USD"}
                                         p {:at-date jan-2})]
     (is (identical? in out))))

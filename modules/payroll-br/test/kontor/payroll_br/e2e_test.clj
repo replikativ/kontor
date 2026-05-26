@@ -36,9 +36,9 @@
     (pbr-chart/install! conn)
     (d/transact conn
                 [{:db/id "ent-acme-br"
-                  :entity/code "ACME-BR"
-                  :entity/name "Acme do Brasil Ltda"
-                  :entity/kind :operating}
+                  :kontor.entity/code "ACME-BR"
+                  :kontor.entity/name "Acme do Brasil Ltda"
+                  :kontor.entity/kind :operating}
                  {:db/id "journal-pay-br"
                   :journal/code "PAY-BR"
                   :journal/name "Folha de Pagamento (BR)"
@@ -88,7 +88,7 @@
   (let [conn (bootstrap)
         db (d/db conn)
         brl (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "BRL"]] db)
-        ent (d/q '[:find ?e . :where [?e :entity/code "ACME-BR"]] db)
+        ent (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-BR"]] db)
         journal (d/q '[:find ?e . :where [?e :journal/code "PAY-BR"]] db)
         period (d/q '[:find ?e . :where [?e :period/name "2026-05-br"]] db)
         ;; Create persons + employments

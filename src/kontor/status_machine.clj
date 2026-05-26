@@ -64,7 +64,7 @@
                    (nil? org)     nil
                    (string? org)  (d/q '[:find ?e .
                                          :in $ ?code
-                                         :where [?e :entity/code ?code]]
+                                         :where [?e :kontor.entity/code ?code]]
                                        db org)
                    :else          org)]
      (boolean
@@ -102,7 +102,7 @@
                    (nil? org)     nil
                    (string? org)  (d/q '[:find ?e .
                                          :in $ ?code
-                                         :where [?e :entity/code ?code]]
+                                         :where [?e :kontor.entity/code ?code]]
                                        db org)
                    :else          org)
          tenant-wide (d/q '[:find [?to ...]
@@ -148,7 +148,7 @@
                    (nil? org)     nil
                    (string? org)  (d/q '[:find ?e .
                                          :in $ ?code
-                                         :where [?e :entity/code ?code]]
+                                         :where [?e :kontor.entity/code ?code]]
                                        db org)
                    :else          org)
          tenant-rows (d/q '[:find [?p ...]

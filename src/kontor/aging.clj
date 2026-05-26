@@ -74,7 +74,7 @@
                  (let [tx (d/pull db
                                   [:db/id
                                    :transaction/due-date
-                                   {:transaction/partner [:db/id :partner/name]}]
+                                   {:transaction/partner [:db/id :kontor.partner/name]}]
                                   transaction-eid)
                        due (or (:transaction/due-date tx) (:date o))
                        overdue (if due (days-between due as-of) 0)
@@ -84,7 +84,7 @@
                           :days-overdue overdue
                           :bucket (bucket-for overdue buckets)
                           :partner-eid (:db/id partner)
-                          :partner-name (:partner/name partner)))))
+                          :partner-name (:kontor.partner/name partner)))))
          (sort-by :due-date)
          vec)))
 

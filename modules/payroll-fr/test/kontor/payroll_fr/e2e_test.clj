@@ -26,9 +26,9 @@
     (pfr-chart/install! conn)
     (d/transact conn
                 [{:db/id "ent-acme"
-                  :entity/code "ACME-FR"
-                  :entity/name "Acme France SAS"
-                  :entity/kind :operating}
+                  :kontor.entity/code "ACME-FR"
+                  :kontor.entity/name "Acme France SAS"
+                  :kontor.entity/kind :operating}
                  {:db/id "journal-pay"
                   :journal/code "PAY-FR"
                   :journal/name "Paie (FR)"
@@ -111,7 +111,7 @@
   (let [conn (bootstrap)
         db (d/db conn)
         eur (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "EUR"]] db)
-        ent (d/q '[:find ?e . :where [?e :entity/code "ACME-FR"]] db)
+        ent (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-FR"]] db)
         journal (d/q '[:find ?e . :where [?e :journal/code "PAY-FR"]] db)
         period (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)
         ;; Persons + employments

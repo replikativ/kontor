@@ -159,7 +159,7 @@
 (defn- entity-key
   "Grouping key for a posting's entity scope. Returns the raw
    :posting/entity value (eid, lookup-ref like
-   [:entity/code \"acme-de\"], etc.). nil when the attribute is absent."
+   [:kontor.entity/code \"acme-de\"], etc.). nil when the attribute is absent."
   [posting]
   (:posting/entity posting))
 

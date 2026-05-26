@@ -43,9 +43,9 @@
        :kontor.commodity/precision 2
        :kontor.commodity/iso-4217 "MXN"}
       {:db/id "ent-acme-mx"
-       :entity/code "ACME-MX"
-       :entity/name "Acme México S.A. de C.V."
-       :entity/kind :operating}
+       :kontor.entity/code "ACME-MX"
+       :kontor.entity/name "Acme México S.A. de C.V."
+       :kontor.entity/kind :operating}
       {:db/id "journal-nom"
        :journal/code "NOM"
        :journal/name "Nómina"
@@ -167,7 +167,7 @@
     (let [conn (bootstrap)
           db   (d/db conn)
           mxn       (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "MXN"]] db)
-          entity    (d/q '[:find ?e . :where [?e :entity/code "ACME-MX"]] db)
+          entity    (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-MX"]] db)
           journal   (d/q '[:find ?e . :where [?e :journal/code "NOM"]] db)
           fiscal-pp (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)
           ;; Persons + employments matching the CONTPAQi CSV fixture (E001 + E002).

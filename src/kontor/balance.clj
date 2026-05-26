@@ -138,7 +138,7 @@
                       {:as-of-valid #inst \"2026-03-31\"
                        :as-of-tx    #inst \"2026-03-31\"})
      ;; DE GmbH only
-     (account-balance conn rec {:entity [:entity/code \"DE-GMBH\"]})"
+     (account-balance conn rec {:entity [:kontor.entity/code \"DE-GMBH\"]})"
   ([conn account-eid] (account-balance conn account-eid {}))
   ([conn account-eid {:keys [as-of-valid as-of-tx include-states entity]
                       :or   {include-states default-included-states}}]

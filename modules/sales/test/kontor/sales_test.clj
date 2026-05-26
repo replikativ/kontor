@@ -35,18 +35,18 @@
 
 (defn- seed-partners! []
   (d/transact *conn*
-              [{:partner/external-id "SELLER"
-                :partner/type :org
-                :partner/status :enabled
-                :partner/name "Seller Co"}
-               {:partner/external-id "BUYER"
-                :partner/type :person
-                :partner/status :enabled
-                :partner/name "Customer Person"}
-               {:partner/external-id "CARRIER"
-                :partner/type :org
-                :partner/status :enabled
-                :partner/name "Carrier Co"}]))
+              [{:kontor.partner/external-id "SELLER"
+                :kontor.partner/type :org
+                :kontor.partner/status :enabled
+                :kontor.partner/name "Seller Co"}
+               {:kontor.partner/external-id "BUYER"
+                :kontor.partner/type :person
+                :kontor.partner/status :enabled
+                :kontor.partner/name "Customer Person"}
+               {:kontor.partner/external-id "CARRIER"
+                :kontor.partner/type :org
+                :kontor.partner/status :enabled
+                :kontor.partner/name "Carrier Co"}]))
 
 (defn- minimal-order!
   "Transact a minimal order with one item; returns the order eid."
@@ -60,8 +60,8 @@
                 :order/order-date #inst "2026-05-01"
                 :order/entry-date #inst "2026-05-01"
                 :order/currency [:kontor.commodity/symbol "EUR"]
-                :order/bill-from-partner [:partner/external-id "SELLER"]
-                :order/bill-to-partner [:partner/external-id "BUYER"]
+                :order/bill-from-partner [:kontor.partner/external-id "SELLER"]
+                :order/bill-to-partner [:kontor.partner/external-id "BUYER"]
                 :order/invoice-per-shipment? false}
                {:order-item/order [:order/external-id "ORD-1"]
                 :order-item/seq-id "00001"
@@ -128,8 +128,8 @@
         ord (sales/pull-order db "ORD-1")
         items (sales/items-of db "ORD-1")]
     (is (= :sales (:order/type ord)))
-    (is (= "Seller Co" (-> ord :order/bill-from-partner :partner/name)))
-    (is (= "Customer Person" (-> ord :order/bill-to-partner :partner/name)))
+    (is (= "Seller Co" (-> ord :order/bill-from-partner :kontor.partner/name)))
+    (is (= "Customer Person" (-> ord :order/bill-to-partner :kontor.partner/name)))
     (is (= 1 (count items)))
     (is (= 10M (-> items first :order-item/quantity)))
     (is (= 25M (-> items first :order-item/unit-price)))))
@@ -168,7 +168,7 @@
                 [{:ship-group/order order-eid
                   :ship-group/seq-id "SG-001"
                   :ship-group/shipment-method-type :standard
-                  :ship-group/carrier-partner [:partner/external-id "CARRIER"]
+                  :ship-group/carrier-partner [:kontor.partner/external-id "CARRIER"]
                   :ship-group/facility-id "WHSE-DE-1"
                   :ship-group/may-split? true}
                  {:ship-group-assoc/order order-eid
@@ -255,23 +255,23 @@
   (let [order-eid (minimal-order!)]
     (d/transact *conn*
                 [{:order-role/order order-eid
-                  :order-role/partner [:partner/external-id "BUYER"]
+                  :order-role/partner [:kontor.partner/external-id "BUYER"]
                   :order-role/role-type :customer}
                  {:order-role/order order-eid
-                  :order-role/partner [:partner/external-id "BUYER"]
+                  :order-role/partner [:kontor.partner/external-id "BUYER"]
                   :order-role/role-type :bill-to}
                  {:order-role/order order-eid
-                  :order-role/partner [:partner/external-id "BUYER"]
+                  :order-role/partner [:kontor.partner/external-id "BUYER"]
                   :order-role/role-type :ship-to}
                  {:order-role/order order-eid
-                  :order-role/partner [:partner/external-id "SELLER"]
+                  :order-role/partner [:kontor.partner/external-id "SELLER"]
                   :order-role/role-type :bill-from}])
     (let [db (d/db *conn*)]
       (is (= 4 (count (sales/roles-of db "ORD-1"))))
-      (is (= (d/q '[:find ?p . :in $ ?xid :where [?p :partner/external-id ?xid]]
+      (is (= (d/q '[:find ?p . :in $ ?xid :where [?p :kontor.partner/external-id ?xid]]
                   db "BUYER")
              (sales/partner-on-order db "ORD-1" :customer)))
-      (is (= (d/q '[:find ?p . :in $ ?xid :where [?p :partner/external-id ?xid]]
+      (is (= (d/q '[:find ?p . :in $ ?xid :where [?p :kontor.partner/external-id ?xid]]
                   db "SELLER")
              (sales/partner-on-order db "ORD-1" :bill-from))))))
 
@@ -279,12 +279,12 @@
   (let [order-eid (minimal-order!)]
     (d/transact *conn*
                 [{:order-role/order order-eid
-                  :order-role/partner [:partner/external-id "BUYER"]
+                  :order-role/partner [:kontor.partner/external-id "BUYER"]
                   :order-role/role-type :customer}])
     ;; Same (order, partner, role-type) should be a no-op via upsert
     (d/transact *conn*
                 [{:order-role/order order-eid
-                  :order-role/partner [:partner/external-id "BUYER"]
+                  :order-role/partner [:kontor.partner/external-id "BUYER"]
                   :order-role/role-type :customer}])
     ;; Only the tx datom and identity tuple datoms are added, not a
     ;; new role row.

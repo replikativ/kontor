@@ -38,12 +38,12 @@
   (d/transact *conn*
               [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                 :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
-               {:entity/code "ACME" :entity/name "Acme Inc"
-                :entity/kind :operating :entity/active true}
-               {:partner/external-id "BUYER" :partner/type :org
-                :partner/status :enabled :partner/name "Acme Inc"}
-               {:partner/external-id "SUPPLIER" :partner/type :org
-                :partner/status :enabled :partner/name "Supplier Co"}]))
+               {:kontor.entity/code "ACME" :kontor.entity/name "Acme Inc"
+                :kontor.entity/kind :operating :kontor.entity/active true}
+               {:kontor.partner/external-id "BUYER" :kontor.partner/type :org
+                :kontor.partner/status :enabled :kontor.partner/name "Acme Inc"}
+               {:kontor.partner/external-id "SUPPLIER" :kontor.partner/type :org
+                :kontor.partner/status :enabled :kontor.partner/name "Supplier Co"}]))
 
 (defn- seed-accounts! []
   (d/transact *conn*
@@ -89,9 +89,9 @@
                 :order/order-date #inst "2026-05-01"
                 :order/entry-date #inst "2026-05-01"
                 :order/currency [:kontor.commodity/symbol "EUR"]
-                :order/bill-from-partner [:partner/external-id "SUPPLIER"]
-                :order/bill-to-partner [:partner/external-id "BUYER"]
-                :order/entity [:entity/code "ACME"]}
+                :order/bill-from-partner [:kontor.partner/external-id "SUPPLIER"]
+                :order/bill-to-partner [:kontor.partner/external-id "BUYER"]
+                :order/entity [:kontor.entity/code "ACME"]}
                {:order-item/order [:order/external-id external-id]
                 :order-item/seq-id "00001"
                 :order-item/type :product
@@ -284,8 +284,8 @@
                 :order/order-date #inst "2026-05-01"
                 :order/entry-date #inst "2026-05-01"
                 :order/currency [:kontor.commodity/symbol "EUR"]
-                :order/bill-from-partner [:partner/external-id "BUYER"]
-                :order/bill-to-partner [:partner/external-id "SUPPLIER"]}
+                :order/bill-from-partner [:kontor.partner/external-id "BUYER"]
+                :order/bill-to-partner [:kontor.partner/external-id "SUPPLIER"]}
                {:order-item/order [:order/external-id "SO-REGR"]
                 :order-item/seq-id "00001"
                 :order-item/type :product
@@ -342,8 +342,8 @@
   (seed-base!)
   (let [{:keys [order-eid item-eid]} (create-purchase-order! {})
         db (d/db *conn*)
-        entity-eid (d/q '[:find ?e . :where [?e :entity/code "ACME"]] db)
-        supplier-eid (d/q '[:find ?p . :where [?p :partner/external-id "SUPPLIER"]] db)]
+        entity-eid (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME"]] db)
+        supplier-eid (d/q '[:find ?p . :where [?p :kontor.partner/external-id "SUPPLIER"]] db)]
     ;; Seed a 10% over-receipt tolerance
     (d/transact *conn*
                 [{:match-tolerance/entity entity-eid

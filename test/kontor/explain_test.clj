@@ -52,10 +52,10 @@
                {:db/id -4 :journal/code "INV" :journal/name "Customer invoices"
                 :journal/type :sale :journal/active true}
                ;; ADR-090: partner with concept-iri (FIBO Organization).
-               {:db/id -5 :partner/external-id "acme"
-                :partner/name "ACME Corp"
-                :partner/kind :customer
-                :partner/concept-iri "https://gleif.org/lei/254900XYZ0000000ACME"}
+               {:db/id -5 :kontor.partner/external-id "acme"
+                :kontor.partner/name "ACME Corp"
+                :kontor.partner/kind :customer
+                :kontor.partner/concept-iri "https://gleif.org/lei/254900XYZ0000000ACME"}
                ;; status-transition: nil → :reviewed for our test facet
                {:status-transition/entity-type :transaction
                 :status-transition/facet :tx-test/review-status
@@ -73,7 +73,7 @@
         rec (:db/id (d/entity db [:account/path "Assets:Receivable"]))
         rev (:db/id (d/entity db [:account/path "Income:Sales"]))
         jnl (:db/id (d/entity db [:journal/code "INV"]))
-        prt (:db/id (d/entity db [:partner/external-id "acme"]))
+        prt (:db/id (d/entity db [:kontor.partner/external-id "acme"]))
         _   (posting/post-transaction!
              conn
              {:transaction
@@ -241,7 +241,7 @@
   (let [conn (core/create-test-db)
         _    (seed! conn)
         db   (d/db conn)
-        prt  (:db/id (d/entity db [:partner/external-id "acme"]))
+        prt  (:db/id (d/entity db [:kontor.partner/external-id "acme"]))
         r    (explain/entities-with-concept-iri
               db
               "https://gleif.org/lei/254900XYZ0000000ACME")]
