@@ -25,7 +25,7 @@
   [db external-id]
   (d/q '[:find ?e .
          :in $ ?xid
-         :where [?e :payment-promise/external-id ?xid]]
+         :where [?e :kontor.payment-promise/external-id ?xid]]
        db external-id))
 
 (defn resolve-promise
@@ -39,11 +39,11 @@
   [db spec]
   (when-let [eid (resolve-promise db spec)]
     (d/pull db
-            '[* {:payment-promise/case [:collection-case/code]
-                 :payment-promise/invoice [:kontor.invoice/external-id]
-                 :payment-promise/commodity [:kontor.commodity/symbol]
-                 :payment-promise/captured-by-uid [:kontor.audit/create-uid]
-                 :payment-promise/supporting-doc [:audit-doc/code]}]
+            '[* {:kontor.payment-promise/case [:kontor.collection-case/code]
+                 :kontor.payment-promise/invoice [:kontor.invoice/external-id]
+                 :kontor.payment-promise/commodity [:kontor.commodity/symbol]
+                 :kontor.payment-promise/captured-by-uid [:kontor.audit/create-uid]
+                 :kontor.payment-promise/supporting-doc [:kontor.audit-doc/code]}]
             eid)))
 
 ;; ============================================================================
@@ -57,8 +57,8 @@
   (->> (d/q '[:find [?p ...]
               :in $ ?case
               :where
-              [?p :payment-promise/case ?case]
-              [?p :payment-promise/status :open]]
+              [?p :kontor.payment-promise/case ?case]
+              [?p :kontor.payment-promise/status :open]]
             db case-eid)
        (map #(pull-promise db %))
        vec))
@@ -68,8 +68,8 @@
   (->> (d/q '[:find [?p ...]
               :in $ ?inv
               :where
-              [?p :payment-promise/invoice ?inv]
-              [?p :payment-promise/status :open]]
+              [?p :kontor.payment-promise/invoice ?inv]
+              [?p :kontor.payment-promise/status :open]]
             db invoice-eid)
        (map #(pull-promise db %))
        vec))
@@ -120,24 +120,24 @@
   (when-not captured-by-uid  (throw (ex-info ":captured-by-uid required" {})))
   (let [recorded-at (or recorded-at (java.util.Date.))
         row (cond-> {:db/id tempid
-                     :payment-promise/external-id external-id
-                     :payment-promise/case case
-                     :payment-promise/amount amount
-                     :payment-promise/commodity commodity
-                     :payment-promise/promised-by-date promised-by-date
-                     :payment-promise/captured-by-uid captured-by-uid
-                     :payment-promise/status :open}
-              invoice        (assoc :payment-promise/invoice invoice)
-              captured-via   (assoc :payment-promise/captured-via captured-via)
-              notes          (assoc :payment-promise/notes notes)
-              supporting-doc (assoc :payment-promise/supporting-doc supporting-doc))
+                     :kontor.payment-promise/external-id external-id
+                     :kontor.payment-promise/case case
+                     :kontor.payment-promise/amount amount
+                     :kontor.payment-promise/commodity commodity
+                     :kontor.payment-promise/promised-by-date promised-by-date
+                     :kontor.payment-promise/captured-by-uid captured-by-uid
+                     :kontor.payment-promise/status :open}
+              invoice        (assoc :kontor.payment-promise/invoice invoice)
+              captured-via   (assoc :kontor.payment-promise/captured-via captured-via)
+              notes          (assoc :kontor.payment-promise/notes notes)
+              supporting-doc (assoc :kontor.payment-promise/supporting-doc supporting-doc))
         ;; Status-history nil → :open via the status machine
         ;; (atomic).
         status-tx (sm/record-status-change-tx-data
                    db
                    {:entity tempid
                     :entity-type :payment-promise
-                    :facet :payment-promise/status
+                    :facet :kontor.payment-promise/status
                     :from :nil
                     :to :open
                     :changed-at recorded-at
@@ -164,7 +164,7 @@
      db
      (cond-> {:entity eid
               :entity-type :payment-promise
-              :facet :payment-promise/status
+              :facet :kontor.payment-promise/status
               :to to
               :changed-at now
               :changed-by-uid changed-by-uid}
@@ -234,7 +234,7 @@
      db
      (cond-> {:entity eid
               :entity-type :payment-promise
-              :facet :payment-promise/status
+              :facet :kontor.payment-promise/status
               :to :renegotiated
               :changed-by-uid changed-by-uid}
        reason      (assoc :reason (or reason :renegotiated))
@@ -252,7 +252,7 @@
 
    Real-world wiring: a daily cron or sweep job runs this; the
    broken-promise transitions can in turn re-open the parent case
-   via :collection-case/state :promised → :open. This fn handles only
+   via :kontor.collection-case/state :promised → :open. This fn handles only
    the promise side; case-side transition is a separate call."
   [conn {:keys [now system-uid]
          :or {now (java.util.Date.)}}]
@@ -263,8 +263,8 @@
         open-eids (d/q '[:find [?p ...]
                          :in $ ?now-ms
                          :where
-                         [?p :payment-promise/status :open]
-                         [?p :payment-promise/promised-by-date ?by]
+                         [?p :kontor.payment-promise/status :open]
+                         [?p :kontor.payment-promise/promised-by-date ?by]
                          [(.getTime ^java.util.Date ?by) ?by-ms]
                          [(< ?by-ms ?now-ms)]]
                        db now-ms)]

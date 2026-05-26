@@ -65,9 +65,9 @@
                   :kontor.journal/code "GEN" :kontor.journal/name "General"
                   :kontor.journal/type :general}
                  {:db/id "class-machinery"
-                  :asset-class/code "machinery"
-                  :asset-class/name "Machinery & Equipment"
-                  :asset-class/default-useful-life-months 120}])
+                  :kontor.asset-class/code "machinery"
+                  :kontor.asset-class/name "Machinery & Equipment"
+                  :kontor.asset-class/default-useful-life-months 120}])
     conn))
 
 (defn- ref-eid [db a v]
@@ -78,7 +78,7 @@
 (defn- acct      [db code] (ref-eid db :kontor.account/code code))
 (defn- ledger    [db code] (ref-eid db :kontor.ledger/code code))
 (defn- journal   [db] (ref-eid db :kontor.journal/code "GEN"))
-(defn- class-eid [db] (ref-eid db :asset-class/code "machinery"))
+(defn- class-eid [db] (ref-eid db :kontor.asset-class/code "machinery"))
 
 (defn- post!
   "Post a balanced 2-line tx: Dr `dr-acct` / Cr `cr-acct` for `amount`,
@@ -250,9 +250,9 @@
       ;; Record the disposal :asset-event directly — asset-roll-forward
       ;; reads :asset-event, and this keeps the test off the approval
       ;; machinery (exercised in lifecycle_test).
-      (d/transact conn [{:asset-event/asset (asset/by-code (d/db conn) "RF-OLD")
-                         :asset-event/kind :disposal
-                         :asset-event/date #inst "2026-06-15"}])
+      (d/transact conn [{:kontor.asset-event/asset (asset/by-code (d/db conn) "RF-OLD")
+                         :kontor.asset-event/kind :disposal
+                         :kontor.asset-event/date #inst "2026-06-15"}])
       (let [rf (areport/asset-roll-forward (d/db conn) window)
             g (first (:groups rf))]
         (is (= 100000.00M (:cost-disposals g)))
@@ -308,14 +308,14 @@
                                 :depreciable-base 100000.00M
                                 :opening-accumulated 30000.00M})
         ;; An impairment and a revaluation, both within the window.
-        _ (d/transact conn [{:asset-event/asset (asset/by-code (d/db conn) "EV-1")
-                             :asset-event/kind :impairment
-                             :asset-event/date #inst "2026-06-01"
-                             :asset-event/amount 12000.00M}
-                            {:asset-event/asset (asset/by-code (d/db conn) "EV-1")
-                             :asset-event/kind :revaluation
-                             :asset-event/date #inst "2026-09-01"
-                             :asset-event/amount 5000.00M}])
+        _ (d/transact conn [{:kontor.asset-event/asset (asset/by-code (d/db conn) "EV-1")
+                             :kontor.asset-event/kind :impairment
+                             :kontor.asset-event/date #inst "2026-06-01"
+                             :kontor.asset-event/amount 12000.00M}
+                            {:kontor.asset-event/asset (asset/by-code (d/db conn) "EV-1")
+                             :kontor.asset-event/kind :revaluation
+                             :kontor.asset-event/date #inst "2026-09-01"
+                             :kontor.asset-event/amount 5000.00M}])
         window {:from #inst "2026-01-01" :to #inst "2027-01-01"
                 :ledger (ledger (d/db conn) "hgb")}
         g (first (:groups (areport/asset-roll-forward (d/db conn) window)))]

@@ -17,7 +17,7 @@
 
    Per ADR-002 the companion cohabits with the kernel + other
    companions in one DB. Per ADR-075 the only kernel additions are
-   :audit-doc/category + :retention-policy/category; everything else
+   :kontor.audit-doc/category + :kontor.retention-policy/category; everything else
    lives here.
 
    Install order: kontor.core/install-schema! first (kernel),
@@ -66,11 +66,11 @@
   (d/q '[:find ?e . :in $ ?x :where [?e :kontor.person/external-id ?x]] db external-id))
 
 (defn employment-by-code
-  "Resolve an :employment eid by :employment/code."
+  "Resolve an :employment eid by :kontor.employment/code."
   [db code]
-  (d/q '[:find ?e . :in $ ?c :where [?e :employment/code ?c]] db code))
+  (d/q '[:find ?e . :in $ ?c :where [?e :kontor.employment/code ?c]] db code))
 
 (defn pay-period-by-code
-  "Resolve a :pay-period eid by :pay-period/code."
+  "Resolve a :pay-period eid by :kontor.pay-period/code."
   [db code]
-  (d/q '[:find ?e . :in $ ?c :where [?e :pay-period/code ?c]] db code))
+  (d/q '[:find ?e . :in $ ?c :where [?e :kontor.pay-period/code ?c]] db code))

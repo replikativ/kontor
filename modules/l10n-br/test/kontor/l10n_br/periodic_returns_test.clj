@@ -146,21 +146,21 @@
     (let [conn (bootstrap)
           _ (seed-january! conn)
           r (pr/generate-pis-cofins-return conn {:year 2026 :month 1})]
-      (is (= "EFD-Contribuições" (:return/form r)))
-      (is (≈ (brl "63.72")  (:return/pis-net r)))
-      (is (≈ (brl "293.51") (:return/cofins-net r)))
-      (is (≈ (brl "357.23") (:return/total-net r))
+      (is (= "EFD-Contribuições" (:kontor.return/form r)))
+      (is (≈ (brl "63.72")  (:kontor.return/pis-net r)))
+      (is (≈ (brl "293.51") (:kontor.return/cofins-net r)))
+      (is (≈ (brl "357.23") (:kontor.return/total-net r))
           "Total PIS + COFINS = 357.23 to remit")
       ;; Drill-down per line
-      (is (≈ (brl "63.72") (-> r :return/lines :pis-output)))
-      (is (≈ (brl "0") (-> r :return/lines :pis-input))
+      (is (≈ (brl "63.72") (-> r :kontor.return/lines :pis-output)))
+      (is (≈ (brl "0") (-> r :kontor.return/lines :pis-input))
           "No input credits in this fixture (no purchase invoices)"))))
 
 (deftest pis-cofins-empty-period
   (testing "No postings in the period → all zeros, total-net zero."
     (let [conn (bootstrap)
           r (pr/generate-pis-cofins-return conn {:year 2026 :month 1})]
-      (is (≈ (brl "0") (:return/total-net r))))))
+      (is (≈ (brl "0") (:kontor.return/total-net r))))))
 
 (deftest pis-cofins-explicit-window
   (testing "Explicit :from/:to overrides :year/:month shorthand."
@@ -171,7 +171,7 @@
       ;; Only the Jan 10 + Jan 15 goods invoices (Jan 20 services is
       ;; at exactly the :to boundary, excluded by half-open window).
       ;; PIS = 13.53 + 27.06 = 40.59
-      (is (≈ (brl "40.59") (:return/pis-net r))))))
+      (is (≈ (brl "40.59") (:kontor.return/pis-net r))))))
 
 ;; ============================================================================
 ;; ICMS — EFD ICMS/IPI
@@ -184,8 +184,8 @@
     (let [conn (bootstrap)
           _ (seed-january! conn)
           r (pr/generate-icms-return conn {:year 2026 :month 1})]
-      (is (= "EFD ICMS/IPI" (:return/form r)))
-      (is (≈ (brl "738") (:return/icms-net r))))))
+      (is (= "EFD ICMS/IPI" (:kontor.return/form r)))
+      (is (≈ (brl "738") (:kontor.return/icms-net r))))))
 
 (deftest icms-state-echoes-into-result
   (testing ":state opt echoes into the return-data so the consumer
@@ -196,7 +196,7 @@
           _ (seed-january! conn)
           r (pr/generate-icms-return conn
                                      {:year 2026 :month 1 :state "SP"})]
-      (is (= "SP" (:return/state r))))))
+      (is (= "SP" (:kontor.return/state r))))))
 
 ;; ============================================================================
 ;; IPI — federal manufacturing tax
@@ -208,8 +208,8 @@
     (let [conn (bootstrap)
           _ (seed-january! conn)
           r (pr/generate-ipi-return conn {:year 2026 :month 1})]
-      (is (= "EFD ICMS/IPI" (:return/form r)))
-      (is (≈ (brl "100") (:return/ipi-net r))))))
+      (is (= "EFD ICMS/IPI" (:kontor.return/form r)))
+      (is (≈ (brl "100") (:kontor.return/ipi-net r))))))
 
 ;; ============================================================================
 ;; ISS — municipal service tax
@@ -221,9 +221,9 @@
     (let [conn (bootstrap)
           _ (seed-january! conn)
           r (pr/generate-iss-return conn {:year 2026 :month 1})]
-      (is (= "ISS" (:return/form r)))
-      (is (≈ (brl "25") (:return/iss-total r)))
-      (is (map? (:return/by-municipality r))
+      (is (= "ISS" (:kontor.return/form r)))
+      (is (≈ (brl "25") (:kontor.return/iss-total r)))
+      (is (map? (:kontor.return/by-municipality r))
           ":by-municipality is a map (empty at substrate tier)"))))
 
 ;; ============================================================================
@@ -236,12 +236,12 @@
     (let [conn (bootstrap)
           _ (seed-january! conn)
           r (pr/generate-dctf-web conn {:year 2026 :month 1})]
-      (is (= "DCTFWeb" (:return/form r)))
-      (is (≈ (brl "457.23") (:return/federal-total r)))
+      (is (= "DCTFWeb" (:kontor.return/form r)))
+      (is (≈ (brl "457.23") (:kontor.return/federal-total r)))
       (is (≈ (brl "357.23")
-             (-> r :return/components :pis-cofins :return/total-net)))
+             (-> r :kontor.return/components :pis-cofins :kontor.return/total-net)))
       (is (≈ (brl "100")
-             (-> r :return/components :ipi :return/ipi-net))))))
+             (-> r :kontor.return/components :ipi :kontor.return/ipi-net))))))
 
 ;; ============================================================================
 ;; Period scoping — invoices outside the window are excluded
@@ -262,7 +262,7 @@
                                :kontor.invoice-line/tax-classification :goods}]})
           jan (pr/generate-icms-return conn {:year 2026 :month 1})
           feb (pr/generate-icms-return conn {:year 2026 :month 2})]
-      (is (≈ (brl "738")  (:return/icms-net jan))
+      (is (≈ (brl "738")  (:kontor.return/icms-net jan))
           "Jan unaffected by Feb activity")
-      (is (≈ (brl "1800") (:return/icms-net feb))
+      (is (≈ (brl "1800") (:kontor.return/icms-net feb))
           "Feb captures the new R$10,000 goods invoice (ICMS 18%)"))))

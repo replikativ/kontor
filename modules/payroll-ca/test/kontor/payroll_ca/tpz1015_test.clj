@@ -198,13 +198,13 @@
     (testing "One audit-doc row produced"
       (is (= 1 (count tx))))
     (testing "Category is :payroll-filing"
-      (is (= :payroll-filing (:audit-doc/category (first tx)))))
+      (is (= :payroll-filing (:kontor.audit-doc/category (first tx)))))
     (testing "Language defaults to :fr (Revenu Québec convention)"
-      (is (= :fr (:audit-doc/language (first tx)))))
+      (is (= :fr (:kontor.audit-doc/language (first tx)))))
     (testing "Title carries RP + period"
-      (is (re-find #"qc-rq-employer-A" (:audit-doc/title (first tx)))))
+      (is (re-find #"qc-rq-employer-A" (:kontor.audit-doc/title (first tx)))))
     (testing "Description carries all four buckets + total"
-      (let [desc (:audit-doc/description (first tx))]
+      (let [desc (:kontor.audit-doc/description (first tx))]
         (is (re-find #"QC-ITX" desc))
         (is (re-find #"QPP" desc))
         (is (re-find #"QPIP" desc))
@@ -221,4 +221,4 @@
         tx (tpz/tpz1015-audit-doc-tx-data
             {:tpz1015-summary summary :language :en})]
     (testing "Language override honored"
-      (is (= :en (:audit-doc/language (first tx)))))))
+      (is (= :en (:kontor.audit-doc/language (first tx)))))))

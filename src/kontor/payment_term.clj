@@ -31,7 +31,7 @@
    the term is missing or has zero net-days (`:due-on-receipt`)."
   [^Date effective-date payment-term]
   (when effective-date
-    (let [n (or (:payment-term/net-days payment-term) 0)]
+    (let [n (or (:kontor.payment-term/net-days payment-term) 0)]
       (if (zero? n) effective-date (plus-days effective-date n)))))
 
 (defn compute-discount-deadline
@@ -39,9 +39,9 @@
    term has no discount."
   [^Date effective-date payment-term]
   (when (and effective-date
-             (:payment-term/discount-pct payment-term)
-             (:payment-term/discount-days payment-term))
-    (plus-days effective-date (:payment-term/discount-days payment-term))))
+             (:kontor.payment-term/discount-pct payment-term)
+             (:kontor.payment-term/discount-days payment-term))
+    (plus-days effective-date (:kontor.payment-term/discount-days payment-term))))
 
 (defn apply-term
   "Return a transaction-attribute map fragment (plain map, not
@@ -62,42 +62,42 @@
 (def standard-terms
   "Common payment terms. Install via `install-standard-terms!`.
    Tenants can add more; these are the universal ones."
-  [{:payment-term/code         "DUE-ON-RECEIPT"
-    :payment-term/name         "Zahlbar sofort"
-    :payment-term/net-days     0
-    :payment-term/active       true}
-   {:payment-term/code         "NET7"
-    :payment-term/name         "7 Tage netto"
-    :payment-term/net-days     7
-    :payment-term/active       true}
-   {:payment-term/code         "NET14"
-    :payment-term/name         "14 Tage netto"
-    :payment-term/net-days     14
-    :payment-term/active       true}
-   {:payment-term/code         "NET30"
-    :payment-term/name         "30 Tage netto"
-    :payment-term/net-days     30
-    :payment-term/active       true}
-   {:payment-term/code         "NET60"
-    :payment-term/name         "60 Tage netto"
-    :payment-term/net-days     60
-    :payment-term/active       true}
-   {:payment-term/code         "2/10-NET30"
-    :payment-term/name         "2% Skonto bei Zahlung in 10 Tagen, sonst 30 Tage netto"
-    :payment-term/net-days     30
-    :payment-term/discount-pct 2.0M
-    :payment-term/discount-days 10
-    :payment-term/active       true}
-   {:payment-term/code         "3/10-NET30"
-    :payment-term/name         "3% Skonto bei Zahlung in 10 Tagen, sonst 30 Tage netto"
-    :payment-term/net-days     30
-    :payment-term/discount-pct 3.0M
-    :payment-term/discount-days 10
-    :payment-term/active       true}])
+  [{:kontor.payment-term/code         "DUE-ON-RECEIPT"
+    :kontor.payment-term/name         "Zahlbar sofort"
+    :kontor.payment-term/net-days     0
+    :kontor.payment-term/active       true}
+   {:kontor.payment-term/code         "NET7"
+    :kontor.payment-term/name         "7 Tage netto"
+    :kontor.payment-term/net-days     7
+    :kontor.payment-term/active       true}
+   {:kontor.payment-term/code         "NET14"
+    :kontor.payment-term/name         "14 Tage netto"
+    :kontor.payment-term/net-days     14
+    :kontor.payment-term/active       true}
+   {:kontor.payment-term/code         "NET30"
+    :kontor.payment-term/name         "30 Tage netto"
+    :kontor.payment-term/net-days     30
+    :kontor.payment-term/active       true}
+   {:kontor.payment-term/code         "NET60"
+    :kontor.payment-term/name         "60 Tage netto"
+    :kontor.payment-term/net-days     60
+    :kontor.payment-term/active       true}
+   {:kontor.payment-term/code         "2/10-NET30"
+    :kontor.payment-term/name         "2% Skonto bei Zahlung in 10 Tagen, sonst 30 Tage netto"
+    :kontor.payment-term/net-days     30
+    :kontor.payment-term/discount-pct 2.0M
+    :kontor.payment-term/discount-days 10
+    :kontor.payment-term/active       true}
+   {:kontor.payment-term/code         "3/10-NET30"
+    :kontor.payment-term/name         "3% Skonto bei Zahlung in 10 Tagen, sonst 30 Tage netto"
+    :kontor.payment-term/net-days     30
+    :kontor.payment-term/discount-pct 3.0M
+    :kontor.payment-term/discount-days 10
+    :kontor.payment-term/active       true}])
 
 (defn install-standard-terms!
   "Idempotently transact the standard payment-term entities into
-   `conn`. The :payment-term/code uniqueness means re-installing is
+   `conn`. The :kontor.payment-term/code uniqueness means re-installing is
    a no-op."
   [conn]
   (d/transact conn standard-terms))
@@ -108,9 +108,9 @@
   [db ^String code]
   (when-let [eid (d/q '[:find ?e .
                         :in $ ?code
-                        :where [?e :payment-term/code ?code]]
+                        :where [?e :kontor.payment-term/code ?code]]
                       db code)]
-    (d/pull db [:db/id :payment-term/code :payment-term/name
-                :payment-term/net-days :payment-term/discount-pct
-                :payment-term/discount-days]
+    (d/pull db [:db/id :kontor.payment-term/code :kontor.payment-term/name
+                :kontor.payment-term/net-days :kontor.payment-term/discount-pct
+                :kontor.payment-term/discount-days]
             eid)))

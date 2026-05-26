@@ -62,13 +62,13 @@
       (let [db (d/db conn)
             doc (audit-doc/pull-doc db "mbgm-2026-01")]
         (is (some? doc))
-        (is (= :mbgm (:audit-doc/type doc)))
-        (is (= :payroll-filing (:audit-doc/category doc)))
-        (is (= :de (:audit-doc/language doc)))
+        (is (= :mbgm (:kontor.audit-doc/type doc)))
+        (is (= :payroll-filing (:kontor.audit-doc/category doc)))
+        (is (= :de (:kontor.audit-doc/language doc)))
         (is (= "s3://kontor-test/mbgm/2026-01.xml"
-               (:audit-doc/storage-uri doc)))
-        (is (string? (:audit-doc/content-hash doc)))
-        (is (= 64 (count (:audit-doc/content-hash doc)))
+               (:kontor.audit-doc/storage-uri doc)))
+        (is (string? (:kontor.audit-doc/content-hash doc)))
+        (is (= 64 (count (:kontor.audit-doc/content-hash doc)))
             "SHA-256 hex is 64 chars")))))
 
 (deftest e2e-multiple-periods-then-l16
@@ -118,11 +118,11 @@
             payroll-docs
             (d/q '[:find [?e ...]
                    :where
-                   [?e :audit-doc/category :payroll-filing]]
+                   [?e :kontor.audit-doc/category :payroll-filing]]
                  db)]
         (is (= 3 (count payroll-docs))
             (str "expected 3 :payroll-filing docs, got " (count payroll-docs)))
-        (let [types (set (map #(:audit-doc/type (d/pull db [:audit-doc/type] %))
+        (let [types (set (map #(:kontor.audit-doc/type (d/pull db [:kontor.audit-doc/type] %))
                               payroll-docs))]
           (is (contains? types :mbgm))
           (is (contains? types :l16-lohnzettel)))))))

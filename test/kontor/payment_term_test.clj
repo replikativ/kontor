@@ -19,9 +19,9 @@
 (deftest install-is-idempotent
   (let [conn (core/create-test-db)
         _ (pt/install-standard-terms! conn)
-        n1 (count (d/q '[:find [?e ...] :where [?e :payment-term/code _]] (d/db conn)))
+        n1 (count (d/q '[:find [?e ...] :where [?e :kontor.payment-term/code _]] (d/db conn)))
         _ (pt/install-standard-terms! conn)
-        n2 (count (d/q '[:find [?e ...] :where [?e :payment-term/code _]] (d/db conn)))]
+        n2 (count (d/q '[:find [?e ...] :where [?e :kontor.payment-term/code _]] (d/db conn)))]
     (is (= n1 n2))
     (is (= n1 (count pt/standard-terms)))))
 
@@ -29,7 +29,7 @@
   (let [conn (bootstrap)
         net30 (pt/by-code (d/db conn) "NET30")]
     (is (some? net30))
-    (is (= 30 (:payment-term/net-days net30)))))
+    (is (= 30 (:kontor.payment-term/net-days net30)))))
 
 (deftest compute-due-date
   (let [conn (bootstrap)

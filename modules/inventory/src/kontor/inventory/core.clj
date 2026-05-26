@@ -23,9 +23,9 @@
 ;; ============================================================================
 
 (defn facility-by-code
-  "Resolve a :facility eid by :facility/code."
+  "Resolve a :facility eid by :kontor.facility/code."
   [db code]
-  (d/q '[:find ?e . :in $ ?c :where [?e :facility/code ?c]] db code))
+  (d/q '[:find ?e . :in $ ?c :where [?e :kontor.facility/code ?c]] db code))
 
 (defn resolve-facility
   "Coerce `spec` to a :facility eid (string → by-code lookup)."
@@ -42,16 +42,16 @@
   (when-not code (throw (ex-info ":code required" {})))
   (when-not name (throw (ex-info ":name required" {})))
   (when-not type (throw (ex-info ":type required" {})))
-  [(cond-> {:facility/code code
-            :facility/name name
-            :facility/type type}
-     parent              (assoc :facility/parent (resolve-facility db parent))
-     owner-entity        (assoc :facility/owner-entity owner-entity)
-     default-days-to-ship (assoc :facility/default-days-to-ship
+  [(cond-> {:kontor.facility/code code
+            :kontor.facility/name name
+            :kontor.facility/type type}
+     parent              (assoc :kontor.facility/parent (resolve-facility db parent))
+     owner-entity        (assoc :kontor.facility/owner-entity owner-entity)
+     default-days-to-ship (assoc :kontor.facility/default-days-to-ship
                                  default-days-to-ship)
-     opened-at           (assoc :facility/opened-at opened-at)
-     closed-at           (assoc :facility/closed-at closed-at)
-     note                (assoc :facility/note note))])
+     opened-at           (assoc :kontor.facility/opened-at opened-at)
+     closed-at           (assoc :kontor.facility/closed-at closed-at)
+     note                (assoc :kontor.facility/note note))])
 
 (defn define-facility!
   "Create (or upsert by :code) a :facility. Routes through the gate
@@ -73,8 +73,8 @@
   (when-let [f (resolve-facility db facility-spec)]
     (d/q '[:find ?e . :in $ ?f ?s
            :where
-           [?e :facility-location/facility ?f]
-           [?e :facility-location/seq-id ?s]]
+           [?e :kontor.facility-location/facility ?f]
+           [?e :kontor.facility-location/seq-id ?s]]
          db f seq-id)))
 
 (defn define-location-tx-data
@@ -84,13 +84,13 @@
   (when-not type   (throw (ex-info ":type required" {})))
   (let [f (resolve-facility db facility)
         _ (when-not f (throw (ex-info "Facility not found" {:spec facility})))]
-    [(cond-> {:facility-location/facility f
-              :facility-location/seq-id seq-id
-              :facility-location/type type}
-       area  (assoc :facility-location/area area)
-       aisle (assoc :facility-location/aisle aisle)
-       bin   (assoc :facility-location/bin bin)
-       note  (assoc :facility-location/note note))]))
+    [(cond-> {:kontor.facility-location/facility f
+              :kontor.facility-location/seq-id seq-id
+              :kontor.facility-location/type type}
+       area  (assoc :kontor.facility-location/area area)
+       aisle (assoc :kontor.facility-location/aisle aisle)
+       bin   (assoc :kontor.facility-location/bin bin)
+       note  (assoc :kontor.facility-location/note note))]))
 
 (defn define-location!
   "Create a :facility-location (a bin) within a facility. Routes
@@ -112,17 +112,17 @@
   (when-not product (throw (ex-info ":product required" {})))
   (let [f (resolve-facility db facility)
         _ (when-not f (throw (ex-info "Facility not found" {:spec facility})))]
-    [(cond-> {:facility-product/facility f
-              :facility-product/product product}
-       min-stock        (assoc :facility-product/min-stock min-stock)
-       reorder-qty      (assoc :facility-product/reorder-qty reorder-qty)
-       safety-stock     (assoc :facility-product/safety-stock safety-stock)
+    [(cond-> {:kontor.facility-product/facility f
+              :kontor.facility-product/product product}
+       min-stock        (assoc :kontor.facility-product/min-stock min-stock)
+       reorder-qty      (assoc :kontor.facility-product/reorder-qty reorder-qty)
+       safety-stock     (assoc :kontor.facility-product/safety-stock safety-stock)
        (some? negative-allowed?)
-       (assoc :facility-product/negative-allowed? negative-allowed?)
-       days-to-ship     (assoc :facility-product/days-to-ship days-to-ship)
-       replenish-method (assoc :facility-product/replenish-method
+       (assoc :kontor.facility-product/negative-allowed? negative-allowed?)
+       days-to-ship     (assoc :kontor.facility-product/days-to-ship days-to-ship)
+       replenish-method (assoc :kontor.facility-product/replenish-method
                                replenish-method)
-       note             (assoc :facility-product/note note))]))
+       note             (assoc :kontor.facility-product/note note))]))
 
 (defn define-facility-product!
   "Create (or upsert by the (facility, product) identity tuple) a
@@ -156,20 +156,20 @@
   (let [candidates (d/q '[:find [?e ...]
                           :in $ ?p ?f
                           :where
-                          [?e :inventory-item/product ?p]
-                          [?e :inventory-item/facility ?f]]
+                          [?e :kontor.inventory-item/product ?p]
+                          [?e :kontor.inventory-item/facility ?f]]
                         db product facility)]
     (first
      (filter (fn [eid]
-               (let [it (d/pull db [{:inventory-item/location [:db/id]}
-                                    {:inventory-item/lot [:db/id]}
-                                    {:inventory-item/owner-entity [:db/id]}
-                                    :inventory-item/serial-number]
+               (let [it (d/pull db [{:kontor.inventory-item/location [:db/id]}
+                                    {:kontor.inventory-item/lot [:db/id]}
+                                    {:kontor.inventory-item/owner-entity [:db/id]}
+                                    :kontor.inventory-item/serial-number]
                                 eid)]
-                 (and (= location (:db/id (:inventory-item/location it)))
-                      (= lot (:db/id (:inventory-item/lot it)))
-                      (= owner-entity (:db/id (:inventory-item/owner-entity it)))
-                      (= serial-number (:inventory-item/serial-number it)))))
+                 (and (= location (:db/id (:kontor.inventory-item/location it)))
+                      (= lot (:db/id (:kontor.inventory-item/lot it)))
+                      (= owner-entity (:db/id (:kontor.inventory-item/owner-entity it)))
+                      (= serial-number (:kontor.inventory-item/serial-number it)))))
              candidates))))
 
 (defn inventory-item-entity
@@ -182,16 +182,16 @@
                   serial-number received-at note]
            :or {kind :non-serial status :available}}]
   (cond-> {:db/id tempid
-           :inventory-item/product product
-           :inventory-item/facility facility
-           :inventory-item/kind kind
-           :inventory-item/status status}
-    location      (assoc :inventory-item/location location)
-    lot           (assoc :inventory-item/lot lot)
-    owner-entity  (assoc :inventory-item/owner-entity owner-entity)
-    serial-number (assoc :inventory-item/serial-number serial-number)
-    received-at   (assoc :inventory-item/received-at received-at)
-    note          (assoc :inventory-item/note note)))
+           :kontor.inventory-item/product product
+           :kontor.inventory-item/facility facility
+           :kontor.inventory-item/kind kind
+           :kontor.inventory-item/status status}
+    location      (assoc :kontor.inventory-item/location location)
+    lot           (assoc :kontor.inventory-item/lot lot)
+    owner-entity  (assoc :kontor.inventory-item/owner-entity owner-entity)
+    serial-number (assoc :kontor.inventory-item/serial-number serial-number)
+    received-at   (assoc :kontor.inventory-item/received-at received-at)
+    note          (assoc :kontor.inventory-item/note note)))
 
 (defn find-or-create-inventory-item-tx-data
   "Pure builder for `find-or-create-inventory-item!` (ADR-068). Returns
@@ -230,10 +230,10 @@
   "Pull an :inventory-item with its facility / location / lot."
   [db eid]
   (d/pull db
-          '[* {:inventory-item/facility [:facility/code :facility/name]
-               :inventory-item/location [:facility-location/seq-id
-                                         :facility-location/type]
-               :inventory-item/lot [:lot/label]}]
+          '[* {:kontor.inventory-item/facility [:kontor.facility/code :kontor.facility/name]
+               :kontor.inventory-item/location [:kontor.facility-location/seq-id
+                                         :kontor.facility-location/type]
+               :kontor.inventory-item/lot [:kontor.lot/label]}]
           eid))
 
 (defn items-of
@@ -245,11 +245,11 @@
       (if f
         (d/q '[:find [?e ...] :in $ ?p ?f
                :where
-               [?e :inventory-item/product ?p]
-               [?e :inventory-item/facility ?f]]
+               [?e :kontor.inventory-item/product ?p]
+               [?e :kontor.inventory-item/facility ?f]]
              db product f)
         (d/q '[:find [?e ...] :in $ ?p
-               :where [?e :inventory-item/product ?p]]
+               :where [?e :kontor.inventory-item/product ?p]]
              db product))))))
 
 ;; ============================================================================
@@ -275,15 +275,15 @@
                 reason description source source-kind]}]
   (when-not inventory-item (throw (ex-info ":inventory-item required" {})))
   (when (nil? qoh-diff)    (throw (ex-info ":qoh-diff required" {})))
-  (let [detail (cond-> {:inventory-detail/inventory-item inventory-item
-                        :inventory-detail/effective-date (or effective-date (Date.))
-                        :inventory-detail/qoh-diff qoh-diff
-                        :inventory-detail/atp-diff (if (nil? atp-diff)
+  (let [detail (cond-> {:kontor.inventory-detail/inventory-item inventory-item
+                        :kontor.inventory-detail/effective-date (or effective-date (Date.))
+                        :kontor.inventory-detail/qoh-diff qoh-diff
+                        :kontor.inventory-detail/atp-diff (if (nil? atp-diff)
                                                      qoh-diff atp-diff)}
-                 reason      (assoc :inventory-detail/reason reason)
-                 description (assoc :inventory-detail/description description)
-                 source      (assoc :inventory-detail/source source)
-                 source-kind (assoc :inventory-detail/source-kind source-kind))]
+                 reason      (assoc :kontor.inventory-detail/reason reason)
+                 description (assoc :kontor.inventory-detail/description description)
+                 source      (assoc :kontor.inventory-detail/source source)
+                 source-kind (assoc :kontor.inventory-detail/source-kind source-kind))]
     (validation/transact-with-validation conn [detail])))
 
 (defn place-opening-stock!
@@ -305,12 +305,12 @@
         existing (find-inventory-item db spec)
         item-id (or existing "inv-item")
         eff (or effective-date received-at (Date.))
-        detail (cond-> {:inventory-detail/inventory-item item-id
-                        :inventory-detail/effective-date eff
-                        :inventory-detail/qoh-diff qty
-                        :inventory-detail/atp-diff qty
-                        :inventory-detail/source-kind :opening}
-                 reason (assoc :inventory-detail/reason reason))
+        detail (cond-> {:kontor.inventory-detail/inventory-item item-id
+                        :kontor.inventory-detail/effective-date eff
+                        :kontor.inventory-detail/qoh-diff qty
+                        :kontor.inventory-detail/atp-diff qty
+                        :kontor.inventory-detail/source-kind :opening}
+                 reason (assoc :kontor.inventory-detail/reason reason))
         tx-data (cond-> [detail]
                   (not existing) (conj (inventory-item-entity "inv-item" spec)))
         report (validation/transact-with-validation conn tx-data)]
@@ -326,10 +326,10 @@
    (let [db* (if as-of-tx (d/as-of db as-of-tx) db)]
      (->> (d/q '[:find [?d ...]
                  :in $ ?item
-                 :where [?d :inventory-detail/inventory-item ?item]]
+                 :where [?d :kontor.inventory-detail/inventory-item ?item]]
                db* inventory-item)
           (map #(d/pull db* '[*] %))
-          (sort-by :inventory-detail/effective-date)
+          (sort-by :kontor.inventory-detail/effective-date)
           vec))))
 
 ;; ============================================================================
@@ -350,7 +350,7 @@
     :else           #{spec}))
 
 (defn on-hand-qty
-  "Quantity-on-hand for a scope — `Σ :inventory-detail/qoh-diff`,
+  "Quantity-on-hand for a scope — `Σ :kontor.inventory-detail/qoh-diff`,
    derived from the append-only ledger. Returns a bigdec (0M when
    nothing matches).
 
@@ -371,9 +371,9 @@
                   :with ?d
                   :in $ [?item ...] ?cutoff
                   :where
-                  [?d :inventory-detail/inventory-item ?item]
-                  [?d :inventory-detail/qoh-diff ?diff]
-                  [?d :inventory-detail/effective-date ?ed]
+                  [?d :kontor.inventory-detail/inventory-item ?item]
+                  [?d :kontor.inventory-detail/qoh-diff ?diff]
+                  [?d :kontor.inventory-detail/effective-date ?ed]
                   [(<= ?ed ?cutoff)]]
                 db* items (or as-of-valid kbt/forever))
            0M)))))

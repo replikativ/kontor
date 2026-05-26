@@ -32,50 +32,50 @@
 ;; ============================================================================
 
 (def ^:private facility-attrs
-  [{:db/ident       :facility/code
+  [{:db/ident       :kontor.facility/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "External identifier — 'WH-BERLIN', 'STORE-01'."}
 
-   {:db/ident       :facility/name
+   {:db/ident       :kontor.facility/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :facility/type
+   {:db/ident       :kontor.facility/type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "#{:warehouse :store :plant :transit :virtual}.
                      :transit / :virtual model in-transit stock and
                      other non-physical buckets (ADR-059)."}
 
-   {:db/ident       :facility/parent
+   {:db/ident       :kontor.facility/parent
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Self-reference — the warehouse tree. Optional."}
 
-   {:db/ident       :facility/owner-entity
+   {:db/ident       :kontor.facility/owner-entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :entity (ADR-031) — the legal entity that
                      owns this facility. NOT a :partner. Optional."}
 
-   {:db/ident       :facility/default-days-to-ship
+   {:db/ident       :kontor.facility/default-days-to-ship
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "Fallback lead time for promise-date computation
-                     (ADR-058) when :facility-product/days-to-ship is
+                     (ADR-058) when :kontor.facility-product/days-to-ship is
                      absent."}
 
-   {:db/ident       :facility/opened-at
+   {:db/ident       :kontor.facility/opened-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :facility/closed-at
+   {:db/ident       :kontor.facility/closed-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :facility/note
+   {:db/ident       :kontor.facility/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 
@@ -84,42 +84,42 @@
 ;; ============================================================================
 
 (def ^:private facility-location-attrs
-  [{:db/ident       :facility-location/facility
+  [{:db/ident       :kontor.facility-location/facility
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :facility-location/seq-id
+   {:db/ident       :kontor.facility-location/seq-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Bin identifier, unique within the facility."}
 
-   {:db/ident       :facility-location/identity
+   {:db/ident       :kontor.facility-location/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:facility-location/facility :facility-location/seq-id]
+    :db/tupleAttrs  [:kontor.facility-location/facility :kontor.facility-location/seq-id]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "One location per (facility, seq-id). Both members
                      always present — no nil-in-tuple caveat."}
 
-   {:db/ident       :facility-location/type
+   {:db/ident       :kontor.facility-location/type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "#{:pickloc :bulk :staging}. The ADR-058
                      reservation walk visits :pickloc before :bulk."}
 
-   {:db/ident       :facility-location/area
+   {:db/ident       :kontor.facility-location/area
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :facility-location/aisle
+   {:db/ident       :kontor.facility-location/aisle
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :facility-location/bin
+   {:db/ident       :kontor.facility-location/bin
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :facility-location/note
+   {:db/ident       :kontor.facility-location/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 
@@ -128,38 +128,38 @@
 ;; ============================================================================
 
 (def ^:private facility-product-attrs
-  [{:db/ident       :facility-product/facility
+  [{:db/ident       :kontor.facility-product/facility
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :facility-product/product
+   {:db/ident       :kontor.facility-product/product
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Generic ref — the consumer's product entity."}
 
-   {:db/ident       :facility-product/identity
+   {:db/ident       :kontor.facility-product/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:facility-product/facility :facility-product/product]
+    :db/tupleAttrs  [:kontor.facility-product/facility :kontor.facility-product/product]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "One policy row per (facility, product)."}
 
-   {:db/ident       :facility-product/min-stock
+   {:db/ident       :kontor.facility-product/min-stock
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Reorder point — replenish when on-hand drops below."}
 
-   {:db/ident       :facility-product/reorder-qty
+   {:db/ident       :kontor.facility-product/reorder-qty
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :facility-product/safety-stock
+   {:db/ident       :kontor.facility-product/safety-stock
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Buffer held back from available-to-promise
                      (ADR-058): ATP = Σ atp-diff − safety-stock."}
 
-   {:db/ident       :facility-product/negative-allowed?
+   {:db/ident       :kontor.facility-product/negative-allowed?
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-059 negative-inventory policy. When true,
@@ -168,17 +168,17 @@
                      (the default), an over-issue throws
                      :inventory/negative-not-allowed."}
 
-   {:db/ident       :facility-product/days-to-ship
+   {:db/ident       :kontor.facility-product/days-to-ship
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :facility-product/replenish-method
+   {:db/ident       :kontor.facility-product/replenish-method
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Free-form — :reorder-point | :make-to-order |
                      :drop-ship | … Consumers extend."}
 
-   {:db/ident       :facility-product/note
+   {:db/ident       :kontor.facility-product/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 
@@ -187,29 +187,29 @@
 ;; ============================================================================
 
 (def ^:private inventory-item-attrs
-  [{:db/ident       :inventory-item/product
+  [{:db/ident       :kontor.inventory-item/product
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Generic ref — the consumer's product entity."}
 
-   {:db/ident       :inventory-item/facility
+   {:db/ident       :kontor.inventory-item/facility
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :inventory-item/location
+   {:db/ident       :kontor.inventory-item/location
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :facility-location — the bin. Optional;
                      stock can be tracked facility-level."}
 
-   {:db/ident       :inventory-item/lot
+   {:db/ident       :kontor.inventory-item/lot
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to the kernel :lot. THE JOIN to the financial
-                     half — :valuation-layer/lot points at the same
+                     half — :kontor.valuation-layer/lot points at the same
                      :lot. Optional (un-lotted stock)."}
 
-   {:db/ident       :inventory-item/owner-entity
+   {:db/ident       :kontor.inventory-item/owner-entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :entity — the legal entity that owns this
@@ -217,7 +217,7 @@
                      ADR-059's consignment flag will diverge from
                      this."}
 
-   {:db/ident       :inventory-item/kind
+   {:db/ident       :kontor.inventory-item/kind
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Wired: :non-serial. RESERVED: :serialized — the
@@ -228,22 +228,22 @@
                      ergonomics are a documented follow-up). Use
                      :non-serial until the serialized path ships."}
 
-   {:db/ident       :inventory-item/status
+   {:db/ident       :kontor.inventory-item/status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-034 status-machine facet.
                      #{:available :on-hold :defective :consumed}."}
 
-   {:db/ident       :inventory-item/serial-number
+   {:db/ident       :kontor.inventory-item/serial-number
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Serialized buckets only."}
 
-   {:db/ident       :inventory-item/received-at
+   {:db/ident       :kontor.inventory-item/received-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :inventory-item/note
+   {:db/ident       :kontor.inventory-item/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 
@@ -252,28 +252,28 @@
 ;; ============================================================================
 
 (def ^:private inventory-detail-attrs
-  [{:db/ident       :inventory-detail/inventory-item
+  [{:db/ident       :kontor.inventory-detail/inventory-item
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Required back-pointer to the :inventory-item."}
 
-   {:db/ident       :inventory-detail/effective-date
+   {:db/ident       :kontor.inventory-detail/effective-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "The valid-time of this delta. A first-class
                      queryable field (following
-                     :schedule-occurrence/scheduled-date's precedent)
+                     :kontor.schedule-occurrence/scheduled-date's precedent)
                      — `on-hand-qty` filters on it for the
                      :as-of-valid axis. The :as-of-tx axis is
                      datahike's d/as-of."}
 
-   {:db/ident       :inventory-detail/qoh-diff
+   {:db/ident       :kontor.inventory-detail/qoh-diff
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Signed quantity-on-hand delta: a receipt is +,
                      an issue −, a variance ±. Never an absolute."}
 
-   {:db/ident       :inventory-detail/atp-diff
+   {:db/ident       :kontor.inventory-detail/atp-diff
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Signed available-to-promise delta: a reservation
@@ -282,24 +282,24 @@
                      to :qoh-diff when the caller omits it (a pure
                      physical move shifts both)."}
 
-   {:db/ident       :inventory-detail/reason
+   {:db/ident       :kontor.inventory-detail/reason
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Movement / variance reason keyword. Free-form;
                      ADR-060 seeds the cycle-count vocabulary."}
 
-   {:db/ident       :inventory-detail/description
+   {:db/ident       :kontor.inventory-detail/description
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :inventory-detail/source-kind
+   {:db/ident       :kontor.inventory-detail/source-kind
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Discriminator for :source — #{:opening :receipt
                      :issuance :reservation :variance :transfer
                      :adjustment}."}
 
-   {:db/ident       :inventory-detail/source
+   {:db/ident       :kontor.inventory-detail/source
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Polymorphic ref — the entity that caused this
@@ -307,7 +307,7 @@
                      :inventory-variance, an :inventory-transfer, …).
                      Interpreted via :source-kind. Optional."}
 
-   {:db/ident       :inventory-detail/transaction
+   {:db/ident       :kontor.inventory-detail/transaction
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-059 — ref to the kernel :transaction whose
@@ -322,47 +322,47 @@
 ;; ============================================================================
 
 (def ^:private inventory-transfer-attrs
-  [{:db/ident       :inventory-transfer/inventory-item
+  [{:db/ident       :kontor.inventory-transfer/inventory-item
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The SOURCE :inventory-item bucket."}
 
-   {:db/ident       :inventory-transfer/quantity
+   {:db/ident       :kontor.inventory-transfer/quantity
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :inventory-transfer/from-facility
+   {:db/ident       :kontor.inventory-transfer/from-facility
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :inventory-transfer/from-location
+   {:db/ident       :kontor.inventory-transfer/from-location
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :inventory-transfer/to-facility
+   {:db/ident       :kontor.inventory-transfer/to-facility
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :inventory-transfer/to-location
+   {:db/ident       :kontor.inventory-transfer/to-location
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :inventory-transfer/status
+   {:db/ident       :kontor.inventory-transfer/status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-034 facet. #{:in-transit :complete :cancelled}.
                      The in-transit BALANCE (the period-close cutoff
                      exposure) is the Σ quantity of :in-transit rows."}
 
-   {:db/ident       :inventory-transfer/send-date
+   {:db/ident       :kontor.inventory-transfer/send-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :inventory-transfer/receive-date
+   {:db/ident       :kontor.inventory-transfer/receive-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :inventory-transfer/note
+   {:db/ident       :kontor.inventory-transfer/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 
@@ -371,42 +371,42 @@
 ;; ============================================================================
 
 (def ^:private negative-fill-attrs
-  [{:db/ident       :negative-fill/inventory-item
+  [{:db/ident       :kontor.negative-fill/inventory-item
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :negative-fill/valuation-layer
+   {:db/ident       :kontor.negative-fill/valuation-layer
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The estimated-cost :valuation-layer `issue!`
                      created so the over-issue had a layer to
                      consume."}
 
-   {:db/ident       :negative-fill/shortfall-qty
+   {:db/ident       :kontor.negative-fill/shortfall-qty
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :negative-fill/estimated-unit-cost
+   {:db/ident       :kontor.negative-fill/estimated-unit-cost
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :negative-fill/commodity
+   {:db/ident       :kontor.negative-fill/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :negative-fill/status
+   {:db/ident       :kontor.negative-fill/status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "#{:open :trued-up}. `true-up-negative-fill!`
                      moves it to :trued-up."}
 
-   {:db/ident       :negative-fill/true-up-adjustment
+   {:db/ident       :kontor.negative-fill/true-up-adjustment
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Set on true-up — ref to the :layer-adjustment
                      reconciling estimated cost to actual."}
 
-   {:db/ident       :negative-fill/origin-issue
+   {:db/ident       :kontor.negative-fill/origin-issue
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to the kernel :transaction of the `issue!`
@@ -414,7 +414,7 @@
                      corrected COGS figure traces back to the sale
                      (review-after market-pain P2)."}
 
-   {:db/ident       :negative-fill/created-at
+   {:db/ident       :kontor.negative-fill/created-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}])
 
@@ -423,18 +423,18 @@
 ;; ============================================================================
 
 (def ^:private physical-inventory-attrs
-  [{:db/ident       :physical-inventory/code
+  [{:db/ident       :kontor.physical-inventory/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "External identifier — 'CYCLE-2026-W12'."}
 
-   {:db/ident       :physical-inventory/facility
+   {:db/ident       :kontor.physical-inventory/facility
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The facility being counted."}
 
-   {:db/ident       :physical-inventory/count-date
+   {:db/ident       :kontor.physical-inventory/count-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "The valid-time the count is taken AS-OF. The
@@ -442,61 +442,61 @@
                      — concurrent picks at a later valid-time do not
                      corrupt the count (research note 36 §6)."}
 
-   {:db/ident       :physical-inventory/counted-by
+   {:db/ident       :kontor.physical-inventory/counted-by
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :partner — who counted."}
 
-   {:db/ident       :physical-inventory/status
+   {:db/ident       :kontor.physical-inventory/status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-034 facet. #{:open :counting :review :posted}."}
 
-   {:db/ident       :physical-inventory/comments
+   {:db/ident       :kontor.physical-inventory/comments
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 
 (def ^:private inventory-variance-attrs
-  [{:db/ident       :inventory-variance/physical-inventory
+  [{:db/ident       :kontor.inventory-variance/physical-inventory
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :inventory-variance/inventory-item
+   {:db/ident       :kontor.inventory-variance/inventory-item
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :inventory-variance/expected-qty
+   {:db/ident       :kontor.inventory-variance/expected-qty
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "The perpetual on-hand-qty at the count-date —
                      snapshotted when the line was recorded."}
 
-   {:db/ident       :inventory-variance/counted-qty
+   {:db/ident       :kontor.inventory-variance/counted-qty
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "The physically counted quantity."}
 
-   {:db/ident       :inventory-variance/qoh-var
+   {:db/ident       :kontor.inventory-variance/qoh-var
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "counted − expected. Posting the count emits an
                      :inventory-detail carrying this as :qoh-diff."}
 
-   {:db/ident       :inventory-variance/reason
+   {:db/ident       :kontor.inventory-variance/reason
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "#{:shrinkage :damage :found :recount :uom
                      :mispick}. Reason codes are an audit requirement
                      (research note 36 §6/§9)."}
 
-   {:db/ident       :inventory-variance/recount-of
+   {:db/ident       :kontor.inventory-variance/recount-of
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Self-ref — the variance line this recount
                      supersedes. An out-of-tolerance variance gets
                      recounted before posting."}
 
-   {:db/ident       :inventory-variance/comments
+   {:db/ident       :kontor.inventory-variance/comments
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 
@@ -511,14 +511,14 @@
                physical-inventory-attrs inventory-variance-attrs)))
 
 ;; ============================================================================
-;; Status-transition seeds (ADR-034) — :inventory-item/status
+;; Status-transition seeds (ADR-034) — :kontor.inventory-item/status
 ;; ============================================================================
 
 (def status-transition-seeds
-  "ADR-034 :status-transition rows. `:inventory-item/status` — the
+  "ADR-034 :status-transition rows. `:kontor.inventory-item/status` — the
    lifecycle is light (the `:inventory-detail` ledger does the
    quantity work; `:status` governs whether a bucket is reservable).
-   `:inventory-transfer/status` — the two-phase transfer lifecycle
+   `:kontor.inventory-transfer/status` — the two-phase transfer lifecycle
    (ADR-059)."
   (vec
    (concat
@@ -530,7 +530,7 @@
            [:defective :available  "Re-inspected OK"]
            [:available :consumed   "Fully consumed"]]]
       {:kontor.status-transition/entity-type :inventory-item
-       :kontor.status-transition/facet :inventory-item/status
+       :kontor.status-transition/facet :kontor.inventory-item/status
        :kontor.status-transition/from from
        :kontor.status-transition/to to
        :kontor.status-transition/active true
@@ -540,7 +540,7 @@
            [:in-transit  :complete   "Receive transfer"]
            [:in-transit  :cancelled  "Cancel transfer"]]]
       {:kontor.status-transition/entity-type :inventory-transfer
-       :kontor.status-transition/facet :inventory-transfer/status
+       :kontor.status-transition/facet :kontor.inventory-transfer/status
        :kontor.status-transition/from from
        :kontor.status-transition/to to
        :kontor.status-transition/active true
@@ -552,7 +552,7 @@
            [:review    :counting  "Send back for recount"]
            [:review    :posted    "Post count adjustments"]]]
       {:kontor.status-transition/entity-type :physical-inventory
-       :kontor.status-transition/facet :physical-inventory/status
+       :kontor.status-transition/facet :kontor.physical-inventory/status
        :kontor.status-transition/from from
        :kontor.status-transition/to to
        :kontor.status-transition/active true
@@ -563,7 +563,7 @@
 ;; ============================================================================
 
 (defn install!
-  "Install the kontor-inventory schema + the :inventory-item/status
+  "Install the kontor-inventory schema + the :kontor.inventory-item/status
    status-transition seeds. Idempotent for the schema attrs; the
    seeds are guarded with a presence check (the composite-tuple-with-
    nil-in-tuple non-idempotency caveat).

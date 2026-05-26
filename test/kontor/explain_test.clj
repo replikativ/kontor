@@ -197,7 +197,7 @@
             :type        :credit-memo
             :title       "Credit memo for INV-EXP-AD"
             :storage-uri "s3://kontor-test/credit-memo-001.pdf"})
-          doc-eid (:db/id (d/entity db-after [:audit-doc/code "credit-memo-PD-001"]))]
+          doc-eid (:db/id (d/entity db-after [:kontor.audit-doc/code "credit-memo-PD-001"]))]
       (sm/record-status-change!
        conn
        {:entity         tx-eid
@@ -212,7 +212,7 @@
       (let [r (explain/explain-posting conn p1)]
         (is (= 1 (count (:audit-docs r))))
         (is (= "credit-memo-PD-001"
-               (-> r :audit-docs first :audit-doc/code)))))))
+               (-> r :audit-docs first :kontor.audit-doc/code)))))))
 
 (deftest explain-posting-returns-nil-for-unknown-eid
   (let [conn (core/create-test-db)]

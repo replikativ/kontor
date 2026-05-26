@@ -220,13 +220,13 @@
    quarterly TDS summary. Consumer transacts via
    transact-with-validation. Each :audit-doc carries:
 
-     :audit-doc/code      deterministic from TAN + FY + quarter
-     :audit-doc/category  :payroll-filing
-     :audit-doc/language  :en-in (default; per ADR-083 + CLAUDE.md)
-     :audit-doc/title     'Form 24Q TDS — TAN, FY YYYY-YY, Q[1..4]'
-     :audit-doc/description human-readable summary
+     :kontor.audit-doc/code      deterministic from TAN + FY + quarter
+     :kontor.audit-doc/category  :payroll-filing
+     :kontor.audit-doc/language  :en-in (default; per ADR-083 + CLAUDE.md)
+     :kontor.audit-doc/title     'Form 24Q TDS — TAN, FY YYYY-YY, Q[1..4]'
+     :kontor.audit-doc/description human-readable summary
 
-   Per note 79 §5.3 + ADR-083 — :audit-doc/language is :en-in (not
+   Per note 79 §5.3 + ADR-083 — :kontor.audit-doc/language is :en-in (not
    bare :en) so the three-axis (privilege × category × language)
    filter can distinguish IN from US/UK English correspondence."
   [{:keys [tds-summary language]
@@ -237,13 +237,13 @@
                       tan fy (mod (inc fy) 100) quarter)
         desc (format "TDS deducted (Sec 192): %s | Period %s..%s"
                      (:amount tds) (str period-start) (str period-end))]
-    [{:audit-doc/code (str "FORM-24Q-" tan "-" fy "-Q" quarter)
-      :audit-doc/type :regulator-clearance
-      :audit-doc/title title
-      :audit-doc/description desc
-      :audit-doc/uploaded-at (java.util.Date.)
-      :audit-doc/category :payroll-filing
-      :audit-doc/language language}]))
+    [{:kontor.audit-doc/code (str "FORM-24Q-" tan "-" fy "-Q" quarter)
+      :kontor.audit-doc/type :regulator-clearance
+      :kontor.audit-doc/title title
+      :kontor.audit-doc/description desc
+      :kontor.audit-doc/uploaded-at (java.util.Date.)
+      :kontor.audit-doc/category :payroll-filing
+      :kontor.audit-doc/language language}]))
 
 ;; ============================================================================
 ;; Form 24Q FVU emitter

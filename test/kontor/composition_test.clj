@@ -91,30 +91,30 @@
         db' (d/db conn)
         doc-eid (get tempids "subpoena")
         hold-eid (get tempids "hold-acme")
-        hold (d/pull db' '[:legal-hold/code :legal-hold/state
-                           {:legal-hold/supporting-doc [:db/id :audit-doc/code]}
-                           :legal-hold/scope-eids]
+        hold (d/pull db' '[:kontor.legal-hold/code :kontor.legal-hold/state
+                           {:kontor.legal-hold/supporting-doc [:db/id :kontor.audit-doc/code]}
+                           :kontor.legal-hold/scope-eids]
                      hold-eid)]
     (testing "both entities land in one atomic process"
       (is (some? doc-eid))
       (is (some? hold-eid))
-      (is (= doc-eid (-> hold :legal-hold/supporting-doc :db/id))
+      (is (= doc-eid (-> hold :kontor.legal-hold/supporting-doc :db/id))
           "the hold's supporting-doc resolves to the audit-doc the SAME
            process created — the string tempid round-tripped"))
     (testing "the audit-doc is reachable as a normal entity"
       (is (= "SUB-2026-001"
-             (:audit-doc/code (-> hold :legal-hold/supporting-doc)))))
+             (:kontor.audit-doc/code (-> hold :kontor.legal-hold/supporting-doc)))))
     (testing "the hold is :placed and scoped to acme"
-      (is (= :placed (:legal-hold/state hold)))
-      (is (= [{:db/id acme}] (:legal-hold/scope-eids hold))))
+      (is (= :placed (:kontor.legal-hold/state hold)))
+      (is (= [{:db/id acme}] (:kontor.legal-hold/scope-eids hold))))
     (testing "exactly one datahike tx — both entities share it"
       (let [doc-tx (d/q '[:find ?t .
                           :in $ ?e
-                          :where [?e :audit-doc/code _ ?t]]
+                          :where [?e :kontor.audit-doc/code _ ?t]]
                         db' doc-eid)
             hold-tx (d/q '[:find ?t .
                            :in $ ?e
-                           :where [?e :legal-hold/code _ ?t]]
+                           :where [?e :kontor.legal-hold/code _ ?t]]
                          db' hold-eid)]
         (is (= doc-tx hold-tx)
             "datahike-tx (the implicit :tx) is the same for both —
@@ -144,7 +144,7 @@
                               :reason-note "preservation."})
         db1 (d/db conn)
         ;; Doc count before the doomed process:
-        doc-count-before (d/q '[:find (count ?e) . :where [?e :audit-doc/code _]] db1)
+        doc-count-before (d/q '[:find (count ?e) . :where [?e :kontor.audit-doc/code _]] db1)
         hold-eid (lhold/by-code db1 "HOLD-PRE-EXIST")
         attempt
         (try
@@ -174,16 +174,16 @@
           (catch clojure.lang.ExceptionInfo e
             [(:type (ex-data e)) (.getMessage e)]))
         db2 (d/db conn)
-        doc-count-after (d/q '[:find (count ?e) . :where [?e :audit-doc/code _]] db2)
-        hold-after (d/pull db2 [:legal-hold/state] hold-eid)]
+        doc-count-after (d/q '[:find (count ?e) . :where [?e :kontor.audit-doc/code _]] db2)
+        hold-after (d/pull db2 [:kontor.legal-hold/state] hold-eid)]
     (testing "the process threw (the release-tx-data guard fires)"
       (is (not= ::no-throw attempt)))
     (testing "the doomed audit-doc was NOT created — atomic abort"
       (is (= doc-count-before doc-count-after))
-      (is (nil? (d/q '[:find ?e . :where [?e :audit-doc/code "DOC-RELEASE-DOOMED"]]
+      (is (nil? (d/q '[:find ?e . :where [?e :kontor.audit-doc/code "DOC-RELEASE-DOOMED"]]
                      db2))))
     (testing "the pre-existing hold is untouched"
-      (is (= :placed (:legal-hold/state hold-after))))))
+      (is (= :placed (:kontor.legal-hold/state hold-after))))))
 
 ;; ============================================================================
 ;; 3. Plain tx-data concat — composition without `run-process` ceremony
@@ -220,11 +220,11 @@
           report (v/transact-with-validation conn combined)
           tempids (:tempids report)
           db' (d/db conn)
-          hold (d/pull db' '[:legal-hold/code
-                             {:legal-hold/supporting-doc [:audit-doc/code]}]
+          hold (d/pull db' '[:kontor.legal-hold/code
+                             {:kontor.legal-hold/supporting-doc [:kontor.audit-doc/code]}]
                        (get tempids "hold-direct"))]
       (is (= "SUB-DIRECT-001"
-             (-> hold :legal-hold/supporting-doc :audit-doc/code))
+             (-> hold :kontor.legal-hold/supporting-doc :kontor.audit-doc/code))
           "the hold's supporting-doc points at the doc the SAME tx-data
            created — vec-concat + tempid threading works without
            run-process"))))

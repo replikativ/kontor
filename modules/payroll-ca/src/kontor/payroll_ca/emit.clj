@@ -15,7 +15,7 @@
 
    3. `build-t4-audit-doc-tx-data` — companion of
       `kontor.payroll-ca.t4-builder/build-t4-return-submission`,
-      records what was emitted with the right `:audit-doc/language`
+      records what was emitted with the right `:kontor.audit-doc/language`
       slot.
 
    4. QC warning helper — when a payroll run includes a QC employee,
@@ -89,17 +89,17 @@
                            (boolean (:qc-emit-installed? opts))})
     (let [language (or (:language opts) :en)
           per-fact-count (count payroll-facts)]
-      ;; :audit-doc/category :payroll-filing per note 86 P0-86-2
+      ;; :kontor.audit-doc/category :payroll-filing per note 86 P0-86-2
       ;; (canonical vocabulary; this is the periodic payroll-engine
       ;; summary audit-doc and aligns with the DE LODAS Importdatei +
       ;; CA PD7A audit-doc both classed :payroll-filing).
-      [{:audit-doc/code (str "PAYROLL-EVENT-" entity-eid "-" pay-period-eid)
-        :audit-doc/type :payroll-run-summary
-        :audit-doc/title (format "Payroll run (%d facts) for pay-period %d, entity %d"
+      [{:kontor.audit-doc/code (str "PAYROLL-EVENT-" entity-eid "-" pay-period-eid)
+        :kontor.audit-doc/type :payroll-run-summary
+        :kontor.audit-doc/title (format "Payroll run (%d facts) for pay-period %d, entity %d"
                                  per-fact-count pay-period-eid entity-eid)
-        :audit-doc/category :payroll-filing
-        :audit-doc/language language
-        :audit-doc/uploaded-at (java.util.Date.)}])))
+        :kontor.audit-doc/category :payroll-filing
+        :kontor.audit-doc/language language
+        :kontor.audit-doc/uploaded-at (java.util.Date.)}])))
 
 ;; ============================================================================
 ;; terminate-employment-tx-data — ROE-data emit per note 84 §6.3
@@ -130,9 +130,9 @@
   "Pure ADR-068 tx-data builder for an employment termination event.
    Per note 84 §6.3, kontor:
 
-   - status-machine transitions :employment/state → :terminated
-   - sets :employment/end-date to last-day-worked
-   - sets :employment/termination-reason (open-set keyword)
+   - status-machine transitions :kontor.employment/state → :terminated
+   - sets :kontor.employment/end-date to last-day-worked
+   - sets :kontor.employment/termination-reason (open-set keyword)
    - emits a :termination-event :audit-doc carrying the data the ROE
      engine needs (Block 15 insurable-earnings rolling window,
      Block 16 reason, Block 17 separation payments)
@@ -186,29 +186,29 @@
                   "[]"))
         doc-tempid (str "termination-event-doc-" employment-eid)
         ;; Carry the structured Block 15 data on the audit-doc via
-        ;; :audit-doc/description — kontor doesn't have a typed slot
+        ;; :kontor.audit-doc/description — kontor doesn't have a typed slot
         ;; for it (per note 84 §6.3 the structured payload is for the
         ;; engine to consume; kontor's audit chain just needs to
         ;; record what was passed).
         audit-doc {:db/id doc-tempid
-                   :audit-doc/code doc-code
-                   :audit-doc/type :termination-event
-                   :audit-doc/title (str "Termination — " (name termination-reason))
-                   :audit-doc/description desc
-                   :audit-doc/uploaded-at (java.util.Date.)
-                   :audit-doc/category :hr-personnel
-                   :audit-doc/language language}
+                   :kontor.audit-doc/code doc-code
+                   :kontor.audit-doc/type :termination-event
+                   :kontor.audit-doc/title (str "Termination — " (name termination-reason))
+                   :kontor.audit-doc/description desc
+                   :kontor.audit-doc/uploaded-at (java.util.Date.)
+                   :kontor.audit-doc/category :hr-personnel
+                   :kontor.audit-doc/language language}
         ;; Status-machine transition is a separate concern from this
         ;; ADR-068 builder; the consumer composes via
         ;; kontor.process/run-process and includes both the
         ;; :employment update and the audit-doc in one transaction.
         emp-update (cond->
                     {:db/id employment-eid
-                     :employment/state :terminated
-                     :employment/end-date last-day-worked
-                     :employment/termination-reason termination-reason}
+                     :kontor.employment/state :terminated
+                     :kontor.employment/end-date last-day-worked
+                     :kontor.employment/termination-reason termination-reason}
                      final-pay-period-end-date
-                     (assoc :employment/final-pay-period-end-date
+                     (assoc :kontor.employment/final-pay-period-end-date
                             final-pay-period-end-date))]
     [audit-doc emp-update]))
 
@@ -246,10 +246,10 @@
                       rp-bn15 tax-year slip-count
                       (case language :fr "FR" "EN"))]
     [(cond->
-      {:audit-doc/code doc-code
-       :audit-doc/type :regulator-clearance
-       :audit-doc/title title
-       :audit-doc/uploaded-at (java.util.Date.)
-       :audit-doc/category :payroll-filing
-       :audit-doc/language language}
-       ift-uri (assoc :audit-doc/storage-uri ift-uri))]))
+      {:kontor.audit-doc/code doc-code
+       :kontor.audit-doc/type :regulator-clearance
+       :kontor.audit-doc/title title
+       :kontor.audit-doc/uploaded-at (java.util.Date.)
+       :kontor.audit-doc/category :payroll-filing
+       :kontor.audit-doc/language language}
+       ift-uri (assoc :kontor.audit-doc/storage-uri ift-uri))]))

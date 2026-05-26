@@ -162,7 +162,7 @@
 (defn- audit-docs-for
   "All :audit-doc entities referenced from `entity-eid`'s status-history
    rows via :kontor.status-history/supporting-doc — i.e., the supporting
-   evidence chain. Deduped + ordered by :audit-doc/uploaded-at."
+   evidence chain. Deduped + ordered by :kontor.audit-doc/uploaded-at."
   [db entity-eid]
   (->> (d/q '[:find [?d ...]
               :in $ ?e
@@ -174,17 +174,17 @@
        (mapv (fn [eid]
                (d/pull db
                        [:db/id
-                        :audit-doc/code
-                        :audit-doc/type
-                        :audit-doc/title
-                        :audit-doc/description
-                        :audit-doc/storage-uri
-                        :audit-doc/content-hash
-                        :audit-doc/uploaded-by-uid
-                        :audit-doc/uploaded-at
-                        :audit-doc/privilege]
+                        :kontor.audit-doc/code
+                        :kontor.audit-doc/type
+                        :kontor.audit-doc/title
+                        :kontor.audit-doc/description
+                        :kontor.audit-doc/storage-uri
+                        :kontor.audit-doc/content-hash
+                        :kontor.audit-doc/uploaded-by-uid
+                        :kontor.audit-doc/uploaded-at
+                        :kontor.audit-doc/privilege]
                        eid)))
-       (sort-by :audit-doc/uploaded-at)
+       (sort-by :kontor.audit-doc/uploaded-at)
        vec))
 
 (defn- legal-holds-for
@@ -198,14 +198,14 @@
          (mapv (fn [eid]
                  (d/pull db
                          [:db/id
-                          :legal-hold/code
-                          :legal-hold/matter
-                          :legal-hold/state
-                          :legal-hold/placed-at
-                          :legal-hold/released-at
-                          :legal-hold/placed-by-uid]
+                          :kontor.legal-hold/code
+                          :kontor.legal-hold/matter
+                          :kontor.legal-hold/state
+                          :kontor.legal-hold/placed-at
+                          :kontor.legal-hold/released-at
+                          :kontor.legal-hold/placed-by-uid]
                          eid)))
-         (sort-by :legal-hold/placed-at)
+         (sort-by :kontor.legal-hold/placed-at)
          vec)))
 
 (defn- retention-summary-for
@@ -223,12 +223,12 @@
       (when policy-eid
         (let [policy   (d/pull db
                                [:db/id
-                                :retention-policy/code
-                                :retention-policy/applies-to
-                                :retention-policy/triggered-by
-                                :retention-policy/duration-years
-                                :retention-policy/expiry-action
-                                :retention-policy/state]
+                                :kontor.retention-policy/code
+                                :kontor.retention-policy/applies-to
+                                :kontor.retention-policy/triggered-by
+                                :kontor.retention-policy/duration-years
+                                :kontor.retention-policy/expiry-action
+                                :kontor.retention-policy/state]
                                policy-eid)
               deadline (retention/retention-deadline db entity-eid policy-eid)
               elig?    (retention/eligible? db entity-eid policy-eid {})]
@@ -280,7 +280,7 @@
                                      (group-by :db/id)
                                      vals
                                      (map first)
-                                     (sort-by :audit-doc/uploaded-at)
+                                     (sort-by :kontor.audit-doc/uploaded-at)
                                      vec)
              ;; status-history rows whose :origin-transaction points BACK
              ;; at this transaction — i.e., this tx caused changes on
@@ -338,4 +338,4 @@
      :partner        (find-by :kontor.partner/concept-iri)
      :commodity      (find-by :kontor.commodity/concept-iri)
      :tax            (find-by :kontor.tax/concept-iri)
-     :document-type  (find-by :document-type/concept-iri)}))
+     :document-type  (find-by :kontor.document-type/concept-iri)}))

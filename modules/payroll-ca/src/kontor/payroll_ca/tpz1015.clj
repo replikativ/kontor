@@ -37,7 +37,7 @@
      - QPP (`:ca-payroll-qpp`)
      - QPIP (`:ca-payroll-qpip`)
      - FSS (`:ca-payroll-fss`) — Fonds des services de santé
-   - DOES return a `:audit-doc/category :payroll-filing` row.
+   - DOES return a `:kontor.audit-doc/category :payroll-filing` row.
    - DOES NOT emit a TPZ-1015 form (no employer-filed form exists).
    - DOES NOT auto-remit (consumer holds Revenu Québec payment-channel
      credentials).
@@ -201,11 +201,11 @@
    summary. Consumer transacts via `transact-with-validation`.
 
    Each :audit-doc carries:
-     :audit-doc/code     deterministic from RP/NEQ + period
-     :audit-doc/category :payroll-filing
-     :audit-doc/title    'RQ TPZ-1015 remittance for NEQ — period'
-     :audit-doc/description a human-readable summary
-     :audit-doc/language consumer-supplied; defaults to :fr (Revenu
+     :kontor.audit-doc/code     deterministic from RP/NEQ + period
+     :kontor.audit-doc/category :payroll-filing
+     :kontor.audit-doc/title    'RQ TPZ-1015 remittance for NEQ — period'
+     :kontor.audit-doc/description a human-readable summary
+     :kontor.audit-doc/language consumer-supplied; defaults to :fr (Revenu
                          Québec correspondence is French)."
   [{:keys [tpz1015-summary language]
     :or {language :fr}}]
@@ -223,14 +223,14 @@
               (:amount fss)
               (:amount total)
               (if due-date (str " | Due: " due-date) ""))]
-    [{:audit-doc/code (str "TPZ1015-" rp "-"
+    [{:kontor.audit-doc/code (str "TPZ1015-" rp "-"
                            (.getTime ^java.util.Date period-end))
-      :audit-doc/type :regulator-clearance
-      :audit-doc/title title
-      :audit-doc/description desc
-      :audit-doc/uploaded-at (java.util.Date.)
-      :audit-doc/category :payroll-filing
-      :audit-doc/language language}]))
+      :kontor.audit-doc/type :regulator-clearance
+      :kontor.audit-doc/title title
+      :kontor.audit-doc/description desc
+      :kontor.audit-doc/uploaded-at (java.util.Date.)
+      :kontor.audit-doc/category :payroll-filing
+      :kontor.audit-doc/language language}]))
 
 ;; Suppress 'unused' for the str/blank ref pattern at REPL inspection.
 (comment str/blank?)

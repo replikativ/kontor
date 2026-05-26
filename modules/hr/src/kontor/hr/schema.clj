@@ -33,8 +33,8 @@
    legal-hold / retention / schedule / process / parallel-ledger / FX
    all ship in the kernel. kontor-hr adds the entities listed above
    plus three minor refinements from note 81 §9.7 (:kontor.person/kind for
-   Worker subtyping, :employment/work-time-fraction for FTE,
-   :employment/work-relationship-kind for DE Beamter / apprentice /
+   Worker subtyping, :kontor.employment/work-time-fraction for FTE,
+   :kontor.employment/work-relationship-kind for DE Beamter / apprentice /
    working-student that :exempt-flag can't represent).
 
    Cohabits with the kernel + other companions per ADR-002. Per-
@@ -77,8 +77,8 @@
     :db/cardinality :db.cardinality/many
     :db/doc         "Refs to :audit-doc — storage for SSN / AHV /
                      SV-Nummer / SIN / national-ID scans when the
-                     consumer wants :audit-doc/privilege +
-                     :audit-doc/category machinery to apply. The
+                     consumer wants :kontor.audit-doc/privilege +
+                     :kontor.audit-doc/category machinery to apply. The
                      kernel's plaintext :kontor.person/national-id stays
                      available for the simpler scalar case."}
 
@@ -129,7 +129,7 @@
 ;; ============================================================================
 
 (def ^:private employment-attrs
-  [{:db/ident       :employment/code
+  [{:db/ident       :kontor.employment/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
@@ -137,7 +137,7 @@
                      Stable per (person, entity) pair; re-hire
                      gets a new code."}
 
-   {:db/ident       :employment/person
+   {:db/ident       :kontor.employment/person
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :person. A :person may have N concurrent
@@ -147,7 +147,7 @@
                      employed by Acme-DE-GmbH AND seconded to
                      Acme-US-LLC — needs this)."}
 
-   {:db/ident       :employment/entity
+   {:db/ident       :kontor.employment/entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :entity (ADR-031). The legal employer.
@@ -156,28 +156,28 @@
                      with a new :employment row at a later
                      :start-date)."}
 
-   {:db/ident       :employment/start-date
+   {:db/ident       :kontor.employment/start-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :employment/end-date
+   {:db/ident       :kontor.employment/end-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "nil = open-ended. Set by termination!."}
 
-   {:db/ident       :employment/job-title
+   {:db/ident       :kontor.employment/job-title
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Free text. :position / :job-profile separation
                      (Workday Job Profile vs Position) deferred to
                      C5+ per note 79 §9 + note 81 §9.5."}
 
-   {:db/ident       :employment/department
+   {:db/ident       :kontor.employment/department
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :department."}
 
-   {:db/ident       :employment/manager
+   {:db/ident       :kontor.employment/manager
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :employment (NOT :person). A person's
@@ -185,25 +185,25 @@
                      in multi-employment Jane reports to Bob in her
                      Acme-DE role and to Alice in her Acme-US role."}
 
-   {:db/ident       :employment/exempt-flag
+   {:db/ident       :kontor.employment/exempt-flag
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "US FLSA exempt-vs-non-exempt classification.
                      For DE Beamter / apprentice / working-student
-                     etc. — use :employment/work-relationship-kind
+                     etc. — use :kontor.employment/work-relationship-kind
                      instead (note 81 §9.7)."}
 
-   {:db/ident       :employment/fulltime-flag
+   {:db/ident       :kontor.employment/fulltime-flag
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "Boolean FT/PT shorthand. For continuous FTE,
-                     prefer :employment/work-time-fraction
+                     prefer :kontor.employment/work-time-fraction
                      (note 81 §9.7)."}
 
    ;; Note 81 §9.7 — continuous FTE (Workday/SF/Oracle/Gusto all
    ;; carry this). Half-FTE part-time vs 80% reduced-hours secondment
    ;; matter for payroll math; :fulltime-flag is too coarse.
-   {:db/ident       :employment/work-time-fraction
+   {:db/ident       :kontor.employment/work-time-fraction
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Full-time-equivalent fraction (typically 0.0–1.0
@@ -228,7 +228,7 @@
    ;; binary. Open-set: :standard | :secondment | :board-position |
    ;; :apprentice | :intern | :working-student | :civil-servant
    ;; (DE Beamter) | <consumer ext>.
-   {:db/ident       :employment/work-relationship-kind
+   {:db/ident       :kontor.employment/work-relationship-kind
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Open-set keyword for the employment-relationship
@@ -241,14 +241,14 @@
    ;; that CA's T4 + ROE emitters required. Promoted to substrate
    ;; because US state-of-employment (W-2 box 15) + DE Bundesland
    ;; (Lohnsteuerklasse routing) also need them.
-   {:db/ident       :employment/province-of-employment
+   {:db/ident       :kontor.employment/province-of-employment
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Geographic locus of the employment for tax /
                      filing purposes. ISO-3166-2 subdivision code
                      (e.g. 'CA-ON' Ontario, 'US-NY' New York, 'DE-BY'
                      Bayern). When nil the consumer / per-country
-                     adapter falls back to (a) `:employment/entity`'s
+                     adapter falls back to (a) `:kontor.employment/entity`'s
                      country default or (b) the employer's primary
                      jurisdiction. Used by:
                      - CA T4 box 10 (Province of Employment)
@@ -258,7 +258,7 @@
                      CA agent referenced this attr in t4_builder.clj
                      before C5; note 86 P1-86-3 declared it here."}
 
-   {:db/ident       :employment/final-pay-period-end-date
+   {:db/ident       :kontor.employment/final-pay-period-end-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "End-date of the LAST :pay-period this employment
@@ -267,26 +267,26 @@
                      CA ROE block 6 + DE Lohnsteuerbescheinigung
                      final-pay-period reporting + US final-pay date
                      state filings on termination. Distinct from
-                     `:employment/end-date` (the employment-relationship
+                     `:kontor.employment/end-date` (the employment-relationship
                      end) — the final pay-period typically ends after
                      the termination date because trailing accruals
                      run through to the period close."}
 
-   {:db/ident       :employment/contract-doc
+   {:db/ident       :kontor.employment/contract-doc
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :audit-doc (the signed employment
-                     contract). Typical :audit-doc/category
+                     contract). Typical :kontor.audit-doc/category
                      :hr-personnel."}
 
-   {:db/ident       :employment/state
+   {:db/ident       :kontor.employment/state
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-034 status-machine facet. #{:applicant
                      :offered :hired :active :on-leave :terminated
                      :rehired}."}
 
-   {:db/ident       :employment/termination-reason
+   {:db/ident       :kontor.employment/termination-reason
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Open-set per jurisdiction. #{:voluntary
@@ -299,28 +299,28 @@
 ;; ============================================================================
 
 (def ^:private department-attrs
-  [{:db/ident       :department/code
+  [{:db/ident       :kontor.department/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "External identifier — 'DE-ENG-BERLIN'."}
 
-   {:db/ident       :department/name
+   {:db/ident       :kontor.department/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :department/entity
+   {:db/ident       :kontor.department/entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :entity (ADR-031). Departments are
                      per-entity; cross-entity org views compose at
                      the consumer level."}
 
-   {:db/ident       :department/parent
+   {:db/ident       :kontor.department/parent
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :department. nil = root department."}
 
-   {:db/ident       :department/manager
+   {:db/ident       :kontor.department/manager
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :employment (NOT :person). A
@@ -340,13 +340,13 @@
 ;; have a structural target.
 
 (def ^:private compensation-attrs
-  [{:db/ident       :compensation/employment
+  [{:db/ident       :kontor.compensation/employment
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :employment. Many :compensation rows per
                      :employment; only one is :active at any (vt, tt)."}
 
-   {:db/ident       :compensation/effective-from
+   {:db/ident       :kontor.compensation/effective-from
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "When this compensation envelope becomes effective.
@@ -356,19 +356,19 @@
                      without making the transaction itself happen at
                      a future time."}
 
-   {:db/ident       :compensation/effective-to
+   {:db/ident       :kontor.compensation/effective-to
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Exclusive upper bound; nil = open-ended (the
                      current compensation). Set when superseded."}
 
-   {:db/ident       :compensation/commodity
+   {:db/ident       :kontor.compensation/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The pay commodity (EUR / USD / CAD / …).
                      Components inherit this unless they override."}
 
-   {:db/ident       :compensation/state
+   {:db/ident       :kontor.compensation/state
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-034 facet. #{:proposed :active :superseded}.
@@ -377,12 +377,12 @@
                      :superseded → terminal once a successor lands."}])
 
 (def ^:private compensation-component-attrs
-  [{:db/ident       :compensation-component/compensation
+  [{:db/ident       :kontor.compensation-component/compensation
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :compensation — the parent envelope."}
 
-   {:db/ident       :compensation-component/kind
+   {:db/ident       :kontor.compensation-component/kind
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Open-set per kontor.payroll-provider — common:
@@ -393,14 +393,14 @@
                      | :equity-vest | :vwl (DE) | :housing-allowance
                      | <consumer extends>."}
 
-   {:db/ident       :compensation-component/amount
+   {:db/ident       :kontor.compensation-component/amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Signed BigDecimal. Sign convention:
                      positive = paid to/earned by employee;
                      negative = deducted from/withheld."}
 
-   {:db/ident       :compensation-component/period
+   {:db/ident       :kontor.compensation-component/period
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Cadence: :hourly | :daily | :weekly |
@@ -408,14 +408,14 @@
                      :on-event. Implies how PayrollComputeProvider
                      prorates per pay-period."}
 
-   {:db/ident       :compensation-component/commodity
+   {:db/ident       :kontor.compensation-component/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
-    :db/doc         "Override the parent :compensation/commodity
+    :db/doc         "Override the parent :kontor.compensation/commodity
                      when a component is denominated differently
                      (rare — RSU vest in equity vs cash base wage)."}
 
-   {:db/ident       :compensation-component/account-hint
+   {:db/ident       :kontor.compensation-component/account-hint
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Consumer-side CoA mapping hint. Typically the
@@ -430,34 +430,34 @@
 ;; ============================================================================
 
 (def ^:private pay-period-attrs
-  [{:db/ident       :pay-period/code
+  [{:db/ident       :kontor.pay-period/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "External identifier — 'DE-2026-05'."}
 
-   {:db/ident       :pay-period/entity
+   {:db/ident       :kontor.pay-period/entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :entity. A pay-period is per-entity;
                      DE-monthly + US-biweekly coexist within a
                      multi-entity group."}
 
-   {:db/ident       :pay-period/start-date
+   {:db/ident       :kontor.pay-period/start-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :pay-period/end-date
+   {:db/ident       :kontor.pay-period/end-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :pay-period/frequency
+   {:db/ident       :kontor.pay-period/frequency
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "#{:weekly :biweekly :semimonthly :monthly
                        :quarterly :annual}."}
 
-   {:db/ident       :pay-period/fiscal-period
+   {:db/ident       :kontor.pay-period/fiscal-period
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :period (ADR-014). The fiscal-period
@@ -465,7 +465,7 @@
                      period-lock middleware to ensure a payroll-run
                      for a locked period is rejected."}
 
-   {:db/ident       :pay-period/state
+   {:db/ident       :kontor.pay-period/state
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-034 facet. #{:open :computed :approved
@@ -476,55 +476,55 @@
 ;; ============================================================================
 
 (def ^:private payroll-run-attrs
-  [{:db/ident       :payroll-run/code
+  [{:db/ident       :kontor.payroll-run/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "External identifier — 'RUN-DE-2026-05-001'."}
 
-   {:db/ident       :payroll-run/pay-period
+   {:db/ident       :kontor.payroll-run/pay-period
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :payroll-run/provider-id
+   {:db/ident       :kontor.payroll-run/provider-id
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "The PayrollComputeProvider keyword used —
                      :datev-lodas | :adp-gli | :wagepoint-api |
                      :static-table. Audit trail."}
 
-   {:db/ident       :payroll-run/state
+   {:db/ident       :kontor.payroll-run/state
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-034 facet. #{:proposed :computed :approved
                      :posted :emitted :reconciled}."}
 
-   {:db/ident       :payroll-run/control-total-gross
+   {:db/ident       :kontor.payroll-run/control-total-gross
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Σ gross over all employees in the run. Cached
                      for reconciliation against the engine's
                      control total."}
 
-   {:db/ident       :payroll-run/control-total-net
+   {:db/ident       :kontor.payroll-run/control-total-net
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Σ net over all employees in the run."}
 
-   {:db/ident       :payroll-run/payroll-transaction
+   {:db/ident       :kontor.payroll-run/payroll-transaction
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :transaction — the GL entry produced by
                      the PayrollPostingBuilder + posted to the
                      ledger. Set on :computed → :posted transition."}
 
-   {:db/ident       :payroll-run/emit-docs
+   {:db/ident       :kontor.payroll-run/emit-docs
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Refs to :audit-doc — the emissions produced by
                      the PayrollEmitProvider (DE LODAS Lohnimport,
                      UK FPS XML, etc.). Each typically carries
-                     :audit-doc/category :tax-filing."}])
+                     :kontor.audit-doc/category :tax-filing."}])
 
 ;; ============================================================================
 ;; :consent — per-(subject, scope) legal-basis record (ADR-094, note 93 §4.2)
@@ -544,27 +544,27 @@
 ;; the consent record exists.
 
 (def ^:private consent-attrs
-  [{:db/ident       :consent/code
+  [{:db/ident       :kontor.consent/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Consumer-supplied opaque identifier."}
 
-   {:db/ident       :consent/subject
+   {:db/ident       :kontor.consent/subject
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :person — the data subject consenting."}
 
-   {:db/ident       :consent/scope
+   {:db/ident       :kontor.consent/scope
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Open-set keyword matching the
-                     :audit-doc/category vocabulary
+                     :kontor.audit-doc/category vocabulary
                      (kontor.audit-doc/canonical-categories). The
                      consent applies to processing of data tagged
                      with this category."}
 
-   {:db/ident       :consent/legal-basis
+   {:db/ident       :kontor.consent/legal-basis
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Legal basis vocabulary (note 93 §4.2, open-set):
@@ -586,47 +586,47 @@
                      enforced by the kernel),
                      :withdrawn. Consumer extends freely."}
 
-   {:db/ident       :consent/granted-at
+   {:db/ident       :kontor.consent/granted-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :consent/withdrawn-at
+   {:db/ident       :kontor.consent/withdrawn-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "nil = still in force. Processing AFTER
                      :withdrawn-at must rely on a different
-                     :consent/legal-basis (or stop). Processing BEFORE
+                     :kontor.consent/legal-basis (or stop). Processing BEFORE
                      :withdrawn-at under the prior basis remains
                      lawful."}
 
-   {:db/ident       :consent/supporting-doc
+   {:db/ident       :kontor.consent/supporting-doc
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :audit-doc — the DPIA, LIA, consent form
-                     scan, etc. Typical :audit-doc/category
+                     scan, etc. Typical :kontor.audit-doc/category
                      :hr-monitoring-consent."}
 
-   {:db/ident       :consent/works-agreement-ref
+   {:db/ident       :kontor.consent/works-agreement-ref
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
-    :db/doc         "Ref to :audit-doc with :audit-doc/type
+    :db/doc         "Ref to :audit-doc with :kontor.audit-doc/type
                      :betriebsvereinbarung / :works-agreement. Required
-                     by BetrVG §87 for DE :consent/scope values
+                     by BetrVG §87 for DE :kontor.consent/scope values
                      covered by co-determination."}
 
-   {:db/ident       :consent/notice-acknowledged-at
+   {:db/ident       :kontor.consent/notice-acknowledged-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "For US-state electronic-monitoring notice statutes
                      (NY 52-c, CT 31-48d, DE 19/705)."}
 
-   {:db/ident       :consent/parent-consent
+   {:db/ident       :kontor.consent/parent-consent
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :consent — for parental co-consent on
                      under-18 interns / apprentices. nil for adults."}
 
-   {:db/ident       :consent/state
+   {:db/ident       :kontor.consent/state
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-034 facet. #{:proposed :active :withdrawn
@@ -669,7 +669,7 @@
        :kontor.status-transition/active true
        :kontor.status-transition/name name})
 
-    ;; :employment/state — Workday-style lifecycle. :rehired creates
+    ;; :kontor.employment/state — Workday-style lifecycle. :rehired creates
     ;; a NEW :employment row (per Call 2), but the prior row may
     ;; transition :terminated → :rehired as an audit pointer.
     (for [[from to name]
@@ -685,13 +685,13 @@
            [:on-leave     :terminated  "Terminate during leave"]
            [:terminated   :rehired     "Re-hire (audit pointer)"]]]
       {:kontor.status-transition/entity-type :employment
-       :kontor.status-transition/facet :employment/state
+       :kontor.status-transition/facet :kontor.employment/state
        :kontor.status-transition/from from
        :kontor.status-transition/to to
        :kontor.status-transition/active true
        :kontor.status-transition/name name})
 
-    ;; :compensation/state — :proposed → :active → :superseded.
+    ;; :kontor.compensation/state — :proposed → :active → :superseded.
     (for [[from to name]
           [[:nil          :proposed    "Create (proposed)"]
            [:nil          :active      "Create (active)"]
@@ -699,13 +699,13 @@
            [:active       :superseded  "Supersede with new envelope"]
            [:proposed     :superseded  "Discard (proposed)"]]]
       {:kontor.status-transition/entity-type :compensation
-       :kontor.status-transition/facet :compensation/state
+       :kontor.status-transition/facet :kontor.compensation/state
        :kontor.status-transition/from from
        :kontor.status-transition/to to
        :kontor.status-transition/active true
        :kontor.status-transition/name name})
 
-    ;; :pay-period/state — :open → :computed → :approved → :posted → :paid.
+    ;; :kontor.pay-period/state — :open → :computed → :approved → :posted → :paid.
     (for [[from to name]
           [[:nil          :open        "Create (open)"]
            [:open         :computed    "Compute payroll facts"]
@@ -714,13 +714,13 @@
            [:approved     :posted      "Post to GL"]
            [:posted       :paid        "Mark paid (bank settled)"]]]
       {:kontor.status-transition/entity-type :pay-period
-       :kontor.status-transition/facet :pay-period/state
+       :kontor.status-transition/facet :kontor.pay-period/state
        :kontor.status-transition/from from
        :kontor.status-transition/to to
        :kontor.status-transition/active true
        :kontor.status-transition/name name})
 
-    ;; :payroll-run/state.
+    ;; :kontor.payroll-run/state.
     (for [[from to name]
           [[:nil          :proposed    "Create (proposed)"]
            [:proposed     :computed    "Compute facts"]
@@ -731,13 +731,13 @@
            [:emitted      :reconciled  "Reconcile against engine output"]
            [:posted       :reconciled  "Reconcile (no emit jurisdiction)"]]]
       {:kontor.status-transition/entity-type :payroll-run
-       :kontor.status-transition/facet :payroll-run/state
+       :kontor.status-transition/facet :kontor.payroll-run/state
        :kontor.status-transition/from from
        :kontor.status-transition/to to
        :kontor.status-transition/active true
        :kontor.status-transition/name name})
 
-    ;; :consent/state — ADR-094 (note 93 §5). :proposed = DPIA drafted
+    ;; :kontor.consent/state — ADR-094 (note 93 §5). :proposed = DPIA drafted
     ;; but not yet effective; :active = in force; :withdrawn = subject
     ;; revoked; :superseded = replaced by a successor consent row
     ;; (e.g. scope expanded, new legal basis under updated works-
@@ -753,7 +753,7 @@
            [:active    :withdrawn   "Subject withdraws"]
            [:active    :superseded  "Supersede with new scope / basis"]]]
       {:kontor.status-transition/entity-type :consent
-       :kontor.status-transition/facet :consent/state
+       :kontor.status-transition/facet :kontor.consent/state
        :kontor.status-transition/from from
        :kontor.status-transition/to to
        :kontor.status-transition/active true
@@ -768,46 +768,46 @@
    transitions. Payroll approve + post are the load-bearing edges:
    :approved → :posted writes real money; :no-self-approval prevents
    the same person from running and approving the same payroll."
-  [{:approval-policy/entity-type     :payroll-run
-    :approval-policy/facet           :payroll-run/state
-    :approval-policy/transition-from :computed
-    :approval-policy/transition-to   :approved
-    :approval-policy/rule            :no-self-approval
-    :approval-policy/active          true}
+  [{:kontor.approval-policy/entity-type     :payroll-run
+    :kontor.approval-policy/facet           :kontor.payroll-run/state
+    :kontor.approval-policy/transition-from :computed
+    :kontor.approval-policy/transition-to   :approved
+    :kontor.approval-policy/rule            :no-self-approval
+    :kontor.approval-policy/active          true}
 
    ;; Terminating an employment requires written justification (a
    ;; supporting doc captures the termination letter / wrongful-
    ;; dismissal-review memo / mutual-agreement record).
-   {:approval-policy/entity-type     :employment
-    :approval-policy/facet           :employment/state
-    :approval-policy/transition-from :active
-    :approval-policy/transition-to   :terminated
-    :approval-policy/rule            :requires-supporting-doc
-    :approval-policy/active          true}
-   {:approval-policy/entity-type     :employment
-    :approval-policy/facet           :employment/state
-    :approval-policy/transition-from :on-leave
-    :approval-policy/transition-to   :terminated
-    :approval-policy/rule            :requires-supporting-doc
-    :approval-policy/active          true}
+   {:kontor.approval-policy/entity-type     :employment
+    :kontor.approval-policy/facet           :kontor.employment/state
+    :kontor.approval-policy/transition-from :active
+    :kontor.approval-policy/transition-to   :terminated
+    :kontor.approval-policy/rule            :requires-supporting-doc
+    :kontor.approval-policy/active          true}
+   {:kontor.approval-policy/entity-type     :employment
+    :kontor.approval-policy/facet           :kontor.employment/state
+    :kontor.approval-policy/transition-from :on-leave
+    :kontor.approval-policy/transition-to   :terminated
+    :kontor.approval-policy/rule            :requires-supporting-doc
+    :kontor.approval-policy/active          true}
 
    ;; Marking a :person :purged (GDPR Art. 17 erasure) requires
    ;; both supporting doc (the DSAR :dsar-request reference + the
    ;; retention-policy clearance) AND non-empty reason note (the
    ;; legal basis). Two policies because the kernel supports one
    ;; rule per row.
-   {:approval-policy/entity-type     :person
-    :approval-policy/facet           :kontor.person/state
-    :approval-policy/transition-from :active
-    :approval-policy/transition-to   :purged
-    :approval-policy/rule            :requires-supporting-doc
-    :approval-policy/active          true}
-   {:approval-policy/entity-type     :person
-    :approval-policy/facet           :kontor.person/state
-    :approval-policy/transition-from :active
-    :approval-policy/transition-to   :purged
-    :approval-policy/rule            :requires-non-empty-reason-note
-    :approval-policy/active          true}])
+   {:kontor.approval-policy/entity-type     :person
+    :kontor.approval-policy/facet           :kontor.person/state
+    :kontor.approval-policy/transition-from :active
+    :kontor.approval-policy/transition-to   :purged
+    :kontor.approval-policy/rule            :requires-supporting-doc
+    :kontor.approval-policy/active          true}
+   {:kontor.approval-policy/entity-type     :person
+    :kontor.approval-policy/facet           :kontor.person/state
+    :kontor.approval-policy/transition-from :active
+    :kontor.approval-policy/transition-to   :purged
+    :kontor.approval-policy/rule            :requires-non-empty-reason-note
+    :kontor.approval-policy/active          true}])
 
 ;; ============================================================================
 ;; Installer

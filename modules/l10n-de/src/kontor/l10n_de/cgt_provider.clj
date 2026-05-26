@@ -14,7 +14,7 @@
    - **`de-corporate-cgt-provider`** (kind `:corporation`): §8b KStG
      (95 % participation exemption + 5 % non-deductible add-back) on
      corporate disposals of participations. §6b EStG rollover relief
-     (when `:disposal/elective-regime` contains `:de-§6b-reserve` the
+     (when `:kontor.disposal/elective-regime` contains `:de-§6b-reserve` the
      gain is excluded from the §8b pool — deferred via reserve on the
      GL side, NOT this provider's concern). Output: a single component
      whose `:jurisdiction-specific-codes :cit-base-additions` carries
@@ -68,7 +68,7 @@
          standalone component and folds the §20 net into PIT base
          instead.
 
-   ## Lane classification (`:disposal/asset-class`)
+   ## Lane classification (`:kontor.disposal/asset-class`)
 
      :de-§8b-participation      → §8b lane (corporate)
      :de-§6b-eligible           → §6b lane (deferred when
@@ -104,13 +104,13 @@
 ;; ============================================================================
 
 (def corporate-asset-classes
-  "Closed set of `:disposal/asset-class` keywords the corporate CGT
+  "Closed set of `:kontor.disposal/asset-class` keywords the corporate CGT
    provider recognises."
   #{:de-§8b-participation
     :de-§6b-eligible})
 
 (def individual-asset-classes
-  "Closed set of `:disposal/asset-class` keywords the individual CGT
+  "Closed set of `:kontor.disposal/asset-class` keywords the individual CGT
    provider recognises."
   #{:de-§17-wesentlich
     :de-§20-stock
@@ -144,9 +144,9 @@
    commodity: `proceeds − basis − rollover-amount`. Loss is signed
    negative so bucket-netting can sum gains + losses naturally."
   ^java.math.BigDecimal [disposal]
-  (let [p (or (:disposal/proceeds-amount disposal) 0M)
-        b (or (:disposal/basis-amount disposal) 0M)
-        r (or (:disposal/rollover-amount disposal) 0M)]
+  (let [p (or (:kontor.disposal/proceeds-amount disposal) 0M)
+        b (or (:kontor.disposal/basis-amount disposal) 0M)
+        r (or (:kontor.disposal/rollover-amount disposal) 0M)]
     (- p b r)))
 
 (defn- §6b-rollover-elected?
@@ -156,7 +156,7 @@
    schema; pull may return a vector OR (for a single value) a single
    keyword."
   [disposal]
-  (let [r (:disposal/elective-regime disposal)]
+  (let [r (:kontor.disposal/elective-regime disposal)]
     (cond
       (nil? r)         false
       (coll? r)        (contains? (set r) :de-§6b-reserve)
@@ -225,7 +225,7 @@
    dropped — the disposal substrate is multi-jurisdiction and may carry
    asset-classes a given provider has no view on)."
   [disposal]
-  (let [asset-class (:disposal/asset-class disposal)]
+  (let [asset-class (:kontor.disposal/asset-class disposal)]
     (cond
       (not (contains? corporate-asset-classes asset-class))
       nil
@@ -260,8 +260,8 @@
    (movable: > cutoff-days; real estate: > cutoff-days). Tax-FREE past
    the cutoff."
   [disposal cutoff-days]
-  (let [acq (:disposal/acquired-on disposal)
-        dis (:disposal/disposed-on disposal)]
+  (let [acq (:kontor.disposal/acquired-on disposal)
+        dis (:kontor.disposal/disposed-on disposal)]
     (and acq dis cutoff-days
          (> (days-between acq dis) cutoff-days))))
 
@@ -270,7 +270,7 @@
    disposals the individual provider doesn't recognise OR for §23
    disposals past their cutoff (tax-free)."
   [disposal {:keys [§23-real-estate-cutoff §23-movable-cutoff]}]
-  (let [asset-class (:disposal/asset-class disposal)]
+  (let [asset-class (:kontor.disposal/asset-class disposal)]
     (cond
       (not (contains? individual-asset-classes asset-class))
       nil

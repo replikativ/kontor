@@ -198,13 +198,13 @@
      :year        — alternative: full fiscal year (Jan 1 – Jan 1 of next)
 
    Returns:
-     {:return/form    \"JCT\"
-      :return/period  {:from :to ...}
-      :return/lines   {<line-code> Money :JPY ...}
-      :return/jct-collected   Money
-      :return/jct-deductible  Money
-      :return/jct-net         Money   ; positive = pay; negative = refund
-      :return/outcome         :payment | :refund | :nil-return}"
+     {:kontor.return/form    \"JCT\"
+      :kontor.return/period  {:from :to ...}
+      :kontor.return/lines   {<line-code> Money :JPY ...}
+      :kontor.return/jct-collected   Money
+      :kontor.return/jct-deductible  Money
+      :kontor.return/jct-net         Money   ; positive = pay; negative = refund
+      :kontor.return/outcome         :payment | :refund | :nil-return}"
   [conn {:keys [from to year] :as _opts}]
   (let [zero (m-zero)
         period (cond
@@ -237,9 +237,9 @@
         deductible      (money/add jct-in-10 jct-in-8)
         net             (money/sub collected deductible)
         sign            (.signum ^java.math.BigDecimal (:amount net))]
-    {:return/form    "JCT"
-     :return/period  period
-     :return/lines   {:sales-10     (m-cents sales-10)
+    {:kontor.return/form    "JCT"
+     :kontor.return/period  period
+     :kontor.return/lines   {:sales-10     (m-cents sales-10)
                       :sales-8      (m-cents sales-8)
                       :sales-exempt (m-cents sales-exempt)
                       :sales-zero   (m-cents sales-zero)
@@ -249,10 +249,10 @@
                       :jct-out-8    (m-cents jct-out-8)
                       :jct-in-10    (m-cents jct-in-10)
                       :jct-in-8     (m-cents jct-in-8)}
-     :return/jct-collected  (m-cents collected)
-     :return/jct-deductible (m-cents deductible)
-     :return/jct-net        (m-cents net)
-     :return/outcome (cond
+     :kontor.return/jct-collected  (m-cents collected)
+     :kontor.return/jct-deductible (m-cents deductible)
+     :kontor.return/jct-net        (m-cents net)
+     :kontor.return/outcome (cond
                        (neg? sign) :refund
                        (pos? sign) :payment
                        :else       :nil-return)}))

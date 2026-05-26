@@ -40,7 +40,7 @@
    ## What kontor does and does NOT do
 
    - **DOES** build the XML payload per the published S-1.3 XSDs.
-   - **DOES** wrap each event as an `:audit-doc/category :payroll-filing`
+   - **DOES** wrap each event as an `:kontor.audit-doc/category :payroll-filing`
      entity carrying the language `:pt-br` so audit grids work.
    - **DOES NOT** sign with the ICP-Brasil certificate (consumer holds).
    - **DOES NOT** transmit over the eSocial Webservice.

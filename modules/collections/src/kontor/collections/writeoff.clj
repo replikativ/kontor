@@ -2,7 +2,7 @@
   "Bad-debt write-off transactor — ADR-043.
 
    Composes:
-     1. Drives :collection-case/state → :written-off via the status
+     1. Drives :kontor.collection-case/state → :written-off via the status
         machine (typically from :legal; the seed allows it).
      2. For each remaining-open invoice on the case, posts a
         Dr Bad-Debt-Expense / Cr AR kernel transaction per
@@ -34,16 +34,16 @@
         (d/q '[:find ?a .
                :in $ ?at ?e
                :where
-               [?d :gl-account-default/account-type ?at]
-               [?d :gl-account-default/entity ?e]
-               [?d :gl-account-default/account ?a]]
+               [?d :kontor.gl-account-default/account-type ?at]
+               [?d :kontor.gl-account-default/entity ?e]
+               [?d :kontor.gl-account-default/account ?a]]
              db account-type entity))
       (d/q '[:find ?a .
              :in $ ?at
              :where
-             [?d :gl-account-default/account-type ?at]
-             [?d :gl-account-default/account ?a]
-             [(missing? $ ?d :gl-account-default/entity)]]
+             [?d :kontor.gl-account-default/account-type ?at]
+             [?d :kontor.gl-account-default/account ?a]
+             [(missing? $ ?d :kontor.gl-account-default/entity)]]
            db account-type)
       (throw (ex-info "No :gl-account-default configured for account-type"
                       {:type :writeoff/missing-gl-default
@@ -63,11 +63,11 @@
    :commodity-sym}."
   [db case-eid]
   (let [c (d/pull db
-                  [{:collection-case/partner [:db/id]}
-                   {:collection-case/entity  [:db/id]}]
+                  [{:kontor.collection-case/partner [:db/id]}
+                   {:kontor.collection-case/entity  [:db/id]}]
                   case-eid)
-        partner-eid (get-in c [:collection-case/partner :db/id])
-        entity-eid  (get-in c [:collection-case/entity :db/id])
+        partner-eid (get-in c [:kontor.collection-case/partner :db/id])
+        entity-eid  (get-in c [:kontor.collection-case/entity :db/id])
         eids (d/q '[:find [?i ...]
                     :in $ ?b ?e
                     :where
@@ -97,7 +97,7 @@
      - For each open invoice on the case, build a kernel :transaction
        Dr :bad-debt-expense / Cr :ar at the invoice's open-amount.
        (Multi-invoice cases produce N transactions, all in one tx.)
-     - Drive :collection-case/state → :written-off via the status
+     - Drive :kontor.collection-case/state → :written-off via the status
        machine (must be legal from current state — typically requires
        case at :legal).
      - Write :audit-doc with :type :write-off-supporting; ref it on
@@ -153,11 +153,11 @@
   (let [case-eid (kcase/resolve-case db case)
         _ (when-not case-eid (throw (ex-info "Case not found" {:spec case})))
         c (d/pull db
-                  '[* {:collection-case/partner [:db/id]
-                       :collection-case/entity  [:db/id]}]
+                  '[* {:kontor.collection-case/partner [:db/id]
+                       :kontor.collection-case/entity  [:db/id]}]
                   case-eid)
-        entity-eid (get-in c [:collection-case/entity :db/id])
-        partner-eid (get-in c [:collection-case/partner :db/id])
+        entity-eid (get-in c [:kontor.collection-case/entity :db/id])
+        partner-eid (get-in c [:kontor.collection-case/partner :db/id])
         opens (open-invoices-for-case db case-eid)
         effective-date (or effective-date (java.util.Date.))
         ;; Build kernel postings per invoice. Each transaction is its
@@ -224,7 +224,7 @@
                    db
                    {:entity case-eid
                     :entity-type :collection-case
-                    :facet :collection-case/state
+                    :facet :kontor.collection-case/state
                     :to :written-off
                     :changed-at effective-date
                     :changed-by-uid written-off-by
@@ -233,6 +233,6 @@
                     :supporting-doc supporting-doc})
         ;; Also stamp the supporting-doc on the case + closed-at.
         case-update {:db/id case-eid
-                     :collection-case/supporting-doc supporting-doc
-                     :collection-case/closed-at effective-date}]
+                     :kontor.collection-case/supporting-doc supporting-doc
+                     :kontor.collection-case/closed-at effective-date}]
     (vec (concat all-posting-tx [case-update] status-tx))))

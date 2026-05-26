@@ -2,7 +2,7 @@
   "kontor-hr :department transactors — the recursive per-entity org tree.
 
    A :department belongs to one :entity (ADR-031) and may have a
-   :parent for the tree structure. :department/manager refs an
+   :parent for the tree structure. :kontor.department/manager refs an
    :employment, not a :person — the manager-role is per their
    employment in this entity."
   (:require [datahike.api :as d]
@@ -20,11 +20,11 @@
   (when-not name   (throw (ex-info ":name required" {})))
   (when-not entity (throw (ex-info ":entity required" {})))
   [(cond-> {:db/id tempid
-            :department/code code
-            :department/name name
-            :department/entity entity}
-     parent  (assoc :department/parent parent)
-     manager (assoc :department/manager manager))])
+            :kontor.department/code code
+            :kontor.department/name name
+            :kontor.department/entity entity}
+     parent  (assoc :kontor.department/parent parent)
+     manager (assoc :kontor.department/manager manager))])
 
 (defn create-department!
   [conn opts]

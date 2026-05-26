@@ -71,10 +71,10 @@
    center on `:employment`, project on timesheet, manufacturing
    work-center, asset cost-center, fleet vehicle. Pre-installing
    the plan removes cross-companion coordination overhead."
-  {:analytic-plan/code          "cost-center"
-   :analytic-plan/name          "Cost centers"
-   :analytic-plan/applicability :optional
-   :analytic-plan/active        true})
+  {:kontor.analytic-plan/code          "cost-center"
+   :kontor.analytic-plan/name          "Cost centers"
+   :kontor.analytic-plan/applicability :optional
+   :kontor.analytic-plan/active        true})
 
 (defn install-schema!
   "Transact the kernel schema into the connection AND bootstrap
@@ -87,7 +87,7 @@
   (valuation/install-defaults! conn)
   (legal-hold/install-seeds! conn)   ; ADR-049 status-transition + approval-policy seeds
   (retention/install-seeds! conn)    ; ADR-050 status-transition + approval-policy seeds
-  (audit-doc/install-seeds! conn)    ; ADR-051 :audit-doc/privilege transitions + policies
+  (audit-doc/install-seeds! conn)    ; ADR-051 :kontor.audit-doc/privilege transitions + policies
   (dsar/install-seeds! conn)         ; ADR-052 :dsar-request transitions + policies
   (statute/install-seeds! conn)      ; ADR-101 starter :tax-concept catalogue
   (d/transact conn [cost-center-plan-seed])

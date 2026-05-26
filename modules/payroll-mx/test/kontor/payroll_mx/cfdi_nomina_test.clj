@@ -192,15 +192,15 @@
     (is (= :mx/cfdi-nomina-1.2 (:emit-format result))
         "Emit format keyword identifies the version")
     (is (= :mx/cfdi-nomina-1.2 (core/emit-format provider)))
-    (is (= :payroll-filing (:audit-doc/category result))
+    (is (= :payroll-filing (:kontor.audit-doc/category result))
         "Audit-doc category tag per ADR-082 + task spec")
-    (is (= :es-mx (:audit-doc/language result))
+    (is (= :es-mx (:kontor.audit-doc/language result))
         "Audit-doc language tag per ADR-082")
-    (is (= :payroll-cfdi-xml (:audit-doc/type result)))
+    (is (= :payroll-cfdi-xml (:kontor.audit-doc/type result)))
     (is (string? (:xml result)))
     (is (string? (:complemento-xml result)))
-    (is (string? (:audit-doc/title result)))
-    (is (string? (:audit-doc/description result)))))
+    (is (string? (:kontor.audit-doc/title result)))
+    (is (string? (:kontor.audit-doc/description result)))))
 
 (deftest extraordinaria-tipo-emits-E
   (testing "Aguinaldo period → tipo-nomina='E' (extraordinaria)."

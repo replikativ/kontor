@@ -30,14 +30,14 @@
                 [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
                  ;; Legal entity — the facility owner (ADR-031).
                  {:db/id "entity-de" :kontor.entity/code "ACME-DE" :kontor.entity/name "Acme GmbH"}
-                 ;; Products — :inventory-item/product is a generic ref;
+                 ;; Products — :kontor.inventory-item/product is a generic ref;
                  ;; reuse :partner entities as product stand-ins (the
                  ;; kernel test convention for caller-defined refs).
                  {:kontor.partner/external-id "P-widget" :kontor.partner/name "Widget"}
                  {:kontor.partner/external-id "P-gadget" :kontor.partner/name "Gadget"}
                  ;; Two lots of the widget.
-                 {:db/id "lot-a" :lot/label "LOT-A" :lot/acquired-at #inst "2026-01-10"}
-                 {:db/id "lot-b" :lot/label "LOT-B" :lot/acquired-at #inst "2026-02-10"}])
+                 {:db/id "lot-a" :kontor.lot/label "LOT-A" :kontor.lot/acquired-at #inst "2026-01-10"}
+                 {:db/id "lot-b" :kontor.lot/label "LOT-B" :kontor.lot/acquired-at #inst "2026-02-10"}])
     conn))
 
 (defn- ref-eid [db a v]
@@ -45,7 +45,7 @@
 
 (defn- product [db code] (ref-eid db :kontor.partner/external-id code))
 (defn- entity  [db]      (ref-eid db :kontor.entity/code "ACME-DE"))
-(defn- lot     [db label] (ref-eid db :lot/label label))
+(defn- lot     [db label] (ref-eid db :kontor.lot/label label))
 
 ;; ============================================================================
 ;; Facilities + locations
@@ -68,16 +68,16 @@
       (let [berlin (inv/facility-by-code db "WH-BERLIN")
             hall-a (inv/facility-by-code db "WH-BERLIN-A")]
         (is (some? berlin))
-        (is (= berlin (:db/id (:facility/parent
-                               (d/pull db [:facility/parent] hall-a)))))))
+        (is (= berlin (:db/id (:kontor.facility/parent
+                               (d/pull db [:kontor.facility/parent] hall-a)))))))
     (testing "locations resolve by (facility, seq-id) and carry their type"
       (let [pick (inv/location-by db "WH-BERLIN-A" "A-01-01")]
         (is (some? pick))
-        (is (= :pickloc (:facility-location/type
-                         (d/pull db [:facility-location/type] pick))))))
+        (is (= :pickloc (:kontor.facility-location/type
+                         (d/pull db [:kontor.facility-location/type] pick))))))
     (testing "the (facility, seq-id) identity tuple is unique"
       (is (= 2 (count (d/q '[:find [?e ...]
-                             :where [?e :facility-location/seq-id _]] db)))))))
+                             :where [?e :kontor.facility-location/seq-id _]] db)))))))
 
 ;; ============================================================================
 ;; Bucket resolution
@@ -132,8 +132,8 @@
                          :with ?d
                          :in $ ?item
                          :where
-                         [?d :inventory-detail/inventory-item ?item]
-                         [?d :inventory-detail/atp-diff ?atp]]
+                         [?d :kontor.inventory-detail/inventory-item ?item]
+                         [?d :kontor.inventory-detail/atp-diff ?atp]]
                        (d/db conn) item))))
     (testing ":as-of-valid filters by :effective-date"
       (is (= 100M (inv/on-hand-qty (d/db conn) item
@@ -168,7 +168,7 @@
         (is (= inventory-item again))
         (is (= 260M (inv/on-hand-qty (d/db conn) inventory-item)))))
     (testing "the detail is tagged :source-kind :opening"
-      (is (every? #(= :opening (:inventory-detail/source-kind %))
+      (is (every? #(= :opening (:kontor.inventory-detail/source-kind %))
                   (inv/details-of (d/db conn) inventory-item))))))
 
 ;; ============================================================================

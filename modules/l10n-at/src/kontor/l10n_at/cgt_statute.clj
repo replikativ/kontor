@@ -133,7 +133,7 @@
    ;; proceeds: Bemessungsgrundlage = min(1.30 × Gewinn ; Erlös).
    ;; The consumer flags eligibility via
    ;; `:elective-regime :at-umwidmungszuschlag` on the disposal AND
-   ;; supplies the LAND-slice basis via `:disposal/basis-amount`
+   ;; supplies the LAND-slice basis via `:kontor.disposal/basis-amount`
    ;; (building portion documented in `:notes`), per the existing
    ;; Herstellerbefreiung convention. Research note 146 §3.1.
    {:kontor.parameter/code         "AT.EStG.§30-Abs-6a.umwidmungszuschlag-rate"

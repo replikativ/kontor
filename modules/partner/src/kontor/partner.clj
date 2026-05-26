@@ -64,7 +64,7 @@
   (when-let [pid (resolve-partner db partner)]
     (when-let [org-eid (d/q '[:find ?o .
                               :in $ ?partner
-                              :where [?o :org/partner ?partner]]
+                              :where [?o :kontor.org/partner ?partner]]
                             db pid)]
       (d/pull db '[*] org-eid))))
 
@@ -92,7 +92,7 @@
 ;; ============================================================================
 
 (defn roles-of
-  "All :partner-role/role-type values currently held by `partner`,
+  "All :kontor.partner-role/role-type values currently held by `partner`,
    as a set. Pass `:as-of` to query at a different valid-time
    instant; default is `now`."
   ([db partner] (roles-of db partner nil))
@@ -102,10 +102,10 @@
          rows (d/q '[:find ?role ?from ?thru
                      :in $ ?partner
                      :where
-                     [?r :partner-role/partner ?partner]
-                     [?r :partner-role/role-type ?role]
-                     [?r :partner-role/from-date ?from]
-                     [(get-else $ ?r :partner-role/thru-date :__none) ?thru]]
+                     [?r :kontor.partner-role/partner ?partner]
+                     [?r :kontor.partner-role/role-type ?role]
+                     [?r :kontor.partner-role/from-date ?from]
+                     [(get-else $ ?r :kontor.partner-role/thru-date :__none) ?thru]]
                    db pid)]
      (->> rows
           (filter (fn [[_ from thru]] (active-as-of? from thru as-of)))
@@ -128,10 +128,10 @@
          rows (d/q '[:find ?partner ?from ?thru
                      :in $ ?role
                      :where
-                     [?r :partner-role/role-type ?role]
-                     [?r :partner-role/partner ?partner]
-                     [?r :partner-role/from-date ?from]
-                     [(get-else $ ?r :partner-role/thru-date :__none) ?thru]]
+                     [?r :kontor.partner-role/role-type ?role]
+                     [?r :kontor.partner-role/partner ?partner]
+                     [?r :kontor.partner-role/from-date ?from]
+                     [(get-else $ ?r :kontor.partner-role/thru-date :__none) ?thru]]
                    db role-type)]
      (->> rows
           (filter (fn [[_ from thru]] (active-as-of? from thru as-of)))
@@ -152,10 +152,10 @@
          rows (d/q '[:find ?cm ?from ?thru
                      :in $ ?partner
                      :where
-                     [?j :partner-contact-mech/partner ?partner]
-                     [?j :partner-contact-mech/contact-mech ?cm]
-                     [?j :partner-contact-mech/from-date ?from]
-                     [(get-else $ ?j :partner-contact-mech/thru-date :__none) ?thru]]
+                     [?j :kontor.partner-contact-mech/partner ?partner]
+                     [?j :kontor.partner-contact-mech/contact-mech ?cm]
+                     [?j :kontor.partner-contact-mech/from-date ?from]
+                     [(get-else $ ?j :kontor.partner-contact-mech/thru-date :__none) ?thru]]
                    db pid)]
      (->> rows
           (filter (fn [[_ from thru]] (active-as-of? from thru as-of)))
@@ -175,11 +175,11 @@
          rows (d/q '[:find ?cm ?from ?thru
                      :in $ ?partner ?purpose
                      :where
-                     [?p :partner-contact-mech-purpose/partner ?partner]
-                     [?p :partner-contact-mech-purpose/purpose-type ?purpose]
-                     [?p :partner-contact-mech-purpose/contact-mech ?cm]
-                     [?p :partner-contact-mech-purpose/from-date ?from]
-                     [(get-else $ ?p :partner-contact-mech-purpose/thru-date :__none) ?thru]]
+                     [?p :kontor.partner-contact-mech-purpose/partner ?partner]
+                     [?p :kontor.partner-contact-mech-purpose/purpose-type ?purpose]
+                     [?p :kontor.partner-contact-mech-purpose/contact-mech ?cm]
+                     [?p :kontor.partner-contact-mech-purpose/from-date ?from]
+                     [(get-else $ ?p :kontor.partner-contact-mech-purpose/thru-date :__none) ?thru]]
                    db pid purpose-type)]
      (->> rows
           (filter (fn [[_ from thru]] (active-as-of? from thru as-of)))
@@ -187,7 +187,7 @@
           ffirst))))
 
 (defn primary-email
-  "The :email-address/address string serving :primary-email for
+  "The :kontor.email-address/address string serving :primary-email for
    `partner`, or nil. Walks contact-mech-by-purpose then resolves
    the typed payload."
   ([db partner] (primary-email db partner nil))
@@ -196,8 +196,8 @@
      (d/q '[:find ?addr .
             :in $ ?cm
             :where
-            [?e :email-address/contact-mech ?cm]
-            [?e :email-address/address ?addr]]
+            [?e :kontor.email-address/contact-mech ?cm]
+            [?e :kontor.email-address/address ?addr]]
           db cm-eid))))
 
 (defn primary-postal-address
@@ -210,7 +210,7 @@
    (when-let [cm-eid (contact-mech-by-purpose db partner :primary-location opts)]
      (when-let [addr-eid (d/q '[:find ?a .
                                 :in $ ?cm
-                                :where [?a :postal-address/contact-mech ?cm]]
+                                :where [?a :kontor.postal-address/contact-mech ?cm]]
                               db cm-eid)]
        (d/pull db '[*] addr-eid)))))
 
@@ -229,14 +229,14 @@
          eids (d/q '[:find [?r ...]
                      :in $ ?partner
                      :where
-                     (or [?r :partner-relationship/partner-from ?partner]
-                         [?r :partner-relationship/partner-to ?partner])]
+                     (or [?r :kontor.partner-relationship/partner-from ?partner]
+                         [?r :kontor.partner-relationship/partner-to ?partner])]
                    db pid)
          rows (map (fn [r] (d/pull db '[*] r)) eids)]
      (->> rows
           (filter (fn [rel]
-                    (active-as-of? (:partner-relationship/from-date rel)
-                                   (:partner-relationship/thru-date rel)
+                    (active-as-of? (:kontor.partner-relationship/from-date rel)
+                                   (:kontor.partner-relationship/thru-date rel)
                                    as-of)))
           vec))))
 
@@ -249,13 +249,13 @@
          pid (resolve-partner db partner)
          eids (d/q '[:find [?r ...]
                      :in $ ?partner
-                     :where [?r :partner-relationship/partner-from ?partner]]
+                     :where [?r :kontor.partner-relationship/partner-from ?partner]]
                    db pid)
          rows (map (fn [r] (d/pull db '[*] r)) eids)]
      (->> rows
           (filter (fn [rel]
-                    (active-as-of? (:partner-relationship/from-date rel)
-                                   (:partner-relationship/thru-date rel)
+                    (active-as-of? (:kontor.partner-relationship/from-date rel)
+                                   (:kontor.partner-relationship/thru-date rel)
                                    as-of)))
           vec))))
 
@@ -268,25 +268,25 @@
          pid (resolve-partner db partner)
          eids (d/q '[:find [?r ...]
                      :in $ ?partner
-                     :where [?r :partner-relationship/partner-to ?partner]]
+                     :where [?r :kontor.partner-relationship/partner-to ?partner]]
                    db pid)
          rows (map (fn [r] (d/pull db '[*] r)) eids)]
      (->> rows
           (filter (fn [rel]
-                    (active-as-of? (:partner-relationship/from-date rel)
-                                   (:partner-relationship/thru-date rel)
+                    (active-as-of? (:kontor.partner-relationship/from-date rel)
+                                   (:kontor.partner-relationship/thru-date rel)
                                    as-of)))
           vec))))
 
 (defn relationships-of-type
-  "Restrict `relationships-of` to a specific `:partner-relationship/
+  "Restrict `relationships-of` to a specific `:kontor.partner-relationship/
    relationship-type` keyword (e.g. :employment, :subsidiary)."
   ([db partner relationship-type]
    (relationships-of-type db partner relationship-type nil))
   ([db partner relationship-type opts]
    (->> (relationships-of db partner opts)
         (filter #(= relationship-type
-                    (:partner-relationship/relationship-type %)))
+                    (:kontor.partner-relationship/relationship-type %)))
         vec)))
 
 (defn current-employer
@@ -294,14 +294,14 @@
    hold an :employment relationship as the :employee side. Returns
    nil if no active employment. If a person holds multiple concurrent
    employments, returns the one with the highest
-   `:partner-relationship/priority` (default ranking)."
+   `:kontor.partner-relationship/priority` (default ranking)."
   ([db partner] (current-employer db partner nil))
   ([db partner opts]
    (let [emps (->> (relationships-from db partner opts)
                    (filter #(= :employment
-                               (:partner-relationship/relationship-type %)))
-                   (sort-by #(or (:partner-relationship/priority %) 0) >))]
-     (some-> emps first :partner-relationship/partner-to :db/id))))
+                               (:kontor.partner-relationship/relationship-type %)))
+                   (sort-by #(or (:kontor.partner-relationship/priority %) 0) >))]
+     (some-> emps first :kontor.partner-relationship/partner-to :db/id))))
 
 (defn current-employees
   "For an :org-typed partner, the set of person partner-ids currently
@@ -311,8 +311,8 @@
   ([db partner opts]
    (->> (relationships-to db partner opts)
         (filter #(= :employment
-                    (:partner-relationship/relationship-type %)))
-        (map #(get-in % [:partner-relationship/partner-from :db/id]))
+                    (:kontor.partner-relationship/relationship-type %)))
+        (map #(get-in % [:kontor.partner-relationship/partner-from :db/id]))
         (remove nil?)
         set)))
 
@@ -327,7 +327,7 @@
 ;; to-zero) fires uniformly.
 ;;
 ;; The schema does NOT install `:status-transition` seeds for
-;; `:kontor.partner/status` or `:partner-relationship/status`, so those are
+;; `:kontor.partner/status` or `:kontor.partner-relationship/status`, so those are
 ;; written as plain facet updates. If/when a future ADR adds the
 ;; seeds, `update-party!` + `end-relationship!` can switch to
 ;; `kontor.status-machine/record-status-change-tx-data` without a
@@ -335,7 +335,7 @@
 ;;
 ;; "Removal" of a partner-contact-mech association honours ADR-007
 ;; (no silent retract of consequential history) by setting
-;; `:partner-contact-mech/thru-date` rather than retracting the
+;; `:kontor.partner-contact-mech/thru-date` rather than retracting the
 ;; junction row. The audit chain documents the withdrawal.
 ;; ============================================================================
 
@@ -346,7 +346,7 @@
   "Pure tx-data builder for `create-party!`. Returns a vector of
    tx-ops: one `:partner` map plus, when `:type` is `:person` or
    `:org`, a 1:1 subtype row joined by `:kontor.person/partner` or
-   `:org/partner`.
+   `:kontor.org/partner`.
 
    Required:
      :external-id  — string, unique :kontor.partner/external-id
@@ -427,20 +427,20 @@
                        (:national-id person)      (assoc :kontor.person/national-id (:national-id person))))
         org-row (when (and (= type :org) (seq org))
                   (cond-> {:db/id       subtype-tempid
-                           :org/partner tempid}
-                    (:legal-name org)          (assoc :org/legal-name (:legal-name org))
-                    (:legal-form org)          (assoc :org/legal-form (:legal-form org))
-                    (:trading-name org)        (assoc :org/trading-name (:trading-name org))
-                    (:registration-number org) (assoc :org/registration-number (:registration-number org))
-                    (:duns org)                (assoc :org/duns (:duns org))
-                    (:lei org)                 (assoc :org/lei (:lei org))
-                    (:ticker-symbol org)       (assoc :org/ticker-symbol (:ticker-symbol org))
-                    (:exchange org)            (assoc :org/exchange (:exchange org))
-                    (:annual-revenue org)      (assoc :org/annual-revenue (:annual-revenue org))
-                    (:revenue-commodity org)   (assoc :org/revenue-commodity (:revenue-commodity org))
-                    (:num-employees org)       (assoc :org/num-employees (:num-employees org))
-                    (:incorporation-date org)  (assoc :org/incorporation-date (:incorporation-date org))
-                    (:dissolution-date org)    (assoc :org/dissolution-date (:dissolution-date org))))]
+                           :kontor.org/partner tempid}
+                    (:legal-name org)          (assoc :kontor.org/legal-name (:legal-name org))
+                    (:legal-form org)          (assoc :kontor.org/legal-form (:legal-form org))
+                    (:trading-name org)        (assoc :kontor.org/trading-name (:trading-name org))
+                    (:registration-number org) (assoc :kontor.org/registration-number (:registration-number org))
+                    (:duns org)                (assoc :kontor.org/duns (:duns org))
+                    (:lei org)                 (assoc :kontor.org/lei (:lei org))
+                    (:ticker-symbol org)       (assoc :kontor.org/ticker-symbol (:ticker-symbol org))
+                    (:exchange org)            (assoc :kontor.org/exchange (:exchange org))
+                    (:annual-revenue org)      (assoc :kontor.org/annual-revenue (:annual-revenue org))
+                    (:revenue-commodity org)   (assoc :kontor.org/revenue-commodity (:revenue-commodity org))
+                    (:num-employees org)       (assoc :kontor.org/num-employees (:num-employees org))
+                    (:incorporation-date org)  (assoc :kontor.org/incorporation-date (:incorporation-date org))
+                    (:dissolution-date org)    (assoc :kontor.org/dissolution-date (:dissolution-date org))))]
     (cond-> [partner-row]
       person-row (conj person-row)
       org-row    (conj org-row))))
@@ -497,7 +497,7 @@
 ;; ----------------------------------------------------------------------------
 
 (def ^:private contact-mech-kinds
-  "Discriminator values the schema endorses on `:contact-mech/type`."
+  "Discriminator values the schema endorses on `:kontor.contact-mech/type`."
   #{:postal :telecom :email :web :ftp})
 
 (defn- contact-mech-tempid [base] (str base "-cm"))
@@ -508,7 +508,7 @@
 (defn- typed-payload-row
   "Build the typed subtype row that hangs off a `:contact-mech`.
    Returns nil for `:web` / `:ftp` (no schema-side subtype — payload
-   goes into `:contact-mech/info-string` directly)."
+   goes into `:kontor.contact-mech/info-string` directly)."
   [kind payload-tempid cm-tempid payload]
   (case kind
     :postal (let [{:keys [to-name attn-name address1 address2 house-number
@@ -516,52 +516,52 @@
                           postal-code-ext county region state country
                           latitude longitude]} payload]
               (cond-> {:db/id                       payload-tempid
-                       :postal-address/contact-mech cm-tempid}
-                to-name           (assoc :postal-address/to-name to-name)
-                attn-name         (assoc :postal-address/attn-name attn-name)
-                address1          (assoc :postal-address/address1 address1)
-                address2          (assoc :postal-address/address2 address2)
-                house-number      (assoc :postal-address/house-number house-number)
-                house-number-ext  (assoc :postal-address/house-number-ext house-number-ext)
-                directions        (assoc :postal-address/directions directions)
-                city              (assoc :postal-address/city city)
-                postal-code       (assoc :postal-address/postal-code postal-code)
-                postal-code-ext   (assoc :postal-address/postal-code-ext postal-code-ext)
-                county            (assoc :postal-address/county county)
-                region            (assoc :postal-address/region region)
-                state             (assoc :postal-address/state state)
-                country           (assoc :postal-address/country country)
-                latitude          (assoc :postal-address/latitude latitude)
-                longitude         (assoc :postal-address/longitude longitude)))
+                       :kontor.postal-address/contact-mech cm-tempid}
+                to-name           (assoc :kontor.postal-address/to-name to-name)
+                attn-name         (assoc :kontor.postal-address/attn-name attn-name)
+                address1          (assoc :kontor.postal-address/address1 address1)
+                address2          (assoc :kontor.postal-address/address2 address2)
+                house-number      (assoc :kontor.postal-address/house-number house-number)
+                house-number-ext  (assoc :kontor.postal-address/house-number-ext house-number-ext)
+                directions        (assoc :kontor.postal-address/directions directions)
+                city              (assoc :kontor.postal-address/city city)
+                postal-code       (assoc :kontor.postal-address/postal-code postal-code)
+                postal-code-ext   (assoc :kontor.postal-address/postal-code-ext postal-code-ext)
+                county            (assoc :kontor.postal-address/county county)
+                region            (assoc :kontor.postal-address/region region)
+                state             (assoc :kontor.postal-address/state state)
+                country           (assoc :kontor.postal-address/country country)
+                latitude          (assoc :kontor.postal-address/latitude latitude)
+                longitude         (assoc :kontor.postal-address/longitude longitude)))
     :telecom (let [{:keys [country-code area-code contact-number extension
                            ask-for-name]} payload]
                (cond-> {:db/id                       payload-tempid
-                        :telecom-number/contact-mech cm-tempid}
-                 country-code   (assoc :telecom-number/country-code country-code)
-                 area-code      (assoc :telecom-number/area-code area-code)
-                 contact-number (assoc :telecom-number/contact-number contact-number)
-                 extension      (assoc :telecom-number/extension extension)
-                 ask-for-name   (assoc :telecom-number/ask-for-name ask-for-name)))
+                        :kontor.telecom-number/contact-mech cm-tempid}
+                 country-code   (assoc :kontor.telecom-number/country-code country-code)
+                 area-code      (assoc :kontor.telecom-number/area-code area-code)
+                 contact-number (assoc :kontor.telecom-number/contact-number contact-number)
+                 extension      (assoc :kontor.telecom-number/extension extension)
+                 ask-for-name   (assoc :kontor.telecom-number/ask-for-name ask-for-name)))
     :email (let [{:keys [address verified? bounced?]} payload]
              (cond-> {:db/id                      payload-tempid
-                      :email-address/contact-mech cm-tempid}
-               address                (assoc :email-address/address address)
-               (some? verified?)      (assoc :email-address/verified? (boolean verified?))
-               (some? bounced?)       (assoc :email-address/bounced? (boolean bounced?))))
+                      :kontor.email-address/contact-mech cm-tempid}
+               address                (assoc :kontor.email-address/address address)
+               (some? verified?)      (assoc :kontor.email-address/verified? (boolean verified?))
+               (some? bounced?)       (assoc :kontor.email-address/bounced? (boolean bounced?))))
     (:web :ftp) nil))
 
 (defn add-contact-mech-tx-data
   "Pure tx-data builder for `add-contact-mech!`. Creates a
    `:contact-mech` root row with a typed subtype payload
    (`:postal-address` / `:telecom-number` / `:email-address`; `:web`
-   and `:ftp` store the raw URL via `:contact-mech/info-string`),
+   and `:ftp` store the raw URL via `:kontor.contact-mech/info-string`),
    plus a `:partner-contact-mech` junction row linking the mech to
    `partner` from `from-date` (default now), plus optional
    `:partner-contact-mech-purpose` rows (one per `:purposes` entry).
 
    Required:
      :partner    — partner eid or external-id string
-     :code       — string :contact-mech/code (unique-identity)
+     :code       — string :kontor.contact-mech/code (unique-identity)
      :kind       — :postal | :telecom | :email | :web | :ftp
      :payload    — typed sub-map matching `:kind` (see schema for
                    field vocabulary); for `:web` / `:ftp` `payload`
@@ -579,7 +579,7 @@
                            per entry, with the same `:from-date` /
                            `:thru-date`
      :info-string        — string (always written to
-                           `:contact-mech/info-string`; useful for
+                           `:kontor.contact-mech/info-string`; useful for
                            `:web` / `:ftp` payload)
      :tempid             — base tempid prefix (default
                            `\"contact-mech-1\"`); the cm / payload /
@@ -588,12 +588,12 @@
               allow-solicitation? verified? comments purposes info-string
               tempid]
        :or {tempid "contact-mech-1"}}]
-  (when-not partner (throw (ex-info ":partner required" {:type :contact-mech/missing-partner})))
-  (when-not code    (throw (ex-info ":code required"    {:type :contact-mech/missing-code})))
-  (when-not kind    (throw (ex-info ":kind required"    {:type :contact-mech/missing-kind})))
+  (when-not partner (throw (ex-info ":partner required" {:type :kontor.contact-mech/missing-partner})))
+  (when-not code    (throw (ex-info ":code required"    {:type :kontor.contact-mech/missing-code})))
+  (when-not kind    (throw (ex-info ":kind required"    {:type :kontor.contact-mech/missing-kind})))
   (when-not (contains? contact-mech-kinds kind)
     (throw (ex-info ":kind must be :postal :telecom :email :web or :ftp"
-                    {:type :contact-mech/invalid-kind :got kind})))
+                    {:type :kontor.contact-mech/invalid-kind :got kind})))
   (let [partner-eid (resolve-partner db partner)
         _ (when-not partner-eid
             (throw (ex-info "Partner not found"
@@ -607,33 +607,33 @@
                            (when (contains? #{:web :ftp} kind)
                              (:info-string payload)))
         cm-row        (cond-> {:db/id                 cm-tempid
-                               :contact-mech/code     code
-                               :contact-mech/type     kind
-                               :contact-mech/created-at  now
-                               :contact-mech/modified-at now}
-                        effective-info (assoc :contact-mech/info-string effective-info))
+                               :kontor.contact-mech/code     code
+                               :kontor.contact-mech/type     kind
+                               :kontor.contact-mech/created-at  now
+                               :kontor.contact-mech/modified-at now}
+                        effective-info (assoc :kontor.contact-mech/info-string effective-info))
         payload-row   (typed-payload-row kind payload-tempid cm-tempid (or payload {}))
         junction-row  (cond-> {:db/id                             j-tempid
-                               :partner-contact-mech/partner      partner-eid
-                               :partner-contact-mech/contact-mech cm-tempid
-                               :partner-contact-mech/from-date    from}
-                        thru-date              (assoc :partner-contact-mech/thru-date thru-date)
-                        role-type              (assoc :partner-contact-mech/role-type role-type)
+                               :kontor.partner-contact-mech/partner      partner-eid
+                               :kontor.partner-contact-mech/contact-mech cm-tempid
+                               :kontor.partner-contact-mech/from-date    from}
+                        thru-date              (assoc :kontor.partner-contact-mech/thru-date thru-date)
+                        role-type              (assoc :kontor.partner-contact-mech/role-type role-type)
                         (some? allow-solicitation?)
-                        (assoc :partner-contact-mech/allow-solicitation?
+                        (assoc :kontor.partner-contact-mech/allow-solicitation?
                                (boolean allow-solicitation?))
                         (some? verified?)
-                        (assoc :partner-contact-mech/verified? (boolean verified?))
-                        comments               (assoc :partner-contact-mech/comments comments))
+                        (assoc :kontor.partner-contact-mech/verified? (boolean verified?))
+                        comments               (assoc :kontor.partner-contact-mech/comments comments))
         purpose-rows  (map-indexed
                        (fn [i purpose]
                          (cond-> {:db/id (purpose-tempid tempid i)
-                                  :partner-contact-mech-purpose/partner      partner-eid
-                                  :partner-contact-mech-purpose/contact-mech cm-tempid
-                                  :partner-contact-mech-purpose/purpose-type purpose
-                                  :partner-contact-mech-purpose/from-date    from}
+                                  :kontor.partner-contact-mech-purpose/partner      partner-eid
+                                  :kontor.partner-contact-mech-purpose/contact-mech cm-tempid
+                                  :kontor.partner-contact-mech-purpose/purpose-type purpose
+                                  :kontor.partner-contact-mech-purpose/from-date    from}
                            thru-date
-                           (assoc :partner-contact-mech-purpose/thru-date thru-date)))
+                           (assoc :kontor.partner-contact-mech-purpose/thru-date thru-date)))
                        (or purposes []))]
     (cond-> [cm-row]
       payload-row (conj payload-row)
@@ -651,7 +651,7 @@
   "Pure tx-data builder for `remove-contact-mech!`. Closes the
    currently-active `:partner-contact-mech` junction row(s) between
    `partner` and `contact-mech` by setting
-   `:partner-contact-mech/thru-date` (default now).
+   `:kontor.partner-contact-mech/thru-date` (default now).
 
    Per ADR-007 the substrate prefers `thru-date` closure over silent
    retraction: the junction history stays in the chain. If multiple
@@ -660,15 +660,15 @@
 
    Required:
      :partner       — eid or external-id
-     :contact-mech  — eid or `:contact-mech/code` string
+     :contact-mech  — eid or `:kontor.contact-mech/code` string
 
    Optional:
      :thru-date     — instant (default now); inclusive cutoff
      :as-of         — instant for the active-window filter (default
                       `:thru-date`)"
   [db {:keys [partner contact-mech thru-date as-of]}]
-  (when-not partner      (throw (ex-info ":partner required" {:type :contact-mech/missing-partner})))
-  (when-not contact-mech (throw (ex-info ":contact-mech required" {:type :contact-mech/missing-contact-mech})))
+  (when-not partner      (throw (ex-info ":partner required" {:type :kontor.contact-mech/missing-partner})))
+  (when-not contact-mech (throw (ex-info ":contact-mech required" {:type :kontor.contact-mech/missing-contact-mech})))
   (let [partner-eid (resolve-partner db partner)
         _ (when-not partner-eid
             (throw (ex-info "Partner not found"
@@ -676,21 +676,21 @@
         cm-eid (if (string? contact-mech)
                  (d/q '[:find ?cm .
                         :in $ ?code
-                        :where [?cm :contact-mech/code ?code]]
+                        :where [?cm :kontor.contact-mech/code ?code]]
                       db contact-mech)
                  contact-mech)
         _ (when-not cm-eid
             (throw (ex-info "Contact-mech not found"
-                            {:type :contact-mech/not-found :spec contact-mech})))
+                            {:type :kontor.contact-mech/not-found :spec contact-mech})))
         thru (or thru-date (now-instant))
         as-of-d (or as-of thru)
         rows (d/q '[:find ?j ?from ?thru
                     :in $ ?p ?cm
                     :where
-                    [?j :partner-contact-mech/partner ?p]
-                    [?j :partner-contact-mech/contact-mech ?cm]
-                    [?j :partner-contact-mech/from-date ?from]
-                    [(get-else $ ?j :partner-contact-mech/thru-date :__none) ?thru]]
+                    [?j :kontor.partner-contact-mech/partner ?p]
+                    [?j :kontor.partner-contact-mech/contact-mech ?cm]
+                    [?j :kontor.partner-contact-mech/from-date ?from]
+                    [(get-else $ ?j :kontor.partner-contact-mech/thru-date :__none) ?thru]]
                   db partner-eid cm-eid)
         active (filter (fn [[_ from t]]
                          (active-as-of? from
@@ -699,13 +699,13 @@
                        rows)]
     (when (empty? active)
       (throw (ex-info "No active partner-contact-mech junction to close"
-                      {:type :contact-mech/no-active-junction
+                      {:type :kontor.contact-mech/no-active-junction
                        :partner partner-eid
                        :contact-mech cm-eid
                        :as-of as-of-d})))
     (mapv (fn [[j _ _]]
             {:db/id j
-             :partner-contact-mech/thru-date thru})
+             :kontor.partner-contact-mech/thru-date thru})
           active)))
 
 (defn remove-contact-mech!
@@ -766,18 +766,18 @@
                             {:type :kontor.partner/not-found :spec partner-to})))
         from (or from-date (now-instant))]
     [(cond-> {:db/id                                  tempid
-              :partner-relationship/partner-from      from-eid
-              :partner-relationship/partner-to        to-eid
-              :partner-relationship/role-type-from    role-type-from
-              :partner-relationship/role-type-to      role-type-to
-              :partner-relationship/relationship-type relationship-type
-              :partner-relationship/from-date         from
-              :partner-relationship/status            status}
-       thru-date         (assoc :partner-relationship/thru-date thru-date)
-       relationship-name (assoc :partner-relationship/relationship-name relationship-name)
-       position-title    (assoc :partner-relationship/position-title position-title)
-       priority          (assoc :partner-relationship/priority priority)
-       comments          (assoc :partner-relationship/comments comments))]))
+              :kontor.partner-relationship/partner-from      from-eid
+              :kontor.partner-relationship/partner-to        to-eid
+              :kontor.partner-relationship/role-type-from    role-type-from
+              :kontor.partner-relationship/role-type-to      role-type-to
+              :kontor.partner-relationship/relationship-type relationship-type
+              :kontor.partner-relationship/from-date         from
+              :kontor.partner-relationship/status            status}
+       thru-date         (assoc :kontor.partner-relationship/thru-date thru-date)
+       relationship-name (assoc :kontor.partner-relationship/relationship-name relationship-name)
+       position-title    (assoc :kontor.partner-relationship/position-title position-title)
+       priority          (assoc :kontor.partner-relationship/priority priority)
+       comments          (assoc :kontor.partner-relationship/comments comments))]))
 
 (defn add-relationship!
   "Link two partners with a `:partner-relationship` row. Routes
@@ -793,7 +793,7 @@
    an existing `:partner-relationship` row.
 
    `relationship` may be either an entity-id (preferred) or a tuple
-   lookup ref into `:partner-relationship/identity`."
+   lookup ref into `:kontor.partner-relationship/identity`."
   [db {:keys [relationship thru-date status]
        :or   {status :inactive}}]
   (when-not relationship
@@ -806,8 +806,8 @@
       (throw (ex-info "Relationship not found"
                       {:type :relationship/not-found :spec relationship})))
     [(cond-> {:db/id rel-eid
-              :partner-relationship/thru-date (or thru-date (now-instant))}
-       status (assoc :partner-relationship/status status))]))
+              :kontor.partner-relationship/thru-date (or thru-date (now-instant))}
+       status (assoc :kontor.partner-relationship/status status))]))
 
 (defn end-relationship!
   "Terminate a `:partner-relationship` by setting its `:thru-date`
@@ -845,10 +845,10 @@
                             {:type :kontor.partner/not-found :spec partner})))
         from (or from-date (now-instant))]
     [(cond-> {:db/id                  tempid
-              :partner-role/partner   partner-eid
-              :partner-role/role-type role-type
-              :partner-role/from-date from}
-       thru-date (assoc :partner-role/thru-date thru-date))]))
+              :kontor.partner-role/partner   partner-eid
+              :kontor.partner-role/role-type role-type
+              :kontor.partner-role/from-date from}
+       thru-date (assoc :kontor.partner-role/thru-date thru-date))]))
 
 (defn add-party-role!
   "Assign `role-type` to `partner` as a `:partner-role` row. Routes
@@ -875,8 +875,8 @@
       (if-let [canonical (d/q '[:find ?c .
                                 :in $ ?super
                                 :where
-                                [?m :partner-merge/superseded ?super]
-                                [?m :partner-merge/duplicate-of ?c]]
+                                [?m :kontor.partner-merge/superseded ?super]
+                                [?m :kontor.partner-merge/duplicate-of ?c]]
                               db eid)]
         (recur canonical (conj visited eid))
         eid))))
@@ -892,26 +892,26 @@
         superseded-eid (resolve-partner db superseded-partner)
         _ (when-not canonical-eid
             (throw (ex-info "Canonical partner not found"
-                            {:type :partner-merge/canonical-not-found
+                            {:type :kontor.partner-merge/canonical-not-found
                              :spec canonical-partner})))
         _ (when-not superseded-eid
             (throw (ex-info "Superseded partner not found"
-                            {:type :partner-merge/superseded-not-found
+                            {:type :kontor.partner-merge/superseded-not-found
                              :spec superseded-partner})))
         _ (when (= canonical-eid superseded-eid)
             (throw (ex-info "Cannot merge a partner with itself"
-                            {:type :partner-merge/self-merge
+                            {:type :kontor.partner-merge/self-merge
                              :partner canonical-eid})))
         _ (when-not reason
             (throw (ex-info "merge-partners! requires :reason"
-                            {:type :partner-merge/missing-reason})))
-        merge-row (cond-> {:partner-merge/duplicate-of canonical-eid
-                           :partner-merge/superseded superseded-eid
-                           :partner-merge/merged-at (or merged-at (java.util.Date.))
-                           :partner-merge/reason reason}
-                    reason-note    (assoc :partner-merge/reason-note reason-note)
-                    supporting-doc (assoc :partner-merge/supporting-doc supporting-doc)
-                    merged-by-uid  (assoc :partner-merge/merged-by-uid merged-by-uid))
+                            {:type :kontor.partner-merge/missing-reason})))
+        merge-row (cond-> {:kontor.partner-merge/duplicate-of canonical-eid
+                           :kontor.partner-merge/superseded superseded-eid
+                           :kontor.partner-merge/merged-at (or merged-at (java.util.Date.))
+                           :kontor.partner-merge/reason reason}
+                    reason-note    (assoc :kontor.partner-merge/reason-note reason-note)
+                    supporting-doc (assoc :kontor.partner-merge/supporting-doc supporting-doc)
+                    merged-by-uid  (assoc :kontor.partner-merge/merged-by-uid merged-by-uid))
         archive-row {:db/id superseded-eid
                      :kontor.partner/status :archived}]
     [merge-row archive-row]))
@@ -948,11 +948,11 @@
          rows (d/q '[:find ?ba ?from ?thru ?purp
                      :in $ ?p
                      :where
-                     [?j :partner-bank-account/partner ?p]
-                     [?j :partner-bank-account/bank-account ?ba]
-                     [?j :partner-bank-account/from-date ?from]
-                     [?j :partner-bank-account/purpose ?purp]
-                     [(get-else $ ?j :partner-bank-account/thru-date :__none) ?thru]]
+                     [?j :kontor.partner-bank-account/partner ?p]
+                     [?j :kontor.partner-bank-account/bank-account ?ba]
+                     [?j :kontor.partner-bank-account/from-date ?from]
+                     [?j :kontor.partner-bank-account/purpose ?purp]
+                     [(get-else $ ?j :kontor.partner-bank-account/thru-date :__none) ?thru]]
                    db pid)]
      (->> rows
           (filter (fn [[_ from thru _]] (active-as-of? from thru as-of)))
@@ -972,12 +972,12 @@
          rows (d/q '[:find ?ba ?from ?thru ?pref
                      :in $ ?p
                      :where
-                     [?j :partner-bank-account/partner ?p]
-                     [?j :partner-bank-account/bank-account ?ba]
-                     [?j :partner-bank-account/from-date ?from]
-                     [?j :partner-bank-account/purpose ?purp]
-                     [(get-else $ ?j :partner-bank-account/thru-date :__none) ?thru]
-                     [(get-else $ ?j :partner-bank-account/preferred? false) ?pref]
+                     [?j :kontor.partner-bank-account/partner ?p]
+                     [?j :kontor.partner-bank-account/bank-account ?ba]
+                     [?j :kontor.partner-bank-account/from-date ?from]
+                     [?j :kontor.partner-bank-account/purpose ?purp]
+                     [(get-else $ ?j :kontor.partner-bank-account/thru-date :__none) ?thru]
+                     [(get-else $ ?j :kontor.partner-bank-account/preferred? false) ?pref]
                      [(contains? #{:disbursement :both} ?purp)]]
                    db pid)
          active (filter (fn [[_ from thru _]] (active-as-of? from thru as-of)) rows)
@@ -991,7 +991,7 @@
 ;; ============================================================================
 
 (defn tags-of
-  "Set of :partner-tag/tag-type keywords active for `partner` at
+  "Set of :kontor.partner-tag/tag-type keywords active for `partner` at
    `:as-of`."
   ([db partner] (tags-of db partner nil))
   ([db partner opts]
@@ -1000,10 +1000,10 @@
          rows (d/q '[:find ?tag ?from ?thru
                      :in $ ?p
                      :where
-                     [?t :partner-tag/partner ?p]
-                     [?t :partner-tag/tag-type ?tag]
-                     [?t :partner-tag/from-date ?from]
-                     [(get-else $ ?t :partner-tag/thru-date :__none) ?thru]]
+                     [?t :kontor.partner-tag/partner ?p]
+                     [?t :kontor.partner-tag/tag-type ?tag]
+                     [?t :kontor.partner-tag/from-date ?from]
+                     [(get-else $ ?t :kontor.partner-tag/thru-date :__none) ?thru]]
                    db pid)]
      (->> rows
           (filter (fn [[_ from thru]] (active-as-of? from thru as-of)))
@@ -1018,10 +1018,10 @@
          rows (d/q '[:find ?partner ?from ?thru
                      :in $ ?tag
                      :where
-                     [?t :partner-tag/tag-type ?tag]
-                     [?t :partner-tag/partner ?partner]
-                     [?t :partner-tag/from-date ?from]
-                     [(get-else $ ?t :partner-tag/thru-date :__none) ?thru]]
+                     [?t :kontor.partner-tag/tag-type ?tag]
+                     [?t :kontor.partner-tag/partner ?partner]
+                     [?t :kontor.partner-tag/from-date ?from]
+                     [(get-else $ ?t :kontor.partner-tag/thru-date :__none) ?thru]]
                    db tag-type)]
      (->> rows
           (filter (fn [[_ from thru]] (active-as-of? from thru as-of)))
@@ -1043,10 +1043,10 @@
          rows (d/q '[:find ?t ?from ?thru ?country
                      :in $ ?p
                      :where
-                     [?t :partner-tax-id/partner ?p]
-                     [?t :partner-tax-id/country ?country]
-                     [?t :partner-tax-id/from-date ?from]
-                     [(get-else $ ?t :partner-tax-id/thru-date :__none) ?thru]]
+                     [?t :kontor.partner-tax-id/partner ?p]
+                     [?t :kontor.partner-tax-id/country ?country]
+                     [?t :kontor.partner-tax-id/from-date ?from]
+                     [(get-else $ ?t :kontor.partner-tax-id/thru-date :__none) ?thru]]
                    db pid)]
      (->> rows
           (filter (fn [[_ from thru _]] (active-as-of? from thru as-of)))
@@ -1073,6 +1073,6 @@
          tax-id-type (:tax-id-type opts)
          hits (tax-ids-of db partner {:as-of as-of :country country-eid})
          filtered (if tax-id-type
-                    (filter #(= tax-id-type (:partner-tax-id/tax-id-type %)) hits)
+                    (filter #(= tax-id-type (:kontor.partner-tax-id/tax-id-type %)) hits)
                     hits)]
-     (some-> filtered first :partner-tax-id/tax-id))))
+     (some-> filtered first :kontor.partner-tax-id/tax-id))))

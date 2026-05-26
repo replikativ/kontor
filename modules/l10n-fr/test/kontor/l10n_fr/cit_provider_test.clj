@@ -76,7 +76,7 @@
         (is (== 4000000M (:amount (:base is-c))))
         (is (nil? (:base-transform is-c))))
       (testing "schedule = flat 25 %; gross = 4 000 000 × 25 % = 1 000 000"
-        (is (= :flat (:schedule/type (:schedule is-c))))
+        (is (= :flat (:kontor.schedule/type (:schedule is-c))))
         (is (== 0.25M (:rate (:schedule is-c))))
         (is (== 1000000M (:amount (:gross-liability is-c)))))
       (testing "CGE = (1 000 000 − 763 000) × 3.3 % = 7 821"
@@ -107,7 +107,7 @@
         (is (== 4000000M (:amount (:base is-c))))
         (is (nil? (:base-transform is-c))))
       (testing "schedule = PME progressive (15 % to €42 500, 25 % above)"
-        (is (= :progressive-bracket (:schedule/type (:schedule is-c))))
+        (is (= :progressive-bracket (:kontor.schedule/type (:schedule is-c))))
         (is (= [{:rate 0.15M :upper 42500M}
                 {:rate 0.25M :upper nil}]
                (:brackets (:schedule is-c)))))
@@ -139,7 +139,7 @@
                           :cir-qualifying-expenses 500000M})
           is-c  (is-component facts)]
       (testing "schedule = PME progressive"
-        (is (= :progressive-bracket (:schedule/type (:schedule is-c)))))
+        (is (= :progressive-bracket (:kontor.schedule/type (:schedule is-c)))))
       (testing "IS gross = 42 500 × 15 % + 957 500 × 25 % = 6 375 + 239 375 = 245 750"
         (is (== 245750M (:amount (:gross-liability is-c)))))
       (testing "CIR = 500 000 × 30 % = 150 000 (refundable)"

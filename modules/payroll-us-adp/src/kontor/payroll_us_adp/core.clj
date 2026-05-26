@@ -24,7 +24,7 @@
                                                  balancing-row trap)
      - `kontor.payroll-us-adp.posting-builder` — UsPayrollPostingBuilder
                                                  (multi-state alloc via
-                                                 :analytic-account/state,
+                                                 :kontor.analytic-account/state,
                                                  parallel-ledger split)
      - `kontor.payroll-us-adp.accrual`         — ASC 710 PTO + 401(k)
                                                  match accrual
@@ -132,7 +132,7 @@
 (defn install-state-analytic-plan!
   "Install the :state analytic plan + per-state :analytic-account rows.
    Idempotent: re-running with the same data is a no-op (uses
-   :db.unique/identity on :analytic-plan/code + :analytic-account/path).
+   :db.unique/identity on :kontor.analytic-plan/code + :kontor.analytic-account/path).
 
    The :state plan applies to *consumer-marked* wage / payroll-tax /
    benefit accounts via :kontor.account/required-analytic-plans (per ADR-022).
@@ -141,16 +141,16 @@
   [conn]
   (let [plan-tempid "state-plan"
         plan-tx [{:db/id plan-tempid
-                  :analytic-plan/code "state"
-                  :analytic-plan/name "US state of work"
-                  :analytic-plan/applicability :optional
-                  :analytic-plan/active true}]
+                  :kontor.analytic-plan/code "state"
+                  :kontor.analytic-plan/name "US state of work"
+                  :kontor.analytic-plan/applicability :optional
+                  :kontor.analytic-plan/active true}]
         account-tx (mapv (fn [[code label]]
-                           {:analytic-account/path (str "state:" code)
-                            :analytic-account/code code
-                            :analytic-account/name label
-                            :analytic-account/plan plan-tempid
-                            :analytic-account/active true})
+                           {:kontor.analytic-account/path (str "state:" code)
+                            :kontor.analytic-account/code code
+                            :kontor.analytic-account/name label
+                            :kontor.analytic-account/plan plan-tempid
+                            :kontor.analytic-account/active true})
                          us-states)]
     (d/transact conn (vec (concat plan-tx account-tx)))))
 
@@ -163,7 +163,7 @@
   [conn]
   (let [db (d/db conn)
         already? (boolean (d/q '[:find ?e .
-                                 :where [?e :analytic-plan/code "state"]]
+                                 :where [?e :kontor.analytic-plan/code "state"]]
                                db))]
     (when-not already?
       (install-state-analytic-plan! conn))))

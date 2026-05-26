@@ -30,89 +30,89 @@
   (let [db (d/db *conn*)
         idents (set (d/q '[:find [?i ...] :where [_ :db/ident ?i]] db))]
     (testing "extensions to :order-item"
-      (doseq [a [:order-item/requires-receipt? :order-item/category]]
+      (doseq [a [:kontor.procurement.order-item/requires-receipt? :kontor.procurement.order-item/category]]
         (is (contains? idents a) (str "missing: " a))))
     (testing "extensions to :invoice"
       (is (contains? idents :kontor.invoice/match-status)))
     (testing "requirement attrs"
-      (doseq [a [:requirement/external-id :requirement/type :requirement/status
-                 :requirement/product-id :requirement/quantity :requirement/uom
-                 :requirement/facility-id :requirement/facility-to-id
-                 :requirement/required-by-date :requirement/start-date
-                 :requirement/estimated-budget :requirement/budget-commodity
-                 :requirement/entity :requirement/cost-center
-                 :requirement/justification :requirement/description
-                 :requirement/created-at :requirement/created-by-uid]]
+      (doseq [a [:kontor.requirement/external-id :kontor.requirement/type :kontor.requirement/status
+                 :kontor.requirement/product-id :kontor.requirement/quantity :kontor.requirement/uom
+                 :kontor.requirement/facility-id :kontor.requirement/facility-to-id
+                 :kontor.requirement/required-by-date :kontor.requirement/start-date
+                 :kontor.requirement/estimated-budget :kontor.requirement/budget-commodity
+                 :kontor.requirement/entity :kontor.requirement/cost-center
+                 :kontor.requirement/justification :kontor.requirement/description
+                 :kontor.requirement/created-at :kontor.requirement/created-by-uid]]
         (is (contains? idents a) (str "missing: " a))))
     (testing "requirement-commitment junction"
-      (doseq [a [:requirement-commitment/requirement
-                 :requirement-commitment/order-item
-                 :requirement-commitment/quantity
-                 :requirement-commitment/committed-at
-                 :requirement-commitment/identity]]
+      (doseq [a [:kontor.requirement-commitment/requirement
+                 :kontor.requirement-commitment/order-item
+                 :kontor.requirement-commitment/quantity
+                 :kontor.requirement-commitment/committed-at
+                 :kontor.requirement-commitment/identity]]
         (is (contains? idents a) (str "missing: " a))))
     (testing "receipt attrs"
-      (doseq [a [:receipt/external-id :receipt/order :receipt/ship-group
-                 :receipt/status :receipt/received-at :receipt/received-by-uid
-                 :receipt/packing-slip-ref :receipt/facility-id
-                 :receipt/carrier-partner :receipt/tracking-number]]
+      (doseq [a [:kontor.receipt/external-id :kontor.receipt/order :kontor.receipt/ship-group
+                 :kontor.receipt/status :kontor.receipt/received-at :kontor.receipt/received-by-uid
+                 :kontor.receipt/packing-slip-ref :kontor.receipt/facility-id
+                 :kontor.receipt/carrier-partner :kontor.receipt/tracking-number]]
         (is (contains? idents a) (str "missing: " a))))
     (testing "receipt-item attrs"
-      (doseq [a [:receipt-item/receipt :receipt-item/order-item
-                 :receipt-item/quantity-accepted :receipt-item/quantity-rejected
-                 :receipt-item/rejection-reason :receipt-item/lot
-                 :receipt-item/unit-cost :receipt-item/identity]]
+      (doseq [a [:kontor.receipt-item/receipt :kontor.receipt-item/order-item
+                 :kontor.receipt-item/quantity-accepted :kontor.receipt-item/quantity-rejected
+                 :kontor.receipt-item/rejection-reason :kontor.receipt-item/lot
+                 :kontor.receipt-item/unit-cost :kontor.receipt-item/identity]]
         (is (contains? idents a) (str "missing: " a))))
     (testing "receipt-invoice-billing junction"
-      (doseq [a [:receipt-invoice-billing/receipt
-                 :receipt-invoice-billing/invoice-line
-                 :receipt-invoice-billing/quantity
-                 :receipt-invoice-billing/identity]]
+      (doseq [a [:kontor.receipt-invoice-billing/receipt
+                 :kontor.receipt-invoice-billing/invoice-line
+                 :kontor.receipt-invoice-billing/quantity
+                 :kontor.receipt-invoice-billing/identity]]
         (is (contains? idents a) (str "missing: " a))))
     (testing "service-acceptance attrs"
-      (doseq [a [:service-acceptance/external-id :service-acceptance/order
-                 :service-acceptance/order-item
-                 :service-acceptance/quantity-accepted
-                 :service-acceptance/accepted-at
-                 :service-acceptance/accepted-by-uid
-                 :service-acceptance/acceptance-evidence
-                 :service-acceptance/identity]]
+      (doseq [a [:kontor.service-acceptance/external-id :kontor.service-acceptance/order
+                 :kontor.service-acceptance/order-item
+                 :kontor.service-acceptance/quantity-accepted
+                 :kontor.service-acceptance/accepted-at
+                 :kontor.service-acceptance/accepted-by-uid
+                 :kontor.service-acceptance/acceptance-evidence
+                 :kontor.service-acceptance/identity]]
         (is (contains? idents a) (str "missing: " a))))
     (testing "order-item-assoc attrs"
-      (doseq [a [:order-item-assoc/from-order-item
-                 :order-item-assoc/to-order-item
-                 :order-item-assoc/type
-                 :order-item-assoc/quantity
-                 :order-item-assoc/identity]]
+      (doseq [a [:kontor.procurement.order-item-assoc/from-order-item
+                 :kontor.procurement.order-item-assoc/to-order-item
+                 :kontor.procurement.order-item-assoc/type
+                 :kontor.procurement.order-item-assoc/quantity
+                 :kontor.procurement.order-item-assoc/identity]]
         (is (contains? idents a) (str "missing: " a))))
     (testing "match-tolerance attrs"
-      (doseq [a [:match-tolerance/entity :match-tolerance/supplier
-                 :match-tolerance/product-id :match-tolerance/qty-pct-over
-                 :match-tolerance/qty-abs-over :match-tolerance/price-pct-over
-                 :match-tolerance/price-abs-over :match-tolerance/active
-                 :match-tolerance/identity]]
+      (doseq [a [:kontor.match-tolerance/entity :kontor.match-tolerance/supplier
+                 :kontor.match-tolerance/product-id :kontor.match-tolerance/qty-pct-over
+                 :kontor.match-tolerance/qty-abs-over :kontor.match-tolerance/price-pct-over
+                 :kontor.match-tolerance/price-abs-over :kontor.match-tolerance/active
+                 :kontor.match-tolerance/identity]]
         (is (contains? idents a) (str "missing: " a))))
     (testing "return attrs"
-      (doseq [a [:return/external-id :return/type :return/status
-                 :return/from-party :return/to-party :return/order
-                 :return/entity :return/destination-facility-id
-                 :return/supplier-rma :return/entry-date :return/supporting-doc]]
+      (doseq [a [:kontor.return/external-id :kontor.return/type :kontor.return/status
+                 :kontor.return/from-party :kontor.return/to-party :kontor.return/order
+                 :kontor.return/entity :kontor.return/destination-facility-id
+                 :kontor.return/supplier-rma :kontor.return/entry-date :kontor.return/supporting-doc]]
         (is (contains? idents a) (str "missing: " a))))
     (testing "return-item attrs"
-      (doseq [a [:return-item/return :return-item/order-item
-                 :return-item/seq-id :return-item/return-quantity
-                 :return-item/received-quantity :return-item/return-price
-                 :return-item/reason :return-item/return-type
-                 :return-item/expected-disposition :return-item/status
-                 :return-item/response :return-item/identity]]
+      (doseq [a [:kontor.return-item/return :kontor.return-item/order-item
+                 :kontor.return-item/seq-id :kontor.return-item/return-quantity
+                 :kontor.return-item/received-quantity :kontor.return-item/return-price
+                 :kontor.return-item/reason :kontor.return-item/return-type
+                 :kontor.return-item/expected-disposition :kontor.return-item/status
+                 :kontor.return-item/response :kontor.return-item/identity]]
         (is (contains? idents a) (str "missing: " a))))
     (testing "return-response + return-item-billing"
-      (doseq [a [:return-response/return-item :return-response/type
-                 :return-response/replacement-order :return-response/credit-memo
-                 :return-response/amount :return-response/created-at
-                 :return-item-billing/return-item
-                 :return-item-billing/invoice-line
-                 :return-item-billing/quantity :return-item-billing/identity]]
+      (doseq [a [:kontor.return-response/return-item :kontor.return-response/type
+                 :kontor.return-response/replacement-order :kontor.return-response/credit-memo
+                 :kontor.return-response/amount :kontor.return-response/created-at
+                 :kontor.return-item-billing/return-item
+                 :kontor.return-item-billing/invoice-line
+                 :kontor.return-item-billing/quantity :kontor.return-item-billing/identity]]
         (is (contains? idents a) (str "missing: " a))))))
 
 ;; ============================================================================
@@ -122,38 +122,38 @@
 (deftest requirement-status-transitions-seeded
   (let [db (d/db *conn*)]
     (testing "happy path"
-      (is (true? (sm/legal-transition? db :requirement :requirement/status
+      (is (true? (sm/legal-transition? db :requirement :kontor.requirement/status
                                        :nil :proposed)))
-      (is (true? (sm/legal-transition? db :requirement :requirement/status
+      (is (true? (sm/legal-transition? db :requirement :kontor.requirement/status
                                        :proposed :approved)))
-      (is (true? (sm/legal-transition? db :requirement :requirement/status
+      (is (true? (sm/legal-transition? db :requirement :kontor.requirement/status
                                        :approved :ordered)))
-      (is (true? (sm/legal-transition? db :requirement :requirement/status
+      (is (true? (sm/legal-transition? db :requirement :kontor.requirement/status
                                        :ordered :received))))
     (testing "rejection paths"
-      (is (true? (sm/legal-transition? db :requirement :requirement/status
+      (is (true? (sm/legal-transition? db :requirement :kontor.requirement/status
                                        :proposed :rejected)))
-      (is (true? (sm/legal-transition? db :requirement :requirement/status
+      (is (true? (sm/legal-transition? db :requirement :kontor.requirement/status
                                        :proposed :cancelled)))
-      (is (true? (sm/legal-transition? db :requirement :requirement/status
+      (is (true? (sm/legal-transition? db :requirement :kontor.requirement/status
                                        :approved :cancelled))))
     (testing "non-seeded transitions are illegal"
-      (is (false? (sm/legal-transition? db :requirement :requirement/status
+      (is (false? (sm/legal-transition? db :requirement :kontor.requirement/status
                                         :nil :received))
           "cannot skip to received")
-      (is (false? (sm/legal-transition? db :requirement :requirement/status
+      (is (false? (sm/legal-transition? db :requirement :kontor.requirement/status
                                         :received :proposed))
           "received is terminal-forward"))))
 
 (deftest receipt-status-transitions-seeded
   (let [db (d/db *conn*)]
-    (is (true? (sm/legal-transition? db :receipt :receipt/status
+    (is (true? (sm/legal-transition? db :receipt :kontor.receipt/status
                                      :nil :pending)))
-    (is (true? (sm/legal-transition? db :receipt :receipt/status
+    (is (true? (sm/legal-transition? db :receipt :kontor.receipt/status
                                      :pending :accepted)))
-    (is (true? (sm/legal-transition? db :receipt :receipt/status
+    (is (true? (sm/legal-transition? db :receipt :kontor.receipt/status
                                      :pending :rejected)))
-    (is (true? (sm/legal-transition? db :receipt :receipt/status
+    (is (true? (sm/legal-transition? db :receipt :kontor.receipt/status
                                      :accepted :rejected))
         "post-inspection reject is legal (quality issue found later)")))
 
@@ -186,17 +186,17 @@
 
 (deftest return-status-transitions-seeded
   (let [db (d/db *conn*)]
-    (is (true? (sm/legal-transition? db :return :return/status
+    (is (true? (sm/legal-transition? db :return :kontor.return/status
                                      :nil :requested)))
-    (is (true? (sm/legal-transition? db :return :return/status
+    (is (true? (sm/legal-transition? db :return :kontor.return/status
                                      :requested :accepted)))
-    (is (true? (sm/legal-transition? db :return :return/status
+    (is (true? (sm/legal-transition? db :return :kontor.return/status
                                      :requested :rejected)))
-    (is (true? (sm/legal-transition? db :return :return/status
+    (is (true? (sm/legal-transition? db :return :kontor.return/status
                                      :accepted :received)))
-    (is (true? (sm/legal-transition? db :return :return/status
+    (is (true? (sm/legal-transition? db :return :kontor.return/status
                                      :received :completed)))
-    (is (false? (sm/legal-transition? db :return :return/status
+    (is (false? (sm/legal-transition? db :return :kontor.return/status
                                       :completed :requested))
         "completed is terminal")))
 

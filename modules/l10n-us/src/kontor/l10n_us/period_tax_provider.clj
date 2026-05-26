@@ -159,7 +159,7 @@
   [_]
   (pit/personal-income-tax-provider
    {:id        :us-1040
-    :schedule  {:schedule/type :formula :fn us-1040-tax}
+    :schedule  {:kontor.schedule/type :formula :fn us-1040-tax}
     :authority :us-irs
     :commodity :USD
     :statute   "IRC §1"}))

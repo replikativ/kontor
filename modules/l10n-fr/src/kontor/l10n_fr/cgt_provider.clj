@@ -7,7 +7,7 @@
    five statutory shapes (note 128 §1), per-asset-class PS-rate
    carve-outs (§5.4), and a per-foyer barème election (§1.1). The
    substrate fit is otherwise clean: only enumerant additions on the
-   shipped `:disposal/asset-class` / `:elective-regime` /
+   shipped `:kontor.disposal/asset-class` / `:elective-regime` /
    `:exemption-claimed` / `:loss-bucket` slots (note 128 §4) — no
    schema change.
 
@@ -91,7 +91,7 @@
 ;; ============================================================================
 
 (def asset-classes
-  "Closed v1 set of FR-namespaced `:disposal/asset-class` enumerants
+  "Closed v1 set of FR-namespaced `:kontor.disposal/asset-class` enumerants
    the provider recognizes. Note 128 §4.1. A disposal with an
    unrecognized `:asset-class` is silently dropped — the provider
    only fires on the FR vocabulary."
@@ -109,7 +109,7 @@
     :fr-pea-pme})
 
 (def loss-buckets
-  "Closed v1 set of FR-namespaced `:disposal/loss-bucket` enumerants.
+  "Closed v1 set of FR-namespaced `:kontor.disposal/loss-bucket` enumerants.
    Note 128 §1.8 / §4.4."
   #{:fr-mv-mobilière
     :fr-mv-immobilière
@@ -118,7 +118,7 @@
     :fr-mv-titres-participation})
 
 (def elective-regimes
-  "Closed v1 set of FR-namespaced `:disposal/elective-regime`
+  "Closed v1 set of FR-namespaced `:kontor.disposal/elective-regime`
    enumerants. Note 128 §4.2."
   #{:fr-pfu
     :fr-barème
@@ -129,7 +129,7 @@
     :fr-étalement-3-ans})
 
 (def exemptions
-  "Closed v1 set of FR-namespaced `:disposal/exemption-claimed`
+  "Closed v1 set of FR-namespaced `:kontor.disposal/exemption-claimed`
    enumerants. Note 128 §4.3."
   #{:fr-pea-exoneration
     :fr-residence-principale
@@ -156,9 +156,9 @@
   "Positive gain or negative loss in the proceeds commodity:
    `proceeds − basis − rollover-amount`."
   ^java.math.BigDecimal [disposal]
-  (let [p (or (:disposal/proceeds-amount disposal) 0M)
-        b (or (:disposal/basis-amount disposal) 0M)
-        r (or (:disposal/rollover-amount disposal) 0M)]
+  (let [p (or (:kontor.disposal/proceeds-amount disposal) 0M)
+        b (or (:kontor.disposal/basis-amount disposal) 0M)
+        r (or (:kontor.disposal/rollover-amount disposal) 0M)]
     (- p b r)))
 
 (defn- whole-years-between
@@ -171,8 +171,8 @@
 
 (defn- holding-period-years
   ^long [disposal]
-  (let [acq (:disposal/acquired-on disposal)
-        dis (:disposal/disposed-on disposal)]
+  (let [acq (:kontor.disposal/acquired-on disposal)
+        dis (:kontor.disposal/disposed-on disposal)]
     (if (and acq dis)
       (whole-years-between acq dis)
       0)))
@@ -180,12 +180,12 @@
 (defn- exemption-claimed?
   "True when `disposal` carries the named `:exemption-claimed`."
   [disposal exemption-kw]
-  (let [claimed (:disposal/exemption-claimed disposal)]
+  (let [claimed (:kontor.disposal/exemption-claimed disposal)]
     (boolean (and claimed (contains? (set claimed) exemption-kw)))))
 
 (defn- elective?
   [disposal regime-kw]
-  (let [eless (:disposal/elective-regime disposal)]
+  (let [eless (:kontor.disposal/elective-regime disposal)]
     (boolean (and eless (contains? (set eless) regime-kw)))))
 
 (defn- as-of-from-ctx
@@ -220,10 +220,10 @@
    appropriately or doesn't claim the renforcé ladder)."
   ^java.math.BigDecimal [disposal]
   (let [years (holding-period-years disposal)
-        acq   (:disposal/acquired-on disposal)
+        acq   (:kontor.disposal/acquired-on disposal)
         pre-2018? (and acq (< (.getTime acq) (.getTime #inst "2018-01-01")))
         claimed?  (exemption-claimed? disposal :fr-abattement-durée)
-        pme?      (= :fr-titres-pme (:disposal/asset-class disposal))]
+        pme?      (= :fr-titres-pme (:kontor.disposal/asset-class disposal))]
     (cond
       (not (and pre-2018? claimed?)) 0M
       pme?
@@ -354,7 +354,7 @@
    non-agricultural transmissions was the original P0).
 
    §151 septies + §238 quindecies CANNOT cumulate on the same disposal
-   (note 128 §1.5); the consumer's `:disposal/exemption-claimed`
+   (note 128 §1.5); the consumer's `:kontor.disposal/exemption-claimed`
    should pick one."
   ^java.math.BigDecimal [db ^java.util.Date as-of {:keys [transmission-value activity]}]
   (let [agri?      (= activity :agricultural)
@@ -385,7 +385,7 @@
         §238? (exemption-claimed? disposal :fr-238-quindecies-transmission)]
     (cond
       §238? (§238-quindecies-fraction
-             db as-of (merge {:transmission-value (:disposal/proceeds-amount disposal)}
+             db as-of (merge {:transmission-value (:kontor.disposal/proceeds-amount disposal)}
                              (:238-quindecies inputs)))
       §151? (§151-septies-fraction db as-of (:151-septies inputs))
       :else 1M)))
@@ -414,7 +414,7 @@
         barème? (= :bareme (get-in ctx [:tax-unit :pfu-or-bareme]))
         ir-rate (param db "FR.CGT.PFU.IR-rate" as-of)
         ;; Split PEA disposals — they take IR exoneration
-        pea? (fn [d] (boolean (or (#{:fr-pea :fr-pea-pme} (:disposal/asset-class d))
+        pea? (fn [d] (boolean (or (#{:fr-pea :fr-pea-pme} (:kontor.disposal/asset-class d))
                                   (exemption-claimed? d :fr-pea-exoneration))))
         pea-disposals     (filter pea? mob-disposals)
         non-pea-disposals (remove pea? mob-disposals)
@@ -463,7 +463,7 @@
       {:kind            :capital-gains-tax
        :authority       authority
        :base            (money/money ir-base commodity)
-       :schedule        (if barème? nil {:schedule/type :flat :rate ir-rate})
+       :schedule        (if barème? nil {:kontor.schedule/type :flat :rate ir-rate})
        :gross-liability (money/money (+ ir-tax ps-tax-non-pea ps-tax-pea) commodity)
        :liability       (money/money total-liability commodity)
        :prepaid         (money/zero commodity)
@@ -489,7 +489,7 @@
                           :value (money/money ir-tax commodity)}]
        :jurisdiction-specific-codes
        (cond-> {:lane :fr-mobilière
-                :asset-classes (vec (distinct (map :disposal/asset-class mob-disposals)))}
+                :asset-classes (vec (distinct (map :kontor.disposal/asset-class mob-disposals)))}
          barème? (assoc :pit-base-additions [ir-base]))})))
 
 ;; ============================================================================
@@ -503,9 +503,9 @@
   [disposal]
   (let [g (realized-gain disposal)]
     (cond
-      (or (= :fr-immobilier-residence (:disposal/asset-class disposal))
+      (or (= :fr-immobilier-residence (:kontor.disposal/asset-class disposal))
           (exemption-claimed? disposal :fr-residence-principale)
-          (true? (:disposal/residence? disposal))) [0M 0M]
+          (true? (:kontor.disposal/residence? disposal))) [0M 0M]
       (not (pos? g)) [0M 0M]                  ; losses in the bucket vanish (note 128 §1.8)
       :else
       (let [years (holding-period-years disposal)]
@@ -533,7 +533,7 @@
       {:kind            :capital-gains-tax
        :authority       authority
        :base            (money/money ir-base commodity)
-       :schedule        {:schedule/type :flat :rate ir-rate}
+       :schedule        {:kontor.schedule/type :flat :rate ir-rate}
        :gross-liability (money/money (+ ir-tax surtaxe) commodity)
        :liability       (money/money total commodity)
        :prepaid         (money/zero commodity)
@@ -612,7 +612,7 @@
       {:kind            :capital-gains-tax
        :authority       authority
        :base            (money/money ir-base commodity)
-       :schedule        {:schedule/type :flat :rate ir-rate}
+       :schedule        {:kontor.schedule/type :flat :rate ir-rate}
        :gross-liability (money/money ir-tax commodity)
        :liability       (money/money total commodity)
        :prepaid         (money/zero commodity)
@@ -682,7 +682,7 @@
         net-weighted (reduce + 0M
                              (map (fn [d]
                                     (let [g (realized-gain d)
-                                          eid (:disposal/external-id d)
+                                          eid (:kontor.disposal/external-id d)
                                           nx  (or (get-in ip-inputs [eid :nexus-ratio]) 1M)]
                                       (* g nx)))
                                   qualifying))
@@ -692,7 +692,7 @@
       {:kind            :capital-gains-tax
        :authority       authority
        :base            (money/money net-pos commodity)
-       :schedule        {:schedule/type :flat :rate rate}
+       :schedule        {:kontor.schedule/type :flat :rate rate}
        :gross-liability (money/money tax commodity)
        :liability       (money/money tax commodity)
        :prepaid         (money/zero commodity)
@@ -717,9 +717,9 @@
                                         {:ctx-keys (keys ctx)})))
           disposals (ds/disposals-in source entity period)
           ;; Sort disposals into corporate lanes
-          tp-disposals (filter #(= :fr-titres-participation (:disposal/asset-class %))
+          tp-disposals (filter #(= :fr-titres-participation (:kontor.disposal/asset-class %))
                                disposals)
-          brevet-disposals (filter #(= :fr-brevet (:disposal/asset-class %))
+          brevet-disposals (filter #(= :fr-brevet (:kontor.disposal/asset-class %))
                                    disposals)
           opts      {:authority authority :commodity commodity :db db}
           tp-cmp     (titres-participation-component opts ctx tp-disposals)
@@ -746,10 +746,10 @@
                                         {:ctx-keys (keys ctx)})))
           disposals (ds/disposals-in source entity period)
           ;; Drop unrecognized asset classes
-          recognized (filter #(contains? asset-classes (:disposal/asset-class %)) disposals)
+          recognized (filter #(contains? asset-classes (:kontor.disposal/asset-class %)) disposals)
           by-lane (group-by
                    (fn [d]
-                     (let [ac (:disposal/asset-class d)]
+                     (let [ac (:kontor.disposal/asset-class d)]
                        (cond
                          (pfu-asset-classes ac)                 :mobilière
                          (immo-asset-classes ac)                :immobilière

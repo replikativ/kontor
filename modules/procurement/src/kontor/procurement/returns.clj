@@ -1,7 +1,7 @@
 (ns kontor.procurement.returns
   "Return helpers — ADR-042.
 
-   `:return/type :customer | :vendor` is the role-inverted
+   `:kontor.return/type :customer | :vendor` is the role-inverted
    discriminator (OFBiz ReturnHeader.returnHeaderTypeId pattern).
    95% same codepath; the inversion is the from-party / to-party
    refs.
@@ -27,7 +27,7 @@
   [db external-id]
   (d/q '[:find ?e .
          :in $ ?xid
-         :where [?e :return/external-id ?xid]]
+         :where [?e :kontor.return/external-id ?xid]]
        db external-id))
 
 (defn resolve-return
@@ -41,11 +41,11 @@
   [db spec]
   (when-let [eid (resolve-return db spec)]
     (d/pull db
-            '[* {:return/from-party [:kontor.partner/external-id :kontor.partner/name]
-                 :return/to-party [:kontor.partner/external-id :kontor.partner/name]
-                 :return/order [:order/external-id :order/type]
-                 :return/entity [:kontor.entity/code]
-                 :return/supporting-doc [:audit-doc/code :audit-doc/type]}]
+            '[* {:kontor.return/from-party [:kontor.partner/external-id :kontor.partner/name]
+                 :kontor.return/to-party [:kontor.partner/external-id :kontor.partner/name]
+                 :kontor.return/order [:kontor.order/external-id :kontor.order/type]
+                 :kontor.return/entity [:kontor.entity/code]
+                 :kontor.return/supporting-doc [:kontor.audit-doc/code :kontor.audit-doc/type]}]
             eid)))
 
 (defn items-of
@@ -53,14 +53,14 @@
   (when-let [eid (resolve-return db spec)]
     (->> (d/q '[:find [?i ...]
                 :in $ ?r
-                :where [?i :return-item/return ?r]]
+                :where [?i :kontor.return-item/return ?r]]
               db eid)
-         (map #(d/pull db '[* {:return-item/order-item [:db/id
-                                                         :order-item/seq-id
-                                                         :order-item/product-id
-                                                         :order-item/category]
-                                :return-item/response [*]}] %))
-         (sort-by :return-item/seq-id)
+         (map #(d/pull db '[* {:kontor.return-item/order-item [:db/id
+                                                         :kontor.sales.order-item/seq-id
+                                                         :kontor.sales.order-item/product-id
+                                                         :kontor.procurement.order-item/category]
+                                :kontor.return-item/response [*]}] %))
+         (sort-by :kontor.return-item/seq-id)
          vec)))
 
 ;; ============================================================================
@@ -81,39 +81,39 @@
   (when-not to-party    (throw (ex-info ":to-party required" {})))
   (when-not (seq items) (throw (ex-info "non-empty :items required" {})))
   (let [return-row (cond-> {:db/id tempid
-                            :return/external-id external-id
-                            :return/type type
-                            :return/status :requested
-                            :return/from-party from-party
-                            :return/to-party to-party
-                            :return/order order
-                            :return/entry-date (or entry-date (java.util.Date.))}
-                     entity                  (assoc :return/entity entity)
-                     destination-facility-id (assoc :return/destination-facility-id destination-facility-id)
-                     supplier-rma            (assoc :return/supplier-rma supplier-rma)
-                     notes                   (assoc :return/notes notes)
-                     supporting-doc          (assoc :return/supporting-doc supporting-doc))
+                            :kontor.return/external-id external-id
+                            :kontor.return/type type
+                            :kontor.return/status :requested
+                            :kontor.return/from-party from-party
+                            :kontor.return/to-party to-party
+                            :kontor.return/order order
+                            :kontor.return/entry-date (or entry-date (java.util.Date.))}
+                     entity                  (assoc :kontor.return/entity entity)
+                     destination-facility-id (assoc :kontor.return/destination-facility-id destination-facility-id)
+                     supplier-rma            (assoc :kontor.return/supplier-rma supplier-rma)
+                     notes                   (assoc :kontor.return/notes notes)
+                     supporting-doc          (assoc :kontor.return/supporting-doc supporting-doc))
         item-rows (mapv (fn [idx item]
-                          (cond-> {:return-item/return tempid
-                                   :return-item/order-item (:order-item item)
-                                   :return-item/seq-id (or (:seq-id item)
+                          (cond-> {:kontor.return-item/return tempid
+                                   :kontor.return-item/order-item (:order-item item)
+                                   :kontor.return-item/seq-id (or (:seq-id item)
                                                             (format "%05d" (inc idx)))
-                                   :return-item/return-quantity (:return-quantity item)
-                                   :return-item/status :requested}
+                                   :kontor.return-item/return-quantity (:return-quantity item)
+                                   :kontor.return-item/status :requested}
                             (:product-id item)
-                            (assoc :return-item/product-id (:product-id item))
+                            (assoc :kontor.return-item/product-id (:product-id item))
 
                             (:return-price item)
-                            (assoc :return-item/return-price (:return-price item))
+                            (assoc :kontor.return-item/return-price (:return-price item))
 
                             (:reason item)
-                            (assoc :return-item/reason (:reason item))
+                            (assoc :kontor.return-item/reason (:reason item))
 
                             (:return-type item)
-                            (assoc :return-item/return-type (:return-type item))
+                            (assoc :kontor.return-item/return-type (:return-type item))
 
                             (:expected-disposition item)
-                            (assoc :return-item/expected-disposition
+                            (assoc :kontor.return-item/expected-disposition
                                    (:expected-disposition item))))
                         (range)
                         items)]
@@ -147,7 +147,7 @@
      (sm/record-status-change! conn
                                (merge {:entity eid
                                        :entity-type :return
-                                       :facet :return/status
+                                       :facet :kontor.return/status
                                        :to :accepted}
                                       opts)))))
 
@@ -159,7 +159,7 @@
      (sm/record-status-change! conn
                                (merge {:entity eid
                                        :entity-type :return
-                                       :facet :return/status
+                                       :facet :kontor.return/status
                                        :to :rejected}
                                       opts)))))
 
@@ -171,13 +171,13 @@
      (sm/record-status-change! conn
                                (merge {:entity eid
                                        :entity-type :return
-                                       :facet :return/status
+                                       :facet :kontor.return/status
                                        :to :cancelled}
                                       opts)))))
 
 (defn receive-return!
   "Transition :accepted → :received. Caller must update
-   :return-item/received-quantity per line via separate tx if it
+   :kontor.return-item/received-quantity per line via separate tx if it
    differs from :return-quantity."
   ([conn return] (receive-return! conn return nil))
   ([conn return opts]
@@ -185,7 +185,7 @@
      (sm/record-status-change! conn
                                (merge {:entity eid
                                        :entity-type :return
-                                       :facet :return/status
+                                       :facet :kontor.return/status
                                        :to :received}
                                       opts)))))
 
@@ -198,7 +198,7 @@
      (sm/record-status-change! conn
                                (merge {:entity eid
                                        :entity-type :return
-                                       :facet :return/status
+                                       :facet :kontor.return/status
                                        :to :completed}
                                       opts)))))
 
@@ -223,30 +223,30 @@
         _ (when-not return-eid
             (throw (ex-info "Return not found" {:spec return-spec})))
         return (d/pull db
-                       '[* {:return/from-party [:db/id]
-                            :return/to-party [:db/id]
-                            :return/entity [:db/id]
-                            :return/order [:db/id {:order/currency [:kontor.commodity/symbol]}]}]
+                       '[* {:kontor.return/from-party [:db/id]
+                            :kontor.return/to-party [:db/id]
+                            :kontor.return/entity [:db/id]
+                            :kontor.return/order [:db/id {:kontor.order/currency [:kontor.commodity/symbol]}]}]
                        return-eid)
-        return-type (:return/type return)
+        return-type (:kontor.return/type return)
         invoice-type (credit-memo-invoice-type return-type)
-        ;; The polarity is symmetric: :return/to-party is the issuer
-        ;; of the credit (= invoice :seller), :return/from-party is
+        ;; The polarity is symmetric: :kontor.return/to-party is the issuer
+        ;; of the credit (= invoice :seller), :kontor.return/from-party is
         ;; the recipient (= invoice :buyer). For :customer returns
         ;; we (the org) issue credit to the customer. For :vendor
         ;; returns the supplier issues credit to us (the kontor
         ;; convention follows Odoo / Coupa, not SAP's buyer-issued
         ;; debit-memo pattern).
-        seller-eid (get-in return [:return/to-party :db/id])
-        buyer-eid  (get-in return [:return/from-party :db/id])
-        currency (get-in return [:return/order :order/currency :kontor.commodity/symbol])
+        seller-eid (get-in return [:kontor.return/to-party :db/id])
+        buyer-eid  (get-in return [:kontor.return/from-party :db/id])
+        currency (get-in return [:kontor.return/order :kontor.order/currency :kontor.commodity/symbol])
         items (items-of db return-eid)
         invoice-tempid "credit-memo-1"
         line-tempids (mapv #(str "credit-line-" (inc %)) (range (count items)))
         line-rows (mapv (fn [item line-tempid idx]
-                          (let [qty (or (:return-item/received-quantity item)
-                                        (:return-item/return-quantity item))
-                                price (or (:return-item/return-price item) 0M)
+                          (let [qty (or (:kontor.return-item/received-quantity item)
+                                        (:kontor.return-item/return-quantity item))
+                                price (or (:kontor.return-item/return-price item) 0M)
                                 amount (.multiply ^java.math.BigDecimal qty
                                                   ^java.math.BigDecimal price)
                                 ;; GL routing: credit-memo lines reverse a
@@ -254,7 +254,7 @@
                                 ;; (the polarity flip in default-direction-
                                 ;; for makes the posting Dr revenue, Cr AR).
                                 ;; Debit-memo lines reverse a prior purchase
-                                ;; via :order-item/category dispatch — same
+                                ;; via :kontor.procurement.order-item/category dispatch — same
                                 ;; account-type the original purchase line
                                 ;; would have used. Direct-material RTVs
                                 ;; that need explicit inventory adjustment
@@ -262,8 +262,8 @@
                                 ;; :out separately and let the debit-memo
                                 ;; clear AP; the bridge here only models
                                 ;; the AP side.
-                                category (:order-item/category
-                                           (:return-item/order-item item))
+                                category (:kontor.procurement.order-item/category
+                                           (:kontor.return-item/order-item item))
                                 gl-type (case invoice-type
                                           :credit-memo :sales-revenue
                                           :debit-memo
@@ -277,8 +277,8 @@
                              :kontor.invoice-line/invoice invoice-tempid
                              :kontor.invoice-line/sequence (inc idx)
                              :kontor.invoice-line/order-item (:db/id
-                                                       (:return-item/order-item item))
-                             :kontor.invoice-line/name (or (:return-item/product-id item)
+                                                       (:kontor.return-item/order-item item))
+                             :kontor.invoice-line/name (or (:kontor.return-item/product-id item)
                                                      "Return")
                              :kontor.invoice-line/quantity qty
                              :kontor.invoice-line/unit-price price
@@ -286,18 +286,18 @@
                              :kontor.invoice-line/gl-account-type gl-type}))
                         items line-tempids (range))
         billing-rows (mapv (fn [item line-tempid]
-                             {:return-item-billing/return-item (:db/id item)
-                              :return-item-billing/invoice-line line-tempid
-                              :return-item-billing/quantity
-                              (or (:return-item/received-quantity item)
-                                  (:return-item/return-quantity item))
-                              :return-item-billing/amount
+                             {:kontor.return-item-billing/return-item (:db/id item)
+                              :kontor.return-item-billing/invoice-line line-tempid
+                              :kontor.return-item-billing/quantity
+                              (or (:kontor.return-item/received-quantity item)
+                                  (:kontor.return-item/return-quantity item))
+                              :kontor.return-item-billing/amount
                               (.multiply
                                ^java.math.BigDecimal
-                               (or (:return-item/received-quantity item)
-                                   (:return-item/return-quantity item) 0M)
+                               (or (:kontor.return-item/received-quantity item)
+                                   (:kontor.return-item/return-quantity item) 0M)
                                ^java.math.BigDecimal
-                               (or (:return-item/return-price item) 0M))})
+                               (or (:kontor.return-item/return-price item) 0M))})
                            items line-tempids)
         invoice-row (cond-> {:db/id invoice-tempid
                              :kontor.invoice/external-id external-id
@@ -306,11 +306,11 @@
                              :kontor.invoice/issue-date (or issue-date (java.util.Date.))
                              :kontor.invoice/seller seller-eid
                              :kontor.invoice/buyer buyer-eid
-                             :kontor.invoice/order (get-in return [:return/order :db/id])
+                             :kontor.invoice/order (get-in return [:kontor.return/order :db/id])
                              :kontor.invoice/lines (mapv :db/id line-rows)}
                       currency (assoc :kontor.invoice/currency currency)
-                      (get-in return [:return/entity :db/id])
-                      (assoc :kontor.invoice/entity (get-in return [:return/entity :db/id])))]
+                      (get-in return [:kontor.return/entity :db/id])
+                      (assoc :kontor.invoice/entity (get-in return [:kontor.return/entity :db/id])))]
     (vec (concat [invoice-row] line-rows billing-rows))))
 
 (defn make-credit-memo-from-return!

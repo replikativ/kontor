@@ -207,8 +207,8 @@
 
 (defn esi-audit-doc-tx-data
   "Build an :audit-doc tx-data fragment recording the monthly ESI
-   submission. Carries :audit-doc/category :payroll-filing +
-   :audit-doc/language :en-in per ADR-083."
+   submission. Carries :kontor.audit-doc/category :payroll-filing +
+   :kontor.audit-doc/language :en-in per ADR-083."
   [{:keys [esi-summary esic-code language]
     :or {language :en-in}}]
   (let [{:keys [year month esi-total period-start period-end
@@ -217,13 +217,13 @@
         title (format "ESIC monthly return — %s, %04d-%02d" code year month)
         desc (format "ESI payable (EE 0.75%% + ER 3.25%%): %s | Period %s..%s"
                      (:amount esi-total) (str period-start) (str period-end))]
-    [{:audit-doc/code (str "ESIC-" code "-" year "-" (format "%02d" month))
-      :audit-doc/type :regulator-clearance
-      :audit-doc/title title
-      :audit-doc/description desc
-      :audit-doc/uploaded-at (java.util.Date.)
-      :audit-doc/category :payroll-filing
-      :audit-doc/language language}]))
+    [{:kontor.audit-doc/code (str "ESIC-" code "-" year "-" (format "%02d" month))
+      :kontor.audit-doc/type :regulator-clearance
+      :kontor.audit-doc/title title
+      :kontor.audit-doc/description desc
+      :kontor.audit-doc/uploaded-at (java.util.Date.)
+      :kontor.audit-doc/category :payroll-filing
+      :kontor.audit-doc/language language}]))
 
 ;; ============================================================================
 ;; build-esi-submission — end-to-end

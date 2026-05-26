@@ -110,7 +110,7 @@
 (defn apply-schedule
   "Run BigDecimal `base` through `schedule`, returning the BigDecimal
    gross liability. `schedule` is plain data tagged by
-   `:schedule/type` — `:flat | :progressive-bracket | :capped |
+   `:kontor.schedule/type` — `:flat | :progressive-bracket | :capped |
    :formula | :elect` (see the ns docstring).
 
    The optional `ctx` map is threaded to `:formula` schedules — its
@@ -120,14 +120,14 @@
   (^java.math.BigDecimal [schedule base]
    (apply-schedule schedule base nil))
   (^java.math.BigDecimal [schedule ^java.math.BigDecimal base ctx]
-   (case (:schedule/type schedule)
+   (case (:kontor.schedule/type schedule)
      :flat                (* base (:rate schedule))
      :progressive-bracket (progressive-tax (:brackets schedule) base)
      :capped              (capped-tax schedule base)
      :formula             ((:fn schedule) base ctx)
      :elect               (elect-tax schedule base ctx)
      :sum                 (sum-tax schedule base ctx)
-     (throw (ex-info "apply-schedule: unknown :schedule/type"
+     (throw (ex-info "apply-schedule: unknown :kontor.schedule/type"
                      {:schedule schedule})))))
 
 ;; ============================================================================
@@ -294,18 +294,18 @@
 (defn flat
   "A `:flat` schedule."
   [rate]
-  {:schedule/type :flat :rate rate})
+  {:kontor.schedule/type :flat :rate rate})
 
 (defn progressive
   "A `:progressive-bracket` schedule. `brackets` is an ascending
    vector of `{:rate :upper}`; the last `:upper` should be nil."
   [brackets]
-  {:schedule/type :progressive-bracket :brackets (vec brackets)})
+  {:kontor.schedule/type :progressive-bracket :brackets (vec brackets)})
 
 (defn capped
   "A `:capped` schedule — `rate` on `[floor, ceiling]`."
   [rate {:keys [floor ceiling]}]
-  (cond-> {:schedule/type :capped :rate rate}
+  (cond-> {:kontor.schedule/type :capped :rate rate}
     floor   (assoc :floor floor)
     ceiling (assoc :ceiling ceiling)))
 
@@ -314,8 +314,8 @@
    add the results (a base-surcharge alongside the main schedule, e.g.
    AU income-tax brackets + the Medicare levy)."
   [schedules]
-  {:schedule/type :sum :schedules (vec schedules)})
+  {:kontor.schedule/type :sum :schedules (vec schedules)})
 
 (def schedule-types
-  "The closed set of `:schedule/type` values `apply-schedule` accepts."
+  "The closed set of `:kontor.schedule/type` values `apply-schedule` accepts."
   #{:flat :progressive-bracket :capped :formula :elect :sum})

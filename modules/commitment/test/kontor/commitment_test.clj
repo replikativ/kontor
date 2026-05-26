@@ -49,7 +49,7 @@
     (testing "the commitment opens"
       (let [opens (commitment/open-commitments (d/db conn))]
         (is (= 1 (count opens)))
-        (is (= :open (:commitment/state (first opens))))
+        (is (= :open (:kontor.commitment/state (first opens))))
         (is (== 1000M (commitment/outstanding (d/db conn) "C-1")))))
     ;; the obligation hits the GL as a sale on account
     (book/sell! conn {:debit-account [:kontor.account/path "Assets:Receivable"]
@@ -68,15 +68,15 @@
                                  :amount 1000 :recorded-by-uid alice})
       (is (empty? (commitment/open-commitments (d/db conn)))
           "fully fulfilled → no longer open")
-      (is (= :fulfilled (:commitment/state (commitment/pull-commitment (d/db conn) "C-1"))))
+      (is (= :fulfilled (:kontor.commitment/state (commitment/pull-commitment (d/db conn) "C-1"))))
       (is (== 0M (commitment/outstanding (d/db conn) "C-1"))))
     (testing "the fulfillment edge points at the settling transaction"
       (let [edge (d/q '[:find (pull ?f [*]) .
-                        :where [?f :commitment-fulfillment/commitment _]]
+                        :where [?f :kontor.commitment-fulfillment/commitment _]]
                       (d/db conn))]
         (is (= (tx-by-xid conn "PAY-1")
-               (get-in edge [:commitment-fulfillment/transaction :db/id])))
-        (is (== 1000M (:commitment-fulfillment/amount edge)))))))
+               (get-in edge [:kontor.commitment-fulfillment/transaction :db/id])))
+        (is (== 1000M (:kontor.commitment-fulfillment/amount edge)))))))
 
 ;; ============================================================================
 ;; Partial fulfillment
@@ -96,7 +96,7 @@
                                :amount 600 :recorded-by-uid alice})
     (testing "a partial fulfillment leaves the commitment open"
       (is (= :partially-fulfilled
-             (:commitment/state (commitment/pull-commitment (d/db conn) "C-2"))))
+             (:kontor.commitment/state (commitment/pull-commitment (d/db conn) "C-2"))))
       (is (== 400M (commitment/outstanding (d/db conn) "C-2")))
       (is (= 1 (count (commitment/open-commitments (d/db conn))))))
     (book/pay-bill! conn {:debit-account [:kontor.account/path "Assets:Receivable"]
@@ -107,7 +107,7 @@
                                :amount 400 :recorded-by-uid alice})
     (testing "the completing fulfillment closes it"
       (is (= :fulfilled
-             (:commitment/state (commitment/pull-commitment (d/db conn) "C-2"))))
+             (:kontor.commitment/state (commitment/pull-commitment (d/db conn) "C-2"))))
       (is (empty? (commitment/open-commitments (d/db conn)))))))
 
 (deftest cannot-fulfill-a-closed-commitment
@@ -139,7 +139,7 @@
            :due-date #inst "2026-04-01" :recorded-by-uid alice})
     (commitment/cancel! conn {:commitment "C-4" :changed-by-uid alice
                               :reason :superseded})
-    (is (= :cancelled (:commitment/state (commitment/pull-commitment (d/db conn) "C-4"))))
+    (is (= :cancelled (:kontor.commitment/state (commitment/pull-commitment (d/db conn) "C-4"))))
     (is (empty? (commitment/open-commitments (d/db conn))))))
 
 ;; ============================================================================

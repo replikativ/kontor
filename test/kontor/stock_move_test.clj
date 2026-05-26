@@ -85,7 +85,7 @@
       (let [n-layers (d/q '[:find (count ?l) .
                             :in $ ?item
                             :where
-                            [?l :valuation-layer/item ?item]]
+                            [?l :kontor.valuation-layer/item ?item]]
                           db item)]
         (is (= 1 n-layers))))
     (testing "On-hand qty matches the receipt"
@@ -193,7 +193,7 @@
         (is (= 0 (.compareTo (bigdec "620.00") cogs-bal))))
       (testing "Two consumption events written (one per drawn layer)"
         (let [n-cons (d/q '[:find (count ?c) .
-                            :where [?c :layer-consumption/layer _]]
+                            :where [?c :kontor.layer-consumption/layer _]]
                           db)]
           (is (= 2 n-cons))))
       (testing "Remaining on-hand = 100 + 50 − 120 = 30"
@@ -233,11 +233,11 @@
             consult only that book's layers."
     (let [{:keys [conn commodity item journal book]} (setup!)
           _ (d/transact conn
-                        [{:valuation-book/code        "ifrs"
-                          :valuation-book/name        "IFRS valuation"
-                          :valuation-book/framework   :ifrs
-                          :valuation-book/cost-method :avg
-                          :valuation-book/active      true}])
+                        [{:kontor.valuation-book/code        "ifrs"
+                          :kontor.valuation-book/name        "IFRS valuation"
+                          :kontor.valuation-book/framework   :ifrs
+                          :kontor.valuation-book/cost-method :avg
+                          :kontor.valuation-book/active      true}])
           ifrs (valuation/by-code (d/db conn) "ifrs")
           fifo (costing/make-fifo-provider)
           avg  (costing/make-weighted-average-provider)

@@ -212,9 +212,9 @@
                       :commodity cad})
         db (:db-after report)
         run-eid (d/q '[:find ?r . :in $ ?c
-                       :where [?r :payroll-run/code ?c]]
+                       :where [?r :kontor.payroll-run/code ?c]]
                      db "ACME-2026-05-001")
-        run (d/pull db '[* {:payroll-run/payroll-transaction
+        run (d/pull db '[* {:kontor.payroll-run/payroll-transaction
                             [:kontor.transaction/external-id
                              {:kontor.posting/_transaction
                               [:kontor.posting/amount
@@ -222,20 +222,20 @@
                     run-eid)]
     (testing "payroll-run row created"
       (is (some? run-eid))
-      (is (= :computed (:payroll-run/state run)))
-      (is (= :mock-ca (:payroll-run/provider-id run))))
+      (is (= :computed (:kontor.payroll-run/state run)))
+      (is (= :mock-ca (:kontor.payroll-run/provider-id run))))
     (testing "Control totals reflect both employees"
       ;; James gross 7083.33 + Sophie gross 5500 = 12583.33
-      (is (= 12583.33M (:payroll-run/control-total-gross run))))
+      (is (= 12583.33M (:kontor.payroll-run/control-total-gross run))))
     (testing "Posting legs sum to zero per ledger × commodity"
-      (let [postings (-> run :payroll-run/payroll-transaction
+      (let [postings (-> run :kontor.payroll-run/payroll-transaction
                          :kontor.posting/_transaction)
             sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                           (.add ^BigDecimal a ^BigDecimal amount))
                         0M postings)]
         (is (zero? (.compareTo ^BigDecimal sum 0M)))))
     (testing "Sophie's QC-specific deductions hit the right accounts"
-      (let [postings (-> run :payroll-run/payroll-transaction
+      (let [postings (-> run :kontor.payroll-run/payroll-transaction
                          :kontor.posting/_transaction)
             by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)]
         ;; QPP (2521) total: -353 employee + -353 employer payable
@@ -272,7 +272,7 @@
     (testing "Emit provider produced one audit-doc with :payroll-filing category"
       ;; Note 86 P0-86-2 — canonical vocabulary; was :payroll.
       (let [docs (d/q '[:find [?e ...]
-                        :where [?e :audit-doc/category :payroll-filing]]
+                        :where [?e :kontor.audit-doc/category :payroll-filing]]
                       db)]
         (is (>= (count docs) 1))))))
 
@@ -426,8 +426,8 @@
             events (ppro/emit-payroll-events
                     qc-prov facts {:pay-period-eid pp-eid :entity-eid ent})]
         (is (= 1 (count events)))
-        (is (= :payroll-filing (:audit-doc/category (first events))))
-        (is (= :fr (:audit-doc/language (first events))))))
+        (is (= :payroll-filing (:kontor.audit-doc/category (first events))))
+        (is (= :fr (:kontor.audit-doc/language (first events))))))
     (testing "build-rl1-submission! generates valid XML envelope"
       (let [;; Build a synthetic full-year facts list (12 × monthly) so
             ;; the RL-1 + Sommaire1 totals make sense.
@@ -469,4 +469,4 @@
         (is (not (re-find #"<NAS>123456790</NAS>" xml-str)) "James (ON) excluded")
         (is (re-find #"<Sommaire1>" xml-str))
         (is (re-find #"<Case30>2580\.00</Case30>" xml-str) "FSS present in summary")
-        (is (= :fr (:audit-doc/language (first (:audit-doc-tx-data result)))))))))
+        (is (= :fr (:kontor.audit-doc/language (first (:audit-doc-tx-data result)))))))))

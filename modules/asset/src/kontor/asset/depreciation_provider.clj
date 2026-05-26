@@ -40,11 +40,11 @@
    l10n concern. l10n-de ships a `:depreciation-rule` entity
    (l10n-owned namespace) with `:effective-from` / `:effective-until`
    bounds and resolves the row whose window contains the asset's
-   **`:asset/acquisition-date`** — the one deliberate divergence from
+   **`:kontor.asset/acquisition-date`** — the one deliberate divergence from
    ADR-026, which keys on the transaction date. The rule that governs
    an asset is fixed at acquisition for the asset's whole life, so
    the resolved row is pinned permanently as
-   `:asset-depreciation/effective-rule` at `open-book!` time and
+   `:kontor.asset-depreciation/effective-rule` at `open-book!` time and
    never re-resolved. The companion ships the *slot* + the *pattern*;
    l10n ships the *rows* + the resolution helper. A built-in here
    only ever reads `:asset-method-params` (which l10n populates from
@@ -63,7 +63,7 @@
 
   (provider-id [provider]
     "A keyword identifying this provider impl. Matches the
-     `:asset-depreciation/provider-id` stored on the book.")
+     `:kontor.asset-depreciation/provider-id` stored on the book.")
 
   (plan-schedule [provider db book]
     "Given a `db` value and an `:asset-depreciation` book (eid or
@@ -99,16 +99,16 @@
 (defn- bd- ^BigDecimal [^BigDecimal a ^BigDecimal b] (.subtract a b))
 
 (defn- fired-amounts
-  "Map of `sequence → fired :schedule-occurrence/amount` for a book's
+  "Map of `sequence → fired :kontor.schedule-occurrence/amount` for a book's
    schedule."
   [db schedule-eid]
   (into {}
         (d/q '[:find ?seq ?amt
                :in $ ?s
                :where
-               [?o :schedule-occurrence/schedule ?s]
-               [?o :schedule-occurrence/sequence ?seq]
-               [?o :schedule-occurrence/amount ?amt]]
+               [?o :kontor.schedule-occurrence/schedule ?s]
+               [?o :kontor.schedule-occurrence/sequence ?seq]
+               [?o :kontor.schedule-occurrence/amount ?amt]]
              db schedule-eid)))
 
 (defn- equal-split
@@ -132,7 +132,7 @@
   [{:keys [convention provider-id]}]
   (when-not (= :full convention)
     (throw (ex-info "Built-in DepreciationProvider supports the :full convention only — a non-:full convention needs an l10n provider"
-                    {:type        :asset/unsupported-convention
+                    {:type        :kontor.asset/unsupported-convention
                      :convention  convention
                      :provider-id provider-id}))))
 
@@ -220,9 +220,9 @@
           (depreciation/book-plan-inputs db book)
           _ (assert-full-convention! inputs)
           fired (fired-amounts db schedule)
-          multiple (or (:asset-method-params/rate-multiple method-params) 2M)
-          ceiling  (:asset-method-params/ceiling-rate method-params)
-          switch?  (boolean (:asset-method-params/switch-to-straight-line method-params))
+          multiple (or (:kontor.asset-method-params/rate-multiple method-params) 2M)
+          ceiling  (:kontor.asset-method-params/ceiling-rate method-params)
+          switch?  (boolean (:kontor.asset-method-params/switch-to-straight-line method-params))
           ;; sl-rate is per-period (1/n-periods); db-rate stays
           ;; per-period; the annual :ceiling-rate is converted to a
           ;; per-period cap — all three on the same time base.
@@ -325,9 +325,9 @@
            :as inputs}
           (depreciation/book-plan-inputs db book)
           _ (assert-full-convention! inputs)
-          total-units (:asset-method-params/total-units method-params)
+          total-units (:kontor.asset-method-params/total-units method-params)
           _ (when-not (and total-units (pos? (.signum ^BigDecimal total-units)))
-              (throw (ex-info "units-of-production needs :asset-method-params/total-units > 0"
+              (throw (ex-info "units-of-production needs :kontor.asset-method-params/total-units > 0"
                               {:book (:book inputs)})))
           rate (.divide ^BigDecimal depreciable-base ^BigDecimal total-units
                         12 RoundingMode/HALF_EVEN)
@@ -356,7 +356,7 @@
    :units-of-production ->UnitsOfProductionProvider})
 
 (defn provider-for
-  "Resolve a `:asset-depreciation/provider-id` keyword to a built-in
+  "Resolve a `:kontor.asset-depreciation/provider-id` keyword to a built-in
    `DepreciationProvider` instance. l10n modules pass their own impl
    instance directly to the runner instead of going through this."
   [provider-id]

@@ -2,12 +2,12 @@
   "kontor-asset register + lifecycle transactors — ADR-053.
 
    GL-free: ADR-053 records the :asset register, the :asset-event
-   append-only mid-life facts, and drives the :asset/status lifecycle
+   append-only mid-life facts, and drives the :kontor.asset/status lifecycle
    status machine. ADR-054 adds the per-(asset, ledger) depreciation
    books, the depreciation runner, and the GL postings — in ADR-053
    the caller supplies :origin-transaction / event-transaction refs.
 
-   Lifecycle (`:asset/status` facet, ADR-034):
+   Lifecycle (`:kontor.asset/status` facet, ADR-034):
      nil → :planned → :in-service → :fully-depreciated
                                   / :disposed / :transferred
 
@@ -43,10 +43,10 @@
 ;; ============================================================================
 
 (defn by-code
-  "Resolve an :asset eid by its :asset/code."
+  "Resolve an :asset eid by its :kontor.asset/code."
   [db code]
   (d/q '[:find ?e . :in $ ?c
-         :where [?e :asset/code ?c]]
+         :where [?e :kontor.asset/code ?c]]
        db code))
 
 (defn resolve-asset
@@ -62,7 +62,7 @@
   [db spec]
   (when-let [eid (resolve-asset db spec)]
     (d/pull db
-            '[* {:asset/class [:asset-class/code :asset-class/name]}]
+            '[* {:kontor.asset/class [:kontor.asset-class/code :kontor.asset-class/name]}]
             eid)))
 
 ;; ============================================================================
@@ -97,26 +97,26 @@
         isd (when in-service? (or in-service-date acquisition-date))
         asset-tempid tempid
         row (cond-> {:db/id asset-tempid
-                     :asset/code code
-                     :asset/name name
-                     :asset/class class
-                     :asset/acquisition-cost acquisition-cost
-                     :asset/acquisition-commodity acquisition-commodity
-                     :asset/acquisition-date acquisition-date
-                     :asset/salvage-value (or salvage-value 0M)
-                     :asset/status target-state}
-              isd                 (assoc :asset/in-service-date isd)
-              asset-account       (assoc :asset/asset-account asset-account)
-              accumulated-account (assoc :asset/accumulated-account accumulated-account)
-              expense-account     (assoc :asset/expense-account expense-account)
-              cost-center         (assoc :asset/cost-center cost-center)
-              entity              (assoc :asset/entity entity)
-              parent              (assoc :asset/parent parent)
-              origin-transaction  (assoc :asset/origin-transaction origin-transaction)
-              origin-document     (assoc :asset/origin-document origin-document)
-              serial-number       (assoc :asset/serial-number serial-number)
-              location            (assoc :asset/location location)
-              note                (assoc :asset/note note)
+                     :kontor.asset/code code
+                     :kontor.asset/name name
+                     :kontor.asset/class class
+                     :kontor.asset/acquisition-cost acquisition-cost
+                     :kontor.asset/acquisition-commodity acquisition-commodity
+                     :kontor.asset/acquisition-date acquisition-date
+                     :kontor.asset/salvage-value (or salvage-value 0M)
+                     :kontor.asset/status target-state}
+              isd                 (assoc :kontor.asset/in-service-date isd)
+              asset-account       (assoc :kontor.asset/asset-account asset-account)
+              accumulated-account (assoc :kontor.asset/accumulated-account accumulated-account)
+              expense-account     (assoc :kontor.asset/expense-account expense-account)
+              cost-center         (assoc :kontor.asset/cost-center cost-center)
+              entity              (assoc :kontor.asset/entity entity)
+              parent              (assoc :kontor.asset/parent parent)
+              origin-transaction  (assoc :kontor.asset/origin-transaction origin-transaction)
+              origin-document     (assoc :kontor.asset/origin-document origin-document)
+              serial-number       (assoc :kontor.asset/serial-number serial-number)
+              location            (assoc :kontor.asset/location location)
+              note                (assoc :kontor.asset/note note)
               ;; The acquirer IS the creator — stamp :kontor.audit/create-uid so
               ;; ADR-038 :no-self-approval can fire on disposal.
               changed-by-uid      (assoc :kontor.audit/create-uid changed-by-uid))
@@ -124,7 +124,7 @@
                    db
                    (cond-> {:entity asset-tempid
                             :entity-type :asset
-                            :facet :asset/status
+                            :facet :kontor.asset/status
                             :from :nil
                             :to target-state
                             :changed-at (or changed-at (java.util.Date.))
@@ -176,7 +176,7 @@
 
 (defn place-in-service!
   "Transition a :planned asset to :in-service, stamping
-   `:asset/in-service-date`. The depreciation clock starts here
+   `:kontor.asset/in-service-date`. The depreciation clock starts here
    (ADR-054).
 
    Required opts: :asset (code or eid), :in-service-date,
@@ -207,7 +207,7 @@
                    db
                    (cond-> {:entity eid
                             :entity-type :asset
-                            :facet :asset/status
+                            :facet :kontor.asset/status
                             :from :planned
                             :to :in-service
                             :changed-at (or changed-at (java.util.Date.))
@@ -216,11 +216,11 @@
                      reason-note    (assoc :reason-note reason-note)
                      supporting-doc (assoc :supporting-doc supporting-doc)))]
     (into [{:db/id eid
-            :asset/in-service-date in-service-date}]
+            :kontor.asset/in-service-date in-service-date}]
           status-tx)))
 
 ;; ============================================================================
-;; Lifecycle-changing events — dispose / transfer (drive :asset/status)
+;; Lifecycle-changing events — dispose / transfer (drive :kontor.asset/status)
 ;; ============================================================================
 
 (defn- record-event-tx-data
@@ -233,22 +233,22 @@
                          transaction justification note tempid]
                   :or   {tempid "asset-event-1"}}]
   [(cond-> {:db/id tempid
-            :asset-event/asset asset-eid
-            :asset-event/kind kind
-            :asset-event/date date}
-     amount                 (assoc :asset-event/amount amount)
-     commodity              (assoc :asset-event/commodity commodity)
-     new-useful-life-months (assoc :asset-event/new-useful-life-months
+            :kontor.asset-event/asset asset-eid
+            :kontor.asset-event/kind kind
+            :kontor.asset-event/date date}
+     amount                 (assoc :kontor.asset-event/amount amount)
+     commodity              (assoc :kontor.asset-event/commodity commodity)
+     new-useful-life-months (assoc :kontor.asset-event/new-useful-life-months
                                    new-useful-life-months)
-     transaction            (assoc :asset-event/transaction transaction)
-     justification          (assoc :asset-event/justification justification)
-     note                   (assoc :asset-event/note note))])
+     transaction            (assoc :kontor.asset-event/transaction transaction)
+     justification          (assoc :kontor.asset-event/justification justification)
+     note                   (assoc :kontor.asset-event/note note))])
 
 (declare dispose-tx-data)
 
 (defn dispose!
   "Dispose of an asset — write-off, sale, or scrap. Records an
-   append-only `:asset-event :disposal` AND drives `:asset/status`
+   append-only `:asset-event :disposal` AND drives `:kontor.asset/status`
    :in-service → :disposed (or :fully-depreciated → :disposed), so
    the ADR-038 approval policy fires (`:requires-supporting-doc` +
    `:no-self-approval`).
@@ -262,7 +262,7 @@
 
    Optional:
      :proceeds        bigdec — sale proceeds (recorded as
-                      :asset-event/amount; 0 for a scrap/write-off)
+                      :kontor.asset-event/amount; 0 for a scrap/write-off)
      :commodity       ref to :commodity
      :transaction     ref to :transaction (the GL reversal entry —
                       ADR-054's posting helper builds it)
@@ -279,7 +279,7 @@
 (defn dispose-tx-data
   "Pure tx-data builder for `dispose!` (ADR-068). Returns the tx-data
    vector (no `d/transact`, no `kbt/with-vt`). Reads the current
-   :asset/status from `db` to feed the status-machine `:from` slot.
+   :kontor.asset/status from `db` to feed the status-machine `:from` slot.
    Optional `:event-tempid` (default `\"asset-event-1\"`) for
    composition."
   [db {:keys [asset date changed-by-uid justification proceeds commodity
@@ -290,7 +290,7 @@
   (when-not justification  (throw (ex-info ":justification required (disposal authorisation)" {})))
   (let [eid (resolve-asset db asset)
         _ (when-not eid (throw (ex-info "Asset not found" {:spec asset})))
-        from (:asset/status (d/pull db [:asset/status] eid))
+        from (:kontor.asset/status (d/pull db [:kontor.asset/status] eid))
         event-tx (record-event-tx-data db eid
                                        {:kind :disposal :date date
                                         :amount (or proceeds 0M)
@@ -303,7 +303,7 @@
                    db
                    (cond-> {:entity eid
                             :entity-type :asset
-                            :facet :asset/status
+                            :facet :kontor.asset/status
                             :from from
                             :to :disposed
                             :changed-at date
@@ -317,7 +317,7 @@
 
 (defn transfer!
   "Transfer an asset to another legal entity (ADR-031). Records an
-   `:asset-event :transfer` AND drives `:asset/status` :in-service →
+   `:asset-event :transfer` AND drives `:kontor.asset/status` :in-service →
    :transferred.
 
    Required opts: :asset, :date, :changed-by-uid, :to-entity.
@@ -353,7 +353,7 @@
                    db
                    (cond-> {:entity eid
                             :entity-type :asset
-                            :facet :asset/status
+                            :facet :kontor.asset/status
                             :from :in-service
                             :to :transferred
                             :changed-at date
@@ -362,12 +362,12 @@
                      reason-note    (assoc :reason-note reason-note)
                      justification  (assoc :supporting-doc justification)))]
     (into (conj (vec event-tx)
-                {:db/id eid :asset/entity to-entity})
+                {:db/id eid :kontor.asset/entity to-entity})
           status-tx)))
 
 ;; ============================================================================
 ;; In-service events — impair / revalue / revise-useful-life / addition
-;; (no :asset/status change; inline required-arg guards)
+;; (no :kontor.asset/status change; inline required-arg guards)
 ;; ============================================================================
 
 (declare impair-tx-data)
@@ -548,15 +548,15 @@
 ;; ============================================================================
 
 (defn events-of
-  "All :asset-event entities for an asset, ordered by :asset-event/date."
+  "All :asset-event entities for an asset, ordered by :kontor.asset-event/date."
   [db asset-spec]
   (when-let [eid (resolve-asset db asset-spec)]
     (->> (d/q '[:find [?e ...]
                 :in $ ?a
-                :where [?e :asset-event/asset ?a]]
+                :where [?e :kontor.asset-event/asset ?a]]
               db eid)
          (map #(d/pull db '[*] %))
-         (sort-by :asset-event/date)
+         (sort-by :kontor.asset-event/date)
          vec)))
 
 (defn assets-by-status
@@ -564,5 +564,5 @@
   [db status]
   (set (d/q '[:find [?e ...]
               :in $ ?s
-              :where [?e :asset/status ?s]]
+              :where [?e :kontor.asset/status ?s]]
             db status)))

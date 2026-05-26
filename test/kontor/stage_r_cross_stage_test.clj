@@ -283,7 +283,7 @@
     (testing "Jane has three concurrent employments across three entities"
       (let [emps (d/q '[:find [?e ...]
                         :in $ ?p
-                        :where [?e :employment/person ?p]]
+                        :where [?e :kontor.employment/person ?p]]
                       (d/db conn) jane)]
         (is (= 3 (count emps)))))
 
@@ -296,8 +296,8 @@
       (let [ftes (d/q '[:find [?ft ...]
                         :in $ ?p
                         :where
-                        [?e :employment/person ?p]
-                        [?e :employment/work-time-fraction ?ft]]
+                        [?e :kontor.employment/person ?p]
+                        [?e :kontor.employment/work-time-fraction ?ft]]
                       (d/db conn) jane)]
         (is (= 3 (count ftes)))
         (is (= 1.20M (reduce (fn [a v] (.add ^java.math.BigDecimal a
@@ -311,9 +311,9 @@
             (d/q '[:find [?sym ...]
                    :in $ ?p
                    :where
-                   [?e :employment/person ?p]
-                   [?c :compensation/employment ?e]
-                   [?c :compensation/commodity ?cm]
+                   [?e :kontor.employment/person ?p]
+                   [?c :kontor.compensation/employment ?e]
+                   [?c :kontor.compensation/commodity ?cm]
                    [?cm :kontor.commodity/symbol ?sym]]
                  (d/db conn) jane)]
         (is (= #{"EUR" "USD" "CAD"} (set comp-currencies)))))
@@ -321,8 +321,8 @@
     (testing "Three :payroll-run rows produced with country-specific provider IDs"
       (let [runs (d/q '[:find ?code ?pid
                         :where
-                        [?r :payroll-run/code ?code]
-                        [?r :payroll-run/provider-id ?pid]]
+                        [?r :kontor.payroll-run/code ?code]
+                        [?r :kontor.payroll-run/provider-id ?pid]]
                       (d/db conn))]
         (is (= 3 (count runs)))
         (is (= #{:mock-datev-lodas :mock-adp-gli :mock-ceridian}
@@ -331,10 +331,10 @@
     (testing "Each payroll-run has a linked :transaction with balanced postings"
       (doseq [code ["JANE-DE-2026-05" "JANE-US-2026-05" "JANE-CA-2026-05"]]
         (let [run-eid (d/q '[:find ?r . :in $ ?c
-                             :where [?r :payroll-run/code ?c]]
+                             :where [?r :kontor.payroll-run/code ?c]]
                            (d/db conn) code)
               tx (d/q '[:find ?t . :in $ ?r
-                        :where [?r :payroll-run/payroll-transaction ?t]]
+                        :where [?r :kontor.payroll-run/payroll-transaction ?t]]
                       (d/db conn) run-eid)
               postings (when tx
                          (d/q '[:find ?amt
@@ -411,9 +411,9 @@
 ;;   - The 10-leg Bruttomethode posting builder lands in the cross-stage
 ;;     transaction.
 ;;   - The LODAS Importdatei `EmitProvider` produces an :audit-doc with
-;;     :audit-doc/category :payroll-filing + :audit-doc/inline-payload
+;;     :kontor.audit-doc/category :payroll-filing + :kontor.audit-doc/inline-payload
 ;;     carrying [Allgemein] + [Bewegungsdaten] sections.
-;;   - The substrate `:payroll-run/emit-docs` link survives composition
+;;   - The substrate `:kontor.payroll-run/emit-docs` link survives composition
 ;;     (note 86 P0-86-1 fix verified at the cross-stage level).
 ;;
 ;; The fixture is the existing module fixture at
@@ -654,25 +654,25 @@
                             :wages-payable ca-wages-pay}})
         db (d/db conn)
         de-run-eid (d/q '[:find ?r . :in $ ?c
-                          :where [?r :payroll-run/code ?c]]
+                          :where [?r :kontor.payroll-run/code ?c]]
                         db "JANE-DE-REAL-2025-11")
         de-run (d/pull db
-                       '[* {:payroll-run/payroll-transaction
+                       '[* {:kontor.payroll-run/payroll-transaction
                             [:kontor.transaction/external-id
                              {:kontor.posting/_transaction
                               [:kontor.posting/amount
                                {:kontor.posting/account [:kontor.account/code]}]}]}
-                         {:payroll-run/emit-docs [:db/id :audit-doc/code
-                                                  :audit-doc/category
-                                                  :audit-doc/inline-payload]}]
+                         {:kontor.payroll-run/emit-docs [:db/id :kontor.audit-doc/code
+                                                  :kontor.audit-doc/category
+                                                  :kontor.audit-doc/inline-payload]}]
                        de-run-eid)]
     (testing "DE run carries the real :datev-lodas provider-id and matches fixture totals"
-      (is (= :datev-lodas (:payroll-run/provider-id de-run)))
-      (is (= 4000.00M (:payroll-run/control-total-gross de-run)))
-      (is (= 2500.00M (:payroll-run/control-total-net   de-run))))
+      (is (= :datev-lodas (:kontor.payroll-run/provider-id de-run)))
+      (is (= 4000.00M (:kontor.payroll-run/control-total-gross de-run)))
+      (is (= 2500.00M (:kontor.payroll-run/control-total-net   de-run))))
 
     (testing "DE transaction posted with the 10-leg Bruttomethode shape (real provider)"
-      (let [tx (:payroll-run/payroll-transaction de-run)
+      (let [tx (:kontor.payroll-run/payroll-transaction de-run)
             postings (:kontor.posting/_transaction tx)]
         (is (= "TX-JANE-DE-REAL-2025-11" (:kontor.transaction/external-id tx)))
         (is (= 10 (count postings))
@@ -693,21 +693,21 @@
           (is (= [-700.00M]               (amounts "3730")))
           (is (= [-800.00M -800.00M]      (amounts "3740"))))))
 
-    (testing "DE emit-doc is linked through :payroll-run/emit-docs (P0-86-1 across the substrate seam)"
-      (let [emit-docs (:payroll-run/emit-docs de-run)]
+    (testing "DE emit-doc is linked through :kontor.payroll-run/emit-docs (P0-86-1 across the substrate seam)"
+      (let [emit-docs (:kontor.payroll-run/emit-docs de-run)]
         (is (= 1 (count emit-docs)))
         (let [doc (first emit-docs)]
-          (is (= :payroll-filing (:audit-doc/category doc)))
-          (is (= "LODAS-DE-JANE-2025-11" (:audit-doc/code doc)))
-          (is (str/includes? (:audit-doc/inline-payload doc) "[Allgemein]"))
-          (is (str/includes? (:audit-doc/inline-payload doc) "Ziel=LODAS"))
-          (is (str/includes? (:audit-doc/inline-payload doc) "[Bewegungsdaten]")))))
+          (is (= :payroll-filing (:kontor.audit-doc/category doc)))
+          (is (= "LODAS-DE-JANE-2025-11" (:kontor.audit-doc/code doc)))
+          (is (str/includes? (:kontor.audit-doc/inline-payload doc) "[Allgemein]"))
+          (is (str/includes? (:kontor.audit-doc/inline-payload doc) "Ziel=LODAS"))
+          (is (str/includes? (:kontor.audit-doc/inline-payload doc) "[Bewegungsdaten]")))))
 
     (testing "All three :payroll-run rows present + provider-ids reflect real+mock mix"
       (let [pids (d/q '[:find ?code ?pid
                         :where
-                        [?r :payroll-run/code ?code]
-                        [?r :payroll-run/provider-id ?pid]]
+                        [?r :kontor.payroll-run/code ?code]
+                        [?r :kontor.payroll-run/provider-id ?pid]]
                       db)]
         (is (= 3 (count pids)))
         (is (= #{:datev-lodas :mock-adp-gli :mock-ceridian}

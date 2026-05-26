@@ -180,13 +180,13 @@
         (is (= 1 (count disps))
             "only the appreciated equipment contribution emits a disposal")
         (let [d (first disps)]
-          (is (= :incorporation-contribution (:disposal/kind d)))
-          (is (== 20000M (:disposal/proceeds-amount d))
+          (is (= :incorporation-contribution (:kontor.disposal/kind d)))
+          (is (== 20000M (:kontor.disposal/proceeds-amount d))
               "proceeds = FMV at contribution date")
-          (is (== 12000M (:disposal/basis-amount d))
+          (is (== 12000M (:kontor.disposal/basis-amount d))
               "basis = founder's basis (carries via §351)")
           (is (= #{:us-§351-incorporation-rollover}
-                 (set (:disposal/elective-regime d)))
+                 (set (:kontor.disposal/elective-regime d)))
               "§351 elective-regime flag preserved for the CGT provider"))))))
 
 ;; ============================================================================

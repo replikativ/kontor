@@ -71,7 +71,7 @@
   [_]
   (pit/personal-income-tax-provider
    {:id          :de-est
-    :schedule    {:schedule/type :formula :fn est-2024}
+    :schedule    {:kontor.schedule/type :formula :fn est-2024}
     :authority   :de-finanzamt
     :commodity   :EUR
     :statute     "§32a EStG"

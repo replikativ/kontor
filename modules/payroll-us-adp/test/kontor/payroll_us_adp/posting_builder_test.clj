@@ -118,7 +118,7 @@
                    :ledgers-map {:us-gaap book-ledger-eid}
                    :commodity usd-eid})]
     (testing "no posting carries :kontor.posting/entity (single legal entity)"
-      ;; Per note 83 §4: kontor uses :analytic-account/state, NOT
+      ;; Per note 83 §4: kontor uses :kontor.analytic-account/state, NOT
       ;; :kontor.posting/entity. The substrate-level :kontor.posting/entity is
       ;; reserved for multi-LLC / cross-border / PEO secondment.
       (doseq [p postings]
@@ -130,14 +130,14 @@
         (is (seq wage-side))
         (doseq [p wage-side
                 d (:kontor.posting/analytic-distributions p)]
-          (is (= [:analytic-plan/code "state"]
-                 (:analytic-distribution/plan d)))
-          (is (= 100M (:analytic-distribution/percent d)))
-          (is (some? (:analytic-distribution/account d))))))
+          (is (= [:kontor.analytic-plan/code "state"]
+                 (:kontor.analytic-distribution/plan d)))
+          (is (= 100M (:kontor.analytic-distribution/percent d)))
+          (is (some? (:kontor.analytic-distribution/account d))))))
     (testing "three distinct states appear in the distributions"
       (let [states (->> postings
                         (mapcat :kontor.posting/analytic-distributions)
-                        (map :analytic-distribution/account)
+                        (map :kontor.analytic-distribution/account)
                         (map second) ; the path string
                         distinct
                         set)]
@@ -165,17 +165,17 @@
                                          (let [dists (:kontor.posting/analytic-distributions p)]
                                            (and (= 2 (count dists))
                                                 (some #(= "state:CA"
-                                                          (second (:analytic-distribution/account %)))
+                                                          (second (:kontor.analytic-distribution/account %)))
                                                       dists)
                                                 (some #(= "state:CO"
-                                                          (second (:analytic-distribution/account %)))
+                                                          (second (:kontor.analytic-distribution/account %)))
                                                       dists))))
                                 p))
                             postings)]
         (is (some? wage-e101))
         (when wage-e101
           (let [dists (:kontor.posting/analytic-distributions wage-e101)
-                pcts (sort (map :analytic-distribution/percent dists))]
+                pcts (sort (map :kontor.analytic-distribution/percent dists))]
             (is (= [40M 60M] pcts))))))))
 
 ;; ============================================================================

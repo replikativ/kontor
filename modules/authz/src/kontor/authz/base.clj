@@ -7,7 +7,7 @@
    EACL's `eacl.datomic.impl.base` (research note 41).
 
    The component attributes these emit auto-compute the tuple index
-   attributes (`:authz.relation/identity`, `:authz.relationship/
+   attributes (`:kontor.authz.relation/identity`, `:kontor.authz.relationship/
    forward`, …) that `kontor.authz.indexed` range-scans — see
    `kontor.authz.schema`. (Pagination cursors flow as plain maps
    `{:resource …}` / `{:subject …}` — no cursor record.)"
@@ -18,7 +18,7 @@
 ;; ============================================================================
 
 (defn ->relation-id
-  "Stable `:authz/object-id` for a relation definition. `(str kw)`
+  "Stable `:kontor.authz/object-id` for a relation definition. `(str kw)`
    keeps namespaces; the leading colons are intentional."
   [resource-type relation-name subject-type]
   (str "authz.relation:" resource-type ":" relation-name ":" subject-type))
@@ -49,13 +49,13 @@
    (when-not (and (<= 0 (compare subject-type :a))
                   (<= (compare subject-type :z) 0))
      (throw (ex-info "Relation: :subject-type must sort within :a..:z — kontor.authz.indexed range-scans subject-types with :a/:z sentinels; a type outside that range is silently missed by can?/lookup-* (ADR-066 review-after P1). Rename the type."
-                     {:type :authz/subject-type-out-of-range
+                     {:type :kontor.authz/subject-type-out-of-range
                       :subject-type subject-type})))
-   {:authz/object-id             (->relation-id resource-type relation-name
+   {:kontor.authz/object-id             (->relation-id resource-type relation-name
                                                 subject-type)
-    :authz.relation/resource-type resource-type
-    :authz.relation/relation-name relation-name
-    :authz.relation/subject-type  subject-type})
+    :kontor.authz.relation/resource-type resource-type
+    :kontor.authz.relation/relation-name relation-name
+    :kontor.authz.relation/subject-type  subject-type})
   ([resource-type+relation-name subject-type]
    {:pre [(keyword? resource-type+relation-name)
           (namespace resource-type+relation-name)
@@ -69,7 +69,7 @@
 ;; ============================================================================
 
 (defn ->permission-id
-  "Stable `:authz/object-id` for a permission definition."
+  "Stable `:kontor.authz/object-id` for a permission definition."
   [resource-type permission-name arrow target-type relation-or-permission]
   (str "authz.permission:" resource-type ":" permission-name ":" arrow ":"
        target-type ":" relation-or-permission))
@@ -109,26 +109,26 @@
          (not (and relation permission))]}
   (cond
     relation
-    {:authz/object-id                      (->permission-id resource-type
+    {:kontor.authz/object-id                      (->permission-id resource-type
                                                             permission-name
                                                             arrow :relation
                                                             relation)
-     :authz.permission/resource-type        resource-type
-     :authz.permission/permission-name      permission-name
-     :authz.permission/source-relation-name arrow
-     :authz.permission/target-type          :relation
-     :authz.permission/target-name          relation}
+     :kontor.authz.permission/resource-type        resource-type
+     :kontor.authz.permission/permission-name      permission-name
+     :kontor.authz.permission/source-relation-name arrow
+     :kontor.authz.permission/target-type          :relation
+     :kontor.authz.permission/target-name          relation}
 
     permission
-    {:authz/object-id                      (->permission-id resource-type
+    {:kontor.authz/object-id                      (->permission-id resource-type
                                                             permission-name
                                                             arrow :permission
                                                             permission)
-     :authz.permission/resource-type        resource-type
-     :authz.permission/permission-name      permission-name
-     :authz.permission/source-relation-name arrow
-     :authz.permission/target-type          :permission
-     :authz.permission/target-name          permission}
+     :kontor.authz.permission/resource-type        resource-type
+     :kontor.authz.permission/permission-name      permission-name
+     :kontor.authz.permission/source-relation-name arrow
+     :kontor.authz.permission/target-type          :permission
+     :kontor.authz.permission/target-name          permission}
 
     :else
     (throw (ex-info "Invalid Permission spec — expected one of {:relation n}, {:permission n}, {:arrow a :relation n}, {:arrow a :permission n}"
@@ -149,8 +149,8 @@
          (keyword? relation-name)
          (:id resource)
          (:type resource)]}
-  {:authz.relationship/resource-type (:type resource)
-   :authz.relationship/resource      (:id resource)
-   :authz.relationship/relation-name relation-name
-   :authz.relationship/subject-type  (:type subject)
-   :authz.relationship/subject       (:id subject)})
+  {:kontor.authz.relationship/resource-type (:type resource)
+   :kontor.authz.relationship/resource      (:id resource)
+   :kontor.authz.relationship/relation-name relation-name
+   :kontor.authz.relationship/subject-type  (:type subject)
+   :kontor.authz.relationship/subject       (:id subject)})

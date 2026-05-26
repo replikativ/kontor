@@ -85,23 +85,23 @@
 (defn- long-term?
   "True iff held strictly more than the §1222 holding-period cutoff."
   [disposal cutoff-days]
-  (let [acq (:disposal/acquired-on disposal)
-        dis (:disposal/disposed-on disposal)]
+  (let [acq (:kontor.disposal/acquired-on disposal)
+        dis (:kontor.disposal/disposed-on disposal)]
     (and acq dis (> (days-between acq dis) cutoff-days))))
 
 (defn- depreciation-taken
   "Non-negative BigDecimal — the depreciation-taken amount, defaulting
    to 0 when absent."
   ^java.math.BigDecimal [disposal]
-  (or (:disposal/depreciation-taken-amount disposal) 0M))
+  (or (:kontor.disposal/depreciation-taken-amount disposal) 0M))
 
 (defn- realized-gain
   "Gain (positive) or loss (negative) on one disposal, in the proceeds
    commodity: `proceeds − basis − rollover-amount`."
   ^java.math.BigDecimal [disposal]
-  (let [p (or (:disposal/proceeds-amount disposal) 0M)
-        b (or (:disposal/basis-amount disposal) 0M)
-        r (or (:disposal/rollover-amount disposal) 0M)]
+  (let [p (or (:kontor.disposal/proceeds-amount disposal) 0M)
+        b (or (:kontor.disposal/basis-amount disposal) 0M)
+        r (or (:kontor.disposal/rollover-amount disposal) 0M)]
     (- p b r)))
 
 (defn- classify
@@ -135,7 +135,7 @@
   (let [g            (realized-gain disposal)
         dep-taken    (depreciation-taken disposal)
         long?        (long-term? disposal cutoff-days)
-        asset-class  (:disposal/asset-class disposal)
+        asset-class  (:kontor.disposal/asset-class disposal)
         positive?    (pos? g)
         residual-lane (if long? :lt :st)
         base         {:disposal disposal :recapture-ordinary 0M}]

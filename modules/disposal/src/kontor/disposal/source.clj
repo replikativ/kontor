@@ -1,10 +1,10 @@
 (ns kontor.disposal.source
   "Canonical `DisposalSource` implementation against the companion's
-   `:disposal/*` schema. ADR-102.
+   `:kontor.disposal/*` schema. ADR-102.
 
    Wraps `kontor.disposal/disposals-in-period` (which already excludes
    `:voided` entries) and pulls each disposal into a plain Clojure map
-   keyed by the `:disposal/*` attrs the kernel `DisposalSource` protocol
+   keyed by the `:kontor.disposal/*` attrs the kernel `DisposalSource` protocol
    documents.
 
    Per-jurisdiction CGT providers consume the protocol, not this impl
@@ -26,32 +26,32 @@
    body to compute the gain (they need the GL posting only when
    building a remittance, which goes through `TaxReturnPostingBuilder`)."
   [:db/id
-   :disposal/external-id
-   :disposal/kind
-   :disposal/subject-kind
-   :disposal/asset-class
-   :disposal/subject-form
-   :disposal/acquired-on
-   :disposal/disposed-on
-   :disposal/holding-period
-   :disposal/proceeds-amount
-   {:disposal/proceeds-commodity [:db/id :kontor.commodity/symbol :kontor.commodity/name]}
-   :disposal/basis-amount
-   {:disposal/basis-commodity [:db/id :kontor.commodity/symbol :kontor.commodity/name]}
-   :disposal/depreciation-taken-amount
-   {:disposal/depreciation-taken-commodity [:db/id :kontor.commodity/symbol :kontor.commodity/name]}
-   :disposal/ownership-fraction
-   :disposal/residence?
-   :disposal/elective-regime
-   :disposal/exemption-claimed
-   :disposal/rollover-amount
-   {:disposal/rollover-amount-commodity [:db/id :kontor.commodity/symbol :kontor.commodity/name]}
-   :disposal/rollover-deadline
-   :disposal/loss-bucket
-   :disposal/state
-   {:disposal/subject [:db/id]}
-   {:disposal/realizing-tx [:db/id]}
-   :disposal/notes])
+   :kontor.disposal/external-id
+   :kontor.disposal/kind
+   :kontor.disposal/subject-kind
+   :kontor.disposal/asset-class
+   :kontor.disposal/subject-form
+   :kontor.disposal/acquired-on
+   :kontor.disposal/disposed-on
+   :kontor.disposal/holding-period
+   :kontor.disposal/proceeds-amount
+   {:kontor.disposal/proceeds-commodity [:db/id :kontor.commodity/symbol :kontor.commodity/name]}
+   :kontor.disposal/basis-amount
+   {:kontor.disposal/basis-commodity [:db/id :kontor.commodity/symbol :kontor.commodity/name]}
+   :kontor.disposal/depreciation-taken-amount
+   {:kontor.disposal/depreciation-taken-commodity [:db/id :kontor.commodity/symbol :kontor.commodity/name]}
+   :kontor.disposal/ownership-fraction
+   :kontor.disposal/residence?
+   :kontor.disposal/elective-regime
+   :kontor.disposal/exemption-claimed
+   :kontor.disposal/rollover-amount
+   {:kontor.disposal/rollover-amount-commodity [:db/id :kontor.commodity/symbol :kontor.commodity/name]}
+   :kontor.disposal/rollover-deadline
+   :kontor.disposal/loss-bucket
+   :kontor.disposal/state
+   {:kontor.disposal/subject [:db/id]}
+   {:kontor.disposal/realizing-tx [:db/id]}
+   :kontor.disposal/notes])
 
 ;; ============================================================================
 ;; The companion's DisposalSource
@@ -63,31 +63,31 @@
     (let [db        (d/db conn)
           entity-id (if (integer? entity) entity (:db/id (d/entity db entity)))
           eids      (if entity-id
-                      ;; Entity-scoped path — exact eq on :disposal/entity ref.
+                      ;; Entity-scoped path — exact eq on :kontor.disposal/entity ref.
                       (d/q '[:find [?d ...]
                              :in $ ?ent ?from ?to
                              :where
-                             [?d :disposal/entity ?ent]
-                             [?d :disposal/disposed-on ?on]
+                             [?d :kontor.disposal/entity ?ent]
+                             [?d :kontor.disposal/disposed-on ?on]
                              [(<= ?from ?on)]
                              [(< ?on ?to)]
-                             [?d :disposal/state ?st]
+                             [?d :kontor.disposal/state ?st]
                              [(not= ?st :voided)]]
                            db entity-id (:from period) (:to period))
                       ;; No entity → list all (still void-excluded).
                       (d/q '[:find [?d ...]
                              :in $ ?from ?to
                              :where
-                             [?d :disposal/disposed-on ?on]
+                             [?d :kontor.disposal/disposed-on ?on]
                              [(<= ?from ?on)]
                              [(< ?on ?to)]
-                             [?d :disposal/state ?st]
+                             [?d :kontor.disposal/state ?st]
                              [(not= ?st :voided)]]
                            db (:from period) (:to period)))]
       (mapv #(d/pull db pull-spec %) eids))))
 
 (defn datahike-source
-  "Build a `DisposalSource` backed by `kontor-disposal`'s `:disposal/*`
+  "Build a `DisposalSource` backed by `kontor-disposal`'s `:kontor.disposal/*`
    schema on `conn`. The canonical reference impl — most consumers can
    use this directly."
   [conn]

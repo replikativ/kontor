@@ -114,23 +114,23 @@
   "Gain (positive) or loss (negative) on one disposal:
    `proceeds − basis − rollover-amount`."
   ^java.math.BigDecimal [disposal]
-  (let [p (or (:disposal/proceeds-amount disposal) 0M)
-        b (or (:disposal/basis-amount disposal) 0M)
-        r (or (:disposal/rollover-amount disposal) 0M)]
+  (let [p (or (:kontor.disposal/proceeds-amount disposal) 0M)
+        b (or (:kontor.disposal/basis-amount disposal) 0M)
+        r (or (:kontor.disposal/rollover-amount disposal) 0M)]
     (- p b r)))
 
 (defn- elective-regime?
   "True iff `disposal` has the given regime keyword in its (set-valued)
-   `:disposal/elective-regime`."
+   `:kontor.disposal/elective-regime`."
   [disposal regime]
   (boolean (and disposal regime
-                (contains? (set (:disposal/elective-regime disposal)) regime))))
+                (contains? (set (:kontor.disposal/elective-regime disposal)) regime))))
 
 (defn- exemption?
   "True iff `disposal` claims the given exemption keyword."
   [disposal exemption]
   (boolean (and disposal exemption
-                (contains? (set (:disposal/exemption-claimed disposal)) exemption))))
+                (contains? (set (:kontor.disposal/exemption-claimed disposal)) exemption))))
 
 ;; ============================================================================
 ;; IIT — exemption routing + base computation
@@ -144,7 +144,7 @@
   (and (= residency :resident-individual)
        (contains? #{:cn-listed-a-share :cn-listed-b-share
                     :cn-listed-h-share-via-connect}
-                  (:disposal/asset-class disposal))))
+                  (:kontor.disposal/asset-class disposal))))
 
 (defn- manwuweiyi-exempt?
   "True iff the residential disposal satisfies BOTH 滿五唯一 prongs:
@@ -154,11 +154,11 @@
    :family-sole-residence?` (companion-attested per note 133 §6.3)."
   [disposal residency ctx]
   (and (= residency :resident-individual)
-       (= :cn-residential (:disposal/asset-class disposal))
-       (true? (:disposal/residence? disposal))
+       (= :cn-residential (:kontor.disposal/asset-class disposal))
+       (true? (:kontor.disposal/residence? disposal))
        (true? (get-in ctx [:tax-unit :family-sole-residence?]))
-       (>= (compare (holding-years (:disposal/acquired-on disposal)
-                                   (:disposal/disposed-on disposal))
+       (>= (compare (holding-years (:kontor.disposal/acquired-on disposal)
+                                   (:kontor.disposal/disposed-on disposal))
                     5M)
            0)))
 
@@ -172,7 +172,7 @@
    (defaults to the 1 % floor)."
   ^java.math.BigDecimal [disposal ctx]
   (if (elective-regime? disposal :cn-real-estate-deemed-rate)
-    (let [proceeds (or (:disposal/proceeds-amount disposal) 0M)
+    (let [proceeds (or (:kontor.disposal/proceeds-amount disposal) 0M)
           rate    (or (get-in ctx [:tax-unit :deemed-rate]) 0.01M)]
       ;; Deemed-gross returns the pre-multiplied liability — the
       ;; caller does NOT apply the 20 % schedule to it.
@@ -196,7 +196,7 @@
 
     (and (= residency :resident-individual)
          (contains? #{:cn-residential :cn-non-residential}
-                    (:disposal/asset-class disposal))
+                    (:kontor.disposal/asset-class disposal))
          (elective-regime? disposal :cn-real-estate-deemed-rate))
     {:lane :deemed-gross
      :liability (iit-real-estate-base disposal ctx)
@@ -292,7 +292,7 @@
    defaults to 0.85 (the statutory minimum that triggers the
    five-criteria gate). Returns BigDecimal in [0, 1]."
   ^java.math.BigDecimal [disposal ctx]
-  (let [eid (:disposal/external-id disposal)
+  (let [eid (:kontor.disposal/external-id disposal)
         m   (get-in ctx [:tax-unit :equity-payment-share])]
     (cond
       (and (map? m) (contains? m eid)) (bigdec (get m eid))
@@ -314,7 +314,7 @@
   (reduce
    (fn [{:keys [additions deductions deferral-lines current-lines]} c]
      (let [{:keys [exception disposal gain]} c
-           eid (:disposal/external-id disposal)]
+           eid (:kontor.disposal/external-id disposal)]
        (case exception
          :normal
          {:additions     (+ additions gain)
@@ -410,7 +410,7 @@
           classified (mapv #(iit-classify-one % ctx residency) disposals)
           ;; Drop LAT-eligible developer disposals (handled by lat-provider).
           classified (remove #(= :cn-developer-real-estate
-                                 (:disposal/asset-class (:disposal %)))
+                                 (:kontor.disposal/asset-class (:disposal %)))
                              classified)
           ;; Exempt lines logged for audit but contribute no tax.
           exempt-lines (->> classified
@@ -457,7 +457,7 @@
     (let [disposals  (ds/disposals-in source entity period)
           ;; Drop LAT-eligible developer disposals (handled by lat-provider).
           disposals  (remove #(= :cn-developer-real-estate
-                                 (:disposal/asset-class %))
+                                 (:kontor.disposal/asset-class %))
                              disposals)
           classified (mapv eit-classify-one disposals)
           {:keys [additions deductions current-lines deferral-lines]}

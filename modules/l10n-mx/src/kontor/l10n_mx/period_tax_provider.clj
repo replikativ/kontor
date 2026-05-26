@@ -151,7 +151,7 @@
    this over the default `progressive` schedule when bit-exact
    agreement with a SAT worksheet is required — see the abstraction
    note above for the sub-cent divergence between the two."
-  {:schedule/type :formula :fn tarifa-cuota-fija-tax})
+  {:kontor.schedule/type :formula :fn tarifa-cuota-fija-tax})
 
 ;; --- Subsidio para el empleo --------------------------------------------
 ;;

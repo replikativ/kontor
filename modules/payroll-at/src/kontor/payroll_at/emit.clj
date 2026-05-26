@@ -9,7 +9,7 @@
    Section II (Sonderzahlungen at the 6 % begünstigte Steuersatz).
 
    The kernel module produces the XML bytes + records an
-   `:audit-doc/category :payroll-filing` row. The transmission to
+   `:kontor.audit-doc/category :payroll-filing` row. The transmission to
    FinanzOnline is a consumer concern (the kernel ships no API keys
    per ADR-072)."
   (:require [clojure.data.xml :as xml]

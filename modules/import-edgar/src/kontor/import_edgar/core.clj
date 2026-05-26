@@ -1,6 +1,6 @@
 (ns kontor.import-edgar.core
   "kontor-import-edgar — ingest SEC EDGAR `companyfacts` JSON into
-   the kontor `:reported-fact/*` substrate (note 94 §3.4 + note 78).
+   the kontor `:kontor.reported-fact/*` substrate (note 94 §3.4 + note 78).
 
    ## What this ingests
 
@@ -28,14 +28,14 @@
       `:filed` date (`kontor.bitemporal/close-validity-tx-data`).
    2. Record a new `:reported-fact` row with `:tx/valid-from` = the
       new `:filed` date, AND set the prior fact's
-      `:reported-fact/superseded-by` to the new fact.
+      `:kontor.reported-fact/superseded-by` to the new fact.
 
    Result:
    - `(d/valid-at db t)` returns the fact authoritative AS OF
      reporting time `t` — the original 10-K before the amendment,
      the amendment after.
    - The supersession chain is also navigable structurally via the
-     `:reported-fact/superseded-by` ref — useful for 'show me the
+     `:kontor.reported-fact/superseded-by` ref — useful for 'show me the
      history of this restatement' walks.
 
    ## Per ADR-005 + ADR-001
@@ -79,7 +79,7 @@
 (defn- ^String concept-iri
   "Combine taxonomy + concept name → IRI string. SEC keys taxonomies
    by 'us-gaap' / 'dei' / 'srt' / 'ifrs-full' / 'invest'; we adopt the
-   colon-prefixed form for `:reported-fact/concept-iri`."
+   colon-prefixed form for `:kontor.reported-fact/concept-iri`."
   [taxonomy concept]
   (str (name taxonomy) ":" (name concept)))
 
@@ -146,26 +146,26 @@
   (let [eids (d/q '[:find [?f ...]
                     :in $ ?e ?c ?p ?u
                     :where
-                    [?f :reported-fact/entity ?e]
-                    [?f :reported-fact/concept-iri ?c]
-                    [?f :reported-fact/period-end ?p]
-                    [?f :reported-fact/unit ?u]]
+                    [?f :kontor.reported-fact/entity ?e]
+                    [?f :kontor.reported-fact/concept-iri ?c]
+                    [?f :kontor.reported-fact/period-end ?p]
+                    [?f :kontor.reported-fact/unit ?u]]
                   db entity-eid concept-iri period-end unit)
         rows (mapv #(d/pull db
                             [:db/id
-                             :reported-fact/filed
-                             :reported-fact/value-bigdec
-                             :reported-fact/accession-number
-                             :reported-fact/form
-                             :reported-fact/superseded-by] %)
+                             :kontor.reported-fact/filed
+                             :kontor.reported-fact/value-bigdec
+                             :kontor.reported-fact/accession-number
+                             :kontor.reported-fact/form
+                             :kontor.reported-fact/superseded-by] %)
                    eids)
         ;; Of all facts for this quad, the authoritative one is the
         ;; latest-:filed without a :superseded-by reference. (A row
         ;; might have an older :filed but still be the head if the
         ;; supersession chain points elsewhere.)
         head (->> rows
-                  (remove :reported-fact/superseded-by)
-                  (sort-by :reported-fact/filed)
+                  (remove :kontor.reported-fact/superseded-by)
+                  (sort-by :kontor.reported-fact/filed)
                   last)]
     head))
 
@@ -204,29 +204,29 @@
                                        :period-end period-end
                                        :unit unit})
             already? (and prior
-                          (= (:reported-fact/accession-number prior)
+                          (= (:kontor.reported-fact/accession-number prior)
                              accession))]
         (when-not already?
           (let [tempid (str "fact:" ext-id)
                 new-fact
                 (cond-> {:db/id tempid
-                         :reported-fact/external-id     ext-id
-                         :reported-fact/entity          entity-eid
-                         :reported-fact/concept-iri     concept-iri
-                         :reported-fact/value-bigdec    val
-                         :reported-fact/unit            unit
-                         :reported-fact/period-end      period-end
-                         :reported-fact/accession-number accession
-                         :reported-fact/form            (:form fact)
-                         :reported-fact/filed           filed
-                         :reported-fact/source-id       source}
-                  period-start (assoc :reported-fact/period-start period-start))]
+                         :kontor.reported-fact/external-id     ext-id
+                         :kontor.reported-fact/entity          entity-eid
+                         :kontor.reported-fact/concept-iri     concept-iri
+                         :kontor.reported-fact/value-bigdec    val
+                         :kontor.reported-fact/unit            unit
+                         :kontor.reported-fact/period-end      period-end
+                         :kontor.reported-fact/accession-number accession
+                         :kontor.reported-fact/form            (:form fact)
+                         :kontor.reported-fact/filed           filed
+                         :kontor.reported-fact/source-id       source}
+                  period-start (assoc :kontor.reported-fact/period-start period-start))]
             (if (and prior
-                     (.before ^Date (:reported-fact/filed prior) filed))
+                     (.before ^Date (:kontor.reported-fact/filed prior) filed))
               ;; Restatement — wire up :superseded-by + return both
               ;; the supersession marker and the new fact.
               {:tx-data [{:db/id (:db/id prior)
-                          :reported-fact/superseded-by tempid}
+                          :kontor.reported-fact/superseded-by tempid}
                          new-fact]
                :prior prior
                :vt-from filed}
@@ -239,13 +239,13 @@
 
    Required opts:
      :entity-eid — ref to the kontor :entity these facts are about.
-     :source     — provenance string for :reported-fact/source-id.
+     :source     — provenance string for :kontor.reported-fact/source-id.
 
    Each fact becomes its own transaction with `:db.valid/from` set to
    the SEC `:filed` date. Re-ingesting the same fact (same accession,
    concept, period-end, unit) is a no-op. Re-ingesting an updated
    fact (different accession but same quad) records the supersession
-   chain via `:reported-fact/superseded-by` AND closes the prior
+   chain via `:kontor.reported-fact/superseded-by` AND closes the prior
    tx's valid-time window via `kontor.bitemporal/close-validity!`.
 
    Returns a summary `{:ingested int :superseded int :skipped int
@@ -277,7 +277,7 @@
                  ;; the close-validity and the new-fact write below go
                  ;; through raw d/transact because kernel invariants
                  ;; (sum-to-zero / period-lock / sealing) don't apply to
-                 ;; :reported-fact/*. See note 95 §2 (kontor-import-edgar)
+                 ;; :kontor.reported-fact/*. See note 95 §2 (kontor-import-edgar)
                  ;; for the audit entry + the documented atomicity
                  ;; limitation between the two transacts.
                  _ (when prior
@@ -285,7 +285,7 @@
                            (d/q '[:find ?tx .
                                   :in $ ?e
                                   :where
-                                  [?e :reported-fact/external-id _ ?tx _]]
+                                  [?e :kontor.reported-fact/external-id _ ?tx _]]
                                 db (:db/id prior))]
                        (when prior-tx-eid
                          (try
@@ -325,18 +325,18 @@
          eids (d/q '[:find [?f ...]
                      :in $ ?e ?c ?p ?u
                      :where
-                     [?f :reported-fact/entity ?e]
-                     [?f :reported-fact/concept-iri ?c]
-                     [?f :reported-fact/period-end ?p]
-                     [?f :reported-fact/unit ?u]]
+                     [?f :kontor.reported-fact/entity ?e]
+                     [?f :kontor.reported-fact/concept-iri ?c]
+                     [?f :kontor.reported-fact/period-end ?p]
+                     [?f :kontor.reported-fact/unit ?u]]
                    db entity-eid concept-iri period-end unit)
          ;; The head of the chain (latest non-superseded fact); the
          ;; bitemporal window pruning already removes facts whose
          ;; tx-vt window has closed.
          rows (mapv #(d/pull db '[*] %) eids)]
      (->> rows
-          (remove :reported-fact/superseded-by)
-          (sort-by :reported-fact/filed)
+          (remove :kontor.reported-fact/superseded-by)
+          (sort-by :kontor.reported-fact/filed)
           last))))
 
 (defn fact-history
@@ -348,11 +348,11 @@
         eids (d/q '[:find [?f ...]
                     :in $ ?e ?c ?p ?u
                     :where
-                    [?f :reported-fact/entity ?e]
-                    [?f :reported-fact/concept-iri ?c]
-                    [?f :reported-fact/period-end ?p]
-                    [?f :reported-fact/unit ?u]]
+                    [?f :kontor.reported-fact/entity ?e]
+                    [?f :kontor.reported-fact/concept-iri ?c]
+                    [?f :kontor.reported-fact/period-end ?p]
+                    [?f :kontor.reported-fact/unit ?u]]
                   db entity-eid concept-iri period-end unit)]
     (->> eids
          (mapv #(d/pull db '[*] %))
-         (sort-by :reported-fact/filed))))
+         (sort-by :kontor.reported-fact/filed))))

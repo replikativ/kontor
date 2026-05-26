@@ -34,7 +34,7 @@
     (is (= :CNY (:commodity p)))
     (is (= :cn-tax (:authority p)))
     (is (= "中华人民共和国个人所得税法 §3 §6" (:statute p)))
-    (is (= :progressive-bracket (:schedule/type (:schedule p)))))
+    (is (= :progressive-bracket (:kontor.schedule/type (:schedule p)))))
   (testing "the 7-bracket annual comprehensive-income rate table"
     (let [bs cn/iit-comprehensive-income-brackets]
       (is (= 7 (count bs)))

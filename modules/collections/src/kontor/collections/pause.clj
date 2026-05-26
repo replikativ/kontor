@@ -7,7 +7,7 @@
    or open PTP. Reasons include holiday freeze, key-account
    exception, legal hold.
 
-   Active = the pause's `:dunning-pause/state` is `:placed` (resolved
+   Active = the pause's `:kontor.dunning-pause/state` is `:placed` (resolved
    bitemporally via :tx/valid-from) AND not yet expired by
    `:expires-at`. The placement date derives from the creating tx's
    `:tx/valid-from` (kontor.bitemporal, ADR-048)."
@@ -21,19 +21,19 @@
 ;; ============================================================================
 
 (defn- expired? [p as-of-ms]
-  (when-let [exp (:dunning-pause/expires-at p)]
+  (when-let [exp (:kontor.dunning-pause/expires-at p)]
     (<= (.getTime ^java.util.Date exp) as-of-ms)))
 
 (defn- state-at [db pause-eid ^java.util.Date as-of]
-  (:dunning-pause/state
-   (d/pull (d/valid-at db as-of) [:dunning-pause/state] pause-eid)))
+  (:kontor.dunning-pause/state
+   (d/pull (d/valid-at db as-of) [:kontor.dunning-pause/state] pause-eid)))
 
 (defn active-pauses-for-case
   "Pulled `:dunning-pause` rows active at `:as-of-valid` for a case.
    Returns vec of pulled maps.
 
    Active = pause is visible at as-of-valid (via d/valid-at) AND its
-   :dunning-pause/state at as-of-valid is :placed AND it isn't yet
+   :kontor.dunning-pause/state at as-of-valid is :placed AND it isn't yet
    expired by :expires-at."
   ([db case-eid] (active-pauses-for-case db case-eid nil))
   ([db case-eid {:keys [as-of-valid]}]
@@ -43,7 +43,7 @@
          rows (d/q '[:find [?p ...]
                      :in $ ?case
                      :where
-                     [?p :dunning-pause/case ?case]]
+                     [?p :kontor.dunning-pause/case ?case]]
                    vt-db case-eid)]
      (->> rows
           (map #(d/pull db '[*] %))
@@ -103,18 +103,18 @@
   (when-not placed-by-uid (throw (ex-info ":placed-by-uid required" {})))
   (let [placed-at (or placed-at (java.util.Date.))
         row (cond-> {:db/id tempid
-                     :dunning-pause/case case
-                     :dunning-pause/reason-code reason-code
-                     :dunning-pause/placed-by-uid placed-by-uid
-                     :dunning-pause/state :placed}
-              expires-at     (assoc :dunning-pause/expires-at expires-at)
-              notes          (assoc :dunning-pause/notes notes)
-              supporting-doc (assoc :dunning-pause/supporting-doc supporting-doc))
+                     :kontor.dunning-pause/case case
+                     :kontor.dunning-pause/reason-code reason-code
+                     :kontor.dunning-pause/placed-by-uid placed-by-uid
+                     :kontor.dunning-pause/state :placed}
+              expires-at     (assoc :kontor.dunning-pause/expires-at expires-at)
+              notes          (assoc :kontor.dunning-pause/notes notes)
+              supporting-doc (assoc :kontor.dunning-pause/supporting-doc supporting-doc))
         status-tx (sm/record-status-change-tx-data
                    db
                    (cond-> {:entity tempid
                             :entity-type :dunning-pause
-                            :facet :dunning-pause/state
+                            :facet :kontor.dunning-pause/state
                             :from :nil
                             :to :placed
                             :changed-at placed-at
@@ -147,13 +147,13 @@
   (when-not released-by-uid  (throw (ex-info ":released-by-uid required" {})))
   (let [now (or released-at (java.util.Date.))
         update (cond-> {:db/id pause-eid}
-                 notes          (assoc :dunning-pause/notes notes)
-                 supporting-doc (assoc :dunning-pause/supporting-doc supporting-doc))
+                 notes          (assoc :kontor.dunning-pause/notes notes)
+                 supporting-doc (assoc :kontor.dunning-pause/supporting-doc supporting-doc))
         status-tx (sm/record-status-change-tx-data
                    db
                    (cond-> {:entity pause-eid
                             :entity-type :dunning-pause
-                            :facet :dunning-pause/state
+                            :facet :kontor.dunning-pause/state
                             :to :released
                             :changed-at now
                             :changed-by-uid released-by-uid

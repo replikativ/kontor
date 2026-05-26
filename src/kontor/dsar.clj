@@ -18,7 +18,7 @@
    Partner references are pervasive AND many live in companion
    modules the kernel does not import. `*partner-attrs*` is an atom
    seeded with the kernel's own partner-referencing attributes; each
-   companion calls `(register-partner-attr! :collection-case/partner)`
+   companion calls `(register-partner-attr! :kontor.collection-case/partner)`
    etc. at load time. `collect` iterates the registry — the kernel
    ships the mechanism, companions extend it.
 
@@ -50,18 +50,18 @@
 
 (def ^:private kernel-partner-attrs
   "Partner-referencing attributes the kernel itself ships. Companion
-   modules register their own (`:collection-case/partner`,
-   `:order/bill-to-partner`, `:kontor.person/partner`, …) at load time via
+   modules register their own (`:kontor.collection-case/partner`,
+   `:kontor.order/bill-to-partner`, `:kontor.person/partner`, …) at load time via
    `register-partner-attr!`."
   #{:kontor.transaction/partner
     :kontor.posting/partner
     :kontor.invoice/buyer
     :kontor.invoice/seller
-    :partner-bank-account/partner
-    :partner-tax-id/partner
-    :partner-tag/partner
-    :partner-merge/duplicate-of
-    :partner-merge/superseded})
+    :kontor.partner-bank-account/partner
+    :kontor.partner-tax-id/partner
+    :kontor.partner-tag/partner
+    :kontor.partner-merge/duplicate-of
+    :kontor.partner-merge/superseded})
 
 (defonce ^{:doc "Atom holding the set of attributes referencing
    :kontor.partner/* that `collect` walks. Seeded with the kernel attrs;
@@ -86,7 +86,7 @@
 ;; the :partner directly — it references a :transaction that, in turn,
 ;; references the subject. A :status-history row's
 ;; :kontor.status-history/origin-transaction, a companion :payment-application's
-;; :payment-application/payment, … all point at a :transaction. `collect`
+;; :kontor.payment-application/payment, … all point at a :transaction. `collect`
 ;; walks BOTH axes: direct partner-refs, then — from the subject's
 ;; transactions — every registered tx-referencing attribute. Same
 ;; companion-extends-the-kernel-registry pattern (P0-1 review fix,
@@ -94,8 +94,8 @@
 
 (def ^:private kernel-tx-attrs
   "Transaction-referencing attributes the kernel ships. Companions
-   register their own (`:payment-application/payment`,
-   `:asset-event/transaction`, …) via `register-tx-attr!`."
+   register their own (`:kontor.payment-application/payment`,
+   `:kontor.asset-event/transaction`, …) via `register-tx-attr!`."
   #{:kontor.status-history/origin-transaction
     :kontor.transaction/reverses})
 
@@ -153,53 +153,53 @@
 ;; ============================================================================
 
 (def status-transition-seeds
-  "ADR-034 :status-transition rows for the :dsar-request/state facet."
+  "ADR-034 :status-transition rows for the :kontor.dsar-request/state facet."
   [{:kontor.status-transition/entity-type :dsar-request
-    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/facet :kontor.dsar-request/state
     :kontor.status-transition/from :nil :kontor.status-transition/to :received
     :kontor.status-transition/active true :kontor.status-transition/name "Receive Request"}
    {:kontor.status-transition/entity-type :dsar-request
-    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/facet :kontor.dsar-request/state
     :kontor.status-transition/from :received :kontor.status-transition/to :verifying-identity
     :kontor.status-transition/active true :kontor.status-transition/name "Begin Identity Verification"}
    {:kontor.status-transition/entity-type :dsar-request
-    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/facet :kontor.dsar-request/state
     :kontor.status-transition/from :received :kontor.status-transition/to :withdrawn
     :kontor.status-transition/active true :kontor.status-transition/name "Subject Withdrew Request"}
    {:kontor.status-transition/entity-type :dsar-request
-    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/facet :kontor.dsar-request/state
     :kontor.status-transition/from :received :kontor.status-transition/to :extended
     :kontor.status-transition/active true :kontor.status-transition/name "Extend Deadline (GDPR 60-day)"}
    {:kontor.status-transition/entity-type :dsar-request
-    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/facet :kontor.dsar-request/state
     :kontor.status-transition/from :verifying-identity :kontor.status-transition/to :in-progress
     :kontor.status-transition/active true :kontor.status-transition/name "Identity Verified"}
    {:kontor.status-transition/entity-type :dsar-request
-    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/facet :kontor.dsar-request/state
     :kontor.status-transition/from :verifying-identity :kontor.status-transition/to :denied
     :kontor.status-transition/active true :kontor.status-transition/name "Identity Not Verified"}
    {:kontor.status-transition/entity-type :dsar-request
-    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/facet :kontor.dsar-request/state
     :kontor.status-transition/from :extended :kontor.status-transition/to :in-progress
     :kontor.status-transition/active true :kontor.status-transition/name "Resume After Extension"}
    {:kontor.status-transition/entity-type :dsar-request
-    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/facet :kontor.dsar-request/state
     :kontor.status-transition/from :in-progress :kontor.status-transition/to :awaiting-legal-review
     :kontor.status-transition/active true :kontor.status-transition/name "Privileged Data — Counsel Review"}
    {:kontor.status-transition/entity-type :dsar-request
-    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/facet :kontor.dsar-request/state
     :kontor.status-transition/from :in-progress :kontor.status-transition/to :fulfilled
     :kontor.status-transition/active true :kontor.status-transition/name "Fulfill Request"}
    {:kontor.status-transition/entity-type :dsar-request
-    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/facet :kontor.dsar-request/state
     :kontor.status-transition/from :in-progress :kontor.status-transition/to :denied
     :kontor.status-transition/active true :kontor.status-transition/name "Deny Request"}
    {:kontor.status-transition/entity-type :dsar-request
-    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/facet :kontor.dsar-request/state
     :kontor.status-transition/from :awaiting-legal-review :kontor.status-transition/to :fulfilled
     :kontor.status-transition/active true :kontor.status-transition/name "Fulfill After Legal Review"}
    {:kontor.status-transition/entity-type :dsar-request
-    :kontor.status-transition/facet :dsar-request/state
+    :kontor.status-transition/facet :kontor.dsar-request/state
     :kontor.status-transition/from :awaiting-legal-review :kontor.status-transition/to :denied
     :kontor.status-transition/active true :kontor.status-transition/name "Deny After Legal Review"}])
 
@@ -212,21 +212,21 @@
     ;; * → :fulfilled — no-self-approval + the produced bundle
     (for [from [:in-progress :awaiting-legal-review]
           rule [:no-self-approval :requires-supporting-doc]]
-      {:approval-policy/entity-type     :dsar-request
-       :approval-policy/facet           :dsar-request/state
-       :approval-policy/transition-from from
-       :approval-policy/transition-to   :fulfilled
-       :approval-policy/rule            rule
-       :approval-policy/active          true})
+      {:kontor.approval-policy/entity-type     :dsar-request
+       :kontor.approval-policy/facet           :kontor.dsar-request/state
+       :kontor.approval-policy/transition-from from
+       :kontor.approval-policy/transition-to   :fulfilled
+       :kontor.approval-policy/rule            rule
+       :kontor.approval-policy/active          true})
     ;; * → :denied — the written denial rationale
     (for [from [:verifying-identity :in-progress :awaiting-legal-review]
           rule [:requires-supporting-doc :requires-non-empty-reason-note]]
-      {:approval-policy/entity-type     :dsar-request
-       :approval-policy/facet           :dsar-request/state
-       :approval-policy/transition-from from
-       :approval-policy/transition-to   :denied
-       :approval-policy/rule            rule
-       :approval-policy/active          true}))))
+      {:kontor.approval-policy/entity-type     :dsar-request
+       :kontor.approval-policy/facet           :kontor.dsar-request/state
+       :kontor.approval-policy/transition-from from
+       :kontor.approval-policy/transition-to   :denied
+       :kontor.approval-policy/rule            rule
+       :kontor.approval-policy/active          true}))))
 
 (defn install-seeds!
   "Idempotently transact the :dsar-request status-transition +
@@ -248,11 +248,11 @@
 ;; ============================================================================
 
 (defn by-external-id
-  "Resolve a :dsar-request eid by its :dsar-request/external-id."
+  "Resolve a :dsar-request eid by its :kontor.dsar-request/external-id."
   [db external-id]
   (d/q '[:find ?e .
          :in $ ?xid
-         :where [?e :dsar-request/external-id ?xid]]
+         :where [?e :kontor.dsar-request/external-id ?xid]]
        db external-id))
 
 (defn- resolve-request
@@ -284,8 +284,8 @@
   (d/q '[:find [?dup ...]
          :in $ ?canonical
          :where
-         [?m :partner-merge/duplicate-of ?canonical]
-         [?m :partner-merge/superseded ?dup]]
+         [?m :kontor.partner-merge/duplicate-of ?canonical]
+         [?m :kontor.partner-merge/superseded ?dup]]
        db canonical-eid))
 
 (defn- refs-by-attr
@@ -327,7 +327,7 @@
      transactions (anything with `:kontor.transaction/partner` = subject),
      every entity referencing those transactions via a registered
      `tx-attrs` attribute (`:kontor.status-history/origin-transaction`, a
-     companion `:payment-application/payment`, …). A great deal of
+     companion `:kontor.payment-application/payment`, …). A great deal of
      subject data — payment applications, status-history of the
      subject's invoices — references a `:transaction`, not the
      `:partner` directly; omitting it ships an incomplete access
@@ -439,17 +439,17 @@
   (when-not received-at   (throw (ex-info ":received-at required" {})))
   (when-not deadline-days (throw (ex-info ":deadline-days required" {})))
   (let [row (cond-> {:db/id tempid
-                     :dsar-request/external-id external-id
-                     :dsar-request/partner partner
-                     :dsar-request/kind kind
-                     :dsar-request/received-at received-at
-                     :dsar-request/deadline-days deadline-days
-                     :dsar-request/deadline-at (plus-days received-at deadline-days)
-                     :dsar-request/state :received}
-              jurisdiction   (assoc :dsar-request/jurisdiction jurisdiction)
-              received-via   (assoc :dsar-request/received-via received-via)
-              supporting-doc (assoc :dsar-request/supporting-doc supporting-doc)
-              notes          (assoc :dsar-request/notes notes)
+                     :kontor.dsar-request/external-id external-id
+                     :kontor.dsar-request/partner partner
+                     :kontor.dsar-request/kind kind
+                     :kontor.dsar-request/received-at received-at
+                     :kontor.dsar-request/deadline-days deadline-days
+                     :kontor.dsar-request/deadline-at (plus-days received-at deadline-days)
+                     :kontor.dsar-request/state :received}
+              jurisdiction   (assoc :kontor.dsar-request/jurisdiction jurisdiction)
+              received-via   (assoc :kontor.dsar-request/received-via received-via)
+              supporting-doc (assoc :kontor.dsar-request/supporting-doc supporting-doc)
+              notes          (assoc :kontor.dsar-request/notes notes)
               ;; The intake person IS the creator — stamp :kontor.audit/create-uid
               ;; so ADR-038 :no-self-approval can fire on fulfillment
               ;; (the intake person can't also be the fulfiller).
@@ -458,7 +458,7 @@
                    db
                    (cond-> {:entity tempid
                             :entity-type :dsar-request
-                            :facet :dsar-request/state
+                            :facet :kontor.dsar-request/state
                             :from :nil
                             :to :received
                             :changed-at (or received-state-at (Date.))
@@ -501,23 +501,23 @@
   (let [req-eid (resolve-request db request)
         _ (when-not req-eid
             (throw (ex-info "DSAR request not found" {:spec request})))
-        from (:dsar-request/state (d/pull db [:dsar-request/state] req-eid))
+        from (:kontor.dsar-request/state (d/pull db [:kontor.dsar-request/state] req-eid))
         now (or changed-at (Date.))
         ;; Side-effect attrs that ride along with specific transitions.
         update (cond-> {:db/id req-eid}
                  (and (= to :in-progress) (= from :verifying-identity))
-                 (assoc :dsar-request/identity-verified-at now)
+                 (assoc :kontor.dsar-request/identity-verified-at now)
 
                  (= to :fulfilled)
-                 (assoc :dsar-request/fulfilled-at now)
+                 (assoc :kontor.dsar-request/fulfilled-at now)
 
-                 fulfilled-package (assoc :dsar-request/fulfilled-package fulfilled-package)
-                 denied-reason     (assoc :dsar-request/denied-reason denied-reason))
+                 fulfilled-package (assoc :kontor.dsar-request/fulfilled-package fulfilled-package)
+                 denied-reason     (assoc :kontor.dsar-request/denied-reason denied-reason))
         status-tx (sm/record-status-change-tx-data
                    db
                    (cond-> {:entity req-eid
                             :entity-type :dsar-request
-                            :facet :dsar-request/state
+                            :facet :kontor.dsar-request/state
                             :to to
                             :changed-at now
                             :changed-by-uid changed-by-uid}

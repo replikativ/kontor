@@ -15,13 +15,13 @@
   (let [conn (core/create-test-db)
         db (d/db conn)
         plan (d/q '[:find ?e .
-                    :where [?e :analytic-plan/code "cost-center"]]
+                    :where [?e :kontor.analytic-plan/code "cost-center"]]
                   db)]
     (is (some? plan))
     (let [pulled (d/pull db '[*] plan)]
-      (is (= "cost-center" (:analytic-plan/code pulled)))
-      (is (= "Cost centers" (:analytic-plan/name pulled)))
-      (is (true? (:analytic-plan/active pulled))))))
+      (is (= "cost-center" (:kontor.analytic-plan/code pulled)))
+      (is (= "Cost centers" (:kontor.analytic-plan/name pulled)))
+      (is (true? (:kontor.analytic-plan/active pulled))))))
 
 (deftest cost-center-plan-idempotent
   (let [conn (core/create-test-db)
@@ -29,7 +29,7 @@
         _ (core/install-schema! conn)
         db (d/db conn)
         n (d/q '[:find (count ?e) .
-                 :where [?e :analytic-plan/code "cost-center"]]
+                 :where [?e :kontor.analytic-plan/code "cost-center"]]
                db)]
     (is (= 1 n))))
 
@@ -56,22 +56,22 @@
                         :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}])
         eur (:db/id (d/entity (d/db conn) [:kontor.commodity/symbol "EUR"]))
         _ (d/transact conn
-                      [{:schedule/code           "bldg-100-dep"
-                        :schedule/name           "Building 100 — straight-line 40yr"
-                        :schedule/kind           :depreciation
-                        :schedule/origin-entity  asset-eid
-                        :schedule/start-date     #inst "2026-06-01"
-                        :schedule/end-date       #inst "2066-05-31"
-                        :schedule/frequency      :monthly
-                        :schedule/total-amount   480000.00M
-                        :schedule/total-commodity eur
-                        :schedule/state          :active
-                        :schedule/active         true}])
+                      [{:kontor.schedule/code           "bldg-100-dep"
+                        :kontor.schedule/name           "Building 100 — straight-line 40yr"
+                        :kontor.schedule/kind           :depreciation
+                        :kontor.schedule/origin-entity  asset-eid
+                        :kontor.schedule/start-date     #inst "2026-06-01"
+                        :kontor.schedule/end-date       #inst "2066-05-31"
+                        :kontor.schedule/frequency      :monthly
+                        :kontor.schedule/total-amount   480000.00M
+                        :kontor.schedule/total-commodity eur
+                        :kontor.schedule/state          :active
+                        :kontor.schedule/active         true}])
         db (d/db conn)
         sched (schedule/by-code db "bldg-100-dep")]
     (is (some? sched))
-    (is (= "bldg-100-dep" (:schedule/code (d/entity db sched))))
-    (is (= :depreciation (:schedule/kind (d/entity db sched))))
+    (is (= "bldg-100-dep" (:kontor.schedule/code (d/entity db sched))))
+    (is (= :depreciation (:kontor.schedule/kind (d/entity db sched))))
     (is (= sched (schedule/resolve-schedule db "bldg-100-dep")))
     (is (= sched (schedule/resolve-schedule db sched)))
     (is (nil? (schedule/resolve-schedule db nil)))))
@@ -135,7 +135,7 @@
 
 (defn- dep-tx-data
   "Build a minimal depreciation journal entry. Tempid -1 is the
-   :transaction; `:schedule-occurrence/transaction` will point at it.
+   :transaction; `:kontor.schedule-occurrence/transaction` will point at it.
    Valid-time anchored on the tx via :db.valid/from = date."
   [{:keys [dep-expense accum-dep commodity journal]} amount date]
   [{:db/id "datomic.tx"
@@ -169,16 +169,16 @@
   (let [conn (core/create-test-db)
         cat (minimal-fixture! conn)
         _ (d/transact conn
-                      [{:schedule/code "bldg-dep"
-                        :schedule/name "Building dep"
-                        :schedule/kind :depreciation
-                        :schedule/origin-entity (:asset cat)
-                        :schedule/start-date #inst "2026-06-01"
-                        :schedule/frequency :monthly
-                        :schedule/total-amount 480000.00M
-                        :schedule/total-commodity (:commodity cat)
-                        :schedule/state :active
-                        :schedule/active true}])
+                      [{:kontor.schedule/code "bldg-dep"
+                        :kontor.schedule/name "Building dep"
+                        :kontor.schedule/kind :depreciation
+                        :kontor.schedule/origin-entity (:asset cat)
+                        :kontor.schedule/start-date #inst "2026-06-01"
+                        :kontor.schedule/frequency :monthly
+                        :kontor.schedule/total-amount 480000.00M
+                        :kontor.schedule/total-commodity (:commodity cat)
+                        :kontor.schedule/state :active
+                        :kontor.schedule/active true}])
         sched (schedule/by-code (d/db conn) "bldg-dep")
         amount 1000.00M
         date #inst "2026-06-30"
@@ -188,16 +188,16 @@
         occ (d/q '[:find ?o .
                    :in $ ?s
                    :where
-                   [?o :schedule-occurrence/schedule ?s]
-                   [?o :schedule-occurrence/sequence 1]]
+                   [?o :kontor.schedule-occurrence/schedule ?s]
+                   [?o :kontor.schedule-occurrence/sequence 1]]
                  db sched)]
     (is (some? occ))
     (let [pulled (d/pull db '[*] occ)]
-      (is (= 1 (:schedule-occurrence/sequence pulled)))
-      (is (= date (:schedule-occurrence/scheduled-date pulled)))
+      (is (= 1 (:kontor.schedule-occurrence/sequence pulled)))
+      (is (= date (:kontor.schedule-occurrence/scheduled-date pulled)))
       (is (= 0 (.compareTo (bigdec "1000.00")
-                           (:schedule-occurrence/amount pulled))))
-      (is (some? (:schedule-occurrence/transaction pulled))
+                           (:kontor.schedule-occurrence/amount pulled))))
+      (is (some? (:kontor.schedule-occurrence/transaction pulled))
           "Occurrence references the kernel transaction it produced"))))
 
 (deftest record-occurrence-is-idempotent
@@ -205,14 +205,14 @@
     (let [conn (core/create-test-db)
           cat (minimal-fixture! conn)
           _ (d/transact conn
-                        [{:schedule/code "bldg-dep"
-                          :schedule/name "Building dep"
-                          :schedule/kind :depreciation
-                          :schedule/origin-entity (:asset cat)
-                          :schedule/start-date #inst "2026-06-01"
-                          :schedule/frequency :monthly
-                          :schedule/state :active
-                          :schedule/active true}])
+                        [{:kontor.schedule/code "bldg-dep"
+                          :kontor.schedule/name "Building dep"
+                          :kontor.schedule/kind :depreciation
+                          :kontor.schedule/origin-entity (:asset cat)
+                          :kontor.schedule/start-date #inst "2026-06-01"
+                          :kontor.schedule/frequency :monthly
+                          :kontor.schedule/state :active
+                          :kontor.schedule/active true}])
           amount 1000.00M
           date #inst "2026-06-30"
           _ (schedule/record-occurrence! conn "bldg-dep" 1 date amount (:commodity cat)
@@ -221,7 +221,7 @@
                                          (dep-tx-data cat amount date))
           db (d/db conn)
           n (d/q '[:find (count ?o) .
-                   :where [?o :schedule-occurrence/sequence 1]]
+                   :where [?o :kontor.schedule-occurrence/sequence 1]]
                  db)]
       (is (= 1 n)
           "Composite identity collapses duplicates"))))
@@ -231,14 +231,14 @@
     (let [conn (core/create-test-db)
           cat (minimal-fixture! conn)
           _ (d/transact conn
-                        [{:schedule/code "bldg-dep"
-                          :schedule/name "Building dep"
-                          :schedule/kind :depreciation
-                          :schedule/origin-entity (:asset cat)
-                          :schedule/start-date #inst "2026-06-01"
-                          :schedule/frequency :monthly
-                          :schedule/state :active
-                          :schedule/active true}])
+                        [{:kontor.schedule/code "bldg-dep"
+                          :kontor.schedule/name "Building dep"
+                          :kontor.schedule/kind :depreciation
+                          :kontor.schedule/origin-entity (:asset cat)
+                          :kontor.schedule/start-date #inst "2026-06-01"
+                          :kontor.schedule/frequency :monthly
+                          :kontor.schedule/state :active
+                          :kontor.schedule/active true}])
           sched (schedule/by-code (d/db conn) "bldg-dep")
           ;; Fire 3 monthly occurrences
           _ (doseq [n [1 2 3]]
@@ -265,14 +265,14 @@
     (let [conn (core/create-test-db)
           cat (minimal-fixture! conn)
           _ (d/transact conn
-                        [{:schedule/code "bldg-dep"
-                          :schedule/name "Building dep"
-                          :schedule/kind :depreciation
-                          :schedule/origin-entity (:asset cat)
-                          :schedule/start-date #inst "2026-06-01"
-                          :schedule/frequency :monthly
-                          :schedule/state :paused
-                          :schedule/active true}])
+                        [{:kontor.schedule/code "bldg-dep"
+                          :kontor.schedule/name "Building dep"
+                          :kontor.schedule/kind :depreciation
+                          :kontor.schedule/origin-entity (:asset cat)
+                          :kontor.schedule/start-date #inst "2026-06-01"
+                          :kontor.schedule/frequency :monthly
+                          :kontor.schedule/state :paused
+                          :kontor.schedule/active true}])
           sched (schedule/by-code (d/db conn) "bldg-dep")
           pending (schedule/pending-occurrences
                    (d/db conn) sched #inst "2026-12-15")]
@@ -280,19 +280,19 @@
           "Paused schedules return no pending occurrences"))))
 
 (deftest pending-respects-end-date
-  (testing "Occurrences past :schedule/end-date are excluded"
+  (testing "Occurrences past :kontor.schedule/end-date are excluded"
     (let [conn (core/create-test-db)
           cat (minimal-fixture! conn)
           _ (d/transact conn
-                        [{:schedule/code "short-dep"
-                          :schedule/name "3-month dep"
-                          :schedule/kind :depreciation
-                          :schedule/origin-entity (:asset cat)
-                          :schedule/start-date #inst "2026-06-01"
-                          :schedule/end-date   #inst "2026-08-31"
-                          :schedule/frequency :monthly
-                          :schedule/state :active
-                          :schedule/active true}])
+                        [{:kontor.schedule/code "short-dep"
+                          :kontor.schedule/name "3-month dep"
+                          :kontor.schedule/kind :depreciation
+                          :kontor.schedule/origin-entity (:asset cat)
+                          :kontor.schedule/start-date #inst "2026-06-01"
+                          :kontor.schedule/end-date   #inst "2026-08-31"
+                          :kontor.schedule/frequency :monthly
+                          :kontor.schedule/state :active
+                          :kontor.schedule/active true}])
           sched (schedule/by-code (d/db conn) "short-dep")
           pending (schedule/pending-occurrences
                    (d/db conn) sched #inst "2027-01-01")]
@@ -303,15 +303,15 @@
   (let [conn (core/create-test-db)
         cat (minimal-fixture! conn)
         _ (d/transact conn
-                      [{:schedule/code "lf-dep"
-                        :schedule/name "Lifecycle dep"
-                        :schedule/kind :depreciation
-                        :schedule/origin-entity (:asset cat)
-                        :schedule/start-date #inst "2026-06-01"
-                        :schedule/frequency :monthly
-                        :schedule/state :active
-                        :schedule/active true}])
-        state #(:schedule/state (d/entity (d/db conn)
+                      [{:kontor.schedule/code "lf-dep"
+                        :kontor.schedule/name "Lifecycle dep"
+                        :kontor.schedule/kind :depreciation
+                        :kontor.schedule/origin-entity (:asset cat)
+                        :kontor.schedule/start-date #inst "2026-06-01"
+                        :kontor.schedule/frequency :monthly
+                        :kontor.schedule/state :active
+                        :kontor.schedule/active true}])
+        state #(:kontor.schedule/state (d/entity (d/db conn)
                                           (schedule/by-code (d/db conn) "lf-dep")))]
     (is (= :active (state)))
     (schedule/mark-paused! conn "lf-dep")

@@ -151,26 +151,26 @@
           ;; produce the right final order regardless of insertion order.
           _ (d/transact conn
                         [{:db/id -100
-                          :complemento/transaction tx
-                          :complemento/namespace   "http://www.sat.gob.mx/TimbreFiscalDigital"
-                          :complemento/format      :mx/cfdi-tfd-1.1
-                          :complemento/sequence    9999            ; TFD always last
-                          :complemento/payload     tfd-payload
-                          :complemento/active      true}
+                          :kontor.complemento/transaction tx
+                          :kontor.complemento/namespace   "http://www.sat.gob.mx/TimbreFiscalDigital"
+                          :kontor.complemento/format      :mx/cfdi-tfd-1.1
+                          :kontor.complemento/sequence    9999            ; TFD always last
+                          :kontor.complemento/payload     tfd-payload
+                          :kontor.complemento/active      true}
                          {:db/id -200
-                          :complemento/transaction tx
-                          :complemento/namespace   "http://www.sat.gob.mx/CartaPorte31"
-                          :complemento/format      :mx/cfdi-carta-porte-3.1
-                          :complemento/sequence    200
-                          :complemento/payload     carta-payload
-                          :complemento/active      true}
+                          :kontor.complemento/transaction tx
+                          :kontor.complemento/namespace   "http://www.sat.gob.mx/CartaPorte31"
+                          :kontor.complemento/format      :mx/cfdi-carta-porte-3.1
+                          :kontor.complemento/sequence    200
+                          :kontor.complemento/payload     carta-payload
+                          :kontor.complemento/active      true}
                          {:db/id -300
-                          :complemento/transaction tx
-                          :complemento/namespace   "http://www.sat.gob.mx/Pagos20"
-                          :complemento/format      :mx/cfdi-pagos-2.0
-                          :complemento/sequence    100
-                          :complemento/payload     pagos-payload
-                          :complemento/active      true}
+                          :kontor.complemento/transaction tx
+                          :kontor.complemento/namespace   "http://www.sat.gob.mx/Pagos20"
+                          :kontor.complemento/format      :mx/cfdi-pagos-2.0
+                          :kontor.complemento/sequence    100
+                          :kontor.complemento/payload     pagos-payload
+                          :kontor.complemento/active      true}
                          {:db/id tx :kontor.transaction/complementos [-100 -200 -300]}])
           xml-str (cfdi/assemble-from-transaction conn tx sample-invoice-base)]
       (is (string? xml-str))
@@ -182,21 +182,21 @@
         (is (pos? carta-idx))
         (is (pos? tfd-idx))
         (is (< pagos-idx carta-idx tfd-idx)
-            "Datalog-sourced complementos must emit in :complemento/sequence order")))))
+            "Datalog-sourced complementos must emit in :kontor.complemento/sequence order")))))
 
 (deftest inactive-complementos-are-skipped
-  (testing "A complemento with :complemento/active false is excluded
+  (testing "A complemento with :kontor.complemento/active false is excluded
             from the assembled envelope (soft-supersede)"
     (let [conn (core/create-test-db)
           tx   (minimal-tx! conn)
           _ (d/transact conn
                         [{:db/id -1
-                          :complemento/transaction tx
-                          :complemento/namespace   "http://www.sat.gob.mx/Pagos20"
-                          :complemento/format      :mx/cfdi-pagos-2.0
-                          :complemento/sequence    100
-                          :complemento/payload     "<pago20:Pagos xmlns:pago20=\"http://www.sat.gob.mx/Pagos20\" Version=\"2.0\" obsolete=\"yes\"/>"
-                          :complemento/active      false}
+                          :kontor.complemento/transaction tx
+                          :kontor.complemento/namespace   "http://www.sat.gob.mx/Pagos20"
+                          :kontor.complemento/format      :mx/cfdi-pagos-2.0
+                          :kontor.complemento/sequence    100
+                          :kontor.complemento/payload     "<pago20:Pagos xmlns:pago20=\"http://www.sat.gob.mx/Pagos20\" Version=\"2.0\" obsolete=\"yes\"/>"
+                          :kontor.complemento/active      false}
                          {:db/id tx :kontor.transaction/complementos -1}])
           xml-str (cfdi/assemble-from-transaction conn tx sample-invoice-base)]
       (is (not (re-find #"obsolete" xml-str))

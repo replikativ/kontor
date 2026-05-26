@@ -18,11 +18,11 @@
                                        {:pay-period-eid 999 :entity-eid 7})]
       (is (= 1 (count docs)))
       (let [doc (first docs)]
-        (is (= :payroll-filing (:audit-doc/category doc)))
-        (is (= :fr (:audit-doc/language doc)))
-        (is (= :regulator-clearance (:audit-doc/type doc)))
-        (is (str/starts-with? (:audit-doc/code doc) "DSN-"))
-        (is (str/includes? (:audit-doc/description doc) "skeleton"))))))
+        (is (= :payroll-filing (:kontor.audit-doc/category doc)))
+        (is (= :fr (:kontor.audit-doc/language doc)))
+        (is (= :regulator-clearance (:kontor.audit-doc/type doc)))
+        (is (str/starts-with? (:kontor.audit-doc/code doc) "DSN-"))
+        (is (str/includes? (:kontor.audit-doc/description doc) "skeleton"))))))
 
 (deftest emit-provider-full-payload-mode
   (testing "FrDsnEmitProvider with envelope/entreprise/établissement supplied"
@@ -61,9 +61,9 @@
                                        {:pay-period-eid 999 :entity-eid 7})]
       (is (= 1 (count docs)))
       (let [doc (first docs)
-            desc (:audit-doc/description doc)]
-        (is (= :payroll-filing (:audit-doc/category doc)))
-        (is (= :fr (:audit-doc/language doc)))
+            desc (:kontor.audit-doc/description doc)]
+        (is (= :payroll-filing (:kontor.audit-doc/category doc)))
+        (is (= :fr (:kontor.audit-doc/language doc)))
         ;; The description is the serialized NEODES payload
         (is (str/includes? desc "S10.G00.00,001,'123456782'"))
         (is (str/includes? desc "S21.G00.51"))
@@ -92,29 +92,29 @@
                   :pay-period "2026-05"
                   :individus-count 3
                   :language :fr})]
-      (is (= :payroll-filing (:audit-doc/category doc)))
-      (is (= :fr (:audit-doc/language doc)))
-      (is (= "DSN-12345678900012-2026-05" (:audit-doc/code doc)))
-      (is (str/includes? (:audit-doc/title doc) "SIRET 12345678900012"))
-      (is (str/includes? (:audit-doc/title doc) "2026-05"))
-      (is (str/includes? (:audit-doc/title doc) "3 individus"))))
+      (is (= :payroll-filing (:kontor.audit-doc/category doc)))
+      (is (= :fr (:kontor.audit-doc/language doc)))
+      (is (= "DSN-12345678900012-2026-05" (:kontor.audit-doc/code doc)))
+      (is (str/includes? (:kontor.audit-doc/title doc) "SIRET 12345678900012"))
+      (is (str/includes? (:kontor.audit-doc/title doc) "2026-05"))
+      (is (str/includes? (:kontor.audit-doc/title doc) "3 individus"))))
   (testing "Nature + type-envoi reflected in title"
     (let [[doc] (emit/build-dsn-audit-doc-tx-data
                  {:siret "1" :pay-period "2026-05" :individus-count 0
                   :language :fr :nature :test :type-envoi :neant})]
-      (is (str/includes? (:audit-doc/title doc) "test"))
-      (is (str/includes? (:audit-doc/title doc) "néant"))))
+      (is (str/includes? (:kontor.audit-doc/title doc) "test"))
+      (is (str/includes? (:kontor.audit-doc/title doc) "néant"))))
   (testing "Custom code overrides the default"
     (let [[doc] (emit/build-dsn-audit-doc-tx-data
                  {:siret "1" :pay-period "2026-05" :individus-count 1
                   :code "CUSTOM-CODE-XYZ"})]
-      (is (= "CUSTOM-CODE-XYZ" (:audit-doc/code doc)))))
-  (testing "Storage URI flows into :audit-doc/storage-uri"
+      (is (= "CUSTOM-CODE-XYZ" (:kontor.audit-doc/code doc)))))
+  (testing "Storage URI flows into :kontor.audit-doc/storage-uri"
     (let [[doc] (emit/build-dsn-audit-doc-tx-data
                  {:siret "1" :pay-period "2026-05" :individus-count 1
                   :submitted-uri "s3://kontor-dsn/2026-05/dsn-payload.txt"})]
       (is (= "s3://kontor-dsn/2026-05/dsn-payload.txt"
-             (:audit-doc/storage-uri doc))))))
+             (:kontor.audit-doc/storage-uri doc))))))
 
 ;; ============================================================================
 ;; terminate-employment-tx-data
@@ -127,14 +127,14 @@
                      {:employment-eid 101
                       :last-day-worked #inst "2026-05-31"
                       :termination-reason :demission})]
-      (is (= :termination-event (:audit-doc/type doc)))
-      (is (= :hr-personnel (:audit-doc/category doc)))
-      (is (= :fr (:audit-doc/language doc)))
-      (is (str/includes? (:audit-doc/description doc) "010"))  ; motif demission
+      (is (= :termination-event (:kontor.audit-doc/type doc)))
+      (is (= :hr-personnel (:kontor.audit-doc/category doc)))
+      (is (= :fr (:kontor.audit-doc/language doc)))
+      (is (str/includes? (:kontor.audit-doc/description doc) "010"))  ; motif demission
       (is (= 101 (:db/id emp)))
-      (is (= :terminated (:employment/state emp)))
-      (is (= #inst "2026-05-31" (:employment/end-date emp)))
-      (is (= :demission (:employment/termination-reason emp)))))
+      (is (= :terminated (:kontor.employment/state emp)))
+      (is (= #inst "2026-05-31" (:kontor.employment/end-date emp)))
+      (is (= :demission (:kontor.employment/termination-reason emp)))))
   (testing "Final-pay-period-end-date when supplied flows into :employment"
     (let [[_ emp] (emit/terminate-employment-tx-data
                    nil
@@ -142,14 +142,14 @@
                     :last-day-worked #inst "2026-05-31"
                     :final-pay-period-end-date #inst "2026-06-15"
                     :termination-reason :rupture-conventionnelle})]
-      (is (= #inst "2026-06-15" (:employment/final-pay-period-end-date emp)))))
+      (is (= #inst "2026-06-15" (:kontor.employment/final-pay-period-end-date emp)))))
   (testing "Unknown termination reason falls back to motif 999"
     (let [[doc _] (emit/terminate-employment-tx-data
                    nil
                    {:employment-eid 101
                     :last-day-worked #inst "2026-05-31"
                     :termination-reason :consumer-bespoke-reason})]
-      (is (str/includes? (:audit-doc/description doc) "999")))))
+      (is (str/includes? (:kontor.audit-doc/description doc) "999")))))
 
 (deftest terminate-employment-required-args
   (testing "Missing employment-eid throws"

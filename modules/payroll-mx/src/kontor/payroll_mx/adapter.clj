@@ -47,8 +47,8 @@
        (e.g. `MxCfdiNominaEmitProvider`). Delegates the CFDI XML
        generation, then projects the result into the canonical
        `:audit-doc` tx-data shape with
-       `:audit-doc/category :payroll-filing` +
-       `:audit-doc/language :es-mx` (per note 86 P0-86-2 + ADR-082).
+       `:kontor.audit-doc/category :payroll-filing` +
+       `:kontor.audit-doc/language :es-mx` (per note 86 P0-86-2 + ADR-082).
 
    ## Wiring
 
@@ -98,8 +98,8 @@
      vendor / regulator material is referenced from sat.gob.mx
      specs; the consumer holds engine + PAC credentials.
    - BigDecimal HALF-EVEN throughout (Money discipline).
-   - `:audit-doc/category :payroll-filing` is canonical (note 86).
-   - `:audit-doc/language :es-mx` is the canonical MX locale tag.
+   - `:kontor.audit-doc/category :payroll-filing` is canonical (note 86).
+   - `:kontor.audit-doc/language :es-mx` is the canonical MX locale tag.
    - License posture clean — the bridge contains no derivative
      code from any vendor source; it just routes MX shapes into
      kernel shapes."
@@ -223,7 +223,7 @@
   pp/PayrollComputeProvider
   (provider-id [_]
     ;; Carry the wrapped engine vendor-id through so the
-    ;; :payroll-run/provider-id slot records the upstream engine
+    ;; :kontor.payroll-run/provider-id slot records the upstream engine
     ;; (e.g. :contpaqi-nominas) — matches the substrate convention.
     (core/vendor-id mx-engine))
   (compute-payroll [_ {:keys [pay-period-eid employment-eids variable-inputs]}]
@@ -526,14 +526,14 @@
   (let [code (str (or code-prefix "CFDI-NOM-")
                   entity-eid "-" pay-period-eid
                   (when employee-code (str "-" employee-code)))
-        title (or (:audit-doc/title emit-result)
+        title (or (:kontor.audit-doc/title emit-result)
                   (str "CFDI Nómina " code))
-        desc  (or (:audit-doc/description emit-result)
+        desc  (or (:kontor.audit-doc/description emit-result)
                   (str "Recibo de nómina (sin sellar) — empleado "
                        employee-code))
-        cat   (or (:audit-doc/category emit-result) :payroll-filing)
-        lang  (or (:audit-doc/language emit-result) :es-mx)
-        type  (or (:audit-doc/type emit-result) :payroll-cfdi-xml)
+        cat   (or (:kontor.audit-doc/category emit-result) :payroll-filing)
+        lang  (or (:kontor.audit-doc/language emit-result) :es-mx)
+        type  (or (:kontor.audit-doc/type emit-result) :payroll-cfdi-xml)
         xml   (:xml emit-result)
         ;; Storage-uri is consumer-supplied; default to an opaque
         ;; placeholder that records the run-scope so the consumer can
@@ -550,15 +550,15 @@
         content-hash (when xml
                        (format "%08x"
                                (.hashCode ^String xml)))]
-    (cond-> {:audit-doc/code code
-             :audit-doc/type type
-             :audit-doc/title title
-             :audit-doc/description desc
-             :audit-doc/category cat
-             :audit-doc/language lang
-             :audit-doc/storage-uri storage-uri
-             :audit-doc/uploaded-at (java.util.Date.)}
-      content-hash (assoc :audit-doc/content-hash content-hash))))
+    (cond-> {:kontor.audit-doc/code code
+             :kontor.audit-doc/type type
+             :kontor.audit-doc/title title
+             :kontor.audit-doc/description desc
+             :kontor.audit-doc/category cat
+             :kontor.audit-doc/language lang
+             :kontor.audit-doc/storage-uri storage-uri
+             :kontor.audit-doc/uploaded-at (java.util.Date.)}
+      content-hash (assoc :kontor.audit-doc/content-hash content-hash))))
 
 (defrecord MxKontorEmitProvider [mx-emitter opts]
   pp/PayrollEmitProvider

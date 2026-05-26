@@ -17,11 +17,11 @@
      - Paid feeds (XE, OANDA) require API keys that are *customer*
        property, never bundled (same posture as ADR-005's tax-API
        stance and ADR-071's TaxRateProvider).
-     - In-DB rates (`:fx-rate/*`, manually entered or batch-imported)
+     - In-DB rates (`:kontor.fx-rate/*`, manually entered or batch-imported)
        and live-API rates compose via [[chain]] just like TaxRateProvider.
 
    Built-in impls:
-     - [[StaticTableProvider]] — reads `:fx-rate/*` from the connected
+     - [[StaticTableProvider]] — reads `:kontor.fx-rate/*` from the connected
        db. Default last-on-or-before policy. Bundle-free.
      - [[EcbReferenceRatesProvider]] — wraps a static-table provider,
        populated by ingesting the ECB euro-reference-rates CSV. The
@@ -131,7 +131,7 @@
 (defn- rate-type-or-default [rt] (or rt :spot))
 
 ;; ============================================================================
-;; StaticTableProvider — reads :fx-rate/* from the connected db
+;; StaticTableProvider — reads :kontor.fx-rate/* from the connected db
 ;; ============================================================================
 
 (defn- non-zero
@@ -146,7 +146,7 @@
   "Direct lookup by composite tuple. Returns BigDecimal or nil.
 
    NOTE: pass the tuple as ONE value via `:in`. The naive form
-   `[?e :fx-rate/by-tuple [?from ?to ?date ?type]]` does NOT do tuple
+   `[?e :kontor.fx-rate/by-tuple [?from ?to ?date ?type]]` does NOT do tuple
    equality — datahike treats the position-vector as a fresh binding
    for each slot."
   [db from-eid to-eid ^Date at-date rate-type]
@@ -154,8 +154,8 @@
    (d/q '[:find ?r .
           :in $ ?tuple
           :where
-          [?e :fx-rate/by-tuple ?tuple]
-          [?e :fx-rate/rate ?r]]
+          [?e :kontor.fx-rate/by-tuple ?tuple]
+          [?e :kontor.fx-rate/rate ?r]]
         db [from-eid to-eid at-date rate-type])))
 
 (defn- query-last-on-or-before
@@ -165,11 +165,11 @@
   (let [hits (d/q '[:find ?date ?r
                     :in $ ?from ?to ?cutoff ?type
                     :where
-                    [?e :fx-rate/from-commodity ?from]
-                    [?e :fx-rate/to-commodity   ?to]
-                    [?e :fx-rate/rate-type      ?type]
-                    [?e :fx-rate/at-date        ?date]
-                    [?e :fx-rate/rate           ?r]
+                    [?e :kontor.fx-rate/from-commodity ?from]
+                    [?e :kontor.fx-rate/to-commodity   ?to]
+                    [?e :kontor.fx-rate/rate-type      ?type]
+                    [?e :kontor.fx-rate/at-date        ?date]
+                    [?e :kontor.fx-rate/rate           ?r]
                     [(<= ?date ?cutoff)]]
                   db from-eid to-eid at-date rate-type)]
     (when (seq hits)
@@ -250,11 +250,11 @@
           hits (d/q '[:find ?date ?r
                       :in $ ?from ?to ?type ?lo ?hi
                       :where
-                      [?e :fx-rate/from-commodity ?from]
-                      [?e :fx-rate/to-commodity   ?to]
-                      [?e :fx-rate/rate-type      ?type]
-                      [?e :fx-rate/at-date        ?date]
-                      [?e :fx-rate/rate           ?r]
+                      [?e :kontor.fx-rate/from-commodity ?from]
+                      [?e :kontor.fx-rate/to-commodity   ?to]
+                      [?e :kontor.fx-rate/rate-type      ?type]
+                      [?e :kontor.fx-rate/at-date        ?date]
+                      [?e :kontor.fx-rate/rate           ?r]
                       [(<= ?lo ?date)]
                       [(<= ?date ?hi)]]
                     db from-eid to-eid rate-type from-date to-date)]
@@ -288,7 +288,7 @@
 ;; ============================================================================
 
 (defn save-rate!-tx-data
-  "Tx-data for ONE :fx-rate/* sample. Per ADR-068.
+  "Tx-data for ONE :kontor.fx-rate/* sample. Per ADR-068.
 
    Required: :from :to :at-date :rate
    Optional: :rate-type (default :spot) :source (default :manual)
@@ -298,17 +298,17 @@
     (throw (ex-info "save-rate!-tx-data: required keys missing"
                     {:got #{(when from :from) (when to :to)
                             (when at-date :at-date) (when rate :rate)}})))
-  (cond-> {:fx-rate/from-commodity (if (string? from) [:kontor.commodity/symbol from] from)
-           :fx-rate/to-commodity   (if (string? to)   [:kontor.commodity/symbol to]   to)
-           :fx-rate/at-date        at-date
-           :fx-rate/rate           (if (instance? BigDecimal rate) rate (bigdec rate))
-           :fx-rate/rate-type      (or rate-type :spot)
-           :fx-rate/source         (or source :manual)}
-    source-doc (assoc :fx-rate/source-doc source-doc)))
+  (cond-> {:kontor.fx-rate/from-commodity (if (string? from) [:kontor.commodity/symbol from] from)
+           :kontor.fx-rate/to-commodity   (if (string? to)   [:kontor.commodity/symbol to]   to)
+           :kontor.fx-rate/at-date        at-date
+           :kontor.fx-rate/rate           (if (instance? BigDecimal rate) rate (bigdec rate))
+           :kontor.fx-rate/rate-type      (or rate-type :spot)
+           :kontor.fx-rate/source         (or source :manual)}
+    source-doc (assoc :kontor.fx-rate/source-doc source-doc)))
 
 (defn save-rates!
   "Transact a batch of rates. Each sample is the same map shape as
-   `save-rate!-tx-data`. Idempotent via :fx-rate/by-tuple — re-transacting
+   `save-rate!-tx-data`. Idempotent via :kontor.fx-rate/by-tuple — re-transacting
    the same key replaces :rate / :source / :source-doc."
   [conn samples]
   (d/transact conn (mapv save-rate!-tx-data samples)))
@@ -361,7 +361,7 @@
      (->EcbReferenceRatesProvider conn merged inner))))
 
 (defn ingest-ecb-csv-rows!
-  "Persist a sequence of parsed ECB CSV rows into the :fx-rate/* table.
+  "Persist a sequence of parsed ECB CSV rows into the :kontor.fx-rate/* table.
 
    Each row is a map:
      {:at-date <java.util.Date>     ; the publication date
@@ -376,7 +376,7 @@
    later corrects the forward rate (per ADR-072 review P1-72-1: storing
    both directions caused silent inverse drift when one was overridden).
 
-   Re-ingestion is a no-op via the `:fx-rate/by-tuple` upsert identity.
+   Re-ingestion is a no-op via the `:kontor.fx-rate/by-tuple` upsert identity.
 
    We do NOT bundle a CSV parser; the caller produces rows. ECB's
    eurofxref-daily.xml is one parse call from clojure.data.xml, and

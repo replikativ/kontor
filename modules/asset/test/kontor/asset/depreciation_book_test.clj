@@ -75,9 +75,9 @@
                   :kontor.journal/type :general}
                  ;; Asset class.
                  {:db/id "class-machinery"
-                  :asset-class/code "machinery"
-                  :asset-class/name "Machinery & Equipment"
-                  :asset-class/default-useful-life-months 120}])
+                  :kontor.asset-class/code "machinery"
+                  :kontor.asset-class/name "Machinery & Equipment"
+                  :kontor.asset-class/default-useful-life-months 120}])
     conn))
 
 (defn- ref-eid [db a v]
@@ -88,7 +88,7 @@
 (defn- acct      [db code] (ref-eid db :kontor.account/code code))
 (defn- ledger    [db code] (ref-eid db :kontor.ledger/code code))
 (defn- journal   [db] (ref-eid db :kontor.journal/code "GEN"))
-(defn- class-eid [db] (ref-eid db :asset-class/code "machinery"))
+(defn- class-eid [db] (ref-eid db :kontor.asset-class/code "machinery"))
 
 ;; A standard in-service €120,000 machine, salvage €0.
 (defn- acquire-machine! [conn code]
@@ -124,19 +124,19 @@
         book (dep/pull-book (d/db conn) [(asset/by-code (d/db conn) "MACH-001")
                                          (ledger (d/db conn) "hgb")])]
     (testing "the book carries its config"
-      (is (= :straight-line (:asset-depreciation/provider-id book)))
-      (is (= 120 (:asset-depreciation/useful-life-months book)))
-      (is (= :full (:asset-depreciation/convention book)))
-      (is (= 120000.00M (:asset-depreciation/depreciable-base book))
+      (is (= :straight-line (:kontor.asset-depreciation/provider-id book)))
+      (is (= 120 (:kontor.asset-depreciation/useful-life-months book)))
+      (is (= :full (:kontor.asset-depreciation/convention book)))
+      (is (= 120000.00M (:kontor.asset-depreciation/depreciable-base book))
           "depreciable-base defaults to acquisition-cost − salvage"))
     (testing "the schedule is created, active, monthly, with a derived end-date"
-      (let [s (:asset-depreciation/schedule book)]
-        (is (= :depreciation (:schedule/kind s)))
-        (is (= :active (:schedule/state s)))
-        (is (= :monthly (:schedule/frequency s)))
-        (is (= #inst "2026-01-15" (:schedule/start-date s)))
+      (let [s (:kontor.asset-depreciation/schedule book)]
+        (is (= :depreciation (:kontor.schedule/kind s)))
+        (is (= :active (:kontor.schedule/state s)))
+        (is (= :monthly (:kontor.schedule/frequency s)))
+        (is (= #inst "2026-01-15" (:kontor.schedule/start-date s)))
         (is (= (schedule/date-of-occurrence #inst "2026-01-15" :monthly 120)
-               (:schedule/end-date s))
+               (:kontor.schedule/end-date s))
             "end-date = start + useful-life-months occurrences")))))
 
 (deftest open-book-with-method-params
@@ -148,16 +148,16 @@
                            :ledger (ledger db "tax-de")
                            :provider-id :declining-balance
                            :useful-life-months 120
-                           :method-params {:asset-method-params/rate-multiple 2.5M
-                                           :asset-method-params/ceiling-rate 0.25M
-                                           :asset-method-params/switch-to-straight-line true}})
+                           :method-params {:kontor.asset-method-params/rate-multiple 2.5M
+                                           :kontor.asset-method-params/ceiling-rate 0.25M
+                                           :kontor.asset-method-params/switch-to-straight-line true}})
         book (dep/pull-book (d/db conn) [(asset/by-code (d/db conn) "MACH-DB")
                                          (ledger (d/db conn) "tax-de")])]
     (testing "the inline method-params entity is created and linked"
-      (let [mp (:asset-depreciation/method-params book)]
-        (is (= 2.5M (:asset-method-params/rate-multiple mp)))
-        (is (= 0.25M (:asset-method-params/ceiling-rate mp)))
-        (is (true? (:asset-method-params/switch-to-straight-line mp)))))))
+      (let [mp (:kontor.asset-depreciation/method-params book)]
+        (is (= 2.5M (:kontor.asset-method-params/rate-multiple mp)))
+        (is (= 0.25M (:kontor.asset-method-params/ceiling-rate mp)))
+        (is (true? (:kontor.asset-method-params/switch-to-straight-line mp)))))))
 
 (deftest one-book-per-asset-ledger-pair
   (let [conn (bootstrap)
@@ -191,10 +191,10 @@
                                             (ledger (d/db conn) "hgb")])
             tax (dep/pull-book (d/db conn) [(asset/by-code (d/db conn) "MACH-MB")
                                             (ledger (d/db conn) "tax-de")])]
-        (is (= 120 (:asset-depreciation/useful-life-months hgb)))
-        (is (= 84 (:asset-depreciation/useful-life-months tax)))
-        (is (not= (:db/id (:asset-depreciation/schedule hgb))
-                  (:db/id (:asset-depreciation/schedule tax))))))))
+        (is (= 120 (:kontor.asset-depreciation/useful-life-months hgb)))
+        (is (= 84 (:kontor.asset-depreciation/useful-life-months tax)))
+        (is (not= (:db/id (:kontor.asset-depreciation/schedule hgb))
+                  (:db/id (:kontor.asset-depreciation/schedule tax))))))))
 
 ;; ============================================================================
 ;; Roll-forward queries
@@ -208,8 +208,8 @@
                           {:asset "MACH-NBV" :ledger (ledger db "hgb")
                            :provider-id :straight-line :useful-life-months 120})
         book (dep/book-for (d/db conn) "MACH-NBV" (ledger (d/db conn) "hgb"))
-        sched (:db/id (:asset-depreciation/schedule
-                       (d/pull (d/db conn) [:asset-depreciation/schedule] book)))
+        sched (:db/id (:kontor.asset-depreciation/schedule
+                       (d/pull (d/db conn) [:kontor.asset-depreciation/schedule] book)))
         eur (commodity (d/db conn))]
     (testing "with no occurrences, accumulated = 0 and NBV = cost"
       (is (= 0M (dep/accumulated-depreciation (d/db conn) book)))
@@ -217,18 +217,18 @@
     (testing "after two €1,000 occurrences, accumulated = 2,000 and NBV = 118,000"
       ;; Record two occurrences directly (the ADR-055 runner does this
       ;; for real; here we only exercise the roll-forward queries).
-      (d/transact conn [{:schedule-occurrence/schedule sched
-                         :schedule-occurrence/sequence 1
-                         :schedule-occurrence/scheduled-date #inst "2026-02-15"
-                         :schedule-occurrence/amount 1000.00M
-                         :schedule-occurrence/commodity eur
-                         :schedule-occurrence/fired-at #inst "2026-02-15"}
-                        {:schedule-occurrence/schedule sched
-                         :schedule-occurrence/sequence 2
-                         :schedule-occurrence/scheduled-date #inst "2026-03-15"
-                         :schedule-occurrence/amount 1000.00M
-                         :schedule-occurrence/commodity eur
-                         :schedule-occurrence/fired-at #inst "2026-03-15"}])
+      (d/transact conn [{:kontor.schedule-occurrence/schedule sched
+                         :kontor.schedule-occurrence/sequence 1
+                         :kontor.schedule-occurrence/scheduled-date #inst "2026-02-15"
+                         :kontor.schedule-occurrence/amount 1000.00M
+                         :kontor.schedule-occurrence/commodity eur
+                         :kontor.schedule-occurrence/fired-at #inst "2026-02-15"}
+                        {:kontor.schedule-occurrence/schedule sched
+                         :kontor.schedule-occurrence/sequence 2
+                         :kontor.schedule-occurrence/scheduled-date #inst "2026-03-15"
+                         :kontor.schedule-occurrence/amount 1000.00M
+                         :kontor.schedule-occurrence/commodity eur
+                         :kontor.schedule-occurrence/fired-at #inst "2026-03-15"}])
       (is (= 2000.00M (dep/accumulated-depreciation (d/db conn) book)))
       (is (= 118000.00M (dep/net-book-value (d/db conn) book))))))
 
@@ -295,19 +295,19 @@
                           {:asset code :ledger hgb
                            :provider-id :straight-line :useful-life-months 120})
           (let [book (dep/book-for (d/db conn) code hgb)
-                sched (:db/id (:asset-depreciation/schedule
+                sched (:db/id (:kontor.asset-depreciation/schedule
                                (d/pull (d/db conn)
-                                       [:asset-depreciation/schedule] book)))
+                                       [:kontor.asset-depreciation/schedule] book)))
                 eur (commodity (d/db conn))]
             (when (pos? occurrences)
               (d/transact conn
                           (mapv (fn [i]
-                                  {:schedule-occurrence/schedule sched
-                                   :schedule-occurrence/sequence (inc i)
-                                   :schedule-occurrence/scheduled-date #inst "2026-02-15"
-                                   :schedule-occurrence/amount 1000.00M
-                                   :schedule-occurrence/commodity eur
-                                   :schedule-occurrence/fired-at #inst "2026-02-15"})
+                                  {:kontor.schedule-occurrence/schedule sched
+                                   :kontor.schedule-occurrence/sequence (inc i)
+                                   :kontor.schedule-occurrence/scheduled-date #inst "2026-02-15"
+                                   :kontor.schedule-occurrence/amount 1000.00M
+                                   :kontor.schedule-occurrence/commodity eur
+                                   :kontor.schedule-occurrence/fired-at #inst "2026-02-15"})
                                 (range occurrences))))
             book))]
     (testing "disposal at a GAIN — proceeds above NBV"

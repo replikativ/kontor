@@ -10,9 +10,9 @@
      fire via the status transition.
    - impair! / revalue! record the :asset-event, keep status
      :in-service, enforce inline :justification + :reason-note guards.
-   - transfer! → :transferred + re-points :asset/entity.
+   - transfer! → :transferred + re-points :kontor.asset/entity.
    - revise-useful-life! records the event.
-   - componentisation via :asset/parent.
+   - componentisation via :kontor.asset/parent.
    - events-of returns events ordered by date."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
@@ -45,28 +45,28 @@
                   :kontor.account/type :expense :kontor.account/active true}
                  ;; Asset class.
                  {:db/id "class-machinery"
-                  :asset-class/code "machinery"
-                  :asset-class/name "Machinery & Equipment"
-                  :asset-class/default-useful-life-months 120}
+                  :kontor.asset-class/code "machinery"
+                  :kontor.asset-class/name "Machinery & Equipment"
+                  :kontor.asset-class/default-useful-life-months 120}
                  ;; A second legal entity for the transfer test.
                  {:db/id "entity-sub"
                   :kontor.entity/code "SUB-DE" :kontor.entity/name "Subsidiary GmbH"}
                  ;; Supporting docs.
                  {:db/id "doc-invoice"
-                  :audit-doc/code "ASSET-INV-001"
-                  :audit-doc/type :acquisition-invoice
-                  :audit-doc/storage-uri "s3://docs/asset-inv-001"
-                  :audit-doc/uploaded-at #inst "2026-01-15"}
+                  :kontor.audit-doc/code "ASSET-INV-001"
+                  :kontor.audit-doc/type :acquisition-invoice
+                  :kontor.audit-doc/storage-uri "s3://docs/asset-inv-001"
+                  :kontor.audit-doc/uploaded-at #inst "2026-01-15"}
                  {:db/id "doc-disposal"
-                  :audit-doc/code "ASSET-DISPOSAL-001"
-                  :audit-doc/type :disposal-authorisation
-                  :audit-doc/storage-uri "s3://docs/asset-disposal-001"
-                  :audit-doc/uploaded-at #inst "2026-09-01"}
+                  :kontor.audit-doc/code "ASSET-DISPOSAL-001"
+                  :kontor.audit-doc/type :disposal-authorisation
+                  :kontor.audit-doc/storage-uri "s3://docs/asset-disposal-001"
+                  :kontor.audit-doc/uploaded-at #inst "2026-09-01"}
                  {:db/id "doc-impair"
-                  :audit-doc/code "ASSET-IMPAIR-001"
-                  :audit-doc/type :impairment-test-memo
-                  :audit-doc/storage-uri "s3://docs/asset-impair-001"
-                  :audit-doc/uploaded-at #inst "2026-06-30"}])
+                  :kontor.audit-doc/code "ASSET-IMPAIR-001"
+                  :kontor.audit-doc/type :impairment-test-memo
+                  :kontor.audit-doc/storage-uri "s3://docs/asset-impair-001"
+                  :kontor.audit-doc/uploaded-at #inst "2026-06-30"}])
     conn))
 
 (defn- uid [db actor]
@@ -77,10 +77,10 @@
   (d/q '[:find ?e . :in $ ?a ?v :where [?e ?a ?v]] db tempid-attr v))
 
 (defn- commodity [db] (ref-eid db :kontor.commodity/symbol "EUR"))
-(defn- adoc [db code] (ref-eid db :audit-doc/code code))
+(defn- adoc [db code] (ref-eid db :kontor.audit-doc/code code))
 (defn- acct [db code] (ref-eid db :kontor.account/code code))
 (defn- entity-eid [db code] (ref-eid db :kontor.entity/code code))
-(defn- class-eid [db code] (ref-eid db :asset-class/code code))
+(defn- class-eid [db code] (ref-eid db :kontor.asset-class/code code))
 
 ;; Acquire a standard in-service machinery asset; returns the eid.
 (defn- acquire-machine! [conn code]
@@ -117,14 +117,14 @@
                            :changed-by-uid (uid db "buyer")})
         a (asset/pull-asset (d/db conn) "MACH-PLAN")]
     (testing "acquire! defaults to :planned, no :in-service-date"
-      (is (= :planned (:asset/status a)))
-      (is (nil? (:asset/in-service-date a))))
+      (is (= :planned (:kontor.asset/status a)))
+      (is (nil? (:kontor.asset/in-service-date a))))
     (testing "a status-history row records nil → :planned"
       (is (= 1 (count (d/q '[:find [?h ...]
                              :in $ ?e
                              :where
                              [?h :kontor.status-history/entity ?e]
-                             [?h :kontor.status-history/facet :asset/status]]
+                             [?h :kontor.status-history/facet :kontor.asset/status]]
                            (d/db conn) (asset/by-code (d/db conn) "MACH-PLAN"))))))
     (testing "place-in-service! → :in-service, stamps :in-service-date"
       (asset/place-in-service! conn
@@ -132,17 +132,17 @@
                                 :in-service-date #inst "2026-02-15"
                                 :changed-by-uid (uid (d/db conn) "manager")})
       (let [a' (asset/pull-asset (d/db conn) "MACH-PLAN")]
-        (is (= :in-service (:asset/status a')))
-        (is (= #inst "2026-02-15" (:asset/in-service-date a')))))))
+        (is (= :in-service (:kontor.asset/status a')))
+        (is (= #inst "2026-02-15" (:kontor.asset/in-service-date a')))))))
 
 (deftest acquire-in-service-stamps-in-service-date
   (let [conn (bootstrap)
         _ (acquire-machine! conn "MACH-001")
         a (asset/pull-asset (d/db conn) "MACH-001")]
-    (is (= :in-service (:asset/status a)))
-    (is (= #inst "2026-01-15" (:asset/in-service-date a))
+    (is (= :in-service (:kontor.asset/status a)))
+    (is (= #inst "2026-01-15" (:kontor.asset/in-service-date a))
         ":in-service-date defaults to :acquisition-date when :in-service?")
-    (is (= 120000.00M (:asset/acquisition-cost a)))))
+    (is (= 120000.00M (:kontor.asset/acquisition-cost a)))))
 
 ;; ============================================================================
 ;; Disposal — governed by the status machine (ADR-038)
@@ -162,10 +162,10 @@
                        :reason-note "Sold to scrap dealer."})
       (let [a (asset/pull-asset (d/db conn) "MACH-DISP")
             events (asset/events-of (d/db conn) "MACH-DISP")]
-        (is (= :disposed (:asset/status a)))
+        (is (= :disposed (:kontor.asset/status a)))
         (is (= 1 (count events)))
-        (is (= :disposal (:asset-event/kind (first events))))
-        (is (= 30000.00M (:asset-event/amount (first events))))))))
+        (is (= :disposal (:kontor.asset-event/kind (first events))))
+        (is (= 30000.00M (:kontor.asset-event/amount (first events))))))))
 
 (deftest dispose-by-acquirer-rejected
   (let [conn (bootstrap)
@@ -209,11 +209,11 @@
     (let [a (asset/pull-asset (d/db conn) "MACH-IMP")
           events (asset/events-of (d/db conn) "MACH-IMP")]
       (testing "asset stays :in-service after impairment"
-        (is (= :in-service (:asset/status a))))
+        (is (= :in-service (:kontor.asset/status a))))
       (testing "the :impairment :asset-event is recorded"
         (is (= 1 (count events)))
-        (is (= :impairment (:asset-event/kind (first events))))
-        (is (= 15000.00M (:asset-event/amount (first events))))))))
+        (is (= :impairment (:kontor.asset-event/kind (first events))))
+        (is (= 15000.00M (:kontor.asset-event/amount (first events))))))))
 
 (deftest impair-without-justification-rejected
   (let [conn (bootstrap)
@@ -247,9 +247,9 @@
                                 :changed-by-uid (uid (d/db conn) "manager")
                                 :reason-note "Annual IAS 16 review — lifespan extended."})
     (let [events (asset/events-of (d/db conn) "MACH-LIFE")]
-      (is (= :useful-life-revision (:asset-event/kind (first events))))
-      (is (= 84 (:asset-event/new-useful-life-months (first events))))
-      (is (= :in-service (:asset/status (asset/pull-asset (d/db conn) "MACH-LIFE")))))))
+      (is (= :useful-life-revision (:kontor.asset-event/kind (first events))))
+      (is (= 84 (:kontor.asset-event/new-useful-life-months (first events))))
+      (is (= :in-service (:kontor.asset/status (asset/pull-asset (d/db conn) "MACH-LIFE")))))))
 
 ;; ============================================================================
 ;; Transfer
@@ -265,14 +265,14 @@
                       :to-entity (entity-eid (d/db conn) "SUB-DE")
                       :reason-note "Intercompany transfer to subsidiary."})
     (let [a (asset/pull-asset (d/db conn) "MACH-XFER")]
-      (is (= :transferred (:asset/status a)))
+      (is (= :transferred (:kontor.asset/status a)))
       (is (= (entity-eid (d/db conn) "SUB-DE")
-             (:db/id (:asset/entity a))))
-      (is (= :transfer (:asset-event/kind
+             (:db/id (:kontor.asset/entity a))))
+      (is (= :transfer (:kontor.asset-event/kind
                         (first (asset/events-of (d/db conn) "MACH-XFER"))))))))
 
 ;; ============================================================================
-;; Componentisation — :asset/parent
+;; Componentisation — :kontor.asset/parent
 ;; ============================================================================
 
 (deftest componentisation-via-asset-parent
@@ -291,8 +291,8 @@
                            :parent whole
                            :changed-by-uid (uid db "buyer")})
         component (asset/pull-asset (d/db conn) "BUILDING-1-ROOF")]
-    (testing "the component references the whole via :asset/parent"
-      (is (= whole (:db/id (:asset/parent component)))))
+    (testing "the component references the whole via :kontor.asset/parent"
+      (is (= whole (:db/id (:kontor.asset/parent component)))))
     (testing "both are independent :in-service assets"
-      (is (= :in-service (:asset/status component)))
-      (is (= :in-service (:asset/status (asset/pull-asset (d/db conn) "BUILDING-1")))))))
+      (is (= :in-service (:kontor.asset/status component)))
+      (is (= :in-service (:kontor.asset/status (asset/pull-asset (d/db conn) "BUILDING-1")))))))

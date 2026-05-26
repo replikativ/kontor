@@ -5,7 +5,7 @@
        CSV adapter through `run-payroll!`.
      - Posting balances per-(ledger × commodity).
      - eSocial S-1200 / S-1210 / S-1299 audit-docs are produced and
-       carry :audit-doc/category :payroll-filing + :pt-br language.
+       carry :kontor.audit-doc/category :payroll-filing + :pt-br language.
      - Each event payload includes a well-formed XML payload (round-
        trips through clojure.data.xml).
      - The four canonical statutory buckets (INSS-EE, INSS-ER, FGTS,
@@ -173,9 +173,9 @@
                       :commodity brl})
         db (:db-after report)
         run-eid (d/q '[:find ?r . :in $ ?c
-                       :where [?r :payroll-run/code ?c]]
+                       :where [?r :kontor.payroll-run/code ?c]]
                      db "ACME-BR-2026-05-001")
-        run (d/pull db '[* {:payroll-run/payroll-transaction
+        run (d/pull db '[* {:kontor.payroll-run/payroll-transaction
                             [:kontor.transaction/external-id
                              {:kontor.posting/_transaction
                               [:kontor.posting/amount
@@ -183,20 +183,20 @@
                     run-eid)]
     (testing "payroll-run row created"
       (is (some? run-eid))
-      (is (= :computed (:payroll-run/state run)))
-      (is (= :mock-br (:payroll-run/provider-id run))))
+      (is (= :computed (:kontor.payroll-run/state run)))
+      (is (= :mock-br (:kontor.payroll-run/provider-id run))))
     (testing "Control totals reflect both employees"
       ;; 2 × 5000 = 10000
-      (is (= 10000M (:payroll-run/control-total-gross run))))
+      (is (= 10000M (:kontor.payroll-run/control-total-gross run))))
     (testing "Posting legs sum to zero per (ledger × commodity)"
-      (let [postings (-> run :payroll-run/payroll-transaction
+      (let [postings (-> run :kontor.payroll-run/payroll-transaction
                          :kontor.posting/_transaction)
             sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                           (.add ^BigDecimal a ^BigDecimal amount))
                         0M postings)]
         (is (zero? (.compareTo ^BigDecimal sum 0M)))))
     (testing "Four canonical BR statutory buckets land on DISTINCT accounts"
-      (let [postings (-> run :payroll-run/payroll-transaction
+      (let [postings (-> run :kontor.payroll-run/payroll-transaction
                          :kontor.posting/_transaction)
             by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)]
         ;; INSS empregado (2.1.1.05): -800 (2 × -400)
@@ -221,25 +221,25 @@
                        0M (get by-code "2.1.1.15"))))))
     (testing "eSocial emit-docs produced with :payroll-filing category"
       (let [docs (d/q '[:find [?e ...]
-                        :where [?e :audit-doc/category :payroll-filing]]
+                        :where [?e :kontor.audit-doc/category :payroll-filing]]
                       db)]
         ;; 2 employees × 2 events (S-1200 + S-1210) + 1 S-1299 = 5 docs
         (is (>= (count docs) 5))))
     (testing "All eSocial emit-docs are :pt-br language"
       (let [docs (d/q '[:find [?e ...]
                         :where
-                        [?e :audit-doc/category :payroll-filing]]
+                        [?e :kontor.audit-doc/category :payroll-filing]]
                       db)
             languages (map (fn [eid]
-                             (:audit-doc/language
-                              (d/pull db [:audit-doc/language] eid)))
+                             (:kontor.audit-doc/language
+                              (d/pull db [:kontor.audit-doc/language] eid)))
                            docs)]
         (is (every? #(= :pt-br %) languages))))
     (testing "S-1200 payloads contain rubrica codes"
       (let [all-docs (d/q '[:find ?c ?p
                             :where
-                            [?e :audit-doc/code ?c]
-                            [?e :audit-doc/inline-payload ?p]]
+                            [?e :kontor.audit-doc/code ?c]
+                            [?e :kontor.audit-doc/inline-payload ?p]]
                           db)
             s1200-payloads (->> all-docs
                                 (filter (fn [[c _]] (str/includes? c "S1200")))

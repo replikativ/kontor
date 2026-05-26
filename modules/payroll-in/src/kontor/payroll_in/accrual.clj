@@ -210,7 +210,7 @@
      :audit-doc-code             — string identifier for an :audit-doc
                                    carrying the actuary's valuation
                                    report (typically created separately
-                                   with :audit-doc/category
+                                   with :kontor.audit-doc/category
                                    :payroll-filing or :compliance-
                                    attestation per the consumer's
                                    classification). The string is

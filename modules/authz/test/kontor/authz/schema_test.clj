@@ -2,11 +2,11 @@
   "ADR-065: kontor-authz — the schema + the entity-map builders.
 
    Covers (the first unit — core protocol + base builders + schema):
-   - install! lays down the :authz/* attributes idempotently.
+   - install! lays down the :kontor.authz/* attributes idempotently.
    - Relation / Permission / Relationship builders emit the component
      attributes, and datahike auto-computes the composite tuple
-     index attributes (:authz.relation/identity,
-     :authz.permission/identity, :authz.relationship/forward +
+     index attributes (:kontor.authz.relation/identity,
+     :kontor.authz.permission/identity, :kontor.authz.relationship/forward +
      /reverse).
    - the tuple :db.unique/identity constraints dedupe — re-declaring
      a Relation / Permission / Relationship upserts onto the same
@@ -35,11 +35,11 @@
           attr? (fn [a] (some? (d/q '[:find ?e . :in $ ?a
                                       :where [?e :db/ident ?a]] db a)))]
       (testing "the core component + tuple attrs are installed"
-        (is (attr? :authz/object-id))
-        (is (attr? :authz.relation/identity))
-        (is (attr? :authz.permission/identity))
-        (is (attr? :authz.relationship/forward))
-        (is (attr? :authz.relationship/reverse))))
+        (is (attr? :kontor.authz/object-id))
+        (is (attr? :kontor.authz.relation/identity))
+        (is (attr? :kontor.authz.permission/identity))
+        (is (attr? :kontor.authz.relationship/forward))
+        (is (attr? :kontor.authz.relationship/reverse))))
     (testing "install! is idempotent"
       (is (some? (schema/install! conn))))))
 
@@ -64,61 +64,61 @@
       (is (= [:account :owner :user]
              (first (d/q '[:find ?rt ?rn ?st
                            :where
-                           [?e :authz.relation/resource-type ?rt]
-                           [?e :authz.relation/relation-name ?rn]
-                           [?e :authz.relation/subject-type ?st]
+                           [?e :kontor.authz.relation/resource-type ?rt]
+                           [?e :kontor.authz.relation/relation-name ?rn]
+                           [?e :kontor.authz.relation/subject-type ?st]
                            [(= ?rt :account)]]
                          db)))))
-    (testing "the :authz.relation/identity tuple auto-computes"
+    (testing "the :kontor.authz.relation/identity tuple auto-computes"
       (is (= [:account :owner :user]
-             (:authz.relation/identity
-              (d/pull db [:authz.relation/identity]
-                      [:authz.relation/identity [:account :owner :user]])))))
-    (testing "the :authz.permission/identity tuple auto-computes (arrow permission)"
+             (:kontor.authz.relation/identity
+              (d/pull db [:kontor.authz.relation/identity]
+                      [:kontor.authz.relation/identity [:account :owner :user]])))))
+    (testing "the :kontor.authz.permission/identity tuple auto-computes (arrow permission)"
       (is (some? (d/q '[:find ?e .
                         :where
-                        [?e :authz.permission/identity
+                        [?e :kontor.authz.permission/identity
                          [:server :account :permission :admin :view]]]
                       db))))
     (testing "Permission with :relation spec resolves through a relation"
-      (let [p (d/pull db [:authz.permission/source-relation-name
-                          :authz.permission/target-type
-                          :authz.permission/target-name]
-                      [:authz.permission/identity
+      (let [p (d/pull db [:kontor.authz.permission/source-relation-name
+                          :kontor.authz.permission/target-type
+                          :kontor.authz.permission/target-name]
+                      [:kontor.authz.permission/identity
                        [:account :self :relation :owner :admin]])]
-        (is (= :self     (:authz.permission/source-relation-name p)))
-        (is (= :relation (:authz.permission/target-type p)))
-        (is (= :owner    (:authz.permission/target-name p)))))))
+        (is (= :self     (:kontor.authz.permission/source-relation-name p)))
+        (is (= :relation (:kontor.authz.permission/target-type p)))
+        (is (= :owner    (:kontor.authz.permission/target-name p)))))))
 
 (deftest relationship-builder-and-forward-reverse-tuples
   (let [conn (fresh-conn)
         _ (schema/install! conn)
         ;; subject + resource entities (consumer-defined; here keyed by
-        ;; :authz/object-id, the external-id handle)
-        _ (d/transact conn [{:db/id "u" :authz/object-id "user-1"}
-                            {:db/id "a" :authz/object-id "account-1"}])
+        ;; :kontor.authz/object-id, the external-id handle)
+        _ (d/transact conn [{:db/id "u" :kontor.authz/object-id "user-1"}
+                            {:db/id "a" :kontor.authz/object-id "account-1"}])
         db0 (d/db conn)
-        u (d/q '[:find ?e . :where [?e :authz/object-id "user-1"]] db0)
-        a (d/q '[:find ?e . :where [?e :authz/object-id "account-1"]] db0)
+        u (d/q '[:find ?e . :where [?e :kontor.authz/object-id "user-1"]] db0)
+        a (d/q '[:find ?e . :where [?e :kontor.authz/object-id "account-1"]] db0)
         _ (d/transact conn [(base/Relationship (authz/object-ref :user u)
                                                :owner
                                                (authz/object-ref :account a))])
         db (d/db conn)]
     (testing "the forward tuple auto-computes — (s-type s rel r-type r)"
       (is (some? (d/q '[:find ?e . :in $ ?fwd
-                        :where [?e :authz.relationship/forward ?fwd]]
+                        :where [?e :kontor.authz.relationship/forward ?fwd]]
                       db [:user u :owner :account a]))))
     (testing "the reverse tuple auto-computes — (r-type r rel s-type s)"
       (is (some? (d/q '[:find ?e . :in $ ?rev
-                        :where [?e :authz.relationship/reverse ?rev]]
+                        :where [?e :kontor.authz.relationship/reverse ?rev]]
                       db [:account a :owner :user u]))))
     (testing "the relationship refs resolve to the subject + resource entities"
-      (let [rel (d/pull db [{:authz.relationship/subject [:authz/object-id]}
-                            {:authz.relationship/resource [:authz/object-id]}]
-                        (d/q '[:find ?e . :where [?e :authz.relationship/forward _]]
+      (let [rel (d/pull db [{:kontor.authz.relationship/subject [:kontor.authz/object-id]}
+                            {:kontor.authz.relationship/resource [:kontor.authz/object-id]}]
+                        (d/q '[:find ?e . :where [?e :kontor.authz.relationship/forward _]]
                              db))]
-        (is (= "user-1"    (:authz/object-id (:authz.relationship/subject rel))))
-        (is (= "account-1" (:authz/object-id (:authz.relationship/resource rel))))))))
+        (is (= "user-1"    (:kontor.authz/object-id (:kontor.authz.relationship/subject rel))))
+        (is (= "account-1" (:kontor.authz/object-id (:kontor.authz.relationship/resource rel))))))))
 
 ;; ============================================================================
 ;; Tuple :db.unique/identity dedup
@@ -127,16 +127,16 @@
 (deftest tuple-identity-dedupes-definitions-and-edges
   (let [conn (fresh-conn)
         _ (schema/install! conn)
-        _ (d/transact conn [{:db/id "u" :authz/object-id "user-1"}
-                            {:db/id "a" :authz/object-id "account-1"}])
+        _ (d/transact conn [{:db/id "u" :kontor.authz/object-id "user-1"}
+                            {:db/id "a" :kontor.authz/object-id "account-1"}])
         db0 (d/db conn)
-        u (d/q '[:find ?e . :where [?e :authz/object-id "user-1"]] db0)
-        a (d/q '[:find ?e . :where [?e :authz/object-id "account-1"]] db0)]
+        u (d/q '[:find ?e . :where [?e :kontor.authz/object-id "user-1"]] db0)
+        a (d/q '[:find ?e . :where [?e :kontor.authz/object-id "account-1"]] db0)]
     (testing "re-declaring a Relation upserts (one entity, not two)"
       (d/transact conn [(base/Relation :account :owner :user)])
       (d/transact conn [(base/Relation :account :owner :user)])
       (is (= 1 (count (d/q '[:find [?e ...]
-                             :where [?e :authz.relation/identity
+                             :where [?e :kontor.authz.relation/identity
                                      [:account :owner :user]]]
                            (d/db conn))))))
     (testing "re-creating an identical Relationship upserts (one edge, not two)"
@@ -145,7 +145,7 @@
       (d/transact conn [(base/Relationship (authz/object-ref :user u) :owner
                                            (authz/object-ref :account a))])
       (is (= 1 (count (d/q '[:find [?e ...]
-                             :where [?e :authz.relationship/forward
+                             :where [?e :kontor.authz.relationship/forward
                                      [:user ?u :owner :account ?a]]]
                            (d/db conn))))))))
 

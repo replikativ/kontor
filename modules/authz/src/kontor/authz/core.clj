@@ -5,7 +5,7 @@
    speaks in. A faithful reimplementation of EACL's ReBAC model
    (https://github.com/theronic/eacl, EPL-2.0), proven to run on
    datahike in research note 41 — kontor-authz ports the *design*
-   into a datahike-native, EPL-1.0, `:authz/*`-namespaced companion
+   into a datahike-native, EPL-1.0, `:kontor.authz/*`-namespaced companion
    (the project's lift-the-pattern-write-our-own convention, ADR-001;
    ADR-002 cohabitation).
 

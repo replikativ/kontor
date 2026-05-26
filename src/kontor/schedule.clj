@@ -4,8 +4,8 @@
    A `:schedule` is a sequence of dates at which a recurring posting
    fires. Each firing produces one immutable `:schedule-occurrence`
    referencing the kernel `:transaction` it created. Remaining
-   occurrences are *derived* from `(:schedule/start-date,
-   :schedule/end-date, :schedule/frequency)` minus the already-fired
+   occurrences are *derived* from `(:kontor.schedule/start-date,
+   :kontor.schedule/end-date, :kontor.schedule/frequency)` minus the already-fired
    sequence numbers — the kernel doesn't materialize the full
    schedule, only the occurrences that have actually fired.
 
@@ -36,11 +36,11 @@
 ;; ============================================================================
 
 (defn by-code
-  "Resolve a schedule entity-id by its `:schedule/code`."
+  "Resolve a schedule entity-id by its `:kontor.schedule/code`."
   [db code]
   (d/q '[:find ?e .
          :in $ ?code
-         :where [?e :schedule/code ?code]]
+         :where [?e :kontor.schedule/code ?code]]
        db code))
 
 (defn resolve-schedule
@@ -101,8 +101,8 @@
   (set (d/q '[:find [?seq ...]
               :in $ ?s
               :where
-              [?o :schedule-occurrence/schedule ?s]
-              [?o :schedule-occurrence/sequence ?seq]]
+              [?o :kontor.schedule-occurrence/schedule ?s]
+              [?o :kontor.schedule-occurrence/sequence ?seq]]
             db schedule-eid)))
 
 (defn last-fired-sequence
@@ -111,8 +111,8 @@
   (or (d/q '[:find (max ?seq) .
              :in $ ?s
              :where
-             [?o :schedule-occurrence/schedule ?s]
-             [?o :schedule-occurrence/sequence ?seq]]
+             [?o :kontor.schedule-occurrence/schedule ?s]
+             [?o :kontor.schedule-occurrence/sequence ?seq]]
            db schedule-eid)
       0))
 
@@ -133,15 +133,15 @@
   ([db schedule-eid] (pending-occurrences db schedule-eid (java.util.Date.)))
   ([db schedule-eid ^java.util.Date now]
    (let [pulled (d/pull db
-                        [:schedule/start-date
-                         :schedule/end-date
-                         :schedule/frequency
-                         :schedule/state]
+                        [:kontor.schedule/start-date
+                         :kontor.schedule/end-date
+                         :kontor.schedule/frequency
+                         :kontor.schedule/state]
                         schedule-eid)
-         start (:schedule/start-date pulled)
-         end   (:schedule/end-date pulled)
-         freq  (:schedule/frequency pulled)
-         state (:schedule/state pulled)
+         start (:kontor.schedule/start-date pulled)
+         end   (:kontor.schedule/end-date pulled)
+         freq  (:kontor.schedule/frequency pulled)
+         state (:kontor.schedule/state pulled)
          fired (fired-sequences db schedule-eid)]
      (when (and (#{:active} state)
                 (not= :custom freq))
@@ -170,13 +170,13 @@
         _ (when-not schedule-eid
             (throw (ex-info "record-occurrence!: schedule not found"
                             {:schedule schedule})))
-        occurrence {:schedule-occurrence/schedule       schedule-eid
-                    :schedule-occurrence/sequence       sequence
-                    :schedule-occurrence/scheduled-date scheduled-date
-                    :schedule-occurrence/transaction    -1
-                    :schedule-occurrence/amount         amount
-                    :schedule-occurrence/commodity      commodity
-                    :schedule-occurrence/fired-at       fired-at}]
+        occurrence {:kontor.schedule-occurrence/schedule       schedule-eid
+                    :kontor.schedule-occurrence/sequence       sequence
+                    :kontor.schedule-occurrence/scheduled-date scheduled-date
+                    :kontor.schedule-occurrence/transaction    -1
+                    :kontor.schedule-occurrence/amount         amount
+                    :kontor.schedule-occurrence/commodity      commodity
+                    :kontor.schedule-occurrence/fired-at       fired-at}]
     (conj (vec tx-data) occurrence)))
 
 (defn record-occurrence!
@@ -190,7 +190,7 @@
 
    Input:
      conn         — datahike connection
-     schedule     — schedule eid or `:schedule/code` string
+     schedule     — schedule eid or `:kontor.schedule/code` string
      sequence     — long, 1-indexed
      scheduled-date — `java.util.Date`, the valid-time
      amount       — bigdec, this period's amount
@@ -217,10 +217,10 @@
 (defn set-state-tx-data
   "Pure tx-data builder for the schedule lifecycle transitions —
    `mark-completed!` / `mark-paused!` / `mark-cancelled!` all reduce
-   to setting `:schedule/state`. Use as a `kontor.process` step
+   to setting `:kontor.schedule/state`. Use as a `kontor.process` step
    (ADR-067)."
   [db schedule state]
-  [{:db/id (resolve-schedule db schedule) :schedule/state state}])
+  [{:db/id (resolve-schedule db schedule) :kontor.schedule/state state}])
 
 (defn mark-completed!
   "Mark a schedule `:completed` (no further occurrences will fire).

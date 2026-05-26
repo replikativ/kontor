@@ -129,22 +129,22 @@
           _ (d/transact conn
                         [{:db/id -1 :kontor.country/code "US" :kontor.country/name "United States" :kontor.country/active true}
                          {:db/id -2 :kontor.country/code "CA" :kontor.country/name "Canada"        :kontor.country/active true}
-                         {:state/country -1 :state/code "CA" :state/name "California" :state/active true}
-                         {:state/country -2 :state/code "QC" :state/name "Quebec"     :state/active true}])
+                         {:kontor.state/country -1 :kontor.state/code "CA" :kontor.state/name "California" :kontor.state/active true}
+                         {:kontor.state/country -2 :kontor.state/code "QC" :kontor.state/name "Quebec"     :kontor.state/active true}])
           db (d/db conn)
           ;; Composite tuple lookup-refs don't auto-resolve nested
           ;; lookups, so query directly.
           us-ca (d/q '[:find ?s .
                        :where
                        [?c :kontor.country/code "US"]
-                       [?s :state/country ?c]
-                       [?s :state/code "CA"]]
+                       [?s :kontor.state/country ?c]
+                       [?s :kontor.state/code "CA"]]
                      db)
           ca-qc (d/q '[:find ?s .
                        :where
                        [?c :kontor.country/code "CA"]
-                       [?s :state/country ?c]
-                       [?s :state/code "QC"]]
+                       [?s :kontor.state/country ?c]
+                       [?s :kontor.state/code "QC"]]
                      db)]
       (is (some? us-ca))
       (is (some? ca-qc))
@@ -153,14 +153,14 @@
         ;; A CA-CA (Canadian "CA" state-code) could be added without
         ;; conflicting with US-CA — the tuple identity is on the pair.
         (d/transact conn
-                    [{:state/country [:kontor.country/code "CA"] :state/code "CA"
-                      :state/name "(fake CA-CA for test)" :state/active true}])
+                    [{:kontor.state/country [:kontor.country/code "CA"] :kontor.state/code "CA"
+                      :kontor.state/name "(fake CA-CA for test)" :kontor.state/active true}])
         (let [db2 (d/db conn)
               ca-ca (d/q '[:find ?s .
                            :where
                            [?c :kontor.country/code "CA"]
-                           [?s :state/country ?c]
-                           [?s :state/code "CA"]]
+                           [?s :kontor.state/country ?c]
+                           [?s :kontor.state/code "CA"]]
                          db2)]
           (is (some? ca-ca))
           (is (not= ca-ca us-ca)
@@ -172,22 +172,22 @@
     (let [conn (core/create-test-db)
           _ (d/transact conn
                         [{:db/id -1 :kontor.country/code "IN" :kontor.country/name "India" :kontor.country/active true}
-                         {:db/id -2 :state/country -1 :state/code "MH"
-                          :state/name "Maharashtra" :state/active true}
-                         {:state-code/state     -2
-                          :state-code/regulator :in/gst
-                          :state-code/code      "27"}
-                         {:state-code/state     -2
-                          :state-code/regulator :iso-3166-2
-                          :state-code/code      "IN-MH"}])
+                         {:db/id -2 :kontor.state/country -1 :kontor.state/code "MH"
+                          :kontor.state/name "Maharashtra" :kontor.state/active true}
+                         {:kontor.state-code/state     -2
+                          :kontor.state-code/regulator :in/gst
+                          :kontor.state-code/code      "27"}
+                         {:kontor.state-code/state     -2
+                          :kontor.state-code/regulator :iso-3166-2
+                          :kontor.state-code/code      "IN-MH"}])
           db (d/db conn)
-          mh-eid (:db/id (d/entity db [:state/identity [[:kontor.country/code "IN"] "MH"]]))
+          mh-eid (:db/id (d/entity db [:kontor.state/identity [[:kontor.country/code "IN"] "MH"]]))
           codes (->> (d/q '[:find ?reg ?code
                             :in $ ?s
                             :where
-                            [?sc :state-code/state ?s]
-                            [?sc :state-code/regulator ?reg]
-                            [?sc :state-code/code ?code]]
+                            [?sc :kontor.state-code/state ?s]
+                            [?sc :kontor.state-code/regulator ?reg]
+                            [?sc :kontor.state-code/code ?code]]
                           db mh-eid)
                      (into {}))]
       (is (= "27"    (codes :in/gst)))
@@ -201,12 +201,12 @@
                         [{:db/id -1 :kontor.country/code "IN" :kontor.country/name "India"  :kontor.country/active true}
                          {:db/id -2 :kontor.country/code "BR" :kontor.country/name "Brazil" :kontor.country/active true}
                          {:db/id -3 :kontor.country/code "CA" :kontor.country/name "Canada" :kontor.country/active true}
-                         {:db/id -10 :state/country -1 :state/code "MH" :state/name "Maharashtra" :state/active true}
-                         {:db/id -20 :state/country -2 :state/code "SP" :state/name "São Paulo"   :state/active true}
-                         {:db/id -30 :state/country -3 :state/code "QC" :state/name "Quebec"     :state/active true}
-                         {:state-code/state -10 :state-code/regulator :in/gst    :state-code/code "27"}
-                         {:state-code/state -20 :state-code/regulator :br/ibge   :state-code/code "35"}
-                         {:state-code/state -30 :state-code/regulator :ca/cra    :state-code/code "13"}])
+                         {:db/id -10 :kontor.state/country -1 :kontor.state/code "MH" :kontor.state/name "Maharashtra" :kontor.state/active true}
+                         {:db/id -20 :kontor.state/country -2 :kontor.state/code "SP" :kontor.state/name "São Paulo"   :kontor.state/active true}
+                         {:db/id -30 :kontor.state/country -3 :kontor.state/code "QC" :kontor.state/name "Quebec"     :kontor.state/active true}
+                         {:kontor.state-code/state -10 :kontor.state-code/regulator :in/gst    :kontor.state-code/code "27"}
+                         {:kontor.state-code/state -20 :kontor.state-code/regulator :br/ibge   :kontor.state-code/code "35"}
+                         {:kontor.state-code/state -30 :kontor.state-code/regulator :ca/cra    :kontor.state-code/code "13"}])
           db (d/db conn)
           lookup (fn [code-iso2 code-st]
                    ;; find-tuple form: `[?reg ?code] .` returns a single tuple
@@ -214,11 +214,11 @@
                           :in $ ?iso ?st
                           :where
                           [?c :kontor.country/code ?iso]
-                          [?s :state/country ?c]
-                          [?s :state/code ?st]
-                          [?sc :state-code/state ?s]
-                          [?sc :state-code/regulator ?reg]
-                          [?sc :state-code/code ?code]]
+                          [?s :kontor.state/country ?c]
+                          [?s :kontor.state/code ?st]
+                          [?sc :kontor.state-code/state ?s]
+                          [?sc :kontor.state-code/regulator ?reg]
+                          [?sc :kontor.state-code/code ?code]]
                         db code-iso2 code-st))]
       (is (= [:in/gst  "27"] (lookup "IN" "MH")))
       (is (= [:br/ibge "35"] (lookup "BR" "SP")))
@@ -232,8 +232,8 @@
   (let [conn (core/create-test-db)
         _ (d/transact conn
                       [{:db/id -1 :kontor.country/code "IN" :kontor.country/name "India" :kontor.country/active true}
-                       {:db/id -2 :state/country -1 :state/code "MH"
-                        :state/name "Maharashtra" :state/active true}
+                       {:db/id -2 :kontor.state/country -1 :kontor.state/code "MH"
+                        :kontor.state/name "Maharashtra" :kontor.state/active true}
                        {:db/id -3
                         :kontor.partner/external-id "CUST-001"
                         :kontor.partner/name        "Acme India Pvt Ltd"
@@ -242,8 +242,8 @@
                         :kontor.partner/state       -2}])
         db (d/db conn)
         p  (d/entity db [:kontor.partner/external-id "CUST-001"])]
-    (is (= "Maharashtra" (-> p :kontor.partner/state :state/name)))
-    (is (= "IN"          (-> p :kontor.partner/state :state/country :kontor.country/code))
+    (is (= "Maharashtra" (-> p :kontor.partner/state :kontor.state/name)))
+    (is (= "IN"          (-> p :kontor.partner/state :kontor.state/country :kontor.country/code))
         "Country dereferences cleanly via the state ref")))
 
 (deftest transaction-place-of-supply-roundtrip
@@ -253,8 +253,8 @@
     (let [conn (core/create-test-db)
           _ (d/transact conn
                         [{:db/id -1 :kontor.country/code "IN" :kontor.country/name "India" :kontor.country/active true}
-                         {:db/id -10 :state/country -1 :state/code "MH" :state/name "Maharashtra" :state/active true}
-                         {:db/id -20 :state/country -1 :state/code "KA" :state/name "Karnataka"   :state/active true}
+                         {:db/id -10 :kontor.state/country -1 :kontor.state/code "MH" :kontor.state/name "Maharashtra" :kontor.state/active true}
+                         {:db/id -20 :kontor.state/country -1 :kontor.state/code "KA" :kontor.state/name "Karnataka"   :kontor.state/active true}
                          {:db/id -100 :kontor.journal/code "INV-IN" :kontor.journal/name "Sales India"
                           :kontor.journal/type :sale :kontor.journal/active true}
                          {:db/id -200
@@ -265,8 +265,8 @@
                           :kontor.transaction/place-of-supply -20}])
           db (d/db conn)
           tx (d/entity db [:kontor.transaction/external-id "INV-2026-001"])]
-      (is (= "KA" (-> tx :kontor.transaction/place-of-supply :state/code)))
-      (is (= "IN" (-> tx :kontor.transaction/place-of-supply :state/country :kontor.country/code))))))
+      (is (= "KA" (-> tx :kontor.transaction/place-of-supply :kontor.state/code)))
+      (is (= "IN" (-> tx :kontor.transaction/place-of-supply :kontor.state/country :kontor.country/code))))))
 
 (deftest schema-attr-shapes
   (testing "ADR-023 attributes are present with expected typing"
@@ -276,13 +276,13 @@
           state-attr (d/pull db '[*] :kontor.partner/state)
           pos-attr   (d/pull db '[*] :kontor.transaction/place-of-supply)
           ;; tuple composite
-          state-id   (d/pull db '[*] :state/identity)
+          state-id   (d/pull db '[*] :kontor.state/identity)
           country-id (d/pull db '[*] :kontor.country-code/identity)]
       (is (= :db.type/ref         (:db/valueType state-attr)))
       (is (= :db.cardinality/one  (:db/cardinality state-attr)))
       (is (= :db.type/ref         (:db/valueType pos-attr)))
       (is (= :db.cardinality/one  (:db/cardinality pos-attr)))
       (is (= :db.type/tuple       (:db/valueType state-id)))
-      (is (= [:state/country :state/code] (:db/tupleAttrs state-id)))
+      (is (= [:kontor.state/country :kontor.state/code] (:db/tupleAttrs state-id)))
       (is (= :db.unique/identity  (:db/unique state-id)))
       (is (= :db.type/tuple       (:db/valueType country-id))))))

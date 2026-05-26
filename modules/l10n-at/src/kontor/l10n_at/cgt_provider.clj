@@ -21,7 +21,7 @@
      pauschale 4.2 % (unwidmet) / 18 % (gewidmet) of GROSS PROCEEDS
      for Altvermögen. Hauptwohnsitzbefreiung short-circuits to zero;
      Herstellerbefreiung exempts building only (consumer splits via
-     `:disposal/basis-amount` representing land only + a notes field).
+     `:kontor.disposal/basis-amount` representing land only + a notes field).
      §30 Abs 7 loss carry: 60 % of net loss residual × 15 years
      against §28-Vermietung income (note 134 §6.2 — first cross-
      category CGT loss in the kontor substrate; provider writes to
@@ -52,7 +52,7 @@
      which exempts dividends but NOT gains on domestic stakes).
      §9 KStG Gruppenbesteuerung is OUT OF SCOPE for v1.
 
-   ## Lane classification (`:disposal/asset-class`)
+   ## Lane classification (`:kontor.disposal/asset-class`)
 
      :at-kest-aktien            → KESt 27.5 % (shares)
      :at-kest-anleihen          → KESt 27.5 % (bonds)
@@ -103,18 +103,18 @@
 ;; ============================================================================
 
 (def kest-asset-classes
-  "Closed set of `:disposal/asset-class` keywords the KESt provider
+  "Closed set of `:kontor.disposal/asset-class` keywords the KESt provider
    recognises. All four route to the 27.5 % flat schedule (interest on
    bank deposits is not a disposal event — see note 134 §3 row 2)."
   #{:at-kest-aktien :at-kest-anleihen :at-kest-fonds :at-kest-derivate})
 
 (def immoest-asset-classes
-  "Closed set of `:disposal/asset-class` keywords the ImmoESt provider
+  "Closed set of `:kontor.disposal/asset-class` keywords the ImmoESt provider
    recognises."
   #{:at-immoest-neu :at-immoest-alt :at-immoest-residence})
 
 (def corporate-asset-classes
-  "Closed set of `:disposal/asset-class` keywords the corporate §10
+  "Closed set of `:kontor.disposal/asset-class` keywords the corporate §10
    provider recognises."
   #{:at-§10-participation})
 
@@ -151,7 +151,7 @@
    disposal involves land previously zoned non-building (e.g.
    agricultural/forest) that was rezoned to Bauland after 2024-12-31,
    (b) the disposal occurred after 2025-06-30, and (c) the
-   `:disposal/basis-amount` represents the LAND-only portion (building
+   `:kontor.disposal/basis-amount` represents the LAND-only portion (building
    share documented in `:notes` per Herstellerbefreiung convention).
    Provider emits a separate 30 %-of-positive-land-gain surcharge
    component (cap: Bemessungsgrundlage ≤ proceeds). Note 146 §3.1."
@@ -178,22 +178,22 @@
    commodity: `proceeds − basis − rollover-amount`. Loss is signed
    negative so bucket-netting can sum gains + losses naturally."
   ^java.math.BigDecimal [disposal]
-  (let [p (or (:disposal/proceeds-amount disposal) 0M)
-        b (or (:disposal/basis-amount disposal) 0M)
-        r (or (:disposal/rollover-amount disposal) 0M)]
+  (let [p (or (:kontor.disposal/proceeds-amount disposal) 0M)
+        b (or (:kontor.disposal/basis-amount disposal) 0M)
+        r (or (:kontor.disposal/rollover-amount disposal) 0M)]
     (- p b r)))
 
 (defn- proceeds
   "Proceeds (gross sales price) on one disposal — used by the
    Altvermögen pauschale path (4.2 % / 18 % of GROSS, not of gain)."
   ^java.math.BigDecimal [disposal]
-  (or (:disposal/proceeds-amount disposal) 0M))
+  (or (:kontor.disposal/proceeds-amount disposal) 0M))
 
 (defn- regime-set
-  "Normalize `:disposal/elective-regime` (cardinality-many) to a set.
+  "Normalize `:kontor.disposal/elective-regime` (cardinality-many) to a set.
    Pull may return a vector OR a single keyword."
   [disposal]
-  (let [r (:disposal/elective-regime disposal)]
+  (let [r (:kontor.disposal/elective-regime disposal)]
     (cond
       (nil? r)         #{}
       (coll? r)        (set r)
@@ -201,9 +201,9 @@
       :else            #{})))
 
 (defn- exemption-set
-  "Normalize `:disposal/exemption-claimed` (cardinality-many) to a set."
+  "Normalize `:kontor.disposal/exemption-claimed` (cardinality-many) to a set."
   [disposal]
-  (let [r (:disposal/exemption-claimed disposal)]
+  (let [r (:kontor.disposal/exemption-claimed disposal)]
     (cond
       (nil? r)         #{}
       (coll? r)        (set r)
@@ -246,9 +246,9 @@
    this predicate returns false so the default-exempt INVERSION does
    NOT fire and the gain stays in the CIT base as ordinary income."
   [disposal qualifying-fraction qualifying-days ctx]
-  (let [own (or (:disposal/ownership-fraction disposal) 0M)
-        acq (:disposal/acquired-on disposal)
-        dis (:disposal/disposed-on disposal)
+  (let [own (or (:kontor.disposal/ownership-fraction disposal) 0M)
+        acq (:kontor.disposal/acquired-on disposal)
+        dis (:kontor.disposal/disposed-on disposal)
         days (when (and acq dis) (days-between acq dis))
         domestic? (boolean (get-in ctx [:tax-unit :held-entity-domestic?]))]
     (and (not domestic?)
@@ -343,7 +343,7 @@
    when the Hauptwohnsitz flag is absent (note 134 §1.4 — exemption
    must be explicitly claimed). When `:at-herstellerbefreiung` is in
    the exemption set, the consumer must have set
-   `:disposal/basis-amount` to represent the LAND-only portion (note
+   `:kontor.disposal/basis-amount` to represent the LAND-only portion (note
    134 §4.2 — building share exempt; the deviation is documented in
    `:notes`)."
   [{:keys [commodity authority]} ctx disposal rate prepaid]
@@ -434,7 +434,7 @@
      surcharge = (proceeds − gain) × ImmoESt-rate.
 
    Consumer attests via `:elective-regime :at-umwidmungszuschlag` and
-   supplies the LAND-slice basis as `:disposal/basis-amount` so the
+   supplies the LAND-slice basis as `:kontor.disposal/basis-amount` so the
    gain IS the land slice (per Herstellerbefreiung convention)."
   [{:keys [commodity authority]} disposal
    ^java.math.BigDecimal surcharge-rate
@@ -613,7 +613,7 @@
           ;; within the year (Verlustverrechnungstopf; NO carry-in —
           ;; note 134 §6.3).
           relevant  (filter #(contains? kest-asset-classes
-                                        (:disposal/asset-class %))
+                                        (:kontor.disposal/asset-class %))
                             disposals)
           kest-net  (sum-amounts (map realized-gain relevant))
           rate      (statute/parameter-value-at
@@ -642,7 +642,7 @@
           as-of     (as-of-from-ctx ctx)
           disposals (ds/disposals-in source entity period)
           relevant  (filter #(contains? immoest-asset-classes
-                                        (:disposal/asset-class %))
+                                        (:kontor.disposal/asset-class %))
                             disposals)
           rate-30   (statute/parameter-value-at
                      db "AT.EStG.§30a.immoest-rate" as-of)
@@ -662,7 +662,7 @@
           (->> relevant
                (mapcat
                 (fn [d]
-                  (let [ac (:disposal/asset-class d)
+                  (let [ac (:kontor.disposal/asset-class d)
                         base-cmp
                         (cond
                            ;; Hauptwohnsitzbefreiung short-circuit
@@ -697,14 +697,14 @@
                             (nil? umwidmung-rate)
                             (throw (ex-info
                                     "AT §30 Abs 6a Umwidmungszuschlag flagged but no rate effective at :as-of (BBG 2025 effective-from 2025-07-01)"
-                                    {:disposal/external-id (:disposal/external-id d)
+                                    {:kontor.disposal/external-id (:kontor.disposal/external-id d)
                                      :as-of as-of}))
 
                             (not (or (= ac :at-immoest-neu)
                                      (= ac :at-immoest-residence)))
                             (throw (ex-info
                                     "AT §30 Abs 6a Umwidmungszuschlag only applies to Neuvermögen-style Bauland disposals (:at-immoest-neu / :at-immoest-residence); reclassify the disposal or remove :at-umwidmungszuschlag from :elective-regime"
-                                    {:disposal/external-id (:disposal/external-id d)
+                                    {:kontor.disposal/external-id (:kontor.disposal/external-id d)
                                      :asset-class ac}))
 
                             (and (or (= ac :at-immoest-residence)
@@ -729,8 +729,8 @@
           ;; is always positive proceeds); residence is exempted.
           neuvermoegen-net
           (sum-amounts (map realized-gain
-                            (filter #(and (or (= (:disposal/asset-class %) :at-immoest-neu)
-                                              (= (:disposal/asset-class %) :at-immoest-residence))
+                            (filter #(and (or (= (:kontor.disposal/asset-class %) :at-immoest-neu)
+                                              (= (:kontor.disposal/asset-class %) :at-immoest-residence))
                                           (not (hauptwohnsitz-claimed? %)))
                                     relevant)))
           loss-carry-component
@@ -767,7 +767,7 @@
           cit-rate            (statute/parameter-value-at
                                db "AT.KStG.cit-rate" as-of)
           relevant  (filter #(contains? corporate-asset-classes
-                                        (:disposal/asset-class %))
+                                        (:kontor.disposal/asset-class %))
                             disposals)
           opts {:authority authority :commodity commodity}
           per-disposal-components

@@ -100,7 +100,7 @@
   (pit/personal-income-tax-provider
    {:id        :au-individual
     :schedule  (ts/sum-of [(ts/progressive income-tax-brackets)
-                           {:schedule/type :formula :fn medicare-levy}])
+                           {:kontor.schedule/type :formula :fn medicare-levy}])
     :authority :au-ato
     :commodity :AUD
     :statute   "Income Tax Assessment Act 1997 + Medicare Levy Act 1986"}))

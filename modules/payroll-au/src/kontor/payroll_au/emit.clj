@@ -59,16 +59,16 @@
                :else
                :stp-pay-event)]
     [(cond->
-      {:audit-doc/code doc-code
-       :audit-doc/type kind
-       :audit-doc/title (format "STP Phase 2 pay-event — ABN %s, paid %s"
+      {:kontor.audit-doc/code doc-code
+       :kontor.audit-doc/type kind
+       :kontor.audit-doc/title (format "STP Phase 2 pay-event — ABN %s, paid %s"
                                 (:stp.event/abn payload)
                                 (:stp.event/pay-date payload))
-       :audit-doc/description desc
-       :audit-doc/uploaded-at (Date.)
-       :audit-doc/category :payroll-filing
-       :audit-doc/language language}
-       storage-uri (assoc :audit-doc/storage-uri storage-uri))]))
+       :kontor.audit-doc/description desc
+       :kontor.audit-doc/uploaded-at (Date.)
+       :kontor.audit-doc/category :payroll-filing
+       :kontor.audit-doc/language language}
+       storage-uri (assoc :kontor.audit-doc/storage-uri storage-uri))]))
 
 ;; ============================================================================
 ;; AuStpEmitProvider — PayrollEmitProvider protocol impl
@@ -85,7 +85,7 @@
     ;;
     ;; The substrate-provided ctx carries :pay-period-eid + :entity-eid
     ;; but the linkage to those entities flows via
-    ;; :payroll-run/emit-docs (set by run-payroll! per note 86
+    ;; :kontor.payroll-run/emit-docs (set by run-payroll! per note 86
     ;; P0-86-1), so the provider does not need to embed them directly
     ;; on the audit-doc.
     ;;
@@ -174,9 +174,9 @@
   "Pure ADR-068 tx-data builder for an employment-termination event.
    Mirrors CA's `terminate-employment-tx-data` shape.
 
-   - status-machine transitions `:employment/state` → `:terminated`
-   - sets `:employment/end-date` to last-day-worked
-   - sets `:employment/termination-reason`
+   - status-machine transitions `:kontor.employment/state` → `:terminated`
+   - sets `:kontor.employment/end-date` to last-day-worked
+   - sets `:kontor.employment/termination-reason`
    - emits a `:termination-event` audit-doc carrying the data the
      engine needs to surface to the ATO via the next STP pay-event's
      cessation block + (optionally) to print an Employment
@@ -221,21 +221,21 @@
         doc-tempid (str "termination-event-doc-" employment-eid)
         audit-doc (cond->
                    {:db/id doc-tempid
-                    :audit-doc/code doc-code
-                    :audit-doc/type :termination-event
-                    :audit-doc/title (str "Termination — " (name termination-reason))
-                    :audit-doc/description desc
-                    :audit-doc/uploaded-at (Date.)
-                    :audit-doc/category :hr-personnel
-                    :audit-doc/language language}
+                    :kontor.audit-doc/code doc-code
+                    :kontor.audit-doc/type :termination-event
+                    :kontor.audit-doc/title (str "Termination — " (name termination-reason))
+                    :kontor.audit-doc/description desc
+                    :kontor.audit-doc/uploaded-at (Date.)
+                    :kontor.audit-doc/category :hr-personnel
+                    :kontor.audit-doc/language language}
                     rolling-window
                     (identity)) ; placeholder for future structured fields
         emp-update (cond->
                     {:db/id employment-eid
-                     :employment/state :terminated
-                     :employment/end-date last-day-worked
-                     :employment/termination-reason termination-reason}
+                     :kontor.employment/state :terminated
+                     :kontor.employment/end-date last-day-worked
+                     :kontor.employment/termination-reason termination-reason}
                      final-pay-period-end-date
-                     (assoc :employment/final-pay-period-end-date
+                     (assoc :kontor.employment/final-pay-period-end-date
                             final-pay-period-end-date))]
     [audit-doc emp-update]))

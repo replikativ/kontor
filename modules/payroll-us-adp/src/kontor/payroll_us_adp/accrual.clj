@@ -65,8 +65,8 @@
 
    The accrual primitives are pure tx-data builders. The consumer
    transacts via `kontor.validation/transact-with-validation`
-   (kernel's gate). PTO-policy machinery (`:employment/pto-policy`,
-   `:employment/pto-balance-hours`) is deferred to a future C4 slice
+   (kernel's gate). PTO-policy machinery (`:kontor.employment/pto-policy`,
+   `:kontor.employment/pto-balance-hours`) is deferred to a future C4 slice
    per note 79 §3; for C3 the accrual delta is consumer-computed
    (timesheet aggregation or manual journal-entry) and passed in as
    a BigDecimal. The substrate exposes the *shape*, the consumer

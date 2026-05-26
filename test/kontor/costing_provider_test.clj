@@ -42,15 +42,15 @@
                                  :kontor.transaction/effective-date date
                                  :kontor.transaction/narration "Receipt"}
                                 {:db/id -2
-                                 :valuation-layer/book book
-                                 :valuation-layer/item itm
-                                 :valuation-layer/origin-transaction -1
-                                 :valuation-layer/qty-original qty
-                                 :valuation-layer/unit-cost-original unit-cost
-                                 :valuation-layer/commodity eur
-                                 :valuation-layer/received-at date}])
+                                 :kontor.valuation-layer/book book
+                                 :kontor.valuation-layer/item itm
+                                 :kontor.valuation-layer/origin-transaction -1
+                                 :kontor.valuation-layer/qty-original qty
+                                 :kontor.valuation-layer/unit-cost-original unit-cost
+                                 :kontor.valuation-layer/commodity eur
+                                 :kontor.valuation-layer/received-at date}])
                    (d/q '[:find ?l . :in $ ?d :where
-                          [?l :valuation-layer/received-at ?d]]
+                          [?l :kontor.valuation-layer/received-at ?d]]
                         (d/db conn) date))
         l-a (receipt! 100M 5.00M #inst "2026-05-01")
         l-b (receipt!  50M 6.00M #inst "2026-05-10")

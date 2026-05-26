@@ -66,7 +66,7 @@
 ;; on ADR-022 analytic distributions.
 ;;
 ;; ISO-3166-2:IN codes — 28 states + 8 union territories + Ladakh (UT).
-;; Matches `:employment/province-of-employment` per note 86 P1-86-3
+;; Matches `:kontor.employment/province-of-employment` per note 86 P1-86-3
 ;; (substrate-level attr documents ISO-3166-2 codes as canonical).
 
 (def in-states
@@ -117,7 +117,7 @@
 (defn install-in-state-analytic-plan!
   "Install the :in-state analytic plan + per-state :analytic-account
    rows. Idempotent: re-running with the same data is a no-op (uses
-   :db.unique/identity on :analytic-plan/code + :analytic-account/path).
+   :db.unique/identity on :kontor.analytic-plan/code + :kontor.analytic-account/path).
 
    The :in-state plan applies to *consumer-marked* wage / payroll-tax
    / PT-payable accounts via :kontor.account/required-analytic-plans (per
@@ -127,16 +127,16 @@
   [conn]
   (let [plan-tempid "in-state-plan"
         plan-tx [{:db/id plan-tempid
-                  :analytic-plan/code "in-state"
-                  :analytic-plan/name "IN state of employment (ISO-3166-2:IN)"
-                  :analytic-plan/applicability :optional
-                  :analytic-plan/active true}]
+                  :kontor.analytic-plan/code "in-state"
+                  :kontor.analytic-plan/name "IN state of employment (ISO-3166-2:IN)"
+                  :kontor.analytic-plan/applicability :optional
+                  :kontor.analytic-plan/active true}]
         account-tx (mapv (fn [[code label]]
-                           {:analytic-account/path (str "in-state:IN-" code)
-                            :analytic-account/code (str "IN-" code)
-                            :analytic-account/name label
-                            :analytic-account/plan plan-tempid
-                            :analytic-account/active true})
+                           {:kontor.analytic-account/path (str "in-state:IN-" code)
+                            :kontor.analytic-account/code (str "IN-" code)
+                            :kontor.analytic-account/name label
+                            :kontor.analytic-account/plan plan-tempid
+                            :kontor.analytic-account/active true})
                          in-states)]
     (d/transact conn (vec (concat plan-tx account-tx)))))
 
@@ -200,7 +200,7 @@
    (let [db (d/db conn)
          plan-already?
          (boolean (d/q '[:find ?e .
-                         :where [?e :analytic-plan/code "in-state"]]
+                         :where [?e :kontor.analytic-plan/code "in-state"]]
                        db))]
      (when-not plan-already?
        (install-in-state-analytic-plan! conn))

@@ -42,8 +42,8 @@
    - No bundled IMSS / INFONAVIT / ISR rate tables — the consumer's
      payroll engine has them, encoded in vendor-specific files.
    - No PAC credentials — PAC submission is a partner concern.
-   - Per `:audit-doc/category :payroll-filing` and
-     `:audit-doc/language :es-mx`.
+   - Per `:kontor.audit-doc/category :payroll-filing` and
+     `:kontor.audit-doc/language :es-mx`.
    - BigDecimal HALF-EVEN throughout (Money discipline).
    - `kontor.process` ADR-067 composition: `import-period!` is one
      pure tx (the GL post + the audit-doc + the status row).
@@ -118,8 +118,8 @@
     "Returns a keyword identifying the emit format, e.g.
      :mx/cfdi-nomina-1.2.")
   (emit-payroll [this facts opts]
-    "Returns `{:xml <string> :audit-doc/category :payroll-filing
-                :audit-doc/language :es-mx :audit-doc/type
+    "Returns `{:xml <string> :kontor.audit-doc/category :payroll-filing
+                :kontor.audit-doc/language :es-mx :kontor.audit-doc/type
                 :payroll-cfdi-xml :emit-format <keyword>}`.
      `opts` carries the employer + period scope; `facts` is one
      period's :payroll-facts vector."))

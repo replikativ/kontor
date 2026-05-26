@@ -62,7 +62,7 @@
   [_]
   (pit/personal-income-tax-provider
    {:id        :fr-ir
-    :schedule  {:schedule/type :formula :fn impot-revenu}
+    :schedule  {:kontor.schedule/type :formula :fn impot-revenu}
     :authority :fr-dgfip
     :commodity :EUR
     :statute   "CGI art. 197"}))

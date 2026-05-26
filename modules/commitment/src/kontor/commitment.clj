@@ -38,13 +38,13 @@
 ;; ============================================================================
 
 (defn resolve-commitment
-  "Resolve a commitment spec — an `:commitment/external-id` string or
+  "Resolve a commitment spec — an `:kontor.commitment/external-id` string or
    an eid — to an eid (nil if absent)."
   [db spec]
   (cond
     (nil? spec)    nil
     (string? spec) (d/q '[:find ?e . :in $ ?x
-                          :where [?e :commitment/external-id ?x]]
+                          :where [?e :kontor.commitment/external-id ?x]]
                         db spec)
     :else          spec))
 
@@ -52,16 +52,16 @@
   [db spec]
   (when-let [eid (resolve-commitment db spec)]
     (d/pull db
-            '[* {:commitment/counterparty [:kontor.partner/external-id]}
-              {:commitment/commodity [:kontor.commodity/symbol]}]
+            '[* {:kontor.commitment/counterparty [:kontor.partner/external-id]}
+              {:kontor.commitment/commodity [:kontor.commodity/symbol]}]
             eid)))
 
 (defn outstanding
   "`committed − fulfilled` for a commitment (pull-result map or spec
    resolvable against `db`)."
   ([commitment-map]
-   (- (or (:commitment/committed-amount commitment-map) 0M)
-      (or (:commitment/fulfilled-amount commitment-map) 0M)))
+   (- (or (:kontor.commitment/committed-amount commitment-map) 0M)
+      (or (:kontor.commitment/fulfilled-amount commitment-map) 0M)))
   ([db spec]
    (outstanding (pull-commitment db spec))))
 
@@ -73,7 +73,7 @@
   [db]
   (->> (d/q '[:find [?c ...]
               :in $ [?st ...]
-              :where [?c :commitment/state ?st]]
+              :where [?c :kontor.commitment/state ?st]]
             db open-states)
        (map #(pull-commitment db %))
        vec))
@@ -118,23 +118,23 @@
             {:hint :missing-status-transition-seeds})))
   (let [recorded-at (or recorded-at (java.util.Date.))
         row (cond-> {:db/id                       tempid
-                     :commitment/external-id      external-id
-                     :commitment/kind             kind
-                     :commitment/counterparty     counterparty
-                     :commitment/committed-amount (bigdec committed-amount)
-                     :commitment/fulfilled-amount 0M
-                     :commitment/commodity        commodity
-                     :commitment/due-date         due-date
-                     :commitment/recorded-by-uid  recorded-by-uid
-                     :commitment/recorded-at      recorded-at
-                     :commitment/state            :open}
-              entity (assoc :commitment/entity entity)
-              origin (assoc :commitment/origin origin)
-              notes  (assoc :commitment/notes notes))
+                     :kontor.commitment/external-id      external-id
+                     :kontor.commitment/kind             kind
+                     :kontor.commitment/counterparty     counterparty
+                     :kontor.commitment/committed-amount (bigdec committed-amount)
+                     :kontor.commitment/fulfilled-amount 0M
+                     :kontor.commitment/commodity        commodity
+                     :kontor.commitment/due-date         due-date
+                     :kontor.commitment/recorded-by-uid  recorded-by-uid
+                     :kontor.commitment/recorded-at      recorded-at
+                     :kontor.commitment/state            :open}
+              entity (assoc :kontor.commitment/entity entity)
+              origin (assoc :kontor.commitment/origin origin)
+              notes  (assoc :kontor.commitment/notes notes))
         status-tx (sm/record-status-change-tx-data
                    db {:entity         tempid
                        :entity-type    :commitment
-                       :facet          :commitment/state
+                       :facet          :kontor.commitment/state
                        :from           :nil
                        :to             :open
                        :changed-at     recorded-at
@@ -161,8 +161,8 @@
 (defn fulfill-tx-data
   "Pure tx-data builder for `fulfill!` (ADR-068). Records a
    `:commitment-fulfillment` edge to the settling `:transaction`,
-   advances the denormalized `:commitment/fulfilled-amount`, and — when
-   the state actually changes — transitions `:commitment/state`
+   advances the denormalized `:kontor.commitment/fulfilled-amount`, and — when
+   the state actually changes — transitions `:kontor.commitment/state`
    (`:open`/`:partially-fulfilled` → `:partially-fulfilled`/`:fulfilled`).
 
    Required opts: `:commitment` (spec), `:transaction` (the settling
@@ -180,10 +180,10 @@
     (let [amount (bigdec amount)
           _ (when-not (pos? amount)
               (throw (ex-info ":amount must be positive" {:amount amount})))
-          {:keys [commitment/state commitment/committed-amount
-                  commitment/fulfilled-amount]}
-          (d/pull db [:commitment/state :commitment/committed-amount
-                      :commitment/fulfilled-amount]
+          {:keys [kontor.commitment/state kontor.commitment/committed-amount
+                  kontor.commitment/fulfilled-amount]}
+          (d/pull db [:kontor.commitment/state :kontor.commitment/committed-amount
+                      :kontor.commitment/fulfilled-amount]
                   eid)
           _ (when-not (open-states state)
               (throw (ex-info "Cannot fulfill a closed commitment"
@@ -194,19 +194,19 @@
                              (pos? new-fulfilled)                :partially-fulfilled
                              :else                               :open)
           edge (cond-> {:db/id tempid
-                        :commitment-fulfillment/commitment      eid
-                        :commitment-fulfillment/transaction     transaction
-                        :commitment-fulfillment/amount          amount
-                        :commitment-fulfillment/fulfilled-at    at
-                        :commitment-fulfillment/recorded-by-uid recorded-by-uid}
-                 notes (assoc :commitment-fulfillment/notes notes))
-          denorm {:db/id eid :commitment/fulfilled-amount new-fulfilled}]
+                        :kontor.commitment-fulfillment/commitment      eid
+                        :kontor.commitment-fulfillment/transaction     transaction
+                        :kontor.commitment-fulfillment/amount          amount
+                        :kontor.commitment-fulfillment/fulfilled-at    at
+                        :kontor.commitment-fulfillment/recorded-by-uid recorded-by-uid}
+                 notes (assoc :kontor.commitment-fulfillment/notes notes))
+          denorm {:db/id eid :kontor.commitment/fulfilled-amount new-fulfilled}]
       (cond-> [edge denorm]
         (not= new-state state)
         (into (sm/record-status-change-tx-data
                db {:entity         eid
                    :entity-type    :commitment
-                   :facet          :commitment/state
+                   :facet          :kontor.commitment/state
                    :from           state
                    :to             new-state
                    :changed-at     at
@@ -231,7 +231,7 @@
 
 (defn cancel-tx-data
   "Pure tx-data builder for `cancel!` (ADR-068). Transitions
-   `:commitment/state` to `:cancelled`. Required: `:commitment`,
+   `:kontor.commitment/state` to `:cancelled`. Required: `:commitment`,
    `:changed-by-uid`. Optional: `:reason` (default `:cancelled`),
    `:reason-note`, `:changed-at` (default now)."
   [db {:keys [commitment changed-by-uid reason reason-note changed-at]}]
@@ -240,7 +240,7 @@
     (sm/record-status-change-tx-data
      db (cond-> {:entity         eid
                  :entity-type    :commitment
-                 :facet          :commitment/state
+                 :facet          :kontor.commitment/state
                  :to             :cancelled
                  :changed-at     (or changed-at (java.util.Date.))
                  :changed-by-uid changed-by-uid
@@ -286,13 +286,13 @@
    (let [as-of-ms (.getTime ^java.util.Date as-of)]
      (->> (open-commitments db)
           (map (fn [c]
-                 (let [due-ms (.getTime ^java.util.Date (:commitment/due-date c))
+                 (let [due-ms (.getTime ^java.util.Date (:kontor.commitment/due-date c))
                        overdue-days (quot (- as-of-ms due-ms) day-ms)]
                    {:commitment   (:db/id c)
-                    :external-id  (:commitment/external-id c)
-                    :kind         (:commitment/kind c)
+                    :external-id  (:kontor.commitment/external-id c)
+                    :kind         (:kontor.commitment/kind c)
                     :outstanding  (outstanding c)
-                    :due-date     (:commitment/due-date c)
+                    :due-date     (:kontor.commitment/due-date c)
                     :overdue-days overdue-days
                     :bucket       (bucket-of overdue-days)})))
           vec))))

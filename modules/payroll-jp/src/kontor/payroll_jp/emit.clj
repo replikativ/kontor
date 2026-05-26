@@ -2,7 +2,7 @@
   "JP payroll emit-provider. Two responsibilities:
 
    1. **`JpPayrollEmitProvider`** — `PayrollEmitProvider` impl.
-      Returns an `:audit-doc/category :payroll-filing` row per
+      Returns an `:kontor.audit-doc/category :payroll-filing` row per
       payroll run carrying the language flag (default :ja). kontor
       does NOT emit any clearance payload — Japan has no real-time
       payroll clearance regime (the Gensen filing is annual + paper-
@@ -12,9 +12,9 @@
    2. **`build-gensen-audit-doc-tx-data`** — ADR-068 builder that
       produces an `:audit-doc` row recording the annual 源泉徴収票
       (Gensen Choshu Hyo) generation. Carries
-      `:audit-doc/category :payroll-filing` +
-      `:audit-doc/language :ja`. The structured statement payload
-      is stored on `:audit-doc/description` as EDN text — kontor's
+      `:kontor.audit-doc/category :payroll-filing` +
+      `:kontor.audit-doc/language :ja`. The structured statement payload
+      is stored on `:kontor.audit-doc/description` as EDN text — kontor's
       audit chain records WHAT was generated; the rendered PDF
       delivery is consumer / engine business.
 
@@ -26,9 +26,9 @@
       attestation METADATA (date attested, who attested, document
       type that verified it) with:
 
-        :audit-doc/category :hr-personnel
-        :audit-doc/privilege :pii-sensitive
-        :audit-doc/language :ja
+        :kontor.audit-doc/category :hr-personnel
+        :kontor.audit-doc/privilege :pii-sensitive
+        :kontor.audit-doc/language :ja
 
       The consumer's privileged store holds the My Number value
       itself; kontor records that the attestation happened, the
@@ -51,13 +51,13 @@
     ;; per-pay-period :audit-doc summary for the audit chain.
     (let [language (or (:language opts) :ja)
           per-fact-count (count payroll-facts)]
-      [{:audit-doc/code (str "PAYROLL-EVENT-JP-" entity-eid "-" pay-period-eid)
-        :audit-doc/type :payroll-run-summary
-        :audit-doc/title (format "Payroll run (%d facts) for pay-period %d, entity %d"
+      [{:kontor.audit-doc/code (str "PAYROLL-EVENT-JP-" entity-eid "-" pay-period-eid)
+        :kontor.audit-doc/type :payroll-run-summary
+        :kontor.audit-doc/title (format "Payroll run (%d facts) for pay-period %d, entity %d"
                                  per-fact-count pay-period-eid entity-eid)
-        :audit-doc/category :payroll-filing
-        :audit-doc/language language
-        :audit-doc/uploaded-at (java.util.Date.)}])))
+        :kontor.audit-doc/category :payroll-filing
+        :kontor.audit-doc/language language
+        :kontor.audit-doc/uploaded-at (java.util.Date.)}])))
 
 ;; ============================================================================
 ;; build-gensen-audit-doc-tx-data — companion to gensen/build-gensen-submission
@@ -74,10 +74,10 @@
 
 (defn- statement->desc
   "Pretty-print a single Gensen statement as a one-line description
-   suitable for :audit-doc/description (a string slot).
+   suitable for :kontor.audit-doc/description (a string slot).
 
    The full structured payload should be carried on
-   :audit-doc/storage-uri (pointing at the consumer's rendered PDF)
+   :kontor.audit-doc/storage-uri (pointing at the consumer's rendered PDF)
    when the consumer materializes the form."
   [{:keys [gensen/tax-year gensen/employee gensen/payment-amount
            gensen/withholding-amount gensen/social-insurance-paid]
@@ -136,14 +136,14 @@
                       (case language :en "EN" "JA"))
         desc (statement->desc statement)]
     [(cond->
-      {:audit-doc/code doc-code
-       :audit-doc/type :regulator-clearance
-       :audit-doc/title title
-       :audit-doc/description desc
-       :audit-doc/uploaded-at (java.util.Date.)
-       :audit-doc/category :payroll-filing
-       :audit-doc/language language}
-       storage-uri (assoc :audit-doc/storage-uri storage-uri))]))
+      {:kontor.audit-doc/code doc-code
+       :kontor.audit-doc/type :regulator-clearance
+       :kontor.audit-doc/title title
+       :kontor.audit-doc/description desc
+       :kontor.audit-doc/uploaded-at (java.util.Date.)
+       :kontor.audit-doc/category :payroll-filing
+       :kontor.audit-doc/language language}
+       storage-uri (assoc :kontor.audit-doc/storage-uri storage-uri))]))
 
 (defn build-gensen-submission-audit-docs-tx-data
   "Convenience wrapper: build audit-docs for a vector of Gensen
@@ -191,12 +191,12 @@
        date attested, who attested, document type that verified it,
        retention end-date.
      - The audit-doc is classified
-         :audit-doc/category :hr-personnel
-         :audit-doc/privilege :pii-sensitive
-         :audit-doc/language :ja
+         :kontor.audit-doc/category :hr-personnel
+         :kontor.audit-doc/privilege :pii-sensitive
+         :kontor.audit-doc/language :ja
        so the consumer's auth layer (kontor-authz per ADR-065/066)
        can gate access reliably.
-     - The audit-doc's `:audit-doc/code` is deterministic from the
+     - The audit-doc's `:kontor.audit-doc/code` is deterministic from the
        :person + :tax-year so a repeat call is idempotent and won't
        create duplicate attestation records.
 
@@ -224,7 +224,7 @@
    period ends — typically 7 years after employment termination per
    所得税法施行令 §322 + Number Act §19. Consumers wire this via
    `kontor.retention/retention-policy` (ADR-050) keyed on
-   `:retention-policy/category :hr-personnel` — the sweeper walks
+   `:kontor.retention-policy/category :hr-personnel` — the sweeper walks
    audit-docs with this category + privilege facet and produces
    purge candidates.
 
@@ -253,20 +253,20 @@
                   ". Value held in consumer's privileged store; "
                   "kontor records ONLY this attestation metadata "
                   "per ADR-084 §1 + Number Act discipline. "
-                  "The :audit-doc/privilege :pii-sensitive facet "
+                  "The :kontor.audit-doc/privilege :pii-sensitive facet "
                   "gates downstream access via the consumer's auth "
                   "layer.")]
     [(cond->
-      {:audit-doc/code doc-code
-       :audit-doc/type :pii-attestation
-       :audit-doc/title title
-       :audit-doc/description desc
-       :audit-doc/uploaded-at attested-at
-       :audit-doc/uploaded-by-uid attested-by-uid
-       :audit-doc/category :hr-personnel
-       :audit-doc/privilege :pii-sensitive
-       :audit-doc/language language}
-       storage-uri (assoc :audit-doc/storage-uri storage-uri))]))
+      {:kontor.audit-doc/code doc-code
+       :kontor.audit-doc/type :pii-attestation
+       :kontor.audit-doc/title title
+       :kontor.audit-doc/description desc
+       :kontor.audit-doc/uploaded-at attested-at
+       :kontor.audit-doc/uploaded-by-uid attested-by-uid
+       :kontor.audit-doc/category :hr-personnel
+       :kontor.audit-doc/privilege :pii-sensitive
+       :kontor.audit-doc/language language}
+       storage-uri (assoc :kontor.audit-doc/storage-uri storage-uri))]))
 
 ;; ============================================================================
 ;; QC-style PII-detection helper — surface My Number presence

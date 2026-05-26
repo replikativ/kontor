@@ -6,14 +6,14 @@
    ONE transaction — the valuation layer + GL postings (via
    `kontor.posting/plan-stock-move`, ADR-030) AND the physical
    `:inventory-item` / `:inventory-detail` — linked by
-   `:inventory-detail/transaction`. The physical and financial views
+   `:kontor.inventory-detail/transaction`. The physical and financial views
    cannot drift, because they are written together and the GL is
    *only* ever touched through `plan-stock-move` (research note 36
    §2 — the discipline that makes subledger-vs-GL drift structurally
    hard).
 
    Negative inventory is a per-(facility, product) policy
-   (`:facility-product/negative-allowed?`): an over-issue is refused
+   (`:kontor.facility-product/negative-allowed?`): an over-issue is refused
    by default, or — when allowed — creates an explicit negative-fill
    `:valuation-layer` so the issue still has a layer to consume, with
    `true-up-negative-fill!` reconciling the estimate to actual later.
@@ -38,12 +38,12 @@
 
 (defn provider-for-book
   "Resolve a `CostingProvider` from a valuation book's
-   `:valuation-book/cost-method`. `:standard` books must pass
+   `:kontor.valuation-book/cost-method`. `:standard` books must pass
    `:provider` explicitly (it needs a standard-cost-fn)."
   [db book]
   (let [eid    (valuation/resolve-book db book)
-        method (:valuation-book/cost-method
-                (d/pull db [:valuation-book/cost-method] eid))]
+        method (:kontor.valuation-book/cost-method
+                (d/pull db [:kontor.valuation-book/cost-method] eid))]
     (costing/provider-for method)))
 
 (defn- insufficient-stock?
@@ -81,7 +81,7 @@
    valuation layer + GL postings (`plan-stock-move :direction :in`)
    AND the physical `:inventory-detail` against the
    `(product, facility, location, lot, owner)` bucket — linked by
-   `:inventory-detail/transaction`. Routes through the gate (ADR-068).
+   `:kontor.inventory-detail/transaction`. Routes through the gate (ADR-068).
 
    Required: :product, :facility, :book (valuation-book), :qty,
              :unit-cost, :commodity, :journal, :account-fn.
@@ -150,14 +150,14 @@
         item-id  (or existing tempid)
         item-entity (when-not existing
                       (inv/inventory-item-entity tempid bucket-spec))
-        detail (cond-> {:inventory-detail/inventory-item item-id
-                        :inventory-detail/effective-date eff
-                        :inventory-detail/qoh-diff qty
-                        :inventory-detail/atp-diff qty
-                        :inventory-detail/source-kind :receipt
+        detail (cond-> {:kontor.inventory-detail/inventory-item item-id
+                        :kontor.inventory-detail/effective-date eff
+                        :kontor.inventory-detail/qoh-diff qty
+                        :kontor.inventory-detail/atp-diff qty
+                        :kontor.inventory-detail/source-kind :receipt
                         ;; -1 is plan-stock-move's transaction tempid.
-                        :inventory-detail/transaction -1}
-                 reason (assoc :inventory-detail/reason reason))]
+                        :kontor.inventory-detail/transaction -1}
+                 reason (assoc :kontor.inventory-detail/reason reason))]
     {:tx-data (cond-> (conj (vec (seal-stock-move move-tx eff)) detail)
                 item-entity (conj item-entity))
      :existing-item-id existing}))
@@ -167,16 +167,16 @@
 ;; ============================================================================
 
 (defn- negative-allowed?
-  "The `:facility-product/negative-allowed?` flag for a
+  "The `:kontor.facility-product/negative-allowed?` flag for a
    (facility, product) pair — false when no policy row exists."
   [db facility product]
   (boolean
    (d/q '[:find ?na .
           :in $ ?f ?p
           :where
-          [?fp :facility-product/facility ?f]
-          [?fp :facility-product/product ?p]
-          [?fp :facility-product/negative-allowed? ?na]]
+          [?fp :kontor.facility-product/facility ?f]
+          [?fp :kontor.facility-product/product ?p]
+          [?fp :kontor.facility-product/negative-allowed? ?na]]
         db facility product)))
 
 (defn- negative-fill-tx-data
@@ -219,23 +219,23 @@
                    :kontor.transaction/posted-at eff
                    :kontor.transaction/narration "Negative-fill layer (estimated cost)"}
         layer (cond-> {:db/id "nf-layer"
-                       :valuation-layer/book book-eid
-                       :valuation-layer/item product
-                       :valuation-layer/origin-transaction "nf-tx"
-                       :valuation-layer/qty-original shortfall
-                       :valuation-layer/unit-cost-original estimated-unit-cost
-                       :valuation-layer/commodity commodity
-                       :valuation-layer/received-at eff
-                       :valuation-layer/note "negative-fill (estimated cost)"}
-                lot (assoc :valuation-layer/lot lot))
+                       :kontor.valuation-layer/book book-eid
+                       :kontor.valuation-layer/item product
+                       :kontor.valuation-layer/origin-transaction "nf-tx"
+                       :kontor.valuation-layer/qty-original shortfall
+                       :kontor.valuation-layer/unit-cost-original estimated-unit-cost
+                       :kontor.valuation-layer/commodity commodity
+                       :kontor.valuation-layer/received-at eff
+                       :kontor.valuation-layer/note "negative-fill (estimated cost)"}
+                lot (assoc :kontor.valuation-layer/lot lot))
         nf {:db/id "nf"
-            :negative-fill/inventory-item item-id
-            :negative-fill/valuation-layer "nf-layer"
-            :negative-fill/shortfall-qty shortfall
-            :negative-fill/estimated-unit-cost estimated-unit-cost
-            :negative-fill/commodity commodity
-            :negative-fill/status :open
-            :negative-fill/created-at eff}]
+            :kontor.negative-fill/inventory-item item-id
+            :kontor.negative-fill/valuation-layer "nf-layer"
+            :kontor.negative-fill/shortfall-qty shortfall
+            :kontor.negative-fill/estimated-unit-cost estimated-unit-cost
+            :kontor.negative-fill/commodity commodity
+            :kontor.negative-fill/status :open
+            :kontor.negative-fill/created-at eff}]
     (cond-> [origin-tx layer nf]
       item-entity (conj item-entity))))
 
@@ -254,8 +254,8 @@
               lot owner-entity]}]
   (cond
     inventory-item inventory-item
-    reservation    (:db/id (:inv-reservation/inventory-item
-                            (d/pull db [{:inv-reservation/inventory-item [:db/id]}]
+    reservation    (:db/id (:kontor.inv-reservation/inventory-item
+                            (d/pull db [{:kontor.inv-reservation/inventory-item [:db/id]}]
                                     reservation)))
     :else (inv/find-inventory-item db {:product product :facility facility
                                        :location location :lot lot
@@ -272,7 +272,7 @@
    plain issue carries `:atp-diff -qty`.
 
    Negative-inventory policy: if the issue over-draws and the
-   `(facility, product)` `:facility-product/negative-allowed?` is
+   `(facility, product)` `:kontor.facility-product/negative-allowed?` is
    false (default), throws `:inventory/negative-not-allowed`. When
    true, a negative-fill `:valuation-layer` is created first (at
    `:estimated-unit-cost`) + a `:negative-fill` record — so the issue
@@ -363,24 +363,24 @@
                                   :lot (:lot spec)
                                   :owner-entity (:owner-entity spec)
                                   :received-at eff}))
-                detail (cond-> {:inventory-detail/inventory-item item-id
-                                :inventory-detail/effective-date eff
-                                :inventory-detail/qoh-diff
+                detail (cond-> {:kontor.inventory-detail/inventory-item item-id
+                                :kontor.inventory-detail/effective-date eff
+                                :kontor.inventory-detail/qoh-diff
                                 (.negate ^java.math.BigDecimal qty)
                                 ;; A reservation already dropped ATP —
                                 ;; realizing it moves QOH only. A plain
                                 ;; issue moves both.
-                                :inventory-detail/atp-diff
+                                :kontor.inventory-detail/atp-diff
                                 (if reservation 0M
                                     (.negate ^java.math.BigDecimal qty))
-                                :inventory-detail/source-kind :issuance
-                                :inventory-detail/transaction -1}
-                         reason (assoc :inventory-detail/reason reason))]
+                                :kontor.inventory-detail/source-kind :issuance
+                                :kontor.inventory-detail/transaction -1}
+                         reason (assoc :kontor.inventory-detail/reason reason))]
             (cond-> (conj (vec (seal-stock-move move-tx eff)) detail)
               bucket-entity (conj bucket-entity)
               ;; Link the negative-fill back to the originating issue tx.
               need-neg-fill? (conj {:db/id "nf"
-                                    :negative-fill/origin-issue -1})
+                                    :kontor.negative-fill/origin-issue -1})
               ;; Realize (consume) the reservation — retract it.
               reservation (conj [:db/retractEntity reservation]))))
         steps (cond-> []
@@ -409,7 +409,7 @@
    `(actual − estimated) × shortfall-qty` + a balanced GL correction
    (`Dr :variance-account / Cr :inventory-account` for a positive
    delta), links the adjustment back via
-   `:negative-fill/true-up-adjustment`, and marks the
+   `:kontor.negative-fill/true-up-adjustment`, and marks the
    `:negative-fill` `:trued-up`. Routes through the gate (ADR-068).
 
    Note the negative-fill layer was already fully consumed by the
@@ -443,25 +443,25 @@
   (when-not journal         (throw (ex-info ":journal required" {})))
   (when-not inventory-account (throw (ex-info ":inventory-account required" {})))
   (when-not variance-account  (throw (ex-info ":variance-account required" {})))
-  (let [nf (d/pull db [:negative-fill/status
-                       :negative-fill/shortfall-qty
-                       :negative-fill/estimated-unit-cost
-                       {:negative-fill/commodity [:db/id]}
-                       {:negative-fill/valuation-layer [:db/id]}]
+  (let [nf (d/pull db [:kontor.negative-fill/status
+                       :kontor.negative-fill/shortfall-qty
+                       :kontor.negative-fill/estimated-unit-cost
+                       {:kontor.negative-fill/commodity [:db/id]}
+                       {:kontor.negative-fill/valuation-layer [:db/id]}]
                    negative-fill)
-        _ (when-not (= :open (:negative-fill/status nf))
+        _ (when-not (= :open (:kontor.negative-fill/status nf))
             (throw (ex-info "Negative-fill is not :open"
                             {:type :inventory/negative-fill-not-open
                              :negative-fill negative-fill
-                             :status (:negative-fill/status nf)})))
+                             :status (:kontor.negative-fill/status nf)})))
         eff (or effective-date (Date.))
-        shortfall (:negative-fill/shortfall-qty nf)
+        shortfall (:kontor.negative-fill/shortfall-qty nf)
         delta-unit (.subtract ^java.math.BigDecimal actual-unit-cost
-                              ^java.math.BigDecimal (:negative-fill/estimated-unit-cost nf))
+                              ^java.math.BigDecimal (:kontor.negative-fill/estimated-unit-cost nf))
         delta-total (.multiply ^java.math.BigDecimal delta-unit
                                ^java.math.BigDecimal shortfall)
-        commodity (:db/id (:negative-fill/commodity nf))
-        layer (:db/id (:negative-fill/valuation-layer nf))
+        commodity (:db/id (:kontor.negative-fill/commodity nf))
+        layer (:db/id (:kontor.negative-fill/valuation-layer nf))
         ;; GL correction — Dr variance / Cr inventory for a positive
         ;; delta (the estimate under-stated cost); reversed when
         ;; negative. build-transaction enforces sum-to-zero.
@@ -476,17 +476,17 @@
                          :kontor.posting/amount (.negate ^java.math.BigDecimal delta-total)
                          :kontor.posting/commodity commodity}]})
         adjustment {:db/id "adj"
-                    :layer-adjustment/layer layer
-                    :layer-adjustment/amount delta-total
-                    :layer-adjustment/reason :correction
-                    :layer-adjustment/origin-transaction -1
-                    :layer-adjustment/applied-at eff
-                    :layer-adjustment/note "Negative-fill estimate → actual"}]
+                    :kontor.layer-adjustment/layer layer
+                    :kontor.layer-adjustment/amount delta-total
+                    :kontor.layer-adjustment/reason :correction
+                    :kontor.layer-adjustment/origin-transaction -1
+                    :kontor.layer-adjustment/applied-at eff
+                    :kontor.layer-adjustment/note "Negative-fill estimate → actual"}]
     (into (vec gl)
           [adjustment
            {:db/id negative-fill
-            :negative-fill/status :trued-up
-            :negative-fill/true-up-adjustment "adj"}])))
+            :kontor.negative-fill/status :trued-up
+            :kontor.negative-fill/true-up-adjustment "adj"}])))
 
 ;; ============================================================================
 ;; Transfers — two-phase, GL-free (same-entity quantity moves)
@@ -528,32 +528,32 @@
   (when-not inventory-item (throw (ex-info ":inventory-item required" {})))
   (when (nil? quantity)    (throw (ex-info ":quantity required" {})))
   (when-not to-facility    (throw (ex-info ":to-facility required" {})))
-  (let [src (d/pull db [{:inventory-item/facility [:db/id]}
-                        {:inventory-item/location [:db/id]}]
+  (let [src (d/pull db [{:kontor.inventory-item/facility [:db/id]}
+                        {:kontor.inventory-item/location [:db/id]}]
                     inventory-item)
         to-f (inv/resolve-facility db to-facility)
         _ (when-not to-f (throw (ex-info "Destination facility not found"
                                          {:spec to-facility})))
         sent (or send-date (Date.))
         transfer (cond-> {:db/id tempid
-                          :inventory-transfer/inventory-item inventory-item
-                          :inventory-transfer/quantity quantity
-                          :inventory-transfer/from-facility
-                          (:db/id (:inventory-item/facility src))
-                          :inventory-transfer/to-facility to-f
-                          :inventory-transfer/status :in-transit
-                          :inventory-transfer/send-date sent}
-                   (:inventory-item/location src)
-                   (assoc :inventory-transfer/from-location
-                          (:db/id (:inventory-item/location src)))
-                   to-location (assoc :inventory-transfer/to-location to-location)
-                   note        (assoc :inventory-transfer/note note))
-        detail {:inventory-detail/inventory-item inventory-item
-                :inventory-detail/effective-date sent
-                :inventory-detail/qoh-diff (.negate ^java.math.BigDecimal quantity)
-                :inventory-detail/atp-diff (.negate ^java.math.BigDecimal quantity)
-                :inventory-detail/source-kind :transfer
-                :inventory-detail/source tempid}]
+                          :kontor.inventory-transfer/inventory-item inventory-item
+                          :kontor.inventory-transfer/quantity quantity
+                          :kontor.inventory-transfer/from-facility
+                          (:db/id (:kontor.inventory-item/facility src))
+                          :kontor.inventory-transfer/to-facility to-f
+                          :kontor.inventory-transfer/status :in-transit
+                          :kontor.inventory-transfer/send-date sent}
+                   (:kontor.inventory-item/location src)
+                   (assoc :kontor.inventory-transfer/from-location
+                          (:db/id (:kontor.inventory-item/location src)))
+                   to-location (assoc :kontor.inventory-transfer/to-location to-location)
+                   note        (assoc :kontor.inventory-transfer/note note))
+        detail {:kontor.inventory-detail/inventory-item inventory-item
+                :kontor.inventory-detail/effective-date sent
+                :kontor.inventory-detail/qoh-diff (.negate ^java.math.BigDecimal quantity)
+                :kontor.inventory-detail/atp-diff (.negate ^java.math.BigDecimal quantity)
+                :kontor.inventory-detail/source-kind :transfer
+                :kontor.inventory-detail/source tempid}]
     [transfer detail]))
 
 (defn complete-transfer!
@@ -568,27 +568,27 @@
   [conn {:keys [transfer receive-date]}]
   (when-not transfer (throw (ex-info ":transfer required" {})))
   (let [db (d/db conn)
-        t (d/pull db [:inventory-transfer/quantity
-                      :inventory-transfer/status
-                      {:inventory-transfer/to-facility [:db/id]}
-                      {:inventory-transfer/to-location [:db/id]}
-                      {:inventory-transfer/inventory-item
-                       [{:inventory-item/product [:db/id]}
-                        {:inventory-item/lot [:db/id]}
-                        {:inventory-item/owner-entity [:db/id]}]}]
+        t (d/pull db [:kontor.inventory-transfer/quantity
+                      :kontor.inventory-transfer/status
+                      {:kontor.inventory-transfer/to-facility [:db/id]}
+                      {:kontor.inventory-transfer/to-location [:db/id]}
+                      {:kontor.inventory-transfer/inventory-item
+                       [{:kontor.inventory-item/product [:db/id]}
+                        {:kontor.inventory-item/lot [:db/id]}
+                        {:kontor.inventory-item/owner-entity [:db/id]}]}]
                   transfer)
-        _ (when-not (= :in-transit (:inventory-transfer/status t))
+        _ (when-not (= :in-transit (:kontor.inventory-transfer/status t))
             (throw (ex-info "Transfer is not :in-transit"
                             {:type :inventory/transfer-not-in-transit
                              :transfer transfer
-                             :status (:inventory-transfer/status t)})))
-        src (:inventory-transfer/inventory-item t)
+                             :status (:kontor.inventory-transfer/status t)})))
+        src (:kontor.inventory-transfer/inventory-item t)
         rcv (or receive-date (Date.))
-        dest-spec {:product (:db/id (:inventory-item/product src))
-                   :facility (:db/id (:inventory-transfer/to-facility t))
-                   :location (:db/id (:inventory-transfer/to-location t))
-                   :lot (:db/id (:inventory-item/lot src))
-                   :owner-entity (:db/id (:inventory-item/owner-entity src))
+        dest-spec {:product (:db/id (:kontor.inventory-item/product src))
+                   :facility (:db/id (:kontor.inventory-transfer/to-facility t))
+                   :location (:db/id (:kontor.inventory-transfer/to-location t))
+                   :lot (:db/id (:kontor.inventory-item/lot src))
+                   :owner-entity (:db/id (:kontor.inventory-item/owner-entity src))
                    :received-at rcv}
         ;; ONE atomic, gated process (ADR-067). Find-or-create the
         ;; destination bucket against the speculative db; if created,
@@ -601,18 +601,18 @@
                      bucket-entity (when-not existing
                                      (inv/inventory-item-entity
                                       "dest-item" dest-spec))
-                     detail {:inventory-detail/inventory-item dest-id
-                             :inventory-detail/effective-date rcv
-                             :inventory-detail/qoh-diff
-                             (:inventory-transfer/quantity t)
-                             :inventory-detail/atp-diff
-                             (:inventory-transfer/quantity t)
-                             :inventory-detail/source-kind :transfer
-                             :inventory-detail/source transfer}]
+                     detail {:kontor.inventory-detail/inventory-item dest-id
+                             :kontor.inventory-detail/effective-date rcv
+                             :kontor.inventory-detail/qoh-diff
+                             (:kontor.inventory-transfer/quantity t)
+                             :kontor.inventory-detail/atp-diff
+                             (:kontor.inventory-transfer/quantity t)
+                             :kontor.inventory-detail/source-kind :transfer
+                             :kontor.inventory-detail/source transfer}]
                  (cond-> [detail
                           {:db/id transfer
-                           :inventory-transfer/status :complete
-                           :inventory-transfer/receive-date rcv}]
+                           :kontor.inventory-transfer/status :complete
+                           :kontor.inventory-transfer/receive-date rcv}]
                    bucket-entity (conj bucket-entity))))
         report (process/run-process conn {:steps [step] :vt-from rcv})
         tempids (:tempids report)]
@@ -643,21 +643,21 @@
 (defn cancel-transfer-tx-data
   "Pure tx-data builder for `cancel-transfer!` (ADR-068)."
   [db transfer-eid {:keys [effective-date]}]
-  (let [t (d/pull db [:inventory-transfer/quantity
-                      :inventory-transfer/status
-                      {:inventory-transfer/inventory-item [:db/id]}]
+  (let [t (d/pull db [:kontor.inventory-transfer/quantity
+                      :kontor.inventory-transfer/status
+                      {:kontor.inventory-transfer/inventory-item [:db/id]}]
                   transfer-eid)
-        _ (when-not (= :in-transit (:inventory-transfer/status t))
+        _ (when-not (= :in-transit (:kontor.inventory-transfer/status t))
             (throw (ex-info "Transfer is not :in-transit"
                             {:type :inventory/transfer-not-in-transit
                              :transfer transfer-eid
-                             :status (:inventory-transfer/status t)})))]
-    [{:inventory-detail/inventory-item
-      (:db/id (:inventory-transfer/inventory-item t))
-      :inventory-detail/effective-date (or effective-date (Date.))
-      :inventory-detail/qoh-diff (:inventory-transfer/quantity t)
-      :inventory-detail/atp-diff (:inventory-transfer/quantity t)
-      :inventory-detail/source-kind :transfer
-      :inventory-detail/source transfer-eid
-      :inventory-detail/description "Transfer cancelled"}
-     {:db/id transfer-eid :inventory-transfer/status :cancelled}]))
+                             :status (:kontor.inventory-transfer/status t)})))]
+    [{:kontor.inventory-detail/inventory-item
+      (:db/id (:kontor.inventory-transfer/inventory-item t))
+      :kontor.inventory-detail/effective-date (or effective-date (Date.))
+      :kontor.inventory-detail/qoh-diff (:kontor.inventory-transfer/quantity t)
+      :kontor.inventory-detail/atp-diff (:kontor.inventory-transfer/quantity t)
+      :kontor.inventory-detail/source-kind :transfer
+      :kontor.inventory-detail/source transfer-eid
+      :kontor.inventory-detail/description "Transfer cancelled"}
+     {:db/id transfer-eid :kontor.inventory-transfer/status :cancelled}]))

@@ -103,14 +103,14 @@
              :storage-uri "s3://kontor-audit/superstream/2026-05.xml"})
         doc (first tx)]
     (testing "audit-doc carries the right category + language"
-      (is (= :payroll-filing (:audit-doc/category doc)))
-      (is (= :en             (:audit-doc/language doc))))
+      (is (= :payroll-filing (:kontor.audit-doc/category doc)))
+      (is (= :en             (:kontor.audit-doc/language doc))))
     (testing "title + description summarize the message"
-      (is (re-find #"SuperStream" (:audit-doc/title doc)))
-      (is (re-find #"747\.50"      (:audit-doc/description doc)))
-      (is (re-find #"1 line"        (:audit-doc/description doc))))
+      (is (re-find #"SuperStream" (:kontor.audit-doc/title doc)))
+      (is (re-find #"747\.50"      (:kontor.audit-doc/description doc)))
+      (is (re-find #"1 line"        (:kontor.audit-doc/description doc))))
     (testing "storage-uri attaches when supplied"
       (is (= "s3://kontor-audit/superstream/2026-05.xml"
-             (:audit-doc/storage-uri doc))))
+             (:kontor.audit-doc/storage-uri doc))))
     (testing "code is deterministic from ABN + period-end"
-      (is (re-find #"^SUPER-33051775556-" (:audit-doc/code doc))))))
+      (is (re-find #"^SUPER-33051775556-" (:kontor.audit-doc/code doc))))))

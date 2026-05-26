@@ -34,18 +34,18 @@
                  {:db/id "country-us" :kontor.country/code "US" :kontor.country/name "United States"}
                  ;; The retention schedule doc (ADR-038 :supporting-doc).
                  {:db/id "doc-schedule"
-                  :audit-doc/code "RETENTION-SCHEDULE-2026"
-                  :audit-doc/type :retention-schedule
-                  :audit-doc/uploaded-at #inst "2026-01-01"}
+                  :kontor.audit-doc/code "RETENTION-SCHEDULE-2026"
+                  :kontor.audit-doc/type :retention-schedule
+                  :kontor.audit-doc/uploaded-at #inst "2026-01-01"}
                  ;; Hold preservation order.
                  {:db/id "doc-hold"
-                  :audit-doc/code "HOLD-ORDER-001"
-                  :audit-doc/type :legal-hold-order
-                  :audit-doc/uploaded-at #inst "2026-05-13"}
+                  :kontor.audit-doc/code "HOLD-ORDER-001"
+                  :kontor.audit-doc/type :legal-hold-order
+                  :kontor.audit-doc/uploaded-at #inst "2026-05-13"}
                  {:db/id "doc-release"
-                  :audit-doc/code "HOLD-RELEASE-001"
-                  :audit-doc/type :legal-hold-release
-                  :audit-doc/uploaded-at #inst "2026-06-01"}])
+                  :kontor.audit-doc/code "HOLD-RELEASE-001"
+                  :kontor.audit-doc/type :legal-hold-release
+                  :kontor.audit-doc/uploaded-at #inst "2026-06-01"}])
     conn))
 
 (defn- uid [db actor]
@@ -54,22 +54,22 @@
        db (str "U-" actor)))
 
 (defn- adoc-eid [db code]
-  (d/q '[:find ?e . :in $ ?c :where [?e :audit-doc/code ?c]] db code))
+  (d/q '[:find ?e . :in $ ?c :where [?e :kontor.audit-doc/code ?c]] db code))
 
 (defn- country-eid [db iso]
   (d/q '[:find ?e . :in $ ?c :where [?e :kontor.country/code ?c]] db iso))
 
 ;; Seed an audit-doc whose :uploaded-at is the retention clock anchor.
 (defn- seed-doc! [conn code uploaded-at]
-  (d/transact conn [{:audit-doc/code code
-                     :audit-doc/type :customer-email
-                     :audit-doc/title (str "Doc " code)
-                     :audit-doc/description "sensitive contents"
-                     :audit-doc/uploaded-at uploaded-at}])
+  (d/transact conn [{:kontor.audit-doc/code code
+                     :kontor.audit-doc/type :customer-email
+                     :kontor.audit-doc/title (str "Doc " code)
+                     :kontor.audit-doc/description "sensitive contents"
+                     :kontor.audit-doc/uploaded-at uploaded-at}])
   (adoc-eid (d/db conn) code))
 
 ;; Define + activate a :purge policy on :audit-doc, anchored on
-;; :audit-doc/uploaded-at.
+;; :kontor.audit-doc/uploaded-at.
 (defn- active-purge-policy! [conn {:keys [code duration-years effective-from
                                           effective-until jurisdiction category]
                                    :or {duration-years 7
@@ -78,7 +78,7 @@
     (cond-> {:code code
              :applies-to [:audit-doc]
              :duration-years duration-years
-             :triggered-by :audit-doc/uploaded-at
+             :triggered-by :kontor.audit-doc/uploaded-at
              :expiry-action :purge
              :effective-from effective-from
              :legal-basis "Test policy"
@@ -104,7 +104,7 @@
             {:code "DE-HGB-257"
              :applies-to [:audit-doc :transaction]
              :duration-years 10
-             :triggered-by :audit-doc/uploaded-at
+             :triggered-by :kontor.audit-doc/uploaded-at
              :expiry-action :purge
              :effective-from #inst "2025-01-01"
              :legal-basis "HGB §257"
@@ -116,11 +116,11 @@
                        :in $ ?e
                        :where
                        [?h :kontor.status-history/entity ?e]
-                       [?h :kontor.status-history/facet :retention-policy/state]]
+                       [?h :kontor.status-history/facet :kontor.retention-policy/state]]
                      db policy-eid)]
-    (is (= :draft (:retention-policy/state policy)))
-    (is (= 10 (:retention-policy/duration-years policy)))
-    (is (= #{:audit-doc :transaction} (set (:retention-policy/applies-to policy))))
+    (is (= :draft (:kontor.retention-policy/state policy)))
+    (is (= 10 (:kontor.retention-policy/duration-years policy)))
+    (is (= #{:audit-doc :transaction} (set (:kontor.retention-policy/applies-to policy))))
     (is (= 1 (count history)) "Exactly one :status-history row for nil → :draft.")))
 
 (deftest activate-requires-supporting-doc
@@ -129,7 +129,7 @@
             {:code "P-NEEDS-DOC"
              :applies-to [:audit-doc]
              :duration-years 7
-             :triggered-by :audit-doc/uploaded-at
+             :triggered-by :kontor.audit-doc/uploaded-at
              :expiry-action :purge
              :effective-from #inst "2025-01-01"
              :legal-basis "Test"
@@ -155,8 +155,8 @@
                              :supporting-doc (adoc-eid (d/db conn) "RETENTION-SCHEDULE-2026")
                              :reason-note "Statutory."
                              :changed-by-uid (uid (d/db conn) "records")})
-      (is (= :active (:retention-policy/state
-                      (d/pull (d/db conn) [:retention-policy/state] policy-eid)))))))
+      (is (= :active (:kontor.retention-policy/state
+                      (d/pull (d/db conn) [:kontor.retention-policy/state] policy-eid)))))))
 
 ;; ============================================================================
 ;; policy-for / retention-deadline / eligible?
@@ -201,7 +201,7 @@
              (ret/policy-for (d/db conn) :audit-doc {}))))))
 
 ;; ADR-075 P0-85-2 — category gate. The sweeper must read
-;; :retention-policy/category so per-jurisdiction floors can differ
+;; :kontor.retention-policy/category so per-jurisdiction floors can differ
 ;; by subject-matter (DE GDPR Art. 17 + §28f SGB IV payroll-PII
 ;; retention vs HGB §257 financial-records retention).
 
@@ -324,7 +324,7 @@
                                     :action :purge})))
       ;; P1-1 (research note 32): the :type must be reachable on
       ;; (ex-data e) directly — not buried in (.getCause e).
-      (is (= :legal-hold/purge-blocked
+      (is (= :kontor.legal-hold/purge-blocked
              (try (ret/apply-expiry! conn {:entity-eid held-doc
                                            :policy-eid (ret/by-code (d/db conn) "P-HOLD-TEST")
                                            :action :purge})
@@ -353,7 +353,7 @@
   ;; in a DIFFERENT namespace (:kontor.status-history/changed-at). Without the
   ;; :applies-to cross-check, candidate-eids would enumerate every
   ;; :status-history row in the DB as a candidate. The guard filters
-  ;; them out — a :status-history row carries no :audit-doc/* attr.
+  ;; them out — a :status-history row carries no :kontor.audit-doc/* attr.
   (let [conn (bootstrap)
         _ (ret/define-policy! conn
             {:code "P-CROSS-NS"
@@ -388,10 +388,10 @@
             {:code "P-ANON"
              :applies-to [:audit-doc]
              :duration-years 3
-             :triggered-by :audit-doc/uploaded-at
+             :triggered-by :kontor.audit-doc/uploaded-at
              :expiry-action :anonymize
-             :anonymize-fields [:audit-doc/title
-                                :audit-doc/description]
+             :anonymize-fields [:kontor.audit-doc/title
+                                :kontor.audit-doc/description]
              :effective-from #inst "2000-01-01"
              :legal-basis "GDPR Art. 5(1)(e) — anonymize but keep"
              :changed-by-uid (uid (d/db conn) "records")})
@@ -408,10 +408,10 @@
         (is (= 1 (count (:applied r))))))
     (testing "PII fields are purged; identity field survives"
       (let [doc (d/pull (d/db conn) '[*] old-doc)]
-        (is (= "DOC-ANON" (:audit-doc/code doc)) ":code survives.")
-        (is (= :customer-email (:audit-doc/type doc)) ":type survives.")
-        (is (nil? (:audit-doc/title doc)) ":title purged.")
-        (is (nil? (:audit-doc/description doc)) ":description purged.")))))
+        (is (= "DOC-ANON" (:kontor.audit-doc/code doc)) ":code survives.")
+        (is (= :customer-email (:kontor.audit-doc/type doc)) ":type survives.")
+        (is (nil? (:kontor.audit-doc/title doc)) ":title purged.")
+        (is (nil? (:kontor.audit-doc/description doc)) ":description purged.")))))
 
 ;; ============================================================================
 ;; supersede
@@ -433,6 +433,6 @@
                               :changed-by-uid (uid (d/db conn) "records")
                               :supporting-doc (adoc-eid (d/db conn) "RETENTION-SCHEDULE-2026")
                               :reason-note "Replaced by 2027 schedule."})
-      (is (= :superseded (:retention-policy/state
-                          (d/pull (d/db conn) [:retention-policy/state] policy-eid))))
+      (is (= :superseded (:kontor.retention-policy/state
+                          (d/pull (d/db conn) [:kontor.retention-policy/state] policy-eid))))
       (is (nil? (ret/policy-for (d/db conn) :audit-doc {}))))))

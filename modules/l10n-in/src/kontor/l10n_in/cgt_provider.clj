@@ -12,7 +12,7 @@
    / §54GA / §54GB plus 30+ §47 transfer-not-regarded keywords).
 
    The provider classifies each disposal into one of five lanes via
-   `:disposal/asset-class`:
+   `:kontor.disposal/asset-class`:
 
      :in-equity-listed     listed STT-paid equity / equity-MF / BT units
                            — §111A 20 % STCG / §112A 12.5 % LTCG above ₹1.25 L floor
@@ -59,7 +59,7 @@
    `:in-§54`, `:in-§54B`, `:in-§54D`, `:in-§54EC`, `:in-§54F`,
    `:in-§54G`, `:in-§54GA`, `:in-§54GB`, or the `:in-§47-*`
    transfer-not-regarded subset, the provider folds the
-   `:disposal/rollover-amount` (or, for §47, the entire gain) out of
+   `:kontor.disposal/rollover-amount` (or, for §47, the entire gain) out of
    the lane's net base — surfaces a `:rollover-§…` line item, but the
    gain does not enter the lane.
 
@@ -115,7 +115,7 @@
     :exempt})     ; §54 family / §47 (no liability)
 
 (def asset-classes
-  "The IN-namespaced :disposal/asset-class vocabulary the provider
+  "The IN-namespaced :kontor.disposal/asset-class vocabulary the provider
    classifies on. Other unknown values are treated conservatively as
    `:in-other-lta`."
   #{:in-equity-listed :in-equity-unlisted :in-immovable
@@ -188,9 +188,9 @@
    all other asset classes use 24 months. `:in-debt-mf` (post-1-Apr-2023
    acquisition) is ALWAYS short regardless of holding (§50AA)."
   [disposal {:keys [equity-cutoff-mo other-cutoff-mo]}]
-  (let [acq         (:disposal/acquired-on disposal)
-        dis         (:disposal/disposed-on disposal)
-        asset-class (:disposal/asset-class disposal)]
+  (let [acq         (:kontor.disposal/acquired-on disposal)
+        dis         (:kontor.disposal/disposed-on disposal)
+        asset-class (:kontor.disposal/asset-class disposal)]
     (cond
       (= asset-class :in-debt-mf)        false  ; §50AA — always STCG
       (= asset-class :in-debt-security)  false
@@ -229,9 +229,9 @@
    explicit `MathContext` to avoid the non-terminating-decimal
    exception that `(/ a b)` raises for ratios like 376/167."
   ^java.math.BigDecimal [db ^java.util.Date as-of disposal]
-  (let [acq          (:disposal/acquired-on disposal)
-        dis          (:disposal/disposed-on disposal)
-        basis        (or (:disposal/basis-amount disposal) 0M)
+  (let [acq          (:kontor.disposal/acquired-on disposal)
+        dis          (:kontor.disposal/disposed-on disposal)
+        basis        (or (:kontor.disposal/basis-amount disposal) 0M)
         cii-acq      (cii-for db as-of acq)
         cii-dis      (cii-for db as-of dis)]
     (when (and cii-acq cii-dis (pos? cii-acq))
@@ -247,18 +247,18 @@
 ;; ============================================================================
 
 (defn- effective-proceeds
-  "Resolve `:disposal/proceeds-amount`, applying §50C deemed-proceeds
+  "Resolve `:kontor.disposal/proceeds-amount`, applying §50C deemed-proceeds
    for immovable property when the consumer supplied
    `:inputs :in-stamp-duty-deemed-proceeds` and the SDV exceeds the
    safe-harbour ratio (default 110 % post-FA-2020) of recorded
    proceeds."
   ^java.math.BigDecimal [disposal {:keys [in-stamp-duty-deemed-proceeds
                                           §50C-safe-harbour-ratio]}]
-  (let [recorded (or (:disposal/proceeds-amount disposal) 0M)
+  (let [recorded (or (:kontor.disposal/proceeds-amount disposal) 0M)
         sdv      (some-> in-stamp-duty-deemed-proceeds bigdec)
         ratio    (or §50C-safe-harbour-ratio 1.10M)]
     (cond
-      (not= (:disposal/asset-class disposal) :in-immovable) recorded
+      (not= (:kontor.disposal/asset-class disposal) :in-immovable) recorded
       (nil? sdv) recorded
       ;; §50C bites when SDV > ratio × recorded (the safe-harbour);
       ;; effective proceeds become the SDV.
@@ -273,8 +273,8 @@
   (let [proceeds (effective-proceeds disposal §50C-opts)
         basis    (if cii-elected?
                    (or (indexed-basis db as-of disposal)
-                       (or (:disposal/basis-amount disposal) 0M))
-                   (or (:disposal/basis-amount disposal) 0M))]
+                       (or (:kontor.disposal/basis-amount disposal) 0M))
+                   (or (:kontor.disposal/basis-amount disposal) 0M))]
     (- proceeds basis)))
 
 (defn- §47-exempt?
@@ -282,11 +282,11 @@
    (transferee inherits basis under §49)."
   [disposal]
   (boolean (some §47-transfer-not-regarded
-                 (:disposal/exemption-claimed disposal))))
+                 (:kontor.disposal/exemption-claimed disposal))))
 
 (defn- §54-family-rollover-amount
   "If the disposal claims any §54 family exemption AND the consumer
-   recorded `:disposal/rollover-amount`, return a map
+   recorded `:kontor.disposal/rollover-amount`, return a map
    `{:total <BigDecimal> :§54EC-used <BigDecimal>}` where `:total` is
    the total amount deferred (capped by §54EC ₹50 L if §54EC was the
    sole claim) and `:§54EC-used` is the §54EC-attributable slice that
@@ -313,8 +313,8 @@
    §54EC-attributable, which it did wrong by adding the FULL rollover
    to the FY accumulator on every mixed claim.)"
   [disposal {:keys [§54EC-cap §54EC-prior-claimed §54EC-running-claimed]}]
-  (let [claimed   (set (:disposal/exemption-claimed disposal))
-        rollover  (or (:disposal/rollover-amount disposal) 0M)
+  (let [claimed   (set (:kontor.disposal/exemption-claimed disposal))
+        rollover  (or (:kontor.disposal/rollover-amount disposal) 0M)
         §54EC?    (contains? claimed :in-§54EC)
         non-§54EC (some §54-family-exemptions (disj claimed :in-§54EC))]
     (cond
@@ -346,8 +346,8 @@
   (let [{:keys [equity-cutoff-mo other-cutoff-mo §54EC-cap
                 §54EC-prior-claimed §54EC-running-claimed
                 §50C-opts]} opts
-        asset-class   (:disposal/asset-class disposal)
-        elective      (set (:disposal/elective-regime disposal))
+        asset-class   (:kontor.disposal/asset-class disposal)
+        elective      (set (:kontor.disposal/elective-regime disposal))
         cii-elected?  (contains? elective :in-cii-indexation)
         gain-pre      (realized-gain db as-of disposal cii-elected? §50C-opts)
         long?         (long-term? disposal {:equity-cutoff-mo equity-cutoff-mo

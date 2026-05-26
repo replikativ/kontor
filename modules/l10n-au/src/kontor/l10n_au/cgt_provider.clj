@@ -48,18 +48,18 @@
      4. $500 000 retirement exemption (Subdiv 152-D, s152-305) — cap
         consumes lifetime budget via `:inputs :au-retirement-cap-used`.
      5. Small-business rollover (Subdiv 152-E, s152-410) — deferral via
-        kernel `:disposal/rollover-amount` (handled by the substrate).
+        kernel `:kontor.disposal/rollover-amount` (handled by the substrate).
 
    ## Other carve-outs handled provider-internally
 
-   - **Main residence** (Subdiv 118-B, s118-110) — `:disposal/residence?
+   - **Main residence** (Subdiv 118-B, s118-110) — `:kontor.disposal/residence?
      true` + `:au-main-residence` exemption-claim → full exclusion.
    - **Collectables / personal-use thresholds** (s118-10) — first-element
      under $500 / $10 000 → gain disregarded.
    - **Foreign-resident TAP** (Div 855) — `:au-foreign-resident-non-tap`
      exemption-claim → not taxable.
    - **6-year absence rule** (s118-145) — out of scope; consumer pre-
-     flags eligibility via `:disposal/residence?`.
+     flags eligibility via `:kontor.disposal/residence?`.
    - **Indexation method** (s110-36) — taxpayer election via
      `:au-indexation-method` regime; v1 raises `:not-yet-implemented`
      (note 129 §6 Q6).
@@ -98,8 +98,8 @@
 (defn- long-term?
   "True iff held strictly more than the s115-25 holding-period cutoff."
   [disposal cutoff-days]
-  (let [acq (:disposal/acquired-on disposal)
-        dis (:disposal/disposed-on disposal)]
+  (let [acq (:kontor.disposal/acquired-on disposal)
+        dis (:kontor.disposal/disposed-on disposal)]
     (and acq dis (> (days-between acq dis) cutoff-days))))
 
 (defn- as-of-from-ctx
@@ -125,9 +125,9 @@
    commodity: `proceeds − basis − rollover-amount`. Rollover slice is
    deferred (Subdiv 152-E or Div 124) — not recognised this period."
   ^java.math.BigDecimal [disposal]
-  (let [p (or (:disposal/proceeds-amount disposal) 0M)
-        b (or (:disposal/basis-amount disposal) 0M)
-        r (or (:disposal/rollover-amount disposal) 0M)]
+  (let [p (or (:kontor.disposal/proceeds-amount disposal) 0M)
+        b (or (:kontor.disposal/basis-amount disposal) 0M)
+        r (or (:kontor.disposal/rollover-amount disposal) 0M)]
     (- p b r)))
 
 ;; ============================================================================
@@ -135,14 +135,14 @@
 ;; ============================================================================
 
 (defn- elective-regime-set
-  "Coerce the cardinality-many `:disposal/elective-regime` to a set."
+  "Coerce the cardinality-many `:kontor.disposal/elective-regime` to a set."
   [disposal]
-  (set (:disposal/elective-regime disposal)))
+  (set (:kontor.disposal/elective-regime disposal)))
 
 (defn- exemption-claimed-set
-  "Coerce the cardinality-many `:disposal/exemption-claimed` to a set."
+  "Coerce the cardinality-many `:kontor.disposal/exemption-claimed` to a set."
   [disposal]
-  (set (:disposal/exemption-claimed disposal)))
+  (set (:kontor.disposal/exemption-claimed disposal)))
 
 (defn- below-threshold-exempt?
   "True iff this disposal is exempt under s118-10 — collectables under
@@ -150,8 +150,8 @@
    (the 'first element' acquisition cost) per note 129 §1.5 + s108-10.
    Both thresholds are statute parameters."
   [disposal db ^java.util.Date as-of]
-  (let [basis (or (:disposal/basis-amount disposal) 0M)
-        ac    (:disposal/asset-class disposal)
+  (let [basis (or (:kontor.disposal/basis-amount disposal) 0M)
+        ac    (:kontor.disposal/asset-class disposal)
         coll  (statute/parameter-value-at db "AU.CGT.§118-10.collectable-threshold" as-of)
         pu    (statute/parameter-value-at db "AU.CGT.§118-10.personal-use-threshold" as-of)]
     (cond
@@ -161,11 +161,11 @@
 
 (defn- main-residence-exempt?
   "True iff the disposal claims the Div 118-B main-residence exemption
-   AND `:disposal/residence?` is set (the gate). Returns the reason
+   AND `:kontor.disposal/residence?` is set (the gate). Returns the reason
    keyword if exempt; nil otherwise. The 6-year absence rule (s118-145)
    is consumer-flagged via `:residence?` per note 129 §1.9."
   [disposal]
-  (when (and (:disposal/residence? disposal)
+  (when (and (:kontor.disposal/residence? disposal)
              (contains? (exemption-claimed-set disposal) :au-main-residence))
     :s118-110-main-residence))
 
@@ -303,8 +303,8 @@
    surface the gap explicitly per note 129 §6 Q6."
   [disposal {:keys [db as-of]}]
   (let [raw           (realized-gain disposal)
-        asset-class   (:disposal/asset-class disposal)
-        commodity-sym (or (:kontor.commodity/symbol (:disposal/proceeds-commodity disposal))
+        asset-class   (:kontor.disposal/asset-class disposal)
+        commodity-sym (or (:kontor.commodity/symbol (:kontor.disposal/proceeds-commodity disposal))
                           "AUD")
         regimes       (elective-regime-set disposal)
         below-thresh  (below-threshold-exempt? disposal db as-of)
@@ -316,7 +316,7 @@
       indexation?
       (throw (ex-info "AU CGT :au-indexation-method not yet implemented (note 129 §6 Q6)"
                       {:disposal-id (:db/id disposal)
-                       :external-id (:disposal/external-id disposal)
+                       :external-id (:kontor.disposal/external-id disposal)
                        :as-of as-of}))
 
       below-thresh
@@ -531,7 +531,7 @@
         per-disposal-line-items
         (vec (mapcat
               (fn [c]
-                (let [id (or (:disposal/external-id (:disposal c))
+                (let [id (or (:kontor.disposal/external-id (:disposal c))
                              (str "eid-" (:db/id (:disposal c))))]
                   (mapv (fn [li]
                           (assoc li :disposal id

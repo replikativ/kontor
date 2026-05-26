@@ -2,8 +2,8 @@
   "End-to-end + per-namespace tests for the forward procurement
    flow — ADR-042 commit 2/4. Covers: requirement lifecycle, receipt
    creation + status, service acceptance, 3-way match (with and
-   without tolerance), polymorphic bridge dispatch on :order/type
-   :purchase + :order-item/category."
+   without tolerance), polymorphic bridge dispatch on :kontor.order/type
+   :purchase + :kontor.procurement.order-item/category."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [datahike.api :as d]
             [kontor.core :as core]
@@ -60,16 +60,16 @@
 
 (defn- seed-gl-defaults! []
   (d/transact *conn*
-              [{:gl-account-default/account-type :inventory
-                :gl-account-default/account [:kontor.account/path "1400"]}
-               {:gl-account-default/account-type :purchase-expense
-                :gl-account-default/account [:kontor.account/path "5000"]}
-               {:gl-account-default/account-type :ap
-                :gl-account-default/account [:kontor.account/path "2000"]}
-               {:gl-account-default/account-type :gr-ir-clearing
-                :gl-account-default/account [:kontor.account/path "2150"]}
-               {:gl-account-default/account-type :purchase-tax-recoverable
-                :gl-account-default/account [:kontor.account/path "1370"]}]))
+              [{:kontor.gl-account-default/account-type :inventory
+                :kontor.gl-account-default/account [:kontor.account/path "1400"]}
+               {:kontor.gl-account-default/account-type :purchase-expense
+                :kontor.gl-account-default/account [:kontor.account/path "5000"]}
+               {:kontor.gl-account-default/account-type :ap
+                :kontor.gl-account-default/account [:kontor.account/path "2000"]}
+               {:kontor.gl-account-default/account-type :gr-ir-clearing
+                :kontor.gl-account-default/account [:kontor.account/path "2150"]}
+               {:kontor.gl-account-default/account-type :purchase-tax-recoverable
+                :kontor.gl-account-default/account [:kontor.account/path "1370"]}]))
 
 (defn- seed-journal! []
   (d/transact *conn*
@@ -83,31 +83,31 @@
     :or {external-id "PO-1" qty 10M unit-price 25M
          category :direct requires-receipt? true}}]
   (d/transact *conn*
-              [{:order/external-id external-id
-                :order/type :purchase
-                :order/status :order.status/created
-                :order/order-date #inst "2026-05-01"
-                :order/entry-date #inst "2026-05-01"
-                :order/currency [:kontor.commodity/symbol "EUR"]
-                :order/bill-from-partner [:kontor.partner/external-id "SUPPLIER"]
-                :order/bill-to-partner [:kontor.partner/external-id "BUYER"]
-                :order/entity [:kontor.entity/code "ACME"]}
-               {:order-item/order [:order/external-id external-id]
-                :order-item/seq-id "00001"
-                :order-item/type :product
-                :order-item/product-id "WIDGET-A"
-                :order-item/quantity qty
-                :order-item/unit-price unit-price
-                :order-item/cancel-quantity 0M
-                :order-item/status :order-item.status/approved
-                :order-item/category category
-                :order-item/requires-receipt? requires-receipt?}])
+              [{:kontor.order/external-id external-id
+                :kontor.order/type :purchase
+                :kontor.order/status :order.status/created
+                :kontor.order/order-date #inst "2026-05-01"
+                :kontor.order/entry-date #inst "2026-05-01"
+                :kontor.order/currency [:kontor.commodity/symbol "EUR"]
+                :kontor.order/bill-from-partner [:kontor.partner/external-id "SUPPLIER"]
+                :kontor.order/bill-to-partner [:kontor.partner/external-id "BUYER"]
+                :kontor.order/entity [:kontor.entity/code "ACME"]}
+               {:kontor.sales.order-item/order [:kontor.order/external-id external-id]
+                :kontor.sales.order-item/seq-id "00001"
+                :kontor.sales.order-item/type :product
+                :kontor.sales.order-item/product-id "WIDGET-A"
+                :kontor.sales.order-item/quantity qty
+                :kontor.sales.order-item/unit-price unit-price
+                :kontor.sales.order-item/cancel-quantity 0M
+                :kontor.sales.order-item/status :order-item.status/approved
+                :kontor.procurement.order-item/category category
+                :kontor.procurement.order-item/requires-receipt? requires-receipt?}])
   (let [db (d/db *conn*)
         order-eid (d/q '[:find ?e . :in $ ?xid
-                         :where [?e :order/external-id ?xid]]
+                         :where [?e :kontor.order/external-id ?xid]]
                        db external-id)
         item-eid (d/q '[:find ?i . :in $ ?o
-                        :where [?i :order-item/order ?o]]
+                        :where [?i :kontor.sales.order-item/order ?o]]
                       db order-eid)]
     {:order-eid order-eid :item-eid item-eid}))
 
@@ -127,10 +127,10 @@
   (let [db (d/db *conn*)
         req-eid (req/by-external-id db "REQ-1")]
     (testing "requirement created in :proposed"
-      (is (= :proposed (sm/current-status db req-eid :requirement/status))))
+      (is (= :proposed (sm/current-status db req-eid :kontor.requirement/status))))
     (req/approve-requirement! *conn* "REQ-1" {:reason :approved})
     (testing "approved transitions to :approved"
-      (is (= :approved (sm/current-status (d/db *conn*) req-eid :requirement/status))))))
+      (is (= :approved (sm/current-status (d/db *conn*) req-eid :kontor.requirement/status))))))
 
 (deftest requirement-rejection
   (seed-base!)
@@ -142,7 +142,7 @@
   (req/reject-requirement! *conn* "REQ-REJ" {:reason :rejected
                                               :reason-note "supplier unavailable"})
   (is (= :rejected (sm/current-status (d/db *conn*) (req/by-external-id (d/db *conn*) "REQ-REJ")
-                                       :requirement/status))))
+                                       :kontor.requirement/status))))
 
 (deftest requirement-commit-to-po
   (seed-base!)
@@ -161,10 +161,10 @@
           req-eid (req/by-external-id db "REQ-COMMIT")
           commitments (req/commitments-of db req-eid)]
       (testing "status advances to :ordered"
-        (is (= :ordered (sm/current-status db req-eid :requirement/status))))
+        (is (= :ordered (sm/current-status db req-eid :kontor.requirement/status))))
       (testing "commitment row created"
         (is (= 1 (count commitments)))
-        (is (= 10M (-> commitments first :requirement-commitment/quantity)))))))
+        (is (= 10M (-> commitments first :kontor.requirement-commitment/quantity)))))))
 
 ;; ============================================================================
 ;; Receipt lifecycle
@@ -186,16 +186,16 @@
     (let [db (d/db *conn*)
           receipt-eid (receipt/by-external-id db "RCPT-1")]
       (testing "receipt created in :pending"
-        (is (= :pending (sm/current-status db receipt-eid :receipt/status))))
+        (is (= :pending (sm/current-status db receipt-eid :kontor.receipt/status))))
       (testing "receipt items captured with split quantities"
         (let [items (receipt/items-of db receipt-eid)]
           (is (= 1 (count items)))
-          (is (= 8M (-> items first :receipt-item/quantity-accepted)))
-          (is (= 2M (-> items first :receipt-item/quantity-rejected)))
-          (is (= :damaged (-> items first :receipt-item/rejection-reason)))))
+          (is (= 8M (-> items first :kontor.receipt-item/quantity-accepted)))
+          (is (= 2M (-> items first :kontor.receipt-item/quantity-rejected)))
+          (is (= :damaged (-> items first :kontor.receipt-item/rejection-reason)))))
       (receipt/accept-receipt! *conn* "RCPT-1" {:reason :approved})
       (testing "transition to :accepted"
-        (is (= :accepted (sm/current-status (d/db *conn*) receipt-eid :receipt/status))))
+        (is (= :accepted (sm/current-status (d/db *conn*) receipt-eid :kontor.receipt/status))))
       (testing "qty-received query rolls up across receipts"
         (is (= 8M (receipt/quantity-received-of-order-item (d/db *conn*) item-eid)))
         (is (= 2M (receipt/quantity-rejected-of-order-item (d/db *conn*) item-eid)))))))
@@ -222,12 +222,12 @@
     (testing "acceptance recorded"
       (let [accs (acc/acceptances-of-order (d/db *conn*) order-eid)]
         (is (= 1 (count accs)))
-        (is (= 40M (-> accs first :service-acceptance/quantity-accepted)))))
+        (is (= 40M (-> accs first :kontor.service-acceptance/quantity-accepted)))))
     (testing "qty-accepted query for service line"
       (is (= 40M (acc/quantity-accepted-of-order-item (d/db *conn*) item-eid))))))
 
 ;; ============================================================================
-;; Bridge polymorphism on :order/type :purchase
+;; Bridge polymorphism on :kontor.order/type :purchase
 ;; ============================================================================
 
 (deftest bridge-routes-purchase-direct-to-gr-ir-clearing
@@ -278,22 +278,22 @@
   (seed-base!)
   (seed-accounts!)
   (d/transact *conn*
-              [{:order/external-id "SO-REGR"
-                :order/type :sales
-                :order/status :order.status/created
-                :order/order-date #inst "2026-05-01"
-                :order/entry-date #inst "2026-05-01"
-                :order/currency [:kontor.commodity/symbol "EUR"]
-                :order/bill-from-partner [:kontor.partner/external-id "BUYER"]
-                :order/bill-to-partner [:kontor.partner/external-id "SUPPLIER"]}
-               {:order-item/order [:order/external-id "SO-REGR"]
-                :order-item/seq-id "00001"
-                :order-item/type :product
-                :order-item/product-id "WIDGET-B"
-                :order-item/quantity 5M
-                :order-item/unit-price 100M
-                :order-item/cancel-quantity 0M
-                :order-item/status :order-item.status/approved}])
+              [{:kontor.order/external-id "SO-REGR"
+                :kontor.order/type :sales
+                :kontor.order/status :order.status/created
+                :kontor.order/order-date #inst "2026-05-01"
+                :kontor.order/entry-date #inst "2026-05-01"
+                :kontor.order/currency [:kontor.commodity/symbol "EUR"]
+                :kontor.order/bill-from-partner [:kontor.partner/external-id "BUYER"]
+                :kontor.order/bill-to-partner [:kontor.partner/external-id "SUPPLIER"]}
+               {:kontor.sales.order-item/order [:kontor.order/external-id "SO-REGR"]
+                :kontor.sales.order-item/seq-id "00001"
+                :kontor.sales.order-item/type :product
+                :kontor.sales.order-item/product-id "WIDGET-B"
+                :kontor.sales.order-item/quantity 5M
+                :kontor.sales.order-item/unit-price 100M
+                :kontor.sales.order-item/cancel-quantity 0M
+                :kontor.sales.order-item/status :order-item.status/approved}])
   (inv/make-invoice-from-order! *conn* "SO-REGR"
                                 {:external-id "INV-SALES-REGR"})
   (let [lines (inv/lines-of (d/db *conn*) "INV-SALES-REGR")]
@@ -346,13 +346,13 @@
         supplier-eid (d/q '[:find ?p . :where [?p :kontor.partner/external-id "SUPPLIER"]] db)]
     ;; Seed a 10% over-receipt tolerance
     (d/transact *conn*
-                [{:match-tolerance/entity entity-eid
-                  :match-tolerance/supplier supplier-eid
-                  :match-tolerance/qty-pct-over 0.10M
-                  :match-tolerance/qty-abs-over 0M
-                  :match-tolerance/price-pct-over 0M
-                  :match-tolerance/price-abs-over 0M
-                  :match-tolerance/active true}])
+                [{:kontor.match-tolerance/entity entity-eid
+                  :kontor.match-tolerance/supplier supplier-eid
+                  :kontor.match-tolerance/qty-pct-over 0.10M
+                  :kontor.match-tolerance/qty-abs-over 0M
+                  :kontor.match-tolerance/price-pct-over 0M
+                  :kontor.match-tolerance/price-abs-over 0M
+                  :kontor.match-tolerance/active true}])
     ;; 11 received vs 10 ordered → 10% over → within tolerance
     (receipt/make-receipt! *conn*
                            {:external-id "RCPT-OVER"

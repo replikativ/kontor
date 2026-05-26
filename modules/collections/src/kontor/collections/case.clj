@@ -3,7 +3,7 @@
 
    The case is the workflow root. One open case per (partner, entity)
    at any given time; close before re-opening. Composes with:
-     - ADR-034 status-machine on `:collection-case/state`
+     - ADR-034 status-machine on `:kontor.collection-case/state`
      - ADR-038 audit-doc + approval-policy
      - ADR-041 :side-effect-intent for any outgoing communication
 
@@ -24,7 +24,7 @@
   [db code]
   (d/q '[:find ?e .
          :in $ ?c
-         :where [?e :collection-case/code ?c]]
+         :where [?e :kontor.collection-case/code ?c]]
        db code))
 
 (defn resolve-case
@@ -38,12 +38,12 @@
   [db spec]
   (when-let [eid (resolve-case db spec)]
     (d/pull db
-            '[* {:collection-case/partner [:kontor.partner/external-id :kontor.partner/name]
-                 :collection-case/entity [:kontor.entity/code]
-                 :collection-case/opened-by-uid [:kontor.audit/create-uid]
-                 :collection-case/assigned-collector [:kontor.audit/create-uid]
-                 :collection-case/oldest-invoice [:kontor.invoice/external-id]
-                 :collection-case/supporting-doc [:audit-doc/code :audit-doc/type]}]
+            '[* {:kontor.collection-case/partner [:kontor.partner/external-id :kontor.partner/name]
+                 :kontor.collection-case/entity [:kontor.entity/code]
+                 :kontor.collection-case/opened-by-uid [:kontor.audit/create-uid]
+                 :kontor.collection-case/assigned-collector [:kontor.audit/create-uid]
+                 :kontor.collection-case/oldest-invoice [:kontor.invoice/external-id]
+                 :kontor.collection-case/supporting-doc [:kontor.audit-doc/code :kontor.audit-doc/type]}]
             eid)))
 
 ;; ============================================================================
@@ -57,16 +57,16 @@
   (d/q '[:find ?c .
          :in $ ?p ?e
          :where
-         [?c :collection-case/partner ?p]
-         [?c :collection-case/entity ?e]
-         [(missing? $ ?c :collection-case/closed-at)]]
+         [?c :kontor.collection-case/partner ?p]
+         [?c :kontor.collection-case/entity ?e]
+         [(missing? $ ?c :kontor.collection-case/closed-at)]]
        db partner-eid entity-eid))
 
 (defn cases-by-state
   [db state-kw]
   (->> (d/q '[:find [?c ...]
               :in $ ?s
-              :where [?c :collection-case/state ?s]]
+              :where [?c :kontor.collection-case/state ?s]]
             db state-kw)
        (map #(pull-case db %))
        vec))
@@ -76,8 +76,8 @@
   (->> (d/q '[:find [?c ...]
               :in $ ?col
               :where
-              [?c :collection-case/assigned-collector ?col]
-              [(missing? $ ?c :collection-case/closed-at)]]
+              [?c :kontor.collection-case/assigned-collector ?col]
+              [(missing? $ ?c :kontor.collection-case/closed-at)]]
             db collector-uid-eid)
        (map #(pull-case db %))
        vec))
@@ -103,7 +103,7 @@
 
    Optional opts:
      :strategy           keyword (:reminder-only :phone :legal …)
-     :segment            keyword (matches :collection-case/
+     :segment            keyword (matches :kontor.collection-case/
                           collections-segment)
      :assigned-collector ref to :kontor.audit/create-uid
      :notes              string
@@ -134,29 +134,29 @@
   (let [existing (open-case-for db partner entity)
         _ (when existing
             (throw (ex-info "Open case already exists for (partner, entity)"
-                            {:type :collection-case/already-open
+                            {:type :kontor.collection-case/already-open
                              :existing existing
                              :partner partner :entity entity})))
         opened-at (or opened-at (java.util.Date.))
         row (cond-> {:db/id tempid
-                     :collection-case/code code
-                     :collection-case/partner partner
-                     :collection-case/entity entity
-                     :collection-case/state :open
-                     :collection-case/opened-at opened-at
-                     :collection-case/opened-by-uid opened-by-uid}
-              strategy           (assoc :collection-case/strategy strategy)
-              segment            (assoc :collection-case/collections-segment segment)
-              assigned-collector (assoc :collection-case/assigned-collector assigned-collector)
-              notes              (assoc :collection-case/notes notes)
-              supporting-doc     (assoc :collection-case/supporting-doc supporting-doc))
+                     :kontor.collection-case/code code
+                     :kontor.collection-case/partner partner
+                     :kontor.collection-case/entity entity
+                     :kontor.collection-case/state :open
+                     :kontor.collection-case/opened-at opened-at
+                     :kontor.collection-case/opened-by-uid opened-by-uid}
+              strategy           (assoc :kontor.collection-case/strategy strategy)
+              segment            (assoc :kontor.collection-case/collections-segment segment)
+              assigned-collector (assoc :kontor.collection-case/assigned-collector assigned-collector)
+              notes              (assoc :kontor.collection-case/notes notes)
+              supporting-doc     (assoc :kontor.collection-case/supporting-doc supporting-doc))
         ;; Write the initial status-history row for nil → :open via the
         ;; status machine (atomic).
         status-tx (sm/record-status-change-tx-data
                    db
                    {:entity tempid
                     :entity-type :collection-case
-                    :facet :collection-case/state
+                    :facet :kontor.collection-case/state
                     :from :nil
                     :to :open
                     :changed-at opened-at
@@ -165,7 +165,7 @@
     (into [row] status-tx)))
 
 (defn advance-case-state!
-  "Drive `:collection-case/state` through the status-machine. Generic
+  "Drive `:kontor.collection-case/state` through the status-machine. Generic
    helper for dunning-l1 / l2 / final-notice / promised / disputed
    / legal / paid / written-off transitions.
 
@@ -192,7 +192,7 @@
      db
      (cond-> {:entity eid
               :entity-type :collection-case
-              :facet :collection-case/state
+              :facet :kontor.collection-case/state
               :to to
               :changed-at now
               :changed-by-uid changed-by-uid}
@@ -226,8 +226,8 @@
         _ (when-not eid (throw (ex-info "Case not found" {:spec case})))
         closed-at (or closed-at (java.util.Date.))
         update (cond-> {:db/id eid
-                        :collection-case/closed-at closed-at}
-                 supporting-doc (assoc :collection-case/supporting-doc
+                        :kontor.collection-case/closed-at closed-at}
+                 supporting-doc (assoc :kontor.collection-case/supporting-doc
                                        supporting-doc))]
     [update]))
 
@@ -248,10 +248,10 @@
   (let [eid (resolve-case db case)
         _ (when-not eid (throw (ex-info "Case not found" {:spec case})))]
     [{:db/id eid
-      :collection-case/assigned-collector collector-uid}]))
+      :kontor.collection-case/assigned-collector collector-uid}]))
 
 (defn refresh-denorms!
-  "Update `:collection-case/total-overdue` and `:collection-case/
+  "Update `:kontor.collection-case/total-overdue` and `:kontor.collection-case/
    oldest-invoice` for a case. Caller passes the computed values —
    the denorm refresh is just a write. Production: nightly sweeper
    computes both via `kontor.payment-application/open-amount-of-
@@ -271,5 +271,5 @@
   (let [eid (resolve-case db case)
         _ (when-not eid (throw (ex-info "Case not found" {:spec case})))]
     [(cond-> {:db/id eid}
-       total-overdue   (assoc :collection-case/total-overdue total-overdue)
-       oldest-invoice  (assoc :collection-case/oldest-invoice oldest-invoice))]))
+       total-overdue   (assoc :kontor.collection-case/total-overdue total-overdue)
+       oldest-invoice  (assoc :kontor.collection-case/oldest-invoice oldest-invoice))]))

@@ -7,7 +7,7 @@
 
    The companion is intentionally narrow: it owns the order aggregate
    (header, items, ship groups, reservations, adjustments, roles)
-   and the state machines for :order/status + :order-item/status.
+   and the state machines for :kontor.order/status + :kontor.sales.order-item/status.
    The order→invoice bridge lives in kontor-invoice (ADR-036)."
   (:require [datahike.api :as d]
             [kontor.status-machine :as sm]
@@ -18,11 +18,11 @@
 ;; ============================================================================
 
 (defn by-external-id
-  "Resolve an order entity-id by `:order/external-id`."
+  "Resolve an order entity-id by `:kontor.order/external-id`."
   [db external-id]
   (d/q '[:find ?e .
          :in $ ?xid
-         :where [?e :order/external-id ?xid]]
+         :where [?e :kontor.order/external-id ?xid]]
        db external-id))
 
 (defn resolve-order
@@ -44,23 +44,23 @@
   [db spec]
   (when-let [eid (resolve-order db spec)]
     (d/pull db
-            '[* {:order/currency [*]
-                 :order/bill-from-partner [:kontor.partner/external-id :kontor.partner/name]
-                 :order/bill-to-partner   [:kontor.partner/external-id :kontor.partner/name]
-                 :order/entity            [:kontor.entity/code :kontor.entity/name]}]
+            '[* {:kontor.order/currency [*]
+                 :kontor.order/bill-from-partner [:kontor.partner/external-id :kontor.partner/name]
+                 :kontor.order/bill-to-partner   [:kontor.partner/external-id :kontor.partner/name]
+                 :kontor.order/entity            [:kontor.entity/code :kontor.entity/name]}]
             eid)))
 
 (defn items-of
-  "Pulled :order-item rows for the order, sorted by :order-item/seq-id
+  "Pulled :order-item rows for the order, sorted by :kontor.sales.order-item/seq-id
    (ascending)."
   [db spec]
   (when-let [oid (resolve-order db spec)]
     (->> (d/q '[:find [?i ...]
                 :in $ ?o
-                :where [?i :order-item/order ?o]]
+                :where [?i :kontor.sales.order-item/order ?o]]
               db oid)
          (map #(d/pull db '[*] %))
-         (sort-by :order-item/seq-id)
+         (sort-by :kontor.sales.order-item/seq-id)
          vec)))
 
 (defn ship-groups-of
@@ -69,10 +69,10 @@
   (when-let [oid (resolve-order db spec)]
     (->> (d/q '[:find [?sg ...]
                 :in $ ?o
-                :where [?sg :ship-group/order ?o]]
+                :where [?sg :kontor.ship-group/order ?o]]
               db oid)
          (map #(d/pull db '[*] %))
-         (sort-by :ship-group/seq-id)
+         (sort-by :kontor.ship-group/seq-id)
          vec)))
 
 (defn adjustments-of
@@ -86,22 +86,22 @@
    (when-let [oid (resolve-order db spec)]
      (let [rows (->> (d/q '[:find [?a ...]
                             :in $ ?o
-                            :where [?a :order-adjustment/order ?o]]
+                            :where [?a :kontor.order-adjustment/order ?o]]
                           db oid)
                      (map #(d/pull db '[*] %))
                      vec)
            level (:level opts)]
        (case level
-         :header     (filter #(= (get-in % [:order-adjustment/scope :db/id]) oid) rows)
+         :header     (filter #(= (get-in % [:kontor.order-adjustment/scope :db/id]) oid) rows)
          :line       (filter (fn [a]
-                               (let [scope-eid (get-in a [:order-adjustment/scope :db/id])]
+                               (let [scope-eid (get-in a [:kontor.order-adjustment/scope :db/id])]
                                  (and scope-eid
-                                      (some? (:order-item/seq-id (d/pull db [:order-item/seq-id] scope-eid))))))
+                                      (some? (:kontor.sales.order-item/seq-id (d/pull db [:kontor.sales.order-item/seq-id] scope-eid))))))
                              rows)
          :ship-group (filter (fn [a]
-                               (let [scope-eid (get-in a [:order-adjustment/scope :db/id])]
+                               (let [scope-eid (get-in a [:kontor.order-adjustment/scope :db/id])]
                                  (and scope-eid
-                                      (some? (:ship-group/seq-id (d/pull db [:ship-group/seq-id] scope-eid))))))
+                                      (some? (:kontor.ship-group/seq-id (d/pull db [:kontor.ship-group/seq-id] scope-eid))))))
                              rows)
          rows)))))
 
@@ -111,9 +111,9 @@
   (when-let [oid (resolve-order db spec)]
     (->> (d/q '[:find [?r ...]
                 :in $ ?o
-                :where [?r :order-role/order ?o]]
+                :where [?r :kontor.order-role/order ?o]]
               db oid)
-         (map #(d/pull db '[* {:order-role/partner [:kontor.partner/external-id :kontor.partner/name]}] %))
+         (map #(d/pull db '[* {:kontor.order-role/partner [:kontor.partner/external-id :kontor.partner/name]}] %))
          vec)))
 
 (defn partner-on-order
@@ -125,9 +125,9 @@
     (d/q '[:find ?p .
            :in $ ?o ?rt
            :where
-           [?r :order-role/order ?o]
-           [?r :order-role/role-type ?rt]
-           [?r :order-role/partner ?p]]
+           [?r :kontor.order-role/order ?o]
+           [?r :kontor.order-role/role-type ?rt]
+           [?r :kontor.order-role/partner ?p]]
          db oid role-type)))
 
 (defn reservations-of
@@ -136,7 +136,7 @@
   (when-let [oid (resolve-order db spec)]
     (->> (d/q '[:find [?r ...]
                 :in $ ?o
-                :where [?r :inv-reservation/order ?o]]
+                :where [?r :kontor.inv-reservation/order ?o]]
               db oid)
          (map #(d/pull db '[*] %))
          vec)))
@@ -147,13 +147,13 @@
 
 (defn compute-grand-total
   "Compute the order's grand-total live from items + non-neutral
-   adjustments. Does NOT update the denormalized :order/grand-total
+   adjustments. Does NOT update the denormalized :kontor.order/grand-total
    attribute — that's the recalc pipeline's job. Returns a bigdec."
   [db spec]
   (when-let [oid (resolve-order db spec)]
     (let [items (items-of db oid)
           adjustments (adjustments-of db oid)
-          item-total (reduce (fn [acc {:order-item/keys [quantity unit-price cancel-quantity]
+          item-total (reduce (fn [acc {:kontor.sales.order-item/keys [quantity unit-price cancel-quantity]
                                        :or {cancel-quantity 0M}}]
                                (let [effective-qty (.subtract ^java.math.BigDecimal (or quantity 0M)
                                                               ^java.math.BigDecimal cancel-quantity)]
@@ -162,7 +162,7 @@
                                                   ^java.math.BigDecimal (or unit-price 0M)))))
                              0M
                              items)
-          adj-total (reduce (fn [acc {:order-adjustment/keys [amount neutral?]}]
+          adj-total (reduce (fn [acc {:kontor.order-adjustment/keys [amount neutral?]}]
                               (if neutral?
                                 acc
                                 (.add ^java.math.BigDecimal acc
@@ -176,14 +176,14 @@
 ;; ============================================================================
 
 (defn approve-order!
-  "Transition :order/status :created → :approved. Throws if illegal."
+  "Transition :kontor.order/status :created → :approved. Throws if illegal."
   ([conn order] (approve-order! conn order nil))
   ([conn order opts]
    (let [oid (resolve-order (d/db conn) order)]
      (sm/record-status-change! conn
                                (merge {:entity      oid
                                        :entity-type :order
-                                       :facet       :order/status
+                                       :facet       :kontor.order/status
                                        :to          :order.status/approved}
                                       opts)))))
 
@@ -194,7 +194,7 @@
      (sm/record-status-change! conn
                                (merge {:entity      oid
                                        :entity-type :order
-                                       :facet       :order/status
+                                       :facet       :kontor.order/status
                                        :to          :order.status/hold}
                                       opts)))))
 
@@ -205,7 +205,7 @@
      (sm/record-status-change! conn
                                (merge {:entity      oid
                                        :entity-type :order
-                                       :facet       :order/status
+                                       :facet       :kontor.order/status
                                        :to          :order.status/approved}
                                       opts)))))
 
@@ -216,7 +216,7 @@
      (sm/record-status-change! conn
                                (merge {:entity      oid
                                        :entity-type :order
-                                       :facet       :order/status
+                                       :facet       :kontor.order/status
                                        :to          :order.status/cancelled}
                                       opts)))))
 
@@ -227,7 +227,7 @@
      (sm/record-status-change! conn
                                (merge {:entity      oid
                                        :entity-type :order
-                                       :facet       :order/status
+                                       :facet       :kontor.order/status
                                        :to          :order.status/completed}
                                       opts)))))
 
@@ -238,18 +238,18 @@
      (sm/record-status-change! conn
                                (merge {:entity      oid
                                        :entity-type :order
-                                       :facet       :order/status
+                                       :facet       :kontor.order/status
                                        :to          :order.status/rejected}
                                       opts)))))
 
 (defn set-item-status!
-  "Transition :order-item/status for the given item eid to `to`."
+  "Transition :kontor.sales.order-item/status for the given item eid to `to`."
   ([conn item-eid to] (set-item-status! conn item-eid to nil))
   ([conn item-eid to opts]
    (sm/record-status-change! conn
                              (merge {:entity      item-eid
                                      :entity-type :order-item
-                                     :facet       :order-item/status
+                                     :facet       :kontor.sales.order-item/status
                                      :to          to}
                                     opts))))
 
@@ -270,14 +270,14 @@
   (let [db  (d/db conn)
         oid (resolve-order db order)
         items (items-of db oid)
-        statuses (set (map :order-item/status items))
-        current  (sm/current-status db oid :order/status)
+        statuses (set (map :kontor.sales.order-item/status items))
+        current  (sm/current-status db oid :kontor.order/status)
         promote (fn [to]
-                  (when (sm/legal-transition? db :order :order/status current to)
+                  (when (sm/legal-transition? db :order :kontor.order/status current to)
                     (sm/record-status-change! conn
                                               {:entity      oid
                                                :entity-type :order
-                                               :facet       :order/status
+                                               :facet       :kontor.order/status
                                                :to          to
                                                :reason      :auto-promoted})
                     to))]

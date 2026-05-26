@@ -9,10 +9,10 @@
      balances throughout.
    - terminate! — full early termination derecognises the liability
      and the ROU asset, books the difference (and any penalty) to
-     P&L, cancels both schedules, and drives :lease/status →
+     P&L, cancels both schedules, and drives :kontor.lease/status →
      :terminated.
    - purchase! — exercising the purchase option settles the remaining
-     liability in cash and drives :lease/status → :purchased.
+     liability in cash and drives :kontor.lease/status → :purchased.
    - partial-terminate! — the proportional approach: the liability and
      the ROU asset are reduced by the scope-decrease fraction, the
      difference is a P&L gain/loss, and the remaining lease still
@@ -47,12 +47,12 @@
                  {:kontor.partner/external-id "L-acme" :kontor.partner/name "Acme Properties"}
                  {:db/id "led-ifrs" :kontor.ledger/code "ifrs" :kontor.ledger/name "IFRS 16"
                   :kontor.ledger/framework :ifrs}
-                 {:db/id "class-rou" :asset-class/code "rou-property"
-                  :asset-class/name "Right-of-Use — Property"}
-                 {:db/id "doc-lease" :audit-doc/code "LEASE-CONTRACT-1"
-                  :audit-doc/type :lease-contract
-                  :audit-doc/storage-uri "s3://docs/lease-1"
-                  :audit-doc/uploaded-at #inst "2026-01-01"}
+                 {:db/id "class-rou" :kontor.asset-class/code "rou-property"
+                  :kontor.asset-class/name "Right-of-Use — Property"}
+                 {:db/id "doc-lease" :kontor.audit-doc/code "LEASE-CONTRACT-1"
+                  :kontor.audit-doc/type :lease-contract
+                  :kontor.audit-doc/storage-uri "s3://docs/lease-1"
+                  :kontor.audit-doc/uploaded-at #inst "2026-01-01"}
                  {:db/id "a-rou"    :kontor.account/code "0250" :kontor.account/name "ROU Asset"
                   :kontor.account/type :asset :kontor.account/active true}
                  {:db/id "a-rouacc" :kontor.account/code "0259"
@@ -83,8 +83,8 @@
 (defn- p         [db code] (ref-eid db :kontor.partner/external-id code))
 (defn- acct      [db code] (ref-eid db :kontor.account/code code))
 (defn- journal   [db] (ref-eid db :kontor.journal/code "GEN"))
-(defn- class-eid [db] (ref-eid db :asset-class/code "rou-property"))
-(defn- adoc      [db] (ref-eid db :audit-doc/code "LEASE-CONTRACT-1"))
+(defn- class-eid [db] (ref-eid db :kontor.asset-class/code "rou-property"))
+(defn- adoc      [db] (ref-eid db :kontor.audit-doc/code "LEASE-CONTRACT-1"))
 (defn- ifrs      [db] (ref-eid db :kontor.ledger/code "ifrs"))
 
 (defn- ledger-balance [db account ledger-eid]
@@ -193,16 +193,16 @@
                     :gain-loss-account (acct db1 "7400")})
           db2 (d/db conn)]
       (testing "the :lease contract fact is updated and an event recorded"
-        (is (= 1200.00M (:lease/payment-amount (lease/pull-lease db2 "LSE-RM"))))
+        (is (= 1200.00M (:kontor.lease/payment-amount (lease/pull-lease db2 "LSE-RM"))))
         (is (some? (:modification result)))
         (is (= :index-reset
-               (:lease-modification/kind
-                (d/pull db2 [:lease-modification/kind] (:modification result))))))
+               (:kontor.lease-modification/kind
+                (d/pull db2 [:kontor.lease-modification/kind] (:modification result))))))
       (testing "the book is re-anchored: opening-fired-through = the fired count"
         (let [b (liability/pull-book db2 book)]
-          (is (= 6 (:lease-liability/opening-fired-through b)))
+          (is (= 6 (:kontor.lease-liability/opening-fired-through b)))
           (is (= (:new-liability (first (:books result)))
-                 (:lease-liability/opening-liability b)))))
+                 (:kontor.lease-liability/opening-liability b)))))
       (testing "the remeasurement adjustment is tagged with the book's ledger and balances"
         (is (zero? (.signum (ledger-sum db2 ifrs-eid gl-codes)))))
       (testing "the new liability is the PV of the revised remaining payments"
@@ -217,7 +217,7 @@
                              (ledger-balance db3 (acct db3 "0259") ifrs-eid)))))
         (testing "the GL still balances and the lease is :expired"
           (is (zero? (.signum (ledger-sum db3 ifrs-eid gl-codes))))
-          (is (= :expired (:lease/status (lease/pull-lease db3 "LSE-RM"))))))
+          (is (= :expired (:kontor.lease/status (lease/pull-lease db3 "LSE-RM"))))))
       (is (pos? (.compareTo (:new-liability (first (:books result)))
                             outstanding-before))
           "a payment increase raises the liability"))))
@@ -239,14 +239,14 @@
                   :penalty 200.00M :cash-account (acct db1 "1800")})
         db2 (d/db conn)]
     (testing "the lease is driven to :terminated"
-      (is (= :terminated (:lease/status (lease/pull-lease db2 "LSE-T")))))
+      (is (= :terminated (:kontor.lease/status (lease/pull-lease db2 "LSE-T")))))
     (testing "the liability and the ROU asset are derecognised — both land on zero"
       (is (= 0.00M (ledger-balance db2 (acct db2 "1750") ifrs-eid)))
       (is (= 0.00M (.add (ledger-balance db2 (acct db2 "0250") ifrs-eid)
                          (ledger-balance db2 (acct db2 "0259") ifrs-eid)))))
     (testing "both schedules are cancelled"
       (let [b (liability/pull-book db2 book)]
-        (is (= :cancelled (:schedule/state (:lease-liability/schedule b))))))
+        (is (= :cancelled (:kontor.schedule/state (:kontor.lease-liability/schedule b))))))
     (testing "the GL balances (penalty + gain/loss included)"
       (is (zero? (.signum (ledger-sum db2 ifrs-eid gl-codes)))))
     (testing "the derecognised amounts are reported"
@@ -272,7 +272,7 @@
                   :gain-loss-account (acct db1 "7400") :justification (adoc db1)})
         db2 (d/db conn)]
     (testing "the lease is driven to :purchased"
-      (is (= :purchased (:lease/status (lease/pull-lease db2 "LSE-P")))))
+      (is (= :purchased (:kontor.lease/status (lease/pull-lease db2 "LSE-P")))))
     (testing "the remaining liability is settled — it lands on zero"
       (is (= 0.00M (ledger-balance db2 (acct db2 "1750") ifrs-eid))))
     (testing "the GL balances"
@@ -302,8 +302,8 @@
       (is (zero? (.signum (ledger-sum db2 ifrs-eid gl-codes)))))
     (testing "a :partial-termination event records the scope decrease"
       (is (= 0.40M
-             (:lease-modification/scope-decrease-pct
-              (d/pull db2 [:lease-modification/scope-decrease-pct]
+             (:kontor.lease-modification/scope-decrease-pct
+              (d/pull db2 [:kontor.lease-modification/scope-decrease-pct]
                       (:modification result))))))
     (run-through! conn "LSE-PT" #inst "2028-06-01")        ; fire to end of term
     (let [db3 (d/db conn)]
@@ -313,7 +313,7 @@
                            (ledger-balance db3 (acct db3 "0259") ifrs-eid)))))
       (testing "the GL balances end-to-end and the lease is :expired"
         (is (zero? (.signum (ledger-sum db3 ifrs-eid gl-codes))))
-        (is (= :expired (:lease/status (lease/pull-lease db3 "LSE-PT"))))))))
+        (is (= :expired (:kontor.lease/status (lease/pull-lease db3 "LSE-PT"))))))))
 
 ;; ============================================================================
 ;; revise-liability-book! — the re-anchor primitive
@@ -328,13 +328,13 @@
       {:book book :new-opening-liability 4000.00M :note "manual re-anchor"})
     (let [b (liability/pull-book (d/db conn) book)]
       (testing ":opening-fired-through advances to the fired-occurrence count"
-        (is (= 4 (:lease-liability/opening-fired-through b))))
+        (is (= 4 (:kontor.lease-liability/opening-fired-through b))))
       (testing ":opening-liability is set to the new anchor"
-        (is (= 4000.00M (:lease-liability/opening-liability b))))
+        (is (= 4000.00M (:kontor.lease-liability/opening-liability b))))
       (testing "fired occurrences are untouched"
         (is (= 4 (count (schedule/fired-sequences
                          (d/db conn)
-                         (:db/id (:lease-liability/schedule b))))))))))
+                         (:db/id (:kontor.lease-liability/schedule b))))))))))
 
 ;; ============================================================================
 ;; Review-after coverage — operating-lease modification, term change,
@@ -365,7 +365,7 @@
                            (ledger-balance db3 (acct db3 "0259") ifrs-eid)))))
       (testing "the GL balances and the lease is :expired"
         (is (zero? (.signum (ledger-sum db3 ifrs-eid gl-codes))))
-        (is (= :expired (:lease/status (lease/pull-lease db3 "LSE-OPR"))))))))
+        (is (= :expired (:kontor.lease/status (lease/pull-lease db3 "LSE-OPR"))))))))
 
 (deftest remeasure-with-a-term-extension-reschedules-and-unwinds
   (let [conn (a-finance-lease! {:code "LSE-TX" :term 12 :payment 500.00M})
@@ -381,7 +381,7 @@
                   :gain-loss-account (acct db1 "7400")})
         db2 (d/db conn)]
     (testing "the :lease term fact is updated"
-      (is (= 24 (:lease/term-months (lease/pull-lease db2 "LSE-TX")))))
+      (is (= 24 (:kontor.lease/term-months (lease/pull-lease db2 "LSE-TX")))))
     (testing "the term extension raises the liability and the adjustment balances"
       (is (pos? (.compareTo (:new-liability (first (:books result)))
                             (:old-outstanding (first (:books result))))))
@@ -390,7 +390,7 @@
     (let [db3 (d/db conn)]
       (testing "all 24 periods fire and the extended lease unwinds to zero"
         (is (= 24 (count (schedule/fired-sequences
-                          db3 (:db/id (:lease-liability/schedule
+                          db3 (:db/id (:kontor.lease-liability/schedule
                                        (liability/pull-book db3 book)))))))
         (is (= 0.00M (ledger-balance db3 (acct db3 "1750") ifrs-eid)))
         (is (= 0.00M (.add (ledger-balance db3 (acct db3 "0250") ifrs-eid)
@@ -416,7 +416,7 @@
                   :gain-loss-account (acct db2 "7400")})
         db3 (d/db conn)]
     (testing "terminating an already-modified lease derecognises cleanly"
-      (is (= :terminated (:lease/status (lease/pull-lease db3 "LSE-RT"))))
+      (is (= :terminated (:kontor.lease/status (lease/pull-lease db3 "LSE-RT"))))
       (is (= 0.00M (ledger-balance db3 (acct db3 "1750") ifrs-eid)))
       (is (= 0.00M (.add (ledger-balance db3 (acct db3 "0250") ifrs-eid)
                          (ledger-balance db3 (acct db3 "0259") ifrs-eid))))
@@ -481,17 +481,17 @@
                     :gain-loss-account (acct db1 "7400")})
           mod-eid (:modification result)
           db2 (d/db conn)
-          m (d/pull db2 [:lease-modification/liability-delta
-                         :lease-modification/rou-delta
-                         :lease-modification/pnl-delta]
+          m (d/pull db2 [:kontor.lease-modification/liability-delta
+                         :kontor.lease-modification/rou-delta
+                         :kontor.lease-modification/pnl-delta]
                     mod-eid)]
       (testing "the modification persists the aggregated liability + ROU delta"
-        (is (some? (:lease-modification/liability-delta m)))
-        (is (= (:lease-modification/liability-delta m)
-               (:lease-modification/rou-delta m))
+        (is (some? (:kontor.lease-modification/liability-delta m)))
+        (is (= (:kontor.lease-modification/liability-delta m)
+               (:kontor.lease-modification/rou-delta m))
             "remeasure! flows BS-only so liability + ROU deltas match"))
       (testing "remeasure!'s P&L delta is zero in the common case"
-        (is (= 0M (:lease-modification/pnl-delta m)))))))
+        (is (= 0M (:kontor.lease-modification/pnl-delta m)))))))
 
 (deftest terminate-persists-derecognition-deltas
   (let [conn (bootstrap)
@@ -518,16 +518,16 @@
                     :gain-loss-account (acct db1 "7400")})
           mod-eid (:modification result)
           db2 (d/db conn)
-          m (d/pull db2 [:lease-modification/liability-delta
-                         :lease-modification/rou-delta
-                         :lease-modification/pnl-delta]
+          m (d/pull db2 [:kontor.lease-modification/liability-delta
+                         :kontor.lease-modification/rou-delta
+                         :kontor.lease-modification/pnl-delta]
                     mod-eid)]
       (testing "termination derecognises the full outstanding liability"
         (is (neg? (.signum ^java.math.BigDecimal
-                           (:lease-modification/liability-delta m)))))
+                           (:kontor.lease-modification/liability-delta m)))))
       (testing "termination derecognises the full ROU carrying amount"
         (is (neg? (.signum ^java.math.BigDecimal
-                           (:lease-modification/rou-delta m))))))))
+                           (:kontor.lease-modification/rou-delta m))))))))
 
 (deftest rate-rationale-audit-doc-is-persisted-on-the-liability-book
   (let [conn (bootstrap)
@@ -550,7 +550,7 @@
     (let [db1 (d/db conn)
           ifrs-eid (ifrs db1)
           book (liability/book-for db1 "LSE-RR" ifrs-eid)
-          b (d/pull db1 [{:lease-liability/rate-rationale [:audit-doc/code]}] book)]
+          b (d/pull db1 [{:kontor.lease-liability/rate-rationale [:kontor.audit-doc/code]}] book)]
       (testing "the :rate-rationale audit-doc ref is persisted on the book"
         (is (= "LEASE-CONTRACT-1"
-               (:audit-doc/code (:lease-liability/rate-rationale b))))))))
+               (:kontor.audit-doc/code (:kontor.lease-liability/rate-rationale b))))))))

@@ -204,7 +204,7 @@
       {:kind            :investment-income-tax
        :authority       authority
        :base            (money/money ir-base commodity)
-       :schedule        (if barème? nil {:schedule/type :flat :rate ir-rate})
+       :schedule        (if barème? nil {:kontor.schedule/type :flat :rate ir-rate})
        :gross-liability (money/money gross-liab commodity)
        :liability       (money/money liability commodity)
        :prepaid         (money/money pas-credit commodity)
@@ -268,7 +268,7 @@
       {:kind            :investment-income-tax
        :authority       authority
        :base            (money/money ir-base commodity)
-       :schedule        (if barème? nil {:schedule/type :flat :rate ir-rate})
+       :schedule        (if barème? nil {:kontor.schedule/type :flat :rate ir-rate})
        :gross-liability (money/money gross-liab commodity)
        :liability       (money/money gross-liab commodity)
        :prepaid         (money/zero commodity)
@@ -323,7 +323,7 @@
       {:kind            :investment-income-tax
        :authority       authority
        :base            (money/money av-gain commodity)
-       :schedule        {:schedule/type :flat :rate ir-rate}
+       :schedule        {:kontor.schedule/type :flat :rate ir-rate}
        :gross-liability (money/money gross-liab commodity)
        :liability       (money/money gross-liab commodity)
        :prepaid         (money/zero commodity)

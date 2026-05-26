@@ -179,7 +179,7 @@
   ;; `d/transact conn (frag1++frag2)`. If a future datahike upgrade
   ;; changed the allocator (e.g. parallel db-with, reservation-pool
   ;; reordering, randomized eids), the inventory subsystem would
-  ;; silently mis-link `:layer-consumption/layer` against a stale
+  ;; silently mis-link `:kontor.layer-consumption/layer` against a stale
   ;; speculative eid. This test fails loudly if that invariant breaks.
   (let [conn (core/create-test-db)
         db0 (d/db conn)

@@ -256,7 +256,7 @@
   [^java.math.BigDecimal band-low
    ^java.math.BigDecimal band-high
    ^java.math.BigDecimal top-rate]
-  {:schedule/type :formula
+  {:kontor.schedule/type :formula
    :fn (fn [base _ctx]
          (let [eff (irpfm-effective-rate base band-low band-high top-rate)]
            (* base eff)))})

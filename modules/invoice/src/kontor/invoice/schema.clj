@@ -5,10 +5,10 @@
    order-bridge fields, :kontor.invoice/type discriminator, sealing marker,
    multi-entity scope, and per-line GL routing metadata. Introduces
    two new entity namespaces:
-     :order-item-billing/* — junction tracking invoiced quantity per
+     :kontor.order-item-billing/* — junction tracking invoiced quantity per
                              (order-item, invoice-line) for partial-
                              invoice arithmetic
-     :gl-account-default/* — per-(account-type, entity) → :account
+     :kontor.gl-account-default/* — per-(account-type, entity) → :account
                              lookup table (OFBiz GlAccountTypeDefault
                              pattern)
 
@@ -154,26 +154,26 @@
 ;; ============================================================================
 
 (def ^:private order-item-billing-attrs
-  [{:db/ident       :order-item-billing/order-item
+  [{:db/ident       :kontor.order-item-billing/order-item
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :order-item (from kontor-sales)."}
 
-   {:db/ident       :order-item-billing/invoice-line
+   {:db/ident       :kontor.order-item-billing/invoice-line
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :invoice-line."}
 
-   {:db/ident       :order-item-billing/quantity
+   {:db/ident       :kontor.order-item-billing/quantity
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Quantity of the :order-item billed on this
                      :invoice-line."}
 
-   {:db/ident       :order-item-billing/identity
+   {:db/ident       :kontor.order-item-billing/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:order-item-billing/order-item
-                     :order-item-billing/invoice-line]
+    :db/tupleAttrs  [:kontor.order-item-billing/order-item
+                     :kontor.order-item-billing/invoice-line]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
@@ -182,13 +182,13 @@
 ;; ============================================================================
 
 (def ^:private gl-account-default-attrs
-  [{:db/ident       :gl-account-default/account-type
+  [{:db/ident       :kontor.gl-account-default/account-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":sales-revenue | :cogs | :ar | :ap | :sales-tax-
                      payable | … Posting-time GL routing key."}
 
-   {:db/ident       :gl-account-default/entity
+   {:db/ident       :kontor.gl-account-default/entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional :entity scope. When nil = tenant-wide
@@ -196,16 +196,16 @@
                      coexists with the global. Same semantics as
                      :kontor.status-transition/applies-to-org (ADR-034)."}
 
-   {:db/ident       :gl-account-default/account
+   {:db/ident       :kontor.gl-account-default/account
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The :account this account-type resolves to for
                      the given entity scope."}
 
-   {:db/ident       :gl-account-default/identity
+   {:db/ident       :kontor.gl-account-default/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:gl-account-default/account-type
-                     :gl-account-default/entity]
+    :db/tupleAttrs  [:kontor.gl-account-default/account-type
+                     :kontor.gl-account-default/entity]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 

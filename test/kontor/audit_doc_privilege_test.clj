@@ -1,5 +1,5 @@
 (ns kontor.audit-doc-privilege-test
-  "ADR-051: :audit-doc/privilege classification.
+  "ADR-051: :kontor.audit-doc/privilege classification.
 
    Covers:
    - reclassify-privilege! :none → :attorney-client (upgrade — ungated).
@@ -9,7 +9,7 @@
    - waiver requires :supporting-doc + :reason-note (ADR-038).
    - waiver by a different actor with both succeeds.
    - visible-to? / filter-by-privilege label rules.
-   - bitemporal: value-at on :audit-doc/privilege returns the
+   - bitemporal: value-at on :kontor.audit-doc/privilege returns the
      classification as of a past valid-time."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
@@ -28,10 +28,10 @@
                  {:kontor.partner/external-id "U-counsel"   :kontor.partner/name "Counsel C"}
                  ;; The waiver-determination memo.
                  {:db/id "doc-memo"
-                  :audit-doc/code "WAIVER-MEMO-001"
-                  :audit-doc/type :legal-memo
-                  :audit-doc/storage-uri "s3://docs/waiver-memo-001"
-                  :audit-doc/uploaded-at #inst "2026-05-14"}])
+                  :kontor.audit-doc/code "WAIVER-MEMO-001"
+                  :kontor.audit-doc/type :legal-memo
+                  :kontor.audit-doc/storage-uri "s3://docs/waiver-memo-001"
+                  :kontor.audit-doc/uploaded-at #inst "2026-05-14"}])
     conn))
 
 (defn- uid [db actor]
@@ -71,7 +71,7 @@
                            :in $ ?e
                            :where
                            [?h :kontor.status-history/entity ?e]
-                           [?h :kontor.status-history/facet :audit-doc/privilege]]
+                           [?h :kontor.status-history/facet :kontor.audit-doc/privilege]]
                          (d/db conn) doc)]
         (is (= 1 (count history)))))))
 
@@ -200,6 +200,6 @@
                                  :vt-from #inst "2026-05-14"})
     (testing "d/valid-at resolves the privilege classification at a valid-time"
       (is (= :attorney-client
-             (:audit-doc/privilege
+             (:kontor.audit-doc/privilege
               (d/pull (d/valid-at (d/db conn) #inst "2026-05-20")
-                      [:audit-doc/privilege] doc)))))))
+                      [:kontor.audit-doc/privilege] doc)))))))

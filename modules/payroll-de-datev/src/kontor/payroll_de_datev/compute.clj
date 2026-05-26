@@ -24,7 +24,7 @@
    Lohn-/Gehaltsverrechnungskonto (SKR04 3790 / SKR03 1755) must
    net to zero. The parser asserts this and refuses corrupt files
    by raising ex-info; the orchestrator surfaces this as
-   `:payroll-run/state :buchungsbeleg-invalid` (per note 82 §9.4
+   `:kontor.payroll-run/state :buchungsbeleg-invalid` (per note 82 §9.4
    gotcha 12).
 
    License posture (ADR-001): the EXTF format is public DATEV spec;
@@ -193,7 +193,7 @@
 ;; :kind :unmapped-postings.
 
 (def ^:private skr04-account-kinds
-  "Mapping from SKR04 Konto → :compensation-component/kind for the
+  "Mapping from SKR04 Konto → :kontor.compensation-component/kind for the
    parser's structural classification."
   {"6010" :base-wage
    "6020" :base-salary
@@ -208,7 +208,7 @@
    "3791" :pfaendung})
 
 (def ^:private skr03-account-kinds
-  "Mapping from SKR03 Konto → :compensation-component/kind."
+  "Mapping from SKR03 Konto → :kontor.compensation-component/kind."
   {"4120" :base-wage
    "4124" :base-salary
    "4130" :employer-si

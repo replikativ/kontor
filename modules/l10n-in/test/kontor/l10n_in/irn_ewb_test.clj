@@ -184,17 +184,17 @@
           irn-issued-at #inst "2026-05-11T10:23:00Z"
           _ (d/transact conn
                         [{:db/id -100
-                          :attestation/transaction   tx
-                          :attestation/format        :in/irn
-                          :attestation/token         irn-hash
-                          :attestation/state         :issued
-                          :attestation/issued-at     irn-issued-at
-                          :attestation/payload       irn-json
-                          :attestation/payload-hash  irn-hash}
+                          :kontor.attestation/transaction   tx
+                          :kontor.attestation/format        :in/irn
+                          :kontor.attestation/token         irn-hash
+                          :kontor.attestation/state         :issued
+                          :kontor.attestation/issued-at     irn-issued-at
+                          :kontor.attestation/payload       irn-json
+                          :kontor.attestation/payload-hash  irn-hash}
                          {:db/id tx :kontor.transaction/attestations -100}])
           irn-eid (d/q '[:find ?a . :in $ ?t :where
-                         [?a :attestation/transaction ?t]
-                         [?a :attestation/format :in/irn]]
+                         [?a :kontor.attestation/transaction ?t]
+                         [?a :kontor.attestation/format :in/irn]]
                        (d/db conn) tx)
           ;; Step 4: build the EWB Part A — references the IRN
           ewb-a (ewb/build-part-a
@@ -216,17 +216,17 @@
           ewb-a-issued-at #inst "2026-05-11T10:24:00Z"
           _ (d/transact conn
                         [{:db/id -200
-                          :attestation/transaction tx
-                          :attestation/format      :in/ewb-part-a
-                          :attestation/token       "1234567890123"
-                          :attestation/state       :issued
-                          :attestation/issued-at   ewb-a-issued-at
-                          :attestation/payload     (json/write-str ewb-a)
-                          :attestation/depends-on  [irn-eid]}
+                          :kontor.attestation/transaction tx
+                          :kontor.attestation/format      :in/ewb-part-a
+                          :kontor.attestation/token       "1234567890123"
+                          :kontor.attestation/state       :issued
+                          :kontor.attestation/issued-at   ewb-a-issued-at
+                          :kontor.attestation/payload     (json/write-str ewb-a)
+                          :kontor.attestation/depends-on  [irn-eid]}
                          {:db/id tx :kontor.transaction/attestations -200}])
           ewb-a-eid (d/q '[:find ?a . :in $ ?t :where
-                           [?a :attestation/transaction ?t]
-                           [?a :attestation/format :in/ewb-part-a]]
+                           [?a :kontor.attestation/transaction ?t]
+                           [?a :kontor.attestation/format :in/ewb-part-a]]
                          (d/db conn) tx)
           ;; Step 5: Part B added when the truck rolls
           part-b-issued-at #inst "2026-05-11T14:30:00Z"
@@ -240,42 +240,42 @@
                   :transporter-doc-date #inst "2026-05-11"})
           _ (d/transact conn
                         [{:db/id -300
-                          :attestation/transaction tx
-                          :attestation/format      :in/ewb-part-b
-                          :attestation/token       "1234567890123-B"
-                          :attestation/state       :issued
-                          :attestation/issued-at   part-b-issued-at
-                          :attestation/valid-from  v-from
-                          :attestation/valid-until v-until
-                          :attestation/payload     (json/write-str ewb-b)
-                          :attestation/depends-on  [ewb-a-eid]}
+                          :kontor.attestation/transaction tx
+                          :kontor.attestation/format      :in/ewb-part-b
+                          :kontor.attestation/token       "1234567890123-B"
+                          :kontor.attestation/state       :issued
+                          :kontor.attestation/issued-at   part-b-issued-at
+                          :kontor.attestation/valid-from  v-from
+                          :kontor.attestation/valid-until v-until
+                          :kontor.attestation/payload     (json/write-str ewb-b)
+                          :kontor.attestation/depends-on  [ewb-a-eid]}
                          {:db/id tx :kontor.transaction/attestations -300}])
           db (d/db conn)
           tx-entity (d/entity db tx)
           attestations (:kontor.transaction/attestations tx-entity)
-          by-format (into {} (map (juxt :attestation/format identity) attestations))]
+          by-format (into {} (map (juxt :kontor.attestation/format identity) attestations))]
       (testing "Transaction now carries 3 attestations"
         (is (= 3 (count attestations)))
         (is (= #{:in/irn :in/ewb-part-a :in/ewb-part-b}
                (set (keys by-format)))))
       (testing "The IRN attestation"
         (let [irn-att (by-format :in/irn)]
-          (is (= irn-hash (:attestation/token irn-att)))
-          (is (= :issued  (:attestation/state irn-att)))
-          (is (some?      (:attestation/payload irn-att))
+          (is (= irn-hash (:kontor.attestation/token irn-att)))
+          (is (= :issued  (:kontor.attestation/state irn-att)))
+          (is (some?      (:kontor.attestation/payload irn-att))
               "Full JSON payload stored for audit / byte-exact replay")))
       (testing "The EWB Part A depends on the IRN"
         (let [ewb-a-att (by-format :in/ewb-part-a)
-              deps (set (map :db/id (:attestation/depends-on ewb-a-att)))]
+              deps (set (map :db/id (:kontor.attestation/depends-on ewb-a-att)))]
           (is (contains? deps irn-eid)
               "ADR-024 :depends-on must wire EWB-A → IRN")))
       (testing "The EWB Part B has a valid-from / valid-until window
                 computed from 400 km @ 1d/200km = 2 days"
         (let [ewb-b-att (by-format :in/ewb-part-b)]
-          (is (some? (:attestation/valid-from ewb-b-att)))
-          (is (some? (:attestation/valid-until ewb-b-att)))
-          (let [from (:attestation/valid-from ewb-b-att)
-                until (:attestation/valid-until ewb-b-att)
+          (is (some? (:kontor.attestation/valid-from ewb-b-att)))
+          (is (some? (:kontor.attestation/valid-until ewb-b-att)))
+          (let [from (:kontor.attestation/valid-from ewb-b-att)
+                until (:kontor.attestation/valid-until ewb-b-att)
                 duration-ms (- (.getTime until) (.getTime from))
                 duration-days (/ duration-ms (* 1000 60 60 24))]
             (is (= 2 duration-days)
@@ -283,19 +283,19 @@
       (testing "Query: 'what's the EWB validity status as of D?'"
         (let [ewb-b-att (by-format :in/ewb-part-b)
               within  (let [now (java.util.Date.
-                                 (+ (.getTime ^java.util.Date (:attestation/valid-from ewb-b-att))
+                                 (+ (.getTime ^java.util.Date (:kontor.attestation/valid-from ewb-b-att))
                                     (* 24 60 60 1000)))]   ; 1 day in
-                        (and (some? (:attestation/valid-from ewb-b-att))
-                             (some? (:attestation/valid-until ewb-b-att))
+                        (and (some? (:kontor.attestation/valid-from ewb-b-att))
+                             (some? (:kontor.attestation/valid-until ewb-b-att))
                              (>= (.compareTo ^java.util.Date now
-                                             (:attestation/valid-from ewb-b-att)) 0)
+                                             (:kontor.attestation/valid-from ewb-b-att)) 0)
                              (<  (.compareTo ^java.util.Date now
-                                             (:attestation/valid-until ewb-b-att)) 0)))
+                                             (:kontor.attestation/valid-until ewb-b-att)) 0)))
               expired (let [later (java.util.Date.
-                                   (+ (.getTime ^java.util.Date (:attestation/valid-until ewb-b-att))
+                                   (+ (.getTime ^java.util.Date (:kontor.attestation/valid-until ewb-b-att))
                                       (* 24 60 60 1000)))]   ; 1 day after expiry
-                        (and (some? (:attestation/valid-until ewb-b-att))
+                        (and (some? (:kontor.attestation/valid-until ewb-b-att))
                              (>= (.compareTo ^java.util.Date later
-                                             (:attestation/valid-until ewb-b-att)) 0)))]
+                                             (:kontor.attestation/valid-until ewb-b-att)) 0)))]
           (is within  "Valid 24h after Part B issuance")
           (is expired "Expired 24h after the 48h window closes"))))))

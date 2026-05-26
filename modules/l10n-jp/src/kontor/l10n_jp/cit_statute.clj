@@ -348,7 +348,7 @@
     :kontor.provision/consequence     (pr-str {:op :schedule-override
                                         :code :jp-cit-large-flat
                                         :label "法人税 large-corporation flat 23.2 %"
-                                        :schedule {:schedule/type :flat
+                                        :schedule {:kontor.schedule/type :flat
                                                    :rate-from :parameter
                                                    :parameter "JP.CIT.flat-rate"}})}
 
@@ -371,7 +371,7 @@
     :kontor.provision/consequence     (pr-str {:op :schedule-override
                                         :code :jp-cit-sme-large-income
                                         :label "法人税 SME 17%/23.2% (income > ¥1B)"
-                                        :schedule {:schedule/type :formula
+                                        :schedule {:kontor.schedule/type :formula
                                                    :fn-from :compute-fn
                                                    :fn :jp-cit-sme-large-income-schedule}})}
 
@@ -440,7 +440,7 @@
     :kontor.provision/consequence     (pr-str {:op :schedule-override
                                         :code :jp-enterprise-large-flat
                                         :label "事業税 large-corporation flat 1.18 %"
-                                        :schedule {:schedule/type :flat
+                                        :schedule {:kontor.schedule/type :flat
                                                    :rate-from :parameter
                                                    :parameter "JP.Enterprise.large-rate"}})}
 

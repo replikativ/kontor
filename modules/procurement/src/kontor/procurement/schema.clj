@@ -29,19 +29,19 @@
 
 (def ^:private order-item-ext-attrs
   ;; Stage K extensions to :order-item (originally ADR-035).
-  [{:db/ident       :order-item/requires-receipt?
+  [{:db/ident       :kontor.procurement.order-item/requires-receipt?
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "Default true. When false, this line is a service
                      line — 3-way match degenerates to 2-way and uses
                      :service-acceptance instead of :receipt. ADR-042."}
 
-   {:db/ident       :order-item/category
+   {:db/ident       :kontor.procurement.order-item/category
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":direct | :indirect | :services | :asset.
                      Drives :kontor.invoice-line/gl-account-type dispatch
-                     in kontor.invoice.bridge for :order/type :purchase.
+                     in kontor.invoice.bridge for :kontor.order/type :purchase.
                      Direct = goods for resale or raw materials;
                      indirect = office supplies; services = consulting/
                      legal; asset = CapEx (fixed assets). ADR-042."}])
@@ -63,122 +63,122 @@
 ;; ============================================================================
 
 (def ^:private requirement-attrs
-  [{:db/ident       :requirement/external-id
+  [{:db/ident       :kontor.requirement/external-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}
 
-   {:db/ident       :requirement/type
+   {:db/ident       :kontor.requirement/type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":product | :transfer | :production | :service |
                      :asset-maint. Discriminator from OFBiz
                      RequirementType. ADR-042."}
 
-   {:db/ident       :requirement/status
+   {:db/ident       :kontor.requirement/status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "State-machine facet (ADR-034). :proposed |
                      :approved | :ordered | :received | :rejected |
                      :cancelled."}
 
-   {:db/ident       :requirement/product-id
+   {:db/ident       :kontor.requirement/product-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Consumer-supplied product ref (kernel ships no
                      :product entity yet)."}
 
-   {:db/ident       :requirement/quantity
+   {:db/ident       :kontor.requirement/quantity
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :requirement/uom
+   {:db/ident       :kontor.requirement/uom
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Unit of measure — :each | :kg | :hour | etc."}
 
-   {:db/ident       :requirement/facility-id
+   {:db/ident       :kontor.requirement/facility-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Destination facility (consumer-supplied opaque
                      string; no :facility kernel entity yet)."}
 
-   {:db/ident       :requirement/facility-to-id
+   {:db/ident       :kontor.requirement/facility-to-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Destination for :type :transfer requirements
                      (origin is :facility-id)."}
 
-   {:db/ident       :requirement/required-by-date
+   {:db/ident       :kontor.requirement/required-by-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :requirement/start-date
+   {:db/ident       :kontor.requirement/start-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :requirement/estimated-budget
+   {:db/ident       :kontor.requirement/estimated-budget
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :requirement/budget-commodity
+   {:db/ident       :kontor.requirement/budget-commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :requirement/entity
+   {:db/ident       :kontor.requirement/entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Multi-entity scope (ADR-031)."}
 
-   {:db/ident       :requirement/cost-center
+   {:db/ident       :kontor.requirement/cost-center
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional :analytic-account for cost-center
                      reporting (ADR-032)."}
 
-   {:db/ident       :requirement/justification
+   {:db/ident       :kontor.requirement/justification
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Replaces OFBiz `useCase` + `reason` — free-text."}
 
-   {:db/ident       :requirement/description
+   {:db/ident       :kontor.requirement/description
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :requirement/created-at
+   {:db/ident       :kontor.requirement/created-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :requirement/created-by-uid
+   {:db/ident       :kontor.requirement/created-by-uid
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}])
 
 (def ^:private requirement-commitment-attrs
   ;; ADR-042: many-to-many junction PR ↔ PO line (OFBiz
   ;; OrderRequirementCommitment pattern).
-  [{:db/ident       :requirement-commitment/requirement
+  [{:db/ident       :kontor.requirement-commitment/requirement
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :requirement-commitment/order-item
+   {:db/ident       :kontor.requirement-commitment/order-item
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :requirement-commitment/quantity
+   {:db/ident       :kontor.requirement-commitment/quantity
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Quantity of the requirement covered by this PO
                      line — many small requirements roll into one PO
                      line, or one requirement splits across N POs."}
 
-   {:db/ident       :requirement-commitment/committed-at
+   {:db/ident       :kontor.requirement-commitment/committed-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :requirement-commitment/identity
+   {:db/ident       :kontor.requirement-commitment/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:requirement-commitment/requirement
-                     :requirement-commitment/order-item]
+    :db/tupleAttrs  [:kontor.requirement-commitment/requirement
+                     :kontor.requirement-commitment/order-item]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
@@ -187,137 +187,137 @@
 ;; ============================================================================
 
 (def ^:private receipt-attrs
-  [{:db/ident       :receipt/external-id
+  [{:db/ident       :kontor.receipt/external-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}
 
-   {:db/ident       :receipt/order
+   {:db/ident       :kontor.receipt/order
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The PO this receipt is against."}
 
-   {:db/ident       :receipt/ship-group
+   {:db/ident       :kontor.receipt/ship-group
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional :ship-group for multi-destination POs."}
 
-   {:db/ident       :receipt/status
+   {:db/ident       :kontor.receipt/status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":pending | :accepted | :rejected.
                      State-machine driven (ADR-034)."}
 
-   {:db/ident       :receipt/received-at
+   {:db/ident       :kontor.receipt/received-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :receipt/received-by-uid
+   {:db/ident       :kontor.receipt/received-by-uid
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :receipt/inspector-uid
+   {:db/ident       :kontor.receipt/inspector-uid
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :receipt/inspected-at
+   {:db/ident       :kontor.receipt/inspected-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :receipt/packing-slip-ref
+   {:db/ident       :kontor.receipt/packing-slip-ref
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :audit-doc (ADR-038) — packing slip image
                      / shipping label / bill of lading."}
 
-   {:db/ident       :receipt/notes
+   {:db/ident       :kontor.receipt/notes
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :receipt/facility-id
+   {:db/ident       :kontor.receipt/facility-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :receipt/carrier-partner
+   {:db/ident       :kontor.receipt/carrier-partner
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Carrier :partner; should hold :partner-role
                      :carrier per ADR-033."}
 
-   {:db/ident       :receipt/tracking-number
+   {:db/ident       :kontor.receipt/tracking-number
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 
 (def ^:private receipt-item-attrs
-  [{:db/ident       :receipt-item/receipt
+  [{:db/ident       :kontor.receipt-item/receipt
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :receipt-item/order-item
+   {:db/ident       :kontor.receipt-item/order-item
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The PO line received."}
 
-   {:db/ident       :receipt-item/product-id
+   {:db/ident       :kontor.receipt-item/product-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
-    :db/doc         "Denorm of :order-item/product-id."}
+    :db/doc         "Denorm of :kontor.sales.order-item/product-id."}
 
-   {:db/ident       :receipt-item/quantity-accepted
+   {:db/ident       :kontor.receipt-item/quantity-accepted
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Quantity accepted into inventory."}
 
-   {:db/ident       :receipt-item/quantity-rejected
+   {:db/ident       :kontor.receipt-item/quantity-rejected
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Quantity rejected with reason. Routes to
                      :receive-reject-loss GL (kontor improvement over
                      OFBiz which silently drops). ADR-042."}
 
-   {:db/ident       :receipt-item/rejection-reason
+   {:db/ident       :kontor.receipt-item/rejection-reason
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":damaged | :wrong-item | :expired |
                      :quantity-mismatch | :quality-fail."}
 
-   {:db/ident       :receipt-item/lot
+   {:db/ident       :kontor.receipt-item/lot
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
-    :db/doc         "Optional :lot ref. Per :valuation-book/lot-
+    :db/doc         "Optional :lot ref. Per :kontor.valuation-book/lot-
                      required? policy (ADR-027)."}
 
-   {:db/ident       :receipt-item/unit-cost
+   {:db/ident       :kontor.receipt-item/unit-cost
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Actual cost at receipt; may differ from PO line.
                      Difference posts as :price-variance."}
 
-   {:db/ident       :receipt-item/identity
+   {:db/ident       :kontor.receipt-item/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:receipt-item/receipt :receipt-item/order-item]
+    :db/tupleAttrs  [:kontor.receipt-item/receipt :kontor.receipt-item/order-item]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
 (def ^:private receipt-invoice-billing-attrs
   ;; ADR-042: junction for 3-way match — :receipt ↔ :invoice-line
   ;; (mirror of ADR-036's :order-item-billing).
-  [{:db/ident       :receipt-invoice-billing/receipt
+  [{:db/ident       :kontor.receipt-invoice-billing/receipt
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :receipt-invoice-billing/invoice-line
+   {:db/ident       :kontor.receipt-invoice-billing/invoice-line
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :receipt-invoice-billing/quantity
+   {:db/ident       :kontor.receipt-invoice-billing/quantity
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :receipt-invoice-billing/identity
+   {:db/ident       :kontor.receipt-invoice-billing/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:receipt-invoice-billing/receipt
-                     :receipt-invoice-billing/invoice-line]
+    :db/tupleAttrs  [:kontor.receipt-invoice-billing/receipt
+                     :kontor.receipt-invoice-billing/invoice-line]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
@@ -326,50 +326,50 @@
 ;; ============================================================================
 
 (def ^:private service-acceptance-attrs
-  [{:db/ident       :service-acceptance/external-id
+  [{:db/ident       :kontor.service-acceptance/external-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}
 
-   {:db/ident       :service-acceptance/order
+   {:db/ident       :kontor.service-acceptance/order
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :service-acceptance/order-item
+   {:db/ident       :kontor.service-acceptance/order-item
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The PO line accepted. Must have
-                     :order-item/requires-receipt? false."}
+                     :kontor.procurement.order-item/requires-receipt? false."}
 
-   {:db/ident       :service-acceptance/quantity-accepted
+   {:db/ident       :kontor.service-acceptance/quantity-accepted
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Hours / days / deliverable count. Replaces
-                     :receipt-item/quantity-accepted in the 3-way
+                     :kontor.receipt-item/quantity-accepted in the 3-way
                      match query for service lines."}
 
-   {:db/ident       :service-acceptance/accepted-at
+   {:db/ident       :kontor.service-acceptance/accepted-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :service-acceptance/accepted-by-uid
+   {:db/ident       :kontor.service-acceptance/accepted-by-uid
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :service-acceptance/acceptance-evidence
+   {:db/ident       :kontor.service-acceptance/acceptance-evidence
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :audit-doc (ADR-038) — Slack thread, email,
                      signed milestone PDF, etc."}
 
-   {:db/ident       :service-acceptance/notes
+   {:db/ident       :kontor.service-acceptance/notes
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :service-acceptance/identity
+   {:db/ident       :kontor.service-acceptance/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:service-acceptance/order-item
-                     :service-acceptance/accepted-at]
+    :db/tupleAttrs  [:kontor.service-acceptance/order-item
+                     :kontor.service-acceptance/accepted-at]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
@@ -379,15 +379,15 @@
 
 (def ^:private order-item-assoc-attrs
   ;; ADR-042: OFBiz OrderItemAssoc pattern lifted verbatim.
-  [{:db/ident       :order-item-assoc/from-order-item
+  [{:db/ident       :kontor.procurement.order-item-assoc/from-order-item
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :order-item-assoc/to-order-item
+   {:db/ident       :kontor.procurement.order-item-assoc/to-order-item
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :order-item-assoc/type
+   {:db/ident       :kontor.procurement.order-item-assoc/type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":drop-shipment | :substitute | :replacement |
@@ -395,8 +395,8 @@
 
                      :drop-shipment — SO line fulfilled by a linked PO
                      line; supplier ships directly to customer. The
-                     PO's :ship-group/contact-mech should ref the SO's
-                     :ship-group/contact-mech (not copy) for
+                     PO's :kontor.ship-group/contact-mech should ref the SO's
+                     :kontor.ship-group/contact-mech (not copy) for
                      bitemporal correctness.
 
                      :substitute — alt product offered for unavailable
@@ -408,19 +408,19 @@
 
                      :upgrade — upgrade to a higher SKU."}
 
-   {:db/ident       :order-item-assoc/quantity
+   {:db/ident       :kontor.procurement.order-item-assoc/quantity
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :order-item-assoc/note
+   {:db/ident       :kontor.procurement.order-item-assoc/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :order-item-assoc/identity
+   {:db/ident       :kontor.procurement.order-item-assoc/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:order-item-assoc/from-order-item
-                     :order-item-assoc/to-order-item
-                     :order-item-assoc/type]
+    :db/tupleAttrs  [:kontor.procurement.order-item-assoc/from-order-item
+                     :kontor.procurement.order-item-assoc/to-order-item
+                     :kontor.procurement.order-item-assoc/type]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
@@ -429,55 +429,55 @@
 ;; ============================================================================
 
 (def ^:private match-tolerance-attrs
-  [{:db/ident       :match-tolerance/entity
+  [{:db/ident       :kontor.match-tolerance/entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Required; tenant scope (ADR-031)."}
 
-   {:db/ident       :match-tolerance/supplier
+   {:db/ident       :kontor.match-tolerance/supplier
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional :partner ref. Nil = entity-wide default."}
 
-   {:db/ident       :match-tolerance/product-id
+   {:db/ident       :kontor.match-tolerance/product-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional consumer-supplied product ref. Nil =
                      supplier-wide default (when supplier is set) or
                      entity-wide (when supplier is also nil)."}
 
-   {:db/ident       :match-tolerance/qty-pct-over
+   {:db/ident       :kontor.match-tolerance/qty-pct-over
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "E.g., 0.05M = 5% over-receipt allowed."}
 
-   {:db/ident       :match-tolerance/qty-abs-over
+   {:db/ident       :kontor.match-tolerance/qty-abs-over
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Absolute unit allowance (whichever is greater
                      wins vs pct)."}
 
-   {:db/ident       :match-tolerance/price-pct-over
+   {:db/ident       :kontor.match-tolerance/price-pct-over
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :match-tolerance/price-abs-over
+   {:db/ident       :kontor.match-tolerance/price-abs-over
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :match-tolerance/price-abs-commodity
+   {:db/ident       :kontor.match-tolerance/price-abs-commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :match-tolerance/active
+   {:db/ident       :kontor.match-tolerance/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :match-tolerance/identity
+   {:db/ident       :kontor.match-tolerance/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:match-tolerance/entity
-                     :match-tolerance/supplier
-                     :match-tolerance/product-id]
+    :db/tupleAttrs  [:kontor.match-tolerance/entity
+                     :kontor.match-tolerance/supplier
+                     :kontor.match-tolerance/product-id]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
@@ -486,176 +486,176 @@
 ;; ============================================================================
 
 (def ^:private return-attrs
-  [{:db/ident       :return/external-id
+  [{:db/ident       :kontor.return/external-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}
 
-   {:db/ident       :return/type
+   {:db/ident       :kontor.return/type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":customer | :vendor. Discriminator (OFBiz
                      ReturnHeader.returnHeaderTypeId pattern)."}
 
-   {:db/ident       :return/status
+   {:db/ident       :kontor.return/status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":requested | :accepted | :received | :completed |
                      :rejected | :cancelled. State-machine (ADR-034)."}
 
-   {:db/ident       :return/from-party
+   {:db/ident       :kontor.return/from-party
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "For :customer → the customer; for :vendor →
                      ourselves (the org returning)."}
 
-   {:db/ident       :return/to-party
+   {:db/ident       :kontor.return/to-party
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "For :customer → ourselves; for :vendor → the
                      supplier."}
 
-   {:db/ident       :return/order
+   {:db/ident       :kontor.return/order
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The original order being returned (SO for
                      :customer, PO for :vendor)."}
 
-   {:db/ident       :return/entity
+   {:db/ident       :kontor.return/entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Multi-entity scope (ADR-031)."}
 
-   {:db/ident       :return/destination-facility-id
+   {:db/ident       :kontor.return/destination-facility-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Where the returned goods land."}
 
-   {:db/ident       :return/supplier-rma
+   {:db/ident       :kontor.return/supplier-rma
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Vendor's RMA number (for :vendor returns)."}
 
-   {:db/ident       :return/entry-date
+   {:db/ident       :kontor.return/entry-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :return/notes
+   {:db/ident       :kontor.return/notes
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :return/supporting-doc
+   {:db/ident       :kontor.return/supporting-doc
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :audit-doc (ADR-038) — customer email,
                      defect photo, etc."}])
 
 (def ^:private return-item-attrs
-  [{:db/ident       :return-item/return
+  [{:db/ident       :kontor.return-item/return
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :return-item/order-item
+   {:db/ident       :kontor.return-item/order-item
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The original line being returned."}
 
-   {:db/ident       :return-item/seq-id
+   {:db/ident       :kontor.return-item/seq-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :return-item/product-id
+   {:db/ident       :kontor.return-item/product-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Denorm."}
 
-   {:db/ident       :return-item/return-quantity
+   {:db/ident       :kontor.return-item/return-quantity
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Quantity requested for return."}
 
-   {:db/ident       :return-item/received-quantity
+   {:db/ident       :kontor.return-item/received-quantity
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Quantity actually received (may differ)."}
 
-   {:db/ident       :return-item/return-price
+   {:db/ident       :kontor.return-item/return-price
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Price at return time; may differ from invoice."}
 
-   {:db/ident       :return-item/reason
+   {:db/ident       :kontor.return-item/reason
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":damaged | :defective | :wrong-item |
                      :not-as-described | :no-longer-needed |
                      :late-delivery | :customer-request."}
 
-   {:db/ident       :return-item/return-type
+   {:db/ident       :kontor.return-item/return-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":store-credit | :cash-refund | :exchange |
                      :vendor-credit."}
 
-   {:db/ident       :return-item/expected-disposition
+   {:db/ident       :kontor.return-item/expected-disposition
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":available | :defective | :scrap |
                      :return-to-supplier."}
 
-   {:db/ident       :return-item/status
+   {:db/ident       :kontor.return-item/status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :return-item/response
+   {:db/ident       :kontor.return-item/response
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :return-item/identity
+   {:db/ident       :kontor.return-item/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:return-item/return :return-item/seq-id]
+    :db/tupleAttrs  [:kontor.return-item/return :kontor.return-item/seq-id]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
 (def ^:private return-response-attrs
-  [{:db/ident       :return-response/return-item
+  [{:db/ident       :kontor.return-response/return-item
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/value
     :db/doc         "1:1 with :return-item."}
 
-   {:db/ident       :return-response/type
+   {:db/ident       :kontor.return-response/type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":replacement-order | :credit-memo | :cash-refund |
                      :billing-account-credit."}
 
-   {:db/ident       :return-response/replacement-order
+   {:db/ident       :kontor.return-response/replacement-order
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "New SO/PO created in response."}
 
-   {:db/ident       :return-response/credit-memo
+   {:db/ident       :kontor.return-response/credit-memo
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Kernel :invoice with :kontor.invoice/type :credit-memo
                      or :debit-memo."}
 
-   {:db/ident       :return-response/payment-ref
+   {:db/ident       :kontor.return-response/payment-ref
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "For refunds processed via external payment
                      processor."}
 
-   {:db/ident       :return-response/amount
+   {:db/ident       :kontor.return-response/amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :return-response/amount-commodity
+   {:db/ident       :kontor.return-response/amount-commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :return-response/created-at
+   {:db/ident       :kontor.return-response/created-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}])
 
@@ -663,27 +663,27 @@
   ;; ADR-042: junction for credit memo linkage to return-item
   ;; (mirror of :order-item-billing for forward flow, :receipt-
   ;; invoice-billing for receipts).
-  [{:db/ident       :return-item-billing/return-item
+  [{:db/ident       :kontor.return-item-billing/return-item
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :return-item-billing/invoice-line
+   {:db/ident       :kontor.return-item-billing/invoice-line
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Credit-memo line."}
 
-   {:db/ident       :return-item-billing/quantity
+   {:db/ident       :kontor.return-item-billing/quantity
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :return-item-billing/amount
+   {:db/ident       :kontor.return-item-billing/amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :return-item-billing/identity
+   {:db/ident       :kontor.return-item-billing/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:return-item-billing/return-item
-                     :return-item-billing/invoice-line]
+    :db/tupleAttrs  [:kontor.return-item-billing/return-item
+                     :kontor.return-item-billing/invoice-line]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
@@ -711,77 +711,77 @@
 (def status-transition-seeds
   "Requirement + receipt + invoice match-status + return state
    machines, seeded into the kernel :status-transition table (ADR-034)."
-  [;; --- :requirement/status ---------------------------------------
+  [;; --- :kontor.requirement/status ---------------------------------------
    {:kontor.status-transition/entity-type :requirement
-    :kontor.status-transition/facet :requirement/status
+    :kontor.status-transition/facet :kontor.requirement/status
     :kontor.status-transition/from :nil
     :kontor.status-transition/to :proposed
     :kontor.status-transition/active true
     :kontor.status-transition/name "Create Requirement"}
    {:kontor.status-transition/entity-type :requirement
-    :kontor.status-transition/facet :requirement/status
+    :kontor.status-transition/facet :kontor.requirement/status
     :kontor.status-transition/from :proposed
     :kontor.status-transition/to :approved
     :kontor.status-transition/active true
     :kontor.status-transition/name "Approve Requirement"}
    {:kontor.status-transition/entity-type :requirement
-    :kontor.status-transition/facet :requirement/status
+    :kontor.status-transition/facet :kontor.requirement/status
     :kontor.status-transition/from :proposed
     :kontor.status-transition/to :rejected
     :kontor.status-transition/active true
     :kontor.status-transition/name "Reject Requirement"}
    {:kontor.status-transition/entity-type :requirement
-    :kontor.status-transition/facet :requirement/status
+    :kontor.status-transition/facet :kontor.requirement/status
     :kontor.status-transition/from :proposed
     :kontor.status-transition/to :cancelled
     :kontor.status-transition/active true
     :kontor.status-transition/name "Cancel Proposed Requirement"}
    {:kontor.status-transition/entity-type :requirement
-    :kontor.status-transition/facet :requirement/status
+    :kontor.status-transition/facet :kontor.requirement/status
     :kontor.status-transition/from :approved
     :kontor.status-transition/to :ordered
     :kontor.status-transition/active true
     :kontor.status-transition/name "Commit to PO"}
    {:kontor.status-transition/entity-type :requirement
-    :kontor.status-transition/facet :requirement/status
+    :kontor.status-transition/facet :kontor.requirement/status
     :kontor.status-transition/from :approved
     :kontor.status-transition/to :cancelled
     :kontor.status-transition/active true
     :kontor.status-transition/name "Cancel Approved Requirement"}
    {:kontor.status-transition/entity-type :requirement
-    :kontor.status-transition/facet :requirement/status
+    :kontor.status-transition/facet :kontor.requirement/status
     :kontor.status-transition/from :approved
     :kontor.status-transition/to :proposed
     :kontor.status-transition/active true
     :kontor.status-transition/name "Revise Approval"}
    {:kontor.status-transition/entity-type :requirement
-    :kontor.status-transition/facet :requirement/status
+    :kontor.status-transition/facet :kontor.requirement/status
     :kontor.status-transition/from :ordered
     :kontor.status-transition/to :received
     :kontor.status-transition/active true
     :kontor.status-transition/name "Auto-Promote on Full Receipt"}
 
-   ;; --- :receipt/status -------------------------------------------
+   ;; --- :kontor.receipt/status -------------------------------------------
    {:kontor.status-transition/entity-type :receipt
-    :kontor.status-transition/facet :receipt/status
+    :kontor.status-transition/facet :kontor.receipt/status
     :kontor.status-transition/from :nil
     :kontor.status-transition/to :pending
     :kontor.status-transition/active true
     :kontor.status-transition/name "Create Receipt"}
    {:kontor.status-transition/entity-type :receipt
-    :kontor.status-transition/facet :receipt/status
+    :kontor.status-transition/facet :kontor.receipt/status
     :kontor.status-transition/from :pending
     :kontor.status-transition/to :accepted
     :kontor.status-transition/active true
     :kontor.status-transition/name "Inspection Pass"}
    {:kontor.status-transition/entity-type :receipt
-    :kontor.status-transition/facet :receipt/status
+    :kontor.status-transition/facet :kontor.receipt/status
     :kontor.status-transition/from :pending
     :kontor.status-transition/to :rejected
     :kontor.status-transition/active true
     :kontor.status-transition/name "Inspection Fail"}
    {:kontor.status-transition/entity-type :receipt
-    :kontor.status-transition/facet :receipt/status
+    :kontor.status-transition/facet :kontor.receipt/status
     :kontor.status-transition/from :accepted
     :kontor.status-transition/to :rejected
     :kontor.status-transition/active true
@@ -891,45 +891,45 @@
     :kontor.status-transition/active true
     :kontor.status-transition/name "Clear after Manual Approval (post-payment)"}
 
-   ;; --- :return/status --------------------------------------------
+   ;; --- :kontor.return/status --------------------------------------------
    {:kontor.status-transition/entity-type :return
-    :kontor.status-transition/facet :return/status
+    :kontor.status-transition/facet :kontor.return/status
     :kontor.status-transition/from :nil
     :kontor.status-transition/to :requested
     :kontor.status-transition/active true
     :kontor.status-transition/name "Request Return"}
    {:kontor.status-transition/entity-type :return
-    :kontor.status-transition/facet :return/status
+    :kontor.status-transition/facet :kontor.return/status
     :kontor.status-transition/from :requested
     :kontor.status-transition/to :accepted
     :kontor.status-transition/active true
     :kontor.status-transition/name "Accept RMA"}
    {:kontor.status-transition/entity-type :return
-    :kontor.status-transition/facet :return/status
+    :kontor.status-transition/facet :kontor.return/status
     :kontor.status-transition/from :requested
     :kontor.status-transition/to :rejected
     :kontor.status-transition/active true
     :kontor.status-transition/name "Deny RMA"}
    {:kontor.status-transition/entity-type :return
-    :kontor.status-transition/facet :return/status
+    :kontor.status-transition/facet :kontor.return/status
     :kontor.status-transition/from :requested
     :kontor.status-transition/to :cancelled
     :kontor.status-transition/active true
     :kontor.status-transition/name "Cancel Requested Return"}
    {:kontor.status-transition/entity-type :return
-    :kontor.status-transition/facet :return/status
+    :kontor.status-transition/facet :kontor.return/status
     :kontor.status-transition/from :accepted
     :kontor.status-transition/to :received
     :kontor.status-transition/active true
     :kontor.status-transition/name "Receive Returned Goods"}
    {:kontor.status-transition/entity-type :return
-    :kontor.status-transition/facet :return/status
+    :kontor.status-transition/facet :kontor.return/status
     :kontor.status-transition/from :accepted
     :kontor.status-transition/to :cancelled
     :kontor.status-transition/active true
     :kontor.status-transition/name "Cancel Accepted Return"}
    {:kontor.status-transition/entity-type :return
-    :kontor.status-transition/facet :return/status
+    :kontor.status-transition/facet :kontor.return/status
     :kontor.status-transition/from :received
     :kontor.status-transition/to :completed
     :kontor.status-transition/active true

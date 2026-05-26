@@ -302,7 +302,7 @@
   "States/UTs that levy Professional Tax under their own State Tax on
    Professions, Trades, Callings and Employments Act. Encoded as
    ISO-3166-2:IN sub-jurisdiction codes (matching kernel attr
-   `:employment/province-of-employment`).
+   `:kontor.employment/province-of-employment`).
 
    Per note 79 §5.3 C9 plan: 17 states + 1 UT levy PT; the other
    17 sub-jurisdictions (UP, Delhi, Haryana, Punjab, Rajasthan,

@@ -24,31 +24,31 @@
   [conn]
   (d/transact conn
               [{:kontor.status-transition/entity-type :order
-                :kontor.status-transition/facet :order/status
+                :kontor.status-transition/facet :kontor.order/status
                 :kontor.status-transition/from :order.status/nil
                 :kontor.status-transition/to :order.status/created
                 :kontor.status-transition/active true
                 :kontor.status-transition/name "Create Order"}
                {:kontor.status-transition/entity-type :order
-                :kontor.status-transition/facet :order/status
+                :kontor.status-transition/facet :kontor.order/status
                 :kontor.status-transition/from :order.status/created
                 :kontor.status-transition/to :order.status/approved
                 :kontor.status-transition/active true
                 :kontor.status-transition/name "Approve Order"}
                {:kontor.status-transition/entity-type :order
-                :kontor.status-transition/facet :order/status
+                :kontor.status-transition/facet :kontor.order/status
                 :kontor.status-transition/from :order.status/approved
                 :kontor.status-transition/to :order.status/completed
                 :kontor.status-transition/active true
                 :kontor.status-transition/name "Complete Order"}
                {:kontor.status-transition/entity-type :order
-                :kontor.status-transition/facet :order/status
+                :kontor.status-transition/facet :kontor.order/status
                 :kontor.status-transition/from :order.status/created
                 :kontor.status-transition/to :order.status/cancelled
                 :kontor.status-transition/active true
                 :kontor.status-transition/name "Cancel Order"}
                {:kontor.status-transition/entity-type :order
-                :kontor.status-transition/facet :order/status
+                :kontor.status-transition/facet :kontor.order/status
                 :kontor.status-transition/from :order.status/approved
                 :kontor.status-transition/to :order.status/cancelled
                 :kontor.status-transition/active true
@@ -56,7 +56,7 @@
 
 ;; To exercise the table without a real :order entity, we use a tiny
 ;; throwaway schema for an :ord entity with an :ord/status attr that
-;; behaves like :order/status. (The kernel only owns the
+;; behaves like :kontor.order/status. (The kernel only owns the
 ;; :status-transition + :status-history attrs; consumers bring their
 ;; own facet attribute.)
 (defn- install-ord-attr! [conn]
@@ -131,25 +131,25 @@
   (seed-order-status-transitions! *conn*)
   (let [db (d/db *conn*)]
     (testing "seeded transitions are legal"
-      (is (true? (sm/legal-transition? db :order :order/status
+      (is (true? (sm/legal-transition? db :order :kontor.order/status
                                        :order.status/nil
                                        :order.status/created)))
-      (is (true? (sm/legal-transition? db :order :order/status
+      (is (true? (sm/legal-transition? db :order :kontor.order/status
                                        :order.status/created
                                        :order.status/approved)))
-      (is (true? (sm/legal-transition? db :order :order/status
+      (is (true? (sm/legal-transition? db :order :kontor.order/status
                                        :order.status/approved
                                        :order.status/completed))))
     (testing "non-seeded transitions are illegal"
-      (is (false? (sm/legal-transition? db :order :order/status
+      (is (false? (sm/legal-transition? db :order :kontor.order/status
                                         :order.status/nil
                                         :order.status/completed))
           "skip-to-completed without intermediate states")
-      (is (false? (sm/legal-transition? db :order :order/status
+      (is (false? (sm/legal-transition? db :order :kontor.order/status
                                         :order.status/completed
                                         :order.status/approved))
           "regress completed → approved")
-      (is (false? (sm/legal-transition? db :order :order/status
+      (is (false? (sm/legal-transition? db :order :kontor.order/status
                                         :order.status/cancelled
                                         :order.status/created))
           "cancelled is terminal"))))
@@ -158,25 +158,25 @@
   (seed-order-status-transitions! *conn*)
   (let [db (d/db *conn*)]
     (is (= #{:order.status/approved :order.status/cancelled}
-           (sm/legal-transitions-from db :order :order/status :order.status/created)))
+           (sm/legal-transitions-from db :order :kontor.order/status :order.status/created)))
     (is (= #{:order.status/completed :order.status/cancelled}
-           (sm/legal-transitions-from db :order :order/status :order.status/approved)))
+           (sm/legal-transitions-from db :order :kontor.order/status :order.status/approved)))
     (is (= #{:order.status/created}
-           (sm/legal-transitions-from db :order :order/status :order.status/nil)))
+           (sm/legal-transitions-from db :order :kontor.order/status :order.status/nil)))
     (is (= #{}
-           (sm/legal-transitions-from db :order :order/status :order.status/completed))
+           (sm/legal-transitions-from db :order :kontor.order/status :order.status/completed))
         "completed has no onward transitions in this seed")))
 
 (deftest inactive-transitions-are-ignored
   (d/transact *conn*
               [{:kontor.status-transition/entity-type :order
-                :kontor.status-transition/facet :order/status
+                :kontor.status-transition/facet :kontor.order/status
                 :kontor.status-transition/from :order.status/created
                 :kontor.status-transition/to :order.status/approved
                 :kontor.status-transition/active false
                 :kontor.status-transition/name "(deactivated)"}])
   (let [db (d/db *conn*)]
-    (is (false? (sm/legal-transition? db :order :order/status
+    (is (false? (sm/legal-transition? db :order :kontor.order/status
                                       :order.status/created
                                       :order.status/approved))
         "inactive row should not match")))
@@ -201,7 +201,7 @@
   ;; tenant-wide vocabulary.
   (d/transact *conn*
               [{:kontor.status-transition/entity-type :order
-                :kontor.status-transition/facet :order/status
+                :kontor.status-transition/facet :kontor.order/status
                 :kontor.status-transition/from :order.status/completed
                 :kontor.status-transition/to :order.status/approved
                 :kontor.status-transition/applies-to-org [:kontor.entity/code "ACME"]
@@ -209,21 +209,21 @@
                 :kontor.status-transition/name "Re-open ACME order"}])
   (let [db (d/db *conn*)]
     (testing "ACME can re-open completed orders (org override)"
-      (is (true? (sm/legal-transition? db :order :order/status
+      (is (true? (sm/legal-transition? db :order :kontor.order/status
                                        :order.status/completed
                                        :order.status/approved
                                        "ACME"))))
     (testing "OTHER cannot re-open (no override)"
-      (is (false? (sm/legal-transition? db :order :order/status
+      (is (false? (sm/legal-transition? db :order :kontor.order/status
                                         :order.status/completed
                                         :order.status/approved
                                         "OTHER"))))
     (testing "Tenant-wide query (no org) does not match the override"
-      (is (false? (sm/legal-transition? db :order :order/status
+      (is (false? (sm/legal-transition? db :order :kontor.order/status
                                         :order.status/completed
                                         :order.status/approved))))
     (testing "legal-transitions-from merges tenant-wide + org-specific for ACME"
-      (let [acme (sm/legal-transitions-from db :order :order/status
+      (let [acme (sm/legal-transitions-from db :order :kontor.order/status
                                             :order.status/approved "ACME")]
         (is (contains? acme :order.status/completed))
         (is (contains? acme :order.status/cancelled))))))
@@ -333,12 +333,12 @@
   (seed-ord-status-transitions! *conn*)
   ;; Seed an :no-self-approval policy on :ord.status/created → :approved
   (d/transact *conn*
-              [{:approval-policy/entity-type :ord
-                :approval-policy/facet :ord/status
-                :approval-policy/transition-from :ord.status/created
-                :approval-policy/transition-to :ord.status/approved
-                :approval-policy/rule :no-self-approval
-                :approval-policy/active true}])
+              [{:kontor.approval-policy/entity-type :ord
+                :kontor.approval-policy/facet :ord/status
+                :kontor.approval-policy/transition-from :ord.status/created
+                :kontor.approval-policy/transition-to :ord.status/approved
+                :kontor.approval-policy/rule :no-self-approval
+                :kontor.approval-policy/active true}])
   ;; Seed two opaque user entities via partner records (which exist
   ;; in the kernel schema with :kontor.partner/external-id identity).
   (d/transact *conn*
@@ -379,12 +379,12 @@
   (seed-ord-status-transitions! *conn*)
   ;; Seed a policy requiring :supporting-doc on cancel
   (d/transact *conn*
-              [{:approval-policy/entity-type :ord
-                :approval-policy/facet :ord/status
-                :approval-policy/transition-from :ord.status/created
-                :approval-policy/transition-to :ord.status/cancelled
-                :approval-policy/rule :requires-supporting-doc
-                :approval-policy/active true}])
+              [{:kontor.approval-policy/entity-type :ord
+                :kontor.approval-policy/facet :ord/status
+                :kontor.approval-policy/transition-from :ord.status/created
+                :kontor.approval-policy/transition-to :ord.status/cancelled
+                :kontor.approval-policy/rule :requires-supporting-doc
+                :kontor.approval-policy/active true}])
   (d/transact *conn* [{:ord/code "O-DOC" :ord/status :ord.status/created}])
   (let [eid (d/q '[:find ?e . :where [?e :ord/code "O-DOC"]] (d/db *conn*))]
     (testing "transition without :supporting-doc is rejected"
@@ -399,12 +399,12 @@
     (testing "with :supporting-doc succeeds"
       ;; Seed an :audit-doc and reference it
       (d/transact *conn*
-                  [{:audit-doc/code "DOC-1"
-                    :audit-doc/type :customer-email
-                    :audit-doc/storage-uri "s3://test-bucket/doc-1.eml"
-                    :audit-doc/uploaded-at #inst "2026-05-01"
-                    :audit-doc/title "Customer cancellation request"}])
-      (let [doc-eid (d/q '[:find ?d . :where [?d :audit-doc/code "DOC-1"]]
+                  [{:kontor.audit-doc/code "DOC-1"
+                    :kontor.audit-doc/type :customer-email
+                    :kontor.audit-doc/storage-uri "s3://test-bucket/doc-1.eml"
+                    :kontor.audit-doc/uploaded-at #inst "2026-05-01"
+                    :kontor.audit-doc/title "Customer cancellation request"}])
+      (let [doc-eid (d/q '[:find ?d . :where [?d :kontor.audit-doc/code "DOC-1"]]
                          (d/db *conn*))]
         (sm/record-status-change!
          *conn*

@@ -49,10 +49,10 @@
   (->> (d/q '[:find [?d ...]
               :in $ ?asset
               :where
-              [?e :asset-event/asset ?asset]
-              [?e :asset-event/kind ?k]
+              [?e :kontor.asset-event/asset ?asset]
+              [?e :kontor.asset-event/kind ?k]
               [(contains? #{:disposal :transfer} ?k)]
-              [?e :asset-event/date ?d]]
+              [?e :kontor.asset-event/date ?d]]
             db asset-eid)
        sort
        first))
@@ -71,7 +71,7 @@
       :completed? boolean}      ; the schedule is now fully fired
 
    When the schedule becomes fully fired AND the asset is still
-   `:in-service`, the runner drives `:asset/status` →
+   `:in-service`, the runner drives `:kontor.asset/status` →
    `:fully-depreciated` (unless `:mark-fully-depreciated?` is false).
    That transition is ungated (no `:approval-policy`), so it needs no
    `:changed-by-uid` — pass one anyway to attribute the system run.
@@ -191,7 +191,7 @@
                         (:n-periods inputs))]
      (when (and completed? mark-fully-depreciated? (seq fired))
        (let [asset-eid (:asset inputs)
-             status (:asset/status (d/pull db' [:asset/status] asset-eid))]
+             status (:kontor.asset/status (d/pull db' [:kontor.asset/status] asset-eid))]
          (when (= :in-service status)
            (let [last-date (:date (last fired))
                  status-step
@@ -199,7 +199,7 @@
                    (sm/record-status-change-tx-data
                     sdb (cond-> {:entity asset-eid
                                  :entity-type :asset
-                                 :facet :asset/status
+                                 :facet :kontor.asset/status
                                  :from :in-service
                                  :to :fully-depreciated
                                  :changed-at last-date

@@ -1,6 +1,6 @@
 (ns kontor.collections.p0-fixes-test
   "Tests for ADR-043 P0 review fixes:
-     P0-3 — :dunning-event/identity drops :invoice (no nil-tuple trap)
+     P0-3 — :kontor.dunning-event/identity drops :invoice (no nil-tuple trap)
      P0-4 — credit-utilization numeric query
      P0-5 — :dunning-pause helpers + plan-dunning-run gate
      P1   — credit-hold :expires-at auto-release
@@ -73,7 +73,7 @@
     (inv/by-external-id (d/db *conn*) external-id)))
 
 ;; ============================================================================
-;; P0-3: :dunning-event/identity (case, level, scheduled-at) — no
+;; P0-3: :kontor.dunning-event/identity (case, level, scheduled-at) — no
 ;;       nil-in-tuple trap
 ;; ============================================================================
 
@@ -90,22 +90,22 @@
           scheduled #inst "2026-05-15"]
       ;; First event — should succeed
       (d/transact *conn*
-                  [{:dunning-event/case case-eid
-                    :dunning-event/level 1
-                    :dunning-event/scheduled-at scheduled
-                    :dunning-event/channel :email
-                    :dunning-event/locale "en-US"}])
+                  [{:kontor.dunning-event/case case-eid
+                    :kontor.dunning-event/level 1
+                    :kontor.dunning-event/scheduled-at scheduled
+                    :kontor.dunning-event/channel :email
+                    :kontor.dunning-event/locale "en-US"}])
       ;; Re-transacting the same identity should upsert (one row)
       (d/transact *conn*
-                  [{:dunning-event/case case-eid
-                    :dunning-event/level 1
-                    :dunning-event/scheduled-at scheduled
-                    :dunning-event/channel :email
-                    :dunning-event/locale "en-US"}])
+                  [{:kontor.dunning-event/case case-eid
+                    :kontor.dunning-event/level 1
+                    :kontor.dunning-event/scheduled-at scheduled
+                    :kontor.dunning-event/channel :email
+                    :kontor.dunning-event/locale "en-US"}])
       (testing "Only one row exists (upsert worked)"
         (is (= 1 (d/q '[:find (count ?e) .
                         :in $ ?case
-                        :where [?e :dunning-event/case ?case]]
+                        :where [?e :kontor.dunning-event/case ?case]]
                       (d/db *conn*) case-eid)))))))
 
 ;; ============================================================================
@@ -164,18 +164,18 @@
       (is (kpause/any-active-pause? (d/db *conn*) case-eid)))
     ;; Plan run should skip with :explicit-pause
     (d/transact *conn*
-                [{:dunning-policy/code "P-PAUSE"
-                  :dunning-policy/name "Test"
-                  :dunning-policy/entity (entity "ACME-DE")
-                  :dunning-policy/applies-to-segment :default
-                  :dunning-policy/levels kdunning/default-policy-levels-edn
-                  :dunning-policy/frequency-cap-window-days 7
-                  :dunning-policy/frequency-cap-max-events 5
-                  :dunning-policy/pause-on-dispute? true
-                  :dunning-policy/pause-on-open-promise? true
-                  :dunning-policy/active true}])
+                [{:kontor.dunning-policy/code "P-PAUSE"
+                  :kontor.dunning-policy/name "Test"
+                  :kontor.dunning-policy/entity (entity "ACME-DE")
+                  :kontor.dunning-policy/applies-to-segment :default
+                  :kontor.dunning-policy/levels kdunning/default-policy-levels-edn
+                  :kontor.dunning-policy/frequency-cap-window-days 7
+                  :kontor.dunning-policy/frequency-cap-max-events 5
+                  :kontor.dunning-policy/pause-on-dispute? true
+                  :kontor.dunning-policy/pause-on-open-promise? true
+                  :kontor.dunning-policy/active true}])
     (let [policy (d/pull (d/db *conn*) '[*]
-                         (d/q '[:find ?p . :where [?p :dunning-policy/code "P-PAUSE"]]
+                         (d/q '[:find ?p . :where [?p :kontor.dunning-policy/code "P-PAUSE"]]
                               (d/db *conn*)))
           plan (kdunning/plan-dunning-run
                 (d/db *conn*)
@@ -253,14 +253,14 @@
   (let [case-eid (kcase/by-code (d/db *conn*) "CASE-FC2")]
     ;; Seed an event from 2026-01-01
     (d/transact *conn*
-                [{:dunning-event/case case-eid
-                  :dunning-event/level 1
-                  :dunning-event/scheduled-at #inst "2026-01-01"
-                  :dunning-event/sent-at #inst "2026-01-01"
-                  :dunning-event/channel :email
-                  :dunning-event/locale "en-US"}])
-    (let [policy {:dunning-policy/frequency-cap-window-days 7
-                  :dunning-policy/frequency-cap-max-events 1}]
+                [{:kontor.dunning-event/case case-eid
+                  :kontor.dunning-event/level 1
+                  :kontor.dunning-event/scheduled-at #inst "2026-01-01"
+                  :kontor.dunning-event/sent-at #inst "2026-01-01"
+                  :kontor.dunning-event/channel :email
+                  :kontor.dunning-event/locale "en-US"}])
+    (let [policy {:kontor.dunning-policy/frequency-cap-window-days 7
+                  :kontor.dunning-policy/frequency-cap-max-events 1}]
       (testing "Within window (2026-01-05): cap violated"
         (is (kdunning/frequency-cap-violated?
              (d/db *conn*) case-eid policy #inst "2026-01-05")))

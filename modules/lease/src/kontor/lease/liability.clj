@@ -8,7 +8,7 @@
    `:finance` on one and `:operating` on another — so classification
    lives HERE, on the book, not on the framework-neutral `:lease`.
 
-   Each book owns one ADR-032 `:schedule` (`:schedule/kind
+   Each book owns one ADR-032 `:schedule` (`:kontor.schedule/kind
    :lease-liability`) that the lease runner (ADR-063) fires. This
    namespace is the book lifecycle + the flat `book-plan-inputs` map
    the `LeaseProvider` impls consume; it has NO dependency on the
@@ -31,8 +31,8 @@
     (d/q '[:find ?e .
            :in $ ?l ?led
            :where
-           [?e :lease-liability/lease ?l]
-           [?e :lease-liability/ledger ?led]]
+           [?e :kontor.lease-liability/lease ?l]
+           [?e :kontor.lease-liability/ledger ?led]]
          db lease-eid ledger)))
 
 (defn resolve-book
@@ -51,7 +51,7 @@
   (when-let [lease-eid (lease/resolve-lease db lease-spec)]
     (set (d/q '[:find [?e ...]
                 :in $ ?l
-                :where [?e :lease-liability/lease ?l]]
+                :where [?e :kontor.lease-liability/lease ?l]]
               db lease-eid))))
 
 (defn pull-book
@@ -59,17 +59,17 @@
   [db spec]
   (when-let [eid (resolve-book db spec)]
     (d/pull db
-            '[* {:lease-liability/lease [:db/id :lease/code :lease/name
-                                         :lease/status]
-                 :lease-liability/ledger [:db/id :kontor.ledger/code :kontor.ledger/framework]
-                 :lease-liability/commodity [:db/id]
-                 :lease-liability/liability-account [:db/id]
-                 :lease-liability/interest-account [:db/id]
-                 :lease-liability/schedule [:db/id :schedule/code
-                                            :schedule/kind :schedule/state
-                                            :schedule/start-date
-                                            :schedule/end-date
-                                            :schedule/frequency]}]
+            '[* {:kontor.lease-liability/lease [:db/id :kontor.lease/code :kontor.lease/name
+                                         :kontor.lease/status]
+                 :kontor.lease-liability/ledger [:db/id :kontor.ledger/code :kontor.ledger/framework]
+                 :kontor.lease-liability/commodity [:db/id]
+                 :kontor.lease-liability/liability-account [:db/id]
+                 :kontor.lease-liability/interest-account [:db/id]
+                 :kontor.lease-liability/schedule [:db/id :kontor.schedule/code
+                                            :kontor.schedule/kind :kontor.schedule/state
+                                            :kontor.schedule/start-date
+                                            :kontor.schedule/end-date
+                                            :kontor.schedule/frequency]}]
             eid)))
 
 ;; ============================================================================
@@ -100,52 +100,52 @@
         _ (when-not eid
             (throw (ex-info "Lease-liability book not found" {:spec book-spec})))
         b (d/pull db
-                  '[:lease-liability/provider-id
-                    :lease-liability/classification
-                    :lease-liability/opening-liability
-                    :lease-liability/discount-rate
-                    :lease-liability/opening-fired-through
-                    {:lease-liability/lease
-                     [:db/id :lease/term-months :lease/payment-amount
-                      :lease/payment-timing :lease/payment-frequency
-                      :lease/purchase-option-price
-                      :lease/initial-direct-costs
-                      :lease/prepaid-at-commencement
-                      :lease/incentives-received]}
-                    {:lease-liability/ledger [:db/id]}
-                    {:lease-liability/commodity [:db/id]}
-                    {:lease-liability/schedule [:db/id :schedule/frequency
-                                                :schedule/start-date]}]
+                  '[:kontor.lease-liability/provider-id
+                    :kontor.lease-liability/classification
+                    :kontor.lease-liability/opening-liability
+                    :kontor.lease-liability/discount-rate
+                    :kontor.lease-liability/opening-fired-through
+                    {:kontor.lease-liability/lease
+                     [:db/id :kontor.lease/term-months :kontor.lease/payment-amount
+                      :kontor.lease/payment-timing :kontor.lease/payment-frequency
+                      :kontor.lease/purchase-option-price
+                      :kontor.lease/initial-direct-costs
+                      :kontor.lease/prepaid-at-commencement
+                      :kontor.lease/incentives-received]}
+                    {:kontor.lease-liability/ledger [:db/id]}
+                    {:kontor.lease-liability/commodity [:db/id]}
+                    {:kontor.lease-liability/schedule [:db/id :kontor.schedule/frequency
+                                                :kontor.schedule/start-date]}]
                   eid)
-        l     (:lease-liability/lease b)
-        sched (:lease-liability/schedule b)
-        freq  (:lease/payment-frequency l)
-        rate  (:lease-liability/discount-rate b)
+        l     (:kontor.lease-liability/lease b)
+        sched (:kontor.lease-liability/schedule b)
+        freq  (:kontor.lease/payment-frequency l)
+        rate  (:kontor.lease-liability/discount-rate b)
         ppy   (lease/periods-per-year freq)
         period-rate (.divide ^java.math.BigDecimal rate
                              (java.math.BigDecimal/valueOf ppy)
                              12 java.math.RoundingMode/HALF_EVEN)]
     {:book                  eid
      :lease                 (:db/id l)
-     :ledger                (:db/id (:lease-liability/ledger b))
+     :ledger                (:db/id (:kontor.lease-liability/ledger b))
      :schedule              (:db/id sched)
-     :provider-id           (:lease-liability/provider-id b)
-     :classification        (:lease-liability/classification b)
-     :opening-liability     (:lease-liability/opening-liability b)
+     :provider-id           (:kontor.lease-liability/provider-id b)
+     :classification        (:kontor.lease-liability/classification b)
+     :opening-liability     (:kontor.lease-liability/opening-liability b)
      :discount-rate         rate
-     :opening-fired-through (or (:lease-liability/opening-fired-through b) 0)
-     :payment-amount        (:lease/payment-amount l)
-     :payment-timing        (:lease/payment-timing l)
+     :opening-fired-through (or (:kontor.lease-liability/opening-fired-through b) 0)
+     :payment-amount        (:kontor.lease/payment-amount l)
+     :payment-timing        (:kontor.lease/payment-timing l)
      :payment-frequency     freq
      :periods-per-year      ppy
      :period-rate           period-rate
-     :n-periods             (lease/periods-for (:lease/term-months l) freq)
-     :start-date            (:schedule/start-date sched)
-     :commodity             (:db/id (:lease-liability/commodity b))
-     :purchase-option-price (:lease/purchase-option-price l)
-     :initial-direct-costs  (or (:lease/initial-direct-costs l) 0M)
-     :prepaid-at-commencement (or (:lease/prepaid-at-commencement l) 0M)
-     :incentives-received   (or (:lease/incentives-received l) 0M)}))
+     :n-periods             (lease/periods-for (:kontor.lease/term-months l) freq)
+     :start-date            (:kontor.schedule/start-date sched)
+     :commodity             (:db/id (:kontor.lease-liability/commodity b))
+     :purchase-option-price (:kontor.lease/purchase-option-price l)
+     :initial-direct-costs  (or (:kontor.lease/initial-direct-costs l) 0M)
+     :prepaid-at-commencement (or (:kontor.lease/prepaid-at-commencement l) 0M)
+     :incentives-received   (or (:kontor.lease/incentives-received l) 0M)}))
 
 ;; ============================================================================
 ;; open-liability-book!
@@ -181,54 +181,54 @@
         _ (when-not lease-eid (throw (ex-info "Lease not found" {:spec lease})))
         _ (when (book-for db lease-eid ledger)
             (throw (ex-info "A lease-liability book already exists for this (lease, ledger) — one book per pair (ADR-063)"
-                            {:type :lease/duplicate-book
+                            {:type :kontor.lease/duplicate-book
                              :lease lease :ledger ledger})))
-        lease-code  (:lease/code (d/pull db [:lease/code] lease-eid))
+        lease-code  (:kontor.lease/code (d/pull db [:kontor.lease/code] lease-eid))
         ledger-code (:kontor.ledger/code (d/pull db [:kontor.ledger/code] ledger))
         sched-code  (or schedule-code
                         (str lease-code "-liab-" (or ledger-code ledger)))
         end-date    (schedule/date-of-occurrence start-date frequency n-periods)
         total       (or total-amount
-                        (some-> (:lease/payment-amount
-                                 (d/pull db [:lease/payment-amount] lease-eid))
+                        (some-> (:kontor.lease/payment-amount
+                                 (d/pull db [:kontor.lease/payment-amount] lease-eid))
                                 (.multiply (java.math.BigDecimal/valueOf
                                             (long n-periods)))))
         sched-tempid (str "lease-liab-sched" tempid-suffix)
         book-tempid  (str "lease-liab-book" tempid-suffix)
         schedule-entity (cond-> {:db/id sched-tempid
-                                 :schedule/code sched-code
-                                 :schedule/kind :lease-liability
-                                 :schedule/origin-entity book-tempid
-                                 :schedule/start-date start-date
-                                 :schedule/end-date end-date
-                                 :schedule/frequency frequency
-                                 :schedule/total-commodity commodity
-                                 :schedule/state :active
-                                 :schedule/active true}
-                          total (assoc :schedule/total-amount total))
+                                 :kontor.schedule/code sched-code
+                                 :kontor.schedule/kind :lease-liability
+                                 :kontor.schedule/origin-entity book-tempid
+                                 :kontor.schedule/start-date start-date
+                                 :kontor.schedule/end-date end-date
+                                 :kontor.schedule/frequency frequency
+                                 :kontor.schedule/total-commodity commodity
+                                 :kontor.schedule/state :active
+                                 :kontor.schedule/active true}
+                          total (assoc :kontor.schedule/total-amount total))
         book-entity (cond-> {:db/id book-tempid
-                             :lease-liability/lease lease-eid
-                             :lease-liability/ledger ledger
-                             :lease-liability/classification classification
-                             :lease-liability/provider-id provider-id
-                             :lease-liability/opening-liability opening-liability
-                             :lease-liability/discount-rate discount-rate
-                             :lease-liability/liability-account liability-account
-                             :lease-liability/interest-account interest-account
-                             :lease-liability/opening-fired-through 0
-                             :lease-liability/commodity commodity
-                             :lease-liability/schedule sched-tempid}
-                      note (assoc :lease-liability/note note)
-                      rate-rationale (assoc :lease-liability/rate-rationale
+                             :kontor.lease-liability/lease lease-eid
+                             :kontor.lease-liability/ledger ledger
+                             :kontor.lease-liability/classification classification
+                             :kontor.lease-liability/provider-id provider-id
+                             :kontor.lease-liability/opening-liability opening-liability
+                             :kontor.lease-liability/discount-rate discount-rate
+                             :kontor.lease-liability/liability-account liability-account
+                             :kontor.lease-liability/interest-account interest-account
+                             :kontor.lease-liability/opening-fired-through 0
+                             :kontor.lease-liability/commodity commodity
+                             :kontor.lease-liability/schedule sched-tempid}
+                      note (assoc :kontor.lease-liability/note note)
+                      rate-rationale (assoc :kontor.lease-liability/rate-rationale
                                             rate-rationale))]
     [book-entity schedule-entity]))
 
 (defn open-liability-book!
   "Create a `:lease-liability` book for a (lease, ledger) pair — plus
-   its ADR-032 `:schedule` (`:schedule/kind :lease-liability`) — in
+   its ADR-032 `:schedule` (`:kontor.schedule/kind :lease-liability`) — in
    one tx. Returns the tx-report.
 
-   The `:lease-liability/identity` tuple (`:db.unique/identity` on
+   The `:kontor.lease-liability/identity` tuple (`:db.unique/identity` on
    `[lease ledger]`) means one book per (lease, ledger). ADR-063's
    `commence!` is the orchestrator that calls this once per ledger;
    it asserts the lease is `:draft` and that no book exists yet.
@@ -278,28 +278,28 @@
   (let [eid (resolve-book db book)
         _ (when-not eid
             (throw (ex-info "Lease-liability book not found" {:spec book})))
-        b (d/pull db [{:lease-liability/lease [:lease/term-months
-                                               :lease/payment-frequency]}
-                      {:lease-liability/schedule [:db/id :schedule/start-date]}]
+        b (d/pull db [{:kontor.lease-liability/lease [:kontor.lease/term-months
+                                               :kontor.lease/payment-frequency]}
+                      {:kontor.lease-liability/schedule [:db/id :kontor.schedule/start-date]}]
                   eid)
-        l (:lease-liability/lease b)
-        sched (:lease-liability/schedule b)
+        l (:kontor.lease-liability/lease b)
+        sched (:kontor.lease-liability/schedule b)
         sched-eid (:db/id sched)
-        freq (:lease/payment-frequency l)
-        n (lease/periods-for (:lease/term-months l) freq)
+        freq (:kontor.lease/payment-frequency l)
+        n (lease/periods-for (:kontor.lease/term-months l) freq)
         fired (long (count (schedule/fired-sequences db sched-eid)))
         _ (when (< n fired)
             (throw (ex-info "revise-liability-book!: revised term implies fewer periods than already fired"
-                            {:type :lease/revision-below-fired
+                            {:type :kontor.lease/revision-below-fired
                              :revised-periods n :fired fired})))
-        end-date (schedule/date-of-occurrence (:schedule/start-date sched) freq n)]
+        end-date (schedule/date-of-occurrence (:kontor.schedule/start-date sched) freq n)]
     [(cond-> {:db/id eid
-              :lease-liability/opening-liability new-opening-liability
-              :lease-liability/opening-fired-through fired}
+              :kontor.lease-liability/opening-liability new-opening-liability
+              :kontor.lease-liability/opening-fired-through fired}
        new-discount-rate
-       (assoc :lease-liability/discount-rate new-discount-rate)
-       note (assoc :lease-liability/note note))
-     {:db/id sched-eid :schedule/end-date end-date}]))
+       (assoc :kontor.lease-liability/discount-rate new-discount-rate)
+       note (assoc :kontor.lease-liability/note note))
+     {:db/id sched-eid :kontor.schedule/end-date end-date}]))
 
 (defn revise-liability-book!
   "Re-anchor a `:lease-liability` book after an ADR-064 modification:

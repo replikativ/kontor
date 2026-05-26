@@ -38,13 +38,13 @@
       (is (== 60M   (ts/apply-schedule s 4500M))  "1000 above the floor")
       (is (== 3900M (ts/apply-schedule s 99999M)) "capped at the ceiling")))
   (testing ":formula — escape hatch (fn is (fn [base ctx]))"
-    (is (== 42M (ts/apply-schedule {:schedule/type :formula
+    (is (== 42M (ts/apply-schedule {:kontor.schedule/type :formula
                                     :fn (fn [_ _] 42M)} 999M))))
   (testing ":elect — same base, pick min/max"
-    (is (== 250M (ts/apply-schedule {:schedule/type :elect :choose :min
+    (is (== 250M (ts/apply-schedule {:kontor.schedule/type :elect :choose :min
                                      :schedules [(ts/flat 0.30M) (ts/flat 0.25M)]}
                                     1000M)))
-    (is (== 300M (ts/apply-schedule {:schedule/type :elect :choose :max
+    (is (== 300M (ts/apply-schedule {:kontor.schedule/type :elect :choose :max
                                      :schedules [(ts/flat 0.30M) (ts/flat 0.25M)]}
                                     1000M)))))
 
@@ -59,8 +59,8 @@
     (is (== 1200M (ts/apply-schedule s 10000M)) "10% bracket + 2% levy")))
 
 (deftest unknown-schedule-throws
-  (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unknown :schedule/type"
-                        (ts/apply-schedule {:schedule/type :bogus} 100M))))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unknown :kontor.schedule/type"
+                        (ts/apply-schedule {:kontor.schedule/type :bogus} 100M))))
 
 (deftest apply-adjustments-fold
   ;; note 105 frontier 1 — the ordered, signed, base-aware adjustment fold.
@@ -149,14 +149,14 @@
 (deftest formula-schedule-receives-ctx
   ;; note 103 GAP 3 — the tax-unit reaches the schedule (the substrate seam
   ;; FR quotient familial / DE Ehegattensplitting need).
-  (let [per-part {:schedule/type :formula
+  (let [per-part {:kontor.schedule/type :formula
                   :fn (fn [base ctx] (/ base (:parts ctx)))}]
     (is (== 500M (ts/apply-schedule per-part 1000M {:parts 2M}))
         "the schedule reads :parts from ctx")
     (is (== 250M (ts/apply-schedule per-part 1000M {:parts 4M}))))
   (testing ":elect threads ctx into its sub-schedules"
-    (let [s {:schedule/type :elect :choose :min
-             :schedules [{:schedule/type :formula :fn (fn [base ctx]
+    (let [s {:kontor.schedule/type :elect :choose :min
+             :schedules [{:kontor.schedule/type :formula :fn (fn [base ctx]
                                                         (* base (:rate ctx)))}
                          (ts/flat 0.40M)]}]
       (is (== 200M (ts/apply-schedule s 1000M {:rate 0.20M}))

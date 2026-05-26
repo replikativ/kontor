@@ -89,11 +89,11 @@
     (testing "PT carries analytic-distribution on in-state plan"
       (is (seq (:kontor.posting/analytic-distributions pt-posting)))
       (let [d (first (:kontor.posting/analytic-distributions pt-posting))]
-        (is (= [:analytic-plan/code "in-state"]
-               (:analytic-distribution/plan d)))
-        (is (= [:analytic-account/path "in-state:IN-MH"]
-               (:analytic-distribution/account d)))
-        (is (= 100M (:analytic-distribution/percent d)))))))
+        (is (= [:kontor.analytic-plan/code "in-state"]
+               (:kontor.analytic-distribution/plan d)))
+        (is (= [:kontor.analytic-account/path "in-state:IN-MH"]
+               (:kontor.analytic-distribution/account d)))
+        (is (= 100M (:kontor.analytic-distribution/percent d)))))))
 
 (deftest wages-expense-carries-state-distribution
   (let [postings (pb/build-payroll-postings
@@ -115,17 +115,17 @@
     (testing "Two state distributions emitted"
       (is (= 2 (count dists))))
     (testing "Both states appear"
-      (let [paths (set (map :analytic-distribution/account dists))]
-        (is (contains? paths [:analytic-account/path "in-state:IN-MH"]))
-        (is (contains? paths [:analytic-account/path "in-state:IN-KA"]))))
+      (let [paths (set (map :kontor.analytic-distribution/account dists))]
+        (is (contains? paths [:kontor.analytic-account/path "in-state:IN-MH"]))
+        (is (contains? paths [:kontor.analytic-account/path "in-state:IN-KA"]))))
     (testing "Percentages match allocation"
       (let [by-path (into {}
                           (map (fn [d]
-                                 [(:analytic-distribution/account d)
-                                  (:analytic-distribution/percent d)])
+                                 [(:kontor.analytic-distribution/account d)
+                                  (:kontor.analytic-distribution/percent d)])
                                dists))]
-        (is (= 60M (by-path [:analytic-account/path "in-state:IN-MH"])))
-        (is (= 40M (by-path [:analytic-account/path "in-state:IN-KA"])))))))
+        (is (= 60M (by-path [:kontor.analytic-account/path "in-state:IN-MH"])))
+        (is (= 40M (by-path [:kontor.analytic-account/path "in-state:IN-KA"])))))))
 
 (deftest missing-account-tag-throws
   (testing "Builder fails loud when consumer's :accounts map missing a tag"

@@ -262,7 +262,7 @@
 
 (defn pay-event->summary-string
   "Human-readable single-line summary of a pay-event. Used in
-   `:audit-doc/description` so the audit chain row carries an
+   `:kontor.audit-doc/description` so the audit chain row carries an
    immediately-useful glance value."
   [event]
   (format

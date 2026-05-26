@@ -6,7 +6,7 @@
 
    1. **`QcPayrollEmitProvider`** — `PayrollEmitProvider` impl that
       complements `CaPayrollEmitProvider`. Emits per-pay-period
-      `:audit-doc/category :payroll-filing :audit-doc/language :fr`
+      `:kontor.audit-doc/category :payroll-filing :kontor.audit-doc/language :fr`
       rows when any payroll-fact carries QC component-kinds.
       The CRA-side `CaPayrollEmitProvider` still emits its own EN row;
       QC employees produce a parallel FR row for the audit chain.
@@ -15,7 +15,7 @@
       `kontor.payroll-ca.rl1/payroll-facts->rl1-slip` +
       `kontor.payroll-ca.rl1-summary/build-summary` +
       `kontor.payroll-ca.rl1-summary/submission`. Records what was
-      emitted to Revenu Québec with `:audit-doc/language :fr`.
+      emitted to Revenu Québec with `:kontor.audit-doc/language :fr`.
 
    ## QC detection (with the emitter installed)
 
@@ -40,21 +40,21 @@
   (emit-payroll-events [_ payroll-facts {:keys [pay-period-eid entity-eid]}]
     (let [qc-set (emit/qc-employees-in-facts payroll-facts)]
       (when (seq qc-set)
-        [{:audit-doc/code (str "QC-PAYROLL-EVENT-" entity-eid
+        [{:kontor.audit-doc/code (str "QC-PAYROLL-EVENT-" entity-eid
                                "-" pay-period-eid)
-          :audit-doc/type :payroll-run-summary
-          :audit-doc/title
+          :kontor.audit-doc/type :payroll-run-summary
+          :kontor.audit-doc/title
           (format (str "QC payroll run (%d QC employments) for "
                        "pay-period %d, entity %d")
                   (count qc-set) pay-period-eid entity-eid)
-          :audit-doc/description
+          :kontor.audit-doc/description
           (str "QC employments: " qc-set ". TPZ-1015 totals computed "
                "via kontor.payroll-ca.tpz1015/tpz1015-period-due; RL-1 "
                "year-end submission via "
                "kontor.payroll-ca.rl1-summary/submission. See ADR-087.")
-          :audit-doc/category :payroll-filing
-          :audit-doc/language (or (:language opts) :fr)
-          :audit-doc/uploaded-at (java.util.Date.)}]))))
+          :kontor.audit-doc/category :payroll-filing
+          :kontor.audit-doc/language (or (:language opts) :fr)
+          :kontor.audit-doc/uploaded-at (java.util.Date.)}]))))
 
 ;; ============================================================================
 ;; Year-end RL-1 submission emit

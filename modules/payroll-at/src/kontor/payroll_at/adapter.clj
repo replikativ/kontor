@@ -44,7 +44,7 @@
      to a wrapped `AtFilingEmitProvider` (default `AtMbgmL16Emitter`)
      to construct the mBGM XML bytes + SHA-256, and returns a vector
      of `:audit-doc` tx-data maps with
-     `:audit-doc/category :payroll-filing` + `:audit-doc/language :de`
+     `:kontor.audit-doc/category :payroll-filing` + `:kontor.audit-doc/language :de`
      ready for `run-payroll!` to transact. Unlike the side-effecting
      `emit-monthly!`, this returns PURE tx-data (no `!` call) — the
      orchestrator atomically composes the audit-doc rows with the GL
@@ -487,16 +487,16 @@
 
 (defn- period-from-pay-period
   "Derive the {:from :to} period bounds for the mBGM element from a
-   :pay-period eid. The :pay-period schema carries :pay-period/start-date
-   + :pay-period/end-date (per `kontor.hr.schema`); the mBGM element
+   :pay-period eid. The :pay-period schema carries :kontor.pay-period/start-date
+   + :kontor.pay-period/end-date (per `kontor.hr.schema`); the mBGM element
    wants the same shape `:payroll-result/period` carries.
 
    The :end-date in HR schema is INCLUSIVE; mBGM uses an exclusive
    upper bound; we add 1 day."
   [db pay-period-eid]
-  (let [entity (d/pull db [:pay-period/start-date :pay-period/end-date]
+  (let [entity (d/pull db [:kontor.pay-period/start-date :kontor.pay-period/end-date]
                        pay-period-eid)
-        {:pay-period/keys [start-date end-date]} entity]
+        {:kontor.pay-period/keys [start-date end-date]} entity]
     (when (and start-date end-date)
       (let [cal (doto (java.util.Calendar/getInstance
                        (TimeZone/getTimeZone "UTC"))
@@ -537,21 +537,21 @@
           code (str "mbgm-" period-str "-" entity-eid)
           tempid (str "at-emit-mbgm-" period-str "-" entity-eid)]
       [(cond-> {:db/id tempid
-                :audit-doc/code code
-                :audit-doc/type :mbgm
-                :audit-doc/title (str "mBGM " period-str)
-                :audit-doc/description
+                :kontor.audit-doc/code code
+                :kontor.audit-doc/type :mbgm
+                :kontor.audit-doc/title (str "mBGM " period-str)
+                :kontor.audit-doc/description
                 (str "ÖGK mBGM submission for " period-str
                      " (" (count payroll-facts) " employees)"
                      (when emit-format
                        (str "; envelope " emit-format)))
-                :audit-doc/storage-uri uri
-                :audit-doc/content-hash sha
-                :audit-doc/uploaded-at (Date.)
-                :audit-doc/category :payroll-filing
-                :audit-doc/language language}
+                :kontor.audit-doc/storage-uri uri
+                :kontor.audit-doc/content-hash sha
+                :kontor.audit-doc/uploaded-at (Date.)
+                :kontor.audit-doc/category :payroll-filing
+                :kontor.audit-doc/language language}
          uploaded-by-uid
-         (assoc :audit-doc/uploaded-by-uid uploaded-by-uid))])))
+         (assoc :kontor.audit-doc/uploaded-by-uid uploaded-by-uid))])))
 
 (defn make-at-kontor-emit-provider
   ([] (make-at-kontor-emit-provider {}))

@@ -1,7 +1,7 @@
 (ns kontor.authz.relationships
   "kontor-authz — relationship-edge CRUD (ADR-066).
 
-   Reading + writing the `:authz.relationship/*` edges. The traversal
+   Reading + writing the `:kontor.authz.relationship/*` edges. The traversal
    (`kontor.authz.indexed`) is read-only over these edges; this
    namespace is how they get created, touched, deleted, and queried.
    Ported from the relationship half of EACL's `eacl.datomic.impl`
@@ -48,11 +48,11 @@
             (:resource/relation filters) (conj '?resource-relation)
             (:subject/type filters)      (conj '?subject-type)
             (:subject/id filters)        (conj '?subject))
-   :where '[[?rel :authz.relationship/resource ?resource]
-            [?rel :authz.relationship/resource-type ?resource-type]
-            [?rel :authz.relationship/relation-name ?resource-relation]
-            [?rel :authz.relationship/subject ?subject]
-            [?rel :authz.relationship/subject-type ?subject-type]]})
+   :where '[[?rel :kontor.authz.relationship/resource ?resource]
+            [?rel :kontor.authz.relationship/resource-type ?resource-type]
+            [?rel :kontor.authz.relationship/relation-name ?resource-relation]
+            [?rel :kontor.authz.relationship/subject ?subject]
+            [?rel :kontor.authz.relationship/subject-type ?subject-type]]})
 
 (defn- row->Relationship
   [{rt :resource/type rid :resource/id rrel :resource/relation
@@ -84,7 +84,7 @@
   (let [subject-eid  (entid db (:id subject))
         resource-eid (entid db (:id resource))]
     (when (and subject-eid resource-eid)
-      (->> (d/datoms db :avet :authz.relationship/forward
+      (->> (d/datoms db :avet :kontor.authz.relationship/forward
                      [(:type subject) subject-eid relation
                       (:type resource) resource-eid])
            (map :e)
@@ -100,7 +100,7 @@
    The `:create` duplicate check is against the *pre-tx* `db`
    snapshot — so two identical `:create`s in ONE
    `write-relationships!` batch both pass here; the
-   `:authz.relationship/forward` `:db.unique/identity` tuple then
+   `:kontor.authz.relationship/forward` `:db.unique/identity` tuple then
    merges them into one edge at transact time. Data stays consistent
    (one edge, not two); the only effect is that the in-batch
    duplicate does not *throw*. A cross-batch duplicate is caught."

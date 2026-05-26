@@ -49,12 +49,12 @@
                   :kontor.ledger/framework :ifrs}
                  {:db/id "led-usgaap" :kontor.ledger/code "us-gaap" :kontor.ledger/name "ASC 842"
                   :kontor.ledger/framework :us-gaap}
-                 {:db/id "class-rou" :asset-class/code "rou-property"
-                  :asset-class/name "Right-of-Use — Property"}
-                 {:db/id "doc-lease" :audit-doc/code "LEASE-CONTRACT-1"
-                  :audit-doc/type :lease-contract
-                  :audit-doc/storage-uri "s3://docs/lease-1"
-                  :audit-doc/uploaded-at #inst "2026-01-01"}
+                 {:db/id "class-rou" :kontor.asset-class/code "rou-property"
+                  :kontor.asset-class/name "Right-of-Use — Property"}
+                 {:db/id "doc-lease" :kontor.audit-doc/code "LEASE-CONTRACT-1"
+                  :kontor.audit-doc/type :lease-contract
+                  :kontor.audit-doc/storage-uri "s3://docs/lease-1"
+                  :kontor.audit-doc/uploaded-at #inst "2026-01-01"}
                  {:db/id "a-rou"    :kontor.account/code "0250" :kontor.account/name "ROU Asset"
                   :kontor.account/type :asset :kontor.account/active true}
                  {:db/id "a-rouacc" :kontor.account/code "0259"
@@ -85,8 +85,8 @@
 (defn- p          [db code] (ref-eid db :kontor.partner/external-id code))
 (defn- acct       [db code] (ref-eid db :kontor.account/code code))
 (defn- journal    [db] (ref-eid db :kontor.journal/code "GEN"))
-(defn- class-eid  [db] (ref-eid db :asset-class/code "rou-property"))
-(defn- adoc       [db] (ref-eid db :audit-doc/code "LEASE-CONTRACT-1"))
+(defn- class-eid  [db] (ref-eid db :kontor.asset-class/code "rou-property"))
+(defn- adoc       [db] (ref-eid db :kontor.audit-doc/code "LEASE-CONTRACT-1"))
 (defn- ledger     [db code] (ref-eid db :kontor.ledger/code code))
 
 (defn- ledger-balance
@@ -158,7 +158,7 @@
       (testing "the balance unwinds exactly to zero"
         (is (= 0.00M (:balance-remaining (last periods)))))
       (testing "Σ principal = the opening liability (the PV)"
-        (let [opening (:lease-liability/opening-liability
+        (let [opening (:kontor.lease-liability/opening-liability
                        (liability/pull-book (d/db conn) book))
               sum-principal (reduce (fn [a x] (.add a (:principal x))) 0M periods)]
           (is (= opening sum-principal))))
@@ -218,17 +218,17 @@
         db' (d/db conn)
         ifrs (ledger db' "ifrs")]
     (testing "the lease moves :draft → :active"
-      (is (= :active (:lease/status (lease/pull-lease db' "LSE-FIN")))))
+      (is (= :active (:kontor.lease/status (lease/pull-lease db' "LSE-FIN")))))
     (testing "a single Right-of-Use :asset is created and linked"
       (is (some? (:rou-asset result)))
       (is (= (:rou-asset result)
-             (:db/id (:lease/rou-asset (lease/pull-lease db' "LSE-FIN"))))))
+             (:db/id (:kontor.lease/rou-asset (lease/pull-lease db' "LSE-FIN"))))))
     (testing "one :lease-liability book + one ROU :asset-depreciation book exist"
       (is (= 1 (count (liability/books-of db' "LSE-FIN"))))
       (is (= 1 (count (asset-dep/books-of db' (:rou-asset result))))))
     (testing "the opening liability is the PV of the payments"
       (let [book (liability/book-for db' "LSE-FIN" ifrs)]
-        (is (= 32871.02M (:lease-liability/opening-liability
+        (is (= 32871.02M (:kontor.lease-liability/opening-liability
                           (liability/pull-book db' book))))))
     (testing "the day-one recognition entry is balanced on the IFRS ledger"
       (is (zero? (.signum (reduce (fn [a code] (.add a (ledger-balance db' (acct db' code) ifrs)))
@@ -360,7 +360,7 @@
       (is (= 24 (:count (:liability result))))
       (is (= 24 (:count (:rou result))))
       (is (:completed? result))
-      (is (= :expired (:lease/status (lease/pull-lease db' "LSE-OP")))))
+      (is (= :expired (:kontor.lease/status (lease/pull-lease db' "LSE-OP")))))
     (testing "the liability is fully unwound and the ROU asset fully amortised"
       (is (= 0.00M (ledger-balance db' (acct db' "1750") usgaap)))
       (is (= 46787.80M (ledger-balance db' (acct db' "0250") usgaap)))
@@ -408,7 +408,7 @@
       (is (= 2 (count (asset-dep/books-of db' (:rou-asset result))))))
     (testing "two :lease-liability books — one per ledger — with the right classification"
       (is (= #{:finance :operating}
-             (set (map #(:lease-liability/classification (liability/pull-book db' %))
+             (set (map #(:kontor.lease-liability/classification (liability/pull-book db' %))
                        (liability/books-of db' "LSE-MB"))))))
     ;; run month 1 on both ledgers.
     (lrun/run-lease! conn {:lease "LSE-MB" :ledger ifrs :journal (journal db')
@@ -465,22 +465,22 @@
         db' (d/db conn)
         ifrs (ledger db' "ifrs")]
     (testing "the lease moves :draft → :active via :lease-imported"
-      (is (= :active (:lease/status (lease/pull-lease db' "LSE-IMP")))))
+      (is (= :active (:kontor.lease/status (lease/pull-lease db' "LSE-IMP")))))
     (testing "the audit denorms are preserved on the lease"
       (let [l (lease/pull-lease db' "LSE-IMP")]
-        (is (true? (:lease/imported? l)))
-        (is (= #inst "2024-01-01" (:lease/imported-original-commencement-date l)))
-        (is (= 36 (:lease/imported-original-term-months l)))))
+        (is (true? (:kontor.lease/imported? l)))
+        (is (= #inst "2024-01-01" (:kontor.lease/imported-original-commencement-date l)))
+        (is (= 36 (:kontor.lease/imported-original-term-months l)))))
     (testing "a single Right-of-Use :asset is created and linked"
       (is (some? (:rou-asset result)))
       (is (= (:rou-asset result)
-             (:db/id (:lease/rou-asset (lease/pull-lease db' "LSE-IMP"))))))
+             (:db/id (:kontor.lease/rou-asset (lease/pull-lease db' "LSE-IMP"))))))
     (testing "one :lease-liability book + one ROU :asset-depreciation book"
       (is (= 1 (count (liability/books-of db' "LSE-IMP"))))
       (is (= 1 (count (asset-dep/books-of db' (:rou-asset result))))))
     (testing "the liability book's :opening-liability IS the imported remaining PV"
       (let [book (liability/book-for db' "LSE-IMP" ifrs)]
-        (is (= 7891.86M (:lease-liability/opening-liability
+        (is (= 7891.86M (:kontor.lease-liability/opening-liability
                          (liability/pull-book db' book))))))
     (testing "import-lease! posts NO day-one GL entry — the GL is the consumer's bridge"
       (is (zero? (.signum (ledger-balance db' (acct db' "0250") ifrs))))
@@ -543,7 +543,7 @@
              :changed-by-uid (p db "U-cfo")})]
     (testing "import-lease! refuses a lease without :imported? true"
       (is (thrown-with-msg?
-           clojure.lang.ExceptionInfo #":lease/imported\?"
+           clojure.lang.ExceptionInfo #":kontor.lease/imported\?"
            (lrun/import-lease! conn
                                {:lease "LSE-NORMAL" :changed-by-uid (p db "U-cfo")
                                 :rou-asset-account (acct db "0250")
@@ -586,7 +586,7 @@
         ifrs (ledger (d/db conn) "ifrs")
         db1 (d/db conn)
         rou-dep-book (asset-dep/book-for db1
-                                         (:db/id (:lease/rou-asset
+                                         (:db/id (:kontor.lease/rou-asset
                                                   (lease/pull-lease db1 "LSE-IMP2")))
                                          ifrs)
         result (lrun/run-lease! conn
@@ -595,16 +595,16 @@
                   :changed-by-uid (p (d/db conn) "U-cfo")
                   :as-of #inst "2026-08-15"})]
     (testing "the ROU dep book carries the pre-import accumulated as a scalar"
-      (let [b (d/pull db1 [:asset-depreciation/opening-accumulated
-                           :asset-depreciation/depreciable-base
-                           :asset-depreciation/useful-life-months]
+      (let [b (d/pull db1 [:kontor.asset-depreciation/opening-accumulated
+                           :kontor.asset-depreciation/depreciable-base
+                           :kontor.asset-depreciation/useful-life-months]
                       rou-dep-book)]
-        (is (= 30130.10M (:asset-depreciation/opening-accumulated b)))
-        (is (= 2740.92M  (:asset-depreciation/depreciable-base b)))
-        (is (= 3 (:asset-depreciation/useful-life-months b)))))
+        (is (= 30130.10M (:kontor.asset-depreciation/opening-accumulated b)))
+        (is (= 2740.92M  (:kontor.asset-depreciation/depreciable-base b)))
+        (is (= 3 (:kontor.asset-depreciation/useful-life-months b)))))
     (testing "the remaining three payments fire on the imported tail"
       (is (= [1 2 3] (:fired (:liability result))))
       (is (= [1 2 3] (:fired (:rou result)))))
     (testing "the lease auto-expires at the last fired payment"
       (is (true? (:completed? result)))
-      (is (= :expired (:lease/status (lease/pull-lease (d/db conn) "LSE-IMP2")))))))
+      (is (= :expired (:kontor.lease/status (lease/pull-lease (d/db conn) "LSE-IMP2")))))))

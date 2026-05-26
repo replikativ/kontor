@@ -427,17 +427,17 @@
 ;;   (-> {:transaction {...} :postings [posting]}
 ;;       (update :postings #(into [] (mapcat (fn [p]
 ;;                                              (expand-distribution
-;;                                               p [:analytic-plan/code "COST-CENTER"])))
+;;                                               p [:kontor.analytic-plan/code "COST-CENTER"])))
 ;;                                 %)))
 ;;       (build-transaction))
 
 (defn- distribution-matches-plan?
-  "True iff a distribution map's :analytic-distribution/plan value
+  "True iff a distribution map's :kontor.analytic-distribution/plan value
    equals the supplied plan-spec. Plan-spec may be an eid, a
-   lookup-ref like [:analytic-plan/code \"COST-CENTER\"], or any
+   lookup-ref like [:kontor.analytic-plan/code \"COST-CENTER\"], or any
    value that the caller used in the distribution entry."
   [plan-spec dist]
-  (= plan-spec (:analytic-distribution/plan dist)))
+  (= plan-spec (:kontor.analytic-distribution/plan dist)))
 
 (defn- precision-for-amount
   "At the build/expansion layer we don't have DB access to query
@@ -458,22 +458,22 @@
     (if (empty? matching)
       [posting]
       (let [parent-money (money/posting->money posting)
-            percents     (mapv :analytic-distribution/percent matching)
+            percents     (mapv :kontor.analytic-distribution/percent matching)
             precision    (precision-for-amount (:amount parent-money))
             splits       (money/split-by-percentages parent-money percents precision)]
         (->> (map vector matching splits)
              ;; Drop zero-percent children — no zero-amount postings.
              (remove (fn [[d _]]
-                       (zero? (compare (bigdec (:analytic-distribution/percent d))
+                       (zero? (compare (bigdec (:kontor.analytic-distribution/percent d))
                                        0M))))
              (mapv (fn [[dist split-money]]
                      (-> posting
                          (assoc :kontor.posting/amount (:amount split-money))
                          (assoc :kontor.posting/analytic-distributions
-                                (into [{:analytic-distribution/plan plan-spec
-                                        :analytic-distribution/account
-                                        (:analytic-distribution/account dist)
-                                        :analytic-distribution/percent 100M}]
+                                (into [{:kontor.analytic-distribution/plan plan-spec
+                                        :kontor.analytic-distribution/account
+                                        (:kontor.analytic-distribution/account dist)
+                                        :kontor.analytic-distribution/percent 100M}]
                                       others))))))))))
 
 (defn expand-distribution
@@ -482,7 +482,7 @@
    amount split per percent (largest-remainder method — see
    `kontor.money/split-by-percentages`).
 
-   `plan-spec` matches a distribution's :analytic-distribution/plan
+   `plan-spec` matches a distribution's :kontor.analytic-distribution/plan
    value exactly (eid, lookup-ref, etc. — pass it in whatever form
    the caller used to tag the distribution).
 
@@ -498,7 +498,7 @@
    redistributed by largest-remainder so the children sum bit-exact
    to the parent.
 
-   Distributions with :analytic-distribution/percent = 0 produce no
+   Distributions with :kontor.analytic-distribution/percent = 0 produce no
    child (we don't emit zero-amount postings).
 
    If the posting carries no distributions for `plan-spec`, returns
@@ -641,7 +641,7 @@
 
    Mandatory input keys:
      :direction       :in | :out
-     :book            valuation-book eid or :valuation-book/code string
+     :book            valuation-book eid or :kontor.valuation-book/code string
      :item            ref (caller-defined item entity)
      :qty             bigdec
      :commodity       commodity ref
@@ -710,15 +710,15 @@
             (costing/plan-receipt provider db receipt-req)
             layer-tempid -200
             layer-entity (cond-> {:db/id                              layer-tempid
-                                  :valuation-layer/book               book-eid
-                                  :valuation-layer/item               item
-                                  :valuation-layer/origin-transaction tx-tempid
-                                  :valuation-layer/qty-original       (:qty layer-data)
-                                  :valuation-layer/unit-cost-original (:unit-cost layer-data)
-                                  :valuation-layer/commodity          commodity
-                                  :valuation-layer/received-at        effective-date}
-                           lot  (assoc :valuation-layer/lot lot)
-                           note (assoc :valuation-layer/note note))
+                                  :kontor.valuation-layer/book               book-eid
+                                  :kontor.valuation-layer/item               item
+                                  :kontor.valuation-layer/origin-transaction tx-tempid
+                                  :kontor.valuation-layer/qty-original       (:qty layer-data)
+                                  :kontor.valuation-layer/unit-cost-original (:unit-cost layer-data)
+                                  :kontor.valuation-layer/commodity          commodity
+                                  :kontor.valuation-layer/received-at        effective-date}
+                           lot  (assoc :kontor.valuation-layer/lot lot)
+                           note (assoc :kontor.valuation-layer/note note))
             postings (receipt-postings
                       {:tx-tempid tx-tempid
                        :commodity commodity
@@ -765,11 +765,11 @@
               consumption-entities
               (mapv (fn [i {:keys [layer qty unit-cost]}]
                       {:db/id                                       (- -400 i)
-                       :layer-consumption/layer                     layer
-                       :layer-consumption/qty                       qty
-                       :layer-consumption/unit-cost-at-consumption  unit-cost
-                       :layer-consumption/issue-transaction         tx-tempid
-                       :layer-consumption/issued-at                 effective-date})
+                       :kontor.layer-consumption/layer                     layer
+                       :kontor.layer-consumption/qty                       qty
+                       :kontor.layer-consumption/unit-cost-at-consumption  unit-cost
+                       :kontor.layer-consumption/issue-transaction         tx-tempid
+                       :kontor.layer-consumption/issued-at                 effective-date})
                     (range)
                     consumptions)
               posting-entities

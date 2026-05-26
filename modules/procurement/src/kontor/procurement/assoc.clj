@@ -7,8 +7,8 @@
 
    The drop-ship pattern: an SO line is fulfilled by a linked PO
    line; the supplier ships directly to the customer. The PO's
-   `:ship-group/contact-mech` should reference the SO's
-   `:ship-group/contact-mech` (NOT a copy) — bitemporal queries
+   `:kontor.ship-group/contact-mech` should reference the SO's
+   `:kontor.ship-group/contact-mech` (NOT a copy) — bitemporal queries
    answer 'what was the customer address at PO time' for free.
 
    The substitute pattern: alt product offered when the original is
@@ -37,18 +37,18 @@
              (d/q '[:find [?a ...]
                     :in $ ?oi ?t
                     :where
-                    [?a :order-item-assoc/from-order-item ?oi]
-                    [?a :order-item-assoc/type ?t]]
+                    [?a :kontor.procurement.order-item-assoc/from-order-item ?oi]
+                    [?a :kontor.procurement.order-item-assoc/type ?t]]
                   db order-item-eid type-filter)
              (d/q '[:find [?a ...]
                     :in $ ?oi
-                    :where [?a :order-item-assoc/from-order-item ?oi]]
+                    :where [?a :kontor.procurement.order-item-assoc/from-order-item ?oi]]
                   db order-item-eid))]
      (->> q
           (map #(d/pull db
-                        '[* {:order-item-assoc/to-order-item
-                             [:db/id :order-item/seq-id :order-item/product-id
-                              {:order-item/order [:order/external-id :order/type]}]}]
+                        '[* {:kontor.procurement.order-item-assoc/to-order-item
+                             [:db/id :kontor.sales.order-item/seq-id :kontor.sales.order-item/product-id
+                              {:kontor.sales.order-item/order [:kontor.order/external-id :kontor.order/type]}]}]
                         %))
           vec))))
 
@@ -62,18 +62,18 @@
              (d/q '[:find [?a ...]
                     :in $ ?oi ?t
                     :where
-                    [?a :order-item-assoc/to-order-item ?oi]
-                    [?a :order-item-assoc/type ?t]]
+                    [?a :kontor.procurement.order-item-assoc/to-order-item ?oi]
+                    [?a :kontor.procurement.order-item-assoc/type ?t]]
                   db order-item-eid type-filter)
              (d/q '[:find [?a ...]
                     :in $ ?oi
-                    :where [?a :order-item-assoc/to-order-item ?oi]]
+                    :where [?a :kontor.procurement.order-item-assoc/to-order-item ?oi]]
                   db order-item-eid))]
      (->> q
           (map #(d/pull db
-                        '[* {:order-item-assoc/from-order-item
-                             [:db/id :order-item/seq-id :order-item/product-id
-                              {:order-item/order [:order/external-id :order/type]}]}]
+                        '[* {:kontor.procurement.order-item-assoc/from-order-item
+                             [:db/id :kontor.sales.order-item/seq-id :kontor.sales.order-item/product-id
+                              {:kontor.sales.order-item/order [:kontor.order/external-id :kontor.order/type]}]}]
                         %))
           vec))))
 
@@ -90,11 +90,11 @@
   (when-not to-order-item   (throw (ex-info ":to-order-item required" {})))
   (when-not type            (throw (ex-info ":type required" {})))
   (when-not quantity        (throw (ex-info ":quantity required" {})))
-  (let [row (cond-> {:order-item-assoc/from-order-item from-order-item
-                     :order-item-assoc/to-order-item to-order-item
-                     :order-item-assoc/type type
-                     :order-item-assoc/quantity quantity}
-              note (assoc :order-item-assoc/note note))]
+  (let [row (cond-> {:kontor.procurement.order-item-assoc/from-order-item from-order-item
+                     :kontor.procurement.order-item-assoc/to-order-item to-order-item
+                     :kontor.procurement.order-item-assoc/type type
+                     :kontor.procurement.order-item-assoc/quantity quantity}
+              note (assoc :kontor.procurement.order-item-assoc/note note))]
     [row]))
 
 (defn link-orders!
@@ -167,7 +167,7 @@
    to. Returns pulled :order-item maps."
   [db so-item-eid]
   (->> (assocs-from db so-item-eid {:type :drop-shipment})
-       (map :order-item-assoc/to-order-item)
+       (map :kontor.procurement.order-item-assoc/to-order-item)
        vec))
 
 (defn so-for-drop-ship-po
@@ -175,5 +175,5 @@
    linked from. Returns pulled :order-item maps."
   [db po-item-eid]
   (->> (assocs-to db po-item-eid {:type :drop-shipment})
-       (map :order-item-assoc/from-order-item)
+       (map :kontor.procurement.order-item-assoc/from-order-item)
        vec))

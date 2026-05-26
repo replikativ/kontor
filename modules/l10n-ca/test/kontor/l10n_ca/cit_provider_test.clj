@@ -124,13 +124,13 @@
         (is (== 150000M (:amount (:gross-liability fed))))
         (is (== 150000M (:amount (:liability fed))))
         (is (= :general (:regime fed)))
-        (is (= :flat (:schedule/type (:schedule fed))))
+        (is (= :flat (:kontor.schedule/type (:schedule fed))))
         (is (== 0.15M (:rate (:schedule fed)))))
       (testing "Ontario: 1,000,000 × 11.5% = 115,000 (flat — no SBD)"
         (is (== 1000000M (:amount (:base on))))
         (is (== 115000M (:amount (:gross-liability on))))
         (is (== 115000M (:amount (:liability on))))
-        (is (= :flat (:schedule/type (:schedule on))))
+        (is (= :flat (:kontor.schedule/type (:schedule on))))
         (is (== 0.115M (:rate (:schedule on)))))
       (testing "Total: 150,000 + 115,000 = 265,000"
         (is (== 265000M (total-liability facts)))))))

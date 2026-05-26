@@ -16,7 +16,7 @@
 
    The substrate's check on payroll-facts (sum invariant): for each
    PayrollFact, gross must equal Σ positive employee-side
-   :compensation-component/amount and net must equal gross minus Σ
+   :kontor.compensation-component/amount and net must equal gross minus Σ
    absolute-value negative deductions. The check throws ex-info on
    first mismatch (no silent passing).
 
@@ -83,12 +83,12 @@
   (let [gross-total (->> facts (map :gross) (reduce (fn [a v] (.add ^BigDecimal a ^BigDecimal v)) 0M))
         net-total   (->> facts (map :net)   (reduce (fn [a v] (.add ^BigDecimal a ^BigDecimal v)) 0M))]
     [{:db/id tempid
-      :payroll-run/code code
-      :payroll-run/pay-period pay-period
-      :payroll-run/provider-id provider-id
-      :payroll-run/state :computed
-      :payroll-run/control-total-gross gross-total
-      :payroll-run/control-total-net net-total}]))
+      :kontor.payroll-run/code code
+      :kontor.payroll-run/pay-period pay-period
+      :kontor.payroll-run/provider-id provider-id
+      :kontor.payroll-run/state :computed
+      :kontor.payroll-run/control-total-gross gross-total
+      :kontor.payroll-run/control-total-net net-total}]))
 
 ;; ============================================================================
 ;; run-payroll!
@@ -108,14 +108,14 @@
        stack fires once.
 
    Required opts:
-     :pay-period      — eid or :pay-period/code
+     :pay-period      — eid or :kontor.pay-period/code
      :entity          — eid of :entity (ADR-031)
      :employments     — vector of :employment eids to include
      :compute-provider — satisfies PayrollComputeProvider
      :posting-builder  — satisfies PayrollPostingBuilder
      :accounts         — map keyed by component-kind → :account ref
                          (consumer-supplied CoA)
-     :run-code         — string for :payroll-run/code
+     :run-code         — string for :kontor.payroll-run/code
      :tx-code          — string for the :kontor.transaction/code
 
    Optional opts:
@@ -167,7 +167,7 @@
         (fn [db _ctx]
           (let [pp-eid (if (number? pay-period)
                          pay-period
-                         (d/q '[:find ?e . :in $ ?c :where [?e :pay-period/code ?c]]
+                         (d/q '[:find ?e . :in $ ?c :where [?e :kontor.pay-period/code ?c]]
                               db pay-period))
                 facts (->> (pp/compute-payroll compute-provider
                                                {:pay-period-eid pp-eid
@@ -196,7 +196,7 @@
                 tx-frag (posting/build-transaction tx-input)
                 ;; P0-86-1 fix — give every emit-doc a tempid so the
                 ;; payroll-run row can reference them via
-                ;; :payroll-run/emit-docs. The substrate guarantees:
+                ;; :kontor.payroll-run/emit-docs. The substrate guarantees:
                 ;; if the emit-provider produced N audit-docs for this
                 ;; pay-period, all N are reachable from the run row.
                 ;; Providers that pre-assign :db/id keep it; those that
@@ -220,11 +220,11 @@
                 run-frag (if (seq emit-tempids)
                            ;; The single-row map produced by
                            ;; create-payroll-run-tx-data — augment with
-                           ;; :payroll-run/emit-docs (cardinality/many).
+                           ;; :kontor.payroll-run/emit-docs (cardinality/many).
                            (mapv (fn [row]
                                    (if (and (map? row)
                                             (= "payroll-run-1" (:db/id row)))
-                                     (assoc row :payroll-run/emit-docs emit-tempids)
+                                     (assoc row :kontor.payroll-run/emit-docs emit-tempids)
                                      row))
                                  run-frag)
                            run-frag)]
@@ -233,7 +233,7 @@
                                    run-frag
                                    ;; link the run to the transaction
                                    [{:db/id "payroll-run-1"
-                                     :payroll-run/payroll-transaction "payroll-tx-1"}]))
+                                     :kontor.payroll-run/payroll-transaction "payroll-tx-1"}]))
              :ctx {:facts facts :run-tempid "payroll-run-1"
                    :emit-tempids emit-tempids}}))]
     (process/run-process

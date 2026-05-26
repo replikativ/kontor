@@ -51,13 +51,13 @@
                                       :entity-eid 2})]
     (testing "Three audit-docs returned (S-1200 + S-1210 + S-1299)"
       (is (= 3 (count docs))))
-    (testing "All carry :audit-doc/category :payroll-filing"
-      (is (every? #(= :payroll-filing (:audit-doc/category %)) docs)))
-    (testing "All carry :audit-doc/language :pt-br"
-      (is (every? #(= :pt-br (:audit-doc/language %)) docs)))
-    (testing "All carry :audit-doc/inline-payload with the eSocial XML"
-      (is (every? #(string? (:audit-doc/inline-payload %)) docs))
-      (is (every? #(str/includes? (:audit-doc/inline-payload %) "eSocial")
+    (testing "All carry :kontor.audit-doc/category :payroll-filing"
+      (is (every? #(= :payroll-filing (:kontor.audit-doc/category %)) docs)))
+    (testing "All carry :kontor.audit-doc/language :pt-br"
+      (is (every? #(= :pt-br (:kontor.audit-doc/language %)) docs)))
+    (testing "All carry :kontor.audit-doc/inline-payload with the eSocial XML"
+      (is (every? #(string? (:kontor.audit-doc/inline-payload %)) docs))
+      (is (every? #(str/includes? (:kontor.audit-doc/inline-payload %) "eSocial")
                   docs)))))
 
 (deftest provider-emits-per-employee
@@ -77,8 +77,8 @@
       (is (= 5 (count docs))))
     (testing "S-1200 docs reference both CPFs"
       (let [s1200-payloads (->> docs
-                                (filter #(str/includes? (:audit-doc/code %) "S1200"))
-                                (mapv :audit-doc/inline-payload))]
+                                (filter #(str/includes? (:kontor.audit-doc/code %) "S1200"))
+                                (mapv :kontor.audit-doc/inline-payload))]
         (is (= 2 (count s1200-payloads)))
         (is (some #(str/includes? % "11144477735") s1200-payloads))
         (is (some #(str/includes? % "12345678909") s1200-payloads))))))
@@ -94,7 +94,7 @@
                (assoc (sample-fact) :employment :emp/three)]
         docs (pp/emit-payroll-events provider facts
                                      {:pay-period-eid 1 :entity-eid 2})
-        s1299-docs (filter #(str/includes? (:audit-doc/code %) "S1299") docs)]
+        s1299-docs (filter #(str/includes? (:kontor.audit-doc/code %) "S1299") docs)]
     (is (= 1 (count s1299-docs)))))
 
 (deftest provider-emit-doc-id-is-stable
@@ -110,8 +110,8 @@
         docs-2 (pp/emit-payroll-events provider facts
                                        {:pay-period-eid 1 :entity-eid 2})]
     (testing "Codes match across calls"
-      (is (= (set (map :audit-doc/code docs-1))
-             (set (map :audit-doc/code docs-2)))))))
+      (is (= (set (map :kontor.audit-doc/code docs-1))
+             (set (map :kontor.audit-doc/code docs-2)))))))
 
 ;; ============================================================================
 ;; Table events
@@ -138,9 +138,9 @@
     (testing "Three docs"
       (is (= 3 (count docs))))
     (testing "Each tagged :payroll-filing"
-      (is (every? #(= :payroll-filing (:audit-doc/category %)) docs)))
+      (is (every? #(= :payroll-filing (:kontor.audit-doc/category %)) docs)))
     (testing "Each carries inline XML payload"
-      (is (every? #(str/includes? (:audit-doc/inline-payload %) "eSocial") docs)))))
+      (is (every? #(str/includes? (:kontor.audit-doc/inline-payload %) "eSocial") docs)))))
 
 (deftest table-events-reject-unknown-type
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
@@ -165,19 +165,19 @@
           :last-day-worked #inst "2026-06-30"
           :termination-reason :dismissal-without-cause})]
     (testing "Audit-doc carries :payroll-filing category"
-      (is (= :payroll-filing (:audit-doc/category audit-doc))))
+      (is (= :payroll-filing (:kontor.audit-doc/category audit-doc))))
     (testing "Audit-doc carries :pt-br language"
-      (is (= :pt-br (:audit-doc/language audit-doc))))
+      (is (= :pt-br (:kontor.audit-doc/language audit-doc))))
     (testing "Audit-doc inline-payload contains S-2299 XML"
-      (is (str/includes? (:audit-doc/inline-payload audit-doc)
+      (is (str/includes? (:kontor.audit-doc/inline-payload audit-doc)
                          "evtDeslig"))
-      (is (str/includes? (:audit-doc/inline-payload audit-doc)
+      (is (str/includes? (:kontor.audit-doc/inline-payload audit-doc)
                          "<a:mtvDeslig>02</a:mtvDeslig>")))
     (testing "Employment update transitions state to :terminated"
       (is (= 42 (:db/id emp-update)))
-      (is (= :terminated (:employment/state emp-update)))
-      (is (= #inst "2026-06-30" (:employment/end-date emp-update)))
-      (is (= :dismissal-without-cause (:employment/termination-reason emp-update))))))
+      (is (= :terminated (:kontor.employment/state emp-update)))
+      (is (= #inst "2026-06-30" (:kontor.employment/end-date emp-update)))
+      (is (= :dismissal-without-cause (:kontor.employment/termination-reason emp-update))))))
 
 (deftest terminate-employment-requires-keys
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
@@ -200,11 +200,11 @@
                       :matricula "EMP-001"
                       :remuneracao 5000M})]
     (testing "Audit-doc carries :payroll-filing category"
-      (is (= :payroll-filing (:audit-doc/category audit-doc))))
+      (is (= :payroll-filing (:kontor.audit-doc/category audit-doc))))
     (testing "Audit-doc carries :pt-br language"
-      (is (= :pt-br (:audit-doc/language audit-doc))))
+      (is (= :pt-br (:kontor.audit-doc/language audit-doc))))
     (testing "Inline payload contains S-2200 XML"
-      (is (str/includes? (:audit-doc/inline-payload audit-doc)
+      (is (str/includes? (:kontor.audit-doc/inline-payload audit-doc)
                          "evtAdmissao"))
-      (is (str/includes? (:audit-doc/inline-payload audit-doc)
+      (is (str/includes? (:kontor.audit-doc/inline-payload audit-doc)
                          "Jane Silva")))))

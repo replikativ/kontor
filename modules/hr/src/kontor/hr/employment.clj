@@ -8,8 +8,8 @@
    The `hire!` orchestrator composes (per ADR-067 kontor.process):
      1. create :employment row (or reuse existing in :applicant /
         :offered state)
-     2. attach :employment/contract-doc — an :audit-doc with
-        :audit-doc/category :hr-personnel (kernel attr per ADR-075)
+     2. attach :kontor.employment/contract-doc — an :audit-doc with
+        :kontor.audit-doc/category :hr-personnel (kernel attr per ADR-075)
      3. state transition → :hired (or → :active if start-date already
         passed)
 
@@ -34,7 +34,7 @@
    creating an :employment row (and optionally a contract :audit-doc).
 
    Required keys:
-     :code            — string, unique :employment/code
+     :code            — string, unique :kontor.employment/code
      :person          — ref or eid of :person
      :entity          — ref or eid of :entity (the employer)
      :start-date      — instant
@@ -70,19 +70,19 @@
                   fulltime-flag
                   (>= (compare work-time-fraction 1M) 0))]
     [(cond-> {:db/id tempid
-              :employment/code code
-              :employment/person person
-              :employment/entity entity
-              :employment/start-date start-date
-              :employment/job-title job-title
-              :employment/work-time-fraction work-time-fraction
-              :employment/work-relationship-kind work-relationship-kind
-              :employment/exempt-flag (boolean exempt-flag)
-              :employment/fulltime-flag ft-flag
-              :employment/state initial-state}
-       department    (assoc :employment/department department)
-       manager       (assoc :employment/manager manager)
-       contract-doc  (assoc :employment/contract-doc contract-doc))]))
+              :kontor.employment/code code
+              :kontor.employment/person person
+              :kontor.employment/entity entity
+              :kontor.employment/start-date start-date
+              :kontor.employment/job-title job-title
+              :kontor.employment/work-time-fraction work-time-fraction
+              :kontor.employment/work-relationship-kind work-relationship-kind
+              :kontor.employment/exempt-flag (boolean exempt-flag)
+              :kontor.employment/fulltime-flag ft-flag
+              :kontor.employment/state initial-state}
+       department    (assoc :kontor.employment/department department)
+       manager       (assoc :kontor.employment/manager manager)
+       contract-doc  (assoc :kontor.employment/contract-doc contract-doc))]))
 
 (defn hire!
   "Transact a new :employment. Routes through transact-with-validation.
@@ -105,13 +105,13 @@
 
 (defn terminate-tx-data
   "Pure tx-data builder for `terminate!`. Returns tx-data that:
-     - drives :employment/state to :terminated via the status machine
+     - drives :kontor.employment/state to :terminated via the status machine
        (legality check + history row + facet update)
-     - sets :employment/end-date + :employment/termination-reason on
+     - sets :kontor.employment/end-date + :kontor.employment/termination-reason on
        the same entity in the same transaction
 
    Required opts:
-     :employment       — eid or :employment/code
+     :employment       — eid or :kontor.employment/code
      :end-date         — instant
      :reason           — keyword (open-set per jurisdiction)
      :supporting-doc   — ref to :audit-doc (the termination letter /
@@ -134,13 +134,13 @@
                                            {:type :hr/termination-supporting-doc-required})))
   (let [eid (if (number? employment)
               employment
-              (d/q '[:find ?e . :in $ ?c :where [?e :employment/code ?c]]
+              (d/q '[:find ?e . :in $ ?c :where [?e :kontor.employment/code ?c]]
                    db employment))]
     (when-not eid (throw (ex-info "unknown :employment" {:employment employment})))
     (let [status-tx (sm/record-status-change-tx-data
                      db (cond-> {:entity      eid
                                  :entity-type :employment
-                                 :facet       :employment/state
+                                 :facet       :kontor.employment/state
                                  :to          :terminated
                                  :changed-at  (or changed-at (Date.))
                                  :supporting-doc supporting-doc}
@@ -149,8 +149,8 @@
                           reason-note    (assoc :reason-note reason-note)))]
       (into status-tx
             [{:db/id eid
-              :employment/end-date end-date
-              :employment/termination-reason reason}]))))
+              :kontor.employment/end-date end-date
+              :kontor.employment/termination-reason reason}]))))
 
 (defn terminate!
   "Transact a termination. The approval-policy gate
@@ -166,11 +166,11 @@
 ;; ============================================================================
 
 (defn sum-work-time-fraction
-  "Sum :employment/work-time-fraction across a person's concurrent
+  "Sum :kontor.employment/work-time-fraction across a person's concurrent
    employments at `at-date` (default: now). Returns a BigDecimal.
 
    The substrate INTENTIONALLY does NOT enforce sum ≤ 1.0 (see schema
-   docstring on :employment/work-time-fraction): secondment-with-
+   docstring on :kontor.employment/work-time-fraction): secondment-with-
    overlap is legitimate. This helper exists so a consumer's HR
    policy can compose an over-allocation guard tailored to its rules
    (e.g. 'sum > 1.5 requires approval', 'apprentice cannot stack
@@ -187,11 +187,11 @@
                 :with ?e
                 :in $ ?p ?at
                 :where
-                [?e :employment/person ?p]
-                [?e :employment/work-time-fraction ?ft]
-                [?e :employment/start-date ?start]
+                [?e :kontor.employment/person ?p]
+                [?e :kontor.employment/work-time-fraction ?ft]
+                [?e :kontor.employment/start-date ?start]
                 [(<= ?start ?at)]
-                [(get-else $ ?e :employment/end-date
+                [(get-else $ ?e :kontor.employment/end-date
                            #inst "9999-12-31") ?end]
                 [(< ?at ?end)]]
               db person-eid at-date)

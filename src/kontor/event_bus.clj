@@ -51,7 +51,7 @@
                             if no :kontor.transaction/* ops were present)
         :event/at         — java.util.Date of dispatch}
 
-   Future kinds (`:kontor.status-history/changed`, `:audit-doc/created`,
+   Future kinds (`:kontor.status-history/changed`, `:kontor.audit-doc/created`,
    `:kontor.posting/posted`) compose orthogonally; consumers filter on
    `:event/kind` in their handler.
 

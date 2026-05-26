@@ -185,7 +185,7 @@
    per-capita levy is a flat addition, so the whole thing is not a
    pure `:flat` schedule — `:formula` carries it faithfully."
   []
-  {:schedule/type :formula
+  {:kontor.schedule/type :formula
    :fn (fn [^java.math.BigDecimal taxable-income _ctx]
          (if (pos? taxable-income)
            (+ (* taxable-income inhabitant-tax-income-rate)

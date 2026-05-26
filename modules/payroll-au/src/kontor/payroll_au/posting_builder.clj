@@ -29,7 +29,7 @@
    AU has 8 jurisdictions (NSW / VIC / QLD / WA / SA / TAS / ACT / NT)
    with state payroll tax that varies wildly: threshold-then-rate
    between 4.75 % and 6.85 % depending on state. Allocation lives on
-   `:kontor.posting/analytic-distributions` via the `:analytic-plan/code
+   `:kontor.posting/analytic-distributions` via the `:kontor.analytic-plan/code
    \"state\"` plan + ISO-3166-2:AU per-state `:analytic-account`
    rows (installed via `kontor.payroll-au.core/install-state-analytic-plan!`).
 
@@ -109,17 +109,17 @@
   (cond
     (and (map? state-allocations) (seq state-allocations))
     (mapv (fn [[s pct]]
-            {:analytic-distribution/plan [:analytic-plan/code "state"]
-             :analytic-distribution/account
-             [:analytic-account/path (str "state:" (name s))]
-             :analytic-distribution/percent (bigdec pct)})
+            {:kontor.analytic-distribution/plan [:kontor.analytic-plan/code "state"]
+             :kontor.analytic-distribution/account
+             [:kontor.analytic-account/path (str "state:" (name s))]
+             :kontor.analytic-distribution/percent (bigdec pct)})
           state-allocations)
 
     (:state component)
-    [{:analytic-distribution/plan [:analytic-plan/code "state"]
-      :analytic-distribution/account
-      [:analytic-account/path (str "state:" (name (:state component)))]
-      :analytic-distribution/percent 100M}]
+    [{:kontor.analytic-distribution/plan [:kontor.analytic-plan/code "state"]
+      :kontor.analytic-distribution/account
+      [:kontor.analytic-account/path (str "state:" (name (:state component)))]
+      :kontor.analytic-distribution/percent 100M}]
 
     :else nil))
 

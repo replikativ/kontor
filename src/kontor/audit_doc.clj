@@ -14,7 +14,7 @@
 
    ## Privilege (ADR-051)
 
-   :audit-doc/privilege classifies a document's legal-privilege
+   :kontor.audit-doc/privilege classifies a document's legal-privilege
    status. It is a status-machine facet — changes go through
    `reclassify-privilege!`, which records who/why/supporting-doc on
    a :status-history row; a *waiver* (→ :none from a privileged
@@ -35,7 +35,7 @@
 ;;
 ;; Closes note 86 P0-86-2 (category vocabulary canonicalization) + adds
 ;; the 8 HR values from note 93 §4.1. Open-set — the substrate still
-;; accepts any keyword on `:audit-doc/category`; this def names the
+;; accepts any keyword on `:kontor.audit-doc/category`; this def names the
 ;; values the project endorses + documents. Consumers extending the
 ;; vocabulary (e.g. :hr-equity-vesting, :hr-secondment-agreement) just
 ;; transact arbitrary keywords; no migration.
@@ -45,7 +45,7 @@
 ;; scores, biometric inference, covert telemetry). See note 93 §6.
 
 (def canonical-categories
-  "Endorsed `:audit-doc/category` values. Open-set; consumers extend
+  "Endorsed `:kontor.audit-doc/category` values. Open-set; consumers extend
    freely. Grouped here for documentation + IDE autocomplete + DSAR /
    retention-policy targeting; the substrate never restricts."
   [;; Financial + regulator-bound filings
@@ -79,11 +79,11 @@
 ;; ============================================================================
 
 (defn by-code
-  "Resolve an :audit-doc eid by its :audit-doc/code."
+  "Resolve an :audit-doc eid by its :kontor.audit-doc/code."
   [db code]
   (d/q '[:find ?e .
          :in $ ?code
-         :where [?e :audit-doc/code ?code]]
+         :where [?e :kontor.audit-doc/code ?code]]
        db code))
 
 (defn resolve-doc
@@ -113,7 +113,7 @@
    `:tempid` (default `\"audit-doc-1\"`) for cross-step references.
 
    Optional `:category` / `:language` set the corresponding
-   `:audit-doc/category` (ADR-075) + `:audit-doc/language` (ADR-078)
+   `:kontor.audit-doc/category` (ADR-075) + `:kontor.audit-doc/language` (ADR-078)
    facets in one builder call — matches the substrate canonical
    vocabulary so callers don't reach for the raw attr names."
   [_db {:keys [code type title description content-hash storage-uri
@@ -123,20 +123,20 @@
   (when-not type     (throw (ex-info ":type required" {})))
   (when-not storage-uri (throw (ex-info ":storage-uri required" {})))
   [(cond-> {:db/id tempid
-            :audit-doc/code code
-            :audit-doc/type type
-            :audit-doc/storage-uri storage-uri
-            :audit-doc/uploaded-at (or uploaded-at (java.util.Date.))}
-     title           (assoc :audit-doc/title title)
-     description     (assoc :audit-doc/description description)
-     content-hash    (assoc :audit-doc/content-hash content-hash)
-     category        (assoc :audit-doc/category category)
-     language        (assoc :audit-doc/language language)
+            :kontor.audit-doc/code code
+            :kontor.audit-doc/type type
+            :kontor.audit-doc/storage-uri storage-uri
+            :kontor.audit-doc/uploaded-at (or uploaded-at (java.util.Date.))}
+     title           (assoc :kontor.audit-doc/title title)
+     description     (assoc :kontor.audit-doc/description description)
+     content-hash    (assoc :kontor.audit-doc/content-hash content-hash)
+     category        (assoc :kontor.audit-doc/category category)
+     language        (assoc :kontor.audit-doc/language language)
      ;; The uploader IS the creator — stamp :kontor.audit/create-uid too
      ;; so ADR-038 :no-self-approval can fire on privilege
      ;; waivers (ADR-051): the doc creator can't waive its
      ;; privilege alone.
-     uploaded-by-uid (assoc :audit-doc/uploaded-by-uid uploaded-by-uid
+     uploaded-by-uid (assoc :kontor.audit-doc/uploaded-by-uid uploaded-by-uid
                             :kontor.audit/create-uid uploaded-by-uid))])
 
 (defn create-doc!
@@ -163,7 +163,7 @@
   (let [doc-eid (resolve-doc db doc-spec)]
     (when-not doc-eid
       (throw (ex-info "Audit-doc not found"
-                      {:type :audit-doc/not-found
+                      {:type :kontor.audit-doc/not-found
                        :spec doc-spec})))
     [{:db/id history-eid
       :kontor.status-history/supporting-doc doc-eid}]))
@@ -200,7 +200,7 @@
 ;; ============================================================================
 
 (def privilege-vocab
-  "Open-set starter vocabulary for :audit-doc/privilege. :none is the
+  "Open-set starter vocabulary for :kontor.audit-doc/privilege. :none is the
    default (nil is treated as :none). Consumer companions extend by
    transacting additional :status-transition + :approval-policy rows
    for their own values (:hipaa-phi, :ferpa-edu, …)."
@@ -213,7 +213,7 @@
   (vec (remove #(= :none %) privilege-vocab)))
 
 (def status-transition-seeds
-  "ADR-034 :status-transition rows for the :audit-doc/privilege
+  "ADR-034 :status-transition rows for the :kontor.audit-doc/privilege
    facet. Privilege is a *complete graph* over the starter vocab —
    a classification can change to any other (re-determination,
    waiver, upgrade). The status machine still earns its place: it
@@ -224,7 +224,7 @@
          to   privilege-vocab
          :when (not= from to)]
      {:kontor.status-transition/entity-type :audit-doc
-      :kontor.status-transition/facet :audit-doc/privilege
+      :kontor.status-transition/facet :kontor.audit-doc/privilege
       :kontor.status-transition/from from
       :kontor.status-transition/to to
       :kontor.status-transition/active true
@@ -242,15 +242,15 @@
          rule [:no-self-approval
                :requires-supporting-doc
                :requires-non-empty-reason-note]]
-     {:approval-policy/entity-type     :audit-doc
-      :approval-policy/facet           :audit-doc/privilege
-      :approval-policy/transition-from from
-      :approval-policy/transition-to   :none
-      :approval-policy/rule            rule
-      :approval-policy/active          true})))
+     {:kontor.approval-policy/entity-type     :audit-doc
+      :kontor.approval-policy/facet           :kontor.audit-doc/privilege
+      :kontor.approval-policy/transition-from from
+      :kontor.approval-policy/transition-to   :none
+      :kontor.approval-policy/rule            rule
+      :kontor.approval-policy/active          true})))
 
 (defn install-seeds!
-  "Idempotently transact the :audit-doc/privilege status-transition +
+  "Idempotently transact the :kontor.audit-doc/privilege status-transition +
    approval-policy seeds. Called from `kontor.core/install-schema!`.
    Guarded with a presence check (the composite-tuple-with-nil-in-
    tuple non-idempotency caveat)."
@@ -260,18 +260,18 @@
                   (d/q '[:find ?e .
                          :where
                          [?e :kontor.status-transition/entity-type :audit-doc]
-                         [?e :kontor.status-transition/facet :audit-doc/privilege]]
+                         [?e :kontor.status-transition/facet :kontor.audit-doc/privilege]]
                        db))]
     (when-not already?
       (d/transact conn (vec (concat status-transition-seeds
                                     approval-policy-seeds))))))
 
 (defn privilege-of
-  "Current :audit-doc/privilege of `doc-spec`, normalized — nil is
+  "Current :kontor.audit-doc/privilege of `doc-spec`, normalized — nil is
    returned as :none."
   [db doc-spec]
   (let [eid (resolve-doc db doc-spec)]
-    (or (:audit-doc/privilege (d/pull db [:audit-doc/privilege] eid))
+    (or (:kontor.audit-doc/privilege (d/pull db [:kontor.audit-doc/privilege] eid))
         :none)))
 
 (declare reclassify-privilege-tx-data)
@@ -292,7 +292,7 @@
    classification (counsel determining a doc privileged), and a
    consumer that needs classifier-vs-waiver SoD must enforce it in
    its own layer — the substrate records every classifier on the
-   `:audit-doc/privilege` :status-history rows. A
+   `:kontor.audit-doc/privilege` :status-history rows. A
    `:no-self-approval-vs-last-classifier` rule variant in
    `kontor.status-machine` is a documented follow-up.
 
@@ -326,13 +326,13 @@
   (let [doc-eid (resolve-doc db doc)
         _ (when-not doc-eid
             (throw (ex-info "Audit-doc not found"
-                            {:type :audit-doc/not-found :spec doc})))
+                            {:type :kontor.audit-doc/not-found :spec doc})))
         from (privilege-of db doc-eid)]
     (sm/record-status-change-tx-data
      db
      (cond-> {:entity doc-eid
               :entity-type :audit-doc
-              :facet :audit-doc/privilege
+              :facet :kontor.audit-doc/privilege
               :from from
               :to to
               :changed-at (or changed-at (java.util.Date.))

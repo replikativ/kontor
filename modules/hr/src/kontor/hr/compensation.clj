@@ -5,8 +5,8 @@
    Note 81 §9.6 refactor: compensation is its own entity (lifted off
    :employment) so that Weihnachtsgeld + employer SI + VWL + housing
    allowance can be modeled as DISTINCT components — each with its
-   own :compensation-component/account-hint → CoA account. A single
-   scalar :employment/wage cannot represent N simultaneously-active
+   own :kontor.compensation-component/account-hint → CoA account. A single
+   scalar :kontor.employment/wage cannot represent N simultaneously-active
    pay components; the bitemporal axis only answers 'envelope as of
    date', not 'which components are active'.
 
@@ -53,11 +53,11 @@
   (when-not commodity      (throw (ex-info ":commodity required" {})))
   (when (empty? components) (throw (ex-info ":components must be non-empty" {})))
   (let [comp-row (cond-> {:db/id tempid
-                          :compensation/employment employment
-                          :compensation/effective-from effective-from
-                          :compensation/commodity commodity
-                          :compensation/state state}
-                   effective-to (assoc :compensation/effective-to effective-to))
+                          :kontor.compensation/employment employment
+                          :kontor.compensation/effective-from effective-from
+                          :kontor.compensation/commodity commodity
+                          :kontor.compensation/state state}
+                   effective-to (assoc :kontor.compensation/effective-to effective-to))
         component-rows
         (map-indexed
          (fn [i {:keys [kind amount period account-hint commodity]
@@ -65,12 +65,12 @@
            (when-not kind   (throw (ex-info "component :kind required"   {:i i})))
            (when-not amount (throw (ex-info "component :amount required" {:i i})))
            (cond-> {:db/id (str "comp-" (inc i))
-                    :compensation-component/compensation tempid
-                    :compensation-component/kind kind
-                    :compensation-component/amount (bigdec amount)
-                    :compensation-component/period period
-                    :compensation-component/account-hint (or account-hint kind)}
-             commodity (assoc :compensation-component/commodity commodity)))
+                    :kontor.compensation-component/compensation tempid
+                    :kontor.compensation-component/kind kind
+                    :kontor.compensation-component/amount (bigdec amount)
+                    :kontor.compensation-component/period period
+                    :kontor.compensation-component/account-hint (or account-hint kind)}
+             commodity (assoc :kontor.compensation-component/commodity commodity)))
          components)]
     (into [comp-row] component-rows)))
 
@@ -97,19 +97,19 @@
   (when-not commodity      (throw (ex-info ":commodity required" {})))
   (let [emp-eid (if (number? employment)
                   employment
-                  (d/q '[:find ?e . :in $ ?c :where [?e :employment/code ?c]]
+                  (d/q '[:find ?e . :in $ ?c :where [?e :kontor.employment/code ?c]]
                        db employment))
         prior (d/q '[:find ?c .
                      :in $ ?emp
                      :where
-                     [?c :compensation/employment ?emp]
-                     [?c :compensation/state :active]]
+                     [?c :kontor.compensation/employment ?emp]
+                     [?c :kontor.compensation/state :active]]
                    db emp-eid)]
     (vec (concat
           (when prior
             [{:db/id prior
-              :compensation/effective-to effective-from
-              :compensation/state :superseded}])
+              :kontor.compensation/effective-to effective-from
+              :kontor.compensation/state :superseded}])
           (set-compensation-tx-data db (assoc opts :employment emp-eid))))))
 
 (defn supersede-compensation!
@@ -131,17 +131,17 @@
   ([db employment ^Date at-date]
    (let [emp-eid (if (number? employment)
                    employment
-                   (d/q '[:find ?e . :in $ ?c :where [?e :employment/code ?c]]
+                   (d/q '[:find ?e . :in $ ?c :where [?e :kontor.employment/code ?c]]
                         db employment))]
      (d/q '[:find ?c .
             :in $ ?emp ?at
             :where
-            [?c :compensation/employment ?emp]
-            [?c :compensation/state ?st]
+            [?c :kontor.compensation/employment ?emp]
+            [?c :kontor.compensation/state ?st]
             [(not= ?st :proposed)]
-            [?c :compensation/effective-from ?f]
+            [?c :kontor.compensation/effective-from ?f]
             [(<= ?f ?at)]
-            [(get-else $ ?c :compensation/effective-to #inst "9999-12-31") ?t]
+            [(get-else $ ?c :kontor.compensation/effective-to #inst "9999-12-31") ?t]
             [(< ?at ?t)]]
           db emp-eid at-date))))
 
@@ -150,7 +150,7 @@
   [db compensation-eid]
   (->> (d/q '[:find [?cc ...]
               :in $ ?c
-              :where [?cc :compensation-component/compensation ?c]]
+              :where [?cc :kontor.compensation-component/compensation ?c]]
             db compensation-eid)
        (map #(d/pull db '[*] %))
        vec))
@@ -171,9 +171,9 @@
                 :with ?cc
                 :in $ ?c
                 :where
-                [?cc :compensation-component/compensation ?c]
-                [?cc :compensation-component/kind :base-wage]
-                [?cc :compensation-component/amount ?amt]]
+                [?cc :kontor.compensation-component/compensation ?c]
+                [?cc :kontor.compensation-component/kind :base-wage]
+                [?cc :kontor.compensation-component/amount ?amt]]
               db comp-eid)
          0M)
      0M)))

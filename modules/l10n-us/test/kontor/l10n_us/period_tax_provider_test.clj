@@ -29,7 +29,7 @@
     (is (= :us-irs (:authority p)))
     (is (= :USD (:commodity p)))
     (is (= "IRC §1" (:statute p)))
-    (is (= :formula (get-in p [:schedule :schedule/type]))
+    (is (= :formula (get-in p [:schedule :kontor.schedule/type]))
         "filing-status selection needs the :formula escape hatch")
     (is (empty? (:surtax-fns p)) "no federal income-tax surtax modelled")))
 

@@ -19,11 +19,11 @@
     (is (some? eid)
         "Primary valuation book must be installed by install-schema!")
     (let [pulled (d/pull db '[*] eid)]
-      (is (= "primary"                 (:valuation-book/code pulled)))
-      (is (= "Primary valuation book" (:valuation-book/name pulled)))
-      (is (= :legal                    (:valuation-book/framework pulled)))
-      (is (= :fifo                     (:valuation-book/cost-method pulled)))
-      (is (true?                       (:valuation-book/active pulled))))))
+      (is (= "primary"                 (:kontor.valuation-book/code pulled)))
+      (is (= "Primary valuation book" (:kontor.valuation-book/name pulled)))
+      (is (= :legal                    (:kontor.valuation-book/framework pulled)))
+      (is (= :fifo                     (:kontor.valuation-book/cost-method pulled)))
+      (is (true?                       (:kontor.valuation-book/active pulled))))))
 
 (deftest install-defaults-idempotent
   (let [conn (core/create-test-db)
@@ -31,7 +31,7 @@
         _ (valuation/install-defaults! conn)
         db (d/db conn)
         n (d/q '[:find (count ?e) .
-                 :where [?e :valuation-book/code "primary"]]
+                 :where [?e :kontor.valuation-book/code "primary"]]
                db)]
     (is (= 1 n)
         "Re-installing must not duplicate the primary book")))
@@ -40,16 +40,16 @@
   (testing "Consumers may register secondary books (IFRS, tax-DE, etc.)"
     (let [conn (core/create-test-db)
           _ (d/transact conn
-                        [{:valuation-book/code        "ifrs"
-                          :valuation-book/name        "IFRS valuation book"
-                          :valuation-book/framework   :ifrs
-                          :valuation-book/cost-method :avg
-                          :valuation-book/active      true}
-                         {:valuation-book/code        "tax-de"
-                          :valuation-book/name        "German tax book"
-                          :valuation-book/framework   :tax-de
-                          :valuation-book/cost-method :fifo
-                          :valuation-book/active      true}])
+                        [{:kontor.valuation-book/code        "ifrs"
+                          :kontor.valuation-book/name        "IFRS valuation book"
+                          :kontor.valuation-book/framework   :ifrs
+                          :kontor.valuation-book/cost-method :avg
+                          :kontor.valuation-book/active      true}
+                         {:kontor.valuation-book/code        "tax-de"
+                          :kontor.valuation-book/name        "German tax book"
+                          :kontor.valuation-book/framework   :tax-de
+                          :kontor.valuation-book/cost-method :fifo
+                          :kontor.valuation-book/active      true}])
           db (d/db conn)]
       (is (some? (valuation/by-code db "primary")))
       (is (some? (valuation/by-code db "ifrs")))
@@ -62,7 +62,7 @@
         prim (valuation/primary db)]
     (testing "nil → primary"
       (is (= prim (valuation/resolve-book db nil))))
-    (testing "string → looked up by :valuation-book/code"
+    (testing "string → looked up by :kontor.valuation-book/code"
       (is (= prim (valuation/resolve-book db "primary"))))
     (testing "long eid → returned as-is"
       (is (= prim (valuation/resolve-book db prim))))))
@@ -98,18 +98,18 @@
                         :kontor.transaction/effective-date received-at
                         :kontor.transaction/narration      "Receipt"}
                        {:db/id                              -2
-                        :valuation-layer/book               book
-                        :valuation-layer/item               item
-                        :valuation-layer/origin-transaction -1
-                        :valuation-layer/qty-original       qty
-                        :valuation-layer/unit-cost-original unit-cost
-                        :valuation-layer/commodity          commodity
-                        :valuation-layer/received-at        received-at}])
+                        :kontor.valuation-layer/book               book
+                        :kontor.valuation-layer/item               item
+                        :kontor.valuation-layer/origin-transaction -1
+                        :kontor.valuation-layer/qty-original       qty
+                        :kontor.valuation-layer/unit-cost-original unit-cost
+                        :kontor.valuation-layer/commodity          commodity
+                        :kontor.valuation-layer/received-at        received-at}])
         db (d/db conn)]
     (d/q '[:find ?l .
            :in $ ?received
            :where
-           [?l :valuation-layer/received-at ?received]]
+           [?l :kontor.valuation-layer/received-at ?received]]
          db received-at)))
 
 (defn- transact-consumption!
@@ -120,11 +120,11 @@
                 :kontor.transaction/journal        journal
                 :kontor.transaction/effective-date issued-at
                 :kontor.transaction/narration      "Issue"}
-               {:layer-consumption/layer                    layer
-                :layer-consumption/qty                      qty
-                :layer-consumption/unit-cost-at-consumption unit-cost
-                :layer-consumption/issue-transaction        -1
-                :layer-consumption/issued-at                issued-at}]))
+               {:kontor.layer-consumption/layer                    layer
+                :kontor.layer-consumption/qty                      qty
+                :kontor.layer-consumption/unit-cost-at-consumption unit-cost
+                :kontor.layer-consumption/issue-transaction        -1
+                :kontor.layer-consumption/issued-at                issued-at}]))
 
 (defn- transact-adjustment!
   "Manually transact a landed-cost-style adjustment to an existing layer."
@@ -134,11 +134,11 @@
                 :kontor.transaction/journal        journal
                 :kontor.transaction/effective-date applied-at
                 :kontor.transaction/narration      (str "Adjustment " (name reason))}
-               {:layer-adjustment/layer              layer
-                :layer-adjustment/amount             amount
-                :layer-adjustment/reason             reason
-                :layer-adjustment/origin-transaction -1
-                :layer-adjustment/applied-at         applied-at}]))
+               {:kontor.layer-adjustment/layer              layer
+                :kontor.layer-adjustment/amount             amount
+                :kontor.layer-adjustment/reason             reason
+                :kontor.layer-adjustment/origin-transaction -1
+                :kontor.layer-adjustment/applied-at         applied-at}]))
 
 (deftest qty-remaining-after-no-consumption
   (let [conn (core/create-test-db)
@@ -206,7 +206,7 @@
           db (d/db conn)
           n-adjustments (d/q '[:find (count ?a) .
                                :in $ ?l
-                               :where [?a :layer-adjustment/layer ?l]]
+                               :where [?a :kontor.layer-adjustment/layer ?l]]
                              db layer)]
       (is (= 3 n-adjustments)
           "All three adjustments are stored as separate facts")
@@ -371,7 +371,7 @@
           db (d/db conn)
           ;; Mark the second receipt's transaction as cancelled
           cancel-tx (d/q '[:find ?tx . :in $ ?l :where
-                           [?l :valuation-layer/origin-transaction ?tx]]
+                           [?l :kontor.valuation-layer/origin-transaction ?tx]]
                          db l-cancel)
           _ (d/transact conn [{:db/id cancel-tx
                                :kontor.transaction/state :cancelled}])
@@ -400,8 +400,8 @@
           db (d/db conn)
           ;; Cancel the issue transaction
           issue-tx (d/q '[:find ?tx . :in $ ?l :where
-                          [?c :layer-consumption/layer ?l]
-                          [?c :layer-consumption/issue-transaction ?tx]]
+                          [?c :kontor.layer-consumption/layer ?l]
+                          [?c :kontor.layer-consumption/issue-transaction ?tx]]
                         db layer)
           _ (d/transact conn [{:db/id issue-tx :kontor.transaction/state :cancelled}])
           db2 (d/db conn)]

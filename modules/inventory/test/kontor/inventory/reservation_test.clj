@@ -31,7 +31,7 @@
     (inv-schema/install! conn)
     (d/transact conn
                 [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
-                 ;; Product + order-side refs — :inv-reservation/{order,
+                 ;; Product + order-side refs — :kontor.inv-reservation/{order,
                  ;; order-item,ship-group} are bare refs; reuse :partner
                  ;; entities as stand-ins (the kernel test convention —
                  ;; the real order aggregate lives in kontor-sales).
@@ -39,15 +39,15 @@
                  {:kontor.partner/external-id "O-1"  :kontor.partner/name "Order 1"}
                  {:kontor.partner/external-id "OI-1" :kontor.partner/name "Order line 1"}
                  {:kontor.partner/external-id "SG-1" :kontor.partner/name "Ship group 1"}
-                 {:db/id "lot-a" :lot/label "LOT-A"}
-                 {:db/id "lot-b" :lot/label "LOT-B"}])
+                 {:db/id "lot-a" :kontor.lot/label "LOT-A"}
+                 {:db/id "lot-b" :kontor.lot/label "LOT-B"}])
     conn))
 
 (defn- ref-eid [db a v]
   (d/q '[:find ?e . :in $ ?a ?v :where [?e ?a ?v]] db a v))
 
 (defn- p   [db code] (ref-eid db :kontor.partner/external-id code))
-(defn- lot [db label] (ref-eid db :lot/label label))
+(defn- lot [db label] (ref-eid db :kontor.lot/label label))
 
 (defn- order-refs [db]
   {:order      (p db "O-1")
@@ -115,7 +115,7 @@
       (is (= 110M (inv/on-hand-qty (d/db conn) {:product widget :facility wh}))))
     (testing "two :inv-reservation rows were created, one per bucket drawn"
       (is (= 2 (count (d/q '[:find [?r ...]
-                             :where [?r :inv-reservation/order _]]
+                             :where [?r :kontor.inv-reservation/order _]]
                            (d/db conn))))))))
 
 (deftest reserve-fifo-rec-orders-by-received-at
@@ -159,12 +159,12 @@
       (is (= -30M (res/atp-raw (d/db conn) item)))
       (is (= 20M (inv/on-hand-qty (d/db conn) item))))
     (testing "the reservation row carries :quantity-not-available"
-      (let [r (d/q '[:find (pull ?r [:inv-reservation/quantity
-                                     :inv-reservation/quantity-not-available]) .
-                     :where [?r :inv-reservation/order _]]
+      (let [r (d/q '[:find (pull ?r [:kontor.inv-reservation/quantity
+                                     :kontor.inv-reservation/quantity-not-available]) .
+                     :where [?r :kontor.inv-reservation/order _]]
                    (d/db conn))]
-        (is (= 20M (:inv-reservation/quantity r)))
-        (is (= 30M (:inv-reservation/quantity-not-available r)))))))
+        (is (= 20M (:kontor.inv-reservation/quantity r)))
+        (is (= 30M (:kontor.inv-reservation/quantity-not-available r)))))))
 
 (deftest reserve-require-inventory-throws-on-shortfall
   (let [conn (bootstrap)
@@ -177,7 +177,7 @@
            (res/reserve! conn (merge (order-refs (d/db conn))
                                      {:product widget :facility wh :quantity 50M
                                       :require-inventory? true}))))
-      (is (empty? (d/q '[:find [?r ...] :where [?r :inv-reservation/order _]]
+      (is (empty? (d/q '[:find [?r ...] :where [?r :kontor.inv-reservation/order _]]
                        (d/db conn)))
           "no :inv-reservation rows written")
       (is (= 20M (res/atp-raw (d/db conn) {:product widget :facility wh}))
@@ -195,10 +195,10 @@
         (inv/place-opening-stock! conn {:product widget :facility wh :qty 100M})
         _ (res/reserve! conn (merge (order-refs (d/db conn))
                                     {:product widget :facility wh :quantity 40M}))
-        res-eid (d/q '[:find ?r . :where [?r :inv-reservation/order _]] (d/db conn))]
+        res-eid (d/q '[:find ?r . :where [?r :kontor.inv-reservation/order _]] (d/db conn))]
     (is (= 60M (res/atp-raw (d/db conn) item)) "reserved → ATP 60")
     (res/release-reservation! conn res-eid)
     (testing "release restores the ATP and retracts the reservation"
       (is (= 100M (res/atp-raw (d/db conn) item)))
-      (is (nil? (d/q '[:find ?r . :where [?r :inv-reservation/order _]]
+      (is (nil? (d/q '[:find ?r . :where [?r :kontor.inv-reservation/order _]]
                      (d/db conn)))))))

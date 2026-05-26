@@ -29,7 +29,7 @@
      :family-name  — string
 
    Optional keys:
-     :birth-date    — instant (PII; surface :audit-doc/category
+     :birth-date    — instant (PII; surface :kontor.audit-doc/category
                       :hr-personnel when persisted alongside docs)
      :citizenship   — vector of ISO-3166 alpha-2 strings
      :kind          — :employee (default) | :contingent | :applicant |

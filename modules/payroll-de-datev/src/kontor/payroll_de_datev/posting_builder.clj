@@ -2,7 +2,7 @@
   "DATEV LODAS payroll → SKR04 / SKR03 GL posting builder
    (`DatevLodasPostingBuilder`).
 
-   Maps `:compensation-component/kind` → SKR04 / SKR03 wage accounts
+   Maps `:kontor.compensation-component/kind` → SKR04 / SKR03 wage accounts
    per the consumer-supplied catalog's `:account-hint` map (note 82
    §4 + §7). Default account-map in
    `kontor.payroll-de-datev.wage-types/default-account-map-skr04` /

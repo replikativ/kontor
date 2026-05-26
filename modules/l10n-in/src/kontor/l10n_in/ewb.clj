@@ -6,7 +6,7 @@
    different validity window. Part A derives from the invoice (and
    may be auto-pulled from the IRN); Part B carries vehicle /
    transporter info added when the truck rolls. The two are coupled
-   via `:attestation/depends-on` in kontor's storage model.
+   via `:kontor.attestation/depends-on` in kontor's storage model.
 
    ## Validity window
 

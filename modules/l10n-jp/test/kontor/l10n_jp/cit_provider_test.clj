@@ -144,7 +144,7 @@
           nat   (component facts :jp-nta)
           ent   (component facts :jp-prefecture)]
       (testing "National CIT: flat 23.2 % schedule override active"
-        (is (= :flat (:schedule/type (:schedule nat)))
+        (is (= :flat (:kontor.schedule/type (:schedule nat)))
             "schedule swapped from SME progressive to large-corp flat")
         (is (== 0.232M (:rate (:schedule nat)))
             "flat rate sourced from JP.CIT.flat-rate parameter")
@@ -156,7 +156,7 @@
         (is (== 9080000M (surtax-amount nat :defense-surtax))))
       (testing "Enterprise tax: large-corp flat 1.18 % override fires (income base only;
                 value-added / capital bases deferred per note 110 §1)"
-        (is (= :flat (:schedule/type (:schedule ent))))
+        (is (= :flat (:kontor.schedule/type (:schedule ent))))
         (is (== 0.0118M (:rate (:schedule ent))))
         (is (== 11800000M (:amount (:gross-liability ent)))
             "0.0118 × ¥1B = ¥11.8M"))

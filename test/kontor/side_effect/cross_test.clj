@@ -50,11 +50,11 @@
            {:intent-key       "k1"
             :target-system-id :other
             :target-tx-data   [{:foo 1}]})]
-    (is (= "k1" (:side-effect-intent/key m)))
-    (is (= :cross-tx-post (:side-effect-intent/type m)))
-    (is (= :pending (:side-effect-intent/status m)))
-    (is (= 5 (:side-effect-intent/max-retries m)))
-    (let [payload (clojure.edn/read-string (:side-effect-intent/payload m))]
+    (is (= "k1" (:kontor.side-effect-intent/key m)))
+    (is (= :cross-tx-post (:kontor.side-effect-intent/type m)))
+    (is (= :pending (:kontor.side-effect-intent/status m)))
+    (is (= 5 (:kontor.side-effect-intent/max-retries m)))
+    (let [payload (clojure.edn/read-string (:kontor.side-effect-intent/payload m))]
       (is (= :other (:target/system-id payload)))
       (is (= [{:foo 1}] (:target/tx-data payload)))
       (is (string? (:step-id payload)))
@@ -77,7 +77,7 @@
 
 (deftest drain-commits-against-target-and-marks-done
   (testing "A pending cross-tx-post intent gets executed against the
-            target conn, the target tx lands with :cross-tx/step-id,
+            target conn, the target tx lands with :kontor.cross-tx/step-id,
             and the source intent transitions to :done."
     (let [src (bootstrap!)
           tgt (bootstrap!)
@@ -92,29 +92,29 @@
           _ (v/transact-with-validation src [intent])
           ;; Verify intent landed pending
           intent-eid (d/q '[:find ?e .
-                            :where [?e :side-effect-intent/key "test-1"]]
+                            :where [?e :kontor.side-effect-intent/key "test-1"]]
                           (d/db src))
           _ (is (= :pending (-> (d/pull (d/db src)
-                                        [:side-effect-intent/status]
+                                        [:kontor.side-effect-intent/status]
                                         intent-eid)
-                                :side-effect-intent/status)))
+                                :kontor.side-effect-intent/status)))
           summary (cross/drain! src router)]
       (is (= {:processed 1 :done 1 :failed 0 :abandoned 0} summary))
       ;; Source intent now done
       (is (= :done (-> (d/pull (d/db src)
-                               [:side-effect-intent/status]
+                               [:kontor.side-effect-intent/status]
                                intent-eid)
-                       :side-effect-intent/status)))
+                       :kontor.side-effect-intent/status)))
       ;; Target conn now has the TEST commodity AND the step-id marker
       (let [tgt-db (d/db tgt)
             commodity (d/q '[:find ?e .
                              :where [?e :kontor.commodity/symbol "TEST"]]
                            tgt-db)
             sid-eid (d/q '[:find ?t .
-                           :where [?t :cross-tx/step-id _]]
+                           :where [?t :kontor.cross-tx/step-id _]]
                          tgt-db)]
         (is (some? commodity) "target conn received the commodity")
-        (is (some? sid-eid)   "target conn has a :cross-tx/step-id marker")))))
+        (is (some? sid-eid)   "target conn has a :kontor.cross-tx/step-id marker")))))
 
 (deftest drain-idempotent-on-already-committed-step
   (testing "If the target already holds the step-id (e.g., a prior worker
@@ -130,7 +130,7 @@
                    :target-tx-data   target-tx})
           _ (v/transact-with-validation src [intent])
           intent-eid (d/q '[:find ?e .
-                            :where [?e :side-effect-intent/key "idem-1"]]
+                            :where [?e :kontor.side-effect-intent/key "idem-1"]]
                           (d/db src))
           ;; Simulate "prior worker already committed the target but
           ;; crashed before mark-done" by manually committing the target
@@ -138,7 +138,7 @@
           sid (cross/step-id "idem-1" target-tx)
           _ (d/transact tgt (conj target-tx
                                   {:db/id "datomic.tx"
-                                   :cross-tx/step-id sid}))
+                                   :kontor.cross-tx/step-id sid}))
           ;; Now the target has it. Drain should find the step-id and
           ;; mark done WITHOUT erroring on the duplicate commodity.
           summary (cross/drain! src router)]
@@ -162,25 +162,25 @@
           _ (v/transact-with-validation src [intent])
           summary (cross/drain! src router)
           intent-eid (d/q '[:find ?e .
-                            :where [?e :side-effect-intent/key "fail-1"]]
+                            :where [?e :kontor.side-effect-intent/key "fail-1"]]
                           (d/db src))
           pulled (d/pull (d/db src) '[*] intent-eid)]
       (is (= 1 (:failed summary)))
-      (is (= :failed (:side-effect-intent/status pulled))
+      (is (= :failed (:kontor.side-effect-intent/status pulled))
           "intent marked :failed")
-      (is (= 1 (:side-effect-intent/retry-count pulled))
+      (is (= 1 (:kontor.side-effect-intent/retry-count pulled))
           "retry-count bumped"))))
 
 (deftest drain-asserts-target-schema-when-missing
-  (testing "If the target conn lacks :cross-tx/step-id schema, drain
-            fails clearly with :cross-tx/target-schema-missing rather
+  (testing "If the target conn lacks :kontor.cross-tx/step-id schema, drain
+            fails clearly with :kontor.cross-tx/target-schema-missing rather
             than a downstream schema error."
     ;; A conn without kontor schema — just a bare datahike db with
-    ;; only enough schema to *exist* but missing :cross-tx/step-id.
+    ;; only enough schema to *exist* but missing :kontor.cross-tx/step-id.
     ;; We approximate by creating a fresh conn and NOT installing the
     ;; kontor schema — well, actually create-test-db installs the
-    ;; kontor schema which includes :cross-tx/step-id by ADR-074.
+    ;; kontor schema which includes :kontor.cross-tx/step-id by ADR-074.
     ;; The "missing" case is rare in practice, but we can simulate by
     ;; verifying the assert exists when it should be triggered.
     ;; Skip this scenario since create-test-db always has the attr.
-    (is true "create-test-db ships :cross-tx/step-id; assertion path is exercised in non-kontor target consumers")))
+    (is true "create-test-db ships :kontor.cross-tx/step-id; assertion path is exercised in non-kontor target consumers")))

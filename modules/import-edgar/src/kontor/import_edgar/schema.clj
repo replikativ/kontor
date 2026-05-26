@@ -1,7 +1,7 @@
 (ns kontor.import-edgar.schema
   "Schema for kontor-import-edgar.
 
-   The companion adds a `:reported-fact/*` namespace — externally-
+   The companion adds a `:kontor.reported-fact/*` namespace — externally-
    filed regulator-attested values about an `:entity`. Distinct from
    `:posting`:
 
@@ -17,7 +17,7 @@
   (:require [datahike.api :as d]))
 
 (def schema
-  [{:db/ident       :reported-fact/external-id
+  [{:db/ident       :kontor.reported-fact/external-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
@@ -27,12 +27,12 @@
                      'edgar:0001193125-09-214859:us-gaap:AccruedLiabilitiesCurrent:2009-09-26:USD').
                      Idempotent re-ingest of the same SEC filing."}
 
-   {:db/ident       :reported-fact/entity
+   {:db/ident       :kontor.reported-fact/entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :entity — the reporting entity."}
 
-   {:db/ident       :reported-fact/concept-iri
+   {:db/ident       :kontor.reported-fact/concept-iri
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -43,7 +43,7 @@
                      (kontor.explain/entities-with-concept-iri walks
                      this attr too — ADR-090)."}
 
-   {:db/ident       :reported-fact/value-bigdec
+   {:db/ident       :kontor.reported-fact/value-bigdec
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Monetary / numeric value. BigDecimal per kontor
@@ -51,47 +51,47 @@
                      date facts use the relevant -text / -instant
                      slots."}
 
-   {:db/ident       :reported-fact/value-string
+   {:db/ident       :kontor.reported-fact/value-string
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "String value for textual concepts (e.g.
                      :EntityRegistrantName, :DocumentType)."}
 
-   {:db/ident       :reported-fact/unit
+   {:db/ident       :kontor.reported-fact/unit
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Unit of measurement. Open-set:
                      :usd | :eur | :jpy | :shares | :percent | :pure
                      | :usd-per-share | ..."}
 
-   {:db/ident       :reported-fact/period-end
+   {:db/ident       :kontor.reported-fact/period-end
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "The period END date this fact reports on. For
                      instant concepts (BS lines) this is the only
                      date. For duration concepts (P&L lines) pair
-                     with :reported-fact/period-start.
+                     with :kontor.reported-fact/period-start.
 
                      Distinct from :tx/valid-from (kontor's bitemporal
                      valid-time): :period-end is what the fact is
                      ABOUT; :tx/valid-from is when this fact became
                      authoritatively reported (the SEC :filed date)."}
 
-   {:db/ident       :reported-fact/period-start
+   {:db/ident       :kontor.reported-fact/period-start
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "For duration facts: the period start. nil for
                      instant facts."}
 
-   {:db/ident       :reported-fact/accession-number
+   {:db/ident       :kontor.reported-fact/accession-number
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "SEC accession number — '0000320193-17-000070'.
                      Identifies the filing this fact came from."}
 
-   {:db/ident       :reported-fact/form
+   {:db/ident       :kontor.reported-fact/form
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "SEC form: '10-K', '10-Q', '10-K/A', '10-Q/A',
@@ -99,7 +99,7 @@
                      an amendment — load-bearing for the bitemporal-
                      restatement story."}
 
-   {:db/ident       :reported-fact/filed
+   {:db/ident       :kontor.reported-fact/filed
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -110,14 +110,14 @@
                      superseded fact and open a new fact valid-from
                      the amendment's :filed date."}
 
-   {:db/ident       :reported-fact/source-id
+   {:db/ident       :kontor.reported-fact/source-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Provenance opaque identifier — e.g.
                      'edgar://companyfacts/CIK0000320193/2026-05-18'.
                      Audit + re-ingest discrimination."}
 
-   {:db/ident       :reported-fact/superseded-by
+   {:db/ident       :kontor.reported-fact/superseded-by
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to the :reported-fact that supersedes this

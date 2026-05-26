@@ -201,7 +201,7 @@
         ;; the flat 25 % standard rate from `:parameter`.
         schedule (if (seq schedule-overrides)
                    (:schedule (first schedule-overrides))
-                   {:schedule/type :flat
+                   {:kontor.schedule/type :flat
                     :rate          (statute/parameter-value-at
                                     db "FR.IS.standard-rate" as-of)})
 

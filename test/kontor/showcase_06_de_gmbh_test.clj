@@ -8,7 +8,7 @@
 
    Substrate exercised end-to-end:
      - kontor-hr                — person + employment + compensation
-     - kontor.hr.consent        — ADR-094 :consent/* grant + active-at?
+     - kontor.hr.consent        — ADR-094 :kontor.consent/* grant + active-at?
      - kontor.audit-doc         — canonical category vocabulary
      - kontor-people-record     — :position-held + :promotion
      - kontor.l10n-de.retention — DE retention seeds + sweeper
@@ -96,7 +96,7 @@
                    :type :dpia
                    :storage-uri "s3://test/dpia.pdf"
                    :category :hr-monitoring-consent})
-          dpia (ref-eid (d/db conn) :audit-doc/code "DPIA-acme-2026")
+          dpia (ref-eid (d/db conn) :kontor.audit-doc/code "DPIA-acme-2026")
           _ (doseq [[code subj] [["CONS-mueller" mueller]
                                  ["CONS-schmidt" schmidt]]]
               (consent/grant!
@@ -123,7 +123,7 @@
       (testing "Year 1 — consents active, positions recorded"
         (is (true? (consent/active-at? (d/db conn) schmidt :hr-track-record
                                        #inst "2026-06-01")))
-        (is (some? (ref-eid (d/db conn) :position-held/external-id "POS-schmidt-vs-1"))))
+        (is (some? (ref-eid (d/db conn) :kontor.position-held/external-id "POS-schmidt-vs-1"))))
 
       ;; ===== Year 1 misclassified expense =====
       ;; Capture the datahike commit-tx eid via the tx-report (per
@@ -172,8 +172,8 @@
                        :title "Vertriebsleiterin" :level :manager
                        :start-date #inst "2027-03-01"
                        :at #inst "2027-03-01"})
-              pos-old (ref-eid (d/db conn) :position-held/external-id "POS-schmidt-vs-1")
-              pos-new (ref-eid (d/db conn) :position-held/external-id "POS-schmidt-leiter-1")
+              pos-old (ref-eid (d/db conn) :kontor.position-held/external-id "POS-schmidt-vs-1")
+              pos-new (ref-eid (d/db conn) :kontor.position-held/external-id "POS-schmidt-leiter-1")
               _ (pr/record-promotion!
                  conn {:code "PROMO-schmidt-2027"
                        :person schmidt
@@ -181,10 +181,10 @@
                        :effective-date #inst "2027-03-01"
                        :at #inst "2027-03-01"})]
           (testing "Y2 promotion recorded"
-            (is (some? (ref-eid (d/db conn) :promotion/external-id "PROMO-schmidt-2027")))
+            (is (some? (ref-eid (d/db conn) :kontor.promotion/external-id "PROMO-schmidt-2027")))
             (is (= 2 (count (d/q '[:find [?p ...]
                                    :in $ ?s
-                                   :where [?p :position-held/person ?s]]
+                                   :where [?p :kontor.position-held/person ?s]]
                                  (d/db conn) schmidt))))))
 
         ;; ===== Year 2 Q4 backdated correction =====
@@ -262,8 +262,8 @@
               (is (= 1 (count (:promotions pr-ext))))))
 
           (testing "DPIA retention — not yet eligible at Y3 (10-year floor)"
-            (let [dpia (ref-eid (d/db conn) :audit-doc/code "DPIA-acme-2026")
-                  policy (ref-eid (d/db conn) :retention-policy/code
+            (let [dpia (ref-eid (d/db conn) :kontor.audit-doc/code "DPIA-acme-2026")
+                  policy (ref-eid (d/db conn) :kontor.retention-policy/code
                                   "DE-DSGVO-hr-monitoring-consent")]
               (is (= false
                      (retention/eligible? (d/db conn) dpia policy

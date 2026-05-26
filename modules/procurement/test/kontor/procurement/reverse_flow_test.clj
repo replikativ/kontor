@@ -45,29 +45,29 @@
   [{:keys [external-id qty unit-price]
     :or {external-id "SO-1" qty 10M unit-price 25M}}]
   (d/transact *conn*
-              [{:order/external-id external-id
-                :order/type :sales
-                :order/status :order.status/created
-                :order/order-date #inst "2026-04-01"
-                :order/entry-date #inst "2026-04-01"
-                :order/currency [:kontor.commodity/symbol "EUR"]
-                :order/bill-from-partner [:kontor.partner/external-id "ACME-ORG"]
-                :order/bill-to-partner [:kontor.partner/external-id "CUSTOMER"]
-                :order/entity [:kontor.entity/code "ACME"]}
-               {:order-item/order [:order/external-id external-id]
-                :order-item/seq-id "00001"
-                :order-item/type :product
-                :order-item/product-id "WIDGET-A"
-                :order-item/quantity qty
-                :order-item/unit-price unit-price
-                :order-item/cancel-quantity 0M
-                :order-item/status :order-item.status/approved}])
+              [{:kontor.order/external-id external-id
+                :kontor.order/type :sales
+                :kontor.order/status :order.status/created
+                :kontor.order/order-date #inst "2026-04-01"
+                :kontor.order/entry-date #inst "2026-04-01"
+                :kontor.order/currency [:kontor.commodity/symbol "EUR"]
+                :kontor.order/bill-from-partner [:kontor.partner/external-id "ACME-ORG"]
+                :kontor.order/bill-to-partner [:kontor.partner/external-id "CUSTOMER"]
+                :kontor.order/entity [:kontor.entity/code "ACME"]}
+               {:kontor.sales.order-item/order [:kontor.order/external-id external-id]
+                :kontor.sales.order-item/seq-id "00001"
+                :kontor.sales.order-item/type :product
+                :kontor.sales.order-item/product-id "WIDGET-A"
+                :kontor.sales.order-item/quantity qty
+                :kontor.sales.order-item/unit-price unit-price
+                :kontor.sales.order-item/cancel-quantity 0M
+                :kontor.sales.order-item/status :order-item.status/approved}])
   (let [db (d/db *conn*)
         order-eid (d/q '[:find ?e . :in $ ?xid
-                         :where [?e :order/external-id ?xid]]
+                         :where [?e :kontor.order/external-id ?xid]]
                        db external-id)
         item-eid (d/q '[:find ?i . :in $ ?o
-                        :where [?i :order-item/order ?o]]
+                        :where [?i :kontor.sales.order-item/order ?o]]
                       db order-eid)]
     {:order-eid order-eid :item-eid item-eid}))
 
@@ -75,30 +75,30 @@
   [{:keys [external-id qty unit-price]
     :or {external-id "PO-1" qty 10M unit-price 12M}}]
   (d/transact *conn*
-              [{:order/external-id external-id
-                :order/type :purchase
-                :order/status :order.status/created
-                :order/order-date #inst "2026-04-01"
-                :order/entry-date #inst "2026-04-01"
-                :order/currency [:kontor.commodity/symbol "EUR"]
-                :order/bill-from-partner [:kontor.partner/external-id "SUPPLIER"]
-                :order/bill-to-partner [:kontor.partner/external-id "ACME-ORG"]
-                :order/entity [:kontor.entity/code "ACME"]}
-               {:order-item/order [:order/external-id external-id]
-                :order-item/seq-id "00001"
-                :order-item/type :product
-                :order-item/product-id "WIDGET-A"
-                :order-item/quantity qty
-                :order-item/unit-price unit-price
-                :order-item/cancel-quantity 0M
-                :order-item/status :order-item.status/approved
-                :order-item/category :direct}])
+              [{:kontor.order/external-id external-id
+                :kontor.order/type :purchase
+                :kontor.order/status :order.status/created
+                :kontor.order/order-date #inst "2026-04-01"
+                :kontor.order/entry-date #inst "2026-04-01"
+                :kontor.order/currency [:kontor.commodity/symbol "EUR"]
+                :kontor.order/bill-from-partner [:kontor.partner/external-id "SUPPLIER"]
+                :kontor.order/bill-to-partner [:kontor.partner/external-id "ACME-ORG"]
+                :kontor.order/entity [:kontor.entity/code "ACME"]}
+               {:kontor.sales.order-item/order [:kontor.order/external-id external-id]
+                :kontor.sales.order-item/seq-id "00001"
+                :kontor.sales.order-item/type :product
+                :kontor.sales.order-item/product-id "WIDGET-A"
+                :kontor.sales.order-item/quantity qty
+                :kontor.sales.order-item/unit-price unit-price
+                :kontor.sales.order-item/cancel-quantity 0M
+                :kontor.sales.order-item/status :order-item.status/approved
+                :kontor.procurement.order-item/category :direct}])
   (let [db (d/db *conn*)
         order-eid (d/q '[:find ?e . :in $ ?xid
-                         :where [?e :order/external-id ?xid]]
+                         :where [?e :kontor.order/external-id ?xid]]
                        db external-id)
         item-eid (d/q '[:find ?i . :in $ ?o
-                        :where [?i :order-item/order ?o]]
+                        :where [?i :kontor.sales.order-item/order ?o]]
                       db order-eid)]
     {:order-eid order-eid :item-eid item-eid}))
 
@@ -131,19 +131,19 @@
     (let [db (d/db *conn*)
           return-eid (returns/by-external-id db "RMA-CUST-1")]
       (testing "return created in :requested"
-        (is (= :requested (sm/current-status db return-eid :return/status))))
+        (is (= :requested (sm/current-status db return-eid :kontor.return/status))))
       (testing "items captured"
         (let [items (returns/items-of db return-eid)]
           (is (= 1 (count items)))
-          (is (= 3M (-> items first :return-item/return-quantity)))
-          (is (= :damaged (-> items first :return-item/reason)))))
+          (is (= 3M (-> items first :kontor.return-item/return-quantity)))
+          (is (= :damaged (-> items first :kontor.return-item/reason)))))
       ;; Lifecycle progression
       (returns/accept-return! *conn* "RMA-CUST-1" {:reason :approved})
-      (is (= :accepted (sm/current-status (d/db *conn*) return-eid :return/status)))
+      (is (= :accepted (sm/current-status (d/db *conn*) return-eid :kontor.return/status)))
       (returns/receive-return! *conn* "RMA-CUST-1" {:reason :received})
-      (is (= :received (sm/current-status (d/db *conn*) return-eid :return/status)))
+      (is (= :received (sm/current-status (d/db *conn*) return-eid :kontor.return/status)))
       (returns/complete-return! *conn* "RMA-CUST-1" {:reason :completed})
-      (is (= :completed (sm/current-status (d/db *conn*) return-eid :return/status))))))
+      (is (= :completed (sm/current-status (d/db *conn*) return-eid :kontor.return/status))))))
 
 (deftest customer-return-rejection
   (seed-base!)
@@ -166,7 +166,7 @@
                              :reason-note "outside return window"})
     (is (= :rejected (sm/current-status (d/db *conn*)
                                          (returns/by-external-id (d/db *conn*) "RMA-REJ")
-                                         :return/status)))))
+                                         :kontor.return/status)))))
 
 ;; ============================================================================
 ;; Vendor return lifecycle (RTV)
@@ -198,16 +198,16 @@
           return-eid (returns/by-external-id db "RMA-VEND-1")
           ret (returns/pull-return db return-eid)]
       (testing "vendor return created with role-inverted parties"
-        (is (= :vendor (:return/type ret)))
-        (is (= "ACME-ORG" (-> ret :return/from-party :kontor.partner/external-id)))
-        (is (= "SUPPLIER" (-> ret :return/to-party :kontor.partner/external-id))))
+        (is (= :vendor (:kontor.return/type ret)))
+        (is (= "ACME-ORG" (-> ret :kontor.return/from-party :kontor.partner/external-id)))
+        (is (= "SUPPLIER" (-> ret :kontor.return/to-party :kontor.partner/external-id))))
       (testing "supplier-rma captured"
-        (is (= "SUP-RMA-12345" (:return/supplier-rma ret))))
+        (is (= "SUP-RMA-12345" (:kontor.return/supplier-rma ret))))
       ;; Progress through lifecycle
       (returns/accept-return! *conn* "RMA-VEND-1")
       (returns/receive-return! *conn* "RMA-VEND-1")
       (returns/complete-return! *conn* "RMA-VEND-1")
-      (is (= :completed (sm/current-status (d/db *conn*) return-eid :return/status))))))
+      (is (= :completed (sm/current-status (d/db *conn*) return-eid :kontor.return/status))))))
 
 ;; ============================================================================
 ;; Credit memo bridge
@@ -252,7 +252,7 @@
         (is (= :sales-revenue (-> lines first :kontor.invoice-line/gl-account-type))))
       (testing "return-item-billing junction created"
         (let [billing-count (d/q '[:find (count ?b) .
-                                   :where [?b :return-item-billing/invoice-line]]
+                                   :where [?b :kontor.return-item-billing/invoice-line]]
                                  db)]
           (is (= 1 billing-count)))))))
 
@@ -288,7 +288,7 @@
         (is (= "SUPPLIER" (-> dm :kontor.invoice/seller :kontor.partner/external-id)))
         (is (= "ACME-ORG" (-> dm :kontor.invoice/buyer :kontor.partner/external-id))))
       (testing "GL routes to :inventory (PO line is :direct material)"
-        ;; debit-memo lines dispatch on :order-item/category — the
+        ;; debit-memo lines dispatch on :kontor.procurement.order-item/category — the
         ;; reversal hits the same account the original purchase debited.
         (is (= :inventory (-> lines first :kontor.invoice-line/gl-account-type))))
       (testing "amount derived from return-quantity × return-price"
@@ -318,10 +318,10 @@
     ;; Override received-quantity to 3 (customer only sent back 3 of 5)
     (let [return-eid (returns/by-external-id (d/db *conn*) "RMA-PARTIAL")
           item-eid (d/q '[:find ?i . :in $ ?r
-                          :where [?i :return-item/return ?r]]
+                          :where [?i :kontor.return-item/return ?r]]
                         (d/db *conn*) return-eid)]
       (d/transact *conn* [{:db/id item-eid
-                           :return-item/received-quantity 3M}]))
+                           :kontor.return-item/received-quantity 3M}]))
     (returns/make-credit-memo-from-return! *conn* "RMA-PARTIAL"
                                             {:external-id "CM-PARTIAL"})
     (let [lines (inv/lines-of (d/db *conn*) "CM-PARTIAL")]

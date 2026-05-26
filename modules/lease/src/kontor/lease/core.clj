@@ -10,7 +10,7 @@
    The exemption path is deliberately separate: a short-term
    (≤12-month) or low-value lease has no balance-sheet footprint —
    it is a straight-line expense, so `register-exempt-lease!` just
-   creates a plain `:schedule` (`:schedule/kind :lease-expense`) and
+   creates a plain `:schedule` (`:kontor.schedule/kind :lease-expense`) and
    `plan-exempt-lease-charge` builds the per-period expense posting.
    No `:lease` entity is involved."
   (:require [datahike.api :as d]
@@ -27,9 +27,9 @@
 ;; ============================================================================
 
 (defn by-code
-  "Resolve a :lease eid by :lease/code."
+  "Resolve a :lease eid by :kontor.lease/code."
   [db code]
-  (d/q '[:find ?e . :in $ ?c :where [?e :lease/code ?c]] db code))
+  (d/q '[:find ?e . :in $ ?c :where [?e :kontor.lease/code ?c]] db code))
 
 (defn resolve-lease
   "Coerce `spec` to a :lease eid (string → by-code)."
@@ -44,9 +44,9 @@
   [db spec]
   (when-let [eid (resolve-lease db spec)]
     (d/pull db
-            '[* {:lease/lessor [:db/id :kontor.partner/external-id :kontor.partner/name]
-                 :lease/rou-asset [:db/id :asset/code :asset/status]
-                 :lease/asset-class [:db/id :asset-class/code]}]
+            '[* {:kontor.lease/lessor [:db/id :kontor.partner/external-id :kontor.partner/name]
+                 :kontor.lease/rou-asset [:db/id :kontor.asset/code :kontor.asset/status]
+                 :kontor.lease/asset-class [:db/id :kontor.asset-class/code]}]
             eid)))
 
 ;; ============================================================================
@@ -77,7 +77,7 @@
    (ordinary annuity). Returns a bigdec rounded to 2dp.
 
    This is the liability measurement at commencement; `commence!`
-   stores it as `:lease-liability/opening-liability`."
+   stores it as `:kontor.lease-liability/opening-liability`."
   ([payment period-rate n timing]
    (present-value payment period-rate n timing {}))
   ([^BigDecimal payment ^BigDecimal period-rate n timing {:keys [final-value]}]
@@ -174,38 +174,38 @@
     (throw (ex-info ":discount-rate must be non-negative"
                     {:discount-rate discount-rate})))
   (let [row (cond-> {:db/id tempid
-                     :lease/code code
-                     :lease/name name
-                     :lease/lessor lessor
-                     :lease/asset-class asset-class
-                     :lease/commencement-date commencement-date
-                     :lease/term-months term-months
-                     :lease/payment-amount payment-amount
-                     :lease/payment-frequency payment-frequency
-                     :lease/payment-timing payment-timing
-                     :lease/commodity commodity
-                     :lease/discount-rate discount-rate
-                     :lease/status :draft}
-              underlying-asset-desc   (assoc :lease/underlying-asset-desc
+                     :kontor.lease/code code
+                     :kontor.lease/name name
+                     :kontor.lease/lessor lessor
+                     :kontor.lease/asset-class asset-class
+                     :kontor.lease/commencement-date commencement-date
+                     :kontor.lease/term-months term-months
+                     :kontor.lease/payment-amount payment-amount
+                     :kontor.lease/payment-frequency payment-frequency
+                     :kontor.lease/payment-timing payment-timing
+                     :kontor.lease/commodity commodity
+                     :kontor.lease/discount-rate discount-rate
+                     :kontor.lease/status :draft}
+              underlying-asset-desc   (assoc :kontor.lease/underlying-asset-desc
                                              underlying-asset-desc)
-              initial-direct-costs    (assoc :lease/initial-direct-costs
+              initial-direct-costs    (assoc :kontor.lease/initial-direct-costs
                                              initial-direct-costs)
-              prepaid-at-commencement (assoc :lease/prepaid-at-commencement
+              prepaid-at-commencement (assoc :kontor.lease/prepaid-at-commencement
                                              prepaid-at-commencement)
-              incentives-received     (assoc :lease/incentives-received
+              incentives-received     (assoc :kontor.lease/incentives-received
                                              incentives-received)
-              purchase-option-price   (assoc :lease/purchase-option-price
+              purchase-option-price   (assoc :kontor.lease/purchase-option-price
                                              purchase-option-price)
-              entity                  (assoc :lease/entity entity)
-              origin-document         (assoc :lease/origin-document origin-document)
-              note                    (assoc :lease/note note)
-              imported?               (assoc :lease/imported? imported?)
-              imported-as-of          (assoc :lease/imported-as-of imported-as-of)
+              entity                  (assoc :kontor.lease/entity entity)
+              origin-document         (assoc :kontor.lease/origin-document origin-document)
+              note                    (assoc :kontor.lease/note note)
+              imported?               (assoc :kontor.lease/imported? imported?)
+              imported-as-of          (assoc :kontor.lease/imported-as-of imported-as-of)
               imported-original-commencement-date
-              (assoc :lease/imported-original-commencement-date
+              (assoc :kontor.lease/imported-original-commencement-date
                      imported-original-commencement-date)
               imported-original-term-months
-              (assoc :lease/imported-original-term-months
+              (assoc :kontor.lease/imported-original-term-months
                      imported-original-term-months)
               ;; The recording actor IS the creator — stamp :kontor.audit/create-uid
               ;; so ADR-038 :no-self-approval can fire on termination.
@@ -218,7 +218,7 @@
         status-tx (sm/record-status-change-tx-data
                    _db (cond-> {:entity tempid
                                 :entity-type :lease
-                                :facet :lease/status
+                                :facet :kontor.lease/status
                                 :from :nil :to :draft
                                 :changed-at (or recorded-at (Date.))
                                 :reason :lease-recorded}
@@ -232,8 +232,8 @@
 (defn register-exempt-lease!
   "Register a short-term (≤12-month) or low-value lease — which has
    NO balance-sheet footprint, hence NO `:lease` entity. Creates a
-   plain `:schedule` (`:schedule/kind :lease-expense`) whose
-   `:schedule/total-amount` is the total undiscounted payments;
+   plain `:schedule` (`:kontor.schedule/kind :lease-expense`) whose
+   `:kontor.schedule/total-amount` is the total undiscounted payments;
    `plan-exempt-lease-charge` builds each period's straight-line
    expense posting, fired by the generic `kontor.schedule`
    mechanism. Returns the tx-report.
@@ -258,35 +258,35 @@
   (when-not term-months    (throw (ex-info ":term-months required" {})))
   (let [n (periods-for term-months frequency)
         end-date (schedule/date-of-occurrence start-date frequency n)]
-    [(cond-> {:schedule/code code
-              :schedule/kind :lease-expense
-              :schedule/start-date start-date
-              :schedule/end-date end-date
-              :schedule/frequency frequency
-              :schedule/total-amount total-payments
-              :schedule/total-commodity commodity
-              :schedule/state :active
-              :schedule/active true}
-       name (assoc :schedule/name name)
-       note (assoc :schedule/note note))]))
+    [(cond-> {:kontor.schedule/code code
+              :kontor.schedule/kind :lease-expense
+              :kontor.schedule/start-date start-date
+              :kontor.schedule/end-date end-date
+              :kontor.schedule/frequency frequency
+              :kontor.schedule/total-amount total-payments
+              :kontor.schedule/total-commodity commodity
+              :kontor.schedule/state :active
+              :kontor.schedule/active true}
+       name (assoc :kontor.schedule/name name)
+       note (assoc :kontor.schedule/note note))]))
 
 (defn exempt-lease-period-amount
   "The straight-line per-period expense for an exempt lease's
-   `:schedule` — `:schedule/total-amount / n-periods`, the last
+   `:schedule` — `:kontor.schedule/total-amount / n-periods`, the last
    period absorbing the rounding remainder. `sequence` is 1-indexed.
    Returns a bigdec."
   ^BigDecimal [db schedule-spec ^long sequence]
   (let [sched-eid (schedule/resolve-schedule db schedule-spec)
-        s (d/pull db [:schedule/total-amount :schedule/start-date
-                      :schedule/end-date :schedule/frequency]
+        s (d/pull db [:kontor.schedule/total-amount :kontor.schedule/start-date
+                      :kontor.schedule/end-date :kontor.schedule/frequency]
                   sched-eid)
-        total ^BigDecimal (:schedule/total-amount s)
-        freq (:schedule/frequency s)
+        total ^BigDecimal (:kontor.schedule/total-amount s)
+        freq (:kontor.schedule/frequency s)
         ;; n-periods = how many occurrences from start to end inclusive.
         n (loop [k 1]
             (if (pos? (.compareTo (schedule/date-of-occurrence
-                                   (:schedule/start-date s) freq k)
-                                  (:schedule/end-date s)))
+                                   (:kontor.schedule/start-date s) freq k)
+                                  (:kontor.schedule/end-date s)))
               (dec k)
               (recur (inc k))))
         per (.setScale (.divide total (BigDecimal/valueOf n) 12 RoundingMode/HALF_EVEN)

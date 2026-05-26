@@ -14,7 +14,7 @@
    The substrate ships:
      - `contribution-message-payload` — structured map per ATO AFF.
      - `superstream-audit-doc-tx-data` — ADR-068 builder that
-       records the payload as an `:audit-doc/category :payroll-filing`
+       records the payload as an `:kontor.audit-doc/category :payroll-filing`
        row for the audit chain.
 
    ## What kontor does NOT do
@@ -152,7 +152,7 @@
 
 (defn superstream-audit-doc-tx-data
   "Pure ADR-068 builder — record a SuperStream contribution-message
-   intent as an `:audit-doc/category :payroll-filing` entity. The
+   intent as an `:kontor.audit-doc/category :payroll-filing` entity. The
    consumer transacts this alongside the actual outbound transmission
    (which happens in the consumer's engine / clearing-house adapter
    — kontor records, it does not transmit).
@@ -181,11 +181,11 @@
                      (:super.message/total-amount payload)
                      (if storage-uri (str " | URI " storage-uri) ""))]
     [(cond->
-      {:audit-doc/code doc-code
-       :audit-doc/type :superstream-contribution
-       :audit-doc/title title
-       :audit-doc/description desc
-       :audit-doc/uploaded-at (Date.)
-       :audit-doc/category :payroll-filing
-       :audit-doc/language language}
-       storage-uri (assoc :audit-doc/storage-uri storage-uri))]))
+      {:kontor.audit-doc/code doc-code
+       :kontor.audit-doc/type :superstream-contribution
+       :kontor.audit-doc/title title
+       :kontor.audit-doc/description desc
+       :kontor.audit-doc/uploaded-at (Date.)
+       :kontor.audit-doc/category :payroll-filing
+       :kontor.audit-doc/language language}
+       storage-uri (assoc :kontor.audit-doc/storage-uri storage-uri))]))

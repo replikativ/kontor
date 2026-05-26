@@ -14,12 +14,12 @@
    What we emit:
 
      - One `:audit-doc` per pay-period with
-         :audit-doc/category :payroll-filing
-         :audit-doc/language :zh-cn
-         :audit-doc/type :emit-payload
-         :audit-doc/inline-payload — the structured CSV payload
-         :audit-doc/code — \"CN-IIT-<period-code>-<entity-code>\"
-         :audit-doc/storage-uri — file://iit/...
+         :kontor.audit-doc/category :payroll-filing
+         :kontor.audit-doc/language :zh-cn
+         :kontor.audit-doc/type :emit-payload
+         :kontor.audit-doc/inline-payload — the structured CSV payload
+         :kontor.audit-doc/code — \"CN-IIT-<period-code>-<entity-code>\"
+         :kontor.audit-doc/storage-uri — file://iit/...
 
    What we deliberately do NOT do:
 
@@ -156,7 +156,7 @@
 
 (defn render-iit-monthly-csv
   "Render the per-period IIT monthly CSV payload. Returns a string
-   suitable for `:audit-doc/inline-payload`. Each row carries one
+   suitable for `:kontor.audit-doc/inline-payload`. Each row carries one
    employee. Per note 87 §6.
 
    Required keys:
@@ -195,19 +195,19 @@
           code (str "CN-IIT-" period "-" ent-suffix)
           uri (str (or uri-prefix "file://iit/")
                    period "/" ent-suffix ".csv")]
-      [{:audit-doc/code code
-        :audit-doc/type :emit-payload
-        :audit-doc/category :payroll-filing
-        :audit-doc/language :zh-cn
-        :audit-doc/storage-uri uri
-        :audit-doc/uploaded-at (java.util.Date.)
-        :audit-doc/inline-payload payload
-        :audit-doc/payroll-period pay-period-eid
-        :audit-doc/payroll-entity entity-eid
+      [{:kontor.audit-doc/code code
+        :kontor.audit-doc/type :emit-payload
+        :kontor.audit-doc/category :payroll-filing
+        :kontor.audit-doc/language :zh-cn
+        :kontor.audit-doc/storage-uri uri
+        :kontor.audit-doc/uploaded-at (java.util.Date.)
+        :kontor.audit-doc/inline-payload payload
+        :kontor.audit-doc/payroll-period pay-period-eid
+        :kontor.audit-doc/payroll-entity entity-eid
         ;; All facts mapped — :iit-withheld is a known kind so we
         ;; report 0 unmapped. This field reuses the DE/CA convention
         ;; (note 86 P0-86-1).
-        :audit-doc/unmapped-count 0}])))
+        :kontor.audit-doc/unmapped-count 0}])))
 
 (defn make-provider
   "Construct a `CnIitMonthlyEmitProvider`. Required opts:
@@ -219,7 +219,7 @@
    Optional:
      :pay-period-date  — java.util.Date; if :pay-period-code is nil,
                           derive YYYY-MM from this
-     :uri-prefix       — string prefix for :audit-doc/storage-uri
+     :uri-prefix       — string prefix for :kontor.audit-doc/storage-uri
      :extras-map       — :component-kind catalog extras"
   [opts]
   (when-not (or (:pay-period-code opts) (:pay-period-date opts))

@@ -305,7 +305,7 @@
     :kontor.provision/consequence     (pr-str {:op       :schedule-override
                                         :code     :cn-2015-101-le-1m
                                         :label    "Caishui [2015] 101 — ≤ 1 month band (full)"
-                                        :schedule {:schedule/type :flat
+                                        :schedule {:kontor.schedule/type :flat
                                                    :rate-from     :parameter
                                                    :parameter     "CN.IIT.investment-income.flat-rate"}})}
 
@@ -323,7 +323,7 @@
     :kontor.provision/consequence     (pr-str {:op       :schedule-override
                                         :code     :cn-2015-101-1m-1y
                                         :label    "Caishui [2015] 101 — 1m–1y band (half base)"
-                                        :schedule {:schedule/type :flat
+                                        :schedule {:kontor.schedule/type :flat
                                                    :rate          0.10M}})}
 
    {:kontor.provision/code            "CN-Caishui-2015-101-listed-A-gt-1y"
@@ -340,7 +340,7 @@
     :kontor.provision/consequence     (pr-str {:op       :schedule-override
                                         :code     :cn-2015-101-gt-1y
                                         :label    "Caishui [2015] 101 — > 1 year band (exempt)"
-                                        :schedule {:schedule/type :flat
+                                        :schedule {:kontor.schedule/type :flat
                                                    :rate          0M}})}
 
    ;; --------------------------------------------------------------------
@@ -363,7 +363,7 @@
     :kontor.provision/consequence     (pr-str {:op       :schedule-override
                                         :code     :cn-stock-connect-sunset
                                         :label    "Stock Connect H-share exemption (through 2027-12-31)"
-                                        :schedule {:schedule/type :flat
+                                        :schedule {:kontor.schedule/type :flat
                                                    :rate          0M}})}
 
    ;; --------------------------------------------------------------------

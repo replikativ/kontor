@@ -12,7 +12,7 @@
         n-states (d/q '[:find (count ?s) .
                         :where
                         [?c :kontor.country/code "IN"]
-                        [?s :state/country ?c]]
+                        [?s :kontor.state/country ?c]]
                       db)]
     (is (= "India" (:kontor.country/name india)))
     (is (= "IND"   (:kontor.country/code-iso3 india)))
@@ -27,7 +27,7 @@
       (let [mh (states/by-gst-code db "27")]
         (is (some? mh))
         (is (= "27" (states/gst-code-of db mh)))
-        (is (= "Maharashtra" (:state/name (d/entity db mh))))))
+        (is (= "Maharashtra" (:kontor.state/name (d/entity db mh))))))
     (testing "Delhi = 07 (Union Territory)"
       (let [dl (states/by-gst-code db "07")]
         (is (some? dl))
@@ -43,7 +43,7 @@
     (testing "Pseudo-code 96 (Foreign Country)"
       (let [fc (states/by-gst-code db "96")]
         (is (some? fc))
-        (is (= "Foreign Country" (:state/name (d/entity db fc))))))))
+        (is (= "Foreign Country" (:kontor.state/name (d/entity db fc))))))))
 
 (deftest install-is-idempotent
   (let [conn (core/create-test-db)
@@ -52,9 +52,9 @@
         db (d/db conn)
         n-mh (d/q '[:find (count ?s) .
                     :where
-                    [?sc :state-code/regulator :in/gst]
-                    [?sc :state-code/code "27"]
-                    [?sc :state-code/state ?s]]
+                    [?sc :kontor.state-code/regulator :in/gst]
+                    [?sc :kontor.state-code/code "27"]
+                    [?sc :kontor.state-code/state ?s]]
                   db)]
     (is (= 1 n-mh)
         "Re-installing must collapse via composite identity")))

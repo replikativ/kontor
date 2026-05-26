@@ -139,8 +139,8 @@
     (let [conn (bootstrap)
           _ (seed-month! conn)
           r (ret/generate-gstr-1 conn {:year 2026 :month 1})
-          totals (:return/totals r)]
-      (is (= "GSTR-1" (:return/form r)))
+          totals (:kontor.return/totals r)]
+      (is (= "GSTR-1" (:kontor.return/form r)))
       ;; B2B taxable value: intra ₹1000 + inter ₹500 = ₹1500
       (is (money/equiv? (money/money "1500.00" :INR) (get totals "b2b-taxable-value"))
           "B2B = intra (₹1000) + inter (₹500)")
@@ -163,7 +163,7 @@
   (let [conn (bootstrap)
         _ (seed-month! conn)
         r (ret/generate-gstr-1 conn {:year 2026 :month 1})]
-    (is (= #inst "2026-02-11T00:00:00Z" (:return/due-date r))
+    (is (= #inst "2026-02-11T00:00:00Z" (:kontor.return/due-date r))
         "Monthly GSTR-1 due 11 Feb 2026")))
 
 ;; ============================================================================
@@ -176,8 +176,8 @@
     (let [conn (bootstrap)
           _ (seed-month! conn)
           r (ret/generate-gstr-3b conn {:year 2026 :month 1})
-          totals (:return/totals r)]
-      (is (= "GSTR-3B" (:return/form r)))
+          totals (:kontor.return/totals r)]
+      (is (= "GSTR-3B" (:kontor.return/form r)))
       ;; Outward — taxable value: ₹1500 (B2B intra + inter)
       ;; Note: kontor.report `:tax-tags` engine doesn't dedupe across
       ;; tags, so a line carrying BOTH :in-gstr3b-outward-taxable and
@@ -201,20 +201,20 @@
     (let [conn (bootstrap)
           _ (seed-month! conn)
           r (ret/generate-gstr-3b conn {:year 2026 :month 1})
-          {:keys [cgst sgst igst utgst cess]} (:return/net-tax r)]
+          {:keys [cgst sgst igst utgst cess]} (:kontor.return/net-tax r)]
       (is (money/equiv? (money/money "90.00" :INR) cgst))
       (is (money/equiv? (money/money "90.00" :INR) sgst))
       (is (money/equiv? (money/money "90.00" :INR) igst))
       (is (money/equiv? (money/zero :INR) utgst))
       (is (money/equiv? (money/zero :INR) cess))
-      (is (money/equiv? (money/money "270.00" :INR) (:return/net-total r))
+      (is (money/equiv? (money/money "270.00" :INR) (:kontor.return/net-total r))
           "Net tax total = sum across heads"))))
 
 (deftest gstr-3b-due-date-attached
   (let [conn (bootstrap)
         _ (seed-month! conn)
         r (ret/generate-gstr-3b conn {:year 2026 :month 1})]
-    (is (= #inst "2026-02-20T00:00:00Z" (:return/due-date r))
+    (is (= #inst "2026-02-20T00:00:00Z" (:kontor.return/due-date r))
         "Monthly GSTR-3B due 20 Feb 2026")))
 
 ;; ============================================================================
@@ -227,12 +227,12 @@
     (let [conn (bootstrap)
           _ (seed-month! conn)
           r (ret/generate-gstr-1 conn {:year 2026 :quarter 1})
-          totals (:return/totals r)]
-      (is (= :quarterly (-> r :return/period :kind)))
+          totals (:kontor.return/totals r)]
+      (is (= :quarterly (-> r :kontor.return/period :kind)))
       (is (money/equiv? (money/money "1500.00" :INR) (get totals "b2b-taxable-value")))
       (is (money/equiv? (money/money "90.00" :INR) (get totals "cgst")))
       (is (money/equiv? (money/money "90.00" :INR) (get totals "igst")))
-      (is (= #inst "2026-04-13T00:00:00Z" (:return/due-date r))
+      (is (= #inst "2026-04-13T00:00:00Z" (:kontor.return/due-date r))
           "Quarterly GSTR-1 (QRMP) due 13th of month following the quarter"))))
 
 ;; ============================================================================
@@ -243,15 +243,15 @@
   (testing "Bootstrap + no invoices → GSTR-3B with all zero totals."
     (let [conn (bootstrap)
           r (ret/generate-gstr-3b conn {:year 2026 :month 1})
-          totals (:return/totals r)
-          {:keys [cgst sgst igst]} (:return/net-tax r)]
+          totals (:kontor.return/totals r)
+          {:keys [cgst sgst igst]} (:kontor.return/net-tax r)]
       (is (money/equiv? (money/zero :INR) (get totals "output-cgst")))
       (is (money/equiv? (money/zero :INR) (get totals "output-sgst")))
       (is (money/equiv? (money/zero :INR) (get totals "output-igst")))
       (is (money/equiv? (money/zero :INR) cgst))
       (is (money/equiv? (money/zero :INR) sgst))
       (is (money/equiv? (money/zero :INR) igst))
-      (is (money/equiv? (money/zero :INR) (:return/net-total r))))))
+      (is (money/equiv? (money/zero :INR) (:kontor.return/net-total r))))))
 
 ;; ============================================================================
 ;; Missing-period opts → throws
@@ -274,7 +274,7 @@
     (let [conn (bootstrap)
           _ (seed-month! conn)
           r (ret/generate-gstr-1 conn {:from jan-1 :to feb-1})
-          totals (:return/totals r)]
+          totals (:kontor.return/totals r)]
       ;; Same totals as the :year+:month run
       (is (money/equiv? (money/money "1500.00" :INR)
                         (get totals "b2b-taxable-value"))))))

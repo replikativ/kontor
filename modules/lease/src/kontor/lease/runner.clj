@@ -5,7 +5,7 @@
    `:draft` `:lease` into an `:active` one by creating the single
    Right-of-Use `:asset`, opening one `:lease-liability` book + one
    ROU `:asset-depreciation` book per ledger, posting the day-one
-   recognition entry per book, and driving `:lease/status :draft →
+   recognition entry per book, and driving `:kontor.lease/status :draft →
    :active`.
 
    `run-lease!` is the period close for one (lease, ledger): it fires
@@ -54,7 +54,7 @@
    `:books` opens a `:lease-liability` book + a ROU
    `:asset-depreciation` book and posts the day-one recognition
    entry `Dr ROU-asset / Cr lease-liability [/ Cr cash]`; sets
-   `:lease/rou-asset`; drives `:lease/status :draft → :active`.
+   `:kontor.lease/rou-asset`; drives `:kontor.lease/status :draft → :active`.
 
    The liability PV is `present-value` of the lease payments at the
    book's discount rate; the ROU asset's cost is `PV + initial-direct-
@@ -87,7 +87,7 @@
         :rou-expense-account   eid — finance: depreciation-expense;
                                operating: the same lease-expense
                                account                   (required)
-        :discount-rate         bigdec (default = `:lease/discount-rate`)
+        :discount-rate         bigdec (default = `:kontor.lease/discount-rate`)
         :liability-provider-id keyword (default :effective-interest)}
 
    Optional opts:
@@ -122,35 +122,35 @@
   (let [db (d/db conn)
         lease-eid (lease/resolve-lease db lease)
         _ (when-not lease-eid (throw (ex-info "Lease not found" {:spec lease})))
-        l (d/pull db [:lease/code :lease/name :lease/status
-                      :lease/commencement-date :lease/term-months
-                      :lease/payment-amount :lease/payment-frequency
-                      :lease/payment-timing :lease/discount-rate
-                      :lease/initial-direct-costs :lease/prepaid-at-commencement
-                      :lease/incentives-received :lease/purchase-option-price
-                      {:lease/asset-class [:db/id]}
-                      {:lease/commodity [:db/id]}
-                      {:lease/origin-document [:db/id]}]
+        l (d/pull db [:kontor.lease/code :kontor.lease/name :kontor.lease/status
+                      :kontor.lease/commencement-date :kontor.lease/term-months
+                      :kontor.lease/payment-amount :kontor.lease/payment-frequency
+                      :kontor.lease/payment-timing :kontor.lease/discount-rate
+                      :kontor.lease/initial-direct-costs :kontor.lease/prepaid-at-commencement
+                      :kontor.lease/incentives-received :kontor.lease/purchase-option-price
+                      {:kontor.lease/asset-class [:db/id]}
+                      {:kontor.lease/commodity [:db/id]}
+                      {:kontor.lease/origin-document [:db/id]}]
                   lease-eid)
-        _ (when-not (= :draft (:lease/status l))
+        _ (when-not (= :draft (:kontor.lease/status l))
             (throw (ex-info "commence!: lease is not :draft — already commenced?"
-                            {:type :lease/not-draft
-                             :lease lease-eid :status (:lease/status l)})))
-        _ (when-not (:lease/origin-document l)
+                            {:type :kontor.lease/not-draft
+                             :lease lease-eid :status (:kontor.lease/status l)})))
+        _ (when-not (:kontor.lease/origin-document l)
             (throw (ex-info "commence!: lease has no :origin-document — the signed contract is required for :draft → :active"
-                            {:type :lease/missing-origin-document :lease lease-eid})))
-        commencement (:lease/commencement-date l)
-        freq         (:lease/payment-frequency l)
-        timing       (:lease/payment-timing l)
-        n-periods    (lease/periods-for (:lease/term-months l) freq)
+                            {:type :kontor.lease/missing-origin-document :lease lease-eid})))
+        commencement (:kontor.lease/commencement-date l)
+        freq         (:kontor.lease/payment-frequency l)
+        timing       (:kontor.lease/payment-timing l)
+        n-periods    (lease/periods-for (:kontor.lease/term-months l) freq)
         ppy          (lease/periods-per-year freq)
-        commodity    (:db/id (:lease/commodity l))
-        payment      (:lease/payment-amount l)
-        idc          (bd (:lease/initial-direct-costs l))
-        prepaid      (bd (:lease/prepaid-at-commencement l))
-        incentives   (bd (:lease/incentives-received l))
+        commodity    (:db/id (:kontor.lease/commodity l))
+        payment      (:kontor.lease/payment-amount l)
+        idc          (bd (:kontor.lease/initial-direct-costs l))
+        prepaid      (bd (:kontor.lease/prepaid-at-commencement l))
+        incentives   (bd (:kontor.lease/incentives-received l))
         net-cash     (-> idc (.add prepaid) (.subtract incentives))
-        purchase-opt (:lease/purchase-option-price l)
+        purchase-opt (:kontor.lease/purchase-option-price l)
         ;; Both the liability schedule and the ROU depreciation
         ;; schedule start on the SAME date so occurrence `k` of each
         ;; lines up — :in-advance pays at commencement, :in-arrears at
@@ -161,7 +161,7 @@
         ;; Per-book PV + ROU cost.
         book-calcs
         (mapv (fn [{:keys [discount-rate] :as bk}]
-                (let [rate (or discount-rate (:lease/discount-rate l))
+                (let [rate (or discount-rate (:kontor.lease/discount-rate l))
                       period-rate (.divide ^BigDecimal rate
                                            (BigDecimal/valueOf (long ppy))
                                            12 RoundingMode/HALF_EVEN)
@@ -170,7 +170,7 @@
                       rou-cost (.add ^BigDecimal pv net-cash)]
                   (assoc bk :rate rate :pv pv :rou-cost rou-cost)))
               books)
-        rou-code (or rou-asset-code (str (:lease/code l) "-ROU"))
+        rou-code (or rou-asset-code (str (:kontor.lease/code l) "-ROU"))
         ;; Ledger codes for the per-book schedule-code default — pulled
         ;; up-front because `open-book-tx-data` in :asset-tempid mode
         ;; does not pull the (not-yet-committed) asset.
@@ -197,8 +197,8 @@
           (asset/acquire-tx-data
            sdb {:tempid rou-tempid
                 :code rou-code
-                :name (str "ROU — " (:lease/name l))
-                :class (:db/id (:lease/asset-class l))
+                :name (str "ROU — " (:kontor.lease/name l))
+                :class (:db/id (:kontor.lease/asset-class l))
                 :acquisition-cost primary-rou-cost
                 :acquisition-commodity commodity
                 :acquisition-date commencement
@@ -208,7 +208,7 @@
                 :asset-account rou-asset-account
                 :accumulated-account rou-accumulated-account
                 :expense-account (:rou-expense-account (first books))
-                :origin-document (:db/id (:lease/origin-document l))
+                :origin-document (:db/id (:kontor.lease/origin-document l))
                 :changed-by-uid changed-by-uid}))
         ;; STEPS 2..N+1 — one per ledger: the :lease-liability book + its
         ;; schedule, the ROU :asset-depreciation book + its schedule, and
@@ -256,7 +256,7 @@
                                 :provider-id (if (= classification :operating)
                                                :lease-rou-plug
                                                :straight-line)
-                                :useful-life-months (:lease/term-months l)
+                                :useful-life-months (:kontor.lease/term-months l)
                                 :depreciable-base rou-cost
                                 :commodity commodity
                                 :start-date sched-start
@@ -278,21 +278,21 @@
                                     :posted-at commencement
                                     :tx-tempid (str "lease-recog" suffix)
                                     :narration (str "Lease recognition — "
-                                                    (:lease/code l))}
+                                                    (:kontor.lease/code l))}
                              cash-account (assoc :cash-account cash-account))))))))
           book-calcs))
         ;; FINAL STEP — link the ROU asset + drive :draft → :active.
         link-and-activate
         (fn [sdb _ctx]
-          (into [{:db/id lease-eid :lease/rou-asset rou-tempid}]
+          (into [{:db/id lease-eid :kontor.lease/rou-asset rou-tempid}]
                 (sm/record-status-change-tx-data
                  sdb {:entity lease-eid
                       :entity-type :lease
-                      :facet :lease/status
+                      :facet :kontor.lease/status
                       :from :draft :to :active
                       :changed-at (Date.)
                       :changed-by-uid changed-by-uid
-                      :supporting-doc (:db/id (:lease/origin-document l))
+                      :supporting-doc (:db/id (:kontor.lease/origin-document l))
                       :reason :lease-commenced})))
         report (process/run-process
                 conn {:steps (concat [recognize-rou] book-steps [link-and-activate])
@@ -328,25 +328,25 @@
    - The single ROU `:asset` with `:in-service-date = :imported-as-of`
      (re-anchored — the new system's depreciation schedule starts
      here). The contractual original commencement date is preserved
-     on the `:lease` via `:lease/imported-original-commencement-date`
-     and the `:lease/imported?` flag.
+     on the `:lease` via `:kontor.lease/imported-original-commencement-date`
+     and the `:kontor.lease/imported?` flag.
    - Per ledger: a `:lease-liability` book with `:opening-liability =
      :remaining-pv` and a schedule that fires the REMAINING payment
      occurrences from `:imported-as-of`; a ROU `:asset-depreciation`
      book with `:depreciable-base = :remaining-rou-base`,
      `:opening-accumulated = :pre-import-accumulated` (reporting
      scalar), and `:useful-life-months = :remaining-useful-life-months`.
-   - `:lease/status :draft → :active` with `:reason :lease-imported`.
+   - `:kontor.lease/status :draft → :active` with `:reason :lease-imported`.
 
    The `:lease` MUST be `:draft` and pre-populated by the consumer with
-   `:lease/commencement-date = :imported-as-of`,
-   `:lease/term-months = :remaining-term-months`,
-   `:lease/payment-amount`, `:lease/payment-frequency`,
-   `:lease/payment-timing`, `:lease/discount-rate`,
-   `:lease/origin-document`, plus the audit denorms
-   `:lease/imported?` (true), `:lease/imported-as-of`,
-   `:lease/imported-original-commencement-date`,
-   `:lease/imported-original-term-months`. The transactor verifies the
+   `:kontor.lease/commencement-date = :imported-as-of`,
+   `:kontor.lease/term-months = :remaining-term-months`,
+   `:kontor.lease/payment-amount`, `:kontor.lease/payment-frequency`,
+   `:kontor.lease/payment-timing`, `:kontor.lease/discount-rate`,
+   `:kontor.lease/origin-document`, plus the audit denorms
+   `:kontor.lease/imported?` (true), `:kontor.lease/imported-as-of`,
+   `:kontor.lease/imported-original-commencement-date`,
+   `:kontor.lease/imported-original-term-months`. The transactor verifies the
    audit denorms are present.
 
    Required opts (same shape as `commence!`):
@@ -367,8 +367,8 @@
         :pre-import-accumulated bigdec — reporting scalar
                                 (default 0)
         :remaining-useful-life-months long — defaults to
-                                :lease/term-months
-        :discount-rate         bigdec (default = :lease/discount-rate)
+                                :kontor.lease/term-months
+        :discount-rate         bigdec (default = :kontor.lease/discount-rate)
         :liability-provider-id keyword (default :effective-interest)}
 
    Optional opts:
@@ -392,40 +392,40 @@
   (let [db (d/db conn)
         lease-eid (lease/resolve-lease db lease)
         _ (when-not lease-eid (throw (ex-info "Lease not found" {:spec lease})))
-        l (d/pull db [:lease/code :lease/name :lease/status
-                      :lease/commencement-date :lease/term-months
-                      :lease/payment-amount :lease/payment-frequency
-                      :lease/payment-timing :lease/discount-rate
-                      :lease/imported? :lease/imported-as-of
-                      :lease/imported-original-commencement-date
-                      :lease/imported-original-term-months
-                      {:lease/asset-class [:db/id]}
-                      {:lease/commodity [:db/id]}
-                      {:lease/origin-document [:db/id]}]
+        l (d/pull db [:kontor.lease/code :kontor.lease/name :kontor.lease/status
+                      :kontor.lease/commencement-date :kontor.lease/term-months
+                      :kontor.lease/payment-amount :kontor.lease/payment-frequency
+                      :kontor.lease/payment-timing :kontor.lease/discount-rate
+                      :kontor.lease/imported? :kontor.lease/imported-as-of
+                      :kontor.lease/imported-original-commencement-date
+                      :kontor.lease/imported-original-term-months
+                      {:kontor.lease/asset-class [:db/id]}
+                      {:kontor.lease/commodity [:db/id]}
+                      {:kontor.lease/origin-document [:db/id]}]
                   lease-eid)
-        _ (when-not (= :draft (:lease/status l))
+        _ (when-not (= :draft (:kontor.lease/status l))
             (throw (ex-info "import-lease!: lease is not :draft"
-                            {:type :lease/not-draft
-                             :lease lease-eid :status (:lease/status l)})))
-        _ (when-not (:lease/origin-document l)
+                            {:type :kontor.lease/not-draft
+                             :lease lease-eid :status (:kontor.lease/status l)})))
+        _ (when-not (:kontor.lease/origin-document l)
             (throw (ex-info "import-lease!: lease has no :origin-document — required for :draft → :active"
-                            {:type :lease/missing-origin-document :lease lease-eid})))
-        _ (when-not (:lease/imported? l)
-            (throw (ex-info "import-lease!: :lease/imported? must be true (use commence! for non-imported leases)"
-                            {:type :lease/not-imported :lease lease-eid})))
-        _ (doseq [k [:lease/imported-as-of
-                     :lease/imported-original-commencement-date
-                     :lease/imported-original-term-months]]
+                            {:type :kontor.lease/missing-origin-document :lease lease-eid})))
+        _ (when-not (:kontor.lease/imported? l)
+            (throw (ex-info "import-lease!: :kontor.lease/imported? must be true (use commence! for non-imported leases)"
+                            {:type :kontor.lease/not-imported :lease lease-eid})))
+        _ (doseq [k [:kontor.lease/imported-as-of
+                     :kontor.lease/imported-original-commencement-date
+                     :kontor.lease/imported-original-term-months]]
             (when (nil? (get l k))
               (throw (ex-info (str "import-lease!: " k " required on an imported lease (audit denorm)")
-                              {:type :lease/missing-import-denorm
+                              {:type :kontor.lease/missing-import-denorm
                                :lease lease-eid :missing k}))))
-        imported-as-of (:lease/commencement-date l)
-        freq         (:lease/payment-frequency l)
-        timing       (:lease/payment-timing l)
-        remaining-n  (lease/periods-for (:lease/term-months l) freq)
-        commodity    (:db/id (:lease/commodity l))
-        rou-code     (or rou-asset-code (str (:lease/code l) "-ROU"))
+        imported-as-of (:kontor.lease/commencement-date l)
+        freq         (:kontor.lease/payment-frequency l)
+        timing       (:kontor.lease/payment-timing l)
+        remaining-n  (lease/periods-for (:kontor.lease/term-months l) freq)
+        commodity    (:db/id (:kontor.lease/commodity l))
+        rou-code     (or rou-asset-code (str (:kontor.lease/code l) "-ROU"))
         sched-start  (if (= timing :in-advance)
                        imported-as-of
                        (schedule/date-of-occurrence imported-as-of freq 2))
@@ -448,16 +448,16 @@
               (throw (ex-info "book spec: :remaining-rou-base required" {:book bk})))
             (when (neg? (.signum ^BigDecimal (:remaining-pv bk)))
               (throw (ex-info "book spec: :remaining-pv must be non-negative — a negative imported PV would unwind to deeply negative balances"
-                              {:type :lease/invalid-import-amount
+                              {:type :kontor.lease/invalid-import-amount
                                :field :remaining-pv :value (:remaining-pv bk) :book bk})))
             (when (neg? (.signum ^BigDecimal (:remaining-rou-base bk)))
               (throw (ex-info "book spec: :remaining-rou-base must be non-negative — a negative imported ROU base would invert the dep schedule"
-                              {:type :lease/invalid-import-amount
+                              {:type :kontor.lease/invalid-import-amount
                                :field :remaining-rou-base :value (:remaining-rou-base bk) :book bk})))
             (when (and (:pre-import-accumulated bk)
                        (neg? (.signum ^BigDecimal (:pre-import-accumulated bk))))
               (throw (ex-info "book spec: :pre-import-accumulated must be non-negative if supplied"
-                              {:type :lease/invalid-import-amount
+                              {:type :kontor.lease/invalid-import-amount
                                :field :pre-import-accumulated :value (:pre-import-accumulated bk) :book bk}))))
         rou-tempid "rou-asset"
         ;; STEP 1 — the Right-of-Use :asset re-anchored at :imported-as-of.
@@ -466,8 +466,8 @@
           (asset/acquire-tx-data
            sdb {:tempid rou-tempid
                 :code rou-code
-                :name (str "ROU — " (:lease/name l))
-                :class (:db/id (:lease/asset-class l))
+                :name (str "ROU — " (:kontor.lease/name l))
+                :class (:db/id (:kontor.lease/asset-class l))
                 :acquisition-cost primary-rou-cost
                 :acquisition-commodity commodity
                 :acquisition-date imported-as-of
@@ -477,7 +477,7 @@
                 :asset-account rou-asset-account
                 :accumulated-account rou-accumulated-account
                 :expense-account (:rou-expense-account (first books))
-                :origin-document (:db/id (:lease/origin-document l))
+                :origin-document (:db/id (:kontor.lease/origin-document l))
                 :changed-by-uid changed-by-uid}))
         ;; STEPS 2..N+1 — per-ledger books (no day-one GL entry).
         book-steps
@@ -498,9 +498,9 @@
             (when-not rou-expense-account
               (throw (ex-info "book spec: :rou-expense-account required" {})))
             (let [suffix (str "-" i)
-                  rate (or discount-rate (:lease/discount-rate l))
+                  rate (or discount-rate (:kontor.lease/discount-rate l))
                   useful-months (or remaining-useful-life-months
-                                    (:lease/term-months l))
+                                    (:kontor.lease/term-months l))
                   pre-acc (or pre-import-accumulated 0M)]
               (fn [sdb _ctx]
                 (-> []
@@ -541,15 +541,15 @@
         ;; FINAL STEP — link the ROU + drive :draft → :active.
         link-and-activate
         (fn [sdb _ctx]
-          (into [{:db/id lease-eid :lease/rou-asset rou-tempid}]
+          (into [{:db/id lease-eid :kontor.lease/rou-asset rou-tempid}]
                 (sm/record-status-change-tx-data
                  sdb {:entity lease-eid
                       :entity-type :lease
-                      :facet :lease/status
+                      :facet :kontor.lease/status
                       :from :draft :to :active
                       :changed-at (Date.)
                       :changed-by-uid changed-by-uid
-                      :supporting-doc (:db/id (:lease/origin-document l))
+                      :supporting-doc (:db/id (:kontor.lease/origin-document l))
                       :reason :lease-imported})))
         report (process/run-process
                 conn {:steps (concat [recognize-rou] book-steps [link-and-activate])
@@ -586,7 +586,7 @@
    `:finance` book.
 
    When the liability schedule becomes fully fired and `:mark-expired?`
-   is true (default), drives `:lease/status :active → :expired`.
+   is true (default), drives `:kontor.lease/status :active → :expired`.
 
    Required opts:
      :lease           code or eid
@@ -618,31 +618,31 @@
         liab-book (liability/book-for db lease-eid ledger)
         _ (when-not liab-book
             (throw (ex-info "run-lease!: no :lease-liability book for this (lease, ledger) — commence the lease first"
-                            {:type :lease/no-liability-book
+                            {:type :kontor.lease/no-liability-book
                              :lease lease-eid :ledger ledger})))
         inputs (liability/book-plan-inputs db liab-book)
         schedule-eid (:schedule inputs)
         commodity (:commodity inputs)
         classification (:classification inputs)
-        b (d/pull db [{:lease-liability/liability-account [:db/id]}
-                      {:lease-liability/interest-account [:db/id]}]
+        b (d/pull db [{:kontor.lease-liability/liability-account [:db/id]}
+                      {:kontor.lease-liability/interest-account [:db/id]}]
                   liab-book)
-        liability-account (:db/id (:lease-liability/liability-account b))
-        interest-account  (:db/id (:lease-liability/interest-account b))
+        liability-account (:db/id (:kontor.lease-liability/liability-account b))
+        interest-account  (:db/id (:kontor.lease-liability/interest-account b))
         ;; The sibling ROU depreciation book — resolved up-front so the
         ;; lockstep invariant can be checked before anything fires.
-        rou-asset (:db/id (:lease/rou-asset
-                           (d/pull db [{:lease/rou-asset [:db/id]}] lease-eid)))
+        rou-asset (:db/id (:kontor.lease/rou-asset
+                           (d/pull db [{:kontor.lease/rou-asset [:db/id]}] lease-eid)))
         _ (when-not rou-asset
             (throw (ex-info "run-lease!: lease has no :rou-asset — not commenced?"
-                            {:type :lease/not-commenced :lease lease-eid})))
+                            {:type :kontor.lease/not-commenced :lease lease-eid})))
         rou-dep-book (asset-dep/book-for db rou-asset ledger)
         _ (when-not rou-dep-book
             (throw (ex-info "run-lease!: no ROU :asset-depreciation book for this (lease, ledger) — commence the lease first"
-                            {:type :lease/no-rou-dep-book
+                            {:type :kontor.lease/no-rou-dep-book
                              :lease lease-eid :ledger ledger})))
-        rou-dep-schedule (:db/id (:asset-depreciation/schedule
-                                  (d/pull db [{:asset-depreciation/schedule
+        rou-dep-schedule (:db/id (:kontor.asset-depreciation/schedule
+                                  (d/pull db [{:kontor.asset-depreciation/schedule
                                                [:db/id]}]
                                           rou-dep-book)))
         ;; Lockstep invariant: run-lease! fires the liability + the ROU
@@ -653,7 +653,7 @@
                 rou-fired  (count (schedule/fired-sequences db rou-dep-schedule))]
             (when-not (= liab-fired rou-fired)
               (throw (ex-info "run-lease!: the liability schedule and the ROU depreciation schedule have diverged — they must be fired in lockstep (a prior run likely failed partway). Reconcile before running."
-                              {:type :lease/lockstep-divergence
+                              {:type :kontor.lease/lockstep-divergence
                                :lease lease-eid :ledger ledger
                                :liability-fired liab-fired :rou-fired rou-fired}))))
         plan (lp/plan-for-book db liab-book)
@@ -734,7 +734,7 @@
         completed? (>= (count (schedule/fired-sequences db' schedule-eid))
                        (:n-periods inputs))]
     (when (and completed? mark-expired? (seq fired))
-      (let [status (:lease/status (d/pull db' [:lease/status] lease-eid))]
+      (let [status (:kontor.lease/status (d/pull db' [:kontor.lease/status] lease-eid))]
         (when (= :active status)
           (let [last-date (:date (last fired))
                 status-step
@@ -742,7 +742,7 @@
                   (sm/record-status-change-tx-data
                    sdb (cond-> {:entity lease-eid
                                 :entity-type :lease
-                                :facet :lease/status
+                                :facet :kontor.lease/status
                                 :from :active :to :expired
                                 :changed-at last-date
                                 :reason :lease-expired}

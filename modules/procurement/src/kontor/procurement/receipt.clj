@@ -2,7 +2,7 @@
   "Receipt helpers — ADR-042.
 
    A `:receipt` is the physical-goods-received anchor for 3-way
-   match. Each receipt belongs to a PO (`:receipt/order`) and has
+   match. Each receipt belongs to a PO (`:kontor.receipt/order`) and has
    N `:receipt-item` rows, one per PO line received. Each item has
    a `:quantity-accepted` + `:quantity-rejected` split with reason.
 
@@ -34,7 +34,7 @@
   [db external-id]
   (d/q '[:find ?e .
          :in $ ?xid
-         :where [?e :receipt/external-id ?xid]]
+         :where [?e :kontor.receipt/external-id ?xid]]
        db external-id))
 
 (defn resolve-receipt
@@ -49,10 +49,10 @@
   [db spec]
   (when-let [eid (resolve-receipt db spec)]
     (d/pull db
-            '[* {:receipt/order [:order/external-id :order/type]
-                 :receipt/ship-group [:ship-group/seq-id]
-                 :receipt/carrier-partner [:kontor.partner/external-id :kontor.partner/name]
-                 :receipt/packing-slip-ref [:audit-doc/code :audit-doc/type]}]
+            '[* {:kontor.receipt/order [:kontor.order/external-id :kontor.order/type]
+                 :kontor.receipt/ship-group [:kontor.ship-group/seq-id]
+                 :kontor.receipt/carrier-partner [:kontor.partner/external-id :kontor.partner/name]
+                 :kontor.receipt/packing-slip-ref [:kontor.audit-doc/code :kontor.audit-doc/type]}]
             eid)))
 
 (defn items-of
@@ -61,10 +61,10 @@
   (when-let [eid (resolve-receipt db spec)]
     (->> (d/q '[:find [?ri ...]
                 :in $ ?r
-                :where [?ri :receipt-item/receipt ?r]]
+                :where [?ri :kontor.receipt-item/receipt ?r]]
               db eid)
-         (map #(d/pull db '[* {:receipt-item/order-item [:order-item/seq-id
-                                                          :order-item/product-id]}] %))
+         (map #(d/pull db '[* {:kontor.receipt-item/order-item [:kontor.sales.order-item/seq-id
+                                                          :kontor.sales.order-item/product-id]}] %))
          vec)))
 
 ;; ============================================================================
@@ -83,28 +83,28 @@
   (when-not order        (throw (ex-info ":order required" {})))
   (when-not (seq items)  (throw (ex-info "non-empty :items required" {})))
   (let [receipt-row (cond-> {:db/id tempid
-                             :receipt/external-id external-id
-                             :receipt/order order
-                             :receipt/status :pending
-                             :receipt/received-at (or received-at (java.util.Date.))}
-                      ship-group       (assoc :receipt/ship-group ship-group)
-                      received-by-uid  (assoc :receipt/received-by-uid received-by-uid)
-                      facility-id      (assoc :receipt/facility-id facility-id)
-                      carrier-partner  (assoc :receipt/carrier-partner carrier-partner)
-                      tracking-number  (assoc :receipt/tracking-number tracking-number)
-                      packing-slip-ref (assoc :receipt/packing-slip-ref packing-slip-ref)
-                      notes            (assoc :receipt/notes notes))
+                             :kontor.receipt/external-id external-id
+                             :kontor.receipt/order order
+                             :kontor.receipt/status :pending
+                             :kontor.receipt/received-at (or received-at (java.util.Date.))}
+                      ship-group       (assoc :kontor.receipt/ship-group ship-group)
+                      received-by-uid  (assoc :kontor.receipt/received-by-uid received-by-uid)
+                      facility-id      (assoc :kontor.receipt/facility-id facility-id)
+                      carrier-partner  (assoc :kontor.receipt/carrier-partner carrier-partner)
+                      tracking-number  (assoc :kontor.receipt/tracking-number tracking-number)
+                      packing-slip-ref (assoc :kontor.receipt/packing-slip-ref packing-slip-ref)
+                      notes            (assoc :kontor.receipt/notes notes))
         item-rows (mapv (fn [{:keys [order-item product-id quantity-accepted
                                      quantity-rejected rejection-reason
                                      lot unit-cost]}]
-                          (cond-> {:receipt-item/receipt tempid
-                                   :receipt-item/order-item order-item
-                                   :receipt-item/quantity-accepted quantity-accepted}
-                            product-id        (assoc :receipt-item/product-id product-id)
-                            quantity-rejected (assoc :receipt-item/quantity-rejected quantity-rejected)
-                            rejection-reason  (assoc :receipt-item/rejection-reason rejection-reason)
-                            lot               (assoc :receipt-item/lot lot)
-                            unit-cost         (assoc :receipt-item/unit-cost unit-cost)))
+                          (cond-> {:kontor.receipt-item/receipt tempid
+                                   :kontor.receipt-item/order-item order-item
+                                   :kontor.receipt-item/quantity-accepted quantity-accepted}
+                            product-id        (assoc :kontor.receipt-item/product-id product-id)
+                            quantity-rejected (assoc :kontor.receipt-item/quantity-rejected quantity-rejected)
+                            rejection-reason  (assoc :kontor.receipt-item/rejection-reason rejection-reason)
+                            lot               (assoc :kontor.receipt-item/lot lot)
+                            unit-cost         (assoc :kontor.receipt-item/unit-cost unit-cost)))
                         items)]
     (vec (cons receipt-row item-rows))))
 
@@ -134,7 +134,7 @@
      (sm/record-status-change! conn
                                (merge {:entity eid
                                        :entity-type :receipt
-                                       :facet :receipt/status
+                                       :facet :kontor.receipt/status
                                        :to :accepted}
                                       opts)))))
 
@@ -147,7 +147,7 @@
      (sm/record-status-change! conn
                                (merge {:entity eid
                                        :entity-type :receipt
-                                       :facet :receipt/status
+                                       :facet :kontor.receipt/status
                                        :to :rejected}
                                       opts)))))
 
@@ -180,19 +180,19 @@
           (d/q '[:find ?a .
                  :in $ ?at ?e
                  :where
-                 [?d :gl-account-default/account-type ?at]
-                 [?d :gl-account-default/entity ?e]
-                 [?d :gl-account-default/account ?a]]
+                 [?d :kontor.gl-account-default/account-type ?at]
+                 [?d :kontor.gl-account-default/entity ?e]
+                 [?d :kontor.gl-account-default/account ?a]]
                db role entity-eid))
         (d/q '[:find ?a .
                :in $ ?at
                :where
-               [?d :gl-account-default/account-type ?at]
-               [?d :gl-account-default/account ?a]
-               [(missing? $ ?d :gl-account-default/entity)]]
+               [?d :kontor.gl-account-default/account-type ?at]
+               [?d :kontor.gl-account-default/account ?a]
+               [(missing? $ ?d :kontor.gl-account-default/entity)]]
              db role)
         (throw (ex-info "No :gl-account-default seeded for stock-move role"
-                        {:type        :receipt/missing-gl-default
+                        {:type        :kontor.receipt/missing-gl-default
                          :role        role
                          :entity      entity-eid
                          :remediation "Seed a :gl-account-default row for
@@ -208,48 +208,48 @@
   [db receipt-spec {:keys [provider book journal-ref ledger-ref
                            account-fn effective-date changed-by-uid
                            reason]}]
-  (when-not provider    (throw (ex-info ":provider required" {:type :receipt/missing-provider})))
-  (when-not journal-ref (throw (ex-info ":journal-ref required" {:type :receipt/missing-journal})))
+  (when-not provider    (throw (ex-info ":provider required" {:type :kontor.receipt/missing-provider})))
+  (when-not journal-ref (throw (ex-info ":journal-ref required" {:type :kontor.receipt/missing-journal})))
   (let [receipt-eid (resolve-receipt db receipt-spec)
         _ (when-not receipt-eid
             (throw (ex-info "Receipt not found" {:spec receipt-spec})))
         receipt (d/pull db
-                        '[* {:receipt/order [:db/id
-                                             {:order/entity [:db/id]
-                                              :order/currency [:db/id :kontor.commodity/symbol]}]}]
+                        '[* {:kontor.receipt/order [:db/id
+                                             {:kontor.order/entity [:db/id]
+                                              :kontor.order/currency [:db/id :kontor.commodity/symbol]}]}]
                         receipt-eid)
-        _ (when-not (= :pending (:receipt/status receipt))
+        _ (when-not (= :pending (:kontor.receipt/status receipt))
             (throw (ex-info "Receipt must be :pending to post"
-                            {:type :receipt/not-pending
+                            {:type :kontor.receipt/not-pending
                              :receipt receipt-eid
-                             :status (:receipt/status receipt)})))
-        entity-eid (get-in receipt [:receipt/order :order/entity :db/id])
-        commodity-eid (get-in receipt [:receipt/order :order/currency :db/id])
+                             :status (:kontor.receipt/status receipt)})))
+        entity-eid (get-in receipt [:kontor.receipt/order :kontor.order/entity :db/id])
+        commodity-eid (get-in receipt [:kontor.receipt/order :kontor.order/currency :db/id])
         _ (when-not commodity-eid
-            (throw (ex-info "Receipt's order has no :order/currency"
-                            {:type :receipt/missing-commodity
+            (throw (ex-info "Receipt's order has no :kontor.order/currency"
+                            {:type :kontor.receipt/missing-commodity
                              :receipt receipt-eid})))
         eff-date (or effective-date (java.util.Date.))
         book-eid (or book (valuation/primary db))
         _ (when-not book-eid
             (throw (ex-info "No :valuation-book available"
-                            {:type :receipt/missing-book
+                            {:type :kontor.receipt/missing-book
                              :remediation "Pass :book explicitly or seed
                                            a :valuation-book row before
                                            posting."})))
         account-fn (or account-fn (default-account-fn db entity-eid))
         items (->> (d/q '[:find [?ri ...]
                           :in $ ?r
-                          :where [?ri :receipt-item/receipt ?r]]
+                          :where [?ri :kontor.receipt-item/receipt ?r]]
                         db receipt-eid)
                    (map #(d/pull db '[*] %))
                    (sort-by :db/id))
         _ (when (empty? items)
             (throw (ex-info "Receipt has no items" {:receipt receipt-eid})))
         _ (doseq [item items]
-            (when-not (:receipt-item/unit-cost item)
-              (throw (ex-info ":receipt-item/unit-cost required for posting"
-                              {:type :receipt/missing-unit-cost
+            (when-not (:kontor.receipt-item/unit-cost item)
+              (throw (ex-info ":kontor.receipt-item/unit-cost required for posting"
+                              {:type :kontor.receipt/missing-unit-cost
                                :receipt-item (:db/id item)}))))
         ;; The state-machine middleware requires :kontor.transaction/posted-at
         ;; in the same tx as :kontor.transaction/state :posted. plan-stock-move
@@ -263,11 +263,11 @@
         (mapv (fn [idx item]
                 (let [move-spec {:direction :in
                                  :book book-eid
-                                 :item (:db/id (:receipt-item/order-item item))
-                                 :qty (:receipt-item/quantity-accepted item)
-                                 :unit-cost (:receipt-item/unit-cost item)
+                                 :item (:db/id (:kontor.receipt-item/order-item item))
+                                 :qty (:kontor.receipt-item/quantity-accepted item)
+                                 :unit-cost (:kontor.receipt-item/unit-cost item)
                                  :commodity commodity-eid
-                                 :lot (:db/id (:receipt-item/lot item))
+                                 :lot (:db/id (:kontor.receipt-item/lot item))
                                  :journal journal-ref
                                  :ledger ledger-ref
                                  :effective-date eff-date
@@ -284,7 +284,7 @@
                    db
                    (cond-> {:entity receipt-eid
                             :entity-type :receipt
-                            :facet :receipt/status
+                            :facet :kontor.receipt/status
                             :to :accepted
                             :changed-at eff-date}
                      changed-by-uid (assoc :changed-by-uid changed-by-uid)
@@ -299,7 +299,7 @@
 
    The receipt must:
      - be in :pending status,
-     - belong to an :order whose :order/currency resolves to a
+     - belong to an :order whose :kontor.order/currency resolves to a
        :commodity,
      - have :receipt-item rows with :unit-cost set (the actual cost
        at receipt time; differences from PO unit-price land on
@@ -310,7 +310,7 @@
      :journal-ref  ref or lookup-ref to the :journal for these tx's.
 
    Optional opts:
-     :book         valuation-book eid or :valuation-book/code (default:
+     :book         valuation-book eid or :kontor.valuation-book/code (default:
                    the primary book via valuation/primary).
      :ledger-ref   posting ledger (default: kernel default).
      :account-fn   override role → account resolver. Default is three-
@@ -350,7 +350,7 @@
   [db order-eid]
   (->> (d/q '[:find [?r ...]
               :in $ ?o
-              :where [?r :receipt/order ?o]]
+              :where [?r :kontor.receipt/order ?o]]
             db order-eid)
        (map #(pull-receipt db %))
        vec))
@@ -360,9 +360,9 @@
    3-way invariant `(received − returned) = (invoiced − credited)`.
 
    Counts:
-     + sum of :receipt-item/quantity-accepted on :receipt rows in
+     + sum of :kontor.receipt-item/quantity-accepted on :receipt rows in
        :accepted status (excludes :pending, :rejected)
-     − sum of :return-item/received-quantity (or :return-quantity if
+     − sum of :kontor.return-item/received-quantity (or :return-quantity if
        not yet received) on :return rows of :type :vendor, where the
        return is past :accepted state (i.e. RMA approved + goods
        physically back at vendor).
@@ -373,39 +373,39 @@
                             :with ?ri
                             :in $ ?oi
                             :where
-                            [?ri :receipt-item/order-item ?oi]
-                            [?ri :receipt-item/quantity-accepted ?q]
-                            [?ri :receipt-item/receipt ?r]
-                            [?r :receipt/status :accepted]]
+                            [?ri :kontor.receipt-item/order-item ?oi]
+                            [?ri :kontor.receipt-item/quantity-accepted ?q]
+                            [?ri :kontor.receipt-item/receipt ?r]
+                            [?r :kontor.receipt/status :accepted]]
                           db order-item-eid)
                      0M)
         returned (or (d/q '[:find (sum ?q) .
                             :with ?rit
                             :in $ ?oi
                             :where
-                            [?rit :return-item/order-item ?oi]
-                            [?rit :return-item/return ?ret]
-                            [?ret :return/type :vendor]
-                            [?ret :return/status ?st]
+                            [?rit :kontor.return-item/order-item ?oi]
+                            [?rit :kontor.return-item/return ?ret]
+                            [?ret :kontor.return/type :vendor]
+                            [?ret :kontor.return/status ?st]
                             [(contains? #{:received :completed} ?st)]
                             (or-join [?rit ?q]
-                                     [?rit :return-item/received-quantity ?q]
-                                     (and [(missing? $ ?rit :return-item/received-quantity)]
-                                          [?rit :return-item/return-quantity ?q]))]
+                                     [?rit :kontor.return-item/received-quantity ?q]
+                                     (and [(missing? $ ?rit :kontor.return-item/received-quantity)]
+                                          [?rit :kontor.return-item/return-quantity ?q]))]
                           db order-item-eid)
                      0M)]
     (.subtract ^java.math.BigDecimal received
                ^java.math.BigDecimal returned)))
 
 (defn quantity-rejected-of-order-item
-  "Sum of :receipt-item/quantity-rejected across all receipts for
+  "Sum of :kontor.receipt-item/quantity-rejected across all receipts for
    `order-item-eid`. Returns bigdec."
   [db order-item-eid]
   (or (d/q '[:find (sum ?q) .
              :with ?ri
              :in $ ?oi
              :where
-             [?ri :receipt-item/order-item ?oi]
-             [?ri :receipt-item/quantity-rejected ?q]]
+             [?ri :kontor.receipt-item/order-item ?oi]
+             [?ri :kontor.receipt-item/quantity-rejected ?q]]
            db order-item-eid)
       0M))

@@ -31,7 +31,7 @@
    ## Composition
 
    - kontor-hr: provides `:person`, `:employment`, `:compensation`.
-   - kontor-hr.consent: provides `:consent/*` machinery (ADR-094).
+   - kontor-hr.consent: provides `:kontor.consent/*` machinery (ADR-094).
    - kontor.audit-doc: provides the `:audit-doc` backbone +
      canonical categories (ADR-094 §3.1).
    - kontor.dsar: bundles a person's records via the kernel walker."
@@ -80,7 +80,7 @@
 (def ^:const hr-track-record-scope :hr-track-record)
 
 (defn check-consent!
-  "Throw `:consent/missing` if no active `:hr-track-record` consent
+  "Throw `:kontor.consent/missing` if no active `:hr-track-record` consent
    for `person` at `at`. The substrate stays neutral; this is the
    consumer-side enforcement of ADR-094's substrate posture.
 
@@ -94,7 +94,7 @@
   [db person ^Date at]
   (when-not (consent/active-at? db person hr-track-record-scope at)
     (throw (ex-info "No active :hr-track-record consent for person"
-                    {:type    :consent/missing
+                    {:type    :kontor.consent/missing
                      :person  person
                      :scope   hr-track-record-scope
                      :at      at}))))
@@ -116,14 +116,14 @@
   (when-not title       (throw (ex-info ":title required" {})))
   (when-not start-date  (throw (ex-info ":start-date required" {})))
   [(cond-> {:db/id                   tempid
-            :position-held/external-id code
-            :position-held/person      person
-            :position-held/employment  employment
-            :position-held/title       title
-            :position-held/start-date  start-date}
-     level              (assoc :position-held/level level)
-     end-date           (assoc :position-held/end-date end-date)
-     manager-employment (assoc :position-held/manager-employment manager-employment))])
+            :kontor.position-held/external-id code
+            :kontor.position-held/person      person
+            :kontor.position-held/employment  employment
+            :kontor.position-held/title       title
+            :kontor.position-held/start-date  start-date}
+     level              (assoc :kontor.position-held/level level)
+     end-date           (assoc :kontor.position-held/end-date end-date)
+     manager-employment (assoc :kontor.position-held/manager-employment manager-employment))])
 
 (defn record-position!
   "Record a held position. Consent-gated on `:hr-track-record` at the
@@ -158,14 +158,14 @@
   (when-not period-end          (throw (ex-info ":period-end required" {})))
   (when-not outcome             (throw (ex-info ":outcome required" {})))
   [(cond-> {:db/id                                 tempid
-            :performance-review/external-id        code
-            :performance-review/person             person
-            :performance-review/reviewer-employment reviewer-employment
-            :performance-review/period-start       period-start
-            :performance-review/period-end         period-end
-            :performance-review/outcome            outcome}
-     supporting-doc (assoc :performance-review/supporting-doc supporting-doc)
-     calibrated-at  (assoc :performance-review/calibrated-at calibrated-at))])
+            :kontor.performance-review/external-id        code
+            :kontor.performance-review/person             person
+            :kontor.performance-review/reviewer-employment reviewer-employment
+            :kontor.performance-review/period-start       period-start
+            :kontor.performance-review/period-end         period-end
+            :kontor.performance-review/outcome            outcome}
+     supporting-doc (assoc :kontor.performance-review/supporting-doc supporting-doc)
+     calibrated-at  (assoc :kontor.performance-review/calibrated-at calibrated-at))])
 
 (defn record-review!
   "Record a performance-review event. Consent-gated on
@@ -200,13 +200,13 @@
   (when-not to-position    (throw (ex-info ":to-position required" {})))
   (when-not effective-date (throw (ex-info ":effective-date required" {})))
   [(cond-> {:db/id                   tempid
-            :promotion/external-id    code
-            :promotion/person         person
-            :promotion/from-position  from-position
-            :promotion/to-position    to-position
-            :promotion/effective-date effective-date}
-     comp-change    (assoc :promotion/comp-change comp-change)
-     supporting-doc (assoc :promotion/supporting-doc supporting-doc))])
+            :kontor.promotion/external-id    code
+            :kontor.promotion/person         person
+            :kontor.promotion/from-position  from-position
+            :kontor.promotion/to-position    to-position
+            :kontor.promotion/effective-date effective-date}
+     comp-change    (assoc :kontor.promotion/comp-change comp-change)
+     supporting-doc (assoc :kontor.promotion/supporting-doc supporting-doc))])
 
 (defn record-promotion!
   "Record a promotion event. Consent-gated. Routes through the gate.
@@ -236,17 +236,17 @@
   (let [positions  (mapv #(d/pull db '[*] %)
                          (d/q '[:find [?p ...]
                                 :in $ ?subj
-                                :where [?p :position-held/person ?subj]]
+                                :where [?p :kontor.position-held/person ?subj]]
                               db person))
         reviews    (mapv #(d/pull db '[*] %)
                          (d/q '[:find [?r ...]
                                 :in $ ?subj
-                                :where [?r :performance-review/person ?subj]]
+                                :where [?r :kontor.performance-review/person ?subj]]
                               db person))
         promotions (mapv #(d/pull db '[*] %)
                          (d/q '[:find [?p ...]
                                 :in $ ?subj
-                                :where [?p :promotion/person ?subj]]
+                                :where [?p :kontor.promotion/person ?subj]]
                               db person))]
     {:positions  positions
      :reviews    reviews

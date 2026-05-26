@@ -56,18 +56,18 @@
   (let [conn (fresh)
         idents (set (d/q '[:find [?i ...]
                            :where [_ :db/ident ?i]] (d/db conn)))]
-    (is (contains? idents :disposal/external-id))
-    (is (contains? idents :disposal/entity))
-    (is (contains? idents :disposal/kind))
-    (is (contains? idents :disposal/subject))
-    (is (contains? idents :disposal/subject-kind))
-    (is (contains? idents :disposal/acquired-on))
-    (is (contains? idents :disposal/disposed-on))
-    (is (contains? idents :disposal/proceeds-amount))
-    (is (contains? idents :disposal/basis-amount))
-    (is (contains? idents :disposal/realizing-tx))
-    (is (contains? idents :disposal/state)
-        ":disposal/state is the ADR-034 facet, transitions are seeded")))
+    (is (contains? idents :kontor.disposal/external-id))
+    (is (contains? idents :kontor.disposal/entity))
+    (is (contains? idents :kontor.disposal/kind))
+    (is (contains? idents :kontor.disposal/subject))
+    (is (contains? idents :kontor.disposal/subject-kind))
+    (is (contains? idents :kontor.disposal/acquired-on))
+    (is (contains? idents :kontor.disposal/disposed-on))
+    (is (contains? idents :kontor.disposal/proceeds-amount))
+    (is (contains? idents :kontor.disposal/basis-amount))
+    (is (contains? idents :kontor.disposal/realizing-tx))
+    (is (contains? idents :kontor.disposal/state)
+        ":kontor.disposal/state is the ADR-034 facet, transitions are seeded")))
 
 (deftest install-attrs-are-idempotent
   (testing "schema attrs (:db/ident) ARE idempotent across re-installs.
@@ -77,7 +77,7 @@
       (d/transact conn disp-schema/all)
       (d/transact conn disp-schema/all)
       (is (= 1 (d/q '[:find (count ?e) .
-                      :where [?e :db/ident :disposal/external-id]]
+                      :where [?e :db/ident :kontor.disposal/external-id]]
                     (d/db conn)))))))
 
 ;; ============================================================================
@@ -88,12 +88,12 @@
   (let [conn (fresh)]
     (record-basic conn "d-1" 100000M 60000M)
     (let [d (disp/pull-disposal (d/db conn) "d-1")]
-      (is (= :sale (:disposal/kind d)))
-      (is (= :fixed-asset (:disposal/subject-kind d)))
-      (is (= :recorded (:disposal/state d)))
-      (is (== 100000M (:disposal/proceeds-amount d)))
-      (is (== 60000M (:disposal/basis-amount d)))
-      (is (= "USD" (-> d :disposal/proceeds-commodity :kontor.commodity/symbol))))))
+      (is (= :sale (:kontor.disposal/kind d)))
+      (is (= :fixed-asset (:kontor.disposal/subject-kind d)))
+      (is (= :recorded (:kontor.disposal/state d)))
+      (is (== 100000M (:kontor.disposal/proceeds-amount d)))
+      (is (== 60000M (:kontor.disposal/basis-amount d)))
+      (is (= "USD" (-> d :kontor.disposal/proceeds-commodity :kontor.commodity/symbol))))))
 
 (deftest record-disposal-required-fields-trap
   (let [conn (fresh)]
@@ -123,8 +123,8 @@
                            :transaction (some-eid conn)
                            :recorded-by-uid "test-user"})
     (let [d (disp/pull-disposal (d/db conn) "d-rec")]
-      (is (= :recognized (:disposal/state d)))
-      (is (some? (:disposal/realizing-tx d))))))
+      (is (= :recognized (:kontor.disposal/state d)))
+      (is (some? (:kontor.disposal/realizing-tx d))))))
 
 (deftest recognize-rejects-already-recognized
   (let [conn (fresh)]
@@ -139,14 +139,14 @@
   (let [conn (fresh)]
     (record-basic conn "d-void" 100M 50M)
     (disp/void! conn {:disposal "d-void" :recorded-by-uid "u" :reason :user-correction})
-    (is (= :voided (:disposal/state (disp/pull-disposal (d/db conn) "d-void"))))))
+    (is (= :voided (:kontor.disposal/state (disp/pull-disposal (d/db conn) "d-void"))))))
 
 (deftest void-from-recognized
   (let [conn (fresh)]
     (record-basic conn "d-void2" 100M 50M)
     (disp/recognize! conn {:disposal "d-void2" :transaction (some-eid conn) :recorded-by-uid "u"})
     (disp/void! conn {:disposal "d-void2" :recorded-by-uid "u" :reason :post-recognition-correction})
-    (is (= :voided (:disposal/state (disp/pull-disposal (d/db conn) "d-void2"))))))
+    (is (= :voided (:kontor.disposal/state (disp/pull-disposal (d/db conn) "d-void2"))))))
 
 ;; ============================================================================
 ;; §4. Queries — disposals-of + disposals-in-period
@@ -159,14 +159,14 @@
     (record-basic conn "d-2025-q1" 300M 100M {:disposed-on #inst "2025-02-15"})
     (testing "the 2024 window picks up only 2024 disposals"
       (is (= #{"d-2024-q1" "d-2024-q3"}
-             (set (map :disposal/external-id
+             (set (map :kontor.disposal/external-id
                        (disp/disposals-in-period (d/db conn)
                                                  {:from #inst "2024-01-01"
                                                   :to   #inst "2025-01-01"}))))))
     (testing "voided disposals are excluded"
       (disp/void! conn {:disposal "d-2024-q3" :recorded-by-uid "u"})
       (is (= ["d-2024-q1"]
-             (map :disposal/external-id
+             (map :kontor.disposal/external-id
                   (disp/disposals-in-period (d/db conn)
                                             {:from #inst "2024-01-01"
                                              :to   #inst "2025-01-01"})))))))
@@ -190,10 +190,10 @@
                                                 :external-id "d-other-1"})
       (let [period {:from #inst "2024-01-01" :to #inst "2026-01-01"}]
         (is (= ["d-holdco-1"]
-               (map :disposal/external-id
+               (map :kontor.disposal/external-id
                     (disp/disposals-in-period (d/db conn) holdco-eid period))))
         (is (= ["d-other-1"]
-               (map :disposal/external-id
+               (map :kontor.disposal/external-id
                     (disp/disposals-in-period (d/db conn) other-eid period))))))))
 
 (deftest disposals-of-subject
@@ -264,12 +264,12 @@
                    :exemption-claimed [:de-§8b-95pct]
                    :loss-bucket       :de-§8b})
     (let [d (disp/pull-disposal (d/db conn) "de-§8b")]
-      (is (= :participation (:disposal/subject-kind d)))
-      (is (= :de-§8b-participation (:disposal/asset-class d)))
-      (is (= :corp (:disposal/subject-form d)))
-      (is (== 0.15M (:disposal/ownership-fraction d)))
-      (is (= #{:de-§8b-95pct} (set (:disposal/exemption-claimed d))))
-      (is (= :de-§8b (:disposal/loss-bucket d))))))
+      (is (= :participation (:kontor.disposal/subject-kind d)))
+      (is (= :de-§8b-participation (:kontor.disposal/asset-class d)))
+      (is (= :corp (:kontor.disposal/subject-form d)))
+      (is (== 0.15M (:kontor.disposal/ownership-fraction d)))
+      (is (= #{:de-§8b-95pct} (set (:kontor.disposal/exemption-claimed d))))
+      (is (= :de-§8b (:kontor.disposal/loss-bucket d))))))
 
 (deftest us-§1245-depreciation-recapture-shape
   (let [conn (fresh)]
@@ -280,7 +280,7 @@
                    :depreciation-taken {:amount 60000M :commodity usd}
                    :loss-bucket        :§1245-recapture})
     (let [d (disp/pull-disposal (d/db conn) "us-§1245")]
-      (is (== 60000M (:disposal/depreciation-taken-amount d))
+      (is (== 60000M (:kontor.disposal/depreciation-taken-amount d))
           "the depreciation US §1245 will recapture as ordinary income"))))
 
 (deftest uk-badr-shape
@@ -294,8 +294,8 @@
                    :acquired-on        #inst "2018-09-01"
                    :exemption-claimed  [:uk-badr]})
     (let [d (disp/pull-disposal (d/db conn) "uk-badr")]
-      (is (= #{:uk-badr} (set (:disposal/exemption-claimed d))))
-      (is (== 0.08M (:disposal/ownership-fraction d))))))
+      (is (= #{:uk-badr} (set (:kontor.disposal/exemption-claimed d))))
+      (is (== 0.08M (:kontor.disposal/ownership-fraction d))))))
 
 (deftest jp-residence-§35-shape
   (let [conn (fresh)]
@@ -307,5 +307,5 @@
                    :acquired-on       #inst "2010-04-01"
                    :exemption-claimed [:jp-§35-residence]})
     (let [d (disp/pull-disposal (d/db conn) "jp-residence")]
-      (is (true? (:disposal/residence? d)))
-      (is (= :jp-residence-§35 (:disposal/asset-class d))))))
+      (is (true? (:kontor.disposal/residence? d)))
+      (is (= :jp-residence-§35 (:kontor.disposal/asset-class d))))))

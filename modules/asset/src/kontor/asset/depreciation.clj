@@ -14,9 +14,9 @@
 
    ## Why the roll-forward reads `:schedule-occurrence`, not the GL
 
-   `accumulated-depreciation` sums `:schedule-occurrence/amount` over
+   `accumulated-depreciation` sums `:kontor.schedule-occurrence/amount` over
    the book's schedule — it does NOT sum GL postings to the
-   `:asset/accumulated-account`. The GL accounts are shared across
+   `:kontor.asset/accumulated-account`. The GL accounts are shared across
    every asset in a class and a `:posting` carries no per-asset
    back-ref, so a GL sum cannot be attributed to one asset. The
    subsystem's own occurrence log is the source of truth for the
@@ -40,8 +40,8 @@
     (d/q '[:find ?e .
            :in $ ?a ?l
            :where
-           [?e :asset-depreciation/asset ?a]
-           [?e :asset-depreciation/ledger ?l]]
+           [?e :kontor.asset-depreciation/asset ?a]
+           [?e :kontor.asset-depreciation/ledger ?l]]
          db asset-eid ledger)))
 
 (defn resolve-book
@@ -60,7 +60,7 @@
   (when-let [asset-eid (asset/resolve-asset db asset-spec)]
     (set (d/q '[:find [?e ...]
                 :in $ ?a
-                :where [?e :asset-depreciation/asset ?a]]
+                :where [?e :kontor.asset-depreciation/asset ?a]]
               db asset-eid))))
 
 (defn pull-book
@@ -68,15 +68,15 @@
   [db spec]
   (when-let [eid (resolve-book db spec)]
     (d/pull db
-            '[* {:asset-depreciation/asset [:asset/code :asset/name
-                                            :asset/acquisition-cost]
-                 :asset-depreciation/ledger [:kontor.ledger/code :kontor.ledger/framework]
-                 :asset-depreciation/method-params [*]
-                 :asset-depreciation/schedule [:db/id :schedule/code
-                                               :schedule/kind :schedule/state
-                                               :schedule/start-date
-                                               :schedule/end-date
-                                               :schedule/frequency]}]
+            '[* {:kontor.asset-depreciation/asset [:kontor.asset/code :kontor.asset/name
+                                            :kontor.asset/acquisition-cost]
+                 :kontor.asset-depreciation/ledger [:kontor.ledger/code :kontor.ledger/framework]
+                 :kontor.asset-depreciation/method-params [*]
+                 :kontor.asset-depreciation/schedule [:db/id :kontor.schedule/code
+                                               :kontor.schedule/kind :kontor.schedule/state
+                                               :kontor.schedule/start-date
+                                               :kontor.schedule/end-date
+                                               :kontor.schedule/frequency]}]
             eid)))
 
 ;; ============================================================================
@@ -86,16 +86,16 @@
 (defn accumulated-depreciation
   "Total accumulated depreciation for this (asset, ledger) book:
    the book's `:opening-accumulated` (pre-schedule depreciation from
-   a mid-life import — usually absent) plus Σ `:schedule-occurrence/
+   a mid-life import — usually absent) plus Σ `:kontor.schedule-occurrence/
    amount` over the book's schedule. Returns a bigdec (0M when
    nothing has been charged)."
   ^java.math.BigDecimal [db book-spec]
   (let [eid (resolve-book db book-spec)
-        b (d/pull db [:asset-depreciation/schedule
-                      :asset-depreciation/opening-accumulated]
+        b (d/pull db [:kontor.asset-depreciation/schedule
+                      :kontor.asset-depreciation/opening-accumulated]
                   eid)
-        sched (:db/id (:asset-depreciation/schedule b))
-        opening (or (:asset-depreciation/opening-accumulated b) 0M)
+        sched (:db/id (:kontor.asset-depreciation/schedule b))
+        opening (or (:kontor.asset-depreciation/opening-accumulated b) 0M)
         from-occurrences
         (or (when sched
               ;; `:with ?o` keeps each occurrence distinct in the
@@ -105,8 +105,8 @@
                      :with ?o
                      :in $ ?s
                      :where
-                     [?o :schedule-occurrence/schedule ?s]
-                     [?o :schedule-occurrence/amount ?amt]]
+                     [?o :kontor.schedule-occurrence/schedule ?s]
+                     [?o :kontor.schedule-occurrence/amount ?amt]]
                    db sched))
             0M)]
     (.add ^java.math.BigDecimal opening ^java.math.BigDecimal from-occurrences)))
@@ -120,10 +120,10 @@
    via ADR-055's re-planning — folded in there, not here."
   ^java.math.BigDecimal [db book-spec]
   (let [eid (resolve-book db book-spec)
-        asset-eid (:db/id (:asset-depreciation/asset
-                           (d/pull db [:asset-depreciation/asset] eid)))
-        cost (:asset/acquisition-cost
-              (d/pull db [:asset/acquisition-cost] asset-eid))]
+        asset-eid (:db/id (:kontor.asset-depreciation/asset
+                           (d/pull db [:kontor.asset-depreciation/asset] eid)))
+        cost (:kontor.asset/acquisition-cost
+              (d/pull db [:kontor.asset/acquisition-cost] asset-eid))]
     (.subtract ^java.math.BigDecimal (or cost 0M)
                (accumulated-depreciation db eid))))
 
@@ -159,34 +159,34 @@
   (let [eid (resolve-book db book-spec)
         _ (when-not eid (throw (ex-info "Depreciation book not found" {:spec book-spec})))
         b (d/pull db
-                  '[:asset-depreciation/provider-id
-                    :asset-depreciation/convention
-                    :asset-depreciation/depreciable-base
-                    :asset-depreciation/useful-life-months
-                    {:asset-depreciation/asset [:db/id :asset/acquisition-cost
-                                                :asset/salvage-value]}
-                    {:asset-depreciation/commodity [:db/id]}
-                    {:asset-depreciation/method-params [*]}
-                    {:asset-depreciation/schedule [:db/id :schedule/frequency
-                                                   :schedule/start-date]}]
+                  '[:kontor.asset-depreciation/provider-id
+                    :kontor.asset-depreciation/convention
+                    :kontor.asset-depreciation/depreciable-base
+                    :kontor.asset-depreciation/useful-life-months
+                    {:kontor.asset-depreciation/asset [:db/id :kontor.asset/acquisition-cost
+                                                :kontor.asset/salvage-value]}
+                    {:kontor.asset-depreciation/commodity [:db/id]}
+                    {:kontor.asset-depreciation/method-params [*]}
+                    {:kontor.asset-depreciation/schedule [:db/id :kontor.schedule/frequency
+                                                   :kontor.schedule/start-date]}]
                   eid)
-        asset (:asset-depreciation/asset b)
-        sched (:asset-depreciation/schedule b)
-        freq  (:schedule/frequency sched)]
+        asset (:kontor.asset-depreciation/asset b)
+        sched (:kontor.asset-depreciation/schedule b)
+        freq  (:kontor.schedule/frequency sched)]
     {:book               eid
      :asset              (:db/id asset)
      :schedule           (:db/id sched)
-     :provider-id        (:asset-depreciation/provider-id b)
-     :convention         (:asset-depreciation/convention b)
-     :acquisition-cost   (:asset/acquisition-cost asset)
-     :salvage-value      (or (:asset/salvage-value asset) 0M)
-     :depreciable-base   (:asset-depreciation/depreciable-base b)
-     :useful-life-months (:asset-depreciation/useful-life-months b)
-     :n-periods          (periods-for (:asset-depreciation/useful-life-months b) freq)
+     :provider-id        (:kontor.asset-depreciation/provider-id b)
+     :convention         (:kontor.asset-depreciation/convention b)
+     :acquisition-cost   (:kontor.asset/acquisition-cost asset)
+     :salvage-value      (or (:kontor.asset/salvage-value asset) 0M)
+     :depreciable-base   (:kontor.asset-depreciation/depreciable-base b)
+     :useful-life-months (:kontor.asset-depreciation/useful-life-months b)
+     :n-periods          (periods-for (:kontor.asset-depreciation/useful-life-months b) freq)
      :frequency          freq
-     :start-date         (:schedule/start-date sched)
-     :commodity          (:db/id (:asset-depreciation/commodity b))
-     :method-params      (:asset-depreciation/method-params b)}))
+     :start-date         (:kontor.schedule/start-date sched)
+     :commodity          (:db/id (:kontor.asset-depreciation/commodity b))
+     :method-params      (:kontor.asset-depreciation/method-params b)}))
 
 (defn open-book-tx-data
   "Pure tx-data builder for `open-book!` — the entity-map
@@ -194,7 +194,7 @@
    `kontor.process` step (ADR-067); `open-book!` is the standalone
    wrapper. See `open-book!` for the opts, plus two composition knobs:
 
-     :asset-tempid   — use this verbatim as the `:asset-depreciation/
+     :asset-tempid   — use this verbatim as the `:kontor.asset-depreciation/
                        asset` ref instead of resolving `:asset`. For
                        when the ROU/asset entity is created by an
                        earlier process step (`commence!`) and threads
@@ -227,27 +227,27 @@
         _ (when-not asset-eid (throw (ex-info "Asset not found" {:spec asset})))
         _ (when (and asset (book-for db asset-eid ledger))
             (throw (ex-info "A depreciation book already exists for this (asset, ledger) — one book per pair (ADR-054)"
-                            {:type :asset/duplicate-book
+                            {:type :kontor.asset/duplicate-book
                              :asset asset :ledger ledger})))
         a (when asset
-            (d/pull db [:asset/code :asset/acquisition-cost
-                        :asset/acquisition-commodity :asset/salvage-value
-                        :asset/in-service-date]
+            (d/pull db [:kontor.asset/code :kontor.asset/acquisition-cost
+                        :kontor.asset/acquisition-commodity :kontor.asset/salvage-value
+                        :kontor.asset/in-service-date]
                     asset-eid))
-        commodity* (or commodity (:db/id (:asset/acquisition-commodity a)))
+        commodity* (or commodity (:db/id (:kontor.asset/acquisition-commodity a)))
         _ (when-not commodity*
             (throw (ex-info "open-book!: no :commodity and the asset has no :acquisition-commodity — pass :commodity"
                             {:asset asset})))
         base (or depreciable-base
-                 (.subtract ^java.math.BigDecimal (:asset/acquisition-cost a)
-                            ^java.math.BigDecimal (or (:asset/salvage-value a) 0M)))
-        start (or start-date (:asset/in-service-date a))
+                 (.subtract ^java.math.BigDecimal (:kontor.asset/acquisition-cost a)
+                            ^java.math.BigDecimal (or (:kontor.asset/salvage-value a) 0M)))
+        start (or start-date (:kontor.asset/in-service-date a))
         _ (when-not start
             (throw (ex-info "open-book!: no :start-date and the asset has no :in-service-date — place it in service first or pass :start-date"
                             {:asset asset})))
         ledger-code (:kontor.ledger/code (d/pull db [:kontor.ledger/code] ledger))
         sched-code (or schedule-code
-                       (str (:asset/code a) "-dep-" (or ledger-code ledger)))
+                       (str (:kontor.asset/code a) "-dep-" (or ledger-code ledger)))
         n-periods (periods-for useful-life-months frequency)
         end-date (schedule/date-of-occurrence start frequency n-periods)
         book-tempid (str "asset-dep-book" tempid-suffix)
@@ -256,35 +256,35 @@
         mparams-entity (when (map? method-params)
                          (assoc method-params :db/id mparams-tempid))
         schedule-entity (cond-> {:db/id sched-tempid
-                                 :schedule/code sched-code
-                                 :schedule/kind :depreciation
-                                 :schedule/origin-entity book-tempid
-                                 :schedule/start-date start
-                                 :schedule/end-date end-date
-                                 :schedule/frequency frequency
-                                 :schedule/total-amount base
-                                 :schedule/state :active
-                                 :schedule/active true}
-                          commodity* (assoc :schedule/total-commodity commodity*))
+                                 :kontor.schedule/code sched-code
+                                 :kontor.schedule/kind :depreciation
+                                 :kontor.schedule/origin-entity book-tempid
+                                 :kontor.schedule/start-date start
+                                 :kontor.schedule/end-date end-date
+                                 :kontor.schedule/frequency frequency
+                                 :kontor.schedule/total-amount base
+                                 :kontor.schedule/state :active
+                                 :kontor.schedule/active true}
+                          commodity* (assoc :kontor.schedule/total-commodity commodity*))
         book-entity (cond-> {:db/id book-tempid
-                             :asset-depreciation/asset asset-eid
-                             :asset-depreciation/ledger ledger
-                             :asset-depreciation/provider-id provider-id
-                             :asset-depreciation/useful-life-months useful-life-months
-                             :asset-depreciation/convention convention
-                             :asset-depreciation/depreciable-base base
-                             :asset-depreciation/commodity commodity*
-                             :asset-depreciation/start-date start
-                             :asset-depreciation/schedule sched-tempid}
+                             :kontor.asset-depreciation/asset asset-eid
+                             :kontor.asset-depreciation/ledger ledger
+                             :kontor.asset-depreciation/provider-id provider-id
+                             :kontor.asset-depreciation/useful-life-months useful-life-months
+                             :kontor.asset-depreciation/convention convention
+                             :kontor.asset-depreciation/depreciable-base base
+                             :kontor.asset-depreciation/commodity commodity*
+                             :kontor.asset-depreciation/start-date start
+                             :kontor.asset-depreciation/schedule sched-tempid}
                       opening-accumulated
-                      (assoc :asset-depreciation/opening-accumulated opening-accumulated)
-                      mparams-entity (assoc :asset-depreciation/method-params mparams-tempid)
+                      (assoc :kontor.asset-depreciation/opening-accumulated opening-accumulated)
+                      mparams-entity (assoc :kontor.asset-depreciation/method-params mparams-tempid)
                       (and method-params (not (map? method-params)))
-                      (assoc :asset-depreciation/method-params method-params)
-                      effective-rule (assoc :asset-depreciation/effective-rule effective-rule)
-                      expense-account (assoc :asset-depreciation/expense-account
+                      (assoc :kontor.asset-depreciation/method-params method-params)
+                      effective-rule (assoc :kontor.asset-depreciation/effective-rule effective-rule)
+                      expense-account (assoc :kontor.asset-depreciation/expense-account
                                              expense-account)
-                      note           (assoc :asset-depreciation/note note))]
+                      note           (assoc :kontor.asset-depreciation/note note))]
     (cond-> [book-entity schedule-entity]
       mparams-entity (conj mparams-entity))))
 
@@ -293,7 +293,7 @@
    plus its ADR-032 `:schedule` and its optional `:asset-method-params`
    — in one tx. Returns the tx-report.
 
-   The `:asset-depreciation/identity` tuple (`:db.unique/identity` on
+   The `:kontor.asset-depreciation/identity` tuple (`:db.unique/identity` on
    `[asset ledger]`) means a second `open-book!` for the same pair
    collides — one book per (asset, ledger).
 
@@ -322,7 +322,7 @@
      :effective-rule      eid of the l10n-owned effective-dated rule
                           row (ADR-055 §effective-dating)
      :expense-account     per-book override of the asset's
-                          :asset/expense-account (ADR-063 — a ROU
+                          :kontor.asset/expense-account (ADR-063 — a ROU
                           asset debits a different P&L account per
                           ledger). Absent ⇒ the asset's account.
      :schedule-code       string (default = \"<asset-code>-dep-<ledger-code>\")
@@ -347,33 +347,33 @@
     (throw (ex-info "revise-book!: :new-useful-life-months or :additional-base required" {})))
   (let [eid (resolve-book db book)
         _ (when-not eid (throw (ex-info "Depreciation book not found" {:spec book})))
-        b (d/pull db [:asset-depreciation/useful-life-months
-                      :asset-depreciation/depreciable-base
-                      :asset-depreciation/start-date
-                      {:asset-depreciation/schedule [:db/id :schedule/frequency]}]
+        b (d/pull db [:kontor.asset-depreciation/useful-life-months
+                      :kontor.asset-depreciation/depreciable-base
+                      :kontor.asset-depreciation/start-date
+                      {:kontor.asset-depreciation/schedule [:db/id :kontor.schedule/frequency]}]
                   eid)
-        sched (:asset-depreciation/schedule b)
+        sched (:kontor.asset-depreciation/schedule b)
         sched-eid (:db/id sched)
-        freq (:schedule/frequency sched)
-        life (or new-useful-life-months (:asset-depreciation/useful-life-months b))
-        base (cond-> (:asset-depreciation/depreciable-base b)
+        freq (:kontor.schedule/frequency sched)
+        life (or new-useful-life-months (:kontor.asset-depreciation/useful-life-months b))
+        base (cond-> (:kontor.asset-depreciation/depreciable-base b)
                additional-base
                (#(.add ^java.math.BigDecimal % ^java.math.BigDecimal additional-base)))
         n-periods (periods-for life freq)
         fired (count (schedule/fired-sequences db sched-eid))
         _ (when (< n-periods fired)
             (throw (ex-info "revise-book!: revised useful life implies fewer periods than already fired"
-                            {:type :asset/revision-below-fired
+                            {:type :kontor.asset/revision-below-fired
                              :revised-periods n-periods :fired fired})))
-        end-date (schedule/date-of-occurrence (:asset-depreciation/start-date b)
+        end-date (schedule/date-of-occurrence (:kontor.asset-depreciation/start-date b)
                                               freq n-periods)]
     [(cond-> {:db/id eid
-              :asset-depreciation/useful-life-months life
-              :asset-depreciation/depreciable-base base}
-       note (assoc :asset-depreciation/note note))
+              :kontor.asset-depreciation/useful-life-months life
+              :kontor.asset-depreciation/depreciable-base base}
+       note (assoc :kontor.asset-depreciation/note note))
      {:db/id sched-eid
-      :schedule/end-date end-date
-      :schedule/total-amount base}]))
+      :kontor.schedule/end-date end-date
+      :kontor.schedule/total-amount base}]))
 
 (defn revise-book!
   "Apply a prospective change to a book — an IAS 16 useful-life

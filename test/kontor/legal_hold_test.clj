@@ -33,13 +33,13 @@
                 [{:kontor.partner/external-id "U-counsel" :kontor.partner/name "Counsel C"}
                  {:kontor.partner/external-id "U-admin"   :kontor.partner/name "Admin A"}
                  {:db/id "doc-place"
-                  :audit-doc/code "DOC-PLACE-001"
-                  :audit-doc/type :legal-hold-order
-                  :audit-doc/uploaded-at #inst "2026-05-13"}
+                  :kontor.audit-doc/code "DOC-PLACE-001"
+                  :kontor.audit-doc/type :legal-hold-order
+                  :kontor.audit-doc/uploaded-at #inst "2026-05-13"}
                  {:db/id "doc-release"
-                  :audit-doc/code "DOC-RELEASE-001"
-                  :audit-doc/type :legal-hold-release
-                  :audit-doc/uploaded-at #inst "2026-06-01"}
+                  :kontor.audit-doc/code "DOC-RELEASE-001"
+                  :kontor.audit-doc/type :legal-hold-release
+                  :kontor.audit-doc/uploaded-at #inst "2026-06-01"}
                  {:db/id "partner-acme"
                   :kontor.partner/external-id "ACME"
                   :kontor.partner/name "Acme Corp"
@@ -54,7 +54,7 @@
        db (str "U-" actor)))
 
 (defn- adoc-eid [db code]
-  (d/q '[:find ?e . :in $ ?c :where [?e :audit-doc/code ?c]] db code))
+  (d/q '[:find ?e . :in $ ?c :where [?e :kontor.audit-doc/code ?c]] db code))
 
 ;; ============================================================================
 ;; place! happy path
@@ -79,11 +79,11 @@
                        :in $ ?e
                        :where
                        [?h :kontor.status-history/entity ?e]
-                       [?h :kontor.status-history/facet :legal-hold/state]]
+                       [?h :kontor.status-history/facet :kontor.legal-hold/state]]
                      db' hold-eid)]
-    (is (= :placed (:legal-hold/state hold)))
-    (is (= "Acme v. Doe 24-CV-1234" (:legal-hold/matter-name hold)))
-    (is (= 1 (count (:legal-hold/scope-eids hold))))
+    (is (= :placed (:kontor.legal-hold/state hold)))
+    (is (= "Acme v. Doe 24-CV-1234" (:kontor.legal-hold/matter-name hold)))
+    (is (= 1 (count (:kontor.legal-hold/scope-eids hold))))
     (is (= 1 (count history)) "Exactly one :status-history row for nil → :placed.")))
 
 ;; ============================================================================
@@ -161,8 +161,8 @@
                            :reason-note "Matter dismissed; preservation no longer required."})]
     (testing "after release, purge succeeds"
       (is (= :released
-             (:legal-hold/state
-              (d/pull (d/db conn) [:legal-hold/state] hold-eid))))
+             (:kontor.legal-hold/state
+              (d/pull (d/db conn) [:kontor.legal-hold/state] hold-eid))))
       ;; Purge would now be allowed by hold-middleware. Validate by
       ;; calling find-hold-violating-destructive-writes directly
       ;; (avoids the sealing middleware which would block for other
@@ -230,9 +230,9 @@
                          :scope-query "[:find ?e :where [?e :kontor.partner/kind :customer]]"
                          :vt-from #inst "2026-05-13"})
         hold-eid (lhold/by-code (d/db conn) "HOLD-007")
-        original-query (:legal-hold/scope-query
+        original-query (:kontor.legal-hold/scope-query
                         (d/pull (d/valid-at (d/db conn) #inst "2026-05-14")
-                                [:legal-hold/scope-query] hold-eid))]
+                                [:kontor.legal-hold/scope-query] hold-eid))]
     (testing "d/valid-at resolves the hold's scope-query at a past valid-time"
       (is (= "[:find ?e :where [?e :kontor.partner/kind :customer]]" original-query)))))
 
@@ -298,7 +298,7 @@
         _ (sm/record-status-change! conn
                                     {:entity hold-eid
                                      :entity-type :legal-hold
-                                     :facet :legal-hold/state
+                                     :facet :kontor.legal-hold/state
                                      :from :placed
                                      :to :pending-review
                                      :changed-by-uid counsel-eid
@@ -321,8 +321,8 @@
                             :supporting-doc (adoc-eid (d/db conn) "DOC-RELEASE-001")
                             :reason-note "Reviewed; matter dismissed."})))
       (is (= :released
-             (:legal-hold/state
-              (d/pull (d/db conn) [:legal-hold/state] hold-eid)))))))
+             (:kontor.legal-hold/state
+              (d/pull (d/db conn) [:kontor.legal-hold/state] hold-eid)))))))
 
 ;; ============================================================================
 ;; Multi-hold overlap
@@ -417,9 +417,9 @@
                              :kontor.partner/kind :customer}])
         r2 (lhold/refresh-scope-eids! conn hold-eid)
         cached-after (set (map :db/id
-                               (:legal-hold/scope-eids
+                               (:kontor.legal-hold/scope-eids
                                 (d/pull (d/db conn)
-                                        [{:legal-hold/scope-eids [:db/id]}]
+                                        [{:kontor.legal-hold/scope-eids [:db/id]}]
                                         hold-eid))))]
     (testing "first refresh caches the matching eids"
       (is (= 1 (:added-count r1)))

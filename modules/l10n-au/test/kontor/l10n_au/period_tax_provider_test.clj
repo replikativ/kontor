@@ -7,7 +7,7 @@
 (deftest payroll-tax-by-state
   (testing "NSW — a :capped schedule (rate above the tax-free threshold)"
     (let [s (:schedule (au/au-payroll-tax-provider {:state :NSW}))]
-      (is (= :capped (:schedule/type s)))
+      (is (= :capped (:kontor.schedule/type s)))
       (is (= 0.0545M (:rate s)))
       (is (= 1200000M (:floor s)))))
   (testing "all eight jurisdictions resolve to a provider"

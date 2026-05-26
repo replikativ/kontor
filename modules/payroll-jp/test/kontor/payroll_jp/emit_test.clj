@@ -21,19 +21,19 @@
     (testing "One audit-doc per payroll run"
       (is (= 1 (count docs))))
     (testing "Category is :payroll-filing per the canonical vocabulary"
-      (is (= :payroll-filing (:audit-doc/category (first docs)))))
+      (is (= :payroll-filing (:kontor.audit-doc/category (first docs)))))
     (testing "Language defaults to :ja"
-      (is (= :ja (:audit-doc/language (first docs)))))
+      (is (= :ja (:kontor.audit-doc/language (first docs)))))
     (testing "Code references pay-period + entity"
-      (is (str/includes? (:audit-doc/code (first docs)) "200"))
-      (is (str/includes? (:audit-doc/code (first docs)) "300")))))
+      (is (str/includes? (:kontor.audit-doc/code (first docs)) "200"))
+      (is (str/includes? (:kontor.audit-doc/code (first docs)) "300")))))
 
 (deftest emit-provider-honors-language-override
   (let [provider (emit/->JpPayrollEmitProvider {:language :en})
         docs (pp/emit-payroll-events provider []
                                      {:pay-period-eid 1 :entity-eid 1})]
     (testing "Language flag passes through"
-      (is (= :en (:audit-doc/language (first docs)))))))
+      (is (= :en (:kontor.audit-doc/language (first docs)))))))
 
 ;; ============================================================================
 ;; build-gensen-audit-doc-tx-data
@@ -54,17 +54,17 @@
   (let [[doc] (emit/build-gensen-audit-doc-tx-data
                {:statement sample-statement})]
     (testing "Category is :payroll-filing"
-      (is (= :payroll-filing (:audit-doc/category doc))))
+      (is (= :payroll-filing (:kontor.audit-doc/category doc))))
     (testing "Language is :ja by default"
-      (is (= :ja (:audit-doc/language doc))))
+      (is (= :ja (:kontor.audit-doc/language doc))))
     (testing "Code is deterministic from employer + tax-year + name"
-      (is (str/includes? (:audit-doc/code doc) "8700110005901"))
-      (is (str/includes? (:audit-doc/code doc) "2026"))
-      (is (str/includes? (:audit-doc/code doc) "田中")))
+      (is (str/includes? (:kontor.audit-doc/code doc) "8700110005901"))
+      (is (str/includes? (:kontor.audit-doc/code doc) "2026"))
+      (is (str/includes? (:kontor.audit-doc/code doc) "田中")))
     (testing "Title includes the Gensen banner"
-      (is (str/includes? (:audit-doc/title doc) "源泉徴収票")))
+      (is (str/includes? (:kontor.audit-doc/title doc) "源泉徴収票")))
     (testing "Description does not contain the My Number value"
-      (let [desc (:audit-doc/description doc)]
+      (let [desc (:kontor.audit-doc/description doc)]
         (is (not (re-find #"\d{12}" desc))
             "12-digit My Number must not appear in description")))))
 
@@ -73,8 +73,8 @@
                {:statement sample-statement
                 :language :en})]
     (testing "EN language honored"
-      (is (= :en (:audit-doc/language doc)))
-      (is (str/includes? (:audit-doc/title doc) "EN")))))
+      (is (= :en (:kontor.audit-doc/language doc)))
+      (is (str/includes? (:kontor.audit-doc/title doc) "EN")))))
 
 (deftest gensen-audit-doc-attaches-storage-uri
   (let [[doc] (emit/build-gensen-audit-doc-tx-data
@@ -82,7 +82,7 @@
                 :storage-uri "s3://archive/2026/gensen/E001.pdf"})]
     (testing "Storage URI present"
       (is (= "s3://archive/2026/gensen/E001.pdf"
-             (:audit-doc/storage-uri doc))))))
+             (:kontor.audit-doc/storage-uri doc))))))
 
 (deftest build-gensen-submission-audit-docs-emits-per-statement
   (let [statements [sample-statement
@@ -92,8 +92,8 @@
     (testing "One audit-doc per statement"
       (is (= 2 (count docs))))
     (testing "Each carries :payroll-filing + :ja"
-      (is (every? #(= :payroll-filing (:audit-doc/category %)) docs))
-      (is (every? #(= :ja (:audit-doc/language %)) docs)))))
+      (is (every? #(= :payroll-filing (:kontor.audit-doc/category %)) docs))
+      (is (every? #(= :ja (:kontor.audit-doc/language %)) docs)))))
 
 ;; ============================================================================
 ;; record-my-number-attestation-tx-data (ADR-084 §1 PII discipline)
@@ -107,19 +107,19 @@
                 :attested-at #inst "2026-01-15"
                 :attested-by-uid :uid/hr-officer-001})]
     (testing "Category is :hr-personnel (ADR-084 §1)"
-      (is (= :hr-personnel (:audit-doc/category doc))))
+      (is (= :hr-personnel (:kontor.audit-doc/category doc))))
     (testing "Privilege is :pii-sensitive (ADR-051 facet)"
-      (is (= :pii-sensitive (:audit-doc/privilege doc))))
+      (is (= :pii-sensitive (:kontor.audit-doc/privilege doc))))
     (testing "Language is :ja by default"
-      (is (= :ja (:audit-doc/language doc))))
+      (is (= :ja (:kontor.audit-doc/language doc))))
     (testing "Type is :pii-attestation"
-      (is (= :pii-attestation (:audit-doc/type doc))))
+      (is (= :pii-attestation (:kontor.audit-doc/type doc))))
     (testing "Audit-doc records the attestation date"
-      (is (= #inst "2026-01-15" (:audit-doc/uploaded-at doc))))
+      (is (= #inst "2026-01-15" (:kontor.audit-doc/uploaded-at doc))))
     (testing "uploaded-by-uid stamped"
-      (is (= :uid/hr-officer-001 (:audit-doc/uploaded-by-uid doc))))
+      (is (= :uid/hr-officer-001 (:kontor.audit-doc/uploaded-by-uid doc))))
     (testing "Description carries the document-type label NOT a My Number value"
-      (let [desc (:audit-doc/description doc)]
+      (let [desc (:kontor.audit-doc/description doc)]
         (is (str/includes? desc "マイナンバーカード"))
         ;; No 12-digit number string in the description.
         (is (not (re-find #"\d{12}" desc)))))))
@@ -138,7 +138,7 @@
                  :attested-at #inst "2026-02-15" ; later date
                  :attested-by-uid :uid/hr})]
     (testing "Two attestations for the same (person, tax-year) share the same :code"
-      (is (= (:audit-doc/code doc1) (:audit-doc/code doc2))))))
+      (is (= (:kontor.audit-doc/code doc1) (:kontor.audit-doc/code doc2))))))
 
 (deftest my-number-attestation-rejects-missing-mandatory-keys
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
@@ -159,7 +159,7 @@
                 :attested-by-uid :uid/hr
                 :storage-uri "vault://hr/my-numbers/100"})]
     (testing "Storage URI lands on the audit-doc"
-      (is (= "vault://hr/my-numbers/100" (:audit-doc/storage-uri doc))))))
+      (is (= "vault://hr/my-numbers/100" (:kontor.audit-doc/storage-uri doc))))))
 
 (deftest my-number-attestation-supports-open-set-document-types
   (let [[doc] (emit/record-my-number-attestation-tx-data
@@ -170,7 +170,7 @@
                 :attested-at #inst "2026-01-15"
                 :attested-by-uid :uid/hr})]
     (testing "Falls back to the keyword name when not in standard map"
-      (is (str/includes? (:audit-doc/title doc) "gaikokujin-toroku-card")))))
+      (is (str/includes? (:kontor.audit-doc/title doc) "gaikokujin-toroku-card")))))
 
 ;; ============================================================================
 ;; My Number leak detection — pii-employees-in-facts

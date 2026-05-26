@@ -27,12 +27,12 @@
 
 (def primary-seed
   "Seed data for the primary valuation book. Idempotent via
-   `:db.unique/identity` on `:valuation-book/code`."
-  {:valuation-book/code        primary-code
-   :valuation-book/name        "Primary valuation book"
-   :valuation-book/framework   :legal
-   :valuation-book/cost-method :fifo
-   :valuation-book/active      true})
+   `:db.unique/identity` on `:kontor.valuation-book/code`."
+  {:kontor.valuation-book/code        primary-code
+   :kontor.valuation-book/name        "Primary valuation book"
+   :kontor.valuation-book/framework   :legal
+   :kontor.valuation-book/cost-method :fifo
+   :kontor.valuation-book/active      true})
 
 (defn install-defaults!
   "Idempotently transact the primary valuation book."
@@ -45,21 +45,21 @@
   [db]
   (d/q '[:find ?e .
          :in $ ?code
-         :where [?e :valuation-book/code ?code]]
+         :where [?e :kontor.valuation-book/code ?code]]
        db primary-code))
 
 (defn by-code
-  "Resolve a valuation book entity-id by its `:valuation-book/code`."
+  "Resolve a valuation book entity-id by its `:kontor.valuation-book/code`."
   [db code]
   (d/q '[:find ?e .
          :in $ ?code
-         :where [?e :valuation-book/code ?code]]
+         :where [?e :kontor.valuation-book/code ?code]]
        db code))
 
 (defn resolve-book
   "Coerce `book-spec` to an entity-id. Accepts:
      - nil       → primary book (or nil if not installed)
-     - a string  → looked up by `:valuation-book/code`
+     - a string  → looked up by `:kontor.valuation-book/code`
      - a long    → returned as-is (assumed eid)
      - a map     → assumed lookup ref or pulled entity"
   [db book-spec]
@@ -121,10 +121,10 @@
    (let [rows (d/q '[:find ?q ?tx ?issued
                      :in $ ?layer
                      :where
-                     [?c :layer-consumption/layer ?layer]
-                     [?c :layer-consumption/qty ?q]
-                     [?c :layer-consumption/issue-transaction ?tx]
-                     [?c :layer-consumption/issued-at ?issued]]
+                     [?c :kontor.layer-consumption/layer ?layer]
+                     [?c :kontor.layer-consumption/qty ?q]
+                     [?c :kontor.layer-consumption/issue-transaction ?tx]
+                     [?c :kontor.layer-consumption/issued-at ?issued]]
                    db layer-eid)]
      (reduce (fn [^java.math.BigDecimal acc [^java.math.BigDecimal q tx issued]]
                (if (event-included? db tx include-states issued as-of-valid)
@@ -140,7 +140,7 @@
   (^java.math.BigDecimal [db layer-eid opts]
    (let [orig (d/q '[:find ?q .
                      :in $ ?l
-                     :where [?l :valuation-layer/qty-original ?q]]
+                     :where [?l :kontor.valuation-layer/qty-original ?q]]
                    db layer-eid)]
      (if orig
        (.subtract ^java.math.BigDecimal orig
@@ -148,17 +148,17 @@
        0M))))
 
 (defn adjustment-total
-  "Sum of `:layer-adjustment/amount` for the given layer, scoped by opts."
+  "Sum of `:kontor.layer-adjustment/amount` for the given layer, scoped by opts."
   (^java.math.BigDecimal [db layer-eid] (adjustment-total db layer-eid {}))
   (^java.math.BigDecimal [db layer-eid {:keys [as-of-valid include-states]
                                         :or {include-states default-include-states}}]
    (let [rows (d/q '[:find ?a ?tx ?applied
                      :in $ ?l
                      :where
-                     [?adj :layer-adjustment/layer ?l]
-                     [?adj :layer-adjustment/amount ?a]
-                     [?adj :layer-adjustment/origin-transaction ?tx]
-                     [?adj :layer-adjustment/applied-at ?applied]]
+                     [?adj :kontor.layer-adjustment/layer ?l]
+                     [?adj :kontor.layer-adjustment/amount ?a]
+                     [?adj :kontor.layer-adjustment/origin-transaction ?tx]
+                     [?adj :kontor.layer-adjustment/applied-at ?applied]]
                    db layer-eid)]
      (reduce (fn [^java.math.BigDecimal acc [^java.math.BigDecimal a tx applied]]
                (if (event-included? db tx include-states applied as-of-valid)
@@ -176,11 +176,11 @@
   (^java.math.BigDecimal [db layer-eid] (current-unit-cost db layer-eid {}))
   (^java.math.BigDecimal [db layer-eid opts]
    (let [pulled (d/pull db
-                        [:valuation-layer/qty-original
-                         :valuation-layer/unit-cost-original]
+                        [:kontor.valuation-layer/qty-original
+                         :kontor.valuation-layer/unit-cost-original]
                         layer-eid)
-         qty-original  ^java.math.BigDecimal (:valuation-layer/qty-original pulled)
-         unit-original ^java.math.BigDecimal (:valuation-layer/unit-cost-original pulled)
+         qty-original  ^java.math.BigDecimal (:kontor.valuation-layer/qty-original pulled)
+         unit-original ^java.math.BigDecimal (:kontor.valuation-layer/unit-cost-original pulled)
          adj-total     ^java.math.BigDecimal (adjustment-total db layer-eid opts)]
      (if (or (nil? qty-original) (zero? (.signum qty-original)))
        0M
@@ -189,17 +189,17 @@
                   4 java.math.RoundingMode/HALF_EVEN))))))
 
 (defn- layer-expires-at
-  "The `:lot/expires-at` of a layer's lot, or nil. Used by the
+  "The `:kontor.lot/expires-at` of a layer's lot, or nil. Used by the
    `:order-by :expires-at` (FEFO) layer ordering."
   ^java.util.Date [db layer-eid]
-  (:lot/expires-at
-   (:valuation-layer/lot
-    (d/pull db [{:valuation-layer/lot [:lot/expires-at]}] layer-eid))))
+  (:kontor.lot/expires-at
+   (:kontor.valuation-layer/lot
+    (d/pull db [{:kontor.valuation-layer/lot [:kontor.lot/expires-at]}] layer-eid))))
 
 (defn available-layers
   "All layers with positive remaining quantity for the given
    (book, item) pair, scoped by opts. Returns entity-ids ordered by
-   `:valuation-layer/received-at` ascending, with layer eid as the
+   `:kontor.valuation-layer/received-at` ascending, with layer eid as the
    deterministic tie-breaker (FIFO order).
 
    Lot-aware: passing a non-nil `lot` restricts to layers in that lot.
@@ -231,21 +231,21 @@
            (d/q '[:find ?l ?orig ?received ?tx
                   :in $ ?book ?item ?lot
                   :where
-                  [?l :valuation-layer/book ?book]
-                  [?l :valuation-layer/item ?item]
-                  [?l :valuation-layer/lot ?lot]
-                  [?l :valuation-layer/qty-original ?orig]
-                  [?l :valuation-layer/received-at ?received]
-                  [?l :valuation-layer/origin-transaction ?tx]]
+                  [?l :kontor.valuation-layer/book ?book]
+                  [?l :kontor.valuation-layer/item ?item]
+                  [?l :kontor.valuation-layer/lot ?lot]
+                  [?l :kontor.valuation-layer/qty-original ?orig]
+                  [?l :kontor.valuation-layer/received-at ?received]
+                  [?l :kontor.valuation-layer/origin-transaction ?tx]]
                 db book item lot)
            (d/q '[:find ?l ?orig ?received ?tx
                   :in $ ?book ?item
                   :where
-                  [?l :valuation-layer/book ?book]
-                  [?l :valuation-layer/item ?item]
-                  [?l :valuation-layer/qty-original ?orig]
-                  [?l :valuation-layer/received-at ?received]
-                  [?l :valuation-layer/origin-transaction ?tx]]
+                  [?l :kontor.valuation-layer/book ?book]
+                  [?l :kontor.valuation-layer/item ?item]
+                  [?l :kontor.valuation-layer/qty-original ?orig]
+                  [?l :kontor.valuation-layer/received-at ?received]
+                  [?l :kontor.valuation-layer/origin-transaction ?tx]]
                 db book item))]
      (->> candidate-rows
           (keep (fn [[layer ^java.math.BigDecimal orig received tx]]

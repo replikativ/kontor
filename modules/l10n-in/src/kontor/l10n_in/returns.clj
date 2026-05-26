@@ -323,11 +323,11 @@
      :as-of-tx — bitemporal tx-snapshot (default now)
 
    Returns:
-     {:return/form         \"GSTR-1\"
-      :return/period       {…}             ; period bounds + kind
-      :return/due-date     <Date>          ; statutory filing due-date
-      :return/totals       {line-code Money …}
-      :return/raw          <report-output> ; full kontor.report result
+     {:kontor.return/form         \"GSTR-1\"
+      :kontor.return/period       {…}             ; period bounds + kind
+      :kontor.return/due-date     <Date>          ; statutory filing due-date
+      :kontor.return/totals       {line-code Money …}
+      :kontor.return/raw          <report-output> ; full kontor.report result
                                              for drill-down}"
   [conn opts]
   (let [{:keys [from to] :as period} (bounds-from-opts opts)
@@ -337,11 +337,11 @@
         r (report/compute-report conn gstr-1-definition report-opts)
         totals (lines->map r)
         due-date (gstr-1-due-date period)]
-    {:return/form "GSTR-1"
-     :return/period period
-     :return/due-date due-date
-     :return/totals totals
-     :return/raw r}))
+    {:kontor.return/form "GSTR-1"
+     :kontor.return/period period
+     :kontor.return/due-date due-date
+     :kontor.return/totals totals
+     :kontor.return/raw r}))
 
 ;; ============================================================================
 ;; GSTR-3B
@@ -372,14 +372,14 @@
      :as-of-tx                   — bitemporal snapshot
 
    Returns:
-     {:return/form         \"GSTR-3B\"
-      :return/period       {…}
-      :return/due-date     <Date>
-      :return/totals       {line-code Money …}
-      :return/net-tax      {:cgst Money :sgst Money :igst Money
+     {:kontor.return/form         \"GSTR-3B\"
+      :kontor.return/period       {…}
+      :kontor.return/due-date     <Date>
+      :kontor.return/totals       {line-code Money …}
+      :kontor.return/net-tax      {:cgst Money :sgst Money :igst Money
                             :utgst Money :cess Money}
-      :return/net-total    Money               ; sum across heads
-      :return/raw          <report-output>}"
+      :kontor.return/net-total    Money               ; sum across heads
+      :kontor.return/raw          <report-output>}"
   [conn opts]
   (let [{:keys [from to] :as period} (bounds-from-opts opts)
         report-opts (-> opts
@@ -400,14 +400,14 @@
                           [net-cgst net-sgst net-igst net-utgst net-cess])
         due-date (gstr-3b-due-date (assoc period
                                           :qrmp-state-group (:qrmp-state-group opts)))]
-    {:return/form "GSTR-3B"
-     :return/period period
-     :return/due-date due-date
-     :return/totals totals
-     :return/net-tax {:cgst net-cgst
+    {:kontor.return/form "GSTR-3B"
+     :kontor.return/period period
+     :kontor.return/due-date due-date
+     :kontor.return/totals totals
+     :kontor.return/net-tax {:cgst net-cgst
                       :sgst net-sgst
                       :igst net-igst
                       :utgst net-utgst
                       :cess net-cess}
-     :return/net-total net-total
-     :return/raw r}))
+     :kontor.return/net-total net-total
+     :kontor.return/raw r}))

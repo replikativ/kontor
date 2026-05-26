@@ -18,10 +18,10 @@
    - `terminate!` — full early termination. The liability and the ROU
      are derecognised, any termination penalty is paid, the difference
      is a P&L gain/loss, both schedules are cancelled, and
-     `:lease/status` is driven `:active → :terminated`.
+     `:kontor.lease/status` is driven `:active → :terminated`.
    - `purchase!` — a purchase option is exercised. The remaining
      liability is settled in cash, both schedules are cancelled, and
-     `:lease/status` is driven `:active → :purchased`. The ROU
+     `:kontor.lease/status` is driven `:active → :purchased`. The ROU
      `:asset` CONTINUES as an owned asset (IFRS 16.67 — no
      derecognition); the consumer opens a fresh `:asset-depreciation`
      book over its owned-asset useful life.
@@ -92,32 +92,32 @@
    old outstanding liability and the ROU carrying amount are computed
    against the *pre-modification* terms. Returns a vector of maps."
   [db lease-eid]
-  (let [rou-asset (:db/id (:lease/rou-asset
-                           (d/pull db [{:lease/rou-asset [:db/id]}] lease-eid)))
+  (let [rou-asset (:db/id (:kontor.lease/rou-asset
+                           (d/pull db [{:kontor.lease/rou-asset [:db/id]}] lease-eid)))
         _ (when-not rou-asset
             (throw (ex-info "Lease has no :rou-asset — not commenced?"
-                            {:type :lease/not-commenced :lease lease-eid})))
-        rou-asset-account (:db/id (:asset/asset-account
-                                   (d/pull db [{:asset/asset-account [:db/id]}]
+                            {:type :kontor.lease/not-commenced :lease lease-eid})))
+        rou-asset-account (:db/id (:kontor.asset/asset-account
+                                   (d/pull db [{:kontor.asset/asset-account [:db/id]}]
                                            rou-asset)))]
     (mapv (fn [lb]
             (let [pb (liability/pull-book db lb)
-                  ledger (:db/id (:lease-liability/ledger pb))
+                  ledger (:db/id (:kontor.lease-liability/ledger pb))
                   rou-dep-book (asset-dep/book-for db rou-asset ledger)
-                  rou-base (:asset-depreciation/depreciable-base
-                            (d/pull db [:asset-depreciation/depreciable-base]
+                  rou-base (:kontor.asset-depreciation/depreciable-base
+                            (d/pull db [:kontor.asset-depreciation/depreciable-base]
                                     rou-dep-book))
                   accumulated (asset-dep/accumulated-depreciation db rou-dep-book)]
               {:liability-book    lb
                :ledger            ledger
-               :commodity         (:db/id (:lease-liability/commodity pb))
-               :liability-account (:db/id (:lease-liability/liability-account pb))
-               :liability-schedule (:db/id (:lease-liability/schedule pb))
+               :commodity         (:db/id (:kontor.lease-liability/commodity pb))
+               :liability-account (:db/id (:kontor.lease-liability/liability-account pb))
+               :liability-schedule (:db/id (:kontor.lease-liability/schedule pb))
                :rou-asset         rou-asset
                :rou-asset-account rou-asset-account
                :rou-dep-book      rou-dep-book
-               :rou-dep-schedule  (:db/id (:asset-depreciation/schedule
-                                           (d/pull db [{:asset-depreciation/schedule
+               :rou-dep-schedule  (:db/id (:kontor.asset-depreciation/schedule
+                                           (d/pull db [{:kontor.asset-depreciation/schedule
                                                         [:db/id]}]
                                                    rou-dep-book)))
                :old-outstanding   (lp/outstanding-liability db lb)
@@ -164,7 +164,7 @@
         pl-leg        (.negate (bd+ liability-leg rou-leg))
         _ (when (and (not (zero? (.signum pl-leg))) (not gain-loss-account))
             (throw (ex-info "modification: a P&L gain/loss leg is required but :gain-loss-account was not supplied"
-                            {:type :lease/missing-gain-loss-account
+                            {:type :kontor.lease/missing-gain-loss-account
                              :book liability-book :pl pl-leg})))
         legs (cond-> [{:account liability-account :amount liability-leg}
                       {:account rou-asset-account :amount rou-leg}]
@@ -206,7 +206,7 @@
    `\"lease-mod\"` tempid (callers extract its eid from the process
    tx-report's `:tempids`). When `:tx-tempids` is given (a vec of
    per-book adjustment tx-tempid strings), the event references them
-   directly via `:lease-modification/transaction` — no follow-up
+   directly via `:kontor.lease-modification/transaction` — no follow-up
    d/transact needed.
 
    `:liability-delta`/`:rou-delta`/`:pnl-delta` are the per-modification
@@ -217,33 +217,33 @@
                      new-discount-rate scope-decrease-pct justification
                      note tx-tempids liability-delta rou-delta pnl-delta]}]
   (let [event (cond-> {:db/id "lease-mod"
-                       :lease-modification/lease lease-eid
-                       :lease-modification/kind kind
-                       :lease-modification/date date}
-                new-payment-amount  (assoc :lease-modification/new-payment-amount
+                       :kontor.lease-modification/lease lease-eid
+                       :kontor.lease-modification/kind kind
+                       :kontor.lease-modification/date date}
+                new-payment-amount  (assoc :kontor.lease-modification/new-payment-amount
                                            new-payment-amount)
-                new-term-months     (assoc :lease-modification/new-term-months
+                new-term-months     (assoc :kontor.lease-modification/new-term-months
                                            new-term-months)
-                new-discount-rate   (assoc :lease-modification/new-discount-rate
+                new-discount-rate   (assoc :kontor.lease-modification/new-discount-rate
                                            new-discount-rate)
-                scope-decrease-pct  (assoc :lease-modification/scope-decrease-pct
+                scope-decrease-pct  (assoc :kontor.lease-modification/scope-decrease-pct
                                            scope-decrease-pct)
-                justification       (assoc :lease-modification/justification
+                justification       (assoc :kontor.lease-modification/justification
                                            justification)
-                note                (assoc :lease-modification/note note)
-                (seq tx-tempids)    (assoc :lease-modification/transaction
+                note                (assoc :kontor.lease-modification/note note)
+                (seq tx-tempids)    (assoc :kontor.lease-modification/transaction
                                            (vec tx-tempids))
                 (some? liability-delta)
-                (assoc :lease-modification/liability-delta liability-delta)
+                (assoc :kontor.lease-modification/liability-delta liability-delta)
                 (some? rou-delta)
-                (assoc :lease-modification/rou-delta rou-delta)
+                (assoc :kontor.lease-modification/rou-delta rou-delta)
                 (some? pnl-delta)
-                (assoc :lease-modification/pnl-delta pnl-delta))
+                (assoc :kontor.lease-modification/pnl-delta pnl-delta))
         lease-update (cond-> {:db/id lease-eid}
-                       new-payment-amount (assoc :lease/payment-amount
+                       new-payment-amount (assoc :kontor.lease/payment-amount
                                                  new-payment-amount)
-                       new-term-months    (assoc :lease/term-months new-term-months)
-                       new-discount-rate  (assoc :lease/discount-rate
+                       new-term-months    (assoc :kontor.lease/term-months new-term-months)
+                       new-discount-rate  (assoc :kontor.lease/discount-rate
                                                  new-discount-rate))]
     [event lease-update]))
 
@@ -294,17 +294,17 @@
   (let [db (d/db conn)
         lease-eid (lease/resolve-lease db lease)
         _ (when-not lease-eid (throw (ex-info "Lease not found" {:spec lease})))
-        l (d/pull db [:lease/status :lease/payment-amount :lease/term-months
-                      :lease/discount-rate :lease/payment-frequency]
+        l (d/pull db [:kontor.lease/status :kontor.lease/payment-amount :kontor.lease/term-months
+                      :kontor.lease/discount-rate :kontor.lease/payment-frequency]
                   lease-eid)
-        _ (when-not (= :active (:lease/status l))
+        _ (when-not (= :active (:kontor.lease/status l))
             (throw (ex-info "remeasure!: lease is not :active"
-                            {:type :lease/not-active :lease lease-eid
-                             :status (:lease/status l)})))
-        freq    (:lease/payment-frequency l)
-        payment (or new-payment-amount (:lease/payment-amount l))
-        term    (or new-term-months (:lease/term-months l))
-        rate    (or new-discount-rate (:lease/discount-rate l))
+                            {:type :kontor.lease/not-active :lease lease-eid
+                             :status (:kontor.lease/status l)})))
+        freq    (:kontor.lease/payment-frequency l)
+        payment (or new-payment-amount (:kontor.lease/payment-amount l))
+        term    (or new-term-months (:kontor.lease/term-months l))
+        rate    (or new-discount-rate (:kontor.lease/discount-rate l))
         n       (lease/periods-for term freq)
         snapshot (pre-mod-snapshot db lease-eid)
         ;; Precompute the per-book new-liability + delta. Done from the
@@ -318,7 +318,7 @@
                       remaining-n (- n ofthr)
                       _ (when (<= remaining-n 0)
                           (throw (ex-info "remeasure!: revised term leaves no un-fired periods"
-                                          {:type :lease/no-remaining-periods
+                                          {:type :kontor.lease/no-remaining-periods
                                            :book liability-book})))
                       new-liability (remaining-pv payment rate freq remaining-n)
                       delta (bd- new-liability old-outstanding)]
@@ -367,7 +367,7 @@
         ;; mod-step FIRST so the per-book revise-liability/revise-book
         ;; steps see the updated :lease contract facts in the
         ;; speculative db (they derive the period count from
-        ;; :lease/term-months).
+        ;; :kontor.lease/term-months).
         report (process/run-process
                 conn {:steps (into [mod-step] book-steps)
                       :vt-from date :vt-to kbt/forever})
@@ -422,15 +422,15 @@
   (let [db (d/db conn)
         lease-eid (lease/resolve-lease db lease)
         _ (when-not lease-eid (throw (ex-info "Lease not found" {:spec lease})))
-        l (d/pull db [:lease/status :lease/term-months :lease/discount-rate
-                      :lease/payment-frequency]
+        l (d/pull db [:kontor.lease/status :kontor.lease/term-months :kontor.lease/discount-rate
+                      :kontor.lease/payment-frequency]
                   lease-eid)
-        _ (when-not (= :active (:lease/status l))
+        _ (when-not (= :active (:kontor.lease/status l))
             (throw (ex-info "partial-terminate!: lease is not :active"
-                            {:type :lease/not-active :lease lease-eid})))
-        freq (:lease/payment-frequency l)
-        term (or new-term-months (:lease/term-months l))
-        rate (or new-discount-rate (:lease/discount-rate l))
+                            {:type :kontor.lease/not-active :lease lease-eid})))
+        freq (:kontor.lease/payment-frequency l)
+        term (or new-term-months (:kontor.lease/term-months l))
+        rate (or new-discount-rate (:kontor.lease/discount-rate l))
         n    (lease/periods-for term freq)
         snapshot (pre-mod-snapshot db lease-eid)
         ;; Precompute per-book new-liability + total ROU base change.
@@ -442,7 +442,7 @@
                       remaining-n (- n ofthr)
                       _ (when (<= remaining-n 0)
                           (throw (ex-info "partial-terminate!: revised term leaves no un-fired periods"
-                                          {:type :lease/no-remaining-periods
+                                          {:type :kontor.lease/no-remaining-periods
                                            :book liability-book})))
                       ;; Step 1 — proportional reduction.
                       liab-reduction (round2 (.multiply ^BigDecimal old-outstanding
@@ -528,7 +528,7 @@
   "Fully terminate an `:active` lease early. For each `:lease-
    liability` book, derecognise the liability and the ROU asset, pay
    any `:penalty`, book the difference to P&L, and cancel both
-   schedules. Drives `:lease/status :active → :terminated` (ADR-038:
+   schedules. Drives `:kontor.lease/status :active → :terminated` (ADR-038:
    `:requires-supporting-doc` + `:no-self-approval`).
 
    The ROU `:asset` entity's status is left untouched — kontor-lease
@@ -559,19 +559,19 @@
   (let [db (d/db conn)
         lease-eid (lease/resolve-lease db lease)
         _ (when-not lease-eid (throw (ex-info "Lease not found" {:spec lease})))
-        l (d/pull db [:lease/status] lease-eid)
-        from (:lease/status l)
+        l (d/pull db [:kontor.lease/status] lease-eid)
+        from (:kontor.lease/status l)
         _ (when-not (= :active from)
             (throw (ex-info "terminate!: lease is not :active"
-                            {:type :lease/not-active :lease lease-eid})))
+                            {:type :kontor.lease/not-active :lease lease-eid})))
         penalty* (bd penalty)
         snapshot (pre-mod-snapshot db lease-eid)
         ;; Pre-pull each book's ROU :depreciable-base (needed to write
         ;; it down by rou-carrying → carrying-after = accumulated).
         book-plans
         (mapv (fn [{:keys [rou-dep-book] :as snap}]
-                (let [rou-base (:asset-depreciation/depreciable-base
-                                (d/pull db [:asset-depreciation/depreciable-base]
+                (let [rou-base (:kontor.asset-depreciation/depreciable-base
+                                (d/pull db [:kontor.asset-depreciation/depreciable-base]
                                         rou-dep-book))]
                   (assoc snap :rou-base rou-base)))
               snapshot)
@@ -607,9 +607,9 @@
                                  :narration "Lease termination"})]
                 (-> (vec adjustment)
                     (conj {:db/id liability-book
-                           :lease-liability/opening-liability 0M}
+                           :kontor.lease-liability/opening-liability 0M}
                           {:db/id rou-dep-book
-                           :asset-depreciation/depreciable-base
+                           :kontor.asset-depreciation/depreciable-base
                            (bd- rou-base rou-carrying)})
                     (into (schedule/set-state-tx-data
                            sdb liability-schedule :cancelled))
@@ -646,7 +646,7 @@
         (fn [sdb _ctx]
           (sm/record-status-change-tx-data
            sdb {:entity lease-eid :entity-type :lease
-                :facet :lease/status :from from :to :terminated
+                :facet :kontor.lease/status :from from :to :terminated
                 :changed-at date :changed-by-uid changed-by-uid
                 :supporting-doc justification :reason :lease-terminated}))
         report (process/run-process
@@ -671,7 +671,7 @@
   "Exercise a purchase option on an `:active` lease. For each
    `:lease-liability` book, settle the remaining liability in cash
    (`Dr liability / Cr cash ± P&L`) and cancel both schedules. Drives
-   `:lease/status :active → :purchased`.
+   `:kontor.lease/status :active → :purchased`.
 
    The ROU `:asset` CONTINUES as an owned asset (IFRS 16.67 — its
    carrying amount carries over, no derecognition). kontor-lease does
@@ -696,12 +696,12 @@
   (let [db (d/db conn)
         lease-eid (lease/resolve-lease db lease)
         _ (when-not lease-eid (throw (ex-info "Lease not found" {:spec lease})))
-        l (d/pull db [:lease/status :lease/purchase-option-price] lease-eid)
-        from (:lease/status l)
+        l (d/pull db [:kontor.lease/status :kontor.lease/purchase-option-price] lease-eid)
+        from (:kontor.lease/status l)
         _ (when-not (= :active from)
             (throw (ex-info "purchase!: lease is not :active"
-                            {:type :lease/not-active :lease lease-eid})))
-        price (or purchase-price (:lease/purchase-option-price l))
+                            {:type :kontor.lease/not-active :lease lease-eid})))
+        price (or purchase-price (:kontor.lease/purchase-option-price l))
         _ (when (nil? price)
             (throw (ex-info "purchase!: :purchase-price required (the lease has no :purchase-option-price)" {})))
         snapshot (pre-mod-snapshot db lease-eid)
@@ -730,7 +730,7 @@
                                  :narration "Lease purchase-option exercise"})]
                 (-> (vec adjustment)
                     (conj {:db/id liability-book
-                           :lease-liability/opening-liability 0M})
+                           :kontor.lease-liability/opening-liability 0M})
                     (into (schedule/set-state-tx-data
                            sdb liability-schedule :cancelled))
                     (into (schedule/set-state-tx-data
@@ -760,7 +760,7 @@
         (fn [sdb _ctx]
           (sm/record-status-change-tx-data
            sdb (cond-> {:entity lease-eid :entity-type :lease
-                        :facet :lease/status :from from :to :purchased
+                        :facet :kontor.lease/status :from from :to :purchased
                         :changed-at date :changed-by-uid changed-by-uid
                         :reason :lease-purchased}
                  justification (assoc :supporting-doc justification))))

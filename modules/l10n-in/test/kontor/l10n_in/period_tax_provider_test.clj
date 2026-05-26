@@ -32,7 +32,7 @@
         (is (satisfies? ptp/PeriodTaxProvider p) (str regime))
         (is (= :INR (:commodity p)) (str regime))
         (is (= :in-income-tax-department (:authority p)) (str regime))
-        (is (= :progressive-bracket (:schedule/type (:schedule p)))
+        (is (= :progressive-bracket (:kontor.schedule/type (:schedule p)))
             (str regime " — the schedule is the plain bracket ladder; "
                  "§87A + surcharge are base-aware adjustment items"))
         (is (= 3 (count (:adjustments p)))

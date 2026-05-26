@@ -89,7 +89,7 @@
 ;; ============================================================================
 
 (def bezug-kinds
-  "Allowed :compensation-component/kind values for Lohnart-Nr < 9000
+  "Allowed :kontor.compensation-component/kind values for Lohnart-Nr < 9000
    (Bezug / gross-side wage types). Open-set; consumers extend by
    passing :allow-extra-bezug-kinds to validate-catalog."
   #{:base-wage :base-salary :overtime
@@ -101,7 +101,7 @@
     :employer-si :employer-pension})
 
 (def netto-kinds
-  "Allowed :compensation-component/kind values for Lohnart-Nr ≥ 9000
+  "Allowed :kontor.compensation-component/kind values for Lohnart-Nr ≥ 9000
    (Netto-Bezug / Netto-Abzug — bypass gross-to-net engine)."
   #{:pfaendung :net-deduction :net-addition
     :employee-pension :voluntary-deduction

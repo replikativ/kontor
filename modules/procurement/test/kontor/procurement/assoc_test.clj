@@ -45,29 +45,29 @@
     :or {type :sales bill-from "ACME-ORG" bill-to "CUSTOMER"
          qty 10M unit-price 25M product-id "WIDGET-A"}}]
   (d/transact *conn*
-              [{:order/external-id external-id
-                :order/type type
-                :order/status :order.status/created
-                :order/order-date #inst "2026-05-01"
-                :order/entry-date #inst "2026-05-01"
-                :order/currency [:kontor.commodity/symbol "EUR"]
-                :order/bill-from-partner [:kontor.partner/external-id bill-from]
-                :order/bill-to-partner [:kontor.partner/external-id bill-to]
-                :order/entity [:kontor.entity/code "ACME"]}
-               {:order-item/order [:order/external-id external-id]
-                :order-item/seq-id "00001"
-                :order-item/type :product
-                :order-item/product-id product-id
-                :order-item/quantity qty
-                :order-item/unit-price unit-price
-                :order-item/cancel-quantity 0M
-                :order-item/status :order-item.status/approved}])
+              [{:kontor.order/external-id external-id
+                :kontor.order/type type
+                :kontor.order/status :order.status/created
+                :kontor.order/order-date #inst "2026-05-01"
+                :kontor.order/entry-date #inst "2026-05-01"
+                :kontor.order/currency [:kontor.commodity/symbol "EUR"]
+                :kontor.order/bill-from-partner [:kontor.partner/external-id bill-from]
+                :kontor.order/bill-to-partner [:kontor.partner/external-id bill-to]
+                :kontor.order/entity [:kontor.entity/code "ACME"]}
+               {:kontor.sales.order-item/order [:kontor.order/external-id external-id]
+                :kontor.sales.order-item/seq-id "00001"
+                :kontor.sales.order-item/type :product
+                :kontor.sales.order-item/product-id product-id
+                :kontor.sales.order-item/quantity qty
+                :kontor.sales.order-item/unit-price unit-price
+                :kontor.sales.order-item/cancel-quantity 0M
+                :kontor.sales.order-item/status :order-item.status/approved}])
   (let [db (d/db *conn*)
         order-eid (d/q '[:find ?e . :in $ ?xid
-                         :where [?e :order/external-id ?xid]]
+                         :where [?e :kontor.order/external-id ?xid]]
                        db external-id)
         item-eid (d/q '[:find ?i . :in $ ?o
-                        :where [?i :order-item/order ?o]]
+                        :where [?i :kontor.sales.order-item/order ?o]]
                       db order-eid)]
     {:order-eid order-eid :item-eid item-eid}))
 
@@ -104,7 +104,7 @@
       (testing "assoc carries the note"
         (let [assoc-row (-> (oia/assocs-from db so-item) first)]
           (is (= "supplier ships direct to customer"
-                 (:order-item-assoc/note assoc-row))))))))
+                 (:kontor.procurement.order-item-assoc/note assoc-row))))))))
 
 (deftest drop-ship-link-idempotent
   ;; Composite identity on [from, to, type] makes re-linking a no-op.
@@ -143,7 +143,7 @@
     (let [db (d/db *conn*)
           links (oia/assocs-from db orig {:type :substitute})]
       (is (= 1 (count links)))
-      (is (= :substitute (-> links first :order-item-assoc/type))))))
+      (is (= :substitute (-> links first :kontor.procurement.order-item-assoc/type))))))
 
 ;; ============================================================================
 ;; Replacement link
@@ -164,11 +164,11 @@
       (testing "forward query: original → replacement"
         (let [links (oia/assocs-from db orig {:type :replacement})]
           (is (= 1 (count links)))
-          (is (= replacement (-> links first :order-item-assoc/to-order-item :db/id)))))
+          (is (= replacement (-> links first :kontor.procurement.order-item-assoc/to-order-item :db/id)))))
       (testing "reverse query: replacement ← original"
         (let [links (oia/assocs-to db replacement {:type :replacement})]
           (is (= 1 (count links)))
-          (is (= orig (-> links first :order-item-assoc/from-order-item :db/id))))))))
+          (is (= orig (-> links first :kontor.procurement.order-item-assoc/from-order-item :db/id))))))))
 
 ;; ============================================================================
 ;; Upgrade link
@@ -190,7 +190,7 @@
     (let [db (d/db *conn*)
           links (oia/assocs-from db basic {:type :upgrade})]
       (is (= 1 (count links)))
-      (is (= :upgrade (-> links first :order-item-assoc/type))))))
+      (is (= :upgrade (-> links first :kontor.procurement.order-item-assoc/type))))))
 
 ;; ============================================================================
 ;; Multiple types on same pair
@@ -211,4 +211,4 @@
       (is (= 2 (count all-links))
           "(A, B, :substitute) and (A, B, :replacement) are distinct rows")
       (is (= #{:substitute :replacement}
-             (set (map :order-item-assoc/type all-links)))))))
+             (set (map :kontor.procurement.order-item-assoc/type all-links)))))))

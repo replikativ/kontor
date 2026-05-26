@@ -145,8 +145,8 @@
            (gstin-check-char (subs s 0 14))))))
 
 (defn gstin-state-code
-  "The leading 2-digit state code. Maps to :state-code/code under
-   `:state-code/regulator :in/gst`."
+  "The leading 2-digit state code. Maps to :kontor.state-code/code under
+   `:kontor.state-code/regulator :in/gst`."
   [^String gstin]
   (when (valid-gstin? gstin)
     (subs gstin 0 2)))

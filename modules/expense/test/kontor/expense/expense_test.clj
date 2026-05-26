@@ -47,12 +47,12 @@
                  {:db/id "journal-gen" :kontor.journal/code "GEN" :kontor.journal/name "General"
                   :kontor.journal/type :general}
                  ;; Receipts.
-                 {:db/id "doc-r1" :audit-doc/code "RCPT-1"
-                  :audit-doc/type :receipt :audit-doc/storage-uri "s3://r/1"
-                  :audit-doc/uploaded-at #inst "2026-04-02"}
-                 {:db/id "doc-r2" :audit-doc/code "RCPT-2"
-                  :audit-doc/type :receipt :audit-doc/storage-uri "s3://r/2"
-                  :audit-doc/uploaded-at #inst "2026-04-03"}])
+                 {:db/id "doc-r1" :kontor.audit-doc/code "RCPT-1"
+                  :kontor.audit-doc/type :receipt :kontor.audit-doc/storage-uri "s3://r/1"
+                  :kontor.audit-doc/uploaded-at #inst "2026-04-02"}
+                 {:db/id "doc-r2" :kontor.audit-doc/code "RCPT-2"
+                  :kontor.audit-doc/type :receipt :kontor.audit-doc/storage-uri "s3://r/2"
+                  :kontor.audit-doc/uploaded-at #inst "2026-04-03"}])
     conn))
 
 (defn- ref-eid [db a v]
@@ -60,7 +60,7 @@
 
 (defn- p       [db code] (ref-eid db :kontor.partner/external-id code))
 (defn- acct    [db code] (ref-eid db :kontor.account/code code))
-(defn- doc     [db code] (ref-eid db :audit-doc/code code))
+(defn- doc     [db code] (ref-eid db :kontor.audit-doc/code code))
 (defn- eur     [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- journal [db] (ref-eid db :kontor.journal/code "GEN"))
 
@@ -93,14 +93,14 @@
         _ (two-line-report! conn)
         r (expense/pull-report (d/db conn) "EXP-1")]
     (testing "the report is :draft, owned by the employee"
-      (is (= :draft (:expense-report/status r)))
-      (is (= "E-alice" (:kontor.partner/external-id (:expense-report/employee r)))))
+      (is (= :draft (:kontor.expense-report/status r)))
+      (is (= "E-alice" (:kontor.partner/external-id (:kontor.expense-report/employee r)))))
     (testing ":kontor.audit/create-uid is stamped to the employee (for :no-self-approval)"
       (is (= (p (d/db conn) "E-alice")
              (:db/id (:kontor.audit/create-uid (d/pull (d/db conn) [:kontor.audit/create-uid]
                                           (expense/by-code (d/db conn) "EXP-1")))))))
     (testing "the cached total tracks the lines"
-      (is (= 250.00M (:expense-report/total r)))
+      (is (= 250.00M (:kontor.expense-report/total r)))
       (is (= 250.00M (expense/report-total (d/db conn) "EXP-1")))
       (is (= 2 (count (expense/lines-of (d/db conn) "EXP-1")))))))
 
@@ -145,7 +145,7 @@
       (expense/submit! conn {:expense-report "EXP-NR"
                              :changed-by-uid (p (d/db conn) "E-alice")
                              :require-receipts? false})
-      (is (= :submitted (:expense-report/status
+      (is (= :submitted (:kontor.expense-report/status
                          (expense/pull-report (d/db conn) "EXP-NR")))))))
 
 (deftest approve-enforces-no-self-approval
@@ -161,7 +161,7 @@
     (testing "a different approver can"
       (expense/approve! conn {:expense-report "EXP-1"
                               :changed-by-uid (p (d/db conn) "M-bob")})
-      (is (= :approved (:expense-report/status
+      (is (= :approved (:kontor.expense-report/status
                         (expense/pull-report (d/db conn) "EXP-1")))))))
 
 (deftest reject-requires-reason-note
@@ -178,7 +178,7 @@
       (expense/reject! conn {:expense-report "EXP-1"
                              :changed-by-uid (p (d/db conn) "M-bob")
                              :reason-note "Missing itemised hotel receipt."})
-      (is (= :rejected (:expense-report/status
+      (is (= :rejected (:kontor.expense-report/status
                         (expense/pull-report (d/db conn) "EXP-1")))))))
 
 ;; ============================================================================
@@ -212,12 +212,12 @@
     (testing "reopen! brings a :rejected report back to :draft"
       (expense/reopen! conn {:expense-report "EXP-1"
                              :changed-by-uid (p (d/db conn) "E-alice")})
-      (is (= :draft (:expense-report/status
+      (is (= :draft (:kontor.expense-report/status
                      (expense/pull-report (d/db conn) "EXP-1")))))
     (testing "the corrected report can be resubmitted"
       (expense/submit! conn {:expense-report "EXP-1"
                              :changed-by-uid (p (d/db conn) "E-alice")})
-      (is (= :submitted (:expense-report/status
+      (is (= :submitted (:kontor.expense-report/status
                          (expense/pull-report (d/db conn) "EXP-1")))))
     (testing "reopen! only applies to a :rejected report"
       (is (thrown-with-msg?
@@ -247,21 +247,21 @@
                                       :reimbursement-payable-account
                                       (acct (d/db conn) "1740")
                                       :changed-by-uid (p (d/db conn) "M-bob")})
-        r (d/pull (d/db conn) [:expense-report/status
-                               {:expense-report/transaction [:db/id]}]
+        r (d/pull (d/db conn) [:kontor.expense-report/status
+                               {:kontor.expense-report/transaction [:db/id]}]
                   (expense/by-code (d/db conn) "EXP-1"))]
     (testing "post-report! → :posted, GL linked"
-      (is (= :posted (:expense-report/status r)))
-      (is (some? (:db/id (:expense-report/transaction r)))))
+      (is (= :posted (:kontor.expense-report/status r)))
+      (is (some? (:db/id (:kontor.expense-report/transaction r)))))
     (testing "the GL entry: Dr travel 200 + Dr meals 50 / Cr payable 250"
       (is (= #{["6700" 200.00M] ["6710" 50.00M] ["1740" -250.00M]}
              (posting-amounts (d/db conn)
-                              (:db/id (:expense-report/transaction r))))))
+                              (:db/id (:kontor.expense-report/transaction r))))))
     (testing "the posting is sealed"
       (is (every? #(some? (:kontor.posting/posted-at %))
                   (->> (d/q '[:find [?p ...] :in $ ?t
                               :where [?p :kontor.posting/transaction ?t]]
-                            (d/db conn) (:db/id (:expense-report/transaction r)))
+                            (d/db conn) (:db/id (:kontor.expense-report/transaction r)))
                        (map #(d/pull (d/db conn) [:kontor.posting/posted-at] %))))))
     (testing "reimburse! settles the own-account total → :reimbursed"
       (expense/reimburse! conn {:expense-report "EXP-1"
@@ -269,13 +269,13 @@
                                 :cash-account (acct (d/db conn) "1800")
                                 :reimbursement-payable-account (acct (d/db conn) "1740")})
       (let [r' (d/pull (d/db conn)
-                       [:expense-report/status
-                        {:expense-report/reimbursement-transaction [:db/id]}]
+                       [:kontor.expense-report/status
+                        {:kontor.expense-report/reimbursement-transaction [:db/id]}]
                        (expense/by-code (d/db conn) "EXP-1"))]
-        (is (= :reimbursed (:expense-report/status r')))
+        (is (= :reimbursed (:kontor.expense-report/status r')))
         (is (= #{["1740" 250.00M] ["1800" -250.00M]}
                (posting-amounts (d/db conn)
-                                (:db/id (:expense-report/reimbursement-transaction r')))))))))
+                                (:db/id (:kontor.expense-report/reimbursement-transaction r')))))))))
 
 (deftest post-report-company-account-credits-card-clearing
   (let [conn (bootstrap)
@@ -297,8 +297,8 @@
         _ (expense/post-report! conn {:expense-report "EXP-CC"
                                       :journal (journal (d/db conn))
                                       :card-clearing-account (acct (d/db conn) "1745")})
-        tx (:db/id (:expense-report/transaction
-                    (d/pull (d/db conn) [{:expense-report/transaction [:db/id]}]
+        tx (:db/id (:kontor.expense-report/transaction
+                    (d/pull (d/db conn) [{:kontor.expense-report/transaction [:db/id]}]
                             (expense/by-code (d/db conn) "EXP-CC"))))]
     (testing "a company-account line credits the corporate-card-clearing account"
       (is (= #{["6700" 120.00M] ["1745" -120.00M]}

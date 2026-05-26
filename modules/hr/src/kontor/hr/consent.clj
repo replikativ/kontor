@@ -3,7 +3,7 @@
 
    A `:consent` row records that a particular `:person` has consented
    (or withdrawn consent) for processing data tagged with a particular
-   `:audit-doc/category`, under a particular legal basis, supported by
+   `:kontor.audit-doc/category`, under a particular legal basis, supported by
    a particular DPIA / works-agreement / consent-form.
 
    The substrate captures consent + withdrawal as bitemporal facts at
@@ -18,7 +18,7 @@
      to do.
    - Withdrawal does NOT retroactively invalidate prior processing.
      Processing under the prior consent remains lawful for the period
-     it was active; processing after `:consent/withdrawn-at` must rely
+     it was active; processing after `:kontor.consent/withdrawn-at` must rely
      on a different basis (or stop).
    - Per ADR-094 §6, the project refuses to ship a kernel-side enforcer
      for the `:ai-act-incompatible` legal-basis marker — substrate
@@ -29,8 +29,8 @@
 
    - `kontor.hr.dsar/collect-for-person` walks `:consent` rows (see
      ADR-052).
-   - `kontor.retention` matches `:retention-policy/category` against
-     the same vocabulary `:consent/scope` uses, so a withdrawn consent
+   - `kontor.retention` matches `:kontor.retention-policy/category` against
+     the same vocabulary `:kontor.consent/scope` uses, so a withdrawn consent
      pairs naturally with an accelerated retention sweep.
    - ADR-094 substrate posture per research note 93."
   (:require [datahike.api :as d]
@@ -43,11 +43,11 @@
 ;; ============================================================================
 
 (defn by-code
-  "Resolve a `:consent` eid by its `:consent/code`."
+  "Resolve a `:consent` eid by its `:kontor.consent/code`."
   [db code]
   (d/q '[:find ?e .
          :in $ ?c
-         :where [?e :consent/code ?c]]
+         :where [?e :kontor.consent/code ?c]]
        db code))
 
 (defn- ->eid [db spec]
@@ -83,16 +83,16 @@
         rows     (->> (d/q '[:find [?c ...]
                              :in $ ?subj ?scope
                              :where
-                             [?c :consent/subject ?subj]
-                             [?c :consent/scope ?scope]]
+                             [?c :kontor.consent/subject ?subj]
+                             [?c :kontor.consent/scope ?scope]]
                            db subj-eid scope)
                       (mapv #(d/pull db
-                                     [:consent/granted-at
-                                      :consent/withdrawn-at
-                                      :consent/state] %)))]
+                                     [:kontor.consent/granted-at
+                                      :kontor.consent/withdrawn-at
+                                      :kontor.consent/state] %)))]
     (boolean
      (some
-      (fn [{:consent/keys [granted-at withdrawn-at state]}]
+      (fn [{:kontor.consent/keys [granted-at withdrawn-at state]}]
         (and (#{:active :withdrawn :superseded} state)
              (some? granted-at)
              (not (.after ^java.util.Date granted-at at))
@@ -107,9 +107,9 @@
   (let [subj-eid (->eid db subject)
         eids     (d/q '[:find [?c ...]
                         :in $ ?subj
-                        :where [?c :consent/subject ?subj]]
+                        :where [?c :kontor.consent/subject ?subj]]
                       db subj-eid)]
-    (sort-by :consent/granted-at
+    (sort-by :kontor.consent/granted-at
              (mapv #(d/pull db '[*] %) eids))))
 
 ;; ============================================================================
@@ -134,16 +134,16 @@
         wa-eid   (when works-agreement-ref (->eid db works-agreement-ref))
         pc-eid   (when parent-consent (->eid db parent-consent))]
     [(cond-> {:db/id              tempid
-              :consent/code       code
-              :consent/subject    subj-eid
-              :consent/scope      scope
-              :consent/legal-basis legal-basis
-              :consent/granted-at (or granted-at (java.util.Date.))
-              :consent/state      :active}
-       sup-eid                (assoc :consent/supporting-doc sup-eid)
-       wa-eid                 (assoc :consent/works-agreement-ref wa-eid)
-       notice-acknowledged-at (assoc :consent/notice-acknowledged-at notice-acknowledged-at)
-       pc-eid                 (assoc :consent/parent-consent pc-eid))]))
+              :kontor.consent/code       code
+              :kontor.consent/subject    subj-eid
+              :kontor.consent/scope      scope
+              :kontor.consent/legal-basis legal-basis
+              :kontor.consent/granted-at (or granted-at (java.util.Date.))
+              :kontor.consent/state      :active}
+       sup-eid                (assoc :kontor.consent/supporting-doc sup-eid)
+       wa-eid                 (assoc :kontor.consent/works-agreement-ref wa-eid)
+       notice-acknowledged-at (assoc :kontor.consent/notice-acknowledged-at notice-acknowledged-at)
+       pc-eid                 (assoc :kontor.consent/parent-consent pc-eid))]))
 
 (defn grant!
   "Create + activate a `:consent` row in one tx. Routes through the
@@ -159,7 +159,7 @@
 (defn withdraw-tx-data
   "Pure tx-data builder for `withdraw!`. Records the withdrawal as a
    status-machine transition `:active → :withdrawn` AND sets
-   `:consent/withdrawn-at`. Required: `:consent`, `:changed-by-uid`.
+   `:kontor.consent/withdrawn-at`. Required: `:consent`, `:changed-by-uid`.
    Optional: `:withdrawn-at` (defaults to now), `:reason-note`,
    `:supporting-doc` (the withdrawal request)."
   [db {:keys [consent changed-by-uid withdrawn-at reason-note
@@ -170,18 +170,18 @@
         when    (or withdrawn-at (java.util.Date.))]
     (when-not con-eid
       (throw (ex-info "Consent not found" {:spec consent})))
-    (let [current (:consent/state
-                   (d/pull db [:consent/state] con-eid))]
+    (let [current (:kontor.consent/state
+                   (d/pull db [:kontor.consent/state] con-eid))]
       (when-not (= :active current)
         (throw (ex-info "Consent not in :active state"
                         {:consent con-eid :current current})))
       (concat
-       [{:db/id con-eid :consent/withdrawn-at when}]
+       [{:db/id con-eid :kontor.consent/withdrawn-at when}]
        (sm/record-status-change-tx-data
         db
         (cond-> {:entity con-eid
                  :entity-type :consent
-                 :facet :consent/state
+                 :facet :kontor.consent/state
                  :from :active
                  :to :withdrawn
                  :changed-at when
@@ -218,7 +218,7 @@
       db
       (cond-> {:entity old-eid
                :entity-type :consent
-               :facet :consent/state
+               :facet :kontor.consent/state
                :from :active
                :to :superseded
                :changed-at when

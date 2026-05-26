@@ -45,15 +45,15 @@
                                :kontor.invoice-line/unit-price 10000M}]})
           r (ret/compute-return conn {:year 2026 :month 1
                                       :compute-surcharges? false})]
-      (is (= "VAT-PRC-General" (:return/form r)))
-      (is (= :general (:return/taxpayer-status r)))
-      (let [lines (:return/lines r)]
+      (is (= "VAT-PRC-General" (:kontor.return/form r)))
+      (is (= :general (:kontor.return/taxpayer-status r)))
+      (let [lines (:kontor.return/lines r)]
         (is (money/equiv? (cny "10000.00") (:1 lines))
             "Line 1 = sum of taxable per-rate sales")
         (is (money/equiv? (cny "0.00")     (:8 lines)) "Line 8 = 0 export")
         (is (money/equiv? (cny "1300.00")  (:11 lines)) "Line 11 = output")
         (is (money/equiv? (cny "1300.00")  (:19 lines)) "Line 19 = payable"))
-      (let [sched-1 (:return/schedule-1 r)]
+      (let [sched-1 (:kontor.return/schedule-1 r)]
         (is (money/equiv? (cny "10000.00") (:net (:rate-13 sched-1))))
         (is (money/equiv? (cny "1300.00")  (:output (:rate-13 sched-1))))
         (is (money/equiv? (cny "0.00")     (:net (:rate-9 sched-1))))
@@ -78,10 +78,10 @@
                 :kontor.invoice-line/rate 0.06M}]})
           r (ret/compute-return conn {:year 2026 :month 1
                                       :compute-surcharges? false})]
-      (let [lines (:return/lines r)]
+      (let [lines (:kontor.return/lines r)]
         (is (money/equiv? (cny "10000.00") (:1 lines)))
         (is (money/equiv? (cny "1040.00")  (:11 lines))))
-      (let [sched-1 (:return/schedule-1 r)]
+      (let [sched-1 (:kontor.return/schedule-1 r)]
         (is (money/equiv? (cny "5000.00") (:net (:rate-13 sched-1))))
         (is (money/equiv? (cny "3000.00") (:net (:rate-9  sched-1))))
         (is (money/equiv? (cny "2000.00") (:net (:rate-6  sched-1))))
@@ -105,7 +105,7 @@
                 :kontor.invoice-line/tax-status :zero-rated}]})
           r (ret/compute-return conn {:year 2026 :month 1
                                       :compute-surcharges? false})]
-      (let [lines (:return/lines r)]
+      (let [lines (:kontor.return/lines r)]
         (is (money/equiv? (cny "5000.00") (:1 lines))
             "Line 1 = domestic standard-rate sales only")
         (is (money/equiv? (cny "1000.00") (:8 lines))
@@ -117,8 +117,8 @@
     (let [conn (bootstrap)
           r (ret/compute-return conn {:year 2026 :month 1
                                       :compute-surcharges? false})]
-      (is (= :nil-return (:return/outcome r)))
-      (is (money/equiv? (cny "0.00") (:11 (:return/lines r)))))))
+      (is (= :nil-return (:kontor.return/outcome r)))
+      (is (money/equiv? (cny "0.00") (:11 (:kontor.return/lines r)))))))
 
 ;; ============================================================================
 ;; General taxpayer — surcharges (UMCT + Edu + Local-Edu)
@@ -136,10 +136,10 @@
                                :kontor.invoice-line/unit-price 10000M}]})
           r (ret/compute-return conn {:year 2026 :month 1
                                       :location-tier :municipal})]
-      (is (money/equiv? (cny "91.00")  (:return/umct-payable r)))
-      (is (money/equiv? (cny "39.00")  (:return/edu-surcharge-payable r)))
-      (is (money/equiv? (cny "26.00")  (:return/local-edu-surcharge-payable r)))
-      (is (money/equiv? (cny "156.00") (:return/total-surcharges r))))))
+      (is (money/equiv? (cny "91.00")  (:kontor.return/umct-payable r)))
+      (is (money/equiv? (cny "39.00")  (:kontor.return/edu-surcharge-payable r)))
+      (is (money/equiv? (cny "26.00")  (:kontor.return/local-edu-surcharge-payable r)))
+      (is (money/equiv? (cny "156.00") (:kontor.return/total-surcharges r))))))
 
 ;; ============================================================================
 ;; Small-scale taxpayer — quarterly return
@@ -168,10 +168,10 @@
               :sales-1pct (cny "50000.00")
               :output-1pct (cny "500.00")
               :compute-surcharges? false})]
-      (is (= "VAT-PRC-SmallScale" (:return/form r)))
-      (is (= :small-scale (:return/taxpayer-status r)))
-      (is (= :quarterly (:kind (:return/period r))))
-      (let [lines (:return/lines r)]
+      (is (= "VAT-PRC-SmallScale" (:kontor.return/form r)))
+      (is (= :small-scale (:kontor.return/taxpayer-status r)))
+      (is (= :quarterly (:kind (:kontor.return/period r))))
+      (let [lines (:kontor.return/lines r)]
         (is (money/equiv? (cny "50000.00") (:2 lines))
             "Line 2 = 1% preferential sales")
         (is (money/equiv? (cny "500.00")   (:16 lines))
@@ -189,7 +189,7 @@
               :sales-5pct (cny "100000.00")
               :output-5pct (cny "5000.00")
               :compute-surcharges? false})]
-      (let [lines (:return/lines r)]
+      (let [lines (:kontor.return/lines r)]
         (is (money/equiv? (cny "100000.00") (:4 lines)))
         (is (money/equiv? (cny "5000.00")   (:16 lines)))))))
 
@@ -210,7 +210,7 @@
               :output-1pct (cny "100.00")
               :output-5pct (cny "5000.00")
               :compute-surcharges? false})]
-      (let [lines (:return/lines r)]
+      (let [lines (:kontor.return/lines r)]
         (is (money/equiv? (cny "5000.00")   (:1  lines)) "3% sales")
         (is (money/equiv? (cny "10000.00")  (:2  lines)) "1% sales")
         (is (money/equiv? (cny "100000.00") (:4  lines)) "5% sales")
@@ -239,5 +239,5 @@
           quarterly (ret/compute-return conn {:year 2026 :quarter 1
                                               :taxpayer-status :small-scale
                                               :compute-surcharges? false})]
-      (is (= :monthly   (:kind (:return/period monthly))))
-      (is (= :quarterly (:kind (:return/period quarterly)))))))
+      (is (= :monthly   (:kind (:kontor.return/period monthly))))
+      (is (= :quarterly (:kind (:kontor.return/period quarterly)))))))

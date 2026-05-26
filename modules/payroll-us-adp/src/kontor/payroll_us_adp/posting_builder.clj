@@ -25,7 +25,7 @@
    ## Multi-state allocation (note 83 §4)
 
    STRONGLY recommended: per-state allocation lives on
-   `:kontor.posting/analytic-distributions` via an `:analytic-plan/code
+   `:kontor.posting/analytic-distributions` via an `:kontor.analytic-plan/code
    \"state\"` (consumer-installed at install time), NOT on
    `:kontor.posting/entity`. A US LLC with employees in 15 states is ONE
    legal entity — `:kontor.posting/entity` is reserved for true multi-LLC /
@@ -33,7 +33,7 @@
 
    Per-state allocation uses the kernel's existing analytic-
    distribution machinery (ADR-022): each wage posting gets a
-   distribution `{:plan [:analytic-plan/code \"state\"] :account [:analytic-account/path \"state:CA\"] :percent 100M}` (or split
+   distribution `{:plan [:kontor.analytic-plan/code \"state\"] :account [:kontor.analytic-account/path \"state:CA\"] :percent 100M}` (or split
    distributions for hybrid employees).
 
    ## Sum-to-zero (ADR-021 + ADR-031)
@@ -95,7 +95,7 @@
 (defn- state-distribution
   "Build an analytic-distribution map for per-state allocation, or nil
    if the component lacks a `:state` tag. The consumer is responsible
-   for installing the `:analytic-plan/code \"state\"` plan and the
+   for installing the `:kontor.analytic-plan/code \"state\"` plan and the
    per-state `:analytic-account` rows at bootstrap time (see
    `kontor.payroll-us-adp.core/install-state-analytic-plan!`).
 
@@ -108,17 +108,17 @@
       ;; Hybrid / multi-state allocation override.
       (and state (map? state-allocations) (seq state-allocations))
       (mapv (fn [[s pct]]
-              {:analytic-distribution/plan [:analytic-plan/code "state"]
-               :analytic-distribution/account
-               [:analytic-account/path (str "state:" (name s))]
-               :analytic-distribution/percent (bigdec pct)})
+              {:kontor.analytic-distribution/plan [:kontor.analytic-plan/code "state"]
+               :kontor.analytic-distribution/account
+               [:kontor.analytic-account/path (str "state:" (name s))]
+               :kontor.analytic-distribution/percent (bigdec pct)})
             state-allocations)
 
       state
-      [{:analytic-distribution/plan [:analytic-plan/code "state"]
-        :analytic-distribution/account
-        [:analytic-account/path (str "state:" (name state))]
-        :analytic-distribution/percent 100M}]
+      [{:kontor.analytic-distribution/plan [:kontor.analytic-plan/code "state"]
+        :kontor.analytic-distribution/account
+        [:kontor.analytic-account/path (str "state:" (name state))]
+        :kontor.analytic-distribution/percent 100M}]
 
       :else nil)))
 

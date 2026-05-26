@@ -21,13 +21,13 @@
 ;; ============================================================================
 
 (def ^:private expense-report-attrs
-  [{:db/ident       :expense-report/code
+  [{:db/ident       :kontor.expense-report/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "External identifier — 'EXP-2026-0042'."}
 
-   {:db/ident       :expense-report/employee
+   {:db/ident       :kontor.expense-report/employee
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :partner — the employee who incurred the
@@ -36,28 +36,28 @@
                      :no-self-approval rule fires (an employee
                      cannot approve their own report)."}
 
-   {:db/ident       :expense-report/status
+   {:db/ident       :kontor.expense-report/status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-034 lifecycle facet.
                      #{:draft :submitted :approved :posted :reimbursed
                        :rejected}."}
 
-   {:db/ident       :expense-report/report-date
+   {:db/ident       :kontor.expense-report/report-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :expense-report/commodity
+   {:db/ident       :kontor.expense-report/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The report's reporting commodity. Individual
                      lines may carry their own :commodity."}
 
-   {:db/ident       :expense-report/total
+   {:db/ident       :kontor.expense-report/total
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Cached convenience total — the truth is
-                     `Σ :expense-line/amount`, maintained by
+                     `Σ :kontor.expense-line/amount`, maintained by
                      `add-line!`. Meaningful only for a
                      single-commodity report — it sums raw amounts
                      across commodities, so a mixed-commodity
@@ -65,20 +65,20 @@
                      entry `post-report!` builds is still correct
                      (it groups credit legs per commodity)."}
 
-   {:db/ident       :expense-report/transaction
+   {:db/ident       :kontor.expense-report/transaction
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The GL entry — ref to :transaction. Set by
                      `post-report!`."}
 
-   {:db/ident       :expense-report/reimbursement-transaction
+   {:db/ident       :kontor.expense-report/reimbursement-transaction
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The reimbursement settlement entry — ref to
                      :transaction. Set by `reimburse!` (own-account
                      reports only)."}
 
-   {:db/ident       :expense-report/note
+   {:db/ident       :kontor.expense-report/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 
@@ -87,30 +87,30 @@
 ;; ============================================================================
 
 (def ^:private expense-line-attrs
-  [{:db/ident       :expense-line/expense-report
+  [{:db/ident       :kontor.expense-line/expense-report
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :expense-line/category
+   {:db/ident       :kontor.expense-line/category
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Generic ref — the consumer's expense-category
                      entity (kontor ships the slot, not a
                      vocabulary)."}
 
-   {:db/ident       :expense-line/expense-date
+   {:db/ident       :kontor.expense-line/expense-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :expense-line/amount
+   {:db/ident       :kontor.expense-line/amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :expense-line/commodity
+   {:db/ident       :kontor.expense-line/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :expense-line/payment-mode
+   {:db/ident       :kontor.expense-line/payment-mode
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "#{:own-account :company-account}. Decides the
@@ -121,25 +121,25 @@
                      bank-statement matching). A report may mix
                      modes across lines."}
 
-   {:db/ident       :expense-line/expense-account
+   {:db/ident       :kontor.expense-line/expense-account
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The P&L account this line debits."}
 
-   {:db/ident       :expense-line/cost-center
+   {:db/ident       :kontor.expense-line/cost-center
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ref to :analytic-account — the
                      cost-center the expense is attributed to."}
 
-   {:db/ident       :expense-line/supporting-doc
+   {:db/ident       :kontor.expense-line/supporting-doc
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :audit-doc — the receipt. `submit!`
                      enforces its presence unless :require-receipts?
                      is false (e.g. a mileage line)."}
 
-   {:db/ident       :expense-line/description
+   {:db/ident       :kontor.expense-line/description
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 
@@ -155,7 +155,7 @@
 ;; ============================================================================
 
 (def status-transition-seeds
-  "ADR-034 :status-transition rows for the :expense-report/status
+  "ADR-034 :status-transition rows for the :kontor.expense-report/status
    lifecycle."
   (vec
    (for [[from to name]
@@ -168,7 +168,7 @@
           [:approved   :posted      "Post to the GL"]
           [:posted     :reimbursed  "Reimburse (own-account)"]]]
      {:kontor.status-transition/entity-type :expense-report
-      :kontor.status-transition/facet :expense-report/status
+      :kontor.status-transition/facet :kontor.expense-report/status
       :kontor.status-transition/from from
       :kontor.status-transition/to to
       :kontor.status-transition/active true
@@ -180,24 +180,24 @@
    their own report; `create-report!` stamps the employee as
    `:kontor.audit/create-uid`). Both `:rejected` edges require a non-empty
    reason note."
-  [{:approval-policy/entity-type     :expense-report
-    :approval-policy/facet           :expense-report/status
-    :approval-policy/transition-from :submitted
-    :approval-policy/transition-to   :approved
-    :approval-policy/rule            :no-self-approval
-    :approval-policy/active          true}
-   {:approval-policy/entity-type     :expense-report
-    :approval-policy/facet           :expense-report/status
-    :approval-policy/transition-from :submitted
-    :approval-policy/transition-to   :rejected
-    :approval-policy/rule            :requires-non-empty-reason-note
-    :approval-policy/active          true}
-   {:approval-policy/entity-type     :expense-report
-    :approval-policy/facet           :expense-report/status
-    :approval-policy/transition-from :approved
-    :approval-policy/transition-to   :rejected
-    :approval-policy/rule            :requires-non-empty-reason-note
-    :approval-policy/active          true}])
+  [{:kontor.approval-policy/entity-type     :expense-report
+    :kontor.approval-policy/facet           :kontor.expense-report/status
+    :kontor.approval-policy/transition-from :submitted
+    :kontor.approval-policy/transition-to   :approved
+    :kontor.approval-policy/rule            :no-self-approval
+    :kontor.approval-policy/active          true}
+   {:kontor.approval-policy/entity-type     :expense-report
+    :kontor.approval-policy/facet           :kontor.expense-report/status
+    :kontor.approval-policy/transition-from :submitted
+    :kontor.approval-policy/transition-to   :rejected
+    :kontor.approval-policy/rule            :requires-non-empty-reason-note
+    :kontor.approval-policy/active          true}
+   {:kontor.approval-policy/entity-type     :expense-report
+    :kontor.approval-policy/facet           :kontor.expense-report/status
+    :kontor.approval-policy/transition-from :approved
+    :kontor.approval-policy/transition-to   :rejected
+    :kontor.approval-policy/rule            :requires-non-empty-reason-note
+    :kontor.approval-policy/active          true}])
 
 ;; ============================================================================
 ;; Installer

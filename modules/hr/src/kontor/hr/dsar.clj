@@ -26,7 +26,7 @@
       :pay-runs        [<pulled :payroll-run rows whose facts touched
                         any of this person's employments>]
       :contract-docs   [<pulled :audit-doc rows referenced by
-                        :employment/contract-doc>]}
+                        :kontor.employment/contract-doc>]}
 
    Bitemporal-aware via `:as-of-tx` opt (`d/as-of` snapshot)."
   ([db person-eid] (collect-for-person db person-eid {}))
@@ -35,39 +35,39 @@
          person (d/pull db '[*] person-eid)
          emps (->> (d/q '[:find [?e ...]
                           :in $ ?p
-                          :where [?e :employment/person ?p]]
+                          :where [?e :kontor.employment/person ?p]]
                         db person-eid)
                    (map #(d/pull db
-                                 '[* {:employment/department [*]
-                                      :employment/manager [:db/id :employment/code
-                                                           :employment/job-title]
-                                      :employment/contract-doc [*]}]
+                                 '[* {:kontor.employment/department [*]
+                                      :kontor.employment/manager [:db/id :kontor.employment/code
+                                                           :kontor.employment/job-title]
+                                      :kontor.employment/contract-doc [*]}]
                                  %))
                    vec)
          emp-eids (mapv :db/id emps)
          comps (when (seq emp-eids)
                  (->> (d/q '[:find [?c ...]
                              :in $ [?e ...]
-                             :where [?c :compensation/employment ?e]]
+                             :where [?c :kontor.compensation/employment ?e]]
                            db emp-eids)
                       (map #(d/pull db
-                                    '[* {:compensation/employment
-                                         [:db/id :employment/code]
-                                         :compensation/commodity
+                                    '[* {:kontor.compensation/employment
+                                         [:db/id :kontor.employment/code]
+                                         :kontor.compensation/commodity
                                          [:db/id :kontor.commodity/symbol]}]
                                     %))
                       (map (fn [c]
                              (assoc c
-                                    :compensation/components
+                                    :kontor.compensation/components
                                     (->> (d/q '[:find [?cc ...]
                                                 :in $ ?c
-                                                :where [?cc :compensation-component/compensation ?c]]
+                                                :where [?cc :kontor.compensation-component/compensation ?c]]
                                               db (:db/id c))
                                          (map #(d/pull db '[*] %))
                                          vec))))
                       vec))
          contract-doc-eids (->> emps
-                                (keep (comp :db/id :employment/contract-doc))
+                                (keep (comp :db/id :kontor.employment/contract-doc))
                                 distinct
                                 vec)]
      {:person        person

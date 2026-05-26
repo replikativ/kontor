@@ -88,7 +88,7 @@
 ;; passing `:asset-class-overrides {:br-foo :br-ganho-capital}` to the
 ;; provider constructor.
 (def default-asset-class->lane
-  "Default BR `:disposal/asset-class` → lane mapping (note 130 §3.2
+  "Default BR `:kontor.disposal/asset-class` → lane mapping (note 130 §3.2
    open vocabulary). The keys in this map are the canonical
    BR-namespaced asset classes; a consumer's custom asset class falls
    into `:br-ganho-capital` by default (the conservative — non-bolsa
@@ -120,23 +120,23 @@
   "Gain (positive) or loss (negative) on one disposal in the proceeds
    commodity: `proceeds − basis − rollover-amount`."
   ^java.math.BigDecimal [disposal]
-  (let [p (or (:disposal/proceeds-amount disposal) 0M)
-        b (or (:disposal/basis-amount disposal) 0M)
-        r (or (:disposal/rollover-amount disposal) 0M)]
+  (let [p (or (:kontor.disposal/proceeds-amount disposal) 0M)
+        b (or (:kontor.disposal/basis-amount disposal) 0M)
+        r (or (:kontor.disposal/rollover-amount disposal) 0M)]
     (- p b r)))
 
 (defn- proceeds
   ^java.math.BigDecimal [disposal]
-  (or (:disposal/proceeds-amount disposal) 0M))
+  (or (:kontor.disposal/proceeds-amount disposal) 0M))
 
 (defn- claims-residence-reinvest?
   "True iff the disposal claims the art. 39 residence-reinvestment
    exemption (Lei 11.196/2005 art. 39). Reads either
-   `:disposal/elective-regime` or `:disposal/exemption-claimed` for
+   `:kontor.disposal/elective-regime` or `:kontor.disposal/exemption-claimed` for
    the closed BR keywords."
   [disposal]
-  (let [reg (set (:disposal/elective-regime disposal))
-        exm (set (:disposal/exemption-claimed disposal))]
+  (let [reg (set (:kontor.disposal/elective-regime disposal))
+        exm (set (:kontor.disposal/exemption-claimed disposal))]
     (boolean (or (contains? reg :br-residence-reinvest)
                  (contains? exm :br-art-39-residence-reinvest)))))
 
@@ -150,7 +150,7 @@
   "Return the `[year month]` pair for a disposal — the bucket key the
    monthly aggregate isenção folds against."
   [disposal]
-  (let [d (:disposal/disposed-on disposal)
+  (let [d (:kontor.disposal/disposed-on disposal)
         cal (doto (java.util.Calendar/getInstance)
               (.setTime d))]
     [(.get cal java.util.Calendar/YEAR)
@@ -172,13 +172,13 @@
   [disposal {:keys [asset-class->lane]}]
   (let [g           (realized-gain disposal)
         p           (proceeds disposal)
-        ac          (:disposal/asset-class disposal)
+        ac          (:kontor.disposal/asset-class disposal)
         lane        (or (get asset-class->lane ac)
                         ;; default: real-asset Lane A
                         :br-ganho-capital)
         reinvest?   (and (= lane :br-ganho-capital)
                          (claims-residence-reinvest? disposal))
-        rollover    (or (:disposal/rollover-amount disposal) 0M)
+        rollover    (or (:kontor.disposal/rollover-amount disposal) 0M)
         reinvest-fraction (when reinvest?
                             (if (pos? p) (/ rollover p) 0M))
         ;; A reinvest exemption proportionally reduces the gain. Note
@@ -304,7 +304,7 @@
                         (filter #(= :br-ganho-capital (:lane %)))
                         (mapv (fn [c]
                                 {:line  :ganho-capital-disposal
-                                 :label (str (:disposal/external-id (:disposal c))
+                                 :label (str (:kontor.disposal/external-id (:disposal c))
                                              (cond
                                                (:exempt-by-reinvest? c)
                                                " (art. 39 reinvest exempt)"

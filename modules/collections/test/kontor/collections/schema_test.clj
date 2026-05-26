@@ -33,20 +33,20 @@
   (let [db (d/db *conn*)
         attr-known? (fn [k]
                       (some? (:db/valueType (d/pull db [:db/valueType] k))))]
-    (is (attr-known? :collection-case/code))
-    (is (attr-known? :collection-case/partner))
-    (is (attr-known? :collection-case/state))
-    (is (attr-known? :payment-promise/case))
-    (is (attr-known? :payment-promise/status))
-    (is (attr-known? :dispute/invoice))
-    (is (attr-known? :dispute/state))
-    (is (attr-known? :credit-hold/partner))
-    (is (attr-known? :credit-hold/entity))
-    (is (attr-known? :dunning-policy/code))
-    (is (attr-known? :dunning-policy/levels))
-    (is (attr-known? :dunning-event/case))
-    (is (attr-known? :dunning-event/level))
-    (is (attr-known? :dunning-pause/case))
+    (is (attr-known? :kontor.collection-case/code))
+    (is (attr-known? :kontor.collection-case/partner))
+    (is (attr-known? :kontor.collection-case/state))
+    (is (attr-known? :kontor.payment-promise/case))
+    (is (attr-known? :kontor.payment-promise/status))
+    (is (attr-known? :kontor.dispute/invoice))
+    (is (attr-known? :kontor.dispute/state))
+    (is (attr-known? :kontor.credit-hold/partner))
+    (is (attr-known? :kontor.credit-hold/entity))
+    (is (attr-known? :kontor.dunning-policy/code))
+    (is (attr-known? :kontor.dunning-policy/levels))
+    (is (attr-known? :kontor.dunning-event/case))
+    (is (attr-known? :kontor.dunning-event/level))
+    (is (attr-known? :kontor.dunning-pause/case))
     (is (attr-known? :kontor.invoice/collections-status))))
 
 ;; ============================================================================
@@ -56,65 +56,65 @@
 (deftest collection-case-transitions-seeded
   (let [db (d/db *conn*)]
     (testing "open → dunning-l1 legal"
-      (is (sm/legal-transition? db :collection-case :collection-case/state
+      (is (sm/legal-transition? db :collection-case :kontor.collection-case/state
                                 :open :dunning-l1)))
     (testing "dunning-l1 → dunning-l2 legal"
-      (is (sm/legal-transition? db :collection-case :collection-case/state
+      (is (sm/legal-transition? db :collection-case :kontor.collection-case/state
                                 :dunning-l1 :dunning-l2)))
     (testing "PTP suppression: open → promised legal"
-      (is (sm/legal-transition? db :collection-case :collection-case/state
+      (is (sm/legal-transition? db :collection-case :kontor.collection-case/state
                                 :open :promised)))
     (testing "Promise broken: promised → open legal"
-      (is (sm/legal-transition? db :collection-case :collection-case/state
+      (is (sm/legal-transition? db :collection-case :kontor.collection-case/state
                                 :promised :open)))
     (testing "Dispute suppression: open → disputed legal"
-      (is (sm/legal-transition? db :collection-case :collection-case/state
+      (is (sm/legal-transition? db :collection-case :kontor.collection-case/state
                                 :open :disputed)))
     (testing "Final notice → legal escalation legal"
-      (is (sm/legal-transition? db :collection-case :collection-case/state
+      (is (sm/legal-transition? db :collection-case :kontor.collection-case/state
                                 :final-notice :legal)))
     (testing "Legal → written-off legal"
-      (is (sm/legal-transition? db :collection-case :collection-case/state
+      (is (sm/legal-transition? db :collection-case :kontor.collection-case/state
                                 :legal :written-off)))
     (testing "Closed paid from any active level"
-      (is (sm/legal-transition? db :collection-case :collection-case/state
+      (is (sm/legal-transition? db :collection-case :kontor.collection-case/state
                                 :open :paid))
-      (is (sm/legal-transition? db :collection-case :collection-case/state
+      (is (sm/legal-transition? db :collection-case :kontor.collection-case/state
                                 :dunning-l1 :paid))
-      (is (sm/legal-transition? db :collection-case :collection-case/state
+      (is (sm/legal-transition? db :collection-case :kontor.collection-case/state
                                 :final-notice :paid)))
     (testing "Illegal transitions rejected"
-      (is (not (sm/legal-transition? db :collection-case :collection-case/state
+      (is (not (sm/legal-transition? db :collection-case :kontor.collection-case/state
                                      :written-off :open)))
-      (is (not (sm/legal-transition? db :collection-case :collection-case/state
+      (is (not (sm/legal-transition? db :collection-case :kontor.collection-case/state
                                      :paid :open))))))
 
 (deftest payment-promise-transitions-seeded
   (let [db (d/db *conn*)]
-    (is (sm/legal-transition? db :payment-promise :payment-promise/status
+    (is (sm/legal-transition? db :payment-promise :kontor.payment-promise/status
                               :nil :open))
-    (is (sm/legal-transition? db :payment-promise :payment-promise/status
+    (is (sm/legal-transition? db :payment-promise :kontor.payment-promise/status
                               :open :kept))
-    (is (sm/legal-transition? db :payment-promise :payment-promise/status
+    (is (sm/legal-transition? db :payment-promise :kontor.payment-promise/status
                               :open :broken))
-    (is (sm/legal-transition? db :payment-promise :payment-promise/status
+    (is (sm/legal-transition? db :payment-promise :kontor.payment-promise/status
                               :open :renegotiated))
-    (is (sm/legal-transition? db :payment-promise :payment-promise/status
+    (is (sm/legal-transition? db :payment-promise :kontor.payment-promise/status
                               :broken :renegotiated))
     (testing "kept is terminal"
-      (is (not (sm/legal-transition? db :payment-promise :payment-promise/status
+      (is (not (sm/legal-transition? db :payment-promise :kontor.payment-promise/status
                                      :kept :open))))))
 
 (deftest dispute-transitions-seeded
   (let [db (d/db *conn*)]
-    (is (sm/legal-transition? db :dispute :dispute/state :nil :open))
-    (is (sm/legal-transition? db :dispute :dispute/state :open :under-review))
-    (is (sm/legal-transition? db :dispute :dispute/state :under-review :resolved))
-    (is (sm/legal-transition? db :dispute :dispute/state :open :resolved))
-    (is (sm/legal-transition? db :dispute :dispute/state :under-review :escalated))
-    (is (sm/legal-transition? db :dispute :dispute/state :escalated :resolved))
+    (is (sm/legal-transition? db :dispute :kontor.dispute/state :nil :open))
+    (is (sm/legal-transition? db :dispute :kontor.dispute/state :open :under-review))
+    (is (sm/legal-transition? db :dispute :kontor.dispute/state :under-review :resolved))
+    (is (sm/legal-transition? db :dispute :kontor.dispute/state :open :resolved))
+    (is (sm/legal-transition? db :dispute :kontor.dispute/state :under-review :escalated))
+    (is (sm/legal-transition? db :dispute :kontor.dispute/state :escalated :resolved))
     (testing "resolved is terminal"
-      (is (not (sm/legal-transition? db :dispute :dispute/state
+      (is (not (sm/legal-transition? db :dispute :kontor.dispute/state
                                      :resolved :open))))))
 
 (deftest invoice-collections-status-transitions-seeded

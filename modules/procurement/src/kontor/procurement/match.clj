@@ -10,7 +10,7 @@
 
    This namespace ships the tolerance-policy lookup + match-report
    query + state-machine driver. The actual posting-time enforcement
-   happens via ADR-038's `:approval-policy/rule :requires-three-way-
+   happens via ADR-038's `:kontor.approval-policy/rule :requires-three-way-
    match-pass` consulted by kontor.invoice.posting/post-to-ledger!."
   (:require [datahike.api :as d]
             [kontor.status-machine :as sm]
@@ -36,30 +36,30 @@
              (d/q '[:find ?t .
                     :in $ ?e ?s ?p
                     :where
-                    [?t :match-tolerance/entity ?e]
-                    [?t :match-tolerance/supplier ?s]
-                    [?t :match-tolerance/product-id ?p]
-                    [?t :match-tolerance/active true]]
+                    [?t :kontor.match-tolerance/entity ?e]
+                    [?t :kontor.match-tolerance/supplier ?s]
+                    [?t :kontor.match-tolerance/product-id ?p]
+                    [?t :kontor.match-tolerance/active true]]
                   db entity supplier product-id))
         ;; Tier 2: entity + supplier, no product
         t2 (when (and entity supplier)
              (d/q '[:find ?t .
                     :in $ ?e ?s
                     :where
-                    [?t :match-tolerance/entity ?e]
-                    [?t :match-tolerance/supplier ?s]
-                    [(missing? $ ?t :match-tolerance/product-id)]
-                    [?t :match-tolerance/active true]]
+                    [?t :kontor.match-tolerance/entity ?e]
+                    [?t :kontor.match-tolerance/supplier ?s]
+                    [(missing? $ ?t :kontor.match-tolerance/product-id)]
+                    [?t :kontor.match-tolerance/active true]]
                   db entity supplier))
         ;; Tier 3: entity only
         t3 (when entity
              (d/q '[:find ?t .
                     :in $ ?e
                     :where
-                    [?t :match-tolerance/entity ?e]
-                    [(missing? $ ?t :match-tolerance/supplier)]
-                    [(missing? $ ?t :match-tolerance/product-id)]
-                    [?t :match-tolerance/active true]]
+                    [?t :kontor.match-tolerance/entity ?e]
+                    [(missing? $ ?t :kontor.match-tolerance/supplier)]
+                    [(missing? $ ?t :kontor.match-tolerance/product-id)]
+                    [?t :kontor.match-tolerance/active true]]
                   db entity))]
     (or (pull-tolerance t1)
         (pull-tolerance t2)
@@ -108,25 +108,25 @@
                           :where [?l :kontor.invoice-line/invoice ?inv]]
                         db invoice-eid)
                    (map #(d/pull db '[* {:kontor.invoice-line/order-item [:db/id
-                                                                    :order-item/product-id
-                                                                    :order-item/quantity
-                                                                    :order-item/unit-price
-                                                                    :order-item/requires-receipt?]}] %)))]
+                                                                    :kontor.sales.order-item/product-id
+                                                                    :kontor.sales.order-item/quantity
+                                                                    :kontor.sales.order-item/unit-price
+                                                                    :kontor.procurement.order-item/requires-receipt?]}] %)))]
     (mapv (fn [line]
             (let [oi (:kontor.invoice-line/order-item line)
                   oi-eid (:db/id oi)
-                  ordered-qty (or (:order-item/quantity oi) 0M)
-                  ordered-price (or (:order-item/unit-price oi) 0M)
+                  ordered-qty (or (:kontor.sales.order-item/quantity oi) 0M)
+                  ordered-price (or (:kontor.sales.order-item/unit-price oi) 0M)
                   invoiced-qty (or (:kontor.invoice-line/quantity line) 0M)
                   invoiced-price (or (:kontor.invoice-line/unit-price line) 0M)
-                  received-qty (if (false? (:order-item/requires-receipt? oi))
+                  received-qty (if (false? (:kontor.procurement.order-item/requires-receipt? oi))
                                  ;; service line — use service-acceptance
                                  (or (d/q '[:find (sum ?q) .
                                             :with ?sa
                                             :in $ ?oi
                                             :where
-                                            [?sa :service-acceptance/order-item ?oi]
-                                            [?sa :service-acceptance/quantity-accepted ?q]]
+                                            [?sa :kontor.service-acceptance/order-item ?oi]
+                                            [?sa :kontor.service-acceptance/quantity-accepted ?q]]
                                           db oi-eid) 0M)
                                  (receipt/quantity-received-of-order-item db oi-eid))
                   qty-delta (.subtract ^java.math.BigDecimal (big invoiced-qty)
@@ -135,15 +135,15 @@
                                          ^java.math.BigDecimal (big ordered-price))
                   tol (applicable-tolerance db {:entity entity-eid
                                                 :supplier supplier-eid
-                                                :product-id (:order-item/product-id oi)})
-                  qty-ok? (within-tolerance? (:match-tolerance/qty-pct-over tol)
-                                             (:match-tolerance/qty-abs-over tol)
+                                                :product-id (:kontor.sales.order-item/product-id oi)})
+                  qty-ok? (within-tolerance? (:kontor.match-tolerance/qty-pct-over tol)
+                                             (:kontor.match-tolerance/qty-abs-over tol)
                                              (big received-qty) qty-delta)
-                  price-ok? (within-tolerance? (:match-tolerance/price-pct-over tol)
-                                               (:match-tolerance/price-abs-over tol)
+                  price-ok? (within-tolerance? (:kontor.match-tolerance/price-pct-over tol)
+                                               (:kontor.match-tolerance/price-abs-over tol)
                                                (big ordered-price) price-delta)
                   missing-receipt? (and (zero? (.signum ^java.math.BigDecimal (big received-qty)))
-                                        (not (false? (:order-item/requires-receipt? oi))))
+                                        (not (false? (:kontor.procurement.order-item/requires-receipt? oi))))
                   verdict (cond
                             missing-receipt? :exception-missing-receipt
                             (and qty-ok? price-ok?
@@ -155,7 +155,7 @@
                             :else :exception-price)]
               {:invoice-line (:db/id line)
                :order-item oi-eid
-               :product-id (:order-item/product-id oi)
+               :product-id (:kontor.sales.order-item/product-id oi)
                :ordered-qty ordered-qty
                :received-qty received-qty
                :invoiced-qty invoiced-qty

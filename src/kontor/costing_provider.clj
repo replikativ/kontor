@@ -6,7 +6,7 @@
    extend the protocol for jurisdiction-specific variants
    (Anglo-Saxon FIFO, Continental immediate-expense, lot-isolated
    FIFO, etc.). Consumers select the impl via the valuation book's
-   `:valuation-book/cost-method` keyword or pass an instance directly.
+   `:kontor.valuation-book/cost-method` keyword or pass an instance directly.
 
    Each impl computes how a stock movement's cost is composed; the
    posting builder (`kontor.posting/plan-stock-move`, ADR-030) takes
@@ -324,7 +324,7 @@
 
 (defn provider-for
   "Pick a kernel-shipped provider implementation for a
-   `:valuation-book/cost-method` keyword. Standard cost requires
+   `:kontor.valuation-book/cost-method` keyword. Standard cost requires
    the caller to supply `standard-cost-fn`."
   ([method] (provider-for method nil))
   ([method standard-cost-fn]

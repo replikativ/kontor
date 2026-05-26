@@ -52,7 +52,7 @@
    When §10 KStG exempts the dividend on the corporate side, the
    DBA-Quellensteuer credit cap = 0 (Lang 2024, SWI 2024/06). Provider
    emits NO foreign-tax credit in the default-exempt branch; the
-   `:audit-doc/category :at-dba-credit-lost-bfg-2024` records the lost
+   `:kontor.audit-doc/category :at-dba-credit-lost-bfg-2024` records the lost
    recovery opportunity for downstream consumer follow-up (foreign
    reclaim).
 

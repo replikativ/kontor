@@ -30,7 +30,7 @@
    - CTA 2009 Part 9A corporate dividend exemption — the consumer
      asserts via account tag (`:uk-investment-income/corp-dividend-
      exempt` vs `/corp-dividend-taxable`); the provider trusts the
-     tag (same discipline as UK CGT trusting `:disposal/exemption-
+     tag (same discipline as UK CGT trusting `:kontor.disposal/exemption-
      claimed :uk-sse`).
 
    Citations point at legislation.gov.uk / gov.uk."

@@ -14,7 +14,7 @@
    ## Vocabulary conventions
 
    - **Facet**: the attribute carrying state on the entity (e.g.
-     `:order/status`, `:kontor.invoice/status`, `:order-item/status`). One
+     `:kontor.order/status`, `:kontor.invoice/status`, `:kontor.sales.order-item/status`). One
      entity can have multiple facets — multiple independent state
      machines on the same row.
    - **From-state `nil` pseudo-state**: when a transition represents
@@ -154,23 +154,23 @@
          tenant-rows (d/q '[:find [?p ...]
                             :in $ ?et ?f ?from ?to
                             :where
-                            [?p :approval-policy/entity-type ?et]
-                            [?p :approval-policy/facet ?f]
-                            [?p :approval-policy/transition-from ?from]
-                            [?p :approval-policy/transition-to ?to]
-                            [?p :approval-policy/active true]
-                            [(missing? $ ?p :approval-policy/applies-to-org)]]
+                            [?p :kontor.approval-policy/entity-type ?et]
+                            [?p :kontor.approval-policy/facet ?f]
+                            [?p :kontor.approval-policy/transition-from ?from]
+                            [?p :kontor.approval-policy/transition-to ?to]
+                            [?p :kontor.approval-policy/active true]
+                            [(missing? $ ?p :kontor.approval-policy/applies-to-org)]]
                           db entity-type facet from to)
          org-rows (when org-eid
                     (d/q '[:find [?p ...]
                            :in $ ?et ?f ?from ?to ?org
                            :where
-                           [?p :approval-policy/entity-type ?et]
-                           [?p :approval-policy/facet ?f]
-                           [?p :approval-policy/transition-from ?from]
-                           [?p :approval-policy/transition-to ?to]
-                           [?p :approval-policy/applies-to-org ?org]
-                           [?p :approval-policy/active true]]
+                           [?p :kontor.approval-policy/entity-type ?et]
+                           [?p :kontor.approval-policy/facet ?f]
+                           [?p :kontor.approval-policy/transition-from ?from]
+                           [?p :kontor.approval-policy/transition-to ?to]
+                           [?p :kontor.approval-policy/applies-to-org ?org]
+                           [?p :kontor.approval-policy/active true]]
                          db entity-type facet from to org-eid))]
      (mapv #(d/pull db '[*] %) (concat tenant-rows org-rows)))))
 
@@ -186,7 +186,7 @@
 (defn- check-policy
   "Apply one :approval-policy rule to a change-spec; return nil if ok,
    {:rule ... :reason ...} if violated."
-  [db {:approval-policy/keys [rule]}
+  [db {:kontor.approval-policy/keys [rule]}
    {:keys [entity changed-by-uid reason-note]
     sup-doc :supporting-doc
     :as change-spec}]
@@ -229,7 +229,7 @@
 
     :requires-dpia-supporting-doc
     ;; ADR-094 — like :requires-supporting-doc but the referenced
-    ;; audit-doc must carry :audit-doc/category :hr-monitoring-consent
+    ;; audit-doc must carry :kontor.audit-doc/category :hr-monitoring-consent
     ;; (the DPIA / LIA / consent-form bucket). Used on consent + people-
     ;; record transitions that legally require a documented privacy
     ;; impact assessment.
@@ -239,17 +239,17 @@
        :reason ":supporting-doc ref is required (DPIA / LIA / consent-form)"}
 
       :else
-      (let [cat (:audit-doc/category
-                 (d/pull db [:audit-doc/category]
+      (let [cat (:kontor.audit-doc/category
+                 (d/pull db [:kontor.audit-doc/category]
                          (if (map? sup-doc) (:db/id sup-doc) sup-doc)))]
         (when-not (= cat :hr-monitoring-consent)
           {:rule rule
-           :reason ":supporting-doc must carry :audit-doc/category :hr-monitoring-consent"
+           :reason ":supporting-doc must carry :kontor.audit-doc/category :hr-monitoring-consent"
            :actual-category cat})))
 
     :requires-works-agreement-ref
     ;; ADR-094 — the change-spec must include :works-agreement-ref
-    ;; pointing at an :audit-doc with :audit-doc/type
+    ;; pointing at an :audit-doc with :kontor.audit-doc/type
     ;; :betriebsvereinbarung (or :works-agreement). Used on consent /
     ;; activity-monitoring transitions covered by BetrVG §87 co-
     ;; determination.
@@ -260,12 +260,12 @@
          :reason ":works-agreement-ref is required (Betriebsvereinbarung / works-agreement)"}
 
         :else
-        (let [doc-type (:audit-doc/type
-                        (d/pull db [:audit-doc/type]
+        (let [doc-type (:kontor.audit-doc/type
+                        (d/pull db [:kontor.audit-doc/type]
                                 (if (map? wa-ref) (:db/id wa-ref) wa-ref)))]
           (when-not (#{:betriebsvereinbarung :works-agreement} doc-type)
             {:rule rule
-             :reason ":works-agreement-ref must point to an :audit-doc with :audit-doc/type :betriebsvereinbarung or :works-agreement"
+             :reason ":works-agreement-ref must point to an :audit-doc with :kontor.audit-doc/type :betriebsvereinbarung or :works-agreement"
              :actual-type doc-type}))))
 
     ;; Unknown rule: treat as a no-op (forward-compat for new rules
@@ -273,7 +273,7 @@
     nil))
 
 (defn check-policies
-  "Throw :approval-policy/violation if any applicable policy rejects
+  "Throw :kontor.approval-policy/violation if any applicable policy rejects
    the change-spec. Returns nil on success.
 
    change-spec must include :entity, :entity-type, :facet, :from, :to,
@@ -287,7 +287,7 @@
                         vec)]
     (when (seq violations)
       (throw (ex-info "Approval-policy violation"
-                      {:type        :approval-policy/violation
+                      {:type        :kontor.approval-policy/violation
                        :entity      (:entity change-spec)
                        :entity-type entity-type
                        :facet       facet
@@ -304,7 +304,7 @@
   "Pure variant: validate the transition against `db` and return
    tx-data ready to `d/transact` (the facet update + the history row).
    Throws ex-info :type :status-machine/illegal-transition or
-   :approval-policy/violation if invalid.
+   :kontor.approval-policy/violation if invalid.
 
    Use this when the status change must compose atomically with other
    tx-data (e.g. the invoice posting bridge composes posting tx-data

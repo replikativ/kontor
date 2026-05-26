@@ -53,7 +53,7 @@
 ;; ============================================================================
 
 (defn- decode-levels
-  "Decode `:dunning-policy/levels` (EDN-encoded string) to a Clojure
+  "Decode `:kontor.dunning-policy/levels` (EDN-encoded string) to a Clojure
    vector of level maps."
   [s]
   (if (string? s)
@@ -75,18 +75,18 @@
             (let [eid (d/q '[:find ?p .
                              :in $ ?e ?s
                              :where
-                             [?p :dunning-policy/active true]
-                             [?p :dunning-policy/applies-to-segment ?s]
-                             [?p :dunning-policy/entity ?e]]
+                             [?p :kontor.dunning-policy/active true]
+                             [?p :kontor.dunning-policy/applies-to-segment ?s]
+                             [?p :kontor.dunning-policy/entity ?e]]
                            db entity-eid seg)]
               (when eid (d/pull db '[*] eid))))
         q-tenant (fn [seg]
                    (let [eid (d/q '[:find ?p .
                                     :in $ ?s
                                     :where
-                                    [?p :dunning-policy/active true]
-                                    [?p :dunning-policy/applies-to-segment ?s]
-                                    [(missing? $ ?p :dunning-policy/entity)]]
+                                    [?p :kontor.dunning-policy/active true]
+                                    [?p :kontor.dunning-policy/applies-to-segment ?s]
+                                    [(missing? $ ?p :kontor.dunning-policy/entity)]]
                                   db seg)]
                      (when eid (d/pull db '[*] eid))))]
     (or (and entity (q entity segment))
@@ -112,11 +112,11 @@
      (or (d/q '[:find (count ?e) .
                 :in $ ?case ?cutoff-ms
                 :where
-                [?e :dunning-event/case ?case]
-                [?e :dunning-event/sent-at ?when]
+                [?e :kontor.dunning-event/case ?case]
+                [?e :kontor.dunning-event/sent-at ?when]
                 [(.getTime ^java.util.Date ?when) ?when-ms]
                 [(>= ?when-ms ?cutoff-ms)]
-                (not [?e :dunning-event/skipped? true])]
+                (not [?e :kontor.dunning-event/skipped? true])]
               db case-eid cutoff-ms)
          0))))
 
@@ -125,7 +125,7 @@
    policy's cap. `:as-of` defaults to now."
   ([db case-eid policy] (frequency-cap-violated? db case-eid policy nil))
   ([db case-eid
-    {:dunning-policy/keys [frequency-cap-window-days
+    {:kontor.dunning-policy/keys [frequency-cap-window-days
                            frequency-cap-max-events]}
     as-of]
    (and frequency-cap-window-days frequency-cap-max-events
@@ -153,17 +153,17 @@
     (kpause/any-active-pause? db case-eid {:as-of-valid as-of})
     :explicit-pause
 
-    (and (:dunning-policy/pause-on-dispute? policy)
+    (and (:kontor.dunning-policy/pause-on-dispute? policy)
          invoice-eid
          (kdispute/any-open-dispute-for-invoice? db invoice-eid))
     :open-dispute
 
-    (and (:dunning-policy/pause-on-open-promise? policy)
+    (and (:kontor.dunning-policy/pause-on-open-promise? policy)
          (kpromise/any-open-promise-for-partner-invoice?
           db case-eid invoice-eid))
     :open-promise
 
-    (and (:dunning-policy/pause-on-unapplied-cash? policy)
+    (and (:kontor.dunning-policy/pause-on-unapplied-cash? policy)
          unapplied-cash-fn
          (let [u (unapplied-cash-fn db case-eid)]
            (and u (pos? (.signum ^java.math.BigDecimal u)))))
@@ -180,14 +180,14 @@
    how many levels have already been sent (non-skipped). Returns
    the next level map or nil when policy exhausted."
   [db case-eid policy]
-  (let [levels (decode-levels (:dunning-policy/levels policy))
+  (let [levels (decode-levels (:kontor.dunning-policy/levels policy))
         sent-levels (set (d/q '[:find [?lvl ...]
                                 :in $ ?case
                                 :where
-                                [?e :dunning-event/case ?case]
-                                [?e :dunning-event/level ?lvl]
-                                (not [?e :dunning-event/skipped? true])
-                                [?e :dunning-event/sent-at _]]
+                                [?e :kontor.dunning-event/case ?case]
+                                [?e :kontor.dunning-event/level ?lvl]
+                                (not [?e :kontor.dunning-event/skipped? true])
+                                [?e :kontor.dunning-event/sent-at _]]
                               db case-eid))
         ;; Convention: level map's :ordinal is its index; fall back
         ;; to position when :ordinal is absent.
@@ -210,7 +210,7 @@
      :cases            seq of {:case-eid :invoice-eid :segment
                                 :partner :locale}.
                        Caller computes which cases are due (typically
-                       from `aging.clj` + `:collection-case/total-
+                       from `aging.clj` + `:kontor.collection-case/total-
                        overdue`).
 
    Optional opts:
@@ -296,52 +296,52 @@
         doc-tempid (str "ev-doc" tempid-suffix)
         intent-tempid (str "ev-intent" tempid-suffix)
         event-row (cond-> {:db/id event-tempid
-                           :dunning-event/case (:case plan-row)
-                           :dunning-event/level (or (:level plan-row) 0)
-                           :dunning-event/scheduled-at (:scheduled-at plan-row)
-                           :dunning-event/channel channel
-                           :dunning-event/locale (:locale plan-row)}
+                           :kontor.dunning-event/case (:case plan-row)
+                           :kontor.dunning-event/level (or (:level plan-row) 0)
+                           :kontor.dunning-event/scheduled-at (:scheduled-at plan-row)
+                           :kontor.dunning-event/channel channel
+                           :kontor.dunning-event/locale (:locale plan-row)}
                     (:invoice plan-row)
-                    (assoc :dunning-event/invoice (:invoice plan-row))
+                    (assoc :kontor.dunning-event/invoice (:invoice plan-row))
 
                     (:template-ref plan-row)
-                    (assoc :dunning-event/template-ref (:template-ref plan-row))
+                    (assoc :kontor.dunning-event/template-ref (:template-ref plan-row))
 
                     sent?
-                    (assoc :dunning-event/sent-at now
-                           :dunning-event/audit-doc doc-tempid
-                           :dunning-event/side-effect-intent intent-tempid)
+                    (assoc :kontor.dunning-event/sent-at now
+                           :kontor.dunning-event/audit-doc doc-tempid
+                           :kontor.dunning-event/side-effect-intent intent-tempid)
 
                     (:skipped? plan-row)
-                    (assoc :dunning-event/skipped? true
-                           :dunning-event/skip-reason (:skip-reason plan-row)))
+                    (assoc :kontor.dunning-event/skipped? true
+                           :kontor.dunning-event/skip-reason (:skip-reason plan-row)))
         doc-rows (when sent?
                    [{:db/id doc-tempid
-                     :audit-doc/code (str "DUNN-"
+                     :kontor.audit-doc/code (str "DUNN-"
                                           (.getTime ^java.util.Date now)
                                           "-"
                                           (:case plan-row))
-                     :audit-doc/type :dunning-letter
-                     :audit-doc/title (str "Dunning Letter L"
+                     :kontor.audit-doc/type :dunning-letter
+                     :kontor.audit-doc/title (str "Dunning Letter L"
                                            (:level plan-row))
-                     :audit-doc/content-hash (:content-hash rendered)
-                     :audit-doc/uploaded-at now}])
+                     :kontor.audit-doc/content-hash (:content-hash rendered)
+                     :kontor.audit-doc/uploaded-at now}])
         intent-rows (when sent?
                       [{:db/id intent-tempid
-                        :side-effect-intent/key
+                        :kontor.side-effect-intent/key
                         (str "DUNN-" (.getTime ^java.util.Date now)
                              "-" (:case plan-row))
-                        :side-effect-intent/type (case channel
+                        :kontor.side-effect-intent/type (case channel
                                                    :email :send-email
                                                    :letter :send-letter
                                                    :phone :phone-call-scheduled
                                                    :portal :portal-notification
                                                    :send-email)
-                        :side-effect-intent/payload (:rendered-content rendered)
-                        :side-effect-intent/status :pending
-                        :side-effect-intent/created-at now
-                        :side-effect-intent/retry-count 0
-                        :side-effect-intent/max-retries 3}])]
+                        :kontor.side-effect-intent/payload (:rendered-content rendered)
+                        :kontor.side-effect-intent/status :pending
+                        :kontor.side-effect-intent/created-at now
+                        :kontor.side-effect-intent/retry-count 0
+                        :kontor.side-effect-intent/max-retries 3}])]
     (vec (concat [event-row] doc-rows intent-rows))))
 
 ;; ============================================================================
@@ -349,7 +349,7 @@
 ;; ============================================================================
 
 (def default-policy-levels-edn
-  "EDN-encoded vec for `:dunning-policy/levels`. Three-level cadence
+  "EDN-encoded vec for `:kontor.dunning-policy/levels`. Three-level cadence
    roughly aligned with EU Late Payment Directive 2011/7/EU and US
    common practice (30/60/90). Tenants override per jurisdiction via
    l10n modules."

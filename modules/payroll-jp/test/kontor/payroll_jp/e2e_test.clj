@@ -227,9 +227,9 @@
                       :commodity jpy})
         db (:db-after report)
         run-eid (d/q '[:find ?r . :in $ ?c
-                       :where [?r :payroll-run/code ?c]]
+                       :where [?r :kontor.payroll-run/code ?c]]
                      db "ACME-JP-2026-05-001")
-        run (d/pull db '[* {:payroll-run/payroll-transaction
+        run (d/pull db '[* {:kontor.payroll-run/payroll-transaction
                             [:kontor.transaction/external-id
                              {:kontor.posting/_transaction
                               [:kontor.posting/amount
@@ -237,20 +237,20 @@
                     run-eid)]
     (testing "payroll-run row created"
       (is (some? run-eid))
-      (is (= :computed (:payroll-run/state run)))
-      (is (= :mock-jp (:payroll-run/provider-id run))))
+      (is (= :computed (:kontor.payroll-run/state run)))
+      (is (= :mock-jp (:kontor.payroll-run/provider-id run))))
     (testing "Control totals reflect all three employees"
       ;; Tanaka 340000 + Suzuki 500000 + Sato 380000 = 1_220_000
-      (is (= 1220000M (:payroll-run/control-total-gross run))))
+      (is (= 1220000M (:kontor.payroll-run/control-total-gross run))))
     (testing "Posting legs sum to zero per (ledger × commodity)"
-      (let [postings (-> run :payroll-run/payroll-transaction
+      (let [postings (-> run :kontor.payroll-run/payroll-transaction
                          :kontor.posting/_transaction)
             sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                           (.add ^BigDecimal a ^BigDecimal amount))
                         0M postings)]
         (is (zero? (.compareTo ^BigDecimal sum 0M)))))
     (testing "Long-term-care (介護保険料) posts ONLY for Suzuki (≥40)"
-      (let [postings (-> run :payroll-run/payroll-transaction
+      (let [postings (-> run :kontor.payroll-run/payroll-transaction
                          :kontor.posting/_transaction)
             by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)
             kaigo-total (reduce (fn [a {:kontor.posting/keys [amount]}]
@@ -259,7 +259,7 @@
         ;; -4510 (employee) + -4510 (employer payable) = -9020
         (is (= -9020M kaigo-total))))
     (testing "Income tax + resident tax route to DIFFERENT liability buckets"
-      (let [postings (-> run :payroll-run/payroll-transaction
+      (let [postings (-> run :kontor.payroll-run/payroll-transaction
                          :kontor.posting/_transaction)
             by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)
             itx-total (reduce (fn [a {:kontor.posting/keys [amount]}]
@@ -272,11 +272,11 @@
         (is (= -40500M itx-total))
         ;; Resident tax: -18000 + -4000 + -16686 = -38686
         (is (= -38686M rt-total))))
-    (testing "Emit produced :audit-doc/category :payroll-filing + :audit-doc/language :ja"
+    (testing "Emit produced :kontor.audit-doc/category :payroll-filing + :kontor.audit-doc/language :ja"
       (let [doc-eids (d/q '[:find [?e ...]
                             :where
-                            [?e :audit-doc/category :payroll-filing]
-                            [?e :audit-doc/language :ja]]
+                            [?e :kontor.audit-doc/category :payroll-filing]
+                            [?e :kontor.audit-doc/language :ja]]
                           db)]
         (is (>= (count doc-eids) 1))))))
 
@@ -387,7 +387,7 @@
       (let [docs (jp-emit/build-gensen-submission-audit-docs-tx-data
                   {:statements statements})]
         (is (= 1 (count docs)))
-        (is (= :payroll-filing (:audit-doc/category (first docs))))
-        (is (= :ja (:audit-doc/language (first docs))))))
+        (is (= :payroll-filing (:kontor.audit-doc/category (first docs))))
+        (is (= :ja (:kontor.audit-doc/language (first docs))))))
     ;; Suppress reflection-warning on conn:
     (is (some? conn))))

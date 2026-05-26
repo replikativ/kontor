@@ -223,8 +223,8 @@
 
 (defn ecr-audit-doc-tx-data
   "Build an :audit-doc tx-data fragment recording the monthly ECR
-   summary. Carries :audit-doc/category :payroll-filing +
-   :audit-doc/language :en-in per ADR-083."
+   summary. Carries :kontor.audit-doc/category :payroll-filing +
+   :kontor.audit-doc/language :en-in per ADR-083."
   [{:keys [pf-summary establishment-code language]
     :or {language :en-in}}]
   (let [{:keys [year month pf-total period-start period-end
@@ -233,13 +233,13 @@
         title (format "EPFO ECR — %s, %04d-%02d" est year month)
         desc (format "PF payable (EE 12%% + ER 12%% + EDLI 0.5%%): %s | Period %s..%s"
                      (:amount pf-total) (str period-start) (str period-end))]
-    [{:audit-doc/code (str "EPFO-ECR-" est "-" year "-" (format "%02d" month))
-      :audit-doc/type :regulator-clearance
-      :audit-doc/title title
-      :audit-doc/description desc
-      :audit-doc/uploaded-at (java.util.Date.)
-      :audit-doc/category :payroll-filing
-      :audit-doc/language language}]))
+    [{:kontor.audit-doc/code (str "EPFO-ECR-" est "-" year "-" (format "%02d" month))
+      :kontor.audit-doc/type :regulator-clearance
+      :kontor.audit-doc/title title
+      :kontor.audit-doc/description desc
+      :kontor.audit-doc/uploaded-at (java.util.Date.)
+      :kontor.audit-doc/category :payroll-filing
+      :kontor.audit-doc/language language}]))
 
 ;; ============================================================================
 ;; build-ecr-submission — end-to-end

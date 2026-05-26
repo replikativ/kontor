@@ -141,7 +141,7 @@
     (is (= :br-irpf (:id p)))
     (is (= :BRL (:commodity p)))
     (is (= :br-receita-federal (:authority p)))
-    (is (= :progressive-bracket (:schedule/type (:schedule p))))
+    (is (= :progressive-bracket (:kontor.schedule/type (:schedule p))))
     (is (= 5 (count (:brackets (:schedule p))))
         "five bands — 0 / 7.5 / 15 / 22.5 / 27.5 %")
     (is (= [0M 0.075M 0.15M 0.225M 0.275M]

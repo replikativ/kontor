@@ -152,18 +152,18 @@
                               and local-edu surcharge amounts.
 
    Returns:
-     {:return/form           \"VAT-PRC\"
-      :return/period         {…}
-      :return/lines          {…  ; per-rate sales + total output/input}
-      :return/output-vat     Money :CNY
-      :return/output-by-rate {0.13 Money 0.09 Money 0.06 Money 0.00 Money}
-      :return/input-vat      Money :CNY
-      :return/net-vat        Money :CNY  ; positive = pay; negative = credit-carryforward
-      :return/umct-payable   Money :CNY
-      :return/edu-surcharge-payable       Money :CNY
-      :return/local-edu-surcharge-payable Money :CNY
-      :return/total-surcharges            Money :CNY
-      :return/outcome        :payment | :credit-carryforward | :nil-return}"
+     {:kontor.return/form           \"VAT-PRC\"
+      :kontor.return/period         {…}
+      :kontor.return/lines          {…  ; per-rate sales + total output/input}
+      :kontor.return/output-vat     Money :CNY
+      :kontor.return/output-by-rate {0.13 Money 0.09 Money 0.06 Money 0.00 Money}
+      :kontor.return/input-vat      Money :CNY
+      :kontor.return/net-vat        Money :CNY  ; positive = pay; negative = credit-carryforward
+      :kontor.return/umct-payable   Money :CNY
+      :kontor.return/edu-surcharge-payable       Money :CNY
+      :kontor.return/local-edu-surcharge-payable Money :CNY
+      :kontor.return/total-surcharges            Money :CNY
+      :kontor.return/outcome        :payment | :credit-carryforward | :nil-return}"
   [conn {:keys [location-tier compute-surcharges?]
          :or {location-tier :other compute-surcharges? true}
          :as opts}]
@@ -244,24 +244,24 @@
         total-surcharges  (when compute-surcharges?
                             (-> (m-zero) (money/add umct) (money/add edu) (money/add local-edu)))]
     (cond->
-     {:return/form           "VAT-PRC"
-      :return/period         period
-      :return/lines          (into {} (map (fn [[k v]] [(keyword k) (m-cents v)]) vals*))
-      :return/output-vat     (m-cents output-total)
-      :return/output-by-rate {0.13M (m-cents out-13)
+     {:kontor.return/form           "VAT-PRC"
+      :kontor.return/period         period
+      :kontor.return/lines          (into {} (map (fn [[k v]] [(keyword k) (m-cents v)]) vals*))
+      :kontor.return/output-vat     (m-cents output-total)
+      :kontor.return/output-by-rate {0.13M (m-cents out-13)
                               0.09M (m-cents out-9)
                               0.06M (m-cents out-6)
                               0M    zero}
-      :return/computed-output (m-cents computed-output)
-      :return/input-vat      (m-cents input)
-      :return/net-vat        (m-cents net)
-      :return/outcome (cond
+      :kontor.return/computed-output (m-cents computed-output)
+      :kontor.return/input-vat      (m-cents input)
+      :kontor.return/net-vat        (m-cents net)
+      :kontor.return/outcome (cond
                         (neg? sign) :credit-carryforward
                         (pos? sign) :payment
                         :else :nil-return)}
       compute-surcharges?
-      (assoc :return/location-tier              location-tier
-             :return/umct-payable               (m-cents umct)
-             :return/edu-surcharge-payable      (m-cents edu)
-             :return/local-edu-surcharge-payable (m-cents local-edu)
-             :return/total-surcharges           (m-cents total-surcharges)))))
+      (assoc :kontor.return/location-tier              location-tier
+             :kontor.return/umct-payable               (m-cents umct)
+             :kontor.return/edu-surcharge-payable      (m-cents edu)
+             :kontor.return/local-edu-surcharge-payable (m-cents local-edu)
+             :kontor.return/total-surcharges           (m-cents total-surcharges)))))

@@ -24,9 +24,9 @@
 
    PT varies per state. Routing:
      1. Each posting carries an `:analytic-distribution` on the
-        `:analytic-plan/code \"in-state\"` plan (consumer-installed
+        `:kontor.analytic-plan/code \"in-state\"` plan (consumer-installed
         per `kontor.payroll-in.core/install!`), with the state code
-        as `:analytic-account/code`.
+        as `:kontor.analytic-account/code`.
      2. The PT-payable account itself is one liability; per-state
         breakdown lives on the analytic-distribution axis (mirrors
         US ADP's per-state W-2 box 15 routing per ADR-077 note 83
@@ -109,17 +109,17 @@
     (cond
       (and (map? employee-allocations) (seq employee-allocations))
       (mapv (fn [[s pct]]
-              {:analytic-distribution/plan [:analytic-plan/code "in-state"]
-               :analytic-distribution/account
-               [:analytic-account/path (str "in-state:" (name s))]
-               :analytic-distribution/percent (bigdec pct)})
+              {:kontor.analytic-distribution/plan [:kontor.analytic-plan/code "in-state"]
+               :kontor.analytic-distribution/account
+               [:kontor.analytic-account/path (str "in-state:" (name s))]
+               :kontor.analytic-distribution/percent (bigdec pct)})
             employee-allocations)
 
       primary
-      [{:analytic-distribution/plan [:analytic-plan/code "in-state"]
-        :analytic-distribution/account
-        [:analytic-account/path (str "in-state:" primary)]
-        :analytic-distribution/percent 100M}]
+      [{:kontor.analytic-distribution/plan [:kontor.analytic-plan/code "in-state"]
+        :kontor.analytic-distribution/account
+        [:kontor.analytic-account/path (str "in-state:" primary)]
+        :kontor.analytic-distribution/percent 100M}]
 
       :else nil)))
 

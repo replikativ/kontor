@@ -7,11 +7,11 @@
    not in the kernel.
 
    Per ADR-018 the resulting TFD (TimbreFiscalDigital) UUID returned
-   by the PAC lands in `:attestation/token` under format `:mx/cfdi-uuid`.
+   by the PAC lands in `:kontor.attestation/token` under format `:mx/cfdi-uuid`.
 
    Per **ADR-025** the CFDI envelope is one root + N stacked
    complementos. The emitter assembles the `<cfdi:Complemento>` block
-   from `:kontor.transaction/complementos` sorted by `:complemento/sequence`,
+   from `:kontor.transaction/complementos` sorted by `:kontor.complemento/sequence`,
    splicing each payload XML into the parent in order.
 
    ## Known emit gaps (deferred)
@@ -193,7 +193,7 @@
 
    `:cfdi/complementos` is the ordered list of complemento XML payloads
    to splice into `<cfdi:Complemento>` per ADR-025 — typically built
-   from `:kontor.transaction/complementos` ordered by `:complemento/sequence`."
+   from `:kontor.transaction/complementos` ordered by `:kontor.complemento/sequence`."
   [{:keys [cfdi/version cfdi/serie cfdi/folio cfdi/fecha
            cfdi/forma-pago cfdi/no-certificado cfdi/certificado
            cfdi/subtotal cfdi/descuento cfdi/moneda cfdi/tipo-cambio
@@ -246,7 +246,7 @@
 
 (defn assemble-from-transaction
   "Build the CFDI envelope from a transaction's `:kontor.transaction/complementos`,
-   ordered by `:complemento/sequence`. Returns a CFDI XML string.
+   ordered by `:kontor.complemento/sequence`. Returns a CFDI XML string.
 
    This is the kernel/ADR-025 integration point: complementos stored
    as data are spliced into the envelope at emit time.
@@ -258,10 +258,10 @@
                            '[:find ?seq ?payload ?active
                              :in $ ?t
                              :where
-                             [?c :complemento/transaction ?t]
-                             [?c :complemento/sequence ?seq]
-                             [?c :complemento/payload ?payload]
-                             [?c :complemento/active ?active]]
+                             [?c :kontor.complemento/transaction ?t]
+                             [?c :kontor.complemento/sequence ?seq]
+                             [?c :kontor.complemento/payload ?payload]
+                             [?c :kontor.complemento/active ?active]]
                            db tx-eid)
                           (filter (fn [[_ _ active]] active))
                           (sort-by first)

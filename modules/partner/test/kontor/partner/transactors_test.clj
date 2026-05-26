@@ -90,9 +90,9 @@
           org (p/org db "O-CREATE-1")]
       (is (= :org      (:kontor.partner/type partner)))
       (is (= "DE123456789" (:kontor.partner/tax-id partner)))
-      (is (= :gmbh     (:org/legal-form org)))
-      (is (= "HRB 12345" (:org/registration-number org)))
-      (is (= 42        (:org/num-employees org))))))
+      (is (= :gmbh     (:kontor.org/legal-form org)))
+      (is (= "HRB 12345" (:kontor.org/registration-number org)))
+      (is (= 42        (:kontor.org/num-employees org))))))
 
 (deftest create-party!-validation
   (testing "Missing required keys throw"
@@ -174,9 +174,9 @@
     (testing "junction row links partner ↔ mech"
       (is (= 1 (count mechs))))
     (testing "typed payload is queryable"
-      (is (= "Hauptstr. 1" (:postal-address/address1 addr)))
-      (is (= "Berlin"      (:postal-address/city addr)))
-      (is (= "10115"       (:postal-address/postal-code addr))))
+      (is (= "Hauptstr. 1" (:kontor.postal-address/address1 addr)))
+      (is (= "Berlin"      (:kontor.postal-address/city addr)))
+      (is (= "10115"       (:kontor.postal-address/postal-code addr))))
     (testing "both purposes resolve to the same mech"
       (is (pos-int? billing))
       (is (= billing (p/contact-mech-by-purpose db "P-POSTAL" :primary-location
@@ -192,13 +192,13 @@
                         :from-date jan-2025})
   (let [db (d/db *conn*)
         cm-eid (d/q '[:find ?cm . :in $ ?c
-                      :where [?cm :contact-mech/code ?c]]
+                      :where [?cm :kontor.contact-mech/code ?c]]
                     db "CM-TEL-1")
         tn (d/q '[:find (pull ?t [*]) . :in $ ?cm
-                  :where [?t :telecom-number/contact-mech ?cm]]
+                  :where [?t :kontor.telecom-number/contact-mech ?cm]]
                 db cm-eid)]
-    (is (= "+49"      (:telecom-number/country-code tn)))
-    (is (= "12345678" (:telecom-number/contact-number tn)))))
+    (is (= "+49"      (:kontor.telecom-number/country-code tn)))
+    (is (= "12345678" (:kontor.telecom-number/contact-number tn)))))
 
 (deftest add-contact-mech!-email
   (p/create-party! *conn* {:external-id "P-EML" :type :person :name "X"})
@@ -221,8 +221,8 @@
   (let [db (d/db *conn*)
         info (d/q '[:find ?s . :in $ ?c
                     :where
-                    [?cm :contact-mech/code ?c]
-                    [?cm :contact-mech/info-string ?s]]
+                    [?cm :kontor.contact-mech/code ?c]
+                    [?cm :kontor.contact-mech/info-string ?s]]
                   db "CM-WEB-1")]
     (is (= "https://example.com" info))))
 
@@ -270,7 +270,7 @@
   (testing "contact-mech entity itself is preserved (ADR-007 no silent retract)"
     (let [db (d/db *conn*)]
       (is (some? (d/q '[:find ?cm . :in $ ?c
-                        :where [?cm :contact-mech/code ?c]]
+                        :where [?cm :kontor.contact-mech/code ?c]]
                       db "CM-REM-1"))))))
 
 (deftest remove-contact-mech!-no-active-throws
@@ -309,8 +309,8 @@
                                       {:as-of jul-2024})]
     (testing "relationship is discoverable by both sides"
       (is (= 1 (count rels)))
-      (is (= "Senior Engineer" (-> rels first :partner-relationship/position-title)))
-      (is (= :active (-> rels first :partner-relationship/status))))
+      (is (= "Senior Engineer" (-> rels first :kontor.partner-relationship/position-title)))
+      (is (= :active (-> rels first :kontor.partner-relationship/status))))
     (testing "current-employer / current-employees traverse correctly"
       (is (= (p/by-external-id db "O-EMPLOYER")
              (p/current-employer db "P-EMPLOYEE" {:as-of jul-2024})))
@@ -351,8 +351,8 @@
     (let [db' (d/db *conn*)
           pulled (d/pull db' '[*] rel-eid)]
       (testing ":thru-date + :status are stamped"
-        (is (= jul-2025 (:partner-relationship/thru-date pulled)))
-        (is (= :inactive (:partner-relationship/status pulled))))
+        (is (= jul-2025 (:kontor.partner-relationship/thru-date pulled)))
+        (is (= :inactive (:kontor.partner-relationship/status pulled))))
       (testing "after :thru-date no current-employer is reported"
         (is (nil? (p/current-employer db' "P-END" {:as-of jan-2026})))))))
 

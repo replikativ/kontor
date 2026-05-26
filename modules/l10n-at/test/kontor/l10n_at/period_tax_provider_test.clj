@@ -6,7 +6,7 @@
 
 (deftest kommunalsteuer-is-a-flat-3pct-levy
   (let [p (at/at-kommunalsteuer-provider {:wage-codes ["6000"]})]
-    (is (= :flat (:schedule/type (:schedule p))))
+    (is (= :flat (:kontor.schedule/type (:schedule p))))
     (is (= 0.03M (:rate (:schedule p))))
     (is (= :EUR (:commodity p)))
     (is (= :at-municipality (:authority p)))

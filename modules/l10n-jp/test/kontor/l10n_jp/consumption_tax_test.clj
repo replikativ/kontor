@@ -92,19 +92,19 @@
     (let [conn (bootstrap)
           _ (post-standard-sale! conn "INV-1" jan-15 100000)
           r (jct/compute-return conn {:from jan-1 :to feb-1})]
-      (is (money/equiv? (jpy "100000") (:sales-10 (:return/lines r))))
-      (is (money/equiv? (jpy "10000")  (:jct-out-10 (:return/lines r))))
-      (is (money/equiv? (jpy "10000")  (:return/jct-collected r)))
-      (is (= :payment (:return/outcome r))))))
+      (is (money/equiv? (jpy "100000") (:sales-10 (:kontor.return/lines r))))
+      (is (money/equiv? (jpy "10000")  (:jct-out-10 (:kontor.return/lines r))))
+      (is (money/equiv? (jpy "10000")  (:kontor.return/jct-collected r)))
+      (is (= :payment (:kontor.return/outcome r))))))
 
 (deftest single-8pct-sale
   (testing "JPY 1,000 food sale at 8% → sales-8=1,000, jct-out-8=80"
     (let [conn (bootstrap)
           _ (post-reduced-sale! conn "INV-2" jan-15 1000)
           r (jct/compute-return conn {:from jan-1 :to feb-1})]
-      (is (money/equiv? (jpy "1000") (:sales-8 (:return/lines r))))
-      (is (money/equiv? (jpy "80")   (:jct-out-8 (:return/lines r))))
-      (is (money/equiv? (jpy "80")   (:return/jct-collected r))))))
+      (is (money/equiv? (jpy "1000") (:sales-8 (:kontor.return/lines r))))
+      (is (money/equiv? (jpy "80")   (:jct-out-8 (:kontor.return/lines r))))
+      (is (money/equiv? (jpy "80")   (:kontor.return/jct-collected r))))))
 
 (deftest mixed-rates
   (testing "Mixed-rate quarter: 100k at 10% + 50k at 8%
@@ -113,16 +113,16 @@
           _ (post-standard-sale! conn "INV-1" jan-15 100000)
           _ (post-reduced-sale!  conn "INV-2" jan-15 50000)
           r (jct/compute-return conn {:from jan-1 :to feb-1})]
-      (is (money/equiv? (jpy "100000") (:sales-10 (:return/lines r))))
-      (is (money/equiv? (jpy "50000")  (:sales-8 (:return/lines r))))
-      (is (money/equiv? (jpy "14000")  (:return/jct-collected r))))))
+      (is (money/equiv? (jpy "100000") (:sales-10 (:kontor.return/lines r))))
+      (is (money/equiv? (jpy "50000")  (:sales-8 (:kontor.return/lines r))))
+      (is (money/equiv? (jpy "14000")  (:kontor.return/jct-collected r))))))
 
 (deftest nil-return
   (testing "No postings → nil return"
     (let [conn (bootstrap)
           r (jct/compute-return conn {:from jan-1 :to feb-1})]
-      (is (= :nil-return (:return/outcome r)))
-      (is (money/equiv? (jpy "0") (:return/jct-net r))))))
+      (is (= :nil-return (:kontor.return/outcome r)))
+      (is (money/equiv? (jpy "0") (:kontor.return/jct-net r))))))
 
 (deftest annual-period-bounds
   (testing ":year 2026 picks Jan 1 2026 → Jan 1 2027"
@@ -131,4 +131,4 @@
           ;; Out-of-range sale (Feb 2027) should NOT count
           _ (post-standard-sale! conn "INV-2" #inst "2027-02-01" 999999)
           r (jct/compute-return conn {:year 2026})]
-      (is (money/equiv? (jpy "100000") (:sales-10 (:return/lines r)))))))
+      (is (money/equiv? (jpy "100000") (:sales-10 (:kontor.return/lines r)))))))

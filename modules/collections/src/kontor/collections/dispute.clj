@@ -5,7 +5,7 @@
    Auto-suppresses dunning on the disputed invoice via a predicate
    query consulted by `kontor.collections.dunning`.
 
-   `:dispute/scope` is optional — when set to an `:invoice-line` ref,
+   `:kontor.dispute/scope` is optional — when set to an `:invoice-line` ref,
    the dispute is line-level (the market-pain #18 fix vs SAP/NetSuite
    which only model invoice-level)."
   (:require [datahike.api :as d]
@@ -21,7 +21,7 @@
   [db external-id]
   (d/q '[:find ?e .
          :in $ ?xid
-         :where [?e :dispute/external-id ?xid]]
+         :where [?e :kontor.dispute/external-id ?xid]]
        db external-id))
 
 (defn resolve-dispute
@@ -35,13 +35,13 @@
   [db spec]
   (when-let [eid (resolve-dispute db spec)]
     (d/pull db
-            '[* {:dispute/invoice [:kontor.invoice/external-id]
-                 :dispute/scope   [:db/id
+            '[* {:kontor.dispute/invoice [:kontor.invoice/external-id]
+                 :kontor.dispute/scope   [:db/id
                                    :kontor.invoice-line/sequence
                                    :kontor.invoice-line/name]
-                 :dispute/opened-by-uid [:kontor.partner/external-id]
-                 :dispute/resolved-by-uid [:kontor.partner/external-id]
-                 :dispute/supporting-doc [:audit-doc/code]}]
+                 :kontor.dispute/opened-by-uid [:kontor.partner/external-id]
+                 :kontor.dispute/resolved-by-uid [:kontor.partner/external-id]
+                 :kontor.dispute/supporting-doc [:kontor.audit-doc/code]}]
             eid)))
 
 ;; ============================================================================
@@ -56,8 +56,8 @@
   (->> (d/q '[:find [?d ...]
               :in $ ?inv
               :where
-              [?d :dispute/invoice ?inv]
-              [?d :dispute/state ?st]
+              [?d :kontor.dispute/invoice ?inv]
+              [?d :kontor.dispute/state ?st]
               [(contains? #{:open :under-review :escalated} ?st)]]
             db invoice-eid)
        (map #(pull-dispute db %))
@@ -72,7 +72,7 @@
    :reason-code over a window."
   [db]
   (->> (d/q '[:find ?reason (count ?d)
-              :where [?d :dispute/reason-code ?reason]]
+              :where [?d :kontor.dispute/reason-code ?reason]]
             db)
        (sort-by (comp - second))
        vec))
@@ -124,21 +124,21 @@
   (when-not opened-by-uid   (throw (ex-info ":opened-by-uid required" {})))
   (let [opened-at (or opened-at (java.util.Date.))
         row (cond-> {:db/id tempid
-                     :dispute/external-id external-id
-                     :dispute/invoice invoice
-                     :dispute/disputed-amount disputed-amount
-                     :dispute/reason-code reason-code
-                     :dispute/opened-by-uid opened-by-uid
-                     :dispute/state :open}
-              scope          (assoc :dispute/scope scope)
-              sla-deadline   (assoc :dispute/sla-deadline sla-deadline)
-              notes          (assoc :dispute/notes notes)
-              supporting-doc (assoc :dispute/supporting-doc supporting-doc))
+                     :kontor.dispute/external-id external-id
+                     :kontor.dispute/invoice invoice
+                     :kontor.dispute/disputed-amount disputed-amount
+                     :kontor.dispute/reason-code reason-code
+                     :kontor.dispute/opened-by-uid opened-by-uid
+                     :kontor.dispute/state :open}
+              scope          (assoc :kontor.dispute/scope scope)
+              sla-deadline   (assoc :kontor.dispute/sla-deadline sla-deadline)
+              notes          (assoc :kontor.dispute/notes notes)
+              supporting-doc (assoc :kontor.dispute/supporting-doc supporting-doc))
         status-tx (sm/record-status-change-tx-data
                    db
                    {:entity tempid
                     :entity-type :dispute
-                    :facet :dispute/state
+                    :facet :kontor.dispute/state
                     :from :nil
                     :to :open
                     :changed-at opened-at
@@ -173,7 +173,7 @@
      db
      (cond-> {:entity eid
               :entity-type :dispute
-              :facet :dispute/state
+              :facet :kontor.dispute/state
               :to to
               :changed-at now
               :changed-by-uid changed-by-uid}
@@ -183,8 +183,8 @@
 
 (defn resolve-dispute!
   "Resolve a dispute. Atomically:
-     1. Sets :dispute/state → :resolved via the status machine.
-     2. Writes :dispute/resolution, :resolved-by-uid.
+     1. Sets :kontor.dispute/state → :resolved via the status machine.
+     2. Writes :kontor.dispute/resolution, :resolved-by-uid.
 
    :resolved-at is no longer denormalized — read it from
    `:status-history` (the row that transitioned to :resolved) or
@@ -215,7 +215,7 @@
                    db
                    (cond-> {:entity eid
                             :entity-type :dispute
-                            :facet :dispute/state
+                            :facet :kontor.dispute/state
                             :to :resolved
                             :changed-at resolved-at
                             :changed-by-uid resolved-by-uid
@@ -223,8 +223,8 @@
                      reason-note    (assoc :reason-note reason-note)
                      supporting-doc (assoc :supporting-doc supporting-doc)))
         attrs-update (cond-> {:db/id eid
-                              :dispute/resolution resolution
-                              :dispute/resolved-by-uid resolved-by-uid}
-                       supporting-doc (assoc :dispute/supporting-doc
+                              :kontor.dispute/resolution resolution
+                              :kontor.dispute/resolved-by-uid resolved-by-uid}
+                       supporting-doc (assoc :kontor.dispute/supporting-doc
                                              supporting-doc))]
     (into [attrs-update] status-tx)))

@@ -40,7 +40,7 @@
 
    ## Out of scope (v1)
 
-   - **INPC adjustment** — `:disposal/basis-amount` is consumer-supplied
+   - **INPC adjustment** — `:kontor.disposal/basis-amount` is consumer-supplied
      already-indexed per note 132 §4 Gap A. The monthly INPC series
      would be a 30-year parameter timeline that does not belong in a
      v1 snapshot.

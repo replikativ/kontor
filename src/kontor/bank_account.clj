@@ -12,11 +12,11 @@
 ;; ============================================================================
 
 (defn by-code
-  "Resolve a :bank-account eid by :bank-account/code."
+  "Resolve a :bank-account eid by :kontor.bank-account/code."
   [db code]
   (d/q '[:find ?e .
          :in $ ?code
-         :where [?e :bank-account/code ?code]]
+         :where [?e :kontor.bank-account/code ?code]]
        db code))
 
 (defn resolve-bank-account

@@ -78,18 +78,18 @@
                                    freq-window-days 7
                                    freq-max-events 2}}]
   (d/transact *conn*
-              [{:dunning-policy/code code
-                :dunning-policy/name (str "Policy " code)
-                :dunning-policy/entity (entity "ACME-DE")
-                :dunning-policy/applies-to-segment :default
-                :dunning-policy/levels kdunning/default-policy-levels-edn
-                :dunning-policy/frequency-cap-window-days freq-window-days
-                :dunning-policy/frequency-cap-max-events freq-max-events
-                :dunning-policy/pause-on-dispute? pause-on-dispute?
-                :dunning-policy/pause-on-open-promise? pause-on-open-promise?
-                :dunning-policy/pause-on-unapplied-cash? pause-on-unapplied-cash?
-                :dunning-policy/active true}])
-  (d/q '[:find ?p . :in $ ?c :where [?p :dunning-policy/code ?c]]
+              [{:kontor.dunning-policy/code code
+                :kontor.dunning-policy/name (str "Policy " code)
+                :kontor.dunning-policy/entity (entity "ACME-DE")
+                :kontor.dunning-policy/applies-to-segment :default
+                :kontor.dunning-policy/levels kdunning/default-policy-levels-edn
+                :kontor.dunning-policy/frequency-cap-window-days freq-window-days
+                :kontor.dunning-policy/frequency-cap-max-events freq-max-events
+                :kontor.dunning-policy/pause-on-dispute? pause-on-dispute?
+                :kontor.dunning-policy/pause-on-open-promise? pause-on-open-promise?
+                :kontor.dunning-policy/pause-on-unapplied-cash? pause-on-unapplied-cash?
+                :kontor.dunning-policy/active true}])
+  (d/q '[:find ?p . :in $ ?c :where [?p :kontor.dunning-policy/code ?c]]
        (d/db *conn*) code))
 
 (defn- provider []
@@ -108,7 +108,7 @@
 (deftest resolve-policy-prefers-entity-segment-specific
   (seed-policy! "DEFAULT")
   (let [eid (d/q '[:find ?p . :in $ ?c
-                   :where [?p :dunning-policy/code ?c]]
+                   :where [?p :kontor.dunning-policy/code ?c]]
                  (d/db *conn*) "DEFAULT")
         resolved (kdunning/resolve-policy (d/db *conn*)
                                           {:entity (entity "ACME-DE")
@@ -132,18 +132,18 @@
         case-eid (kcase/by-code (d/db *conn*) "CASE-FC")]
     ;; Seed 2 already-sent events within the window
     (d/transact *conn*
-                [{:dunning-event/case case-eid
-                  :dunning-event/level 1
-                  :dunning-event/scheduled-at (java.util.Date.)
-                  :dunning-event/sent-at (java.util.Date.)
-                  :dunning-event/channel :email
-                  :dunning-event/locale "en-US"}
-                 {:dunning-event/case case-eid
-                  :dunning-event/level 2
-                  :dunning-event/scheduled-at (java.util.Date.)
-                  :dunning-event/sent-at (java.util.Date.)
-                  :dunning-event/channel :email
-                  :dunning-event/locale "en-US"}])
+                [{:kontor.dunning-event/case case-eid
+                  :kontor.dunning-event/level 1
+                  :kontor.dunning-event/scheduled-at (java.util.Date.)
+                  :kontor.dunning-event/sent-at (java.util.Date.)
+                  :kontor.dunning-event/channel :email
+                  :kontor.dunning-event/locale "en-US"}
+                 {:kontor.dunning-event/case case-eid
+                  :kontor.dunning-event/level 2
+                  :kontor.dunning-event/scheduled-at (java.util.Date.)
+                  :kontor.dunning-event/sent-at (java.util.Date.)
+                  :kontor.dunning-event/channel :email
+                  :kontor.dunning-event/locale "en-US"}])
     (testing "2 events in window AT the cap"
       (is (kdunning/frequency-cap-violated?
            (d/db *conn*) case-eid policy)))))
@@ -280,19 +280,19 @@
         (let [ev-count (d/q '[:find (count ?e) .
                               :in $ ?case
                               :where
-                              [?e :dunning-event/case ?case]
-                              [?e :dunning-event/sent-at _]]
+                              [?e :kontor.dunning-event/case ?case]
+                              [?e :kontor.dunning-event/sent-at _]]
                             db case-eid)]
           (is (= 1 ev-count))))
       (testing "audit-doc with :dunning-letter type created"
         (is (= 1 (d/q '[:find (count ?d) .
-                        :where [?d :audit-doc/type :dunning-letter]]
+                        :where [?d :kontor.audit-doc/type :dunning-letter]]
                       db))))
       (testing "side-effect-intent created in :pending status"
         (is (some? (d/q '[:find ?i .
                           :where
-                          [?i :side-effect-intent/type :send-email]
-                          [?i :side-effect-intent/status :pending]]
+                          [?i :kontor.side-effect-intent/type :send-email]
+                          [?i :kontor.side-effect-intent/status :pending]]
                         db)))))))
 
 (deftest emit-skipped-row-records-skip-reason
@@ -326,14 +326,14 @@
       (let [db (d/db *conn*)
             ev (-> (d/q '[:find [?e ...]
                           :in $ ?case
-                          :where [?e :dunning-event/case ?case]]
+                          :where [?e :kontor.dunning-event/case ?case]]
                         db case-eid)
                    first
                    (->> (d/pull db '[*])))]
         (testing "event row has :skipped? + :skip-reason"
-          (is (true? (:dunning-event/skipped? ev)))
-          (is (= :open-dispute (:dunning-event/skip-reason ev))))
+          (is (true? (:kontor.dunning-event/skipped? ev)))
+          (is (= :open-dispute (:kontor.dunning-event/skip-reason ev))))
         (testing "no audit-doc nor side-effect-intent for skipped"
           (is (nil? (d/q '[:find (count ?d) .
-                           :where [?d :audit-doc/type :dunning-letter]]
+                           :where [?d :kontor.audit-doc/type :dunning-letter]]
                          db))))))))

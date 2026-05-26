@@ -9,8 +9,8 @@
      2. Validates `check-facts` per employee.
      3. Builds a balanced transaction with per-province analytic
         distributions.
-     4. Emits an IIT monthly filing audit-doc with `:audit-doc/category
-        :payroll-filing` + `:audit-doc/language :zh-cn`.
+     4. Emits an IIT monthly filing audit-doc with `:kontor.audit-doc/category
+        :payroll-filing` + `:kontor.audit-doc/language :zh-cn`.
      5. Records the `:payroll-run` row with control totals.
 
    This test exercises the FULL kernel gate stack via
@@ -18,7 +18,7 @@
    `kontor.validation/transact-with-validation`.
 
    Per note 87 §2.2: multi-province wage allocation in the GL uses
-   `:kontor.posting/analytic-distributions` with `:analytic-plan/code
+   `:kontor.posting/analytic-distributions` with `:kontor.analytic-plan/code
    \"cn-province\"`. This is the substrate's structural answer to
    multi-city CN workforces."
   (:require [clojure.string :as str]
@@ -215,31 +215,31 @@
                       :commodity cny})
         db' (:db-after report)
         run-eid (d/q '[:find ?r . :in $ ?c
-                       :where [?r :payroll-run/code ?c]]
+                       :where [?r :kontor.payroll-run/code ?c]]
                      db' "RUN-CN-2026-04-001")
-        run (d/pull db' '[* {:payroll-run/payroll-transaction
+        run (d/pull db' '[* {:kontor.payroll-run/payroll-transaction
                              [:kontor.transaction/external-id
                               {:kontor.posting/_transaction
                                [:kontor.posting/amount :kontor.posting/account
                                 {:kontor.posting/analytic-distributions
-                                 [:analytic-distribution/percent
-                                  {:analytic-distribution/account
-                                   [:analytic-account/code]}]}]}]}
-                          {:payroll-run/emit-docs
-                           [:audit-doc/code :audit-doc/category
-                            :audit-doc/language :audit-doc/inline-payload]}]
+                                 [:kontor.analytic-distribution/percent
+                                  {:kontor.analytic-distribution/account
+                                   [:kontor.analytic-account/code]}]}]}]}
+                          {:kontor.payroll-run/emit-docs
+                           [:kontor.audit-doc/code :kontor.audit-doc/category
+                            :kontor.audit-doc/language :kontor.audit-doc/inline-payload]}]
                     run-eid)
-        postings (-> run :payroll-run/payroll-transaction
+        postings (-> run :kontor.payroll-run/payroll-transaction
                      :kontor.posting/_transaction)
-        emit-docs (:payroll-run/emit-docs run)]
+        emit-docs (:kontor.payroll-run/emit-docs run)]
     (testing "the payroll-run row is created"
       (is (some? run-eid))
-      (is (= :mock-cn (:payroll-run/provider-id run))))
+      (is (= :mock-cn (:kontor.payroll-run/provider-id run))))
     (testing "control totals reflect all three employees"
       ;; Gross 18000 × 3 = 54000
-      (is (= 54000M (:payroll-run/control-total-gross run)))
+      (is (= 54000M (:kontor.payroll-run/control-total-gross run)))
       ;; Net 12620 × 3 = 37860
-      (is (= 37860M (:payroll-run/control-total-net run))))
+      (is (= 37860M (:kontor.payroll-run/control-total-net run))))
     (testing "the linked :transaction balances per-(ledger, commodity)"
       (let [sum (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                           (.add a ^BigDecimal amount))
@@ -251,15 +251,15 @@
         (let [province-codes
               (->> with-dist
                    (mapcat :kontor.posting/analytic-distributions)
-                   (map :analytic-distribution/account)
-                   (map :analytic-account/code)
+                   (map :kontor.analytic-distribution/account)
+                   (map :kontor.analytic-account/code)
                    distinct
                    set)]
           (is (= #{"BJ" "SH" "GD"} province-codes)))))
     (testing "the IIT emit-doc is linked to the run"
       (is (= 1 (count emit-docs)))
       (let [doc (first emit-docs)]
-        (is (= "CN-IIT-2026-04-ACME-CN" (:audit-doc/code doc)))
-        (is (= :payroll-filing (:audit-doc/category doc)))
-        (is (= :zh-cn (:audit-doc/language doc)))
-        (is (str/includes? (:audit-doc/inline-payload doc) "员工编号 / employee-id"))))))
+        (is (= "CN-IIT-2026-04-ACME-CN" (:kontor.audit-doc/code doc)))
+        (is (= :payroll-filing (:kontor.audit-doc/category doc)))
+        (is (= :zh-cn (:kontor.audit-doc/language doc)))
+        (is (str/includes? (:kontor.audit-doc/inline-payload doc) "员工编号 / employee-id"))))))

@@ -217,7 +217,7 @@
     :kontor.provision/consequence     (pr-str {:op       :schedule-override
                                         :code     :fr-is-pme
                                         :label    "FR IS PME — 15 % puis 25 %"
-                                        :schedule {:schedule/type :progressive-bracket
+                                        :schedule {:kontor.schedule/type :progressive-bracket
                                                    :brackets-from :parameter
                                                    :parameter     "FR.IS.pme-brackets"}})}
 

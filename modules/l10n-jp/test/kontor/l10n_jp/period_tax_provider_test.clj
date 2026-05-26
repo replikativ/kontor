@@ -29,7 +29,7 @@
 (deftest income-tax-schedule-matches-the-NTA-quick-table
   (let [s (:schedule (jp/jp-income-tax-provider {}))]
     (testing "the schedule shape"
-      (is (= :progressive-bracket (:schedule/type s)))
+      (is (= :progressive-bracket (:kontor.schedule/type s)))
       (is (= 7 (count (:brackets s))))
       (is (nil? (:upper (last (:brackets s)))) "open top band"))
     (testing "bracket-boundary values vs the published quick table"

@@ -265,7 +265,7 @@
 
    The shape kontor emits is sufficient for:
      - audit-doc round-trip (NEODES lines persisted in
-       `:audit-doc/description` as a single string),
+       `:kontor.audit-doc/description` as a single string),
      - audit-trail reconstruction (which (employee × pay-element ×
        montant) flowed into which DSN month),
      - regulator-spec compliance for the structural blocks we DO

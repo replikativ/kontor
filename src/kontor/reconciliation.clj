@@ -29,8 +29,8 @@
      3. `commit-match!` — apply a match decision atomically:
           - construct the bank-side transaction (bank ↔ AR/AP/contra)
           - link `:kontor.transaction/settles` to the settled invoices
-          - update `:bank-line/status` to `:reconciled`
-          - set `:bank-line/posting`
+          - update `:kontor.bank-line/status` to `:reconciled`
+          - set `:kontor.bank-line/posting`
 
      4. `unmatched-queue` — return all `:bank-line` entities still
         in `:unmatched` status, for a UI / batch tool to walk.
@@ -83,20 +83,20 @@
   (let [{:keys [bank date value-date amount counterparty
                 counterparty-iban description transaction-type
                 category]} candidate]
-    (cond-> {:bank-line/external-id    (bank-line-external-id candidate)
-             :bank-line/source-account source-account-eid
-             :bank-line/commodity      commodity-eid
-             :bank-line/amount         (bigdec amount)
-             :bank-line/status         :unmatched
-             :bank-line/raw-row        (raw-row-text candidate)}
-      bank             (assoc :bank-line/bank bank)
-      date             (assoc :bank-line/date date)
-      value-date       (assoc :bank-line/value-date value-date)
-      counterparty     (assoc :bank-line/counterparty counterparty)
-      counterparty-iban (assoc :bank-line/counterparty-iban counterparty-iban)
-      description      (assoc :bank-line/description description)
-      transaction-type (assoc :bank-line/transaction-type transaction-type)
-      category         (assoc :bank-line/category category))))
+    (cond-> {:kontor.bank-line/external-id    (bank-line-external-id candidate)
+             :kontor.bank-line/source-account source-account-eid
+             :kontor.bank-line/commodity      commodity-eid
+             :kontor.bank-line/amount         (bigdec amount)
+             :kontor.bank-line/status         :unmatched
+             :kontor.bank-line/raw-row        (raw-row-text candidate)}
+      bank             (assoc :kontor.bank-line/bank bank)
+      date             (assoc :kontor.bank-line/date date)
+      value-date       (assoc :kontor.bank-line/value-date value-date)
+      counterparty     (assoc :kontor.bank-line/counterparty counterparty)
+      counterparty-iban (assoc :kontor.bank-line/counterparty-iban counterparty-iban)
+      description      (assoc :kontor.bank-line/description description)
+      transaction-type (assoc :kontor.bank-line/transaction-type transaction-type)
+      category         (assoc :kontor.bank-line/category category))))
 
 (defn ingest-statement-tx-data
   "Pure tx-data builder for `ingest-statement!` (ADR-068)."
@@ -355,13 +355,13 @@
                           account. Optional."
   [db bank-line-eid {:keys [ar-codes ap-codes category-resolver]
                      :or {ar-codes #{"1400"} ap-codes #{"3300"}}}]
-  (let [bl (d/pull db [:bank-line/amount :bank-line/description
-                       :bank-line/counterparty :bank-line/category]
+  (let [bl (d/pull db [:kontor.bank-line/amount :kontor.bank-line/description
+                       :kontor.bank-line/counterparty :kontor.bank-line/category]
                    bank-line-eid)
-        amount (:bank-line/amount bl)
-        desc (:bank-line/description bl)
-        cp (:bank-line/counterparty bl)
-        cat (:bank-line/category bl)
+        amount (:kontor.bank-line/amount bl)
+        desc (:kontor.bank-line/description bl)
+        cp (:kontor.bank-line/counterparty bl)
+        cat (:kontor.bank-line/category bl)
         inflow? (and amount (pos? (.signum ^java.math.BigDecimal amount)))
         opens (if inflow?
                 (open-receivables-by-tx db ar-codes)
@@ -458,7 +458,7 @@
        (bank ↔ AR/AP/contra)
      - link via :kontor.transaction/settles when match is :settle
      - update bank-line/status to :reconciled and link
-       :bank-line/posting
+       :kontor.bank-line/posting
 
    `match` is one entry from `suggest-match`'s result, OR a hand-
    crafted equivalent. `journal-eid` is the journal to file the
@@ -482,21 +482,21 @@
    the bank-side posting — compose into one tx-data via tempid
    threading: the payment uses `:tx-tempid \"pay-tx\"`, the bank-
    side posting is `\"pay-tx-p0\"` (first posting in the input
-   vec), and the bank-line's `:bank-line/posting` ref carries the
+   vec), and the bank-line's `:kontor.bank-line/posting` ref carries the
    string `\"pay-tx-p0\"` so datahike resolves it consistently in
    the one commit."
   [db bank-line-eid match journal-eid
    {:keys [ar-codes ap-codes external-id-prefix]
     :or {ar-codes #{"1400"} ap-codes #{"3300"}
          external-id-prefix "PAY-"}}]
-  (let [bl (d/pull db [:bank-line/external-id :bank-line/amount
-                       :bank-line/source-account :bank-line/commodity
-                       :bank-line/date :bank-line/counterparty]
+  (let [bl (d/pull db [:kontor.bank-line/external-id :kontor.bank-line/amount
+                       :kontor.bank-line/source-account :kontor.bank-line/commodity
+                       :kontor.bank-line/date :kontor.bank-line/counterparty]
                    bank-line-eid)
-        amount (:bank-line/amount bl)
-        bank-acct (:db/id (:bank-line/source-account bl))
-        commodity (:db/id (:bank-line/commodity bl))
-        date (:bank-line/date bl)
+        amount (:kontor.bank-line/amount bl)
+        bank-acct (:db/id (:kontor.bank-line/source-account bl))
+        commodity (:db/id (:kontor.bank-line/commodity bl))
+        date (:kontor.bank-line/date bl)
         inflow? (pos? (.signum ^java.math.BigDecimal amount))
         contra (case (:kind match)
                  :settle    (ar-or-ap-account db (:transactions match)
@@ -505,7 +505,7 @@
         _ (when-not contra
             (throw (ex-info "Cannot resolve contra account for match"
                             {:match match :inflow? inflow?})))
-        pay-ext-id (str external-id-prefix (:bank-line/external-id bl))
+        pay-ext-id (str external-id-prefix (:kontor.bank-line/external-id bl))
         payment-tx
         (posting/build-transaction
          {:tx-tempid "pay-tx"
@@ -514,7 +514,7 @@
                    :kontor.transaction/journal        journal-eid
                    :kontor.transaction/effective-date date
                    :kontor.transaction/narration      (str "Payment via bank: "
-                                                    (:bank-line/counterparty bl))
+                                                    (:kontor.bank-line/counterparty bl))
                    :kontor.transaction/state          :posted
                    :kontor.transaction/posted-at      date}
             (and (= :settle (:kind match))
@@ -532,9 +532,9 @@
             :kontor.posting/posted-at date}]})]
     (conj (vec payment-tx)
           {:db/id bank-line-eid
-           :bank-line/status :reconciled
-           :bank-line/reconciled-at (Date.)
-           :bank-line/posting "pay-tx-p0"})))
+           :kontor.bank-line/status :reconciled
+           :kontor.bank-line/reconciled-at (Date.)
+           :kontor.bank-line/posting "pay-tx-p0"})))
 
 (defn unmatched-queue
   "Return all `:bank-line` entities still in `:unmatched` status,
@@ -542,13 +542,13 @@
    :amount :counterparty :description]`."
   [db]
   (->> (d/q '[:find [?bl ...]
-              :where [?bl :bank-line/status :unmatched]]
+              :where [?bl :kontor.bank-line/status :unmatched]]
             db)
        (mapv (fn [eid]
                (let [bl (d/pull db
-                                [:db/id :bank-line/external-id
-                                 :bank-line/date :bank-line/amount
-                                 :bank-line/counterparty :bank-line/description]
+                                [:db/id :kontor.bank-line/external-id
+                                 :kontor.bank-line/date :kontor.bank-line/amount
+                                 :kontor.bank-line/counterparty :kontor.bank-line/description]
                                 eid)]
                  bl)))
-       (sort-by :bank-line/date #(compare %2 %1))))
+       (sort-by :kontor.bank-line/date #(compare %2 %1))))

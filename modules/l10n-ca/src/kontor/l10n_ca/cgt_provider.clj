@@ -27,10 +27,10 @@
 
    ## CCA recapture
 
-   Depreciable-property disposal splits at `:disposal/depreciation-taken-amount`:
+   Depreciable-property disposal splits at `:kontor.disposal/depreciation-taken-amount`:
 
      recapture = min(proceeds, capital_cost) − NBV
-       where  NBV = :disposal/basis-amount
+       where  NBV = :kontor.disposal/basis-amount
               capital_cost = NBV + depreciation_taken
 
    The recapture slice is ordinary income (NOT capital — `s.13(1)`),
@@ -42,7 +42,7 @@
 
    `s.39(1)(c)` business investment loss; `s.38(c)` 1/2 deductible
    against ANY income (not just capital). When a disposal carries
-   `:disposal/loss-bucket :ca-abil`, the provider folds 1/2 of the
+   `:kontor.disposal/loss-bucket :ca-abil`, the provider folds 1/2 of the
    loss into the PIT/CIT base addition as a NEGATIVE adjustment AND
    reports it on a separate `:line-items` entry — but does NOT include
    it in the 50%-inclusion pool (where it would be wall-quarantined
@@ -51,8 +51,8 @@
 
    ## Principal residence + rollover exclusion
 
-   When a disposal carries `:disposal/residence? true` AND
-   `:disposal/elective-regime` contains `:ca-principal-residence`,
+   When a disposal carries `:kontor.disposal/residence? true` AND
+   `:kontor.disposal/elective-regime` contains `:ca-principal-residence`,
    the full gain is exempt — the disposal contributes 0 to every pool.
    The 1+ formula (s.40(2)(b) `(1 + designated-years) / years-owned`)
    is NOT modelled in v1 — the consumer enforces full vs partial via
@@ -79,7 +79,7 @@
 
    ## Superficial loss
 
-   Trusts a consumer-supplied `:disposal/exemption-claimed
+   Trusts a consumer-supplied `:kontor.disposal/exemption-claimed
    :ca-superficial-loss` flag (note 127 §1.7 +§6 — full detection
    deferred to v2). When the flag is present, the loss is dropped
    from the pool entirely (denied per s.40(2)(g)(i); the basis-bump
@@ -102,7 +102,7 @@
 
 (def asset-classes
   "Documented CA asset-class values the provider dispatches on. The
-   `:disposal/asset-class` attr is OPEN — consumers can supply other
+   `:kontor.disposal/asset-class` attr is OPEN — consumers can supply other
    keywords; the provider falls back to plain 50%-inclusion behaviour
    for unrecognised values. See note 127 §3.1."
   #{:ca-public-shares
@@ -172,7 +172,7 @@
   "True when the disposal carries any of the rollover-style elective
    regimes — the gain is deferred and excluded from the period pool."
   [disposal]
-  (let [regimes (to-set (:disposal/elective-regime disposal))]
+  (let [regimes (to-set (:kontor.disposal/elective-regime disposal))]
     (boolean
      (some regimes
            #{:ca-§85-rollover
@@ -186,8 +186,8 @@
   "True when the disposal is the holder's principal residence AND the
    `:ca-principal-residence` regime is elected. v1 ⇒ full exemption."
   [disposal]
-  (and (true? (:disposal/residence? disposal))
-       (contains? (to-set (:disposal/elective-regime disposal))
+  (and (true? (:kontor.disposal/residence? disposal))
+       (contains? (to-set (:kontor.disposal/elective-regime disposal))
                   :ca-principal-residence)))
 
 (defn- charitable-public-share-zero?
@@ -195,25 +195,25 @@
    under s.38(a.1) — inclusion rate ZERO. The gain is still computed
    (for audit), but 0 × gain = 0 contribution to the taxable pool."
   [disposal]
-  (contains? (to-set (:disposal/exemption-claimed disposal))
+  (contains? (to-set (:kontor.disposal/exemption-claimed disposal))
              :ca-§38a1-listed-donation))
 
 (defn- superficial-loss-flagged?
   "Trust the consumer-supplied flag; drop the loss from the pool."
   [disposal]
-  (contains? (to-set (:disposal/exemption-claimed disposal))
+  (contains? (to-set (:kontor.disposal/exemption-claimed disposal))
              :ca-superficial-loss))
 
 (defn- abil?
   "True when the disposal's loss-bucket is `:ca-abil`. ABIL detours
    OUT of the capital lane into the ordinary lane at 1/2 deductibility."
   [disposal]
-  (= :ca-abil (:disposal/loss-bucket disposal)))
+  (= :ca-abil (:kontor.disposal/loss-bucket disposal)))
 
 (defn- lcge-eligible?
   "True when the disposal claims LCGE on QSBCS or QFP/QFishing."
   [disposal]
-  (let [exempt (to-set (:disposal/exemption-claimed disposal))]
+  (let [exempt (to-set (:kontor.disposal/exemption-claimed disposal))]
     (or (contains? exempt :ca-lcge-qsbcs)
         (contains? exempt :ca-lcge-qfp))))
 
@@ -222,15 +222,15 @@
    asset classes."
   [disposal]
   (contains? #{:ca-depreciable :ca-class-14.1}
-             (:disposal/asset-class disposal)))
+             (:kontor.disposal/asset-class disposal)))
 
 (defn- realized-gain
   "Raw gain (positive) or loss (negative) on a disposal:
    `proceeds − basis − rollover-amount`."
   ^java.math.BigDecimal [disposal]
-  (let [p (bigdec0 (:disposal/proceeds-amount disposal))
-        b (bigdec0 (:disposal/basis-amount disposal))
-        r (bigdec0 (:disposal/rollover-amount disposal))]
+  (let [p (bigdec0 (:kontor.disposal/proceeds-amount disposal))
+        b (bigdec0 (:kontor.disposal/basis-amount disposal))
+        r (bigdec0 (:kontor.disposal/rollover-amount disposal))]
     (- p b r)))
 
 (defn- cca-split
@@ -238,8 +238,8 @@
    capital portion, and terminal loss. Returns
    `{:recapture <bigdec> :capital <bigdec> :terminal-loss <bigdec>}`.
 
-     NBV          = :disposal/basis-amount
-     capital_cost = NBV + :disposal/depreciation-taken-amount
+     NBV          = :kontor.disposal/basis-amount
+     capital_cost = NBV + :kontor.disposal/depreciation-taken-amount
      gain         = proceeds − NBV (basis already = NBV)
      recapture    = min(proceeds, capital_cost) − NBV  (positive only)
      capital      = max(0, proceeds − capital_cost)
@@ -254,9 +254,9 @@
    When `:depreciation-taken-amount` is absent / zero AND there is a
    gain, recapture is 0 and the entire gain stays capital."
   [disposal]
-  (let [proceeds     (bigdec0 (:disposal/proceeds-amount disposal))
-        nbv          (bigdec0 (:disposal/basis-amount disposal))
-        dep-taken    (bigdec0 (:disposal/depreciation-taken-amount disposal))
+  (let [proceeds     (bigdec0 (:kontor.disposal/proceeds-amount disposal))
+        nbv          (bigdec0 (:kontor.disposal/basis-amount disposal))
+        dep-taken    (bigdec0 (:kontor.disposal/depreciation-taken-amount disposal))
         capital-cost (+ nbv dep-taken)
         gain         (realized-gain disposal)]
     (cond
@@ -300,9 +300,9 @@
    depreciable property at a loss — s.20(16)), then leave the rest as
    capital."
   [disposal]
-  (let [external-id (:disposal/external-id disposal)
+  (let [external-id (:kontor.disposal/external-id disposal)
         gain        (realized-gain disposal)
-        base-line   {:disposal/external-id external-id
+        base-line   {:kontor.disposal/external-id external-id
                      :gain                 gain}]
     (cond
       ;; Superficial loss — fully denied; no contribution to any pool.
@@ -373,11 +373,11 @@
                                                 :recapture recapture
                                                 :terminal-loss terminal-loss)]
                                   (pos? recapture)
-                                  (conj {:disposal/external-id external-id
+                                  (conj {:kontor.disposal/external-id external-id
                                          :role :cca-recapture
                                          :amount recapture})
                                   (pos? terminal-loss)
-                                  (conj {:disposal/external-id external-id
+                                  (conj {:kontor.disposal/external-id external-id
                                          :role :terminal-loss
                                          :amount terminal-loss
                                          :note "s.20(16) terminal loss — deducts vs ANY income; depreciable property is NOT a capital loss per s.39(1)(b)(i)"}))

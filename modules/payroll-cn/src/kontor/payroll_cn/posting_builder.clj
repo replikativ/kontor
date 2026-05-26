@@ -27,7 +27,7 @@
    ## Province routing (note 87 §2.2)
 
    Per-province allocation lives on `:kontor.posting/analytic-distributions`
-   via an `:analytic-plan/code \"cn-province\"` (consumer-installed at
+   via an `:kontor.analytic-plan/code \"cn-province\"` (consumer-installed at
    install time, OR auto-installed by `kontor.payroll-cn.core/install!`),
    NOT on `:kontor.posting/entity`. A CN Ltd Co with employees in BJ / SH / SZ
    is ONE legal entity (one CIT filing) — `:kontor.posting/entity` is reserved
@@ -82,7 +82,7 @@
 (defn- province-distribution
   "Build an analytic-distribution map for per-province allocation, or
    nil if the fact lacks a province tag. The consumer is responsible
-   for installing the `:analytic-plan/code \"cn-province\"` plan and
+   for installing the `:kontor.analytic-plan/code \"cn-province\"` plan and
    the per-province `:analytic-account` rows at bootstrap time
    (`kontor.payroll-cn.core/install!` does this idempotently).
 
@@ -94,10 +94,10 @@
                         (str/starts-with? province-code "CN-"))
                  (subs province-code 3)
                  (str province-code))]
-      [{:analytic-distribution/plan [:analytic-plan/code "cn-province"]
-        :analytic-distribution/account
-        [:analytic-account/path (str "cn-province:" code)]
-        :analytic-distribution/percent 100M}])))
+      [{:kontor.analytic-distribution/plan [:kontor.analytic-plan/code "cn-province"]
+        :kontor.analytic-distribution/account
+        [:kontor.analytic-account/path (str "cn-province:" code)]
+        :kontor.analytic-distribution/percent 100M}])))
 
 ;; ============================================================================
 ;; Per-fact posting legs

@@ -183,27 +183,27 @@
                       :ledger gaap})
         db' (:db-after report)
         run-eid (d/q '[:find ?r . :in $ ?c
-                       :where [?r :payroll-run/code ?c]]
+                       :where [?r :kontor.payroll-run/code ?c]]
                      db' "RUN-US-2026-04-001")
-        run (d/pull db' '[* {:payroll-run/payroll-transaction
+        run (d/pull db' '[* {:kontor.payroll-run/payroll-transaction
                              [:kontor.transaction/external-id
                               {:kontor.posting/_transaction
                                [:kontor.posting/amount :kontor.posting/account
                                 {:kontor.posting/analytic-distributions
-                                 [:analytic-distribution/percent
-                                  {:analytic-distribution/account
-                                   [:analytic-account/code]}]}]}]}]
+                                 [:kontor.analytic-distribution/percent
+                                  {:kontor.analytic-distribution/account
+                                   [:kontor.analytic-account/code]}]}]}]}]
                     run-eid)
-        postings (-> run :payroll-run/payroll-transaction
+        postings (-> run :kontor.payroll-run/payroll-transaction
                      :kontor.posting/_transaction)]
     (testing "the payroll-run row is created"
       (is (some? run-eid))
-      (is (= :adp-gli (:payroll-run/provider-id run))))
+      (is (= :adp-gli (:kontor.payroll-run/provider-id run))))
     (testing "control totals reflect all three employees combined"
       ;; Gross 8500 + 9200 + 7800 = 25,500
-      (is (= 25500.00M (:payroll-run/control-total-gross run)))
+      (is (= 25500.00M (:kontor.payroll-run/control-total-gross run)))
       ;; Net 5669.75 + 6221.20 + 5903.30 = 17,794.25
-      (is (= 17794.25M (:payroll-run/control-total-net run))))
+      (is (= 17794.25M (:kontor.payroll-run/control-total-net run))))
     (testing "the linked :transaction balances per-(ledger, commodity)"
       (let [sum (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                           (.add a ^BigDecimal amount))
@@ -216,8 +216,8 @@
         (let [state-codes
               (->> with-dist
                    (mapcat :kontor.posting/analytic-distributions)
-                   (map :analytic-distribution/account)
-                   (map :analytic-account/code)
+                   (map :kontor.analytic-distribution/account)
+                   (map :kontor.analytic-account/code)
                    distinct
                    set)]
           (is (= #{"CA" "NY" "TX"} state-codes)))))))

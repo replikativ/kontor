@@ -252,13 +252,13 @@
     (testing "Single audit-doc row"
       (is (= 1 (count tx))))
     (testing "Category is :payroll-filing"
-      (is (= :payroll-filing (:audit-doc/category (first tx)))))
+      (is (= :payroll-filing (:kontor.audit-doc/category (first tx)))))
     (testing "Language defaults to :fr"
-      (is (= :fr (:audit-doc/language (first tx)))))
+      (is (= :fr (:kontor.audit-doc/language (first tx)))))
     (testing "Title carries NEQ + year + slip count"
-      (is (re-find #"1234567890" (:audit-doc/title (first tx))))
-      (is (re-find #"2026" (:audit-doc/title (first tx))))
-      (is (re-find #"3 slips" (:audit-doc/title (first tx)))))))
+      (is (re-find #"1234567890" (:kontor.audit-doc/title (first tx))))
+      (is (re-find #"2026" (:kontor.audit-doc/title (first tx))))
+      (is (re-find #"3 slips" (:kontor.audit-doc/title (first tx)))))))
 
 (deftest audit-doc-tx-data-honors-amended-and-storage-uri
   (let [tx (rl1/rl1-audit-doc-tx-data
@@ -266,10 +266,10 @@
              :report-type :amended
              :storage-uri "s3://payroll-archive/rl1-2026-amended.xml"})]
     (testing "Code reflects report-type"
-      (is (re-find #"amended" (:audit-doc/code (first tx)))))
+      (is (re-find #"amended" (:kontor.audit-doc/code (first tx)))))
     (testing "Storage URI is preserved"
       (is (= "s3://payroll-archive/rl1-2026-amended.xml"
-             (:audit-doc/storage-uri (first tx)))))))
+             (:kontor.audit-doc/storage-uri (first tx)))))))
 
 ;; ============================================================================
 ;; Sanity check on the box-mapping catalog

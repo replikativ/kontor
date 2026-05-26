@@ -180,7 +180,7 @@
    schedule = flat KSt rate (from `:parameter`); surtaxes = Soli."
   [db ctx as-of book-profit functional-commodity]
   (let [kst-rate (statute/parameter-value-at db "DE.KSt.rate" as-of)
-        schedule {:schedule/type :flat :rate kst-rate}
+        schedule {:kontor.schedule/type :flat :rate kst-rate}
         {:keys [base-items tax-items provisions]} (component-items db ctx as-of :kst)
         scoped-ctx     (assoc ctx :component :kst :db db :as-of as-of)
         {base'   :base    base-resolved :resolved} (ts/apply-base-adjustments
@@ -218,7 +218,7 @@
   "Build the GewSt component map. Base = book-profit + §8 add-backs −
    §9 reductions; schedule = formula (Messzahl × Hebesatz / 100)."
   [db ctx as-of book-profit functional-commodity]
-  (let [schedule {:schedule/type :formula :fn gewst-formula}
+  (let [schedule {:kontor.schedule/type :formula :fn gewst-formula}
         {:keys [base-items tax-items provisions]} (component-items db ctx as-of :gewst)
         scoped-ctx     (assoc ctx :component :gewst :db db :as-of as-of)
         {base' :base base-resolved :resolved} (ts/apply-base-adjustments

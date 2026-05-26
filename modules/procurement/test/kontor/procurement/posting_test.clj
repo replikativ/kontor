@@ -68,18 +68,18 @@
                {:kontor.account/code "2150" :kontor.account/name "GR/IR Clearing"
                 :kontor.account/path "2150" :kontor.account/type :liability}
                ;; GL defaults
-               {:gl-account-default/account-type :inventory
-                :gl-account-default/account [:kontor.account/path "1400"]}
-               {:gl-account-default/account-type :ar
-                :gl-account-default/account [:kontor.account/path "1200"]}
-               {:gl-account-default/account-type :sales-revenue
-                :gl-account-default/account [:kontor.account/path "4000"]}
-               {:gl-account-default/account-type :purchase-expense
-                :gl-account-default/account [:kontor.account/path "5000"]}
-               {:gl-account-default/account-type :ap
-                :gl-account-default/account [:kontor.account/path "2000"]}
-               {:gl-account-default/account-type :gr-ir-clearing
-                :gl-account-default/account [:kontor.account/path "2150"]}
+               {:kontor.gl-account-default/account-type :inventory
+                :kontor.gl-account-default/account [:kontor.account/path "1400"]}
+               {:kontor.gl-account-default/account-type :ar
+                :kontor.gl-account-default/account [:kontor.account/path "1200"]}
+               {:kontor.gl-account-default/account-type :sales-revenue
+                :kontor.gl-account-default/account [:kontor.account/path "4000"]}
+               {:kontor.gl-account-default/account-type :purchase-expense
+                :kontor.gl-account-default/account [:kontor.account/path "5000"]}
+               {:kontor.gl-account-default/account-type :ap
+                :kontor.gl-account-default/account [:kontor.account/path "2000"]}
+               {:kontor.gl-account-default/account-type :gr-ir-clearing
+                :kontor.gl-account-default/account [:kontor.account/path "2150"]}
                ;; Journals
                {:kontor.journal/code "PURCH" :kontor.journal/name "Purchase Journal"
                 :kontor.journal/type :purchase}
@@ -90,31 +90,31 @@
   [{:keys [external-id qty unit-price]
     :or {external-id "PO-1" qty 10M unit-price 25M}}]
   (d/transact *conn*
-              [{:order/external-id external-id
-                :order/type :purchase
-                :order/status :order.status/created
-                :order/order-date #inst "2026-05-01"
-                :order/entry-date #inst "2026-05-01"
-                :order/currency [:kontor.commodity/symbol "EUR"]
-                :order/bill-from-partner [:kontor.partner/external-id "SUPPLIER"]
-                :order/bill-to-partner [:kontor.partner/external-id "BUYER"]
-                :order/entity [:kontor.entity/code "ACME"]}
-               {:order-item/order [:order/external-id external-id]
-                :order-item/seq-id "00001"
-                :order-item/type :product
-                :order-item/product-id "WIDGET-A"
-                :order-item/quantity qty
-                :order-item/unit-price unit-price
-                :order-item/cancel-quantity 0M
-                :order-item/status :order-item.status/approved
-                :order-item/category :direct
-                :order-item/requires-receipt? true}])
+              [{:kontor.order/external-id external-id
+                :kontor.order/type :purchase
+                :kontor.order/status :order.status/created
+                :kontor.order/order-date #inst "2026-05-01"
+                :kontor.order/entry-date #inst "2026-05-01"
+                :kontor.order/currency [:kontor.commodity/symbol "EUR"]
+                :kontor.order/bill-from-partner [:kontor.partner/external-id "SUPPLIER"]
+                :kontor.order/bill-to-partner [:kontor.partner/external-id "BUYER"]
+                :kontor.order/entity [:kontor.entity/code "ACME"]}
+               {:kontor.sales.order-item/order [:kontor.order/external-id external-id]
+                :kontor.sales.order-item/seq-id "00001"
+                :kontor.sales.order-item/type :product
+                :kontor.sales.order-item/product-id "WIDGET-A"
+                :kontor.sales.order-item/quantity qty
+                :kontor.sales.order-item/unit-price unit-price
+                :kontor.sales.order-item/cancel-quantity 0M
+                :kontor.sales.order-item/status :order-item.status/approved
+                :kontor.procurement.order-item/category :direct
+                :kontor.procurement.order-item/requires-receipt? true}])
   (let [db (d/db *conn*)
         order-eid (d/q '[:find ?e . :in $ ?xid
-                         :where [?e :order/external-id ?xid]]
+                         :where [?e :kontor.order/external-id ?xid]]
                        db external-id)
         item-eid (d/q '[:find ?i . :in $ ?o
-                        :where [?i :order-item/order ?o]]
+                        :where [?i :kontor.sales.order-item/order ?o]]
                       db order-eid)]
     {:order-eid order-eid :item-eid item-eid}))
 
@@ -142,11 +142,11 @@
           (is (= :accepted
                  (sm/current-status db
                                     (receipt/by-external-id db "RCPT-1")
-                                    :receipt/status))))
+                                    :kontor.receipt/status))))
         (testing "valuation-layer materialized"
           (is (= 1 (d/q '[:find (count ?l) .
                           :in $ ?oi
-                          :where [?l :valuation-layer/item ?oi]]
+                          :where [?l :kontor.valuation-layer/item ?oi]]
                         db item-eid))))
         (testing "Dr inventory 250.00"
           (is (= 0 (.compareTo (bigdec "250.00")
@@ -185,7 +185,7 @@
              :journal-ref [:kontor.journal/code "PURCH"]}))))))
 
 (deftest post-receipt-fails-without-unit-cost
-  (testing "P0-1: missing :receipt-item/unit-cost throws clearly"
+  (testing "P0-1: missing :kontor.receipt-item/unit-cost throws clearly"
     (seed!)
     (let [{:keys [order-eid item-eid]} (create-purchase-order! {})]
       (receipt/make-receipt! *conn*
@@ -206,40 +206,40 @@
             tempids per item (Dr inventory 250 + 180 = 430)"
     (seed!)
     (d/transact *conn*
-                [{:order/external-id "PO-MULTI"
-                  :order/type :purchase
-                  :order/status :order.status/created
-                  :order/order-date #inst "2026-05-01"
-                  :order/entry-date #inst "2026-05-01"
-                  :order/currency [:kontor.commodity/symbol "EUR"]
-                  :order/bill-from-partner [:kontor.partner/external-id "SUPPLIER"]
-                  :order/bill-to-partner [:kontor.partner/external-id "BUYER"]
-                  :order/entity [:kontor.entity/code "ACME"]}
-                 {:order-item/order [:order/external-id "PO-MULTI"]
-                  :order-item/seq-id "00001"
-                  :order-item/type :product
-                  :order-item/product-id "WIDGET-A"
-                  :order-item/quantity 10M
-                  :order-item/unit-price 25M
-                  :order-item/cancel-quantity 0M
-                  :order-item/status :order-item.status/approved
-                  :order-item/category :direct
-                  :order-item/requires-receipt? true}
-                 {:order-item/order [:order/external-id "PO-MULTI"]
-                  :order-item/seq-id "00002"
-                  :order-item/type :product
-                  :order-item/product-id "WIDGET-B"
-                  :order-item/quantity 6M
-                  :order-item/unit-price 30M
-                  :order-item/cancel-quantity 0M
-                  :order-item/status :order-item.status/approved
-                  :order-item/category :direct
-                  :order-item/requires-receipt? true}])
+                [{:kontor.order/external-id "PO-MULTI"
+                  :kontor.order/type :purchase
+                  :kontor.order/status :order.status/created
+                  :kontor.order/order-date #inst "2026-05-01"
+                  :kontor.order/entry-date #inst "2026-05-01"
+                  :kontor.order/currency [:kontor.commodity/symbol "EUR"]
+                  :kontor.order/bill-from-partner [:kontor.partner/external-id "SUPPLIER"]
+                  :kontor.order/bill-to-partner [:kontor.partner/external-id "BUYER"]
+                  :kontor.order/entity [:kontor.entity/code "ACME"]}
+                 {:kontor.sales.order-item/order [:kontor.order/external-id "PO-MULTI"]
+                  :kontor.sales.order-item/seq-id "00001"
+                  :kontor.sales.order-item/type :product
+                  :kontor.sales.order-item/product-id "WIDGET-A"
+                  :kontor.sales.order-item/quantity 10M
+                  :kontor.sales.order-item/unit-price 25M
+                  :kontor.sales.order-item/cancel-quantity 0M
+                  :kontor.sales.order-item/status :order-item.status/approved
+                  :kontor.procurement.order-item/category :direct
+                  :kontor.procurement.order-item/requires-receipt? true}
+                 {:kontor.sales.order-item/order [:kontor.order/external-id "PO-MULTI"]
+                  :kontor.sales.order-item/seq-id "00002"
+                  :kontor.sales.order-item/type :product
+                  :kontor.sales.order-item/product-id "WIDGET-B"
+                  :kontor.sales.order-item/quantity 6M
+                  :kontor.sales.order-item/unit-price 30M
+                  :kontor.sales.order-item/cancel-quantity 0M
+                  :kontor.sales.order-item/status :order-item.status/approved
+                  :kontor.procurement.order-item/category :direct
+                  :kontor.procurement.order-item/requires-receipt? true}])
     (let [db (d/db *conn*)
-          order-eid (d/q '[:find ?e . :where [?e :order/external-id "PO-MULTI"]] db)
+          order-eid (d/q '[:find ?e . :where [?e :kontor.order/external-id "PO-MULTI"]] db)
           [item-a item-b] (vec (sort (d/q '[:find [?i ...]
                                             :in $ ?o
-                                            :where [?i :order-item/order ?o]]
+                                            :where [?i :kontor.sales.order-item/order ?o]]
                                           db order-eid)))]
       (receipt/make-receipt!
        *conn*
@@ -253,7 +253,7 @@
         :journal-ref [:kontor.journal/code "PURCH"]})
       (let [db (d/db *conn*)]
         (testing "two valuation-layers"
-          (is (= 2 (d/q '[:find (count ?l) . :where [?l :valuation-layer/book _]] db))))
+          (is (= 2 (d/q '[:find (count ?l) . :where [?l :kontor.valuation-layer/book _]] db))))
         (testing "Dr Inventory total = 250 + 180 = 430"
           (is (= 0 (.compareTo (bigdec "430.00")
                                (d/q '[:find (sum ?amt) .
@@ -311,27 +311,27 @@
                               db (inv/by-external-id db "INV-J"))
             junctions (->> (d/q '[:find [?j ...]
                                   :in $ ?l
-                                  :where [?j :receipt-invoice-billing/invoice-line ?l]]
+                                  :where [?j :kontor.receipt-invoice-billing/invoice-line ?l]]
                                 db inv-line-eid)
                            (map #(d/pull db
-                                         '[* {:receipt-invoice-billing/receipt
-                                              [:receipt/external-id]}]
+                                         '[* {:kontor.receipt-invoice-billing/receipt
+                                              [:kontor.receipt/external-id]}]
                                          %))
-                           (sort-by #(get-in % [:receipt-invoice-billing/receipt
-                                                :receipt/external-id])))]
+                           (sort-by #(get-in % [:kontor.receipt-invoice-billing/receipt
+                                                :kontor.receipt/external-id])))]
         (testing "two junction rows — one per receipt"
           (is (= 2 (count junctions))))
         (testing "FIFO allocation: RCPT-J1 (older) gets 6, RCPT-J2 gets 4"
           (is (= "RCPT-J1"
                  (get-in (first junctions)
-                         [:receipt-invoice-billing/receipt :receipt/external-id])))
+                         [:kontor.receipt-invoice-billing/receipt :kontor.receipt/external-id])))
           (is (= 0 (.compareTo (bigdec "6")
-                               (:receipt-invoice-billing/quantity (first junctions)))))
+                               (:kontor.receipt-invoice-billing/quantity (first junctions)))))
           (is (= "RCPT-J2"
                  (get-in (second junctions)
-                         [:receipt-invoice-billing/receipt :receipt/external-id])))
+                         [:kontor.receipt-invoice-billing/receipt :kontor.receipt/external-id])))
           (is (= 0 (.compareTo (bigdec "4")
-                               (:receipt-invoice-billing/quantity (second junctions))))))))))
+                               (:kontor.receipt-invoice-billing/quantity (second junctions))))))))))
 
 (deftest e2e-purchase-receipt-invoice-post
   (testing "P0-7: full PO → receipt → invoice → posted with GR-IR
@@ -427,12 +427,12 @@
        *conn* (inv/by-external-id (d/db *conn*) "INV-EXC"))
       ;; Seed the policy for :kontor.invoice/status :draft → :sent
       (d/transact *conn*
-                  [{:approval-policy/entity-type :invoice
-                    :approval-policy/facet :kontor.invoice/status
-                    :approval-policy/transition-from :draft
-                    :approval-policy/transition-to :sent
-                    :approval-policy/rule :requires-three-way-match-pass
-                    :approval-policy/active true}])
+                  [{:kontor.approval-policy/entity-type :invoice
+                    :kontor.approval-policy/facet :kontor.invoice/status
+                    :kontor.approval-policy/transition-from :draft
+                    :kontor.approval-policy/transition-to :sent
+                    :kontor.approval-policy/rule :requires-three-way-match-pass
+                    :kontor.approval-policy/active true}])
       ;; Posting should now throw
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo
@@ -460,12 +460,12 @@
       (match/recompute-match-status!
        *conn* (inv/by-external-id (d/db *conn*) "INV-OK"))
       (d/transact *conn*
-                  [{:approval-policy/entity-type :invoice
-                    :approval-policy/facet :kontor.invoice/status
-                    :approval-policy/transition-from :draft
-                    :approval-policy/transition-to :sent
-                    :approval-policy/rule :requires-three-way-match-pass
-                    :approval-policy/active true}])
+                  [{:kontor.approval-policy/entity-type :invoice
+                    :kontor.approval-policy/facet :kontor.invoice/status
+                    :kontor.approval-policy/transition-from :draft
+                    :kontor.approval-policy/transition-to :sent
+                    :kontor.approval-policy/rule :requires-three-way-match-pass
+                    :kontor.approval-policy/active true}])
       ;; Should NOT throw
       (inv-post/post-to-ledger!
        *conn* "INV-OK"
@@ -482,33 +482,33 @@
     (seed!)
     ;; Create a simple sales order
     (d/transact *conn*
-                [{:order/external-id "SO-1"
-                  :order/type :sales
-                  :order/status :order.status/created
-                  :order/order-date #inst "2026-05-01"
-                  :order/entry-date #inst "2026-05-01"
-                  :order/currency [:kontor.commodity/symbol "EUR"]
-                  :order/bill-from-partner [:kontor.partner/external-id "BUYER"]
-                  :order/bill-to-partner [:kontor.partner/external-id "CUSTOMER"]
-                  :order/entity [:kontor.entity/code "ACME"]}
-                 {:order-item/order [:order/external-id "SO-1"]
-                  :order-item/seq-id "00001"
-                  :order-item/type :product
-                  :order-item/product-id "WIDGET-X"
-                  :order-item/quantity 1M
-                  :order-item/unit-price 100M
-                  :order-item/cancel-quantity 0M
-                  :order-item/status :order-item.status/approved}])
+                [{:kontor.order/external-id "SO-1"
+                  :kontor.order/type :sales
+                  :kontor.order/status :order.status/created
+                  :kontor.order/order-date #inst "2026-05-01"
+                  :kontor.order/entry-date #inst "2026-05-01"
+                  :kontor.order/currency [:kontor.commodity/symbol "EUR"]
+                  :kontor.order/bill-from-partner [:kontor.partner/external-id "BUYER"]
+                  :kontor.order/bill-to-partner [:kontor.partner/external-id "CUSTOMER"]
+                  :kontor.order/entity [:kontor.entity/code "ACME"]}
+                 {:kontor.sales.order-item/order [:kontor.order/external-id "SO-1"]
+                  :kontor.sales.order-item/seq-id "00001"
+                  :kontor.sales.order-item/type :product
+                  :kontor.sales.order-item/product-id "WIDGET-X"
+                  :kontor.sales.order-item/quantity 1M
+                  :kontor.sales.order-item/unit-price 100M
+                  :kontor.sales.order-item/cancel-quantity 0M
+                  :kontor.sales.order-item/status :order-item.status/approved}])
     (inv/make-invoice-from-order!
      *conn* "SO-1"
      {:external-id "INV-SALES" :type :sales})
     (d/transact *conn*
-                [{:approval-policy/entity-type :invoice
-                  :approval-policy/facet :kontor.invoice/status
-                  :approval-policy/transition-from :draft
-                  :approval-policy/transition-to :sent
-                  :approval-policy/rule :requires-three-way-match-pass
-                  :approval-policy/active true}])
+                [{:kontor.approval-policy/entity-type :invoice
+                  :kontor.approval-policy/facet :kontor.invoice/status
+                  :kontor.approval-policy/transition-from :draft
+                  :kontor.approval-policy/transition-to :sent
+                  :kontor.approval-policy/rule :requires-three-way-match-pass
+                  :kontor.approval-policy/active true}])
     ;; Sales invoice has no match-status — policy must passthrough
     (inv-post/post-to-ledger!
      *conn* "INV-SALES"
@@ -527,27 +527,27 @@
             the original sale Cr revenue / Dr AR)"
     (seed!)
     (d/transact *conn*
-                [{:order/external-id "SO-RET"
-                  :order/type :sales
-                  :order/status :order.status/created
-                  :order/order-date #inst "2026-05-01"
-                  :order/entry-date #inst "2026-05-01"
-                  :order/currency [:kontor.commodity/symbol "EUR"]
-                  :order/bill-from-partner [:kontor.partner/external-id "BUYER"]
-                  :order/bill-to-partner [:kontor.partner/external-id "CUSTOMER"]
-                  :order/entity [:kontor.entity/code "ACME"]}
-                 {:order-item/order [:order/external-id "SO-RET"]
-                  :order-item/seq-id "00001"
-                  :order-item/type :product
-                  :order-item/product-id "WIDGET-A"
-                  :order-item/quantity 3M
-                  :order-item/unit-price 25M
-                  :order-item/cancel-quantity 0M
-                  :order-item/status :order-item.status/approved}])
+                [{:kontor.order/external-id "SO-RET"
+                  :kontor.order/type :sales
+                  :kontor.order/status :order.status/created
+                  :kontor.order/order-date #inst "2026-05-01"
+                  :kontor.order/entry-date #inst "2026-05-01"
+                  :kontor.order/currency [:kontor.commodity/symbol "EUR"]
+                  :kontor.order/bill-from-partner [:kontor.partner/external-id "BUYER"]
+                  :kontor.order/bill-to-partner [:kontor.partner/external-id "CUSTOMER"]
+                  :kontor.order/entity [:kontor.entity/code "ACME"]}
+                 {:kontor.sales.order-item/order [:kontor.order/external-id "SO-RET"]
+                  :kontor.sales.order-item/seq-id "00001"
+                  :kontor.sales.order-item/type :product
+                  :kontor.sales.order-item/product-id "WIDGET-A"
+                  :kontor.sales.order-item/quantity 3M
+                  :kontor.sales.order-item/unit-price 25M
+                  :kontor.sales.order-item/cancel-quantity 0M
+                  :kontor.sales.order-item/status :order-item.status/approved}])
     (let [db (d/db *conn*)
-          order-eid (d/q '[:find ?e . :where [?e :order/external-id "SO-RET"]] db)
+          order-eid (d/q '[:find ?e . :where [?e :kontor.order/external-id "SO-RET"]] db)
           item-eid (d/q '[:find ?i . :in $ ?o
-                          :where [?i :order-item/order ?o]] db order-eid)
+                          :where [?i :kontor.sales.order-item/order ?o]] db order-eid)
           customer (d/q '[:find ?p . :where [?p :kontor.partner/external-id "CUSTOMER"]] db)
           acme (d/q '[:find ?p . :where [?p :kontor.partner/external-id "BUYER"]] db)]
       (returns/make-return! *conn*

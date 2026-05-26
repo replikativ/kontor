@@ -6,7 +6,7 @@
    **id coercion** + dispatch: the traversal (`kontor.authz.indexed`)
    and the edge CRUD (`kontor.authz.relationships`) speak datahike
    eids; a consumer speaks whatever external id it chose
-   (`:authz/object-id` strings by default, or raw eids). The client
+   (`:kontor.authz/object-id` strings by default, or raw eids). The client
    coerces at the boundary.
 
    Ported from EACL's `eacl.datomic.core` (research note 41). The
@@ -20,7 +20,7 @@
 
    ## Configuring id coercion
 
-     ;; default — subjects/resources keyed by :authz/object-id strings
+     ;; default — subjects/resources keyed by :kontor.authz/object-id strings
      (make-client conn {})
 
      ;; raw datahike eids, no external-id layer
@@ -116,7 +116,7 @@
     (let [eid (object-id->entid db (get filters k))]
       (when (nil? eid)
         (throw (ex-info (str "read-relationships: " k " does not resolve to an entity")
-                        {:type :authz/unresolvable-filter
+                        {:type :kontor.authz/unresolvable-filter
                          :filter k :value (get filters k)})))
       (assoc filters k eid))
     filters))
@@ -201,7 +201,7 @@
   ;; process routes the combined tx-data through the gate.
   (let [report (d/transact conn (write-relationships-tx-data (d/db conn) opts updates))]
     {:tx-report   report
-     :authz/token (str (:max-tx (:db-after report)))}))
+     :kontor.authz/token (str (:max-tx (:db-after report)))}))
 
 ;; ============================================================================
 ;; the client
@@ -289,19 +289,19 @@
    Opts (all optional):
      :entity->object-id  (fn [entity] → object-id) — how to read a
                          subject/resource's external id from its
-                         pulled entity. Default `:authz/object-id`.
+                         pulled entity. Default `:kontor.authz/object-id`.
      :object-id->ident   (fn [object-id] → eid|lookup-ref) — how to
                          resolve an external id to something datahike
                          can look up. Default
-                         `(fn [oid] [:authz/object-id oid])`.
+                         `(fn [oid] [:kontor.authz/object-id oid])`.
 
    For raw datahike eids and no external-id layer:
      (make-client conn {:entity->object-id :db/id
                         :object-id->ident  identity})"
   ([conn] (make-client conn {}))
   ([conn {:keys [entity->object-id object-id->ident]
-          :or   {entity->object-id #(:authz/object-id %)
-                 object-id->ident  (fn [oid] [:authz/object-id oid])}}]
+          :or   {entity->object-id #(:kontor.authz/object-id %)
+                 object-id->ident  (fn [oid] [:kontor.authz/object-id oid])}}]
    (let [object-id->entid (fn [db object-id]
                             (entid db (object-id->ident object-id)))
          entid->object-id (fn [db eid]

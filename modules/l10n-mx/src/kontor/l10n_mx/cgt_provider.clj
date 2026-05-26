@@ -35,7 +35,7 @@
    - **`:individual` with `:tax-unit :mx-residence-status
      :non-resident`** — switches the provider to the Title V lane:
        - real-estate: 25 % on gross OR 35 % on net (elective per
-         `:disposal/elective-regime` containing
+         `:kontor.disposal/elective-regime` containing
          `:mx-art-161-dictamen-on-net`).
        - shares: same gross/net election under art. 161.
 
@@ -63,7 +63,7 @@
 
    ## INPC
 
-   Out of scope (note 132 §4 Gap A). `:disposal/basis-amount` is
+   Out of scope (note 132 §4 Gap A). `:kontor.disposal/basis-amount` is
    consumer-supplied already-indexed for inflation between acquisition
    and disposition months. Storing a 30-year monthly INPC series in
    `:parameter`s is a Phase 3 decision per note 132 §6.
@@ -136,22 +136,22 @@
    `proceeds - basis - rollover`. The basis is treated as already
    INPC-adjusted (note 132 §4 Gap A)."
   ^java.math.BigDecimal [disposal]
-  (let [p (or (:disposal/proceeds-amount disposal) 0M)
-        b (or (:disposal/basis-amount disposal) 0M)
-        r (or (:disposal/rollover-amount disposal) 0M)]
+  (let [p (or (:kontor.disposal/proceeds-amount disposal) 0M)
+        b (or (:kontor.disposal/basis-amount disposal) 0M)
+        r (or (:kontor.disposal/rollover-amount disposal) 0M)]
     (- p b r)))
 
 (defn- proceeds-of
   ^java.math.BigDecimal [disposal]
-  (or (:disposal/proceeds-amount disposal) 0M))
+  (or (:kontor.disposal/proceeds-amount disposal) 0M))
 
 (defn- years-held
   "Compute years-held (capped, with override support). The cap is the
    art. 120 / 122 parameter (20 for gains, 10 for losses)."
   ^java.math.BigDecimal [disposal cap-years input-override]
   (let [raw (or input-override
-                (years-between (:disposal/acquired-on disposal)
-                               (:disposal/disposed-on disposal)))]
+                (years-between (:kontor.disposal/acquired-on disposal)
+                               (:kontor.disposal/disposed-on disposal)))]
     (cond
       (nil? raw) 1M
       (zero? raw) 1M
@@ -243,15 +243,15 @@
    proportional share of the CUFIN increase (prevents double-tax of
    already-taxed retained earnings), subtracts CUCA capital
    reductions (consumer-supplied via `:inputs :mx-share-adjustments`,
-   keyed by the disposal's `:disposal/external-id` — see note 132 §4
+   keyed by the disposal's `:kontor.disposal/external-id` — see note 132 §4
    Gap B).
 
    Returns a map `{:gain :adjusted-basis :cufin-add :cuca-deduct}`."
   [disposal share-adjustments]
-  (let [adj          (get share-adjustments (:disposal/external-id disposal) {})
+  (let [adj          (get share-adjustments (:kontor.disposal/external-id disposal) {})
         proceeds     (proceeds-of disposal)
-        basis        (or (:disposal/basis-amount disposal) 0M)
-        ownership    (or (:disposal/ownership-fraction disposal) 1M)
+        basis        (or (:kontor.disposal/basis-amount disposal) 0M)
+        ownership    (or (:kontor.disposal/ownership-fraction disposal) 1M)
         cufin-delta  (or (:cufin-delta adj) 0M)
         cufin-add    (* cufin-delta ownership)
         cuca-deduct  (or (:cuca-reduction adj) 0M)
@@ -294,7 +294,7 @@
    exemption / pure loss in v1)."
   [{:keys [commodity authority]} ctx ^java.math.BigDecimal cap-udis
    ^java.math.BigDecimal gain-years-cap disposal]
-  (let [asset-class    (:disposal/asset-class disposal)
+  (let [asset-class    (:kontor.disposal/asset-class disposal)
         inputs         (:inputs ctx)
         udi-rate       (get inputs :mx-udis-rate)
         cap-used       (get inputs :mx-residence-cap-used 0M)
@@ -442,7 +442,7 @@
                               :value (money/money net commodity)}]
                             (map (fn [{:keys [disposal gain adjusted-basis cufin-add cuca-deduct]}]
                                    {:line :unlisted-detail
-                                    :label (str "Unlisted gain " (:disposal/external-id disposal))
+                                    :label (str "Unlisted gain " (:kontor.disposal/external-id disposal))
                                     :value {:gain           (money/money gain commodity)
                                             :adjusted-basis (money/money adjusted-basis commodity)
                                             :cufin-add      (money/money cufin-add commodity)
@@ -465,8 +465,8 @@
   [{:keys [commodity authority]} ctx disposal]
   (let [db          (:db ctx)
         as-of       (as-of-from-ctx ctx)
-        asset-class (:disposal/asset-class disposal)
-        elections   (set (or (:disposal/elective-regime disposal) #{}))
+        asset-class (:kontor.disposal/asset-class disposal)
+        elections   (set (or (:kontor.disposal/elective-regime disposal) #{}))
         net-elect?  (contains? elections :mx-art-161-dictamen-on-net)
         rate-code   (case [asset-class net-elect?]
                       [:mx-non-resident-prop true]    "MX.CGT.art-160.nr-real-estate-net-rate"
@@ -516,7 +516,7 @@
                             :value (money/money net-capital commodity)}]
                           (map (fn [{:keys [disposal gain cufin-add cuca-deduct]}]
                                  {:line :detail
-                                  :label (str "Detail " (:disposal/external-id disposal))
+                                  :label (str "Detail " (:kontor.disposal/external-id disposal))
                                   :value {:gain        (money/money gain commodity)
                                           :cufin-add   (money/money cufin-add commodity)
                                           :cuca-deduct (money/money cuca-deduct commodity)}})
@@ -543,7 +543,7 @@
           opts        {:authority authority :commodity commodity}
           residence-status (or (get-in ctx [:tax-unit :mx-residence-status]) :resident)
           ;; Group disposals by asset class for dispatch.
-          by-class    (group-by :disposal/asset-class disposals)
+          by-class    (group-by :kontor.disposal/asset-class disposals)
           components
           (case kind
             :individual
@@ -551,7 +551,7 @@
               ;; Non-resident path — Title V.
               (= residence-status :non-resident)
               (->> disposals
-                   (filter #(contains? non-resident-asset-classes (:disposal/asset-class %)))
+                   (filter #(contains? non-resident-asset-classes (:kontor.disposal/asset-class %)))
                    (mapv #(non-resident-component opts ctx %))
                    (remove nil?)
                    vec)
@@ -584,9 +584,9 @@
             (let [share-adj (or (get-in inputs [:mx-share-adjustments]) {})
                   details
                   (->> disposals
-                       (filter #(contains? corporate-asset-classes (:disposal/asset-class %)))
+                       (filter #(contains? corporate-asset-classes (:kontor.disposal/asset-class %)))
                        (mapv (fn [d]
-                               (if (#{:mx-unlisted-shares} (:disposal/asset-class d))
+                               (if (#{:mx-unlisted-shares} (:kontor.disposal/asset-class d))
                                  (assoc (art-22-adjusted-gain d share-adj) :disposal d)
                                  {:disposal      d
                                   :gain          (gain-of d)

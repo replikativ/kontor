@@ -5,7 +5,7 @@
      - Status-machine transitions are recorded with audit metadata.
      - A balanced kernel :transaction is posted Dr Bad-Debt-Expense
        / Cr AR.
-     - The :collection-case/closed-at is set.
+     - The :kontor.collection-case/closed-at is set.
      - :supporting-doc is required (smoke-tests :missing-supporting
        throw)."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
@@ -42,10 +42,10 @@
                   :kontor.account/name "Bad Debt Expense"
                   :kontor.account/type :expense}
                  ;; GL defaults (tenant-wide)
-                 {:gl-account-default/account-type :ar
-                  :gl-account-default/account [:kontor.account/path "1200"]}
-                 {:gl-account-default/account-type :bad-debt-expense
-                  :gl-account-default/account [:kontor.account/path "6900"]}
+                 {:kontor.gl-account-default/account-type :ar
+                  :kontor.gl-account-default/account [:kontor.account/path "1200"]}
+                 {:kontor.gl-account-default/account-type :bad-debt-expense
+                  :kontor.gl-account-default/account [:kontor.account/path "6900"]}
                  ;; Journal
                  {:kontor.journal/code "SALES" :kontor.journal/name "Sales Journal"
                   :kontor.journal/type :sales}])
@@ -118,7 +118,7 @@
                :uploaded-by-uid (actor "bob")
                :storage-uri "file:///doc/wo-1.pdf"
                :content-hash "sha256:placeholder"})
-      (let [doc-eid (d/q '[:find ?d . :where [?d :audit-doc/code "DOC-WO-1"]]
+      (let [doc-eid (d/q '[:find ?d . :where [?d :kontor.audit-doc/code "DOC-WO-1"]]
                          (d/db *conn*))
             result (kwo/write-off-case!
                     *conn*
@@ -137,10 +137,10 @@
             (is (= :written-off
                    (sm/current-status db
                                       (kcase/by-code db "CASE-WO")
-                                      :collection-case/state))))
+                                      :kontor.collection-case/state))))
           (testing "case :closed-at set"
             (let [c (kcase/pull-case db "CASE-WO")]
-              (is (some? (:collection-case/closed-at c)))))
+              (is (some? (:kontor.collection-case/closed-at c)))))
           (testing "Dr Bad-Debt-Expense = 1000"
             (is (= 0 (.compareTo 1000M
                                  (d/q '[:find (sum ?amt) .
@@ -213,7 +213,7 @@
                               :title "WO package"
                               :storage-uri "file:///wo.pdf"
                               :content-hash "sha256:test"})
-    (let [doc (d/q '[:find ?d . :where [?d :audit-doc/code "DOC-E2E"]]
+    (let [doc (d/q '[:find ?d . :where [?d :kontor.audit-doc/code "DOC-E2E"]]
                    (d/db *conn*))]
       (kwo/write-off-case!
        *conn*
@@ -224,12 +224,12 @@
         :supporting-doc doc}))
     (let [db (d/db *conn*)
           eid (kcase/by-code db "CASE-E2E")
-          history (sm/status-history-of db eid :collection-case/state)]
+          history (sm/status-history-of db eid :kontor.collection-case/state)]
       (testing "Six history rows: open, l1, l2, final, legal, written-off"
         (is (= 6 (count history))))
       (testing "Final state :written-off"
         (is (= :written-off
-               (sm/current-status db eid :collection-case/state))))
+               (sm/current-status db eid :kontor.collection-case/state))))
       (testing "Status-history captures reasons across the chain"
         (let [reasons (mapv :kontor.status-history/reason history)]
           (is (some #{:case-opened} reasons))

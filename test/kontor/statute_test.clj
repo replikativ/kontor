@@ -521,7 +521,7 @@
                        :kontor.provision/consequence (pr-str {:op :schedule-override
                                                        :code :hnte
                                                        :label "HNTE 15%"
-                                                       :schedule {:schedule/type :flat
+                                                       :schedule {:kontor.schedule/type :flat
                                                                   :rate-from :parameter
                                                                   :parameter "CN.EIT.hnte-rate"}})})])
       (let [{:keys [schedule-overrides]}
@@ -534,7 +534,7 @@
         (is (= :hnte (:code override)))
         (testing "the :schedule field has the rate resolved from the parameter at as-of"
           (is (= 0.15M (get-in override [:schedule :rate])))
-          (is (= :flat (get-in override [:schedule :schedule/type]))))
+          (is (= :flat (get-in override [:schedule :kontor.schedule/type]))))
         (testing "the resolved schedule feeds tax-schedule/apply-schedule directly"
           (is (== 7500M (ts/apply-schedule (:schedule override) 50000M))))))))
 
@@ -556,7 +556,7 @@
                        :kontor.provision/consequence (pr-str {:op :schedule-override
                                                        :code :pme
                                                        :label "FR PME 15%/25%"
-                                                       :schedule {:schedule/type :progressive-bracket
+                                                       :schedule {:kontor.schedule/type :progressive-bracket
                                                                   :brackets-from :parameter
                                                                   :parameter "FR.IS.pme-brackets"}})})])
       (let [{:keys [schedule-overrides]}
@@ -565,7 +565,7 @@
                                       {})
             override (first schedule-overrides)
             schedule (:schedule override)]
-        (is (= :progressive-bracket (:schedule/type schedule)))
+        (is (= :progressive-bracket (:kontor.schedule/type schedule)))
         (is (= [{:rate 0.15M :upper 42500M} {:rate 0.25M :upper nil}]
                (:brackets schedule)))
         (testing "200000 → 42500×15% + 157500×25% = 45750"

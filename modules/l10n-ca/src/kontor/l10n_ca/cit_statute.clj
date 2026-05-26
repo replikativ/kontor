@@ -341,7 +341,7 @@
     :kontor.provision/consequence     (pr-str {:op :schedule-override
                                         :code :ca-fed-ccpc-sbd
                                         :label "Federal CCPC schedule: 9% to $500k, 15% above"
-                                        :schedule {:schedule/type :formula
+                                        :schedule {:kontor.schedule/type :formula
                                                    :fn-from :compute-fn
                                                    :fn :ca-federal-ccpc-schedule}})}
 
@@ -358,7 +358,7 @@
     :kontor.provision/consequence     (pr-str {:op :schedule-override
                                         :code :ca-fed-general
                                         :label "Federal general schedule: flat 15%"
-                                        :schedule {:schedule/type :flat
+                                        :schedule {:kontor.schedule/type :flat
                                                    :rate-from :parameter
                                                    :parameter "CA.Federal.CIT.general-rate"}})}
 
@@ -417,7 +417,7 @@
     :kontor.provision/consequence     (pr-str {:op :schedule-override
                                         :code :ca-on-ccpc-sbd
                                         :label "Ontario CCPC schedule: 3.2% to allocated SBD pool, 11.5% above"
-                                        :schedule {:schedule/type :formula
+                                        :schedule {:kontor.schedule/type :formula
                                                    :fn-from :compute-fn
                                                    :fn :ca-on-ccpc-schedule}})}
 
@@ -434,7 +434,7 @@
     :kontor.provision/consequence     (pr-str {:op :schedule-override
                                         :code :ca-on-general
                                         :label "Ontario general schedule: flat 11.5%"
-                                        :schedule {:schedule/type :flat
+                                        :schedule {:kontor.schedule/type :flat
                                                    :rate-from :parameter
                                                    :parameter "CA.ON.CIT.general-rate"}})}
 
@@ -454,7 +454,7 @@
     :kontor.provision/consequence     (pr-str {:op :schedule-override
                                         :code :ca-bc-ccpc-sbd
                                         :label "BC CCPC schedule: 2% to allocated SBD pool, 12% above"
-                                        :schedule {:schedule/type :formula
+                                        :schedule {:kontor.schedule/type :formula
                                                    :fn-from :compute-fn
                                                    :fn :ca-bc-ccpc-schedule}})}
 
@@ -471,7 +471,7 @@
     :kontor.provision/consequence     (pr-str {:op :schedule-override
                                         :code :ca-bc-general
                                         :label "BC general schedule: flat 12%"
-                                        :schedule {:schedule/type :flat
+                                        :schedule {:kontor.schedule/type :flat
                                                    :rate-from :parameter
                                                    :parameter "CA.BC.CIT.general-rate"}})}
 
@@ -491,7 +491,7 @@
     :kontor.provision/consequence     (pr-str {:op :schedule-override
                                         :code :ca-ab-ccpc-sbd
                                         :label "Alberta CCPC schedule: 2% to allocated SBD pool, 8% above"
-                                        :schedule {:schedule/type :formula
+                                        :schedule {:kontor.schedule/type :formula
                                                    :fn-from :compute-fn
                                                    :fn :ca-ab-ccpc-schedule}})}
 
@@ -508,7 +508,7 @@
     :kontor.provision/consequence     (pr-str {:op :schedule-override
                                         :code :ca-ab-general
                                         :label "Alberta general schedule: flat 8%"
-                                        :schedule {:schedule/type :flat
+                                        :schedule {:kontor.schedule/type :flat
                                                    :rate-from :parameter
                                                    :parameter "CA.AB.CIT.general-rate"}})}])
 

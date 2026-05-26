@@ -21,9 +21,9 @@
      ONE component (`:kind :capital-gains-tax`) carrying
      `:cit-base-additions [net-gain]` for the consumer to thread into
      the CT provider's `:base-transform :adjustments`. Handles SSE
-     (`:disposal/exemption-claimed #{:uk-sse}` ⇒ gain fully exempt).
+     (`:kontor.disposal/exemption-claimed #{:uk-sse}` ⇒ gain fully exempt).
      Indexation allowance (frozen Dec 2017) is handled OUT-OF-BAND:
-     the consumer supplies an already-indexed `:disposal/basis-amount`
+     the consumer supplies an already-indexed `:kontor.disposal/basis-amount`
      per note 114 §3.2 recommendation; multi-tranche holdings emit one
      `:disposal` per tranche.
 
@@ -63,7 +63,7 @@
 ;; ============================================================================
 
 (def asset-classes
-  "UK-tagged `:disposal/asset-class` values this provider recognises.
+  "UK-tagged `:kontor.disposal/asset-class` values this provider recognises.
    Anything else routes through the standard non-residential lane."
   #{:uk-residential-property
     :uk-listed-shares
@@ -90,29 +90,29 @@
   "Per-disposal realised gain (positive) or loss (negative), in the
    proceeds commodity: `proceeds − basis − rollover-amount`.
 
-   For UK corporates, `:disposal/basis-amount` is expected to be the
+   For UK corporates, `:kontor.disposal/basis-amount` is expected to be the
    ALREADY-INDEXED cost base (consumer responsibility per note 114 §3.2).
    For individuals, indexation is irrelevant (abolished 2008) — the
    basis is the actual acquisition cost + allowable expenditure."
   ^java.math.BigDecimal [disposal]
-  (let [p (or (:disposal/proceeds-amount disposal) 0M)
-        b (or (:disposal/basis-amount disposal) 0M)
-        r (or (:disposal/rollover-amount disposal) 0M)]
+  (let [p (or (:kontor.disposal/proceeds-amount disposal) 0M)
+        b (or (:kontor.disposal/basis-amount disposal) 0M)
+        r (or (:kontor.disposal/rollover-amount disposal) 0M)]
     (- p b r)))
 
 (defn- exemption-claimed?
   "Does the disposal carry a given keyword in its
-   `:disposal/exemption-claimed` cardinality-many set?"
+   `:kontor.disposal/exemption-claimed` cardinality-many set?"
   [disposal kw]
-  (boolean (some #{kw} (:disposal/exemption-claimed disposal))))
+  (boolean (some #{kw} (:kontor.disposal/exemption-claimed disposal))))
 
 (defn- residential?
   "True for residential-property disposals (drives the residential
    rate lane). UK identifies residential property by asset class
-   and/or by `:disposal/residence?` (which is more of a §121-style
+   and/or by `:kontor.disposal/residence?` (which is more of a §121-style
    primary-residence flag — kept for cross-jurisdiction symmetry)."
   [disposal]
-  (= (:disposal/asset-class disposal) :uk-residential-property))
+  (= (:kontor.disposal/asset-class disposal) :uk-residential-property))
 
 ;; ============================================================================
 ;; Allocation — gain → BADR / IR / residential / standard lanes

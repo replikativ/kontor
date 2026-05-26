@@ -26,7 +26,7 @@
 
    ## Bitemporal interop (experimental, see kontor.bitemporal)
 
-   The `:payment-application/applied-at` attribute IS the per-entity
+   The `:kontor.payment-application/applied-at` attribute IS the per-entity
    valid-time for an application — when the cash hit the books in
    the world. Classical `:as-of-valid` reads filter on it.
 
@@ -80,25 +80,25 @@
            rows (d/q '[:find [?app ...]
                        :in $ ?inv ?cutoff-ms
                        :where
-                       [?app :payment-application/invoice ?inv]
-                       [?app :payment-application/applied-at ?when]
+                       [?app :kontor.payment-application/invoice ?inv]
+                       [?app :kontor.payment-application/applied-at ?when]
                        [(.getTime ^java.util.Date ?when) ?when-ms]
                        [(<= ?when-ms ?cutoff-ms)]]
                      db invoice-eid cutoff-millis)]
        (->> rows
             (map #(d/pull db '[*] %))
-            (sort-by :payment-application/applied-at)
+            (sort-by :kontor.payment-application/applied-at)
             vec)))))
 
 (defn applied-amount-of-invoice
-  "Sum of :payment-application/amount for an invoice (positive +
+  "Sum of :kontor.payment-application/amount for an invoice (positive +
    negative reversals net out). Returns BigDecimal."
   ([db invoice-spec] (applied-amount-of-invoice db invoice-spec nil))
   ([db invoice-spec {:keys [as-of-valid]}]
    (let [apps (applications-of db invoice-spec {:as-of-valid as-of-valid})]
      (reduce (fn [^java.math.BigDecimal acc app]
                (.add acc ^java.math.BigDecimal
-                     (or (:payment-application/amount app) 0M)))
+                     (or (:kontor.payment-application/amount app) 0M)))
              0M
              apps))))
 
@@ -256,16 +256,16 @@
         applied-at (or applied-at (java.util.Date.))
         app-tempid (str "pay-app" tempid-suffix)
         app-row (cond-> {:db/id app-tempid
-                         :payment-application/payment payment
-                         :payment-application/invoice invoice-eid
-                         :payment-application/amount amount
-                         :payment-application/commodity commodity
-                         :payment-application/applied-at applied-at
-                         :payment-application/applied-by-uid applied-by-uid
-                         :payment-application/strategy strategy}
-                  reason         (assoc :payment-application/reason reason)
-                  reason-note    (assoc :payment-application/reason-note reason-note)
-                  supporting-doc (assoc :payment-application/supporting-doc supporting-doc))
+                         :kontor.payment-application/payment payment
+                         :kontor.payment-application/invoice invoice-eid
+                         :kontor.payment-application/amount amount
+                         :kontor.payment-application/commodity commodity
+                         :kontor.payment-application/applied-at applied-at
+                         :kontor.payment-application/applied-by-uid applied-by-uid
+                         :kontor.payment-application/strategy strategy}
+                  reason         (assoc :kontor.payment-application/reason reason)
+                  reason-note    (assoc :kontor.payment-application/reason-note reason-note)
+                  supporting-doc (assoc :kontor.payment-application/supporting-doc supporting-doc))
         already-applied (applied-amount-of-invoice db invoice-eid nil)
         gross (or (:kontor.invoice/total-gross
                    (d/pull db [:kontor.invoice/total-gross] invoice-eid))
@@ -344,32 +344,32 @@
        :or {tempid-suffix ""}}]
   (when-not application-eid (throw (ex-info ":application-eid required" {})))
   (when-not applied-by-uid  (throw (ex-info ":applied-by-uid required" {})))
-  (let [original (d/pull db '[* {:payment-application/invoice [:db/id :kontor.invoice/status]
-                                 :payment-application/payment [:db/id]
-                                 :payment-application/commodity [:db/id]}]
+  (let [original (d/pull db '[* {:kontor.payment-application/invoice [:db/id :kontor.invoice/status]
+                                 :kontor.payment-application/payment [:db/id]
+                                 :kontor.payment-application/commodity [:db/id]}]
                          application-eid)
         _ (when-not (:db/id original)
             (throw (ex-info "Application not found" {:eid application-eid})))
-        invoice-eid (get-in original [:payment-application/invoice :db/id])
-        current-status (get-in original [:payment-application/invoice :kontor.invoice/status])
-        original-amount (:payment-application/amount original)
+        invoice-eid (get-in original [:kontor.payment-application/invoice :db/id])
+        current-status (get-in original [:kontor.payment-application/invoice :kontor.invoice/status])
+        original-amount (:kontor.payment-application/amount original)
         negated (.negate ^java.math.BigDecimal original-amount)
         applied-at (or applied-at (java.util.Date.))
         rev-tempid (str "pay-app-rev" tempid-suffix)
         rev-row (cond-> {:db/id rev-tempid
-                         :payment-application/payment
-                         (get-in original [:payment-application/payment :db/id])
-                         :payment-application/invoice invoice-eid
-                         :payment-application/amount negated
-                         :payment-application/commodity
-                         (get-in original [:payment-application/commodity :db/id])
-                         :payment-application/applied-at applied-at
-                         :payment-application/applied-by-uid applied-by-uid
-                         :payment-application/strategy :reversal
-                         :payment-application/reversal-of application-eid}
-                  reason         (assoc :payment-application/reason reason)
-                  reason-note    (assoc :payment-application/reason-note reason-note)
-                  supporting-doc (assoc :payment-application/supporting-doc supporting-doc))
+                         :kontor.payment-application/payment
+                         (get-in original [:kontor.payment-application/payment :db/id])
+                         :kontor.payment-application/invoice invoice-eid
+                         :kontor.payment-application/amount negated
+                         :kontor.payment-application/commodity
+                         (get-in original [:kontor.payment-application/commodity :db/id])
+                         :kontor.payment-application/applied-at applied-at
+                         :kontor.payment-application/applied-by-uid applied-by-uid
+                         :kontor.payment-application/strategy :reversal
+                         :kontor.payment-application/reversal-of application-eid}
+                  reason         (assoc :kontor.payment-application/reason reason)
+                  reason-note    (assoc :kontor.payment-application/reason-note reason-note)
+                  supporting-doc (assoc :kontor.payment-application/supporting-doc supporting-doc))
         ;; Compute new open-after: prior-net + negated.
         prior-applied (applied-amount-of-invoice db invoice-eid nil)
         new-applied (.add ^java.math.BigDecimal prior-applied

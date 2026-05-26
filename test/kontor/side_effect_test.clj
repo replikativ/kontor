@@ -15,13 +15,13 @@
 
 (defn- seed-intent! [k type payload]
   (d/transact *conn*
-              [{:side-effect-intent/key k
-                :side-effect-intent/type type
-                :side-effect-intent/payload payload
-                :side-effect-intent/status :pending
-                :side-effect-intent/created-at (java.util.Date.)
-                :side-effect-intent/retry-count 0
-                :side-effect-intent/max-retries 3}]))
+              [{:kontor.side-effect-intent/key k
+                :kontor.side-effect-intent/type type
+                :kontor.side-effect-intent/payload payload
+                :kontor.side-effect-intent/status :pending
+                :kontor.side-effect-intent/created-at (java.util.Date.)
+                :kontor.side-effect-intent/retry-count 0
+                :kontor.side-effect-intent/max-retries 3}]))
 
 (deftest intent-lifecycle-happy-path
   (seed-intent! "intent-1" :send-email "{:to \"a@b\"}")
@@ -31,13 +31,13 @@
     (se/claim! *conn* eid)
     (testing "after claim, status is :processing"
       (let [intent (se/pull-intent (d/db *conn*) "intent-1")]
-        (is (= :processing (:side-effect-intent/status intent)))
-        (is (some? (:side-effect-intent/processing-at intent)))))
+        (is (= :processing (:kontor.side-effect-intent/status intent)))
+        (is (some? (:kontor.side-effect-intent/processing-at intent)))))
     (se/mark-done! *conn* eid)
     (testing "after mark-done!, status is :done"
       (let [intent (se/pull-intent (d/db *conn*) "intent-1")]
-        (is (= :done (:side-effect-intent/status intent)))
-        (is (some? (:side-effect-intent/processed-at intent)))))))
+        (is (= :done (:kontor.side-effect-intent/status intent)))
+        (is (some? (:kontor.side-effect-intent/processed-at intent)))))))
 
 (deftest intent-failure-retries-then-abandons
   (seed-intent! "intent-2" :send-edi "{:msg \"850\"}")
@@ -46,8 +46,8 @@
     (se/mark-failed! *conn* eid "EDI gateway timeout")
     (testing "first failure: status is :failed, retry-count 1"
       (let [intent (se/pull-intent (d/db *conn*) "intent-2")]
-        (is (= :failed (:side-effect-intent/status intent)))
-        (is (= 1 (:side-effect-intent/retry-count intent)))))
+        (is (= :failed (:kontor.side-effect-intent/status intent)))
+        (is (= 1 (:kontor.side-effect-intent/retry-count intent)))))
     ;; Two more failures should still leave it :failed
     (se/claim! *conn* eid)
     (se/mark-failed! *conn* eid "again")
@@ -55,8 +55,8 @@
     (se/mark-failed! *conn* eid "third strike — at the max")
     (testing "after max retries, status is :abandoned"
       (let [intent (se/pull-intent (d/db *conn*) "intent-2")]
-        (is (= :abandoned (:side-effect-intent/status intent)))
-        (is (= 3 (:side-effect-intent/retry-count intent)))))))
+        (is (= :abandoned (:kontor.side-effect-intent/status intent)))
+        (is (= 3 (:kontor.side-effect-intent/retry-count intent)))))))
 
 (deftest pending-filter-by-type
   (seed-intent! "i-email" :send-email "{}")

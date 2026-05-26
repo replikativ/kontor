@@ -7,7 +7,7 @@
 
      1. Any active `:credit-hold` row for (partner, entity) at
         `:as-of-valid` — i.e. `:placed-at ≤ as-of` AND
-        `:credit-hold/state == :placed` (or unreleased) at as-of AND
+        `:kontor.credit-hold/state == :placed` (or unreleased) at as-of AND
         not yet expired by `:expires-at`.
      2. Otherwise the partner's `:kontor.partner/credit-status` scalar
         (ADR-039 default — `:open | :hold | :review | :closed`).
@@ -34,23 +34,23 @@
 (defn- expired?
   "True iff `:expires-at` is set and ≤ as-of-ms (auto-release)."
   [h as-of-ms]
-  (when-let [exp (:credit-hold/expires-at h)]
+  (when-let [exp (:kontor.credit-hold/expires-at h)]
     (<= (.getTime ^java.util.Date exp) as-of-ms)))
 
 (defn- state-at
-  "Resolve `:credit-hold/state` at valid-time `as-of` via the
+  "Resolve `:kontor.credit-hold/state` at valid-time `as-of` via the
    bitemporal resolver — answers 'what was the state, as known now,
    at as-of-valid'. Returns the keyword or nil if the entity didn't
    exist yet at as-of."
   [db hold-eid ^java.util.Date as-of]
-  (:credit-hold/state
-   (d/pull (d/valid-at db as-of) [:credit-hold/state] hold-eid)))
+  (:kontor.credit-hold/state
+   (d/pull (d/valid-at db as-of) [:kontor.credit-hold/state] hold-eid)))
 
 (defn active-holds-for
   "Pulled `:credit-hold` rows that are active at `:as-of-valid`
    (default: now) for (partner, entity).
 
-   Active = placed-at ≤ as-of AND `:credit-hold/state` at as-of-valid
+   Active = placed-at ≤ as-of AND `:kontor.credit-hold/state` at as-of-valid
    is `:placed` AND not yet expired (per ADR-043 :expires-at auto-
    release; P1-8 fix)."
   ([db {:keys [partner entity as-of-valid]}]
@@ -59,9 +59,9 @@
          rows (d/q '[:find [?h ...]
                      :in $ ?p ?e ?as-of-ms
                      :where
-                     [?h :credit-hold/partner ?p]
-                     [?h :credit-hold/entity ?e]
-                     [?h :credit-hold/placed-at ?placed]
+                     [?h :kontor.credit-hold/partner ?p]
+                     [?h :kontor.credit-hold/entity ?e]
+                     [?h :kontor.credit-hold/placed-at ?placed]
                      [(.getTime ^java.util.Date ?placed) ?placed-ms]
                      [(<= ?placed-ms ?as-of-ms)]]
                    db partner entity as-of-ms)]
@@ -69,7 +69,7 @@
           (map #(d/pull db '[*] %))
           (filter #(= :placed (state-at db (:db/id %) as-of)))
           (remove #(expired? % as-of-ms))
-          (sort-by :credit-hold/placed-at)
+          (sort-by :kontor.credit-hold/placed-at)
           vec))))
 
 (defn credit-status-for
@@ -106,7 +106,7 @@
    :sent/:partially-paid sales invoices for this partner+entity.
 
    ADR-043 P0-4 fix: numeric query, not categorical. Bitemporal
-   via :payment-application/applied-at. Live = computed from
+   via :kontor.payment-application/applied-at. Live = computed from
    :payment-application + :invoice rows; never a cached snapshot."
   ([db {:keys [partner entity as-of-valid]}]
    (let [as-of-valid (or as-of-valid (java.util.Date.))
@@ -146,7 +146,7 @@
 
    Returns BigDecimal. Positive = remittance sitting in suspense.
 
-   ADR-043 P0-3 fix. Bitemporal via :payment-application/applied-at
+   ADR-043 P0-3 fix. Bitemporal via :kontor.payment-application/applied-at
    and :kontor.transaction/effective-date (per ADR-048 the kernel valid-time
    anchor is :tx/valid-from on the writing tx, which equals
    :kontor.transaction/effective-date for kernel builders)."
@@ -189,10 +189,10 @@
                             :with ?app
                             :in $ ?p ?cutoff-ms
                             :where
-                            [?app :payment-application/payment ?tx]
+                            [?app :kontor.payment-application/payment ?tx]
                             [?tx :kontor.transaction/partner ?p]
-                            [?app :payment-application/amount ?amt]
-                            [?app :payment-application/applied-at ?when]
+                            [?app :kontor.payment-application/amount ?amt]
+                            [?app :kontor.payment-application/applied-at ?when]
                             [(.getTime ^java.util.Date ?when) ?when-ms]
                             [(<= ?when-ms ?cutoff-ms)]]
                           db partner as-of-ms)
@@ -254,21 +254,21 @@
   (when-not placed-by-uid (throw (ex-info ":placed-by-uid required" {})))
   (let [placed-at (or placed-at (java.util.Date.))
         row (cond-> {:db/id tempid
-                     :credit-hold/partner partner
-                     :credit-hold/entity entity
-                     :credit-hold/reason-code reason-code
-                     :credit-hold/placed-at placed-at
-                     :credit-hold/placed-by-uid placed-by-uid
-                     :credit-hold/state :placed}
-              approver-uid   (assoc :credit-hold/approver-uid approver-uid)
-              expires-at     (assoc :credit-hold/expires-at expires-at)
-              notes          (assoc :credit-hold/notes notes)
-              supporting-doc (assoc :credit-hold/supporting-doc supporting-doc))
+                     :kontor.credit-hold/partner partner
+                     :kontor.credit-hold/entity entity
+                     :kontor.credit-hold/reason-code reason-code
+                     :kontor.credit-hold/placed-at placed-at
+                     :kontor.credit-hold/placed-by-uid placed-by-uid
+                     :kontor.credit-hold/state :placed}
+              approver-uid   (assoc :kontor.credit-hold/approver-uid approver-uid)
+              expires-at     (assoc :kontor.credit-hold/expires-at expires-at)
+              notes          (assoc :kontor.credit-hold/notes notes)
+              supporting-doc (assoc :kontor.credit-hold/supporting-doc supporting-doc))
         status-tx (sm/record-status-change-tx-data
                    db
                    (cond-> {:entity tempid
                             :entity-type :credit-hold
-                            :facet :credit-hold/state
+                            :facet :kontor.credit-hold/state
                             :from :nil
                             :to :placed
                             :changed-at placed-at
@@ -312,14 +312,14 @@
   (when-not released-by-uid  (throw (ex-info ":released-by-uid required" {})))
   (let [now (or released-at (java.util.Date.))
         update (cond-> {:db/id hold-eid}
-                 notes          (assoc :credit-hold/notes notes)
-                 supporting-doc (assoc :credit-hold/supporting-doc
+                 notes          (assoc :kontor.credit-hold/notes notes)
+                 supporting-doc (assoc :kontor.credit-hold/supporting-doc
                                        supporting-doc))
         status-tx (sm/record-status-change-tx-data
                    db
                    (cond-> {:entity hold-eid
                             :entity-type :credit-hold
-                            :facet :credit-hold/state
+                            :facet :kontor.credit-hold/state
                             :to :released
                             :changed-at now
                             :changed-by-uid released-by-uid

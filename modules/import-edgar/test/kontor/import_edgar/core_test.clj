@@ -72,7 +72,7 @@
       (is (= 0 (:skipped result))))
     (testing "one :reported-fact row landed"
       (let [n (count (d/q '[:find [?f ...]
-                            :where [?f :reported-fact/external-id]]
+                            :where [?f :kontor.reported-fact/external-id]]
                           (d/db conn)))]
         (is (= 1 n))))))
 
@@ -92,7 +92,7 @@
       (is (= 1 (:skipped r))))
     (testing "still one :reported-fact row"
       (is (= 1 (count (d/q '[:find [?f ...]
-                             :where [?f :reported-fact/external-id]]
+                             :where [?f :kontor.reported-fact/external-id]]
                            (d/db conn))))))))
 
 (deftest restatement-records-supersession-chain-and-closes-prior-vt-window
@@ -119,34 +119,34 @@
 
     (testing "two :reported-fact rows exist now"
       (is (= 2 (count (d/q '[:find [?f ...]
-                             :where [?f :reported-fact/external-id]]
+                             :where [?f :kontor.reported-fact/external-id]]
                            (d/db conn))))))
 
     (testing "the original carries :superseded-by ref to the amended"
       (let [orig-eid (d/q '[:find ?f . :in $ ?accn
-                            :where [?f :reported-fact/accession-number ?accn]]
+                            :where [?f :kontor.reported-fact/accession-number ?accn]]
                           (d/db conn) "0001193125-09-214859")
             amend-eid (d/q '[:find ?f . :in $ ?accn
-                             :where [?f :reported-fact/accession-number ?accn]]
+                             :where [?f :kontor.reported-fact/accession-number ?accn]]
                            (d/db conn) "0001193125-10-012091")
-            orig (d/pull (d/db conn) [:reported-fact/superseded-by] orig-eid)]
+            orig (d/pull (d/db conn) [:kontor.reported-fact/superseded-by] orig-eid)]
         (is (= amend-eid
-               (-> orig :reported-fact/superseded-by :db/id)))))
+               (-> orig :kontor.reported-fact/superseded-by :db/id)))))
 
     (testing "current-fact returns the amended value"
       (let [head (edgar/current-fact conn eid "us-gaap:AccruedLiabilitiesCurrent"
                                      #inst "2008-09-27" :usd)]
-        (is (= 4224000000M (:reported-fact/value-bigdec head)))
-        (is (= "10-K/A" (:reported-fact/form head)))))
+        (is (= 4224000000M (:kontor.reported-fact/value-bigdec head)))
+        (is (= "10-K/A" (:kontor.reported-fact/form head)))))
 
     (testing "fact-history returns both in chronological order"
       (let [hist (edgar/fact-history conn eid "us-gaap:AccruedLiabilitiesCurrent"
                                      #inst "2008-09-27" :usd)]
         (is (= 2 (count hist)))
         (is (= [3719000000M 4224000000M]
-               (mapv :reported-fact/value-bigdec hist)))
+               (mapv :kontor.reported-fact/value-bigdec hist)))
         (is (= ["10-K" "10-K/A"]
-               (mapv :reported-fact/form hist)))))
+               (mapv :kontor.reported-fact/form hist)))))
 
     (testing "bitemporal :as-of-valid BEFORE amendment returns ORIGINAL fact"
       ;; Query at 2009-12-01 (between original 2009-10-27 and amend 2010-01-25):
@@ -155,22 +155,22 @@
       (let [before-amendment #inst "2009-12-01"
             db (d/valid-at (d/db conn) before-amendment)
             n  (count (d/q '[:find [?f ...]
-                             :where [?f :reported-fact/external-id]]
+                             :where [?f :kontor.reported-fact/external-id]]
                            db))]
         (is (= 1 n) "only one fact visible at the pre-amendment timestamp")
         (let [head (->> (d/q '[:find [?f ...]
-                               :where [?f :reported-fact/external-id]]
+                               :where [?f :kontor.reported-fact/external-id]]
                              db)
                         (mapv #(d/pull db '[*] %))
                         first)]
-          (is (= 3719000000M (:reported-fact/value-bigdec head))
+          (is (= 3719000000M (:kontor.reported-fact/value-bigdec head))
               "original 10-K value at pre-amendment vt"))))
 
     (testing "bitemporal :as-of-valid AFTER amendment returns AMENDED fact"
       (let [after-amendment #inst "2010-02-01"
             db (d/valid-at (d/db conn) after-amendment)
             head (->> (d/q '[:find [?f ...]
-                             :where [?f :reported-fact/external-id]]
+                             :where [?f :kontor.reported-fact/external-id]]
                            db)
                       (mapv #(d/pull db '[*] %))
                       ;; The original's tx-vt has been closed at the
@@ -178,7 +178,7 @@
                       ;; fact appears in the valid-at view.
                       first)]
         (is (some? head))
-        (is (= 4224000000M (:reported-fact/value-bigdec head))
+        (is (= 4224000000M (:kontor.reported-fact/value-bigdec head))
             "amended 10-K/A value at post-amendment vt")))))
 
 (deftest full-fixture-ingest-records-multiple-supersessions
@@ -212,5 +212,5 @@
         ;; Apple AccumulatedOCI restatement; sign flipped per the
         ;; ASC 605-25 revenue-recognition restatement narrative.
         (is (neg? (.signum ^java.math.BigDecimal
-                           (:reported-fact/value-bigdec head)))
+                           (:kontor.reported-fact/value-bigdec head)))
             "amended value is negative (sign flipped from +8M to -9M)")))))

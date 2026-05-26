@@ -378,20 +378,20 @@
    consequence to a concrete `kontor.tax-schedule` schedule map at
    `as-of`. Supported shapes:
 
-     {:schedule/type :flat
+     {:kontor.schedule/type :flat
       :rate-from :parameter :parameter <code>}
-     {:schedule/type :flat :rate <bigdec>}              (inline literal)
-     {:schedule/type :progressive-bracket
+     {:kontor.schedule/type :flat :rate <bigdec>}              (inline literal)
+     {:kontor.schedule/type :progressive-bracket
       :brackets-from :parameter :parameter <code>}
-     {:schedule/type :progressive-bracket :brackets [{:rate ... :upper ...} ...]}
-     {:schedule/type :formula :fn <kw>}                 (resolves via compute-fn)
+     {:kontor.schedule/type :progressive-bracket :brackets [{:rate ... :upper ...} ...]}
+     {:kontor.schedule/type :formula :fn <kw>}                 (resolves via compute-fn)
      other schedule shapes pass through unchanged
 
    Lets a `:kontor.provision/consequence` express \"swap the schedule based
    on a parameter\" cleanly — CN HNTE 15%, FR PME progressive, IN
    §115BAA new-regime flat 22%."
   [template db ^java.util.Date as-of]
-  (case (:schedule/type template)
+  (case (:kontor.schedule/type template)
     :flat
     (assoc template :rate
            (case (:rate-from template)

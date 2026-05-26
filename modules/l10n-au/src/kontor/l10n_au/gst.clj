@@ -27,7 +27,7 @@
    is **Simpler BAS**, which only reports G1, 1A, 1B (and 1H for
    GST instalments). Full BAS adds the G2/G3/G4/G10/G11/W1/W2 labels
    and is mandatory at AUD 10M+. The `compute-return` :bas/mode opt
-   selects which label set ships in `:return/lines`.
+   selects which label set ships in `:kontor.return/lines`.
 
    ## Scope notes (per AU verification 2026-05-11)
 
@@ -157,12 +157,12 @@
                                   request :simpler when they qualify.
 
    Returns:
-     {:return/form    \"BAS\"
-      :return/mode    :simpler | :full
-      :return/period  {…}
-      :return/lines   {<code> Money :AUD …}
-      :return/net-gst Money            ; line 1A - line 1B
-      :return/outcome :payment | :refund | :nil-return}"
+     {:kontor.return/form    \"BAS\"
+      :kontor.return/mode    :simpler | :full
+      :kontor.return/period  {…}
+      :kontor.return/lines   {<code> Money :AUD …}
+      :kontor.return/net-gst Money            ; line 1A - line 1B
+      :kontor.return/outcome :payment | :refund | :nil-return}"
   [conn {:keys [from to year quarter month] :as opts}]
   (let [period (cond
                  (and from to) {:from from :to to :kind :explicit}
@@ -180,12 +180,12 @@
         sign (.signum ^java.math.BigDecimal (:amount net-gst))]
     (let [mode (get opts :bas/mode :full)
           all-lines (into {} (map (fn [[k v]] [(keyword k) (m-cents v)]) vals*))]
-      {:return/form    "BAS"
-       :return/mode    mode
-       :return/period  period
-       :return/lines   (maybe-filter-labels all-lines mode)
-       :return/net-gst (m-cents net-gst)
-       :return/outcome (cond
+      {:kontor.return/form    "BAS"
+       :kontor.return/mode    mode
+       :kontor.return/period  period
+       :kontor.return/lines   (maybe-filter-labels all-lines mode)
+       :kontor.return/net-gst (m-cents net-gst)
+       :kontor.return/outcome (cond
                          (neg? sign) :refund
                          (pos? sign) :payment
                          :else       :nil-return)})))

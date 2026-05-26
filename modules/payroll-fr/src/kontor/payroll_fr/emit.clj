@@ -7,7 +7,7 @@
       net-entreprises.fr (kontor does NOT transmit).
 
    2. `build-dsn-audit-doc-tx-data` — ADR-068 builder companion that
-      records what was emitted with the right `:audit-doc/language`
+      records what was emitted with the right `:kontor.audit-doc/language`
       slot.
 
    3. `terminate-employment-tx-data` — ADR-068 builder for an
@@ -81,13 +81,13 @@
                              "FrDsnEmitProvider opts. Consumer's engine "
                              "produces the authoritative file via "
                              "dsn-info.fr / partner API."))]
-      [{:audit-doc/code doc-code
-        :audit-doc/type :regulator-clearance
-        :audit-doc/title title
-        :audit-doc/description description
-        :audit-doc/uploaded-at (java.util.Date.)
-        :audit-doc/category :payroll-filing
-        :audit-doc/language language}])))
+      [{:kontor.audit-doc/code doc-code
+        :kontor.audit-doc/type :regulator-clearance
+        :kontor.audit-doc/title title
+        :kontor.audit-doc/description description
+        :kontor.audit-doc/uploaded-at (java.util.Date.)
+        :kontor.audit-doc/category :payroll-filing
+        :kontor.audit-doc/language language}])))
 
 ;; ============================================================================
 ;; build-dsn-audit-doc-tx-data — companion of dsn/facts->payload
@@ -132,14 +132,14 @@
                                          "payload stored at " submitted-uri)
                       :else (str "DSN payload generated for " title))]
     [(cond->
-      {:audit-doc/code doc-code
-       :audit-doc/type :regulator-clearance
-       :audit-doc/title title
-       :audit-doc/description description
-       :audit-doc/uploaded-at (java.util.Date.)
-       :audit-doc/category :payroll-filing
-       :audit-doc/language language}
-       submitted-uri (assoc :audit-doc/storage-uri submitted-uri))]))
+      {:kontor.audit-doc/code doc-code
+       :kontor.audit-doc/type :regulator-clearance
+       :kontor.audit-doc/title title
+       :kontor.audit-doc/description description
+       :kontor.audit-doc/uploaded-at (java.util.Date.)
+       :kontor.audit-doc/category :payroll-filing
+       :kontor.audit-doc/language language}
+       submitted-uri (assoc :kontor.audit-doc/storage-uri submitted-uri))]))
 
 ;; ============================================================================
 ;; terminate-employment-tx-data — DSN 'fin de contrat' helper
@@ -167,9 +167,9 @@
   "Pure ADR-068 tx-data builder for an employment termination event.
    kontor:
 
-   - status-machine transitions :employment/state → :terminated
-   - sets :employment/end-date to last-day-worked
-   - sets :employment/termination-reason (open-set keyword)
+   - status-machine transitions :kontor.employment/state → :terminated
+   - sets :kontor.employment/end-date to last-day-worked
+   - sets :kontor.employment/termination-reason (open-set keyword)
    - emits a :termination-event :audit-doc carrying the data the DSN
      engine needs (motif de rupture, indemnités de rupture, attestation
      Pôle emploi data)
@@ -217,20 +217,20 @@
               (or (some-> indemnites keys vec str) "[]"))
         doc-tempid (str "termination-event-doc-" employment-eid)
         audit-doc {:db/id doc-tempid
-                   :audit-doc/code doc-code
-                   :audit-doc/type :termination-event
-                   :audit-doc/title (str "Rupture — " (name termination-reason))
-                   :audit-doc/description desc
-                   :audit-doc/uploaded-at (java.util.Date.)
-                   :audit-doc/category :hr-personnel
-                   :audit-doc/language language}
+                   :kontor.audit-doc/code doc-code
+                   :kontor.audit-doc/type :termination-event
+                   :kontor.audit-doc/title (str "Rupture — " (name termination-reason))
+                   :kontor.audit-doc/description desc
+                   :kontor.audit-doc/uploaded-at (java.util.Date.)
+                   :kontor.audit-doc/category :hr-personnel
+                   :kontor.audit-doc/language language}
         emp-update (cond->
                     {:db/id employment-eid
-                     :employment/state :terminated
-                     :employment/end-date last-day-worked
-                     :employment/termination-reason termination-reason}
+                     :kontor.employment/state :terminated
+                     :kontor.employment/end-date last-day-worked
+                     :kontor.employment/termination-reason termination-reason}
                      final-pay-period-end-date
-                     (assoc :employment/final-pay-period-end-date
+                     (assoc :kontor.employment/final-pay-period-end-date
                             final-pay-period-end-date))]
     [audit-doc emp-update]))
 

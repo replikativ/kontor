@@ -220,12 +220,12 @@
         (is (nil? (:error result)) (str result))
         (let [eid (d/q '[:find ?e .
                          :in $ ?c
-                         :where [?e :audit-doc/code ?c]]
+                         :where [?e :kontor.audit-doc/code ?c]]
                        (d/db conn) "DOC-AGENT-1")
               row (d/pull (d/db conn) '[*] eid)]
           (is (some? eid))
-          (is (= :hr-grievance (:audit-doc/category row)))
-          (is (= :de (:audit-doc/language row)))))
+          (is (= :hr-grievance (:kontor.audit-doc/category row)))
+          (is (= :de (:kontor.audit-doc/language row)))))
       (finally (reset! kt/registry original)))))
 
 ;; ============================================================================

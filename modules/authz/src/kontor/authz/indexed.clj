@@ -7,12 +7,12 @@
 
    ## How it works
 
-   1. `get-permission-paths` walks the *schema* (`:authz.relation/*`
-      + `:authz.permission/*` definitions) and builds a tree of
+   1. `get-permission-paths` walks the *schema* (`:kontor.authz.relation/*`
+      + `:kontor.authz.permission/*` definitions) and builds a tree of
       **paths** — every way `permission` on `resource-type` can be
       granted: a direct relation, an arrow through another relation
       or permission, or a self-permission. Schema-only, cheap.
-   2. The `traverse-*` fns walk the *data* (`:authz.relationship/*`
+   2. The `traverse-*` fns walk the *data* (`:kontor.authz.relationship/*`
       edges) along those paths via `index-range` scans over the
       `forward` / `reverse` tuple indices. Each scan is already
       sorted ascending by the trailing ref eid (research note 41);
@@ -61,14 +61,14 @@
 ;; ============================================================================
 
 (defn- extract-resource-id
-  "The trailing (resource) eid of a `:authz.relationship/forward`
+  "The trailing (resource) eid of a `:kontor.authz.relationship/forward`
    tuple datom — `[subject-type subject relation resource-type
    resource]`."
   [{v :v}]
   (let [[_st _se _rn _rt resource-eid] v] resource-eid))
 
 (defn- extract-subject-id
-  "The trailing (subject) eid of a `:authz.relationship/reverse`
+  "The trailing (subject) eid of a `:kontor.authz.relationship/reverse`
    tuple datom — `[resource-type resource relation subject-type
    subject]`."
   [{v :v}]
@@ -79,14 +79,14 @@
 ;; ============================================================================
 
 (defn relation-datoms
-  "Lazy seq of `:authz.relation/identity` datoms for a (resource-type,
+  "Lazy seq of `:kontor.authz.relation/identity` datoms for a (resource-type,
    relation-name) — one per declared subject-type. The `:a`/`:z`
    keyword sentinels span every subject-type; this requires
    subject-type keywords to sort within `:a … :z` (kontor's type
    vocabulary does)."
   [db resource-type relation-name]
   (if (and resource-type relation-name)
-    (idx-range db :authz.relation/identity
+    (idx-range db :kontor.authz.relation/identity
                [resource-type relation-name :a]
                [resource-type relation-name :z])
     (throw (ex-info "relation-datoms: resource-type + relation-name required"
@@ -97,7 +97,7 @@
    `resource-type` — a vector of pulled permission maps (a permission
    can have several union clauses)."
   [db resource-type permission-name]
-  (->> (d/datoms db :avet :authz.permission/by-resource
+  (->> (d/datoms db :avet :kontor.authz.permission/by-resource
                  [resource-type permission-name])
        (map :e)
        (map #(d/pull db '[*] %))
@@ -131,7 +131,7 @@
      (->> perm-defs
           (mapcat
            (fn [{perm-eid :db/id
-                 :authz.permission/keys [source-relation-name
+                 :kontor.authz.permission/keys [source-relation-name
                                          target-type target-name]}]
              (cond
                (contains? visited-perms perm-eid)
@@ -218,7 +218,7 @@
              (case (:type path)
                :relation
                (when (= subject-type (:subject-type path))
-                 (seq (d/datoms db :avet :authz.relationship/forward
+                 (seq (d/datoms db :avet :kontor.authz.relationship/forward
                                 [subject-type subject-eid (:name path)
                                  resource-type resource-eid])))
 
@@ -229,7 +229,7 @@
                (let [via-relation      (:via path)
                      intermediate-type (:target-type path)
                      intermediates
-                     (->> (idx-range db :authz.relationship/reverse
+                     (->> (idx-range db :kontor.authz.relationship/reverse
                                      [resource-type resource-eid via-relation
                                       intermediate-type 0]
                                      [resource-type resource-eid via-relation
@@ -239,7 +239,7 @@
                    ;; arrow → relation: subject must have target-relation
                    ;; to some intermediate connected to the resource.
                    (some (fn [intermediate-eid]
-                           (seq (d/datoms db :avet :authz.relationship/forward
+                           (seq (d/datoms db :avet :kontor.authz.relationship/forward
                                           [subject-type subject-eid
                                            target-relation intermediate-type
                                            intermediate-eid])))
@@ -266,7 +266,7 @@
   (case (:type path)
     :relation
     (when (= subject-type (:subject-type path))
-      (->> (idx-range db :authz.relationship/forward
+      (->> (idx-range db :kontor.authz.relationship/forward
                       [subject-type subject-eid (:name path) resource-type
                        (or cursor-eid 0)]
                       [subject-type subject-eid (:name path) resource-type
@@ -288,7 +288,7 @@
         ;; arrow → relation: intermediates the subject has
         ;; target-relation to, then resources via via-relation.
         (let [intermediate-eids
-              (->> (idx-range db :authz.relationship/forward
+              (->> (idx-range db :kontor.authz.relationship/forward
                               [subject-type subject-eid target-relation
                                intermediate-type 0]
                               [subject-type subject-eid target-relation
@@ -297,7 +297,7 @@
                    (filter some?))
               resource-seqs
               (map (fn [intermediate-eid]
-                     (->> (idx-range db :authz.relationship/forward
+                     (->> (idx-range db :kontor.authz.relationship/forward
                                      [intermediate-type intermediate-eid
                                       via-relation resource-type
                                       (or cursor-eid 0)]
@@ -322,7 +322,7 @@
               resource-seqs
               (->> intermediate-eids
                    (map (fn [intermediate-eid]
-                          (->> (idx-range db :authz.relationship/forward
+                          (->> (idx-range db :kontor.authz.relationship/forward
                                           [intermediate-type intermediate-eid
                                            via-relation resource-type
                                            (or cursor-eid 0)]
@@ -356,7 +356,7 @@
                  (case path-type
                    :relation
                    (when (= subject-type (:subject-type path))
-                     (->> (idx-range db :authz.relationship/forward
+                     (->> (idx-range db :kontor.authz.relationship/forward
                                      [subject-type subject-eid (:name path)
                                       resource-type 0]
                                      [subject-type subject-eid (:name path)
@@ -378,7 +378,7 @@
                          intermediate-type (:target-type path)]
                      (if-let [target-relation (:target-relation path)]
                        (let [intermediate-eids
-                             (->> (idx-range db :authz.relationship/forward
+                             (->> (idx-range db :kontor.authz.relationship/forward
                                              [subject-type subject-eid
                                               target-relation intermediate-type 0]
                                              [subject-type subject-eid
@@ -387,7 +387,7 @@
                                   (map extract-resource-id))
                              resource-seqs
                              (map (fn [intermediate-eid]
-                                    (->> (idx-range db :authz.relationship/forward
+                                    (->> (idx-range db :kontor.authz.relationship/forward
                                                     [intermediate-type
                                                      intermediate-eid via-relation
                                                      resource-type 0]
@@ -410,7 +410,7 @@
                              resource-seqs
                              (->> intermediate-eids
                                   (map (fn [intermediate-eid]
-                                         (->> (idx-range db :authz.relationship/forward
+                                         (->> (idx-range db :kontor.authz.relationship/forward
                                                          [intermediate-type
                                                           intermediate-eid via-relation
                                                           resource-type 0]
@@ -484,7 +484,7 @@
    (case (:type path)
      :relation
      (when (= subject-type (:subject-type path))
-       (->> (idx-range db :authz.relationship/reverse
+       (->> (idx-range db :kontor.authz.relationship/reverse
                        [resource-type resource-eid (:name path) subject-type 0]
                        [resource-type resource-eid (:name path) subject-type
                         Long/MAX_VALUE])
@@ -516,7 +516,7 @@
         ;; via via-relation, then subjects with target-relation to
         ;; each intermediate.
         (let [intermediate-eids
-              (->> (idx-range db :authz.relationship/reverse
+              (->> (idx-range db :kontor.authz.relationship/reverse
                               [resource-type resource-eid via-relation
                                intermediate-type 0]
                               [resource-type resource-eid via-relation
@@ -524,7 +524,7 @@
                    (map extract-subject-id))
               subject-seqs
               (map (fn [intermediate-eid]
-                     (->> (idx-range db :authz.relationship/reverse
+                     (->> (idx-range db :kontor.authz.relationship/reverse
                                      [intermediate-type intermediate-eid
                                       target-relation subject-type 0]
                                      [intermediate-type intermediate-eid
@@ -540,7 +540,7 @@
         ;; then recursively subjects with the target permission on each.
         (let [target-permission (:target-permission path)
               intermediate-eids
-              (->> (idx-range db :authz.relationship/reverse
+              (->> (idx-range db :kontor.authz.relationship/reverse
                               [resource-type resource-eid via-relation
                                intermediate-type 0]
                               [resource-type resource-eid via-relation

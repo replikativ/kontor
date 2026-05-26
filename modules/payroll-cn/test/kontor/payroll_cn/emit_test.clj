@@ -70,25 +70,25 @@
       (is (= 1 (count docs))))
     (let [doc (first docs)]
       (testing "audit-doc carries the canonical category"
-        (is (= :payroll-filing (:audit-doc/category doc))))
+        (is (= :payroll-filing (:kontor.audit-doc/category doc))))
       (testing "language tag is zh-cn"
-        (is (= :zh-cn (:audit-doc/language doc))))
+        (is (= :zh-cn (:kontor.audit-doc/language doc))))
       (testing "type is :emit-payload"
-        (is (= :emit-payload (:audit-doc/type doc))))
+        (is (= :emit-payload (:kontor.audit-doc/type doc))))
       (testing "code follows the CN-IIT-<period>-<entity> convention"
-        (is (= "CN-IIT-2026-04-ACME-CN" (:audit-doc/code doc))))
+        (is (= "CN-IIT-2026-04-ACME-CN" (:kontor.audit-doc/code doc))))
       (testing "inline payload is non-empty + bilingual"
-        (is (some? (:audit-doc/inline-payload doc)))
-        (is (str/includes? (:audit-doc/inline-payload doc)
+        (is (some? (:kontor.audit-doc/inline-payload doc)))
+        (is (str/includes? (:kontor.audit-doc/inline-payload doc)
                            "员工编号 / employee-id")))
       (testing "storage URI defaults under file://iit/"
-        (is (str/starts-with? (:audit-doc/storage-uri doc)
+        (is (str/starts-with? (:kontor.audit-doc/storage-uri doc)
                               "file://iit/2026-04/")))
       (testing "linkage attrs to period + entity"
-        (is (= 99 (:audit-doc/payroll-period doc)))
-        (is (= 42 (:audit-doc/payroll-entity doc))))
+        (is (= 99 (:kontor.audit-doc/payroll-period doc)))
+        (is (= 42 (:kontor.audit-doc/payroll-entity doc))))
       (testing "unmapped-count is zero (all kinds known)"
-        (is (= 0 (:audit-doc/unmapped-count doc)))))))
+        (is (= 0 (:kontor.audit-doc/unmapped-count doc)))))))
 
 (deftest emit-provider-rejects-empty-facts
   (let [provider (emit/make-provider {:pay-period-code "2026-04"
@@ -101,7 +101,7 @@
                                       :entity-code "ACME-CN"
                                       :uri-prefix "s3://payroll-archive/cn/"})
         [doc] (pp/emit-payroll-events provider [fact-1] {})]
-    (is (str/starts-with? (:audit-doc/storage-uri doc)
+    (is (str/starts-with? (:kontor.audit-doc/storage-uri doc)
                           "s3://payroll-archive/cn/"))))
 
 (deftest emit-provider-derives-period-from-date
@@ -109,4 +109,4 @@
                                       :entity-code "ACME-CN"})
         [doc] (pp/emit-payroll-events provider [fact-1] {})]
     ;; The pay-period-date #inst "2026-04-30" formats to "2026-04" (UTC).
-    (is (str/includes? (:audit-doc/code doc) "2026-04"))))
+    (is (str/includes? (:kontor.audit-doc/code doc) "2026-04"))))

@@ -5,7 +5,7 @@
    Covers:
    - define-lease! records a :lease at :draft, stamps :kontor.audit/create-uid,
      validates :payment-frequency / :payment-timing.
-   - register-exempt-lease! creates a :schedule/kind :lease-expense
+   - register-exempt-lease! creates a :kontor.schedule/kind :lease-expense
      with no :lease entity; exempt-lease-period-amount straight-lines
      (last period absorbs the remainder); plan-exempt-lease-charge
      builds a balanced sealed posting."
@@ -31,13 +31,13 @@
                  {:kontor.partner/external-id "U-cfo"    :kontor.partner/name "CFO"}
                  {:kontor.partner/external-id "L-acme"   :kontor.partner/name "Acme Properties"}
                  {:db/id "class-rou"
-                  :asset-class/code "rou-property"
-                  :asset-class/name "Right-of-Use — Property"}
+                  :kontor.asset-class/code "rou-property"
+                  :kontor.asset-class/name "Right-of-Use — Property"}
                  {:db/id "doc-lease"
-                  :audit-doc/code "LEASE-CONTRACT-1"
-                  :audit-doc/type :lease-contract
-                  :audit-doc/storage-uri "s3://docs/lease-1"
-                  :audit-doc/uploaded-at #inst "2026-01-01"}
+                  :kontor.audit-doc/code "LEASE-CONTRACT-1"
+                  :kontor.audit-doc/type :lease-contract
+                  :kontor.audit-doc/storage-uri "s3://docs/lease-1"
+                  :kontor.audit-doc/uploaded-at #inst "2026-01-01"}
                  {:db/id "acct-lease-exp" :kontor.account/code "6740"
                   :kontor.account/name "Short-term Lease Expense"
                   :kontor.account/type :expense :kontor.account/active true}
@@ -54,8 +54,8 @@
 (defn- p   [db code] (ref-eid db :kontor.partner/external-id code))
 (defn- acct [db code] (ref-eid db :kontor.account/code code))
 (defn- journal [db] (ref-eid db :kontor.journal/code "GEN"))
-(defn- class-eid [db] (ref-eid db :asset-class/code "rou-property"))
-(defn- adoc [db] (ref-eid db :audit-doc/code "LEASE-CONTRACT-1"))
+(defn- class-eid [db] (ref-eid db :kontor.asset-class/code "rou-property"))
+(defn- adoc [db] (ref-eid db :kontor.audit-doc/code "LEASE-CONTRACT-1"))
 
 ;; ============================================================================
 ;; define-lease!
@@ -79,10 +79,10 @@
              :changed-by-uid (p db "U-cfo")})
         l (lease/pull-lease (d/db conn) "LSE-1")]
     (testing "the lease is recorded at :draft"
-      (is (= :draft (:lease/status l)))
-      (is (= 60 (:lease/term-months l)))
-      (is (= 0.05M (:lease/discount-rate l)))
-      (is (= :in-arrears (:lease/payment-timing l))))
+      (is (= :draft (:kontor.lease/status l)))
+      (is (= 60 (:kontor.lease/term-months l)))
+      (is (= 0.05M (:kontor.lease/discount-rate l)))
+      (is (= :in-arrears (:kontor.lease/payment-timing l))))
     (testing ":kontor.audit/create-uid is stamped to the recording actor"
       (is (= (p (d/db conn) "U-cfo")
              (:db/id (:kontor.audit/create-uid (d/pull (d/db conn) [:kontor.audit/create-uid]
@@ -92,7 +92,7 @@
                              :in $ ?e
                              :where
                              [?h :kontor.status-history/entity ?e]
-                             [?h :kontor.status-history/facet :lease/status]]
+                             [?h :kontor.status-history/facet :kontor.lease/status]]
                            (d/db conn) (lease/by-code (d/db conn) "LSE-1"))))))))
 
 (deftest define-lease-validates-enums
@@ -127,10 +127,10 @@
                                          :start-date #inst "2026-03-01"
                                          :term-months 9})
         sched (schedule/by-code (d/db conn) "EXEMPT-1")]
-    (testing "a :schedule/kind :lease-expense is created — no :lease entity"
+    (testing "a :kontor.schedule/kind :lease-expense is created — no :lease entity"
       (is (some? sched))
-      (is (= :lease-expense (:schedule/kind
-                             (d/pull (d/db conn) [:schedule/kind] sched))))
+      (is (= :lease-expense (:kontor.schedule/kind
+                             (d/pull (d/db conn) [:kontor.schedule/kind] sched))))
       (is (nil? (lease/by-code (d/db conn) "EXEMPT-1"))
           "the exemption path creates no :lease"))
     (testing "exempt-lease-period-amount straight-lines, last period absorbs the remainder"

@@ -65,24 +65,24 @@
                 :timestamp timestamp})]
     [;; S-1200 audit-doc
      {:db/id (str "esocial-s1200-" cpf "-" per-code)
-      :audit-doc/code (str "ESOCIAL-S1200-" employer-cnpj "-" cpf "-" per-code)
-      :audit-doc/type :payroll-filing
-      :audit-doc/title (str "eSocial S-1200 Remuneração — " cpf " — " per-code)
-      :audit-doc/description "eSocial S-1200 — Remuneração de Trabalhador (per-employee monthly)"
-      :audit-doc/category :payroll-filing
-      :audit-doc/language (or language :pt-br)
-      :audit-doc/uploaded-at (Date.)
-      :audit-doc/inline-payload (esocial/emit-xml s1200)}
+      :kontor.audit-doc/code (str "ESOCIAL-S1200-" employer-cnpj "-" cpf "-" per-code)
+      :kontor.audit-doc/type :payroll-filing
+      :kontor.audit-doc/title (str "eSocial S-1200 Remuneração — " cpf " — " per-code)
+      :kontor.audit-doc/description "eSocial S-1200 — Remuneração de Trabalhador (per-employee monthly)"
+      :kontor.audit-doc/category :payroll-filing
+      :kontor.audit-doc/language (or language :pt-br)
+      :kontor.audit-doc/uploaded-at (Date.)
+      :kontor.audit-doc/inline-payload (esocial/emit-xml s1200)}
      ;; S-1210 audit-doc
      {:db/id (str "esocial-s1210-" cpf "-" per-code)
-      :audit-doc/code (str "ESOCIAL-S1210-" employer-cnpj "-" cpf "-" per-code)
-      :audit-doc/type :payroll-filing
-      :audit-doc/title (str "eSocial S-1210 Pagamentos — " cpf " — " per-code)
-      :audit-doc/description "eSocial S-1210 — Pagamentos de Rendimentos do Trabalho"
-      :audit-doc/category :payroll-filing
-      :audit-doc/language (or language :pt-br)
-      :audit-doc/uploaded-at (Date.)
-      :audit-doc/inline-payload (esocial/emit-xml s1210)}]))
+      :kontor.audit-doc/code (str "ESOCIAL-S1210-" employer-cnpj "-" cpf "-" per-code)
+      :kontor.audit-doc/type :payroll-filing
+      :kontor.audit-doc/title (str "eSocial S-1210 Pagamentos — " cpf " — " per-code)
+      :kontor.audit-doc/description "eSocial S-1210 — Pagamentos de Rendimentos do Trabalho"
+      :kontor.audit-doc/category :payroll-filing
+      :kontor.audit-doc/language (or language :pt-br)
+      :kontor.audit-doc/uploaded-at (Date.)
+      :kontor.audit-doc/inline-payload (esocial/emit-xml s1210)}]))
 
 (defn ^:private fechamento-audit-doc
   "Per-pay-period S-1299 fechamento (period-close) audit-doc."
@@ -93,14 +93,14 @@
                 :per-apur per-apur
                 :timestamp timestamp})]
     {:db/id (str "esocial-s1299-" per-code)
-     :audit-doc/code (str "ESOCIAL-S1299-" employer-cnpj "-" per-code)
-     :audit-doc/type :payroll-filing
-     :audit-doc/title (str "eSocial S-1299 Fechamento — " per-code)
-     :audit-doc/description "eSocial S-1299 — Fechamento dos Eventos Periódicos"
-     :audit-doc/category :payroll-filing
-     :audit-doc/language (or language :pt-br)
-     :audit-doc/uploaded-at (Date.)
-     :audit-doc/inline-payload (esocial/emit-xml s1299)}))
+     :kontor.audit-doc/code (str "ESOCIAL-S1299-" employer-cnpj "-" per-code)
+     :kontor.audit-doc/type :payroll-filing
+     :kontor.audit-doc/title (str "eSocial S-1299 Fechamento — " per-code)
+     :kontor.audit-doc/description "eSocial S-1299 — Fechamento dos Eventos Periódicos"
+     :kontor.audit-doc/category :payroll-filing
+     :kontor.audit-doc/language (or language :pt-br)
+     :kontor.audit-doc/uploaded-at (Date.)
+     :kontor.audit-doc/inline-payload (esocial/emit-xml s1299)}))
 
 ;; ============================================================================
 ;; BrESocialEmitProvider — PayrollEmitProvider impl
@@ -146,8 +146,8 @@
       (cond->> all-docs
         uri-prefix
         (mapv (fn [doc]
-                (let [code (:audit-doc/code doc)]
-                  (assoc doc :audit-doc/storage-uri
+                (let [code (:kontor.audit-doc/code doc)]
+                  (assoc doc :kontor.audit-doc/storage-uri
                          (str uri-prefix code ".xml"))))))
       ;; The above thread-last is a no-op when uri-prefix is nil;
       ;; return the bare list.
@@ -165,7 +165,7 @@
      :dt-pgto                  Date (default = per-apur)
      :employee-cpf->matricula  map CPF → matrícula
      :language                 :pt-br (default) | :en (informational)
-     :uri-prefix               string — prefix for :audit-doc/storage-uri
+     :uri-prefix               string — prefix for :kontor.audit-doc/storage-uri
      :timestamp                Date for event-ID synthesis (default now)"
   [opts]
   (require-opts! opts [:employer-cnpj :per-apur :cod-lotacao])
@@ -203,15 +203,15 @@
                  (throw (ex-info "Unknown event-type" {:type event-type
                                                        :known #{:s-1000 :s-1005 :s-1010 :s-1020}})))
            type-name (-> event-type name str/upper-case)]
-       {:audit-doc/code (str "ESOCIAL-" type-name "-" employer-cnpj "-"
+       {:kontor.audit-doc/code (str "ESOCIAL-" type-name "-" employer-cnpj "-"
                              (.getTime ^Date (Date.)))
-        :audit-doc/type :payroll-filing
-        :audit-doc/title (str "eSocial " type-name " — table event")
-        :audit-doc/description (str "eSocial " type-name " table event (one-time / on-change)")
-        :audit-doc/category :payroll-filing
-        :audit-doc/language language
-        :audit-doc/uploaded-at (Date.)
-        :audit-doc/inline-payload (esocial/emit-xml xml)}))
+        :kontor.audit-doc/type :payroll-filing
+        :kontor.audit-doc/title (str "eSocial " type-name " — table event")
+        :kontor.audit-doc/description (str "eSocial " type-name " table event (one-time / on-change)")
+        :kontor.audit-doc/category :payroll-filing
+        :kontor.audit-doc/language language
+        :kontor.audit-doc/uploaded-at (Date.)
+        :kontor.audit-doc/inline-payload (esocial/emit-xml xml)}))
    event-specs))
 
 ;; ============================================================================
@@ -222,9 +222,9 @@
   "Pure ADR-068 tx-data builder for an employment termination event.
    Per ADR-081 §6.3, kontor:
 
-   - status-machine transitions :employment/state → :terminated
-   - sets :employment/end-date to last-day-worked
-   - sets :employment/termination-reason (open-set keyword)
+   - status-machine transitions :kontor.employment/state → :terminated
+   - sets :kontor.employment/end-date to last-day-worked
+   - sets :kontor.employment/termination-reason (open-set keyword)
    - emits an S-2299 :audit-doc carrying the eSocial XML the consumer's
      engine needs to file via eSocial WS
    - does NOT transmit the event itself
@@ -269,18 +269,18 @@
                              (.getTime ^Date last-day-worked)))
         doc-tempid (str "termination-event-doc-" employment-eid)
         audit-doc {:db/id doc-tempid
-                   :audit-doc/code doc-code
-                   :audit-doc/type :termination-event
-                   :audit-doc/title (str "eSocial S-2299 — " (name termination-reason))
-                   :audit-doc/description "eSocial S-2299 — Desligamento (consumer's engine signs + transmits)"
-                   :audit-doc/uploaded-at (Date.)
-                   :audit-doc/category :payroll-filing
-                   :audit-doc/language language
-                   :audit-doc/inline-payload (esocial/emit-xml s2299)}
+                   :kontor.audit-doc/code doc-code
+                   :kontor.audit-doc/type :termination-event
+                   :kontor.audit-doc/title (str "eSocial S-2299 — " (name termination-reason))
+                   :kontor.audit-doc/description "eSocial S-2299 — Desligamento (consumer's engine signs + transmits)"
+                   :kontor.audit-doc/uploaded-at (Date.)
+                   :kontor.audit-doc/category :payroll-filing
+                   :kontor.audit-doc/language language
+                   :kontor.audit-doc/inline-payload (esocial/emit-xml s2299)}
         emp-update {:db/id employment-eid
-                    :employment/state :terminated
-                    :employment/end-date last-day-worked
-                    :employment/termination-reason termination-reason}]
+                    :kontor.employment/state :terminated
+                    :kontor.employment/end-date last-day-worked
+                    :kontor.employment/termination-reason termination-reason}]
     [audit-doc emp-update]))
 
 ;; ============================================================================
@@ -318,11 +318,11 @@
                      (format "ESOCIAL-S2200-%s-%s-%d"
                              employer-cnpj cpf
                              (.getTime ^Date dt-admissao)))]
-    [{:audit-doc/code doc-code
-      :audit-doc/type :payroll-filing
-      :audit-doc/title (str "eSocial S-2200 — Admissão " cpf)
-      :audit-doc/description "eSocial S-2200 — Cadastramento Inicial / Admissão (consumer's engine signs + transmits)"
-      :audit-doc/uploaded-at (Date.)
-      :audit-doc/category :payroll-filing
-      :audit-doc/language language
-      :audit-doc/inline-payload (esocial/emit-xml xml)}]))
+    [{:kontor.audit-doc/code doc-code
+      :kontor.audit-doc/type :payroll-filing
+      :kontor.audit-doc/title (str "eSocial S-2200 — Admissão " cpf)
+      :kontor.audit-doc/description "eSocial S-2200 — Cadastramento Inicial / Admissão (consumer's engine signs + transmits)"
+      :kontor.audit-doc/uploaded-at (Date.)
+      :kontor.audit-doc/category :payroll-filing
+      :kontor.audit-doc/language language
+      :kontor.audit-doc/inline-payload (esocial/emit-xml xml)}]))

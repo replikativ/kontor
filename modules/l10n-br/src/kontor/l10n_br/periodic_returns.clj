@@ -60,8 +60,8 @@
 
    Each generator function takes `conn` + a period-window opts map
    and returns a return-data map. All commodity values are
-   `Money :BRL`. The return-data maps carry `:return/form`,
-   `:return/period`, and the aggregated line totals + drill-down
+   `Money :BRL`. The return-data maps carry `:kontor.return/form`,
+   `:kontor.return/period`, and the aggregated line totals + drill-down
    posting ids so a downstream auditor can follow each number back to
    contributing postings.
 
@@ -187,13 +187,13 @@
      :year + :month         shorthand for the monthly window
 
    Returns:
-     {:return/form    \"EFD-Contribuições\"
-      :return/period  {:from … :to … :kind :monthly :year … :month …}
-      :return/lines   {:pis-output Money :pis-input Money
+     {:kontor.return/form    \"EFD-Contribuições\"
+      :kontor.return/period  {:from … :to … :kind :monthly :year … :month …}
+      :kontor.return/lines   {:pis-output Money :pis-input Money
                         :cofins-output Money :cofins-input Money}
-      :return/pis-net      Money — payable (positive) or credit (negative)
-      :return/cofins-net   Money — payable / credit
-      :return/total-net    Money — combined PIS + COFINS net to remit
+      :kontor.return/pis-net      Money — payable (positive) or credit (negative)
+      :kontor.return/cofins-net   Money — payable / credit
+      :kontor.return/total-net    Money — combined PIS + COFINS net to remit
       :report/lines        — drill-down per line (postings included)}"
   [conn opts]
   (let [window (resolve-window opts)
@@ -210,15 +210,15 @@
         cof-net (money/sub cof-out cof-in)
         total   (money/add pis-net cof-net)]
     (-> r
-        (assoc :return/form "EFD-Contribuições"
-               :return/period window
-               :return/lines {:pis-output    pis-out
+        (assoc :kontor.return/form "EFD-Contribuições"
+               :kontor.return/period window
+               :kontor.return/lines {:pis-output    pis-out
                               :pis-input     pis-in
                               :cofins-output cof-out
                               :cofins-input  cof-in}
-               :return/pis-net    pis-net
-               :return/cofins-net cof-net
-               :return/total-net  total))))
+               :kontor.return/pis-net    pis-net
+               :kontor.return/cofins-net cof-net
+               :kontor.return/total-net  total))))
 
 ;; ============================================================================
 ;; ICMS (state — monthly EFD ICMS/IPI + GIA)
@@ -264,11 +264,11 @@
                mapping is the natural extension).
 
    Returns:
-     {:return/form        \"EFD ICMS/IPI\"
-      :return/state       <2-letter code or nil>
-      :return/period      {:from … :to … :kind … }
-      :return/lines       {:icms-output Money :icms-input Money}
-      :return/icms-net    Money — payable (positive) / recoverable
+     {:kontor.return/form        \"EFD ICMS/IPI\"
+      :kontor.return/state       <2-letter code or nil>
+      :kontor.return/period      {:from … :to … :kind … }
+      :kontor.return/lines       {:icms-output Money :icms-input Money}
+      :kontor.return/icms-net    Money — payable (positive) / recoverable
       :report/lines       — drill-down per line}"
   [conn {:keys [state] :as opts}]
   (let [window (resolve-window opts)
@@ -281,11 +281,11 @@
         in  (get-z "icms-input")
         net (money/sub out in)]
     (-> r
-        (assoc :return/form   "EFD ICMS/IPI"
-               :return/state  state
-               :return/period window
-               :return/lines  {:icms-output out :icms-input in}
-               :return/icms-net net))))
+        (assoc :kontor.return/form   "EFD ICMS/IPI"
+               :kontor.return/state  state
+               :kontor.return/period window
+               :kontor.return/lines  {:icms-output out :icms-input in}
+               :kontor.return/icms-net net))))
 
 ;; ============================================================================
 ;; IPI (federal — monthly EFD ICMS/IPI)
@@ -317,10 +317,10 @@
      :from / :to OR :year + :month
 
    Returns:
-     {:return/form     \"EFD ICMS/IPI\"
-      :return/period   window
-      :return/lines    {:ipi-output Money :ipi-input Money}
-      :return/ipi-net  Money — payable (positive) / credit (negative)
+     {:kontor.return/form     \"EFD ICMS/IPI\"
+      :kontor.return/period   window
+      :kontor.return/lines    {:ipi-output Money :ipi-input Money}
+      :kontor.return/ipi-net  Money — payable (positive) / credit (negative)
       :report/lines    — drill-down}"
   [conn opts]
   (let [window (resolve-window opts)
@@ -333,10 +333,10 @@
         in  (get-z "ipi-input")
         net (money/sub out in)]
     (-> r
-        (assoc :return/form    "EFD ICMS/IPI"
-               :return/period  window
-               :return/lines   {:ipi-output out :ipi-input in}
-               :return/ipi-net net))))
+        (assoc :kontor.return/form    "EFD ICMS/IPI"
+               :kontor.return/period  window
+               :kontor.return/lines   {:ipi-output out :ipi-input in}
+               :kontor.return/ipi-net net))))
 
 ;; ============================================================================
 ;; ISS (municipal — per município)
@@ -362,7 +362,7 @@
    `{municipality-id Money}`. Returns `{}` when no postings carry a
    municipality refinement. Currently a stub — see the note in
    `generate-iss-return` below — but the return-data carries an
-   `:return/by-municipality` key so consumers can populate it from
+   `:kontor.return/by-municipality` key so consumers can populate it from
    their own partner-municipality mapping at the next stage."
   [_postings]
   {})
@@ -374,7 +374,7 @@
    total — municipal split is a downstream concern (the consumer
    resolves partner / service-location → municipality before filing).
 
-   The per-municipality breakdown (`:return/by-municipality`) is
+   The per-municipality breakdown (`:kontor.return/by-municipality`) is
    returned as an empty map at the substrate tier; a future
    extension can populate it via partner-municipality mapping
    (ADR-019-style account-tag refinement, or a per-line
@@ -385,11 +385,11 @@
      :from / :to OR :year + :month
 
    Returns:
-     {:return/form              \"ISS\"
-      :return/period            window
-      :return/lines             {:iss-output Money}
-      :return/iss-total         Money — total ISS payable
-      :return/by-municipality   {municipality-id Money} (substrate: empty)
+     {:kontor.return/form              \"ISS\"
+      :kontor.return/period            window
+      :kontor.return/lines             {:iss-output Money}
+      :kontor.return/iss-total         Money — total ISS payable
+      :kontor.return/by-municipality   {municipality-id Money} (substrate: empty)
       :report/lines             — drill-down}"
   [conn opts]
   (let [window (resolve-window opts)
@@ -401,11 +401,11 @@
         by-mun (partition-by-municipality
                 (-> r :report/lines first :line/postings))]
     (-> r
-        (assoc :return/form              "ISS"
-               :return/period            window
-               :return/lines             {:iss-output total}
-               :return/iss-total         total
-               :return/by-municipality   by-mun))))
+        (assoc :kontor.return/form              "ISS"
+               :kontor.return/period            window
+               :kontor.return/lines             {:iss-output total}
+               :kontor.return/iss-total         total
+               :kontor.return/by-municipality   by-mun))))
 
 ;; ============================================================================
 ;; DCTFWeb — federal consolidation
@@ -425,20 +425,20 @@
      :from / :to OR :year + :month
 
    Returns:
-     {:return/form     \"DCTFWeb\"
-      :return/period   window
-      :return/components {:pis-cofins {…aggregated…}
+     {:kontor.return/form     \"DCTFWeb\"
+      :kontor.return/period   window
+      :kontor.return/components {:pis-cofins {…aggregated…}
                           :ipi        {…aggregated…}}
-      :return/federal-total  Money — sum of PIS + COFINS + IPI net}"
+      :kontor.return/federal-total  Money — sum of PIS + COFINS + IPI net}"
   [conn opts]
   (let [window (resolve-window opts)
         pcv (generate-pis-cofins-return conn (merge opts window))
         ipi (generate-ipi-return        conn (merge opts window))
         federal-total (-> (money/zero :BRL)
-                          (money/add (:return/total-net pcv))
-                          (money/add (:return/ipi-net   ipi)))]
-    {:return/form         "DCTFWeb"
-     :return/period       window
-     :return/components   {:pis-cofins pcv
+                          (money/add (:kontor.return/total-net pcv))
+                          (money/add (:kontor.return/ipi-net   ipi)))]
+    {:kontor.return/form         "DCTFWeb"
+     :kontor.return/period       window
+     :kontor.return/components   {:pis-cofins pcv
                            :ipi        ipi}
-     :return/federal-total federal-total}))
+     :kontor.return/federal-total federal-total}))

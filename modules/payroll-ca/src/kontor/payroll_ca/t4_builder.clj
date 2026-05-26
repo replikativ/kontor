@@ -44,7 +44,7 @@
    province is read from each PayrollFact's
    `:jurisdiction-specific-codes :province-of-employment`; if absent,
    the aggregator falls back to the employee's
-   `:employment/province-of-employment` attribute."
+   `:kontor.employment/province-of-employment` attribute."
   (:require [datahike.api :as d]
             [kontor.l10n-ca.xml.t4 :as xt4]
             [kontor.money :as money])
@@ -87,8 +87,8 @@
   [db {:keys [employment jurisdiction-specific-codes]} default]
   (or (:province-of-employment jurisdiction-specific-codes)
       (when (and db (or (number? employment) (vector? employment)))
-        (some-> (d/pull db [:employment/province-of-employment] employment)
-                :employment/province-of-employment))
+        (some-> (d/pull db [:kontor.employment/province-of-employment] employment)
+                :kontor.employment/province-of-employment))
       default))
 
 ;; ============================================================================
@@ -189,7 +189,7 @@
      :report-type   :original | :amended | :cancelled (defaults
                     :original).
      :cpp-qpp-exempt? :ei-exempt?  booleans (from
-                    `:employment/cpp-exempt?` / `:employment/ei-exempt?`).
+                    `:kontor.employment/cpp-exempt?` / `:kontor.employment/ei-exempt?`).
      :dental-coverage-code  integer 1..5 (T4 box-45) — informational;
                     `xml/t4.clj` currently doesn't emit it but the slip
                     map carries it for future extension.
@@ -267,7 +267,7 @@
                      caller (e.g. an HR-companion-aware adapter) walks
                      :person + :employment + :address to construct it.
      :default-province fallback province code if neither the fact nor
-                       :employment/province-of-employment is set.
+                       :kontor.employment/province-of-employment is set.
      :language       :en (default) | :fr — emits T619 lang_cd E|F
                      AND tags the submission's audit-doc entry.
      :report-type    :original (default) | :amended

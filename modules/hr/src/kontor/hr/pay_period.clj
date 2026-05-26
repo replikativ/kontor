@@ -2,7 +2,7 @@
   "kontor-hr :pay-period transactors. A :pay-period is per-entity;
    DE-monthly + US-biweekly coexist within a multi-entity group.
 
-   The :pay-period/fiscal-period link points at the kernel :period
+   The :kontor.pay-period/fiscal-period link points at the kernel :period
    (ADR-014) so the period-lock middleware refuses payroll runs into
    a locked fiscal period."
   (:require [datahike.api :as d]
@@ -22,13 +22,13 @@
                  :fiscal-period fiscal-period}]
     (when (nil? v) (throw (ex-info (str (subs (str k) 1) " required") {}))))
   [{:db/id tempid
-    :pay-period/code code
-    :pay-period/entity entity
-    :pay-period/start-date start-date
-    :pay-period/end-date end-date
-    :pay-period/frequency frequency
-    :pay-period/fiscal-period fiscal-period
-    :pay-period/state :open}])
+    :kontor.pay-period/code code
+    :kontor.pay-period/entity entity
+    :kontor.pay-period/start-date start-date
+    :kontor.pay-period/end-date end-date
+    :kontor.pay-period/frequency frequency
+    :kontor.pay-period/fiscal-period fiscal-period
+    :kontor.pay-period/state :open}])
 
 (defn create-pay-period!
   [conn opts]

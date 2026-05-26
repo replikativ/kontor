@@ -89,9 +89,9 @@
         ;; Apply payment-term if supplied; produces due-date +
         ;; optionally discount-deadline.
         term-frag (when-let [term-eid (:kontor.invoice/payment-term invoice-map)]
-                    (let [term (d/pull db [:db/id :payment-term/net-days
-                                           :payment-term/discount-pct
-                                           :payment-term/discount-days]
+                    (let [term (d/pull db [:db/id :kontor.payment-term/net-days
+                                           :kontor.payment-term/discount-pct
+                                           :kontor.payment-term/discount-days]
                                        term-eid)
                           frag (pt/apply-term (:kontor.invoice/issue-date invoice-map) term)
                           ;; pt/apply-term returns :kontor.transaction/* keys; rename to :kontor.invoice/*

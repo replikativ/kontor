@@ -213,18 +213,18 @@
 ;; expand-distribution (ADR-022 split-line strategy)
 ;; ============================================================================
 
-(def ^:private cc-plan [:analytic-plan/code "COST-CENTER"])
-(def ^:private proj-plan [:analytic-plan/code "PROJECT"])
+(def ^:private cc-plan [:kontor.analytic-plan/code "COST-CENTER"])
+(def ^:private proj-plan [:kontor.analytic-plan/code "PROJECT"])
 
 (defn- cc [name pct]
-  {:analytic-distribution/plan    cc-plan
-   :analytic-distribution/account [:analytic-account/path (str "COST-CENTER:" name)]
-   :analytic-distribution/percent pct})
+  {:kontor.analytic-distribution/plan    cc-plan
+   :kontor.analytic-distribution/account [:kontor.analytic-account/path (str "COST-CENTER:" name)]
+   :kontor.analytic-distribution/percent pct})
 
 (defn- proj [name pct]
-  {:analytic-distribution/plan    proj-plan
-   :analytic-distribution/account [:analytic-account/path (str "PROJECT:" name)]
-   :analytic-distribution/percent pct})
+  {:kontor.analytic-distribution/plan    proj-plan
+   :kontor.analytic-distribution/account [:kontor.analytic-account/path (str "PROJECT:" name)]
+   :kontor.analytic-distribution/percent pct})
 
 (def ^:private one-posting-with-cc-60-40
   {:kontor.posting/account   :kontor.account/cogs
@@ -254,8 +254,8 @@
     (doseq [c children]
       (let [dists (:kontor.posting/analytic-distributions c)]
         (is (= 1 (count dists)))
-        (is (= 100M (:analytic-distribution/percent (first dists))))
-        (is (= cc-plan (:analytic-distribution/plan (first dists))))))))
+        (is (= 100M (:kontor.analytic-distribution/percent (first dists))))
+        (is (= cc-plan (:kontor.analytic-distribution/plan (first dists))))))))
 
 (deftest expand-rides-other-plans-unchanged
   (testing "Distributions in plans other than the expansion target
@@ -267,11 +267,11 @@
           children (posting/expand-distribution parent cc-plan)]
       (is (= 2 (count children)) "Only the cost-center plan splits")
       (doseq [c children]
-        (let [proj-dists (filterv #(= proj-plan (:analytic-distribution/plan %))
+        (let [proj-dists (filterv #(= proj-plan (:kontor.analytic-distribution/plan %))
                                   (:kontor.posting/analytic-distributions c))]
           (is (= 2 (count proj-dists)))
           (is (= #{70M 30M}
-                 (set (map :analytic-distribution/percent proj-dists)))))))))
+                 (set (map :kontor.analytic-distribution/percent proj-dists)))))))))
 
 (deftest expand-largest-remainder-on-thirds
   (testing "100.00 EUR split 33.333333 / 33.333333 / 33.333334 → sum

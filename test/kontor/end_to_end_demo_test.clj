@@ -162,8 +162,8 @@
            {:source-account-eid bank-acct :commodity-eid eur})
         db (d/db conn)
         bl (d/q '[:find ?bl . :in $ ?amt :where
-                  [?bl :bank-line/amount ?amt]
-                  (not [?bl :bank-line/matched-tx _])]
+                  [?bl :kontor.bank-line/amount ?amt]
+                  (not [?bl :kontor.bank-line/matched-tx _])]
                 db amount)
         best (first (recon/suggest-match db bl {}))]
     (when-not best

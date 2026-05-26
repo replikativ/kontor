@@ -177,7 +177,7 @@
                              :period-end #inst "2026-07-01"
                              :tds {:amount 4000M :commodity :INR}
                              :tan-account-tag "TAN-BLRA12345E"}}))]
-    (is (= :payroll-filing (:audit-doc/category doc)))
-    (is (= :en-in (:audit-doc/language doc)))
-    (is (re-find #"Form 24Q" (:audit-doc/title doc)))
-    (is (str/includes? (:audit-doc/code doc) "FORM-24Q-TAN-BLRA12345E-2026-Q1"))))
+    (is (= :payroll-filing (:kontor.audit-doc/category doc)))
+    (is (= :en-in (:kontor.audit-doc/language doc)))
+    (is (re-find #"Form 24Q" (:kontor.audit-doc/title doc)))
+    (is (str/includes? (:kontor.audit-doc/code doc) "FORM-24Q-TAN-BLRA12345E-2026-Q1"))))

@@ -44,11 +44,11 @@
     (testing "One QC audit-doc row emitted"
       (is (= 1 (count events))))
     (testing "Category is :payroll-filing"
-      (is (= :payroll-filing (:audit-doc/category (first events)))))
+      (is (= :payroll-filing (:kontor.audit-doc/category (first events)))))
     (testing "Language is :fr (RL-1 convention)"
-      (is (= :fr (:audit-doc/language (first events)))))
+      (is (= :fr (:kontor.audit-doc/language (first events)))))
     (testing "Title mentions QC + employment count"
-      (is (re-find #"QC payroll run" (:audit-doc/title (first events)))))))
+      (is (re-find #"QC payroll run" (:kontor.audit-doc/title (first events)))))))
 
 (deftest qc-emit-noop-when-no-qc-employees
   (let [provider (qc-emit/->QcPayrollEmitProvider {})
@@ -66,7 +66,7 @@
                 [(qc-fact :emp/sophie)]
                 {:pay-period-eid 1 :entity-eid 1})]
     (testing "Language override honored"
-      (is (= :en (:audit-doc/language (first events)))))))
+      (is (= :en (:kontor.audit-doc/language (first events)))))))
 
 ;; ============================================================================
 ;; warn-if-qc-detected! — suppression when emitter installed
@@ -147,9 +147,9 @@
       (is (re-find #"<Case30>4500\.00</Case30>" xml-str)))
     (testing "Audit-doc tx-data is :fr + :payroll-filing"
       (let [doc (first (:audit-doc-tx-data result))]
-        (is (= :payroll-filing (:audit-doc/category doc)))
-        (is (= :fr (:audit-doc/language doc)))
-        (is (re-find #"1234567890" (:audit-doc/title doc)))))))
+        (is (= :payroll-filing (:kontor.audit-doc/category doc)))
+        (is (= :fr (:kontor.audit-doc/language doc)))
+        (is (re-find #"1234567890" (:kontor.audit-doc/title doc)))))))
 
 (deftest build-rl1-submission-requires-keys
   (testing "Missing :employer-neq throws"

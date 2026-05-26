@@ -212,7 +212,7 @@
         raw (gst/compute-return conn (merge (select-keys opts [:bas/mode])
                                             {:from (:from period)
                                              :to   (:to period)}))
-        lines (:return/lines raw)
+        lines (:kontor.return/lines raw)
         ;; Re-key into the canonical :G1/:1A/... keyword shape and
         ;; ensure every documented label has a value (default zero).
         labels (reduce (fn [acc k] (assoc acc k (safe-get lines k)))

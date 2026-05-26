@@ -347,22 +347,22 @@
                          :bewegungsdaten-rows rows})]
       ;; Return one :audit-doc per emission (note 79 §2.4 +
       ;; ADR-075 PayrollEmitProvider contract).
-      ;; :audit-doc/category :payroll-filing per note 86 P0-86-2
+      ;; :kontor.audit-doc/category :payroll-filing per note 86 P0-86-2
       ;; (canonical vocabulary; this is a periodic payroll-engine
       ;; emission to a regulator, NOT a tax-return-shaped filing).
-      ;; :audit-doc/language :de per note 86 P1-86-4 — LODAS files
+      ;; :kontor.audit-doc/language :de per note 86 P1-86-4 — LODAS files
       ;; are German-language by format spec.
-      [{:audit-doc/code (str (or uri-prefix "LODAS-") pay-period-code)
-        :audit-doc/type :emit-payload
-        :audit-doc/category :payroll-filing
-        :audit-doc/language :de
-        :audit-doc/storage-uri (str (or uri-prefix "lodas://import/")
+      [{:kontor.audit-doc/code (str (or uri-prefix "LODAS-") pay-period-code)
+        :kontor.audit-doc/type :emit-payload
+        :kontor.audit-doc/category :payroll-filing
+        :kontor.audit-doc/language :de
+        :kontor.audit-doc/storage-uri (str (or uri-prefix "lodas://import/")
                                     pay-period-code ".txt")
-        :audit-doc/uploaded-at (java.util.Date.)
-        :audit-doc/inline-payload file-content
-        :audit-doc/payroll-period pay-period-eid
-        :audit-doc/payroll-entity entity-eid
-        :audit-doc/unmapped-count (long (count unmapped))}])))
+        :kontor.audit-doc/uploaded-at (java.util.Date.)
+        :kontor.audit-doc/inline-payload file-content
+        :kontor.audit-doc/payroll-period pay-period-eid
+        :kontor.audit-doc/payroll-entity entity-eid
+        :kontor.audit-doc/unmapped-count (long (count unmapped))}])))
 
 (defn make-provider
   "Construct a DatevLodasEmitProvider. Required opts:
@@ -377,7 +377,7 @@
      :pay-period-code  — string used in the audit-doc code + filename
 
    Optional:
-     :uri-prefix       — string prefix for :audit-doc/storage-uri"
+     :uri-prefix       — string prefix for :kontor.audit-doc/storage-uri"
   [opts]
   (when-not (:catalog opts)
     (throw (ex-info ":catalog required" {})))

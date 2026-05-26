@@ -320,10 +320,10 @@
       (let [facts (run-provider conn :individual p2026)
             re    (component-by-regime facts :jp-real-estate-long)]
         (is (some? re))
-        ;; §35 must NOT apply — no `:disposal/residence? true` flag.
+        ;; §35 must NOT apply — no `:kontor.disposal/residence? true` flag.
         ;; Defensive: silently drop the claim rather than reward bad data.
         (is (== 50000000M (-> re :base :amount))
-            "§35 deduction NOT applied without :disposal/residence? true")))))
+            "§35 deduction NOT applied without :kontor.disposal/residence? true")))))
 
 (deftest §35-deduction-applies-to-§31-3-lane
   (testing "§35 + §31-3 election → deduction subtracts before §31-3 rate"

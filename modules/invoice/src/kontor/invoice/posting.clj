@@ -5,7 +5,7 @@
      1. Explicit override on the invoice line (:kontor.invoice-line/account
         — kernel attribute).
      2. Entity-specific default — :gl-account-default with
-        :gl-account-default/entity = :kontor.invoice/entity.
+        :kontor.gl-account-default/entity = :kontor.invoice/entity.
      3. Tenant-wide default — :gl-account-default with no entity.
      4. Throw :kontor.invoice/missing-gl-default if all miss.
 
@@ -33,9 +33,9 @@
     (d/q '[:find ?a .
            :in $ ?at ?e
            :where
-           [?d :gl-account-default/account-type ?at]
-           [?d :gl-account-default/entity ?e]
-           [?d :gl-account-default/account ?a]]
+           [?d :kontor.gl-account-default/account-type ?at]
+           [?d :kontor.gl-account-default/entity ?e]
+           [?d :kontor.gl-account-default/account ?a]]
          db account-type entity-eid)))
 
 (defn- tenant-wide-default-account
@@ -45,9 +45,9 @@
   (d/q '[:find ?a .
          :in $ ?at
          :where
-         [?d :gl-account-default/account-type ?at]
-         [?d :gl-account-default/account ?a]
-         [(missing? $ ?d :gl-account-default/entity)]]
+         [?d :kontor.gl-account-default/account-type ?at]
+         [?d :kontor.gl-account-default/account ?a]
+         [(missing? $ ?d :kontor.gl-account-default/entity)]]
        db account-type))
 
 (defn resolve-gl-account

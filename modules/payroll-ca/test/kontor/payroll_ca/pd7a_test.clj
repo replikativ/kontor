@@ -181,8 +181,8 @@
     (testing "One audit-doc row produced"
       (is (= 1 (count tx))))
     (testing "Category is :payroll-filing per note 84 §3.3"
-      (is (= :payroll-filing (:audit-doc/category (first tx)))))
+      (is (= :payroll-filing (:kontor.audit-doc/category (first tx)))))
     (testing "Language honored"
-      (is (= :fr (:audit-doc/language (first tx)))))
+      (is (= :fr (:kontor.audit-doc/language (first tx)))))
     (testing "Title carries RP + period"
-      (is (re-find #"ca-cra-rp-RP0001" (:audit-doc/title (first tx)))))))
+      (is (re-find #"ca-cra-rp-RP0001" (:kontor.audit-doc/title (first tx)))))))

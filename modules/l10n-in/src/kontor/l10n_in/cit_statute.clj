@@ -301,7 +301,7 @@
     :kontor.provision/consequence     (pr-str {:op        :schedule-override
                                         :code      :in-cit-standard-small
                                         :label     "Standard regime, 25 % (small turnover)"
-                                        :schedule  {:schedule/type :flat
+                                        :schedule  {:kontor.schedule/type :flat
                                                     :rate-from     :parameter
                                                     :parameter     "IN.CIT.standard.small-turnover-rate"}})}
 
@@ -320,7 +320,7 @@
     :kontor.provision/consequence     (pr-str {:op        :schedule-override
                                         :code      :in-cit-standard-large
                                         :label     "Standard regime, 30 % (large turnover)"
-                                        :schedule  {:schedule/type :flat
+                                        :schedule  {:kontor.schedule/type :flat
                                                     :rate-from     :parameter
                                                     :parameter     "IN.CIT.standard.large-turnover-rate"}})}
 
@@ -340,7 +340,7 @@
     :kontor.provision/consequence     (pr-str {:op        :schedule-override
                                         :code      :in-cit-115BAA
                                         :label     "§115BAA flat 22 %"
-                                        :schedule  {:schedule/type :flat
+                                        :schedule  {:kontor.schedule/type :flat
                                                     :rate-from     :parameter
                                                     :parameter     "IN.CIT.115BAA.rate"}})}
 
@@ -360,7 +360,7 @@
     :kontor.provision/consequence     (pr-str {:op        :schedule-override
                                         :code      :in-cit-115BAB
                                         :label     "§115BAB flat 15 %"
-                                        :schedule  {:schedule/type :flat
+                                        :schedule  {:kontor.schedule/type :flat
                                                     :rate-from     :parameter
                                                     :parameter     "IN.CIT.115BAB.rate"}})}
 
@@ -383,7 +383,7 @@
     :kontor.provision/consequence     (pr-str {:op        :schedule-override
                                         :code      :in-cit-foreign
                                         :label     "Foreign-co flat rate (40 %/35 %)"
-                                        :schedule  {:schedule/type :flat
+                                        :schedule  {:kontor.schedule/type :flat
                                                     :rate-from     :parameter
                                                     :parameter     "IN.CIT.foreign.rate"}})}
 
@@ -485,7 +485,7 @@
     :kontor.provision/consequence     (pr-str {:op        :schedule-override
                                         :code      :in-mat-flat
                                         :label     "§115JB MAT flat rate"
-                                        :schedule  {:schedule/type :flat
+                                        :schedule  {:kontor.schedule/type :flat
                                                     :rate-from     :parameter
                                                     :parameter     "IN.CIT.MAT.rate"}})}
 

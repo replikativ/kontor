@@ -9,7 +9,7 @@
 
    Per ADR-023 these load as `:state` entities under
    `:kontor.country/code \"IN\"`, with the GSTN code attached as
-   `:state-code/regulator :in/gst`."
+   `:kontor.state-code/regulator :in/gst`."
   (:require [clojure.java.io :as io]
             [clojure.edn :as edn]
             [datahike.api :as d]))
@@ -63,7 +63,7 @@
 
 (defn install!
   "Idempotently install India + its 37 states under ADR-023's :state
-   entity model. Each state carries `:state-code/regulator :in/gst`
+   entity model. Each state carries `:kontor.state-code/regulator :in/gst`
    with the 2-digit GSTN state code as the canonical sub-jurisdiction
    identifier.
 
@@ -93,15 +93,15 @@
                                     ut?     "Union Territory"
                                     :else   nil)]
                          [{:db/id          state-tempid
-                           :state/country  [:kontor.country/code "IN"]
-                           :state/code     code
-                           :state/name     name
-                           :state/active   (not pseudo?)}
+                           :kontor.state/country  [:kontor.country/code "IN"]
+                           :kontor.state/code     code
+                           :kontor.state/name     name
+                           :kontor.state/active   (not pseudo?)}
                           (cond-> {:db/id                  code-tempid
-                                   :state-code/state       state-tempid
-                                   :state-code/regulator   :in/gst
-                                   :state-code/code        gst}
-                            note (assoc :state-code/note note))])))
+                                   :kontor.state-code/state       state-tempid
+                                   :kontor.state-code/regulator   :in/gst
+                                   :kontor.state-code/code        gst}
+                            note (assoc :kontor.state-code/note note))])))
                    vec)]
       (d/transact conn tx-data)))
   conn)
@@ -112,9 +112,9 @@
   (d/q '[:find ?s .
          :in $ ?gst
          :where
-         [?sc :state-code/regulator :in/gst]
-         [?sc :state-code/code ?gst]
-         [?sc :state-code/state ?s]]
+         [?sc :kontor.state-code/regulator :in/gst]
+         [?sc :kontor.state-code/code ?gst]
+         [?sc :kontor.state-code/state ?s]]
        db gst-code))
 
 (defn gst-code-of
@@ -123,9 +123,9 @@
   (d/q '[:find ?gst .
          :in $ ?s
          :where
-         [?sc :state-code/state ?s]
-         [?sc :state-code/regulator :in/gst]
-         [?sc :state-code/code ?gst]]
+         [?sc :kontor.state-code/state ?s]
+         [?sc :kontor.state-code/regulator :in/gst]
+         [?sc :kontor.state-code/code ?gst]]
        db state-eid))
 
 (defn union-territory?
@@ -135,8 +135,8 @@
   (let [note (d/q '[:find ?note .
                     :in $ ?s
                     :where
-                    [?sc :state-code/state ?s]
-                    [?sc :state-code/regulator :in/gst]
-                    [?sc :state-code/note ?note]]
+                    [?sc :kontor.state-code/state ?s]
+                    [?sc :kontor.state-code/regulator :in/gst]
+                    [?sc :kontor.state-code/note ?note]]
                   db state-eid)]
     (= note "Union Territory")))

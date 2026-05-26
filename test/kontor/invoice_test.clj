@@ -185,7 +185,7 @@
                                      {:source-account-eid bank-acct
                                       :commodity-eid eur})
           db (d/db conn)
-          [bl] (d/q '[:find [?bl] :where [?bl :bank-line/amount 1891.50M]] db)
+          [bl] (d/q '[:find [?bl] :where [?bl :kontor.bank-line/amount 1891.50M]] db)
           best (first (recon/suggest-match db bl {}))
           _ (recon/commit-match! conn bl (:match best) bank-jnl {})
           ;; Now flip-paid-on-settlement

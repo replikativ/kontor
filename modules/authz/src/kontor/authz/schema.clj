@@ -1,14 +1,14 @@
 (ns kontor.authz.schema
-  "kontor-authz datahike schema — the `:authz/*` attributes (ADR-065).
+  "kontor-authz datahike schema — the `:kontor.authz/*` attributes (ADR-065).
 
    Three entity shapes, each backed by composite `:db/tupleAttrs`
    index attributes that `kontor.authz.indexed` range-scans:
 
-   - **Relation** definitions (`:authz.relation/*`) — typed edge
+   - **Relation** definitions (`:kontor.authz.relation/*`) — typed edge
      declarations. Sparse; cheap to index.
-   - **Permission** definitions (`:authz.permission/*`) — derived
+   - **Permission** definitions (`:kontor.authz.permission/*`) — derived
      checks (direct / arrow / self). Also sparse.
-   - **Relationship** edges (`:authz.relationship/*`) — the actual
+   - **Relationship** edges (`:kontor.authz.relationship/*`) — the actual
      access graph. The bulk of the data; the `forward` and `reverse`
      tuple indices are what make `can?` / `lookup-resources` /
      `lookup-subjects` O(log n) range-scans rather than datalog
@@ -25,15 +25,15 @@
    eid order. That ordering IS the pagination cursor (ADR-065).
 
    Cohabits with the kernel + every other companion per ADR-002 —
-   the `:authz/*` namespaces are reserved for this module."
+   the `:kontor.authz/*` namespaces are reserved for this module."
   (:require [datahike.api :as d]))
 
 ;; ============================================================================
-;; :authz/object-id — the optional external-id handle
+;; :kontor.authz/object-id — the optional external-id handle
 ;; ============================================================================
 
 (def ^:private object-id-attrs
-  [{:db/ident       :authz/object-id
+  [{:db/ident       :kontor.authz/object-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
@@ -46,35 +46,35 @@
                      definitions."}])
 
 ;; ============================================================================
-;; :authz.relation/* — typed edge definitions
+;; :kontor.authz.relation/* — typed edge definitions
 ;; ============================================================================
 
 (def ^:private relation-attrs
-  [{:db/ident       :authz.relation/resource-type
+  [{:db/ident       :kontor.authz.relation/resource-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "The resource type this relation is declared on —
                      e.g. :account in `account { relation owner }`."}
 
-   {:db/ident       :authz.relation/relation-name
+   {:db/ident       :kontor.authz.relation/relation-name
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "The relation name — e.g. :owner."}
 
-   {:db/ident       :authz.relation/subject-type
+   {:db/ident       :kontor.authz.relation/subject-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "The subject type the relation points at — e.g.
                      :user in `account { relation owner: user }`."}
 
-   {:db/ident       :authz.relation/identity
+   {:db/ident       :kontor.authz.relation/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:authz.relation/resource-type
-                     :authz.relation/relation-name
-                     :authz.relation/subject-type]
+    :db/tupleAttrs  [:kontor.authz.relation/resource-type
+                     :kontor.authz.relation/relation-name
+                     :kontor.authz.relation/subject-type]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "One relation definition per (resource-type,
@@ -82,23 +82,23 @@
                      upserts. All three members always present."}])
 
 ;; ============================================================================
-;; :authz.permission/* — derived checks
+;; :kontor.authz.permission/* — derived checks
 ;; ============================================================================
 
 (def ^:private permission-attrs
-  [{:db/ident       :authz.permission/resource-type
+  [{:db/ident       :kontor.authz.permission/resource-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "The resource type the permission is declared on."}
 
-   {:db/ident       :authz.permission/permission-name
+   {:db/ident       :kontor.authz.permission/permission-name
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "The permission name — e.g. :view."}
 
-   {:db/ident       :authz.permission/source-relation-name
+   {:db/ident       :kontor.authz.permission/source-relation-name
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -106,7 +106,7 @@
                      `view = account->admin`. `:self` for a direct or
                      self permission."}
 
-   {:db/ident       :authz.permission/target-type
+   {:db/ident       :kontor.authz.permission/target-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -114,50 +114,50 @@
                      resolves through another relation or another
                      permission."}
 
-   {:db/ident       :authz.permission/target-name
+   {:db/ident       :kontor.authz.permission/target-name
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "The relation name or permission name the
                      permission resolves through."}
 
-   {:db/ident       :authz.permission/by-resource
+   {:db/ident       :kontor.authz.permission/by-resource
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:authz.permission/resource-type
-                     :authz.permission/permission-name]
+    :db/tupleAttrs  [:kontor.authz.permission/resource-type
+                     :kontor.authz.permission/permission-name]
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "Index: every permission clause on a (resource-
                      type, permission-name) — a permission can have
                      several clauses (a union)."}
 
-   {:db/ident       :authz.permission/arrow-permission-index
+   {:db/ident       :kontor.authz.permission/arrow-permission-index
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:authz.permission/resource-type
-                     :authz.permission/source-relation-name
-                     :authz.permission/target-type
-                     :authz.permission/permission-name]
+    :db/tupleAttrs  [:kontor.authz.permission/resource-type
+                     :kontor.authz.permission/source-relation-name
+                     :kontor.authz.permission/target-type
+                     :kontor.authz.permission/permission-name]
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "Index: enumerate arrow-via-permission clauses."}
 
-   {:db/ident       :authz.permission/arrow-relation-index
+   {:db/ident       :kontor.authz.permission/arrow-relation-index
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:authz.permission/resource-type
-                     :authz.permission/source-relation-name
-                     :authz.permission/target-type
-                     :authz.permission/target-name]
+    :db/tupleAttrs  [:kontor.authz.permission/resource-type
+                     :kontor.authz.permission/source-relation-name
+                     :kontor.authz.permission/target-type
+                     :kontor.authz.permission/target-name]
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "Index: enumerate arrow-via-relation clauses."}
 
-   {:db/ident       :authz.permission/identity
+   {:db/ident       :kontor.authz.permission/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:authz.permission/resource-type
-                     :authz.permission/source-relation-name
-                     :authz.permission/target-type
-                     :authz.permission/target-name
-                     :authz.permission/permission-name]
+    :db/tupleAttrs  [:kontor.authz.permission/resource-type
+                     :kontor.authz.permission/source-relation-name
+                     :kontor.authz.permission/target-type
+                     :kontor.authz.permission/target-name
+                     :kontor.authz.permission/permission-name]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "One clause per (resource-type, source-relation,
@@ -165,16 +165,16 @@
                      full identity, re-declaring upserts."}])
 
 ;; ============================================================================
-;; :authz.relationship/* — the access graph edges
+;; :kontor.authz.relationship/* — the access graph edges
 ;; ============================================================================
 
 (def ^:private relationship-attrs
-  [{:db/ident       :authz.relationship/subject-type
+  [{:db/ident       :kontor.authz.relationship/subject-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true}
 
-   {:db/ident       :authz.relationship/subject
+   {:db/ident       :kontor.authz.relationship/subject
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -182,17 +182,17 @@
                      component of the `reverse` index — so a reverse
                      scan yields subjects in eid order."}
 
-   {:db/ident       :authz.relationship/relation-name
+   {:db/ident       :kontor.authz.relationship/relation-name
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true}
 
-   {:db/ident       :authz.relationship/resource-type
+   {:db/ident       :kontor.authz.relationship/resource-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true}
 
-   {:db/ident       :authz.relationship/resource
+   {:db/ident       :kontor.authz.relationship/resource
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -201,13 +201,13 @@
                      scan yields resources in eid order, which is the
                      `lookup-resources` pagination cursor."}
 
-   {:db/ident       :authz.relationship/forward
+   {:db/ident       :kontor.authz.relationship/forward
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:authz.relationship/subject-type
-                     :authz.relationship/subject
-                     :authz.relationship/relation-name
-                     :authz.relationship/resource-type
-                     :authz.relationship/resource]
+    :db/tupleAttrs  [:kontor.authz.relationship/subject-type
+                     :kontor.authz.relationship/subject
+                     :kontor.authz.relationship/relation-name
+                     :kontor.authz.relationship/resource-type
+                     :kontor.authz.relationship/resource]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "The forward index — (subject-type, subject,
@@ -217,13 +217,13 @@
                      the forward leg of `can?`. All five members
                      always present — no nil-tuple caveat."}
 
-   {:db/ident       :authz.relationship/reverse
+   {:db/ident       :kontor.authz.relationship/reverse
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:authz.relationship/resource-type
-                     :authz.relationship/resource
-                     :authz.relationship/relation-name
-                     :authz.relationship/subject-type
-                     :authz.relationship/subject]
+    :db/tupleAttrs  [:kontor.authz.relationship/resource-type
+                     :kontor.authz.relationship/resource
+                     :kontor.authz.relationship/relation-name
+                     :kontor.authz.relationship/subject-type
+                     :kontor.authz.relationship/subject]
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "The reverse index — (resource-type, resource,
@@ -261,18 +261,18 @@
    `kontor.authz.base/Relation`)."
   [m]
   (and (map? m)
-       (contains? m :authz.relation/resource-type)
-       (contains? m :authz.relation/relation-name)
-       (contains? m :authz.relation/subject-type)))
+       (contains? m :kontor.authz.relation/resource-type)
+       (contains? m :kontor.authz.relation/relation-name)
+       (contains? m :kontor.authz.relation/subject-type)))
 
 (defn- permission-map?
   [m]
   (and (map? m)
-       (contains? m :authz.permission/resource-type)
-       (contains? m :authz.permission/permission-name)
-       (contains? m :authz.permission/source-relation-name)
-       (contains? m :authz.permission/target-type)
-       (contains? m :authz.permission/target-name)))
+       (contains? m :kontor.authz.permission/resource-type)
+       (contains? m :kontor.authz.permission/permission-name)
+       (contains? m :kontor.authz.permission/source-relation-name)
+       (contains? m :kontor.authz.permission/target-type)
+       (contains? m :kontor.authz.permission/target-name)))
 
 (defn- index-relations
   "Build a lookup map keyed by [resource-type relation-name] → the set
@@ -281,10 +281,10 @@
   [defs]
   (reduce (fn [acc d]
             (update acc
-                    [(:authz.relation/resource-type d)
-                     (:authz.relation/relation-name d)]
+                    [(:kontor.authz.relation/resource-type d)
+                     (:kontor.authz.relation/relation-name d)]
                     (fnil conj #{})
-                    (:authz.relation/subject-type d)))
+                    (:kontor.authz.relation/subject-type d)))
           {} (filter relation-map? defs)))
 
 (defn- index-permissions
@@ -294,14 +294,14 @@
   [defs]
   (reduce (fn [acc d]
             (assoc acc
-                   [(:authz.permission/resource-type d)
-                    (:authz.permission/permission-name d)]
+                   [(:kontor.authz.permission/resource-type d)
+                    (:kontor.authz.permission/permission-name d)]
                    d))
           {} (filter permission-map? defs)))
 
 (defn- validate-schema
   "Structural validation of a vector of Relation + Permission defs.
-   Throws `:authz/schema-invalid` ex-info on:
+   Throws `:kontor.authz/schema-invalid` ex-info on:
 
    - a Permission whose `:source-relation-name` (the `:arrow`) is
      not `:self` and is not a defined Relation on the same
@@ -325,10 +325,10 @@
         (vec
          (mapcat
           (fn [p]
-            (let [rt (:authz.permission/resource-type p)
-                  arrow (:authz.permission/source-relation-name p)
-                  tt (:authz.permission/target-type p)
-                  tn (:authz.permission/target-name p)
+            (let [rt (:kontor.authz.permission/resource-type p)
+                  arrow (:kontor.authz.permission/source-relation-name p)
+                  tt (:kontor.authz.permission/target-type p)
+                  tn (:kontor.authz.permission/target-name p)
                   errs (transient [])
                   ;; The arrow itself must resolve (unless self).
                   _ (when (and (not= arrow :self)
@@ -357,7 +357,7 @@
           (filter permission-map? defs)))]
     (when (seq errors)
       (throw (ex-info "authz schema validation failed — see :errors"
-                      {:type :authz/schema-invalid
+                      {:type :kontor.authz/schema-invalid
                        :errors errors})))))
 
 (defn write-schema-tx-data
@@ -372,14 +372,14 @@
   [_db schema-defs]
   (when-not (and (sequential? schema-defs) (every? map? schema-defs))
     (throw (ex-info "write-schema-tx-data: schema-defs must be a sequence of Relation / Permission entity maps"
-                    {:type :authz/bad-input :got schema-defs})))
+                    {:type :kontor.authz/bad-input :got schema-defs})))
   (validate-schema schema-defs)
   (vec schema-defs))
 
 (defn write-schema!
   "Install a vector of `Relation` + `Permission` entity maps. The
-   tuple `:db.unique/identity` on `:authz.relation/identity` and
-   `:authz.permission/identity` makes the write idempotent — re-
+   tuple `:db.unique/identity` on `:kontor.authz.relation/identity` and
+   `:kontor.authz.permission/identity` makes the write idempotent — re-
    declaring an identical Relation / Permission upserts onto the
    same entity. Validates structurally first (`validate-schema`).
 
@@ -400,40 +400,40 @@
    deterministically** (lex by the tuple key) so diffs are stable
    regardless of the underlying datalog set-iteration order."
   [db]
-  (let [tuple-key (juxt :authz.relation/resource-type
-                        :authz.relation/relation-name
-                        :authz.relation/subject-type)
-        perm-key  (juxt :authz.permission/resource-type
-                        :authz.permission/permission-name
-                        :authz.permission/source-relation-name
-                        :authz.permission/target-type
-                        :authz.permission/target-name)
+  (let [tuple-key (juxt :kontor.authz.relation/resource-type
+                        :kontor.authz.relation/relation-name
+                        :kontor.authz.relation/subject-type)
+        perm-key  (juxt :kontor.authz.permission/resource-type
+                        :kontor.authz.permission/permission-name
+                        :kontor.authz.permission/source-relation-name
+                        :kontor.authz.permission/target-type
+                        :kontor.authz.permission/target-name)
         rels (->> (d/q '[:find ?rt ?rn ?st
                          :where
-                         [?e :authz.relation/resource-type ?rt]
-                         [?e :authz.relation/relation-name ?rn]
-                         [?e :authz.relation/subject-type ?st]]
+                         [?e :kontor.authz.relation/resource-type ?rt]
+                         [?e :kontor.authz.relation/relation-name ?rn]
+                         [?e :kontor.authz.relation/subject-type ?st]]
                        db)
                   (mapv (fn [[rt rn st]]
-                          {:authz.relation/resource-type rt
-                           :authz.relation/relation-name rn
-                           :authz.relation/subject-type st}))
+                          {:kontor.authz.relation/resource-type rt
+                           :kontor.authz.relation/relation-name rn
+                           :kontor.authz.relation/subject-type st}))
                   (sort-by (comp str tuple-key))
                   vec)
         perms (->> (d/q '[:find ?rt ?pn ?src ?tt ?tn
                           :where
-                          [?e :authz.permission/resource-type ?rt]
-                          [?e :authz.permission/permission-name ?pn]
-                          [?e :authz.permission/source-relation-name ?src]
-                          [?e :authz.permission/target-type ?tt]
-                          [?e :authz.permission/target-name ?tn]]
+                          [?e :kontor.authz.permission/resource-type ?rt]
+                          [?e :kontor.authz.permission/permission-name ?pn]
+                          [?e :kontor.authz.permission/source-relation-name ?src]
+                          [?e :kontor.authz.permission/target-type ?tt]
+                          [?e :kontor.authz.permission/target-name ?tn]]
                         db)
                    (mapv (fn [[rt pn src tt tn]]
-                           {:authz.permission/resource-type rt
-                            :authz.permission/permission-name pn
-                            :authz.permission/source-relation-name src
-                            :authz.permission/target-type tt
-                            :authz.permission/target-name tn}))
+                           {:kontor.authz.permission/resource-type rt
+                            :kontor.authz.permission/permission-name pn
+                            :kontor.authz.permission/source-relation-name src
+                            :kontor.authz.permission/target-type tt
+                            :kontor.authz.permission/target-name tn}))
                    (sort-by (comp str perm-key))
                    vec)]
     {:relations rels :permissions perms}))

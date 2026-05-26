@@ -129,13 +129,13 @@
     (is (= :mx-isr-personal (:id p)))
     (is (= :mx-sat (:authority p)))
     (is (= :MXN (:commodity p)))
-    (is (= :progressive-bracket (:schedule/type (:schedule p)))
+    (is (= :progressive-bracket (:kontor.schedule/type (:schedule p)))
         "default schedule is the marginal-bracket progressive form")
     (is (= "Ley del ISR, Art. 152 (personas físicas)" (:statute p))))
   (testing "the cuota-fija :formula schedule can be selected explicitly"
     (let [p (mx/mx-isr-personal-provider
              {:schedule mx/isr-personal-cuota-fija-schedule})]
-      (is (= :formula (:schedule/type (:schedule p)))))))
+      (is (= :formula (:kontor.schedule/type (:schedule p)))))))
 
 (deftest isr-personal-end-to-end
   ;; A persona física with 600000 MXN of income, 90000 of deducciones

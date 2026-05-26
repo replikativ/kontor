@@ -19,7 +19,7 @@
   [db external-id]
   (d/q '[:find ?e .
          :in $ ?xid
-         :where [?e :requirement/external-id ?xid]]
+         :where [?e :kontor.requirement/external-id ?xid]]
        db external-id))
 
 (defn resolve-requirement
@@ -34,9 +34,9 @@
   [db spec]
   (when-let [eid (resolve-requirement db spec)]
     (d/pull db
-            '[* {:requirement/entity [:kontor.entity/code :kontor.entity/name]
-                 :requirement/budget-commodity [:kontor.commodity/symbol]
-                 :requirement/cost-center [:analytic-account/code :analytic-account/name]}]
+            '[* {:kontor.requirement/entity [:kontor.entity/code :kontor.entity/name]
+                 :kontor.requirement/budget-commodity [:kontor.commodity/symbol]
+                 :kontor.requirement/cost-center [:kontor.analytic-account/code :kontor.analytic-account/name]}]
             eid)))
 
 (defn commitments-of
@@ -46,12 +46,12 @@
   (when-let [eid (resolve-requirement db spec)]
     (->> (d/q '[:find [?c ...]
                 :in $ ?req
-                :where [?c :requirement-commitment/requirement ?req]]
+                :where [?c :kontor.requirement-commitment/requirement ?req]]
               db eid)
-         (map #(d/pull db '[* {:requirement-commitment/order-item
-                                [:order-item/seq-id :order-item/product-id
-                                 :order-item/quantity
-                                 {:order-item/order [:order/external-id]}]}] %))
+         (map #(d/pull db '[* {:kontor.requirement-commitment/order-item
+                                [:kontor.sales.order-item/seq-id :kontor.sales.order-item/product-id
+                                 :kontor.sales.order-item/quantity
+                                 {:kontor.sales.order-item/order [:kontor.order/external-id]}]}] %))
          vec)))
 
 ;; ============================================================================
@@ -71,24 +71,24 @@
   (when-not product-id   (throw (ex-info ":product-id required" {})))
   (when-not quantity     (throw (ex-info ":quantity required" {})))
   (when-not facility-id  (throw (ex-info ":facility-id required" {})))
-  (let [row (cond-> {:requirement/external-id external-id
-                     :requirement/type type
-                     :requirement/status :proposed
-                     :requirement/product-id product-id
-                     :requirement/quantity quantity
-                     :requirement/facility-id facility-id
-                     :requirement/created-at (or created-at (java.util.Date.))}
-              uom              (assoc :requirement/uom uom)
-              facility-to-id   (assoc :requirement/facility-to-id facility-to-id)
-              required-by-date (assoc :requirement/required-by-date required-by-date)
-              start-date       (assoc :requirement/start-date start-date)
-              estimated-budget (assoc :requirement/estimated-budget estimated-budget)
-              budget-commodity (assoc :requirement/budget-commodity budget-commodity)
-              entity           (assoc :requirement/entity entity)
-              cost-center      (assoc :requirement/cost-center cost-center)
-              justification    (assoc :requirement/justification justification)
-              description      (assoc :requirement/description description)
-              created-by-uid   (assoc :requirement/created-by-uid created-by-uid))]
+  (let [row (cond-> {:kontor.requirement/external-id external-id
+                     :kontor.requirement/type type
+                     :kontor.requirement/status :proposed
+                     :kontor.requirement/product-id product-id
+                     :kontor.requirement/quantity quantity
+                     :kontor.requirement/facility-id facility-id
+                     :kontor.requirement/created-at (or created-at (java.util.Date.))}
+              uom              (assoc :kontor.requirement/uom uom)
+              facility-to-id   (assoc :kontor.requirement/facility-to-id facility-to-id)
+              required-by-date (assoc :kontor.requirement/required-by-date required-by-date)
+              start-date       (assoc :kontor.requirement/start-date start-date)
+              estimated-budget (assoc :kontor.requirement/estimated-budget estimated-budget)
+              budget-commodity (assoc :kontor.requirement/budget-commodity budget-commodity)
+              entity           (assoc :kontor.requirement/entity entity)
+              cost-center      (assoc :kontor.requirement/cost-center cost-center)
+              justification    (assoc :kontor.requirement/justification justification)
+              description      (assoc :kontor.requirement/description description)
+              created-by-uid   (assoc :kontor.requirement/created-by-uid created-by-uid))]
     [row]))
 
 (defn make-requirement!
@@ -121,7 +121,7 @@
      (sm/record-status-change! conn
                                (merge {:entity eid
                                        :entity-type :requirement
-                                       :facet :requirement/status
+                                       :facet :kontor.requirement/status
                                        :to :approved}
                                       opts)))))
 
@@ -132,7 +132,7 @@
      (sm/record-status-change! conn
                                (merge {:entity eid
                                        :entity-type :requirement
-                                       :facet :requirement/status
+                                       :facet :kontor.requirement/status
                                        :to :rejected}
                                       opts)))))
 
@@ -143,7 +143,7 @@
      (sm/record-status-change! conn
                                (merge {:entity eid
                                        :entity-type :requirement
-                                       :facet :requirement/status
+                                       :facet :kontor.requirement/status
                                        :to :cancelled}
                                       opts)))))
 
@@ -152,28 +152,28 @@
   [db {:keys [requirement order-item quantity skip-status-advance?
               committed-at]}]
   (let [req-eid (resolve-requirement db requirement)
-        commitment {:requirement-commitment/requirement req-eid
-                    :requirement-commitment/order-item order-item
-                    :requirement-commitment/quantity quantity
-                    :requirement-commitment/committed-at
+        commitment {:kontor.requirement-commitment/requirement req-eid
+                    :kontor.requirement-commitment/order-item order-item
+                    :kontor.requirement-commitment/quantity quantity
+                    :kontor.requirement-commitment/committed-at
                     (or committed-at (java.util.Date.))}]
     (if (and (not skip-status-advance?)
              (sm/legal-transition? db :requirement
-                                   :requirement/status
+                                   :kontor.requirement/status
                                    :approved :ordered))
       (vec (concat [commitment]
                    (sm/record-status-change-tx-data
                     db
                     {:entity req-eid
                      :entity-type :requirement
-                     :facet :requirement/status
+                     :facet :kontor.requirement/status
                      :to :ordered
                      :reason :auto-promoted})))
       [commitment])))
 
 (defn commit-to-po!
   "Link a requirement to a PO line via :requirement-commitment, in
-   the same tx advance :requirement/status :approved → :ordered.
+   the same tx advance :kontor.requirement/status :approved → :ordered.
    The composite identity tuple makes the junction idempotent.
    Routes through the gate (ADR-068).
 
@@ -192,13 +192,13 @@
 
 (defn auto-promote-to-received!
   "When all linked POs for a requirement are fully received,
-   advance :requirement/status :ordered → :received.
+   advance :kontor.requirement/status :ordered → :received.
 
    No-op for requirements not yet :ordered or already :received."
   [conn requirement]
   (let [db (d/db conn)
         req-eid (resolve-requirement db requirement)
-        current (sm/current-status db req-eid :requirement/status)]
+        current (sm/current-status db req-eid :kontor.requirement/status)]
     (when (= :ordered current)
       ;; For v1: simple check — all commitments have receipts with
       ;; matching qty. Detailed math (qty-accepted vs committed qty)
@@ -206,7 +206,7 @@
       ;; existence.
       (let [commitments (commitments-of db req-eid)
             fully-received? (every?
-                             (fn [{:requirement-commitment/keys [order-item quantity]}]
+                             (fn [{:kontor.requirement-commitment/keys [order-item quantity]}]
                                (let [oi-eid (:db/id order-item)
                                      received (receipt/quantity-received-of-order-item
                                                db oi-eid)]
@@ -218,7 +218,7 @@
           (sm/record-status-change! conn
                                     {:entity req-eid
                                      :entity-type :requirement
-                                     :facet :requirement/status
+                                     :facet :kontor.requirement/status
                                      :to :received
                                      :reason :auto-promoted}))))))
 
@@ -231,31 +231,31 @@
   [db status]
   (->> (d/q '[:find [?r ...]
               :in $ ?st
-              :where [?r :requirement/status ?st]]
+              :where [?r :kontor.requirement/status ?st]]
             db status)
        (map #(d/pull db '[*] %))
        vec))
 
 (defn pending-of-supplier
   "Approved requirements that haven't been fully committed to POs of
-   a given supplier. Lookup by :order-role/role-type :supplier =
+   a given supplier. Lookup by :kontor.order-role/role-type :supplier =
    the supplier on the committed PO. Returns requirements eligible
    for inclusion in a new PO to this supplier."
   [db supplier-partner-eid]
   (->> (d/q '[:find [?req ...]
               :in $ ?sup
               :where
-              [?req :requirement/status :approved]
+              [?req :kontor.requirement/status :approved]
               ;; Has zero or partial commitments
               (not-join [?req ?sup]
                         ;; Anti-pattern: skip if already fully committed
                         ;; to this supplier
-                        [?c :requirement-commitment/requirement ?req]
-                        [?c :requirement-commitment/order-item ?oi]
-                        [?oi :order-item/order ?o]
-                        [?r :order-role/order ?o]
-                        [?r :order-role/role-type :supplier]
-                        [?r :order-role/partner ?sup])]
+                        [?c :kontor.requirement-commitment/requirement ?req]
+                        [?c :kontor.requirement-commitment/order-item ?oi]
+                        [?oi :kontor.sales.order-item/order ?o]
+                        [?r :kontor.order-role/order ?o]
+                        [?r :kontor.order-role/role-type :supplier]
+                        [?r :kontor.order-role/partner ?sup])]
             db supplier-partner-eid)
        (map #(d/pull db '[*] %))
        vec))

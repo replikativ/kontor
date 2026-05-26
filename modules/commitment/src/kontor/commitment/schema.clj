@@ -14,13 +14,13 @@
      :commitment-fulfillment  — an edge: which `:transaction` settled
                                 how much of which commitment
 
-   State machine (ADR-034), facet `:commitment/state`:
+   State machine (ADR-034), facet `:kontor.commitment/state`:
      :open → :partially-fulfilled → :fulfilled
      :open / :partially-fulfilled → :cancelled
 
    The kernel is untouched: the fulfillment edge points AT a kernel
    `:transaction` but the kernel `:transaction` gains no attribute.
-   `:commitment/origin` is an opt-in soft link to an `:order` /
+   `:kontor.commitment/origin` is an opt-in soft link to an `:order` /
    `:schedule` / lease-liability entity — those modules are not
    changed; unification is a deliberately deferred later pass."
   (:require [datahike.api :as d]))
@@ -30,35 +30,35 @@
 ;; ============================================================================
 
 (def ^:private commitment-attrs
-  [{:db/ident       :commitment/external-id
+  [{:db/ident       :kontor.commitment/external-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Caller-supplied stable id. Identity."}
 
-   {:db/ident       :commitment/kind
+   {:db/ident       :kontor.commitment/kind
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         ":receivable (owed to you) | :payable (you owe) |
                      :encumbrance (you have earmarked / reserved)."}
 
-   {:db/ident       :commitment/counterparty
+   {:db/ident       :kontor.commitment/counterparty
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The partner the obligation is with."}
 
-   {:db/ident       :commitment/entity
+   {:db/ident       :kontor.commitment/entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ADR-031 legal-entity scope."}
 
-   {:db/ident       :commitment/committed-amount
+   {:db/ident       :kontor.commitment/committed-amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "The obligation's total amount, unsigned."}
 
-   {:db/ident       :commitment/fulfilled-amount
+   {:db/ident       :kontor.commitment/fulfilled-amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Running total fulfilled — a denormalization kept
@@ -67,32 +67,32 @@
                      drift window). `outstanding = committed −
                      fulfilled`."}
 
-   {:db/ident       :commitment/commodity
+   {:db/ident       :kontor.commitment/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :commitment/due-date
+   {:db/ident       :kontor.commitment/due-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "When the obligation falls due — drives `aging`."}
 
-   {:db/ident       :commitment/state
+   {:db/ident       :kontor.commitment/state
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "ADR-034 status-machine facet.
                      #{:open :partially-fulfilled :fulfilled :cancelled}"}
 
-   {:db/ident       :commitment/recorded-by-uid
+   {:db/ident       :kontor.commitment/recorded-by-uid
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Actor who recorded the commitment (audit)."}
 
-   {:db/ident       :commitment/recorded-at
+   {:db/ident       :kontor.commitment/recorded-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :commitment/origin
+   {:db/ident       :kontor.commitment/origin
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "OPT-IN soft link to the entity this commitment
@@ -101,7 +101,7 @@
                      is a join handle for consumers. Unifying these
                      obligation sources is a deferred pass (ADR-098)."}
 
-   {:db/ident       :commitment/notes
+   {:db/ident       :kontor.commitment/notes
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 
@@ -110,33 +110,33 @@
 ;; ============================================================================
 
 (def ^:private commitment-fulfillment-attrs
-  [{:db/ident       :commitment-fulfillment/commitment
+  [{:db/ident       :kontor.commitment-fulfillment/commitment
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The commitment being (partly) settled."}
 
-   {:db/ident       :commitment-fulfillment/transaction
+   {:db/ident       :kontor.commitment-fulfillment/transaction
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The kernel `:transaction` that settled it. The
                      edge lives here, in the companion — the kernel
                      `:transaction` gains nothing."}
 
-   {:db/ident       :commitment-fulfillment/amount
+   {:db/ident       :kontor.commitment-fulfillment/amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "How much of the commitment this fulfillment
                      applied, unsigned."}
 
-   {:db/ident       :commitment-fulfillment/fulfilled-at
+   {:db/ident       :kontor.commitment-fulfillment/fulfilled-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :commitment-fulfillment/recorded-by-uid
+   {:db/ident       :kontor.commitment-fulfillment/recorded-by-uid
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :commitment-fulfillment/notes
+   {:db/ident       :kontor.commitment-fulfillment/notes
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 
@@ -144,37 +144,37 @@
   (vec (concat commitment-attrs commitment-fulfillment-attrs)))
 
 ;; ============================================================================
-;; State-machine seeds — :commitment/state (ADR-034)
+;; State-machine seeds — :kontor.commitment/state (ADR-034)
 ;; ============================================================================
 
 (def ^:private status-transition-seeds
   [{:kontor.status-transition/entity-type :commitment
-    :kontor.status-transition/facet :commitment/state
+    :kontor.status-transition/facet :kontor.commitment/state
     :kontor.status-transition/from :nil :kontor.status-transition/to :open
     :kontor.status-transition/active true
     :kontor.status-transition/name "Record Commitment"}
    {:kontor.status-transition/entity-type :commitment
-    :kontor.status-transition/facet :commitment/state
+    :kontor.status-transition/facet :kontor.commitment/state
     :kontor.status-transition/from :open :kontor.status-transition/to :partially-fulfilled
     :kontor.status-transition/active true
     :kontor.status-transition/name "Partially Fulfill Commitment"}
    {:kontor.status-transition/entity-type :commitment
-    :kontor.status-transition/facet :commitment/state
+    :kontor.status-transition/facet :kontor.commitment/state
     :kontor.status-transition/from :open :kontor.status-transition/to :fulfilled
     :kontor.status-transition/active true
     :kontor.status-transition/name "Fulfill Commitment"}
    {:kontor.status-transition/entity-type :commitment
-    :kontor.status-transition/facet :commitment/state
+    :kontor.status-transition/facet :kontor.commitment/state
     :kontor.status-transition/from :partially-fulfilled :kontor.status-transition/to :fulfilled
     :kontor.status-transition/active true
     :kontor.status-transition/name "Complete Partially-Fulfilled Commitment"}
    {:kontor.status-transition/entity-type :commitment
-    :kontor.status-transition/facet :commitment/state
+    :kontor.status-transition/facet :kontor.commitment/state
     :kontor.status-transition/from :open :kontor.status-transition/to :cancelled
     :kontor.status-transition/active true
     :kontor.status-transition/name "Cancel Commitment"}
    {:kontor.status-transition/entity-type :commitment
-    :kontor.status-transition/facet :commitment/state
+    :kontor.status-transition/facet :kontor.commitment/state
     :kontor.status-transition/from :partially-fulfilled :kontor.status-transition/to :cancelled
     :kontor.status-transition/active true
     :kontor.status-transition/name "Cancel Partially-Fulfilled Commitment"}])
@@ -184,7 +184,7 @@
 ;; ============================================================================
 
 (defn install!
-  "Install the kontor-commitment schema + `:commitment/state`
+  "Install the kontor-commitment schema + `:kontor.commitment/state`
    status-machine seeds. Run after `kontor.schema/install!` (the
    kernel attrs the companion references — `:transaction`, `:partner`,
    `:commodity`, `:status-transition` — must already exist).

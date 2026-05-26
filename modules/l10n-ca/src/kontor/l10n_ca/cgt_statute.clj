@@ -20,7 +20,7 @@
      is flagged.
    - **CCA recapture** — depreciable property gain splits between
      ordinary income (`s.13(1)` recapture) and capital (the excess).
-     Provider-side split using `:disposal/depreciation-taken-amount`.
+     Provider-side split using `:kontor.disposal/depreciation-taken-amount`.
 
    ## Note on the cancelled 2024 increase
 

@@ -321,7 +321,7 @@
          base-resolved :resolved}
         (ts/apply-base-adjustments raw-base base-items scoped-ctx-base)
         irpj-rate (statute/parameter-value-at db "BR.IRPJ.rate" as-of)
-        schedule  {:schedule/type :flat :rate irpj-rate}
+        schedule  {:kontor.schedule/type :flat :rate irpj-rate}
         gross     (ts/apply-schedule schedule base')
         ;; Thread the resolved base into ctx so the adicional surtax compute-fn
         ;; can read it via :base-amount (note 162 §5.3 + provider docstring).
@@ -363,7 +363,7 @@
          base-resolved :resolved}
         (ts/apply-base-adjustments raw-base base-items scoped-ctx)
         rate     (csll-rate db as-of (boolean (:financial? tax-profile)))
-        schedule {:schedule/type :flat :rate rate}
+        schedule {:kontor.schedule/type :flat :rate rate}
         gross    (ts/apply-schedule schedule base')
         {liability    :liability
          tax-resolved :resolved}

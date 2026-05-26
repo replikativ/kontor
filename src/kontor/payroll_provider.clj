@@ -32,7 +32,7 @@
       emission). Transmission is consumer-held credential / endpoint
       URL (mirrors `:sent-by-consumer?` per ADR-017). The default
       `LocalfileEmitProvider` writes events as `:audit-doc` rows with
-      `:audit-doc/category :tax-filing` for manual upload — adequate
+      `:kontor.audit-doc/category :tax-filing` for manual upload — adequate
       for US (no clearance regime).
 
    ## Composition
@@ -200,7 +200,7 @@
                         {:keys [pay-period-eid entity-eid]}]
     "Returns a vector of `:audit-doc` tx-data maps (one per required
      emission). Each is shaped per ADR-038 + carries
-     `:audit-doc/category :tax-filing`. The orchestrator (`run-payroll!`)
+     `:kontor.audit-doc/category :tax-filing`. The orchestrator (`run-payroll!`)
      transacts these alongside the postings; the consumer's own
      workflow uploads them to the regulator via the engine.
 

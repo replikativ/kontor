@@ -38,7 +38,7 @@
 (def ^:private entities
   (for [oid ["user-1" "user-2" "account-1" "account-2"
              "server-1" "server-2" "server-3"]]
-    {:db/id oid :authz/object-id oid}))
+    {:db/id oid :kontor.authz/object-id oid}))
 
 (defn- ->u [id] (object-ref :user id))
 (defn- ->a [id] (object-ref :account id))
@@ -169,7 +169,7 @@
 (deftest write-and-delete-relationships
   (let [c (fresh-client)
         conn (:conn c)]
-    (d/transact conn [{:db/id "user-3" :authz/object-id "user-3"}])
+    (d/transact conn [{:db/id "user-3" :kontor.authz/object-id "user-3"}])
     (testing "create-relationship! grants access through the graph"
       (is (false? (authz/can? c (->u "user-3") :view (->s "server-1"))))
       (authz/create-relationship! c (->u "user-3") :owner (->a "account-1"))
@@ -188,7 +188,7 @@
     (testing "write-relationships! returns a basis token"
       (let [result (authz/create-relationship! c (->u "user-3") :owner
                                                (->a "account-2"))]
-        (is (string? (:authz/token result)))))))
+        (is (string? (:kontor.authz/token result)))))))
 
 ;; ============================================================================
 ;; raw-eid client (no external-id layer)
@@ -205,7 +205,7 @@
                                        :object-id->ident  identity})
         db   (d/db conn)
         eid  (fn [oid] (d/q '[:find ?e . :in $ ?o
-                              :where [?e :authz/object-id ?o]] db oid))]
+                              :where [?e :kontor.authz/object-id ?o]] db oid))]
     (testing "can? works with raw datahike eids"
       (is (true? (authz/can? c (object-ref :user (eid "user-1"))
                              :view (object-ref :server (eid "server-1"))))))
@@ -247,8 +247,8 @@
         ;; :loop = :loop (self-cycle); + a valid relation so entities exist
         _    (d/transact conn [(Relation :account :owner :user)
                                (Permission :account :loop {:permission :loop})
-                               {:db/id "u" :authz/object-id "u"}
-                               {:db/id "a" :authz/object-id "a"}
+                               {:db/id "u" :kontor.authz/object-id "u"}
+                               {:db/id "a" :kontor.authz/object-id "a"}
                                (base/Relationship (object-ref :user "u") :owner
                                                   (object-ref :account "a"))])
         c    (client/make-client conn)]
@@ -291,8 +291,8 @@
                ;; view = owner + editor — two union clauses
                (Permission :doc :view {:relation :owner})
                (Permission :doc :view {:relation :editor})
-               {:db/id "u" :authz/object-id "u"}
-               {:db/id "d" :authz/object-id "d"}
+               {:db/id "u" :kontor.authz/object-id "u"}
+               {:db/id "d" :kontor.authz/object-id "d"}
                ;; u is BOTH owner and editor of d — two parallel paths
                (base/Relationship (object-ref :user "u") :owner
                                   (object-ref :doc "d"))
@@ -330,9 +330,9 @@
                ;; server owner-view = account->owner  (arrow → relation)
                (Permission :server :owner-view {:arrow :account
                                                 :relation :owner})
-               {:db/id "u" :authz/object-id "u"}
-               {:db/id "a" :authz/object-id "a"}
-               {:db/id "s" :authz/object-id "s"}
+               {:db/id "u" :kontor.authz/object-id "u"}
+               {:db/id "a" :kontor.authz/object-id "a"}
+               {:db/id "s" :kontor.authz/object-id "s"}
                (base/Relationship (object-ref :user "u") :owner
                                   (object-ref :account "a"))
                (base/Relationship (object-ref :account "a") :account

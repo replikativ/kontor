@@ -72,7 +72,7 @@
    ## DisposalSource
 
    Provider depends on `kontor.disposal-source/DisposalSource` —
-   filters for `:disposal/asset-class :cn-developer-real-estate`
+   filters for `:kontor.disposal/asset-class :cn-developer-real-estate`
    (LAT-eligible)."
   (:require [kontor.disposal-source :as ds]
             [kontor.money :as money]
@@ -127,20 +127,20 @@
    `:cn-residential` and let the IIT provider handle them). See the
    namespace docstring + note 145 §1 P0-1."
   [disposal]
-  (= :cn-developer-real-estate (:disposal/asset-class disposal)))
+  (= :cn-developer-real-estate (:kontor.disposal/asset-class disposal)))
 
 (defn- value-add
   "Value-add = proceeds − basis (= the deductibles). Negative ⇒ no
    appreciation, no LAT."
   ^java.math.BigDecimal [disposal]
-  (- (or (:disposal/proceeds-amount disposal) 0M)
-     (or (:disposal/basis-amount disposal) 0M)))
+  (- (or (:kontor.disposal/proceeds-amount disposal) 0M)
+     (or (:kontor.disposal/basis-amount disposal) 0M)))
 
 (defn- ordinary-residential-developer-exempt?
   "True iff developer + ordinary residential AND value-add ratio ≤
    20 % (Provisional Regs §8 §1)."
   [disposal ctx]
-  (let [deductibles (or (:disposal/basis-amount disposal) 0M)
+  (let [deductibles (or (:kontor.disposal/basis-amount disposal) 0M)
         va          (value-add disposal)
         ratio       (if (pos? deductibles) (/ va deductibles) 0M)]
     (and (true? (get-in ctx [:tax-unit :ordinary-residential?]))
@@ -155,7 +155,7 @@
 (defn- lat-component-one
   "Build ONE LAT component for ONE LAT-eligible disposal."
   [{:keys [commodity authority]} disposal]
-  (let [deductibles (or (:disposal/basis-amount disposal) 0M)
+  (let [deductibles (or (:kontor.disposal/basis-amount disposal) 0M)
         va          (value-add disposal)
         schedule    (lat-schedule deductibles)
         liability   (if (pos? va) (ts/apply-schedule schedule va) 0M)
@@ -181,7 +181,7 @@
                         :value (money/money liability commodity)}]
      :jurisdiction-specific-codes
      {:lane             :cn-lat
-      :cn-lat/external-id (:disposal/external-id disposal)
+      :cn-lat/external-id (:kontor.disposal/external-id disposal)
       :cn-lat/ratio       ratio}}))
 
 ;; ============================================================================

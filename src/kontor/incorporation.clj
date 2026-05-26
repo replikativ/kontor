@@ -22,7 +22,7 @@
 
    4. **Optional `:disposal`** — when a contributed asset's FMV
       differs from its basis, a deemed disposal is recorded
-      (`:disposal/kind :incorporation-contribution`) on the founder's
+      (`:kontor.disposal/kind :incorporation-contribution`) on the founder's
       books. Most jurisdictions defer recognition (US §351, CA §85,
       DE §20 UmwStG, FR Apport-cession, JP §50 — these are
       `:elective-regime` keywords the CGT provider routes on). v1
@@ -171,7 +171,7 @@
 
 (defn- disposal-tx-data-for-contribution
   "When `:basis` ≠ `:amount` for a contribution, emit a
-   `:disposal/kind :incorporation-contribution` on the founder's
+   `:kontor.disposal/kind :incorporation-contribution` on the founder's
    books. The CGT provider applies any deferral elective
    (US §351 / CA §85 / DE §20 UmwStG / FR Apport-cession / JP §50)
    based on `:elective-regime`."

@@ -14,11 +14,11 @@
      {:xml             <string>          ; the CFDI envelope
       :complemento-xml <string>          ; just the <nomina12:Nomina>
       :emit-format     :mx/cfdi-nomina-1.2
-      :audit-doc/category :payroll-filing
-      :audit-doc/language :es-mx
-      :audit-doc/type     :payroll-cfdi-xml
-      :audit-doc/title    \"CFDI Nómina <employee-code> <period>\"
-      :audit-doc/description \"<facts summary in es-mx>\"}
+      :kontor.audit-doc/category :payroll-filing
+      :kontor.audit-doc/language :es-mx
+      :kontor.audit-doc/type     :payroll-cfdi-xml
+      :kontor.audit-doc/title    \"CFDI Nómina <employee-code> <period>\"
+      :kontor.audit-doc/description \"<facts summary in es-mx>\"}
 
    The caller persists the XML, hashes it, and creates an
    :audit-doc via `kontor.audit-doc/create-doc!`. The :audit-doc
@@ -66,11 +66,11 @@
       {:xml envelope-xml
        :complemento-xml complemento-xml
        :emit-format :mx/cfdi-nomina-1.2
-       :audit-doc/category :payroll-filing
-       :audit-doc/language :es-mx
-       :audit-doc/type :payroll-cfdi-xml
-       :audit-doc/title title
-       :audit-doc/description desc})))
+       :kontor.audit-doc/category :payroll-filing
+       :kontor.audit-doc/language :es-mx
+       :kontor.audit-doc/type :payroll-cfdi-xml
+       :kontor.audit-doc/title title
+       :kontor.audit-doc/description desc})))
 
 (defn make-cfdi-nomina-provider
   "Construct the default MxCfdiNominaEmitProvider."

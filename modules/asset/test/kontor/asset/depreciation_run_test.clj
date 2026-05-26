@@ -4,7 +4,7 @@
    Covers:
    - StraightLineProvider/plan-schedule: equal periods, Σ = base.
    - run-depreciation!: fires every due occurrence, posts the GL
-     entries (sealed), drives :asset/status → :fully-depreciated on
+     entries (sealed), drives :kontor.asset/status → :fully-depreciated on
      completion, idempotent on re-run.
    - revise-book! + re-plan: a useful-life revision re-spreads only
      the un-fired tail; fired occurrences keep their amounts.
@@ -48,9 +48,9 @@
                   :kontor.journal/code "GEN" :kontor.journal/name "General"
                   :kontor.journal/type :general}
                  {:db/id "class-machinery"
-                  :asset-class/code "machinery"
-                  :asset-class/name "Machinery & Equipment"
-                  :asset-class/default-useful-life-months 120}])
+                  :kontor.asset-class/code "machinery"
+                  :kontor.asset-class/name "Machinery & Equipment"
+                  :kontor.asset-class/default-useful-life-months 120}])
     conn))
 
 (defn- ref-eid [db a v]
@@ -61,7 +61,7 @@
 (defn- acct      [db code] (ref-eid db :kontor.account/code code))
 (defn- hgb       [db] (ref-eid db :kontor.ledger/code "hgb"))
 (defn- journal   [db] (ref-eid db :kontor.journal/code "GEN"))
-(defn- class-eid [db] (ref-eid db :asset-class/code "machinery"))
+(defn- class-eid [db] (ref-eid db :kontor.asset-class/code "machinery"))
 
 (defn- acquire-machine!
   ([conn code] (acquire-machine! conn code 120000.00M))
@@ -122,7 +122,7 @@
       (is (= 0M (dep/net-book-value (d/db conn) book))))
     (testing "the asset is driven to :fully-depreciated"
       (is (= :fully-depreciated
-             (:asset/status (asset/pull-asset (d/db conn) "SL-RUN")))))
+             (:kontor.asset/status (asset/pull-asset (d/db conn) "SL-RUN")))))
     (testing "the GL entries are posted (sealed) and tagged with the book's ledger"
       (let [db (d/db conn)
             posted (d/q '[:find [?p ...]
@@ -185,7 +185,7 @@
         _ (dep/open-book! conn {:asset "DB-1" :ledger (hgb (d/db conn))
                                 :provider-id :declining-balance
                                 :useful-life-months 60
-                                :method-params {:asset-method-params/rate-multiple 2M}})
+                                :method-params {:kontor.asset-method-params/rate-multiple 2M}})
         book (dep/book-for (d/db conn) "DB-1" (hgb (d/db conn)))
         plan (dp/plan-schedule (dp/provider-for :declining-balance)
                                (d/db conn) book)
@@ -204,8 +204,8 @@
                           {:asset "DB-SW" :ledger (hgb (d/db conn))
                            :provider-id :declining-balance
                            :useful-life-months 60
-                           :method-params {:asset-method-params/rate-multiple 2M
-                                           :asset-method-params/switch-to-straight-line true}})
+                           :method-params {:kontor.asset-method-params/rate-multiple 2M
+                                           :kontor.asset-method-params/switch-to-straight-line true}})
         book (dep/book-for (d/db conn) "DB-SW" (hgb (d/db conn)))
         plan (dp/plan-schedule (dp/provider-for :declining-balance)
                                (d/db conn) book)
@@ -246,7 +246,7 @@
                           {:asset "UOP-1" :ledger (hgb (d/db conn))
                            :provider-id :units-of-production
                            :useful-life-months 60
-                           :method-params {:asset-method-params/total-units 100000M}})
+                           :method-params {:kontor.asset-method-params/total-units 100000M}})
         book (dep/book-for (d/db conn) "UOP-1" (hgb (d/db conn)))
         plan (dp/plan-schedule (dp/provider-for :units-of-production)
                                (d/db conn) book)]
@@ -283,7 +283,7 @@
                                 :provider-id :declining-balance
                                 :useful-life-months 60
                                 :depreciable-base 70000.00M
-                                :method-params {:asset-method-params/rate-multiple 2M}})
+                                :method-params {:kontor.asset-method-params/rate-multiple 2M}})
         book (dep/book-for (d/db conn) "DB-BASE" (hgb (d/db conn)))
         plan (dp/plan-schedule (dp/provider-for :declining-balance)
                                (d/db conn) book)]
@@ -299,12 +299,12 @@
         _ (dep/open-book! conn {:asset "DB-CAP" :ledger (hgb (d/db conn))
                                 :provider-id :declining-balance
                                 :useful-life-months 24
-                                :method-params {:asset-method-params/rate-multiple 2.5M
-                                                :asset-method-params/ceiling-rate 0.25M}})
+                                :method-params {:kontor.asset-method-params/rate-multiple 2.5M
+                                                :kontor.asset-method-params/ceiling-rate 0.25M}})
         _ (dep/open-book! conn {:asset "DB-UNCAP" :ledger (hgb (d/db conn))
                                 :provider-id :declining-balance
                                 :useful-life-months 24
-                                :method-params {:asset-method-params/rate-multiple 2.5M}})
+                                :method-params {:kontor.asset-method-params/rate-multiple 2.5M}})
         p1 (fn [code]
              (-> (dp/plan-schedule (dp/provider-for :declining-balance)
                                    (d/db conn)
@@ -336,9 +336,9 @@
         book (dep/book-for (d/db conn) "RUN-DISP" (hgb (d/db conn)))
         ;; Record a disposal event 6 months in (raw transact — keeps
         ;; the test off the approval machinery, exercised elsewhere).
-        _ (d/transact conn [{:asset-event/asset (asset/by-code (d/db conn) "RUN-DISP")
-                             :asset-event/kind :disposal
-                             :asset-event/date #inst "2026-07-15"}])
+        _ (d/transact conn [{:kontor.asset-event/asset (asset/by-code (d/db conn) "RUN-DISP")
+                             :kontor.asset-event/kind :disposal
+                             :kontor.asset-event/date #inst "2026-07-15"}])
         result (runner/run-depreciation! conn book
                                          {:journal (journal (d/db conn))
                                           :as-of far-future})]

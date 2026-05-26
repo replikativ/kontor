@@ -27,7 +27,7 @@
    The IRN attestation is one of (potentially several) attestations
    on a transaction. For goods movement it's the *first* attestation;
    the e-way bill Part A (see `kontor.l10n-in.ewb`) then carries
-   `:attestation/depends-on` referencing the IRN."
+   `:kontor.attestation/depends-on` referencing the IRN."
   (:require [clojure.data.json :as json]
             [clojure.string :as str])
   (:import [java.security MessageDigest]

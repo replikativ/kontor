@@ -143,14 +143,14 @@
     (let [conn (bootstrap)
           _ (seed-january! conn)
           r (ret/generate-dpi-return conn {:year 2026 :month 1})]
-      (is (= "DPI" (:return/form r)))
-      (is (≈ (mxn "160") (-> r :return/lines :iva-cobrado-16))
+      (is (= "DPI" (:kontor.return/form r)))
+      (is (≈ (mxn "160") (-> r :kontor.return/lines :iva-cobrado-16))
           "16% cash-sale produced 160 IVA on 208.01")
-      (is (≈ (mxn "40")  (-> r :return/lines :iva-cobrado-8))
+      (is (≈ (mxn "40")  (-> r :kontor.return/lines :iva-cobrado-8))
           "8% border cash-sale produced 40 IVA on 208.01.002")
-      (is (≈ (mxn "0")   (-> r :return/lines :iva-cobrado-0))
+      (is (≈ (mxn "0")   (-> r :kontor.return/lines :iva-cobrado-0))
           "0% cash-sale produced no IVA")
-      (is (≈ (mxn "200") (-> r :return/lines :iva-cobrado-total))
+      (is (≈ (mxn "200") (-> r :kontor.return/lines :iva-cobrado-total))
           "Total IVA cobrado = 200 (EXCLUDES the 480 credit-sale IVA
            still in 208.02 no cobrado)"))))
 
@@ -161,11 +161,11 @@
     (let [conn (bootstrap)
           _ (seed-january! conn)
           r (ret/generate-dpi-return conn {:year 2026 :month 1})]
-      (is (≈ (mxn "200") (:return/iva-net r))
+      (is (≈ (mxn "200") (:kontor.return/iva-net r))
           "Net = cobrado − acreditable = 200 − 0 = 200")
-      (is (≈ (mxn "0")   (-> r :return/lines :iva-acreditable-total))
+      (is (≈ (mxn "0")   (-> r :kontor.return/lines :iva-acreditable-total))
           "No input ITC in fixture")
-      (is (≈ (mxn "200") (:return/total-iva-payable r))
+      (is (≈ (mxn "200") (:kontor.return/total-iva-payable r))
           "Total payable = iva-net + retención-iva-net = 200 + 0"))))
 
 (deftest dpi-ingresos-aggregate-all-revenue
@@ -178,7 +178,7 @@
           _ (seed-january! conn)
           r (ret/generate-dpi-return conn {:year 2026 :month 1})]
       ;; Cash 1000 + Cash 500 + Cash 200 + Credit 3000 = 4700
-      (is (≈ (mxn "4700") (-> r :return/lines :ingresos-total))
+      (is (≈ (mxn "4700") (-> r :kontor.return/lines :ingresos-total))
           "All four invoices contribute revenue, including the
            credit-sale whose IVA is still pending"))))
 
@@ -186,9 +186,9 @@
   (testing "No activity in the period → all aggregates zero, no NPE."
     (let [conn (bootstrap)
           r (ret/generate-dpi-return conn {:year 2026 :month 1})]
-      (is (≈ (mxn "0") (:return/iva-net r)))
-      (is (≈ (mxn "0") (:return/ieps-net r)))
-      (is (≈ (mxn "0") (:return/total-iva-payable r))))))
+      (is (≈ (mxn "0") (:kontor.return/iva-net r)))
+      (is (≈ (mxn "0") (:kontor.return/ieps-net r)))
+      (is (≈ (mxn "0") (:kontor.return/total-iva-payable r))))))
 
 (deftest dpi-due-date-on-return
   (testing "DPI return-data carries the statutory filing due date
@@ -196,7 +196,7 @@
               nil due-date (the DPI is a monthly form)."
     (let [conn (bootstrap)
           r (ret/generate-dpi-return conn {:year 2026 :month 1})]
-      (is (= feb-17 (:return/due-date r))))))
+      (is (= feb-17 (:kontor.return/due-date r))))))
 
 ;; ============================================================================
 ;; Period scoping — feb activity must NOT contribute to jan DPI
@@ -217,9 +217,9 @@
                                :kontor.invoice-line/unit-price 5000M}]})
           jan (ret/generate-dpi-return conn {:year 2026 :month 1})
           feb (ret/generate-dpi-return conn {:year 2026 :month 2})]
-      (is (≈ (mxn "200") (:return/iva-net jan))
+      (is (≈ (mxn "200") (:kontor.return/iva-net jan))
           "January DPI unaffected by Feb activity")
-      (is (≈ (mxn "800") (:return/iva-net feb))
+      (is (≈ (mxn "800") (:kontor.return/iva-net feb))
           "Feb DPI captures the 5000 × 16% = 800"))))
 
 ;; ============================================================================
@@ -234,7 +234,7 @@
       ;; Cash sales Jan 10 (160) + Jan 15 (40) = 200; Jan 20 (0%, no IVA)
       ;; is at the :to boundary which is exclusive ⇒ excluded.
       ;; And the credit-sale on Jan 20 is also excluded by the window.
-      (is (≈ (mxn "200") (-> r :return/lines :iva-cobrado-total))
+      (is (≈ (mxn "200") (-> r :kontor.return/lines :iva-cobrado-total))
           "Half-open window excludes the Jan-20 entries"))))
 
 ;; ============================================================================
@@ -253,7 +253,7 @@
                                :kontor.invoice-line/unit-price 1000M
                                :kontor.invoice-line/ieps-rate 0.265M}]})
           r (ret/generate-dpi-return conn {:year 2026 :month 1})]
-      (is (≈ (mxn "265") (-> r :return/lines :ieps-cobrado))
+      (is (≈ (mxn "265") (-> r :kontor.return/lines :ieps-cobrado))
           "IEPS 26.5% × 1000 = 265 on 209.01 cobrado")
-      (is (≈ (mxn "265") (:return/ieps-net r))
+      (is (≈ (mxn "265") (:kontor.return/ieps-net r))
           "IEPS net = IEPS cobrado − IEPS acreditable = 265 − 0"))))

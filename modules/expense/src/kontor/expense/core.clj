@@ -10,7 +10,7 @@
    `post-report!` builds the GL entry via
    `kontor.posting/build-transaction`: each line debits its
    `:expense-account`; the credit leg is grouped by
-   `:expense-line/payment-mode` — `:own-account` credits an
+   `:kontor.expense-line/payment-mode` — `:own-account` credits an
    employee-reimbursement-payable (later settled by `reimburse!`),
    `:company-account` credits a corporate-card-clearing account
    (closed by bank-statement matching)."
@@ -27,9 +27,9 @@
 ;; ============================================================================
 
 (defn by-code
-  "Resolve an :expense-report eid by :expense-report/code."
+  "Resolve an :expense-report eid by :kontor.expense-report/code."
   [db code]
-  (d/q '[:find ?e . :in $ ?c :where [?e :expense-report/code ?c]] db code))
+  (d/q '[:find ?e . :in $ ?c :where [?e :kontor.expense-report/code ?c]] db code))
 
 (defn resolve-report
   "Coerce `spec` to an :expense-report eid (string → by-code)."
@@ -45,15 +45,15 @@
   (when-let [eid (resolve-report db report-spec)]
     (->> (d/q '[:find [?l ...]
                 :in $ ?r
-                :where [?l :expense-line/expense-report ?r]]
+                :where [?l :kontor.expense-line/expense-report ?r]]
               db eid)
          (map #(d/pull db '[*] %))
-         (sort-by :expense-line/expense-date)
+         (sort-by :kontor.expense-line/expense-date)
          vec)))
 
 (defn report-total
-  "`Σ :expense-line/amount` for a report — the truth behind the
-   cached `:expense-report/total`."
+  "`Σ :kontor.expense-line/amount` for a report — the truth behind the
+   cached `:kontor.expense-report/total`."
   ^BigDecimal [db report-spec]
   (let [eid (resolve-report db report-spec)]
     (or (when eid
@@ -61,8 +61,8 @@
                  :with ?l
                  :in $ ?r
                  :where
-                 [?l :expense-line/expense-report ?r]
-                 [?l :expense-line/amount ?amt]]
+                 [?l :kontor.expense-line/expense-report ?r]
+                 [?l :kontor.expense-line/amount ?amt]]
                db eid))
         0M)))
 
@@ -71,7 +71,7 @@
    status."
   [db report-spec]
   (when-let [eid (resolve-report db report-spec)]
-    (d/pull db '[* {:expense-report/employee [:kontor.partner/external-id
+    (d/pull db '[* {:kontor.expense-report/employee [:kontor.partner/external-id
                                               :kontor.partner/name]}]
             eid)))
 
@@ -91,20 +91,20 @@
   (when-not report-date (throw (ex-info ":report-date required" {})))
   (when-not commodity   (throw (ex-info ":commodity required" {})))
   (let [row (cond-> {:db/id tempid
-                     :expense-report/code code
-                     :expense-report/employee employee
-                     :expense-report/status :draft
-                     :expense-report/report-date report-date
-                     :expense-report/commodity commodity
-                     :expense-report/total 0M
+                     :kontor.expense-report/code code
+                     :kontor.expense-report/employee employee
+                     :kontor.expense-report/status :draft
+                     :kontor.expense-report/report-date report-date
+                     :kontor.expense-report/commodity commodity
+                     :kontor.expense-report/total 0M
                      ;; The employee IS the creator — :no-self-approval
                      ;; compares the approver's :changed-by-uid to this.
                      :kontor.audit/create-uid employee}
-              note (assoc :expense-report/note note))
+              note (assoc :kontor.expense-report/note note))
         status-tx (sm/record-status-change-tx-data
                    db {:entity tempid
                        :entity-type :expense-report
-                       :facet :expense-report/status
+                       :facet :kontor.expense-report/status
                        :from :nil :to :draft
                        :changed-at (or changed-at (Date.))
                        :changed-by-uid employee
@@ -146,28 +146,28 @@
   (let [report (resolve-report db expense-report)
         _ (when-not report (throw (ex-info "Expense report not found"
                                            {:spec expense-report})))
-        status (:expense-report/status
-                (d/pull db [:expense-report/status] report))
+        status (:kontor.expense-report/status
+                (d/pull db [:kontor.expense-report/status] report))
         _ (when-not (= :draft status)
             (throw (ex-info "Can only add lines to a :draft report"
                             {:type :expense/report-not-draft :status status})))
-        line (cond-> {:expense-line/expense-report report
-                      :expense-line/category category
-                      :expense-line/expense-date expense-date
-                      :expense-line/amount amount
-                      :expense-line/commodity commodity
-                      :expense-line/payment-mode payment-mode
-                      :expense-line/expense-account expense-account}
-               cost-center    (assoc :expense-line/cost-center cost-center)
-               supporting-doc (assoc :expense-line/supporting-doc supporting-doc)
-               description    (assoc :expense-line/description description))
+        line (cond-> {:kontor.expense-line/expense-report report
+                      :kontor.expense-line/category category
+                      :kontor.expense-line/expense-date expense-date
+                      :kontor.expense-line/amount amount
+                      :kontor.expense-line/commodity commodity
+                      :kontor.expense-line/payment-mode payment-mode
+                      :kontor.expense-line/expense-account expense-account}
+               cost-center    (assoc :kontor.expense-line/cost-center cost-center)
+               supporting-doc (assoc :kontor.expense-line/supporting-doc supporting-doc)
+               description    (assoc :kontor.expense-line/description description))
         new-total (.add (report-total db report) ^BigDecimal amount)]
     [line
-     {:db/id report :expense-report/total new-total}]))
+     {:db/id report :kontor.expense-report/total new-total}]))
 
 (defn add-line!
   "Add an :expense-line to a `:draft` report and bump the cached
-   `:expense-report/total`. Routes through the gate (ADR-068).
+   `:kontor.expense-report/total`. Routes through the gate (ADR-068).
    Returns the tx-report.
 
    Required opts: :expense-report (code/eid), :category (ref),
@@ -195,7 +195,7 @@
   (sm/record-status-change-tx-data
    db (cond-> {:entity report-eid
                :entity-type :expense-report
-               :facet :expense-report/status
+               :facet :kontor.expense-report/status
                :from from :to to
                :changed-at (or changed-at (Date.))}
         changed-by-uid (assoc :changed-by-uid changed-by-uid)
@@ -204,7 +204,7 @@
         supporting-doc (assoc :supporting-doc supporting-doc))))
 
 (defn change-status!
-  "Drive an :expense-report/status transition through the status
+  "Drive an :kontor.expense-report/status transition through the status
    machine, wrapped in valid-time. Routes through the gate (ADR-068).
 
    Public so consumers can drive transitions the convenience wrappers
@@ -238,8 +238,8 @@
         ;; Read the REAL current status — never trust a hard-coded
         ;; `:from`, or the whole approval gate is bypassable by
         ;; calling the transactors out of order (review-after P0).
-        status (:expense-report/status
-                (d/pull db [:expense-report/status] report))
+        status (:kontor.expense-report/status
+                (d/pull db [:kontor.expense-report/status] report))
         _ (when-not (= :draft status)
             (throw (ex-info "Can only submit a :draft report"
                             {:type :expense/report-not-draft :status status})))
@@ -248,7 +248,7 @@
             (throw (ex-info "Cannot submit a report with no lines"
                             {:type :expense/no-lines :report report})))
         _ (when (and require-receipts?
-                     (some #(nil? (:expense-line/supporting-doc %)) lines))
+                     (some #(nil? (:kontor.expense-line/supporting-doc %)) lines))
             (throw (ex-info "Every expense line needs a :supporting-doc (receipt) to submit — pass :require-receipts? false to override"
                             {:type :expense/missing-receipt :report report})))]
     (change-status! conn report status :submitted
@@ -269,8 +269,8 @@
         _ (when-not report (throw (ex-info "Expense report not found"
                                            {:spec expense-report})))
         ;; Read the REAL status (review-after P0 — no hard-coded :from).
-        status (:expense-report/status
-                (d/pull db [:expense-report/status] report))
+        status (:kontor.expense-report/status
+                (d/pull db [:kontor.expense-report/status] report))
         _ (when-not (= :submitted status)
             (throw (ex-info "Can only approve a :submitted report"
                             {:type :expense/report-not-submitted :status status})))]
@@ -291,8 +291,8 @@
         report (resolve-report db expense-report)
         _ (when-not report (throw (ex-info "Expense report not found"
                                            {:spec expense-report})))
-        from (:expense-report/status
-              (d/pull db [:expense-report/status] report))]
+        from (:kontor.expense-report/status
+              (d/pull db [:kontor.expense-report/status] report))]
     (change-status! conn report from :rejected
                     (assoc opts :reason :expense-report-rejected))))
 
@@ -310,8 +310,8 @@
         report (resolve-report db expense-report)
         _ (when-not report (throw (ex-info "Expense report not found"
                                            {:spec expense-report})))
-        status (:expense-report/status
-                (d/pull db [:expense-report/status] report))
+        status (:kontor.expense-report/status
+                (d/pull db [:kontor.expense-report/status] report))
         _ (when-not (= :rejected status)
             (throw (ex-info "Can only reopen a :rejected report"
                             {:type :expense/report-not-rejected :status status})))]
@@ -342,11 +342,11 @@
   (let [report (resolve-report db expense-report)
         _ (when-not report (throw (ex-info "Expense report not found"
                                            {:spec expense-report})))
-        r (d/pull db [:expense-report/status :expense-report/code] report)
-        _ (when-not (= :approved (:expense-report/status r))
+        r (d/pull db [:kontor.expense-report/status :kontor.expense-report/code] report)
+        _ (when-not (= :approved (:kontor.expense-report/status r))
             (throw (ex-info "Can only post an :approved report"
                             {:type :expense/report-not-approved
-                             :status (:expense-report/status r)})))
+                             :status (:kontor.expense-report/status r)})))
         lines (lines-of db report)
         _ (when (empty? lines)
             (throw (ex-info "Report has no lines to post" {:report report})))
@@ -354,27 +354,27 @@
         ;; Debit postings — one per line.
         debit-postings
         (mapv (fn [l]
-                (cond-> {:kontor.posting/account (:db/id (:expense-line/expense-account l))
-                         :kontor.posting/amount (:expense-line/amount l)
-                         :kontor.posting/commodity (:db/id (:expense-line/commodity l))
+                (cond-> {:kontor.posting/account (:db/id (:kontor.expense-line/expense-account l))
+                         :kontor.posting/amount (:kontor.expense-line/amount l)
+                         :kontor.posting/commodity (:db/id (:kontor.expense-line/commodity l))
                          :kontor.posting/posted-at pa}
-                  (and cost-center-plan (:expense-line/cost-center l))
+                  (and cost-center-plan (:kontor.expense-line/cost-center l))
                   (assoc :kontor.posting/analytic-distributions
-                         [{:analytic-distribution/plan cost-center-plan
-                           :analytic-distribution/account
-                           (:db/id (:expense-line/cost-center l))
-                           :analytic-distribution/percent 100M}])))
+                         [{:kontor.analytic-distribution/plan cost-center-plan
+                           :kontor.analytic-distribution/account
+                           (:db/id (:kontor.expense-line/cost-center l))
+                           :kontor.analytic-distribution/percent 100M}])))
               lines)
         ;; Credit postings — grouped by (payment-mode, commodity).
         credit-postings
         (->> lines
-             (group-by (juxt :expense-line/payment-mode
-                             #(:db/id (:expense-line/commodity %))))
+             (group-by (juxt :kontor.expense-line/payment-mode
+                             #(:db/id (:kontor.expense-line/commodity %))))
              (mapv (fn [[[mode commodity] grp]]
                      {:kontor.posting/account (credit-account-for mode opts)
                       :kontor.posting/amount (.negate ^BigDecimal
                                        (reduce (fn [^BigDecimal a l]
-                                                 (.add a (:expense-line/amount l)))
+                                                 (.add a (:kontor.expense-line/amount l)))
                                                0M grp))
                       :kontor.posting/commodity commodity
                       :kontor.posting/posted-at pa})))
@@ -384,14 +384,14 @@
                                 :kontor.transaction/state :posted
                                 :kontor.transaction/posted-at pa
                                 :kontor.transaction/source
-                                (str "expense-report:" (:expense-report/code r))
+                                (str "expense-report:" (:kontor.expense-report/code r))
                                 :kontor.transaction/narration
-                                (str "Expense report " (:expense-report/code r))}
+                                (str "Expense report " (:kontor.expense-report/code r))}
                   :postings (into debit-postings credit-postings)})
         status-tx (sm/record-status-change-tx-data
                    db (cond-> {:entity report
                                :entity-type :expense-report
-                               :facet :expense-report/status
+                               :facet :kontor.expense-report/status
                                :from :approved :to :posted
                                :changed-at pa
                                :reason :expense-report-posted}
@@ -399,7 +399,7 @@
     (-> (vec tx-data)
         (into status-tx)
         (conj {:db/id report
-               :expense-report/transaction -1}))))
+               :kontor.expense-report/transaction -1}))))
 
 (defn post-report!
   "Post an `:approved` report to the GL (`:approved → :posted`).
@@ -409,7 +409,7 @@
    `:own-account` → `:reimbursement-payable-account`,
    `:company-account` → `:card-clearing-account`. Stamps
    `:kontor.transaction/source` = `\"expense-report:<code>\"` and links
-   `:expense-report/transaction`. Routes through the gate (ADR-068).
+   `:kontor.expense-report/transaction`. Routes through the gate (ADR-068).
 
    When `:cost-center-plan` is supplied, a line's `:cost-center` is
    attached to its debit posting as a `:kontor.posting/analytic-distributions`
@@ -447,12 +447,12 @@
   (let [report (resolve-report db expense-report)
         _ (when-not report (throw (ex-info "Expense report not found"
                                            {:spec expense-report})))
-        status (:expense-report/status
-                (d/pull db [:expense-report/status] report))
+        status (:kontor.expense-report/status
+                (d/pull db [:kontor.expense-report/status] report))
         _ (when-not (= :posted status)
             (throw (ex-info "Can only reimburse a :posted report"
                             {:type :expense/report-not-posted :status status})))
-        own-lines (filter #(= :own-account (:expense-line/payment-mode %))
+        own-lines (filter #(= :own-account (:kontor.expense-line/payment-mode %))
                           (lines-of db report))
         _ (when (empty? own-lines)
             (throw (ex-info "Report has no :own-account lines to reimburse"
@@ -460,10 +460,10 @@
         pa (or posted-at (Date.))
         by-commodity
         (->> own-lines
-             (group-by #(:db/id (:expense-line/commodity %)))
+             (group-by #(:db/id (:kontor.expense-line/commodity %)))
              (mapcat (fn [[commodity grp]]
                        (let [total (reduce (fn [^BigDecimal a l]
-                                             (.add a (:expense-line/amount l)))
+                                             (.add a (:kontor.expense-line/amount l)))
                                            0M grp)]
                          [{:kontor.posting/account reimbursement-payable-account
                            :kontor.posting/amount total
@@ -484,7 +484,7 @@
         status-tx (sm/record-status-change-tx-data
                    db (cond-> {:entity report
                                :entity-type :expense-report
-                               :facet :expense-report/status
+                               :facet :kontor.expense-report/status
                                :from :posted :to :reimbursed
                                :changed-at pa
                                :reason :expense-report-reimbursed}
@@ -492,14 +492,14 @@
     (-> (vec tx-data)
         (into status-tx)
         (conj {:db/id report
-               :expense-report/reimbursement-transaction -1}))))
+               :kontor.expense-report/reimbursement-transaction -1}))))
 
 (defn reimburse!
   "Settle the `:own-account` portion of a `:posted` report
    (`:posted → :reimbursed`): builds — in ONE transaction with the
    status change — a sealed `Dr :reimbursement-payable-account /
    Cr :cash-account` entry for the own-account total, and links
-   `:expense-report/reimbursement-transaction`. A report with no
+   `:kontor.expense-report/reimbursement-transaction`. A report with no
    `:own-account` lines is terminal at `:posted` — `reimburse!`
    throws for it. Routes through the gate (ADR-068).
 

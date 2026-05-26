@@ -43,12 +43,12 @@
         f  (inv/resolve-facility db facility)
         _  (when-not f (throw (ex-info "Facility not found" {:spec facility})))
         row (cond-> {:db/id "count"
-                     :physical-inventory/facility f
-                     :physical-inventory/count-date count-date
-                     :physical-inventory/status status}
-              code       (assoc :physical-inventory/code code)
-              counted-by (assoc :physical-inventory/counted-by counted-by)
-              comments   (assoc :physical-inventory/comments comments))
+                     :kontor.physical-inventory/facility f
+                     :kontor.physical-inventory/count-date count-date
+                     :kontor.physical-inventory/status status}
+              code       (assoc :kontor.physical-inventory/code code)
+              counted-by (assoc :kontor.physical-inventory/counted-by counted-by)
+              comments   (assoc :kontor.physical-inventory/comments comments))
         report (validation/transact-with-validation conn [row])]
     {:physical-inventory (get-in report [:tempids "count"])
      :tx-report report}))
@@ -70,19 +70,19 @@
   (when-not inventory-item     (throw (ex-info ":inventory-item required" {})))
   (when (nil? counted-qty)     (throw (ex-info ":counted-qty required" {})))
   (let [db (d/db conn)
-        count-date (:physical-inventory/count-date
-                    (d/pull db [:physical-inventory/count-date] physical-inventory))
+        count-date (:kontor.physical-inventory/count-date
+                    (d/pull db [:kontor.physical-inventory/count-date] physical-inventory))
         expected (inv/on-hand-qty db inventory-item {:as-of-valid count-date})
         qoh-var (.subtract ^BigDecimal counted-qty ^BigDecimal expected)
         row (cond-> {:db/id "var"
-                     :inventory-variance/physical-inventory physical-inventory
-                     :inventory-variance/inventory-item inventory-item
-                     :inventory-variance/expected-qty expected
-                     :inventory-variance/counted-qty counted-qty
-                     :inventory-variance/qoh-var qoh-var}
-              reason     (assoc :inventory-variance/reason reason)
-              recount-of (assoc :inventory-variance/recount-of recount-of)
-              comments   (assoc :inventory-variance/comments comments))
+                     :kontor.inventory-variance/physical-inventory physical-inventory
+                     :kontor.inventory-variance/inventory-item inventory-item
+                     :kontor.inventory-variance/expected-qty expected
+                     :kontor.inventory-variance/counted-qty counted-qty
+                     :kontor.inventory-variance/qoh-var qoh-var}
+              reason     (assoc :kontor.inventory-variance/reason reason)
+              recount-of (assoc :kontor.inventory-variance/recount-of recount-of)
+              comments   (assoc :kontor.inventory-variance/comments comments))
         report (validation/transact-with-validation conn [row])]
     {:variance      (get-in report [:tempids "var"])
      :expected-qty  expected
@@ -99,11 +99,11 @@
   [db physical-inventory]
   (let [lines (d/q '[:find [?v ...]
                      :in $ ?pi
-                     :where [?v :inventory-variance/physical-inventory ?pi]]
+                     :where [?v :kontor.inventory-variance/physical-inventory ?pi]]
                    db physical-inventory)
         superseded (set (keep (fn [v]
-                                (:db/id (:inventory-variance/recount-of
-                                         (d/pull db [{:inventory-variance/recount-of
+                                (:db/id (:kontor.inventory-variance/recount-of
+                                         (d/pull db [{:kontor.inventory-variance/recount-of
                                                       [:db/id]}]
                                                  v))))
                               lines))]
@@ -118,8 +118,8 @@
    (d/q '[:find ?d .
           :in $ ?v
           :where
-          [?d :inventory-detail/source ?v]
-          [?d :inventory-detail/source-kind :variance]]
+          [?d :kontor.inventory-detail/source ?v]
+          [?d :kontor.inventory-detail/source-kind :variance]]
         db variance)))
 
 (defn post-count!
@@ -158,8 +158,8 @@
   (when-not account-fn         (throw (ex-info ":account-fn required" {})))
   (when-not commodity          (throw (ex-info ":commodity required" {})))
   (let [db0 (d/db conn)
-        count-date (:physical-inventory/count-date
-                    (d/pull db0 [:physical-inventory/count-date] physical-inventory))
+        count-date (:kontor.physical-inventory/count-date
+                    (d/pull db0 [:kontor.physical-inventory/count-date] physical-inventory))
         eff  (or effective-date count-date)
         prov (or provider (ops/provider-for-book db0 book))
         lines (current-variance-lines db0 physical-inventory)
@@ -171,8 +171,8 @@
                      (some (fn [v]
                              (pos? (.signum
                                     ^BigDecimal
-                                    (:inventory-variance/qoh-var
-                                     (d/pull db0 [:inventory-variance/qoh-var] v)))))
+                                    (:kontor.inventory-variance/qoh-var
+                                     (d/pull db0 [:kontor.inventory-variance/qoh-var] v)))))
                            lines))
             (throw (ex-info ":found-unit-cost required — the count has a positive (found-stock) variance"
                             {:type :inventory/found-cost-required
@@ -184,18 +184,18 @@
              (if (already-posted? db v)
                acc   ; idempotent — a partial re-run skips posted lines
                (let [vr (d/pull db
-                                [:inventory-variance/qoh-var
-                                 :inventory-variance/reason
-                                 {:inventory-variance/inventory-item
+                                [:kontor.inventory-variance/qoh-var
+                                 :kontor.inventory-variance/reason
+                                 {:kontor.inventory-variance/inventory-item
                                   [:db/id
-                                   {:inventory-item/product [:db/id]}
-                                   {:inventory-item/lot [:db/id]}]}]
+                                   {:kontor.inventory-item/product [:db/id]}
+                                   {:kontor.inventory-item/lot [:db/id]}]}]
                                 v)
-                     qoh-var  (:inventory-variance/qoh-var vr)
-                     item     (:inventory-variance/inventory-item vr)
+                     qoh-var  (:kontor.inventory-variance/qoh-var vr)
+                     item     (:kontor.inventory-variance/inventory-item vr)
                      item-eid (:db/id item)
-                     product  (:db/id (:inventory-item/product item))
-                     lot      (:db/id (:inventory-item/lot item))]
+                     product  (:db/id (:kontor.inventory-item/product item))
+                     lot      (:db/id (:kontor.inventory-item/lot item))]
                  (if (zero? (.signum ^BigDecimal qoh-var))
                    acc
                    (let [neg? (neg? (.signum ^BigDecimal qoh-var))
@@ -222,16 +222,16 @@
                                             lot        (assoc :lot lot)
                                             (not neg?) (assoc :unit-cost
                                                               found-unit-cost)))
-                                 detail (cond-> {:inventory-detail/inventory-item item-eid
-                                                 :inventory-detail/effective-date eff
-                                                 :inventory-detail/qoh-diff qoh-var
-                                                 :inventory-detail/atp-diff qoh-var
-                                                 :inventory-detail/source-kind :variance
-                                                 :inventory-detail/source v
-                                                 :inventory-detail/transaction -1}
-                                          (:inventory-variance/reason vr)
-                                          (assoc :inventory-detail/reason
-                                                 (:inventory-variance/reason vr)))]
+                                 detail (cond-> {:kontor.inventory-detail/inventory-item item-eid
+                                                 :kontor.inventory-detail/effective-date eff
+                                                 :kontor.inventory-detail/qoh-diff qoh-var
+                                                 :kontor.inventory-detail/atp-diff qoh-var
+                                                 :kontor.inventory-detail/source-kind :variance
+                                                 :kontor.inventory-detail/source v
+                                                 :kontor.inventory-detail/transaction -1}
+                                          (:kontor.inventory-variance/reason vr)
+                                          (assoc :kontor.inventory-detail/reason
+                                                 (:kontor.inventory-variance/reason vr)))]
                              (conj (vec (ops/seal-stock-move move-tx eff)) detail)))]
                      (process/run-process
                       conn {:steps [line-step] :vt-from eff})
@@ -241,7 +241,7 @@
     (process/run-process
      conn {:steps [(fn [_sdb _ctx]
                      [{:db/id physical-inventory
-                       :physical-inventory/status :posted}])]
+                       :kontor.physical-inventory/status :posted}])]
            :vt-from eff})
     {:posted posted
      :count (count posted)

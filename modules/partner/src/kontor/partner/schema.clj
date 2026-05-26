@@ -143,78 +143,78 @@
 ;; ============================================================================
 ;; Organization subtype
 ;;
-;; 1:1 with :partner via :org/partner. Carries org-specific
+;; 1:1 with :partner via :kontor.org/partner. Carries org-specific
 ;; registration + financial + market data.
 ;; ============================================================================
 
 (def ^:private org-attrs
-  [{:db/ident       :org/partner
+  [{:db/ident       :kontor.org/partner
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/value
     :db/doc         "FK to :partner. 1:1."}
 
-   {:db/ident       :org/legal-name
+   {:db/ident       :kontor.org/legal-name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Formally registered name (often differs from
                      :kontor.partner/name which may be the trading name)."}
 
-   {:db/ident       :org/legal-form
+   {:db/ident       :kontor.org/legal-form
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":gmbh | :ag | :llc | :inc | :sa | :ltd | …
                      keyword vocabulary; consumers extend per
                      jurisdiction."}
 
-   {:db/ident       :org/trading-name
+   {:db/ident       :kontor.org/trading-name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "\"Doing business as\" name."}
 
-   {:db/ident       :org/registration-number
+   {:db/ident       :kontor.org/registration-number
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Jurisdiction-specific company register number
                      (HRB in DE, ABN in AU, EIN in US, etc.)."}
 
-   {:db/ident       :org/duns
+   {:db/ident       :kontor.org/duns
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Dun & Bradstreet 9-digit D-U-N-S identifier."}
 
-   {:db/ident       :org/lei
+   {:db/ident       :kontor.org/lei
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Legal Entity Identifier (ISO 17442 / GLEIF)."}
 
-   {:db/ident       :org/ticker-symbol
+   {:db/ident       :kontor.org/ticker-symbol
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :org/exchange
+   {:db/ident       :kontor.org/exchange
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Stock exchange where listed (e.g. NYSE, XETRA)."}
 
-   {:db/ident       :org/annual-revenue
+   {:db/ident       :kontor.org/annual-revenue
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :org/revenue-commodity
+   {:db/ident       :kontor.org/revenue-commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
-    :db/doc         "Commodity (currency) of :org/annual-revenue."}
+    :db/doc         "Commodity (currency) of :kontor.org/annual-revenue."}
 
-   {:db/ident       :org/num-employees
+   {:db/ident       :kontor.org/num-employees
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :org/incorporation-date
+   {:db/ident       :kontor.org/incorporation-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :org/dissolution-date
+   {:db/ident       :kontor.org/dissolution-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}])
 
@@ -223,12 +223,12 @@
 ;;
 ;; A contact mechanism is identified by a consumer-supplied code
 ;; (vCard UID / Peppol contact-point identifier / app-internal ID)
-;; and discriminated by :contact-mech/type. The :info-string is a
+;; and discriminated by :kontor.contact-mech/type. The :info-string is a
 ;; fallback for raw/untyped data when a subtype entity is overkill.
 ;; ============================================================================
 
 (def ^:private contact-mech-attrs
-  [{:db/ident       :contact-mech/code
+  [{:db/ident       :kontor.contact-mech/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
@@ -236,25 +236,25 @@
                      contact-mech. vCard UID, Peppol contact-point
                      ID, or app-internal. Identity attribute."}
 
-   {:db/ident       :contact-mech/type
+   {:db/ident       :kontor.contact-mech/type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":postal | :telecom | :email | :web | :ftp.
                      Discriminator for the subtype entity carrying
                      the typed payload."}
 
-   {:db/ident       :contact-mech/info-string
+   {:db/ident       :kontor.contact-mech/info-string
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Fallback untyped storage when no subtype is
                      installed (e.g. :web / :ftp without a dedicated
                      entity)."}
 
-   {:db/ident       :contact-mech/created-at
+   {:db/ident       :kontor.contact-mech/created-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :contact-mech/modified-at
+   {:db/ident       :kontor.contact-mech/modified-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}])
 
@@ -267,89 +267,89 @@
 ;; ============================================================================
 
 (def ^:private postal-address-attrs
-  [{:db/ident       :postal-address/contact-mech
+  [{:db/ident       :kontor.postal-address/contact-mech
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/value
     :db/doc         "FK to :contact-mech. 1:1."}
 
-   {:db/ident       :postal-address/to-name
+   {:db/ident       :kontor.postal-address/to-name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Addressee on the envelope, if distinct from the
                      partner name."}
 
-   {:db/ident       :postal-address/attn-name
+   {:db/ident       :kontor.postal-address/attn-name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "ATTN: line — typically a department or role
                      name for a corporate recipient."}
 
-   {:db/ident       :postal-address/address1
+   {:db/ident       :kontor.postal-address/address1
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :postal-address/address2
+   {:db/ident       :kontor.postal-address/address2
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :postal-address/house-number
+   {:db/ident       :kontor.postal-address/house-number
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Separated from address1 for jurisdictions
                      (DE, NL) where house number is a distinct
                      parsing token from the street name."}
 
-   {:db/ident       :postal-address/house-number-ext
+   {:db/ident       :kontor.postal-address/house-number-ext
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :postal-address/directions
+   {:db/ident       :kontor.postal-address/directions
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :postal-address/city
+   {:db/ident       :kontor.postal-address/city
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :postal-address/postal-code
+   {:db/ident       :kontor.postal-address/postal-code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :postal-address/postal-code-ext
+   {:db/ident       :kontor.postal-address/postal-code-ext
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "ZIP+4 suffix in the US, similar in other
                      jurisdictions."}
 
-   {:db/ident       :postal-address/county
+   {:db/ident       :kontor.postal-address/county
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :postal-address/region
+   {:db/ident       :kontor.postal-address/region
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
-    :db/doc         "Free-text region (use :postal-address/state for
+    :db/doc         "Free-text region (use :kontor.postal-address/state for
                      jurisdictions with structured state entities)."}
 
-   {:db/ident       :postal-address/state
+   {:db/ident       :kontor.postal-address/state
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :state — structured province/state per
                      ADR-023. Preferred over :region when the country
                      has its state set installed."}
 
-   {:db/ident       :postal-address/country
+   {:db/ident       :kontor.postal-address/country
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :country — structured ISO country per
                      ADR-023."}
 
-   {:db/ident       :postal-address/latitude
+   {:db/ident       :kontor.postal-address/latitude
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :postal-address/longitude
+   {:db/ident       :kontor.postal-address/longitude
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one}])
 
@@ -358,31 +358,31 @@
 ;; ============================================================================
 
 (def ^:private telecom-number-attrs
-  [{:db/ident       :telecom-number/contact-mech
+  [{:db/ident       :kontor.telecom-number/contact-mech
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/value
     :db/doc         "FK to :contact-mech. 1:1."}
 
-   {:db/ident       :telecom-number/country-code
+   {:db/ident       :kontor.telecom-number/country-code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "E.164-style country code, e.g. \"+49\". Stored
                      as a string to preserve the leading +."}
 
-   {:db/ident       :telecom-number/area-code
+   {:db/ident       :kontor.telecom-number/area-code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :telecom-number/contact-number
+   {:db/ident       :kontor.telecom-number/contact-number
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :telecom-number/extension
+   {:db/ident       :kontor.telecom-number/extension
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :telecom-number/ask-for-name
+   {:db/ident       :kontor.telecom-number/ask-for-name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Routing hint for switchboards (\"ask for
@@ -393,22 +393,22 @@
 ;; ============================================================================
 
 (def ^:private email-address-attrs
-  [{:db/ident       :email-address/contact-mech
+  [{:db/ident       :kontor.email-address/contact-mech
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/value
     :db/doc         "FK to :contact-mech. 1:1."}
 
-   {:db/ident       :email-address/address
+   {:db/ident       :kontor.email-address/address
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "The email address itself (e.g. jane@example.com)."}
 
-   {:db/ident       :email-address/verified?
+   {:db/ident       :kontor.email-address/verified?
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :email-address/bounced?
+   {:db/ident       :kontor.email-address/bounced?
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "Marks an address that has hard-bounced. Affects
@@ -425,22 +425,22 @@
 ;; ============================================================================
 
 (def ^:private partner-contact-mech-attrs
-  [{:db/ident       :partner-contact-mech/partner
+  [{:db/ident       :kontor.partner-contact-mech/partner
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "FK to :partner."}
 
-   {:db/ident       :partner-contact-mech/contact-mech
+   {:db/ident       :kontor.partner-contact-mech/contact-mech
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "FK to :contact-mech."}
 
-   {:db/ident       :partner-contact-mech/from-date
+   {:db/ident       :kontor.partner-contact-mech/from-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Inclusive start of the association's validity."}
 
-   {:db/ident       :partner-contact-mech/thru-date
+   {:db/ident       :kontor.partner-contact-mech/thru-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Exclusive end of the association's validity. Nil
@@ -448,21 +448,21 @@
                      `active-as-of? d` is true iff
                      from-date <= d < thru-date, or thru-date is nil.)"}
 
-   {:db/ident       :partner-contact-mech/role-type
+   {:db/ident       :kontor.partner-contact-mech/role-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional role-context for this association — a
                      :customer-role :ship-to address vs the same
                      partner's :employee-role home address."}
 
-   {:db/ident       :partner-contact-mech/allow-solicitation?
+   {:db/ident       :kontor.partner-contact-mech/allow-solicitation?
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "True iff the partner has consented to be
                      contacted via this mechanism for marketing /
                      non-transactional outreach. Default false."}
 
-   {:db/ident       :partner-contact-mech/verified?
+   {:db/ident       :kontor.partner-contact-mech/verified?
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "True once the consumer has confirmed the
@@ -470,15 +470,15 @@
                      postal mail returned, phone-call verification,
                      etc.)."}
 
-   {:db/ident       :partner-contact-mech/comments
+   {:db/ident       :kontor.partner-contact-mech/comments
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-contact-mech/identity
+   {:db/ident       :kontor.partner-contact-mech/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:partner-contact-mech/partner
-                     :partner-contact-mech/contact-mech
-                     :partner-contact-mech/from-date]
+    :db/tupleAttrs  [:kontor.partner-contact-mech/partner
+                     :kontor.partner-contact-mech/contact-mech
+                     :kontor.partner-contact-mech/from-date]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Composite identity: one row per (partner,
@@ -494,15 +494,15 @@
 ;; ============================================================================
 
 (def ^:private partner-contact-mech-purpose-attrs
-  [{:db/ident       :partner-contact-mech-purpose/partner
+  [{:db/ident       :kontor.partner-contact-mech-purpose/partner
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-contact-mech-purpose/contact-mech
+   {:db/ident       :kontor.partner-contact-mech-purpose/contact-mech
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-contact-mech-purpose/purpose-type
+   {:db/ident       :kontor.partner-contact-mech-purpose/purpose-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":billing-location | :shipping-location |
@@ -510,20 +510,20 @@
                      :general-correspondence | … See ADR-033 for the
                      canonical vocabulary; consumers extend."}
 
-   {:db/ident       :partner-contact-mech-purpose/from-date
+   {:db/ident       :kontor.partner-contact-mech-purpose/from-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-contact-mech-purpose/thru-date
+   {:db/ident       :kontor.partner-contact-mech-purpose/thru-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-contact-mech-purpose/identity
+   {:db/ident       :kontor.partner-contact-mech-purpose/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:partner-contact-mech-purpose/partner
-                     :partner-contact-mech-purpose/contact-mech
-                     :partner-contact-mech-purpose/purpose-type
-                     :partner-contact-mech-purpose/from-date]
+    :db/tupleAttrs  [:kontor.partner-contact-mech-purpose/partner
+                     :kontor.partner-contact-mech-purpose/contact-mech
+                     :kontor.partner-contact-mech-purpose/purpose-type
+                     :kontor.partner-contact-mech-purpose/from-date]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
@@ -537,11 +537,11 @@
 ;; ============================================================================
 
 (def ^:private partner-role-attrs
-  [{:db/ident       :partner-role/partner
+  [{:db/ident       :kontor.partner-role/partner
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-role/role-type
+   {:db/ident       :kontor.partner-role/role-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":customer | :supplier | :employee | :contractor |
@@ -549,19 +549,19 @@
                      organization | … See ADR-033 for the canonical
                      vocabulary; consumers extend."}
 
-   {:db/ident       :partner-role/from-date
+   {:db/ident       :kontor.partner-role/from-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-role/thru-date
+   {:db/ident       :kontor.partner-role/thru-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-role/identity
+   {:db/ident       :kontor.partner-role/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:partner-role/partner
-                     :partner-role/role-type
-                     :partner-role/from-date]
+    :db/tupleAttrs  [:kontor.partner-role/partner
+                     :kontor.partner-role/role-type
+                     :kontor.partner-role/from-date]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
@@ -576,76 +576,76 @@
 ;; ============================================================================
 
 (def ^:private partner-relationship-attrs
-  [{:db/ident       :partner-relationship/partner-from
+  [{:db/ident       :kontor.partner-relationship/partner-from
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "FK to :partner — the 'from' side."}
 
-   {:db/ident       :partner-relationship/partner-to
+   {:db/ident       :kontor.partner-relationship/partner-to
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "FK to :partner — the 'to' side."}
 
-   {:db/ident       :partner-relationship/role-type-from
+   {:db/ident       :kontor.partner-relationship/role-type-from
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Role context of the from-partner (e.g. :employee
                      in an employment relationship)."}
 
-   {:db/ident       :partner-relationship/role-type-to
+   {:db/ident       :kontor.partner-relationship/role-type-to
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Role context of the to-partner (e.g. :internal-
                      organization in an employment relationship)."}
 
-   {:db/ident       :partner-relationship/from-date
+   {:db/ident       :kontor.partner-relationship/from-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-relationship/thru-date
+   {:db/ident       :kontor.partner-relationship/thru-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-relationship/relationship-type
+   {:db/ident       :kontor.partner-relationship/relationship-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":employment | :subsidiary | :branch | :partnership |
                      :reseller-channel | :family | … See ADR-033 for
                      the canonical vocabulary."}
 
-   {:db/ident       :partner-relationship/status
+   {:db/ident       :kontor.partner-relationship/status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":active | :inactive | :pending."}
 
-   {:db/ident       :partner-relationship/relationship-name
+   {:db/ident       :kontor.partner-relationship/relationship-name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Human-friendly label (\"Wholly-owned
                      subsidiary\", \"Senior Engineer\")."}
 
-   {:db/ident       :partner-relationship/position-title
+   {:db/ident       :kontor.partner-relationship/position-title
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-relationship/priority
+   {:db/ident       :kontor.partner-relationship/priority
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "Tiebreaker when one party has multiple
                      concurrent relationships of the same type
                      (e.g. multi-job employment ranking)."}
 
-   {:db/ident       :partner-relationship/comments
+   {:db/ident       :kontor.partner-relationship/comments
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-relationship/identity
+   {:db/ident       :kontor.partner-relationship/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:partner-relationship/partner-from
-                     :partner-relationship/role-type-from
-                     :partner-relationship/partner-to
-                     :partner-relationship/role-type-to
-                     :partner-relationship/from-date]
+    :db/tupleAttrs  [:kontor.partner-relationship/partner-from
+                     :kontor.partner-relationship/role-type-from
+                     :kontor.partner-relationship/partner-to
+                     :kontor.partner-relationship/role-type-to
+                     :kontor.partner-relationship/from-date]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 

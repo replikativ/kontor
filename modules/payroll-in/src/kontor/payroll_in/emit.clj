@@ -91,30 +91,30 @@
           per-fact-count (count payroll-facts)
           pt-states (warn-if-multi-state-pt! payroll-facts)
           base-doc
-          {:audit-doc/code (str "IN-PAYROLL-EVENT-" entity-eid "-" pay-period-eid)
-           :audit-doc/type :payroll-run-summary
-           :audit-doc/title (format "IN payroll run (%d facts) for pay-period %d, entity %d"
+          {:kontor.audit-doc/code (str "IN-PAYROLL-EVENT-" entity-eid "-" pay-period-eid)
+           :kontor.audit-doc/type :payroll-run-summary
+           :kontor.audit-doc/title (format "IN payroll run (%d facts) for pay-period %d, entity %d"
                                     per-fact-count pay-period-eid entity-eid)
-           :audit-doc/description
+           :kontor.audit-doc/description
            (format "Payroll-run audit-doc. PT states touched: %s. TDS / PF / ESI quarterly / monthly emissions are produced by tds.clj / pf.clj / esi.clj — NOT in this per-run emission."
                    (if (seq pt-states) (str/join ", " (sort pt-states)) "none"))
-           :audit-doc/category :payroll-filing
-           :audit-doc/language language
-           :audit-doc/uploaded-at (java.util.Date.)}]
+           :kontor.audit-doc/category :payroll-filing
+           :kontor.audit-doc/language language
+           :kontor.audit-doc/uploaded-at (java.util.Date.)}]
       (cond-> [base-doc]
         (> (count pt-states) 1)
-        (conj {:audit-doc/code
+        (conj {:kontor.audit-doc/code
                (str "IN-PT-MULTI-STATE-" entity-eid "-" pay-period-eid)
-               :audit-doc/type :payroll-run-summary
-               :audit-doc/title
+               :kontor.audit-doc/type :payroll-run-summary
+               :kontor.audit-doc/title
                (format "Multi-state PT detection — pay-period %d, entity %d"
                        pay-period-eid entity-eid)
-               :audit-doc/description
+               :kontor.audit-doc/description
                (format "This run spans %d PT-levying states (%s). The consumer's PT-remittance workflow needs to file PER STATE."
                        (count pt-states) (str/join ", " (sort pt-states)))
-               :audit-doc/category :payroll-filing
-               :audit-doc/language language
-               :audit-doc/uploaded-at (java.util.Date.)})))))
+               :kontor.audit-doc/category :payroll-filing
+               :kontor.audit-doc/language language
+               :kontor.audit-doc/uploaded-at (java.util.Date.)})))))
 
 ;; ============================================================================
 ;; terminate-employment-tx-data — Form 12B + final settlement helper
@@ -136,9 +136,9 @@
   "Pure ADR-068 tx-data builder for an employment termination event.
 
    Per note 79 §5.3 C9 plan:
-     - status-machine transitions :employment/state → :terminated
-     - sets :employment/end-date to last-day-worked
-     - sets :employment/termination-reason
+     - status-machine transitions :kontor.employment/state → :terminated
+     - sets :kontor.employment/end-date to last-day-worked
+     - sets :kontor.employment/termination-reason
      - emits a :termination-event :audit-doc carrying the data the
        engine + consumer need for:
          * Form 16 (annual TDS certificate, Sec 192) — issued by
@@ -166,7 +166,7 @@
                                 final-payroll-run linkage
      :years-of-service          integer — drives the gratuity
                                 computation (consumer-supplied; we don't
-                                read :employment/start-date here because
+                                read :kontor.employment/start-date here because
                                 the engine handles the cap + the
                                 continuous-service rule + the
                                 payable-amount under Sec 4(2))
@@ -216,21 +216,21 @@
               (str (or form-16-issuance-date "(consumer-supplied)")))
         doc-tempid (str "in-termination-event-doc-" employment-eid)
         audit-doc {:db/id doc-tempid
-                   :audit-doc/code doc-code
-                   :audit-doc/type :termination-event
-                   :audit-doc/title (str "Termination — " (name termination-reason)
+                   :kontor.audit-doc/code doc-code
+                   :kontor.audit-doc/type :termination-event
+                   :kontor.audit-doc/title (str "Termination — " (name termination-reason)
                                          " (ESIC " (:esic-code reason-meta) ")")
-                   :audit-doc/description desc
-                   :audit-doc/uploaded-at (java.util.Date.)
-                   :audit-doc/category :hr-personnel
-                   :audit-doc/language language}
+                   :kontor.audit-doc/description desc
+                   :kontor.audit-doc/uploaded-at (java.util.Date.)
+                   :kontor.audit-doc/category :hr-personnel
+                   :kontor.audit-doc/language language}
         emp-update (cond->
                     {:db/id employment-eid
-                     :employment/state :terminated
-                     :employment/end-date last-day-worked
-                     :employment/termination-reason termination-reason}
+                     :kontor.employment/state :terminated
+                     :kontor.employment/end-date last-day-worked
+                     :kontor.employment/termination-reason termination-reason}
                      final-pay-period-end-date
-                     (assoc :employment/final-pay-period-end-date
+                     (assoc :kontor.employment/final-pay-period-end-date
                             final-pay-period-end-date))]
     [audit-doc emp-update]))
 
@@ -271,12 +271,12 @@
                       tan fy (mod (inc fy) 100) quarter statement-type
                       (or record-count 0))]
     [(cond->
-      {:audit-doc/code doc-code
-       :audit-doc/type :regulator-clearance
-       :audit-doc/title title
-       :audit-doc/uploaded-at (java.util.Date.)
-       :audit-doc/category :payroll-filing
-       :audit-doc/language language}
-       file-uri (assoc :audit-doc/storage-uri file-uri)
-       rrr-number (assoc :audit-doc/description
+      {:kontor.audit-doc/code doc-code
+       :kontor.audit-doc/type :regulator-clearance
+       :kontor.audit-doc/title title
+       :kontor.audit-doc/uploaded-at (java.util.Date.)
+       :kontor.audit-doc/category :payroll-filing
+       :kontor.audit-doc/language language}
+       file-uri (assoc :kontor.audit-doc/storage-uri file-uri)
+       rrr-number (assoc :kontor.audit-doc/description
                          (str "RRR: " rrr-number)))]))

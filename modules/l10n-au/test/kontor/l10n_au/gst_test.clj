@@ -57,10 +57,10 @@
     (let [conn (bootstrap)
           _ (post-taxable-sale! conn "INV-1" jan-15 10000)
           r (gst/compute-return conn {:from jan-1 :to apr-1})]
-      (is (money/equiv? (aud "10000.00") (:G1 (:return/lines r))))
-      (is (money/equiv? (aud "1000.00")  (:1A (:return/lines r))))
-      (is (money/equiv? (aud "1000.00")  (:return/net-gst r)))
-      (is (= :payment (:return/outcome r))))))
+      (is (money/equiv? (aud "10000.00") (:G1 (:kontor.return/lines r))))
+      (is (money/equiv? (aud "1000.00")  (:1A (:kontor.return/lines r))))
+      (is (money/equiv? (aud "1000.00")  (:kontor.return/net-gst r)))
+      (is (= :payment (:kontor.return/outcome r))))))
 
 (deftest quarterly-period-bounds
   (testing "Q1 2026 picks Jan-Mar"
@@ -82,5 +82,5 @@
 (deftest nil-return
   (let [conn (bootstrap)
         r (gst/compute-return conn {:from jan-1 :to apr-1})]
-    (is (= :nil-return (:return/outcome r)))
-    (is (money/equiv? (aud "0.00") (:return/net-gst r)))))
+    (is (= :nil-return (:kontor.return/outcome r)))
+    (is (money/equiv? (aud "0.00") (:kontor.return/net-gst r)))))

@@ -195,12 +195,12 @@
     (let [conn (bootstrap)
           _ (post-on-hst-sale! conn "INV-1" jan-15 1000)
           r (gst/compute-return conn {:from jan-1 :to feb-1})]
-      (is (= "GST34-2" (:return/form r)))
-      (is (money/equiv? (money/money "130.00" :CAD) (:103 (:return/lines r))))
-      (is (money/equiv? (money/money "130.00" :CAD) (:return/net-tax r)))
-      (is (money/equiv? (money/money "130.00" :CAD) (:115 (:return/lines r)))
+      (is (= "GST34-2" (:kontor.return/form r)))
+      (is (money/equiv? (money/money "130.00" :CAD) (:103 (:kontor.return/lines r))))
+      (is (money/equiv? (money/money "130.00" :CAD) (:kontor.return/net-tax r)))
+      (is (money/equiv? (money/money "130.00" :CAD) (:115 (:kontor.return/lines r)))
           "line 115 (payment enclosed) mirrors the positive balance")
-      (is (= :payment (:return/outcome r))))))
+      (is (= :payment (:kontor.return/outcome r))))))
 
 (deftest cra-gst-hst-with-itc
   (testing "ON sale + vendor bill with GST 5% ITC.
@@ -211,11 +211,11 @@
           _ (post-on-hst-sale! conn "INV-1" jan-15 1000)
           _ (post-bill-with-itc! conn "BILL-1" jan-25 500)
           r (gst/compute-return conn {:from jan-1 :to feb-1})]
-      (is (money/equiv? (money/money "130.00" :CAD) (:103 (:return/lines r))))
-      (is (money/equiv? (money/money "25.00"  :CAD) (:106 (:return/lines r))))
-      (is (money/equiv? (money/money "25.00"  :CAD) (:108 (:return/lines r)))
+      (is (money/equiv? (money/money "130.00" :CAD) (:103 (:kontor.return/lines r))))
+      (is (money/equiv? (money/money "25.00"  :CAD) (:106 (:kontor.return/lines r))))
+      (is (money/equiv? (money/money "25.00"  :CAD) (:108 (:kontor.return/lines r)))
           "108 = 106 + 107(0)")
-      (is (money/equiv? (money/money "105.00" :CAD) (:return/net-tax r))))))
+      (is (money/equiv? (money/money "105.00" :CAD) (:kontor.return/net-tax r))))))
 
 ;; ============================================================================
 ;; BC stacking — GST + PST as TWO separate authority filings
@@ -230,11 +230,11 @@
           _ (post-bc-sale! conn "BC-INV-1" jan-15 1000)
           cra (gst/compute-return  conn {:from jan-1 :to feb-1})
           bc  (ret/compute-bc-pst conn {:from jan-1 :to feb-1})]
-      (is (money/equiv? (money/money "50.00" :CAD) (:103 (:return/lines cra)))
+      (is (money/equiv? (money/money "50.00" :CAD) (:103 (:kontor.return/lines cra)))
           "CRA sees the GST 5% portion only")
       (is (money/equiv? (money/money "70.00" :CAD) (:bc-pst/payable bc))
           "BC Finance sees the PST 7% portion only")
-      (is (money/equiv? (money/money "50.00" :CAD) (:return/net-tax cra))
+      (is (money/equiv? (money/money "50.00" :CAD) (:kontor.return/net-tax cra))
           "CRA net = 50 (GST collected, no ITCs)"))))
 
 ;; ============================================================================
@@ -248,7 +248,7 @@
           _ (post-qc-sale! conn "QC-INV-1" jan-20 1000)
           cra (gst/compute-return conn {:from jan-1 :to feb-1})
           rq  (ret/compute-qst    conn {:from jan-1 :to feb-1})]
-      (is (money/equiv? (money/money "50.00"  :CAD) (:103 (:return/lines cra))))
+      (is (money/equiv? (money/money "50.00"  :CAD) (:103 (:kontor.return/lines cra))))
       (is (money/equiv? (money/money "99.75"  :CAD) (:203 (:qst/lines rq))))
       (is (money/equiv? (money/money "99.75"  :CAD) (:qst/net-tax rq))))))
 
@@ -275,7 +275,7 @@
       (is (= #inst "2027-01-01T00:00:00Z" to)))))
 
 (deftest all-gst34-2-lines-computed
-  (testing "Single ON sale + bill — every GST34-2 line key present in :return/lines.
+  (testing "Single ON sale + bill — every GST34-2 line key present in :kontor.return/lines.
             Includes 113B (other debits) and 113C (final balance), which the
             original draft omitted; 205/405 are caller-supplied opts that
             default to zero but appear in the output for completeness."
@@ -283,7 +283,7 @@
           _ (post-on-hst-sale!  conn "INV-1"  jan-15 1000)
           _ (post-bill-with-itc! conn "BILL-1" jan-25 500)
           r (gst/compute-return conn {:from jan-1 :to feb-1})
-          ks (set (keys (:return/lines r)))]
+          ks (set (keys (:kontor.return/lines r)))]
       (is (= #{:101 :103 :104 :105 :106 :107 :108 :109
                :110 :111 :112 :113A
                :205 :405 :113B :113C
@@ -297,8 +297,8 @@
           _ (post-on-hst-sale! conn "INV-Q2" #inst "2026-04-15" 500) ;; in Q2
           q1 (gst/compute-return conn {:year 2026 :quarter 1})
           q2 (gst/compute-return conn {:year 2026 :quarter 2})]
-      (is (money/equiv? (money/money "130.00" :CAD) (:103 (:return/lines q1))))
-      (is (money/equiv? (money/money  "65.00" :CAD) (:103 (:return/lines q2)))))))
+      (is (money/equiv? (money/money "130.00" :CAD) (:103 (:kontor.return/lines q1))))
+      (is (money/equiv? (money/money  "65.00" :CAD) (:103 (:kontor.return/lines q2)))))))
 
 (deftest adjustment-and-instalment-lines
   (testing "Caller-supplied 104/107/110/111 flow through to 105/108/112/113A.
@@ -315,12 +315,12 @@
               :line-107 (money/money  "2.00" :CAD)
               :line-110 (money/money "50.00" :CAD)
               :line-111 (money/money  "8.00" :CAD)})]
-      (is (money/equiv? (money/money "135.00" :CAD) (:105 (:return/lines r))))
-      (is (money/equiv? (money/money  "27.00" :CAD) (:108 (:return/lines r))))
-      (is (money/equiv? (money/money "108.00" :CAD) (:109 (:return/lines r))))
-      (is (money/equiv? (money/money  "58.00" :CAD) (:112 (:return/lines r))))
-      (is (money/equiv? (money/money  "50.00" :CAD) (:113A (:return/lines r))))
-      (is (money/equiv? (money/money  "50.00" :CAD) (:115 (:return/lines r)))))))
+      (is (money/equiv? (money/money "135.00" :CAD) (:105 (:kontor.return/lines r))))
+      (is (money/equiv? (money/money  "27.00" :CAD) (:108 (:kontor.return/lines r))))
+      (is (money/equiv? (money/money "108.00" :CAD) (:109 (:kontor.return/lines r))))
+      (is (money/equiv? (money/money  "58.00" :CAD) (:112 (:kontor.return/lines r))))
+      (is (money/equiv? (money/money  "50.00" :CAD) (:113A (:kontor.return/lines r))))
+      (is (money/equiv? (money/money  "50.00" :CAD) (:115 (:kontor.return/lines r)))))))
 
 (deftest refund-outcome-when-itcs-exceed-collected
   (testing "Big purchase, no sales → refund. ITCs (line 106) push 113A negative;
@@ -328,17 +328,17 @@
     (let [conn (bootstrap)
           _ (post-bill-with-itc! conn "BILL-1" jan-15 10000)
           r (gst/compute-return conn {:from jan-1 :to feb-1})]
-      (is (= :refund (:return/outcome r)))
-      (is (money/equiv? (money/money "-500.00" :CAD) (:return/balance r)))
-      (is (money/equiv? (money/money "500.00"  :CAD) (:114 (:return/lines r))))
-      (is (money/equiv? (money/money "0.00"    :CAD) (:115 (:return/lines r)))))))
+      (is (= :refund (:kontor.return/outcome r)))
+      (is (money/equiv? (money/money "-500.00" :CAD) (:kontor.return/balance r)))
+      (is (money/equiv? (money/money "500.00"  :CAD) (:114 (:kontor.return/lines r))))
+      (is (money/equiv? (money/money "0.00"    :CAD) (:115 (:kontor.return/lines r)))))))
 
 (deftest nil-return-outcome
   (testing "No postings in period → all lines zero, outcome :nil-return."
     (let [conn (bootstrap)
           r (gst/compute-return conn {:from jan-1 :to feb-1})]
-      (is (= :nil-return (:return/outcome r)))
-      (is (money/equiv? (money/money "0.00" :CAD) (:return/net-tax r))))))
+      (is (= :nil-return (:kontor.return/outcome r)))
+      (is (money/equiv? (money/money "0.00" :CAD) (:kontor.return/net-tax r))))))
 
 (deftest transcription-sheet-renders
   (testing "Transcription sheet contains form, period, every line, and outcome."

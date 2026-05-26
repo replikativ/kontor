@@ -50,13 +50,13 @@
    `kontor.payroll-jp.emit/record-my-number-attestation-tx-data`,
    producing an `:audit-doc` row with:
 
-     :audit-doc/category   :hr-personnel
-     :audit-doc/privilege  :pii-sensitive
-     :audit-doc/language   :ja
+     :kontor.audit-doc/category   :hr-personnel
+     :kontor.audit-doc/privilege  :pii-sensitive
+     :kontor.audit-doc/language   :ja
 
    Downstream consumers gate access via kontor-authz (ADR-065/066).
    Retention follows kontor.retention (ADR-050) keyed on
-   `:retention-policy/category :hr-personnel`.
+   `:kontor.retention-policy/category :hr-personnel`.
 
    See also: doc/decisions.md ADR-084, doc/research/79 §5.3 (C10
    plan), doc/research/82-86 (Stage R substrate)."

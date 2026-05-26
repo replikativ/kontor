@@ -68,12 +68,12 @@
   "Seed tenant-wide :gl-account-default rows."
   []
   (d/transact *conn*
-              [{:gl-account-default/account-type :sales-revenue
-                :gl-account-default/account [:kontor.account/path "4000"]}
-               {:gl-account-default/account-type :ar
-                :gl-account-default/account [:kontor.account/path "1500"]}
-               {:gl-account-default/account-type :sales-tax-payable
-                :gl-account-default/account [:kontor.account/path "3800"]}]))
+              [{:kontor.gl-account-default/account-type :sales-revenue
+                :kontor.gl-account-default/account [:kontor.account/path "4000"]}
+               {:kontor.gl-account-default/account-type :ar
+                :kontor.gl-account-default/account [:kontor.account/path "1500"]}
+               {:kontor.gl-account-default/account-type :sales-tax-payable
+                :kontor.gl-account-default/account [:kontor.account/path "3800"]}]))
 
 (defn- seed-journal!
   "Seed a sales journal for posting."
@@ -87,26 +87,26 @@
   (seed-commodity!)
   (seed-partners!)
   (d/transact *conn*
-              [{:order/external-id "ORD-1"
-                :order/type :sales
-                :order/status :order.status/created
-                :order/order-date #inst "2026-05-01"
-                :order/entry-date #inst "2026-05-01"
-                :order/currency [:kontor.commodity/symbol "EUR"]
-                :order/bill-from-partner [:kontor.partner/external-id "SELLER"]
-                :order/bill-to-partner [:kontor.partner/external-id "BUYER"]}
-               {:order-item/order [:order/external-id "ORD-1"]
-                :order-item/seq-id "00001"
-                :order-item/type :product
-                :order-item/product-id "WIDGET-A"
-                :order-item/description "Widget A"
-                :order-item/quantity 10M
-                :order-item/unit-price 25M
-                :order-item/cancel-quantity 0M
-                :order-item/status :order-item.status/approved}])
+              [{:kontor.order/external-id "ORD-1"
+                :kontor.order/type :sales
+                :kontor.order/status :order.status/created
+                :kontor.order/order-date #inst "2026-05-01"
+                :kontor.order/entry-date #inst "2026-05-01"
+                :kontor.order/currency [:kontor.commodity/symbol "EUR"]
+                :kontor.order/bill-from-partner [:kontor.partner/external-id "SELLER"]
+                :kontor.order/bill-to-partner [:kontor.partner/external-id "BUYER"]}
+               {:kontor.sales.order-item/order [:kontor.order/external-id "ORD-1"]
+                :kontor.sales.order-item/seq-id "00001"
+                :kontor.sales.order-item/type :product
+                :kontor.sales.order-item/product-id "WIDGET-A"
+                :kontor.sales.order-item/description "Widget A"
+                :kontor.sales.order-item/quantity 10M
+                :kontor.sales.order-item/unit-price 25M
+                :kontor.sales.order-item/cancel-quantity 0M
+                :kontor.sales.order-item/status :order-item.status/approved}])
   (d/q '[:find ?e .
          :in $ ?xid
-         :where [?e :order/external-id ?xid]]
+         :where [?e :kontor.order/external-id ?xid]]
        (d/db *conn*) "ORD-1"))
 
 ;; ============================================================================
@@ -120,10 +120,10 @@
                :kontor.invoice-line/parent-line :kontor.invoice-line/order-item
                :kontor.invoice-line/gl-account-type :kontor.invoice-line/tax-auth-party
                :kontor.invoice-line/amount
-               :order-item-billing/order-item :order-item-billing/invoice-line
-               :order-item-billing/quantity :order-item-billing/identity
-               :gl-account-default/account-type :gl-account-default/entity
-               :gl-account-default/account :gl-account-default/identity]]
+               :kontor.order-item-billing/order-item :kontor.order-item-billing/invoice-line
+               :kontor.order-item-billing/quantity :kontor.order-item-billing/identity
+               :kontor.gl-account-default/account-type :kontor.gl-account-default/entity
+               :kontor.gl-account-default/account :kontor.gl-account-default/identity]]
       (is (contains? idents a) (str "missing: " a)))
     (testing "invoice status transitions are seeded"
       (is (true? (sm/legal-transition? db :invoice :kontor.invoice/status
@@ -196,14 +196,14 @@
       (testing "invoice was created with order back-ref"
         (is (some? inv-eid))
         (is (= :sales (:kontor.invoice/type invoice)))
-        (is (= "ORD-1" (-> invoice :kontor.invoice/order :order/external-id)))
+        (is (= "ORD-1" (-> invoice :kontor.invoice/order :kontor.order/external-id)))
         (is (= :draft (:kontor.invoice/status invoice))))
       (testing "one line per order-item, with order-item ref + amount"
         (is (= 1 (count lines)))
         (let [line (first lines)
               order-item-eid (d/q '[:find ?i . :in $ ?o
-                                    :where [?i :order-item/order ?o]
-                                            [?i :order-item/seq-id "00001"]]
+                                    :where [?i :kontor.sales.order-item/order ?o]
+                                            [?i :kontor.sales.order-item/seq-id "00001"]]
                                   db order-eid)]
           (is (= order-item-eid (-> line :kontor.invoice-line/order-item :db/id)))
           (is (= 10M (:kontor.invoice-line/quantity line)))
@@ -212,14 +212,14 @@
           (is (= :sales-revenue (:kontor.invoice-line/gl-account-type line)))))
       (testing ":order-item-billing junction was created"
         (let [order-item-eid (d/q '[:find ?i . :in $ ?o
-                                    :where [?i :order-item/order ?o]]
+                                    :where [?i :kontor.sales.order-item/order ?o]]
                                   db order-eid)]
           (is (= 10M (inv/partial-billed-quantity db order-item-eid))))))))
 
 (deftest partial-invoice-subtracts-already-billed-quantity
   (let [order-eid (minimal-order!)
         item-eid (d/q '[:find ?i . :in $ ?o
-                        :where [?i :order-item/order ?o]]
+                        :where [?i :kontor.sales.order-item/order ?o]]
                       (d/db *conn*) order-eid)]
     ;; Make a first invoice for ALL 10 first; then prepare a second
     ;; invoice that should bill 0 (everything already billed).
@@ -239,20 +239,20 @@
 (deftest adjustment-lines-include-tax-discount-shipping
   (let [order-eid (minimal-order!)
         item-eid (d/q '[:find ?i . :in $ ?o
-                        :where [?i :order-item/order ?o]]
+                        :where [?i :kontor.sales.order-item/order ?o]]
                       (d/db *conn*) order-eid)]
     (d/transact *conn*
                 [;; Header-level discount
-                 {:order-adjustment/order order-eid
-                  :order-adjustment/scope order-eid
-                  :order-adjustment/type :discount
-                  :order-adjustment/amount -10M}
+                 {:kontor.order-adjustment/order order-eid
+                  :kontor.order-adjustment/scope order-eid
+                  :kontor.order-adjustment/type :discount
+                  :kontor.order-adjustment/amount -10M}
                  ;; Line-level tax
-                 {:order-adjustment/order order-eid
-                  :order-adjustment/scope item-eid
-                  :order-adjustment/type :tax
-                  :order-adjustment/amount 47.50M
-                  :order-adjustment/tax-auth-geo-id "DE"}])
+                 {:kontor.order-adjustment/order order-eid
+                  :kontor.order-adjustment/scope item-eid
+                  :kontor.order-adjustment/type :tax
+                  :kontor.order-adjustment/amount 47.50M
+                  :kontor.order-adjustment/tax-auth-geo-id "DE"}])
     (inv/make-invoice-from-order! *conn* "ORD-1"
                                   {:external-id "INV-ADJ-1"})
     (let [db (d/db *conn*)
@@ -333,7 +333,7 @@
   ;; than emit a negative-quantity line.
   (let [order-eid (minimal-order!)
         item-eid (d/q '[:find ?i . :in $ ?o
-                        :where [?i :order-item/order ?o]]
+                        :where [?i :kontor.sales.order-item/order ?o]]
                       (d/db *conn*) order-eid)]
     ;; Manually create a billing junction for 7 (simulating a
     ;; first partial invoice) — bypasses make-invoice-from-order!
@@ -351,13 +351,13 @@
                   :kontor.invoice-line/unit-price 25M
                   :kontor.invoice-line/amount 175M
                   :db/id "line-pre"}
-                 {:order-item-billing/order-item item-eid
-                  :order-item-billing/invoice-line "line-pre"
-                  :order-item-billing/quantity 7M}])
+                 {:kontor.order-item-billing/order-item item-eid
+                  :kontor.order-item-billing/invoice-line "line-pre"
+                  :kontor.order-item-billing/quantity 7M}])
     ;; Bump cancel-quantity past the remaining 3
     (d/transact *conn*
                 [{:db/id item-eid
-                  :order-item/cancel-quantity 5M}])
+                  :kontor.sales.order-item/cancel-quantity 5M}])
     (testing "negative bill-qty raises :kontor.invoice/over-billed-or-over-cancelled"
       (is (thrown-with-msg? Exception #"negative quantity"
                             (inv/make-invoice-from-order! *conn* "ORD-1"
@@ -436,12 +436,12 @@
                   :kontor.account/name "Deferred Revenue"
                   :kontor.account/path "2900"
                   :kontor.account/type :liability}
-                 {:gl-account-default/account-type :sales-revenue
-                  :gl-account-default/account [:kontor.account/path "4000"]}
-                 {:gl-account-default/account-type :sales-revenue-deferred
-                  :gl-account-default/account [:kontor.account/path "2900"]}
-                 {:gl-account-default/account-type :ar
-                  :gl-account-default/account [:kontor.account/path "1500"]}])
+                 {:kontor.gl-account-default/account-type :sales-revenue
+                  :kontor.gl-account-default/account [:kontor.account/path "4000"]}
+                 {:kontor.gl-account-default/account-type :sales-revenue-deferred
+                  :kontor.gl-account-default/account [:kontor.account/path "2900"]}
+                 {:kontor.gl-account-default/account-type :ar
+                  :kontor.gl-account-default/account [:kontor.account/path "1500"]}])
     (inv/make-invoice-from-order! *conn* "ORD-1"
                                   {:external-id "INV-REC-1"})
     ;; Mark the invoice line as :deferred (post-bridge)

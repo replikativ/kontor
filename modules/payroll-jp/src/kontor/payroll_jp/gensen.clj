@@ -32,8 +32,8 @@
 
    - DOES aggregate per-employee YTD totals from PayrollFacts.
    - DOES emit a structured `:gensen/*` map for downstream rendering.
-   - DOES produce an `:audit-doc/category :payroll-filing` +
-     `:audit-doc/language :ja` row recording the emission.
+   - DOES produce an `:kontor.audit-doc/category :payroll-filing` +
+     `:kontor.audit-doc/language :ja` row recording the emission.
    - DOES NOT generate the rendered PDF / paper form (NTA form
      layout shifts year-to-year; consumer renders via their preferred
      tool — freee / MF / Yayoi all generate the PDF themselves).
@@ -147,8 +147,8 @@
                      the consumer's privileged store has the My Number
                      attested; kontor itself does NOT carry the value
                      per ADR-084 §1 (My Number is PII; consumers store
-                     it behind an `:audit-doc/category :hr-personnel`
-                     + `:audit-doc/privilege :pii-sensitive` audit-doc)}
+                     it behind an `:kontor.audit-doc/category :hr-personnel`
+                     + `:kontor.audit-doc/privilege :pii-sensitive` audit-doc)}
      :employer      {:name :corporate-number :address :representative}
                     — corporate-number is the 法人番号 (13-digit NTA
                     Corporate Number per kontor.l10n-jp.identifiers)

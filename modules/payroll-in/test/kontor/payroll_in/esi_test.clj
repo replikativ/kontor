@@ -65,7 +65,7 @@
                              :ip-code-tag "ESIC-12345678"}
                :esic-code "12345678"
                :language :en-in}))]
-    (is (= :payroll-filing (:audit-doc/category doc)))
-    (is (= :en-in (:audit-doc/language doc)))
-    (is (re-find #"ESIC monthly return" (:audit-doc/title doc)))
-    (is (str/includes? (:audit-doc/code doc) "ESIC-12345678-2026-05"))))
+    (is (= :payroll-filing (:kontor.audit-doc/category doc)))
+    (is (= :en-in (:kontor.audit-doc/language doc)))
+    (is (re-find #"ESIC monthly return" (:kontor.audit-doc/title doc)))
+    (is (str/includes? (:kontor.audit-doc/code doc) "ESIC-12345678-2026-05"))))

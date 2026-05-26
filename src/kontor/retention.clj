@@ -19,7 +19,7 @@
    of which the hold-middleware recognizes. The sweeper *structurally
    cannot* expire data under an active legal hold — even a buggy
    caller hitting `apply-expiry!` on a held entity gets the
-   `:legal-hold/purge-blocked` exception.
+   `:kontor.legal-hold/purge-blocked` exception.
 
    `eligible?` *also* consults `legal-hold/entities-held?` — but that
    is an optimization and a visibility feature (the sweeper reports
@@ -58,22 +58,22 @@
 ;; ============================================================================
 
 (def status-transition-seeds
-  "ADR-034 :status-transition rows for the :retention-policy/state
+  "ADR-034 :status-transition rows for the :kontor.retention-policy/state
    facet."
   [{:kontor.status-transition/entity-type :retention-policy
-    :kontor.status-transition/facet :retention-policy/state
+    :kontor.status-transition/facet :kontor.retention-policy/state
     :kontor.status-transition/from :nil
     :kontor.status-transition/to :draft
     :kontor.status-transition/active true
     :kontor.status-transition/name "Draft Retention Policy"}
    {:kontor.status-transition/entity-type :retention-policy
-    :kontor.status-transition/facet :retention-policy/state
+    :kontor.status-transition/facet :kontor.retention-policy/state
     :kontor.status-transition/from :draft
     :kontor.status-transition/to :active
     :kontor.status-transition/active true
     :kontor.status-transition/name "Activate Retention Policy"}
    {:kontor.status-transition/entity-type :retention-policy
-    :kontor.status-transition/facet :retention-policy/state
+    :kontor.status-transition/facet :kontor.retention-policy/state
     :kontor.status-transition/from :active
     :kontor.status-transition/to :superseded
     :kontor.status-transition/active true
@@ -90,12 +90,12 @@
    (for [to   [:active :superseded]
          rule [:requires-supporting-doc
                :requires-non-empty-reason-note]]
-     {:approval-policy/entity-type     :retention-policy
-      :approval-policy/facet           :retention-policy/state
-      :approval-policy/transition-from (if (= to :active) :draft :active)
-      :approval-policy/transition-to   to
-      :approval-policy/rule            rule
-      :approval-policy/active          true})))
+     {:kontor.approval-policy/entity-type     :retention-policy
+      :kontor.approval-policy/facet           :kontor.retention-policy/state
+      :kontor.approval-policy/transition-from (if (= to :active) :draft :active)
+      :kontor.approval-policy/transition-to   to
+      :kontor.approval-policy/rule            rule
+      :kontor.approval-policy/active          true})))
 
 (defn install-seeds!
   "Idempotently transact the retention-policy status-transition +
@@ -139,7 +139,7 @@
      `:category`     — ADR-075 subject-matter keyword
                        (:payroll | :hr-personnel | :financial | …).
                        When supplied, candidate policies match if
-                       either the policy's :retention-policy/category
+                       either the policy's :kontor.retention-policy/category
                        is nil (applies to any category) OR equals the
                        supplied category. The category-matched-non-nil
                        branch wins the tiebreaker — per-jurisdiction
@@ -157,12 +157,12 @@
         (->> (d/q '[:find ?p ?from ?until ?juris ?cat
                     :in $ ?etype
                     :where
-                    [?p :retention-policy/applies-to ?etype]
-                    [?p :retention-policy/state :active]
-                    [?p :retention-policy/effective-from ?from]
-                    [(get-else $ ?p :retention-policy/effective-until :__none) ?until]
-                    [(get-else $ ?p :retention-policy/jurisdiction :__none) ?juris]
-                    [(get-else $ ?p :retention-policy/category :__none) ?cat]]
+                    [?p :kontor.retention-policy/applies-to ?etype]
+                    [?p :kontor.retention-policy/state :active]
+                    [?p :kontor.retention-policy/effective-from ?from]
+                    [(get-else $ ?p :kontor.retention-policy/effective-until :__none) ?until]
+                    [(get-else $ ?p :kontor.retention-policy/jurisdiction :__none) ?juris]
+                    [(get-else $ ?p :kontor.retention-policy/category :__none) ?cat]]
                   db entity-type)
              (map (fn [[p from until juris cat]]
                     [p from
@@ -215,9 +215,9 @@
    anchor attribute (v1: direct-attribute anchors only — the entity
    is then skipped by the sweeper)."
   [db entity-eid policy-eid]
-  (let [{:retention-policy/keys [triggered-by duration-years]}
-        (d/pull db [:retention-policy/triggered-by
-                    :retention-policy/duration-years]
+  (let [{:kontor.retention-policy/keys [triggered-by duration-years]}
+        (d/pull db [:kontor.retention-policy/triggered-by
+                    :kontor.retention-policy/duration-years]
                 policy-eid)
         anchor (get (d/pull db [triggered-by] entity-eid) triggered-by)]
     (when (instance? Date anchor)
@@ -249,7 +249,14 @@
    on `:kontor.status-history/changed-at` must NOT sweep `:status-history`
    rows — research note 32 P1-2)."
   [db eid applies-to]
-  (let [ns-strs (set (map name applies-to))]
+  ;; Post-W1 schema-rename: kontor-owned attrs live under "kontor.<name>".
+  ;; The entity-type value remains the unqualified domain keyword
+  ;; (e.g. :audit-doc, :legal-hold), so we match both the bare name and
+  ;; the prefixed one. ADR-002 cohabitation: consumer namespaces use
+  ;; their own prefix and are caught by the bare-name check.
+  (let [ns-strs (set (mapcat (fn [k]
+                               [(name k) (str "kontor." (name k))])
+                             applies-to))]
     (boolean (some #(contains? ns-strs (namespace %))
                    (keys (d/pull db '[*] eid))))))
 
@@ -261,9 +268,9 @@
    entity types. `limit` caps the candidate set (nil = unbounded) —
    a simple cap, not a full cursor; chunked sweeps are a follow-up."
   [db policy-eid limit]
-  (let [{:retention-policy/keys [triggered-by applies-to]}
-        (d/pull db [:retention-policy/triggered-by
-                    :retention-policy/applies-to]
+  (let [{:kontor.retention-policy/keys [triggered-by applies-to]}
+        (d/pull db [:kontor.retention-policy/triggered-by
+                    :kontor.retention-policy/applies-to]
                 policy-eid)
         applies-to (set applies-to)
         raw (d/q '[:find [?e ...]
@@ -300,8 +307,8 @@
    `:limit` caps the candidate set (default nil = unbounded)."
   [db policy-eid {:keys [as-of limit]}]
   (let [as-of (or as-of (Date.))
-        {:retention-policy/keys [expiry-action]}
-        (d/pull db [:retention-policy/expiry-action] policy-eid)
+        {:kontor.retention-policy/keys [expiry-action]}
+        (d/pull db [:kontor.retention-policy/expiry-action] policy-eid)
         cands (candidate-eids db policy-eid limit)
         past-deadline
         (keep (fn [eid]
@@ -356,7 +363,7 @@
 
    The check runs *directly* (not via `[:db.fn/call …]`) so the
    raised exception is the kernel's own `ex-info` with the
-   `:legal-hold/purge-blocked` `:type` reachable via `(ex-data e)` —
+   `:kontor.legal-hold/purge-blocked` `:type` reachable via `(ex-data e)` —
    not double-wrapped by the transactor (research note 32 P1-1). The
    plain tx-data is then transacted. The validate→transact split is
    single-threaded-sweeper-safe; it mirrors `validation/
@@ -378,10 +385,10 @@
           [[:db/purge entity-eid]]
 
           :anonymize
-          (let [{:retention-policy/keys [anonymize-fields]}
-                (d/pull db [:retention-policy/anonymize-fields] policy-eid)]
+          (let [{:kontor.retention-policy/keys [anonymize-fields]}
+                (d/pull db [:kontor.retention-policy/anonymize-fields] policy-eid)]
             (when (empty? anonymize-fields)
-              (throw (ex-info ":anonymize action requires :retention-policy/anonymize-fields"
+              (throw (ex-info ":anonymize action requires :kontor.retention-policy/anonymize-fields"
                               {:policy-eid policy-eid})))
             (mapv (fn [attr] [:db.purge/attribute entity-eid attr])
                   anonymize-fields))
@@ -393,7 +400,7 @@
           (throw (ex-info "Unknown :expiry-action"
                           {:action action :entity-eid entity-eid})))]
     ;; Run the structural validators directly — this throws the
-    ;; kernel's own ex-info (e.g. :legal-hold/purge-blocked) with the
+    ;; kernel's own ex-info (e.g. :kontor.legal-hold/purge-blocked) with the
     ;; :type on (ex-data e), not buried in (.getCause e).
     (validation/validate-and-apply db tx-data)
     (d/transact conn tx-data)))
@@ -444,24 +451,24 @@
   (when (and (= expiry-action :anonymize) (empty? anonymize-fields))
     (throw (ex-info ":anonymize expiry-action requires :anonymize-fields" {})))
   (let [row (cond-> {:db/id tempid
-                     :retention-policy/code code
-                     :retention-policy/applies-to (vec applies-to)
-                     :retention-policy/duration-years duration-years
-                     :retention-policy/triggered-by triggered-by
-                     :retention-policy/expiry-action expiry-action
-                     :retention-policy/effective-from effective-from
-                     :retention-policy/legal-basis legal-basis
-                     :retention-policy/state :draft}
-              jurisdiction         (assoc :retention-policy/jurisdiction jurisdiction)
-              effective-until      (assoc :retention-policy/effective-until effective-until)
-              category             (assoc :retention-policy/category category)
-              (seq anonymize-fields) (assoc :retention-policy/anonymize-fields
+                     :kontor.retention-policy/code code
+                     :kontor.retention-policy/applies-to (vec applies-to)
+                     :kontor.retention-policy/duration-years duration-years
+                     :kontor.retention-policy/triggered-by triggered-by
+                     :kontor.retention-policy/expiry-action expiry-action
+                     :kontor.retention-policy/effective-from effective-from
+                     :kontor.retention-policy/legal-basis legal-basis
+                     :kontor.retention-policy/state :draft}
+              jurisdiction         (assoc :kontor.retention-policy/jurisdiction jurisdiction)
+              effective-until      (assoc :kontor.retention-policy/effective-until effective-until)
+              category             (assoc :kontor.retention-policy/category category)
+              (seq anonymize-fields) (assoc :kontor.retention-policy/anonymize-fields
                                             (vec anonymize-fields)))
         status-tx (sm/record-status-change-tx-data
                    db
                    (cond-> {:entity tempid
                             :entity-type :retention-policy
-                            :facet :retention-policy/state
+                            :facet :kontor.retention-policy/state
                             :from :nil
                             :to :draft
                             :changed-at (or drafted-at (Date.))
@@ -506,15 +513,15 @@
             (or vt-to kbt/forever)))))
 
 (defn by-code
-  "Resolve a policy's eid by its :retention-policy/code. When several
+  "Resolve a policy's eid by its :kontor.retention-policy/code. When several
    rows share a code (effective-dated supersession), returns the one
    with the latest :effective-from."
   [db code]
   (->> (d/q '[:find ?e ?from
               :in $ ?c
               :where
-              [?e :retention-policy/code ?c]
-              [?e :retention-policy/effective-from ?from]]
+              [?e :kontor.retention-policy/code ?c]
+              [?e :kontor.retention-policy/effective-from ?from]]
             db code)
        (sort-by (fn [[_ ^Date from]] (.getTime from)))
        last
@@ -532,7 +539,7 @@
                    db
                    (cond-> {:entity policy-eid
                             :entity-type :retention-policy
-                            :facet :retention-policy/state
+                            :facet :kontor.retention-policy/state
                             :to :active
                             :changed-at (or changed-at (Date.))
                             :reason (or reason :policy-activated)
@@ -541,7 +548,7 @@
                      changed-by-uid (assoc :changed-by-uid changed-by-uid)))
         ;; Queryable denorm — canonical audit lives on status-history.
         update {:db/id policy-eid
-                :retention-policy/supporting-doc supporting-doc}]
+                :kontor.retention-policy/supporting-doc supporting-doc}]
     (into [update] status-tx)))
 
 (defn activate-policy!
@@ -576,7 +583,7 @@
    db
    {:entity policy-eid
     :entity-type :retention-policy
-    :facet :retention-policy/state
+    :facet :kontor.retention-policy/state
     :to :superseded
     :changed-at (or changed-at (Date.))
     :changed-by-uid changed-by-uid

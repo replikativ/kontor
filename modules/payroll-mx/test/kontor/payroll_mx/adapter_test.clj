@@ -11,8 +11,8 @@
      - a balanced :transaction (Σ posting amount = 0 per ledger ×
        commodity);
      - one CFDI Nómina audit-doc per employment with
-       `:audit-doc/category :payroll-filing` +
-       `:audit-doc/language :es-mx` (note 86 P0-86-2)."
+       `:kontor.audit-doc/category :payroll-filing` +
+       `:kontor.audit-doc/language :es-mx` (note 86 P0-86-2)."
   (:require [clojure.java.io :as io]
             [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
@@ -263,25 +263,25 @@
                  :commodity mxn})
           db (:db-after report)
           run-eid (d/q '[:find ?r . :in $ ?c
-                         :where [?r :payroll-run/code ?c]]
+                         :where [?r :kontor.payroll-run/code ?c]]
                        db "ACME-MX-2026-05-001")
           run (d/pull db
-                      '[* {:payroll-run/payroll-transaction
+                      '[* {:kontor.payroll-run/payroll-transaction
                            [:kontor.transaction/external-id
                             {:kontor.posting/_transaction
                              [:kontor.posting/amount
                               {:kontor.posting/account [:kontor.account/code]}
                               {:kontor.posting/commodity [:kontor.commodity/symbol]}]}]}
-                        {:payroll-run/emit-docs
-                         [:audit-doc/code
-                          :audit-doc/category
-                          :audit-doc/language
-                          :audit-doc/type]}]
+                        {:kontor.payroll-run/emit-docs
+                         [:kontor.audit-doc/code
+                          :kontor.audit-doc/category
+                          :kontor.audit-doc/language
+                          :kontor.audit-doc/type]}]
                       run-eid)]
       (testing "Payroll-run row is created with the wrapped engine's provider-id"
         (is (some? run-eid))
-        (is (= :computed (:payroll-run/state run)))
-        (is (= :contpaqi-nominas (:payroll-run/provider-id run))
+        (is (= :computed (:kontor.payroll-run/state run)))
+        (is (= :contpaqi-nominas (:kontor.payroll-run/provider-id run))
             "Bridge surfaces the wrapped MxEngineProvider's vendor-id")
         ;; Per CONTPAQi fixture + ADR-075 PayrollFacts sum invariant
         ;; (`gross = Σ positive employee-side component amounts`):
@@ -290,10 +290,10 @@
         ;;   gross-total = 13775 (subsidio-al-empleo is :otro-pago,
         ;;   paid to worker — sums into gross per the substrate's
         ;;   sum-rule; it nets out against ISR in the GL via 206.04)
-        (is (= 13775.00M (:payroll-run/control-total-gross run))))
+        (is (= 13775.00M (:kontor.payroll-run/control-total-gross run))))
       (testing "Posting legs sum to zero per ledger × commodity"
         (let [postings (-> run
-                           :payroll-run/payroll-transaction
+                           :kontor.payroll-run/payroll-transaction
                            :kontor.posting/_transaction)
               sum (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                             (.add a ^BigDecimal amount))
@@ -304,7 +304,7 @@
               "Posting sum must be zero")))
       (testing "Postings route via SAT Código Agrupador accounts"
         (let [postings (-> run
-                           :payroll-run/payroll-transaction
+                           :kontor.payroll-run/payroll-transaction
                            :kontor.posting/_transaction)
               codes-seen (->> postings
                               (map (comp :kontor.account/code :kontor.posting/account))
@@ -320,19 +320,19 @@
           ;; Net pay → 206.01
           (is (contains? codes-seen "206.01"))))
       (testing "Emit provider produced one CFDI Nómina audit-doc per employment"
-        (let [docs (:payroll-run/emit-docs run)]
+        (let [docs (:kontor.payroll-run/emit-docs run)]
           (is (= 2 (count docs))
               "One :audit-doc per employment in the run")
           (testing "Each audit-doc carries the MX canonical category + language"
             (doseq [doc docs]
-              (is (= :payroll-filing (:audit-doc/category doc))
-                  ":audit-doc/category :payroll-filing per note 86 P0-86-2")
-              (is (= :es-mx (:audit-doc/language doc))
-                  ":audit-doc/language :es-mx per ADR-082")
-              (is (= :payroll-cfdi-xml (:audit-doc/type doc)))))))
+              (is (= :payroll-filing (:kontor.audit-doc/category doc))
+                  ":kontor.audit-doc/category :payroll-filing per note 86 P0-86-2")
+              (is (= :es-mx (:kontor.audit-doc/language doc))
+                  ":kontor.audit-doc/language :es-mx per ADR-082")
+              (is (= :payroll-cfdi-xml (:kontor.audit-doc/type doc)))))))
       (testing "CFDI audit-doc count matches the substrate's run × employment count"
         (let [filing-docs
               (d/q '[:find [?e ...]
-                     :where [?e :audit-doc/category :payroll-filing]]
+                     :where [?e :kontor.audit-doc/category :payroll-filing]]
                    db)]
           (is (>= (count filing-docs) 2)))))))

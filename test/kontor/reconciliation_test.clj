@@ -143,11 +143,11 @@
           eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           opts {:source-account-eid bank-acct :commodity-eid eur}]
       (recon/ingest-statement! conn (bank-candidates) opts)
-      (let [n1 (count (d/q '[:find [?bl ...] :where [?bl :bank-line/external-id _]]
+      (let [n1 (count (d/q '[:find [?bl ...] :where [?bl :kontor.bank-line/external-id _]]
                            (d/db conn)))]
         (is (= 4 n1) "first import lands 4 lines"))
       (recon/ingest-statement! conn (bank-candidates) opts)
-      (let [n2 (count (d/q '[:find [?bl ...] :where [?bl :bank-line/external-id _]]
+      (let [n2 (count (d/q '[:find [?bl ...] :where [?bl :kontor.bank-line/external-id _]]
                            (d/db conn)))]
         (is (= 4 n2) "re-import is idempotent")))))
 
@@ -169,7 +169,7 @@
           db (d/db conn)
           ;; Find the ACME line
           [acme-bl] (d/q '[:find [?bl]
-                           :where [?bl :bank-line/counterparty "ACME GmbH"]]
+                           :where [?bl :kontor.bank-line/counterparty "ACME GmbH"]]
                          db)
           suggestions (recon/suggest-match db acme-bl {})]
       (is (seq suggestions))
@@ -190,7 +190,7 @@
                                       :commodity-eid eur})
           db (d/db conn)
           [beta-bl] (d/q '[:find [?bl]
-                           :where [?bl :bank-line/counterparty "BETA AG SEPA"]]
+                           :where [?bl :kontor.bank-line/counterparty "BETA AG SEPA"]]
                          db)
           suggestions (recon/suggest-match db beta-bl {})
           best (first suggestions)]
@@ -218,7 +218,7 @@
                                      {:source-account-eid bank-acct
                                       :commodity-eid eur})
           db (d/db conn)
-          [bl] (d/q '[:find [?bl] :where [?bl :bank-line/amount 1785.00M]] db)
+          [bl] (d/q '[:find [?bl] :where [?bl :kontor.bank-line/amount 1785.00M]] db)
           best (first (recon/suggest-match db bl {}))]
       (is (= :multi-line (:strategy best))
           (str "expected :multi-line; got: " (:strategy best)))
@@ -253,7 +253,7 @@
                                      {:source-account-eid bank-acct
                                       :commodity-eid eur})
           db (d/db conn)
-          [bl] (d/q '[:find [?bl] :where [?bl :bank-line/amount 1785.00M]] db)
+          [bl] (d/q '[:find [?bl] :where [?bl :kontor.bank-line/amount 1785.00M]] db)
           best (first (recon/suggest-match db bl {}))
           _ (recon/commit-match! conn bl (:match best) bank-jnl {})
           opens (recon/open-receivables-by-tx (d/db conn) #{"1400"})
@@ -277,7 +277,7 @@
                                       :commodity-eid eur})
           db (d/db conn)
           [strom-bl] (d/q '[:find [?bl]
-                            :where [?bl :bank-line/counterparty "Stadtwerke"]]
+                            :where [?bl :kontor.bank-line/counterparty "Stadtwerke"]]
                           db)
           suggestions (recon/suggest-match db strom-bl
                                            {:category-resolver
@@ -309,7 +309,7 @@
                                       :commodity-eid eur})
           db (d/db conn)
           [acme-bl] (d/q '[:find [?bl]
-                           :where [?bl :bank-line/counterparty "ACME GmbH"]]
+                           :where [?bl :kontor.bank-line/counterparty "ACME GmbH"]]
                          db)
           best (first (recon/suggest-match db acme-bl {}))
           {:keys [payment-tx-eid]} (recon/commit-match!
@@ -357,7 +357,7 @@
                                       :commodity-eid eur})
           db (d/db conn)
           [gamma-bl] (d/q '[:find [?bl]
-                            :where [?bl :bank-line/counterparty "Gamma KG"]]
+                            :where [?bl :kontor.bank-line/counterparty "Gamma KG"]]
                           db)
           best (first (recon/suggest-match db gamma-bl {}))]
       ;; No throw means sum-to-zero / sealing / period passed.
@@ -379,7 +379,7 @@
       (is (= 4 (count (recon/unmatched-queue (d/db conn)))))
       (let [db (d/db conn)
             [acme-bl] (d/q '[:find [?bl]
-                             :where [?bl :bank-line/counterparty "ACME GmbH"]]
+                             :where [?bl :kontor.bank-line/counterparty "ACME GmbH"]]
                            db)
             best (first (recon/suggest-match db acme-bl {}))]
         (recon/commit-match! conn acme-bl (:match best) bank-jnl {}))

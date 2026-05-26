@@ -31,14 +31,14 @@
    So an operating lease reuses the *entire* kontor-asset depreciation
    machinery — the `:asset-depreciation` book, the runner, the GL
    posting builder — by routing its book through THIS provider
-   (`:asset-depreciation/provider-id :lease-rou-plug`) instead of a
-   built-in. The book's `:asset-depreciation/expense-account`
+   (`:kontor.asset-depreciation/provider-id :lease-rou-plug`) instead of a
+   built-in. The book's `:kontor.asset-depreciation/expense-account`
    override (ADR-063) points the charge at the single lease-expense
    account, where it meets the interest leg — one P&L line.
 
    `plan-schedule` reads the SIBLING `:lease-liability` book: the ROU
    `:asset-depreciation` book → its `:asset` → the `:lease` whose
-   `:lease/rou-asset` is that asset → the `:lease-liability` for the
+   `:kontor.lease/rou-asset` is that asset → the `:lease-liability` for the
    same `:ledger`. PURE."
   (:require [datahike.api :as d]
             [kontor.asset.depreciation :as asset-dep]
@@ -54,35 +54,35 @@
 (defn- sibling-liability-book
   "The `:lease-liability` book that is the sibling of a ROU
    `:asset-depreciation` book — same `:ledger`, and the liability's
-   `:lease` is the one whose `:lease/rou-asset` is the dep book's
+   `:lease` is the one whose `:kontor.lease/rou-asset` is the dep book's
    asset. Throws when the dep book is not a ROU book or the sibling
    is missing."
   [db dep-asset-eid dep-ledger-eid]
   (let [lease-eid (d/q '[:find ?l .
                          :in $ ?asset
-                         :where [?l :lease/rou-asset ?asset]]
+                         :where [?l :kontor.lease/rou-asset ?asset]]
                        db dep-asset-eid)
         _ (when-not lease-eid
-            (throw (ex-info "rou-provider: this :asset is not a :lease/rou-asset — :lease-rou-plug is only valid for an operating-lease ROU book"
-                            {:type :lease/not-a-rou-asset :asset dep-asset-eid})))
+            (throw (ex-info "rou-provider: this :asset is not a :kontor.lease/rou-asset — :lease-rou-plug is only valid for an operating-lease ROU book"
+                            {:type :kontor.lease/not-a-rou-asset :asset dep-asset-eid})))
         liab (liability/book-for db lease-eid dep-ledger-eid)]
     (when-not liab
       (throw (ex-info "rou-provider: no sibling :lease-liability book for this (lease, ledger) — commence! opens both together"
-                      {:type :lease/missing-sibling-liability
+                      {:type :kontor.lease/missing-sibling-liability
                        :lease lease-eid :ledger dep-ledger-eid})))
     liab))
 
 (defn- fired-amounts
-  "Map of `sequence → fired :schedule-occurrence/amount` for a ROU
+  "Map of `sequence → fired :kontor.schedule-occurrence/amount` for a ROU
    depreciation schedule."
   [db schedule-eid]
   (into {}
         (d/q '[:find ?seq ?amt
                :in $ ?s
                :where
-               [?o :schedule-occurrence/schedule ?s]
-               [?o :schedule-occurrence/sequence ?seq]
-               [?o :schedule-occurrence/amount ?amt]]
+               [?o :kontor.schedule-occurrence/schedule ?s]
+               [?o :kontor.schedule-occurrence/sequence ?seq]
+               [?o :kontor.schedule-occurrence/amount ?amt]]
              db schedule-eid)))
 
 (defrecord LeaseRouPlugProvider []
@@ -167,6 +167,6 @@
    depreciation schedule are fired in **lockstep**. `run-lease!` fires
    both together AND guards the lockstep invariant up-front; firing a
    ROU book on its own can desync the two and make this provider
-   throw `:lease/...-misaligned` on the next run."
+   throw `:kontor.lease/...-misaligned` on the next run."
   []
   (->LeaseRouPlugProvider))

@@ -69,7 +69,7 @@
   (testing "the schedule has 4 brackets, ascending boundaries, last :upper nil"
     (let [sched (lat/lat-schedule 1000000M)
           bs    (:brackets sched)]
-      (is (= :progressive-bracket (:schedule/type sched)))
+      (is (= :progressive-bracket (:kontor.schedule/type sched)))
       (is (= 4 (count bs)))
       ;; Boundaries scaled by deductibles: 50% × 1M, 100% × 1M, 200% × 1M, nil.
       (is (= [500000M 1000000M 2000000M nil] (mapv :upper bs)))

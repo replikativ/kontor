@@ -6,12 +6,12 @@
    the audit chain.
 
    The audit-doc shape:
-     :audit-doc/category :payroll-filing
-     :audit-doc/language :de
-     :audit-doc/type     :mbgm
-     :audit-doc/title    'mBGM <yyyy-MM>'
-     :audit-doc/storage-uri  consumer-supplied
-     :audit-doc/content-hash SHA-256 of the XML bytes"
+     :kontor.audit-doc/category :payroll-filing
+     :kontor.audit-doc/language :de
+     :kontor.audit-doc/type     :mbgm
+     :kontor.audit-doc/title    'mBGM <yyyy-MM>'
+     :kontor.audit-doc/storage-uri  consumer-supplied
+     :kontor.audit-doc/content-hash SHA-256 of the XML bytes"
   (:require [datahike.api :as d]
             [kontor.audit-doc :as audit-doc]
             [kontor.payroll-at.elda :as elda]

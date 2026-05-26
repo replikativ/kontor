@@ -6,7 +6,7 @@
    and `:valuation-layer` + the GL share one fact log:
 
    - `inventory-roll-forward` — opening + Σ movements = closing, the
-     movements bucketed by `:inventory-detail/source-kind`. The
+     movements bucketed by `:kontor.inventory-detail/source-kind`. The
      audit-grade inventory roll-forward (research note 36 §9) — no
      separate roll-forward table to drift, reason codes and
      immutability are structural.
@@ -54,10 +54,10 @@
                        :with ?d
                        :in $ [?item ...]
                        :where
-                       [?d :inventory-detail/inventory-item ?item]
-                       [?d :inventory-detail/effective-date ?ed]
-                       [?d :inventory-detail/qoh-diff ?diff]
-                       [(get-else $ ?d :inventory-detail/source-kind :unspecified) ?sk]]
+                       [?d :kontor.inventory-detail/inventory-item ?item]
+                       [?d :kontor.inventory-detail/effective-date ?ed]
+                       [?d :kontor.inventory-detail/qoh-diff ?diff]
+                       [(get-else $ ?d :kontor.inventory-detail/source-kind :unspecified) ?sk]]
                      db* items))
         opening (reduce (fn [^BigDecimal acc [ed _ diff]]
                           (if (before? ed from) (.add acc diff) acc))
@@ -109,8 +109,8 @@
         items    (d/q '[:find [?item ...]
                         :in $ ?b
                         :where
-                        [?l :valuation-layer/book ?b]
-                        [?l :valuation-layer/item ?item]]
+                        [?l :kontor.valuation-layer/book ?b]
+                        [?l :kontor.valuation-layer/item ?item]]
                       db book-eid)
         subledger (reduce (fn [^BigDecimal acc item]
                             (.add acc (valuation/on-hand-value db book-eid item opts)))
@@ -130,7 +130,7 @@
 ;; ============================================================================
 
 (defn in-transit-balance
-  "The quantity currently in transit — `Σ :inventory-transfer/quantity`
+  "The quantity currently in transit — `Σ :kontor.inventory-transfer/quantity`
    over `:status :in-transit` transfer rows. This is the period-close
    cutoff exposure (research note 36 §8): stock that has left a source
    bucket but not yet landed at a destination. Optionally scoped to
@@ -142,16 +142,16 @@
          tf (when to-facility (inv/resolve-facility db to-facility))
          rows (d/q '[:find ?t ?qty
                      :where
-                     [?t :inventory-transfer/status :in-transit]
-                     [?t :inventory-transfer/quantity ?qty]]
+                     [?t :kontor.inventory-transfer/status :in-transit]
+                     [?t :kontor.inventory-transfer/quantity ?qty]]
                    db)]
      (->> rows
           (filter (fn [[t _]]
-                    (let [tr (d/pull db [{:inventory-transfer/from-facility [:db/id]}
-                                         {:inventory-transfer/to-facility [:db/id]}]
+                    (let [tr (d/pull db [{:kontor.inventory-transfer/from-facility [:db/id]}
+                                         {:kontor.inventory-transfer/to-facility [:db/id]}]
                                      t)]
                       (and (or (nil? ff)
-                               (= ff (:db/id (:inventory-transfer/from-facility tr))))
+                               (= ff (:db/id (:kontor.inventory-transfer/from-facility tr))))
                            (or (nil? tf)
-                               (= tf (:db/id (:inventory-transfer/to-facility tr))))))))
+                               (= tf (:db/id (:kontor.inventory-transfer/to-facility tr))))))))
           (reduce (fn [^BigDecimal acc [_ qty]] (.add acc qty)) 0M)))))

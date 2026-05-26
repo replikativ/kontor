@@ -19,11 +19,11 @@
 ;; ============================================================================
 
 (defn by-key
-  "Resolve an intent eid by :side-effect-intent/key."
+  "Resolve an intent eid by :kontor.side-effect-intent/key."
   [db k]
   (d/q '[:find ?e .
          :in $ ?k
-         :where [?e :side-effect-intent/key ?k]]
+         :where [?e :kontor.side-effect-intent/key ?k]]
        db k))
 
 (defn pull-intent
@@ -45,22 +45,22 @@
                 (d/q '[:find [?i ...]
                        :in $ ?t
                        :where
-                       [?i :side-effect-intent/status :pending]
-                       [?i :side-effect-intent/type ?t]]
+                       [?i :kontor.side-effect-intent/status :pending]
+                       [?i :kontor.side-effect-intent/type ?t]]
                      db type-filter)
                 (d/q '[:find [?i ...]
-                       :where [?i :side-effect-intent/status :pending]]
+                       :where [?i :kontor.side-effect-intent/status :pending]]
                      db))]
      (->> rows
           (map #(d/pull db '[*] %))
-          (sort-by :side-effect-intent/created-at)
+          (sort-by :kontor.side-effect-intent/created-at)
           vec))))
 
 (defn failed
   "Pulled :side-effect-intent rows in :failed status (worth retrying)."
   [db]
   (->> (d/q '[:find [?i ...]
-              :where [?i :side-effect-intent/status :failed]]
+              :where [?i :kontor.side-effect-intent/status :failed]]
             db)
        (map #(d/pull db '[*] %))
        vec))
@@ -75,8 +75,8 @@
   [conn intent-eid]
   (validation/transact-with-validation
    conn [{:db/id intent-eid
-          :side-effect-intent/status :processing
-          :side-effect-intent/processing-at (java.util.Date.)}]))
+          :kontor.side-effect-intent/status :processing
+          :kontor.side-effect-intent/processing-at (java.util.Date.)}]))
 
 (defn mark-done!
   "Transition :processing → :done. Worker calls this after the side
@@ -84,8 +84,8 @@
   [conn intent-eid]
   (validation/transact-with-validation
    conn [{:db/id intent-eid
-          :side-effect-intent/status :done
-          :side-effect-intent/processed-at (java.util.Date.)}]))
+          :kontor.side-effect-intent/status :done
+          :kontor.side-effect-intent/processed-at (java.util.Date.)}]))
 
 (defn mark-failed!
   "Transition :processing → :failed with error message + retry-count
@@ -93,18 +93,18 @@
    re-claim later for retry."
   [conn intent-eid error-message]
   (let [db (d/db conn)
-        intent (d/pull db [:side-effect-intent/retry-count
-                           :side-effect-intent/max-retries]
+        intent (d/pull db [:kontor.side-effect-intent/retry-count
+                           :kontor.side-effect-intent/max-retries]
                        intent-eid)
-        retry (inc (or (:side-effect-intent/retry-count intent) 0))
-        max-r (or (:side-effect-intent/max-retries intent) 5)
+        retry (inc (or (:kontor.side-effect-intent/retry-count intent) 0))
+        max-r (or (:kontor.side-effect-intent/max-retries intent) 5)
         terminal? (>= retry max-r)]
     (validation/transact-with-validation
      conn [{:db/id intent-eid
-            :side-effect-intent/status (if terminal? :abandoned :failed)
-            :side-effect-intent/retry-count retry
-            :side-effect-intent/last-error (or error-message "(no message)")
-            :side-effect-intent/processed-at (java.util.Date.)}])))
+            :kontor.side-effect-intent/status (if terminal? :abandoned :failed)
+            :kontor.side-effect-intent/retry-count retry
+            :kontor.side-effect-intent/last-error (or error-message "(no message)")
+            :kontor.side-effect-intent/processed-at (java.util.Date.)}])))
 
 (defn mark-abandoned!
   "Force-abandon an intent (no more retries). Use when an error is
@@ -112,6 +112,6 @@
   [conn intent-eid reason-string]
   (validation/transact-with-validation
    conn [{:db/id intent-eid
-          :side-effect-intent/status :abandoned
-          :side-effect-intent/last-error reason-string
-          :side-effect-intent/processed-at (java.util.Date.)}]))
+          :kontor.side-effect-intent/status :abandoned
+          :kontor.side-effect-intent/last-error reason-string
+          :kontor.side-effect-intent/processed-at (java.util.Date.)}]))

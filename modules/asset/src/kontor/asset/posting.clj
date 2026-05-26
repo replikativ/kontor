@@ -41,38 +41,38 @@
   "Pull an asset's three GL account eids."
   [db asset-eid]
   (let [a (d/pull db
-                  '[{:asset/asset-account [:db/id]}
-                    {:asset/accumulated-account [:db/id]}
-                    {:asset/expense-account [:db/id]}]
+                  '[{:kontor.asset/asset-account [:db/id]}
+                    {:kontor.asset/accumulated-account [:db/id]}
+                    {:kontor.asset/expense-account [:db/id]}]
                   asset-eid)]
-    {:asset-account       (:db/id (:asset/asset-account a))
-     :accumulated-account (:db/id (:asset/accumulated-account a))
-     :expense-account     (:db/id (:asset/expense-account a))}))
+    {:asset-account       (:db/id (:kontor.asset/asset-account a))
+     :accumulated-account (:db/id (:kontor.asset/accumulated-account a))
+     :expense-account     (:db/id (:kontor.asset/expense-account a))}))
 
 (defn- book-context
   "Resolve a book spec to {:book :asset :ledger :commodity
    :acquisition-cost + the asset's three account eids}. The
    `:expense-account` is the book's per-book override
-   (`:asset-depreciation/expense-account`, ADR-063) when set, else
-   the asset's `:asset/expense-account`."
+   (`:kontor.asset-depreciation/expense-account`, ADR-063) when set, else
+   the asset's `:kontor.asset/expense-account`."
   [db book-spec]
   (let [eid (depreciation/resolve-book db book-spec)
         _ (when-not eid (throw (ex-info "Depreciation book not found" {:spec book-spec})))
-        b (d/pull db [{:asset-depreciation/asset [:db/id :asset/acquisition-cost]}
-                      {:asset-depreciation/ledger [:db/id]}
-                      {:asset-depreciation/commodity [:db/id]}
-                      {:asset-depreciation/expense-account [:db/id]}]
+        b (d/pull db [{:kontor.asset-depreciation/asset [:db/id :kontor.asset/acquisition-cost]}
+                      {:kontor.asset-depreciation/ledger [:db/id]}
+                      {:kontor.asset-depreciation/commodity [:db/id]}
+                      {:kontor.asset-depreciation/expense-account [:db/id]}]
                   eid)
-        asset-eid (:db/id (:asset-depreciation/asset b))
+        asset-eid (:db/id (:kontor.asset-depreciation/asset b))
         accts (asset-accounts db asset-eid)]
     (merge {:book             eid
             :asset            asset-eid
-            :ledger           (:db/id (:asset-depreciation/ledger b))
-            :commodity        (:db/id (:asset-depreciation/commodity b))
-            :acquisition-cost (:asset/acquisition-cost (:asset-depreciation/asset b))}
+            :ledger           (:db/id (:kontor.asset-depreciation/ledger b))
+            :commodity        (:db/id (:kontor.asset-depreciation/commodity b))
+            :acquisition-cost (:kontor.asset/acquisition-cost (:kontor.asset-depreciation/asset b))}
            accts
            ;; Per-book :expense-account override (ADR-063) wins.
-           (when-let [ovr (:db/id (:asset-depreciation/expense-account b))]
+           (when-let [ovr (:db/id (:kontor.asset-depreciation/expense-account b))]
              {:expense-account ovr}))))
 
 (defn- posting*
@@ -123,7 +123,7 @@
 ;; ============================================================================
 
 (defn plan-capitalisation
-  "Build the acquisition entry: `Dr :asset/asset-account /
+  "Build the acquisition entry: `Dr :kontor.asset/asset-account /
    Cr <credit-account>`. The credit side — AP, bank, an asset-
    clearing account — is caller-supplied.
 
@@ -138,13 +138,13 @@
   (when-not credit-account (throw (ex-info ":credit-account required" {})))
   (let [asset-eid (asset/resolve-asset db asset)
         _ (when-not asset-eid (throw (ex-info "Asset not found" {:spec asset})))
-        a (d/pull db [:asset/acquisition-cost
-                      {:asset/acquisition-commodity [:db/id]}
-                      {:asset/asset-account [:db/id]}]
+        a (d/pull db [:kontor.asset/acquisition-cost
+                      {:kontor.asset/acquisition-commodity [:db/id]}
+                      {:kontor.asset/asset-account [:db/id]}]
                   asset-eid)
-        amt (or amount (:asset/acquisition-cost a))
-        com (or commodity (:db/id (:asset/acquisition-commodity a)))
-        asset-account (:db/id (:asset/asset-account a))]
+        amt (or amount (:kontor.asset/acquisition-cost a))
+        com (or commodity (:db/id (:kontor.asset/acquisition-commodity a)))
+        asset-account (:db/id (:kontor.asset/asset-account a))]
     (build spec
            [(posting* asset-account amt com ledger)
             (posting* credit-account (.negate ^java.math.BigDecimal amt) com ledger)])))
@@ -155,7 +155,7 @@
 
 (defn plan-depreciation-charge
   "Build one period's depreciation entry for a book:
-   `Dr :asset/expense-account / Cr :asset/accumulated-account`,
+   `Dr :kontor.asset/expense-account / Cr :kontor.asset/accumulated-account`,
    both tagged with the book's `:ledger`.
 
    The ADR-055 runner calls this per pending `:schedule` occurrence.
@@ -181,8 +181,8 @@
 
 (defn plan-disposal
   "Build the disposal entry for a book:
-   `Dr <proceeds-account> + Dr :asset/accumulated-account /
-    Cr :asset/asset-account` ± gain/loss.
+   `Dr <proceeds-account> + Dr :kontor.asset/accumulated-account /
+    Cr :kontor.asset/asset-account` ± gain/loss.
 
    Gain/loss = `proceeds − net-book-value`, where NBV =
    `acquisition-cost − accumulated-depreciation` for THIS book
@@ -247,7 +247,7 @@
 
 (defn plan-impairment
   "Build the impairment write-down entry for a book:
-   `Dr <impairment-expense-account> / Cr :asset/accumulated-account`
+   `Dr <impairment-expense-account> / Cr :kontor.asset/accumulated-account`
    (IAS 36 / HGB §253 außerplanmäßige Abschreibung).
 
    Required: :book, :amount (the impairment loss),
@@ -271,7 +271,7 @@
 
 (defn plan-revaluation
   "Build the revaluation entry for a book:
-   `Dr :asset/asset-account / Cr <revaluation-surplus-account>` for
+   `Dr :kontor.asset/asset-account / Cr <revaluation-surplus-account>` for
    an upward revaluation (IAS 16 revaluation model — the surplus is
    an OCI/equity line ADR-056's equity statement picks up). A
    negative `:amount` produces the symmetric downward entry.

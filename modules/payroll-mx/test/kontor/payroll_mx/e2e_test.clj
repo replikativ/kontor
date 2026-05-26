@@ -125,9 +125,9 @@
       (testing "Every emitted XML is tagged with the audit-doc category +
                 language per ADR-082."
         (doseq [r per-employee-xml]
-          (is (= :payroll-filing (:audit-doc/category r)))
-          (is (= :es-mx (:audit-doc/language r)))
-          (is (= :payroll-cfdi-xml (:audit-doc/type r)))
+          (is (= :payroll-filing (:kontor.audit-doc/category r)))
+          (is (= :es-mx (:kontor.audit-doc/language r)))
+          (is (= :payroll-cfdi-xml (:kontor.audit-doc/type r)))
           (is (re-find #"TipoDeComprobante=\"N\"" (:xml r)))
           (is (str/includes? (:xml r) "nomina12"))))
 
@@ -137,18 +137,18 @@
             (audit-doc/create-doc!
              conn
              {:code code
-              :type (:audit-doc/type r)
-              :title (:audit-doc/title r)
-              :description (:audit-doc/description r)
+              :type (:kontor.audit-doc/type r)
+              :title (:kontor.audit-doc/title r)
+              :description (:kontor.audit-doc/description r)
               :storage-uri (str "s3://cfdi-nomina/" code ".xml")
               :content-hash "deadbeef"})
             (d/transact conn
-                        [{:audit-doc/code code
-                          :audit-doc/category (:audit-doc/category r)
-                          :audit-doc/language (:audit-doc/language r)}])
+                        [{:kontor.audit-doc/code code
+                          :kontor.audit-doc/category (:kontor.audit-doc/category r)
+                          :kontor.audit-doc/language (:kontor.audit-doc/language r)}])
             (let [pulled (audit-doc/pull-doc (d/db conn) code)]
-              (is (= :payroll-filing (:audit-doc/category pulled)))
-              (is (= :es-mx (:audit-doc/language pulled))))))))))
+              (is (= :payroll-filing (:kontor.audit-doc/category pulled)))
+              (is (= :es-mx (:kontor.audit-doc/language pulled))))))))))
 
 (deftest aspel-end-to-end-also-balances
   (testing "Aspel NOI provider produces facts that route through the

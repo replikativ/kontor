@@ -171,9 +171,9 @@
                       :commodity inr})
         db' (:db-after report)
         run-eid (d/q '[:find ?r . :in $ ?c
-                       :where [?r :payroll-run/code ?c]]
+                       :where [?r :kontor.payroll-run/code ?c]]
                      db' "RUN-IN-2026-05-001")
-        run (d/pull db' '[* {:payroll-run/payroll-transaction
+        run (d/pull db' '[* {:kontor.payroll-run/payroll-transaction
                              [:kontor.transaction/external-id
                               {:kontor.posting/_transaction
                                [:kontor.posting/amount
@@ -181,27 +181,27 @@
                                                    {:kontor.account/tags
                                                     [:kontor.account-tag/name]}]}
                                 {:kontor.posting/analytic-distributions
-                                 [:analytic-distribution/percent
-                                  {:analytic-distribution/account
-                                   [:analytic-account/code]}]}]}]}]
+                                 [:kontor.analytic-distribution/percent
+                                  {:kontor.analytic-distribution/account
+                                   [:kontor.analytic-account/code]}]}]}]}]
                     run-eid)
-        postings (-> run :payroll-run/payroll-transaction
+        postings (-> run :kontor.payroll-run/payroll-transaction
                      :kontor.posting/_transaction)]
     (testing "Payroll run row created with the expected provider-id"
       (is (some? run-eid))
-      (is (= :keka (:payroll-run/provider-id run)))
-      (is (= :computed (:payroll-run/state run))))
+      (is (= :keka (:kontor.payroll-run/provider-id run)))
+      (is (= :computed (:kontor.payroll-run/state run))))
     (testing "Control totals match the 3-employee CSV"
       ;; E001 gross = 50000 + 5000 + 20000 = 75000
       ;; E002 gross = 40000 + 4000 + 16000 = 60000
       ;; E003 gross = 35000 + 3500 + 14000 = 52500
       ;; Total gross = 187500
-      (is (= 187500M (:payroll-run/control-total-gross run)))
+      (is (= 187500M (:kontor.payroll-run/control-total-gross run)))
       ;; E001 net = 75000 - 4000 - 1800 - 200 = 69000
       ;; E002 net = 60000 - 2500 - 1800 - 200 = 55500
       ;; E003 net = 52500 - 1500 - 1800 - 250 = 48950
       ;; Total net = 173450
-      (is (= 173450M (:payroll-run/control-total-net run))))
+      (is (= 173450M (:kontor.payroll-run/control-total-net run))))
     (testing "Transaction balances per (ledger, commodity)"
       (let [sum (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                           (.add a ^BigDecimal amount))
@@ -217,19 +217,19 @@
         (let [state-codes
               (->> pt-postings
                    (mapcat :kontor.posting/analytic-distributions)
-                   (map :analytic-distribution/account)
-                   (map :analytic-account/code)
+                   (map :kontor.analytic-distribution/account)
+                   (map :kontor.analytic-account/code)
                    distinct
                    set)]
           (is (= #{"IN-MH" "IN-KA" "IN-TN"} state-codes)))))
     (testing "Emit provider produced :payroll-filing audit-docs"
       (let [docs (d/q '[:find [?e ...]
-                        :where [?e :audit-doc/category :payroll-filing]]
+                        :where [?e :kontor.audit-doc/category :payroll-filing]]
                       db')]
         (is (>= (count docs) 1))))
     (testing "Emit provider stamped :en-in language"
       (let [docs (d/q '[:find [?e ...]
-                        :where [?e :audit-doc/language :en-in]]
+                        :where [?e :kontor.audit-doc/language :en-in]]
                       db')]
         (is (>= (count docs) 1))))
     (testing "TDS quarterly summary aggregates the run's TDS"
@@ -268,7 +268,7 @@
           docs (pp/emit-payroll-events
                 provider facts {:pay-period-eid 99 :entity-eid 88})]
       (is (= 2 (count docs)) "One run summary + one multi-state warning")
-      (let [titles (map :audit-doc/title docs)]
+      (let [titles (map :kontor.audit-doc/title docs)]
         (is (some #(re-find #"Multi-state PT detection" %) titles))))))
 
 (deftest single-pt-state-no-warning

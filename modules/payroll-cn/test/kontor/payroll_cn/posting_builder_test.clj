@@ -107,10 +107,10 @@
                    :commodity commodity})]
     (testing "every posting carries a :cn-province analytic-distribution"
       (let [bj-distribution
-            [{:analytic-distribution/plan [:analytic-plan/code "cn-province"]
-              :analytic-distribution/account
-              [:analytic-account/path "cn-province:BJ"]
-              :analytic-distribution/percent 100M}]]
+            [{:kontor.analytic-distribution/plan [:kontor.analytic-plan/code "cn-province"]
+              :kontor.analytic-distribution/account
+              [:kontor.analytic-account/path "cn-province:BJ"]
+              :kontor.analytic-distribution/percent 100M}]]
         (is (every? #(= bj-distribution
                         (:kontor.posting/analytic-distributions %))
                     postings))))))
@@ -135,13 +135,13 @@
                    :accounts accounts
                    :commodity commodity})
         sh-leg (first (filter #(some (fn [d]
-                                       (= [:analytic-account/path "cn-province:SH"]
-                                          (:analytic-distribution/account d)))
+                                       (= [:kontor.analytic-account/path "cn-province:SH"]
+                                          (:kontor.analytic-distribution/account d)))
                                      (:kontor.posting/analytic-distributions %))
                               postings))
         bj-leg (first (filter #(some (fn [d]
-                                       (= [:analytic-account/path "cn-province:BJ"]
-                                          (:analytic-distribution/account d)))
+                                       (= [:kontor.analytic-account/path "cn-province:BJ"]
+                                          (:kontor.analytic-distribution/account d)))
                                      (:kontor.posting/analytic-distributions %))
                               postings))]
     (testing "all postings sum to zero across both employees"

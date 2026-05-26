@@ -55,32 +55,32 @@
       (doseq [a [:kontor.partner/type :kontor.partner/status :kontor.partner/preferred-commodity
                  :kontor.person/partner :kontor.person/first-name :kontor.person/last-name
                  :kontor.person/birth-date :kontor.person/national-id
-                 :org/partner :org/legal-name :org/legal-form
-                 :org/registration-number :org/duns :org/lei
-                 :contact-mech/code :contact-mech/type
-                 :postal-address/contact-mech :postal-address/address1
-                 :postal-address/city :postal-address/postal-code
-                 :postal-address/country :postal-address/state
-                 :telecom-number/contact-mech :telecom-number/country-code
-                 :telecom-number/contact-number
-                 :email-address/contact-mech :email-address/address
-                 :email-address/verified?
-                 :partner-contact-mech/partner
-                 :partner-contact-mech/contact-mech
-                 :partner-contact-mech/from-date
-                 :partner-contact-mech/identity
-                 :partner-contact-mech-purpose/partner
-                 :partner-contact-mech-purpose/purpose-type
-                 :partner-contact-mech-purpose/identity
-                 :partner-role/partner :partner-role/role-type
-                 :partner-role/from-date :partner-role/identity
-                 :partner-relationship/partner-from
-                 :partner-relationship/partner-to
-                 :partner-relationship/role-type-from
-                 :partner-relationship/role-type-to
-                 :partner-relationship/from-date
-                 :partner-relationship/relationship-type
-                 :partner-relationship/identity]]
+                 :kontor.org/partner :kontor.org/legal-name :kontor.org/legal-form
+                 :kontor.org/registration-number :kontor.org/duns :kontor.org/lei
+                 :kontor.contact-mech/code :kontor.contact-mech/type
+                 :kontor.postal-address/contact-mech :kontor.postal-address/address1
+                 :kontor.postal-address/city :kontor.postal-address/postal-code
+                 :kontor.postal-address/country :kontor.postal-address/state
+                 :kontor.telecom-number/contact-mech :kontor.telecom-number/country-code
+                 :kontor.telecom-number/contact-number
+                 :kontor.email-address/contact-mech :kontor.email-address/address
+                 :kontor.email-address/verified?
+                 :kontor.partner-contact-mech/partner
+                 :kontor.partner-contact-mech/contact-mech
+                 :kontor.partner-contact-mech/from-date
+                 :kontor.partner-contact-mech/identity
+                 :kontor.partner-contact-mech-purpose/partner
+                 :kontor.partner-contact-mech-purpose/purpose-type
+                 :kontor.partner-contact-mech-purpose/identity
+                 :kontor.partner-role/partner :kontor.partner-role/role-type
+                 :kontor.partner-role/from-date :kontor.partner-role/identity
+                 :kontor.partner-relationship/partner-from
+                 :kontor.partner-relationship/partner-to
+                 :kontor.partner-relationship/role-type-from
+                 :kontor.partner-relationship/role-type-to
+                 :kontor.partner-relationship/from-date
+                 :kontor.partner-relationship/relationship-type
+                 :kontor.partner-relationship/identity]]
         (is (contains? idents a) (str "missing attr: " a))))))
 
 ;; ============================================================================
@@ -121,22 +121,22 @@
                :kontor.partner/type        :org
                :kontor.partner/status      :enabled
                :kontor.partner/name        "Acme GmbH"}
-              {:org/partner             [:kontor.partner/external-id "O-2001"]
-               :org/legal-name          "Acme Gesellschaft mit beschränkter Haftung"
-               :org/legal-form          :gmbh
-               :org/trading-name        "Acme"
-               :org/registration-number "HRB 12345"
-               :org/duns                "123456789"
-               :org/lei                 "5493001KJTIIGC8Y1R12"
-               :org/num-employees       42}])
+              {:kontor.org/partner             [:kontor.partner/external-id "O-2001"]
+               :kontor.org/legal-name          "Acme Gesellschaft mit beschränkter Haftung"
+               :kontor.org/legal-form          :gmbh
+               :kontor.org/trading-name        "Acme"
+               :kontor.org/registration-number "HRB 12345"
+               :kontor.org/duns                "123456789"
+               :kontor.org/lei                 "5493001KJTIIGC8Y1R12"
+               :kontor.org/num-employees       42}])
   (let [db (d/db *conn*)
         o  (p/org db "O-2001")]
     (testing "org subtype pulls registration identifiers"
-      (is (= "Acme Gesellschaft mit beschränkter Haftung" (:org/legal-name o)))
-      (is (= :gmbh (:org/legal-form o)))
-      (is (= "HRB 12345" (:org/registration-number o)))
-      (is (= "5493001KJTIIGC8Y1R12" (:org/lei o)))
-      (is (= 42 (:org/num-employees o))))
+      (is (= "Acme Gesellschaft mit beschränkter Haftung" (:kontor.org/legal-name o)))
+      (is (= :gmbh (:kontor.org/legal-form o)))
+      (is (= "HRB 12345" (:kontor.org/registration-number o)))
+      (is (= "5493001KJTIIGC8Y1R12" (:kontor.org/lei o)))
+      (is (= 42 (:kontor.org/num-employees o))))
     (testing "person subtype is nil for an org partner"
       (is (nil? (p/person db "O-2001"))))))
 
@@ -164,26 +164,26 @@
                :kontor.partner/type        :person
                :kontor.partner/status      :enabled
                :kontor.partner/name        "Postal Test"}
-              {:contact-mech/code "CM-postal-1"
-               :contact-mech/type :postal}
-              {:postal-address/contact-mech [:contact-mech/code "CM-postal-1"]
-               :postal-address/address1     "Hauptstrasse 1"
-               :postal-address/city         "Berlin"
-               :postal-address/postal-code  "10115"
-               :postal-address/region       "Berlin"}
-              {:partner-contact-mech/partner      [:kontor.partner/external-id "P-3001"]
-               :partner-contact-mech/contact-mech [:contact-mech/code "CM-postal-1"]
-               :partner-contact-mech/from-date    jan-2025
-               :partner-contact-mech/verified?    true}
-              {:partner-contact-mech-purpose/partner      [:kontor.partner/external-id "P-3001"]
-               :partner-contact-mech-purpose/contact-mech [:contact-mech/code "CM-postal-1"]
-               :partner-contact-mech-purpose/purpose-type :primary-location
-               :partner-contact-mech-purpose/from-date    jan-2025}])
+              {:kontor.contact-mech/code "CM-postal-1"
+               :kontor.contact-mech/type :postal}
+              {:kontor.postal-address/contact-mech [:kontor.contact-mech/code "CM-postal-1"]
+               :kontor.postal-address/address1     "Hauptstrasse 1"
+               :kontor.postal-address/city         "Berlin"
+               :kontor.postal-address/postal-code  "10115"
+               :kontor.postal-address/region       "Berlin"}
+              {:kontor.partner-contact-mech/partner      [:kontor.partner/external-id "P-3001"]
+               :kontor.partner-contact-mech/contact-mech [:kontor.contact-mech/code "CM-postal-1"]
+               :kontor.partner-contact-mech/from-date    jan-2025
+               :kontor.partner-contact-mech/verified?    true}
+              {:kontor.partner-contact-mech-purpose/partner      [:kontor.partner/external-id "P-3001"]
+               :kontor.partner-contact-mech-purpose/contact-mech [:kontor.contact-mech/code "CM-postal-1"]
+               :kontor.partner-contact-mech-purpose/purpose-type :primary-location
+               :kontor.partner-contact-mech-purpose/from-date    jan-2025}])
   (let [db (d/db *conn*)
         addr (p/primary-postal-address db "P-3001" {:as-of jan-2026})]
-    (is (= "Hauptstrasse 1" (:postal-address/address1 addr)))
-    (is (= "Berlin" (:postal-address/city addr)))
-    (is (= "10115" (:postal-address/postal-code addr)))))
+    (is (= "Hauptstrasse 1" (:kontor.postal-address/address1 addr)))
+    (is (= "Berlin" (:kontor.postal-address/city addr)))
+    (is (= "10115" (:kontor.postal-address/postal-code addr)))))
 
 (deftest one-email-serves-multiple-purposes
   (transact! *conn*
@@ -191,26 +191,26 @@
                :kontor.partner/type        :person
                :kontor.partner/status      :enabled
                :kontor.partner/name        "Multi-Purpose"}
-              {:contact-mech/code "CM-multi-1"
-               :contact-mech/type :email}
-              {:email-address/contact-mech [:contact-mech/code "CM-multi-1"]
-               :email-address/address      "jane@example.com"
-               :email-address/verified?    true}
-              {:partner-contact-mech/partner      [:kontor.partner/external-id "P-4001"]
-               :partner-contact-mech/contact-mech [:contact-mech/code "CM-multi-1"]
-               :partner-contact-mech/from-date    jan-2025}
-              {:partner-contact-mech-purpose/partner      [:kontor.partner/external-id "P-4001"]
-               :partner-contact-mech-purpose/contact-mech [:contact-mech/code "CM-multi-1"]
-               :partner-contact-mech-purpose/purpose-type :primary-email
-               :partner-contact-mech-purpose/from-date    jan-2025}
-              {:partner-contact-mech-purpose/partner      [:kontor.partner/external-id "P-4001"]
-               :partner-contact-mech-purpose/contact-mech [:contact-mech/code "CM-multi-1"]
-               :partner-contact-mech-purpose/purpose-type :billing-email
-               :partner-contact-mech-purpose/from-date    jan-2025}
-              {:partner-contact-mech-purpose/partner      [:kontor.partner/external-id "P-4001"]
-               :partner-contact-mech-purpose/contact-mech [:contact-mech/code "CM-multi-1"]
-               :partner-contact-mech-purpose/purpose-type :general-correspondence
-               :partner-contact-mech-purpose/from-date    jan-2025}])
+              {:kontor.contact-mech/code "CM-multi-1"
+               :kontor.contact-mech/type :email}
+              {:kontor.email-address/contact-mech [:kontor.contact-mech/code "CM-multi-1"]
+               :kontor.email-address/address      "jane@example.com"
+               :kontor.email-address/verified?    true}
+              {:kontor.partner-contact-mech/partner      [:kontor.partner/external-id "P-4001"]
+               :kontor.partner-contact-mech/contact-mech [:kontor.contact-mech/code "CM-multi-1"]
+               :kontor.partner-contact-mech/from-date    jan-2025}
+              {:kontor.partner-contact-mech-purpose/partner      [:kontor.partner/external-id "P-4001"]
+               :kontor.partner-contact-mech-purpose/contact-mech [:kontor.contact-mech/code "CM-multi-1"]
+               :kontor.partner-contact-mech-purpose/purpose-type :primary-email
+               :kontor.partner-contact-mech-purpose/from-date    jan-2025}
+              {:kontor.partner-contact-mech-purpose/partner      [:kontor.partner/external-id "P-4001"]
+               :kontor.partner-contact-mech-purpose/contact-mech [:kontor.contact-mech/code "CM-multi-1"]
+               :kontor.partner-contact-mech-purpose/purpose-type :billing-email
+               :kontor.partner-contact-mech-purpose/from-date    jan-2025}
+              {:kontor.partner-contact-mech-purpose/partner      [:kontor.partner/external-id "P-4001"]
+               :kontor.partner-contact-mech-purpose/contact-mech [:kontor.contact-mech/code "CM-multi-1"]
+               :kontor.partner-contact-mech-purpose/purpose-type :general-correspondence
+               :kontor.partner-contact-mech-purpose/from-date    jan-2025}])
   (let [db (d/db *conn*)]
     (testing "Same address resolves for each distinct purpose"
       (is (= "jane@example.com" (p/primary-email db "P-4001" {:as-of jan-2026})))
@@ -227,30 +227,30 @@
                :kontor.partner/type        :person
                :kontor.partner/status      :enabled
                :kontor.partner/name        "Multi-Mech"}
-              {:contact-mech/code "CM-5001-postal"
-               :contact-mech/type :postal}
-              {:postal-address/contact-mech [:contact-mech/code "CM-5001-postal"]
-               :postal-address/address1     "1 Main St"
-               :postal-address/city         "Anywhere"}
-              {:contact-mech/code "CM-5001-phone"
-               :contact-mech/type :telecom}
-              {:telecom-number/contact-mech   [:contact-mech/code "CM-5001-phone"]
-               :telecom-number/country-code   "+1"
-               :telecom-number/area-code      "555"
-               :telecom-number/contact-number "0100"}
-              {:contact-mech/code "CM-5001-email"
-               :contact-mech/type :email}
-              {:email-address/contact-mech [:contact-mech/code "CM-5001-email"]
-               :email-address/address      "test@example.com"}
-              {:partner-contact-mech/partner      [:kontor.partner/external-id "P-5001"]
-               :partner-contact-mech/contact-mech [:contact-mech/code "CM-5001-postal"]
-               :partner-contact-mech/from-date    jan-2025}
-              {:partner-contact-mech/partner      [:kontor.partner/external-id "P-5001"]
-               :partner-contact-mech/contact-mech [:contact-mech/code "CM-5001-phone"]
-               :partner-contact-mech/from-date    jan-2025}
-              {:partner-contact-mech/partner      [:kontor.partner/external-id "P-5001"]
-               :partner-contact-mech/contact-mech [:contact-mech/code "CM-5001-email"]
-               :partner-contact-mech/from-date    jan-2025}])
+              {:kontor.contact-mech/code "CM-5001-postal"
+               :kontor.contact-mech/type :postal}
+              {:kontor.postal-address/contact-mech [:kontor.contact-mech/code "CM-5001-postal"]
+               :kontor.postal-address/address1     "1 Main St"
+               :kontor.postal-address/city         "Anywhere"}
+              {:kontor.contact-mech/code "CM-5001-phone"
+               :kontor.contact-mech/type :telecom}
+              {:kontor.telecom-number/contact-mech   [:kontor.contact-mech/code "CM-5001-phone"]
+               :kontor.telecom-number/country-code   "+1"
+               :kontor.telecom-number/area-code      "555"
+               :kontor.telecom-number/contact-number "0100"}
+              {:kontor.contact-mech/code "CM-5001-email"
+               :kontor.contact-mech/type :email}
+              {:kontor.email-address/contact-mech [:kontor.contact-mech/code "CM-5001-email"]
+               :kontor.email-address/address      "test@example.com"}
+              {:kontor.partner-contact-mech/partner      [:kontor.partner/external-id "P-5001"]
+               :kontor.partner-contact-mech/contact-mech [:kontor.contact-mech/code "CM-5001-postal"]
+               :kontor.partner-contact-mech/from-date    jan-2025}
+              {:kontor.partner-contact-mech/partner      [:kontor.partner/external-id "P-5001"]
+               :kontor.partner-contact-mech/contact-mech [:kontor.contact-mech/code "CM-5001-phone"]
+               :kontor.partner-contact-mech/from-date    jan-2025}
+              {:kontor.partner-contact-mech/partner      [:kontor.partner/external-id "P-5001"]
+               :kontor.partner-contact-mech/contact-mech [:kontor.contact-mech/code "CM-5001-email"]
+               :kontor.partner-contact-mech/from-date    jan-2025}])
   (let [db (d/db *conn*)
         mechs (p/contact-mechs-of db "P-5001" {:as-of jan-2026})]
     (is (= 3 (count mechs)))))
@@ -265,21 +265,21 @@
                :kontor.partner/type        :person
                :kontor.partner/status      :enabled
                :kontor.partner/name        "Moved Person"}
-              {:contact-mech/code "CM-old"
-               :contact-mech/type :postal}
-              {:postal-address/contact-mech [:contact-mech/code "CM-old"]
-               :postal-address/address1     "Old Address"}
-              {:contact-mech/code "CM-new"
-               :contact-mech/type :postal}
-              {:postal-address/contact-mech [:contact-mech/code "CM-new"]
-               :postal-address/address1     "New Address"}
-              {:partner-contact-mech/partner      [:kontor.partner/external-id "P-6001"]
-               :partner-contact-mech/contact-mech [:contact-mech/code "CM-old"]
-               :partner-contact-mech/from-date    jan-2025
-               :partner-contact-mech/thru-date    jan-2026}
-              {:partner-contact-mech/partner      [:kontor.partner/external-id "P-6001"]
-               :partner-contact-mech/contact-mech [:contact-mech/code "CM-new"]
-               :partner-contact-mech/from-date    jan-2026}])
+              {:kontor.contact-mech/code "CM-old"
+               :kontor.contact-mech/type :postal}
+              {:kontor.postal-address/contact-mech [:kontor.contact-mech/code "CM-old"]
+               :kontor.postal-address/address1     "Old Address"}
+              {:kontor.contact-mech/code "CM-new"
+               :kontor.contact-mech/type :postal}
+              {:kontor.postal-address/contact-mech [:kontor.contact-mech/code "CM-new"]
+               :kontor.postal-address/address1     "New Address"}
+              {:kontor.partner-contact-mech/partner      [:kontor.partner/external-id "P-6001"]
+               :kontor.partner-contact-mech/contact-mech [:kontor.contact-mech/code "CM-old"]
+               :kontor.partner-contact-mech/from-date    jan-2025
+               :kontor.partner-contact-mech/thru-date    jan-2026}
+              {:kontor.partner-contact-mech/partner      [:kontor.partner/external-id "P-6001"]
+               :kontor.partner-contact-mech/contact-mech [:kontor.contact-mech/code "CM-new"]
+               :kontor.partner-contact-mech/from-date    jan-2026}])
   (let [db (d/db *conn*)]
     (testing "Before the move, only the old address is active"
       (let [mechs (p/contact-mechs-of db "P-6001" {:as-of #inst "2025-06-01T00:00:00Z"})]
@@ -311,12 +311,12 @@
                :kontor.partner/type        :person
                :kontor.partner/status      :enabled
                :kontor.partner/name        "Multi-Role"}
-              {:partner-role/partner   [:kontor.partner/external-id "P-7001"]
-               :partner-role/role-type :customer
-               :partner-role/from-date jan-01}
-              {:partner-role/partner   [:kontor.partner/external-id "P-7001"]
-               :partner-role/role-type :employee
-               :partner-role/from-date jun-01}])
+              {:kontor.partner-role/partner   [:kontor.partner/external-id "P-7001"]
+               :kontor.partner-role/role-type :customer
+               :kontor.partner-role/from-date jan-01}
+              {:kontor.partner-role/partner   [:kontor.partner/external-id "P-7001"]
+               :kontor.partner-role/role-type :employee
+               :kontor.partner-role/from-date jun-01}])
   (let [db (d/db *conn*)]
     (testing "Before employment starts, only :customer role active"
       (let [roles (p/roles-of db "P-7001" {:as-of jun-15})]
@@ -335,10 +335,10 @@
                :kontor.partner/type        :person
                :kontor.partner/status      :enabled
                :kontor.partner/name        "Former Employee"}
-              {:partner-role/partner   [:kontor.partner/external-id "P-8001"]
-               :partner-role/role-type :employee
-               :partner-role/from-date jan-01
-               :partner-role/thru-date aug-01}])
+              {:kontor.partner-role/partner   [:kontor.partner/external-id "P-8001"]
+               :kontor.partner-role/role-type :employee
+               :kontor.partner-role/from-date jan-01
+               :kontor.partner-role/thru-date aug-01}])
   (let [db (d/db *conn*)]
     (is (true?  (p/has-role? db "P-8001" :employee {:as-of jun-15})))
     (is (false? (p/has-role? db "P-8001" :employee {:as-of #inst "2024-08-15T00:00:00Z"})))))
@@ -351,12 +351,12 @@
                :kontor.partner/type :person :kontor.partner/status :enabled :kontor.partner/name "B"}
               {:kontor.partner/external-id "P-9003"
                :kontor.partner/type :org :kontor.partner/status :enabled :kontor.partner/name "Vendor Co"}
-              {:partner-role/partner [:kontor.partner/external-id "P-9001"]
-               :partner-role/role-type :customer :partner-role/from-date jan-01}
-              {:partner-role/partner [:kontor.partner/external-id "P-9002"]
-               :partner-role/role-type :customer :partner-role/from-date jan-01}
-              {:partner-role/partner [:kontor.partner/external-id "P-9003"]
-               :partner-role/role-type :supplier :partner-role/from-date jan-01}])
+              {:kontor.partner-role/partner [:kontor.partner/external-id "P-9001"]
+               :kontor.partner-role/role-type :customer :kontor.partner-role/from-date jan-01}
+              {:kontor.partner-role/partner [:kontor.partner/external-id "P-9002"]
+               :kontor.partner-role/role-type :customer :kontor.partner-role/from-date jan-01}
+              {:kontor.partner-role/partner [:kontor.partner/external-id "P-9003"]
+               :kontor.partner-role/role-type :supplier :kontor.partner-role/from-date jan-01}])
   (let [db (d/db *conn*)
         customers (p/partners-with-role db :customer {:as-of jun-15})
         suppliers (p/partners-with-role db :supplier {:as-of jun-15})]
@@ -378,19 +378,19 @@
               {:kontor.partner/external-id "O-acme"
                :kontor.partner/type :org :kontor.partner/status :enabled
                :kontor.partner/name "Acme"}
-              {:partner-role/partner [:kontor.partner/external-id "P-employee"]
-               :partner-role/role-type :employee :partner-role/from-date jun-01}
-              {:partner-role/partner [:kontor.partner/external-id "O-acme"]
-               :partner-role/role-type :internal-organization
-               :partner-role/from-date jan-01}
-              {:partner-relationship/partner-from      [:kontor.partner/external-id "P-employee"]
-               :partner-relationship/role-type-from    :employee
-               :partner-relationship/partner-to        [:kontor.partner/external-id "O-acme"]
-               :partner-relationship/role-type-to      :internal-organization
-               :partner-relationship/relationship-type :employment
-               :partner-relationship/from-date         jun-01
-               :partner-relationship/position-title    "Senior Engineer"
-               :partner-relationship/status            :active}])
+              {:kontor.partner-role/partner [:kontor.partner/external-id "P-employee"]
+               :kontor.partner-role/role-type :employee :kontor.partner-role/from-date jun-01}
+              {:kontor.partner-role/partner [:kontor.partner/external-id "O-acme"]
+               :kontor.partner-role/role-type :internal-organization
+               :kontor.partner-role/from-date jan-01}
+              {:kontor.partner-relationship/partner-from      [:kontor.partner/external-id "P-employee"]
+               :kontor.partner-relationship/role-type-from    :employee
+               :kontor.partner-relationship/partner-to        [:kontor.partner/external-id "O-acme"]
+               :kontor.partner-relationship/role-type-to      :internal-organization
+               :kontor.partner-relationship/relationship-type :employment
+               :kontor.partner-relationship/from-date         jun-01
+               :kontor.partner-relationship/position-title    "Senior Engineer"
+               :kontor.partner-relationship/status            :active}])
   (let [db (d/db *conn*)
         employees (p/current-employees db "O-acme" {:as-of #inst "2025-01-01T00:00:00Z"})
         employer  (p/current-employer  db "P-employee" {:as-of #inst "2025-01-01T00:00:00Z"})]
@@ -408,14 +408,14 @@
                :kontor.partner/type :person :kontor.partner/status :enabled :kontor.partner/name "Former"}
               {:kontor.partner/external-id "O-x"
                :kontor.partner/type :org :kontor.partner/status :enabled :kontor.partner/name "X"}
-              {:partner-relationship/partner-from      [:kontor.partner/external-id "P-former"]
-               :partner-relationship/role-type-from    :employee
-               :partner-relationship/partner-to        [:kontor.partner/external-id "O-x"]
-               :partner-relationship/role-type-to      :internal-organization
-               :partner-relationship/relationship-type :employment
-               :partner-relationship/from-date         jan-01
-               :partner-relationship/thru-date         aug-01
-               :partner-relationship/status            :inactive}])
+              {:kontor.partner-relationship/partner-from      [:kontor.partner/external-id "P-former"]
+               :kontor.partner-relationship/role-type-from    :employee
+               :kontor.partner-relationship/partner-to        [:kontor.partner/external-id "O-x"]
+               :kontor.partner-relationship/role-type-to      :internal-organization
+               :kontor.partner-relationship/relationship-type :employment
+               :kontor.partner-relationship/from-date         jan-01
+               :kontor.partner-relationship/thru-date         aug-01
+               :kontor.partner-relationship/status            :inactive}])
   (let [db (d/db *conn*)]
     (testing "During tenure, relationship is active"
       (is (some? (p/current-employer db "P-former" {:as-of jun-15}))))
@@ -430,24 +430,24 @@
                :kontor.partner/type :org :kontor.partner/status :enabled :kontor.partner/name "Sub 1"}
               {:kontor.partner/external-id "O-sub2"
                :kontor.partner/type :org :kontor.partner/status :enabled :kontor.partner/name "Sub 2"}
-              {:partner-relationship/partner-from [:kontor.partner/external-id "O-parent"]
-               :partner-relationship/role-type-from :internal-organization
-               :partner-relationship/partner-to [:kontor.partner/external-id "O-sub1"]
-               :partner-relationship/role-type-to :internal-organization
-               :partner-relationship/relationship-type :subsidiary
-               :partner-relationship/from-date jan-01
-               :partner-relationship/status :active}
-              {:partner-relationship/partner-from [:kontor.partner/external-id "O-parent"]
-               :partner-relationship/role-type-from :internal-organization
-               :partner-relationship/partner-to [:kontor.partner/external-id "O-sub2"]
-               :partner-relationship/role-type-to :internal-organization
-               :partner-relationship/relationship-type :subsidiary
-               :partner-relationship/from-date jun-01
-               :partner-relationship/status :active}])
+              {:kontor.partner-relationship/partner-from [:kontor.partner/external-id "O-parent"]
+               :kontor.partner-relationship/role-type-from :internal-organization
+               :kontor.partner-relationship/partner-to [:kontor.partner/external-id "O-sub1"]
+               :kontor.partner-relationship/role-type-to :internal-organization
+               :kontor.partner-relationship/relationship-type :subsidiary
+               :kontor.partner-relationship/from-date jan-01
+               :kontor.partner-relationship/status :active}
+              {:kontor.partner-relationship/partner-from [:kontor.partner/external-id "O-parent"]
+               :kontor.partner-relationship/role-type-from :internal-organization
+               :kontor.partner-relationship/partner-to [:kontor.partner/external-id "O-sub2"]
+               :kontor.partner-relationship/role-type-to :internal-organization
+               :kontor.partner-relationship/relationship-type :subsidiary
+               :kontor.partner-relationship/from-date jun-01
+               :kontor.partner-relationship/status :active}])
   (let [db (d/db *conn*)
         subs (p/relationships-of-type db "O-parent" :subsidiary {:as-of jun-15})]
     (is (= 2 (count subs)))
-    (is (every? #(= :subsidiary (:partner-relationship/relationship-type %)) subs))))
+    (is (every? #(= :subsidiary (:kontor.partner-relationship/relationship-type %)) subs))))
 
 ;; ============================================================================
 ;; ADR-039 — Master-data primitives
@@ -493,26 +493,26 @@
                {:kontor.partner/external-id "P-SUPPLIER"
                 :kontor.partner/type :org :kontor.partner/status :enabled
                 :kontor.partner/name "Supplier Co"}
-               {:bank-account/code "ACCT-EUR-1"
-                :bank-account/iban "DE89370400440532013000"
-                :bank-account/bic "COBADEFFXXX"
-                :bank-account/bank-name "Commerzbank"
-                :bank-account/commodity [:kontor.commodity/symbol "EUR"]
-                :bank-account/holder-name "Supplier Co GmbH"
-                :bank-account/active true}
+               {:kontor.bank-account/code "ACCT-EUR-1"
+                :kontor.bank-account/iban "DE89370400440532013000"
+                :kontor.bank-account/bic "COBADEFFXXX"
+                :kontor.bank-account/bank-name "Commerzbank"
+                :kontor.bank-account/commodity [:kontor.commodity/symbol "EUR"]
+                :kontor.bank-account/holder-name "Supplier Co GmbH"
+                :kontor.bank-account/active true}
                ;; Old account, thru-dated
-               {:partner-bank-account/partner [:kontor.partner/external-id "P-SUPPLIER"]
-                :partner-bank-account/bank-account [:bank-account/code "ACCT-EUR-1"]
-                :partner-bank-account/from-date #inst "2023-01-01"
-                :partner-bank-account/thru-date #inst "2025-01-01"
-                :partner-bank-account/purpose :disbursement
-                :partner-bank-account/preferred? false}
+               {:kontor.partner-bank-account/partner [:kontor.partner/external-id "P-SUPPLIER"]
+                :kontor.partner-bank-account/bank-account [:kontor.bank-account/code "ACCT-EUR-1"]
+                :kontor.partner-bank-account/from-date #inst "2023-01-01"
+                :kontor.partner-bank-account/thru-date #inst "2025-01-01"
+                :kontor.partner-bank-account/purpose :disbursement
+                :kontor.partner-bank-account/preferred? false}
                ;; New account, current
-               {:partner-bank-account/partner [:kontor.partner/external-id "P-SUPPLIER"]
-                :partner-bank-account/bank-account [:bank-account/code "ACCT-EUR-1"]
-                :partner-bank-account/from-date #inst "2025-06-01"
-                :partner-bank-account/purpose :disbursement
-                :partner-bank-account/preferred? true}])
+               {:kontor.partner-bank-account/partner [:kontor.partner/external-id "P-SUPPLIER"]
+                :kontor.partner-bank-account/bank-account [:kontor.bank-account/code "ACCT-EUR-1"]
+                :kontor.partner-bank-account/from-date #inst "2025-06-01"
+                :kontor.partner-bank-account/purpose :disbursement
+                :kontor.partner-bank-account/preferred? true}])
   (let [db (d/db *conn*)]
     (testing "during the gap, no active bank account"
       (let [accts (p/bank-accounts-of db "P-SUPPLIER" {:as-of #inst "2025-03-01"})]
@@ -523,20 +523,20 @@
     (testing "after the new from-date, the preferred account is active"
       (let [primary (p/primary-disbursement-account db "P-SUPPLIER"
                                                     {:as-of #inst "2025-09-01"})]
-        (is (= "DE89370400440532013000" (:bank-account/iban primary)))))))
+        (is (= "DE89370400440532013000" (:kontor.bank-account/iban primary)))))))
 
 (deftest partner-tags-temporal
   (d/transact *conn*
               [{:kontor.partner/external-id "P-TIER"
                 :kontor.partner/type :org :kontor.partner/status :enabled
                 :kontor.partner/name "Tier Customer"}
-               {:partner-tag/partner [:kontor.partner/external-id "P-TIER"]
-                :partner-tag/tag-type :gold-tier
-                :partner-tag/from-date #inst "2024-01-01"
-                :partner-tag/thru-date #inst "2025-06-15"}
-               {:partner-tag/partner [:kontor.partner/external-id "P-TIER"]
-                :partner-tag/tag-type :silver-tier
-                :partner-tag/from-date #inst "2025-06-15"}])
+               {:kontor.partner-tag/partner [:kontor.partner/external-id "P-TIER"]
+                :kontor.partner-tag/tag-type :gold-tier
+                :kontor.partner-tag/from-date #inst "2024-01-01"
+                :kontor.partner-tag/thru-date #inst "2025-06-15"}
+               {:kontor.partner-tag/partner [:kontor.partner/external-id "P-TIER"]
+                :kontor.partner-tag/tag-type :silver-tier
+                :kontor.partner-tag/from-date #inst "2025-06-15"}])
   (let [db (d/db *conn*)]
     (testing "tier as-of mid-2024 is gold"
       (is (= #{:gold-tier} (p/tags-of db "P-TIER" {:as-of #inst "2024-06-15"}))))
@@ -579,19 +579,19 @@
                 :kontor.partner/name "Multi-VAT Inc"
                 :kontor.partner/tax-id "DE123456789"}
                ;; DE VAT
-               {:partner-tax-id/partner [:kontor.partner/external-id "P-MULTI-VAT"]
-                :partner-tax-id/country [:kontor.country/code "DE"]
-                :partner-tax-id/tax-id-type :vat-eu
-                :partner-tax-id/tax-id "DE123456789"
-                :partner-tax-id/from-date #inst "2024-01-01"
-                :partner-tax-id/verified? true}
+               {:kontor.partner-tax-id/partner [:kontor.partner/external-id "P-MULTI-VAT"]
+                :kontor.partner-tax-id/country [:kontor.country/code "DE"]
+                :kontor.partner-tax-id/tax-id-type :vat-eu
+                :kontor.partner-tax-id/tax-id "DE123456789"
+                :kontor.partner-tax-id/from-date #inst "2024-01-01"
+                :kontor.partner-tax-id/verified? true}
                ;; AT VAT — separate jurisdiction
-               {:partner-tax-id/partner [:kontor.partner/external-id "P-MULTI-VAT"]
-                :partner-tax-id/country [:kontor.country/code "AT"]
-                :partner-tax-id/tax-id-type :vat-eu
-                :partner-tax-id/tax-id "ATU12345678"
-                :partner-tax-id/from-date #inst "2024-06-01"
-                :partner-tax-id/verified? true}])
+               {:kontor.partner-tax-id/partner [:kontor.partner/external-id "P-MULTI-VAT"]
+                :kontor.partner-tax-id/country [:kontor.country/code "AT"]
+                :kontor.partner-tax-id/tax-id-type :vat-eu
+                :kontor.partner-tax-id/tax-id "ATU12345678"
+                :kontor.partner-tax-id/from-date #inst "2024-06-01"
+                :kontor.partner-tax-id/verified? true}])
   (let [db (d/db *conn*)]
     (testing "tax-id-for-country DE returns DE VAT"
       (is (= "DE123456789"

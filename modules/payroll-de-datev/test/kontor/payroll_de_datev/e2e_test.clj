@@ -173,30 +173,30 @@
                  :commodity eur})
         db (:db-after report)
         run-eid (d/q '[:find ?r . :in $ ?c
-                       :where [?r :payroll-run/code ?c]]
+                       :where [?r :kontor.payroll-run/code ?c]]
                      db "RUN-DE-2025-11-001")
         run (d/pull db
-                    '[* {:payroll-run/payroll-transaction
+                    '[* {:kontor.payroll-run/payroll-transaction
                          [:kontor.transaction/external-id
                           {:kontor.posting/_transaction
                            [:kontor.posting/amount
                             {:kontor.posting/account [:kontor.account/code]}]}]}]
                     run-eid)
         ;; Note 86 P0-86-1 fix: substrate orchestrator now links
-        ;; emit-docs via :payroll-run/emit-docs. Query through the
+        ;; emit-docs via :kontor.payroll-run/emit-docs. Query through the
         ;; run row's reverse-walk; verify the substrate contract.
         emit-doc-eids (mapv :db/id
-                            (:payroll-run/emit-docs
-                             (d/pull db [{:payroll-run/emit-docs [:db/id]}]
+                            (:kontor.payroll-run/emit-docs
+                             (d/pull db [{:kontor.payroll-run/emit-docs [:db/id]}]
                                      run-eid)))
         emit-doc (when (seq emit-doc-eids)
                    (d/pull db '[*] (first emit-doc-eids)))]
     (testing "payroll-run row + control totals"
-      (is (= 4000.00M (:payroll-run/control-total-gross run)))
-      (is (= 2500.00M (:payroll-run/control-total-net   run)))
-      (is (= :datev-lodas (:payroll-run/provider-id run))))
+      (is (= 4000.00M (:kontor.payroll-run/control-total-gross run)))
+      (is (= 2500.00M (:kontor.payroll-run/control-total-net   run)))
+      (is (= :datev-lodas (:kontor.payroll-run/provider-id run))))
     (testing "transaction posted with the 10-leg Bruttomethode shape"
-      (let [tx (:payroll-run/payroll-transaction run)
+      (let [tx (:kontor.payroll-run/payroll-transaction run)
             postings (:kontor.posting/_transaction tx)]
         (is (= "TX-PAYROLL-DE-2025-11" (:kontor.transaction/external-id tx)))
         (is (= 10 (count postings)))
@@ -224,8 +224,8 @@
               (is (zero? (.compareTo ^java.math.BigDecimal v 0M))))))))
     (testing "EmitProvider produced one LODAS Importdatei audit-doc"
       (is (some? emit-doc))
-      (is (= :payroll-filing (:audit-doc/category emit-doc)))
-      (is (= "LODAS-DE-2025-11" (:audit-doc/code emit-doc)))
-      (is (str/includes? (:audit-doc/inline-payload emit-doc) "[Allgemein]"))
-      (is (str/includes? (:audit-doc/inline-payload emit-doc) "Ziel=LODAS"))
-      (is (str/includes? (:audit-doc/inline-payload emit-doc) "[Bewegungsdaten]")))))
+      (is (= :payroll-filing (:kontor.audit-doc/category emit-doc)))
+      (is (= "LODAS-DE-2025-11" (:kontor.audit-doc/code emit-doc)))
+      (is (str/includes? (:kontor.audit-doc/inline-payload emit-doc) "[Allgemein]"))
+      (is (str/includes? (:kontor.audit-doc/inline-payload emit-doc) "Ziel=LODAS"))
+      (is (str/includes? (:kontor.audit-doc/inline-payload emit-doc) "[Bewegungsdaten]")))))

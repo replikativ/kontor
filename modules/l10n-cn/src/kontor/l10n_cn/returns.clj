@@ -86,10 +86,10 @@
 
    ## API
 
-     compute-return conn opts → {:return/form :return/period
-                                  :return/taxpayer-status
-                                  :return/lines :return/net-vat
-                                  :return/outcome ...}"
+     compute-return conn opts → {:kontor.return/form :kontor.return/period
+                                  :kontor.return/taxpayer-status
+                                  :kontor.return/lines :kontor.return/net-vat
+                                  :kontor.return/outcome ...}"
   (:require [kontor.l10n-cn.vat :as vat]
             [kontor.money :as money]))
 
@@ -115,13 +115,13 @@
    result. The base result already carries per-rate sales totals
    + total output + input VAT. We re-key it into form-line numbers."
   [base-result]
-  (let [lines (:return/lines base-result)
+  (let [lines (:kontor.return/lines base-result)
         zero (m-zero)
         sales-13 (get lines :sales-13 zero)
         sales-9  (get lines :sales-9  zero)
         sales-6  (get lines :sales-6  zero)
         sales-export (get lines :sales-export zero)
-        output (:return/output-vat base-result)
+        output (:kontor.return/output-vat base-result)
         input  (get lines :input-vat zero)
         ;; Sales at standard rates (general method) = sum of taxable
         ;; per-rate net amounts (excludes export which is line 8).
@@ -139,11 +139,11 @@
                                         ; supplies via opts
      :17 input                         ; 应抵扣税额合计 (= 12 - 14)
      :18 input                         ; 实际抵扣税额 (≤ 17, capped at output)
-     :19 (:return/net-vat base-result) ; 应纳税额
-     :23 (:return/net-vat base-result) ; 应纳税额合计
-     :32 (if (neg? (.signum ^java.math.BigDecimal (bd (:return/net-vat base-result))))
+     :19 (:kontor.return/net-vat base-result) ; 应纳税额
+     :23 (:kontor.return/net-vat base-result) ; 应纳税额合计
+     :32 (if (neg? (.signum ^java.math.BigDecimal (bd (:kontor.return/net-vat base-result))))
            ;; If net is negative, 期末留抵税额 = abs(net)
-           (let [neg-amt (bd (:return/net-vat base-result))]
+           (let [neg-amt (bd (:kontor.return/net-vat base-result))]
              (money/money (.negate neg-amt) :CNY))
            zero)}))
 
@@ -153,8 +153,8 @@
    ships the numbers; the exact column layout is left to the
    downstream filing tool."
   [base-result]
-  (let [out-by-rate (:return/output-by-rate base-result)
-        lines (:return/lines base-result)
+  (let [out-by-rate (:kontor.return/output-by-rate base-result)
+        lines (:kontor.return/lines base-result)
         zero (m-zero)
         row (fn [rate-key sales-key]
               {:net    (get lines sales-key zero)
@@ -197,7 +197,7 @@
      :2  sales-1pct                        ; (rate-reduction sub-line for 1%)
      :4  sales-5pct                        ; 应征增值税销售额 5% (real estate)
      :9  sales-exempt                      ; 免税销售额
-     :15 (or (:return/output-vat base-result) total-payable)
+     :15 (or (:kontor.return/output-vat base-result) total-payable)
      :16 total-payable}))                  ; 本期应纳税额
 
 ;; ============================================================================
@@ -231,20 +231,20 @@
      :output-3pct :output-1pct :output-5pct
 
    Returns:
-     {:return/form              \"VAT-PRC-General\" | \"VAT-PRC-SmallScale\"
-      :return/period            {…}
-      :return/taxpayer-status   :general | :small-scale
-      :return/lines             {…}    ; form-line-number → Money
-      :return/schedule-1        {…}    ; general-taxpayer only:
+     {:kontor.return/form              \"VAT-PRC-General\" | \"VAT-PRC-SmallScale\"
+      :kontor.return/period            {…}
+      :kontor.return/taxpayer-status   :general | :small-scale
+      :kontor.return/lines             {…}    ; form-line-number → Money
+      :kontor.return/schedule-1        {…}    ; general-taxpayer only:
                                         ;   per-rate sales detail
-      :return/output-vat        Money
-      :return/input-vat         Money  ; general-taxpayer only
-      :return/net-vat           Money  ; positive = pay
-      :return/umct-payable      Money  ; surcharge (if computed)
-      :return/edu-surcharge-payable Money
-      :return/local-edu-surcharge-payable Money
-      :return/total-surcharges  Money
-      :return/outcome           :payment | :credit-carryforward |
+      :kontor.return/output-vat        Money
+      :kontor.return/input-vat         Money  ; general-taxpayer only
+      :kontor.return/net-vat           Money  ; positive = pay
+      :kontor.return/umct-payable      Money  ; surcharge (if computed)
+      :kontor.return/edu-surcharge-payable Money
+      :kontor.return/local-edu-surcharge-payable Money
+      :kontor.return/total-surcharges  Money
+      :kontor.return/outcome           :payment | :credit-carryforward |
                                  :nil-return}"
   [conn {:keys [taxpayer-status]
          :or {taxpayer-status :general}
@@ -261,12 +261,12 @@
     (case taxpayer-status
       :general
       (merge base
-             {:return/form            "VAT-PRC-General"
-              :return/taxpayer-status :general
-              :return/lines           (general-main-form base)
-              :return/schedule-1      (general-schedule-1 base)})
+             {:kontor.return/form            "VAT-PRC-General"
+              :kontor.return/taxpayer-status :general
+              :kontor.return/lines           (general-main-form base)
+              :kontor.return/schedule-1      (general-schedule-1 base)})
       :small-scale
       (merge base
-             {:return/form            "VAT-PRC-SmallScale"
-              :return/taxpayer-status :small-scale
-              :return/lines           (small-scale-main-form base opts)}))))
+             {:kontor.return/form            "VAT-PRC-SmallScale"
+              :kontor.return/taxpayer-status :small-scale
+              :kontor.return/lines           (small-scale-main-form base opts)}))))

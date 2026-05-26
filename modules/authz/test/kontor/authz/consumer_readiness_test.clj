@@ -41,19 +41,19 @@
     (testing "the relations round-trip"
       (is (= #{[:account :owner :user] [:server :account :account]}
              (into #{}
-                   (map (juxt :authz.relation/resource-type
-                              :authz.relation/relation-name
-                              :authz.relation/subject-type))
+                   (map (juxt :kontor.authz.relation/resource-type
+                              :kontor.authz.relation/relation-name
+                              :kontor.authz.relation/subject-type))
                    relations))))
     (testing "the permissions round-trip"
       (is (= #{[:account :admin :self :relation :owner]
                [:server :view :account :permission :admin]}
              (into #{}
-                   (map (juxt :authz.permission/resource-type
-                              :authz.permission/permission-name
-                              :authz.permission/source-relation-name
-                              :authz.permission/target-type
-                              :authz.permission/target-name))
+                   (map (juxt :kontor.authz.permission/resource-type
+                              :kontor.authz.permission/permission-name
+                              :kontor.authz.permission/source-relation-name
+                              :kontor.authz.permission/target-type
+                              :kontor.authz.permission/target-name))
                    permissions))))))
 
 (deftest write-schema-is-idempotent
@@ -86,7 +86,7 @@
                 (catch clojure.lang.ExceptionInfo e e))
         data (when ex (ex-data ex))]
     (is (some? ex) "write-schema! must throw on undefined arrow")
-    (is (= :authz/schema-invalid (:type data)))
+    (is (= :kontor.authz/schema-invalid (:type data)))
     (is (some #(= :undefined-arrow (:error %)) (:errors data)))))
 
 (deftest validation-rejects-undefined-target-relation
@@ -100,7 +100,7 @@
                 (catch clojure.lang.ExceptionInfo e e))
         data (when ex (ex-data ex))]
     (is (some? ex))
-    (is (= :authz/schema-invalid (:type data)))
+    (is (= :kontor.authz/schema-invalid (:type data)))
     (is (some #(= :undefined-relation (:error %)) (:errors data)))))
 
 (deftest validation-rejects-undefined-target-permission
@@ -117,7 +117,7 @@
                 (catch clojure.lang.ExceptionInfo e e))
         data (when ex (ex-data ex))]
     (is (some? ex))
-    (is (= :authz/schema-invalid (:type data)))
+    (is (= :kontor.authz/schema-invalid (:type data)))
     (is (some #(= :undefined-permission (:error %)) (:errors data)))))
 
 (deftest validation-accepts-self-arrow
@@ -181,7 +181,7 @@
                 (catch clojure.lang.ExceptionInfo e e))
         data (when ex (ex-data ex))]
     (is (some? ex) "the :group branch's missing :admin permission must surface")
-    (is (= :authz/schema-invalid (:type data)))
+    (is (= :kontor.authz/schema-invalid (:type data)))
     (is (some (fn [e] (and (= :undefined-permission (:error e))
                            (= [:group :admin] (:ref e))))
               (:errors data)))))
@@ -211,6 +211,6 @@
       (is (= (:permissions a) (:permissions b))))
     (testing "the order is the lex-by-tuple-key order"
       (is (= [:a :m :z]
-             (mapv :authz.relation/resource-type (:relations a))))
+             (mapv :kontor.authz.relation/resource-type (:relations a))))
       (is (= [:a :m :z]
-             (mapv :authz.permission/resource-type (:permissions a)))))))
+             (mapv :kontor.authz.permission/resource-type (:permissions a)))))))

@@ -31,7 +31,7 @@
 ;; ============================================================================
 
 (defn atp-raw
-  "`Σ :inventory-detail/atp-diff` over a scope — the raw
+  "`Σ :kontor.inventory-detail/atp-diff` over a scope — the raw
    available-to-promise. Outstanding reservations are ALREADY netted
    (a reservation appends an `:atp-diff` negative detail), so this is
    `on-hand − reservations`. Bitemporal, same contract as
@@ -47,23 +47,23 @@
                   :with ?d
                   :in $ [?item ...] ?cutoff
                   :where
-                  [?d :inventory-detail/inventory-item ?item]
-                  [?d :inventory-detail/atp-diff ?diff]
-                  [?d :inventory-detail/effective-date ?ed]
+                  [?d :kontor.inventory-detail/inventory-item ?item]
+                  [?d :kontor.inventory-detail/atp-diff ?diff]
+                  [?d :kontor.inventory-detail/effective-date ?ed]
                   [(<= ?ed ?cutoff)]]
                 db* items (or as-of-valid kbt/forever))
            0M)))))
 
 (defn- safety-stock-of
-  "The `:facility-product/safety-stock` for a (facility, product)
+  "The `:kontor.facility-product/safety-stock` for a (facility, product)
    pair — 0M when no policy row exists."
   ^BigDecimal [db facility product]
   (or (d/q '[:find ?ss .
              :in $ ?f ?p
              :where
-             [?fp :facility-product/facility ?f]
-             [?fp :facility-product/product ?p]
-             [?fp :facility-product/safety-stock ?ss]]
+             [?fp :kontor.facility-product/facility ?f]
+             [?fp :kontor.facility-product/product ?p]
+             [?fp :kontor.facility-product/safety-stock ?ss]]
            db facility product)
       0M))
 
@@ -104,29 +104,29 @@
 
    `:reserve-order-enum`: `:fifo-rec` / `:lifo-rec` order by the
    bucket's `:received-at`; `:fifo-exp` / `:lifo-exp` order by the
-   lot's `:lot/expires-at` (ADR-060 — perishables; buckets with no
+   lot's `:kontor.lot/expires-at` (ADR-060 — perishables; buckets with no
    lot expiry sort last)."
   [db product facility reserve-order-enum]
   (let [epoch (Date. 0)
         rows  (keep
                (fn [eid]
                  (let [it (d/pull db
-                                  '[:inventory-item/status :inventory-item/kind
-                                    :inventory-item/received-at
-                                    {:inventory-item/location [:facility-location/type]}
-                                    {:inventory-item/lot [:lot/expires-at]}]
+                                  '[:kontor.inventory-item/status :kontor.inventory-item/kind
+                                    :kontor.inventory-item/received-at
+                                    {:kontor.inventory-item/location [:kontor.facility-location/type]}
+                                    {:kontor.inventory-item/lot [:kontor.lot/expires-at]}]
                                   eid)]
-                   (when (and (= :available (:inventory-item/status it))
-                              (not= :serialized (:inventory-item/kind it)))
+                   (when (and (= :available (:kontor.inventory-item/status it))
+                              (not= :serialized (:kontor.inventory-item/kind it)))
                      (let [atp (atp-raw db eid)]
                        (when (pos? (.signum atp))
                          {:item        eid
                           :atp         atp
                           :loc-rank    (location-rank
-                                        (:facility-location/type
-                                         (:inventory-item/location it)))
-                          :received-at (or (:inventory-item/received-at it) epoch)
-                          :expires-at  (:lot/expires-at (:inventory-item/lot it))})))))
+                                        (:kontor.facility-location/type
+                                         (:kontor.inventory-item/location it)))
+                          :received-at (or (:kontor.inventory-item/received-at it) epoch)
+                          :expires-at  (:kontor.lot/expires-at (:kontor.inventory-item/lot it))})))))
                (inv/items-of db product facility))
         key-fn (case reserve-order-enum
                  :fifo-rec (fn [r] [(:loc-rank r) (.getTime ^Date (:received-at r))])
@@ -262,25 +262,25 @@
           reservation
           (fn [tempid item take qna?]
             (cond-> {:db/id tempid
-                     :inv-reservation/order order
-                     :inv-reservation/order-item order-item
-                     :inv-reservation/ship-group ship-group
-                     :inv-reservation/inventory-item item
-                     :inv-reservation/quantity take
-                     :inv-reservation/reserve-order-enum reserve-order-enum
-                     :inv-reservation/reserved-datetime reserved-at}
-              promised-date (assoc :inv-reservation/promised-datetime promised-date
-                                   :inv-reservation/current-promised-date promised-date)
-              priority?     (assoc :inv-reservation/priority? true)
-              qna?          (assoc :inv-reservation/quantity-not-available shortfall)))
+                     :kontor.inv-reservation/order order
+                     :kontor.inv-reservation/order-item order-item
+                     :kontor.inv-reservation/ship-group ship-group
+                     :kontor.inv-reservation/inventory-item item
+                     :kontor.inv-reservation/quantity take
+                     :kontor.inv-reservation/reserve-order-enum reserve-order-enum
+                     :kontor.inv-reservation/reserved-datetime reserved-at}
+              promised-date (assoc :kontor.inv-reservation/promised-datetime promised-date
+                                   :kontor.inv-reservation/current-promised-date promised-date)
+              priority?     (assoc :kontor.inv-reservation/priority? true)
+              qna?          (assoc :kontor.inv-reservation/quantity-not-available shortfall)))
           atp-detail
           (fn [item ^BigDecimal amt res-tempid]
-            {:inventory-detail/inventory-item item
-             :inventory-detail/effective-date reserved-at
-             :inventory-detail/qoh-diff 0M
-             :inventory-detail/atp-diff (.negate amt)
-             :inventory-detail/source res-tempid
-             :inventory-detail/source-kind :reservation})
+            {:kontor.inventory-detail/inventory-item item
+             :kontor.inventory-detail/effective-date reserved-at
+             :kontor.inventory-detail/qoh-diff 0M
+             :kontor.inventory-detail/atp-diff (.negate amt)
+             :kontor.inventory-detail/source res-tempid
+             :kontor.inventory-detail/source-kind :reservation})
           tx-data
           (if (empty? draws)
             ;; Nothing on hand — a pure back-order against bo-bucket.
@@ -336,20 +336,20 @@
 (defn release-reservation-tx-data
   "Pure tx-data builder for `release-reservation!` (ADR-068)."
   [db reservation-eid {:keys [effective-date]}]
-  (let [r  (d/pull db [:inv-reservation/quantity
-                       :inv-reservation/quantity-not-available
-                       {:inv-reservation/inventory-item [:db/id]}]
+  (let [r  (d/pull db [:kontor.inv-reservation/quantity
+                       :kontor.inv-reservation/quantity-not-available
+                       {:kontor.inv-reservation/inventory-item [:db/id]}]
                    reservation-eid)
-        item (:db/id (:inv-reservation/inventory-item r))
+        item (:db/id (:kontor.inv-reservation/inventory-item r))
         _ (when-not item
             (throw (ex-info "Reservation not found, or has no :inventory-item"
                             {:reservation reservation-eid})))
-        released (.add ^BigDecimal (or (:inv-reservation/quantity r) 0M)
-                       ^BigDecimal (or (:inv-reservation/quantity-not-available r) 0M))]
-    [{:inventory-detail/inventory-item item
-      :inventory-detail/effective-date (or effective-date (Date.))
-      :inventory-detail/qoh-diff 0M
-      :inventory-detail/atp-diff released
-      :inventory-detail/source-kind :reservation
-      :inventory-detail/description "Reservation released"}
+        released (.add ^BigDecimal (or (:kontor.inv-reservation/quantity r) 0M)
+                       ^BigDecimal (or (:kontor.inv-reservation/quantity-not-available r) 0M))]
+    [{:kontor.inventory-detail/inventory-item item
+      :kontor.inventory-detail/effective-date (or effective-date (Date.))
+      :kontor.inventory-detail/qoh-diff 0M
+      :kontor.inventory-detail/atp-diff released
+      :kontor.inventory-detail/source-kind :reservation
+      :kontor.inventory-detail/description "Reservation released"}
      [:db/retractEntity reservation-eid]]))

@@ -53,13 +53,13 @@
                  {:db/id "period-2026-05" :kontor.period/name "2026-05"
                   :kontor.period/start #inst "2026-05-01"
                   :kontor.period/end #inst "2026-06-01"}
-                 ;; A contract audit-doc, carrying the new :audit-doc/category
+                 ;; A contract audit-doc, carrying the new :kontor.audit-doc/category
                  ;; (ADR-075).
-                 {:db/id "doc-contract-1" :audit-doc/code "CONTRACT-jane"
-                  :audit-doc/type :uploaded-pdf
-                  :audit-doc/storage-uri "s3://contracts/jane-de.pdf"
-                  :audit-doc/uploaded-at #inst "2026-04-15"
-                  :audit-doc/category :hr-personnel}])
+                 {:db/id "doc-contract-1" :kontor.audit-doc/code "CONTRACT-jane"
+                  :kontor.audit-doc/type :uploaded-pdf
+                  :kontor.audit-doc/storage-uri "s3://contracts/jane-de.pdf"
+                  :kontor.audit-doc/uploaded-at #inst "2026-04-15"
+                  :kontor.audit-doc/category :hr-personnel}])
     conn))
 
 (defn- ref-eid [db a v]
@@ -87,14 +87,14 @@
                       db :kontor.person/external-id)))
       (is (some? (d/q '[:find ?a . :in $ ?ident
                         :where [?a :db/ident ?ident]]
-                      db :employment/work-time-fraction)))
+                      db :kontor.employment/work-time-fraction)))
       (is (some? (d/q '[:find ?a . :in $ ?ident
                         :where [?a :db/ident ?ident]]
-                      db :compensation-component/account-hint))))
+                      db :kontor.compensation-component/account-hint))))
     (testing "kernel ADR-075 attrs present + category attrs accept tags"
-      (let [doc-eid (ref-eid db :audit-doc/code "CONTRACT-jane")]
+      (let [doc-eid (ref-eid db :kontor.audit-doc/code "CONTRACT-jane")]
         (is (= :hr-personnel
-               (:audit-doc/category (d/pull db [:audit-doc/category] doc-eid))))))))
+               (:kontor.audit-doc/category (d/pull db [:kontor.audit-doc/category] doc-eid))))))))
 
 ;; ============================================================================
 ;; create-person + hire
@@ -110,7 +110,7 @@
         db (d/db conn)
         jane (hr/person-by-external-id db "P-jane")
         ent-de (ref-eid db :kontor.entity/code "DE-GMBH")
-        contract (ref-eid db :audit-doc/code "CONTRACT-jane")
+        contract (ref-eid db :kontor.audit-doc/code "CONTRACT-jane")
         _ (employment/hire! conn {:code "EMP-DE-jane"
                                   :person jane
                                   :entity ent-de
@@ -119,23 +119,23 @@
                                   :work-time-fraction 1M
                                   :contract-doc contract})
         db (d/db conn)
-        emp (d/pull db '[* {:employment/person [*]
-                            :employment/entity [:kontor.entity/code]
-                            :employment/contract-doc [:audit-doc/code
-                                                      :audit-doc/category]}]
+        emp (d/pull db '[* {:kontor.employment/person [*]
+                            :kontor.employment/entity [:kontor.entity/code]
+                            :kontor.employment/contract-doc [:kontor.audit-doc/code
+                                                      :kontor.audit-doc/category]}]
                     (hr/employment-by-code db "EMP-DE-jane"))]
     (testing "person attrs round-trip"
-      (is (= "Jane" (-> emp :employment/person :kontor.person/given-name)))
-      (is (= "Doe"  (-> emp :employment/person :kontor.person/family-name)))
-      (is (= ["DE"] (vec (-> emp :employment/person :kontor.person/citizenship)))))
+      (is (= "Jane" (-> emp :kontor.employment/person :kontor.person/given-name)))
+      (is (= "Doe"  (-> emp :kontor.employment/person :kontor.person/family-name)))
+      (is (= ["DE"] (vec (-> emp :kontor.employment/person :kontor.person/citizenship)))))
     (testing "employment defaults are populated"
-      (is (= :hired (:employment/state emp)))
-      (is (= 1M     (:employment/work-time-fraction emp)))
-      (is (= :standard (:employment/work-relationship-kind emp)))
-      (is (= "DE-GMBH" (-> emp :employment/entity :kontor.entity/code))))
+      (is (= :hired (:kontor.employment/state emp)))
+      (is (= 1M     (:kontor.employment/work-time-fraction emp)))
+      (is (= :standard (:kontor.employment/work-relationship-kind emp)))
+      (is (= "DE-GMBH" (-> emp :kontor.employment/entity :kontor.entity/code))))
     (testing "contract doc is linked with the kernel-side :hr-personnel category"
-      (is (= "CONTRACT-jane" (-> emp :employment/contract-doc :audit-doc/code)))
-      (is (= :hr-personnel   (-> emp :employment/contract-doc :audit-doc/category))))))
+      (is (= "CONTRACT-jane" (-> emp :kontor.employment/contract-doc :kontor.audit-doc/code)))
+      (is (= :hr-personnel   (-> emp :kontor.employment/contract-doc :kontor.audit-doc/category))))))
 
 (deftest multi-employment-per-person
   (let [conn (bootstrap)
@@ -155,15 +155,15 @@
     (testing "one person has two concurrent employments"
       (is (= 2 (count (d/q '[:find [?e ...]
                              :in $ ?p
-                             :where [?e :employment/person ?p]]
+                             :where [?e :kontor.employment/person ?p]]
                            (d/db conn) jane)))))
     (testing "each employment carries its own FTE"
       (let [us-emp (d/pull (d/db conn)
-                           [:employment/work-time-fraction
-                            :employment/job-title]
+                           [:kontor.employment/work-time-fraction
+                            :kontor.employment/job-title]
                            (hr/employment-by-code (d/db conn) "EMP-US-jane"))]
-        (is (= 0.40M (:employment/work-time-fraction us-emp)))
-        (is (= "Secondment lead (US)" (:employment/job-title us-emp)))))))
+        (is (= 0.40M (:kontor.employment/work-time-fraction us-emp)))
+        (is (= "Secondment lead (US)" (:kontor.employment/job-title us-emp)))))))
 
 ;; ============================================================================
 ;; Compensation
@@ -197,7 +197,7 @@
             comps (comp/components-of (d/db conn) c)]
         (is (= 3 (count comps)))
         (is (= #{:base-wage :vwl :employer-si}
-               (set (map :compensation-component/kind comps))))))))
+               (set (map :kontor.compensation-component/kind comps))))))))
 
 (deftest supersede-compensation-closes-prior
   (let [conn (bootstrap)
@@ -223,8 +223,8 @@
     (testing "only one :compensation is :active for the employment"
       (let [actives (d/q '[:find [?c ...]
                            :in $ ?emp
-                           :where [?c :compensation/employment ?emp]
-                           [?c :compensation/state :active]]
+                           :where [?c :kontor.compensation/employment ?emp]
+                           [?c :kontor.compensation/state :active]]
                          (d/db conn) emp-eid)]
         (is (= 1 (count actives)))))
     (testing "current wage at 2026-12-01 is the old 5000; at 2027-02-01 is the new 5500"
@@ -252,7 +252,7 @@
                                   :start-date #inst "2026-05-01"})
         emp-eid (hr/employment-by-code (d/db conn) "EMP-bob")
         ;; Move :hired → :active so termination is a legal transition.
-        _ (d/transact conn [[:db/add emp-eid :employment/state :active]])]
+        _ (d/transact conn [[:db/add emp-eid :kontor.employment/state :active]])]
     (testing "terminate! without :supporting-doc throws before any write"
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo #"supporting-doc required"
@@ -260,9 +260,9 @@
                                         :end-date #inst "2026-06-30"
                                         :reason :voluntary
                                         :changed-by-uid bob})))
-      (is (= :active (:employment/state
-                      (d/pull (d/db conn) [:employment/state] emp-eid)))
-          ":employment/state stays :active when termination is rejected"))))
+      (is (= :active (:kontor.employment/state
+                      (d/pull (d/db conn) [:kontor.employment/state] emp-eid)))
+          ":kontor.employment/state stays :active when termination is rejected"))))
 
 (deftest terminate-with-supporting-doc-writes-status-history
   (let [conn (bootstrap)
@@ -271,11 +271,11 @@
         db (d/db conn)
         carol (hr/person-by-external-id db "P-carol")
         de (ref-eid db :kontor.entity/code "DE-GMBH")
-        contract (ref-eid db :audit-doc/code "CONTRACT-jane")
+        contract (ref-eid db :kontor.audit-doc/code "CONTRACT-jane")
         _ (employment/hire! conn {:code "EMP-carol" :person carol :entity de
                                   :start-date #inst "2026-05-01"})
         emp-eid (hr/employment-by-code (d/db conn) "EMP-carol")
-        _ (d/transact conn [[:db/add emp-eid :employment/state :active]])
+        _ (d/transact conn [[:db/add emp-eid :kontor.employment/state :active]])
         ;; Carol can't approve her own termination.
         approver (d/q '[:find ?p . :in $ ?x :where
                         [?p :kontor.person/external-id ?x]]
@@ -289,14 +289,14 @@
                                        :reason :voluntary
                                        :supporting-doc contract
                                        :changed-by-uid mgr})]
-    (testing ":employment/state is :terminated + :end-date written"
-      (let [emp (d/pull (d/db conn) [:employment/state
-                                     :employment/end-date
-                                     :employment/termination-reason]
+    (testing ":kontor.employment/state is :terminated + :end-date written"
+      (let [emp (d/pull (d/db conn) [:kontor.employment/state
+                                     :kontor.employment/end-date
+                                     :kontor.employment/termination-reason]
                         emp-eid)]
-        (is (= :terminated (:employment/state emp)))
-        (is (= #inst "2026-06-30" (:employment/end-date emp)))
-        (is (= :voluntary (:employment/termination-reason emp)))))
+        (is (= :terminated (:kontor.employment/state emp)))
+        (is (= #inst "2026-06-30" (:kontor.employment/end-date emp)))
+        (is (= :voluntary (:kontor.employment/termination-reason emp)))))
     (testing ":status-history row written by the status machine"
       (let [history (d/q '[:find [?h ...]
                            :in $ ?e
@@ -403,20 +403,20 @@
                       :commodity eur})
         db (:db-after report)
         run-eid (d/q '[:find ?r . :in $ ?c
-                       :where [?r :payroll-run/code ?c]]
+                       :where [?r :kontor.payroll-run/code ?c]]
                      db "RUN-DE-2026-05-001")
-        run (d/pull db '[* {:payroll-run/payroll-transaction
+        run (d/pull db '[* {:kontor.payroll-run/payroll-transaction
                             [:kontor.transaction/external-id
                              {:kontor.posting/_transaction [:kontor.posting/amount
                                                      :kontor.posting/account]}]}]
                     run-eid)]
     (testing "payroll-run row is created with control totals"
-      (is (= 5000M (:payroll-run/control-total-gross run)))
-      (is (= 4000M (:payroll-run/control-total-net   run)))
-      (is (= :mock (:payroll-run/provider-id run)))
-      (is (= :computed (:payroll-run/state run))))
+      (is (= 5000M (:kontor.payroll-run/control-total-gross run)))
+      (is (= 4000M (:kontor.payroll-run/control-total-net   run)))
+      (is (= :mock (:kontor.payroll-run/provider-id run)))
+      (is (= :computed (:kontor.payroll-run/state run))))
     (testing "the linked :transaction has two posting legs that sum to zero"
-      (let [tx (:payroll-run/payroll-transaction run)
+      (let [tx (:kontor.payroll-run/payroll-transaction run)
             postings (:kontor.posting/_transaction tx)
             sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                           (.add ^java.math.BigDecimal a
@@ -427,25 +427,25 @@
         (is (zero? (.compareTo ^java.math.BigDecimal sum 0M)))))))
 
 ;; ============================================================================
-;; run-payroll! links emit-docs via :payroll-run/emit-docs (P0-86-1)
+;; run-payroll! links emit-docs via :kontor.payroll-run/emit-docs (P0-86-1)
 ;; ============================================================================
 ;; Note 86 P0-86-1: the substrate orchestrator must populate
-;; :payroll-run/emit-docs with every doc the EmitProvider produced.
+;; :kontor.payroll-run/emit-docs with every doc the EmitProvider produced.
 ;; Two-doc provider exercises the cardinality/many path.
 
 (defrecord TwoDocEmit [opts]
   ppro/PayrollEmitProvider
   (emit-payroll-events [_ _facts {:keys [pay-period-eid]}]
-    [{:audit-doc/code (str "EMIT-A-" pay-period-eid)
-      :audit-doc/type :emit-payload
-      :audit-doc/category :payroll-filing
-      :audit-doc/storage-uri "file:///tmp/a.txt"
-      :audit-doc/uploaded-at (java.util.Date.)}
-     {:audit-doc/code (str "EMIT-B-" pay-period-eid)
-      :audit-doc/type :emit-payload
-      :audit-doc/category :payroll-filing
-      :audit-doc/storage-uri "file:///tmp/b.txt"
-      :audit-doc/uploaded-at (java.util.Date.)}]))
+    [{:kontor.audit-doc/code (str "EMIT-A-" pay-period-eid)
+      :kontor.audit-doc/type :emit-payload
+      :kontor.audit-doc/category :payroll-filing
+      :kontor.audit-doc/storage-uri "file:///tmp/a.txt"
+      :kontor.audit-doc/uploaded-at (java.util.Date.)}
+     {:kontor.audit-doc/code (str "EMIT-B-" pay-period-eid)
+      :kontor.audit-doc/type :emit-payload
+      :kontor.audit-doc/category :payroll-filing
+      :kontor.audit-doc/storage-uri "file:///tmp/b.txt"
+      :kontor.audit-doc/uploaded-at (java.util.Date.)}]))
 
 (deftest run-payroll-links-emit-docs
   (let [conn (bootstrap)
@@ -483,17 +483,17 @@
                       :commodity eur})
         db (:db-after report)
         run-eid (d/q '[:find ?r . :in $ ?c
-                       :where [?r :payroll-run/code ?c]]
+                       :where [?r :kontor.payroll-run/code ?c]]
                      db "RUN-EMIT-001")
-        run (d/pull db [{:payroll-run/emit-docs [:audit-doc/code
-                                                 :audit-doc/category]}]
+        run (d/pull db [{:kontor.payroll-run/emit-docs [:kontor.audit-doc/code
+                                                 :kontor.audit-doc/category]}]
                     run-eid)
-        emit-docs (:payroll-run/emit-docs run)]
-    (testing ":payroll-run/emit-docs has both emit-provider outputs"
+        emit-docs (:kontor.payroll-run/emit-docs run)]
+    (testing ":kontor.payroll-run/emit-docs has both emit-provider outputs"
       (is (= 2 (count emit-docs)))
-      (is (= #{:payroll-filing} (set (map :audit-doc/category emit-docs))))
+      (is (= #{:payroll-filing} (set (map :kontor.audit-doc/category emit-docs))))
       (is (= #{"EMIT-A" "EMIT-B"}
-             (set (map #(subs (:audit-doc/code %) 0 6) emit-docs)))))))
+             (set (map #(subs (:kontor.audit-doc/code %) 0 6) emit-docs)))))))
 
 ;; ============================================================================
 ;; Back-dated :compensation correction — P1-86-6 bitemporal exercise
@@ -552,13 +552,13 @@
       ;; audit chain has both views.
       (let [all-comps (d/q '[:find [?c ...]
                              :in $ ?emp
-                             :where [?c :compensation/employment ?emp]]
+                             :where [?c :kontor.compensation/employment ?emp]]
                            db-current emp-eid)
             states (d/q '[:find [?st ...]
                           :in $ ?emp
                           :where
-                          [?c :compensation/employment ?emp]
-                          [?c :compensation/state ?st]]
+                          [?c :kontor.compensation/employment ?emp]
+                          [?c :kontor.compensation/state ?st]]
                         db-current emp-eid)]
         (is (= 2 (count all-comps)) "both envelopes coexist")
         (is (= #{:active :superseded} (set states)))))))

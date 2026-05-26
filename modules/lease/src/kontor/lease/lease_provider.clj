@@ -37,7 +37,7 @@
 
   (provider-id [provider]
     "A keyword identifying this provider impl — matches the
-     `:lease-liability/provider-id` stored on the book.")
+     `:kontor.lease-liability/provider-id` stored on the book.")
 
   (plan-schedule [provider db liability-book]
     "Given a `db` value and a `:lease-liability` book (eid or
@@ -160,7 +160,7 @@
   {:effective-interest ->EffectiveInterestProvider})
 
 (defn provider-for
-  "Resolve a `:lease-liability/provider-id` keyword to a built-in
+  "Resolve a `:kontor.lease-liability/provider-id` keyword to a built-in
    `LeaseProvider` instance. An l10n module passes its own impl
    instance directly to the runner instead."
   [provider-id]

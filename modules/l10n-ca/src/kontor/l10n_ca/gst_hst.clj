@@ -123,12 +123,12 @@
      :line-405  Other GST/HST to be self-assessed
 
    Returns:
-     {:return/form     \"GST34-2\"
-      :return/period   {...}
-      :return/lines    {:101 Money :103 Money ... :115 Money}
-      :return/net-tax  Money       ; line 109
-      :return/balance  Money       ; line 113A (signed)
-      :return/outcome  :payment | :refund | :nil-return}"
+     {:kontor.return/form     \"GST34-2\"
+      :kontor.return/period   {...}
+      :kontor.return/lines    {:101 Money :103 Money ... :115 Money}
+      :kontor.return/net-tax  Money       ; line 109
+      :kontor.return/balance  Money       ; line 113A (signed)
+      :kontor.return/outcome  :payment | :refund | :nil-return}"
   [conn {:keys [from to year quarter
                 line-104 line-107 line-110 line-111
                 line-205 line-405]
@@ -166,18 +166,18 @@
                 (money/money (.negate ^java.math.BigDecimal (:amount l-113C)) :CAD)
                 zero)
         l-115 (if (pos? sign) l-113C zero)]
-    {:return/form    "GST34-2"
-     :return/period  period
-     :return/lines   {:101 l-101 :103 l-103 :104 l-104 :105 l-105
+    {:kontor.return/form    "GST34-2"
+     :kontor.return/period  period
+     :kontor.return/lines   {:101 l-101 :103 l-103 :104 l-104 :105 l-105
                       :106 l-106 :107 l-107 :108 l-108 :109 l-109
                       :110 l-110 :111 l-111 :112 l-112
                       :113A l-113A
                       :205 l-205 :405 l-405
                       :113B l-113B :113C l-113C
                       :114 l-114 :115 l-115}
-     :return/net-tax l-109
-     :return/balance l-113C
-     :return/outcome (cond
+     :kontor.return/net-tax l-109
+     :kontor.return/balance l-113C
+     :kontor.return/outcome (cond
                        (neg? sign) :refund
                        (pos? sign) :payment
                        :else       :nil-return)}))
@@ -224,7 +224,7 @@
 (defn transcription-sheet
   "Render a return for transcription into CRA's GST/HST NETFILE web form.
    Returns a plain-text string."
-  [{:return/keys [form period lines net-tax balance outcome]}]
+  [{:kontor.return/keys [form period lines net-tax balance outcome]}]
   (let [out (java.io.StringWriter.)]
     (binding [*out* out]
       (println "---------------------------------------------------------------")

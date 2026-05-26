@@ -53,22 +53,22 @@
 ;; reconciliation metadata as proper attrs.
 
 (def extra-schema
-  [{:db/ident       :audit-doc/inline-payload
+  [{:db/ident       :kontor.audit-doc/inline-payload
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional inline payload — eSocial event XML
                      contents stored next to the audit-doc record.
-                     Consumers prefer :audit-doc/storage-uri for large
+                     Consumers prefer :kontor.audit-doc/storage-uri for large
                      files (> ~10 KB). Shared with the DE-DATEV-LODAS
                      adapter (note 82 §8.2)."}
 
-   {:db/ident       :audit-doc/payroll-period
+   {:db/ident       :kontor.audit-doc/payroll-period
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :pay-period — the period this emit-payload
                      covers."}
 
-   {:db/ident       :audit-doc/payroll-entity
+   {:db/ident       :kontor.audit-doc/payroll-entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :entity — the employer this emit-payload

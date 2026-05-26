@@ -55,7 +55,7 @@
      `invoke!` catches handler exceptions and returns
      `{:error <message> :ex-data <ex-data>}` rather than propagating.
    - **The kernel validation gate is the only enforcement layer.** This
-     namespace does NOT add its own permission system — `:audit-doc/
+     namespace does NOT add its own permission system — `:kontor.audit-doc/
      privilege`, sealing, approval-policy etc. fire identically to a
      bare `kontor.validation/transact-with-validation` call.
    - **Idempotent registry.** `register-tool!` overwrites by `:name`.

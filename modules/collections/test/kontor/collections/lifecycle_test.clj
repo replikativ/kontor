@@ -80,13 +80,13 @@
   (let [db (d/db *conn*)
         c (kcase/pull-case db "CASE-1")]
     (testing "case row exists with :open state"
-      (is (= :open (:collection-case/state c))))
+      (is (= :open (:kontor.collection-case/state c))))
     (testing "denormalized fields"
-      (is (= :reminder-only (:collection-case/strategy c)))
-      (is (= :strategic (:collection-case/collections-segment c))))
+      (is (= :reminder-only (:kontor.collection-case/strategy c)))
+      (is (= :strategic (:kontor.collection-case/collections-segment c))))
     (testing "status-history row for nil → :open"
       (let [eid (kcase/by-code db "CASE-1")
-            history (sm/status-history-of db eid :collection-case/state)]
+            history (sm/status-history-of db eid :kontor.collection-case/state)]
         (is (= 1 (count history)))
         (is (= :open (:kontor.status-history/to (first history))))
         (is (= :case-opened (:kontor.status-history/reason (first history))))))))
@@ -119,9 +119,9 @@
                     :entity (entity "ACME-US")
                     :opened-by-uid (actor "alice")})
   (is (= "CASE-DE" (-> (kcase/pull-case (d/db *conn*) "CASE-DE")
-                       :collection-case/code)))
+                       :kontor.collection-case/code)))
   (is (= "CASE-US" (-> (kcase/pull-case (d/db *conn*) "CASE-US")
-                       :collection-case/code))))
+                       :kontor.collection-case/code))))
 
 (deftest case-state-machine-walks-through-dunning-levels
   (kcase/open-case! *conn*
@@ -147,9 +147,9 @@
   (testing "state machine walked"
     (let [db (d/db *conn*)
           eid (kcase/by-code db "CASE-DUNN")]
-      (is (= :final-notice (sm/current-status db eid :collection-case/state)))
+      (is (= :final-notice (sm/current-status db eid :kontor.collection-case/state)))
       (testing "4 history rows (open, l1, l2, final)"
-        (is (= 4 (count (sm/status-history-of db eid :collection-case/state))))))))
+        (is (= 4 (count (sm/status-history-of db eid :kontor.collection-case/state))))))))
 
 (deftest illegal-transition-throws
   (kcase/open-case! *conn*
@@ -189,7 +189,7 @@
     (let [db (d/db *conn*)
           ptp (kpromise/pull-promise db "PTP-1")]
       (testing "promise recorded :open"
-        (is (= :open (:payment-promise/status ptp))))
+        (is (= :open (:kontor.payment-promise/status ptp))))
       (testing "case finds the open promise"
         (is (= 1 (count (kpromise/open-promises-for-case db case-eid))))))
     (kpromise/mark-promise-kept! *conn*
@@ -198,7 +198,7 @@
     (testing "promise → :kept"
       (let [db (d/db *conn*)
             ptp (kpromise/pull-promise db "PTP-1")]
-        (is (= :kept (:payment-promise/status ptp)))
+        (is (= :kept (:kontor.payment-promise/status ptp)))
         (is (zero? (count (kpromise/open-promises-for-case db case-eid))))))))
 
 (deftest sweep-broken-promises-flips-lapsed
@@ -229,10 +229,10 @@
         (is (= 1 (:swept report))))
       (let [db (d/db *conn*)]
         (is (= :broken
-               (:payment-promise/status
+               (:kontor.payment-promise/status
                 (kpromise/pull-promise db "PTP-PAST"))))
         (is (= :open
-               (:payment-promise/status
+               (:kontor.payment-promise/status
                 (kpromise/pull-promise db "PTP-FUTURE"))))))))
 
 ;; ============================================================================
@@ -280,7 +280,7 @@
                               :notes "Customer says discount wasn't applied"})
     (let [db (d/db *conn*)]
       (testing "dispute :open"
-        (is (= :open (:dispute/state (kdispute/pull-dispute db "DIS-1")))))
+        (is (= :open (:kontor.dispute/state (kdispute/pull-dispute db "DIS-1")))))
       (testing "open-disputes-for-invoice finds it"
         (is (= 1 (count (kdispute/open-disputes-for-invoice db inv)))))
       (testing "any-open-dispute? predicate"
@@ -293,11 +293,11 @@
     (let [db (d/db *conn*)
           d (kdispute/pull-dispute db "DIS-1")]
       (testing "dispute :resolved"
-        (is (= :resolved (:dispute/state d))))
+        (is (= :resolved (:kontor.dispute/state d))))
       (testing "resolution + resolved-by-uid populated"
-        ;; :dispute/resolved-at was removed — read via :status-history
+        ;; :kontor.dispute/resolved-at was removed — read via :status-history
         ;; or :tx/valid-from on the resolve tx (kontor.bitemporal).
-        (is (= :credit-issued (:dispute/resolution d))))
+        (is (= :credit-issued (:kontor.dispute/resolution d))))
       (testing "no longer in open-disputes"
         (is (zero? (count (kdispute/open-disputes-for-invoice db inv))))))))
 
@@ -315,7 +315,7 @@
                               :opened-by-uid (actor "alice")})
     (testing "dispute :scope refs the line"
       (let [d (kdispute/pull-dispute (d/db *conn*) "DIS-LINE")]
-        (is (= line-eid (:db/id (:dispute/scope d))))))))
+        (is (= line-eid (:db/id (:kontor.dispute/scope d))))))))
 
 ;; ============================================================================
 ;; Credit-hold overlay
@@ -462,5 +462,5 @@
           (is (empty? actives) "all holds released in ONE tx")))
       (testing "transacting mark-promise-kept-tx-data flips status"
         (d/transact *conn* kept-tx)
-        (is (= :kept (:payment-promise/status
+        (is (= :kept (:kontor.payment-promise/status
                       (kpromise/pull-promise (d/db *conn*) "PTP-TXD"))))))))

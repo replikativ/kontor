@@ -18,7 +18,7 @@
    - **Core data** (every disposal): kind, subject (polymorphic ref +
      enum), acquired-on / disposed-on instants, proceeds + basis (Money
      pairs), realizing-tx edge to the kernel `:transaction`, audit-doc
-     refs, state-machine facet `:disposal/state`.
+     refs, state-machine facet `:kontor.disposal/state`.
 
    - **Jurisdiction-specific extension** (sparse, populated when the
      subject's CGT regime requires it): subject-form, ownership-
@@ -35,7 +35,7 @@
      event recorded itself — the law-as-it-stood doctrine. See note
      115 (JP) for the canonical example (Jan-1 measurement rule).
 
-   ## State machine (ADR-034, facet `:disposal/state`)
+   ## State machine (ADR-034, facet `:kontor.disposal/state`)
 
      :recorded → :recognized
      :recorded / :recognized → :voided
@@ -50,7 +50,7 @@
    Kernel CGT providers depend on a `DisposalSource` protocol (one
    method: `(disposals-in-period conn period entity)`); the companion
    implements it. Pure-service consumers don't load the companion →
-   no `:disposal/*` schema → CGT providers see no disposals (return
+   no `:kontor.disposal/*` schema → CGT providers see no disposals (return
    nil). Loose coupling; matches the existing `TaxRateProvider` /
    `FxRateProvider` pattern."
   (:require [datahike.api :as d]))
@@ -61,14 +61,14 @@
 
 (def ^:private disposal-attrs
   [;; --- Identity ---------------------------------------------------------
-   {:db/ident       :disposal/external-id
+   {:db/ident       :kontor.disposal/external-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Caller-supplied stable id. Identity attribute."}
 
    ;; --- Event taxonomy ---------------------------------------------------
-   {:db/ident       :disposal/kind
+   {:db/ident       :kontor.disposal/kind
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Event kind. Closed enum:
@@ -83,7 +83,7 @@
                        constructive sale, mark-to-market election)."}
 
    ;; --- Who is disposing (the holder) ----------------------------------
-   {:db/ident       :disposal/entity
+   {:db/ident       :kontor.disposal/entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The `:entity` holder — the legal person whose books
@@ -95,17 +95,17 @@
                      `:subject` ref to derive the holder."}
 
    ;; --- What was disposed ------------------------------------------------
-   {:db/ident       :disposal/subject
+   {:db/ident       :kontor.disposal/subject
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Polymorphic ref to the disposed entity — typically
                      an `:asset` (kontor-asset), a `:lot` (kernel lot
                      tracking), a `:commitment` (kontor-commitment),
                      or a participation/partner ref. The ref's namespace
-                     identifies the kind; `:disposal/subject-kind`
+                     identifies the kind; `:kontor.disposal/subject-kind`
                      redundantly tags it for fast filtering."}
 
-   {:db/ident       :disposal/subject-kind
+   {:db/ident       :kontor.disposal/subject-kind
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Subject classification (closed-by-ADR; extend via
@@ -120,7 +120,7 @@
                        US §121 main home), :movable-private (DE §23
                        speculation period)."}
 
-   {:db/ident       :disposal/asset-class
+   {:db/ident       :kontor.disposal/asset-class
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Finer-grained jurisdiction-tagged classification
@@ -131,7 +131,7 @@
                      etc. Read by per-jurisdiction CGT providers to
                      pick the right schedule + exemptions."}
 
-   {:db/ident       :disposal/subject-form
+   {:db/ident       :kontor.disposal/subject-form
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Legal form of the subject's holder/issuer when it
@@ -141,7 +141,7 @@
                      UK BADR on 5% trading-company holdings)."}
 
    ;; --- Timing -----------------------------------------------------------
-   {:db/ident       :disposal/acquired-on
+   {:db/ident       :kontor.disposal/acquired-on
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Acquisition date of the subject. The date the
@@ -151,7 +151,7 @@
                      cutoffs; UK indexation needs per-acquisition
                      date)."}
 
-   {:db/ident       :disposal/disposed-on
+   {:db/ident       :kontor.disposal/disposed-on
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Disposal date — the moment ownership transferred.
@@ -159,7 +159,7 @@
                      classifier (note 115); the classifier reads the
                      date, the result lands in `:holding-period`."}
 
-   {:db/ident       :disposal/holding-period
+   {:db/ident       :kontor.disposal/holding-period
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Denormalised holding-period classification — the
@@ -173,19 +173,19 @@
    ;; Each Money is two attrs (BigDecimal amount + commodity ref) per
    ;; kontor convention (no `:db.type/edn` for Money values).
 
-   {:db/ident       :disposal/proceeds-amount
+   {:db/ident       :kontor.disposal/proceeds-amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Proceeds received — the consideration. Gross of
                      transaction costs unless the caller subtracts."}
 
-   {:db/ident       :disposal/proceeds-commodity
+   {:db/ident       :kontor.disposal/proceeds-commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
-    :db/doc         "Commodity ref for `:disposal/proceeds-amount`
+    :db/doc         "Commodity ref for `:kontor.disposal/proceeds-amount`
                      (typically the functional currency)."}
 
-   {:db/ident       :disposal/basis-amount
+   {:db/ident       :kontor.disposal/basis-amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Tax basis (adjusted cost) of the disposed subject.
@@ -194,11 +194,11 @@
                      itself recorded in `:depreciation-taken-amount`
                      for recapture)."}
 
-   {:db/ident       :disposal/basis-commodity
+   {:db/ident       :kontor.disposal/basis-commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :disposal/depreciation-taken-amount
+   {:db/ident       :kontor.disposal/depreciation-taken-amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Accumulated depreciation taken against the
@@ -208,19 +208,19 @@
                      long-term-capital lanes (note 112 §3 P0 — required
                      for US correctness)."}
 
-   {:db/ident       :disposal/depreciation-taken-commodity
+   {:db/ident       :kontor.disposal/depreciation-taken-commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
    ;; --- Eligibility + classification facts ------------------------------
-   {:db/ident       :disposal/ownership-fraction
+   {:db/ident       :kontor.disposal/ownership-fraction
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Holder's ownership percentage of the disposed
                      participation (0–1). DE §17 gates on ≥1%; DE §8b
                      Streubesitz on ≥10%; UK BADR on ≥5%."}
 
-   {:db/ident       :disposal/residence?
+   {:db/ident       :kontor.disposal/residence?
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "True iff the disposed real-estate subject was the
@@ -228,7 +228,7 @@
                      exclusion); JP §35 (¥30M deduction); DE §23
                      residence exception."}
 
-   {:db/ident       :disposal/elective-regime
+   {:db/ident       :kontor.disposal/elective-regime
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/many
     :db/doc         "Elections claimed for this disposal. Cardinality-
@@ -236,7 +236,7 @@
                      `:de-§6b-reserve` / `:de-teileinkünfteverfahren` /
                      `:us-§453-installment` / `:us-§1031-like-kind`."}
 
-   {:db/ident       :disposal/exemption-claimed
+   {:db/ident       :kontor.disposal/exemption-claimed
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/many
     :db/doc         "Statutory exemptions the holder claims. Cardinality-
@@ -245,7 +245,7 @@
                      `:jp-§35-residence` / `:fr-art-150-0-D-PEA`."}
 
    ;; --- Rollover relief --------------------------------------------------
-   {:db/ident       :disposal/rollover-into-asset
+   {:db/ident       :kontor.disposal/rollover-into-asset
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to the replacement asset (typically a
@@ -254,17 +254,17 @@
                      like-kind, DE §6b reserve, UK TCGA s152,
                      JP §36-2 replacement."}
 
-   {:db/ident       :disposal/rollover-amount
+   {:db/ident       :kontor.disposal/rollover-amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Amount of gain deferred into the replacement asset.
                      The recognized gain is `proceeds − basis − rollover-amount`."}
 
-   {:db/ident       :disposal/rollover-amount-commodity
+   {:db/ident       :kontor.disposal/rollover-amount-commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :disposal/rollover-deadline
+   {:db/ident       :kontor.disposal/rollover-deadline
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Deadline by which the replacement must be acquired
@@ -273,7 +273,7 @@
                      36 after; JP §36-2 prescribed period."}
 
    ;; --- Loss compartmentalisation ---------------------------------------
-   {:db/ident       :disposal/loss-bucket
+   {:db/ident       :kontor.disposal/loss-bucket
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Compartmentalises the realised loss for offset
@@ -284,7 +284,7 @@
                      UK (`:uk-capital`); JP per-asset-class."}
 
    ;; --- GL + audit -------------------------------------------------------
-   {:db/ident       :disposal/realizing-tx
+   {:db/ident       :kontor.disposal/realizing-tx
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to the kernel `:transaction` that posted the
@@ -292,18 +292,18 @@
                      Set when the disposal transitions
                      :recorded → :recognized."}
 
-   {:db/ident       :disposal/audit-doc
+   {:db/ident       :kontor.disposal/audit-doc
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Refs to ADR-038 `:audit-doc`s — sale contract,
                      board resolution, IRS Form 8949, BMF Schreiben."}
 
-   {:db/ident       :disposal/notes
+   {:db/ident       :kontor.disposal/notes
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Free-text annotation."}
 
-   {:db/ident       :disposal/voids
+   {:db/ident       :kontor.disposal/voids
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "When a disposal is a CORRECTION of an earlier one,
@@ -311,7 +311,7 @@
                      the audit chain rather than retracting."}
 
    ;; --- State-machine facet (ADR-034) -----------------------------------
-   {:db/ident       :disposal/state
+   {:db/ident       :kontor.disposal/state
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-034 status-machine facet for the disposal
@@ -321,34 +321,34 @@
                      seeds live alongside this schema."}])
 
 ;; ============================================================================
-;; :disposal/state — facet of the kernel ADR-034 status-machine
+;; :kontor.disposal/state — facet of the kernel ADR-034 status-machine
 ;; ============================================================================
 
 (def ^:private status-transition-seeds
-  "Seed `:disposal/state` lifecycle transitions per ADR-034.
+  "Seed `:kontor.disposal/state` lifecycle transitions per ADR-034.
    `:kontor.status-transition/identity` is a composite tuple
    `[entity-type facet from to org]` → re-running install! on the SAME
    DB violates the unique-constraint; install once per DB."
   [{:kontor.status-transition/entity-type :disposal
-    :kontor.status-transition/facet       :disposal/state
+    :kontor.status-transition/facet       :kontor.disposal/state
     :kontor.status-transition/from        :nil
     :kontor.status-transition/to          :recorded
     :kontor.status-transition/active      true
     :kontor.status-transition/name        "Record Disposal — initial create"}
    {:kontor.status-transition/entity-type :disposal
-    :kontor.status-transition/facet       :disposal/state
+    :kontor.status-transition/facet       :kontor.disposal/state
     :kontor.status-transition/from        :recorded
     :kontor.status-transition/to          :recognized
     :kontor.status-transition/active      true
     :kontor.status-transition/name        "Recognize Disposal — posting committed"}
    {:kontor.status-transition/entity-type :disposal
-    :kontor.status-transition/facet       :disposal/state
+    :kontor.status-transition/facet       :kontor.disposal/state
     :kontor.status-transition/from        :recorded
     :kontor.status-transition/to          :voided
     :kontor.status-transition/active      true
     :kontor.status-transition/name        "Void Disposal — pre-recognition correction"}
    {:kontor.status-transition/entity-type :disposal
-    :kontor.status-transition/facet       :disposal/state
+    :kontor.status-transition/facet       :kontor.disposal/state
     :kontor.status-transition/from        :recognized
     :kontor.status-transition/to          :voided
     :kontor.status-transition/active      true
@@ -364,7 +364,7 @@
   disposal-attrs)
 
 (defn install!
-  "Install the kontor-disposal schema + `:disposal/state` status-
+  "Install the kontor-disposal schema + `:kontor.disposal/state` status-
    machine seeds. Run after `kontor.schema/install!` (the kernel
    `:status-transition` attrs must already exist).
 

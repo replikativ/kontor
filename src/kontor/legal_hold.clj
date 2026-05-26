@@ -11,9 +11,9 @@
    specific 'purge blocked by hold X' error wins on overlap.
 
    Two scope shapes:
-   - `:legal-hold/scope-eids` — explicit `:db.cardinality/many` ref
+   - `:kontor.legal-hold/scope-eids` — explicit `:db.cardinality/many` ref
      set. Fast path; sweepers refresh from `:scope-query` results.
-   - `:legal-hold/scope-query` — EDN-encoded datalog string evaluated
+   - `:kontor.legal-hold/scope-query` — EDN-encoded datalog string evaluated
      against the speculative `txdb` at purge time. Catches new
      entities matching the matter between sweeper runs.
 
@@ -32,7 +32,7 @@
      approval`. Policies are installed by `install-seeds!`.
    - **Bitemporal (ADR-048):** the hold itself is bitemporal via
      upstream `:db.valid/from`/`:db.valid/to` on its writing tx.
-     `(:legal-hold/scope-query (d/pull (d/valid-at db as-of) [...] hold-eid))`
+     `(:kontor.legal-hold/scope-query (d/pull (d/valid-at db as-of) [...] hold-eid))`
      answers 'what was the hold's scope on the subpoena date'.
 
    ## Performance
@@ -64,45 +64,45 @@
 ;; ============================================================================
 
 (def status-transition-seeds
-  "ADR-034 :status-transition rows for the :legal-hold/state facet."
+  "ADR-034 :status-transition rows for the :kontor.legal-hold/state facet."
   [{:kontor.status-transition/entity-type :legal-hold
-    :kontor.status-transition/facet :legal-hold/state
+    :kontor.status-transition/facet :kontor.legal-hold/state
     :kontor.status-transition/from :nil
     :kontor.status-transition/to :placed
     :kontor.status-transition/active true
     :kontor.status-transition/name "Place Legal Hold"}
    {:kontor.status-transition/entity-type :legal-hold
-    :kontor.status-transition/facet :legal-hold/state
+    :kontor.status-transition/facet :kontor.legal-hold/state
     :kontor.status-transition/from :placed
     :kontor.status-transition/to :pending-review
     :kontor.status-transition/active true
     :kontor.status-transition/name "Pending Review"}
    {:kontor.status-transition/entity-type :legal-hold
-    :kontor.status-transition/facet :legal-hold/state
+    :kontor.status-transition/facet :kontor.legal-hold/state
     :kontor.status-transition/from :pending-review
     :kontor.status-transition/to :placed
     :kontor.status-transition/active true
     :kontor.status-transition/name "Reaffirm"}
    {:kontor.status-transition/entity-type :legal-hold
-    :kontor.status-transition/facet :legal-hold/state
+    :kontor.status-transition/facet :kontor.legal-hold/state
     :kontor.status-transition/from :pending-review
     :kontor.status-transition/to :released
     :kontor.status-transition/active true
     :kontor.status-transition/name "Release After Review"}
    {:kontor.status-transition/entity-type :legal-hold
-    :kontor.status-transition/facet :legal-hold/state
+    :kontor.status-transition/facet :kontor.legal-hold/state
     :kontor.status-transition/from :placed
     :kontor.status-transition/to :released
     :kontor.status-transition/active true
     :kontor.status-transition/name "Release Hold"}
    {:kontor.status-transition/entity-type :legal-hold
-    :kontor.status-transition/facet :legal-hold/state
+    :kontor.status-transition/facet :kontor.legal-hold/state
     :kontor.status-transition/from :placed
     :kontor.status-transition/to :expired
     :kontor.status-transition/active true
     :kontor.status-transition/name "Auto-Expire Hold"}
    {:kontor.status-transition/entity-type :legal-hold
-    :kontor.status-transition/facet :legal-hold/state
+    :kontor.status-transition/facet :kontor.legal-hold/state
     :kontor.status-transition/from :expired
     :kontor.status-transition/to :released
     :kontor.status-transition/active true
@@ -111,79 +111,79 @@
 (def approval-policy-seeds
   "ADR-038 :approval-policy rows for legal-hold transitions."
   [;; nil → :placed — placement requires supporting doc + reason note
-   {:approval-policy/entity-type     :legal-hold
-    :approval-policy/facet           :legal-hold/state
-    :approval-policy/transition-from :legal-hold.state/nil
-    :approval-policy/transition-to   :placed
-    :approval-policy/rule            :requires-supporting-doc
-    :approval-policy/active          true}
-   {:approval-policy/entity-type     :legal-hold
-    :approval-policy/facet           :legal-hold/state
-    :approval-policy/transition-from :legal-hold.state/nil
-    :approval-policy/transition-to   :placed
-    :approval-policy/rule            :requires-non-empty-reason-note
-    :approval-policy/active          true}
+   {:kontor.approval-policy/entity-type     :legal-hold
+    :kontor.approval-policy/facet           :kontor.legal-hold/state
+    :kontor.approval-policy/transition-from :legal-hold.state/nil
+    :kontor.approval-policy/transition-to   :placed
+    :kontor.approval-policy/rule            :requires-supporting-doc
+    :kontor.approval-policy/active          true}
+   {:kontor.approval-policy/entity-type     :legal-hold
+    :kontor.approval-policy/facet           :kontor.legal-hold/state
+    :kontor.approval-policy/transition-from :legal-hold.state/nil
+    :kontor.approval-policy/transition-to   :placed
+    :kontor.approval-policy/rule            :requires-non-empty-reason-note
+    :kontor.approval-policy/active          true}
 
    ;; :placed → :released — release requires SoD + supporting doc
-   {:approval-policy/entity-type     :legal-hold
-    :approval-policy/facet           :legal-hold/state
-    :approval-policy/transition-from :placed
-    :approval-policy/transition-to   :released
-    :approval-policy/rule            :no-self-approval
-    :approval-policy/active          true}
-   {:approval-policy/entity-type     :legal-hold
-    :approval-policy/facet           :legal-hold/state
-    :approval-policy/transition-from :placed
-    :approval-policy/transition-to   :released
-    :approval-policy/rule            :requires-supporting-doc
-    :approval-policy/active          true}
-   {:approval-policy/entity-type     :legal-hold
-    :approval-policy/facet           :legal-hold/state
-    :approval-policy/transition-from :placed
-    :approval-policy/transition-to   :released
-    :approval-policy/rule            :requires-non-empty-reason-note
-    :approval-policy/active          true}
+   {:kontor.approval-policy/entity-type     :legal-hold
+    :kontor.approval-policy/facet           :kontor.legal-hold/state
+    :kontor.approval-policy/transition-from :placed
+    :kontor.approval-policy/transition-to   :released
+    :kontor.approval-policy/rule            :no-self-approval
+    :kontor.approval-policy/active          true}
+   {:kontor.approval-policy/entity-type     :legal-hold
+    :kontor.approval-policy/facet           :kontor.legal-hold/state
+    :kontor.approval-policy/transition-from :placed
+    :kontor.approval-policy/transition-to   :released
+    :kontor.approval-policy/rule            :requires-supporting-doc
+    :kontor.approval-policy/active          true}
+   {:kontor.approval-policy/entity-type     :legal-hold
+    :kontor.approval-policy/facet           :kontor.legal-hold/state
+    :kontor.approval-policy/transition-from :placed
+    :kontor.approval-policy/transition-to   :released
+    :kontor.approval-policy/rule            :requires-non-empty-reason-note
+    :kontor.approval-policy/active          true}
 
    ;; :pending-review → :released — same triple (P1-1 review fix).
    ;; A reviewer who flagged "do we still need this?" must NOT be
    ;; able to bless their own release; releasing a hold is the most
    ;; consequential action in the kernel (the next purge fires
    ;; unblocked).
-   {:approval-policy/entity-type     :legal-hold
-    :approval-policy/facet           :legal-hold/state
-    :approval-policy/transition-from :pending-review
-    :approval-policy/transition-to   :released
-    :approval-policy/rule            :no-self-approval
-    :approval-policy/active          true}
-   {:approval-policy/entity-type     :legal-hold
-    :approval-policy/facet           :legal-hold/state
-    :approval-policy/transition-from :pending-review
-    :approval-policy/transition-to   :released
-    :approval-policy/rule            :requires-supporting-doc
-    :approval-policy/active          true}
-   {:approval-policy/entity-type     :legal-hold
-    :approval-policy/facet           :legal-hold/state
-    :approval-policy/transition-from :pending-review
-    :approval-policy/transition-to   :released
-    :approval-policy/rule            :requires-non-empty-reason-note
-    :approval-policy/active          true}
+   {:kontor.approval-policy/entity-type     :legal-hold
+    :kontor.approval-policy/facet           :kontor.legal-hold/state
+    :kontor.approval-policy/transition-from :pending-review
+    :kontor.approval-policy/transition-to   :released
+    :kontor.approval-policy/rule            :no-self-approval
+    :kontor.approval-policy/active          true}
+   {:kontor.approval-policy/entity-type     :legal-hold
+    :kontor.approval-policy/facet           :kontor.legal-hold/state
+    :kontor.approval-policy/transition-from :pending-review
+    :kontor.approval-policy/transition-to   :released
+    :kontor.approval-policy/rule            :requires-supporting-doc
+    :kontor.approval-policy/active          true}
+   {:kontor.approval-policy/entity-type     :legal-hold
+    :kontor.approval-policy/facet           :kontor.legal-hold/state
+    :kontor.approval-policy/transition-from :pending-review
+    :kontor.approval-policy/transition-to   :released
+    :kontor.approval-policy/rule            :requires-non-empty-reason-note
+    :kontor.approval-policy/active          true}
 
    ;; :expired → :released — admin acknowledges the sweeper-fired
    ;; auto-expiry. SoD is not required (the sweeper, not a person,
    ;; triggered the expiry) but the release order + a reason note
    ;; ARE required, since this transition also unblocks purges.
-   {:approval-policy/entity-type     :legal-hold
-    :approval-policy/facet           :legal-hold/state
-    :approval-policy/transition-from :expired
-    :approval-policy/transition-to   :released
-    :approval-policy/rule            :requires-supporting-doc
-    :approval-policy/active          true}
-   {:approval-policy/entity-type     :legal-hold
-    :approval-policy/facet           :legal-hold/state
-    :approval-policy/transition-from :expired
-    :approval-policy/transition-to   :released
-    :approval-policy/rule            :requires-non-empty-reason-note
-    :approval-policy/active          true}])
+   {:kontor.approval-policy/entity-type     :legal-hold
+    :kontor.approval-policy/facet           :kontor.legal-hold/state
+    :kontor.approval-policy/transition-from :expired
+    :kontor.approval-policy/transition-to   :released
+    :kontor.approval-policy/rule            :requires-supporting-doc
+    :kontor.approval-policy/active          true}
+   {:kontor.approval-policy/entity-type     :legal-hold
+    :kontor.approval-policy/facet           :kontor.legal-hold/state
+    :kontor.approval-policy/transition-from :expired
+    :kontor.approval-policy/transition-to   :released
+    :kontor.approval-policy/rule            :requires-non-empty-reason-note
+    :kontor.approval-policy/active          true}])
 
 (defn install-seeds!
   "Idempotently transact the legal-hold status-transition + approval-
@@ -214,7 +214,7 @@
 
 (defn- parse-scope-query
   "Parse the EDN scope-query string into a datalog query. Returns nil
-   for a blank/nil string. Throws ex-info :type :legal-hold/invalid-
+   for a blank/nil string. Throws ex-info :type :kontor.legal-hold/invalid-
    scope-query on malformed EDN or a non-[:find …] shape — used at
    placement time so the operator hears about a bad query immediately
    rather than at the first purge (P2-1)."
@@ -224,12 +224,12 @@
               (edn/read-string s)
               (catch Exception e
                 (throw (ex-info "Invalid EDN in :scope-query"
-                                {:type :legal-hold/invalid-scope-query
+                                {:type :kontor.legal-hold/invalid-scope-query
                                  :scope-query s
                                  :cause (.getMessage e)}))))]
       (when-not (and (vector? q) (= :find (first q)))
         (throw (ex-info ":scope-query must be a [:find ?eid :where …] vector"
-                        {:type :legal-hold/invalid-scope-query
+                        {:type :kontor.legal-hold/invalid-scope-query
                          :scope-query s
                          :parsed q})))
       q)))
@@ -241,13 +241,13 @@
    Returns #{} when the hold has no :scope-query."
   [db hold-eid]
   (let [pulled (d/pull db
-                       [:legal-hold/scope-query
-                        :legal-hold/scope-query-as-of]
+                       [:kontor.legal-hold/scope-query
+                        :kontor.legal-hold/scope-query-as-of]
                        hold-eid)
-        q (parse-scope-query (:legal-hold/scope-query pulled))]
+        q (parse-scope-query (:kontor.legal-hold/scope-query pulled))]
     (if-not q
       #{}
-      (let [as-of (:legal-hold/scope-query-as-of pulled)
+      (let [as-of (:kontor.legal-hold/scope-query-as-of pulled)
             db' (if as-of (d/as-of db as-of) db)
             results (d/q q db')]
         ;; Result is a set of tuples; flatten to a set of eids
@@ -262,7 +262,7 @@
    (d/q '[:find [?h ...]
           :in $ [?active-state ...]
           :where
-          [?h :legal-hold/state ?active-state]]
+          [?h :kontor.legal-hold/state ?active-state]]
         db active-states)))
 
 (defn- scoped-eids-by-hold
@@ -276,7 +276,7 @@
                (let [explicit (set
                                (d/q '[:find [?e ...]
                                       :in $ ?h
-                                      :where [?h :legal-hold/scope-eids ?e]]
+                                      :where [?h :kontor.legal-hold/scope-eids ?e]]
                                     db hold-eid))
                      queried (expand-scope-query db hold-eid)]
                  [hold-eid (clojure.set/union explicit queried)])))
@@ -378,16 +378,16 @@
                             (when (contains? held-eids eid)
                               (assoc t
                                      :hold-eid hold-eid
-                                     :hold-code (:legal-hold/code
+                                     :hold-code (:kontor.legal-hold/code
                                                  (d/pull txdb
-                                                         [:legal-hold/code]
+                                                         [:kontor.legal-hold/code]
                                                          hold-eid)))))
                           scope)))
                  vec)))))))
 
 (defn assert-no-hold-violating-destructive-writes!
   "Mirror of `kontor.sealing/assert-no-silent-retracts!`. Throws
-   ex-info `:type :legal-hold/purge-blocked` if any destructive write
+   ex-info `:type :kontor.legal-hold/purge-blocked` if any destructive write
    in `tx-data` (purge / retract / retractEntity / retractAttribute)
    would discard data under an active hold.
 
@@ -402,7 +402,7 @@
   (let [violations (find-hold-violating-destructive-writes txdb tx-data)]
     (when (seq violations)
       (throw (ex-info "Refused: destructive write blocked by active legal hold"
-                      {:type        :legal-hold/purge-blocked
+                      {:type        :kontor.legal-hold/purge-blocked
                        :violations  violations
                        :remediation
                        "Each violating eid is under an active legal
@@ -411,7 +411,7 @@
                         is genuinely no longer needed — or move the
                         target out of scope. Hold scopes are
                         bitemporal: kbt/value-at on
-                        :legal-hold/scope-query answers 'what was in
+                        :kontor.legal-hold/scope-query answers 'what was in
                         scope at any past valid-time'."}))))
   nil)
 
@@ -442,24 +442,24 @@
   (parse-scope-query scope-query)
   (let [placed-at (or placed-at (java.util.Date.))
         row (cond-> {:db/id tempid
-                     :legal-hold/code code
-                     :legal-hold/matter-name matter-name
-                     :legal-hold/issued-by-uid issued-by-uid
-                     :legal-hold/issued-at issued-at
-                     :legal-hold/supporting-doc supporting-doc
-                     :legal-hold/state :placed
+                     :kontor.legal-hold/code code
+                     :kontor.legal-hold/matter-name matter-name
+                     :kontor.legal-hold/issued-by-uid issued-by-uid
+                     :kontor.legal-hold/issued-at issued-at
+                     :kontor.legal-hold/supporting-doc supporting-doc
+                     :kontor.legal-hold/state :placed
                      ;; ADR-038 :no-self-approval compares
                      ;; :changed-by-uid against :kontor.audit/create-uid on the
                      ;; entity. Stamp it so the release-side SoD check
                      ;; can fire.
                      :kontor.audit/create-uid issued-by-uid}
-              (seq scope-eids)        (assoc :legal-hold/scope-eids (vec scope-eids))
-              scope-query             (assoc :legal-hold/scope-query scope-query)
-              scope-query-as-of       (assoc :legal-hold/scope-query-as-of scope-query-as-of)
-              scope-preview           (assoc :legal-hold/scope-preview scope-preview)
-              expires-at              (assoc :legal-hold/expires-at expires-at)
-              note                    (assoc :legal-hold/note note))
-        ;; P1-3: no :legal-hold/placed-at denorm — the placement
+              (seq scope-eids)        (assoc :kontor.legal-hold/scope-eids (vec scope-eids))
+              scope-query             (assoc :kontor.legal-hold/scope-query scope-query)
+              scope-query-as-of       (assoc :kontor.legal-hold/scope-query-as-of scope-query-as-of)
+              scope-preview           (assoc :kontor.legal-hold/scope-preview scope-preview)
+              expires-at              (assoc :kontor.legal-hold/expires-at expires-at)
+              note                    (assoc :kontor.legal-hold/note note))
+        ;; P1-3: no :kontor.legal-hold/placed-at denorm — the placement
         ;; instant is the :tx/valid-from of the wrapping tx and the
         ;; :kontor.status-history/changed-at of the nil → :placed row.
         ;; Resolve via kbt/value-at if needed.
@@ -467,7 +467,7 @@
                    db
                    (cond-> {:entity tempid
                             :entity-type :legal-hold
-                            :facet :legal-hold/state
+                            :facet :kontor.legal-hold/state
                             :from :nil
                             :to :placed
                             :changed-at placed-at
@@ -527,7 +527,7 @@
    db
    {:entity hold-eid
     :entity-type :legal-hold
-    :facet :legal-hold/state
+    :facet :kontor.legal-hold/state
     :to :released
     :changed-at (or released-at (java.util.Date.))
     :changed-by-uid released-by-uid
@@ -561,11 +561,11 @@
             (or vt-to kbt/forever)))))
 
 (defn by-code
-  "Resolve a hold's eid by its :legal-hold/code."
+  "Resolve a hold's eid by its :kontor.legal-hold/code."
   [db code]
   (d/q '[:find ?e .
          :in $ ?c
-         :where [?e :legal-hold/code ?c]]
+         :where [?e :kontor.legal-hold/code ?c]]
        db code))
 
 (defn refresh-scope-eids!
@@ -576,7 +576,7 @@
 
    Returns `{:hold-eid :added-eids :added-count}`. The `:added-eids`
    vector lets the *consumer* write its own audit trail of scope
-   drift — e.g. an `:audit-doc/type :legal-hold-scope-expansion` row
+   drift — e.g. an `:kontor.audit-doc/type :legal-hold-scope-expansion` row
    plus a counsel notification (P2-3: the kernel ships the predicate;
    the consumer owns the audit + notification cadence, consistent
    with ADR-010 and the consumer-schedules-the-sweeper split)."
@@ -584,14 +584,14 @@
   (let [db (d/db conn)
         new-eids (expand-scope-query db hold-eid)
         existing (set (map :db/id
-                           (:legal-hold/scope-eids
-                            (d/pull db [{:legal-hold/scope-eids [:db/id]}]
+                           (:kontor.legal-hold/scope-eids
+                            (d/pull db [{:kontor.legal-hold/scope-eids [:db/id]}]
                                     hold-eid))))
         to-add (vec (clojure.set/difference new-eids existing))]
     (when (seq to-add)
       (transact-with-validation
        conn [{:db/id hold-eid
-              :legal-hold/scope-eids to-add}]))
+              :kontor.legal-hold/scope-eids to-add}]))
     {:hold-eid hold-eid
      :added-eids to-add
      :added-count (count to-add)}))

@@ -1,5 +1,5 @@
 (ns kontor.hr.consent-test
-  "Tests for ADR-094 — `:consent/*` schema + `kontor.hr.consent`."
+  "Tests for ADR-094 — `:kontor.consent/*` schema + `kontor.hr.consent`."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
             [kontor.audit-doc :as audit-doc]
@@ -53,12 +53,12 @@
         row (d/pull db '[*] eid)]
     (testing "row created with the required fields"
       (is (some? eid))
-      (is (= jane (-> row :consent/subject :db/id)))
-      (is (= :hr-track-record (:consent/scope row)))
-      (is (= :bdsg-26-1-employment (:consent/legal-basis row)))
-      (is (= :active (:consent/state row)))
-      (is (= #inst "2026-01-15" (:consent/granted-at row)))
-      (is (nil? (:consent/withdrawn-at row))))))
+      (is (= jane (-> row :kontor.consent/subject :db/id)))
+      (is (= :hr-track-record (:kontor.consent/scope row)))
+      (is (= :bdsg-26-1-employment (:kontor.consent/legal-basis row)))
+      (is (= :active (:kontor.consent/state row)))
+      (is (= #inst "2026-01-15" (:kontor.consent/granted-at row)))
+      (is (nil? (:kontor.consent/withdrawn-at row))))))
 
 (deftest active-at?-respects-grant-and-withdrawal-windows
   (let [conn (bootstrap)
@@ -129,14 +129,14 @@
         old (d/pull db '[*] (consent/by-code db "C-old"))
         new (d/pull db '[*] (consent/by-code db "C-new"))]
     (testing "old row marked superseded"
-      (is (= :superseded (:consent/state old))))
+      (is (= :superseded (:kontor.consent/state old))))
     (testing "new row active"
-      (is (= :active (:consent/state new)))
-      (is (= :works-agreement (:consent/legal-basis new))))
+      (is (= :active (:kontor.consent/state new)))
+      (is (= :works-agreement (:kontor.consent/legal-basis new))))
     (testing "for-subject returns both, sorted by :granted-at"
       (let [rows (consent/for-subject db jane)]
         (is (= 2 (count rows)))
-        (is (= ["C-old" "C-new"] (map :consent/code rows)))))))
+        (is (= ["C-old" "C-new"] (map :kontor.consent/code rows)))))))
 
 (deftest for-subject-returns-empty-for-unknown-person
   (let [conn (bootstrap)

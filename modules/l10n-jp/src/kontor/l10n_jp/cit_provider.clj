@@ -227,7 +227,7 @@
    'surtax on zero' rather than introducing a `:fixed-amount`
    schedule kind)."
   []
-  {:schedule/type :flat :rate 0M})
+  {:kontor.schedule/type :flat :rate 0M})
 
 (defn- component-items
   "For one component (`:national` / `:enterprise` / `:inhabitant`),

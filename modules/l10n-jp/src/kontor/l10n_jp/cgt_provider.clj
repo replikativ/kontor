@@ -131,16 +131,16 @@
    commodity: `proceeds − basis − rollover-amount` (the §36-2 rollover
    slice is excluded — already deferred into the replacement)."
   ^java.math.BigDecimal [disposal]
-  (let [p (or (:disposal/proceeds-amount disposal) 0M)
-        b (or (:disposal/basis-amount disposal) 0M)
-        r (or (:disposal/rollover-amount disposal) 0M)]
+  (let [p (or (:kontor.disposal/proceeds-amount disposal) 0M)
+        b (or (:kontor.disposal/basis-amount disposal) 0M)
+        r (or (:kontor.disposal/rollover-amount disposal) 0M)]
     (- p b r)))
 
 (defn- elective-regimes [disposal]
-  (set (:disposal/elective-regime disposal)))
+  (set (:kontor.disposal/elective-regime disposal)))
 
 (defn- exemptions [disposal]
-  (set (:disposal/exemption-claimed disposal)))
+  (set (:kontor.disposal/exemption-claimed disposal)))
 
 (defn- classify
   "Classify one disposal into a JP CGT regime. The asset-class drives
@@ -152,11 +152,11 @@
    asset-class is left out (the provider drops it — extending the
    regime set is an ADR change)."
   [disposal long-cutoff long-residence-cutoff]
-  (let [ac          (:disposal/asset-class disposal)
-        residence?  (boolean (:disposal/residence? disposal))
+  (let [ac          (:kontor.disposal/asset-class disposal)
+        residence?  (boolean (:kontor.disposal/residence? disposal))
         elects      (elective-regimes disposal)
-        acq         (:disposal/acquired-on disposal)
-        disp        (:disposal/disposed-on disposal)
+        acq         (:kontor.disposal/acquired-on disposal)
+        disp        (:kontor.disposal/disposed-on disposal)
         elapsed     (jan-1-elapsed-years acq disp)
         long?       (> elapsed long-cutoff)
         long-res?   (> elapsed long-residence-cutoff)
@@ -330,13 +330,13 @@
         ;; other). Gate the deduction on:
         ;;   (a) regime ∈ #{short, long, long-residence}    (residence-only relief)
         ;;   (b) the disposal stamps :exemption-claimed :jp-§35-residence
-        ;;   (c) the disposal stamps :disposal/residence? true            (defensive)
+        ;;   (c) the disposal stamps :kontor.disposal/residence? true            (defensive)
         ;; All three real-estate regimes participate; equity regimes never.
         §35?           (and (#{:jp-real-estate-short
                                :jp-real-estate-long
                                :jp-real-estate-long-residence} regime)
                             (§35-deduction-claimed?
-                             (filter :disposal/residence? regime-disposals)))
+                             (filter :kontor.disposal/residence? regime-disposals)))
         after-§35      (apply-§35-deduction gross-gain §35-amount §35?)
         net-base       (net-against-carry after-§35 carry-in)
         {:keys [national local]} (schedules-for regime db as-of)
@@ -509,8 +509,8 @@
 (defn jp-individual-cgt-provider
   "Build a JP individual CGT provider. Required: `:source` — a
    `DisposalSource` (kernel protocol). Per-disposal regimes are
-   determined provider-internally from `:disposal/asset-class` +
-   `:disposal/residence?` + `:disposal/elective-regime` and the Jan-1
+   determined provider-internally from `:kontor.disposal/asset-class` +
+   `:kontor.disposal/residence?` + `:kontor.disposal/elective-regime` and the Jan-1
    measurement rule."
   [{:keys [source id]}]
   (when-not source (throw (ex-info ":source DisposalSource required" {})))

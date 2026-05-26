@@ -70,7 +70,7 @@
                             :establishment-code-tag "EPFO-MH-BOM-12345"}
                :establishment-code "MH/BOM/12345"
                :language :en-in}))]
-    (is (= :payroll-filing (:audit-doc/category doc)))
-    (is (= :en-in (:audit-doc/language doc)))
-    (is (re-find #"EPFO ECR" (:audit-doc/title doc)))
-    (is (str/includes? (:audit-doc/code doc) "EPFO-ECR-MH/BOM/12345-2026-05"))))
+    (is (= :payroll-filing (:kontor.audit-doc/category doc)))
+    (is (= :en-in (:kontor.audit-doc/language doc)))
+    (is (re-find #"EPFO ECR" (:kontor.audit-doc/title doc)))
+    (is (str/includes? (:kontor.audit-doc/code doc) "EPFO-ECR-MH/BOM/12345-2026-05"))))

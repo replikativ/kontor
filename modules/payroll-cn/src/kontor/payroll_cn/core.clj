@@ -77,7 +77,7 @@
 ;; + 2 SARs).
 ;;
 ;; Per-city allocation is a follow-up — consumers can install a
-;; second :analytic-plan/code "cn-city" themselves; v1 ships the
+;; second :kontor.analytic-plan/code "cn-city" themselves; v1 ships the
 ;; province-level granularity.
 ;;
 ;; ISO-3166-2:CN codes — see https://www.iso.org/obp/ui/#iso:code:3166:CN
@@ -130,8 +130,8 @@
 (defn install-cn-province-analytic-plan!
   "Install the :cn-province analytic plan + per-province
    :analytic-account rows. Idempotent: re-running with the same data
-   is a no-op (uses :db.unique/identity on :analytic-plan/code +
-   :analytic-account/path).
+   is a no-op (uses :db.unique/identity on :kontor.analytic-plan/code +
+   :kontor.analytic-account/path).
 
    The :cn-province plan applies to *consumer-marked* wage / SI / HF
    accounts via :kontor.account/required-analytic-plans (per ADR-022). We do
@@ -140,16 +140,16 @@
   [conn]
   (let [plan-tempid "cn-province-plan"
         plan-tx [{:db/id plan-tempid
-                  :analytic-plan/code "cn-province"
-                  :analytic-plan/name "CN province of employment"
-                  :analytic-plan/applicability :optional
-                  :analytic-plan/active true}]
+                  :kontor.analytic-plan/code "cn-province"
+                  :kontor.analytic-plan/name "CN province of employment"
+                  :kontor.analytic-plan/applicability :optional
+                  :kontor.analytic-plan/active true}]
         account-tx (mapv (fn [[code label]]
-                           {:analytic-account/path (str "cn-province:" code)
-                            :analytic-account/code code
-                            :analytic-account/name label
-                            :analytic-account/plan plan-tempid
-                            :analytic-account/active true})
+                           {:kontor.analytic-account/path (str "cn-province:" code)
+                            :kontor.analytic-account/code code
+                            :kontor.analytic-account/name label
+                            :kontor.analytic-account/plan plan-tempid
+                            :kontor.analytic-account/active true})
                          cn-provinces)]
     (d/transact conn (vec (concat plan-tx account-tx)))))
 
@@ -197,34 +197,34 @@
 ;; (without the DE module) still gets the audit-doc emit attrs that the
 ;; emit provider writes. Idempotent (datahike upserts schema by :db/ident).
 ;;
-;;   :audit-doc/inline-payload   — short CSV/XML payload string
-;;   :audit-doc/payroll-period   — ref to :pay-period
-;;   :audit-doc/payroll-entity   — ref to :entity
-;;   :audit-doc/unmapped-count   — long, # of unmapped components
+;;   :kontor.audit-doc/inline-payload   — short CSV/XML payload string
+;;   :kontor.audit-doc/payroll-period   — ref to :pay-period
+;;   :kontor.audit-doc/payroll-entity   — ref to :entity
+;;   :kontor.audit-doc/unmapped-count   — long, # of unmapped components
 
 (def extra-schema
-  [{:db/ident       :audit-doc/inline-payload
+  [{:db/ident       :kontor.audit-doc/inline-payload
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional inline payload — short IIT-monthly CSV
                      contents stored next to the audit-doc record.
-                     Consumers prefer :audit-doc/storage-uri for large
+                     Consumers prefer :kontor.audit-doc/storage-uri for large
                      files (> ~10 KB). Shared attr (also installed by
                      payroll-de-datev per ADR-076)."}
 
-   {:db/ident       :audit-doc/payroll-period
+   {:db/ident       :kontor.audit-doc/payroll-period
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :pay-period — the period this emit-payload
                      covers (note 87 §6). Shared attr."}
 
-   {:db/ident       :audit-doc/payroll-entity
+   {:db/ident       :kontor.audit-doc/payroll-entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :entity — the employer this emit-payload
                      covers. Shared attr."}
 
-   {:db/ident       :audit-doc/unmapped-count
+   {:db/ident       :kontor.audit-doc/unmapped-count
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "Count of compensation-components dropped during
@@ -234,7 +234,7 @@
 
 (defn install!
   "Install the kontor-payroll-cn companion. Currently:
-     - Installs the four shared `:audit-doc/*` payroll-emit attrs (no-op
+     - Installs the four shared `:kontor.audit-doc/*` payroll-emit attrs (no-op
        if already installed by another payroll adapter).
      - Installs the :cn-province analytic plan + 34 provinces / regions.
      - Installs the :account-tag vocabulary so the consumer's chart can
@@ -248,7 +248,7 @@
   (d/transact conn extra-schema)
   (let [db (d/db conn)
         already? (boolean (d/q '[:find ?e .
-                                 :where [?e :analytic-plan/code "cn-province"]]
+                                 :where [?e :kontor.analytic-plan/code "cn-province"]]
                                db))]
     (when-not already?
       (install-cn-province-analytic-plan! conn))

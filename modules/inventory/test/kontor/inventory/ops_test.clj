@@ -4,7 +4,7 @@
 
    Covers:
    - receive! writes the valuation layer + GL postings + the physical
-     :inventory-detail in one tx, linked by :inventory-detail/transaction.
+     :inventory-detail in one tx, linked by :kontor.inventory-detail/transaction.
    - issue! consumes a layer + GL + physical detail; realizing a
      reservation retracts it and moves QOH only (:atp-diff 0).
    - the negative-inventory policy: over-issue throws when
@@ -49,9 +49,9 @@
                  {:db/id "acct-var" :kontor.account/code "5900" :kontor.account/name "Cost Variance"
                   :kontor.account/type :expense :kontor.account/active true}
                  ;; Valuation book + journal.
-                 {:db/id "book" :valuation-book/code "primary"
-                  :valuation-book/name "Primary" :valuation-book/cost-method :fifo
-                  :valuation-book/active true}
+                 {:db/id "book" :kontor.valuation-book/code "primary"
+                  :kontor.valuation-book/name "Primary" :kontor.valuation-book/cost-method :fifo
+                  :kontor.valuation-book/active true}
                  {:db/id "journal-gen" :kontor.journal/code "GEN" :kontor.journal/name "General"
                   :kontor.journal/type :general}])
     conn))
@@ -61,7 +61,7 @@
 
 (defn- p       [db code] (ref-eid db :kontor.partner/external-id code))
 (defn- acct    [db code] (ref-eid db :kontor.account/code code))
-(defn- book    [db] (ref-eid db :valuation-book/code "primary"))
+(defn- book    [db] (ref-eid db :kontor.valuation-book/code "primary"))
 (defn- journal [db] (ref-eid db :kontor.journal/code "GEN"))
 
 ;; account-fn for plan-stock-move's stock-move roles.
@@ -99,7 +99,7 @@
       (is (= 100M (inv/on-hand-qty (d/db conn) inventory-item))))
     (testing "the financial half — a :valuation-layer was created"
       (is (= 1 (count (d/q '[:find [?l ...]
-                             :where [?l :valuation-layer/qty-original _]]
+                             :where [?l :kontor.valuation-layer/qty-original _]]
                            (d/db conn))))))
     (testing "the GL postings landed (Dr inventory / Cr GR-IR)"
       (is (= 1 (count (gl-postings (d/db conn) (acct (d/db conn) "1400")))))
@@ -107,8 +107,8 @@
     (testing "the physical detail is linked to the GL transaction"
       (is (some? transaction))
       (let [det (first (inv/details-of (d/db conn) inventory-item))]
-        (is (= transaction (:db/id (:inventory-detail/transaction det))))
-        (is (= :receipt (:inventory-detail/source-kind det)))))))
+        (is (= transaction (:db/id (:kontor.inventory-detail/transaction det))))
+        (is (= :receipt (:kontor.inventory-detail/source-kind det)))))))
 
 ;; ============================================================================
 ;; issue!
@@ -145,7 +145,7 @@
                               :order (p (d/db conn) "O-1")
                               :order-item (p (d/db conn) "OI-1")
                               :ship-group (p (d/db conn) "SG-1")})
-        reservation (d/q '[:find ?r . :where [?r :inv-reservation/order _]]
+        reservation (d/q '[:find ?r . :where [?r :kontor.inv-reservation/order _]]
                          (d/db conn))]
     (is (= 60M (res/atp-raw (d/db conn) item)) "reserved → ATP 60, QOH still 100")
     (is (= 100M (inv/on-hand-qty (d/db conn) item)))
@@ -156,7 +156,7 @@
     (testing "realizing the reservation moves QOH only, and retracts the reservation"
       (is (= 60M (inv/on-hand-qty (d/db conn) item)))
       (is (= 60M (res/atp-raw (d/db conn) item)) "ATP unchanged — it was already dropped")
-      (is (nil? (d/q '[:find ?r . :where [?r :inv-reservation/order _]]
+      (is (nil? (d/q '[:find ?r . :where [?r :kontor.inv-reservation/order _]]
                      (d/db conn)))))))
 
 ;; ============================================================================
@@ -198,12 +198,12 @@
     (testing "the issue proceeds; QOH goes negative; a :negative-fill is recorded"
       (is (= -30M (inv/on-hand-qty (d/db conn) inventory-item)))
       (is (some? negative-fill))
-      (let [nf (d/pull (d/db conn) '[* {:negative-fill/origin-issue [:db/id]}]
+      (let [nf (d/pull (d/db conn) '[* {:kontor.negative-fill/origin-issue [:db/id]}]
                        negative-fill)]
-        (is (= :open (:negative-fill/status nf)))
-        (is (= 30M (:negative-fill/shortfall-qty nf)))
-        (is (= 13.00M (:negative-fill/estimated-unit-cost nf)))
-        (is (some? (:db/id (:negative-fill/origin-issue nf)))
+        (is (= :open (:kontor.negative-fill/status nf)))
+        (is (= 30M (:kontor.negative-fill/shortfall-qty nf)))
+        (is (= 13.00M (:kontor.negative-fill/estimated-unit-cost nf)))
+        (is (some? (:db/id (:kontor.negative-fill/origin-issue nf)))
             "the negative-fill links back to the originating issue tx")))
     (testing "true-up-negative-fill! reconciles estimate → actual"
       (ops/true-up-negative-fill!
@@ -211,12 +211,12 @@
              :journal (journal (d/db conn))
              :inventory-account (acct (d/db conn) "1400")
              :variance-account (acct (d/db conn) "5900")})
-      (let [nf (d/pull (d/db conn) '[* {:negative-fill/true-up-adjustment [*]}]
+      (let [nf (d/pull (d/db conn) '[* {:kontor.negative-fill/true-up-adjustment [*]}]
                        negative-fill)]
-        (is (= :trued-up (:negative-fill/status nf)))
+        (is (= :trued-up (:kontor.negative-fill/status nf)))
         ;; (15 − 13) × 30 = 60 cost delta on the layer-adjustment.
-        (is (= 60.00M (:layer-adjustment/amount
-                       (:negative-fill/true-up-adjustment nf))))))))
+        (is (= 60.00M (:kontor.layer-adjustment/amount
+                       (:kontor.negative-fill/true-up-adjustment nf))))))))
 
 ;; ============================================================================
 ;; Transfers
@@ -236,8 +236,8 @@
                              :to-facility "WH-2"})]
     (testing "transfer! takes the qty off the source — it is in transit"
       (is (= 60M (inv/on-hand-qty (d/db conn) src)))
-      (is (= :in-transit (:inventory-transfer/status
-                          (d/pull (d/db conn) [:inventory-transfer/status] transfer))))
+      (is (= :in-transit (:kontor.inventory-transfer/status
+                          (d/pull (d/db conn) [:kontor.inventory-transfer/status] transfer))))
       (is (= 40M (report/in-transit-balance (d/db conn)))
           "the in-transit balance is the cutoff exposure"))
     (testing "complete-transfer! lands it at the destination"
@@ -245,8 +245,8 @@
         (is (= 40M (inv/on-hand-qty (d/db conn) dest)))
         (is (= 60M (inv/on-hand-qty (d/db conn) src)))
         (is (= 0M (report/in-transit-balance (d/db conn))) "nothing in transit now")
-        (is (= :complete (:inventory-transfer/status
-                          (d/pull (d/db conn) [:inventory-transfer/status]
+        (is (= :complete (:kontor.inventory-transfer/status
+                          (d/pull (d/db conn) [:kontor.inventory-transfer/status]
                                   transfer))))))))
 
 (deftest cancel-transfer-returns-stock-to-source
@@ -264,6 +264,6 @@
     (ops/cancel-transfer! conn transfer)
     (testing "cancel returns the qty to the source and marks the transfer :cancelled"
       (is (= 100M (inv/on-hand-qty (d/db conn) src)))
-      (is (= :cancelled (:inventory-transfer/status
-                         (d/pull (d/db conn) [:inventory-transfer/status]
+      (is (= :cancelled (:kontor.inventory-transfer/status
+                         (d/pull (d/db conn) [:kontor.inventory-transfer/status]
                                  transfer)))))))

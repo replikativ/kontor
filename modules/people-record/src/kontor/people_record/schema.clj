@@ -8,7 +8,7 @@
                             Career history; one :person can have many.
      :performance-review  — each formal documented review is one row,
                             referring to a backing :audit-doc with
-                            :audit-doc/category :hr-track-record (or
+                            :kontor.audit-doc/category :hr-track-record (or
                             an extension like :hr-performance-review).
      :promotion           — one event per advancement; effective-date
                             + comp-change reference (optional ref to
@@ -30,18 +30,18 @@
 
 (def schema
   [;; :position-held — one (person, employment, role, start, end?) row
-   {:db/ident       :position-held/external-id
+   {:db/ident       :kontor.position-held/external-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Consumer-supplied opaque identifier."}
 
-   {:db/ident       :position-held/person
+   {:db/ident       :kontor.position-held/person
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :person (the human; not the partner)."}
 
-   {:db/ident       :position-held/employment
+   {:db/ident       :kontor.position-held/employment
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :employment (kontor-hr) — the legal
@@ -49,58 +49,58 @@
                      its employment (e.g. internal transfer) or be
                      bounded inside one employment."}
 
-   {:db/ident       :position-held/title
+   {:db/ident       :kontor.position-held/title
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :position-held/level
+   {:db/ident       :kontor.position-held/level
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Open-set band. Consumer extends:
                      :ic-1 / :ic-2 / :senior / :staff / :principal /
                      :manager / :director / :vp / :c-suite."}
 
-   {:db/ident       :position-held/start-date
+   {:db/ident       :kontor.position-held/start-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :position-held/end-date
+   {:db/ident       :kontor.position-held/end-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "nil = currently held."}
 
-   {:db/ident       :position-held/manager-employment
+   {:db/ident       :kontor.position-held/manager-employment
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :employment of the person's manager during
                      this position. Matches kontor-hr's
-                     :employment/manager — manager-relationship is per
+                     :kontor.employment/manager — manager-relationship is per
                      employment, not per person."}
 
    ;; :performance-review — one row per formal review event
-   {:db/ident       :performance-review/external-id
+   {:db/ident       :kontor.performance-review/external-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}
 
-   {:db/ident       :performance-review/person
+   {:db/ident       :kontor.performance-review/person
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :performance-review/reviewer-employment
+   {:db/ident       :kontor.performance-review/reviewer-employment
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :employment of the reviewer."}
 
-   {:db/ident       :performance-review/period-start
+   {:db/ident       :kontor.performance-review/period-start
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :performance-review/period-end
+   {:db/ident       :kontor.performance-review/period-end
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :performance-review/outcome
+   {:db/ident       :kontor.performance-review/outcome
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Open-set: :exceeds | :meets | :partial-meets |
@@ -110,42 +110,42 @@
                      consumers extending with their own outcome
                      keywords is the supported path."}
 
-   {:db/ident       :performance-review/supporting-doc
+   {:db/ident       :kontor.performance-review/supporting-doc
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :audit-doc — the review form / write-up.
-                     Typical :audit-doc/category :hr-track-record."}
+                     Typical :kontor.audit-doc/category :hr-track-record."}
 
-   {:db/ident       :performance-review/calibrated-at
+   {:db/ident       :kontor.performance-review/calibrated-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Date the review was calibrated / finalized."}
 
    ;; :promotion — one event per advancement
-   {:db/ident       :promotion/external-id
+   {:db/ident       :kontor.promotion/external-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}
 
-   {:db/ident       :promotion/person
+   {:db/ident       :kontor.promotion/person
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :promotion/from-position
+   {:db/ident       :kontor.promotion/from-position
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :position-held (the previous position)."}
 
-   {:db/ident       :promotion/to-position
+   {:db/ident       :kontor.promotion/to-position
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :position-held (the new position)."}
 
-   {:db/ident       :promotion/effective-date
+   {:db/ident       :kontor.promotion/effective-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :promotion/comp-change
+   {:db/ident       :kontor.promotion/comp-change
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :compensation (kontor-hr) — the new
@@ -153,11 +153,11 @@
                      promotion. Optional — pure title changes
                      without comp-change have nil."}
 
-   {:db/ident       :promotion/supporting-doc
+   {:db/ident       :kontor.promotion/supporting-doc
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :audit-doc — the promotion letter /
-                     calibration notes. Typical :audit-doc/category
+                     calibration notes. Typical :kontor.audit-doc/category
                      :hr-track-record."}])
 
 (defn install!

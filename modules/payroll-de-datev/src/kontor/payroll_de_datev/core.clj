@@ -5,7 +5,7 @@
    Ships:
      - `DatevLodasComputeProvider` — parses an EXTF Buchungsbeleg
        (Lohn-Buchungsbeleg, LODAS Report 80) into PayrollFacts.
-     - `DatevLodasPostingBuilder`  — maps :compensation-component/kind
+     - `DatevLodasPostingBuilder`  — maps :kontor.compensation-component/kind
        → SKR04 (default) / SKR03 wage accounts; emits Bruttomethode
        GL postings (note 82 §4.2).
      - `DatevLodasEmitProvider`    — writes the LODAS Importdatei
@@ -57,41 +57,41 @@
 ;; namespace so the EmitProvider can carry the LODAS payload + the
 ;; reconciliation metadata as proper attrs (rather than opaque blobs):
 ;;
-;;   :audit-doc/inline-payload     — the LODAS Importdatei contents
+;;   :kontor.audit-doc/inline-payload     — the LODAS Importdatei contents
 ;;                                    (string); short LODAS files
 ;;                                    inline (< ~10KB), larger ones
-;;                                    use :audit-doc/storage-uri only.
-;;   :audit-doc/payroll-period     — ref to :pay-period
-;;   :audit-doc/payroll-entity     — ref to :entity
-;;   :audit-doc/unmapped-count     — long, # of unmapped wage-types
+;;                                    use :kontor.audit-doc/storage-uri only.
+;;   :kontor.audit-doc/payroll-period     — ref to :pay-period
+;;   :kontor.audit-doc/payroll-entity     — ref to :entity
+;;   :kontor.audit-doc/unmapped-count     — long, # of unmapped wage-types
 ;;                                    seen during emit (consumer routes
 ;;                                    to manual review when > 0).
 ;;
-;; These follow the existing :audit-doc/* convention; under ADR-002
+;; These follow the existing :kontor.audit-doc/* convention; under ADR-002
 ;; the audit-doc namespace is shared between kernel + companions.
 
 (def extra-schema
-  [{:db/ident       :audit-doc/inline-payload
+  [{:db/ident       :kontor.audit-doc/inline-payload
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional inline payload — short LODAS Importdatei
                      contents stored next to the audit-doc record.
-                     Consumers prefer :audit-doc/storage-uri for large
+                     Consumers prefer :kontor.audit-doc/storage-uri for large
                      files (> ~10 KB)."}
 
-   {:db/ident       :audit-doc/payroll-period
+   {:db/ident       :kontor.audit-doc/payroll-period
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :pay-period — the period this emit-payload
                      covers (note 82 §8.2)."}
 
-   {:db/ident       :audit-doc/payroll-entity
+   {:db/ident       :kontor.audit-doc/payroll-entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :entity — the employer this emit-payload
                      covers."}
 
-   {:db/ident       :audit-doc/unmapped-count
+   {:db/ident       :kontor.audit-doc/unmapped-count
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "Count of compensation-components dropped during

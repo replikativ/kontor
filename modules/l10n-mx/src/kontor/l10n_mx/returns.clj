@@ -56,7 +56,7 @@
 
    Each generator function takes `conn` + a period-window opts map and
    returns a return-data map. All commodity values are `Money :MXN`.
-   The return-data maps carry `:return/form`, `:return/period`, and
+   The return-data maps carry `:kontor.return/form`, `:kontor.return/period`, and
    the aggregated line totals + drill-down posting ids so a downstream
    auditor can follow each number back to contributing postings.
 
@@ -275,21 +275,21 @@
      :entity                multi-entity scope (ADR-031)
 
    Returns:
-     {:return/form        \"DPI\"
-      :return/period      {:from … :to … :kind :monthly …}
-      :return/due-date    <Date>           — statutory filing date
-      :return/lines       {:iva-cobrado-16 Money :iva-cobrado-8 Money
+     {:kontor.return/form        \"DPI\"
+      :kontor.return/period      {:from … :to … :kind :monthly …}
+      :kontor.return/due-date    <Date>           — statutory filing date
+      :kontor.return/lines       {:iva-cobrado-16 Money :iva-cobrado-8 Money
                             :iva-cobrado-0 Money :iva-cobrado-total Money
                             :iva-acreditable-* Money
                             :ieps-cobrado Money :ieps-acreditable Money
                             :retencion-* Money
                             :ingresos-total Money}
-      :return/iva-net     Money — IVA cobrado − IVA acreditable
+      :kontor.return/iva-net     Money — IVA cobrado − IVA acreditable
                                    (positive = payable, negative = saldo a favor)
-      :return/ieps-net    Money — IEPS cobrado − IEPS acreditable
-      :return/retencion-iva-net  Money — pagar − cobrar
-      :return/retencion-isr-net  Money — pagar − cobrar
-      :return/total-iva-payable  Money — iva-net + retencion-iva-net
+      :kontor.return/ieps-net    Money — IEPS cobrado − IEPS acreditable
+      :kontor.return/retencion-iva-net  Money — pagar − cobrar
+      :kontor.return/retencion-isr-net  Money — pagar − cobrar
+      :kontor.return/total-iva-payable  Money — iva-net + retencion-iva-net
                                    (what supplier remits to SAT this month)
       :report/lines       — drill-down per line (postings included)}"
   [conn opts]
@@ -318,10 +318,10 @@
                             (:year window) (:month window))
                    (dpi-due-date window))]
     (-> r
-        (assoc :return/form     "DPI"
-               :return/period   window
-               :return/due-date due-date
-               :return/lines    {:iva-cobrado-16        (get-z "iva-cobrado-16")
+        (assoc :kontor.return/form     "DPI"
+               :kontor.return/period   window
+               :kontor.return/due-date due-date
+               :kontor.return/lines    {:iva-cobrado-16        (get-z "iva-cobrado-16")
                                  :iva-cobrado-8         (get-z "iva-cobrado-8")
                                  :iva-cobrado-0         (get-z "iva-cobrado-0")
                                  :iva-cobrado-total     iva-out
@@ -336,8 +336,8 @@
                                  :retencion-isr-pagar   rt-isr-pagar
                                  :retencion-isr-cobrar  rt-isr-cobrar
                                  :ingresos-total        (get-z "ingresos-total")}
-               :return/iva-net           iva-net
-               :return/ieps-net          ieps-net
-               :return/retencion-iva-net rt-iva-net
-               :return/retencion-isr-net rt-isr-net
-               :return/total-iva-payable total-iva-payable))))
+               :kontor.return/iva-net           iva-net
+               :kontor.return/ieps-net          ieps-net
+               :kontor.return/retencion-iva-net rt-iva-net
+               :kontor.return/retencion-isr-net rt-isr-net
+               :kontor.return/total-iva-payable total-iva-payable))))

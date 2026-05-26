@@ -4,7 +4,7 @@
 
    The kernel does NOT load the `kontor-disposal` companion's schema
    (ADR-102). CGT providers depend on this protocol; the companion
-   ships the canonical implementation against its `:disposal/*` schema;
+   ships the canonical implementation against its `:kontor.disposal/*` schema;
    a consumer with external storage (e.g. a 1099-B feed, an HMRC CGT
    summary import) writes their own.
 
@@ -15,31 +15,31 @@
    ## Disposal map shape
 
    A `DisposalSource` returns disposal events as plain Clojure maps
-   keyed by the `:disposal/*` attrs from the companion's schema (see
+   keyed by the `:kontor.disposal/*` attrs from the companion's schema (see
    `modules/disposal/src/kontor/disposal/schema.clj`). The canonical
    keys CGT providers may read:
 
-     :disposal/external-id            string
-     :disposal/kind                   keyword (closed enum)
-     :disposal/subject-kind           keyword
-     :disposal/asset-class            keyword — provider routes on this
-     :disposal/subject-form           keyword
-     :disposal/acquired-on            instant
-     :disposal/disposed-on            instant
-     :disposal/holding-period         keyword (denormalized)
-     :disposal/proceeds-amount        BigDecimal
-     :disposal/proceeds-commodity     ref (or pulled commodity map)
-     :disposal/basis-amount           BigDecimal
-     :disposal/basis-commodity        ref
-     :disposal/depreciation-taken-amount      BigDecimal (optional)
-     :disposal/depreciation-taken-commodity   ref (optional)
-     :disposal/ownership-fraction     BigDecimal (optional)
-     :disposal/residence?             boolean (optional)
-     :disposal/elective-regime        #{keyword} (cardinality-many)
-     :disposal/exemption-claimed      #{keyword} (cardinality-many)
-     :disposal/rollover-amount        BigDecimal (optional)
-     :disposal/loss-bucket            keyword (optional)
-     :disposal/state                  keyword — providers should filter
+     :kontor.disposal/external-id            string
+     :kontor.disposal/kind                   keyword (closed enum)
+     :kontor.disposal/subject-kind           keyword
+     :kontor.disposal/asset-class            keyword — provider routes on this
+     :kontor.disposal/subject-form           keyword
+     :kontor.disposal/acquired-on            instant
+     :kontor.disposal/disposed-on            instant
+     :kontor.disposal/holding-period         keyword (denormalized)
+     :kontor.disposal/proceeds-amount        BigDecimal
+     :kontor.disposal/proceeds-commodity     ref (or pulled commodity map)
+     :kontor.disposal/basis-amount           BigDecimal
+     :kontor.disposal/basis-commodity        ref
+     :kontor.disposal/depreciation-taken-amount      BigDecimal (optional)
+     :kontor.disposal/depreciation-taken-commodity   ref (optional)
+     :kontor.disposal/ownership-fraction     BigDecimal (optional)
+     :kontor.disposal/residence?             boolean (optional)
+     :kontor.disposal/elective-regime        #{keyword} (cardinality-many)
+     :kontor.disposal/exemption-claimed      #{keyword} (cardinality-many)
+     :kontor.disposal/rollover-amount        BigDecimal (optional)
+     :kontor.disposal/loss-bucket            keyword (optional)
+     :kontor.disposal/state                  keyword — providers should filter
                                        OUT `:voided` entries.
 
    The companion's reference impl always returns RECORDED + RECOGNIZED
@@ -49,7 +49,7 @@
    ## Why a protocol, not a query helper
 
    Loose coupling. A consumer that doesn't load `kontor-disposal`
-   doesn't get `:disposal/*` schema, doesn't get void-aware queries,
+   doesn't get `:kontor.disposal/*` schema, doesn't get void-aware queries,
    and doesn't need to. The CGT provider asks the protocol; if no
    `DisposalSource` is registered, the provider returns empty
    components (no CGT liability for the period) rather than throwing.
@@ -67,7 +67,7 @@
   (disposals-in
     [this entity period]
     "All disposal events for `entity` whose realizing date
-     (`:disposal/disposed-on`) falls within `period`'s
+     (`:kontor.disposal/disposed-on`) falls within `period`'s
      `{:from #inst :to #inst}` window. Returns a sequence of
      plain Clojure maps as documented in the namespace docstring.
      Implementations MUST exclude `:state :voided` entries."))

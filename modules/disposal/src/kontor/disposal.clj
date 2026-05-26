@@ -47,13 +47,13 @@
 ;; ============================================================================
 
 (defn resolve-disposal
-  "Resolve a disposal spec — an `:disposal/external-id` string or an
+  "Resolve a disposal spec — an `:kontor.disposal/external-id` string or an
    eid — to an eid (nil if absent)."
   [db spec]
   (cond
     (nil? spec)    nil
     (string? spec) (d/q '[:find ?e . :in $ ?x
-                          :where [?e :disposal/external-id ?x]]
+                          :where [?e :kontor.disposal/external-id ?x]]
                         db spec)
     :else          spec))
 
@@ -62,10 +62,10 @@
   [db spec]
   (when-let [eid (resolve-disposal db spec)]
     (d/pull db
-            '[* {:disposal/proceeds-commodity            [:kontor.commodity/symbol]
-                 :disposal/basis-commodity               [:kontor.commodity/symbol]
-                 :disposal/depreciation-taken-commodity  [:kontor.commodity/symbol]
-                 :disposal/rollover-amount-commodity     [:kontor.commodity/symbol]}]
+            '[* {:kontor.disposal/proceeds-commodity            [:kontor.commodity/symbol]
+                 :kontor.disposal/basis-commodity               [:kontor.commodity/symbol]
+                 :kontor.disposal/depreciation-taken-commodity  [:kontor.commodity/symbol]
+                 :kontor.disposal/rollover-amount-commodity     [:kontor.commodity/symbol]}]
             eid)))
 
 ;; ============================================================================
@@ -132,43 +132,43 @@
   (when-not recorded-by-uid (throw (ex-info ":recorded-by-uid required" {})))
   (let [recorded-at (or recorded-at (java.util.Date.))
         row (cond-> {:db/id                       tempid
-                     :disposal/external-id        external-id
-                     :disposal/entity             entity
-                     :disposal/kind               kind
-                     :disposal/subject            subject
-                     :disposal/subject-kind       subject-kind
-                     :disposal/acquired-on        acquired-on
-                     :disposal/disposed-on        disposed-on
-                     :disposal/proceeds-amount    (bigdec (:amount proceeds))
-                     :disposal/proceeds-commodity (:commodity proceeds)
-                     :disposal/basis-amount       (bigdec (:amount basis))
-                     :disposal/basis-commodity    (:commodity basis)}
-              asset-class       (assoc :disposal/asset-class       asset-class)
-              subject-form      (assoc :disposal/subject-form      subject-form)
-              holding-period    (assoc :disposal/holding-period    holding-period)
-              depreciation-taken (-> (assoc :disposal/depreciation-taken-amount
+                     :kontor.disposal/external-id        external-id
+                     :kontor.disposal/entity             entity
+                     :kontor.disposal/kind               kind
+                     :kontor.disposal/subject            subject
+                     :kontor.disposal/subject-kind       subject-kind
+                     :kontor.disposal/acquired-on        acquired-on
+                     :kontor.disposal/disposed-on        disposed-on
+                     :kontor.disposal/proceeds-amount    (bigdec (:amount proceeds))
+                     :kontor.disposal/proceeds-commodity (:commodity proceeds)
+                     :kontor.disposal/basis-amount       (bigdec (:amount basis))
+                     :kontor.disposal/basis-commodity    (:commodity basis)}
+              asset-class       (assoc :kontor.disposal/asset-class       asset-class)
+              subject-form      (assoc :kontor.disposal/subject-form      subject-form)
+              holding-period    (assoc :kontor.disposal/holding-period    holding-period)
+              depreciation-taken (-> (assoc :kontor.disposal/depreciation-taken-amount
                                             (bigdec (:amount depreciation-taken)))
-                                     (assoc :disposal/depreciation-taken-commodity
+                                     (assoc :kontor.disposal/depreciation-taken-commodity
                                             (:commodity depreciation-taken)))
-              ownership-fraction (assoc :disposal/ownership-fraction (bigdec ownership-fraction))
-              (some? residence?) (assoc :disposal/residence? residence?)
-              (seq elective-regime)   (assoc :disposal/elective-regime   (vec elective-regime))
-              (seq exemption-claimed) (assoc :disposal/exemption-claimed (vec exemption-claimed))
-              rollover (-> (assoc :disposal/rollover-into-asset (:into-asset rollover))
+              ownership-fraction (assoc :kontor.disposal/ownership-fraction (bigdec ownership-fraction))
+              (some? residence?) (assoc :kontor.disposal/residence? residence?)
+              (seq elective-regime)   (assoc :kontor.disposal/elective-regime   (vec elective-regime))
+              (seq exemption-claimed) (assoc :kontor.disposal/exemption-claimed (vec exemption-claimed))
+              rollover (-> (assoc :kontor.disposal/rollover-into-asset (:into-asset rollover))
                            (cond->
                             (:amount rollover)
-                             (assoc :disposal/rollover-amount (bigdec (:amount rollover)))
+                             (assoc :kontor.disposal/rollover-amount (bigdec (:amount rollover)))
                              (:commodity rollover)
-                             (assoc :disposal/rollover-amount-commodity (:commodity rollover))
+                             (assoc :kontor.disposal/rollover-amount-commodity (:commodity rollover))
                              (:deadline rollover)
-                             (assoc :disposal/rollover-deadline (:deadline rollover))))
-              loss-bucket       (assoc :disposal/loss-bucket loss-bucket)
-              (seq audit-doc)   (assoc :disposal/audit-doc (vec audit-doc))
-              notes             (assoc :disposal/notes notes))
+                             (assoc :kontor.disposal/rollover-deadline (:deadline rollover))))
+              loss-bucket       (assoc :kontor.disposal/loss-bucket loss-bucket)
+              (seq audit-doc)   (assoc :kontor.disposal/audit-doc (vec audit-doc))
+              notes             (assoc :kontor.disposal/notes notes))
         status-tx (sm/record-status-change-tx-data
                    db {:entity         tempid
                        :entity-type    :disposal
-                       :facet          :disposal/state
+                       :facet          :kontor.disposal/state
                        :from           :nil
                        :to             :recorded
                        :changed-at     recorded-at
@@ -195,7 +195,7 @@
 (defn recognize-tx-data
   "Link a previously-recorded disposal to the kernel `:transaction`
    that posted proceeds / basis / gain-or-loss to the GL. Advances
-   `:disposal/state` from `:recorded` → `:recognized`.
+   `:kontor.disposal/state` from `:recorded` → `:recognized`.
 
    Required opts: `:disposal` (spec), `:transaction` (eid),
    `:recorded-by-uid`. Optional: `:recognized-at` (default now)."
@@ -206,15 +206,15 @@
     (when-not recorded-by-uid (throw (ex-info ":recorded-by-uid required" {})))
     (let [recognized-at (or recognized-at (java.util.Date.))
           curr-state    (d/q '[:find ?st . :in $ ?e
-                               :where [?e :disposal/state ?st]] db eid)]
+                               :where [?e :kontor.disposal/state ?st]] db eid)]
       (when-not (= :recorded curr-state)
         (throw (ex-info "Disposal must be in :recorded state to recognize"
                         {:disposal eid :state curr-state})))
-      (into [{:db/id eid :disposal/realizing-tx transaction}]
+      (into [{:db/id eid :kontor.disposal/realizing-tx transaction}]
             (sm/record-status-change-tx-data
              db {:entity         eid
                  :entity-type    :disposal
-                 :facet          :disposal/state
+                 :facet          :kontor.disposal/state
                  :from           :recorded
                  :to             :recognized
                  :changed-at     recognized-at
@@ -245,16 +245,16 @@
     (when-not recorded-by-uid (throw (ex-info ":recorded-by-uid required" {})))
     (let [voided-at  (or voided-at (java.util.Date.))
           curr-state (d/q '[:find ?st . :in $ ?e
-                            :where [?e :disposal/state ?st]] db eid)]
+                            :where [?e :kontor.disposal/state ?st]] db eid)]
       (when-not (#{:recorded :recognized} curr-state)
         (throw (ex-info "Disposal must be in :recorded or :recognized state to void"
                         {:disposal eid :state curr-state})))
       (into (cond-> [{:db/id eid}]
-              replaced-by (conj {:db/id replaced-by :disposal/voids eid}))
+              replaced-by (conj {:db/id replaced-by :kontor.disposal/voids eid}))
             (sm/record-status-change-tx-data
              db {:entity         eid
                  :entity-type    :disposal
-                 :facet          :disposal/state
+                 :facet          :kontor.disposal/state
                  :from           curr-state
                  :to             :voided
                  :changed-at     voided-at
@@ -280,16 +280,16 @@
   (->> (d/q '[:find [?d ...]
               :in $ ?s
               :where
-              [?d :disposal/subject ?s]
-              [?d :disposal/state ?st]
+              [?d :kontor.disposal/subject ?s]
+              [?d :kontor.disposal/state ?st]
               [(not= ?st :voided)]]
             db subject)
        (map #(pull-disposal db %))
-       (sort-by :disposal/disposed-on)
+       (sort-by :kontor.disposal/disposed-on)
        vec))
 
 (defn disposals-in-period
-  "Every disposal whose `:disposal/disposed-on` lies in the half-open
+  "Every disposal whose `:kontor.disposal/disposed-on` lies in the half-open
    `[from, to)` window. Excludes voided disposals.
 
    Two arities:
@@ -302,28 +302,28 @@
    (->> (d/q '[:find [?d ...]
                :in $ ?from ?to
                :where
-               [?d :disposal/disposed-on ?on]
+               [?d :kontor.disposal/disposed-on ?on]
                [(<= ?from ?on)]
                [(< ?on ?to)]
-               [?d :disposal/state ?st]
+               [?d :kontor.disposal/state ?st]
                [(not= ?st :voided)]]
              db (:from period) (:to period))
         (map #(pull-disposal db %))
-        (sort-by :disposal/disposed-on)
+        (sort-by :kontor.disposal/disposed-on)
         vec))
   ([db entity {:keys [from to]}]
    (->> (d/q '[:find [?d ...]
                :in $ ?entity ?from ?to
                :where
-               [?d :disposal/entity ?entity]
-               [?d :disposal/disposed-on ?on]
+               [?d :kontor.disposal/entity ?entity]
+               [?d :kontor.disposal/disposed-on ?on]
                [(<= ?from ?on)]
                [(< ?on ?to)]
-               [?d :disposal/state ?st]
+               [?d :kontor.disposal/state ?st]
                [(not= ?st :voided)]]
              db entity from to)
         (map #(pull-disposal db %))
-        (sort-by :disposal/disposed-on)
+        (sort-by :kontor.disposal/disposed-on)
         vec)))
 
 ;; ============================================================================
@@ -339,19 +339,19 @@
    Takes a pull-result map. Returns BigDecimal (in the proceeds
    commodity — the caller is responsible for commodity coherence)."
   [disposal-map]
-  (let [proceeds (or (:disposal/proceeds-amount disposal-map) 0M)
-        basis    (or (:disposal/basis-amount disposal-map) 0M)
-        rollover (or (:disposal/rollover-amount disposal-map) 0M)]
+  (let [proceeds (or (:kontor.disposal/proceeds-amount disposal-map) 0M)
+        basis    (or (:kontor.disposal/basis-amount disposal-map) 0M)
+        rollover (or (:kontor.disposal/rollover-amount disposal-map) 0M)]
     (- proceeds basis rollover)))
 
 (defn realized-gain-summary
   "Sum realised gain/loss across the disposals in a period, optionally
    grouped by `:loss-bucket`. Returns `{:bucket-or-nil <bigdec>}`
    where the special key `nil` collects disposals with no
-   `:disposal/loss-bucket` set."
+   `:kontor.disposal/loss-bucket` set."
   [db period]
   (->> (disposals-in-period db period)
-       (group-by :disposal/loss-bucket)
+       (group-by :kontor.disposal/loss-bucket)
        (reduce-kv (fn [acc bucket ds]
                     (assoc acc bucket (reduce + 0M (map realized-gain ds))))
                   {})))

@@ -4,7 +4,7 @@
 
    Lessee-side lease accounting under IFRS 16 and ASC 842. A thin
    companion — the substrate was built for it:
-     - the Right-of-Use asset IS an :asset (`:asset/class` a ROU
+     - the Right-of-Use asset IS an :asset (`:kontor.asset/class` a ROU
        class) — reuse kontor-asset whole; no `:rou-asset` entity.
      - the liability unwind + ROU depreciation are each a :schedule
        (ADR-032).
@@ -26,42 +26,42 @@
 ;; ============================================================================
 
 (def ^:private lease-attrs
-  [{:db/ident       :lease/code
+  [{:db/ident       :kontor.lease/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "External identifier — 'LSE-2026-014'."}
 
-   {:db/ident       :lease/name
+   {:db/ident       :kontor.lease/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :lease/lessor
+   {:db/ident       :kontor.lease/lessor
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :partner — the counterparty (lessor)."}
 
-   {:db/ident       :lease/underlying-asset-desc
+   {:db/ident       :kontor.lease/underlying-asset-desc
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "What is leased — free text (a property, a
                      vehicle fleet, equipment)."}
 
-   {:db/ident       :lease/asset-class
+   {:db/ident       :kontor.lease/asset-class
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :asset-class — the ROU :asset-class the
                      commencement transactor uses when it `acquire!`s
                      the Right-of-Use :asset (ADR-063)."}
 
-   {:db/ident       :lease/commencement-date
+   {:db/ident       :kontor.lease/commencement-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "When the lessee gets the right to use the asset
                      — the valid-time anchor; the ROU asset's
                      :acquisition-date + :in-service-date."}
 
-   {:db/ident       :lease/term-months
+   {:db/ident       :kontor.lease/term-months
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "The lease term AS ASSESSED — the renewal /
@@ -70,7 +70,7 @@
                      folded in by the consumer. A change in that
                      assessment is a :lease-modification (ADR-064)."}
 
-   {:db/ident       :lease/payment-amount
+   {:db/ident       :kontor.lease/payment-amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "The periodic fixed (or in-substance-fixed)
@@ -78,24 +78,24 @@
                      at commencement; a later index change is a
                      :lease-modification :index-reset (ADR-064)."}
 
-   {:db/ident       :lease/payment-frequency
+   {:db/ident       :kontor.lease/payment-frequency
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":monthly | :quarterly | :annual — the :schedule
                      frequency for both the liability and ROU books."}
 
-   {:db/ident       :lease/payment-timing
+   {:db/ident       :kontor.lease/payment-timing
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":in-advance (annuity-due — payment at the start
                      of the period) | :in-arrears (ordinary annuity).
                      Affects period-1 interest in the unwind."}
 
-   {:db/ident       :lease/commodity
+   {:db/ident       :kontor.lease/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :lease/discount-rate
+   {:db/ident       :kontor.lease/discount-rate
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "The annual rate pinned at commencement — the
@@ -105,32 +105,32 @@
                      rate. Re-discounted only on a :term-change /
                      :rate-reset modification (ADR-064)."}
 
-   {:db/ident       :lease/initial-direct-costs
+   {:db/ident       :kontor.lease/initial-direct-costs
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Costs capitalised INTO the ROU asset cost.
                      Optional."}
 
-   {:db/ident       :lease/prepaid-at-commencement
+   {:db/ident       :kontor.lease/prepaid-at-commencement
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Payments made at or before commencement — added
                      to the ROU asset cost. Optional."}
 
-   {:db/ident       :lease/incentives-received
+   {:db/ident       :kontor.lease/incentives-received
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Lease incentives received — REDUCE the ROU asset
                      cost. Optional."}
 
-   {:db/ident       :lease/purchase-option-price
+   {:db/ident       :kontor.lease/purchase-option-price
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "If the lessee is reasonably certain to exercise
                      a purchase option — included in the liability.
                      Optional."}
 
-   {:db/ident       :lease/rou-asset
+   {:db/ident       :kontor.lease/rou-asset
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to the Right-of-Use :asset — created by
@@ -139,29 +139,29 @@
                      per lease; its per-ledger depreciation books
                      are `:asset-depreciation`."}
 
-   {:db/ident       :lease/entity
+   {:db/ident       :kontor.lease/entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional legal-entity scope (ADR-031)."}
 
-   {:db/ident       :lease/origin-document
+   {:db/ident       :kontor.lease/origin-document
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :audit-doc — the signed lease contract.
                      Required (approval policy) for :draft → :active."}
 
-   {:db/ident       :lease/status
+   {:db/ident       :kontor.lease/status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-034 lifecycle facet.
                      #{:draft :active :expired :terminated :purchased}."}
 
-   {:db/ident       :lease/note
+   {:db/ident       :kontor.lease/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
    ;; ADR-069 mid-life-import audit denorms
-   {:db/ident       :lease/imported?
+   {:db/ident       :kontor.lease/imported?
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "True iff this :lease entered :active via
@@ -171,36 +171,36 @@
                      carried-forward balance-sheet amounts.
 
                      ADR-069. The accompanying audit denorms
-                     :lease/imported-as-of,
-                     :lease/imported-original-commencement-date and
-                     :lease/imported-original-term-months document
+                     :kontor.lease/imported-as-of,
+                     :kontor.lease/imported-original-commencement-date and
+                     :kontor.lease/imported-original-term-months document
                      the contractual history that
-                     :lease/commencement-date + :lease/term-months
+                     :kontor.lease/commencement-date + :kontor.lease/term-months
                      do NOT carry (those re-anchor on the import
                      date for the new system's schedules)."}
 
-   {:db/ident       :lease/imported-as-of
+   {:db/ident       :kontor.lease/imported-as-of
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "The date `import-lease!` re-anchored this lease
                      in the new system — equals
-                     :lease/commencement-date for an imported lease.
+                     :kontor.lease/commencement-date for an imported lease.
                      ADR-069."}
 
-   {:db/ident       :lease/imported-original-commencement-date
+   {:db/ident       :kontor.lease/imported-original-commencement-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "The lease's contractual commencement date,
                      PRESERVED across the import — distinct from
-                     :lease/commencement-date which re-anchors on
+                     :kontor.lease/commencement-date which re-anchors on
                      the import date. ADR-069."}
 
-   {:db/ident       :lease/imported-original-term-months
+   {:db/ident       :kontor.lease/imported-original-term-months
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "The lease's contractual total term in months,
                      PRESERVED across the import — distinct from
-                     :lease/term-months which re-anchors to the
+                     :kontor.lease/term-months which re-anchors to the
                      REMAINING term. ADR-069."}])
 
 ;; ============================================================================
@@ -213,25 +213,25 @@
 ;; per-(lease, ledger), not per-:lease.
 
 (def ^:private lease-liability-attrs
-  [{:db/ident       :lease-liability/lease
+  [{:db/ident       :kontor.lease-liability/lease
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :lease-liability/ledger
+   {:db/ident       :kontor.lease-liability/ledger
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The framework book (ADR-021) this liability is
                      measured on — :ledger \"ifrs\", \"us-gaap\", …"}
 
-   {:db/ident       :lease-liability/identity
+   {:db/ident       :kontor.lease-liability/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:lease-liability/lease :lease-liability/ledger]
+    :db/tupleAttrs  [:kontor.lease-liability/lease :kontor.lease-liability/ledger]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "One liability book per (lease, ledger). Both
                      tuple members always present — no nil caveat."}
 
-   {:db/ident       :lease-liability/classification
+   {:db/ident       :kontor.lease-liability/classification
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "#{:finance :operating}. PER-(lease, ledger): the
@@ -240,14 +240,14 @@
                      low-value exempt lease gets NO :lease-liability
                      book at all (the exemption path)."}
 
-   {:db/ident       :lease-liability/provider-id
+   {:db/ident       :kontor.lease-liability/provider-id
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Which LeaseProvider computes this book's
                      amortization — :effective-interest (the
                      built-in)."}
 
-   {:db/ident       :lease-liability/opening-liability
+   {:db/ident       :kontor.lease-liability/opening-liability
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "The liability measurement this book unwinds from
@@ -256,7 +256,7 @@
                      balance. The IFRS book and a local-GAAP book CAN
                      differ here."}
 
-   {:db/ident       :lease-liability/discount-rate
+   {:db/ident       :kontor.lease-liability/discount-rate
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "The annual rate this book discounts at — usually
@@ -264,13 +264,13 @@
                      Re-discounted only on a :term-change / :rate-reset
                      modification (ADR-064)."}
 
-   {:db/ident       :lease-liability/liability-account
+   {:db/ident       :kontor.lease-liability/liability-account
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The BS lease-liability account this book posts
                      against."}
 
-   {:db/ident       :lease-liability/interest-account
+   {:db/ident       :kontor.lease-liability/interest-account
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The P&L account the interest leg of each payment
@@ -281,7 +281,7 @@
                      lease-expense line (interest + the ROU plug both
                      land there = the straight-line expense)."}
 
-   {:db/ident       :lease-liability/opening-fired-through
+   {:db/ident       :kontor.lease-liability/opening-fired-through
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "How many schedule occurrences were already fired
@@ -291,23 +291,23 @@
                      import. The LeaseProvider computes the un-fired
                      tail from period (opening-fired-through + 1)."}
 
-   {:db/ident       :lease-liability/commodity
+   {:db/ident       :kontor.lease-liability/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :lease-liability/schedule
+   {:db/ident       :kontor.lease-liability/schedule
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to the ADR-032 :schedule the lease runner
-                     fires. :schedule/kind :lease-liability,
+                     fires. :kontor.schedule/kind :lease-liability,
                      :origin-entity → this book."}
 
-   {:db/ident       :lease-liability/note
+   {:db/ident       :kontor.lease-liability/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
    ;; ADR-070 disclosure-support — discount-rate audit trail
-   {:db/ident       :lease-liability/rate-rationale
+   {:db/ident       :kontor.lease-liability/rate-rationale
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :audit-doc — the justification for this
@@ -330,11 +330,11 @@
 ;; documented by a :lease-modification.
 
 (def ^:private lease-modification-attrs
-  [{:db/ident       :lease-modification/lease
+  [{:db/ident       :kontor.lease-modification/lease
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :lease-modification/kind
+   {:db/ident       :kontor.lease-modification/kind
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "#{:remeasurement :index-reset :term-change
@@ -344,32 +344,32 @@
                      keyword records intent; the math is the same
                      re-measure-and-adjust-ROU."}
 
-   {:db/ident       :lease-modification/date
+   {:db/ident       :kontor.lease-modification/date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Effective date of the modification — the
                      valid-time anchor and the re-anchor point for the
                      liability books."}
 
-   {:db/ident       :lease-modification/new-payment-amount
+   {:db/ident       :kontor.lease-modification/new-payment-amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "The revised periodic payment. An index-linked
                      payment change is just this — the consumer
                      supplies the new amount from the new index."}
 
-   {:db/ident       :lease-modification/new-term-months
+   {:db/ident       :kontor.lease-modification/new-term-months
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "The revised lease term."}
 
-   {:db/ident       :lease-modification/new-discount-rate
+   {:db/ident       :kontor.lease-modification/new-discount-rate
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "The revised discount rate — IFRS 16 re-discounts
                      on a term or scope change."}
 
-   {:db/ident       :lease-modification/scope-decrease-pct
+   {:db/ident       :kontor.lease-modification/scope-decrease-pct
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Partial termination only — the fraction of the
@@ -378,28 +378,28 @@
                      proportionally; the difference is a P&L
                      gain/loss (the proportional approach)."}
 
-   {:db/ident       :lease-modification/justification
+   {:db/ident       :kontor.lease-modification/justification
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :audit-doc — the modification / termination
                      agreement."}
 
-   {:db/ident       :lease-modification/transaction
+   {:db/ident       :kontor.lease-modification/transaction
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Refs to the GL adjustment :transaction(s) this
                      modification produced — one per affected ledger
                      book."}
 
-   {:db/ident       :lease-modification/note
+   {:db/ident       :kontor.lease-modification/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
    ;; ADR-070 disclosure-support — persisted aggregated deltas
-   {:db/ident       :lease-modification/liability-delta
+   {:db/ident       :kontor.lease-modification/liability-delta
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
-    :db/doc         "Net change in :lease-liability/opening-liability
+    :db/doc         "Net change in :kontor.lease-liability/opening-liability
                      this modification caused, AGGREGATED across all
                      affected per-(lease,ledger) books. Positive =
                      liability increased (e.g. term extension);
@@ -411,16 +411,16 @@
                      `:opening-liability` values; this denorm makes
                      the disclosure a trivial read. ADR-070."}
 
-   {:db/ident       :lease-modification/rou-delta
+   {:db/ident       :kontor.lease-modification/rou-delta
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
-    :db/doc         "Net change in ROU :asset-depreciation/depreciable-
+    :db/doc         "Net change in ROU :kontor.asset-depreciation/depreciable-
                      base aggregated across all affected books. The
                      ROU side counterpart to :liability-delta — paired
                      with it for the IFRS 16 ROU roll-forward
                      disclosure. ADR-070."}
 
-   {:db/ident       :lease-modification/pnl-delta
+   {:db/ident       :kontor.lease-modification/pnl-delta
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Net P&L impact of this modification (the plug
@@ -448,7 +448,7 @@
 ;; ============================================================================
 
 (def status-transition-seeds
-  "ADR-034 :status-transition rows for the :lease/status lifecycle.
+  "ADR-034 :status-transition rows for the :kontor.lease/status lifecycle.
    `:draft` is the recorded-but-not-commenced state — `define-lease!`
    creates the lease at `:draft`; ADR-063's `commence!` does the
    balance-sheet recognition (`:draft → :active`)."
@@ -460,7 +460,7 @@
           [:active  :terminated  "Terminate early"]
           [:active  :purchased   "Purchase option exercised"]]]
      {:kontor.status-transition/entity-type :lease
-      :kontor.status-transition/facet :lease/status
+      :kontor.status-transition/facet :kontor.lease/status
       :kontor.status-transition/from from
       :kontor.status-transition/to to
       :kontor.status-transition/active true
@@ -470,24 +470,24 @@
   "ADR-038 :approval-policy rows. Commencement (`:draft → :active`)
    requires the signed lease contract; early termination requires
    the termination agreement + separation of duties."
-  [{:approval-policy/entity-type     :lease
-    :approval-policy/facet           :lease/status
-    :approval-policy/transition-from :draft
-    :approval-policy/transition-to   :active
-    :approval-policy/rule            :requires-supporting-doc
-    :approval-policy/active          true}
-   {:approval-policy/entity-type     :lease
-    :approval-policy/facet           :lease/status
-    :approval-policy/transition-from :active
-    :approval-policy/transition-to   :terminated
-    :approval-policy/rule            :requires-supporting-doc
-    :approval-policy/active          true}
-   {:approval-policy/entity-type     :lease
-    :approval-policy/facet           :lease/status
-    :approval-policy/transition-from :active
-    :approval-policy/transition-to   :terminated
-    :approval-policy/rule            :no-self-approval
-    :approval-policy/active          true}])
+  [{:kontor.approval-policy/entity-type     :lease
+    :kontor.approval-policy/facet           :kontor.lease/status
+    :kontor.approval-policy/transition-from :draft
+    :kontor.approval-policy/transition-to   :active
+    :kontor.approval-policy/rule            :requires-supporting-doc
+    :kontor.approval-policy/active          true}
+   {:kontor.approval-policy/entity-type     :lease
+    :kontor.approval-policy/facet           :kontor.lease/status
+    :kontor.approval-policy/transition-from :active
+    :kontor.approval-policy/transition-to   :terminated
+    :kontor.approval-policy/rule            :requires-supporting-doc
+    :kontor.approval-policy/active          true}
+   {:kontor.approval-policy/entity-type     :lease
+    :kontor.approval-policy/facet           :kontor.lease/status
+    :kontor.approval-policy/transition-from :active
+    :kontor.approval-policy/transition-to   :terminated
+    :kontor.approval-policy/rule            :no-self-approval
+    :kontor.approval-policy/active          true}])
 
 ;; ============================================================================
 ;; Installer

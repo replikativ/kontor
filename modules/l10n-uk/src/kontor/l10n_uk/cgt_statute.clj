@@ -24,12 +24,12 @@
    - BADR / IR lifetime-cap allocation, AEA application — these are
      base-side mechanics the provider runs in code; the parameter
      table carries the numeric values.
-   - SSE eligibility — claimed via `:disposal/exemption-claimed
+   - SSE eligibility — claimed via `:kontor.disposal/exemption-claimed
      #{:uk-sse}` on the disposal entity; the provider filters.
-   - Indexation factor — already-indexed `:disposal/basis-amount`
+   - Indexation factor — already-indexed `:kontor.disposal/basis-amount`
      responsibility lies with the consumer per note 114 §3.2
      recommendation (multi-tranche FIFO/specific-id falls under
-     ADR-029 `:lot/*` + emit-one-disposal-per-tranche).
+     ADR-029 `:kontor.lot/*` + emit-one-disposal-per-tranche).
 
    The §5.1 sketch in note 114 referenced `:formula` schedules for
    bracket-residual logic. v1 keeps it simpler: the provider reads

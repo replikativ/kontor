@@ -18,7 +18,7 @@
    If the worker crashes after step 2 and another worker picks the
    intent back up, naively retrying step 2 double-commits the target.
    The fix: the worker writes a **deterministic step-id**
-   (`:cross-tx/step-id`, schema in ADR-074) into the target tx; before
+   (`:kontor.cross-tx/step-id`, schema in ADR-074) into the target tx; before
    transacting, it queries the target db for that step-id. If present,
    skip the transact + go straight to `mark-done!`. The step-id is
    derived from the source intent key + a content hash of the
@@ -71,17 +71,17 @@
 
    ## Source-side schema
 
-   Reuses `:side-effect-intent/*` (ADR-041) verbatim. The intent
+   Reuses `:kontor.side-effect-intent/*` (ADR-041) verbatim. The intent
    `:type` is `:cross-tx-post`; the `:payload` is a pr-str'd EDN map
    with the keys documented on [[cross-tx-intent-tx-data]].
 
    ## Target-side schema
 
-   Requires `:cross-tx/step-id` to be installed on the target conn
+   Requires `:kontor.cross-tx/step-id` to be installed on the target conn
    (it is part of `kontor.schema/all`, so any kontor target works
    out of the box; non-kontor targets — scriptum/stratum/etc — must
    install it separately via the same attr def). When this schema is
-   missing the drain worker raises a `:cross-tx/target-schema-missing`
+   missing the drain worker raises a `:kontor.cross-tx/target-schema-missing`
    ex-info before transacting."
   (:require [clojure.edn :as edn]
             [datahike.api :as d]
@@ -102,7 +102,7 @@
   (resolve-conn [this system-id]
     "Return the datahike connection for `system-id`, or throw if the
      system-id is unknown. Workers will surface the thrown ex-info
-     into the intent's :side-effect-intent/last-error."))
+     into the intent's :kontor.side-effect-intent/last-error."))
 
 ;; ============================================================================
 ;; step-id derivation
@@ -132,7 +132,7 @@
 (defn step-id
   "Deterministically derive a step-id from the intent-key + the
    canonical EDN form of the target tx-data. SHA-256, Base64-URL,
-   no padding — 43 chars, fits cleanly in :cross-tx/step-id without
+   no padding — 43 chars, fits cleanly in :kontor.cross-tx/step-id without
    character-class headaches.
 
    Pure — must agree across JVMs / restarts / re-claims."
@@ -162,7 +162,7 @@
      :target-system-id    REQUIRED — keyword the router knows about.
      :target-tx-data      REQUIRED — vector of maps / vectors, ready
                            for `(d/transact target-conn ...)` after
-                           the worker injects the :cross-tx/step-id.
+                           the worker injects the :kontor.cross-tx/step-id.
      :source-history-eid  optional — ref to the :status-history row
                            that produced this intent (back-link for
                            auditors).
@@ -179,15 +179,15 @@
         payload (pr-str {:target/system-id target-system-id
                          :target/tx-data   target-tx-data
                          :step-id          sid})]
-    (cond-> {:side-effect-intent/key         intent-key
-             :side-effect-intent/type        :cross-tx-post
-             :side-effect-intent/payload     payload
-             :side-effect-intent/status      :pending
-             :side-effect-intent/created-at  (java.util.Date.)
-             :side-effect-intent/retry-count 0
-             :side-effect-intent/max-retries max-retries}
+    (cond-> {:kontor.side-effect-intent/key         intent-key
+             :kontor.side-effect-intent/type        :cross-tx-post
+             :kontor.side-effect-intent/payload     payload
+             :kontor.side-effect-intent/status      :pending
+             :kontor.side-effect-intent/created-at  (java.util.Date.)
+             :kontor.side-effect-intent/retry-count 0
+             :kontor.side-effect-intent/max-retries max-retries}
       source-history-eid
-      (assoc :side-effect-intent/origin-history source-history-eid))))
+      (assoc :kontor.side-effect-intent/origin-history source-history-eid))))
 
 ;; ============================================================================
 ;; Drain — the worker
@@ -195,23 +195,23 @@
 
 (defn- target-has-step?
   "Returns true iff the target conn already holds a tx with this
-   step-id. The query is cheap (`:cross-tx/step-id` is identity-
+   step-id. The query is cheap (`:kontor.cross-tx/step-id` is identity-
    unique, so it's an index hit)."
   [target-conn step-id]
   (boolean
    (d/q '[:find ?t .
           :in $ ?sid
-          :where [?t :cross-tx/step-id ?sid]]
+          :where [?t :kontor.cross-tx/step-id ?sid]]
         (d/db target-conn) step-id)))
 
 (defn- assert-target-schema!
   [target-conn]
   (when-not (d/q '[:find ?e .
-                   :where [?e :db/ident :cross-tx/step-id]]
+                   :where [?e :db/ident :kontor.cross-tx/step-id]]
                  (d/db target-conn))
-    (throw (ex-info ":cross-tx/target-schema-missing — :cross-tx/step-id not installed on target conn"
-                    {:type :cross-tx/target-schema-missing
-                     :remediation "Install the :cross-tx/step-id attr — it ships in kontor.schema/all; for non-kontor targets see ADR-074."}))))
+    (throw (ex-info ":kontor.cross-tx/target-schema-missing — :kontor.cross-tx/step-id not installed on target conn"
+                    {:type :kontor.cross-tx/target-schema-missing
+                     :remediation "Install the :kontor.cross-tx/step-id attr — it ships in kontor.schema/all; for non-kontor targets see ADR-074."}))))
 
 (defn execute-one!
   "Execute a single :cross-tx-post intent (already in :pending or
@@ -219,11 +219,11 @@
 
      1. Parse the payload.
      2. Resolve the target conn via the router.
-     3. Assert the target has the :cross-tx/step-id schema.
+     3. Assert the target has the :kontor.cross-tx/step-id schema.
      4. Claim the intent (transition to :processing on the source).
      5. Check if the target already holds the step-id — if yes, skip
         the target transact and go straight to mark-done.
-     6. Otherwise: inject the :cross-tx/step-id onto a tx-meta map
+     6. Otherwise: inject the :kontor.cross-tx/step-id onto a tx-meta map
         and transact the augmented tx-data against the target.
      7. Mark the source intent :done.
      8. On any exception in steps 5-6, mark the source intent
@@ -235,7 +235,7 @@
      :abandoned  — terminal error or retry budget exhausted"
   [source-conn router intent-eid]
   (let [intent (d/pull (d/db source-conn) '[*] intent-eid)
-        payload (edn/read-string (:side-effect-intent/payload intent))
+        payload (edn/read-string (:kontor.side-effect-intent/payload intent))
         {target-system-id :target/system-id
          target-tx-data   :target/tx-data
          sid              :step-id} payload]
@@ -246,18 +246,18 @@
         (when-not (target-has-step? target-conn sid)
           (let [augmented (conj (vec target-tx-data)
                                 {:db/id "datomic.tx"
-                                 :cross-tx/step-id sid})]
+                                 :kontor.cross-tx/step-id sid})]
             (validation/transact-with-validation target-conn augmented)))
         (se/mark-done! source-conn intent-eid)
         :done)
       (catch Exception e
         (se/mark-failed! source-conn intent-eid (.getMessage e))
-        (let [retry (or (:side-effect-intent/retry-count
+        (let [retry (or (:kontor.side-effect-intent/retry-count
                          (d/pull (d/db source-conn)
-                                 [:side-effect-intent/retry-count]
+                                 [:kontor.side-effect-intent/retry-count]
                                  intent-eid))
                         0)
-              max-r (or (:side-effect-intent/max-retries intent) 5)]
+              max-r (or (:kontor.side-effect-intent/max-retries intent) 5)]
           (if (>= retry max-r) :abandoned :failed))))))
 
 (defn drain!

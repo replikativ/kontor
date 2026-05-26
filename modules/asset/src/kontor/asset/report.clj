@@ -68,45 +68,45 @@
    `[date amount]` pairs, and its `:impairment` / `:revaluation`
    `:asset-event` `[date amount]` pairs."
   [db asset book sched]
-  (let [a (d/pull db [:asset/acquisition-cost :asset/in-service-date
-                      :asset/acquisition-date {:asset/class [:db/id]}]
+  (let [a (d/pull db [:kontor.asset/acquisition-cost :kontor.asset/in-service-date
+                      :kontor.asset/acquisition-date {:kontor.asset/class [:db/id]}]
                   asset)
-        opening-accumulated (or (:asset-depreciation/opening-accumulated
-                                 (d/pull db [:asset-depreciation/opening-accumulated]
+        opening-accumulated (or (:kontor.asset-depreciation/opening-accumulated
+                                 (d/pull db [:kontor.asset-depreciation/opening-accumulated]
                                          book))
                                 0M)
         occ (d/q '[:find ?d ?amt
                    :in $ ?s
                    :where
-                   [?o :schedule-occurrence/schedule ?s]
-                   [?o :schedule-occurrence/scheduled-date ?d]
-                   [?o :schedule-occurrence/amount ?amt]]
+                   [?o :kontor.schedule-occurrence/schedule ?s]
+                   [?o :kontor.schedule-occurrence/scheduled-date ?d]
+                   [?o :kontor.schedule-occurrence/amount ?amt]]
                  db sched)
         removal-dates (d/q '[:find [?d ...]
                              :in $ ?asset
                              :where
-                             [?e :asset-event/asset ?asset]
-                             [?e :asset-event/kind ?kind]
+                             [?e :kontor.asset-event/asset ?asset]
+                             [?e :kontor.asset-event/kind ?kind]
                              [(contains? #{:disposal :transfer} ?kind)]
-                             [?e :asset-event/date ?d]]
+                             [?e :kontor.asset-event/date ?d]]
                            db asset)
         ;; [kind date amount] for the value-moving mid-life events.
         kind-events (d/q '[:find ?kind ?d ?amt
                            :in $ ?asset
                            :where
-                           [?e :asset-event/asset ?asset]
-                           [?e :asset-event/kind ?kind]
+                           [?e :kontor.asset-event/asset ?asset]
+                           [?e :kontor.asset-event/kind ?kind]
                            [(contains? #{:impairment :revaluation} ?kind)]
-                           [?e :asset-event/date ?d]
-                           [?e :asset-event/amount ?amt]]
+                           [?e :kontor.asset-event/date ?d]
+                           [?e :kontor.asset-event/amount ?amt]]
                          db asset)
         by-kind (group-by first kind-events)
         pairs   (fn [k] (mapv (fn [[_ d amt]] [d amt]) (get by-kind k)))]
     {:asset               asset
      :book                book
-     :class               (:db/id (:asset/class a))
-     :cost                (or (:asset/acquisition-cost a) 0M)
-     :entry-date          (or (:asset/in-service-date a) (:asset/acquisition-date a))
+     :class               (:db/id (:kontor.asset/class a))
+     :cost                (or (:kontor.asset/acquisition-cost a) 0M)
+     :entry-date          (or (:kontor.asset/in-service-date a) (:kontor.asset/acquisition-date a))
      :removal-date        (when (seq removal-dates) (first (sort removal-dates)))
      :opening-accumulated opening-accumulated
      :occ                 occ
@@ -228,7 +228,7 @@
    folded into `:accum-period` / `:cost-additions`).
 
    Required opts: `:from`, `:to`, `:ledger` (eid).
-   Optional: `:group-by` — `:class` (default, group by `:asset/class`)
+   Optional: `:group-by` — `:class` (default, group by `:kontor.asset/class`)
              or `:none` (one `:all` group)."
   [db {:keys [from to ledger group-by] :or {group-by :class}}]
   (when-not (and from to) (throw (ex-info "asset-roll-forward requires :from and :to" {})))
@@ -236,9 +236,9 @@
   (let [books (d/q '[:find ?asset ?book ?sched
                      :in $ ?ledger
                      :where
-                     [?book :asset-depreciation/ledger ?ledger]
-                     [?book :asset-depreciation/asset ?asset]
-                     [?book :asset-depreciation/schedule ?sched]]
+                     [?book :kontor.asset-depreciation/ledger ?ledger]
+                     [?book :kontor.asset-depreciation/asset ?asset]
+                     [?book :kontor.asset-depreciation/schedule ?sched]]
                    db ledger)
         records (mapv (fn [[asset book sched]]
                         (asset-record db asset book sched))
@@ -281,11 +281,11 @@
                 (kontor.asset.report/pending-depreciation-issues db p)))})
 
    `period` is the map `close!` passes its pre-checks:
-   `{:start Date :end Date …}`. Only `:schedule/state :active` books
+   `{:start Date :end Date …}`. Only `:kontor.schedule/state :active` books
    are considered (a `:completed` / `:paused` book never flags)."
   [db {:keys [start end]}]
   (let [book+sched (d/q '[:find ?book ?sched
-                          :where [?book :asset-depreciation/schedule ?sched]]
+                          :where [?book :kontor.asset-depreciation/schedule ?sched]]
                         db)
         with-pending
         (keep (fn [[book sched]]

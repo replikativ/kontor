@@ -97,7 +97,7 @@
         (is (= :INR                  (:commodity (:base c))))
         (is (= :INR                  (:commodity (:liability c)))))
       (testing "schedule and base"
-        (is (= :flat (:schedule/type (:schedule c))))
+        (is (= :flat (:kontor.schedule/type (:schedule c))))
         (is (== 0.25M (:rate (:schedule c))))
         (is (== 5000000M (:amount (:base c)))))
       (testing "gross + cess only (no surcharge below ₹1 cr) ⇒ ₹13,00,000"
@@ -146,7 +146,7 @@
             "no compose-greater-of when MAT non-applicable")
         (is (nil? (:composition c))))
       (testing "rate path: §115BAA flat 22%"
-        (is (= :flat (:schedule/type (:schedule c))))
+        (is (= :flat (:kontor.schedule/type (:schedule c))))
         (is (== 0.22M (:rate (:schedule c)))))
       (testing "gross, surcharge, cess"
         (is (== 11000000M (:amount (:gross-liability c))))
@@ -200,7 +200,7 @@
         (is (== 20000000M (:amount (:base c)))
             "base on prevailing component is book profit (MAT base)"))
       (testing "MAT computation per blueprint §4.3"
-        (is (= :flat (:schedule/type (:schedule c))))
+        (is (= :flat (:kontor.schedule/type (:schedule c))))
         (is (== 0.15M (:rate (:schedule c))))
         (is (== 3000000M (:amount (:gross-liability c))))
         (is (== 210000M  (surtax-amount c :in-mat-surcharge))

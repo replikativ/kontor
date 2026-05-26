@@ -5,7 +5,7 @@
 
    FR does NOT have one CGT regime — it has FIVE overlapping shapes
    (note 128 §1), and a provider classifies each `:disposal` into the
-   right lane by `:disposal/asset-class` + `:disposal/subject-form`:
+   right lane by `:kontor.disposal/asset-class` + `:kontor.disposal/subject-form`:
 
    - **Plus-values mobilières** (CGI Art. 150-0 A) — PFU 31.4 % default
      (12.8 % IR + 18.6 % PS post-LFSS-2026) OR barème election + the
@@ -90,7 +90,7 @@
    keyed by `:effective-from`. Per-asset-class PS rates surface as
    TWO parameters: the post-2026 default (18.6 %) and the carve-out
    for real estate / life insurance (17.2 %); the provider picks
-   per `:disposal/asset-class`."
+   per `:kontor.disposal/asset-class`."
   [;; --- Mobilière PFU layer (CGI Art. 200 A) -------------------------
    {:kontor.parameter/code         "FR.CGT.PFU.IR-rate"
     :kontor.parameter/label        "PFU IR component (12.8 % flat tax) — CGI Art. 200 A 1°"

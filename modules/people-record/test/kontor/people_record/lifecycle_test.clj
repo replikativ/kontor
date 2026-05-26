@@ -65,7 +65,7 @@
                  :storage-uri "s3://test/dpia-jane.pdf"
                  :title "DPIA — Jane's track record processing"
                  :category :hr-monitoring-consent})
-        dpia (ref-eid (d/db conn) :audit-doc/code "DPIA-jane-track-record-2026")
+        dpia (ref-eid (d/db conn) :kontor.audit-doc/code "DPIA-jane-track-record-2026")
 
         ;; Grant consent for hr-track-record scope (legal basis:
         ;; BDSG §26(1) employment necessity).
@@ -93,7 +93,7 @@
                  :level :ic-2
                  :start-date #inst "2026-01-15"
                  :at #inst "2026-01-15"})
-        pos-1 (ref-eid (d/db conn) :position-held/external-id "POS-jane-eng-1")]
+        pos-1 (ref-eid (d/db conn) :kontor.position-held/external-id "POS-jane-eng-1")]
 
     (testing "Year 1: position landed, person + consent + position visible"
       (is (some? pos-1))
@@ -106,7 +106,7 @@
                    :type :performance-review
                    :storage-uri "s3://test/review-jane-2026.pdf"
                    :category :hr-track-record})
-          review-doc (ref-eid (d/db conn) :audit-doc/code "REVIEW-DOC-jane-2026")
+          review-doc (ref-eid (d/db conn) :kontor.audit-doc/code "REVIEW-DOC-jane-2026")
           ;; The reviewer is also an employee — bootstrap another person
           _ (person/create-person! conn {:external-id "P-bob"
                                          :given-name "Bob" :family-name "Manager"
@@ -138,14 +138,14 @@
                    :start-date #inst "2027-03-01"
                    :at #inst "2027-03-01"
                    :tempid "pos-senior"})
-          pos-senior (ref-eid (d/db conn) :position-held/external-id
+          pos-senior (ref-eid (d/db conn) :kontor.position-held/external-id
                               "POS-jane-senior")
           _ (audit-doc/create-doc!
              conn {:code "PROMOTION-LETTER-jane-2027"
                    :type :promotion-letter
                    :storage-uri "s3://test/promotion-jane.pdf"
                    :category :hr-track-record})
-          promo-doc (ref-eid (d/db conn) :audit-doc/code "PROMOTION-LETTER-jane-2027")
+          promo-doc (ref-eid (d/db conn) :kontor.audit-doc/code "PROMOTION-LETTER-jane-2027")
           _ (pr/record-promotion!
              conn {:code "PROMO-jane-senior-2027"
                    :person jane
@@ -164,7 +164,7 @@
                  :description "Confidential — counsel review"
                  :category :hr-grievance
                  :uploaded-by-uid bob})
-          grievance-doc (ref-eid (d/db conn) :audit-doc/code "GRIEVANCE-jane-2027-Q2")
+          grievance-doc (ref-eid (d/db conn) :kontor.audit-doc/code "GRIEVANCE-jane-2027-Q2")
           ;; Reclassify the grievance doc as :attorney-client privileged
           _ (audit-doc/reclassify-privilege!
              conn {:doc grievance-doc
@@ -173,11 +173,11 @@
                    :reason :privilege-determined
                    :reason-note "Counsel review prior to disclosure"})]
       (testing "Year 2: review + promotion + grievance recorded"
-        (is (some? (ref-eid (d/db conn) :performance-review/external-id "REVIEW-jane-2026")))
-        (is (some? (ref-eid (d/db conn) :promotion/external-id "PROMO-jane-senior-2027")))
+        (is (some? (ref-eid (d/db conn) :kontor.performance-review/external-id "REVIEW-jane-2026")))
+        (is (some? (ref-eid (d/db conn) :kontor.promotion/external-id "PROMO-jane-senior-2027")))
         (is (= :hr-grievance
-               (:audit-doc/category
-                (d/pull (d/db conn) [:audit-doc/category] grievance-doc))))
+               (:kontor.audit-doc/category
+                (d/pull (d/db conn) [:kontor.audit-doc/category] grievance-doc))))
         (is (= :attorney-client
                (audit-doc/privilege-of (d/db conn) grievance-doc))))
 
@@ -208,7 +208,7 @@
                   {:landed false :ex-data (ex-data e)}))]
           (is (false? (:landed withdrawal-result))
               "post-withdrawal write was rejected by the consent gate")
-          (is (= :consent/missing (-> withdrawal-result :ex-data :type))
+          (is (= :kontor.consent/missing (-> withdrawal-result :ex-data :type))
               "structured error type matches the substrate contract")))
 
       (testing "Bitemporal :as-of-valid — pre-withdrawal consent still in force"
@@ -227,9 +227,9 @@
               positions (mapv #(d/pull past-db '[*] %)
                               (d/q '[:find [?p ...]
                                      :in $ ?subj
-                                     :where [?p :position-held/person ?subj]]
+                                     :where [?p :kontor.position-held/person ?subj]]
                                    past-db jane))]
           (is (= 1 (count positions))
               "in mid-2026 only the initial position was held")
           (is (= "Software Engineer"
-                 (:position-held/title (first positions)))))))))
+                 (:kontor.position-held/title (first positions)))))))))

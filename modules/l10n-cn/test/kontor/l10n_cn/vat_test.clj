@@ -58,11 +58,11 @@
     (let [conn (bootstrap)
           _ (post-sale! conn "INV-1" jan-15 10000 "5001.13" 0.13M)
           r (vat/compute-return conn {:from jan-1 :to feb-1 :compute-surcharges? false})]
-      (is (money/equiv? (cny "10000.00") (:sales-13 (:return/lines r))))
-      (is (money/equiv? (cny "1300.00")  (:output-vat (:return/lines r))))
-      (is (money/equiv? (cny "1300.00")  (:return/output-vat r)))
-      (is (money/equiv? (cny "1300.00")  (get (:return/output-by-rate r) 0.13M)))
-      (is (= :payment (:return/outcome r))))))
+      (is (money/equiv? (cny "10000.00") (:sales-13 (:kontor.return/lines r))))
+      (is (money/equiv? (cny "1300.00")  (:output-vat (:kontor.return/lines r))))
+      (is (money/equiv? (cny "1300.00")  (:kontor.return/output-vat r)))
+      (is (money/equiv? (cny "1300.00")  (get (:kontor.return/output-by-rate r) 0.13M)))
+      (is (= :payment (:kontor.return/outcome r))))))
 
 (deftest mixed-rate-sales
   (testing "10k @ 13% + 5k @ 9% + 2k @ 6% — per-rate output breakdown
@@ -73,29 +73,29 @@
           _ (post-sale! conn "INV-3" jan-15  2000 "5001.6"  0.06M)
           r (vat/compute-return conn {:from jan-1 :to feb-1 :compute-surcharges? false})]
       (testing "Per-rate revenue tracked separately"
-        (is (money/equiv? (cny "10000.00") (:sales-13 (:return/lines r))))
-        (is (money/equiv? (cny "5000.00")  (:sales-9 (:return/lines r))))
-        (is (money/equiv? (cny "2000.00")  (:sales-6 (:return/lines r)))))
+        (is (money/equiv? (cny "10000.00") (:sales-13 (:kontor.return/lines r))))
+        (is (money/equiv? (cny "5000.00")  (:sales-9 (:kontor.return/lines r))))
+        (is (money/equiv? (cny "2000.00")  (:sales-6 (:kontor.return/lines r)))))
       (testing "Per-rate output computed from revenue × rate"
-        (is (money/equiv? (cny "1300.00") (get (:return/output-by-rate r) 0.13M)))
-        (is (money/equiv? (cny "450.00")  (get (:return/output-by-rate r) 0.09M)))
-        (is (money/equiv? (cny "120.00")  (get (:return/output-by-rate r) 0.06M))))
+        (is (money/equiv? (cny "1300.00") (get (:kontor.return/output-by-rate r) 0.13M)))
+        (is (money/equiv? (cny "450.00")  (get (:kontor.return/output-by-rate r) 0.09M)))
+        (is (money/equiv? (cny "120.00")  (get (:kontor.return/output-by-rate r) 0.06M))))
       (testing "Total output = 1300 + 450 + 120 = 1870 (booked + computed agree)"
-        (is (money/equiv? (cny "1870.00") (:return/output-vat r)))
-        (is (money/equiv? (cny "1870.00") (:return/computed-output r)))))))
+        (is (money/equiv? (cny "1870.00") (:kontor.return/output-vat r)))
+        (is (money/equiv? (cny "1870.00") (:kontor.return/computed-output r)))))))
 
 (deftest monthly-period-bounds
   (testing "Monthly: January 2026"
     (let [conn (bootstrap)
           _ (post-sale! conn "INV-1" jan-15 10000 "5001.13" 0.13M)
           r (vat/compute-return conn {:year 2026 :month 1 :compute-surcharges? false})]
-      (is (= :monthly (:kind (:return/period r))))
-      (is (money/equiv? (cny "1300.00") (:return/output-vat r))))))
+      (is (= :monthly (:kind (:kontor.return/period r))))
+      (is (money/equiv? (cny "1300.00") (:kontor.return/output-vat r))))))
 
 (deftest nil-return
   (let [conn (bootstrap)
         r (vat/compute-return conn {:from jan-1 :to feb-1 :compute-surcharges? false})]
-    (is (= :nil-return (:return/outcome r)))))
+    (is (= :nil-return (:kontor.return/outcome r)))))
 
 ;; ============================================================================
 ;; Surcharges (UMCT + Education + Local Education)
@@ -119,20 +119,20 @@
           _ (post-sale! conn "INV-1" jan-15 10000 "5001.13" 0.13M)
           r (vat/compute-return conn {:from jan-1 :to feb-1
                                        :location-tier :municipal})]
-      (is (money/equiv? (cny "1300.00") (:return/net-vat r)))
-      (is (money/equiv? (cny "91.00")   (:return/umct-payable r)))
-      (is (money/equiv? (cny "39.00")   (:return/edu-surcharge-payable r)))
-      (is (money/equiv? (cny "26.00")   (:return/local-edu-surcharge-payable r)))
-      (is (money/equiv? (cny "156.00")  (:return/total-surcharges r))))))
+      (is (money/equiv? (cny "1300.00") (:kontor.return/net-vat r)))
+      (is (money/equiv? (cny "91.00")   (:kontor.return/umct-payable r)))
+      (is (money/equiv? (cny "39.00")   (:kontor.return/edu-surcharge-payable r)))
+      (is (money/equiv? (cny "26.00")   (:kontor.return/local-edu-surcharge-payable r)))
+      (is (money/equiv? (cny "156.00")  (:kontor.return/total-surcharges r))))))
 
 (deftest surcharges-county
   (testing "Same sale for a county-level company: UMCT 5%"
     (let [conn (bootstrap)
           _ (post-sale! conn "INV-1" jan-15 10000 "5001.13" 0.13M)
           r (vat/compute-return conn {:from jan-1 :to feb-1 :location-tier :county})]
-      (is (money/equiv? (cny "65.00")   (:return/umct-payable r))
+      (is (money/equiv? (cny "65.00")   (:kontor.return/umct-payable r))
           "1300 × 5% = 65")
-      (is (money/equiv? (cny "130.00")  (:return/total-surcharges r))
+      (is (money/equiv? (cny "130.00")  (:kontor.return/total-surcharges r))
           "65 + 39 + 26 = 130"))))
 
 (deftest surcharges-default-other
@@ -140,8 +140,8 @@
     (let [conn (bootstrap)
           _ (post-sale! conn "INV-1" jan-15 10000 "5001.13" 0.13M)
           r (vat/compute-return conn {:from jan-1 :to feb-1})]
-      (is (= :other (:return/location-tier r)))
-      (is (money/equiv? (cny "13.00")   (:return/umct-payable r))
+      (is (= :other (:kontor.return/location-tier r)))
+      (is (money/equiv? (cny "13.00")   (:kontor.return/umct-payable r))
           "1300 × 1% = 13"))))
 
 (deftest surcharges-zero-on-refund
@@ -150,7 +150,7 @@
     (let [conn (bootstrap)
           ;; No sales (only nil-return); surcharges should be zero
           r (vat/compute-return conn {:from jan-1 :to feb-1 :location-tier :municipal})]
-      (is (money/equiv? (cny "0.00") (:return/umct-payable r))))))
+      (is (money/equiv? (cny "0.00") (:kontor.return/umct-payable r))))))
 
 (deftest compute-surcharges-flag
   (testing ":compute-surcharges? false omits surcharge keys entirely"
@@ -158,5 +158,5 @@
           _ (post-sale! conn "INV-1" jan-15 10000 "5001.13" 0.13M)
           r (vat/compute-return conn {:from jan-1 :to feb-1
                                        :compute-surcharges? false})]
-      (is (not (contains? r :return/umct-payable)))
-      (is (not (contains? r :return/total-surcharges))))))
+      (is (not (contains? r :kontor.return/umct-payable)))
+      (is (not (contains? r :kontor.return/total-surcharges))))))

@@ -192,9 +192,9 @@
                       :commodity eur})
         db (:db-after report)
         run-eid (d/q '[:find ?r . :in $ ?c
-                       :where [?r :payroll-run/code ?c]]
+                       :where [?r :kontor.payroll-run/code ?c]]
                      db "ACME-2026-05-001")
-        run (d/pull db '[* {:payroll-run/payroll-transaction
+        run (d/pull db '[* {:kontor.payroll-run/payroll-transaction
                             [:kontor.transaction/external-id
                              {:kontor.posting/_transaction
                               [:kontor.posting/amount
@@ -202,20 +202,20 @@
                     run-eid)]
     (testing "payroll-run row created"
       (is (some? run-eid))
-      (is (= :computed (:payroll-run/state run)))
-      (is (= :mock-fr (:payroll-run/provider-id run))))
+      (is (= :computed (:kontor.payroll-run/state run)))
+      (is (= :mock-fr (:kontor.payroll-run/provider-id run))))
     (testing "Control totals reflect both employees"
       ;; Dupont gross 5000 + Martin gross 2200 = 7200
-      (is (= 7200M (:payroll-run/control-total-gross run))))
+      (is (= 7200M (:kontor.payroll-run/control-total-gross run))))
     (testing "Posting legs sum to zero per ledger × commodity"
-      (let [postings (-> run :payroll-run/payroll-transaction
+      (let [postings (-> run :kontor.payroll-run/payroll-transaction
                          :kontor.posting/_transaction)
             sum (reduce (fn [a {:kontor.posting/keys [amount]}]
                           (.add ^BigDecimal a ^BigDecimal amount))
                         0M postings)]
         (is (zero? (.compareTo ^BigDecimal sum 0M)))))
     (testing "PCG 431 (URSSAF) accumulates all URSSAF flow for both employees"
-      (let [postings (-> run :payroll-run/payroll-transaction
+      (let [postings (-> run :kontor.payroll-run/payroll-transaction
                          :kontor.posting/_transaction)
             by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)
             urssaf-431 (reduce (fn [a {:kontor.posting/keys [amount]}]
@@ -228,7 +228,7 @@
         ;; Total: -3403.86
         (is (= -3403.86M urssaf-431))))
     (testing "PCG 421 (Net wages payable) totals both employees' net"
-      (let [postings (-> run :payroll-run/payroll-transaction
+      (let [postings (-> run :kontor.payroll-run/payroll-transaction
                          :kontor.posting/_transaction)
             by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)
             net-421 (reduce (fn [a {:kontor.posting/keys [amount]}]
@@ -237,7 +237,7 @@
         ;; -(3514.02 + 1620.32) = -5134.34
         (is (= -5134.34M net-421))))
     (testing "PCG 4421 (PAS withholding) is non-zero"
-      (let [postings (-> run :payroll-run/payroll-transaction
+      (let [postings (-> run :kontor.payroll-run/payroll-transaction
                          :kontor.posting/_transaction)
             by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)
             pas-4421 (reduce (fn [a {:kontor.posting/keys [amount]}]
@@ -246,7 +246,7 @@
         ;; Dupont -400 + Martin -171.80 = -571.80
         (is (= -571.80M pas-4421))))
     (testing "Congés payés accrual lands on both 6412 (DR) and 4282 (CR)"
-      (let [postings (-> run :payroll-run/payroll-transaction
+      (let [postings (-> run :kontor.payroll-run/payroll-transaction
                          :kontor.posting/_transaction)
             by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)
             cp-4282 (reduce (fn [a {:kontor.posting/keys [amount]}]
@@ -256,10 +256,10 @@
         (is (= -416.66M cp-4282))))
     (testing "Emit provider produced one DSN audit-doc with :payroll-filing"
       (let [docs (d/q '[:find [?e ...]
-                        :where [?e :audit-doc/category :payroll-filing]]
+                        :where [?e :kontor.audit-doc/category :payroll-filing]]
                       db)]
         (is (>= (count docs) 1))
         (let [dsn-doc (d/pull db '[*] (first docs))]
-          (is (= :fr (:audit-doc/language dsn-doc)))
-          (is (= :regulator-clearance (:audit-doc/type dsn-doc)))
-          (is (str/starts-with? (:audit-doc/code dsn-doc) "DSN-")))))))
+          (is (= :fr (:kontor.audit-doc/language dsn-doc)))
+          (is (= :regulator-clearance (:kontor.audit-doc/type dsn-doc)))
+          (is (str/starts-with? (:kontor.audit-doc/code dsn-doc) "DSN-")))))))

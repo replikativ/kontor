@@ -250,11 +250,11 @@
    summary. Consumer transacts via `transact-with-validation`.
 
    Each :audit-doc carries:
-     :audit-doc/code     deterministic from RP + period
-     :audit-doc/category :payroll-filing
-     :audit-doc/title    'CRA remittance for RP — period'
-     :audit-doc/description a human-readable summary
-     :audit-doc/language consumer-supplied :en | :fr (default :en)"
+     :kontor.audit-doc/code     deterministic from RP + period
+     :kontor.audit-doc/category :payroll-filing
+     :kontor.audit-doc/title    'CRA remittance for RP — period'
+     :kontor.audit-doc/description a human-readable summary
+     :kontor.audit-doc/language consumer-supplied :en | :fr (default :en)"
   [{:keys [pd7a-summary language]
     :or {language :en}}]
   (let [{:keys [itx cpp ei total period-start period-end
@@ -268,10 +268,10 @@
                      (:amount ei)
                      (:amount total)
                      (if due-date (str " | Due: " due-date) ""))]
-    [{:audit-doc/code (str "PD7A-" rp "-" (.getTime ^java.util.Date period-end))
-      :audit-doc/type :regulator-clearance
-      :audit-doc/title title
-      :audit-doc/description desc
-      :audit-doc/uploaded-at (java.util.Date.)
-      :audit-doc/category :payroll-filing
-      :audit-doc/language language}]))
+    [{:kontor.audit-doc/code (str "PD7A-" rp "-" (.getTime ^java.util.Date period-end))
+      :kontor.audit-doc/type :regulator-clearance
+      :kontor.audit-doc/title title
+      :kontor.audit-doc/description desc
+      :kontor.audit-doc/uploaded-at (java.util.Date.)
+      :kontor.audit-doc/category :payroll-filing
+      :kontor.audit-doc/language language}]))

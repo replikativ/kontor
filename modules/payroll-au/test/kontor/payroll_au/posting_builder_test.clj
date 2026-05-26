@@ -9,7 +9,7 @@
      - Employer-side SG: DR expense + CR payable (separate from
        employee block).
      - Multi-state per-state allocation via
-       `:analytic-distribution/plan \"state\"`, NOT
+       `:kontor.analytic-distribution/plan \"state\"`, NOT
        `:kontor.posting/entity` (mirror ADR-077).
      - Hybrid employee allocation via `:state-allocations` override.
      - Salary-sacrifice routes to the SS-clearing payable (NOT the
@@ -165,13 +165,13 @@
         (is (seq with-dist))
         (doseq [p with-dist
                 d (:kontor.posting/analytic-distributions p)]
-          (is (= [:analytic-plan/code "state"]
-                 (:analytic-distribution/plan d)))
-          (is (some? (:analytic-distribution/account d))))))
+          (is (= [:kontor.analytic-plan/code "state"]
+                 (:kontor.analytic-distribution/plan d)))
+          (is (some? (:kontor.analytic-distribution/account d))))))
     (testing "the three states from the fixture appear"
       (let [paths (->> postings
                        (mapcat :kontor.posting/analytic-distributions)
-                       (map :analytic-distribution/account)
+                       (map :kontor.analytic-distribution/account)
                        (map second)
                        distinct
                        set)]
@@ -197,7 +197,7 @@
       (is (some? e101-wage))
       (when e101-wage
         (let [dists (:kontor.posting/analytic-distributions e101-wage)
-              pcts (sort (map :analytic-distribution/percent dists))]
+              pcts (sort (map :kontor.analytic-distribution/percent dists))]
           (is (= [40M 60M] pcts)))))))
 
 ;; ============================================================================

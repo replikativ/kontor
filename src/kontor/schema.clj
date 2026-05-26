@@ -102,10 +102,10 @@
 ;; FX rate — exchange-rate sample for currency translation.
 ;;
 ;; ADR-072. One entity per (from-commodity, to-commodity, at-date,
-;; rate-type) sample. The `:fx-rate/by-tuple` composite gives upsert
+;; rate-type) sample. The `:kontor.fx-rate/by-tuple` composite gives upsert
 ;; semantics — repeated transacts replace prior samples for the same
-;; key. `:fx-rate/source` carries provenance (`:ecb`, `:manual`, etc.);
-;; `:fx-rate/source-doc` is a free-form pointer to the underlying record
+;; key. `:kontor.fx-rate/source` carries provenance (`:ecb`, `:manual`, etc.);
+;; `:kontor.fx-rate/source-doc` is a free-form pointer to the underlying record
 ;; (URL, CSV path, audit-doc eid as a string) so downstream auditors
 ;; can chase the number to its origin.
 ;;
@@ -124,19 +124,19 @@
 ;; ============================================================================
 
 (def ^:private fx-rate-attrs
-  [{:db/ident       :fx-rate/from-commodity
+  [{:db/ident       :kontor.fx-rate/from-commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :commodity. The base commodity (the \"1 of
                      this\" side of the quote)."}
 
-   {:db/ident       :fx-rate/to-commodity
+   {:db/ident       :kontor.fx-rate/to-commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :commodity. The quote commodity (the
                      \"= N of this\" side)."}
 
-   {:db/ident       :fx-rate/at-date
+   {:db/ident       :kontor.fx-rate/at-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Sample date — the as-of for which this rate is
@@ -145,20 +145,20 @@
                      sample falls back per the provider's policy
                      (typically: last sample on or before D)."}
 
-   {:db/ident       :fx-rate/rate
+   {:db/ident       :kontor.fx-rate/rate
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Multiplier: amount-in-from-commodity × rate =
                      amount-in-to-commodity. BigDecimal — never a
                      double."}
 
-   {:db/ident       :fx-rate/rate-type
+   {:db/ident       :kontor.fx-rate/rate-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":spot | :closing | :average | :opening |
                      :historical — per IAS 21 / ASC 830."}
 
-   {:db/ident       :fx-rate/source
+   {:db/ident       :kontor.fx-rate/source
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Provenance: :ecb | :manual | :xe | :oanda |
@@ -166,19 +166,19 @@
                      keyword. Used in audit reports and to filter
                      out non-authoritative samples."}
 
-   {:db/ident       :fx-rate/source-doc
+   {:db/ident       :kontor.fx-rate/source-doc
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Free-form pointer to the underlying source —
                      a URL, a CSV filename, an :audit-doc eid as a
                      string. Optional."}
 
-   {:db/ident       :fx-rate/by-tuple
+   {:db/ident       :kontor.fx-rate/by-tuple
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:fx-rate/from-commodity
-                     :fx-rate/to-commodity
-                     :fx-rate/at-date
-                     :fx-rate/rate-type]
+    :db/tupleAttrs  [:kontor.fx-rate/from-commodity
+                     :kontor.fx-rate/to-commodity
+                     :kontor.fx-rate/at-date
+                     :kontor.fx-rate/rate-type]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Composite identity. Re-transacting the same
@@ -196,31 +196,31 @@
 ;; ============================================================================
 
 (def ^:private lot-attrs
-  [{:db/ident       :lot/commodity
+  [{:db/ident       :kontor.lot/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :lot/acquired-at
+   {:db/ident       :kontor.lot/acquired-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "When this lot was acquired (valid-time)."}
 
-   {:db/ident       :lot/cost-basis
+   {:db/ident       :kontor.lot/cost-basis
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Cost basis per unit, in the cost commodity."}
 
-   {:db/ident       :lot/cost-commodity
+   {:db/ident       :kontor.lot/cost-commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :lot/label
+   {:db/ident       :kontor.lot/label
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional human label for specific-identification
                      disposal (\"first batch\", \"Q3 raise\", etc.)."}
 
-   {:db/ident       :lot/expires-at
+   {:db/ident       :kontor.lot/expires-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional expiry / best-before date. Drives FEFO
@@ -311,7 +311,7 @@
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "IAS 21 / ASC 830 monetary classification. Default
-                     when absent: monetary for :asset/:liability,
+                     when absent: monetary for :kontor.asset/:liability,
                      non-monetary for :equity, irrelevant for
                      :income/:expense (those translate at :average).
                      Customers with non-monetary asset holdings
@@ -359,7 +359,7 @@
 ;; ============================================================================
 
 (def ^:private document-type-attrs
-  [{:db/ident       :document-type/code
+  [{:db/ident       :kontor.document-type/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Regulator's short code. BR: '55' (NF-e),
@@ -369,7 +369,7 @@
                      '65' (fully-digital).  Not globally unique;
                      identity is (code, jurisdiction)."}
 
-   {:db/ident       :document-type/jurisdiction
+   {:db/ident       :kontor.document-type/jurisdiction
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -377,34 +377,34 @@
                      :br/sefaz, :cn/sta, :de/finanzamt, :ca/cra,
                      :ar/afip, :cl/sii. Co-keys the identity with code."}
 
-   {:db/ident       :document-type/identity
+   {:db/ident       :kontor.document-type/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:document-type/code :document-type/jurisdiction]
+    :db/tupleAttrs  [:kontor.document-type/code :kontor.document-type/jurisdiction]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Composite identity (code, jurisdiction)."}
 
-   {:db/ident       :document-type/name
+   {:db/ident       :kontor.document-type/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Human-readable name, may include native-script:
                      'Nota Fiscal Eletrônica — mercadorias' or
                      '增值税专用发票 (Special VAT Fapiao)'."}
 
-   {:db/ident       :document-type/internal-type
+   {:db/ident       :kontor.document-type/internal-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":invoice | :credit-note | :debit-note | :all.
                      Drives credit/debit-note routing through the same
                      document-type as the origin invoice."}
 
-   {:db/ident       :document-type/prefix
+   {:db/ident       :kontor.document-type/prefix
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Prefix for the clearance-token / access key
                      when applicable ('NFe', 'NFCe')."}
 
-   {:db/ident       :document-type/active?
+   {:db/ident       :kontor.document-type/active?
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}
 
@@ -414,7 +414,7 @@
    ;; concepts (UBL InvoiceTypeCode, UN/EDIFACT document codes, XBRL
    ;; concepts). Substrate carries the IRI so a consumer can cross-walk
    ;; to UBL / Peppol / iXBRL without re-doing the mapping.
-   {:db/ident       :document-type/concept-iri
+   {:db/ident       :kontor.document-type/concept-iri
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -677,7 +677,7 @@
   [{:db/ident       :kontor.person/birth-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
-    :db/doc         "PII; typical :audit-doc/category :hr-personnel.
+    :db/doc         "PII; typical :kontor.audit-doc/category :hr-personnel.
                      DSAR collectors walk this attr; per-jurisdiction
                      :retention-policy governs erasure."}
 
@@ -711,47 +711,47 @@
      :scope-query  — EDN-encoded datalog evaluated against the
                      speculative txdb at write-time (catches new
                      entities matching the matter between sweeps)"
-  [{:db/ident       :legal-hold/code
+  [{:db/ident       :kontor.legal-hold/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "External identifier for the hold (e.g. matter
                      docket number, court case ID)."}
 
-   {:db/ident       :legal-hold/matter-name
+   {:db/ident       :kontor.legal-hold/matter-name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Human-readable matter description, e.g. 'Acme
                      v. Doe 24-CV-1234'."}
 
-   {:db/ident       :legal-hold/issued-by-uid
+   {:db/ident       :kontor.legal-hold/issued-by-uid
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :kontor.audit/create-uid of inside or outside counsel
                      who issued the preservation order."}
 
-   {:db/ident       :legal-hold/issued-at
+   {:db/ident       :kontor.legal-hold/issued-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "When the preservation order was issued
                      externally. May predate :placed-at if recording
                      lagged."}
 
-   ;; No :legal-hold/placed-at denorm (P1-3 review fix). The
+   ;; No :kontor.legal-hold/placed-at denorm (P1-3 review fix). The
    ;; placement instant IS the :tx/valid-from of the placing tx and
    ;; the :kontor.status-history/changed-at of the nil → :placed row.
-   ;; Resolve via (d/pull (d/valid-at db at) [:legal-hold/state] hold-eid) or
+   ;; Resolve via (d/pull (d/valid-at db at) [:kontor.legal-hold/state] hold-eid) or
    ;; the status-history timeline. This matches the ADR-048
    ;; valid-time normalization and the Stage-L denorm-removal pattern.
 
-   {:db/ident       :legal-hold/expires-at
+   {:db/ident       :kontor.legal-hold/expires-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional auto-release boundary. Null = manual-
                      only release. ADR-041 sweep-time-based! flips
                      :placed → :expired when this passes."}
 
-   {:db/ident       :legal-hold/state
+   {:db/ident       :kontor.legal-hold/state
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-034 facet.
@@ -759,14 +759,14 @@
                      :placed and :pending-review are 'active' (block
                      purges). :released and :expired are inactive."}
 
-   {:db/ident       :legal-hold/scope-eids
+   {:db/ident       :kontor.legal-hold/scope-eids
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Explicit entity-ID set. Fast-path membership
                      check at write-time of :db/purge. Sweepers
                      refresh from :scope-query results."}
 
-   {:db/ident       :legal-hold/scope-query
+   {:db/ident       :kontor.legal-hold/scope-query
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "EDN-encoded datalog query (e.g.
@@ -777,13 +777,13 @@
                      Stored as a string for opacity; the EDN reader
                      parses on read."}
 
-   {:db/ident       :legal-hold/scope-query-as-of
+   {:db/ident       :kontor.legal-hold/scope-query-as-of
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional valid-time anchor for :scope-query
                      evaluation. Defaults to query-evaluation time."}
 
-   {:db/ident       :legal-hold/supporting-doc
+   {:db/ident       :kontor.legal-hold/supporting-doc
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :audit-doc carrying the preservation
@@ -791,7 +791,7 @@
                      :requires-supporting-doc enforces presence on
                      placement and release."}
 
-   {:db/ident       :legal-hold/scope-preview
+   {:db/ident       :kontor.legal-hold/scope-preview
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ref to :audit-doc carrying the
@@ -801,7 +801,7 @@
                      that 'this is what counsel signed off on';
                      defends against scope-drift-mid-litigation."}
 
-   {:db/ident       :legal-hold/note
+   {:db/ident       :kontor.legal-hold/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Free-text annotation (not the canonical record;
@@ -821,13 +821,13 @@
    expiry work-items; entities under an active legal hold (ADR-049)
    are reported but never expired (apply-expiry! routes through
    validate-and-apply, so the hold-middleware fires structurally)."
-  [{:db/ident       :retention-policy/code
+  [{:db/ident       :kontor.retention-policy/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "External identifier for the policy (e.g.
                      'DE-HGB-257-ledger', 'US-SOX-103')."}
 
-   {:db/ident       :retention-policy/applies-to
+   {:db/ident       :kontor.retention-policy/applies-to
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/many
     :db/doc         "Entity-type discriminator keyword(s) this policy
@@ -837,49 +837,49 @@
                      :kontor.status-history/entity-type."}
 
    ;; ADR-075 — subject-matter category gate. Open-set keyword that
-   ;; mirrors :audit-doc/category; nil = applies regardless of
+   ;; mirrors :kontor.audit-doc/category; nil = applies regardless of
    ;; category. When non-nil, the policy ONLY applies to entities
-   ;; whose own :audit-doc/category (or, for non-audit-doc entities,
+   ;; whose own :kontor.audit-doc/category (or, for non-audit-doc entities,
    ;; the consumer's category inference) matches. Per-jurisdiction
    ;; retention floors differ by category — payroll PII retention
    ;; (GDPR Art. 17 + DE Sozialversicherung §28f SGB IV) is NOT the
    ;; same as financial-records retention (HGB §257); the category
    ;; axis is the dimension that lets one :retention-policy table
    ;; carry both.
-   {:db/ident       :retention-policy/category
+   {:db/ident       :kontor.retention-policy/category
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Subject-matter category gate (ADR-075). nil =
                      applies regardless of category. When non-nil the
-                     sweeper matches against :audit-doc/category (or
+                     sweeper matches against :kontor.audit-doc/category (or
                      consumer-derived category for other entity types).
                      Per-jurisdiction floors differ by category."}
 
-   {:db/ident       :retention-policy/jurisdiction
+   {:db/ident       :kontor.retention-policy/jurisdiction
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ref to :country. nil = applies
                      globally. policy-for prefers a jurisdiction-
                      specific policy over a global one."}
 
-   {:db/ident       :retention-policy/duration-years
+   {:db/ident       :kontor.retention-policy/duration-years
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "Retention duration in whole years, measured from
                      the entity's :triggered-by anchor date."}
 
-   {:db/ident       :retention-policy/triggered-by
+   {:db/ident       :kontor.retention-policy/triggered-by
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "The clock-anchor attribute keyword. The
                      retention clock starts at the value of this
                      attribute ON the entity (v1: direct-attribute
                      anchors only — e.g. :kontor.transaction/effective-date,
-                     :audit-doc/uploaded-at, :kontor.status-history/changed-
+                     :kontor.audit-doc/uploaded-at, :kontor.status-history/changed-
                      at). Entities lacking the attribute are skipped
                      by the sweeper."}
 
-   {:db/ident       :retention-policy/expiry-action
+   {:db/ident       :kontor.retention-policy/expiry-action
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "What the sweeper does to an expired entity.
@@ -890,7 +890,7 @@
                      :archive-to-cold-storage — deferred in v1
                        (apply-expiry! throws 'not implemented')."}
 
-   {:db/ident       :retention-policy/anonymize-fields
+   {:db/ident       :kontor.retention-policy/anonymize-fields
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/many
     :db/doc         "For :expiry-action :anonymize — the set of PII
@@ -900,13 +900,13 @@
                      policies with the standard per-jurisdiction PII
                      set."}
 
-   {:db/ident       :retention-policy/legal-basis
+   {:db/ident       :kontor.retention-policy/legal-basis
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Free-text statute reference (e.g. 'HGB §257 /
                      GoBD', 'SOX §103', 'GDPR Art. 5(1)(e)')."}
 
-   {:db/ident       :retention-policy/effective-from
+   {:db/ident       :kontor.retention-policy/effective-from
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-026 effective-dating. A policy applies to
@@ -915,13 +915,13 @@
                      change; an entity is evaluated against the
                      policy in force when its anchor date occurred."}
 
-   {:db/ident       :retention-policy/effective-until
+   {:db/ident       :kontor.retention-policy/effective-until
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Exclusive upper bound of the policy's effective
                      window. nil = open-ended (still in force)."}
 
-   {:db/ident       :retention-policy/state
+   {:db/ident       :kontor.retention-policy/state
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-034 facet. #{:draft :active :superseded}.
@@ -929,7 +929,7 @@
                      sweeper. :draft stages a policy without firing;
                      :superseded is terminal."}
 
-   {:db/ident       :retention-policy/supporting-doc
+   {:db/ident       :kontor.retention-policy/supporting-doc
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :audit-doc — the records-retention
@@ -937,10 +937,10 @@
                      the policy. ADR-038 :requires-supporting-doc
                      enforces presence on :draft → :active."}
 
-   {:db/ident       :retention-policy/identity
+   {:db/ident       :kontor.retention-policy/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:retention-policy/code
-                     :retention-policy/effective-from]
+    :db/tupleAttrs  [:kontor.retention-policy/code
+                     :kontor.retention-policy/effective-from]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "One policy row per (code, effective-from). Lets
@@ -960,93 +960,93 @@
    we held about this subject as of the request date' — which the
    consumer assembles into the fulfillment bundle (referenced here
    as `:fulfilled-package`)."
-  [{:db/ident       :dsar-request/external-id
+  [{:db/ident       :kontor.dsar-request/external-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "External identifier for the request (intake
                      ticket number, portal reference)."}
 
-   {:db/ident       :dsar-request/partner
+   {:db/ident       :kontor.dsar-request/partner
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The data subject — a ref to :partner. collect
                      walks every attribute referencing this partner."}
 
-   {:db/ident       :dsar-request/jurisdiction
+   {:db/ident       :kontor.dsar-request/jurisdiction
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ref to :country — which regime governs
                      (GDPR / CCPA / LGPD / …). Drives the deadline."}
 
-   {:db/ident       :dsar-request/kind
+   {:db/ident       :kontor.dsar-request/kind
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "#{:access :portability :erasure :rectification
                        :restriction :objection}."}
 
-   {:db/ident       :dsar-request/received-at
+   {:db/ident       :kontor.dsar-request/received-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "When the request was received — the statutory
                      clock starts here (CCPA: receipt; GDPR: receipt)."}
 
-   {:db/ident       :dsar-request/deadline-days
+   {:db/ident       :kontor.dsar-request/deadline-days
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "Statutory response window in days (GDPR 30,
                      CCPA 45, LGPD 15, …). Jurisdiction-supplied."}
 
-   {:db/ident       :dsar-request/deadline-at
+   {:db/ident       :kontor.dsar-request/deadline-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Computed: received-at + deadline-days. Queryable
                      so a consumer cron can flag approaching/overdue
                      requests."}
 
-   {:db/ident       :dsar-request/state
+   {:db/ident       :kontor.dsar-request/state
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-034 facet. #{:received :verifying-identity
                        :in-progress :awaiting-legal-review :extended
                        :fulfilled :denied :withdrawn}."}
 
-   {:db/ident       :dsar-request/received-via
+   {:db/ident       :kontor.dsar-request/received-via
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "#{:email :portal :postal :api}."}
 
-   {:db/ident       :dsar-request/identity-verified-at
+   {:db/ident       :kontor.dsar-request/identity-verified-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "When the subject's identity was verified — set
                      on :verifying-identity → :in-progress."}
 
-   {:db/ident       :dsar-request/fulfilled-at
+   {:db/ident       :kontor.dsar-request/fulfilled-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "When the request was fulfilled."}
 
-   {:db/ident       :dsar-request/fulfilled-package
+   {:db/ident       :kontor.dsar-request/fulfilled-package
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :audit-doc — the produced bundle artifact
                      (the data package handed to the subject)."}
 
-   {:db/ident       :dsar-request/denied-reason
+   {:db/ident       :kontor.dsar-request/denied-reason
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "#{:identity-not-verified :no-data
                        :legal-hold-override :exempt-records
                        :manifestly-unfounded}."}
 
-   {:db/ident       :dsar-request/supporting-doc
+   {:db/ident       :kontor.dsar-request/supporting-doc
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :audit-doc — the intake form / request
                      correspondence."}
 
-   {:db/ident       :dsar-request/notes
+   {:db/ident       :kontor.dsar-request/notes
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Free-text annotation."}])
@@ -1396,14 +1396,14 @@
 ;; ============================================================================
 
 (def ^:private partner-merge-attrs
-  [{:db/ident       :partner-merge/duplicate-of
+  [{:db/ident       :kontor.partner-merge/duplicate-of
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Canonical (good) partner. After merge, queries
                      via resolve-canonical-partner walk superseded ->
                      duplicate-of."}
 
-   {:db/ident       :partner-merge/superseded
+   {:db/ident       :kontor.partner-merge/superseded
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Duplicate (bad) partner being merged INTO the
@@ -1411,137 +1411,137 @@
                      queries resolve it to :duplicate-of from the
                      merge point forward."}
 
-   {:db/ident       :partner-merge/merged-at
+   {:db/ident       :kontor.partner-merge/merged-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-merge/merged-by-uid
+   {:db/ident       :kontor.partner-merge/merged-by-uid
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-merge/reason
+   {:db/ident       :kontor.partner-merge/reason
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "ADR-038 codified-reason vocabulary."}
 
-   {:db/ident       :partner-merge/reason-note
+   {:db/ident       :kontor.partner-merge/reason-note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-merge/supporting-doc
+   {:db/ident       :kontor.partner-merge/supporting-doc
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ref to :audit-doc (ADR-038)."}
 
-   {:db/ident       :partner-merge/identity
+   {:db/ident       :kontor.partner-merge/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:partner-merge/duplicate-of :partner-merge/superseded]
+    :db/tupleAttrs  [:kontor.partner-merge/duplicate-of :kontor.partner-merge/superseded]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
 (def ^:private bank-account-attrs
-  [{:db/ident       :bank-account/code
+  [{:db/ident       :kontor.bank-account/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}
 
-   {:db/ident       :bank-account/iban
+   {:db/ident       :kontor.bank-account/iban
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :bank-account/bic
+   {:db/ident       :kontor.bank-account/bic
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :bank-account/account-number
+   {:db/ident       :kontor.bank-account/account-number
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "For non-IBAN banks (US, etc.)."}
 
-   {:db/ident       :bank-account/routing-number
+   {:db/ident       :kontor.bank-account/routing-number
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "US ABA, GB sort code, etc."}
 
-   {:db/ident       :bank-account/bank-name
+   {:db/ident       :kontor.bank-account/bank-name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :bank-account/country
+   {:db/ident       :kontor.bank-account/country
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :country (ADR-023)."}
 
-   {:db/ident       :bank-account/commodity
+   {:db/ident       :kontor.bank-account/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The account's currency. Multi-currency partners
                      have N bank accounts each pinned to one
                      :commodity."}
 
-   {:db/ident       :bank-account/holder-name
+   {:db/ident       :kontor.bank-account/holder-name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "On-the-account legal name (may differ from
                      :kontor.partner/name when a partner uses a service
                      intermediary)."}
 
-   {:db/ident       :bank-account/active
+   {:db/ident       :kontor.bank-account/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :bank-account/note
+   {:db/ident       :kontor.bank-account/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 
 (def ^:private partner-bank-account-attrs
-  [{:db/ident       :partner-bank-account/partner
+  [{:db/ident       :kontor.partner-bank-account/partner
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-bank-account/bank-account
+   {:db/ident       :kontor.partner-bank-account/bank-account
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-bank-account/from-date
+   {:db/ident       :kontor.partner-bank-account/from-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-bank-account/thru-date
+   {:db/ident       :kontor.partner-bank-account/thru-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-bank-account/purpose
+   {:db/ident       :kontor.partner-bank-account/purpose
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":disbursement | :collection | :both."}
 
-   {:db/ident       :partner-bank-account/preferred?
+   {:db/ident       :kontor.partner-bank-account/preferred?
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "Preferred-for-purpose flag. When multiple
                      accounts exist for the same partner+purpose,
                      :preferred? disambiguates."}
 
-   {:db/ident       :partner-bank-account/verified?
+   {:db/ident       :kontor.partner-bank-account/verified?
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-bank-account/verified-at
+   {:db/ident       :kontor.partner-bank-account/verified-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-bank-account/identity
+   {:db/ident       :kontor.partner-bank-account/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:partner-bank-account/partner
-                     :partner-bank-account/bank-account
-                     :partner-bank-account/from-date]
+    :db/tupleAttrs  [:kontor.partner-bank-account/partner
+                     :kontor.partner-bank-account/bank-account
+                     :kontor.partner-bank-account/from-date]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
 (def ^:private side-effect-intent-attrs
   ;; ADR-041: side-effect intent row pattern.
-  [{:db/ident       :side-effect-intent/key
+  [{:db/ident       :kontor.side-effect-intent/key
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
@@ -1549,48 +1549,48 @@
                      hash(entity-id, transition, attempt, payload).
                      Worker dedupes on this."}
 
-   {:db/ident       :side-effect-intent/type
+   {:db/ident       :kontor.side-effect-intent/type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":send-email | :send-edi | :send-peppol |
                      :charge-card | :webhook | :notify-slack | …"}
 
-   {:db/ident       :side-effect-intent/payload
+   {:db/ident       :kontor.side-effect-intent/payload
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "EDN or JSON blob the consumer interprets.
                      Kernel doesn't parse."}
 
-   {:db/ident       :side-effect-intent/status
+   {:db/ident       :kontor.side-effect-intent/status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":pending | :processing | :done | :failed | :abandoned"}
 
-   {:db/ident       :side-effect-intent/created-at
+   {:db/ident       :kontor.side-effect-intent/created-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :side-effect-intent/processing-at
+   {:db/ident       :kontor.side-effect-intent/processing-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :side-effect-intent/processed-at
+   {:db/ident       :kontor.side-effect-intent/processed-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :side-effect-intent/last-error
+   {:db/ident       :kontor.side-effect-intent/last-error
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :side-effect-intent/retry-count
+   {:db/ident       :kontor.side-effect-intent/retry-count
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :side-effect-intent/max-retries
+   {:db/ident       :kontor.side-effect-intent/max-retries
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :side-effect-intent/origin-history
+   {:db/ident       :kontor.side-effect-intent/origin-history
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :status-history row that produced this
@@ -1603,7 +1603,7 @@
 ;; ============================================================================
 
 (def ^:private cross-tx-attrs
-  [{:db/ident       :cross-tx/step-id
+  [{:db/ident       :kontor.cross-tx/step-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
@@ -1627,77 +1627,77 @@
   ;; tx-time: query "what applications were known as of T?" reads
   ;; rows with :applied-at ≤ T. Replayable: write a :reversal-of row
   ;; with negated :amount.
-  [{:db/ident       :payment-application/payment
+  [{:db/ident       :kontor.payment-application/payment
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to the :transaction that brought cash in
                      (typically a bank-line settlement)."}
 
-   {:db/ident       :payment-application/invoice
+   {:db/ident       :kontor.payment-application/invoice
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to the :invoice this application reduces."}
 
-   {:db/ident       :payment-application/amount
+   {:db/ident       :kontor.payment-application/amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Signed amount. Positive reduces the invoice's
                      open balance; negative is an allocation reversal
                      (see :reversal-of)."}
 
-   {:db/ident       :payment-application/commodity
+   {:db/ident       :kontor.payment-application/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Currency / commodity of :amount. Must match the
                      invoice's currency."}
 
-   {:db/ident       :payment-application/applied-at
+   {:db/ident       :kontor.payment-application/applied-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Wall-clock instant the application was recorded.
                      Bitemporal queries read applications with
                      :applied-at ≤ :as-of-valid."}
 
-   {:db/ident       :payment-application/applied-by-uid
+   {:db/ident       :kontor.payment-application/applied-by-uid
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to :kontor.audit/create-uid of the actor who applied."}
 
-   {:db/ident       :payment-application/strategy
+   {:db/ident       :kontor.payment-application/strategy
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":fifo | :customer-instruction | :proportional
                      | :cherry-pick | :reversal"}
 
-   {:db/ident       :payment-application/reason
+   {:db/ident       :kontor.payment-application/reason
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional reason keyword (e.g. :remittance-
                      received, :allocation-correction, :customer-
                      dispute)."}
 
-   {:db/ident       :payment-application/reason-note
+   {:db/ident       :kontor.payment-application/reason-note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :payment-application/reversal-of
+   {:db/ident       :kontor.payment-application/reversal-of
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ref to the prior :payment-application
                      this row reverses. Set on reversals; null on
                      forward allocations."}
 
-   {:db/ident       :payment-application/supporting-doc
+   {:db/ident       :kontor.payment-application/supporting-doc
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ref to :audit-doc (e.g. remittance
                      advice PDF)."}
 
-   {:db/ident       :payment-application/identity
+   {:db/ident       :kontor.payment-application/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:payment-application/payment
-                     :payment-application/invoice
-                     :payment-application/applied-at]
+    :db/tupleAttrs  [:kontor.payment-application/payment
+                     :kontor.payment-application/invoice
+                     :kontor.payment-application/applied-at]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
@@ -1732,60 +1732,60 @@
 
 (def ^:private partner-tax-id-attrs
   ;; ADR-040: multi-tax-id-per-jurisdiction junction.
-  [{:db/ident       :partner-tax-id/partner
+  [{:db/ident       :kontor.partner-tax-id/partner
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-tax-id/country
+   {:db/ident       :kontor.partner-tax-id/country
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Jurisdiction (ADR-023 :country)."}
 
-   {:db/ident       :partner-tax-id/tax-id-type
+   {:db/ident       :kontor.partner-tax-id/tax-id-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":vat-eu | :gst-au | :gst-in | :tin-us | :rfc-mx |
                      :cnpj-br | :cpf-br | :pan-in | :abn-au | :kvk-nl |
                      :rsin-nl | :btw-nl | … consumers extend."}
 
-   {:db/ident       :partner-tax-id/tax-id
+   {:db/ident       :kontor.partner-tax-id/tax-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "The ID value. Format country-specific; validation
                      in l10n modules."}
 
-   {:db/ident       :partner-tax-id/from-date
+   {:db/ident       :kontor.partner-tax-id/from-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-tax-id/thru-date
+   {:db/ident       :kontor.partner-tax-id/thru-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-tax-id/verified?
+   {:db/ident       :kontor.partner-tax-id/verified?
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "VIES / SAT / IRP / consumer-side validated."}
 
-   {:db/ident       :partner-tax-id/verified-at
+   {:db/ident       :kontor.partner-tax-id/verified-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-tax-id/identity
+   {:db/ident       :kontor.partner-tax-id/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:partner-tax-id/partner
-                     :partner-tax-id/country
-                     :partner-tax-id/tax-id-type
-                     :partner-tax-id/from-date]
+    :db/tupleAttrs  [:kontor.partner-tax-id/partner
+                     :kontor.partner-tax-id/country
+                     :kontor.partner-tax-id/tax-id-type
+                     :kontor.partner-tax-id/from-date]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
 (def ^:private partner-tag-attrs
-  [{:db/ident       :partner-tag/partner
+  [{:db/ident       :kontor.partner-tag/partner
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-tag/tag-type
+   {:db/ident       :kontor.partner-tag/tag-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Canonical starter vocabulary:
@@ -1794,19 +1794,19 @@
                      :gold-tier | :silver-tier | :bronze-tier | …
                      consumers extend."}
 
-   {:db/ident       :partner-tag/from-date
+   {:db/ident       :kontor.partner-tag/from-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-tag/thru-date
+   {:db/ident       :kontor.partner-tag/thru-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :partner-tag/identity
+   {:db/ident       :kontor.partner-tag/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:partner-tag/partner
-                     :partner-tag/tag-type
-                     :partner-tag/from-date]
+    :db/tupleAttrs  [:kontor.partner-tag/partner
+                     :kontor.partner-tag/tag-type
+                     :kontor.partner-tag/from-date]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
@@ -1815,25 +1815,25 @@
 ;;
 ;; Implements Odoo's account_fiscal_position concept: when a customer
 ;; is in country X, replace the default tax with the X-appropriate one.
-;; The mapping itself lives in :fiscal-position/tax-mappings (a many-ref
+;; The mapping itself lives in :kontor.fiscal-position/tax-mappings (a many-ref
 ;; to remap entities — declared once we have a remap entity).
 ;; ============================================================================
 
 (def ^:private fiscal-position-attrs
-  [{:db/ident       :fiscal-position/name
+  [{:db/ident       :kontor.fiscal-position/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :fiscal-position/country-code
+   {:db/ident       :kontor.fiscal-position/country-code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true}
 
-   {:db/ident       :fiscal-position/auto-apply
+   {:db/ident       :kontor.fiscal-position/auto-apply
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :fiscal-position/vat-required
+   {:db/ident       :kontor.fiscal-position/vat-required
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "Whether partner must have a tax-id for this
@@ -2604,37 +2604,37 @@
 ;; ============================================================================
 
 (def ^:private payment-term-attrs
-  [{:db/ident       :payment-term/code
+  [{:db/ident       :kontor.payment-term/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Stable id (\"NET30\", \"NET14\", \"DUE-ON-RECEIPT\",
                      \"2/10-NET30\")."}
 
-   {:db/ident       :payment-term/name
+   {:db/ident       :kontor.payment-term/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Human-readable label (\"30 days net\")."}
 
-   {:db/ident       :payment-term/net-days
+   {:db/ident       :kontor.payment-term/net-days
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "Days from invoice date until full payment is due.
                      0 means due on receipt."}
 
-   {:db/ident       :payment-term/discount-pct
+   {:db/ident       :kontor.payment-term/discount-pct
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional early-pay discount percentage
                      (e.g. 2.0M for 2%)."}
 
-   {:db/ident       :payment-term/discount-days
+   {:db/ident       :kontor.payment-term/discount-days
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional days within which the discount applies
                      (e.g. 10 for 2/10-NET30)."}
 
-   {:db/ident       :payment-term/active
+   {:db/ident       :kontor.payment-term/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}])
 
@@ -2838,13 +2838,13 @@
 ;;                  transfer between own accounts already accounted
 ;;                  for elsewhere).
 ;;
-;; Idempotency: `:bank-line/external-id` is unique-identity. The
+;; Idempotency: `:kontor.bank-line/external-id` is unique-identity. The
 ;; ingestion code derives it as a hash of (bank, date, amount,
 ;; raw-row) so re-importing the same statement is a no-op.
 ;; ============================================================================
 
 (def ^:private bank-line-attrs
-  [{:db/ident       :bank-line/external-id
+  [{:db/ident       :kontor.bank-line/external-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
@@ -2852,13 +2852,13 @@
                      raw-row-hash). Re-importing the same statement
                      hits the same id and is idempotent."}
 
-   {:db/ident       :bank-line/bank
+   {:db/ident       :kontor.bank-line/bank
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "Bank/format keyword (:dkb :ing :chase :n26 …)."}
 
-   {:db/ident       :bank-line/source-account
+   {:db/ident       :kontor.bank-line/source-account
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Chart account this bank-line lands on (the bank-
@@ -2866,16 +2866,16 @@
                      1200 / 1210 / 1230. Required at ingestion so the
                      import driver knows which account to post."}
 
-   {:db/ident       :bank-line/date
+   {:db/ident       :kontor.bank-line/date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/index       true}
 
-   {:db/ident       :bank-line/value-date
+   {:db/ident       :kontor.bank-line/value-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :bank-line/amount
+   {:db/ident       :kontor.bank-line/amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Signed: positive = inflow (credit on bank
@@ -2883,59 +2883,59 @@
                      the bank's POV; the eventual posting's bank-side
                      amount has the same sign as this attribute."}
 
-   {:db/ident       :bank-line/commodity
+   {:db/ident       :kontor.bank-line/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :bank-line/counterparty
+   {:db/ident       :kontor.bank-line/counterparty
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :bank-line/counterparty-iban
+   {:db/ident       :kontor.bank-line/counterparty-iban
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :bank-line/description
+   {:db/ident       :kontor.bank-line/description
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Free-text Verwendungszweck / memo. Used by the
                      reference-id matcher to detect invoice external-
                      ids embedded in the statement text."}
 
-   {:db/ident       :bank-line/transaction-type
+   {:db/ident       :kontor.bank-line/transaction-type
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Bank-side type label (Lastschrift, Gutschrift,
                      ACH_DEBIT, etc.). Free-form per importer."}
 
-   {:db/ident       :bank-line/category
+   {:db/ident       :kontor.bank-line/category
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Auto-categorizer output from bank-csv (e.g.
                      :miete, :gehalt, :einnahmen). Suggests a contra
                      account when no AR/AP match is found."}
 
-   {:db/ident       :bank-line/raw-row
+   {:db/ident       :kontor.bank-line/raw-row
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Original CSV row joined with a separator. Stored
                      for audit / re-parse / diff against future
                      importer changes."}
 
-   {:db/ident       :bank-line/status
+   {:db/ident       :kontor.bank-line/status
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         ":unmatched | :matched | :reconciled | :ignored.
                      A reconciliation queue UI filters on this."}
 
-   {:db/ident       :bank-line/posting
+   {:db/ident       :kontor.bank-line/posting
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The bank-side posting created when the line is
                      reconciled. Set during commit-match!"}
 
-   {:db/ident       :bank-line/reconciled-at
+   {:db/ident       :kontor.bank-line/reconciled-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Tx-time when the bank-line was reconciled."}])
@@ -2957,76 +2957,76 @@
 ;; ============================================================================
 
 (def ^:private analytic-plan-attrs
-  [{:db/ident       :analytic-plan/code
+  [{:db/ident       :kontor.analytic-plan/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Stable identity (\"COST-CENTER\", \"PROJECT\",
                      \"DEPARTMENT\")."}
 
-   {:db/ident       :analytic-plan/name
+   {:db/ident       :kontor.analytic-plan/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :analytic-plan/applicability
+   {:db/ident       :kontor.analytic-plan/applicability
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional gate: which posting context the plan
                      applies to. nil = all postings."}
 
-   {:db/ident       :analytic-plan/active
+   {:db/ident       :kontor.analytic-plan/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}])
 
 (def ^:private analytic-account-attrs
-  [{:db/ident       :analytic-account/path
+  [{:db/ident       :kontor.analytic-account/path
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Hierarchical path within a plan
                      (\"COST-CENTER:Engineering:Frontend\")."}
 
-   {:db/ident       :analytic-account/code
+   {:db/ident       :kontor.analytic-account/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true}
 
-   {:db/ident       :analytic-account/name
+   {:db/ident       :kontor.analytic-account/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :analytic-account/plan
+   {:db/ident       :kontor.analytic-account/plan
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :analytic-account/parent
+   {:db/ident       :kontor.analytic-account/parent
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :analytic-account/active
+   {:db/ident       :kontor.analytic-account/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}])
 
 (def ^:private analytic-distribution-attrs
-  [{:db/ident       :analytic-distribution/plan
+  [{:db/ident       :kontor.analytic-distribution/plan
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Which plan this distribution applies under
                      (a posting may carry distributions in multiple
                      plans simultaneously — one per plan)."}
 
-   {:db/ident       :analytic-distribution/account
+   {:db/ident       :kontor.analytic-distribution/account
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The analytic account the percent points at."}
 
-   {:db/ident       :analytic-distribution/percent
+   {:db/ident       :kontor.analytic-distribution/percent
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "0..100 inclusive. Sum-to-100 per plan is enforced
                      by the report engine, not by the schema."}
 
-   {:db/ident       :analytic-distribution/posting
+   {:db/ident       :kontor.analytic-distribution/posting
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Back-ref to the posting this distribution annotates.
@@ -3214,54 +3214,54 @@
     :db/cardinality :db.cardinality/one}])
 
 (def ^:private state-attrs
-  [{:db/ident       :state/country
+  [{:db/ident       :kontor.state/country
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Parent country. Required."}
 
-   {:db/ident       :state/code
+   {:db/ident       :kontor.state/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "ISO 3166-2 suffix (\"MH\", \"QC\", \"SP\", \"JAL\").
                      Just the local part — not the full \"IN-MH\"."}
 
-   {:db/ident       :state/name
+   {:db/ident       :kontor.state/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :state/identity
+   {:db/ident       :kontor.state/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:state/country :state/code]
+    :db/tupleAttrs  [:kontor.state/country :kontor.state/code]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Composite identity. One (country, state-code)
                      pairing exists at most once."}
 
-   {:db/ident       :state/external-codes
+   {:db/ident       :kontor.state/external-codes
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Refs to :state-code entities — per-regulator
                      codes beyond ISO 3166-2 (Indian GSTN, Brazilian
                      IBGE, Canadian CRA province code, etc.)."}
 
-   {:db/ident       :state/active
+   {:db/ident       :kontor.state/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}])
 
 (def ^:private state-code-attrs
-  [{:db/ident       :state-code/state
+  [{:db/ident       :kontor.state-code/state
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Back-ref to the state this external code is for."}
 
-   {:db/ident       :state-code/regulator
+   {:db/ident       :kontor.state-code/regulator
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Identifies the regulator / mapping target.
                      Conventions: :in/gst, :br/ibge, :ca/cra,
                      :iso-3166-2, :sap/bland, :sat/c-estado, …"}
 
-   {:db/ident       :state-code/code
+   {:db/ident       :kontor.state-code/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "The code in the regulator's system.
@@ -3269,14 +3269,14 @@
                      \"35\" (IBGE for São Paulo),
                      \"13\" (CRA for Quebec)."}
 
-   {:db/ident       :state-code/identity
+   {:db/ident       :kontor.state-code/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:state-code/state :state-code/regulator]
+    :db/tupleAttrs  [:kontor.state-code/state :kontor.state-code/regulator]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Composite identity."}
 
-   {:db/ident       :state-code/note
+   {:db/ident       :kontor.state-code/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 
@@ -3315,13 +3315,13 @@
 ;; ============================================================================
 
 (def ^:private attestation-attrs
-  [{:db/ident       :attestation/transaction
+  [{:db/ident       :kontor.attestation/transaction
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Back-ref to the transaction this attestation
                      belongs to."}
 
-   {:db/ident       :attestation/format
+   {:db/ident       :kontor.attestation/format
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Format keyword. Conventions:
@@ -3330,43 +3330,43 @@
                      :sa/zatca-icv :sa/zatca-pih :tr/efatura
                      :kr/nts-chain :it/sdi-id"}
 
-   {:db/ident       :attestation/token
+   {:db/ident       :kontor.attestation/token
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "The issued artifact identifier (IRN hash, UUID,
                      access-key, …)."}
 
-   {:db/ident       :attestation/state
+   {:db/ident       :kontor.attestation/state
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":pending | :issued | :revoked | :expired
                      | :superseded"}
 
-   {:db/ident       :attestation/issued-at
+   {:db/ident       :kontor.attestation/issued-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "When the authority's response landed."}
 
-   {:db/ident       :attestation/valid-from
+   {:db/ident       :kontor.attestation/valid-from
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional start of the legal validity window."}
 
-   {:db/ident       :attestation/valid-until
+   {:db/ident       :kontor.attestation/valid-until
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional end of the legal validity window.
                      E-way bills: 1 day per 200 km (regular) or
                      1 day per 20 km (over-dimensional cargo)."}
 
-   {:db/ident       :attestation/depends-on
+   {:db/ident       :kontor.attestation/depends-on
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Refs to other :attestation entities this one
                      depends on. India: EWB Part A derives from the
                      IRN, so the EWB attestation depends-on the IRN."}
 
-   {:db/ident       :attestation/payload
+   {:db/ident       :kontor.attestation/payload
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Canonical bytes sent to / received from the
@@ -3374,20 +3374,20 @@
                      regimes (KSA ZATCA Phase 2, Turkey, Korea) where
                      the bytes themselves are the legal record."}
 
-   {:db/ident       :attestation/payload-hash
+   {:db/ident       :kontor.attestation/payload-hash
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
-    :db/doc         "SHA-256 of :attestation/payload, hex-encoded.
+    :db/doc         "SHA-256 of :kontor.attestation/payload, hex-encoded.
                      PIH (previous-invoice-hash) chains reference
                      this to link consecutive attestations."}
 
-   {:db/ident       :attestation/note
+   {:db/ident       :kontor.attestation/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :attestation/identity
+   {:db/ident       :kontor.attestation/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:attestation/transaction :attestation/format]
+    :db/tupleAttrs  [:kontor.attestation/transaction :kontor.attestation/format]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "One (transaction, format) pair exists at most
@@ -3414,19 +3414,19 @@
 ;; Mexico's CFDI is one envelope + N stacked complementos (Pagos,
 ;; Carta Porte, Nómina, TFD). Each complemento is its own XSD;
 ;; serialization splices them into the envelope's <Complemento>
-;; parent in :complemento/sequence order. The kernel stores opaque
+;; parent in :kontor.complemento/sequence order. The kernel stores opaque
 ;; payload bytes; XSD validation lives in the l10n module that owns
 ;; the namespace.
 ;; ============================================================================
 
 (def ^:private complemento-attrs
-  [{:db/ident       :complemento/transaction
+  [{:db/ident       :kontor.complemento/transaction
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Back-ref to the transaction this complemento
                      attaches to."}
 
-   {:db/ident       :complemento/namespace
+   {:db/ident       :kontor.complemento/namespace
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Canonical XML namespace URI.
@@ -3434,7 +3434,7 @@
                      \"http://www.sat.gob.mx/Pagos20\",
                      \"http://www.sat.gob.mx/TimbreFiscalDigital\"."}
 
-   {:db/ident       :complemento/format
+   {:db/ident       :kontor.complemento/format
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Convenience identifier keyword.
@@ -3442,29 +3442,29 @@
                      :mx/cfdi-nomina-1.2 :mx/cfdi-tfd-1.1
                      :ubl/factur-x-additional-doc."}
 
-   {:db/ident       :complemento/sequence
+   {:db/ident       :kontor.complemento/sequence
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "Ordering within the envelope. Some XSDs enforce
                      a defined order; safe to default to insertion
                      order (0, 100, 200, …)."}
 
-   {:db/ident       :complemento/payload
+   {:db/ident       :kontor.complemento/payload
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "The XML fragment as a string. The kernel does
                      not validate against the XSD; the emitter in
                      the l10n module does."}
 
-   {:db/ident       :complemento/active
+   {:db/ident       :kontor.complemento/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "Soft-supersede flag. Set to false when a later
                      complemento replaces this one (idempotency)."}
 
-   {:db/ident       :complemento/identity
+   {:db/ident       :kontor.complemento/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:complemento/transaction :complemento/namespace]
+    :db/tupleAttrs  [:kontor.complemento/transaction :kontor.complemento/namespace]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "One fragment per (transaction, namespace)."}])
@@ -3510,37 +3510,37 @@
 ;; ============================================================================
 
 (def ^:private valuation-book-attrs
-  [{:db/ident       :valuation-book/code
+  [{:db/ident       :kontor.valuation-book/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Stable identifier (\"primary\", \"ifrs\",
                      \"tax-de\", \"management\")."}
 
-   {:db/ident       :valuation-book/name
+   {:db/ident       :kontor.valuation-book/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :valuation-book/framework
+   {:db/ident       :kontor.valuation-book/framework
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Accounting framework keyword.
                      :legal | :group | :ifrs | :us-gaap | :hgb
                      | :tax-de | :management | … free-form."}
 
-   {:db/ident       :valuation-book/cost-method
+   {:db/ident       :kontor.valuation-book/cost-method
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":fifo | :lifo | :avg | :standard | :specific.
                      CostingProvider impls dispatch on this."}
 
-   {:db/ident       :valuation-book/commodity
+   {:db/ident       :kontor.valuation-book/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Accounting currency for this book when it differs
                      from the transaction commodity. Optional."}
 
-   {:db/ident       :valuation-book/active
+   {:db/ident       :kontor.valuation-book/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}])
 
@@ -3554,12 +3554,12 @@
 ;; ============================================================================
 
 (def ^:private valuation-layer-attrs
-  [{:db/ident       :valuation-layer/book
+  [{:db/ident       :kontor.valuation-layer/book
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Required ref to :valuation-book."}
 
-   {:db/ident       :valuation-layer/item
+   {:db/ident       :kontor.valuation-layer/item
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Generic ref. The kernel does not model 'item';
@@ -3567,72 +3567,72 @@
                      an item is and points the layer at it. (ADR-010
                      scope honesty.)"}
 
-   {:db/ident       :valuation-layer/lot
+   {:db/ident       :kontor.valuation-layer/lot
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ref to :lot. Lot-isolated FIFO uses
                      this to keep separate stacks per lot."}
 
-   {:db/ident       :valuation-layer/origin-transaction
+   {:db/ident       :kontor.valuation-layer/origin-transaction
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to the kernel :transaction that created
                      this layer (the receipt event)."}
 
-   {:db/ident       :valuation-layer/qty-original
+   {:db/ident       :kontor.valuation-layer/qty-original
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Quantity received. Immutable. Remaining quantity
                      is a derived view: qty-original − Σ consumption.qty."}
 
-   {:db/ident       :valuation-layer/unit-cost-original
+   {:db/ident       :kontor.valuation-layer/unit-cost-original
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Per-unit cost at receipt. Immutable. Current cost
                      is a derived view that folds in adjustments."}
 
-   {:db/ident       :valuation-layer/commodity
+   {:db/ident       :kontor.valuation-layer/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Cost currency."}
 
-   {:db/ident       :valuation-layer/received-at
+   {:db/ident       :kontor.valuation-layer/received-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Valid time of the receipt. Used to order FIFO/LIFO
                      stacks. Distinct from :origin-transaction's tx-time."}
 
-   {:db/ident       :valuation-layer/note
+   {:db/ident       :kontor.valuation-layer/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 
 (def ^:private layer-consumption-attrs
-  [{:db/ident       :layer-consumption/layer
+  [{:db/ident       :kontor.layer-consumption/layer
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Required ref to :valuation-layer."}
 
-   {:db/ident       :layer-consumption/qty
+   {:db/ident       :kontor.layer-consumption/qty
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Quantity consumed FROM the referenced layer in
                      this single event. One issue may produce multiple
                      consumption rows (one per drawn layer)."}
 
-   {:db/ident       :layer-consumption/unit-cost-at-consumption
+   {:db/ident       :kontor.layer-consumption/unit-cost-at-consumption
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Book value per unit at the moment of consumption.
                      Folds in any :layer-adjustment that was applied
                      before this event."}
 
-   {:db/ident       :layer-consumption/issue-transaction
+   {:db/ident       :kontor.layer-consumption/issue-transaction
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to the kernel :transaction that issued this
                      consumption (the outbound move)."}
 
-   {:db/ident       :layer-consumption/issued-at
+   {:db/ident       :kontor.layer-consumption/issued-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Valid time of the issue."}])
@@ -3819,7 +3819,7 @@
                      Schema-optional for single-entity tenants."}])
 
 (def ^:private valuation-book-entity-attrs
-  [{:db/ident       :valuation-book/entity
+  [{:db/ident       :kontor.valuation-book/entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ref to :entity (ADR-031). Each entity
@@ -3837,18 +3837,18 @@
 ;; ============================================================================
 
 (def ^:private schedule-attrs
-  [{:db/ident       :schedule/code
+  [{:db/ident       :kontor.schedule/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Stable identifier (\"asset-1234-dep\",
                      \"sub-acme-2026-q3-rev\", \"lease-bldg-01\")."}
 
-   {:db/ident       :schedule/name
+   {:db/ident       :kontor.schedule/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :schedule/kind
+   {:db/ident       :kontor.schedule/kind
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":depreciation | :revenue-recognition
@@ -3856,32 +3856,32 @@
                      | :pto-accrual | :prepaid-amortization
                      | … free-form. Consumers extend."}
 
-   {:db/ident       :schedule/origin-entity
+   {:db/ident       :kontor.schedule/origin-entity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Generic ref — the asset / contract /
                      subscription / lease this schedule belongs to.
                      Consumer defines what that entity is."}
 
-   {:db/ident       :schedule/start-date
+   {:db/ident       :kontor.schedule/start-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "First scheduled occurrence (inclusive)."}
 
-   {:db/ident       :schedule/end-date
+   {:db/ident       :kontor.schedule/end-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Last scheduled occurrence (inclusive). Optional;
                      nil = indefinite."}
 
-   {:db/ident       :schedule/frequency
+   {:db/ident       :kontor.schedule/frequency
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":daily | :weekly | :monthly | :quarterly |
                      :annual | :custom. Consumers compute the next
                      occurrence date using this."}
 
-   {:db/ident       :schedule/total-amount
+   {:db/ident       :kontor.schedule/total-amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Total amount to be amortized over the schedule.
@@ -3891,67 +3891,67 @@
                      (subscription billing with variable usage) omit
                      this."}
 
-   {:db/ident       :schedule/total-commodity
+   {:db/ident       :kontor.schedule/total-commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
-    :db/doc         "Commodity for :schedule/total-amount."}
+    :db/doc         "Commodity for :kontor.schedule/total-amount."}
 
-   {:db/ident       :schedule/state
+   {:db/ident       :kontor.schedule/state
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":active | :paused | :completed | :cancelled."}
 
-   {:db/ident       :schedule/active
+   {:db/ident       :kontor.schedule/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :schedule/note
+   {:db/ident       :kontor.schedule/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 
 (def ^:private schedule-occurrence-attrs
-  [{:db/ident       :schedule-occurrence/schedule
+  [{:db/ident       :kontor.schedule-occurrence/schedule
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Required ref to :schedule. Back-pointer."}
 
-   {:db/ident       :schedule-occurrence/sequence
+   {:db/ident       :kontor.schedule-occurrence/sequence
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "1, 2, 3, … The Nth firing of the schedule."}
 
-   {:db/ident       :schedule-occurrence/scheduled-date
+   {:db/ident       :kontor.schedule-occurrence/scheduled-date
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "The valid-time date this occurrence is for.
                      (E.g. \"depreciation for month 2026-05\".)"}
 
-   {:db/ident       :schedule-occurrence/transaction
+   {:db/ident       :kontor.schedule-occurrence/transaction
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Required ref to the kernel :transaction that
                      this occurrence produced."}
 
-   {:db/ident       :schedule-occurrence/amount
+   {:db/ident       :kontor.schedule-occurrence/amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "This period's amount. Consumer-computed."}
 
-   {:db/ident       :schedule-occurrence/commodity
+   {:db/ident       :kontor.schedule-occurrence/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :schedule-occurrence/fired-at
+   {:db/ident       :kontor.schedule-occurrence/fired-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Wall-clock time the occurrence was recorded.
                      Distinct from :scheduled-date (the valid-time)
                      and from the underlying datahike tx-time."}
 
-   {:db/ident       :schedule-occurrence/identity
+   {:db/ident       :kontor.schedule-occurrence/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:schedule-occurrence/schedule
-                     :schedule-occurrence/sequence]
+    :db/tupleAttrs  [:kontor.schedule-occurrence/schedule
+                     :kontor.schedule-occurrence/sequence]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Composite identity: one occurrence per
@@ -3959,35 +3959,35 @@
                      firing period 7 collapses to the existing row."}])
 
 (def ^:private layer-adjustment-attrs
-  [{:db/ident       :layer-adjustment/layer
+  [{:db/ident       :kontor.layer-adjustment/layer
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Required ref to :valuation-layer."}
 
-   {:db/ident       :layer-adjustment/amount
+   {:db/ident       :kontor.layer-adjustment/amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Signed TOTAL amount (not per-unit). Adds to the
                      layer's total cost; positive for landed cost
                      additions, negative for write-downs."}
 
-   {:db/ident       :layer-adjustment/reason
+   {:db/ident       :kontor.layer-adjustment/reason
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":landed-cost | :revaluation | :correction
                      | :write-down | :write-up | … free-form."}
 
-   {:db/ident       :layer-adjustment/origin-transaction
+   {:db/ident       :kontor.layer-adjustment/origin-transaction
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Ref to the kernel :transaction that booked this
                      adjustment (the landed-cost voucher / revaluation)."}
 
-   {:db/ident       :layer-adjustment/applied-at
+   {:db/ident       :kontor.layer-adjustment/applied-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :layer-adjustment/note
+   {:db/ident       :kontor.layer-adjustment/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 
@@ -4011,7 +4011,7 @@
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "The attribute on the entity carrying this state.
-                     Typically :order/status, :kontor.invoice/status, etc.
+                     Typically :kontor.order/status, :kontor.invoice/status, etc.
                      One entity can have multiple facets — multiple
                      concurrent state machines on the same row."}
 
@@ -4159,13 +4159,13 @@
 ;; ============================================================================
 
 (def ^:private audit-doc-attrs
-  [{:db/ident       :audit-doc/code
+  [{:db/ident       :kontor.audit-doc/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Consumer-supplied opaque identifier."}
 
-   {:db/ident       :audit-doc/type
+   {:db/ident       :kontor.audit-doc/type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":credit-memo | :customer-email | :vendor-email |
@@ -4173,34 +4173,34 @@
                      :regulator-clearance | :manager-override |
                      :compliance-attestation | … consumers extend."}
 
-   {:db/ident       :audit-doc/title
+   {:db/ident       :kontor.audit-doc/title
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Human-readable label for the artifact."}
 
-   {:db/ident       :audit-doc/description
+   {:db/ident       :kontor.audit-doc/description
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :audit-doc/content-hash
+   {:db/ident       :kontor.audit-doc/content-hash
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "SHA-256 of the artifact for integrity
                      verification. The kernel doesn't compute this;
                      consumer derives it at upload time."}
 
-   {:db/ident       :audit-doc/storage-uri
+   {:db/ident       :kontor.audit-doc/storage-uri
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Where the consumer stores the artifact bytes
                      ('s3://...', 'file://...', 'https://...',
                      'ipfs://...'). Kernel is storage-agnostic."}
 
-   {:db/ident       :audit-doc/uploaded-by-uid
+   {:db/ident       :kontor.audit-doc/uploaded-by-uid
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :audit-doc/uploaded-at
+   {:db/ident       :kontor.audit-doc/uploaded-at
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one}
 
@@ -4208,11 +4208,11 @@
    ;; :none (default; nil treated as :none) | :attorney-client |
    ;; :work-product | :joint-defense | :settlement-communication |
    ;; :trade-secret | :pii-sensitive | <consumer extensions>.
-   ;; This is the status-machine facet :audit-doc/privilege —
+   ;; This is the status-machine facet :kontor.audit-doc/privilege —
    ;; changes go through kontor.audit-doc/reclassify-privilege!
    ;; (waivers are ADR-038 approval-gated). The kernel TAGS; the
    ;; consumer's auth layer ENFORCES — there is no kernel ACL.
-   {:db/ident       :audit-doc/privilege
+   {:db/ident       :kontor.audit-doc/privilege
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Legal-privilege classification (ADR-051).
@@ -4220,7 +4220,7 @@
                      (d/pull (d/valid-at db filing-date) [...] doc-eid)
                      answers 'privilege at filing date'."}
 
-   ;; ADR-075 — subject-matter category, orthogonal to :audit-doc/
+   ;; ADR-075 — subject-matter category, orthogonal to :kontor.audit-doc/
    ;; privilege. Open-set keyword: :none (default; nil treated as
    ;; :none) | :financial | :payroll | :hr-personnel | :hr-medical |
    ;; :hr-immigration | :tax-filing | :legal-proceeding |
@@ -4232,12 +4232,12 @@
    ;; GDPR Art. 30 records-of-processing organize by subject-matter
    ;; "category of personal data" — this attr is the regulatory
    ;; schema's reflection in kontor.
-   {:db/ident       :audit-doc/category
+   {:db/ident       :kontor.audit-doc/category
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Subject-matter category (ADR-075 + ADR-094).
                      Open-set; nil = :none. Orthogonal to
-                     :audit-doc/privilege — legal-doctrine and domain
+                     :kontor.audit-doc/privilege — legal-doctrine and domain
                      are independent axes. The consumer's auth layer
                      reads BOTH to make access decisions; the kernel
                      tags only. Canonical vocabulary (project-endorsed,
@@ -4254,7 +4254,7 @@
    ;; workforces route correctly. Per ADR-051's open-set pattern,
    ;; this is a non-breaking addition; DSAR / retention rules are
    ;; per-category, NOT per-language, so language stays independent.
-   {:db/ident       :audit-doc/language
+   {:db/ident       :kontor.audit-doc/language
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Language / locale axis (ADR-078). Open-set;
@@ -4264,32 +4264,32 @@
                      templates read this slot."}])
 
 (def ^:private approval-policy-attrs
-  [{:db/ident       :approval-policy/entity-type
+  [{:db/ident       :kontor.approval-policy/entity-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Which entity type this policy applies to.
                      Mirrors :kontor.status-transition/entity-type."}
 
-   {:db/ident       :approval-policy/facet
+   {:db/ident       :kontor.approval-policy/facet
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :approval-policy/transition-from
+   {:db/ident       :kontor.approval-policy/transition-from
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :approval-policy/transition-to
+   {:db/ident       :kontor.approval-policy/transition-to
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :approval-policy/applies-to-org
+   {:db/ident       :kontor.approval-policy/applies-to-org
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional per-org scope (per ADR-031). Tenant-
                      wide when absent; org-specific overrides coexist
                      with the global."}
 
-   {:db/ident       :approval-policy/rule
+   {:db/ident       :kontor.approval-policy/rule
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":no-self-approval — recorded actor must differ
@@ -4300,22 +4300,22 @@
                      required.
                      … future rules extend the vocabulary."}
 
-   {:db/ident       :approval-policy/active
+   {:db/ident       :kontor.approval-policy/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :approval-policy/note
+   {:db/ident       :kontor.approval-policy/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :approval-policy/identity
+   {:db/ident       :kontor.approval-policy/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:approval-policy/entity-type
-                     :approval-policy/facet
-                     :approval-policy/transition-from
-                     :approval-policy/transition-to
-                     :approval-policy/rule
-                     :approval-policy/applies-to-org]
+    :db/tupleAttrs  [:kontor.approval-policy/entity-type
+                     :kontor.approval-policy/facet
+                     :kontor.approval-policy/transition-from
+                     :kontor.approval-policy/transition-to
+                     :kontor.approval-policy/rule
+                     :kontor.approval-policy/applies-to-org]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 

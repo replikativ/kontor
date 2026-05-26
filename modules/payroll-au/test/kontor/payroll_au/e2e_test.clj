@@ -177,27 +177,27 @@
                       :commodity aud})
         db' (:db-after report)
         run-eid (d/q '[:find ?r . :in $ ?c
-                       :where [?r :payroll-run/code ?c]]
+                       :where [?r :kontor.payroll-run/code ?c]]
                      db' "ACME-2026-05-001")
-        run (d/pull db' '[* {:payroll-run/payroll-transaction
+        run (d/pull db' '[* {:kontor.payroll-run/payroll-transaction
                              [:kontor.transaction/external-id
                               {:kontor.posting/_transaction
                                [:kontor.posting/amount
                                 {:kontor.posting/account [:kontor.account/code]}
                                 {:kontor.posting/analytic-distributions
-                                 [:analytic-distribution/percent
-                                  {:analytic-distribution/account
-                                   [:analytic-account/code]}]}]}]}]
+                                 [:kontor.analytic-distribution/percent
+                                  {:kontor.analytic-distribution/account
+                                   [:kontor.analytic-account/code]}]}]}]}]
                     run-eid)
-        postings (-> run :payroll-run/payroll-transaction :kontor.posting/_transaction)]
+        postings (-> run :kontor.payroll-run/payroll-transaction :kontor.posting/_transaction)]
     (testing "the payroll-run row is created"
       (is (some? run-eid))
-      (is (= :xero-gl (:payroll-run/provider-id run))))
+      (is (= :xero-gl (:kontor.payroll-run/provider-id run))))
     (testing "control totals reflect all three employees"
       ;; Gross: 6500 + (7200+300) + (5800+500) = 6500 + 7500 + 6300 = 20,300
-      (is (= 20300.00M (:payroll-run/control-total-gross run)))
+      (is (= 20300.00M (:kontor.payroll-run/control-total-gross run)))
       ;; Net: 4650 + 5900 + 5200 = 15,750
-      (is (= 15750.00M (:payroll-run/control-total-net run))))
+      (is (= 15750.00M (:kontor.payroll-run/control-total-net run))))
     (testing "the linked transaction balances per-(ledger, commodity)"
       (let [sum (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                           (.add a ^BigDecimal amount))
@@ -208,19 +208,19 @@
         (is (seq with-dist))
         (let [state-codes (->> with-dist
                                (mapcat :kontor.posting/analytic-distributions)
-                               (map :analytic-distribution/account)
-                               (map :analytic-account/code)
+                               (map :kontor.analytic-distribution/account)
+                               (map :kontor.analytic-account/code)
                                distinct
                                set)]
           (is (= #{"NSW" "VIC" "QLD"} state-codes)))))
     (testing "STP Phase 2 emit-doc was produced"
       (let [docs (d/q '[:find [?e ...]
-                        :where [?e :audit-doc/category :payroll-filing]
-                        [?e :audit-doc/type :stp-pay-event]]
+                        :where [?e :kontor.audit-doc/category :payroll-filing]
+                        [?e :kontor.audit-doc/type :stp-pay-event]]
                       db')]
         (is (>= (count docs) 1))))
-    (testing "the emit-doc is linked from :payroll-run/emit-docs (P0-86-1 fix)"
-      (is (seq (:payroll-run/emit-docs run))))))
+    (testing "the emit-doc is linked from :kontor.payroll-run/emit-docs (P0-86-1 fix)"
+      (is (seq (:kontor.payroll-run/emit-docs run))))))
 
 ;; ============================================================================
 ;; SuperStream remittance helper composed standalone (typically monthly,
@@ -249,9 +249,9 @@
         tx (au-super/superstream-audit-doc-tx-data {:payload payload})
         doc (first tx)]
     (testing "the SuperStream audit-doc is :payroll-filing"
-      (is (= :payroll-filing (:audit-doc/category doc)))
-      (is (= :en             (:audit-doc/language doc)))
-      (is (= :superstream-contribution (:audit-doc/type doc))))
+      (is (= :payroll-filing (:kontor.audit-doc/category doc)))
+      (is (= :en             (:kontor.audit-doc/language doc)))
+      (is (= :superstream-contribution (:kontor.audit-doc/type doc))))
     (testing "payload total matches the line total"
       (is (= "747.50" (:super.message/total-amount payload))))))
 
@@ -272,13 +272,13 @@
                 :separation-payments {:unused-leave 4200M}})
         [audit-doc emp-update] tx]
     (testing "audit-doc carries the right category + cessation-code hint"
-      (is (= :hr-personnel (:audit-doc/category audit-doc)))
-      (is (= :termination-event (:audit-doc/type audit-doc)))
-      (is (re-find #"CessationTypeCode: R" (:audit-doc/description audit-doc))))
+      (is (= :hr-personnel (:kontor.audit-doc/category audit-doc)))
+      (is (= :termination-event (:kontor.audit-doc/type audit-doc)))
+      (is (re-find #"CessationTypeCode: R" (:kontor.audit-doc/description audit-doc))))
     (testing "the employment update transitions to :terminated"
-      (is (= :terminated (:employment/state emp-update)))
+      (is (= :terminated (:kontor.employment/state emp-update)))
       (is (= e101 (:db/id emp-update)))
-      (is (= #inst "2026-05-31" (:employment/end-date emp-update)))
-      (is (= :redundancy (:employment/termination-reason emp-update)))
+      (is (= #inst "2026-05-31" (:kontor.employment/end-date emp-update)))
+      (is (= :redundancy (:kontor.employment/termination-reason emp-update)))
       (is (= #inst "2026-06-15"
-             (:employment/final-pay-period-end-date emp-update))))))
+             (:kontor.employment/final-pay-period-end-date emp-update))))))

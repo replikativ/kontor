@@ -131,9 +131,9 @@
                       :vt-from jan-31})
         db (:db-after report)
         run-eid (d/q '[:find ?r . :in $ ?c
-                       :where [?r :payroll-run/code ?c]]
+                       :where [?r :kontor.payroll-run/code ?c]]
                      db "ACME-2026-01-001")
-        run (d/pull db '[* {:payroll-run/payroll-transaction
+        run (d/pull db '[* {:kontor.payroll-run/payroll-transaction
                             [:kontor.transaction/external-id
                              {:kontor.posting/_transaction
                               [:kontor.posting/amount
@@ -141,13 +141,13 @@
                     run-eid)]
     (testing ":payroll-run row was created and tagged with :at/bmd"
       (is (some? run-eid))
-      (is (= :computed (:payroll-run/state run)))
-      (is (= :at/bmd (:payroll-run/provider-id run))))
+      (is (= :computed (:kontor.payroll-run/state run)))
+      (is (= :at/bmd (:kontor.payroll-run/provider-id run))))
     (testing "Control totals match both employees (5500 gross — 3000 + 2500)"
       (is (= 0 (.compareTo ^BigDecimal (bigdec 5500)
-                           ^BigDecimal (:payroll-run/control-total-gross run)))))
+                           ^BigDecimal (:kontor.payroll-run/control-total-gross run)))))
     (testing "Posting legs sum to zero per ledger × commodity"
-      (let [postings (-> run :payroll-run/payroll-transaction
+      (let [postings (-> run :kontor.payroll-run/payroll-transaction
                          :kontor.posting/_transaction)
             sum (reduce (fn [^BigDecimal a {:kontor.posting/keys [amount]}]
                           (.add a ^BigDecimal amount))
@@ -155,7 +155,7 @@
         (is (zero? (.compareTo ^BigDecimal sum 0M))
             (str "expected balanced postings, got sum=" sum))))
     (testing "Per-account balances match the AT RLG-1 fixture totals"
-      (let [postings (-> run :payroll-run/payroll-transaction
+      (let [postings (-> run :kontor.payroll-run/payroll-transaction
                          :kontor.posting/_transaction)
             by-code (group-by (comp :kontor.account/code :kontor.posting/account) postings)
             sum-of (fn [code]
@@ -177,22 +177,22 @@
     (testing "mBGM :audit-doc landed with :payroll-filing category + :de language"
       (let [docs (d/q '[:find [?e ...]
                         :where
-                        [?e :audit-doc/category :payroll-filing]
-                        [?e :audit-doc/language :de]
-                        [?e :audit-doc/type :mbgm]]
+                        [?e :kontor.audit-doc/category :payroll-filing]
+                        [?e :kontor.audit-doc/language :de]
+                        [?e :kontor.audit-doc/type :mbgm]]
                       db)]
         (is (= 1 (count docs)) "exactly one mBGM audit-doc for the run")
         (let [doc (d/pull db '[*] (first docs))]
-          (is (string? (:audit-doc/content-hash doc)))
-          (is (= 64 (count (:audit-doc/content-hash doc)))
+          (is (string? (:kontor.audit-doc/content-hash doc)))
+          (is (= 64 (count (:kontor.audit-doc/content-hash doc)))
               "SHA-256 hex is 64 chars")
           (is (= "s3://kontor-test/mbgm/2026-01.xml"
-                 (:audit-doc/storage-uri doc)))
-          (is (re-find #"mbgm-2026-01-\d+" (:audit-doc/code doc))
-              ":audit-doc/code includes the yyyy-MM stamp"))))
-    (testing "Run row links to the audit-doc via :payroll-run/emit-docs"
+                 (:kontor.audit-doc/storage-uri doc)))
+          (is (re-find #"mbgm-2026-01-\d+" (:kontor.audit-doc/code doc))
+              ":kontor.audit-doc/code includes the yyyy-MM stamp"))))
+    (testing "Run row links to the audit-doc via :kontor.payroll-run/emit-docs"
       (let [linked (d/q '[:find [?d ...]
                           :in $ ?r
-                          :where [?r :payroll-run/emit-docs ?d]]
+                          :where [?r :kontor.payroll-run/emit-docs ?d]]
                         db run-eid)]
         (is (= 1 (count linked)))))))

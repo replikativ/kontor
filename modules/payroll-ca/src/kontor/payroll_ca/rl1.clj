@@ -11,8 +11,8 @@
    - Renders the slip + an envelope wrapping a `Sommaire1` summary into
      a transmittable XML document (one `<T4Submission>`-equivalent
      per filing).
-   - Audit-doc convention: `:audit-doc/category :payroll-filing` +
-     `:audit-doc/language :fr` (RL-1 is French by default).
+   - Audit-doc convention: `:kontor.audit-doc/category :payroll-filing` +
+     `:kontor.audit-doc/language :fr` (RL-1 is French by default).
 
    ## License posture (CLAUDE.md / ADR-001 / ADR-005 / ADR-087)
 
@@ -346,13 +346,13 @@
                       employer-neq tax-year slip-count
                       (case language :en "EN" "FR"))]
     [(cond->
-      {:audit-doc/code doc-code
-       :audit-doc/type :regulator-clearance
-       :audit-doc/title title
-       :audit-doc/uploaded-at (java.util.Date.)
-       :audit-doc/category :payroll-filing
-       :audit-doc/language language}
-       storage-uri (assoc :audit-doc/storage-uri storage-uri))]))
+      {:kontor.audit-doc/code doc-code
+       :kontor.audit-doc/type :regulator-clearance
+       :kontor.audit-doc/title title
+       :kontor.audit-doc/uploaded-at (java.util.Date.)
+       :kontor.audit-doc/category :payroll-filing
+       :kontor.audit-doc/language language}
+       storage-uri (assoc :kontor.audit-doc/storage-uri storage-uri))]))
 
 ;; ============================================================================
 ;; group-facts-for-slips — QC-only filter + group-by employer × tax-year
@@ -362,15 +362,15 @@
   "True iff a PayrollFact's province-of-employment is 'QC'. Looks at
    :jurisdiction-specific-codes :province-of-employment first, then
    falls back to the :employment row's
-   :employment/province-of-employment (if `db` is supplied)."
+   :kontor.employment/province-of-employment (if `db` is supplied)."
   ([fact] (qc-fact? nil fact))
   ([db {:keys [employment jurisdiction-specific-codes]}]
    (let [from-fact (:province-of-employment jurisdiction-specific-codes)
          resolved (or from-fact
                       (when (and db (or (number? employment) (vector? employment)))
-                        (some-> (d/pull db [:employment/province-of-employment]
+                        (some-> (d/pull db [:kontor.employment/province-of-employment]
                                         employment)
-                                :employment/province-of-employment)))]
+                                :kontor.employment/province-of-employment)))]
      (= "QC" resolved))))
 
 (defn group-facts-for-slips
