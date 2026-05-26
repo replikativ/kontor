@@ -337,5 +337,5 @@
      :account-tag    (find-by :kontor.account-tag/concept-iri)
      :partner        (find-by :kontor.partner/concept-iri)
      :commodity      (find-by :kontor.commodity/concept-iri)
-     :tax            (find-by :tax/concept-iri)
+     :tax            (find-by :kontor.tax/concept-iri)
      :document-type  (find-by :document-type/concept-iri)}))

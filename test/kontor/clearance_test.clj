@@ -229,45 +229,45 @@
 ;; ============================================================================
 
 (deftest tax-effective-window-attrs-present
-  (testing ":tax/effective-from / :tax/effective-until are usable attrs"
+  (testing ":kontor.tax/effective-from / :kontor.tax/effective-until are usable attrs"
     (let [conn (core/create-test-db)]
       (d/transact conn
-                  [{:db/id -1 :tax/name "IGST 18% (pre-GST-2.0)"
-                    :tax/country-code "IN"
-                    :tax/type-tax-use :sale
-                    :tax/amount-type :percent
-                    :tax/amount 18.00M
-                    :tax/effective-until #inst "2025-09-22T00:00:00+05:30"
-                    :tax/active true}
-                   {:db/id -2 :tax/name "IGST 18% (post-GST-2.0)"
-                    :tax/country-code "IN"
-                    :tax/type-tax-use :sale
-                    :tax/amount-type :percent
-                    :tax/amount 18.00M
-                    :tax/effective-from #inst "2025-09-22T00:00:00+05:30"
-                    :tax/active true}])
+                  [{:db/id -1 :kontor.tax/name "IGST 18% (pre-GST-2.0)"
+                    :kontor.tax/country-code "IN"
+                    :kontor.tax/type-tax-use :sale
+                    :kontor.tax/amount-type :percent
+                    :kontor.tax/amount 18.00M
+                    :kontor.tax/effective-until #inst "2025-09-22T00:00:00+05:30"
+                    :kontor.tax/active true}
+                   {:db/id -2 :kontor.tax/name "IGST 18% (post-GST-2.0)"
+                    :kontor.tax/country-code "IN"
+                    :kontor.tax/type-tax-use :sale
+                    :kontor.tax/amount-type :percent
+                    :kontor.tax/amount 18.00M
+                    :kontor.tax/effective-from #inst "2025-09-22T00:00:00+05:30"
+                    :kontor.tax/active true}])
       (let [db (d/db conn)
             ;; Pre-cutover: 2025-09-01 falls in the OLD record's window.
             pre  (d/q '[:find [?n ...]
                         :in $ ?d
                         :where
-                        [?t :tax/name ?n]
-                        [?t :tax/country-code "IN"]
+                        [?t :kontor.tax/name ?n]
+                        [?t :kontor.tax/country-code "IN"]
                         ;; Effective-until > D (or absent)
-                        [(get-else $ ?t :tax/effective-from #inst "1970-01-01") ?ef]
+                        [(get-else $ ?t :kontor.tax/effective-from #inst "1970-01-01") ?ef]
                         [(<= ?ef ?d)]
-                        [(get-else $ ?t :tax/effective-until #inst "9999-12-31") ?eu]
+                        [(get-else $ ?t :kontor.tax/effective-until #inst "9999-12-31") ?eu]
                         [(< ?d ?eu)]]
                       db #inst "2025-09-01")
             ;; Post-cutover: 2026-01-01 falls in the NEW record's window.
             post (d/q '[:find [?n ...]
                         :in $ ?d
                         :where
-                        [?t :tax/name ?n]
-                        [?t :tax/country-code "IN"]
-                        [(get-else $ ?t :tax/effective-from #inst "1970-01-01") ?ef]
+                        [?t :kontor.tax/name ?n]
+                        [?t :kontor.tax/country-code "IN"]
+                        [(get-else $ ?t :kontor.tax/effective-from #inst "1970-01-01") ?ef]
                         [(<= ?ef ?d)]
-                        [(get-else $ ?t :tax/effective-until #inst "9999-12-31") ?eu]
+                        [(get-else $ ?t :kontor.tax/effective-until #inst "9999-12-31") ?eu]
                         [(< ?d ?eu)]]
                       db #inst "2026-01-01")]
         (is (= ["IGST 18% (pre-GST-2.0)"]  pre)
@@ -279,20 +279,20 @@
   (testing "Legacy taxes without effective-from/until match any date"
     (let [conn (core/create-test-db)]
       (d/transact conn
-                  [{:tax/name "VAT 19% (always)"
-                    :tax/country-code "DE"
-                    :tax/type-tax-use :sale
-                    :tax/amount-type :percent
-                    :tax/amount 19.00M
-                    :tax/active true}])
+                  [{:kontor.tax/name "VAT 19% (always)"
+                    :kontor.tax/country-code "DE"
+                    :kontor.tax/type-tax-use :sale
+                    :kontor.tax/amount-type :percent
+                    :kontor.tax/amount 19.00M
+                    :kontor.tax/active true}])
       (let [db (d/db conn)
             hits (d/q '[:find [?n ...]
                         :in $ ?d
                         :where
-                        [?t :tax/name ?n]
-                        [(get-else $ ?t :tax/effective-from #inst "1970-01-01") ?ef]
+                        [?t :kontor.tax/name ?n]
+                        [(get-else $ ?t :kontor.tax/effective-from #inst "1970-01-01") ?ef]
                         [(<= ?ef ?d)]
-                        [(get-else $ ?t :tax/effective-until #inst "9999-12-31") ?eu]
+                        [(get-else $ ?t :kontor.tax/effective-until #inst "9999-12-31") ?eu]
                         [(< ?d ?eu)]]
                       db #inst "2024-06-15")]
         (is (= ["VAT 19% (always)"] hits))))))

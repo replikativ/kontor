@@ -276,7 +276,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "IN-IT-§80TTA-savings-interest-deduction"
     :provision/jurisdiction    :in
-    :provision/concept         [:tax-concept/code :base-transform-deduct]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-deduct]
     :provision/title           "§80TTA — savings-account interest deduction (up to ₹10 000; OLD regime; < 60)"
     :provision/citation        "https://cleartax.in/s/section-80tta"
     :provision/effective-from  #inst "2013-04-01"
@@ -296,7 +296,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "IN-IT-§80TTB-senior-interest-deduction"
     :provision/jurisdiction    :in
-    :provision/concept         [:tax-concept/code :base-transform-deduct]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-deduct]
     :provision/title           "§80TTB — senior-citizen all-interest deduction (up to ₹50 000; OLD regime; ≥ 60)"
     :provision/citation        "https://cleartax.in/s/section-80ttb-senior-citizens-deduction"
     :provision/effective-from  #inst "2018-04-01"

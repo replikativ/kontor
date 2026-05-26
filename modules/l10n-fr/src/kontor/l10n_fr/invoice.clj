@@ -54,7 +54,7 @@
    FR service providers default to TVA `sur les encaissements` (the
    tax becomes due when payment is received), while goods sellers
    are always `sur les débits` (when the invoice issues). This
-   distinction is modeled per-`:tax` entity (`:tax/exigibility
+   distinction is modeled per-`:tax` entity (`:kontor.tax/exigibility
    :on-payment` vs `:on-invoice`) and surfaces in the CA3 report's
    inclusion test — NOT in this builder. The seller's *journal entry*
    is the same in both cases.

@@ -293,7 +293,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CN-Caishui-2015-101-listed-A-le-1m"
     :provision/jurisdiction    :cn
-    :provision/concept         [:tax-concept/code :holding-period-preference]
+    :provision/concept         [:kontor.tax-concept/code :holding-period-preference]
     :provision/title           "Caishui [2015] 101 — Listed A-share ≤ 1 month band (full 20 %)"
     :provision/citation        "https://www.chinatax.gov.cn/chinatax/n810341/n810765/c1973234/content.html"
     :provision/effective-from  #inst "2015-09-08"
@@ -311,7 +311,7 @@
 
    {:provision/code            "CN-Caishui-2015-101-listed-A-1m-1y"
     :provision/jurisdiction    :cn
-    :provision/concept         [:tax-concept/code :holding-period-preference]
+    :provision/concept         [:kontor.tax-concept/code :holding-period-preference]
     :provision/title           "Caishui [2015] 101 — Listed A-share 1m–1y band (half, 10 % effective)"
     :provision/citation        "https://www.chinatax.gov.cn/chinatax/n810341/n810765/c1973234/content.html"
     :provision/effective-from  #inst "2015-09-08"
@@ -328,7 +328,7 @@
 
    {:provision/code            "CN-Caishui-2015-101-listed-A-gt-1y"
     :provision/jurisdiction    :cn
-    :provision/concept         [:tax-concept/code :holding-period-preference]
+    :provision/concept         [:kontor.tax-concept/code :holding-period-preference]
     :provision/title           "Caishui [2015] 101 — Listed A-share > 1 year band (exempt)"
     :provision/citation        "https://www.chinatax.gov.cn/chinatax/n810341/n810765/c1973234/content.html"
     :provision/effective-from  #inst "2015-09-08"
@@ -351,7 +351,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CN-Caishui-2014-81-stock-connect-sunset"
     :provision/jurisdiction    :cn
-    :provision/concept         [:tax-concept/code :participation-exemption]
+    :provision/concept         [:kontor.tax-concept/code :participation-exemption]
     :provision/title           "Caishui [2014] 81 — Stock Connect H-share dividend exemption (sunset 2027-12-31)"
     :provision/citation        "https://www.chinatax.gov.cn/chinatax/n810341/n810755/c5210255/content.html"
     :provision/effective-from  #inst "2014-11-17"
@@ -374,7 +374,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CN-Caishui-2008-132-bank-deposit-exemption"
     :provision/jurisdiction    :cn
-    :provision/concept         [:tax-concept/code :participation-exemption]
+    :provision/concept         [:kontor.tax-concept/code :participation-exemption]
     :provision/title           "Caishui [2008] 132 — Bank savings deposit interest IIT exemption"
     :provision/citation        "https://shanghai.chinatax.gov.cn/zcfw/zcfgk/grsds/200810/t288953.html"
     :provision/effective-from  #inst "2008-10-09"
@@ -391,7 +391,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CN-IITLaw-§4-2-gov-bond-exemption"
     :provision/jurisdiction    :cn
-    :provision/concept         [:tax-concept/code :participation-exemption]
+    :provision/concept         [:kontor.tax-concept/code :participation-exemption]
     :provision/title           "个人所得税法 §4(2) + 国债条例 — Government bond interest IIT exemption"
     :provision/citation        "https://fgk.chinatax.gov.cn/zcfgk/c100009/c5193028/content.html"
     :provision/effective-from  #inst "1980-09-10"
@@ -412,7 +412,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CN-EITLaw-§26-2-inter-TRR-exemption"
     :provision/jurisdiction    :cn
-    :provision/concept         [:tax-concept/code :participation-exemption]
+    :provision/concept         [:kontor.tax-concept/code :participation-exemption]
     :provision/title           "EIT Law §26(2) + Impl. Reg. §83 — Inter-TRR dividend exemption"
     :provision/citation        "https://fgk.chinatax.gov.cn/zcfgk/c100012/"
     :provision/effective-from  #inst "2008-01-01"

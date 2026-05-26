@@ -63,7 +63,7 @@
   [;; §163(d) investment-interest deduction cap — limited to NII.
    {:provision/code            "US-IRC-§163d-investment-interest-cap"
     :provision/jurisdiction    :us
-    :provision/concept         [:tax-concept/code :base-transform-deduct]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-deduct]
     :provision/title           "§163(d) — investment-interest deduction limited to net investment income"
     :provision/citation        "https://www.law.cornell.edu/uscode/text/26/163#d"
     :provision/effective-from  #inst "1986-10-22"

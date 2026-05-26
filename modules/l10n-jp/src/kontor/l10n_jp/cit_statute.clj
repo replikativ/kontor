@@ -337,7 +337,7 @@
    ;; large-corp override per ADR-101 Addendum 1 `:op :schedule-override`.
    {:provision/code            "JP-CIT-§66-large"
     :provision/jurisdiction    :jp
-    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/concept         [:kontor.tax-concept/code :elective-regime]
     :provision/title           "法人税法 §66① — flat 23.2 % schedule for large corporations (capital > ¥100M)"
     :provision/citation        "https://elaws.e-gov.go.jp/document?lawid=340AC0000000034"
     :provision/effective-from  #inst "2018-04-01"
@@ -359,7 +359,7 @@
    ;; :is-sme? true; that fires only when :is-sme? false) — no ambiguity.
    {:provision/code            "JP-CIT-§66②-large-income"
     :provision/jurisdiction    :jp
-    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/concept         [:kontor.tax-concept/code :elective-regime]
     :provision/title           "法人税法 §66② post-Reiwa-7 — SME 17 % first-¥8M band when income > ¥1B"
     :provision/citation        "https://elaws.e-gov.go.jp/document?lawid=340AC0000000034"
     :provision/effective-from  #inst "2025-04-01"
@@ -379,7 +379,7 @@
    ;; as DE Soli (late-bound compute-fn reads `:running`).
    {:provision/code            "JP-LocalCIT-§9"
     :provision/jurisdiction    :jp
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "地方法人税法 §9-§10 — 10.3 % surtax on national CIT"
     :provision/citation        "https://elaws.e-gov.go.jp/document?lawid=426AC0000000011"
     :provision/effective-from  #inst "2014-10-01"
@@ -405,7 +405,7 @@
    ;; Note 125 §1.5 / P1-1.
    {:provision/code            "JP-DefenseSurtax"
     :provision/jurisdiction    :jp
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "防衛特別法人税 — 4 % × max(0, national CIT − ¥5M); FY beginning on or after 2026-04-01"
     :provision/citation        "https://www.mof.go.jp/tax_policy/summary/corporation/c01.htm"
     :provision/effective-from  #inst "2026-04-01"  ; statute enactment (audit)
@@ -429,7 +429,7 @@
    ;; deferred — note 110 §1 / stress B.)
    {:provision/code            "JP-Enterprise-§72-large"
     :provision/jurisdiction    :jp
-    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/concept         [:kontor.tax-concept/code :elective-regime]
     :provision/title           "地方税法 §72 — flat 1.18 % income-base for large corporations (pro-forma value-added/capital bases not yet shipped)"
     :provision/citation        "https://www.tax.metro.tokyo.lg.jp/kazei/hojin_jigyou.html"
     :provision/effective-from  #inst "2019-10-01"
@@ -450,7 +450,7 @@
    ;; enterprise component IS the just-computed enterprise tax).
    {:provision/code            "JP-SpecialCorpEnterprise-§7"
     :provision/jurisdiction    :jp
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "特別法人事業税及び特別法人事業譲与税に関する法律 §7 — 37 % SME / 260 % large surtax on enterprise tax"
     :provision/citation        "https://www.nta.go.jp/taxes/shiraberu/taxanswer/hojin/5765.htm"
     :provision/effective-from  #inst "2019-10-01"
@@ -473,7 +473,7 @@
    ;; injects it after computing the national component).
    {:provision/code            "JP-Inhabitant-income-levy"
     :provision/jurisdiction    :jp
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "法人住民税 法人税割 — 7 % combined (1 % pref + 6 % municipal) on national CIT"
     :provision/citation        "https://www.tax.metro.tokyo.lg.jp/kazei/hojin_jumin.html"
     :provision/effective-from  #inst "2019-10-01"
@@ -490,7 +490,7 @@
    ;; dimensions and looks up `per-capita-levy-table`.
    {:provision/code            "JP-Inhabitant-per-capita"
     :provision/jurisdiction    :jp
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "法人住民税 均等割 — fixed per-capita levy (capital × headcount lookup)"
     :provision/citation        "https://www.tax.metro.tokyo.lg.jp/kazei/hojin_jumin.html"
     :provision/effective-from  #inst "2015-04-01"

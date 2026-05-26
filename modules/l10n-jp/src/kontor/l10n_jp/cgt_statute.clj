@@ -276,7 +276,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "JP-FUKKO-§13-reconstruction-surtax"
     :provision/jurisdiction    :jp
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "復興特別所得税 — 2.1 % × the national CGT amount (2013-2037)"
     :provision/citation        "https://elaws.e-gov.go.jp/document?lawid=423AC0000000117"
     :provision/effective-from  #inst "2013-01-01"

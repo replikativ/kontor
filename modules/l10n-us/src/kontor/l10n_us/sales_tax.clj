@@ -8,7 +8,7 @@
    Louisiana home-rule cities self-administer and require an
    additional filing per municipality.
 
-   Per ADR-014's :tax/authority + the cross-country research note 09:
+   Per ADR-014's :kontor.tax/authority + the cross-country research note 09:
    we model each filing authority as its own report definition. This
    namespace ships the 5 highest-revenue states + a sample home-rule
    city (Denver, CO) as the reference shape; consumers add states

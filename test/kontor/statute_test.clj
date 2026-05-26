@@ -28,7 +28,7 @@
 (deftest starter-catalogue-installed
   (let [conn  (core/create-test-db)
         codes (set (d/q '[:find [?code ...]
-                          :where [_ :tax-concept/code ?code]]
+                          :where [_ :kontor.tax-concept/code ?code]]
                         (d/db conn)))]
     (testing "all 14 starter concepts (ADR-101 §D6) are seeded"
       (is (= #{:participation-exemption :rollover-relief :like-kind-exchange
@@ -40,10 +40,10 @@
     (testing "every concept carries label + family + description"
       (let [rows (d/q '[:find ?code ?label ?family ?desc
                         :where
-                        [?c :tax-concept/code ?code]
-                        [?c :tax-concept/label ?label]
-                        [?c :tax-concept/family ?family]
-                        [?c :tax-concept/description ?desc]]
+                        [?c :kontor.tax-concept/code ?code]
+                        [?c :kontor.tax-concept/label ?label]
+                        [?c :kontor.tax-concept/family ?family]
+                        [?c :kontor.tax-concept/description ?desc]]
                       (d/db conn))]
         (is (= 14 (count rows)))))))
 
@@ -212,9 +212,9 @@
 
 (deftest applicable-provisions-concept-filter
   (let [conn (fresh-with-provisions
-              [(p {:provision/code "A" :provision/concept [:tax-concept/code :surtax]
+              [(p {:provision/code "A" :provision/concept [:kontor.tax-concept/code :surtax]
                    :provision/consequence "{}"})
-               (p {:provision/code "B" :provision/concept [:tax-concept/code :refundable-credit]
+               (p {:provision/code "B" :provision/concept [:kontor.tax-concept/code :refundable-credit]
                    :provision/consequence "{}"})])]
     (is (= ["A"] (mapv :provision/code
                        (statute/applicable-provisions (d/db conn)
@@ -224,10 +224,10 @@
 (deftest applicable-provisions-jurisdiction-filter
   (let [conn (fresh-with-provisions
               [(p {:provision/code "A-DE" :provision/jurisdiction :de
-                   :provision/concept [:tax-concept/code :surtax]
+                   :provision/concept [:kontor.tax-concept/code :surtax]
                    :provision/consequence "{}"})
                (p {:provision/code "A-FR" :provision/jurisdiction :fr
-                   :provision/concept [:tax-concept/code :surtax]
+                   :provision/concept [:kontor.tax-concept/code :surtax]
                    :provision/consequence "{}"})])]
     (is (= ["A-DE"] (mapv :provision/code
                           (statute/applicable-provisions (d/db conn)
@@ -237,16 +237,16 @@
 (deftest applicable-provisions-date-window
   (let [conn (fresh-with-provisions
               [(p {:provision/code "EXPIRED"
-                   :provision/concept [:tax-concept/code :surtax]
+                   :provision/concept [:kontor.tax-concept/code :surtax]
                    :provision/effective-from #inst "2000-01-01"
                    :provision/effective-until #inst "2020-01-01"
                    :provision/consequence "{}"})
                (p {:provision/code "FUTURE"
-                   :provision/concept [:tax-concept/code :surtax]
+                   :provision/concept [:kontor.tax-concept/code :surtax]
                    :provision/effective-from #inst "2030-01-01"
                    :provision/consequence "{}"})
                (p {:provision/code "CURRENT"
-                   :provision/concept [:tax-concept/code :surtax]
+                   :provision/concept [:kontor.tax-concept/code :surtax]
                    :provision/effective-from #inst "2020-01-01"
                    :provision/consequence "{}"})])]
     (is (= #{"CURRENT"} (set (mapv :provision/code
@@ -257,11 +257,11 @@
 (deftest applicable-provisions-condition-gate
   (let [conn (fresh-with-provisions
               [(p {:provision/code "PME"
-                   :provision/concept [:tax-concept/code :refundable-credit]
+                   :provision/concept [:kontor.tax-concept/code :refundable-credit]
                    :provision/condition (pr-str [:leq :revenue 10000000M])
                    :provision/consequence "{}"})
                (p {:provision/code "ALWAYS"
-                   :provision/concept [:tax-concept/code :refundable-credit]
+                   :provision/concept [:kontor.tax-concept/code :refundable-credit]
                    :provision/consequence "{}"})])]
     (testing "with condition met"
       (is (= #{"PME" "ALWAYS"}
@@ -285,12 +285,12 @@
                       {:regime/code :test-new :regime/jurisdiction :test :regime/label "New"
                        :regime/effective-from #inst "2024-01-01"}])
     (d/transact conn
-                [(p {:provision/code "FREE" :provision/concept [:tax-concept/code :surtax]
+                [(p {:provision/code "FREE" :provision/concept [:kontor.tax-concept/code :surtax]
                      :provision/consequence "{}"})
-                 (p {:provision/code "OLD-only" :provision/concept [:tax-concept/code :surtax]
+                 (p {:provision/code "OLD-only" :provision/concept [:kontor.tax-concept/code :surtax]
                      :provision/regime [:regime/code :test-old]
                      :provision/consequence "{}"})
-                 (p {:provision/code "NEW-only" :provision/concept [:tax-concept/code :surtax]
+                 (p {:provision/code "NEW-only" :provision/concept [:kontor.tax-concept/code :surtax]
                      :provision/regime [:regime/code :test-new]
                      :provision/consequence "{}"})])
     (testing "no regime elected — only regime-free provisions apply"
@@ -321,10 +321,10 @@
                          :regime/extends [:regime/code :base]
                          :regime/effective-from #inst "2024-01-01"}])
       (d/transact conn
-                  [(p {:provision/code "BASE-P" :provision/concept [:tax-concept/code :surtax]
+                  [(p {:provision/code "BASE-P" :provision/concept [:kontor.tax-concept/code :surtax]
                        :provision/regime [:regime/code :base]
                        :provision/consequence "{}"})
-                   (p {:provision/code "REFORM-P" :provision/concept [:tax-concept/code :surtax]
+                   (p {:provision/code "REFORM-P" :provision/concept [:kontor.tax-concept/code :surtax]
                        :provision/regime [:regime/code :reform]
                        :provision/consequence "{}"})])
       (testing "electing :base — only BASE-P"
@@ -368,15 +368,15 @@
 (deftest apply-provisions-priority-order
   (let [conn (fresh-with-provisions
               [(p {:provision/code "P3" :provision/priority 300
-                   :provision/concept [:tax-concept/code :surtax]
+                   :provision/concept [:kontor.tax-concept/code :surtax]
                    :provision/consequence (pr-str {:op :surtax :code :p3
                                                    :amount-from :literal :amount 30M})})
                (p {:provision/code "P1" :provision/priority 100
-                   :provision/concept [:tax-concept/code :surtax]
+                   :provision/concept [:kontor.tax-concept/code :surtax]
                    :provision/consequence (pr-str {:op :surtax :code :p1
                                                    :amount-from :literal :amount 10M})})
                (p {:provision/code "P2" :provision/priority 200
-                   :provision/concept [:tax-concept/code :surtax]
+                   :provision/concept [:kontor.tax-concept/code :surtax]
                    :provision/consequence (pr-str {:op :surtax :code :p2
                                                    :amount-from :literal :amount 20M})})])
         {:keys [tax-items]} (statute/apply-provisions (d/db conn)
@@ -389,13 +389,13 @@
     (d/transact conn
                 [{:db/id -1
                   :provision/code "DEFAULT" :provision/jurisdiction :test
-                  :provision/concept [:tax-concept/code :refundable-credit]
+                  :provision/concept [:kontor.tax-concept/code :refundable-credit]
                   :provision/title "Default" :provision/citation "https://t"
                   :provision/effective-from #inst "2000-01-01" :provision/priority 200
                   :provision/consequence (pr-str {:op :credit :code :default :refundable? true
                                                   :amount-from :literal :amount 100M})}
                  {:provision/code "EXCEPTION" :provision/jurisdiction :test
-                  :provision/concept [:tax-concept/code :refundable-credit]
+                  :provision/concept [:kontor.tax-concept/code :refundable-credit]
                   :provision/title "Boost" :provision/citation "https://t"
                   :provision/effective-from #inst "2000-01-01" :provision/priority 300
                   :provision/condition (pr-str [:eq :is-startup? true])
@@ -417,10 +417,10 @@
 (deftest apply-provisions-same-priority-ambiguity-trap
   (let [conn (fresh-with-provisions
               [(p {:provision/code "AMB1" :provision/priority 500
-                   :provision/concept [:tax-concept/code :surtax]
+                   :provision/concept [:kontor.tax-concept/code :surtax]
                    :provision/consequence (pr-str {:op :surtax :code :a1 :amount-from :literal :amount 10M})})
                (p {:provision/code "AMB2" :provision/priority 500
-                   :provision/concept [:tax-concept/code :surtax]
+                   :provision/concept [:kontor.tax-concept/code :surtax]
                    :provision/consequence (pr-str {:op :surtax :code :a2 :amount-from :literal :amount 20M})})])]
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"ambiguous-provision"
                           (statute/apply-provisions (d/db conn)
@@ -435,18 +435,18 @@
                        :parameter-value/decimal-value 42M}])
     (d/transact conn
                 [(p {:provision/code "literal" :provision/priority 100
-                     :provision/concept [:tax-concept/code :surtax]
+                     :provision/concept [:kontor.tax-concept/code :surtax]
                      :provision/consequence (pr-str {:op :surtax :code :lit :amount-from :literal :amount 7M})})
                  (p {:provision/code "parameter" :provision/priority 200
-                     :provision/concept [:tax-concept/code :surtax]
+                     :provision/concept [:kontor.tax-concept/code :surtax]
                      :provision/consequence (pr-str {:op :surtax :code :param :amount-from :parameter :parameter "X.rate"})})
                  (p {:provision/code "tax-context-fact" :provision/priority 300
-                     :provision/concept [:tax-concept/code :surtax]
+                     :provision/concept [:kontor.tax-concept/code :surtax]
                      :provision/consequence (pr-str {:op :surtax :code :fact :amount-from :tax-context-fact :fact :my-fact})})])
     (statute/register-compute-fn! :test-fn (fn [_ctx] 99M))
     (d/transact conn
                 [(p {:provision/code "compute-fn" :provision/priority 400
-                     :provision/concept [:tax-concept/code :surtax]
+                     :provision/concept [:kontor.tax-concept/code :surtax]
                      :provision/consequence (pr-str {:op :surtax :code :fn :amount-from :compute-fn :fn :test-fn})})])
     (let [{:keys [tax-items]} (statute/apply-provisions (d/db conn)
                                                         {:concept :surtax :jurisdiction :test :as-of #inst "2025-01-01"}
@@ -517,7 +517,7 @@
                          :parameter-value/decimal-value 0.15M}])
       (d/transact conn
                   [(p {:provision/code "CN-EIT-HNTE-rate"
-                       :provision/concept [:tax-concept/code :elective-regime]
+                       :provision/concept [:kontor.tax-concept/code :elective-regime]
                        :provision/consequence (pr-str {:op :schedule-override
                                                        :code :hnte
                                                        :label "HNTE 15%"
@@ -552,7 +552,7 @@
                          :parameter-bracket/effective-from #inst "2023-01-01"}])
       (d/transact conn
                   [(p {:provision/code "FR-IS-PME-rate"
-                       :provision/concept [:tax-concept/code :elective-regime]
+                       :provision/concept [:kontor.tax-concept/code :elective-regime]
                        :provision/consequence (pr-str {:op :schedule-override
                                                        :code :pme
                                                        :label "FR PME 15%/25%"
@@ -574,7 +574,7 @@
 (deftest schedule-override-empty-when-no-elective-fires
   (testing "no schedule-override provision → empty :schedule-overrides list"
     (let [conn (fresh-with-provisions
-                [(p {:provision/code "X" :provision/concept [:tax-concept/code :surtax]
+                [(p {:provision/code "X" :provision/concept [:kontor.tax-concept/code :surtax]
                      :provision/consequence (pr-str {:op :surtax :code :x
                                                      :amount-from :literal :amount 10M})})])]
       (is (empty? (:schedule-overrides

@@ -206,7 +206,7 @@
    ;; consumer adjudicates and signals via `:tax-unit :pme?`.
    {:provision/code            "FR-CGI-219-I-b-PME"
     :provision/jurisdiction    :fr
-    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/concept         [:kontor.tax-concept/code :elective-regime]
     :provision/title           "CGI Art. 219 I-b — Taux réduit PME (15 % puis 25 %)"
     :provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046868562"
     :provision/effective-from  #inst "2023-01-01"
@@ -236,7 +236,7 @@
    ;; dividend amount received from qualifying subsidiaries.
    {:provision/code            "FR-CGI-145-216-mere-fille"
     :provision/jurisdiction    :fr
-    :provision/concept         [:tax-concept/code :base-transform-add]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-add]
     :provision/title           "CGI Art. 145 + 216 I — Régime mère-fille (5 % quote-part de frais et charges)"
     :provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000048831340"
     :provision/effective-from  #inst "2000-01-01"
@@ -259,7 +259,7 @@
    ;; into the compute-fn (reads `:running` IS).
    {:provision/code            "FR-CGI-235-ter-ZC-CGE"
     :provision/jurisdiction    :fr
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "CGI Art. 235 ter ZC — Contribution sociale 3.3 % sur IS (au-delà de €763 000)"
     :provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000031011715"
     :provision/effective-from  #inst "2000-01-01"
@@ -284,7 +284,7 @@
    ;; carry).
    {:provision/code            "FR-CGI-244-quater-B-CIR"
     :provision/jurisdiction    :fr
-    :provision/concept         [:tax-concept/code :refundable-credit]
+    :provision/concept         [:kontor.tax-concept/code :refundable-credit]
     :provision/title           "CGI Art. 244 quater B — Crédit d'Impôt Recherche (30 % / 5 %)"
     :provision/citation        "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051215816"
     :provision/effective-from  #inst "2008-01-01"

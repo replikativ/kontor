@@ -2,7 +2,7 @@
   "Stage 2 of research note 99 — the ADR-071 tax substrate trio:
    `TaxRateProvider` → `TaxFacts` → `TaxPostingBuilder`. Acceptance
    criterion: a `StaticTableProvider` resolves a real tax line off the
-   `:tax/*` schema, and the trio composes end-to-end."
+   `:kontor.tax/*` schema, and the trio composes end-to-end."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
             [kontor.core :as core]
@@ -21,31 +21,31 @@
                  {:kontor.account/path "Expenses:Supplies"      :kontor.account/type :expense}
                  {:kontor.account/path "Liabilities:VAT-Payable" :kontor.account/type :liability}
                  {:kontor.account/path "Assets:VAT-Receivable"  :kontor.account/type :asset}
-                 {:db/id "grp" :tax-group/name "DE VAT" :tax-group/country-code "DE"}
+                 {:db/id "grp" :kontor.vat-group/name "DE VAT" :kontor.vat-group/country-code "DE"}
                  ;; current sale tax — DE VAT 19%
-                 {:db/id "t-sale" :tax/code "DE-VAT-19-SALE" :tax/name "DE VAT 19% (sale)"
-                  :tax/country-code "DE" :tax/type-tax-use :sale
-                  :tax/amount-type :percent :tax/amount 0.19M
-                  :tax/recoverable? true :tax/active true :tax/tax-group "grp"}
-                 {:tax-rep/tax "t-sale" :tax-rep/document-type :invoice
-                  :tax-rep/repartition-type :tax :tax-rep/factor-percent 100M
-                  :tax-rep/account [:kontor.account/path "Liabilities:VAT-Payable"]
-                  :tax-rep/sequence 0}
+                 {:db/id "t-sale" :kontor.tax/code "DE-VAT-19-SALE" :kontor.tax/name "DE VAT 19% (sale)"
+                  :kontor.tax/country-code "DE" :kontor.tax/type-tax-use :sale
+                  :kontor.tax/amount-type :percent :kontor.tax/amount 0.19M
+                  :kontor.tax/recoverable? true :kontor.tax/active true :kontor.tax/tax-group "grp"}
+                 {:kontor.tax-rep/tax "t-sale" :kontor.tax-rep/document-type :invoice
+                  :kontor.tax-rep/repartition-type :tax :kontor.tax-rep/factor-percent 100M
+                  :kontor.tax-rep/account [:kontor.account/path "Liabilities:VAT-Payable"]
+                  :kontor.tax-rep/sequence 0}
                  ;; current purchase tax — DE VAT 19% input
-                 {:db/id "t-pur" :tax/code "DE-VAT-19-PUR" :tax/name "DE VAT 19% (purchase)"
-                  :tax/country-code "DE" :tax/type-tax-use :purchase
-                  :tax/amount-type :percent :tax/amount 0.19M
-                  :tax/recoverable? true :tax/active true :tax/tax-group "grp"}
-                 {:tax-rep/tax "t-pur" :tax-rep/document-type :invoice
-                  :tax-rep/repartition-type :tax :tax-rep/factor-percent 100M
-                  :tax-rep/account [:kontor.account/path "Assets:VAT-Receivable"]
-                  :tax-rep/sequence 0}
+                 {:db/id "t-pur" :kontor.tax/code "DE-VAT-19-PUR" :kontor.tax/name "DE VAT 19% (purchase)"
+                  :kontor.tax/country-code "DE" :kontor.tax/type-tax-use :purchase
+                  :kontor.tax/amount-type :percent :kontor.tax/amount 0.19M
+                  :kontor.tax/recoverable? true :kontor.tax/active true :kontor.tax/tax-group "grp"}
+                 {:kontor.tax-rep/tax "t-pur" :kontor.tax-rep/document-type :invoice
+                  :kontor.tax-rep/repartition-type :tax :kontor.tax-rep/factor-percent 100M
+                  :kontor.tax-rep/account [:kontor.account/path "Assets:VAT-Receivable"]
+                  :kontor.tax-rep/sequence 0}
                  ;; expired sale tax — 16%, ended 2020 — must be filtered out
-                 {:db/id "t-old" :tax/code "DE-VAT-16-OLD" :tax/name "DE VAT 16% (expired)"
-                  :tax/country-code "DE" :tax/type-tax-use :sale
-                  :tax/amount-type :percent :tax/amount 0.16M
-                  :tax/recoverable? true :tax/active true :tax/tax-group "grp"
-                  :tax/effective-until #inst "2020-01-01"}])
+                 {:db/id "t-old" :kontor.tax/code "DE-VAT-16-OLD" :kontor.tax/name "DE VAT 16% (expired)"
+                  :kontor.tax/country-code "DE" :kontor.tax/type-tax-use :sale
+                  :kontor.tax/amount-type :percent :kontor.tax/amount 0.16M
+                  :kontor.tax/recoverable? true :kontor.tax/active true :kontor.tax/tax-group "grp"
+                  :kontor.tax/effective-until #inst "2020-01-01"}])
     conn))
 
 (def ^:private eur [:kontor.commodity/symbol "EUR"])
@@ -171,28 +171,28 @@
                  {:kontor.account/path "Liabilities:Output-VAT" :kontor.account/type :liability}
                  {:kontor.account/path "Assets:WH-Receivable"   :kontor.account/type :asset}
                  ;; reverse charge needs a :tax-group with BOTH accounts
-                 {:db/id "rc-grp" :tax-group/name "RC VAT" :tax-group/country-code "RC"
-                  :tax-group/payable-account    [:kontor.account/path "Liabilities:Output-VAT"]
-                  :tax-group/receivable-account [:kontor.account/path "Assets:Input-VAT"]}
-                 {:db/id "t-rc-pur" :tax/code "RC-19-PUR" :tax/name "RC 19% (purchase)"
-                  :tax/country-code "RC" :tax/type-tax-use :purchase
-                  :tax/amount-type :percent :tax/amount 0.19M
-                  :tax/recoverable? true :tax/active true
-                  :tax/mechanism :reverse-charge :tax/tax-group "rc-grp"}
-                 {:db/id "t-rc-sale" :tax/code "RC-19-SALE" :tax/name "RC 19% (sale)"
-                  :tax/country-code "RC" :tax/type-tax-use :sale
-                  :tax/amount-type :percent :tax/amount 0.19M
-                  :tax/recoverable? true :tax/active true
-                  :tax/mechanism :reverse-charge :tax/tax-group "rc-grp"}
-                 {:db/id "t-wh" :tax/code "WH-ISR-10" :tax/name "Withholding ISR 10%"
-                  :tax/country-code "WH" :tax/type-tax-use :sale
-                  :tax/amount-type :percent :tax/amount 0.10M
-                  :tax/recoverable? false :tax/active true
-                  :tax/mechanism :withholding}
-                 {:tax-rep/tax "t-wh" :tax-rep/document-type :invoice
-                  :tax-rep/repartition-type :tax :tax-rep/factor-percent 100M
-                  :tax-rep/account [:kontor.account/path "Assets:WH-Receivable"]
-                  :tax-rep/sequence 0}])
+                 {:db/id "rc-grp" :kontor.vat-group/name "RC VAT" :kontor.vat-group/country-code "RC"
+                  :kontor.vat-group/payable-account    [:kontor.account/path "Liabilities:Output-VAT"]
+                  :kontor.vat-group/receivable-account [:kontor.account/path "Assets:Input-VAT"]}
+                 {:db/id "t-rc-pur" :kontor.tax/code "RC-19-PUR" :kontor.tax/name "RC 19% (purchase)"
+                  :kontor.tax/country-code "RC" :kontor.tax/type-tax-use :purchase
+                  :kontor.tax/amount-type :percent :kontor.tax/amount 0.19M
+                  :kontor.tax/recoverable? true :kontor.tax/active true
+                  :kontor.tax/mechanism :reverse-charge :kontor.tax/tax-group "rc-grp"}
+                 {:db/id "t-rc-sale" :kontor.tax/code "RC-19-SALE" :kontor.tax/name "RC 19% (sale)"
+                  :kontor.tax/country-code "RC" :kontor.tax/type-tax-use :sale
+                  :kontor.tax/amount-type :percent :kontor.tax/amount 0.19M
+                  :kontor.tax/recoverable? true :kontor.tax/active true
+                  :kontor.tax/mechanism :reverse-charge :kontor.tax/tax-group "rc-grp"}
+                 {:db/id "t-wh" :kontor.tax/code "WH-ISR-10" :kontor.tax/name "Withholding ISR 10%"
+                  :kontor.tax/country-code "WH" :kontor.tax/type-tax-use :sale
+                  :kontor.tax/amount-type :percent :kontor.tax/amount 0.10M
+                  :kontor.tax/recoverable? false :kontor.tax/active true
+                  :kontor.tax/mechanism :withholding}
+                 {:kontor.tax-rep/tax "t-wh" :kontor.tax-rep/document-type :invoice
+                  :kontor.tax-rep/repartition-type :tax :kontor.tax-rep/factor-percent 100M
+                  :kontor.tax-rep/account [:kontor.account/path "Assets:WH-Receivable"]
+                  :kontor.tax-rep/sequence 0}])
     conn))
 
 ;; --- G1 reverse charge -------------------------------------------------------

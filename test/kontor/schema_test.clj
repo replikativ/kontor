@@ -22,7 +22,7 @@
     "kontor.commodity" "lot"
     "kontor.account" "kontor.account-tag"
     "kontor.journal" "kontor.partner" "fiscal-position"
-    "tax" "tax-rep" "tax-group"
+    "kontor.tax" "kontor.tax-rep" "kontor.vat-group"
     "kontor.period" "kontor.balance-assertion"
     "kontor.transaction" "kontor.posting"
     "analytic-plan" "analytic-account" "analytic-distribution"

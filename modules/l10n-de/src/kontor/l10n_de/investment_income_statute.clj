@@ -151,7 +151,7 @@
    ;; `install!` here ships the full Soli+KiSt stack.
    {:provision/code            "DE-SolZG-§4-on-§20-income"
     :provision/jurisdiction    :de
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "§4 SolZG — Solidaritätszuschlag (5.5 %) on §20 Abgeltungsteuer (income side)"
     :provision/citation        "https://www.gesetze-im-internet.de/solzg_1995/__4.html"
     :provision/effective-from  #inst "2009-01-01"
@@ -165,7 +165,7 @@
 
    {:provision/code            "DE-KiStG-on-§20"
     :provision/jurisdiction    :de
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "KiStG — Kirchensteuer (8 %/9 %) auf §20 Abgeltungsteuer"
     :provision/citation        "https://www.gesetze-im-internet.de/estg/__32d.html (formula); KiStG der Länder (rates)"
     :provision/effective-from  #inst "1995-01-01"

@@ -263,7 +263,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "JP-Shotokuzeihō-§92-haitō-kōjo-national"
     :provision/jurisdiction    :jp
-    :provision/concept         [:tax-concept/code :non-refundable-credit]
+    :provision/concept         [:kontor.tax-concept/code :non-refundable-credit]
     :provision/title           "配当控除 — 所得税法 §92 dividend tax credit (national income tax)"
     :provision/citation        "https://elaws.e-gov.go.jp/document?lawid=340AC0000000033#Mp-At_92"
     :provision/effective-from  #inst "1965-04-01"
@@ -280,7 +280,7 @@
 
    {:provision/code            "JP-Chihōzeihō-haitō-kōjo-jūmin"
     :provision/jurisdiction    :jp
-    :provision/concept         [:tax-concept/code :non-refundable-credit]
+    :provision/concept         [:kontor.tax-concept/code :non-refundable-credit]
     :provision/title           "配当控除 — 地方税法 dividend tax credit (inhabitants tax)"
     :provision/citation        "https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1250.htm"
     :provision/effective-from  #inst "1965-04-01"

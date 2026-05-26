@@ -254,7 +254,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CA-ITA-§121-DTC-Federal-Eligible"
     :provision/jurisdiction    :ca
-    :provision/concept         [:tax-concept/code :non-refundable-credit]
+    :provision/concept         [:kontor.tax-concept/code :non-refundable-credit]
     :provision/title           "ITA §121(a) — federal dividend tax credit on eligible dividends"
     :provision/citation        "https://laws-lois.justice.gc.ca/eng/acts/I-3.3/section-121.html"
     :provision/effective-from  #inst "2014-01-01"
@@ -274,7 +274,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CA-ITA-§121-DTC-Federal-NonEligible"
     :provision/jurisdiction    :ca
-    :provision/concept         [:tax-concept/code :non-refundable-credit]
+    :provision/concept         [:kontor.tax-concept/code :non-refundable-credit]
     :provision/title           "ITA §121(a) — federal dividend tax credit on non-eligible dividends"
     :provision/citation        "https://laws-lois.justice.gc.ca/eng/acts/I-3.3/section-121.html"
     :provision/effective-from  #inst "2019-01-01"
@@ -294,7 +294,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CA-ITA-§126-Foreign-Tax-Credit"
     :provision/jurisdiction    :ca
-    :provision/concept         [:tax-concept/code :non-refundable-credit]
+    :provision/concept         [:kontor.tax-concept/code :non-refundable-credit]
     :provision/title           "ITA §126(1) — federal foreign tax credit on non-business income (15% cap)"
     :provision/citation        "https://laws-lois.justice.gc.ca/eng/acts/I-3.3/section-126.html"
     :provision/effective-from  #inst "1972-01-01"
@@ -314,7 +314,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CA-ON-DTC-Eligible"
     :provision/jurisdiction    :ca-on
-    :provision/concept         [:tax-concept/code :non-refundable-credit]
+    :provision/concept         [:kontor.tax-concept/code :non-refundable-credit]
     :provision/title           "Ontario eligible-dividend tax credit (10.0% of grossed-up)"
     :provision/citation        "https://www.ontario.ca/laws/statute/07t11"
     :provision/effective-from  #inst "2014-01-01"
@@ -331,7 +331,7 @@
 
    {:provision/code            "CA-ON-DTC-NonEligible"
     :provision/jurisdiction    :ca-on
-    :provision/concept         [:tax-concept/code :non-refundable-credit]
+    :provision/concept         [:kontor.tax-concept/code :non-refundable-credit]
     :provision/title           "Ontario non-eligible-dividend tax credit (2.9863% of grossed-up; 2025+)"
     :provision/citation        "https://www.ontario.ca/laws/statute/07t11"
     :provision/effective-from  #inst "2025-01-01"
@@ -351,7 +351,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CA-BC-DTC-Eligible"
     :provision/jurisdiction    :ca-bc
-    :provision/concept         [:tax-concept/code :non-refundable-credit]
+    :provision/concept         [:kontor.tax-concept/code :non-refundable-credit]
     :provision/title           "BC eligible-dividend tax credit (12.0% of grossed-up)"
     :provision/citation        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96215_01"
     :provision/effective-from  #inst "2019-01-01"
@@ -368,7 +368,7 @@
 
    {:provision/code            "CA-BC-DTC-NonEligible"
     :provision/jurisdiction    :ca-bc
-    :provision/concept         [:tax-concept/code :non-refundable-credit]
+    :provision/concept         [:kontor.tax-concept/code :non-refundable-credit]
     :provision/title           "BC non-eligible-dividend tax credit (1.96% of grossed-up)"
     :provision/citation        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96215_01"
     :provision/effective-from  #inst "2019-01-01"
@@ -388,7 +388,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CA-AB-DTC-Eligible"
     :provision/jurisdiction    :ca-ab
-    :provision/concept         [:tax-concept/code :non-refundable-credit]
+    :provision/concept         [:kontor.tax-concept/code :non-refundable-credit]
     :provision/title           "Alberta eligible-dividend tax credit (8.12% of grossed-up)"
     :provision/citation        "https://kings-printer.alberta.ca/1266.cfm?page=A30P1.cfm&leg_type=Acts"
     :provision/effective-from  #inst "2017-01-01"
@@ -405,7 +405,7 @@
 
    {:provision/code            "CA-AB-DTC-NonEligible"
     :provision/jurisdiction    :ca-ab
-    :provision/concept         [:tax-concept/code :non-refundable-credit]
+    :provision/concept         [:kontor.tax-concept/code :non-refundable-credit]
     :provision/title           "Alberta non-eligible-dividend tax credit (2.18% of grossed-up)"
     :provision/citation        "https://kings-printer.alberta.ca/1266.cfm?page=A30P1.cfm&leg_type=Acts"
     :provision/effective-from  #inst "2017-01-01"
@@ -425,7 +425,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CA-QC-DTC-Eligible"
     :provision/jurisdiction    :ca-qc
-    :provision/concept         [:tax-concept/code :non-refundable-credit]
+    :provision/concept         [:kontor.tax-concept/code :non-refundable-credit]
     :provision/title           "Quebec eligible-dividend tax credit (11.70% of grossed-up)"
     :provision/citation        "https://www.legisquebec.gouv.qc.ca/en/document/cs/I-3"
     :provision/effective-from  #inst "2022-01-01"
@@ -442,7 +442,7 @@
 
    {:provision/code            "CA-QC-DTC-NonEligible"
     :provision/jurisdiction    :ca-qc
-    :provision/concept         [:tax-concept/code :non-refundable-credit]
+    :provision/concept         [:kontor.tax-concept/code :non-refundable-credit]
     :provision/title           "Quebec non-eligible-dividend tax credit (3.42% of grossed-up)"
     :provision/citation        "https://www.legisquebec.gouv.qc.ca/en/document/cs/I-3"
     :provision/effective-from  #inst "2022-01-01"

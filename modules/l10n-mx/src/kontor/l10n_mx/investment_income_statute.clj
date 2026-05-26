@@ -148,7 +148,7 @@
    default = post-2014 fires the 10 %)."
   [{:provision/code            "MX-LISR-art-140-isr-adicional-dividendos"
     :provision/jurisdiction    :mx
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "Art. 140 LISR — 10 % ISR Adicional sobre Dividendos (PF, post-2014 CUFIN)"
     :provision/citation        "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-iv/capitulo-viii/"
     :provision/effective-from  #inst "2014-01-01"

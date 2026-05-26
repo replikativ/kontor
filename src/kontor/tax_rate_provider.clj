@@ -37,10 +37,10 @@
      :base        — the base this component was computed from.
      :amount      — the computed tax amount (BigDecimal, unsigned —
                     the posting builder applies the sign per :tax-use).
-     :recoverable? — passthrough of :tax/recoverable?.
+     :recoverable? — passthrough of :kontor.tax/recoverable?.
      :tax-eid     — the backing :tax entity (the posting builder walks
                     its :tax-rep repartition lines).
-     :tax-code    — the :tax/code, for provenance + logs.
+     :tax-code    — the :kontor.tax/code, for provenance + logs.
      :provenance  — {:provider-id <kw> :rate-source <str>
                      :statute <str|nil>}.
      :jurisdiction — per-component {:authority :subdivision}, for
@@ -189,31 +189,31 @@
      or `nil`."))
 
 ;; ============================================================================
-;; StaticTableProvider — reads the :tax/* schema (ADR-071 Implication 2)
+;; StaticTableProvider — reads the :kontor.tax/* schema (ADR-071 Implication 2)
 ;; ============================================================================
 
 (defn- effective?
   "True when `at` falls within the tax entity's effective window.
    nil bounds are open (ADR-071 P2-71-1)."
   [tax ^java.util.Date at]
-  (let [from  (:tax/effective-from tax)
-        until (:tax/effective-until tax)]
+  (let [from  (:kontor.tax/effective-from tax)
+        until (:kontor.tax/effective-until tax)]
     (and (or (nil? from)  (not (.before at ^java.util.Date from)))
          (or (nil? until) (.before at ^java.util.Date until)))))
 
 (defn- component-kind
   "Map a `:tax` entity + `:tax-use` to a `TaxFacts` component `:kind`.
-   `:tax/mechanism` (ADR-071 addendum / note 101) wins when set:
+   `:kontor.tax/mechanism` (ADR-071 addendum / note 101) wins when set:
    `:reverse-charge` and `:withholding` are mechanism-determined. For
    `:standard` (or absent) recoverable VAT is input/output by use, and
    a non-recoverable tax becomes cost and is reported as `:sales-tax`."
   [tax tax-use]
-  (case (:tax/mechanism tax)
+  (case (:kontor.tax/mechanism tax)
     :reverse-charge :reverse-charge
     :withholding    :withholding
     ;; :standard or absent
     (cond
-      (not (:tax/recoverable? tax)) :sales-tax
+      (not (:kontor.tax/recoverable? tax)) :sales-tax
       (= tax-use :sale)             :output-vat
       (= tax-use :purchase)         :input-vat
       :else                         :sales-tax)))
@@ -224,8 +224,8 @@
    (the static provider does not expand tax groups — a per-l10n
    provider handles those)."
   [tax ^java.math.BigDecimal base]
-  (let [rate (:tax/amount tax)]
-    (case (:tax/amount-type tax)
+  (let [rate (:kontor.tax/amount tax)]
+    (case (:kontor.tax/amount-type tax)
       :percent (.multiply base rate)
       :fixed   rate
       nil)))
@@ -242,9 +242,9 @@
           tax-eids (d/q '[:find [?t ...]
                           :in $ ?cc ?use
                           :where
-                          [?t :tax/country-code ?cc]
-                          [?t :tax/type-tax-use ?use]
-                          [?t :tax/active true]]
+                          [?t :kontor.tax/country-code ?cc]
+                          [?t :kontor.tax/type-tax-use ?use]
+                          [?t :kontor.tax/active true]]
                         db cc tax-use)
           components
           (->> tax-eids
@@ -253,17 +253,17 @@
                (keep (fn [tax]
                        (when-let [amt (component-amount tax base)]
                          {:kind         (component-kind tax tax-use)
-                          :rate         (:tax/amount tax)
+                          :rate         (:kontor.tax/amount tax)
                           :base         base
                           :amount       amt
-                          :recoverable? (boolean (:tax/recoverable? tax))
+                          :recoverable? (boolean (:kontor.tax/recoverable? tax))
                           :tax-eid      (:db/id tax)
-                          :tax-code     (:tax/code tax)
+                          :tax-code     (:kontor.tax/code tax)
                           :provenance   {:provider-id :static-table
-                                         :rate-source (:tax/code tax)
+                                         :rate-source (:kontor.tax/code tax)
                                          :statute     nil}
-                          :jurisdiction (when (:tax/authority tax)
-                                          {:authority (:tax/authority tax)})
+                          :jurisdiction (when (:kontor.tax/authority tax)
+                                          {:authority (:kontor.tax/authority tax)})
                           :jurisdiction-specific-codes {}})))
                vec)]
       (when (seq components)

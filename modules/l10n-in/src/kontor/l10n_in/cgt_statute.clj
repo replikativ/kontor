@@ -331,7 +331,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "IN-FA-2018-cess-cgt"
     :provision/jurisdiction    :in
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "Health & Education cess — 4 % on standalone CGT tax"
     :provision/citation        "https://incometaxindia.gov.in/tutorials/65.exemptions-from-capital-gains.pdf"
     :provision/effective-from  #inst "2018-04-01"

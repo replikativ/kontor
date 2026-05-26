@@ -10,7 +10,7 @@
    Wire-shape recap (from `schema.clj`):
 
    - `:tax-concept` — the cross-jurisdiction catalogue; closed-by-ADR.
-     A `:tax-concept/code` like `:participation-exemption` is the
+     A `:kontor.tax-concept/code` like `:participation-exemption` is the
      stable identifier a provision points at.
    - `:provision` — one law contribution. Carries citation, condition
      (closed-vocab EDN predicate), consequence (op + amount source),
@@ -315,13 +315,13 @@
    `apply-provisions`'s job (a default is suppressed only when its
    exception is also in the applicable set)."
   [db {:keys [concept jurisdiction as-of regime]} ctx]
-  (let [candidates (->> (d/q '[:find (pull ?p [* {:provision/concept [:tax-concept/code]
+  (let [candidates (->> (d/q '[:find (pull ?p [* {:provision/concept [:kontor.tax-concept/code]
                                                   :provision/regime  [:regime/code]
                                                   :provision/exception-of [:db/id :provision/code]}])
                                :in $ ?concept-code ?juris
                                :where
                                [?p :provision/concept ?c]
-                               [?c :tax-concept/code ?concept-code]
+                               [?c :kontor.tax-concept/code ?concept-code]
                                [?p :provision/jurisdiction ?juris]]
                              db concept jurisdiction)
                         (mapv first))]
@@ -574,107 +574,107 @@
    schema-derivation reads (117 Catala / 118 OpenFisca). Closed-by-ADR:
    adding a concept is a one-row migration + an ADR addendum reviewing
    the cross-jurisdiction case."
-  [{:tax-concept/code        :participation-exemption
-    :tax-concept/label       "Participation exemption"
-    :tax-concept/family      :exemption
-    :tax-concept/description "Partial or full exemption from tax on
+  [{:kontor.tax-concept/code        :participation-exemption
+    :kontor.tax-concept/label       "Participation exemption"
+    :kontor.tax-concept/family      :exemption
+    :kontor.tax-concept/description "Partial or full exemption from tax on
                               gains / dividends from holdings in another
                               corporation. DE §8b KStG (95%), UK SSE
                               (10%+ shareholding, 12-month hold)."}
 
-   {:tax-concept/code        :rollover-relief
-    :tax-concept/label       "Rollover relief"
-    :tax-concept/family      :relief
-    :tax-concept/description "Deferral of gain on disposal by acquiring
+   {:kontor.tax-concept/code        :rollover-relief
+    :kontor.tax-concept/label       "Rollover relief"
+    :kontor.tax-concept/family      :relief
+    :kontor.tax-concept/description "Deferral of gain on disposal by acquiring
                               a replacement asset within a prescribed
                               window. US §1031 like-kind, DE §6b reserve,
                               UK TCGA s152, JP §36-2."}
 
-   {:tax-concept/code        :like-kind-exchange
-    :tax-concept/label       "Like-kind exchange"
-    :tax-concept/family      :relief
-    :tax-concept/description "Narrower than :rollover-relief — the
+   {:kontor.tax-concept/code        :like-kind-exchange
+    :kontor.tax-concept/label       "Like-kind exchange"
+    :kontor.tax-concept/family      :relief
+    :kontor.tax-concept/description "Narrower than :rollover-relief — the
                               specific US §1031 form requiring like-kind
                               property (real-property only post-TCJA)."}
 
-   {:tax-concept/code        :replacement-property
-    :tax-concept/label       "Replacement property relief"
-    :tax-concept/family      :relief
-    :tax-concept/description "Involuntary-conversion deferral — US §1033,
+   {:kontor.tax-concept/code        :replacement-property
+    :kontor.tax-concept/label       "Replacement property relief"
+    :kontor.tax-concept/family      :relief
+    :kontor.tax-concept/description "Involuntary-conversion deferral — US §1033,
                               DE §6b sub-concept. Asset is forced out
                               (compulsory purchase, casualty); replacement
                               acquired within the prescribed window."}
 
-   {:tax-concept/code        :loss-bucket
-    :tax-concept/label       "Loss bucket"
-    :tax-concept/family      :base-adjustment
-    :tax-concept/description "Compartmentalisation of losses for offset
+   {:kontor.tax-concept/code        :loss-bucket
+    :kontor.tax-concept/label       "Loss bucket"
+    :kontor.tax-concept/family      :base-adjustment
+    :kontor.tax-concept/description "Compartmentalisation of losses for offset
                               purposes. DE four-bucket walls (§8b / §17 /
                               §20 / §23), UK capital-vs-income, US
                               capital-loss $3k/year, JP per-class."}
 
-   {:tax-concept/code        :lifetime-cap
-    :tax-concept/label       "Lifetime cap on preferential treatment"
-    :tax-concept/family      :relief
-    :tax-concept/description "Cumulative limit across the taxpayer's
+   {:kontor.tax-concept/code        :lifetime-cap
+    :kontor.tax-concept/label       "Lifetime cap on preferential treatment"
+    :kontor.tax-concept/family      :relief
+    :kontor.tax-concept/description "Cumulative limit across the taxpayer's
                               lifetime on a preferential rate or
                               exclusion. UK BADR (£1M), US §1202 QSBS
                               (greater of $10M or 10× basis)."}
 
-   {:tax-concept/code        :holding-period-preference
-    :tax-concept/label       "Holding-period preferential rate"
-    :tax-concept/family      :relief
-    :tax-concept/description "A different (usually lower) rate applies
+   {:kontor.tax-concept/code        :holding-period-preference
+    :kontor.tax-concept/label       "Holding-period preferential rate"
+    :kontor.tax-concept/family      :relief
+    :kontor.tax-concept/description "A different (usually lower) rate applies
                               once an asset has been held for the
                               prescribed period. US LT-vs-ST (1 year),
                               DE §23 (10y real estate / 1y other), JP
                               real estate (5y, measured at Jan 1)."}
 
-   {:tax-concept/code        :non-refundable-credit
-    :tax-concept/label       "Non-refundable tax credit"
-    :tax-concept/family      :credit
-    :tax-concept/description "Reduces tax liability but not below zero.
+   {:kontor.tax-concept/code        :non-refundable-credit
+    :kontor.tax-concept/label       "Non-refundable tax credit"
+    :kontor.tax-concept/family      :credit
+    :kontor.tax-concept/description "Reduces tax liability but not below zero.
                               The non-refundable form of most jurisdictions'
                               standard credits."}
 
-   {:tax-concept/code        :refundable-credit
-    :tax-concept/label       "Refundable tax credit"
-    :tax-concept/family      :credit
-    :tax-concept/description "Reduces tax liability and may go below
+   {:kontor.tax-concept/code        :refundable-credit
+    :kontor.tax-concept/label       "Refundable tax credit"
+    :kontor.tax-concept/family      :credit
+    :kontor.tax-concept/description "Reduces tax liability and may go below
                               zero (a refund / transfer to the taxpayer).
                               US EITC, CA SR&ED for CCPCs, FR CIR."}
 
-   {:tax-concept/code        :surtax
-    :tax-concept/label       "Surtax on a prior tax"
-    :tax-concept/family      :surtax
-    :tax-concept/description "A tax on a tax (rate applied to a
+   {:kontor.tax-concept/code        :surtax
+    :kontor.tax-concept/label       "Surtax on a prior tax"
+    :kontor.tax-concept/family      :surtax
+    :kontor.tax-concept/description "A tax on a tax (rate applied to a
                               previously-computed liability). DE Soli,
                               JP local CIT, IN/BR cess."}
 
-   {:tax-concept/code        :minimum-tax
-    :tax-concept/label       "Alternative minimum tax"
-    :tax-concept/family      :minimum-tax
-    :tax-concept/description "A floor on the tax liability computed on
+   {:kontor.tax-concept/code        :minimum-tax
+    :kontor.tax-concept/label       "Alternative minimum tax"
+    :kontor.tax-concept/family      :minimum-tax
+    :kontor.tax-concept/description "A floor on the tax liability computed on
                               an alternative base. US CAMT, IN MAT."}
 
-   {:tax-concept/code        :base-transform-add
-    :tax-concept/label       "Pre-schedule base addition"
-    :tax-concept/family      :base-adjustment
-    :tax-concept/description "Addition to the taxable base before the
+   {:kontor.tax-concept/code        :base-transform-add
+    :kontor.tax-concept/label       "Pre-schedule base addition"
+    :kontor.tax-concept/family      :base-adjustment
+    :kontor.tax-concept/description "Addition to the taxable base before the
                               schedule fires. DE §10 KStG non-deductible
                               expenses; DE §8 GewSt add-backs."}
 
-   {:tax-concept/code        :base-transform-deduct
-    :tax-concept/label       "Pre-schedule base deduction"
-    :tax-concept/family      :base-adjustment
-    :tax-concept/description "Deduction from the taxable base before
+   {:kontor.tax-concept/code        :base-transform-deduct
+    :kontor.tax-concept/label       "Pre-schedule base deduction"
+    :kontor.tax-concept/family      :base-adjustment
+    :kontor.tax-concept/description "Deduction from the taxable base before
                               the schedule fires. DE §9 GewSt reductions;
                               standard / itemized deductions."}
 
-   {:tax-concept/code        :elective-regime
-    :tax-concept/label       "Elective regime"
-    :tax-concept/family      :elective-regime
-    :tax-concept/description "A taxpayer-elected alternative regime
+   {:kontor.tax-concept/code        :elective-regime
+    :kontor.tax-concept/label       "Elective regime"
+    :kontor.tax-concept/family      :elective-regime
+    :kontor.tax-concept/description "A taxpayer-elected alternative regime
                               that swaps in a different set of provisions.
                               IN old-vs-new income tax, FR PME-vs-std
                               IS, US itemized-vs-standard deduction."}])

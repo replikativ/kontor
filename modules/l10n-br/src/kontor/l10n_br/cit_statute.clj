@@ -334,7 +334,7 @@
    ;; ----- ADD: multas indedutíveis (Lei 9.430/1996 art. 41) -----
    {:provision/code            "BR-IRPJ-Real-multas-indedutiveis"
     :provision/jurisdiction    :br
-    :provision/concept         [:tax-concept/code :base-transform-add]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-add]
     :provision/title           "Adição IRPJ — multas indedutíveis (penais)"
     :provision/citation        "https://www.planalto.gov.br/ccivil_03/leis/l9430.htm#art41"
     :provision/effective-from  #inst "1997-01-01"
@@ -352,7 +352,7 @@
    ;; ----- ADD: doações acima dos limites (Lei 9.249/1995 art. 13) -----
    {:provision/code            "BR-IRPJ-Real-doacoes-acima-limite"
     :provision/jurisdiction    :br
-    :provision/concept         [:tax-concept/code :base-transform-add]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-add]
     :provision/title           "Adição IRPJ — doações acima dos limites legais"
     :provision/citation        "https://www.planalto.gov.br/ccivil_03/leis/l9249.htm#art13"
     :provision/effective-from  #inst "1996-01-01"
@@ -370,7 +370,7 @@
    ;; ----- ADD: brindes (Lei 9.249/1995 art. 13 §2) -----
    {:provision/code            "BR-IRPJ-Real-brindes"
     :provision/jurisdiction    :br
-    :provision/concept         [:tax-concept/code :base-transform-add]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-add]
     :provision/title           "Adição IRPJ — brindes (Lei 9.249 art. 13 §2 — não dedutíveis)"
     :provision/citation        "https://www.planalto.gov.br/ccivil_03/leis/l9249.htm#art13"
     :provision/effective-from  #inst "1996-01-01"
@@ -388,7 +388,7 @@
    ;; ----- ADD: CSLL não dedutível do IRPJ (Lei 9.316/1996 art. 1) -----
    {:provision/code            "BR-IRPJ-Real-csll-addback"
     :provision/jurisdiction    :br
-    :provision/concept         [:tax-concept/code :base-transform-add]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-add]
     :provision/title           "Adição IRPJ — CSLL provisão do período (não dedutível)"
     :provision/citation        "https://www.planalto.gov.br/ccivil_03/leis/l9316.htm#art1"
     :provision/effective-from  #inst "1997-01-01"
@@ -406,7 +406,7 @@
    ;; ----- DEDUCT: dividendos isentos (Lei 9.249/1995 art. 10) -----
    {:provision/code            "BR-IRPJ-Real-dividendos-excluidos"
     :provision/jurisdiction    :br
-    :provision/concept         [:tax-concept/code :base-transform-deduct]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-deduct]
     :provision/title           "Exclusão IRPJ — dividendos recebidos isentos"
     :provision/citation        "https://www.planalto.gov.br/ccivil_03/leis/l9249.htm#art10"
     :provision/effective-from  #inst "1996-01-01"
@@ -424,7 +424,7 @@
    ;; ----- DEDUCT: JCP (Lei 9.249/1995 art. 9) -----
    {:provision/code            "BR-IRPJ-Real-jcp-deduction"
     :provision/jurisdiction    :br
-    :provision/concept         [:tax-concept/code :base-transform-deduct]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-deduct]
     :provision/title           "Exclusão IRPJ — JCP pago dentro dos limites (TJLP×PL ∧ 50 % lucro)"
     :provision/citation        "https://www.planalto.gov.br/ccivil_03/leis/l9249.htm#art9"
     :provision/effective-from  #inst "1996-01-01"
@@ -443,7 +443,7 @@
    ;; Late-bound on :running — cap depends on the post-all-other-adjustments base
    {:provision/code            "BR-IRPJ-Real-trava-30pct"
     :provision/jurisdiction    :br
-    :provision/concept         [:tax-concept/code :base-transform-deduct]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-deduct]
     :provision/title           "Compensação prejuízo fiscal — trava 30 % (Lei 9.065 art. 15)"
     :provision/citation        "https://www.planalto.gov.br/ccivil_03/leis/l9065.htm#art15"
     :provision/effective-from  #inst "1995-01-01"
@@ -465,7 +465,7 @@
    ;; ----- DEDUCT: PAT — Programa de Alimentação do Trabalhador (Lei 6.321/1976) -----
    {:provision/code            "BR-IRPJ-Real-pat-deduction"
     :provision/jurisdiction    :br
-    :provision/concept         [:tax-concept/code :base-transform-deduct]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-deduct]
     :provision/title           "Exclusão IRPJ — PAT (Lei 6.321/1976) — não aplicável à CSLL"
     :provision/citation        "https://www.planalto.gov.br/ccivil_03/leis/l6321.htm"
     :provision/effective-from  #inst "1976-04-14"
@@ -483,7 +483,7 @@
    ;; ----- DEDUCT: Lei Rouanet / Lei do Audiovisual (Lei 8.313/1991 + Lei 8.685/1993) -----
    {:provision/code            "BR-IRPJ-Real-rouanet-audiovisual"
     :provision/jurisdiction    :br
-    :provision/concept         [:tax-concept/code :base-transform-deduct]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-deduct]
     :provision/title           "Exclusão IRPJ — Lei Rouanet + Lei do Audiovisual (IRPJ-only)"
     :provision/citation        "https://www.planalto.gov.br/ccivil_03/leis/l8313cons.htm"
     :provision/effective-from  #inst "1991-12-23"
@@ -508,7 +508,7 @@
    ;; ----- ADD CSLL: multas indedutíveis -----
    {:provision/code            "BR-CSLL-Real-multas-indedutiveis"
     :provision/jurisdiction    :br
-    :provision/concept         [:tax-concept/code :base-transform-add]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-add]
     :provision/title           "Adição CSLL — multas indedutíveis"
     :provision/citation        "https://www.planalto.gov.br/ccivil_03/leis/l9430.htm#art41"
     :provision/effective-from  #inst "1997-01-01"
@@ -526,7 +526,7 @@
    ;; ----- ADD CSLL: doações acima dos limites -----
    {:provision/code            "BR-CSLL-Real-doacoes-acima-limite"
     :provision/jurisdiction    :br
-    :provision/concept         [:tax-concept/code :base-transform-add]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-add]
     :provision/title           "Adição CSLL — doações acima dos limites legais"
     :provision/citation        "https://www.planalto.gov.br/ccivil_03/leis/l9249.htm#art13"
     :provision/effective-from  #inst "1996-01-01"
@@ -544,7 +544,7 @@
    ;; ----- DEDUCT CSLL: dividendos isentos -----
    {:provision/code            "BR-CSLL-Real-dividendos-excluidos"
     :provision/jurisdiction    :br
-    :provision/concept         [:tax-concept/code :base-transform-deduct]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-deduct]
     :provision/title           "Exclusão CSLL — dividendos recebidos isentos"
     :provision/citation        "https://www.planalto.gov.br/ccivil_03/leis/l9249.htm#art10"
     :provision/effective-from  #inst "1996-01-01"
@@ -562,7 +562,7 @@
    ;; ----- DEDUCT CSLL: JCP (Lei 9.249/1995 art. 9 §10) -----
    {:provision/code            "BR-CSLL-Real-jcp-deduction"
     :provision/jurisdiction    :br
-    :provision/concept         [:tax-concept/code :base-transform-deduct]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-deduct]
     :provision/title           "Exclusão CSLL — JCP pago dentro dos limites"
     :provision/citation        "https://www.planalto.gov.br/ccivil_03/leis/l9249.htm#art9"
     :provision/effective-from  #inst "1996-01-01"
@@ -580,7 +580,7 @@
    ;; ----- DEDUCT CSLL: trava-30 % base negativa (Lei 9.065/1995 art. 16) -----
    {:provision/code            "BR-CSLL-Real-trava-30pct"
     :provision/jurisdiction    :br
-    :provision/concept         [:tax-concept/code :base-transform-deduct]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-deduct]
     :provision/title           "Compensação base negativa CSLL — trava 30 % (Lei 9.065 art. 16)"
     :provision/citation        "https://www.planalto.gov.br/ccivil_03/leis/l9065.htm#art16"
     :provision/effective-from  #inst "1995-01-01"
@@ -604,7 +604,7 @@
    ;; Arbitrado. Per note 162 §2.3.
    {:provision/code            "BR-IRPJ-adicional-10pct"
     :provision/jurisdiction    :br
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "IRPJ adicional 10 % — Lei 9.430 art. 4"
     :provision/citation        "https://www.planalto.gov.br/ccivil_03/leis/l9430.htm#art4"
     :provision/effective-from  #inst "1997-01-01"

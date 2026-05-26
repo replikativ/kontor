@@ -22,10 +22,10 @@
 ;;   16 — TVA collectée (output VAT total)
 ;;   20 — TVA déductible sur biens et services (input VAT)
 ;;
-;; Note on :tax/exigibility — French rule: service providers default
+;; Note on :kontor.tax/exigibility — French rule: service providers default
 ;; to TVA "sur les encaissements" (cash basis); option for "sur les
 ;; débits" (accrual) by letter to the SIE. Goods sellers are always
-;; "sur les débits". The kernel's :tax/exigibility :on-payment vs
+;; "sur les débits". The kernel's :kontor.tax/exigibility :on-payment vs
 ;; :on-invoice already covers this distinction; the chart below
 ;; doesn't pin it (set per-:tax entity at install-time).
 

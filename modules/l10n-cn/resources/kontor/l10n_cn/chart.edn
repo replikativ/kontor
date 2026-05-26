@@ -9,7 +9,7 @@
 ;;
 ;; ## 2221 应交税费 sub-tree (the MOF-canonical structure)
 ;;
-;; Per-rate aggregation (13% / 9% / 6%) is via :tax-application/rate
+;; Per-rate aggregation (13% / 9% / 6%) is via :kontor.tax-application/rate
 ;; (ADR-016) + per-posting account-tags, NOT via per-rate accounts.
 ;; The MOF chart has ONE output-VAT account and ONE input-VAT account;
 ;; this kernel previously had non-standard per-rate sub-accounts —
@@ -167,7 +167,7 @@
 
  ;; 2221.01 应交增值税 — the 10 MOF-canonical 专栏
  ;; (Cai Kuai [2016] No. 22). Per-rate aggregation (13% / 9% / 6%) is
- ;; via :tax-application/rate + revenue-account tags, NOT via per-rate
+ ;; via :kontor.tax-application/rate + revenue-account tags, NOT via per-rate
  ;; output accounts.
  {:code "2221.01.01" :path "Liabilities:Tax:VAT:OutputVAT"
   :name "Output VAT / 销项税额"

@@ -30,9 +30,9 @@
    Walks each component's backing `:tax` entity's `:tax-rep`
    repartition lines (ADR-071: \"walk `:tax-rep` entries, materialize
    tax postings\"). Each `:tax-rep` line of `:repartition-type :tax`
-   produces one posting: account `:tax-rep/account`, amount
-   `component-amount × :tax-rep/factor-percent/100`, carrying the
-   line's `:tax-rep/tags` for VAT-box aggregation. `:base` repartition
+   produces one posting: account `:kontor.tax-rep/account`, amount
+   `component-amount × :kontor.tax-rep/factor-percent/100`, carrying the
+   line's `:kontor.tax-rep/tags` for VAT-box aggregation. `:base` repartition
    lines attach tags only and produce no posting of their own."
   (:require [datahike.api :as d]
             [kontor.tax-rate-provider :as trp]))
@@ -78,18 +78,18 @@
 
 (defn- rep-lines
   "The `:tax-rep` lines of `:repartition-type :tax` for `tax-eid` and
-   `document-type`, ordered by `:tax-rep/sequence`."
+   `document-type`, ordered by `:kontor.tax-rep/sequence`."
   [db tax-eid document-type]
   (->> (d/q '[:find [?r ...]
               :in $ ?tax ?doc
               :where
-              [?r :tax-rep/tax ?tax]
-              [?r :tax-rep/document-type ?doc]
-              [?r :tax-rep/repartition-type :tax]]
+              [?r :kontor.tax-rep/tax ?tax]
+              [?r :kontor.tax-rep/document-type ?doc]
+              [?r :kontor.tax-rep/repartition-type :tax]]
             db tax-eid document-type)
-       (map #(d/pull db '[* {:tax-rep/account [:db/id]}
-                          {:tax-rep/tags [:db/id]}] %))
-       (sort-by #(:tax-rep/sequence % 0))))
+       (map #(d/pull db '[* {:kontor.tax-rep/account [:db/id]}
+                          {:kontor.tax-rep/tags [:db/id]}] %))
+       (sort-by #(:kontor.tax-rep/sequence % 0))))
 
 (defn- postings-from-rep-lines
   "Materialize one posting per `:repartition-type :tax` repartition
@@ -99,9 +99,9 @@
   [db component commodity document-type sign]
   (let [reps (rep-lines db (:tax-eid component) document-type)]
     (for [rep reps
-          :let [factor  (or (:tax-rep/factor-percent rep) 100M)
+          :let [factor  (or (:kontor.tax-rep/factor-percent rep) 100M)
                 amount  (* (:amount component) (/ factor 100M) sign)
-                account (get-in rep [:tax-rep/account :db/id])]
+                account (get-in rep [:kontor.tax-rep/account :db/id])]
           :when account]
       (cond-> {:kontor.posting/account      account
                :kontor.posting/amount       amount
@@ -109,8 +109,8 @@
                :kontor.posting/display-type :tax
                :kontor.posting/tax-rep      (:db/id rep)
                :kontor.posting/tax-base     (:base component)}
-        (seq (:tax-rep/tags rep))
-        (assoc :kontor.posting/account-tags (mapv :db/id (:tax-rep/tags rep)))))))
+        (seq (:kontor.tax-rep/tags rep))
+        (assoc :kontor.posting/account-tags (mapv :db/id (:kontor.tax-rep/tags rep)))))))
 
 (defn- reverse-charge-postings
   "G1 (ADR-071 P1-71-2). Seller-side (`:sale`) reverse charge has NO
@@ -124,13 +124,13 @@
   [db component commodity tax-use]
   (if (= tax-use :sale)
     []
-    (let [grp (:tax/tax-group
-               (d/pull db '[{:tax/tax-group
-                             [{:tax-group/payable-account [:db/id]}
-                              {:tax-group/receivable-account [:db/id]}]}]
+    (let [grp (:kontor.tax/tax-group
+               (d/pull db '[{:kontor.tax/tax-group
+                             [{:kontor.vat-group/payable-account [:db/id]}
+                              {:kontor.vat-group/receivable-account [:db/id]}]}]
                        (:tax-eid component)))
-          payable    (get-in grp [:tax-group/payable-account :db/id])
-          receivable (get-in grp [:tax-group/receivable-account :db/id])
+          payable    (get-in grp [:kontor.vat-group/payable-account :db/id])
+          receivable (get-in grp [:kontor.vat-group/receivable-account :db/id])
           amt        (:amount component)
           base       {:kontor.posting/commodity    commodity
                       :kontor.posting/display-type :tax

@@ -182,8 +182,8 @@
 (deftest tax-authority-attribute-installed
   (let [conn (core/create-test-db)
         all-idents (set (d/q '[:find [?i ...] :where [_ :db/ident ?i]] (d/db conn)))]
-    (is (contains? all-idents :tax/authority)
-        ":tax/authority must be present in the kernel schema for CA filing reports.")))
+    (is (contains? all-idents :kontor.tax/authority)
+        ":kontor.tax/authority must be present in the kernel schema for CA filing reports.")))
 
 ;; ============================================================================
 ;; CRA GST/HST report — combined federal + HST sales

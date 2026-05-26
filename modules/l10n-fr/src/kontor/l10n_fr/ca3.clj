@@ -26,7 +26,7 @@
    FR encaissements vs débits:
      Service providers default to TVA sur les encaissements (cash).
      Goods sellers always sur les débits (accrual). Modeled per-:tax
-     entity via :tax/exigibility :on-payment | :on-invoice. The CA3
+     entity via :kontor.tax/exigibility :on-payment | :on-invoice. The CA3
      computation is the same; only the timing of when a posting
      enters the report changes."
   (:require [kontor.money :as money]

@@ -288,7 +288,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "IN-CIT-Standard-25"
     :provision/jurisdiction    :in
-    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/concept         [:kontor.tax-concept/code :elective-regime]
     :provision/title           "Standard regime base — 25 % (PY 2023-24 turnover ≤ ₹400 cr)"
     :provision/citation        "Finance (No. 2) Act 2019 §2 + First Schedule Part III A"
     :provision/effective-from  #inst "2019-04-01"
@@ -307,7 +307,7 @@
 
    {:provision/code            "IN-CIT-Standard-30"
     :provision/jurisdiction    :in
-    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/concept         [:kontor.tax-concept/code :elective-regime]
     :provision/title           "Standard regime base — 30 % (PY 2023-24 turnover > ₹400 cr)"
     :provision/citation        "Finance Act First Schedule Part III A — default 30 % rate"
     :provision/effective-from  #inst "2019-04-01"
@@ -329,7 +329,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "IN-CIT-115BAA-22"
     :provision/jurisdiction    :in
-    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/concept         [:kontor.tax-concept/code :elective-regime]
     :provision/title           "§115BAA concessional flat 22 % — domestic-co election (irrevocable, Form 10-IC)"
     :provision/citation        "Income-tax Act §115BAA (Act 46/2019)"
     :provision/effective-from  #inst "2019-04-01"
@@ -349,7 +349,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "IN-CIT-115BAB-15"
     :provision/jurisdiction    :in
-    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/concept         [:kontor.tax-concept/code :elective-regime]
     :provision/title           "§115BAB concessional flat 15 % — new manufacturing co. (commencement ≤ 2024-03-31)"
     :provision/citation        "Income-tax Act §115BAB (Act 46/2019); commencement sunset 2024-03-31 per Finance Act 2024"
     :provision/effective-from  #inst "2019-10-01"
@@ -372,7 +372,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "IN-CIT-Foreign-Co"
     :provision/jurisdiction    :in
-    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/concept         [:kontor.tax-concept/code :elective-regime]
     :provision/title           "Foreign-co CIT — 35 % (post-FA-2024) / 40 % (pre-FA-2024) per :parameter history"
     :provision/citation        "Income-tax Act §90 / §115A; Finance (No. 2) Act 2024 §2"
     :provision/effective-from  #inst "1989-04-01"
@@ -393,7 +393,7 @@
    ;; Standard regime: banded 0/7/12 with statutory marginal relief.
    {:provision/code            "IN-CIT-Surcharge-Standard"
     :provision/jurisdiction    :in
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "Standard-regime surcharge — banded 0/7/12 % (with marginal relief)"
     :provision/citation        "Finance Act 2025 First Schedule Part III A (Surcharge proviso)"
     :provision/effective-from  #inst "2018-04-01"
@@ -411,7 +411,7 @@
    ;; §115BAA / §115BAB: flat 10 %.
    {:provision/code            "IN-CIT-Surcharge-Concessional"
     :provision/jurisdiction    :in
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "§115BAA / §115BAB flat 10 % surcharge"
     :provision/citation        "Finance Act 2020 §2 + Act 46/2019"
     :provision/effective-from  #inst "2019-04-01"
@@ -430,7 +430,7 @@
    ;; Foreign-co: banded 0/2/5, no marginal relief.
    {:provision/code            "IN-CIT-Surcharge-Foreign"
     :provision/jurisdiction    :in
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "Foreign-co surcharge — banded 0/2/5 % (no marginal relief)"
     :provision/citation        "Finance Act 2025 First Schedule Part III E"
     :provision/effective-from  #inst "2018-04-01"
@@ -452,7 +452,7 @@
    ;; `(gross + surcharge)` — exactly what the statute prescribes.
    {:provision/code            "IN-FinAct-Cess"
     :provision/jurisdiction    :in
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "Health & Education Cess — 4 % of (tax + surcharge); fires for :regular and :mat"
     :provision/citation        "Finance Act 2018 §158; Finance Act 2025 §2(12)"
     :provision/effective-from  #inst "2018-04-01"
@@ -473,7 +473,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "IN-MAT-115JB"
     :provision/jurisdiction    :in
-    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/concept         [:kontor.tax-concept/code :elective-regime]
     :provision/title           "§115JB Minimum Alternate Tax — 15 % on book profit (14 % from FY 2026-27)"
     :provision/citation        "Income-tax Act §115JB; Finance (No. 2) Act 2019 §50; Union Budget 2025"
     :provision/effective-from  #inst "2019-04-01"
@@ -494,7 +494,7 @@
    ;; :in-cit-surcharge-standard compute-fn.
    {:provision/code            "IN-MAT-Surcharge"
     :provision/jurisdiction    :in
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "MAT surcharge — same 0/7/12 standard bands (with marginal relief)"
     :provision/citation        "Finance Act 2025 First Schedule Part III A (MAT row)"
     :provision/effective-from  #inst "2018-04-01"

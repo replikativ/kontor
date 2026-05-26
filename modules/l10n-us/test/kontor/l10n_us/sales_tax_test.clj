@@ -122,7 +122,7 @@
 
 (deftest state-codes-have-authority
   (testing "Every modeled state has a distinct :authority — the
-            ADR-014 :tax/authority concept extends from `:tax`
+            ADR-014 :kontor.tax/authority concept extends from `:tax`
             entities to `:account-tag` mapping."
     (let [authorities (map (comp :authority val) sales-tax/state-codes)]
       (is (= (count authorities) (count (set authorities)))

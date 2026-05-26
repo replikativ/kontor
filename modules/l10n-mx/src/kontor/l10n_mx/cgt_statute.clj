@@ -244,7 +244,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "MX-LISR-art-93-XIX-a-casa-habitacion"
     :provision/jurisdiction    :mx
-    :provision/concept         [:tax-concept/code :holding-period-preference]
+    :provision/concept         [:kontor.tax-concept/code :holding-period-preference]
     :provision/title           "Art. 93 fr. XIX a) — casa habitación exemption (700 000 UDIS)"
     :provision/citation        "https://www.sat.gob.mx/articulo/31901/articulo-93"
     :provision/effective-from  #inst "2014-01-01"
@@ -263,7 +263,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "MX-LISR-art-127-state-5pct"
     :provision/jurisdiction    :mx
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "Art. 127 — 5 % state notary remittance on real-estate gain"
     :provision/citation        "https://mexico.justia.com/federales/leyes/ley-del-impuesto-sobre-la-renta/titulo-iv/capitulo-iv/seccion-i/"
     :provision/effective-from  #inst "2014-01-01"

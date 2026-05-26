@@ -1064,7 +1064,7 @@
    `:loss-bucket`, `:lifetime-cap`, …). Closed-by-ADR (additions are
    one-row migrations). Composes with ADR-090 `:concept-iri` for
    XBRL / FIBO / external taxonomy edges. ADR-101 §D6 + note 119."
-  [{:db/ident       :tax-concept/code
+  [{:db/ident       :kontor.tax-concept/code
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
@@ -1073,26 +1073,26 @@
                      set seeded by kontor.statute/install-seeds!; new entries
                      require an ADR addendum + a migration row."}
 
-   {:db/ident       :tax-concept/label
+   {:db/ident       :kontor.tax-concept/label
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Human-readable label for the concept."}
 
-   {:db/ident       :tax-concept/description
+   {:db/ident       :kontor.tax-concept/description
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "One-paragraph description of what the concept names —
                      enough for an l10n author to know whether their
                      statute-provision instantiates it."}
 
-   {:db/ident       :tax-concept/family
+   {:db/ident       :kontor.tax-concept/family
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Coarse family this concept belongs to:
                      :exemption / :relief / :credit / :surtax / :minimum-tax /
                      :base-adjustment / :elective-regime."}
 
-   {:db/ident       :tax-concept/concept-iri
+   {:db/ident       :kontor.tax-concept/concept-iri
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ADR-090 IRI into an external taxonomy
@@ -1150,7 +1150,7 @@
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional ADR-090 IRI to the provision in an external
                      taxonomy (XBRL / FIBO). Distinct from
-                     `:tax-concept/concept-iri` — that's the abstract
+                     `:kontor.tax-concept/concept-iri` — that's the abstract
                      concept; this is the specific provision."}
 
    {:db/ident       :provision/effective-from
@@ -1850,44 +1850,44 @@
 ;; account Y with tag U" — separate repartition for invoices vs refunds.
 ;;
 ;; Recoverable vs non-recoverable (ADR-005): VAT/HST/QST/GST set
-;; :tax/recoverable? true (input tax credit). PST/RST/US sales tax set
+;; :kontor.tax/recoverable? true (input tax credit). PST/RST/US sales tax set
 ;; it false (becomes cost of input).
 ;; ============================================================================
 
 (def ^:private tax-attrs
-  [{:db/ident       :tax/code
+  [{:db/ident       :kontor.tax/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Short code unique within the DB (\"DE-VAT-19\",
                      \"CA-GST-5\"). Identity."}
 
-   {:db/ident       :tax/name
+   {:db/ident       :kontor.tax/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :tax/country-code
+   {:db/ident       :kontor.tax/country-code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true}
 
-   {:db/ident       :tax/type-tax-use
+   {:db/ident       :kontor.tax/type-tax-use
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":sale | :purchase | :none"}
 
-   {:db/ident       :tax/amount-type
+   {:db/ident       :kontor.tax/amount-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":percent | :fixed | :group | :division"}
 
-   {:db/ident       :tax/amount
+   {:db/ident       :kontor.tax/amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "The rate. 0.19M for 19%; 0.05M for 5%; for :fixed
                      the absolute amount per unit."}
 
-   {:db/ident       :tax/recoverable?
+   {:db/ident       :kontor.tax/recoverable?
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "True for VAT-style taxes (input tax credit allowed:
@@ -1899,7 +1899,7 @@
    ;; *mechanism* — the posting shape, as distinct from the *rate*.
    ;; StaticTableProvider maps this to the TaxFacts component :kind; a
    ;; bespoke per-country provider sets :kind directly and ignores it.
-   {:db/ident       :tax/mechanism
+   {:db/ident       :kontor.tax/mechanism
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":standard (default — when absent) | :reverse-charge
@@ -1907,25 +1907,25 @@
                      self-assessment (both-legs); :withholding → a
                      contra deduction (TDS, retención). ADR-071 / note 101."}
 
-   {:db/ident       :tax/tax-group
+   {:db/ident       :kontor.tax/tax-group
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Tax-group ref. The group's payable/receivable
                      accounts are where collected/recoverable taxes
                      accumulate."}
 
-   {:db/ident       :tax/include-base-amount
+   {:db/ident       :kontor.tax/include-base-amount
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "Whether this tax's amount is added to the base for
                      subsequent (compound) taxes."}
 
-   {:db/ident       :tax/exigibility
+   {:db/ident       :kontor.tax/exigibility
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":on-invoice | :on-payment (cash-basis taxes)."}
 
-   {:db/ident       :tax/active
+   {:db/ident       :kontor.tax/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}
 
@@ -1934,11 +1934,11 @@
    ;; Agency, (b) PST to Province of BC, (c) QST to Revenu Québec, and
    ;; (d) state sales tax to Texas Comptroller, all in the same
    ;; period. Without an explicit authority field the filing-time
-   ;; aggregator has to string-match :tax/code prefixes — fragile
+   ;; aggregator has to string-match :kontor.tax/code prefixes — fragile
    ;; across l10n teams. Backfill DE entities with :de-bzst when those
    ;; ship; nil today (no DE :tax entities exist yet — UStVA tags hang
    ;; off accounts, not taxes).
-   {:db/ident       :tax/authority
+   {:db/ident       :kontor.tax/authority
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -1955,7 +1955,7 @@
    ;; mapped to filing-taxonomy concepts (XBRL VAT line items, FIBO
    ;; TaxIdentifier, GST/HST authority IRIs). Substrate carries; consumer
    ;; aligns at filing time.
-   {:db/ident       :tax/concept-iri
+   {:db/ident       :kontor.tax/concept-iri
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -1964,12 +1964,12 @@
                      ADR-090."}])
 
 (def ^:private tax-rep-attrs
-  [{:db/ident       :tax-rep/tax
+  [{:db/ident       :kontor.tax-rep/tax
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Back-ref to the tax this repartition line belongs to."}
 
-   {:db/ident       :tax-rep/document-type
+   {:db/ident       :kontor.tax-rep/document-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":invoice | :refund. Different document types use
@@ -1977,14 +1977,14 @@
                      the same accounts but with tax tags inverted for
                      reporting)."}
 
-   {:db/ident       :tax-rep/repartition-type
+   {:db/ident       :kontor.tax-rep/repartition-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":base | :tax. Whether this repartition line covers
                      the base amount (the pre-tax revenue) or the tax
                      amount itself."}
 
-   {:db/ident       :tax-rep/factor-percent
+   {:db/ident       :kontor.tax-rep/factor-percent
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Percentage of the (base or tax) amount this line
@@ -1992,39 +1992,39 @@
                      partial-deductible scenarios (e.g., DE 50% input-tax
                      deductibility on certain hospitality)."}
 
-   {:db/ident       :tax-rep/account
+   {:db/ident       :kontor.tax-rep/account
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Account the posting lands on. nil for base
                      repartition that just attaches tags without
                      producing its own posting."}
 
-   {:db/ident       :tax-rep/tags
+   {:db/ident       :kontor.tax-rep/tags
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Account-tag refs attached to the produced posting,
                      used for VAT-report-box aggregation."}
 
-   {:db/ident       :tax-rep/sequence
+   {:db/ident       :kontor.tax-rep/sequence
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one}])
 
 (def ^:private tax-group-attrs
-  [{:db/ident       :tax-group/name
+  [{:db/ident       :kontor.vat-group/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :tax-group/country-code
+   {:db/ident       :kontor.vat-group/country-code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true}
 
-   {:db/ident       :tax-group/payable-account
+   {:db/ident       :kontor.vat-group/payable-account
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Where collected output VAT lands (liability side)."}
 
-   {:db/ident       :tax-group/receivable-account
+   {:db/ident       :kontor.vat-group/receivable-account
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Where deductible input VAT lands (asset side)."}])
@@ -2548,19 +2548,19 @@
    base, the resulting tax amount, and the compound-on lineage for
    audit + report queries that need direct (not derived) per-tax
    detail. One :tax-application entity per (product-line × tax) pair."
-  [{:db/ident       :tax-application/posting
+  [{:db/ident       :kontor.tax-application/posting
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "Back-ref to the :product-display-type posting
                      this application annotates."}
 
-   {:db/ident       :tax-application/tax
+   {:db/ident       :kontor.tax-application/tax
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "The :tax entity that was applied."}
 
-   {:db/ident       :tax-application/base
+   {:db/ident       :kontor.tax-application/base
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "The base amount this tax was computed against.
@@ -2568,26 +2568,26 @@
                      taxes compound into the base (BR ICMS-on-net+IPI
                      case)."}
 
-   {:db/ident       :tax-application/amount
+   {:db/ident       :kontor.tax-application/amount
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "The resulting tax amount."}
 
-   {:db/ident       :tax-application/tags
+   {:db/ident       :kontor.tax-application/tags
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Account-tag refs (typically inherited from the
                      tax-repartition lines) used by reports."}
 
-   {:db/ident       :tax-application/compound-on
+   {:db/ident       :kontor.tax-application/compound-on
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Other :tax entities whose amounts were folded
                      into this application's :base (i.e. taxes whose
-                     :tax/include-base-amount was true and which
+                     :kontor.tax/include-base-amount was true and which
                      preceded this one in the chain)."}
 
-   {:db/ident       :tax-application/sequence
+   {:db/ident       :kontor.tax-application/sequence
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "Order within the compound chain. Lower numbers
@@ -3478,7 +3478,7 @@
 ;; ============================================================================
 ;; Effective-dated tax rates — ADR-026.
 ;;
-;; Optional :tax/effective-from / :tax/effective-until on existing
+;; Optional :kontor.tax/effective-from / :kontor.tax/effective-until on existing
 ;; :tax entities. TaxRateProvider selects the tax record whose validity
 ;; window contains the transaction's effective-date. Drives India
 ;; GST 2.0 (pre-2025-09-22 vs current), Brazil IBS/CBS transition,
@@ -3486,13 +3486,13 @@
 ;; ============================================================================
 
 (def ^:private tax-effective-window-attrs
-  [{:db/ident       :tax/effective-from
+  [{:db/ident       :kontor.tax/effective-from
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "Start of the rate's legal validity window.
                      Nil means -infinity (always-effective). ADR-026."}
 
-   {:db/ident       :tax/effective-until
+   {:db/ident       :kontor.tax/effective-until
     :db/valueType   :db.type/instant
     :db/cardinality :db.cardinality/one
     :db/doc         "End of the rate's legal validity window

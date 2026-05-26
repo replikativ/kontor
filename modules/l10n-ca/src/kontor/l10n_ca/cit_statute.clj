@@ -330,7 +330,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CA-ITA-§125-CCPC-SBD"
     :provision/jurisdiction    :ca
-    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/concept         [:kontor.tax-concept/code :elective-regime]
     :provision/title           "ITA §125 — CCPC Small Business Deduction (9% on first $500k, 15% above)"
     :provision/citation        "https://laws-lois.justice.gc.ca/eng/acts/I-3.3/section-125.html"
     :provision/effective-from  #inst "2019-01-01"
@@ -347,7 +347,7 @@
 
    {:provision/code            "CA-ITA-§123.4-General"
     :provision/jurisdiction    :ca
-    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/concept         [:kontor.tax-concept/code :elective-regime]
     :provision/title           "ITA §123 + §123.4 — general 15% federal rate (non-CCPCs)"
     :provision/citation        "https://laws-lois.justice.gc.ca/eng/acts/I-3.3/section-123.4.html"
     :provision/effective-from  #inst "2012-01-01"
@@ -367,7 +367,7 @@
    ;; refundability flag from `:tax-unit :ccpc?`.
    {:provision/code            "CA-ITA-§127.1-SRED-CCPC"
     :provision/jurisdiction    :ca
-    :provision/concept         [:tax-concept/code :refundable-credit]
+    :provision/concept         [:kontor.tax-concept/code :refundable-credit]
     :provision/title           "ITA §127.1 — SR&ED 35% refundable Investment Tax Credit (CCPCs)"
     :provision/citation        "https://laws-lois.justice.gc.ca/eng/acts/I-3.3/section-127.1.html"
     :provision/effective-from  #inst "1985-01-01"
@@ -385,7 +385,7 @@
 
    {:provision/code            "CA-ITA-§127-SRED-Standard"
     :provision/jurisdiction    :ca
-    :provision/concept         [:tax-concept/code :non-refundable-credit]
+    :provision/concept         [:kontor.tax-concept/code :non-refundable-credit]
     :provision/title           "ITA §127(5) — SR&ED 15% non-refundable ITC (non-CCPCs)"
     :provision/citation        "https://laws-lois.justice.gc.ca/eng/acts/I-3.3/section-127.html"
     :provision/effective-from  #inst "2014-01-01"
@@ -406,7 +406,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CA-ON-TA-§31-CCPC-SBD"
     :provision/jurisdiction    :ca-on
-    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/concept         [:kontor.tax-concept/code :elective-regime]
     :provision/title           "Ontario Taxation Act 2007 §31 — CCPC small-business cascade (3.2% to allocated SBD pool, 11.5% above)"
     :provision/citation        "https://www.ontario.ca/laws/statute/07t11"
     :provision/effective-from  #inst "2020-01-01"
@@ -423,7 +423,7 @@
 
    {:provision/code            "CA-ON-TA-§29-General"
     :provision/jurisdiction    :ca-on
-    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/concept         [:kontor.tax-concept/code :elective-regime]
     :provision/title           "Ontario Taxation Act 2007 §29 — general 11.5% (non-CCPCs)"
     :provision/citation        "https://www.ontario.ca/laws/statute/07t11"
     :provision/effective-from  #inst "2018-07-01"
@@ -443,7 +443,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CA-BC-ITA-§14-CCPC-SBD"
     :provision/jurisdiction    :ca-bc
-    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/concept         [:kontor.tax-concept/code :elective-regime]
     :provision/title           "BC Income Tax Act §14 — CCPC cascade (2% to allocated SBD pool, 12% above)"
     :provision/citation        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96215_01"
     :provision/effective-from  #inst "2018-01-01"
@@ -460,7 +460,7 @@
 
    {:provision/code            "CA-BC-ITA-§14-General"
     :provision/jurisdiction    :ca-bc
-    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/concept         [:kontor.tax-concept/code :elective-regime]
     :provision/title           "BC Income Tax Act §14 — general 12% (non-CCPCs)"
     :provision/citation        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96215_01"
     :provision/effective-from  #inst "2018-01-01"
@@ -480,7 +480,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CA-AB-CTA-§21-CCPC-SBD"
     :provision/jurisdiction    :ca-ab
-    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/concept         [:kontor.tax-concept/code :elective-regime]
     :provision/title           "Alberta Corporate Tax Act §21 — CCPC cascade (2% to allocated SBD pool, 8% above)"
     :provision/citation        "https://kings-printer.alberta.ca/1266.cfm?page=A15.cfm&leg_type=Acts"
     :provision/effective-from  #inst "2020-07-01"
@@ -497,7 +497,7 @@
 
    {:provision/code            "CA-AB-CTA-§21-General"
     :provision/jurisdiction    :ca-ab
-    :provision/concept         [:tax-concept/code :elective-regime]
+    :provision/concept         [:kontor.tax-concept/code :elective-regime]
     :provision/title           "Alberta Corporate Tax Act §21 — general 8% (non-CCPCs)"
     :provision/citation        "https://kings-printer.alberta.ca/1266.cfm?page=A15.cfm&leg_type=Acts"
     :provision/effective-from  #inst "2020-07-01"

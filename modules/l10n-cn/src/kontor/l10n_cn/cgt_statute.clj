@@ -235,7 +235,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CN-Caishui-1998-61-listed-A-share-exemption"
     :provision/jurisdiction    :cn
-    :provision/concept         [:tax-concept/code :participation-exemption]
+    :provision/concept         [:kontor.tax-concept/code :participation-exemption]
     :provision/title           "Caishui [1998] 61 — Listed A-/B-share temporary exemption for individuals"
     :provision/citation        "https://www.chinatax.gov.cn/chinatax/n810341/n810765/n812183/199803/c1197999/content.html"
     :provision/effective-from  #inst "1998-03-30"
@@ -254,7 +254,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CN-Caishui-2014-81-stock-connect-exemption"
     :provision/jurisdiction    :cn
-    :provision/concept         [:tax-concept/code :participation-exemption]
+    :provision/concept         [:kontor.tax-concept/code :participation-exemption]
     :provision/title           "Caishui [2014] 81 — Stock Connect H-share IIT exemption (mainland residents)"
     :provision/citation        "https://www.chinatax.gov.cn/chinatax/n810341/n810755/c5210255/content.html"
     :provision/effective-from  #inst "2014-11-17"
@@ -275,7 +275,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CN-Guoshuifa-2006-108-manwuweiyi"
     :provision/jurisdiction    :cn
-    :provision/concept         [:tax-concept/code :holding-period-preference]
+    :provision/concept         [:kontor.tax-concept/code :holding-period-preference]
     :provision/title           "Guoshuifa [2006] 108 §1 — 滿五唯一 residential exemption"
     :provision/citation        "https://www.chinatax.gov.cn/chinatax/n810341/n810765/n812183/200607/c1197073/content.html"
     :provision/effective-from  #inst "2006-07-18"
@@ -298,7 +298,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "CN-Caishui-2009-59-special-restructuring"
     :provision/jurisdiction    :cn
-    :provision/concept         [:tax-concept/code :rollover-relief]
+    :provision/concept         [:kontor.tax-concept/code :rollover-relief]
     :provision/title           "Caishui [2009] 59 + [2014] 109 — special-restructuring tax deferral"
     :provision/citation        "https://fgk.chinatax.gov.cn/zcfgk/c100012/"
     :provision/effective-from  #inst "2009-01-01"

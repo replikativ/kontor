@@ -209,7 +209,7 @@
    amount, return the ICMS base.
 
    This is the canonical example of compound taxation that ADR-016's
-   :tax-application/compound-on is designed to capture."
+   :kontor.tax-application/compound-on is designed to capture."
   [net-amount ipi-amount]
   (money/add net-amount ipi-amount))
 

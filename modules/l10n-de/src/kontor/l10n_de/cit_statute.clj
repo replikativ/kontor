@@ -220,7 +220,7 @@
    ;; consumer's accounting system should.)
    {:provision/code            "DE-KStG-§10"
     :provision/jurisdiction    :de
-    :provision/concept         [:tax-concept/code :base-transform-add]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-add]
     :provision/title           "§10 KStG — Nicht abzugsfähige Aufwendungen"
     :provision/citation        "https://www.gesetze-im-internet.de/kstg/__10.html"
     :provision/effective-from  #inst "2008-01-01"
@@ -249,7 +249,7 @@
    ;; (the legacy / standalone-CIT path).
    {:provision/code            "DE-KStG-§8b-Abs-5"
     :provision/jurisdiction    :de
-    :provision/concept         [:tax-concept/code :base-transform-add]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-add]
     :provision/title           "§8b Abs. 5 KStG — 5% Pauschalzuschlag auf Beteiligungserträge"
     :provision/citation        "https://www.gesetze-im-internet.de/kstg/__8b.html"
     :provision/effective-from  #inst "2004-01-01"
@@ -268,7 +268,7 @@
    ;; Always applies whenever KSt does (no Freigrenze for corps post-2021).
    {:provision/code            "DE-SolZG-§4"
     :provision/jurisdiction    :de
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "§4 SolZG — Solidaritätszuschlag (5.5% surtax on KSt)"
     :provision/citation        "https://www.gesetze-im-internet.de/solzg_1995/__4.html"
     :provision/effective-from  #inst "1998-01-01"
@@ -298,7 +298,7 @@
    ;;   hinzurechnung = post-freibetrag × DE.GewSt.§8.hinzurechnung-fraction
    {:provision/code            "DE-GewStG-§8-Nr-1"
     :provision/jurisdiction    :de
-    :provision/concept         [:tax-concept/code :base-transform-add]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-add]
     :provision/title           "§8 Nr. 1 GewStG — Hinzurechnungen Finanzierungsanteile (a-f, ¼ × (Σweighted − €200k))"
     :provision/citation        "https://www.gesetze-im-internet.de/gewstg/__8.html"
     :provision/effective-from  #inst "2008-01-01"
@@ -324,7 +324,7 @@
    ;; already-×1.4 value via `:inputs :gewst-real-estate-value`.
    {:provision/code            "DE-GewStG-§9-Nr-1-pre-2025"
     :provision/jurisdiction    :de
-    :provision/concept         [:tax-concept/code :base-transform-deduct]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-deduct]
     :provision/title           "§9 Nr. 1 GewStG (pre-2025) — 1.2% × Einheitswert × 1.4"
     :provision/citation        "https://www.gesetze-im-internet.de/gewstg/__9.html"
     :provision/effective-from  #inst "2008-01-01"
@@ -345,7 +345,7 @@
    ;; expense. Consumer supplies `:inputs :grundsteuer-paid`.
    {:provision/code            "DE-GewStG-§9-Nr-1-from-2025"
     :provision/jurisdiction    :de
-    :provision/concept         [:tax-concept/code :base-transform-deduct]
+    :provision/concept         [:kontor.tax-concept/code :base-transform-deduct]
     :provision/title           "§9 Nr. 1 GewStG (from 2025) — actual Grundsteuer paid"
     :provision/citation        "https://www.gesetze-im-internet.de/gewstg/__9.html"
     :provision/effective-from  #inst "2025-01-01"

@@ -235,7 +235,7 @@
    ;; --------------------------------------------------------------------
    {:provision/code            "US-IRC-§1411-NIIT"
     :provision/jurisdiction    :us
-    :provision/concept         [:tax-concept/code :surtax]
+    :provision/concept         [:kontor.tax-concept/code :surtax]
     :provision/title           "§1411 — Net Investment Income Tax (3.8 % surtax)"
     :provision/citation        "https://www.law.cornell.edu/uscode/text/26/1411"
     :provision/effective-from  #inst "2013-01-01"
