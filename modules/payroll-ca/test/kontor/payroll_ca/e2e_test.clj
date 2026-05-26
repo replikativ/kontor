@@ -63,7 +63,7 @@
     conn))
 
 (defn- get-account-eid [db code]
-  (d/q '[:find ?e . :in $ ?c :where [?e :account/code ?c]] db code))
+  (d/q '[:find ?e . :in $ ?c :where [?e :kontor.account/code ?c]] db code))
 
 ;; ============================================================================
 ;; Mock compute provider — supplies a balanced fact per employment
@@ -218,7 +218,7 @@
                             [:transaction/external-id
                              {:posting/_transaction
                               [:posting/amount
-                               {:posting/account [:account/code]}]}]}]
+                               {:posting/account [:kontor.account/code]}]}]}]
                     run-eid)]
     (testing "payroll-run row created"
       (is (some? run-eid))
@@ -237,7 +237,7 @@
     (testing "Sophie's QC-specific deductions hit the right accounts"
       (let [postings (-> run :payroll-run/payroll-transaction
                          :posting/_transaction)
-            by-code (group-by (comp :account/code :posting/account) postings)]
+            by-code (group-by (comp :kontor.account/code :posting/account) postings)]
         ;; QPP (2521) total: -353 employee + -353 employer payable
         (is (= -706M
                (reduce (fn [a {:keys [posting/amount]}]

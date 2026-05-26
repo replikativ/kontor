@@ -172,10 +172,10 @@
 
 (defn account-by-codigo-agrupador
   "Resolve the kontor :account eid by its SAT Código Agrupador (the
-   `:account/code` we store on l10n-mx accounts — '601.01', '601.02',
+   `:kontor.account/code` we store on l10n-mx accounts — '601.01', '601.02',
    etc). Returns nil if not found."
   [db codigo-agrupador]
   (d/q '[:find ?e .
          :in $ ?code
-         :where [?e :account/code ?code]]
+         :where [?e :kontor.account/code ?code]]
        db codigo-agrupador))

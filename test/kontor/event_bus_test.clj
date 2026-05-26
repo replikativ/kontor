@@ -91,12 +91,12 @@
   (d/transact conn
               [{:db/id -1 :kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                 :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
-               {:db/id -2 :account/path "Assets:Receivable"
-                :account/name "Trade receivables"
-                :account/type :asset :account/active true}
-               {:db/id -3 :account/path "Income:Sales"
-                :account/name "Sales revenue"
-                :account/type :income :account/active true}
+               {:db/id -2 :kontor.account/path "Assets:Receivable"
+                :kontor.account/name "Trade receivables"
+                :kontor.account/type :asset :kontor.account/active true}
+               {:db/id -3 :kontor.account/path "Income:Sales"
+                :kontor.account/name "Sales revenue"
+                :kontor.account/type :income :kontor.account/active true}
                {:db/id -4 :journal/code "INV" :journal/name "Customer invoices"
                 :journal/type :sale :journal/active true}])
   (d/db conn))
@@ -106,8 +106,8 @@
         _     (seed! conn)
         db    (d/db conn)
         eur   (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-        rec   (:db/id (d/entity db [:account/path "Assets:Receivable"]))
-        rev   (:db/id (d/entity db [:account/path "Income:Sales"]))
+        rec   (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
+        rev   (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
         jnl   (:db/id (d/entity db [:journal/code "INV"]))
         events (atom [])
         _     (bus/register-handler! (fn [ev] (swap! events conj ev)))
@@ -151,8 +151,8 @@
         _     (seed! conn)
         db    (d/db conn)
         eur   (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-        rec   (:db/id (d/entity db [:account/path "Assets:Receivable"]))
-        rev   (:db/id (d/entity db [:account/path "Income:Sales"]))
+        rec   (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
+        rev   (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
         jnl   (:db/id (d/entity db [:journal/code "INV"]))
         _     (bus/register-handler!
                (fn [_] (throw (ex-info "handler-boom" {}))))

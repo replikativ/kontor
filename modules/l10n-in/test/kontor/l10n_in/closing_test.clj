@@ -29,7 +29,7 @@
 (def apr-1-2025  #inst "2025-04-01T00:00:00Z")
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (defn- bootstrap []
   (let [conn (core/create-test-db)]

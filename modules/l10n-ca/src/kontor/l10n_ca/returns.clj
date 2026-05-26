@@ -15,7 +15,7 @@
    GST/HST (CRA federal) lives in `kontor.l10n-ca.gst-hst` — see ADR-015
    for the filing-module-per-authority pattern.
 
-   The kernel filters on `:account-tag/name` (which embeds the
+   The kernel filters on `:kontor.account-tag/name` (which embeds the
    :ca-{authority}-{box} convention)."
   (:require [kontor.money :as money]
             [kontor.report :as report]))

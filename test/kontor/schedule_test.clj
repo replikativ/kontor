@@ -38,15 +38,15 @@
 ;; ============================================================================
 
 (defn- setup-asset!
-  "Plant a synthetic `:asset`-like entity (using :account/path as a
+  "Plant a synthetic `:asset`-like entity (using :kontor.account/path as a
    stand-in since the kernel doesn't define :asset). Returns the eid."
   [conn]
   (d/transact conn
-              [{:account/path "Asset:Fixed:Building-100"
-                :account/name "Office Building 100"
-                :account/type :asset
-                :account/active true}])
-  (:db/id (d/entity (d/db conn) [:account/path "Asset:Fixed:Building-100"])))
+              [{:kontor.account/path "Asset:Fixed:Building-100"
+                :kontor.account/name "Office Building 100"
+                :kontor.account/type :asset
+                :kontor.account/active true}])
+  (:db/id (d/entity (d/db conn) [:kontor.account/path "Asset:Fixed:Building-100"])))
 
 (deftest schedule-basic-crud
   (let [conn (core/create-test-db)
@@ -117,20 +117,20 @@
         _ (d/transact conn
                       [{:db/id -1 :kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                         :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
-                       {:db/id -2 :account/path "Expense:Depreciation"
-                        :account/name "Depreciation expense" :account/type :expense
-                        :account/active true}
-                       {:db/id -3 :account/path "Asset:AccumulatedDepreciation"
-                        :account/name "Accumulated depreciation" :account/type :asset
-                        :account/active true}
+                       {:db/id -2 :kontor.account/path "Expense:Depreciation"
+                        :kontor.account/name "Depreciation expense" :kontor.account/type :expense
+                        :kontor.account/active true}
+                       {:db/id -3 :kontor.account/path "Asset:AccumulatedDepreciation"
+                        :kontor.account/name "Accumulated depreciation" :kontor.account/type :asset
+                        :kontor.account/active true}
                        {:db/id -4 :journal/code "DEP"
                         :journal/name "Depreciation" :journal/type :general
                         :journal/active true}])
         db (d/db conn)]
     {:asset asset-eid
      :commodity (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-     :dep-expense (:db/id (d/entity db [:account/path "Expense:Depreciation"]))
-     :accum-dep (:db/id (d/entity db [:account/path "Asset:AccumulatedDepreciation"]))
+     :dep-expense (:db/id (d/entity db [:kontor.account/path "Expense:Depreciation"]))
+     :accum-dep (:db/id (d/entity db [:kontor.account/path "Asset:AccumulatedDepreciation"]))
      :journal (:db/id (d/entity db [:journal/code "DEP"]))}))
 
 (defn- dep-tx-data

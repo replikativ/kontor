@@ -27,7 +27,7 @@
   "Define a relation type — a typed edge the access graph can carry.
 
      (Relation :account :owner :user)   ; account { relation owner: user }
-     (Relation :account/owner :user)    ; the namespaced-keyword form
+     (Relation :kontor.account/owner :user)    ; the namespaced-keyword form
 
    `:self` is reserved (it is the implicit source of a
    self-permission), so it may not be a resource-type or a

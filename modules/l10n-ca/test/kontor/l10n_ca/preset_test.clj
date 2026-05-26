@@ -15,7 +15,7 @@
     (let [conn (preset/create-ca-db)
           db   (d/db conn)]
       (testing "CA chart is present"
-        (let [n (count (d/q '[:find [?path ...] :where [_ :account/path ?path]] db))]
+        (let [n (count (d/q '[:find [?path ...] :where [_ :kontor.account/path ?path]] db))]
           (is (pos? n) "expected the CA chart to be installed")))
       (testing "default 5 journals are present"
         (let [n (count (d/q '[:find [?c ...] :where [_ :journal/code ?c]] db))]
@@ -34,16 +34,16 @@
     (let [conn (preset/create-ca-db)
           ;; Pick the first asset + income account from the CA chart
           [bank rev] (d/q '[:find [?path ...]
-                            :where [?a :account/path ?path]
-                                   [?a :account/type ?t]
+                            :where [?a :kontor.account/path ?path]
+                                   [?a :kontor.account/type ?t]
                                    [(contains? #{:asset :income} ?t)]]
                           (d/db conn))
           asset (first (filter #(re-find #"(?i)bank|cash|asset" %) [bank rev]))
           income (first (filter #(re-find #"(?i)income|sales|revenue|service" %) [bank rev]))]
       ;; If we found at least one asset + one income account, post a sale.
       (when (and asset income)
-        (book/sell! conn {:debit-account [:account/path asset]
-                          :credit-account [:account/path income]
+        (book/sell! conn {:debit-account [:kontor.account/path asset]
+                          :credit-account [:kontor.account/path income]
                           :amount 1000M :commodity cad
                           :effective-date #inst "2026-03-15"})
         (testing "trial balance balances per commodity"

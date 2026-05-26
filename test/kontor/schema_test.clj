@@ -20,7 +20,7 @@
    acceptance test below."
   #{"create" "write"
     "kontor.commodity" "lot"
-    "account" "account-tag"
+    "kontor.account" "kontor.account-tag"
     "journal" "kontor.partner" "fiscal-position"
     "tax" "tax-rep" "tax-group"
     "period" "balance-assertion"
@@ -39,7 +39,7 @@
     "partner-merge" "bank-account"
     "partner-bank-account" "partner-tag"
     "partner-tax-id"
-    "side-effect-intent" "account-type-direction"})
+    "side-effect-intent" "kontor.account-type-direction"})
 
 (deftest schema-loads-into-fresh-db
   (testing "Kernel schema transacts cleanly into a fresh in-memory DB"
@@ -99,9 +99,9 @@
                                     [{:db/id "datomic.tx"
                                       :db.valid/from #inst "2024-06-15"
                                       :db.valid/to   #inst "2024-09-15"}
-                                     {:db/id "e1" :account/name "vt-probe"
-                                      :account/path "VtProbe"
-                                      :account/type :asset}])
+                                     {:db/id "e1" :kontor.account/name "vt-probe"
+                                      :kontor.account/path "VtProbe"
+                                      :kontor.account/type :asset}])
               tx-eid (get-in tx-report [:tempids "datomic.tx"])
               db2    (d/db conn)
               pulled (d/pull db2 [:db.valid/from :db.valid/to] tx-eid)]

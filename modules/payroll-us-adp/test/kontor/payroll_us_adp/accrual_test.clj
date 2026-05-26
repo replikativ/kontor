@@ -38,18 +38,18 @@
                   :ledger/name "US Federal Tax basis" :ledger/framework :us-tax
                   :ledger/active true}
                  ;; CoA — minimal payroll chart.
-                 {:db/id "acct-pto-expense" :account/code "5040"
-                  :account/name "PTO Expense" :account/type :expense
-                  :account/active true}
-                 {:db/id "acct-pto-accrual" :account/code "2290"
-                  :account/name "PTO Accrual (current)"
-                  :account/type :liability :account/active true}
-                 {:db/id "acct-match-expense" :account/code "5310"
-                  :account/name "401(k) Match Expense"
-                  :account/type :expense :account/active true}
-                 {:db/id "acct-match-payable" :account/code "2210"
-                  :account/name "401(k) Match Payable"
-                  :account/type :liability :account/active true}
+                 {:db/id "acct-pto-expense" :kontor.account/code "5040"
+                  :kontor.account/name "PTO Expense" :kontor.account/type :expense
+                  :kontor.account/active true}
+                 {:db/id "acct-pto-accrual" :kontor.account/code "2290"
+                  :kontor.account/name "PTO Accrual (current)"
+                  :kontor.account/type :liability :kontor.account/active true}
+                 {:db/id "acct-match-expense" :kontor.account/code "5310"
+                  :kontor.account/name "401(k) Match Expense"
+                  :kontor.account/type :expense :kontor.account/active true}
+                 {:db/id "acct-match-payable" :kontor.account/code "2210"
+                  :kontor.account/name "401(k) Match Payable"
+                  :kontor.account/type :liability :kontor.account/active true}
                  {:db/id "journal-payroll" :journal/code "PAY-US"
                   :journal/name "Payroll (US)" :journal/type :general}
                  {:db/id "period-2026-04" :period/name "2026-04"
@@ -82,8 +82,8 @@
 (deftest asc-710-pto-tx-data-builds-balanced-tx
   (let [conn (bootstrap)
         db (d/db conn)
-        pto-exp (by-code db :account/code "5040")
-        pto-acc (by-code db :account/code "2290")
+        pto-exp (by-code db :kontor.account/code "5040")
+        pto-acc (by-code db :kontor.account/code "2290")
         gaap (by-code db :ledger/code "us-gaap")
         usd  (by-code db :kontor.commodity/symbol "USD")
         journal (by-code db :journal/code "PAY-US")
@@ -132,8 +132,8 @@
 (deftest asc-710-pto-accrual-bang-routes-through-validation
   (let [conn (bootstrap)
         db (d/db conn)
-        pto-exp (by-code db :account/code "5040")
-        pto-acc (by-code db :account/code "2290")
+        pto-exp (by-code db :kontor.account/code "5040")
+        pto-acc (by-code db :kontor.account/code "2290")
         gaap (by-code db :ledger/code "us-gaap")
         usd  (by-code db :kontor.commodity/symbol "USD")
         journal (by-code db :journal/code "PAY-US")
@@ -162,8 +162,8 @@
 (deftest er-401k-match-accrual-book-only
   (let [conn (bootstrap)
         db (d/db conn)
-        match-exp (by-code db :account/code "5310")
-        match-pay (by-code db :account/code "2210")
+        match-exp (by-code db :kontor.account/code "5310")
+        match-pay (by-code db :kontor.account/code "2210")
         gaap (by-code db :ledger/code "us-gaap")
         usd  (by-code db :kontor.commodity/symbol "USD")
         journal (by-code db :journal/code "PAY-US")
@@ -194,8 +194,8 @@
   ;; make the call — kontor records it.
   (let [conn (bootstrap)
         db (d/db conn)
-        match-exp (by-code db :account/code "5310")
-        match-pay (by-code db :account/code "2210")
+        match-exp (by-code db :kontor.account/code "5310")
+        match-pay (by-code db :kontor.account/code "2210")
         tax (by-code db :ledger/code "us-tax")
         usd  (by-code db :kontor.commodity/symbol "USD")
         journal (by-code db :journal/code "PAY-US")

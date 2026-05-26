@@ -45,7 +45,7 @@
     conn))
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (defn- post-invoice!
   "Sales invoice: 1190 EUR (1000 net + 19% USt) to a partner."

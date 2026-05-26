@@ -39,29 +39,29 @@
           ;; Install a minimal chart with one income account + an
           ;; account-tag so :tax-tags engine has something to sum.
           _ (d/transact conn
-                        [{:db/id "tag" :account-tag/name "test-revenue"}
+                        [{:db/id "tag" :kontor.account-tag/name "test-revenue"}
                          {:db/id "income"
-                          :account/path "Income:Test"
-                          :account/code "4000"
-                          :account/name "Test revenue"
-                          :account/type :income
-                          :account/active true
-                          :account/tags ["tag"]}
+                          :kontor.account/path "Income:Test"
+                          :kontor.account/code "4000"
+                          :kontor.account/name "Test revenue"
+                          :kontor.account/type :income
+                          :kontor.account/active true
+                          :kontor.account/tags ["tag"]}
                          {:db/id "journal"
                           :journal/code "INV"
                           :journal/name "Invoices"
                           :journal/type :sale
                           :journal/active true}
                          {:db/id "cash"
-                          :account/path "Assets:Cash"
-                          :account/code "1200"
-                          :account/name "Cash"
-                          :account/type :asset
-                          :account/active true}])
+                          :kontor.account/path "Assets:Cash"
+                          :kontor.account/code "1200"
+                          :kontor.account/name "Cash"
+                          :kontor.account/type :asset
+                          :kontor.account/active true}])
           db0 (d/db conn)
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
-          income-eid (:db/id (d/entity db0 [:account/path "Income:Test"]))
-          cash-eid (:db/id (d/entity db0 [:account/path "Assets:Cash"]))
+          income-eid (:db/id (d/entity db0 [:kontor.account/path "Income:Test"]))
+          cash-eid (:db/id (d/entity db0 [:kontor.account/path "Assets:Cash"]))
           journal-eid (:db/id (d/entity db0 [:journal/code "INV"]))
           ;; Post a balanced 100-EUR sale (debit cash, credit income)
           ;; via the canonical post-transaction! → with-vt sets the

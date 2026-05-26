@@ -23,29 +23,29 @@
                  {:journal/code "SALE" :journal/type :sale}
                  {:journal/code "PUR"  :journal/type :purchase}
                  {:journal/code "GEN"  :journal/type :general}
-                 {:account/path "Income:Sales"          :account/type :income}
-                 {:account/path "Expenses:Goods"        :account/type :expense}
-                 {:account/path "Assets:Cash"           :account/type :asset}
-                 {:account/path "Assets:Receivable"     :account/type :asset}
-                 {:account/path "Expenses:Income-Tax"   :account/type :expense}
-                 {:account/path "Liabilities:Tax-Payable" :account/type :liability}])
+                 {:kontor.account/path "Income:Sales"          :kontor.account/type :income}
+                 {:kontor.account/path "Expenses:Goods"        :kontor.account/type :expense}
+                 {:kontor.account/path "Assets:Cash"           :kontor.account/type :asset}
+                 {:kontor.account/path "Assets:Receivable"     :kontor.account/type :asset}
+                 {:kontor.account/path "Expenses:Income-Tax"   :kontor.account/type :expense}
+                 {:kontor.account/path "Liabilities:Tax-Payable" :kontor.account/type :liability}])
     conn))
 
 (defn- book-pnl! [conn income expense]
-  (book/sell! conn {:debit-account  [:account/path "Assets:Receivable"]
-                    :credit-account [:account/path "Income:Sales"]
+  (book/sell! conn {:debit-account  [:kontor.account/path "Assets:Receivable"]
+                    :credit-account [:kontor.account/path "Income:Sales"]
                     :amount income :commodity eur
                     :effective-date #inst "2026-04-01"})
   (when (pos? expense)
-    (book/buy! conn {:debit-account  [:account/path "Expenses:Goods"]
-                     :credit-account [:account/path "Assets:Cash"]
+    (book/buy! conn {:debit-account  [:kontor.account/path "Expenses:Goods"]
+                     :credit-account [:kontor.account/path "Assets:Cash"]
                      :amount expense :commodity eur
                      :effective-date #inst "2026-05-01"})))
 
 (defn- sum-account [conn path]
   (reduce + 0M
           (d/q '[:find [?amt ...] :in $ ?p
-                 :where [?a :account/path ?p] [?pp :posting/account ?a]
+                 :where [?a :kontor.account/path ?p] [?pp :posting/account ?a]
                  [?pp :posting/amount ?amt]]
                (d/db conn) path)))
 
@@ -113,8 +113,8 @@
     (let [provider (cit/corporate-income-tax-provider
                     {:id :test :rate 0.25M :authority :test :commodity :EUR})
           builder  (trpb/make-static-tax-return-posting-builder
-                    {:expense-account [:account/path "Expenses:Income-Tax"]
-                     :payable-account [:account/path "Liabilities:Tax-Payable"]
+                    {:expense-account [:kontor.account/path "Expenses:Income-Tax"]
+                     :payable-account [:kontor.account/path "Liabilities:Tax-Payable"]
                      :journal   [:journal/code "GEN"]
                      :commodity eur})
           facts    (ptp/period-tax-facts provider {:period fy :conn conn})]

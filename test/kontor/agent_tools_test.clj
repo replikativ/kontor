@@ -18,11 +18,11 @@
   (let [conn (core/create-test-db)]
     (d/transact conn
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
-                 {:account/code "1000" :account/name "Bank"
-                  :account/type :asset :account/active true
-                  :account/concept-iri "urn:test:bank"}
-                 {:account/code "5000" :account/name "Office"
-                  :account/type :expense :account/active true}
+                 {:kontor.account/code "1000" :kontor.account/name "Bank"
+                  :kontor.account/type :asset :kontor.account/active true
+                  :kontor.account/concept-iri "urn:test:bank"}
+                 {:kontor.account/code "5000" :kontor.account/name "Office"
+                  :kontor.account/type :expense :kontor.account/active true}
                  {:journal/code "GEN" :journal/name "General"
                   :journal/type :general}
                  {:period/name "2026-01"
@@ -103,7 +103,7 @@
         (testing "the concept-iri reverse-lookup found the bank account"
           (let [account-eid (d/q '[:find ?e .
                                    :in $ ?c
-                                   :where [?e :account/code ?c]]
+                                   :where [?e :kontor.account/code ?c]]
                                  (d/db conn) "1000")]
             (is (some #{account-eid}
                       (:account (:result result)))))))
@@ -131,7 +131,7 @@
       (testing "lookup-ref resolves the account before passing to the kernel"
         (let [result (kt/invoke! "kontor_explain_balance"
                                  {:conn conn
-                                  :args {:account [:account/code "1000"]}})]
+                                  :args {:account [:kontor.account/code "1000"]}})]
           (is (some? (:result result)))
           (is (nil? (:error result)))
           (is (every? #(contains? (:result result) %)
@@ -139,7 +139,7 @@
       (testing "non-existent account surfaces a structured error"
         (let [result (kt/invoke! "kontor_explain_balance"
                                  {:conn conn
-                                  :args {:account [:account/code "DOES-NOT-EXIST"]}})]
+                                  :args {:account [:kontor.account/code "DOES-NOT-EXIST"]}})]
           (is (some? (:error result)))
           (is (= :agent-tools/account-not-found
                  (-> result :ex-data :type)))))
@@ -165,11 +165,11 @@
                                    :transaction/effective-date "2026-01-15T00:00:00Z"
                                    :transaction/narration "agent-driven write"}
                                   :postings
-                                  [{:posting/account [:account/code "5000"]
+                                  [{:posting/account [:kontor.account/code "5000"]
                                     :posting/amount "100.00"
                                     :posting/commodity [:kontor.commodity/symbol "EUR"]
                                     :posting/narration "Office supplies"}
-                                   {:posting/account [:account/code "1000"]
+                                   {:posting/account [:kontor.account/code "1000"]
                                     :posting/amount "-100.00"
                                     :posting/commodity [:kontor.commodity/symbol "EUR"]
                                     :posting/narration "Paid from bank"}]}})]
@@ -192,10 +192,10 @@
                                    :transaction/journal [:journal/code "GEN"]
                                    :transaction/effective-date "2026-01-15T00:00:00Z"}
                                   :postings
-                                  [{:posting/account [:account/code "5000"]
+                                  [{:posting/account [:kontor.account/code "5000"]
                                     :posting/amount "100.00"
                                     :posting/commodity [:kontor.commodity/symbol "EUR"]}
-                                   {:posting/account [:account/code "1000"]
+                                   {:posting/account [:kontor.account/code "1000"]
                                     :posting/amount "-99.00"
                                     :posting/commodity [:kontor.commodity/symbol "EUR"]}]}})]
           (is (some? (:error result))

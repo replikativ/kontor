@@ -36,23 +36,23 @@
                 [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
                  {:kontor.partner/external-id "U-buyer" :kontor.partner/name "Asset Buyer"}
                  {:db/id "acct-machinery"
-                  :account/code "0210" :account/name "Machinery"
-                  :account/type :asset :account/active true}
+                  :kontor.account/code "0210" :kontor.account/name "Machinery"
+                  :kontor.account/type :asset :kontor.account/active true}
                  {:db/id "acct-accum"
-                  :account/code "0299" :account/name "Accumulated Depreciation"
-                  :account/type :asset :account/active true}
+                  :kontor.account/code "0299" :kontor.account/name "Accumulated Depreciation"
+                  :kontor.account/type :asset :kontor.account/active true}
                  {:db/id "acct-dep-expense"
-                  :account/code "6220" :account/name "Depreciation Expense"
-                  :account/type :expense :account/active true}
+                  :kontor.account/code "6220" :kontor.account/name "Depreciation Expense"
+                  :kontor.account/type :expense :kontor.account/active true}
                  {:db/id "acct-bank"
-                  :account/code "1800" :account/name "Bank"
-                  :account/type :asset :account/active true}
+                  :kontor.account/code "1800" :kontor.account/name "Bank"
+                  :kontor.account/type :asset :kontor.account/active true}
                  {:db/id "acct-revenue"
-                  :account/code "8000" :account/name "Revenue"
-                  :account/type :income :account/active true}
+                  :kontor.account/code "8000" :kontor.account/name "Revenue"
+                  :kontor.account/type :income :kontor.account/active true}
                  {:db/id "acct-equity"
-                  :account/code "2900" :account/name "Subscribed Capital"
-                  :account/type :equity :account/active true}
+                  :kontor.account/code "2900" :kontor.account/name "Subscribed Capital"
+                  :kontor.account/type :equity :kontor.account/active true}
                  {:db/id "ledger-hgb"
                   :ledger/code "hgb" :ledger/name "Handelsbilanz"
                   :ledger/type :primary :ledger/framework :HGB
@@ -75,7 +75,7 @@
 
 (defn- uid       [db] (ref-eid db :kontor.partner/external-id "U-buyer"))
 (defn- commodity [db] (ref-eid db :kontor.commodity/symbol "EUR"))
-(defn- acct      [db code] (ref-eid db :account/code code))
+(defn- acct      [db code] (ref-eid db :kontor.account/code code))
 (defn- ledger    [db code] (ref-eid db :ledger/code code))
 (defn- journal   [db] (ref-eid db :journal/code "GEN"))
 (defn- class-eid [db] (ref-eid db :asset-class/code "machinery"))

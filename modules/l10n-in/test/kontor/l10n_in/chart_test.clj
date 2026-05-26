@@ -24,7 +24,7 @@
     conn))
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 ;; ============================================================================
 ;; INR commodity
@@ -49,7 +49,7 @@
             Revenue / Expenses) has at least one account."
     (let [conn (bootstrap)
           db (d/db conn)
-          types (set (d/q '[:find [?t ...] :where [_ :account/type ?t]] db))]
+          types (set (d/q '[:find [?t ...] :where [_ :kontor.account/type ?t]] db))]
       (is (contains? types :asset))
       (is (contains? types :equity))
       (is (contains? types :liability))
@@ -61,7 +61,7 @@
             ITC + RCM + TDS coverage)."
     (let [conn (bootstrap)
           db (d/db conn)
-          n (count (d/q '[:find [?a ...] :where [?a :account/code _]] db))]
+          n (count (d/q '[:find [?a ...] :where [?a :kontor.account/code _]] db))]
       (is (>= n 60) (str "loaded " n " accounts")))))
 
 ;; ============================================================================
@@ -126,7 +126,7 @@
                     chart/output-igst-code chart/output-utgst-code
                     chart/output-cess-code]]
         (let [a (d/entity db (ace db code))]
-          (is (= :liability (:account/type a)) (str code " is :liability")))))))
+          (is (= :liability (:kontor.account/type a)) (str code " is :liability")))))))
 
 (deftest input-itc-accounts-are-assets
   (testing "Input ITC accounts must be :asset."
@@ -136,7 +136,7 @@
                     chart/input-igst-code chart/input-utgst-code
                     chart/input-cess-code]]
         (let [a (d/entity db (ace db code))]
-          (is (= :asset (:account/type a)) (str code " is :asset")))))))
+          (is (= :asset (:kontor.account/type a)) (str code " is :asset")))))))
 
 ;; ============================================================================
 ;; Retained earnings (closing target)
@@ -149,22 +149,22 @@
           db (d/db conn)]
       (is (ace db chart/retained-earnings-code))
       (is (= :equity
-             (:account/type (d/entity db (ace db chart/retained-earnings-code))))))))
+             (:kontor.account/type (d/entity db (ace db chart/retained-earnings-code))))))))
 
 ;; ============================================================================
 ;; Reconcilable flags
 ;; ============================================================================
 
 (deftest reconcilable-flag-applied
-  (testing "AR / AP / Bank accounts are :account/reconcilable true."
+  (testing "AR / AP / Bank accounts are :kontor.account/reconcilable true."
     (let [conn (bootstrap)
           db (d/db conn)
           ar (d/entity db (ace db chart/ar-code))
           ap (d/entity db (ace db chart/ap-code))
           bank (d/entity db (ace db chart/bank-code))]
-      (is (true? (:account/reconcilable ar)))
-      (is (true? (:account/reconcilable ap)))
-      (is (true? (:account/reconcilable bank))))))
+      (is (true? (:kontor.account/reconcilable ar)))
+      (is (true? (:kontor.account/reconcilable ap)))
+      (is (true? (:kontor.account/reconcilable bank))))))
 
 ;; ============================================================================
 ;; Tags materialise as :account-tag entities under country-code IN
@@ -172,13 +172,13 @@
 
 (deftest tags-materialise-with-country-code
   (testing "Every distinct tag in the EDN becomes an :account-tag entity
-            tagged with :account-tag/country-code IN."
+            tagged with :kontor.account-tag/country-code IN."
     (let [conn (bootstrap)
           db (d/db conn)
           in-tags (d/q '[:find [?n ...]
                          :where
-                         [?t :account-tag/country-code "IN"]
-                         [?t :account-tag/name ?n]]
+                         [?t :kontor.account-tag/country-code "IN"]
+                         [?t :kontor.account-tag/name ?n]]
                        db)]
       (is (seq in-tags))
       ;; The output-CGST tag is one we expect to see.
@@ -194,10 +194,10 @@
   (testing "Calling install! twice yields the same number of accounts."
     (let [conn (core/create-test-db)
           _ (chart/install! conn)
-          n1 (count (d/q '[:find [?a ...] :where [?a :account/code _]]
+          n1 (count (d/q '[:find [?a ...] :where [?a :kontor.account/code _]]
                          (d/db conn)))
           _ (chart/install! conn)
-          n2 (count (d/q '[:find [?a ...] :where [?a :account/code _]]
+          n2 (count (d/q '[:find [?a ...] :where [?a :kontor.account/code _]]
                          (d/db conn)))]
       (is (= n1 n2)
           (str "Re-install must not duplicate accounts; got " n1 " then " n2)))))

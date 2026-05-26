@@ -28,31 +28,31 @@
                  {:journal/code "GEN"     :journal/type :general :journal/active true}
                  {:journal/code "CASH"    :journal/type :cash    :journal/active true}
                  ;; Founder-side chart.
-                 {:account/path "Assets:Bank"               :account/type :asset
-                  :account/commodity usd}
-                 {:account/path "Assets:Equipment"          :account/type :asset
-                  :account/commodity usd}
-                 {:account/path "Assets:Investment-SARAHCO" :account/type :asset
-                  :account/commodity usd}
+                 {:kontor.account/path "Assets:Bank"               :kontor.account/type :asset
+                  :kontor.account/commodity usd}
+                 {:kontor.account/path "Assets:Equipment"          :kontor.account/type :asset
+                  :kontor.account/commodity usd}
+                 {:kontor.account/path "Assets:Investment-SARAHCO" :kontor.account/type :asset
+                  :kontor.account/commodity usd}
                  ;; Corp-side chart (placeholders — corp shares the
                  ;; same chart in this test for simplicity; in real
                  ;; usage the corp has its own chart of accounts).
-                 {:account/path "Corp:Assets:Bank"             :account/type :asset
-                  :account/commodity usd}
-                 {:account/path "Corp:Assets:Equipment"        :account/type :asset
-                  :account/commodity usd}
-                 {:account/path "Corp:Equity:Common-Stock"     :account/type :equity
-                  :account/commodity usd}
-                 {:account/path "Corp:Equity:APIC"             :account/type :equity
-                  :account/commodity usd}
-                 {:account/path "Corp:Equity:Retained-Earnings" :account/type :equity
-                  :account/commodity usd}
-                 {:account/path "Corp:Liabilities:Dividends-Payable"
-                  :account/type :liability :account/commodity usd}
+                 {:kontor.account/path "Corp:Assets:Bank"             :kontor.account/type :asset
+                  :kontor.account/commodity usd}
+                 {:kontor.account/path "Corp:Assets:Equipment"        :kontor.account/type :asset
+                  :kontor.account/commodity usd}
+                 {:kontor.account/path "Corp:Equity:Common-Stock"     :kontor.account/type :equity
+                  :kontor.account/commodity usd}
+                 {:kontor.account/path "Corp:Equity:APIC"             :kontor.account/type :equity
+                  :kontor.account/commodity usd}
+                 {:kontor.account/path "Corp:Equity:Retained-Earnings" :kontor.account/type :equity
+                  :kontor.account/commodity usd}
+                 {:kontor.account/path "Corp:Liabilities:Dividends-Payable"
+                  :kontor.account/type :liability :kontor.account/commodity usd}
                  ;; Founder dividend-income account (used by the
                  ;; receive! step in the lifecycle test).
-                 {:account/path "Income:Dividends"  :account/type :income
-                  :account/commodity usd}])
+                 {:kontor.account/path "Income:Dividends"  :kontor.account/type :income
+                  :kontor.account/commodity usd}])
     conn))
 
 (def ^:private sarah [:kontor.entity/code "SARAH"])
@@ -92,17 +92,17 @@
         :external-id "incorp-2026-01"
         :recorded-by-uid "sarah"
         :contributions
-        [{:account [:account/path "Corp:Assets:Bank"]
+        [{:account [:kontor.account/path "Corp:Assets:Bank"]
           :amount  50000M
           :commodity usd
           :basis   50000M}]    ; basis = amount → no disposal
         :founder-contributions
-        [{:account [:account/path "Assets:Bank"]
+        [{:account [:kontor.account/path "Assets:Bank"]
           :basis   50000M
           :commodity usd}]
-        :common-stock-account [:account/path "Corp:Equity:Common-Stock"]
-        :additional-paid-in-capital-account [:account/path "Corp:Equity:APIC"]
-        :founder-investment-account [:account/path "Assets:Investment-SARAHCO"]
+        :common-stock-account [:kontor.account/path "Corp:Equity:Common-Stock"]
+        :additional-paid-in-capital-account [:kontor.account/path "Corp:Equity:APIC"]
+        :founder-investment-account [:kontor.account/path "Assets:Investment-SARAHCO"]
         :shares-issued {:par 0.01M :count 5000M}})
 
       (let [db (d/db conn)
@@ -129,14 +129,14 @@
         :external-id "incorp-duo"
         :recorded-by-uid "sarah"
         :contributions
-        [{:account [:account/path "Corp:Assets:Bank"]
+        [{:account [:kontor.account/path "Corp:Assets:Bank"]
           :amount 30000M :commodity usd :basis 30000M}]
         :founder-contributions
-        [{:account [:account/path "Assets:Bank"]
+        [{:account [:kontor.account/path "Assets:Bank"]
           :basis 30000M :commodity usd}]
-        :common-stock-account [:account/path "Corp:Equity:Common-Stock"]
-        :additional-paid-in-capital-account [:account/path "Corp:Equity:APIC"]
-        :founder-investment-account [:account/path "Assets:Investment-SARAHCO"]
+        :common-stock-account [:kontor.account/path "Corp:Equity:Common-Stock"]
+        :additional-paid-in-capital-account [:kontor.account/path "Corp:Equity:APIC"]
+        :founder-investment-account [:kontor.account/path "Assets:Investment-SARAHCO"]
         :shares-issued {:par 1M :count 1000M}})
       (let [db (d/db conn)]
         (is (some? (d/q '[:find ?e . :in $ ?c :where [?e :kontor.entity/code ?c]]
@@ -160,18 +160,18 @@
         :external-id "incorp-appreciated"
         :recorded-by-uid "sarah"
         :contributions
-        [{:account [:account/path "Corp:Assets:Bank"]
+        [{:account [:kontor.account/path "Corp:Assets:Bank"]
           :amount  50000M :commodity usd :basis 50000M}    ; cash — no disposal
-         {:account [:account/path "Corp:Assets:Equipment"]
+         {:account [:kontor.account/path "Corp:Assets:Equipment"]
           :amount  20000M :commodity usd :basis 12000M     ; FMV > basis → disposal
           :acquired-on #inst "2023-06-01"
           :elective-regime [:us-§351-incorporation-rollover]}]
         :founder-contributions
-        [{:account [:account/path "Assets:Bank"]      :basis 50000M :commodity usd}
-         {:account [:account/path "Assets:Equipment"] :basis 12000M :commodity usd}]
-        :common-stock-account [:account/path "Corp:Equity:Common-Stock"]
-        :additional-paid-in-capital-account [:account/path "Corp:Equity:APIC"]
-        :founder-investment-account [:account/path "Assets:Investment-SARAHCO"]
+        [{:account [:kontor.account/path "Assets:Bank"]      :basis 50000M :commodity usd}
+         {:account [:kontor.account/path "Assets:Equipment"] :basis 12000M :commodity usd}]
+        :common-stock-account [:kontor.account/path "Corp:Equity:Common-Stock"]
+        :additional-paid-in-capital-account [:kontor.account/path "Corp:Equity:APIC"]
+        :founder-investment-account [:kontor.account/path "Assets:Investment-SARAHCO"]
         :shares-issued {:par 0.01M :count 5000M}})
 
       (let [db (d/db conn)
@@ -198,14 +198,14 @@
     (let [conn (fresh)]
       ;; Stage 1: declare $5,000 dividend.
       (book/declare-dividend!
-       conn {:debit-account  [:account/path "Corp:Equity:Retained-Earnings"]
-             :credit-account [:account/path "Corp:Liabilities:Dividends-Payable"]
+       conn {:debit-account  [:kontor.account/path "Corp:Equity:Retained-Earnings"]
+             :credit-account [:kontor.account/path "Corp:Liabilities:Dividends-Payable"]
              :amount 5000M :commodity usd
              :effective-date #inst "2026-12-15"})
       ;; Stage 2: pay it.
       (book/distribute-dividend!
-       conn {:debit-account  [:account/path "Corp:Liabilities:Dividends-Payable"]
-             :credit-account [:account/path "Corp:Assets:Bank"]
+       conn {:debit-account  [:kontor.account/path "Corp:Liabilities:Dividends-Payable"]
+             :credit-account [:kontor.account/path "Corp:Assets:Bank"]
              :amount 5000M :commodity usd
              :effective-date #inst "2026-12-31"})
 
@@ -213,7 +213,7 @@
             balance-on (fn [acc-path]
                          (reduce + 0M
                                  (d/q '[:find [?amt ...] :in $ ?path
-                                        :where [?a :account/path ?path]
+                                        :where [?a :kontor.account/path ?path]
                                         [?p :posting/account ?a]
                                         [?p :posting/amount ?amt]]
                                       db acc-path)))]
@@ -228,14 +228,14 @@
     (let [conn (fresh)]
       ;; Sarah receives the $5k dividend.
       (book/receive!
-       conn {:debit-account  [:account/path "Assets:Bank"]
-             :credit-account [:account/path "Income:Dividends"]
+       conn {:debit-account  [:kontor.account/path "Assets:Bank"]
+             :credit-account [:kontor.account/path "Income:Dividends"]
              :amount 5000M :commodity usd
              :effective-date #inst "2026-12-31"})
       (let [db (d/db conn)
             inc (reduce + 0M
                         (d/q '[:find [?amt ...]
-                               :where [?a :account/path "Income:Dividends"]
+                               :where [?a :kontor.account/path "Income:Dividends"]
                                [?p :posting/account ?a]
                                [?p :posting/amount ?amt]]
                              db))]

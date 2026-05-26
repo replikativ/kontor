@@ -23,22 +23,22 @@
                   :kontor.commodity/precision 2}
                  {:journal/code "SALE" :journal/type :sale}
                  {:journal/code "GEN"  :journal/type :general}
-                 {:account/path "Income:Salary"        :account/type :income}
-                 {:account/path "Assets:Bank"          :account/type :asset}
-                 {:account/path "Expenses:Income-Tax"  :account/type :expense}
-                 {:account/path "Liabilities:Tax-Payable" :account/type :liability}])
+                 {:kontor.account/path "Income:Salary"        :kontor.account/type :income}
+                 {:kontor.account/path "Assets:Bank"          :kontor.account/type :asset}
+                 {:kontor.account/path "Expenses:Income-Tax"  :kontor.account/type :expense}
+                 {:kontor.account/path "Liabilities:Tax-Payable" :kontor.account/type :liability}])
     conn))
 
 (defn- book-income! [conn amount]
-  (book/sell! conn {:debit-account  [:account/path "Assets:Bank"]
-                    :credit-account [:account/path "Income:Salary"]
+  (book/sell! conn {:debit-account  [:kontor.account/path "Assets:Bank"]
+                    :credit-account [:kontor.account/path "Income:Salary"]
                     :amount amount :commodity eur
                     :effective-date #inst "2026-06-30"}))
 
 (defn- sum-account [conn path]
   (reduce + 0M
           (d/q '[:find [?amt ...] :in $ ?p
-                 :where [?a :account/path ?p] [?pp :posting/account ?a]
+                 :where [?a :kontor.account/path ?p] [?pp :posting/account ?a]
                  [?pp :posting/amount ?amt]]
                (d/db conn) path)))
 
@@ -121,8 +121,8 @@
                     {:id :test :schedule test-schedule
                      :authority :test :commodity :EUR})
           builder  (trpb/make-static-tax-return-posting-builder
-                    {:expense-account [:account/path "Expenses:Income-Tax"]
-                     :payable-account [:account/path "Liabilities:Tax-Payable"]
+                    {:expense-account [:kontor.account/path "Expenses:Income-Tax"]
+                     :payable-account [:kontor.account/path "Liabilities:Tax-Payable"]
                      :journal   [:journal/code "GEN"]
                      :commodity eur})
           facts    (ptp/period-tax-facts provider {:period fy :conn conn})]

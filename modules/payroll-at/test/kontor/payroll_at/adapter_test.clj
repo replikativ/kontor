@@ -32,7 +32,7 @@
   (io/resource (str "kontor/payroll_at/fixtures/" name)))
 
 (defn- get-account-eid [db code]
-  (d/q '[:find ?e . :in $ ?c :where [?e :account/code ?c]] db code))
+  (d/q '[:find ?e . :in $ ?c :where [?e :kontor.account/code ?c]] db code))
 
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
@@ -137,7 +137,7 @@
                             [:transaction/external-id
                              {:posting/_transaction
                               [:posting/amount
-                               {:posting/account [:account/code]}]}]}]
+                               {:posting/account [:kontor.account/code]}]}]}]
                     run-eid)]
     (testing ":payroll-run row was created and tagged with :at/bmd"
       (is (some? run-eid))
@@ -157,7 +157,7 @@
     (testing "Per-account balances match the AT RLG-1 fixture totals"
       (let [postings (-> run :payroll-run/payroll-transaction
                          :posting/_transaction)
-            by-code (group-by (comp :account/code :posting/account) postings)
+            by-code (group-by (comp :kontor.account/code :posting/account) postings)
             sum-of (fn [code]
                      (reduce (fn [^BigDecimal a {:keys [posting/amount]}]
                                (.add a ^BigDecimal amount))

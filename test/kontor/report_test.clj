@@ -29,18 +29,18 @@
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
                  {:journal/code "SALE" :journal/type :sale}
                  {:journal/code "CASH" :journal/type :cash}
-                 {:account-tag/name "revenue-box" :account-tag/applicability :account}
-                 {:account/path "Assets:Cash"        :account/code "1000" :account/type :asset}
-                 {:account/path "Assets:Receivable"  :account/code "1200" :account/type :asset}
-                 {:account/path "Income:Sales"       :account/code "8000" :account/type :income
-                  :account/tags [[:account-tag/name "revenue-box"]]}
-                 {:account/path "Expenses:Supplies"  :account/code "6000" :account/type :expense}])
-    (book/sell! conn {:debit-account [:account/path "Assets:Receivable"]
-                      :credit-account [:account/path "Income:Sales"]
+                 {:kontor.account-tag/name "revenue-box" :kontor.account-tag/applicability :account}
+                 {:kontor.account/path "Assets:Cash"        :kontor.account/code "1000" :kontor.account/type :asset}
+                 {:kontor.account/path "Assets:Receivable"  :kontor.account/code "1200" :kontor.account/type :asset}
+                 {:kontor.account/path "Income:Sales"       :kontor.account/code "8000" :kontor.account/type :income
+                  :kontor.account/tags [[:kontor.account-tag/name "revenue-box"]]}
+                 {:kontor.account/path "Expenses:Supplies"  :kontor.account/code "6000" :kontor.account/type :expense}])
+    (book/sell! conn {:debit-account [:kontor.account/path "Assets:Receivable"]
+                      :credit-account [:kontor.account/path "Income:Sales"]
                       :amount 1000 :commodity [:kontor.commodity/symbol "EUR"]
                       :effective-date d1})
-    (book/pay! conn {:debit-account [:account/path "Expenses:Supplies"]
-                     :credit-account [:account/path "Assets:Cash"]
+    (book/pay! conn {:debit-account [:kontor.account/path "Expenses:Supplies"]
+                     :credit-account [:kontor.account/path "Assets:Cash"]
                      :amount 300 :commodity [:kontor.commodity/symbol "EUR"]
                      :effective-date d1})
     conn))
@@ -131,7 +131,7 @@
 
 (deftest posting-filter-narrows-the-scan
   (let [conn   (fresh-book)
-        ar-eid (d/q '[:find ?a . :where [?a :account/path "Assets:Receivable"]]
+        ar-eid (d/q '[:find ?a . :where [?a :kontor.account/path "Assets:Receivable"]]
                     (d/db conn))
         all    (report/report-postings conn)
         narrow (report/report-postings conn {:posting-filter [['?p :posting/account ar-eid]]})]
@@ -152,17 +152,17 @@
     (d/transact conn
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
                  {:journal/code "GEN" :journal/type :general}
-                 {:account/path "Expenses:Travel"  :account/type :expense}
-                 {:account/path "Expenses:Meals"   :account/type :expense}
-                 {:account/path "Assets:Cash"      :account/type :asset}])
+                 {:kontor.account/path "Expenses:Travel"  :kontor.account/type :expense}
+                 {:kontor.account/path "Expenses:Meals"   :kontor.account/type :expense}
+                 {:kontor.account/path "Assets:Cash"      :kontor.account/type :asset}])
     (book/adjust! conn {:commodity [:kontor.commodity/symbol "EUR"]
                         :effective-date d1
                         :postings
-                        [{:account [:account/path "Expenses:Travel"] :amount 60
+                        [{:account [:kontor.account/path "Expenses:Travel"] :amount 60
                           :dimensions {:cost-center "CC-Sales" :project "PRJ-Alpha"}}
-                         {:account [:account/path "Expenses:Meals"] :amount 40
+                         {:account [:kontor.account/path "Expenses:Meals"] :amount 40
                           :dimensions {:cost-center "CC-Ops"}}
-                         {:account [:account/path "Assets:Cash"] :amount -100}]})
+                         {:account [:kontor.account/path "Assets:Cash"] :amount -100}]})
     conn))
 
 (deftest marginalize-over-a-posting-dimension-axis

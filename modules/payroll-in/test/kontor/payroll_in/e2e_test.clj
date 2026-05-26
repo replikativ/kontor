@@ -103,8 +103,8 @@
                  (d/q '[:find ?a .
                         :in $ ?t
                         :where
-                        [?a :account/tags ?at]
-                        [?at :account-tag/name ?t]]
+                        [?a :kontor.account/tags ?at]
+                        [?at :kontor.account-tag/name ?t]]
                       db (name tag)))]
     {:in-payroll-salaries-wages    (by-tag :in-payroll-salaries-wages)
      :in-payroll-bonus             (by-tag :in-payroll-bonus)
@@ -177,9 +177,9 @@
                              [:transaction/external-id
                               {:posting/_transaction
                                [:posting/amount
-                                {:posting/account [:account/code
-                                                   {:account/tags
-                                                    [:account-tag/name]}]}
+                                {:posting/account [:kontor.account/code
+                                                   {:kontor.account/tags
+                                                    [:kontor.account-tag/name]}]}
                                 {:posting/analytic-distributions
                                  [:analytic-distribution/percent
                                   {:analytic-distribution/account
@@ -210,8 +210,8 @@
     (testing "Per-state PT routing via analytic-distribution"
       (let [pt-postings (filter (fn [p]
                                   (some #(= "in-payroll-pt-payable"
-                                            (:account-tag/name %))
-                                        (:account/tags (:posting/account p))))
+                                            (:kontor.account-tag/name %))
+                                        (:kontor.account/tags (:posting/account p))))
                                 postings)]
         (is (= 3 (count pt-postings)) "One PT leg per employee")
         (let [state-codes

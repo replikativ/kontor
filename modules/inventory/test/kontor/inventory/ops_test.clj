@@ -40,14 +40,14 @@
                  {:kontor.partner/external-id "OI-1" :kontor.partner/name "Order line 1"}
                  {:kontor.partner/external-id "SG-1" :kontor.partner/name "Ship group 1"}
                  ;; GL accounts.
-                 {:db/id "acct-inv" :account/code "1400" :account/name "Inventory"
-                  :account/type :asset :account/active true}
-                 {:db/id "acct-grir" :account/code "1410" :account/name "GR-IR Clearing"
-                  :account/type :liability :account/active true}
-                 {:db/id "acct-cogs" :account/code "5000" :account/name "COGS"
-                  :account/type :expense :account/active true}
-                 {:db/id "acct-var" :account/code "5900" :account/name "Cost Variance"
-                  :account/type :expense :account/active true}
+                 {:db/id "acct-inv" :kontor.account/code "1400" :kontor.account/name "Inventory"
+                  :kontor.account/type :asset :kontor.account/active true}
+                 {:db/id "acct-grir" :kontor.account/code "1410" :kontor.account/name "GR-IR Clearing"
+                  :kontor.account/type :liability :kontor.account/active true}
+                 {:db/id "acct-cogs" :kontor.account/code "5000" :kontor.account/name "COGS"
+                  :kontor.account/type :expense :kontor.account/active true}
+                 {:db/id "acct-var" :kontor.account/code "5900" :kontor.account/name "Cost Variance"
+                  :kontor.account/type :expense :kontor.account/active true}
                  ;; Valuation book + journal.
                  {:db/id "book" :valuation-book/code "primary"
                   :valuation-book/name "Primary" :valuation-book/cost-method :fifo
@@ -60,7 +60,7 @@
   (d/q '[:find ?e . :in $ ?a ?v :where [?e ?a ?v]] db a v))
 
 (defn- p       [db code] (ref-eid db :kontor.partner/external-id code))
-(defn- acct    [db code] (ref-eid db :account/code code))
+(defn- acct    [db code] (ref-eid db :kontor.account/code code))
 (defn- book    [db] (ref-eid db :valuation-book/code "primary"))
 (defn- journal [db] (ref-eid db :journal/code "GEN"))
 

@@ -159,8 +159,8 @@
   (let [q '[:find ?p ?amount
             :in $ ?tag ?start ?end
             :where
-            [?acct :account/tags ?at]
-            [?at :account-tag/name ?tag]
+            [?acct :kontor.account/tags ?at]
+            [?at :kontor.account-tag/name ?tag]
             [?p :posting/account ?acct]
             [?p :posting/amount ?amount]
             [?p :posting/transaction ?tx]
@@ -170,12 +170,12 @@
         q-with-rp '[:find ?p ?amount
                     :in $ ?tag ?rp ?start ?end
                     :where
-                    [?acct :account/tags ?at]
-                    [?at :account-tag/name ?tag]
+                    [?acct :kontor.account/tags ?at]
+                    [?at :kontor.account-tag/name ?tag]
                     [?p :posting/account ?acct]
                     [?p :posting/amount ?amount]
                     [?p :posting/account-tags ?rt]
-                    [?rt :account-tag/name ?rp]
+                    [?rt :kontor.account-tag/name ?rp]
                     [?p :posting/transaction ?tx]
                     [?tx :transaction/effective-date ?ed]
                     [(.before ^java.util.Date ?ed ?end)]

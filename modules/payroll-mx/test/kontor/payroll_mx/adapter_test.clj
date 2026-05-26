@@ -58,63 +58,63 @@
       ;; SAT Código Agrupador chart fragments — the same set the
       ;; legacy MX e2e test installs.
       {:db/id "acct-601-01"
-       :account/code "601.01"
-       :account/path "Gastos:Sueldos"
-       :account/name "Sueldos y Salarios"
-       :account/type :expense
-       :account/active true}
+       :kontor.account/code "601.01"
+       :kontor.account/path "Gastos:Sueldos"
+       :kontor.account/name "Sueldos y Salarios"
+       :kontor.account/type :expense
+       :kontor.account/active true}
       {:db/id "acct-601-02"
-       :account/code "601.02"
-       :account/path "Gastos:Aguinaldo"
-       :account/name "Aguinaldo y Prima Vacacional"
-       :account/type :expense
-       :account/active true}
+       :kontor.account/code "601.02"
+       :kontor.account/path "Gastos:Aguinaldo"
+       :kontor.account/name "Aguinaldo y Prima Vacacional"
+       :kontor.account/type :expense
+       :kontor.account/active true}
       {:db/id "acct-601-05"
-       :account/code "601.05"
-       :account/path "Gastos:IMSS-Patron"
-       :account/name "IMSS patrón"
-       :account/type :expense
-       :account/active true}
+       :kontor.account/code "601.05"
+       :kontor.account/path "Gastos:IMSS-Patron"
+       :kontor.account/name "IMSS patrón"
+       :kontor.account/type :expense
+       :kontor.account/active true}
       {:db/id "acct-601-06"
-       :account/code "601.06"
-       :account/path "Gastos:INFONAVIT-Patron"
-       :account/name "INFONAVIT patrón"
-       :account/type :expense
-       :account/active true}
+       :kontor.account/code "601.06"
+       :kontor.account/path "Gastos:INFONAVIT-Patron"
+       :kontor.account/name "INFONAVIT patrón"
+       :kontor.account/type :expense
+       :kontor.account/active true}
       {:db/id "acct-601-84"
-       :account/code "601.84"
-       :account/path "Gastos:Prestaciones"
-       :account/name "Otras prestaciones"
-       :account/type :expense
-       :account/active true}
+       :kontor.account/code "601.84"
+       :kontor.account/path "Gastos:Prestaciones"
+       :kontor.account/name "Otras prestaciones"
+       :kontor.account/type :expense
+       :kontor.account/active true}
       {:db/id "acct-206-01"
-       :account/code "206.01"
-       :account/path "Pasivos:SueldosPorPagar"
-       :account/name "Sueldos por pagar"
-       :account/type :liability
-       :account/active true}
+       :kontor.account/code "206.01"
+       :kontor.account/path "Pasivos:SueldosPorPagar"
+       :kontor.account/name "Sueldos por pagar"
+       :kontor.account/type :liability
+       :kontor.account/active true}
       {:db/id "acct-206-04"
-       :account/code "206.04"
-       :account/path "Pasivos:ISRPorPagar"
-       :account/name "ISR por pagar"
-       :account/type :liability
-       :account/active true}
+       :kontor.account/code "206.04"
+       :kontor.account/path "Pasivos:ISRPorPagar"
+       :kontor.account/name "ISR por pagar"
+       :kontor.account/type :liability
+       :kontor.account/active true}
       {:db/id "acct-206-05"
-       :account/code "206.05"
-       :account/path "Pasivos:IMSSPorPagar"
-       :account/name "IMSS por pagar"
-       :account/type :liability
-       :account/active true}
+       :kontor.account/code "206.05"
+       :kontor.account/path "Pasivos:IMSSPorPagar"
+       :kontor.account/name "IMSS por pagar"
+       :kontor.account/type :liability
+       :kontor.account/active true}
       {:db/id "acct-206-06"
-       :account/code "206.06"
-       :account/path "Pasivos:INFONAVITPorPagar"
-       :account/name "INFONAVIT por pagar"
-       :account/type :liability
-       :account/active true}])
+       :kontor.account/code "206.06"
+       :kontor.account/path "Pasivos:INFONAVITPorPagar"
+       :kontor.account/name "INFONAVIT por pagar"
+       :kontor.account/type :liability
+       :kontor.account/active true}])
     conn))
 
 (defn- account-eid [db code]
-  (d/q '[:find ?e . :in $ ?c :where [?e :account/code ?c]] db code))
+  (d/q '[:find ?e . :in $ ?c :where [?e :kontor.account/code ?c]] db code))
 
 (defn- accounts-map [db]
   {"601.01" (account-eid db "601.01")
@@ -270,7 +270,7 @@
                            [:transaction/external-id
                             {:posting/_transaction
                              [:posting/amount
-                              {:posting/account [:account/code]}
+                              {:posting/account [:kontor.account/code]}
                               {:posting/commodity [:kontor.commodity/symbol]}]}]}
                         {:payroll-run/emit-docs
                          [:audit-doc/code
@@ -307,7 +307,7 @@
                            :payroll-run/payroll-transaction
                            :posting/_transaction)
               codes-seen (->> postings
-                              (map (comp :account/code :posting/account))
+                              (map (comp :kontor.account/code :posting/account))
                               set)]
           ;; Sueldos (worker percep) → 601.01
           (is (contains? codes-seen "601.01"))

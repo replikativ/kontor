@@ -57,10 +57,10 @@
         {})))
 
 (defn- account-eid
-  "Resolve an account code to an eid via [:account/code <code>]. Returns
+  "Resolve an account code to an eid via [:kontor.account/code <code>]. Returns
    nil if not present in db."
   [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (defn- resolve-acct
   [db code]

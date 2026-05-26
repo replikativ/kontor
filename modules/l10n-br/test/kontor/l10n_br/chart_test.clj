@@ -5,13 +5,13 @@
             [kontor.l10n-br.chart :as chart]))
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (deftest chart-installs
   (let [conn (core/create-test-db)
         _ (chart/install! conn)
         db (d/db conn)
-        n (count (d/q '[:find [?c ...] :where [_ :account/code ?c]] db))]
+        n (count (d/q '[:find [?c ...] :where [_ :kontor.account/code ?c]] db))]
     (is (>= n 40) (str "loaded " n " accounts"))
     (testing "Key dotted-code accounts present"
       (is (ace db "1.01.01.01.01") "Caixa Matriz")
@@ -33,7 +33,7 @@
   (let [conn (core/create-test-db)
         _ (chart/install! conn)
         db (d/db conn)
-        names (set (d/q '[:find [?n ...] :where [_ :account-tag/name ?n]] db))]
+        names (set (d/q '[:find [?n ...] :where [_ :kontor.account-tag/name ?n]] db))]
     (testing "Legacy ICMS/IPI/PIS/COFINS/ISS"
       (is (contains? names "br-icms-output"))
       (is (contains? names "br-icms-input"))
@@ -56,8 +56,8 @@
           codes (d/q '[:find [?code ...]
                        :in $ ?acc
                        :where
-                       [?ec :account-code/account ?acc]
-                       [?ec :account-code/regulator :br/plano-referencial]
-                       [?ec :account-code/code ?code]]
+                       [?ec :kontor.account-code/account ?acc]
+                       [?ec :kontor.account-code/regulator :br/plano-referencial]
+                       [?ec :kontor.account-code/code ?code]]
                      db eid)]
       (is (= ["L100A_1.01.01.01.01"] codes)))))

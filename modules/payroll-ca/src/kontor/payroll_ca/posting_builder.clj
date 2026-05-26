@@ -26,7 +26,7 @@
 
    ## RP routing (note 84 §4)
 
-   Per note 84 §4 we route per-RP via the `:account-tag/name`
+   Per note 84 §4 we route per-RP via the `:kontor.account-tag/name`
    convention. The consumer's `:rp-account-tag` opt is a string like
    `\"ca-cra-rp-RP0001\"`; if supplied the builder appends this tag
    to every posting via `:posting/account-tags`, letting downstream
@@ -88,7 +88,7 @@
   (if (and rp-account-tag (not (str/blank? rp-account-tag)))
     (update posting :posting/account-tags
             (fnil conj [])
-            [:account-tag/name rp-account-tag])
+            [:kontor.account-tag/name rp-account-tag])
     posting))
 
 ;; Suppress 'unused' for forward ref pattern (some legs ignore the helper)
@@ -120,7 +120,7 @@
          rp-account-tag
          (update :posting/account-tags
                  (fnil conj [])
-                 [:account-tag/name rp-account-tag]))])))
+                 [:kontor.account-tag/name rp-account-tag]))])))
 
 (defn- deduction-legs
   "For each negative employee-side deduction component, CR the
@@ -146,7 +146,7 @@
                    rp-account-tag
                    (update :posting/account-tags
                            (fnil conj [])
-                           [:account-tag/name rp-account-tag])))))))
+                           [:kontor.account-tag/name rp-account-tag])))))))
 
 (defn- employer-side-legs
   "For each employer-side component, DR the expense account AND CR the
@@ -172,7 +172,7 @@
                               rp-account-tag
                               (update :posting/account-tags
                                       (fnil conj [])
-                                      [:account-tag/name rp-account-tag]))]
+                                      [:kontor.account-tag/name rp-account-tag]))]
                      pay-acct
                      (conj (cond->
                             {:posting/account pay-acct
@@ -182,7 +182,7 @@
                              rp-account-tag
                              (update :posting/account-tags
                                      (fnil conj [])
-                                     [:account-tag/name rp-account-tag])))))))))
+                                     [:kontor.account-tag/name rp-account-tag])))))))))
 
 (defn- net-wages-leg
   "CR wages-payable for the net amount (gross + sum of deductions —
@@ -198,7 +198,7 @@
        rp-account-tag
        (update :posting/account-tags
                (fnil conj [])
-               [:account-tag/name rp-account-tag]))]))
+               [:kontor.account-tag/name rp-account-tag]))]))
 
 (defn fact->postings
   "Translate one PayrollFact into a balanced set of posting maps. The

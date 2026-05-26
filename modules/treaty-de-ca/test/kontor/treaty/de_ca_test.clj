@@ -51,12 +51,12 @@
                {:kontor.partner/name "Hans-Tech UG" :kontor.partner/external-id "HT-UG"
                 :kontor.partner/country-code "DE"}
                ;; The 3 extra accounts the helper writes to
-               {:account/path "Income:Dividends:Foreign:DE"  :account/type :income
-                :account/commodity cad}
-               {:account/path "Assets:Foreign-Tax-Prepaid"   :account/type :asset
-                :account/commodity cad}
-               {:account/path "Assets:Foreign-Tax-Refundable" :account/type :asset
-                :account/commodity cad}])
+               {:kontor.account/path "Income:Dividends:Foreign:DE"  :kontor.account/type :income
+                :kontor.account/commodity cad}
+               {:kontor.account/path "Assets:Foreign-Tax-Prepaid"   :kontor.account/type :asset
+                :kontor.account/commodity cad}
+               {:kontor.account/path "Assets:Foreign-Tax-Refundable" :kontor.account/type :asset
+                :kontor.account/commodity cad}])
           _ (treaty/receive-dividend-from-de! conn
               {:gross-amount     9000M
                :withheld-amount  2373.75M
@@ -67,8 +67,8 @@
                :payer-partner    [:kontor.partner/external-id "HT-UG"]
                :entity           [:kontor.entity/code "CW"]})
           tb (trial/trial-balance conn)
-          pull-path (fn [eid] (:account/path
-                               (d/pull (d/db conn) [:account/path] eid)))
+          pull-path (fn [eid] (:kontor.account/path
+                               (d/pull (d/db conn) [:kontor.account/path] eid)))
           summary (->> tb
                        (mapv (fn [[eid m]] [(pull-path eid) (->> m vals first :amount)]))
                        (into {}))]

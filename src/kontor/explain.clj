@@ -333,8 +333,8 @@
                               :in $ ?attr ?iri
                               :where [?e ?attr ?iri]]
                             db attr iri)))]
-    {:account        (find-by :account/concept-iri)
-     :account-tag    (find-by :account-tag/concept-iri)
+    {:account        (find-by :kontor.account/concept-iri)
+     :account-tag    (find-by :kontor.account-tag/concept-iri)
      :partner        (find-by :kontor.partner/concept-iri)
      :commodity      (find-by :kontor.commodity/concept-iri)
      :tax            (find-by :tax/concept-iri)

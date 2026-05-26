@@ -32,18 +32,18 @@
                  {:kontor.partner/external-id "CAT-travel" :kontor.partner/name "Travel"}
                  {:kontor.partner/external-id "CAT-meals"  :kontor.partner/name "Meals"}
                  ;; GL accounts.
-                 {:db/id "acct-travel" :account/code "6700" :account/name "Travel Expense"
-                  :account/type :expense :account/active true}
-                 {:db/id "acct-meals" :account/code "6710" :account/name "Meals Expense"
-                  :account/type :expense :account/active true}
-                 {:db/id "acct-payable" :account/code "1740"
-                  :account/name "Employee Reimbursement Payable"
-                  :account/type :liability :account/active true}
-                 {:db/id "acct-card" :account/code "1745"
-                  :account/name "Corporate Card Clearing"
-                  :account/type :liability :account/active true}
-                 {:db/id "acct-cash" :account/code "1800" :account/name "Bank"
-                  :account/type :asset :account/active true}
+                 {:db/id "acct-travel" :kontor.account/code "6700" :kontor.account/name "Travel Expense"
+                  :kontor.account/type :expense :kontor.account/active true}
+                 {:db/id "acct-meals" :kontor.account/code "6710" :kontor.account/name "Meals Expense"
+                  :kontor.account/type :expense :kontor.account/active true}
+                 {:db/id "acct-payable" :kontor.account/code "1740"
+                  :kontor.account/name "Employee Reimbursement Payable"
+                  :kontor.account/type :liability :kontor.account/active true}
+                 {:db/id "acct-card" :kontor.account/code "1745"
+                  :kontor.account/name "Corporate Card Clearing"
+                  :kontor.account/type :liability :kontor.account/active true}
+                 {:db/id "acct-cash" :kontor.account/code "1800" :kontor.account/name "Bank"
+                  :kontor.account/type :asset :kontor.account/active true}
                  {:db/id "journal-gen" :journal/code "GEN" :journal/name "General"
                   :journal/type :general}
                  ;; Receipts.
@@ -59,7 +59,7 @@
   (d/q '[:find ?e . :in $ ?a ?v :where [?e ?a ?v]] db a v))
 
 (defn- p       [db code] (ref-eid db :kontor.partner/external-id code))
-(defn- acct    [db code] (ref-eid db :account/code code))
+(defn- acct    [db code] (ref-eid db :kontor.account/code code))
 (defn- doc     [db code] (ref-eid db :audit-doc/code code))
 (defn- eur     [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- journal [db] (ref-eid db :journal/code "GEN"))
@@ -231,8 +231,8 @@
 
 (defn- posting-amounts [db tx-eid]
   (->> (d/q '[:find [?p ...] :in $ ?t :where [?p :posting/transaction ?t]] db tx-eid)
-       (map #(d/pull db [:posting/amount {:posting/account [:account/code]}] %))
-       (map (juxt #(:account/code (:posting/account %)) :posting/amount))
+       (map #(d/pull db [:posting/amount {:posting/account [:kontor.account/code]}] %))
+       (map (juxt #(:kontor.account/code (:posting/account %)) :posting/amount))
        set))
 
 (deftest post-report-builds-the-gl-and-reimburse-settles

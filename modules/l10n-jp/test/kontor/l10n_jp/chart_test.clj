@@ -5,13 +5,13 @@
             [kontor.l10n-jp.chart :as chart]))
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (deftest chart-installs
   (let [conn (core/create-test-db)
         _ (chart/install! conn)
         db (d/db conn)
-        n (count (d/q '[:find [?c ...] :where [_ :account/code ?c]] db))]
+        n (count (d/q '[:find [?c ...] :where [_ :kontor.account/code ?c]] db))]
     (is (>= n 30) (str "loaded " n " accounts"))
     (testing "Key accounts present"
       (is (ace db "121000") "Accounts receivable")
@@ -35,7 +35,7 @@
   (let [conn (core/create-test-db)
         _ (chart/install! conn)
         db (d/db conn)
-        tag-names (set (d/q '[:find [?n ...] :where [_ :account-tag/name ?n]] db))]
+        tag-names (set (d/q '[:find [?n ...] :where [_ :kontor.account-tag/name ?n]] db))]
     (is (contains? tag-names "jp-jct-line-sales-10"))
     (is (contains? tag-names "jp-jct-line-sales-8"))
     (is (contains? tag-names "jp-jct-line-output-10"))

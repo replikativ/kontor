@@ -37,7 +37,7 @@
     conn))
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (defn- sum-account
   "Sum all posting amounts on the given account code (BigDecimal)."

@@ -117,7 +117,7 @@
    `:analytic-account/path`.
 
    The `:state` plan applies to consumer-marked wage / payroll-tax /
-   benefit accounts via `:account/required-analytic-plans` (per
+   benefit accounts via `:kontor.account/required-analytic-plans` (per
    ADR-022). The accounts themselves are NOT marked here; that's the
    consumer's chart install. We DO ship the plan + states so consumers
    don't need to."

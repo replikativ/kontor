@@ -75,11 +75,11 @@
   "Helper: transact a balanced 'CRA-payable' fragment via build-transaction."
   [conn {:keys [effective-date itx-amount cpp-amount ei-amount rp-tag]}]
   (let [db (d/db conn)
-        wages (d/q '[:find ?e . :where [?e :account/code "5400"]] db)
-        itx (d/q '[:find ?e . :where [?e :account/code "2510"]] db)
-        cpp (d/q '[:find ?e . :where [?e :account/code "2520"]] db)
-        ei  (d/q '[:find ?e . :where [?e :account/code "2530"]] db)
-        net (d/q '[:find ?e . :where [?e :account/code "2550"]] db)
+        wages (d/q '[:find ?e . :where [?e :kontor.account/code "5400"]] db)
+        itx (d/q '[:find ?e . :where [?e :kontor.account/code "2510"]] db)
+        cpp (d/q '[:find ?e . :where [?e :kontor.account/code "2520"]] db)
+        ei  (d/q '[:find ?e . :where [?e :kontor.account/code "2530"]] db)
+        net (d/q '[:find ?e . :where [?e :kontor.account/code "2550"]] db)
         journal (d/q '[:find ?e . :where [?e :journal/code "PAY-CA"]] db)
         cad (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "CAD"]] db)
         gross (.add ^java.math.BigDecimal itx-amount
@@ -87,7 +87,7 @@
                           ^java.math.BigDecimal ei-amount))
         gross (.add ^java.math.BigDecimal gross 1000M) ; +1000 net wages
         net-amt 1000M
-        tag (when rp-tag [[:account-tag/name rp-tag]])
+        tag (when rp-tag [[:kontor.account-tag/name rp-tag]])
         mk-post (fn [acct amount narration]
                   (cond-> {:posting/account acct
                            :posting/amount amount
@@ -131,12 +131,12 @@
 (deftest pd7a-rp-routing-filters-postings
   (let [conn (bootstrap-db)]
     ;; First, register the RP tags
-    (d/transact conn [{:account-tag/name "ca-cra-rp-RP0001"
-                       :account-tag/country-code "CA"
-                       :account-tag/applicability :account}
-                      {:account-tag/name "ca-cra-rp-RP0002"
-                       :account-tag/country-code "CA"
-                       :account-tag/applicability :account}])
+    (d/transact conn [{:kontor.account-tag/name "ca-cra-rp-RP0001"
+                       :kontor.account-tag/country-code "CA"
+                       :kontor.account-tag/applicability :account}
+                      {:kontor.account-tag/name "ca-cra-rp-RP0002"
+                       :kontor.account-tag/country-code "CA"
+                       :kontor.account-tag/applicability :account}])
     (post-payroll-tx! conn {:effective-date #inst "2026-05-10"
                             :itx-amount 1000M :cpp-amount 300M :ei-amount 100M
                             :rp-tag "ca-cra-rp-RP0001"})

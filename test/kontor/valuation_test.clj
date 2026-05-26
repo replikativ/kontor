@@ -72,19 +72,19 @@
 ;; ============================================================================
 
 (defn- setup-catalog!
-  "Plant commodity + journal + a synthetic item (using :account/code
+  "Plant commodity + journal + a synthetic item (using :kontor.account/code
    as a generic ref target — the kernel doesn't model :item)."
   [conn]
   (d/transact conn
               [{:db/id -1 :kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                 :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
-               {:db/id -2 :account/path "Item:Widget" :account/name "Widget item"
-                :account/type :asset :account/active true}
+               {:db/id -2 :kontor.account/path "Item:Widget" :kontor.account/name "Widget item"
+                :kontor.account/type :asset :kontor.account/active true}
                {:db/id -3 :journal/code "STOCK" :journal/name "Stock movements"
                 :journal/type :general :journal/active true}])
   (let [db (d/db conn)]
     {:commodity (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-     :item      (:db/id (d/entity db [:account/path "Item:Widget"]))
+     :item      (:db/id (d/entity db [:kontor.account/path "Item:Widget"]))
      :journal   (:db/id (d/entity db [:journal/code "STOCK"]))
      :book      (valuation/primary db)}))
 

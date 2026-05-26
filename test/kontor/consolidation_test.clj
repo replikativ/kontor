@@ -66,35 +66,35 @@
     ;; Chart: 4 accounts (AR-IC, AP-IC, Sales-IC, Purchases-IC) + CTA
     (d/transact conn
                 [{:db/id "ar-ic"
-                  :account/path "Assets:AR-Intercompany"
-                  :account/code "1400-IC"
-                  :account/name "AR — Intercompany"
-                  :account/type :asset
-                  :account/active true}
+                  :kontor.account/path "Assets:AR-Intercompany"
+                  :kontor.account/code "1400-IC"
+                  :kontor.account/name "AR — Intercompany"
+                  :kontor.account/type :asset
+                  :kontor.account/active true}
                  {:db/id "ap-ic"
-                  :account/path "Liabilities:AP-Intercompany"
-                  :account/code "1600-IC"
-                  :account/name "AP — Intercompany"
-                  :account/type :liability
-                  :account/active true}
+                  :kontor.account/path "Liabilities:AP-Intercompany"
+                  :kontor.account/code "1600-IC"
+                  :kontor.account/name "AP — Intercompany"
+                  :kontor.account/type :liability
+                  :kontor.account/active true}
                  {:db/id "sales-ic"
-                  :account/path "Income:Sales-Intercompany"
-                  :account/code "4400-IC"
-                  :account/name "Sales — Intercompany"
-                  :account/type :income
-                  :account/active true}
+                  :kontor.account/path "Income:Sales-Intercompany"
+                  :kontor.account/code "4400-IC"
+                  :kontor.account/name "Sales — Intercompany"
+                  :kontor.account/type :income
+                  :kontor.account/active true}
                  {:db/id "purchases-ic"
-                  :account/path "Expenses:Purchases-Intercompany"
-                  :account/code "5400-IC"
-                  :account/name "Purchases — Intercompany"
-                  :account/type :expense
-                  :account/active true}
+                  :kontor.account/path "Expenses:Purchases-Intercompany"
+                  :kontor.account/code "5400-IC"
+                  :kontor.account/name "Purchases — Intercompany"
+                  :kontor.account/type :expense
+                  :kontor.account/active true}
                  {:db/id "cta"
-                  :account/path "Equity:CTA"
-                  :account/code "3900"
-                  :account/name "Cumulative Translation Adjustment"
-                  :account/type :equity
-                  :account/active true}
+                  :kontor.account/path "Equity:CTA"
+                  :kontor.account/code "3900"
+                  :kontor.account/name "Cumulative Translation Adjustment"
+                  :kontor.account/type :equity
+                  :kontor.account/active true}
                  {:db/id "journal"
                   :journal/code "GEN"
                   :journal/name "General"
@@ -110,11 +110,11 @@
    "3900"    "Equity:CTA"})
 
 (defn- eids [db codes]
-  (into {} (map (fn [c] [c (:db/id (d/entity db [:account/path (code->path c)]))])
+  (into {} (map (fn [c] [c (:db/id (d/entity db [:kontor.account/path (code->path c)]))])
                 codes)))
 
 (defn- by-code [db code]
-  (:db/id (d/entity db [:account/path (code->path code)])))
+  (:db/id (d/entity db [:kontor.account/path (code->path code)])))
 
 (defn- book-intercompany-pair! [conn]
   "DE books AR-IC +100 EUR / Sales-IC -100 EUR.
@@ -169,7 +169,7 @@
           db (d/db conn)
           de (:db/id (d/entity db [:kontor.entity/code "acme-de"]))
           group (:db/id (d/entity db [:kontor.entity/code "acme-group"]))
-          cta (:db/id (d/entity db [:account/path "Equity:CTA"]))
+          cta (:db/id (d/entity db [:kontor.account/path "Equity:CTA"]))
           jnl (:db/id (d/entity db [:journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
           de-tb (trial/trial-balance conn {:entity de})
@@ -203,7 +203,7 @@
           db (d/db conn)
           us (:db/id (d/entity db [:kontor.entity/code "acme-us"]))
           group (:db/id (d/entity db [:kontor.entity/code "acme-group"]))
-          cta (:db/id (d/entity db [:account/path "Equity:CTA"]))
+          cta (:db/id (d/entity db [:kontor.account/path "Equity:CTA"]))
           jnl (:db/id (d/entity db [:journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
           us-tb (trial/trial-balance conn {:entity us})
@@ -226,8 +226,8 @@
       ;; Whether a CTA plug appears depends on whether the two
       ;; translated amounts net to zero. With identical magnitudes at
       ;; rate 0.925925..., they round to ±100.00 and cancel — no CTA.
-      (is (every? #{(:db/id (d/entity db [:account/path "Expenses:Purchases-Intercompany"]))
-                    (:db/id (d/entity db [:account/path "Liabilities:AP-Intercompany"]))
+      (is (every? #{(:db/id (d/entity db [:kontor.account/path "Expenses:Purchases-Intercompany"]))
+                    (:db/id (d/entity db [:kontor.account/path "Liabilities:AP-Intercompany"]))
                     cta}
                   (mapv :posting/account postings))))))
 
@@ -277,7 +277,7 @@
           db (d/db conn)
           group (:db/id (d/entity db [:kontor.entity/code "acme-group"]))
           elim (:db/id (d/entity db [:kontor.entity/code "acme-elim"]))
-          cta (:db/id (d/entity db [:account/path "Equity:CTA"]))
+          cta (:db/id (d/entity db [:kontor.account/path "Equity:CTA"]))
           jnl (:db/id (d/entity db [:journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
           fragments (cons/consolidate-tx-data
@@ -307,7 +307,7 @@
           db0 (d/db conn)
           group (:db/id (d/entity db0 [:kontor.entity/code "acme-group"]))
           elim (:db/id (d/entity db0 [:kontor.entity/code "acme-elim"]))
-          cta (:db/id (d/entity db0 [:account/path "Equity:CTA"]))
+          cta (:db/id (d/entity db0 [:kontor.account/path "Equity:CTA"]))
           jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
           _ (cons/consolidate! {:conn conn
@@ -338,10 +338,10 @@
       ;; Combined ROLLED-UP view: group + elimination together should
       ;; net to zero on each intercompany account at the group level
       ;; (translation + elimination cancel by construction).
-      (let [ar-ic (:db/id (d/entity (d/db conn) [:account/path "Assets:AR-Intercompany"]))
-            ap-ic (:db/id (d/entity (d/db conn) [:account/path "Liabilities:AP-Intercompany"]))
-            sales-ic (:db/id (d/entity (d/db conn) [:account/path "Income:Sales-Intercompany"]))
-            purch-ic (:db/id (d/entity (d/db conn) [:account/path "Expenses:Purchases-Intercompany"]))
+      (let [ar-ic (:db/id (d/entity (d/db conn) [:kontor.account/path "Assets:AR-Intercompany"]))
+            ap-ic (:db/id (d/entity (d/db conn) [:kontor.account/path "Liabilities:AP-Intercompany"]))
+            sales-ic (:db/id (d/entity (d/db conn) [:kontor.account/path "Income:Sales-Intercompany"]))
+            purch-ic (:db/id (d/entity (d/db conn) [:kontor.account/path "Expenses:Purchases-Intercompany"]))
             rolled-up (fn [acct]
                         (reduce (fn [^java.math.BigDecimal a [_c m]]
                                   (.add a ^java.math.BigDecimal (:amount m)))
@@ -378,7 +378,7 @@
           db0 (d/db conn)
           group (:db/id (d/entity db0 [:kontor.entity/code "acme-group"]))
           elim (:db/id (d/entity db0 [:kontor.entity/code "acme-elim"]))
-          cta (:db/id (d/entity db0 [:account/path "Equity:CTA"]))
+          cta (:db/id (d/entity db0 [:kontor.account/path "Equity:CTA"]))
           jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
           input {:conn conn
@@ -423,7 +423,7 @@
           db0 (d/db conn)
           group (:db/id (d/entity db0 [:kontor.entity/code "acme-group"]))
           elim (:db/id (d/entity db0 [:kontor.entity/code "acme-elim"]))
-          cta (:db/id (d/entity db0 [:account/path "Equity:CTA"]))
+          cta (:db/id (d/entity db0 [:kontor.account/path "Equity:CTA"]))
           jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
           _ (cons/consolidate! {:conn conn
@@ -468,7 +468,7 @@
           de (:db/id (d/entity db [:kontor.entity/code "acme-de"]))
           group (:db/id (d/entity db [:kontor.entity/code "acme-group"]))
           elim (:db/id (d/entity db [:kontor.entity/code "acme-elim"]))
-          cta (:db/id (d/entity db [:account/path "Equity:CTA"]))
+          cta (:db/id (d/entity db [:kontor.account/path "Equity:CTA"]))
           jnl (:db/id (d/entity db [:journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
           tb (trial/trial-balance conn {:entity de})
@@ -502,26 +502,26 @@
           "no vt opts → no tx-meta map (caller-controlled)"))))
 
 (deftest p1-73-1-account-monetary-flag-flips-rate-type
-  (testing "An :asset account with :account/monetary? false (e.g.
+  (testing "An :asset account with :kontor.account/monetary? false (e.g.
             PP&E or inventory at cost) translates at :historical rate
             per IAS 21, NOT the type-default :closing. Regression for
             ADR-073 review P1-73-1."
     (let [conn (bootstrap!)
           ;; Add a non-monetary asset account (PP&E)
           _ (d/transact conn
-                        [{:account/path "Assets:PPE"
-                          :account/code "1500"
-                          :account/name "PP&E (cost basis)"
-                          :account/type :asset
-                          :account/monetary? false
-                          :account/active true}])
+                        [{:kontor.account/path "Assets:PPE"
+                          :kontor.account/code "1500"
+                          :kontor.account/name "PP&E (cost basis)"
+                          :kontor.account/type :asset
+                          :kontor.account/monetary? false
+                          :kontor.account/active true}])
           db0 (d/db conn)
           de (:db/id (d/entity db0 [:kontor.entity/code "acme-de"]))
           group (:db/id (d/entity db0 [:kontor.entity/code "acme-group"]))
-          cta (:db/id (d/entity db0 [:account/path "Equity:CTA"]))
+          cta (:db/id (d/entity db0 [:kontor.account/path "Equity:CTA"]))
           jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
-          ppe (:db/id (d/entity db0 [:account/path "Assets:PPE"]))
-          ar (:db/id (d/entity db0 [:account/path "Assets:AR-Intercompany"]))
+          ppe (:db/id (d/entity db0 [:kontor.account/path "Assets:PPE"]))
+          ar (:db/id (d/entity db0 [:kontor.account/path "Assets:AR-Intercompany"]))
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           ;; Post a PP&E purchase in DE (just PP&E + offsetting AR)
           _ (posting/post-transaction!
@@ -590,7 +590,7 @@
           db0 (d/db conn)
           group (:db/id (d/entity db0 [:kontor.entity/code "acme-group"]))
           elim (:db/id (d/entity db0 [:kontor.entity/code "acme-elim"]))
-          cta (:db/id (d/entity db0 [:account/path "Equity:CTA"]))
+          cta (:db/id (d/entity db0 [:kontor.account/path "Equity:CTA"]))
           jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
           provider (fxp/make-static-table-provider conn)
           input {:conn conn

@@ -40,15 +40,15 @@
                 :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"
                 ;; ADR-090: optional concept-iri.
                 :kontor.commodity/concept-iri "https://www.omg.org/spec/EDMC-FIBO/iso4217/EUR"}
-               {:db/id -2 :account/path "Assets:Receivable"
-                :account/name "Trade receivables"
-                :account/type :asset :account/active true
+               {:db/id -2 :kontor.account/path "Assets:Receivable"
+                :kontor.account/name "Trade receivables"
+                :kontor.account/type :asset :kontor.account/active true
                 ;; ADR-090: account-level concept-iri seam.
-                :account/concept-iri "http://xbrl.ifrs.org/taxonomy/2024-03-27/ifrs-full#TradeAndOtherReceivables"}
-               {:db/id -3 :account/path "Income:Sales"
-                :account/name "Sales revenue"
-                :account/type :income :account/active true
-                :account/concept-iri "http://xbrl.ifrs.org/taxonomy/2024-03-27/ifrs-full#Revenue"}
+                :kontor.account/concept-iri "http://xbrl.ifrs.org/taxonomy/2024-03-27/ifrs-full#TradeAndOtherReceivables"}
+               {:db/id -3 :kontor.account/path "Income:Sales"
+                :kontor.account/name "Sales revenue"
+                :kontor.account/type :income :kontor.account/active true
+                :kontor.account/concept-iri "http://xbrl.ifrs.org/taxonomy/2024-03-27/ifrs-full#Revenue"}
                {:db/id -4 :journal/code "INV" :journal/name "Customer invoices"
                 :journal/type :sale :journal/active true}
                ;; ADR-090: partner with concept-iri (FIBO Organization).
@@ -70,8 +70,8 @@
   [conn external-id amount narration]
   (let [db  (d/db conn)
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-        rec (:db/id (d/entity db [:account/path "Assets:Receivable"]))
-        rev (:db/id (d/entity db [:account/path "Income:Sales"]))
+        rec (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
+        rev (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
         jnl (:db/id (d/entity db [:journal/code "INV"]))
         prt (:db/id (d/entity db [:kontor.partner/external-id "acme"]))
         _   (posting/post-transaction!
@@ -104,7 +104,7 @@
         _    (post-invoice! conn "INV-EXP-1" 100.00M "First sale")
         _    (post-invoice! conn "INV-EXP-2"  50.00M "Second sale")
         db   (d/db conn)
-        rec  (:db/id (d/entity db [:account/path "Assets:Receivable"]))
+        rec  (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
         r    (explain/explain-balance conn rec)]
     (testing "result shape"
       (is (= rec (:account r)))
@@ -134,7 +134,7 @@
           _    (seed! conn)
           _    (post-invoice! conn "INV-EXP-PAST" 75.00M "Past sale")
           db   (d/db conn)
-          rec  (:db/id (d/entity db [:account/path "Assets:Receivable"]))
+          rec  (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
           before #inst "2025-01-01T00:00:00Z"
           r      (explain/explain-balance conn rec {:as-of-valid before})]
       (is (empty? (:postings r)) "no postings yet active in 2025")
@@ -226,7 +226,7 @@
   (let [conn (core/create-test-db)
         _    (seed! conn)
         db   (d/db conn)
-        rec  (:db/id (d/entity db [:account/path "Assets:Receivable"]))
+        rec  (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
         r    (explain/entities-with-concept-iri
               db
               "http://xbrl.ifrs.org/taxonomy/2024-03-27/ifrs-full#TradeAndOtherReceivables")]

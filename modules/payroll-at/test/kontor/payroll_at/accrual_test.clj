@@ -9,18 +9,18 @@
 (def jan-31 #inst "2026-01-31T00:00:00Z")
 
 (def accrual-rueck-accounts
-  [{:account/code "3710" :account/path "Verbindlichkeiten:Rueckstellung:Urlaub"
-    :account/type :liability :account/name "Urlaubsrückstellung"
-    :account/active true
-    :account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:account/code "3720" :account/path "Verbindlichkeiten:Rueckstellung:Sonder"
-    :account/type :liability :account/name "Rückstellung 13./14."
-    :account/active true
-    :account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:account/code "6000" :account/path "Aufwendungen:Personal:Gehälter"
-    :account/type :expense :account/name "Gehälter"
-    :account/active true
-    :account/commodity [:kontor.commodity/symbol "EUR"]}])
+  [{:kontor.account/code "3710" :kontor.account/path "Verbindlichkeiten:Rueckstellung:Urlaub"
+    :kontor.account/type :liability :kontor.account/name "Urlaubsrückstellung"
+    :kontor.account/active true
+    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
+   {:kontor.account/code "3720" :kontor.account/path "Verbindlichkeiten:Rueckstellung:Sonder"
+    :kontor.account/type :liability :kontor.account/name "Rückstellung 13./14."
+    :kontor.account/active true
+    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
+   {:kontor.account/code "6000" :kontor.account/path "Aufwendungen:Personal:Gehälter"
+    :kontor.account/type :expense :kontor.account/name "Gehälter"
+    :kontor.account/active true
+    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}])
 
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
@@ -63,7 +63,7 @@
           db (d/db conn)
           balance-on (fn [code]
                        (let [a (d/q '[:find ?a . :in $ ?c
-                                      :where [?a :account/code ?c]]
+                                      :where [?a :kontor.account/code ?c]]
                                     db code)
                              postings (d/q '[:find [?amt ...]
                                              :in $ ?a
@@ -94,7 +94,7 @@
           db (d/db conn)
           balance-on (fn [code]
                        (let [a (d/q '[:find ?a . :in $ ?c
-                                      :where [?a :account/code ?c]]
+                                      :where [?a :kontor.account/code ?c]]
                                     db code)
                              postings (d/q '[:find [?amt ...]
                                              :in $ ?a

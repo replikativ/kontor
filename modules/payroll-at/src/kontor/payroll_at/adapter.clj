@@ -38,7 +38,7 @@
      per ADR-086. Consumers either supply RLG-1-shaped accounts under
      those keys directly OR pass `:use-default-rlg-1? true` to fall
      back on `kontor.payroll-at.wage-types/default-rlg-1-map` +
-     `default-payable-codes` (resolved via `:account/code`).
+     `default-payable-codes` (resolved via `:kontor.account/code`).
 
    - `AtKontorEmitProvider` — `PayrollEmitProvider` impl. Delegates
      to a wrapped `AtFilingEmitProvider` (default `AtMbgmL16Emitter`)
@@ -104,7 +104,7 @@
      chart-of-accounts is theirs to wire. The `:use-default-rlg-1?`
      flag is sugar over the existing `kontor.payroll-at.wage-types`
      default codes — it resolves each wage-type code via
-     `:account/code` against the DB, mirroring the legacy
+     `:kontor.account/code` against the DB, mirroring the legacy
      `kontor.payroll-at.posting-builder/build-tx-data` behavior.
 
    See also: `modules/payroll-ca/src/kontor/payroll_ca/{compute,
@@ -315,7 +315,7 @@
 (defn- resolve-account-for-tag
   "Resolve a `:component-kind` keyword to an :account eid via the
    consumer-supplied accounts map. Falls back to default RLG-1 codes
-   resolved through `:account/code` when `:use-default-rlg-1?` is set.
+   resolved through `:kontor.account/code` when `:use-default-rlg-1?` is set.
    Throws with a useful message when neither yields a hit."
   [db accounts kind use-default? payable?]
   (or (get accounts kind)
@@ -324,13 +324,13 @@
                      (get wt/default-payable-codes kind)
                      (get wt/default-rlg-1-map kind))]
           (when code
-            (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]]
+            (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]]
                  db code))))
       (throw (ex-info
               "No account configured for component-kind"
               {:kind kind
                :payable? payable?
-               :hint "Pass :accounts {<kind> <eid> ...} OR pass :use-default-rlg-1? true (resolves via :account/code) OR consult `kontor.payroll-at.wage-types`."
+               :hint "Pass :accounts {<kind> <eid> ...} OR pass :use-default-rlg-1? true (resolves via :kontor.account/code) OR consult `kontor.payroll-at.wage-types`."
                :available-default-codes (vec
                                          (keys (if payable?
                                                  wt/default-payable-codes
@@ -577,7 +577,7 @@
    Optional opts:
      :engine               :bmd (default) | :rzl
      :use-default-rlg-1?   true to resolve default RLG-1 codes via
-                           :account/code (mirrors the legacy
+                           :kontor.account/code (mirrors the legacy
                            `kontor.payroll-at.posting-builder`)
      :employer-name        string — appears in mBGM <Dienstgeber>
      :storage-uri-template printf-style template with one %s slot for

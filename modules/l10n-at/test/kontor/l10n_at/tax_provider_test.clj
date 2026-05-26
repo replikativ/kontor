@@ -15,9 +15,9 @@
   (let [conn (core/create-test-db)]
     (d/transact conn
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
-                 {:account/code "3500" :account/path "USt-20" :account/type :liability}
-                 {:account/code "3510" :account/path "USt-13" :account/type :liability}
-                 {:account/code "3520" :account/path "USt-10" :account/type :liability}])
+                 {:kontor.account/code "3500" :kontor.account/path "USt-20" :kontor.account/type :liability}
+                 {:kontor.account/code "3510" :kontor.account/path "USt-13" :kontor.account/type :liability}
+                 {:kontor.account/code "3520" :kontor.account/path "USt-10" :kontor.account/type :liability}])
     conn))
 
 (def ^:private eur [:kontor.commodity/symbol "EUR"])
@@ -60,8 +60,8 @@
         db   (d/db conn)
         prov (atp/make-at-tax-rate-provider)
         bld  (atp/make-at-tax-posting-builder)
-        a3500 (d/q '[:find ?a . :where [?a :account/code "3500"]] db)
-        a3520 (d/q '[:find ?a . :where [?a :account/code "3520"]] db)
+        a3500 (d/q '[:find ?a . :where [?a :kontor.account/code "3500"]] db)
+        a3520 (d/q '[:find ?a . :where [?a :kontor.account/code "3520"]] db)
         post  (fn [vc] (tpb/compute-tax-postings
                         prov bld
                         {:base 1000M :vat-class vc :commodity eur}

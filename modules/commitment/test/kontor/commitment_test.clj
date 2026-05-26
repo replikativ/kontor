@@ -23,9 +23,9 @@
                  {:journal/code "CASH" :journal/type :cash}
                  {:kontor.partner/external-id "CUST" :kontor.partner/name "A Customer"}
                  {:kontor.partner/external-id "U-alice" :kontor.partner/name "Alice (actor)"}
-                 {:account/path "Assets:Receivable" :account/type :asset}
-                 {:account/path "Assets:Cash"       :account/type :asset}
-                 {:account/path "Income:Sales"      :account/type :income}])
+                 {:kontor.account/path "Assets:Receivable" :kontor.account/type :asset}
+                 {:kontor.account/path "Assets:Cash"       :kontor.account/type :asset}
+                 {:kontor.account/path "Income:Sales"      :kontor.account/type :income}])
     conn))
 
 (def ^:private eur   [:kontor.commodity/symbol "EUR"])
@@ -52,13 +52,13 @@
         (is (= :open (:commitment/state (first opens))))
         (is (== 1000M (commitment/outstanding (d/db conn) "C-1")))))
     ;; the obligation hits the GL as a sale on account
-    (book/sell! conn {:debit-account [:account/path "Assets:Receivable"]
-                      :credit-account [:account/path "Income:Sales"]
+    (book/sell! conn {:debit-account [:kontor.account/path "Assets:Receivable"]
+                      :credit-account [:kontor.account/path "Income:Sales"]
                       :amount 1000 :commodity eur
                       :effective-date #inst "2026-03-01" :external-id "INV-1"})
     ;; the customer pays
-    (book/receive-payment! conn {:debit-account [:account/path "Assets:Cash"]
-                                 :credit-account [:account/path "Assets:Receivable"]
+    (book/receive-payment! conn {:debit-account [:kontor.account/path "Assets:Cash"]
+                                 :credit-account [:kontor.account/path "Assets:Receivable"]
                                  :amount 1000 :commodity eur
                                  :effective-date #inst "2026-03-20"
                                  :external-id "PAY-1"})
@@ -88,8 +88,8 @@
      conn {:external-id "C-2" :kind :payable :counterparty cust
            :committed-amount 1000 :commodity eur
            :due-date #inst "2026-04-01" :recorded-by-uid alice})
-    (book/pay-bill! conn {:debit-account [:account/path "Assets:Receivable"]
-                          :credit-account [:account/path "Assets:Cash"]
+    (book/pay-bill! conn {:debit-account [:kontor.account/path "Assets:Receivable"]
+                          :credit-account [:kontor.account/path "Assets:Cash"]
                           :amount 600 :commodity eur
                           :effective-date #inst "2026-03-10" :external-id "P-A"})
     (commitment/fulfill! conn {:commitment "C-2" :transaction (tx-by-xid conn "P-A")
@@ -99,8 +99,8 @@
              (:commitment/state (commitment/pull-commitment (d/db conn) "C-2"))))
       (is (== 400M (commitment/outstanding (d/db conn) "C-2")))
       (is (= 1 (count (commitment/open-commitments (d/db conn))))))
-    (book/pay-bill! conn {:debit-account [:account/path "Assets:Receivable"]
-                          :credit-account [:account/path "Assets:Cash"]
+    (book/pay-bill! conn {:debit-account [:kontor.account/path "Assets:Receivable"]
+                          :credit-account [:kontor.account/path "Assets:Cash"]
                           :amount 400 :commodity eur
                           :effective-date #inst "2026-03-25" :external-id "P-B"})
     (commitment/fulfill! conn {:commitment "C-2" :transaction (tx-by-xid conn "P-B")
@@ -116,8 +116,8 @@
      conn {:external-id "C-3" :kind :receivable :counterparty cust
            :committed-amount 100 :commodity eur
            :due-date #inst "2026-04-01" :recorded-by-uid alice})
-    (book/receive-payment! conn {:debit-account [:account/path "Assets:Cash"]
-                                 :credit-account [:account/path "Assets:Receivable"]
+    (book/receive-payment! conn {:debit-account [:kontor.account/path "Assets:Cash"]
+                                 :credit-account [:kontor.account/path "Assets:Receivable"]
                                  :amount 100 :commodity eur
                                  :effective-date #inst "2026-03-05" :external-id "F-1"})
     (commitment/fulfill! conn {:commitment "C-3" :transaction (tx-by-xid conn "F-1")
@@ -171,8 +171,8 @@
            :committed-amount 200 :commodity eur
            :due-date #inst "2026-04-01" :recorded-by-uid alice})
     (let [db-before-fulfill (d/db conn)]
-      (book/receive-payment! conn {:debit-account [:account/path "Assets:Cash"]
-                                   :credit-account [:account/path "Assets:Receivable"]
+      (book/receive-payment! conn {:debit-account [:kontor.account/path "Assets:Cash"]
+                                   :credit-account [:kontor.account/path "Assets:Receivable"]
                                    :amount 200 :commodity eur
                                    :effective-date #inst "2026-03-08"
                                    :external-id "PAY-6"})

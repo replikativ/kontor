@@ -28,19 +28,19 @@
                  {:journal/code "PUR"  :journal/type :purchase}
                  {:journal/code "CASH" :journal/type :cash}
                  {:journal/code "GEN"  :journal/type :general}
-                 {:account/path "Assets:Cash"         :account/type :asset}
-                 {:account/path "Assets:Receivable"   :account/type :asset}
-                 {:account/path "Liabilities:Payable" :account/type :liability}
-                 {:account/path "Income:Sales"        :account/type :income}
-                 {:account/path "Expenses:Supplies"   :account/type :expense}])
+                 {:kontor.account/path "Assets:Cash"         :kontor.account/type :asset}
+                 {:kontor.account/path "Assets:Receivable"   :kontor.account/type :asset}
+                 {:kontor.account/path "Liabilities:Payable" :kontor.account/type :liability}
+                 {:kontor.account/path "Income:Sales"        :kontor.account/type :income}
+                 {:kontor.account/path "Expenses:Supplies"   :kontor.account/type :expense}])
     conn))
 
 (def ^:private eur  [:kontor.commodity/symbol "EUR"])
-(def ^:private cash [:account/path "Assets:Cash"])
-(def ^:private ar   [:account/path "Assets:Receivable"])
-(def ^:private ap   [:account/path "Liabilities:Payable"])
-(def ^:private rev  [:account/path "Income:Sales"])
-(def ^:private exp  [:account/path "Expenses:Supplies"])
+(def ^:private cash [:kontor.account/path "Assets:Cash"])
+(def ^:private ar   [:kontor.account/path "Assets:Receivable"])
+(def ^:private ap   [:kontor.account/path "Liabilities:Payable"])
+(def ^:private rev  [:kontor.account/path "Income:Sales"])
+(def ^:private exp  [:kontor.account/path "Expenses:Supplies"])
 
 (defn- bal
   "Single-commodity balance amount on `account` (EUR)."
@@ -138,11 +138,11 @@
     (let [conn (core/create-test-db)]
       (d/transact conn [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                          :kontor.commodity/precision 2}
-                        {:account/path "A" :account/type :asset}
-                        {:account/path "B" :account/type :income}])
+                        {:kontor.account/path "A" :kontor.account/type :asset}
+                        {:kontor.account/path "B" :kontor.account/type :income}])
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"no :journal of type"
-                            (book/sell! conn {:debit-account [:account/path "A"]
-                                              :credit-account [:account/path "B"]
+                            (book/sell! conn {:debit-account [:kontor.account/path "A"]
+                                              :credit-account [:kontor.account/path "B"]
                                               :amount 10 :commodity eur
                                               :effective-date d1}))))))
 
@@ -208,7 +208,7 @@
                     {:account ap    :amount -100M :entity hans}]})
       (let [pairs (set (d/q '[:find ?acct-path ?ent-code
                               :where [?p :posting/account ?a]
-                                     [?a :account/path ?acct-path]
+                                     [?a :kontor.account/path ?acct-path]
                                      [?p :posting/entity ?e]
                                      [?e :kontor.entity/code ?ent-code]]
                             (d/db conn)))]
@@ -232,7 +232,7 @@
                       {:account ap  :amount -400M :partner tomas}]})
         (let [pairs (set (d/q '[:find ?path ?amt ?pa-code
                                 :where [?p :posting/account ?a]
-                                       [?a :account/path ?path]
+                                       [?a :kontor.account/path ?path]
                                        [?p :posting/amount ?amt]
                                        [?p :posting/partner ?pa]
                                        [?pa :kontor.partner/external-id ?pa-code]]
@@ -271,7 +271,7 @@
 
     (testing "trial-balance {:entity ug} returns only UG-stamped postings"
       (let [tb (trial/trial-balance conn {:entity ug})
-            pull-path (fn [eid] (:account/path (d/pull (d/db conn) [:account/path] eid)))
+            pull-path (fn [eid] (:kontor.account/path (d/pull (d/db conn) [:kontor.account/path] eid)))
             paths (set (map pull-path (keys tb)))]
         ;; UG should have AR, Cash, Income, but NOT Hans's AP or Exp.
         (is (contains? paths "Assets:Receivable"))

@@ -54,12 +54,12 @@
                 [{:db/id "mxn" :kontor.commodity/symbol "MXN"
                   :kontor.commodity/name "Peso" :kontor.commodity/precision 2
                   :kontor.commodity/iso-4217 "MXN"}
-                 {:account/code "601.02" :account/path "Gastos:Aguinaldo"
-                  :account/name "Gratificación Anual"
-                  :account/type :expense :account/active true}
-                 {:account/code "206.07" :account/path "Pasivos:ProvisionAguinaldo"
-                  :account/name "Provisión Aguinaldo"
-                  :account/type :liability :account/active true}
+                 {:kontor.account/code "601.02" :kontor.account/path "Gastos:Aguinaldo"
+                  :kontor.account/name "Gratificación Anual"
+                  :kontor.account/type :expense :kontor.account/active true}
+                 {:kontor.account/code "206.07" :kontor.account/path "Pasivos:ProvisionAguinaldo"
+                  :kontor.account/name "Provisión Aguinaldo"
+                  :kontor.account/type :liability :kontor.account/active true}
                  {:journal/code "NOM" :journal/name "Nómina"
                   :journal/type :general :journal/active true}])
     conn))

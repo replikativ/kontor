@@ -32,7 +32,7 @@
     conn))
 
 (defn- account-eid [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (defn- post-invoice-19!
   "Post a German VAT-19% sales invoice for `net` EUR.
@@ -149,8 +149,8 @@
   (let [conn (core/create-test-db)
         _ (chart/install! conn)
         db (d/db conn)
-        accounts (d/q '[:find [?code ...] :where [_ :account/code ?code]] db)
-        tags (d/q '[:find [?n ...] :where [_ :account-tag/name ?n]] db)]
+        accounts (d/q '[:find [?code ...] :where [_ :kontor.account/code ?code]] db)
+        tags (d/q '[:find [?n ...] :where [_ :kontor.account-tag/name ?n]] db)]
     (is (>= (count accounts) 30) (str "loaded " (count accounts) " accounts"))
     (is (account-eid db "4400") "Erlöse 19% present")
     (is (account-eid db "1576") "Vorsteuer 19% present")
@@ -160,9 +160,9 @@
 (deftest skr04-install-is-idempotent
   (let [conn (core/create-test-db)
         _ (chart/install! conn)
-        n1 (count (d/q '[:find [?a ...] :where [?a :account/code _]] (d/db conn)))
+        n1 (count (d/q '[:find [?a ...] :where [?a :kontor.account/code _]] (d/db conn)))
         _ (chart/install! conn)
-        n2 (count (d/q '[:find [?a ...] :where [?a :account/code _]] (d/db conn)))]
+        n2 (count (d/q '[:find [?a ...] :where [?a :kontor.account/code _]] (d/db conn)))]
     (is (= n1 n2) "Re-install must not duplicate accounts.")))
 
 ;; ============================================================================

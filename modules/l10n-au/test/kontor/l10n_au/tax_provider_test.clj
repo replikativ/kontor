@@ -16,8 +16,8 @@
     (d/transact conn
                 [{:kontor.commodity/symbol "AUD" :kontor.commodity/name "Australian Dollar"
                   :kontor.commodity/precision 2}
-                 {:account/code "21500" :account/path "GST-payable"
-                  :account/type :liability}])
+                 {:kontor.account/code "21500" :kontor.account/path "GST-payable"
+                  :kontor.account/type :liability}])
     conn))
 
 (def ^:private aud [:kontor.commodity/symbol "AUD"])
@@ -59,7 +59,7 @@
         db    (d/db conn)
         prov  (aup/make-au-tax-rate-provider)
         bld   (aup/make-au-tax-posting-builder)
-        a21500 (d/q '[:find ?a . :where [?a :account/code "21500"]] db)
+        a21500 (d/q '[:find ?a . :where [?a :kontor.account/code "21500"]] db)
         post  (fn [ts] (tpb/compute-tax-postings
                         prov bld
                         {:base 1000M :tax-status ts :commodity aud}

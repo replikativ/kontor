@@ -70,7 +70,7 @@
 (def ^:const default-journal-code "CLOSE")
 
 (defn- account-by-code [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (defn- require-retained [db code]
   (or (account-by-code db code)

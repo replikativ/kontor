@@ -50,7 +50,7 @@
     conn))
 
 (defn- get-account-eid [db code]
-  (d/q '[:find ?e . :in $ ?c :where [?e :account/code ?c]] db code))
+  (d/q '[:find ?e . :in $ ?c :where [?e :kontor.account/code ?c]] db code))
 
 ;; ============================================================================
 ;; Mock compute provider — supplies balanced facts per employment
@@ -179,7 +179,7 @@
                             [:transaction/external-id
                              {:posting/_transaction
                               [:posting/amount
-                               {:posting/account [:account/code]}]}]}]
+                               {:posting/account [:kontor.account/code]}]}]}]
                     run-eid)]
     (testing "payroll-run row created"
       (is (some? run-eid))
@@ -198,7 +198,7 @@
     (testing "Four canonical BR statutory buckets land on DISTINCT accounts"
       (let [postings (-> run :payroll-run/payroll-transaction
                          :posting/_transaction)
-            by-code (group-by (comp :account/code :posting/account) postings)]
+            by-code (group-by (comp :kontor.account/code :posting/account) postings)]
         ;; INSS empregado (2.1.1.05): -800 (2 × -400)
         (is (= -800M
                (reduce (fn [a {:keys [posting/amount]}]

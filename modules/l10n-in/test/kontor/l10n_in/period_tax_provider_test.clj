@@ -51,8 +51,8 @@
                 [{:kontor.commodity/symbol "INR" :kontor.commodity/name "Indian Rupee"
                   :kontor.commodity/precision 2}
                  {:journal/code "SALE" :journal/type :sale}
-                 {:account/path "Income:Salary" :account/type :income}
-                 {:account/path "Assets:Bank"   :account/type :asset}])
+                 {:kontor.account/path "Income:Salary" :kontor.account/type :income}
+                 {:kontor.account/path "Assets:Bank"   :kontor.account/type :asset}])
     conn))
 
 (defn- assess
@@ -60,8 +60,8 @@
    `regime`; return the `:personal-income-tax` component."
   [regime taxable]
   (let [conn (fresh)]
-    (book/sell! conn {:debit-account  [:account/path "Assets:Bank"]
-                      :credit-account [:account/path "Income:Salary"]
+    (book/sell! conn {:debit-account  [:kontor.account/path "Assets:Bank"]
+                      :credit-account [:kontor.account/path "Income:Salary"]
                       :amount taxable :commodity [:kontor.commodity/symbol "INR"]
                       :effective-date #inst "2026-06-30"})
     (first (:components
@@ -132,10 +132,10 @@
                   [{:kontor.commodity/symbol "INR" :kontor.commodity/name "Indian Rupee"
                     :kontor.commodity/precision 2}
                    {:journal/code "SALE" :journal/type :sale}
-                   {:account/path "Income:Salary" :account/type :income}
-                   {:account/path "Assets:Bank"   :account/type :asset}])
-      (book/sell! conn {:debit-account  [:account/path "Assets:Bank"]
-                        :credit-account [:account/path "Income:Salary"]
+                   {:kontor.account/path "Income:Salary" :kontor.account/type :income}
+                   {:kontor.account/path "Assets:Bank"   :kontor.account/type :asset}])
+      (book/sell! conn {:debit-account  [:kontor.account/path "Assets:Bank"]
+                        :credit-account [:kontor.account/path "Income:Salary"]
                         :amount 2000000 :commodity [:kontor.commodity/symbol "INR"]
                         :effective-date #inst "2026-06-30"})
       (let [p     (in/in-income-tax-provider {:regime :new})
@@ -173,10 +173,10 @@
                          [{:kontor.commodity/symbol "INR" :kontor.commodity/name "Rupee"
                            :kontor.commodity/precision 2}
                           {:journal/code "SALE" :journal/type :sale}
-                          {:account/path "Income:Salary" :account/type :income}
-                          {:account/path "Assets:Bank"   :account/type :asset}])
-        _    (book/sell! conn {:debit-account  [:account/path "Assets:Bank"]
-                               :credit-account [:account/path "Income:Salary"]
+                          {:kontor.account/path "Income:Salary" :kontor.account/type :income}
+                          {:kontor.account/path "Assets:Bank"   :kontor.account/type :asset}])
+        _    (book/sell! conn {:debit-account  [:kontor.account/path "Assets:Bank"]
+                               :credit-account [:kontor.account/path "Income:Salary"]
                                :amount 1500000 :commodity [:kontor.commodity/symbol "INR"]
                                :effective-date #inst "2026-06-30"})
         period {:from #inst "2026-04-01" :to #inst "2027-04-01"}

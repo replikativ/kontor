@@ -57,15 +57,15 @@
 (defn resolve-account-ref
   "Resolve an account-hint to a kontor account ref. Strategy:
      1. Consumer-supplied `:accounts` map keyed by account-hint
-        (e.g. {:gehalt 12345} or {:gehalt [:account/code \"6020\"]}).
+        (e.g. {:gehalt 12345} or {:gehalt [:kontor.account/code \"6020\"]}).
      2. Catalog's `account-overrides`.
-     3. Default-account-maps[coa] → [:account/code <code>] lookup-ref.
+     3. Default-account-maps[coa] → [:kontor.account/code <code>] lookup-ref.
    Returns nil when no mapping available — caller decides how to
    surface (throw, route to manual review)."
   [{:keys [accounts catalog]} account-hint]
   (or (get accounts account-hint)
       (when-let [code (wage-types/resolve-account-code catalog account-hint)]
-        [:account/code code])))
+        [:kontor.account/code code])))
 
 (defn- account-ref-or-throw
   [ctx account-hint role]

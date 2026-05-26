@@ -31,7 +31,7 @@
    `:account-key` is the consumer's wage-type → CoA key passed into
    the `:accounts` map at `run-payroll!` time. The reference fixture
    uses descriptive keys (`:wages-expense`, `:ee-fed-withheld`, …);
-   consumers map them to their actual `:account/code` lookup-refs.
+   consumers map them to their actual `:kontor.account/code` lookup-refs.
 
    See doc/research/83-us-adp-gli-research-before.md §5 + §9.2 for
    the full reference fixture and the rationale for each flag.

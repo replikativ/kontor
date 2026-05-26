@@ -2,13 +2,13 @@
 ;; when the account specifies one.
 ;;
 ;; Holds when, for every newly-written posting (in $empty+txs), one of:
-;;   (a) the account does NOT specify :account/commodity (polymorphic
+;;   (a) the account does NOT specify :kontor.account/commodity (polymorphic
 ;;       account — any posting commodity is OK), OR
 ;;   (b) the posting's :posting/commodity equals the account's
-;;       :account/commodity.
+;;       :kontor.account/commodity.
 ;;
 ;; Phrased equivalently: there is no posting in $empty+txs whose
-;; account in $after has a :account/commodity that differs from the
+;; account in $after has a :kontor.account/commodity that differs from the
 ;; posting's :posting/commodity.
 ;;
 ;; See `account_active.edn` for the canonical datalog gotcha
@@ -22,8 +22,8 @@
       [$empty+txs ?p :posting/account ?account]
       [$empty+txs ?p :posting/commodity ?p-commodity]
       ;; The account specifies a commodity (polymorphic accounts
-      ;; have :account/commodity unset and never trigger this clause).
-      [$after ?account :account/commodity ?a-commodity]
+      ;; have :kontor.account/commodity unset and never trigger this clause).
+      [$after ?account :kontor.account/commodity ?a-commodity]
       ;; ...and the posting commodity does NOT match. Both sides come
       ;; from database patterns so the predicate filter fires.
       [(not= ?p-commodity ?a-commodity)]]

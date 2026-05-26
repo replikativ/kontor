@@ -4,7 +4,7 @@
      - account-active invariant fires on a posting against an inactive
        account.
      - account-active passes on postings against active accounts.
-     - account-active passes when the account omits :account/active
+     - account-active passes when the account omits :kontor.account/active
        (treated as active by default — Odoo-compatible)."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
@@ -22,25 +22,25 @@
   (d/transact conn
               [{:db/id -1 :kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                 :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
-               (cond-> {:db/id -2 :account/path "Assets:Receivable"
-                        :account/name "Trade receivables"
-                        :account/type :asset}
-                 :always (assoc :account/active active-receivable?))
-               {:db/id -3 :account/path "Income:Sales"
-                :account/name "Sales revenue"
-                :account/type :income :account/active true}
-               ;; An account with no :account/active set at all (testing
+               (cond-> {:db/id -2 :kontor.account/path "Assets:Receivable"
+                        :kontor.account/name "Trade receivables"
+                        :kontor.account/type :asset}
+                 :always (assoc :kontor.account/active active-receivable?))
+               {:db/id -3 :kontor.account/path "Income:Sales"
+                :kontor.account/name "Sales revenue"
+                :kontor.account/type :income :kontor.account/active true}
+               ;; An account with no :kontor.account/active set at all (testing
                ;; that "absent" reads as "active" per Odoo convention).
-               {:db/id -4 :account/path "Equity:Opening"
-                :account/name "Opening balance"
-                :account/type :equity}
+               {:db/id -4 :kontor.account/path "Equity:Opening"
+                :kontor.account/name "Opening balance"
+                :kontor.account/type :equity}
                {:db/id -5 :journal/code "INV" :journal/name "Customer invoices"
                 :journal/type :sale :journal/active true}])
   (let [db (d/db conn)]
     {:eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-     :rec (:db/id (d/entity db [:account/path "Assets:Receivable"]))
-     :rev (:db/id (d/entity db [:account/path "Income:Sales"]))
-     :opn (:db/id (d/entity db [:account/path "Equity:Opening"]))
+     :rec (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
+     :rev (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
+     :opn (:db/id (d/entity db [:kontor.account/path "Equity:Opening"]))
      :jnl (:db/id (d/entity db [:journal/code "INV"]))}))
 
 ;; ============================================================================
@@ -79,9 +79,9 @@
         "Both accounts active → invariant holds, transact returns a report.")))
 
 (deftest account-active-passes-when-active-attribute-absent
-  (testing "Per ADR-011 / Odoo convention, an account without :account/active
+  (testing "Per ADR-011 / Odoo convention, an account without :kontor.account/active
             set is treated as active. The invariant filters on
-            `:account/active false` explicitly."
+            `:kontor.account/active false` explicitly."
     (let [conn (core/create-test-db)
           _ (v/install-invariants! conn)
           {:keys [eur opn rev jnl]} (catalog! conn {})
@@ -95,7 +95,7 @@
                     [{:posting/account opn :posting/amount  500M :posting/commodity eur}
                      {:posting/account rev :posting/amount -500M :posting/commodity eur}]})]
       (is (some? (v/transact-with-validation conn tx-data))
-          "Account 'opn' has no :account/active attribute; invariant passes."))))
+          "Account 'opn' has no :kontor.account/active attribute; invariant passes."))))
 
 (deftest account-active-rejects-posting-against-inactive-account
   (let [conn (core/create-test-db)
@@ -129,22 +129,22 @@
      :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
     {:db/id -2 :kontor.commodity/symbol "USD" :kontor.commodity/name "US Dollar"
      :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "USD"}
-    {:db/id -3 :account/path "Assets:Receivable" :account/name "AR"
-     :account/type :asset :account/active true
-     :account/commodity -1}                              ;; EUR-typed
-    {:db/id -4 :account/path "Income:Sales" :account/name "Sales"
-     :account/type :income :account/active true
-     :account/commodity -1}                              ;; EUR-typed
-    {:db/id -5 :account/path "Equity:Polymorphic" :account/name "Suspense"
-     :account/type :equity :account/active true}         ;; no commodity
+    {:db/id -3 :kontor.account/path "Assets:Receivable" :kontor.account/name "AR"
+     :kontor.account/type :asset :kontor.account/active true
+     :kontor.account/commodity -1}                              ;; EUR-typed
+    {:db/id -4 :kontor.account/path "Income:Sales" :kontor.account/name "Sales"
+     :kontor.account/type :income :kontor.account/active true
+     :kontor.account/commodity -1}                              ;; EUR-typed
+    {:db/id -5 :kontor.account/path "Equity:Polymorphic" :kontor.account/name "Suspense"
+     :kontor.account/type :equity :kontor.account/active true}         ;; no commodity
     {:db/id -6 :journal/code "INV" :journal/name "J"
      :journal/type :sale :journal/active true}])
   (let [db (d/db conn)]
     {:eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
      :usd (:db/id (d/entity db [:kontor.commodity/symbol "USD"]))
-     :rec (:db/id (d/entity db [:account/path "Assets:Receivable"]))
-     :rev (:db/id (d/entity db [:account/path "Income:Sales"]))
-     :sus (:db/id (d/entity db [:account/path "Equity:Polymorphic"]))
+     :rec (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
+     :rev (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
+     :sus (:db/id (d/entity db [:kontor.account/path "Equity:Polymorphic"]))
      :jnl (:db/id (d/entity db [:journal/code "INV"]))}))
 
 (deftest commodity-match-passes-when-postings-match-account-commodity
@@ -182,7 +182,7 @@
         "Posting commodity USD vs account commodity EUR — invariant fires.")))
 
 (deftest commodity-match-passes-on-polymorphic-account
-  (testing "An account with no :account/commodity (polymorphic / suspense)
+  (testing "An account with no :kontor.account/commodity (polymorphic / suspense)
             accepts postings of any commodity."
     (let [conn (core/create-test-db)
           _ (v/install-invariants! conn)

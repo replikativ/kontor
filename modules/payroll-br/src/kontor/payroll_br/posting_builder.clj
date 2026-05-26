@@ -47,7 +47,7 @@
 
    For a group with multiple CNPJs (matriz + filial; each filial has
    its own CNPJ-raiz/0002, /0003, etc.) the consumer routes per-CNPJ
-   via the `:account-tag/name` convention. Pass `:cnpj-account-tag` opt
+   via the `:kontor.account-tag/name` convention. Pass `:cnpj-account-tag` opt
    (e.g. `\"br-cnpj-12345678000190\"`); the builder appends this tag
    to every posting via `:posting/account-tags`, letting downstream
    GFIP + eSocial aggregators filter by CNPJ cheaply.
@@ -109,7 +109,7 @@
   (if (and cnpj-account-tag (not (str/blank? cnpj-account-tag)))
     (update posting :posting/account-tags
             (fnil conj [])
-            [:account-tag/name cnpj-account-tag])
+            [:kontor.account-tag/name cnpj-account-tag])
     posting))
 
 ;; ============================================================================
@@ -152,7 +152,7 @@
                      cnpj-account-tag
                      (update :posting/account-tags
                              (fnil conj [])
-                             [:account-tag/name cnpj-account-tag])))))
+                             [:kontor.account-tag/name cnpj-account-tag])))))
          (filter (fn [{:keys [posting/amount]}]
                    (pos? (compare ^BigDecimal amount 0M))))
          vec)))
@@ -179,7 +179,7 @@
                    cnpj-account-tag
                    (update :posting/account-tags
                            (fnil conj [])
-                           [:account-tag/name cnpj-account-tag])))))))
+                           [:kontor.account-tag/name cnpj-account-tag])))))))
 
 (defn- employer-side-legs
   "For each employer-side component, DR the expense account AND CR the
@@ -205,7 +205,7 @@
                               cnpj-account-tag
                               (update :posting/account-tags
                                       (fnil conj [])
-                                      [:account-tag/name cnpj-account-tag]))]
+                                      [:kontor.account-tag/name cnpj-account-tag]))]
                      pay-acct
                      (conj (cond->
                             {:posting/account pay-acct
@@ -215,7 +215,7 @@
                              cnpj-account-tag
                              (update :posting/account-tags
                                      (fnil conj [])
-                                     [:account-tag/name cnpj-account-tag])))))))))
+                                     [:kontor.account-tag/name cnpj-account-tag])))))))))
 
 (defn- net-wages-leg
   "CR salários-a-pagar for the net amount (gross + sum of deductions —
@@ -231,7 +231,7 @@
        cnpj-account-tag
        (update :posting/account-tags
                (fnil conj [])
-               [:account-tag/name cnpj-account-tag]))]))
+               [:kontor.account-tag/name cnpj-account-tag]))]))
 
 (defn fact->postings
   "Translate one PayrollFact into a balanced set of posting maps. The

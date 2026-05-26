@@ -35,17 +35,17 @@
                  {:kontor.partner/external-id "U-alice" :kontor.partner/name "Alice"}
                  {:kontor.partner/external-id "U-bob" :kontor.partner/name "Bob"}
                  ;; Accounts
-                 {:account/code "1200" :account/path "1200"
-                  :account/name "Accounts Receivable"
-                  :account/type :asset}
-                 {:account/code "6900" :account/path "6900"
-                  :account/name "Bad Debt Expense"
-                  :account/type :expense}
+                 {:kontor.account/code "1200" :kontor.account/path "1200"
+                  :kontor.account/name "Accounts Receivable"
+                  :kontor.account/type :asset}
+                 {:kontor.account/code "6900" :kontor.account/path "6900"
+                  :kontor.account/name "Bad Debt Expense"
+                  :kontor.account/type :expense}
                  ;; GL defaults (tenant-wide)
                  {:gl-account-default/account-type :ar
-                  :gl-account-default/account [:account/path "1200"]}
+                  :gl-account-default/account [:kontor.account/path "1200"]}
                  {:gl-account-default/account-type :bad-debt-expense
-                  :gl-account-default/account [:account/path "6900"]}
+                  :gl-account-default/account [:kontor.account/path "6900"]}
                  ;; Journal
                  {:journal/code "SALES" :journal/name "Sales Journal"
                   :journal/type :sales}])
@@ -145,7 +145,7 @@
             (is (= 0 (.compareTo 1000M
                                  (d/q '[:find (sum ?amt) .
                                         :where
-                                        [?a :account/path "6900"]
+                                        [?a :kontor.account/path "6900"]
                                         [?p :posting/account ?a]
                                         [?p :posting/amount ?amt]]
                                       db)))))
@@ -153,7 +153,7 @@
             (is (= 0 (.compareTo (bigdec "-1000")
                                  (d/q '[:find (sum ?amt) .
                                         :where
-                                        [?a :account/path "1200"]
+                                        [?a :kontor.account/path "1200"]
                                         [?p :posting/account ?a]
                                         [?p :posting/amount ?amt]]
                                       db)))))

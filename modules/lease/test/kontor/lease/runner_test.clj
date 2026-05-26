@@ -55,25 +55,25 @@
                   :audit-doc/type :lease-contract
                   :audit-doc/storage-uri "s3://docs/lease-1"
                   :audit-doc/uploaded-at #inst "2026-01-01"}
-                 {:db/id "a-rou"    :account/code "0250" :account/name "ROU Asset"
-                  :account/type :asset :account/active true}
-                 {:db/id "a-rouacc" :account/code "0259"
-                  :account/name "ROU Accumulated Amortisation"
-                  :account/type :asset :account/active true}
-                 {:db/id "a-liab"   :account/code "1750"
-                  :account/name "Lease Liability"
-                  :account/type :liability :account/active true}
-                 {:db/id "a-int"    :account/code "7300"
-                  :account/name "Interest Expense"
-                  :account/type :expense :account/active true}
-                 {:db/id "a-dep"    :account/code "6200"
-                  :account/name "Depreciation Expense"
-                  :account/type :expense :account/active true}
-                 {:db/id "a-lexp"   :account/code "6740"
-                  :account/name "Lease Expense"
-                  :account/type :expense :account/active true}
-                 {:db/id "a-cash"   :account/code "1800" :account/name "Bank"
-                  :account/type :asset :account/active true}
+                 {:db/id "a-rou"    :kontor.account/code "0250" :kontor.account/name "ROU Asset"
+                  :kontor.account/type :asset :kontor.account/active true}
+                 {:db/id "a-rouacc" :kontor.account/code "0259"
+                  :kontor.account/name "ROU Accumulated Amortisation"
+                  :kontor.account/type :asset :kontor.account/active true}
+                 {:db/id "a-liab"   :kontor.account/code "1750"
+                  :kontor.account/name "Lease Liability"
+                  :kontor.account/type :liability :kontor.account/active true}
+                 {:db/id "a-int"    :kontor.account/code "7300"
+                  :kontor.account/name "Interest Expense"
+                  :kontor.account/type :expense :kontor.account/active true}
+                 {:db/id "a-dep"    :kontor.account/code "6200"
+                  :kontor.account/name "Depreciation Expense"
+                  :kontor.account/type :expense :kontor.account/active true}
+                 {:db/id "a-lexp"   :kontor.account/code "6740"
+                  :kontor.account/name "Lease Expense"
+                  :kontor.account/type :expense :kontor.account/active true}
+                 {:db/id "a-cash"   :kontor.account/code "1800" :kontor.account/name "Bank"
+                  :kontor.account/type :asset :kontor.account/active true}
                  {:db/id "j-gen" :journal/code "GEN" :journal/name "General"
                   :journal/type :general}])
     conn))
@@ -83,7 +83,7 @@
 
 (defn- commodity  [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- p          [db code] (ref-eid db :kontor.partner/external-id code))
-(defn- acct       [db code] (ref-eid db :account/code code))
+(defn- acct       [db code] (ref-eid db :kontor.account/code code))
 (defn- journal    [db] (ref-eid db :journal/code "GEN"))
 (defn- class-eid  [db] (ref-eid db :asset-class/code "rou-property"))
 (defn- adoc       [db] (ref-eid db :audit-doc/code "LEASE-CONTRACT-1"))

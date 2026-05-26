@@ -47,29 +47,29 @@
 
 (defn- seed-accounts! []
   (d/transact *conn*
-              [{:account/code "1400" :account/name "Inventory"
-                :account/path "1400" :account/type :asset}
-               {:account/code "5000" :account/name "Purchase Expense"
-                :account/path "5000" :account/type :expense}
-               {:account/code "2000" :account/name "Accounts Payable"
-                :account/path "2000" :account/type :liability}
-               {:account/code "2150" :account/name "GR/IR Clearing"
-                :account/path "2150" :account/type :liability}
-               {:account/code "1370" :account/name "VAT Recoverable"
-                :account/path "1370" :account/type :asset}]))
+              [{:kontor.account/code "1400" :kontor.account/name "Inventory"
+                :kontor.account/path "1400" :kontor.account/type :asset}
+               {:kontor.account/code "5000" :kontor.account/name "Purchase Expense"
+                :kontor.account/path "5000" :kontor.account/type :expense}
+               {:kontor.account/code "2000" :kontor.account/name "Accounts Payable"
+                :kontor.account/path "2000" :kontor.account/type :liability}
+               {:kontor.account/code "2150" :kontor.account/name "GR/IR Clearing"
+                :kontor.account/path "2150" :kontor.account/type :liability}
+               {:kontor.account/code "1370" :kontor.account/name "VAT Recoverable"
+                :kontor.account/path "1370" :kontor.account/type :asset}]))
 
 (defn- seed-gl-defaults! []
   (d/transact *conn*
               [{:gl-account-default/account-type :inventory
-                :gl-account-default/account [:account/path "1400"]}
+                :gl-account-default/account [:kontor.account/path "1400"]}
                {:gl-account-default/account-type :purchase-expense
-                :gl-account-default/account [:account/path "5000"]}
+                :gl-account-default/account [:kontor.account/path "5000"]}
                {:gl-account-default/account-type :ap
-                :gl-account-default/account [:account/path "2000"]}
+                :gl-account-default/account [:kontor.account/path "2000"]}
                {:gl-account-default/account-type :gr-ir-clearing
-                :gl-account-default/account [:account/path "2150"]}
+                :gl-account-default/account [:kontor.account/path "2150"]}
                {:gl-account-default/account-type :purchase-tax-recoverable
-                :gl-account-default/account [:account/path "1370"]}]))
+                :gl-account-default/account [:kontor.account/path "1370"]}]))
 
 (defn- seed-journal! []
   (d/transact *conn*

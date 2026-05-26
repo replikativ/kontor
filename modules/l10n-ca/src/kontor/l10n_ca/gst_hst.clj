@@ -28,7 +28,7 @@
        114  Refund claimed                             (113C if < 0)
        115  Payment enclosed                           (113C if > 0)
 
-   Kernel-derived (from postings via :account-tag/name conventions):
+   Kernel-derived (from postings via :kontor.account-tag/name conventions):
      101 ← :ca-cra-line-101 (sales accounts)
      103 ← :ca-cra-line-103 (GST/HST collected accounts)
      106 ← :ca-cra-line-108 (ITC accounts — legacy tag name; semantically

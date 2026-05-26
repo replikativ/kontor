@@ -25,26 +25,26 @@
                  {:journal/code "SALE" :journal/type :sale}
                  {:journal/code "PUR"  :journal/type :purchase}
                  {:journal/code "GEN"  :journal/type :general}
-                 {:account/path "Income:Sales"      :account/code "4000"
-                  :account/type :income}
-                 {:account/path "Expenses:Supplies" :account/code "6000"
-                  :account/type :expense}
-                 {:account/path "Assets:Bank"       :account/code "1000"
-                  :account/type :asset}
-                 {:account/path "Assets:Receivable" :account/code "1100"
-                  :account/type :asset}
-                 {:account/path "Assets:VAT-Input"  :account/code "1200"
-                  :account/type :asset}
-                 {:account/path "Liabilities:VAT-Output"  :account/code "2200"
-                  :account/type :liability}
-                 {:account/path "Liabilities:VAT-Payable" :account/code "2210"
-                  :account/type :liability}])
+                 {:kontor.account/path "Income:Sales"      :kontor.account/code "4000"
+                  :kontor.account/type :income}
+                 {:kontor.account/path "Expenses:Supplies" :kontor.account/code "6000"
+                  :kontor.account/type :expense}
+                 {:kontor.account/path "Assets:Bank"       :kontor.account/code "1000"
+                  :kontor.account/type :asset}
+                 {:kontor.account/path "Assets:Receivable" :kontor.account/code "1100"
+                  :kontor.account/type :asset}
+                 {:kontor.account/path "Assets:VAT-Input"  :kontor.account/code "1200"
+                  :kontor.account/type :asset}
+                 {:kontor.account/path "Liabilities:VAT-Output"  :kontor.account/code "2200"
+                  :kontor.account/type :liability}
+                 {:kontor.account/path "Liabilities:VAT-Payable" :kontor.account/code "2210"
+                  :kontor.account/type :liability}])
     conn))
 
 (defn- sum-account [conn path]
   (reduce + 0M
           (d/q '[:find [?amt ...] :in $ ?p
-                 :where [?a :account/path ?p] [?pp :posting/account ?a]
+                 :where [?a :kontor.account/path ?p] [?pp :posting/account ?a]
                  [?pp :posting/amount ?amt]]
                (d/db conn) path)))
 
@@ -54,20 +54,20 @@
 
 (deftest business-net-marginalizes-the-business-pnl
   (let [conn (fresh)]
-    (book/sell! conn {:debit-account  [:account/path "Assets:Receivable"]
-                      :credit-account [:account/path "Income:Sales"]
+    (book/sell! conn {:debit-account  [:kontor.account/path "Assets:Receivable"]
+                      :credit-account [:kontor.account/path "Income:Sales"]
                       :amount 80000 :commodity eur
                       :effective-date #inst "2026-03-01"})
-    (book/buy! conn {:debit-account  [:account/path "Expenses:Supplies"]
-                     :credit-account [:account/path "Assets:Bank"]
+    (book/buy! conn {:debit-account  [:kontor.account/path "Expenses:Supplies"]
+                     :credit-account [:kontor.account/path "Assets:Bank"]
                      :amount 30000 :commodity eur
                      :effective-date #inst "2026-04-01"})
     (testing "the business kept standalone — the whole book, no :entity"
       (is (== 50000M (:amount (sp/business-net conn (assoc fy :commodity :EUR))))
           "80,000 revenue − 30,000 expenses"))
     (testing "a trading loss is a negative net"
-      (book/buy! conn {:debit-account  [:account/path "Expenses:Supplies"]
-                       :credit-account [:account/path "Assets:Bank"]
+      (book/buy! conn {:debit-account  [:kontor.account/path "Expenses:Supplies"]
+                       :credit-account [:kontor.account/path "Assets:Bank"]
                        :amount 70000 :commodity eur
                        :effective-date #inst "2026-05-01"})
       (is (neg? (:amount (sp/business-net conn (assoc fy :commodity :EUR))))
@@ -81,21 +81,21 @@
   (let [conn (fresh)]
     ;; a taxed sale — the customer pays 119,000: 100,000 revenue + 19,000
     ;; output VAT (a liability owed to the authority).
-    (book/entry! conn {:postings [{:account [:account/path "Assets:Receivable"]
+    (book/entry! conn {:postings [{:account [:kontor.account/path "Assets:Receivable"]
                                    :amount 119000}
-                                  {:account [:account/path "Income:Sales"]
+                                  {:account [:kontor.account/path "Income:Sales"]
                                    :amount -100000}
-                                  {:account [:account/path "Liabilities:VAT-Output"]
+                                  {:account [:kontor.account/path "Liabilities:VAT-Output"]
                                    :amount -19000}]
                        :commodity eur :journal [:journal/code "SALE"]
                        :effective-date #inst "2026-03-01" :narration "Taxed sale"})
     ;; a taxed purchase — 23,800 paid: 20,000 expense + 3,800 input VAT
     ;; (recoverable).
-    (book/entry! conn {:postings [{:account [:account/path "Expenses:Supplies"]
+    (book/entry! conn {:postings [{:account [:kontor.account/path "Expenses:Supplies"]
                                    :amount 20000}
-                                  {:account [:account/path "Assets:VAT-Input"]
+                                  {:account [:kontor.account/path "Assets:VAT-Input"]
                                    :amount 3800}
-                                  {:account [:account/path "Assets:Bank"]
+                                  {:account [:kontor.account/path "Assets:Bank"]
                                    :amount -23800}]
                        :commodity eur :journal [:journal/code "PUR"]
                        :effective-date #inst "2026-04-01" :narration "Taxed purchase"})
@@ -109,9 +109,9 @@
       (testing "the remittance clears both VAT accounts into the net payable"
         (validation/transact-with-validation
          conn (vat/vat-return-tx-data
-               r {:output-vat-account  [:account/path "Liabilities:VAT-Output"]
-                  :input-vat-account   [:account/path "Assets:VAT-Input"]
-                  :vat-payable-account [:account/path "Liabilities:VAT-Payable"]
+               r {:output-vat-account  [:kontor.account/path "Liabilities:VAT-Output"]
+                  :input-vat-account   [:kontor.account/path "Assets:VAT-Input"]
+                  :vat-payable-account [:kontor.account/path "Liabilities:VAT-Payable"]
                   :journal             [:journal/code "GEN"]
                   :effective-date      #inst "2026-12-31"
                   :commodity           eur}))
@@ -130,12 +130,12 @@
   ;; is wired onto the personal return via `:inputs` (the t2125
   ;; pattern); the personal return never marginalizes the business book.
   (let [biz (fresh)]
-    (book/sell! biz {:debit-account  [:account/path "Assets:Receivable"]
-                     :credit-account [:account/path "Income:Sales"]
+    (book/sell! biz {:debit-account  [:kontor.account/path "Assets:Receivable"]
+                     :credit-account [:kontor.account/path "Income:Sales"]
                      :amount 90000 :commodity eur
                      :effective-date #inst "2026-03-01"})
-    (book/buy! biz {:debit-account  [:account/path "Expenses:Supplies"]
-                    :credit-account [:account/path "Assets:Bank"]
+    (book/buy! biz {:debit-account  [:kontor.account/path "Expenses:Supplies"]
+                    :credit-account [:kontor.account/path "Assets:Bank"]
                     :amount 30000 :commodity eur
                     :effective-date #inst "2026-05-01"})
     (let [net      (sp/business-net biz (assoc fy :commodity :EUR))
@@ -154,8 +154,8 @@
           (is (== 15000M (:amount (:liability c))) "25% of 60,000")))
       (testing "a proprietor who also draws a salary — both feed the return"
         (let [person (fresh)]
-          (book/sell! person {:debit-account  [:account/path "Assets:Bank"]
-                              :credit-account [:account/path "Income:Sales"]
+          (book/sell! person {:debit-account  [:kontor.account/path "Assets:Bank"]
+                              :credit-account [:kontor.account/path "Income:Sales"]
                               :amount 40000 :commodity eur
                               :effective-date #inst "2026-06-30"})
           (let [[c] (:components

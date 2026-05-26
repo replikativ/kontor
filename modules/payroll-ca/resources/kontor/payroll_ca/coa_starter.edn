@@ -1,6 +1,6 @@
 ;; CA payroll-specific account starter — extends modules/l10n-ca/chart.edn
 ;; per note 84 §7.2. Consumer overrides as needed; the load-bearing
-;; identifier is :account-tag/name (e.g. "ca-payroll-itx"), not :code.
+;; identifier is :kontor.account-tag/name (e.g. "ca-payroll-itx"), not :code.
 ;;
 ;; PD7A program-account routing (note 84 §4): when a business has
 ;; multiple RP accounts (RP0001 for Division A, RP0002 for Division B),

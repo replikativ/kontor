@@ -36,7 +36,7 @@
     conn))
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (defn- post-on-hst-sale!
   "Ontario HST 13% sale (single combined output tax):
@@ -172,7 +172,7 @@
   (let [conn (core/create-test-db)
         _ (chart/install! conn)
         db (d/db conn)
-        n (count (d/q '[:find [?a ...] :where [_ :account/code ?a]] db))]
+        n (count (d/q '[:find [?a ...] :where [_ :kontor.account/code ?a]] db))]
     (is (>= n 18) (str "loaded " n " accounts"))
     (is (ace db "2310") "GST/HST collected")
     (is (ace db "2320") "BC PST collected")

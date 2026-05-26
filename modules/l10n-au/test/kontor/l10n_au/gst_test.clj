@@ -23,7 +23,7 @@
     conn))
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (defn- post-taxable-sale!
   "GST 10% sale: AR (gross) | Sales (net) | GST payable (10%)"

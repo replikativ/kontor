@@ -147,7 +147,7 @@
         rows (d/q '[:find ?tx ?ext-id ?amount ?partner ?date ?journal-type ?state
                     :in $ [?ar-code ...]
                     :where
-                    [?a :account/code ?ar-code]
+                    [?a :kontor.account/code ?ar-code]
                     [?p :posting/account ?a]
                     [?p :posting/amount ?amount]
                     [?p :posting/transaction ?tx]
@@ -179,7 +179,7 @@
                        [?settler :transaction/settles ?settled]
                        [?p :posting/transaction ?settler]
                        [?p :posting/account ?a]
-                       [?a :account/code ?ar-code]
+                       [?a :kontor.account/code ?ar-code]
                        [?p :posting/amount ?amount]]
                      db ar-account-codes)
         settled-by (reduce (fn [acc [tx amt]]
@@ -210,7 +210,7 @@
   (let [rows (d/q '[:find ?tx ?ext-id ?amount ?partner ?date ?journal-type ?state
                     :in $ [?ap-code ...]
                     :where
-                    [?a :account/code ?ap-code]
+                    [?a :kontor.account/code ?ap-code]
                     [?p :posting/account ?a]
                     [?p :posting/amount ?amount]
                     [?p :posting/transaction ?tx]
@@ -238,7 +238,7 @@
                        [?settler :transaction/settles ?settled]
                        [?p :posting/transaction ?settler]
                        [?p :posting/account ?a]
-                       [?a :account/code ?ap-code]
+                       [?a :kontor.account/code ?ap-code]
                        [?p :posting/amount ?amount]]
                      db ap-account-codes)
         settled-by (reduce (fn [acc [tx amt]]
@@ -447,7 +447,7 @@
                    :where
                    [?p :posting/transaction ?tx]
                    [?p :posting/account ?a]
-                   [?a :account/code ?ar-code]]
+                   [?a :kontor.account/code ?ar-code]]
                  db target-codes eids))))
 
 (declare commit-match-tx-data)

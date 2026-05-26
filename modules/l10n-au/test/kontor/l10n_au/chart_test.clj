@@ -5,13 +5,13 @@
             [kontor.l10n-au.chart :as chart]))
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (deftest chart-installs
   (let [conn (core/create-test-db)
         _ (chart/install! conn)
         db (d/db conn)
-        n (count (d/q '[:find [?c ...] :where [_ :account/code ?c]] db))]
+        n (count (d/q '[:find [?c ...] :where [_ :kontor.account/code ?c]] db))]
     (is (>= n 30) (str "loaded " n " accounts"))
     (is (ace db "11200") "Trade debtors")
     (is (ace db "11700") "GST receivable")
@@ -31,7 +31,7 @@
   (let [conn (core/create-test-db)
         _ (chart/install! conn)
         db (d/db conn)
-        names (set (d/q '[:find [?n ...] :where [_ :account-tag/name ?n]] db))]
+        names (set (d/q '[:find [?n ...] :where [_ :kontor.account-tag/name ?n]] db))]
     (is (contains? names "au-bas-1a-gst"))
     (is (contains? names "au-bas-1b-itc"))
     (is (contains? names "au-bas-g1-total-sales"))

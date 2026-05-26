@@ -71,14 +71,14 @@
         :kontor.entity/country "CA" :kontor.entity/functional-commodity cad}
        {:kontor.partner/name "Hans-Tech UG" :kontor.partner/external-id "HT-UG"
         :kontor.partner/country-code "DE"}
-       {:account/path "Income:Dividends:Foreign:DE"   :account/type :income
-        :account/commodity cad}
-       {:account/path "Income:Self-Employment"        :account/type :income
-        :account/commodity cad}
-       {:account/path "Assets:Foreign-Tax-Prepaid"    :account/type :asset
-        :account/commodity cad}
-       {:account/path "Assets:Foreign-Tax-Refundable" :account/type :asset
-        :account/commodity cad}])
+       {:kontor.account/path "Income:Dividends:Foreign:DE"   :kontor.account/type :income
+        :kontor.account/commodity cad}
+       {:kontor.account/path "Income:Self-Employment"        :kontor.account/type :income
+        :kontor.account/commodity cad}
+       {:kontor.account/path "Assets:Foreign-Tax-Prepaid"    :kontor.account/type :asset
+        :kontor.account/commodity cad}
+       {:kontor.account/path "Assets:Foreign-Tax-Refundable" :kontor.account/type :asset
+        :kontor.account/commodity cad}])
     conn))
 
 ;; ============================================================================
@@ -91,51 +91,51 @@
     ;; Opening capital
     (e {:journal [:journal/code "GJ"] :effective-date #inst "2026-01-02"
         :narration "Eröffnungsbilanz Bank"
-        :postings [{:account [:account/path "Umlaufvermögen:Bank"]            :amount 25000M}
-                   {:account [:account/path "Eigenkapital:Privateinlagen"]   :amount -25000M}]})
+        :postings [{:account [:kontor.account/path "Umlaufvermögen:Bank"]            :amount 25000M}
+                   {:account [:kontor.account/path "Eigenkapital:Privateinlagen"]   :amount -25000M}]})
     ;; Service revenue €40k + USt 7,600
     (e {:journal [:journal/code "CR"] :effective-date #inst "2026-06-30"
         :narration "Beratung Kunde X H1 2026"
-        :postings [{:account [:account/path "Umlaufvermögen:Bank"]                   :amount 47600M}
-                   {:account [:account/path "Erträge:Erlöse:19%"]                    :amount -40000M}
-                   {:account [:account/path "Verbindlichkeiten:Umsatzsteuer:19%"]    :amount -7600M}]})
+        :postings [{:account [:kontor.account/path "Umlaufvermögen:Bank"]                   :amount 47600M}
+                   {:account [:kontor.account/path "Erträge:Erlöse:19%"]                    :amount -40000M}
+                   {:account [:kontor.account/path "Verbindlichkeiten:Umsatzsteuer:19%"]    :amount -7600M}]})
     ;; Opex: rent 5k + tax-adv 4k + other 6k + Vorsteuer 2.85k = cash out 17.85k
     (e {:journal [:journal/code "CD"] :effective-date #inst "2026-12-15"
         :narration "Jahresopex 2026 (zusammengefasst)"
-        :postings [{:account [:account/path "Aufwendungen:Raum:Miete"]               :amount 5000M}
-                   {:account [:account/path "Aufwendungen:Steuerberater"]            :amount 4000M}
-                   {:account [:account/path "Aufwendungen:Sonstige"]                 :amount 6000M}
-                   {:account [:account/path "Umlaufvermögen:Vorsteuer:19%"]           :amount 2850M}
-                   {:account [:account/path "Umlaufvermögen:Bank"]                    :amount -17850M}]})
+        :postings [{:account [:kontor.account/path "Aufwendungen:Raum:Miete"]               :amount 5000M}
+                   {:account [:kontor.account/path "Aufwendungen:Steuerberater"]            :amount 4000M}
+                   {:account [:kontor.account/path "Aufwendungen:Sonstige"]                 :amount 6000M}
+                   {:account [:kontor.account/path "Umlaufvermögen:Vorsteuer:19%"]           :amount 2850M}
+                   {:account [:kontor.account/path "Umlaufvermögen:Bank"]                    :amount -17850M}]})
     ;; Year-end CIT accrual: KSt+Soli + GewSt (numbers from de-cit-provider)
     (e {:journal [:journal/code "GJ"] :effective-date #inst "2026-12-31"
         :narration "Steuerrückstellung 2026"
-        :postings [{:account [:account/path "Aufwendungen:Steuern:KSt"]              :amount 3956.25M}
-                   {:account [:account/path "Aufwendungen:Steuern:GewSt"]            :amount 4287.50M}
-                   {:account [:account/path "Verbindlichkeiten:Steuern:KSt-Rückstellung"]  :amount -3956.25M}
-                   {:account [:account/path "Verbindlichkeiten:Steuern:GewSt-Rückstellung"] :amount -4287.50M}]})
+        :postings [{:account [:kontor.account/path "Aufwendungen:Steuern:KSt"]              :amount 3956.25M}
+                   {:account [:kontor.account/path "Aufwendungen:Steuern:GewSt"]            :amount 4287.50M}
+                   {:account [:kontor.account/path "Verbindlichkeiten:Steuern:KSt-Rückstellung"]  :amount -3956.25M}
+                   {:account [:kontor.account/path "Verbindlichkeiten:Steuern:GewSt-Rückstellung"] :amount -4287.50M}]})
     ;; Dividend declaration €15k 60/40 — exercises I-15 per-posting :partner
     (e {:journal [:journal/code "GJ"] :effective-date #inst "2026-12-31"
         :narration "Gewinnverwendung 2026: €15k Ausschüttung 60/40"
-        :postings [{:account [:account/path "Eigenkapital:Gewinnvortrag"]            :amount 15000M}
-                   {:account [:account/path "Verbindlichkeiten:Dividenden-Zahlbar"] :amount -9000M
+        :postings [{:account [:kontor.account/path "Eigenkapital:Gewinnvortrag"]            :amount 15000M}
+                   {:account [:kontor.account/path "Verbindlichkeiten:Dividenden-Zahlbar"] :amount -9000M
                     :partner [:kontor.partner/external-id "CW"]}
-                   {:account [:account/path "Verbindlichkeiten:Dividenden-Zahlbar"] :amount -6000M
+                   {:account [:kontor.account/path "Verbindlichkeiten:Dividenden-Zahlbar"] :amount -6000M
                     :partner [:kontor.partner/external-id "PB"]}]})
     ;; Distribute to CW (KESt+Soli 26.375 % withheld at source)
     (e {:journal [:journal/code "CD"] :effective-date #inst "2027-01-15"
         :narration "Dividende CW gezahlt"
         :partner  [:kontor.partner/external-id "CW"]
-        :postings [{:account [:account/path "Verbindlichkeiten:Dividenden-Zahlbar"] :amount 9000M}
-                   {:account [:account/path "Umlaufvermögen:Bank"]                   :amount -6626.25M}
-                   {:account [:account/path "Verbindlichkeiten:KESt-Zahlbar"]        :amount -2373.75M}]})
+        :postings [{:account [:kontor.account/path "Verbindlichkeiten:Dividenden-Zahlbar"] :amount 9000M}
+                   {:account [:kontor.account/path "Umlaufvermögen:Bank"]                   :amount -6626.25M}
+                   {:account [:kontor.account/path "Verbindlichkeiten:KESt-Zahlbar"]        :amount -2373.75M}]})
     ;; Distribute to PB
     (e {:journal [:journal/code "CD"] :effective-date #inst "2027-01-15"
         :narration "Dividende PB gezahlt"
         :partner  [:kontor.partner/external-id "PB"]
-        :postings [{:account [:account/path "Verbindlichkeiten:Dividenden-Zahlbar"] :amount 6000M}
-                   {:account [:account/path "Umlaufvermögen:Bank"]                   :amount -4417.50M}
-                   {:account [:account/path "Verbindlichkeiten:KESt-Zahlbar"]        :amount -1582.50M}]})))
+        :postings [{:account [:kontor.account/path "Verbindlichkeiten:Dividenden-Zahlbar"] :amount 6000M}
+                   {:account [:kontor.account/path "Umlaufvermögen:Bank"]                   :amount -4417.50M}
+                   {:account [:kontor.account/path "Verbindlichkeiten:KESt-Zahlbar"]        :amount -1582.50M}]})))
 
 ;; ============================================================================
 ;; The acceptance tests
@@ -186,7 +186,7 @@
         ;; Find the 2 dividend-payable Cr postings + their :posting/partner refs
         pairs (set (d/q '[:find ?path ?amt ?pc
                           :where [?p :posting/account ?a]
-                                 [?a :account/path ?path]
+                                 [?a :kontor.account/path ?path]
                                  [(= ?path "Verbindlichkeiten:Dividenden-Zahlbar")]
                                  [?p :posting/amount ?amt]
                                  [?p :posting/partner ?part]
@@ -205,9 +205,9 @@
                {:journal [:journal/code "CR"] :effective-date #inst "2026-09-30"
                 :commodity :CAD :entity [:kontor.entity/code "CW-PERSONAL"]
                 :narration "Q3 BC consulting CAD 60k + 5% GST"
-                :postings [{:account [:account/path "Assets:Bank:CAD"]              :amount 63000M}
-                           {:account [:account/path "Income:Self-Employment"]       :amount -60000M}
-                           {:account [:account/path "Liabilities:GST-HST-Collected"] :amount -3000M}]})
+                :postings [{:account [:kontor.account/path "Assets:Bank:CAD"]              :amount 63000M}
+                           {:account [:kontor.account/path "Income:Self-Employment"]       :amount -60000M}
+                           {:account [:kontor.account/path "Liabilities:GST-HST-Collected"] :amount -3000M}]})
         _    (treaty/receive-dividend-from-de! conn
                {:gross-amount    9000M
                 :withheld-amount 2373.75M
@@ -218,7 +218,7 @@
                 :payer-partner   [:kontor.partner/external-id "HT-UG"]
                 :entity          [:kontor.entity/code "CW-PERSONAL"]})
         tb   (trial/trial-balance conn)
-        path-of (fn [eid] (:account/path (d/pull (d/db conn) [:account/path] eid)))
+        path-of (fn [eid] (:kontor.account/path (d/pull (d/db conn) [:kontor.account/path] eid)))
         sums (into {} (map (fn [[eid m]] [(path-of eid) (->> m vals first :amount)]) tb))]
     (testing "trial balance balanced"
       (is (true? (trial/balanced? tb))))

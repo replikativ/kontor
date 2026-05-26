@@ -123,10 +123,10 @@
   (d/transact conn
               [{:db/id -1 :kontor.commodity/symbol "MXN" :kontor.commodity/name "Mexican Peso"
                 :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "MXN"}
-               {:db/id -2 :account/path "Assets:Receivable"
-                :account/name "AR" :account/type :asset :account/active true}
-               {:db/id -3 :account/path "Income:Sales"
-                :account/name "Sales" :account/type :income :account/active true}
+               {:db/id -2 :kontor.account/path "Assets:Receivable"
+                :kontor.account/name "AR" :kontor.account/type :asset :kontor.account/active true}
+               {:db/id -3 :kontor.account/path "Income:Sales"
+                :kontor.account/name "Sales" :kontor.account/type :income :kontor.account/active true}
                {:db/id -4 :journal/code "INV-MX" :journal/name "Ventas México"
                 :journal/type :sale :journal/active true}
                {:db/id -10

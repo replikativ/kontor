@@ -112,10 +112,10 @@
 
    Optional opts:
    - `:journal`          journal ref/lookup-ref (default: :cash type)
-   - `:net-cash-account`        (default `[:account/path \"Assets:Bank:CAD\"]`)
-   - `:creditable-account`      (default `[:account/path \"Assets:Foreign-Tax-Prepaid\"]`)
-   - `:refundable-account`      (default `[:account/path \"Assets:Foreign-Tax-Refundable\"]`)
-   - `:income-account`          (default `[:account/path \"Income:Dividends:Foreign:DE\"]`)
+   - `:net-cash-account`        (default `[:kontor.account/path \"Assets:Bank:CAD\"]`)
+   - `:creditable-account`      (default `[:kontor.account/path \"Assets:Foreign-Tax-Prepaid\"]`)
+   - `:refundable-account`      (default `[:kontor.account/path \"Assets:Foreign-Tax-Refundable\"]`)
+   - `:income-account`          (default `[:kontor.account/path \"Income:Dividends:Foreign:DE\"]`)
    - `:narration`               (default constructed from the inputs)
 
    Posts a 4-leg balanced entry in CAD and returns the tx-data report."
@@ -124,10 +124,10 @@
                 journal narration
                 net-cash-account creditable-account refundable-account
                 income-account]
-         :or {net-cash-account   [:account/path "Assets:Bank:CAD"]
-              creditable-account [:account/path "Assets:Foreign-Tax-Prepaid"]
-              refundable-account [:account/path "Assets:Foreign-Tax-Refundable"]
-              income-account     [:account/path "Income:Dividends:Foreign:DE"]}}]
+         :or {net-cash-account   [:kontor.account/path "Assets:Bank:CAD"]
+              creditable-account [:kontor.account/path "Assets:Foreign-Tax-Prepaid"]
+              refundable-account [:kontor.account/path "Assets:Foreign-Tax-Refundable"]
+              income-account     [:kontor.account/path "Income:Dividends:Foreign:DE"]}}]
   ;; Validate inputs
   (when-not (and gross-amount withheld-amount income-kind fx-rate
                  net-cash-amount effective-date payer-partner)

@@ -1,7 +1,7 @@
 ;; FR payroll-specific account starter — extends modules/l10n-fr/pcg.edn
 ;; per ADR-079 + doc/research/79 §5.3. Consumer overrides as needed.
 ;;
-;; The load-bearing identifier is :account-tag/name (e.g.
+;; The load-bearing identifier is :kontor.account-tag/name (e.g.
 ;; "fr-payroll-urssaf"), not :code. Codes follow PCG 2014 class-6 +
 ;; class-4 conventions documented at:
 ;;   https://www.economie.gouv.fr/files/files/directions_services/dgfip/Plan_Comptable_General.pdf

@@ -224,10 +224,10 @@ eol        = #'[ \\t]*\\n'
                "Income"      :income
                "Expenses"    :expense
                :asset)]
-    {:account/path path
-     :account/name (last (str/split path #":"))
-     :account/type type
-     :account/active active?}))
+    {:kontor.account/path path
+     :kontor.account/name (last (str/split path #":"))
+     :kontor.account/type type
+     :kontor.account/active active?}))
 
 (defn- ensure-journal
   "Beancount has no journal concept — every transaction is just dated.
@@ -250,7 +250,7 @@ eol        = #'[ \\t]*\\n'
         (map-indexed
          (fn [idx {:keys [account amount currency]}]
            {:db/id              (str "p-" tx-id "-" idx)
-            :posting/account    [:account/path account]
+            :posting/account    [:kontor.account/path account]
             :posting/amount     amount
             :posting/commodity  [:kontor.commodity/symbol currency]
             :posting/posted-at  date
@@ -274,7 +274,7 @@ eol        = #'[ \\t]*\\n'
   ;; assert-balances! fn (separate) walks the loaded book and
   ;; verifies each.
   [{:db/id                       (str (gensym "bal-"))
-    :balance-assertion/account   [:account/path account]
+    :balance-assertion/account   [:kontor.account/path account]
     :balance-assertion/at        date
     :balance-assertion/amount    amount
     :balance-assertion/commodity [:kontor.commodity/symbol currency]
@@ -329,13 +329,13 @@ eol        = #'[ \\t]*\\n'
     (let [syms (->> opens (mapcat :currencies) distinct)]
       (when (seq syms)
         (d/transact conn (mapv ensure-commodity syms))))
-    ;; Accounts (uniqued by :account/path).
+    ;; Accounts (uniqued by :kontor.account/path).
     (when (seq opens)
       (d/transact conn (mapv #(ensure-account (:account %)) opens)))
-    ;; Closes — set :account/active false on those accounts.
+    ;; Closes — set :kontor.account/active false on those accounts.
     (when (seq closes)
       (d/transact conn (mapv (fn [{:keys [account]}]
-                               {:account/path account :account/active false})
+                               {:kontor.account/path account :kontor.account/active false})
                              closes)))
     ;; Transactions (each is an entity-graph, not a tx-data vector itself).
     (doseq [t txns]
@@ -436,11 +436,11 @@ eol        = #'[ \\t]*\\n'
    from the earliest posting (or, if none, the first balance/close)."
   [db]
   (let [paths (d/q '[:find [?path ...]
-                     :where [_ :account/path ?path]]
+                     :where [_ :kontor.account/path ?path]]
                    db)]
     (vec
      (for [path (sort paths)]
-       (let [eid (:db/id (d/entity db [:account/path path]))
+       (let [eid (:db/id (d/entity db [:kontor.account/path path]))
              ;; Derive the open date heuristically: earliest of
              ;; (a) min :transaction/effective-date for postings on
              ;; this account, (b) min :balance-assertion/at for
@@ -488,7 +488,7 @@ eol        = #'[ \\t]*\\n'
                              distinct
                              sort
                              vec)
-             active? (:account/active (d/entity db eid))]
+             active? (:kontor.account/active (d/entity db eid))]
          {:date  open-date
           :path  path
           :currencies (or (seq currencies) ["EUR"])
@@ -513,7 +513,7 @@ eol        = #'[ \\t]*\\n'
                    (let [pe (d/pull db [:posting/account :posting/amount
                                         :posting/commodity] pid)
                          apath (-> pe :posting/account :db/id
-                                   (#(:account/path (d/entity db %))))
+                                   (#(:kontor.account/path (d/entity db %))))
                          csym (-> pe :posting/commodity :db/id
                                   (#(:kontor.commodity/symbol (d/entity db %))))]
                      {:account apath
@@ -537,7 +537,7 @@ eol        = #'[ \\t]*\\n'
                                     :balance-assertion/amount
                                     :balance-assertion/account
                                     :balance-assertion/commodity] eid)
-                      apath (:account/path
+                      apath (:kontor.account/path
                              (d/entity db (-> b :balance-assertion/account :db/id)))
                       csym (:kontor.commodity/symbol
                             (d/entity db (-> b :balance-assertion/commodity :db/id)))]

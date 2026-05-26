@@ -210,10 +210,10 @@
                  (d/q '[:find ?dir .
                         :in $ ?it ?at
                         :where
-                        [?r :account-type-direction/invoice-type ?it]
-                        [?r :account-type-direction/account-type ?at]
-                        [?r :account-type-direction/direction ?dir]
-                        [?r :account-type-direction/active true]]
+                        [?r :kontor.account-type-direction/invoice-type ?it]
+                        [?r :kontor.account-type-direction/account-type ?at]
+                        [?r :kontor.account-type-direction/direction ?dir]
+                        [?r :kontor.account-type-direction/active true]]
                       db it at))]
     (testing "GR/IR clearing debits on a :purchase invoice line — the
               invoice clears the receipt's credit at the same amount,

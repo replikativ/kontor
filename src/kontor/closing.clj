@@ -49,8 +49,8 @@
   [db]
   (d/q '[:find [?a ...]
          :where
-         (or [?a :account/type :income]
-             [?a :account/type :expense])]
+         (or [?a :kontor.account/type :income]
+             [?a :kontor.account/type :expense])]
        db))
 
 (defn- account-period-end-balance

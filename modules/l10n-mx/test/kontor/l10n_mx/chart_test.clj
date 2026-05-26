@@ -23,7 +23,7 @@
     conn))
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 ;; ============================================================================
 ;; MXN commodity
@@ -48,7 +48,7 @@
             Costos / Gastos) has at least one account."
     (let [conn (bootstrap)
           db (d/db conn)
-          types (set (d/q '[:find [?t ...] :where [_ :account/type ?t]] db))]
+          types (set (d/q '[:find [?t ...] :where [_ :kontor.account/type ?t]] db))]
       (is (contains? types :asset))
       (is (contains? types :equity))
       (is (contains? types :liability))
@@ -59,7 +59,7 @@
   (testing "Starter chart loads at least 60 accounts."
     (let [conn (bootstrap)
           db (d/db conn)
-          n (count (d/q '[:find [?a ...] :where [?a :account/code _]] db))]
+          n (count (d/q '[:find [?a ...] :where [?a :kontor.account/code _]] db))]
       (is (>= n 60) (str "loaded " n " accounts")))))
 
 ;; ============================================================================
@@ -138,7 +138,7 @@
                     chart/iva-trasladado-cobrado-8-code
                     chart/iva-trasladado-no-cobrado-16-code]]
         (let [e (d/entity db (ace db code))]
-          (is (= :liability (:account/type e))
+          (is (= :liability (:kontor.account/type e))
               (str code " should be :liability")))))))
 
 (deftest input-iva-accounts-are-assets
@@ -148,7 +148,7 @@
       (doseq [code [chart/iva-acreditable-pagado-16-code
                     chart/iva-acreditable-pendiente-16-code]]
         (let [e (d/entity db (ace db code))]
-          (is (= :asset (:account/type e))
+          (is (= :asset (:kontor.account/type e))
               (str code " should be :asset")))))))
 
 ;; ============================================================================
@@ -163,7 +163,7 @@
           db (d/db conn)
           retained (d/entity db (ace db chart/utilidades-retenidas-code))]
       (is (some? retained))
-      (is (= :equity (:account/type retained))))))
+      (is (= :equity (:kontor.account/type retained))))))
 
 (deftest utilidad-del-ejercicio-present
   (testing "304.01.001 (Utilidad del Ejercicio — current year profit)
@@ -182,7 +182,7 @@
     (let [conn (bootstrap)
           db (d/db conn)
           reconcilable? (fn [code]
-                          (:account/reconcilable
+                          (:kontor.account/reconcilable
                            (d/entity db (ace db code))))]
       (is (reconcilable? chart/ar-code))
       (is (reconcilable? chart/ap-code))
@@ -196,13 +196,13 @@
 
 (deftest tags-materialise-with-country-code
   (testing "Every distinct :tags keyword from the chart becomes an
-            :account-tag entity with :account-tag/country-code MX."
+            :account-tag entity with :kontor.account-tag/country-code MX."
     (let [conn (bootstrap)
           db (d/db conn)
           tag-countries (d/q '[:find [?cc ...]
                                :where
-                               [_ :account-tag/name _]
-                               [?t :account-tag/country-code ?cc]]
+                               [_ :kontor.account-tag/name _]
+                               [?t :kontor.account-tag/country-code ?cc]]
                              db)]
       (is (some #{"MX"} tag-countries)
           "At least one MX-scoped tag entity exists"))))
@@ -214,7 +214,7 @@
     (let [conn (bootstrap)
           db (d/db conn)
           acct (d/entity db (ace db chart/iva-trasladado-cobrado-16-code))
-          tag-names (set (map :account-tag/name (:account/tags acct)))]
+          tag-names (set (map :kontor.account-tag/name (:kontor.account/tags acct)))]
       (is (contains? tag-names "mx-dpi-iva-cobrado")))))
 
 ;; ============================================================================
@@ -224,9 +224,9 @@
 (deftest install-is-idempotent
   (testing "Running install! twice produces the same chart shape."
     (let [conn (bootstrap)
-          before (d/q '[:find ?c :where [_ :account/code ?c]] (d/db conn))
+          before (d/q '[:find ?c :where [_ :kontor.account/code ?c]] (d/db conn))
           _ (chart/install! conn)
-          after (d/q '[:find ?c :where [_ :account/code ?c]] (d/db conn))]
+          after (d/q '[:find ?c :where [_ :kontor.account/code ?c]] (d/db conn))]
       (is (= before after)
           "Re-running install! does not duplicate accounts"))))
 

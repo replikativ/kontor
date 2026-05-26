@@ -194,7 +194,7 @@
                                       :invoice-line/unit-price
                                       :invoice-line/vat-rate
                                       :invoice-line/vat-category
-                                      {:invoice-line/account [:db/id :account/code]}]}]
+                                      {:invoice-line/account [:db/id :kontor.account/code]}]}]
                     invoice-eid)]
     (when-not (= :draft (:invoice/status inv))
       (throw (ex-info "Only :draft invoices can be sent"

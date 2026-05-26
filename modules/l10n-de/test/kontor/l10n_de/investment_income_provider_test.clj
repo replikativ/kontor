@@ -355,11 +355,11 @@
 ;; ============================================================================
 ;; §8. GL-scan integration — F7 regression guard (note 159)
 ;;
-;; The canonical chart-of-accounts convention is `:account/path` (unique
+;; The canonical chart-of-accounts convention is `:kontor.account/path` (unique
 ;; identity). Pre-fix (commits 0ad48aa / 4a5158b), the IC provider's
-;; GL-scan marginalized on `:account/code`, so a consumer using the
+;; GL-scan marginalized on `:kontor.account/code`, so a consumer using the
 ;; documented chart got silent zero income detected — no error, no tax.
-;; This test seeds a real GL with `:account/path` accounts, posts via
+;; This test seeds a real GL with `:kontor.account/path` accounts, posts via
 ;; `kontor.book`, calls `period-tax-facts` WITHOUT `:investment-income-
 ;; bases` (so the GL-scan path fires), and verifies non-zero tax.
 ;; ============================================================================
@@ -396,15 +396,15 @@
             "Soli surtax line present (F8 regression — no silent omission)")))))
 
 (deftest gl-scan-resolves-against-account-path-convention
-  (testing "GL-scan picks up dividend postings on `:account/path`-keyed chart"
+  (testing "GL-scan picks up dividend postings on `:kontor.account/path`-keyed chart"
     (let [conn (fresh)
           eur  [:kontor.commodity/symbol "EUR"]]
-      ;; Minimal chart using the canonical :account/path convention.
+      ;; Minimal chart using the canonical :kontor.account/path convention.
       (d/transact conn
-        [{:account/path "Assets:Bank"               :account/type :asset
-          :account/commodity eur}
-         {:account/path "Income:Dividends"          :account/type :income
-          :account/commodity eur}
+        [{:kontor.account/path "Assets:Bank"               :kontor.account/type :asset
+          :kontor.account/commodity eur}
+         {:kontor.account/path "Income:Dividends"          :kontor.account/type :income
+          :kontor.account/commodity eur}
          {:journal/code "CR" :journal/type :cash :journal/name "Cash Receipts"}])
       ;; Record €4,000 of dividend income.
       (book/entry! conn
@@ -412,9 +412,9 @@
          :effective-date #inst "2026-06-15"
          :commodity eur
          :narration "Acme dividend"
-         :postings [{:account [:account/path "Assets:Bank"]
+         :postings [{:account [:kontor.account/path "Assets:Bank"]
                      :amount 4000M}
-                    {:account [:account/path "Income:Dividends"]
+                    {:account [:kontor.account/path "Income:Dividends"]
                      :amount -4000M}]})
       ;; Provider with NO pre-supplied :investment-income-bases —
       ;; forces the GL-scan path.
@@ -427,7 +427,7 @@
             §20   (component-by-lane facts :de-§20-income)]
         (is (some? §20)
             "F7 regression: GL-scan must produce a §20 component from
-             :account/path-keyed dividend postings")
+             :kontor.account/path-keyed dividend postings")
         ;; €4,000 dividends − €1,000 Sparer-Pauschbetrag = €3,000 base
         (is (== 3000M (-> §20 :base :amount))
             "base = 4000 − 1000 SP = 3000")

@@ -65,7 +65,7 @@
 ;; ============================================================================
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (defn- bal [conn code as-of]
   (let [db (d/db conn)

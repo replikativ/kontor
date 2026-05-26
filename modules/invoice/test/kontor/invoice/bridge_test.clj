@@ -51,29 +51,29 @@
   "Seed minimal accounts for sales-revenue, sales-tax-payable, AR."
   []
   (d/transact *conn*
-              [{:account/code "4000"
-                :account/name "Sales Revenue"
-                :account/path "4000"
-                :account/type :revenue}
-               {:account/code "1500"
-                :account/name "Accounts Receivable"
-                :account/path "1500"
-                :account/type :asset}
-               {:account/code "3800"
-                :account/name "VAT Payable 19%"
-                :account/path "3800"
-                :account/type :liability}]))
+              [{:kontor.account/code "4000"
+                :kontor.account/name "Sales Revenue"
+                :kontor.account/path "4000"
+                :kontor.account/type :revenue}
+               {:kontor.account/code "1500"
+                :kontor.account/name "Accounts Receivable"
+                :kontor.account/path "1500"
+                :kontor.account/type :asset}
+               {:kontor.account/code "3800"
+                :kontor.account/name "VAT Payable 19%"
+                :kontor.account/path "3800"
+                :kontor.account/type :liability}]))
 
 (defn- seed-gl-defaults!
   "Seed tenant-wide :gl-account-default rows."
   []
   (d/transact *conn*
               [{:gl-account-default/account-type :sales-revenue
-                :gl-account-default/account [:account/path "4000"]}
+                :gl-account-default/account [:kontor.account/path "4000"]}
                {:gl-account-default/account-type :ar
-                :gl-account-default/account [:account/path "1500"]}
+                :gl-account-default/account [:kontor.account/path "1500"]}
                {:gl-account-default/account-type :sales-tax-payable
-                :gl-account-default/account [:account/path "3800"]}]))
+                :gl-account-default/account [:kontor.account/path "3800"]}]))
 
 (defn- seed-journal!
   "Seed a sales journal for posting."
@@ -142,7 +142,7 @@
 (deftest gl-resolution-tier-1-explicit-override
   (seed-accounts!)
   (let [db (d/db *conn*)
-        override-eid (d/q '[:find ?a . :where [?a :account/path "4000"]] db)]
+        override-eid (d/q '[:find ?a . :where [?a :kontor.account/path "4000"]] db)]
     (is (= override-eid
            (posting/resolve-gl-account
             db {:override-account override-eid
@@ -153,7 +153,7 @@
   (seed-accounts!)
   (seed-gl-defaults!)
   (let [db (d/db *conn*)
-        revenue-eid (d/q '[:find ?a . :where [?a :account/path "4000"]] db)]
+        revenue-eid (d/q '[:find ?a . :where [?a :kontor.account/path "4000"]] db)]
     (is (= revenue-eid
            (posting/resolve-gl-account
             db {:account-type :sales-revenue
@@ -172,7 +172,7 @@
   (seed-accounts!)
   (seed-gl-defaults!)
   (let [db (d/db *conn*)
-        ar-eid (d/q '[:find ?a . :where [?a :account/path "1500"]] db)]
+        ar-eid (d/q '[:find ?a . :where [?a :kontor.account/path "1500"]] db)]
     ;; tier 1 wins even though tier 2 would point at the revenue acct
     (is (= ar-eid
            (posting/resolve-gl-account
@@ -432,16 +432,16 @@
     (seed-journal!)
     ;; Add a deferred-revenue account + seed defaults
     (d/transact *conn*
-                [{:account/code "2900"
-                  :account/name "Deferred Revenue"
-                  :account/path "2900"
-                  :account/type :liability}
+                [{:kontor.account/code "2900"
+                  :kontor.account/name "Deferred Revenue"
+                  :kontor.account/path "2900"
+                  :kontor.account/type :liability}
                  {:gl-account-default/account-type :sales-revenue
-                  :gl-account-default/account [:account/path "4000"]}
+                  :gl-account-default/account [:kontor.account/path "4000"]}
                  {:gl-account-default/account-type :sales-revenue-deferred
-                  :gl-account-default/account [:account/path "2900"]}
+                  :gl-account-default/account [:kontor.account/path "2900"]}
                  {:gl-account-default/account-type :ar
-                  :gl-account-default/account [:account/path "1500"]}])
+                  :gl-account-default/account [:kontor.account/path "1500"]}])
     (inv/make-invoice-from-order! *conn* "ORD-1"
                                   {:external-id "INV-REC-1"})
     ;; Mark the invoice line as :deferred (post-bridge)
@@ -466,13 +466,13 @@
                                  :in $ ?tx
                                  :where [?p :posting/transaction ?tx]]
                                db tx-eid)
-                          (map #(d/pull db '[* {:posting/account [:account/path]}] %)))
+                          (map #(d/pull db '[* {:posting/account [:kontor.account/path]}] %)))
             credit-line (->> postings
                              (filter #(neg? (.signum ^java.math.BigDecimal
                                                      (:posting/amount %))))
                              first)]
         (testing "deferred-revenue line credits the liability account"
-          (is (= "2900" (-> credit-line :posting/account :account/path))))))))
+          (is (= "2900" (-> credit-line :posting/account :kontor.account/path))))))))
 
 (deftest invoice-clearance-transitions-seeded
   (let [db (d/db *conn*)]

@@ -38,15 +38,15 @@
 ;; ============================================================================
 
 (deftest resolve-account-prefers-explicit-override
-  (is (= [:account/code "9999"]
+  (is (= [:kontor.account/code "9999"]
          (pb/resolve-account-ref
-          {:catalog catalog :accounts {:gehalt [:account/code "9999"]}}
+          {:catalog catalog :accounts {:gehalt [:kontor.account/code "9999"]}}
           :gehalt))))
 
 (deftest resolve-account-falls-back-to-catalog-defaults
-  (is (= [:account/code "6020"]
+  (is (= [:kontor.account/code "6020"]
          (pb/resolve-account-ref {:catalog catalog :accounts {}} :gehalt)))
-  (is (= [:account/code "3720"]
+  (is (= [:kontor.account/code "3720"]
          (pb/resolve-account-ref {:catalog catalog :accounts {}} :verb-lohn))))
 
 ;; ============================================================================
@@ -70,28 +70,28 @@
         (is (zero? (.compareTo ^BigDecimal sum 0M)))))
     (testing "Verrechnung (3790) net-zero per fact"
       (let [verr-sum (->> postings
-                          (filter #(= [:account/code "3790"] (:posting/account %)))
+                          (filter #(= [:kontor.account/code "3790"] (:posting/account %)))
                           (map :posting/amount)
                           (reduce (fn [^BigDecimal a ^BigDecimal v] (.add a v)) 0M))]
         (is (zero? (.compareTo ^BigDecimal verr-sum 0M)))))
     (testing "gross expense lands on 6020 (Gehälter)"
       (let [gross-dr (->> postings
-                          (filter #(= [:account/code "6020"] (:posting/account %)))
+                          (filter #(= [:kontor.account/code "6020"] (:posting/account %)))
                           (map :posting/amount))]
         (is (= [4000.00M] gross-dr))))
     (testing "employer SI lands on 6110 (Soziale Aufwendungen)"
       (let [agsv (->> postings
-                      (filter #(= [:account/code "6110"] (:posting/account %)))
+                      (filter #(= [:kontor.account/code "6110"] (:posting/account %)))
                       (map :posting/amount))]
         (is (= [800.00M] agsv))))
     (testing "verb-lohn (3720) carries the net as credit"
       (let [vl (->> postings
-                    (filter #(= [:account/code "3720"] (:posting/account %)))
+                    (filter #(= [:kontor.account/code "3720"] (:posting/account %)))
                     (map :posting/amount))]
         (is (= [-2500.00M] vl))))
     (testing "verb-lohnsteuer (3730) carries the withholding"
       (let [vlst (->> postings
-                      (filter #(= [:account/code "3730"] (:posting/account %)))
+                      (filter #(= [:kontor.account/code "3730"] (:posting/account %)))
                       (map :posting/amount))]
         (is (= [-700.00M] vlst))))))
 
@@ -158,9 +158,9 @@
                    :ledger :de-handelsrecht
                    :narration "Urlaubsrückstellung 2026-12-31"})]
     (is (= 2 (count postings)))
-    (is (= [:account/code "6035"]
+    (is (= [:kontor.account/code "6035"]
            (-> postings first :posting/account)))    ; aufw
-    (is (= [:account/code "3066"]
+    (is (= [:kontor.account/code "3066"]
            (-> postings second :posting/account)))   ; rückstellung
     (is (= 3300.00M  (-> postings first  :posting/amount)))
     (is (= -3300.00M (-> postings second :posting/amount)))

@@ -17,10 +17,10 @@
     (d/transact conn
                 [{:kontor.commodity/symbol "JPY" :kontor.commodity/name "Japanese Yen"
                   :kontor.commodity/precision 0}
-                 {:account/code "215100" :account/path "OutputJCT-10"
-                  :account/type :liability}
-                 {:account/code "215200" :account/path "OutputJCT-8"
-                  :account/type :liability}])
+                 {:kontor.account/code "215100" :kontor.account/path "OutputJCT-10"
+                  :kontor.account/type :liability}
+                 {:kontor.account/code "215200" :kontor.account/path "OutputJCT-8"
+                  :kontor.account/type :liability}])
     conn))
 
 (def ^:private jpy [:kontor.commodity/symbol "JPY"])
@@ -75,8 +75,8 @@
         db   (d/db conn)
         prov (jtp/make-jp-tax-rate-provider)
         bld  (jtp/make-jp-tax-posting-builder)
-        a215100 (d/q '[:find ?a . :where [?a :account/code "215100"]] db)
-        a215200 (d/q '[:find ?a . :where [?a :account/code "215200"]] db)
+        a215100 (d/q '[:find ?a . :where [?a :kontor.account/code "215100"]] db)
+        a215200 (d/q '[:find ?a . :where [?a :kontor.account/code "215200"]] db)
         post  (fn [jc] (tpb/compute-tax-postings
                         prov bld
                         {:base 100000M :jct-class jc :commodity jpy}
@@ -128,8 +128,8 @@
                  {:db db :date d1}))
           agg  (tpb/aggregate-postings raw)
           by-acct (into {} (map (juxt :posting/account :posting/amount)) agg)
-          a215100 (d/q '[:find ?a . :where [?a :account/code "215100"]] db)
-          a215200 (d/q '[:find ?a . :where [?a :account/code "215200"]] db)]
+          a215100 (d/q '[:find ?a . :where [?a :kontor.account/code "215100"]] db)
+          a215200 (d/q '[:find ?a . :where [?a :kontor.account/code "215200"]] db)]
       (is (= 2 (count agg)))
       (is (== -10000M (get by-acct a215100)) "10% of 100,000")
       (is (== -4000M  (get by-acct a215200)) "8% of 50,000"))))

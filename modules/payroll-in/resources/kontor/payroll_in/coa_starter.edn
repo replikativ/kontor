@@ -13,7 +13,7 @@
 ;;   - Bonus / leave / gratuity liabilities live under 32xxxx
 ;;     (current liabilities, separate from statutory).
 ;;
-;; The load-bearing identifier is :account-tag/name (e.g.
+;; The load-bearing identifier is :kontor.account-tag/name (e.g.
 ;; "in-payroll-tds-payable"), not :code. Consumers can renumber freely.
 
 [;; ──────────────────────────────────────────────────────────────────

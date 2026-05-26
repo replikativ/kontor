@@ -4,7 +4,7 @@
    Mirrors the DE chart-installer pattern (see ../l10n-de/chart.clj).
    Reads `kontenrahmen.edn`, materializes :account-tag entities for
    the UVA field codes (022/029/006/057/066/011/021), creates
-   accounts with :account/code + :account/tags."
+   accounts with :kontor.account/code + :kontor.account/tags."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [datahike.api :as d]))
@@ -20,9 +20,9 @@
 
 (defn- tag-tx-data [tags]
   (mapv (fn [tag]
-          {:account-tag/name (name tag)
-           :account-tag/country-code "AT"
-           :account-tag/applicability :account})
+          {:kontor.account-tag/name (name tag)
+           :kontor.account-tag/country-code "AT"
+           :kontor.account-tag/applicability :account})
         tags))
 
 (defn- ensure-eur []
@@ -33,16 +33,16 @@
 
 (defn- account-tx-entry
   [{:keys [code path type name reconcilable? tags]}]
-  (cond-> {:account/path        path
-           :account/code        code
-           :account/name        name
-           :account/type        type
-           :account/active      true
-           :account/commodity   [:kontor.commodity/symbol "EUR"]
-           :account/reconcilable (boolean reconcilable?)}
+  (cond-> {:kontor.account/path        path
+           :kontor.account/code        code
+           :kontor.account/name        name
+           :kontor.account/type        type
+           :kontor.account/active      true
+           :kontor.account/commodity   [:kontor.commodity/symbol "EUR"]
+           :kontor.account/reconcilable (boolean reconcilable?)}
     (seq tags)
-    (assoc :account/tags
-           (mapv (fn [t] [:account-tag/name (clojure.core/name t)]) tags))))
+    (assoc :kontor.account/tags
+           (mapv (fn [t] [:kontor.account-tag/name (clojure.core/name t)]) tags))))
 
 (defn install!
   ([conn] (install! conn (load-chart)))

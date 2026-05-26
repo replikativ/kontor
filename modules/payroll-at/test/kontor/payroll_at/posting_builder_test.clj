@@ -26,61 +26,61 @@
    the l10n-at Kontenrahmen (which is a UVA-focused subset); test
    fixture installs them on top."
   [;; Aufwendungen — class 6
-   {:account/code "6000" :account/path "Aufwendungen:Personal:Gehälter"
-    :account/type :expense :account/name "Gehälter"
-    :account/active true
-    :account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:account/code "6400" :account/path "Aufwendungen:Personal:Urlaubsremuneration"
-    :account/type :expense :account/name "Urlaubsremuneration (13.)"
-    :account/active true
-    :account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:account/code "6410" :account/path "Aufwendungen:Personal:Weihnachtsremuneration"
-    :account/type :expense :account/name "Weihnachtsremuneration (14.)"
-    :account/active true
-    :account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:account/code "6500" :account/path "Aufwendungen:Personal:SV-AG"
-    :account/type :expense :account/name "Sozialaufwand-Arbeitgeber"
-    :account/active true
-    :account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:account/code "6510" :account/path "Aufwendungen:Personal:DB-FLAG"
-    :account/type :expense :account/name "DB FLAG (4.1%)"
-    :account/active true
-    :account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:account/code "6520" :account/path "Aufwendungen:Personal:KomSt"
-    :account/type :expense :account/name "Kommunalsteuer (3%)"
-    :account/active true
-    :account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:account/code "6530" :account/path "Aufwendungen:Personal:DZ"
-    :account/type :expense :account/name "Zuschlag zum DB"
-    :account/active true
-    :account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:account/code "6800" :account/path "Aufwendungen:Personal:Sachbezüge"
-    :account/type :expense :account/name "Sachbezugsaufwand"
-    :account/active true
-    :account/commodity [:kontor.commodity/symbol "EUR"]}
+   {:kontor.account/code "6000" :kontor.account/path "Aufwendungen:Personal:Gehälter"
+    :kontor.account/type :expense :kontor.account/name "Gehälter"
+    :kontor.account/active true
+    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
+   {:kontor.account/code "6400" :kontor.account/path "Aufwendungen:Personal:Urlaubsremuneration"
+    :kontor.account/type :expense :kontor.account/name "Urlaubsremuneration (13.)"
+    :kontor.account/active true
+    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
+   {:kontor.account/code "6410" :kontor.account/path "Aufwendungen:Personal:Weihnachtsremuneration"
+    :kontor.account/type :expense :kontor.account/name "Weihnachtsremuneration (14.)"
+    :kontor.account/active true
+    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
+   {:kontor.account/code "6500" :kontor.account/path "Aufwendungen:Personal:SV-AG"
+    :kontor.account/type :expense :kontor.account/name "Sozialaufwand-Arbeitgeber"
+    :kontor.account/active true
+    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
+   {:kontor.account/code "6510" :kontor.account/path "Aufwendungen:Personal:DB-FLAG"
+    :kontor.account/type :expense :kontor.account/name "DB FLAG (4.1%)"
+    :kontor.account/active true
+    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
+   {:kontor.account/code "6520" :kontor.account/path "Aufwendungen:Personal:KomSt"
+    :kontor.account/type :expense :kontor.account/name "Kommunalsteuer (3%)"
+    :kontor.account/active true
+    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
+   {:kontor.account/code "6530" :kontor.account/path "Aufwendungen:Personal:DZ"
+    :kontor.account/type :expense :kontor.account/name "Zuschlag zum DB"
+    :kontor.account/active true
+    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
+   {:kontor.account/code "6800" :kontor.account/path "Aufwendungen:Personal:Sachbezüge"
+    :kontor.account/type :expense :kontor.account/name "Sachbezugsaufwand"
+    :kontor.account/active true
+    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
 
    ;; Verbindlichkeiten — class 3
-   {:account/code "3540" :account/path "Verbindlichkeiten:SV"
-    :account/type :liability :account/name "SV-Verbindlichkeit"
-    :account/active true
-    :account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:account/code "3550" :account/path "Verbindlichkeiten:DB"
-    :account/type :liability :account/name "DB+DZ-Verbindlichkeit"
-    :account/active true
-    :account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:account/code "3560" :account/path "Verbindlichkeiten:KomSt"
-    :account/type :liability :account/name "Kommunalsteuer-Verbindlichkeit"
-    :account/active true
-    :account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:account/code "3590" :account/path "Verbindlichkeiten:Sachbezug-Clearing"
-    :account/type :liability :account/name "Sachbezug-Clearing"
-    :account/active true
-    :account/commodity [:kontor.commodity/symbol "EUR"]}
+   {:kontor.account/code "3540" :kontor.account/path "Verbindlichkeiten:SV"
+    :kontor.account/type :liability :kontor.account/name "SV-Verbindlichkeit"
+    :kontor.account/active true
+    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
+   {:kontor.account/code "3550" :kontor.account/path "Verbindlichkeiten:DB"
+    :kontor.account/type :liability :kontor.account/name "DB+DZ-Verbindlichkeit"
+    :kontor.account/active true
+    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
+   {:kontor.account/code "3560" :kontor.account/path "Verbindlichkeiten:KomSt"
+    :kontor.account/type :liability :kontor.account/name "Kommunalsteuer-Verbindlichkeit"
+    :kontor.account/active true
+    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
+   {:kontor.account/code "3590" :kontor.account/path "Verbindlichkeiten:Sachbezug-Clearing"
+    :kontor.account/type :liability :kontor.account/name "Sachbezug-Clearing"
+    :kontor.account/active true
+    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
    ;; 3700 the net pay payable
-   {:account/code "3700" :account/path "Verbindlichkeiten:Lohn"
-    :account/type :liability :account/name "Verbindlichkeit Lohn"
-    :account/active true
-    :account/commodity [:kontor.commodity/symbol "EUR"]}])
+   {:kontor.account/code "3700" :kontor.account/path "Verbindlichkeiten:Lohn"
+    :kontor.account/type :liability :kontor.account/name "Verbindlichkeit Lohn"
+    :kontor.account/active true
+    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}])
 
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
@@ -143,7 +143,7 @@
           db (d/db conn)
           balance-on (fn [code]
                        (let [a (d/q '[:find ?a . :in $ ?c
-                                      :where [?a :account/code ?c]]
+                                      :where [?a :kontor.account/code ?c]]
                                     db code)
                              postings (d/q '[:find [?amt ...]
                                              :in $ ?a
@@ -184,7 +184,7 @@
           db (d/db conn)
           balance-on (fn [code]
                        (let [a (d/q '[:find ?a . :in $ ?c
-                                      :where [?a :account/code ?c]]
+                                      :where [?a :kontor.account/code ?c]]
                                     db code)
                              postings (d/q '[:find [?amt ...]
                                              :in $ ?a

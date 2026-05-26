@@ -38,36 +38,36 @@
 (def ^:private skr04-payroll-accounts
   "The 10 load-bearing SKR04 payroll accounts (note 82 §4.1). We seed
    only what the e2e flow uses to keep the fixture small."
-  [{:db/id "acct-6020" :account/code "6020"
-    :account/name "Gehälter"
-    :account/type :expense :account/active true}
-   {:db/id "acct-6010" :account/code "6010"
-    :account/name "Löhne"
-    :account/type :expense :account/active true}
-   {:db/id "acct-6035" :account/code "6035"
-    :account/name "Aufwendungen Urlaubsrückstellung"
-    :account/type :expense :account/active true}
-   {:db/id "acct-6060" :account/code "6060"
-    :account/name "Freiwillige soziale Aufwendungen, lohnsteuerpflichtig"
-    :account/type :expense :account/active true}
-   {:db/id "acct-6110" :account/code "6110"
-    :account/name "Gesetzliche soziale Aufwendungen"
-    :account/type :expense :account/active true}
-   {:db/id "acct-3066" :account/code "3066"
-    :account/name "Urlaubsrückstellung"
-    :account/type :liability :account/active true}
-   {:db/id "acct-3720" :account/code "3720"
-    :account/name "Verbindlichkeiten aus Löhnen und Gehältern"
-    :account/type :liability :account/active true}
-   {:db/id "acct-3730" :account/code "3730"
-    :account/name "Verbindlichkeiten aus Lohn- und Kirchensteuer"
-    :account/type :liability :account/active true}
-   {:db/id "acct-3740" :account/code "3740"
-    :account/name "Verbindlichkeiten im Rahmen der sozialen Sicherheit"
-    :account/type :liability :account/active true}
-   {:db/id "acct-3790" :account/code "3790"
-    :account/name "Lohn- und Gehaltsverrechnungskonto"
-    :account/type :liability :account/active true}])
+  [{:db/id "acct-6020" :kontor.account/code "6020"
+    :kontor.account/name "Gehälter"
+    :kontor.account/type :expense :kontor.account/active true}
+   {:db/id "acct-6010" :kontor.account/code "6010"
+    :kontor.account/name "Löhne"
+    :kontor.account/type :expense :kontor.account/active true}
+   {:db/id "acct-6035" :kontor.account/code "6035"
+    :kontor.account/name "Aufwendungen Urlaubsrückstellung"
+    :kontor.account/type :expense :kontor.account/active true}
+   {:db/id "acct-6060" :kontor.account/code "6060"
+    :kontor.account/name "Freiwillige soziale Aufwendungen, lohnsteuerpflichtig"
+    :kontor.account/type :expense :kontor.account/active true}
+   {:db/id "acct-6110" :kontor.account/code "6110"
+    :kontor.account/name "Gesetzliche soziale Aufwendungen"
+    :kontor.account/type :expense :kontor.account/active true}
+   {:db/id "acct-3066" :kontor.account/code "3066"
+    :kontor.account/name "Urlaubsrückstellung"
+    :kontor.account/type :liability :kontor.account/active true}
+   {:db/id "acct-3720" :kontor.account/code "3720"
+    :kontor.account/name "Verbindlichkeiten aus Löhnen und Gehältern"
+    :kontor.account/type :liability :kontor.account/active true}
+   {:db/id "acct-3730" :kontor.account/code "3730"
+    :kontor.account/name "Verbindlichkeiten aus Lohn- und Kirchensteuer"
+    :kontor.account/type :liability :kontor.account/active true}
+   {:db/id "acct-3740" :kontor.account/code "3740"
+    :kontor.account/name "Verbindlichkeiten im Rahmen der sozialen Sicherheit"
+    :kontor.account/type :liability :kontor.account/active true}
+   {:db/id "acct-3790" :kontor.account/code "3790"
+    :kontor.account/name "Lohn- und Gehaltsverrechnungskonto"
+    :kontor.account/type :liability :kontor.account/active true}])
 
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
@@ -138,7 +138,7 @@
                               :stammdaten-gueltig-ab #inst "2025-11-01"}
                   :pay-period-date #inst "2025-11-01"
                   :pay-period-code "DE-2025-11"})
-        ;; Pre-resolve the account-hint → eid map (since :account/code
+        ;; Pre-resolve the account-hint → eid map (since :kontor.account/code
         ;; is not :db.unique/identity in the kernel, we cannot rely on
         ;; lookup-ref resolution at transact time — note 82 §9.4 gotcha).
         accounts-map (->> [[:lohn "6010"] [:gehalt "6020"]
@@ -152,7 +152,7 @@
                            [:verrechnung "3790"]]
                           (reduce (fn [m [hint code]]
                                     (if-some [eid (ref-eid (d/db conn)
-                                                           :account/code code)]
+                                                           :kontor.account/code code)]
                                       (assoc m hint eid)
                                       m))
                                   {}))
@@ -180,7 +180,7 @@
                          [:transaction/external-id
                           {:posting/_transaction
                            [:posting/amount
-                            {:posting/account [:account/code]}]}]}]
+                            {:posting/account [:kontor.account/code]}]}]}]
                     run-eid)
         ;; Note 86 P0-86-1 fix: substrate orchestrator now links
         ;; emit-docs via :payroll-run/emit-docs. Query through the
@@ -205,7 +205,7 @@
                           0M postings)]
           (is (zero? (.compareTo ^java.math.BigDecimal sum 0M))))
         (testing "expected amounts on each SKR04 account"
-          (let [by-code (group-by (comp :account/code :posting/account) postings)
+          (let [by-code (group-by (comp :kontor.account/code :posting/account) postings)
                 amounts (fn [code]
                           (sort (map :posting/amount (get by-code code []))))]
             (is (= [4000.00M]               (amounts "6020")))   ; gross expense

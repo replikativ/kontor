@@ -104,26 +104,26 @@
        :kontor.entity/name "Acme CA Corp" :kontor.entity/kind :operating}
       ;; Per-country minimal payroll chart.
       ;; DE — SKR04 wage accounts.
-      {:db/id "de-wages" :account/code "4120"
-       :account/name "Löhne und Gehälter"
-       :account/type :expense :account/active true}
-      {:db/id "de-wages-payable" :account/code "1741"
-       :account/name "Verbindlichkeiten LuG"
-       :account/type :liability :account/active true}
+      {:db/id "de-wages" :kontor.account/code "4120"
+       :kontor.account/name "Löhne und Gehälter"
+       :kontor.account/type :expense :kontor.account/active true}
+      {:db/id "de-wages-payable" :kontor.account/code "1741"
+       :kontor.account/name "Verbindlichkeiten LuG"
+       :kontor.account/type :liability :kontor.account/active true}
       ;; US — QBO-shaped.
-      {:db/id "us-wages" :account/code "6100"
-       :account/name "Wages Expense"
-       :account/type :expense :account/active true}
-      {:db/id "us-wages-payable" :account/code "2100"
-       :account/name "Wages Payable"
-       :account/type :liability :account/active true}
+      {:db/id "us-wages" :kontor.account/code "6100"
+       :kontor.account/name "Wages Expense"
+       :kontor.account/type :expense :kontor.account/active true}
+      {:db/id "us-wages-payable" :kontor.account/code "2100"
+       :kontor.account/name "Wages Payable"
+       :kontor.account/type :liability :kontor.account/active true}
       ;; CA.
-      {:db/id "ca-wages" :account/code "5400"
-       :account/name "Salaries & Wages"
-       :account/type :expense :account/active true}
-      {:db/id "ca-wages-payable" :account/code "2110"
-       :account/name "Wages Payable"
-       :account/type :liability :account/active true}
+      {:db/id "ca-wages" :kontor.account/code "5400"
+       :kontor.account/name "Salaries & Wages"
+       :kontor.account/type :expense :kontor.account/active true}
+      {:db/id "ca-wages-payable" :kontor.account/code "2110"
+       :kontor.account/name "Wages Payable"
+       :kontor.account/type :liability :kontor.account/active true}
       ;; One journal per country.
       {:db/id "j-de" :journal/code "PAY-DE"
        :journal/name "Payroll DE" :journal/type :general}
@@ -230,12 +230,12 @@
         j-de (ref-eid db :journal/code "PAY-DE")
         j-us (ref-eid db :journal/code "PAY-US")
         j-ca (ref-eid db :journal/code "PAY-CA")
-        de-wages-exp (ref-eid db :account/code "4120")
-        de-wages-pay (ref-eid db :account/code "1741")
-        us-wages-exp (ref-eid db :account/code "6100")
-        us-wages-pay (ref-eid db :account/code "2100")
-        ca-wages-exp (ref-eid db :account/code "5400")
-        ca-wages-pay (ref-eid db :account/code "2110")
+        de-wages-exp (ref-eid db :kontor.account/code "4120")
+        de-wages-pay (ref-eid db :kontor.account/code "1741")
+        us-wages-exp (ref-eid db :kontor.account/code "6100")
+        us-wages-pay (ref-eid db :kontor.account/code "2100")
+        ca-wages-exp (ref-eid db :kontor.account/code "5400")
+        ca-wages-pay (ref-eid db :kontor.account/code "2110")
         de-fact {:gross 3000M :net 1900M
                  :components [{:kind :base-wage       :amount 3000M}
                               {:kind :withholding-tax :amount -500M}
@@ -428,36 +428,36 @@
    kept as a private def here rather than imported so the cross-stage test
    stays self-contained (we don't want a cross-test require for a fixture
    list)."
-  [{:db/id "acct-6020" :account/code "6020"
-    :account/name "Gehälter"
-    :account/type :expense :account/active true}
-   {:db/id "acct-6010" :account/code "6010"
-    :account/name "Löhne"
-    :account/type :expense :account/active true}
-   {:db/id "acct-6035" :account/code "6035"
-    :account/name "Aufwendungen Urlaubsrückstellung"
-    :account/type :expense :account/active true}
-   {:db/id "acct-6060" :account/code "6060"
-    :account/name "Freiwillige soziale Aufwendungen, lohnsteuerpflichtig"
-    :account/type :expense :account/active true}
-   {:db/id "acct-6110" :account/code "6110"
-    :account/name "Gesetzliche soziale Aufwendungen"
-    :account/type :expense :account/active true}
-   {:db/id "acct-3066" :account/code "3066"
-    :account/name "Urlaubsrückstellung"
-    :account/type :liability :account/active true}
-   {:db/id "acct-3720" :account/code "3720"
-    :account/name "Verbindlichkeiten aus Löhnen und Gehältern"
-    :account/type :liability :account/active true}
-   {:db/id "acct-3730" :account/code "3730"
-    :account/name "Verbindlichkeiten aus Lohn- und Kirchensteuer"
-    :account/type :liability :account/active true}
-   {:db/id "acct-3740" :account/code "3740"
-    :account/name "Verbindlichkeiten im Rahmen der sozialen Sicherheit"
-    :account/type :liability :account/active true}
-   {:db/id "acct-3790" :account/code "3790"
-    :account/name "Lohn- und Gehaltsverrechnungskonto"
-    :account/type :liability :account/active true}])
+  [{:db/id "acct-6020" :kontor.account/code "6020"
+    :kontor.account/name "Gehälter"
+    :kontor.account/type :expense :kontor.account/active true}
+   {:db/id "acct-6010" :kontor.account/code "6010"
+    :kontor.account/name "Löhne"
+    :kontor.account/type :expense :kontor.account/active true}
+   {:db/id "acct-6035" :kontor.account/code "6035"
+    :kontor.account/name "Aufwendungen Urlaubsrückstellung"
+    :kontor.account/type :expense :kontor.account/active true}
+   {:db/id "acct-6060" :kontor.account/code "6060"
+    :kontor.account/name "Freiwillige soziale Aufwendungen, lohnsteuerpflichtig"
+    :kontor.account/type :expense :kontor.account/active true}
+   {:db/id "acct-6110" :kontor.account/code "6110"
+    :kontor.account/name "Gesetzliche soziale Aufwendungen"
+    :kontor.account/type :expense :kontor.account/active true}
+   {:db/id "acct-3066" :kontor.account/code "3066"
+    :kontor.account/name "Urlaubsrückstellung"
+    :kontor.account/type :liability :kontor.account/active true}
+   {:db/id "acct-3720" :kontor.account/code "3720"
+    :kontor.account/name "Verbindlichkeiten aus Löhnen und Gehältern"
+    :kontor.account/type :liability :kontor.account/active true}
+   {:db/id "acct-3730" :kontor.account/code "3730"
+    :kontor.account/name "Verbindlichkeiten aus Lohn- und Kirchensteuer"
+    :kontor.account/type :liability :kontor.account/active true}
+   {:db/id "acct-3740" :kontor.account/code "3740"
+    :kontor.account/name "Verbindlichkeiten im Rahmen der sozialen Sicherheit"
+    :kontor.account/type :liability :kontor.account/active true}
+   {:db/id "acct-3790" :kontor.account/code "3790"
+    :kontor.account/name "Lohn- und Gehaltsverrechnungskonto"
+    :kontor.account/type :liability :kontor.account/active true}])
 
 (defn- bootstrap-with-real-de []
   (let [conn (core/create-test-db)]
@@ -476,18 +476,18 @@
        {:db/id "ent-ca" :kontor.entity/code "ACME-CA-CORP"
         :kontor.entity/name "Acme CA Corp" :kontor.entity/kind :operating}
        ;; US + CA stay on the mock chart (one expense + one payable each).
-       {:db/id "us-wages" :account/code "6100"
-        :account/name "Wages Expense"
-        :account/type :expense :account/active true}
-       {:db/id "us-wages-payable" :account/code "2100"
-        :account/name "Wages Payable"
-        :account/type :liability :account/active true}
-       {:db/id "ca-wages" :account/code "5400"
-        :account/name "Salaries & Wages"
-        :account/type :expense :account/active true}
-       {:db/id "ca-wages-payable" :account/code "2110"
-        :account/name "Wages Payable"
-        :account/type :liability :account/active true}
+       {:db/id "us-wages" :kontor.account/code "6100"
+        :kontor.account/name "Wages Expense"
+        :kontor.account/type :expense :kontor.account/active true}
+       {:db/id "us-wages-payable" :kontor.account/code "2100"
+        :kontor.account/name "Wages Payable"
+        :kontor.account/type :liability :kontor.account/active true}
+       {:db/id "ca-wages" :kontor.account/code "5400"
+        :kontor.account/name "Salaries & Wages"
+        :kontor.account/type :expense :kontor.account/active true}
+       {:db/id "ca-wages-payable" :kontor.account/code "2110"
+        :kontor.account/name "Wages Payable"
+        :kontor.account/type :liability :kontor.account/active true}
        {:db/id "j-de" :journal/code "PAY-DE"
         :journal/name "Payroll DE" :journal/type :general}
        {:db/id "j-us" :journal/code "PAY-US"
@@ -593,7 +593,7 @@
                           [:verrechnung "3790"]]
                          (reduce (fn [m [hint code]]
                                    (if-some [eid (ref-eid (d/db conn)
-                                                          :account/code code)]
+                                                          :kontor.account/code code)]
                                      (assoc m hint eid)
                                      m))
                                  {}))
@@ -632,10 +632,10 @@
                               {:kind :employee-si     :amount -50M}
                               {:kind :employer-si :amount 50M :employer-side? true}]
                  :jurisdiction-specific-codes {:ca/province "ON"}}
-        us-wages-exp (ref-eid (d/db conn) :account/code "6100")
-        us-wages-pay (ref-eid (d/db conn) :account/code "2100")
-        ca-wages-exp (ref-eid (d/db conn) :account/code "5400")
-        ca-wages-pay (ref-eid (d/db conn) :account/code "2110")
+        us-wages-exp (ref-eid (d/db conn) :kontor.account/code "6100")
+        us-wages-pay (ref-eid (d/db conn) :kontor.account/code "2100")
+        ca-wages-exp (ref-eid (d/db conn) :kontor.account/code "5400")
+        ca-wages-pay (ref-eid (d/db conn) :kontor.account/code "2110")
         _ (run-country-payroll!
            conn {:run-code "JANE-US-REAL-2025-11" :tx-code "TX-JANE-US-REAL-2025-11"
                  :period period :entity us :employment emp-us :journal j-us
@@ -661,7 +661,7 @@
                             [:transaction/external-id
                              {:posting/_transaction
                               [:posting/amount
-                               {:posting/account [:account/code]}]}]}
+                               {:posting/account [:kontor.account/code]}]}]}
                          {:payroll-run/emit-docs [:db/id :audit-doc/code
                                                   :audit-doc/category
                                                   :audit-doc/inline-payload]}]
@@ -682,7 +682,7 @@
                           0M postings)]
           (is (zero? (.compareTo ^java.math.BigDecimal sum 0M))
               "the cross-stage DE transaction balances under the real adapter"))
-        (let [by-code (group-by (comp :account/code :posting/account) postings)
+        (let [by-code (group-by (comp :kontor.account/code :posting/account) postings)
               amounts (fn [code] (sort (map :posting/amount (get by-code code []))))]
           ;; Same SKR04 amounts as the module's own e2e test — the
           ;; cross-stage substrate must not perturb the per-account
@@ -730,6 +730,6 @@
                                     [?p :posting/account ?a]
                                     [?p :posting/amount ?amt]]
                                   db account-eid))]
-        (is (= 4000.00M (account-totals (ref-eid db :account/code "6020"))))
+        (is (= 4000.00M (account-totals (ref-eid db :kontor.account/code "6020"))))
         (is (= 3200M    (account-totals us-wages-exp)))
         (is (= 800M     (account-totals ca-wages-exp)))))))

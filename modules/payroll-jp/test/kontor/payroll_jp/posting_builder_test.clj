@@ -7,7 +7,7 @@
 
 (def accounts
   "Synthetic eid-shaped account map. Real consumers feed eids from
-   (d/q ... :account/code) lookups."
+   (d/q ... :kontor.account/code) lookups."
   {:jp-payroll-wages                  :acct/wages
    :jp-payroll-bonus                  :acct/bonus
    :jp-payroll-er-statutory-benefits  :acct/er-si

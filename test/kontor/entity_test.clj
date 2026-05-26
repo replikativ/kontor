@@ -110,10 +110,10 @@
                             :transaction/effective-date #inst "2026-05-11"
                             :transaction/narration "single-entity test"}
               :postings
-              [{:posting/account :account/receivable
+              [{:posting/account :kontor.account/receivable
                 :posting/amount 100.00M
                 :posting/commodity :EUR}
-               {:posting/account :account/revenue
+               {:posting/account :kontor.account/revenue
                 :posting/amount -100.00M
                 :posting/commodity :EUR}]})]
       (is (:ok? r))
@@ -138,20 +138,20 @@
                             :transaction/narration "DE → US transfer"}
               :postings
               [;; DE side
-               {:posting/account :account/de-due-from-us
+               {:posting/account :kontor.account/de-due-from-us
                 :posting/amount  100.00M
                 :posting/commodity :EUR
                 :posting/entity de-ref}
-               {:posting/account :account/de-cash
+               {:posting/account :kontor.account/de-cash
                 :posting/amount -100.00M
                 :posting/commodity :EUR
                 :posting/entity de-ref}
                ;; US side (intercompany matching counter)
-               {:posting/account :account/us-cash
+               {:posting/account :kontor.account/us-cash
                 :posting/amount  100.00M
                 :posting/commodity :EUR
                 :posting/entity us-ref}
-               {:posting/account :account/us-due-to-de
+               {:posting/account :kontor.account/us-due-to-de
                 :posting/amount -100.00M
                 :posting/commodity :EUR
                 :posting/entity us-ref}]})]

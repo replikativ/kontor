@@ -31,7 +31,7 @@
 ;; ============================================================================
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (def ^:private rev-account-by-rate
   "VAT rate (BigDecimal) → SKR04 revenue account code. Caller can

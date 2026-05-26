@@ -53,39 +53,39 @@
                   :ledger/active true}
                  ;; Minimal payroll CoA (one account per wage-type-map
                  ;; account-key the fixture references).
-                 {:db/id "acct-5010" :account/code "5010"
-                  :account/name "Wages" :account/type :expense
-                  :account/active true}
-                 {:db/id "acct-5200" :account/code "5200"
-                  :account/name "ER FICA SS" :account/type :expense
-                  :account/active true}
-                 {:db/id "acct-5210" :account/code "5210"
-                  :account/name "ER FICA Medicare" :account/type :expense
-                  :account/active true}
-                 {:db/id "acct-5220" :account/code "5220"
-                  :account/name "FUTA" :account/type :expense
-                  :account/active true}
-                 {:db/id "acct-5230" :account/code "5230"
-                  :account/name "SUTA" :account/type :expense
-                  :account/active true}
-                 {:db/id "acct-2110" :account/code "2110"
-                  :account/name "Federal Income Tax Withheld"
-                  :account/type :liability :account/active true}
-                 {:db/id "acct-2130" :account/code "2130"
-                  :account/name "State Income Tax Withheld"
-                  :account/type :liability :account/active true}
-                 {:db/id "acct-2115" :account/code "2115"
-                  :account/name "FICA SS Withheld"
-                  :account/type :liability :account/active true}
-                 {:db/id "acct-2120" :account/code "2120"
-                  :account/name "Medicare Withheld"
-                  :account/type :liability :account/active true}
-                 {:db/id "acct-2100" :account/code "2100"
-                  :account/name "Wages Payable"
-                  :account/type :liability :account/active true}
-                 {:db/id "acct-1999" :account/code "1999"
-                  :account/name "Unmapped Suspense"
-                  :account/type :asset :account/active true}
+                 {:db/id "acct-5010" :kontor.account/code "5010"
+                  :kontor.account/name "Wages" :kontor.account/type :expense
+                  :kontor.account/active true}
+                 {:db/id "acct-5200" :kontor.account/code "5200"
+                  :kontor.account/name "ER FICA SS" :kontor.account/type :expense
+                  :kontor.account/active true}
+                 {:db/id "acct-5210" :kontor.account/code "5210"
+                  :kontor.account/name "ER FICA Medicare" :kontor.account/type :expense
+                  :kontor.account/active true}
+                 {:db/id "acct-5220" :kontor.account/code "5220"
+                  :kontor.account/name "FUTA" :kontor.account/type :expense
+                  :kontor.account/active true}
+                 {:db/id "acct-5230" :kontor.account/code "5230"
+                  :kontor.account/name "SUTA" :kontor.account/type :expense
+                  :kontor.account/active true}
+                 {:db/id "acct-2110" :kontor.account/code "2110"
+                  :kontor.account/name "Federal Income Tax Withheld"
+                  :kontor.account/type :liability :kontor.account/active true}
+                 {:db/id "acct-2130" :kontor.account/code "2130"
+                  :kontor.account/name "State Income Tax Withheld"
+                  :kontor.account/type :liability :kontor.account/active true}
+                 {:db/id "acct-2115" :kontor.account/code "2115"
+                  :kontor.account/name "FICA SS Withheld"
+                  :kontor.account/type :liability :kontor.account/active true}
+                 {:db/id "acct-2120" :kontor.account/code "2120"
+                  :kontor.account/name "Medicare Withheld"
+                  :kontor.account/type :liability :kontor.account/active true}
+                 {:db/id "acct-2100" :kontor.account/code "2100"
+                  :kontor.account/name "Wages Payable"
+                  :kontor.account/type :liability :kontor.account/active true}
+                 {:db/id "acct-1999" :kontor.account/code "1999"
+                  :kontor.account/name "Unmapped Suspense"
+                  :kontor.account/type :asset :kontor.account/active true}
                  {:db/id "journal-payroll" :journal/code "PAY-US"
                   :journal/name "Payroll (US)" :journal/type :general}
                  {:db/id "period-2026-04" :period/name "2026-04"
@@ -120,18 +120,18 @@
   "Map the wage-type-map :account-key values to the actual :account
    eids the fixture installs."
   [db]
-  {:wages-expense       (ref-eid db :account/code "5010")
-   :er-fica-ss          (ref-eid db :account/code "5200")
-   :er-fica-medicare    (ref-eid db :account/code "5210")
-   :er-futa             (ref-eid db :account/code "5220")
-   :er-suta             (ref-eid db :account/code "5230")
-   :ee-fed-withheld     (ref-eid db :account/code "2110")
-   :ee-state-withheld   (ref-eid db :account/code "2130")
-   :ee-fica-ss          (ref-eid db :account/code "2115")
-   :ee-fica-medicare    (ref-eid db :account/code "2120")
-   :net-pay-payable     (ref-eid db :account/code "2100")
-   :balance-clearing    (ref-eid db :account/code "2100")
-   :unmapped-suspense   (ref-eid db :account/code "1999")})
+  {:wages-expense       (ref-eid db :kontor.account/code "5010")
+   :er-fica-ss          (ref-eid db :kontor.account/code "5200")
+   :er-fica-medicare    (ref-eid db :kontor.account/code "5210")
+   :er-futa             (ref-eid db :kontor.account/code "5220")
+   :er-suta             (ref-eid db :kontor.account/code "5230")
+   :ee-fed-withheld     (ref-eid db :kontor.account/code "2110")
+   :ee-state-withheld   (ref-eid db :kontor.account/code "2130")
+   :ee-fica-ss          (ref-eid db :kontor.account/code "2115")
+   :ee-fica-medicare    (ref-eid db :kontor.account/code "2120")
+   :net-pay-payable     (ref-eid db :kontor.account/code "2100")
+   :balance-clearing    (ref-eid db :kontor.account/code "2100")
+   :unmapped-suspense   (ref-eid db :kontor.account/code "1999")})
 
 (deftest us-llc-three-employees-three-states-end-to-end
   (let [conn (bootstrap)

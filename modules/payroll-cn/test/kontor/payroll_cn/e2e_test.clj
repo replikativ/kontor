@@ -116,31 +116,31 @@
                   :period/end #inst "2026-05-01"}
                  ;; Minimal payroll CoA — one account per :account-tag the
                  ;; posting builder needs.
-                 {:db/id "acct-5603" :account/code "5603"
-                  :account/name "管理费用-工资 / Admin — Wages"
-                  :account/type :expense :account/active true
-                  :account/tags [[:account-tag/name "cn-payroll-wages-expense"]
-                                 [:account-tag/name "cn-payroll-er-si-expense"]
-                                 [:account-tag/name "cn-payroll-er-hf-expense"]]}
-                 {:db/id "acct-2211-01" :account/code "2211.01"
-                  :account/name "应付职工薪酬-工资 / Wages payable"
-                  :account/type :liability :account/active true
-                  :account/tags [[:account-tag/name "cn-payroll-net-wages"]
-                                 [:account-tag/name "cn-payroll-bonus-payable"]]}
-                 {:db/id "acct-2211-03" :account/code "2211.03"
-                  :account/name "应付职工薪酬-社保 / SI payable"
-                  :account/type :liability :account/active true
-                  :account/tags [[:account-tag/name "cn-payroll-ee-si"]
-                                 [:account-tag/name "cn-payroll-er-si-payable"]]}
-                 {:db/id "acct-2211-04" :account/code "2211.04"
-                  :account/name "应付职工薪酬-公积金 / HF payable"
-                  :account/type :liability :account/active true
-                  :account/tags [[:account-tag/name "cn-payroll-ee-hf"]
-                                 [:account-tag/name "cn-payroll-er-hf-payable"]]}
-                 {:db/id "acct-2221-iit" :account/code "2221.IIT"
-                  :account/name "应交税费-个人所得税 / IIT withheld payable"
-                  :account/type :liability :account/active true
-                  :account/tags [[:account-tag/name "cn-payroll-iit"]]}])
+                 {:db/id "acct-5603" :kontor.account/code "5603"
+                  :kontor.account/name "管理费用-工资 / Admin — Wages"
+                  :kontor.account/type :expense :kontor.account/active true
+                  :kontor.account/tags [[:kontor.account-tag/name "cn-payroll-wages-expense"]
+                                 [:kontor.account-tag/name "cn-payroll-er-si-expense"]
+                                 [:kontor.account-tag/name "cn-payroll-er-hf-expense"]]}
+                 {:db/id "acct-2211-01" :kontor.account/code "2211.01"
+                  :kontor.account/name "应付职工薪酬-工资 / Wages payable"
+                  :kontor.account/type :liability :kontor.account/active true
+                  :kontor.account/tags [[:kontor.account-tag/name "cn-payroll-net-wages"]
+                                 [:kontor.account-tag/name "cn-payroll-bonus-payable"]]}
+                 {:db/id "acct-2211-03" :kontor.account/code "2211.03"
+                  :kontor.account/name "应付职工薪酬-社保 / SI payable"
+                  :kontor.account/type :liability :kontor.account/active true
+                  :kontor.account/tags [[:kontor.account-tag/name "cn-payroll-ee-si"]
+                                 [:kontor.account-tag/name "cn-payroll-er-si-payable"]]}
+                 {:db/id "acct-2211-04" :kontor.account/code "2211.04"
+                  :kontor.account/name "应付职工薪酬-公积金 / HF payable"
+                  :kontor.account/type :liability :kontor.account/active true
+                  :kontor.account/tags [[:kontor.account-tag/name "cn-payroll-ee-hf"]
+                                 [:kontor.account-tag/name "cn-payroll-er-hf-payable"]]}
+                 {:db/id "acct-2221-iit" :kontor.account/code "2221.IIT"
+                  :kontor.account/name "应交税费-个人所得税 / IIT withheld payable"
+                  :kontor.account/type :liability :kontor.account/active true
+                  :kontor.account/tags [[:kontor.account-tag/name "cn-payroll-iit"]]}])
     conn))
 
 (defn- setup-employees [conn]
@@ -184,16 +184,16 @@
                                        :frequency :monthly
                                        :fiscal-period period})
         pp-eid (hr/pay-period-by-code (d/db conn) "CN-2026-04")
-        accounts {:cn-payroll-wages-expense   (ref-eid (d/db conn) :account/code "5603")
-                  :cn-payroll-er-si-expense   (ref-eid (d/db conn) :account/code "5603")
-                  :cn-payroll-er-hf-expense   (ref-eid (d/db conn) :account/code "5603")
-                  :cn-payroll-net-wages       (ref-eid (d/db conn) :account/code "2211.01")
-                  :cn-payroll-bonus-payable   (ref-eid (d/db conn) :account/code "2211.01")
-                  :cn-payroll-ee-si           (ref-eid (d/db conn) :account/code "2211.03")
-                  :cn-payroll-er-si-payable   (ref-eid (d/db conn) :account/code "2211.03")
-                  :cn-payroll-ee-hf           (ref-eid (d/db conn) :account/code "2211.04")
-                  :cn-payroll-er-hf-payable   (ref-eid (d/db conn) :account/code "2211.04")
-                  :cn-payroll-iit             (ref-eid (d/db conn) :account/code "2221.IIT")}
+        accounts {:cn-payroll-wages-expense   (ref-eid (d/db conn) :kontor.account/code "5603")
+                  :cn-payroll-er-si-expense   (ref-eid (d/db conn) :kontor.account/code "5603")
+                  :cn-payroll-er-hf-expense   (ref-eid (d/db conn) :kontor.account/code "5603")
+                  :cn-payroll-net-wages       (ref-eid (d/db conn) :kontor.account/code "2211.01")
+                  :cn-payroll-bonus-payable   (ref-eid (d/db conn) :kontor.account/code "2211.01")
+                  :cn-payroll-ee-si           (ref-eid (d/db conn) :kontor.account/code "2211.03")
+                  :cn-payroll-er-si-payable   (ref-eid (d/db conn) :kontor.account/code "2211.03")
+                  :cn-payroll-ee-hf           (ref-eid (d/db conn) :kontor.account/code "2211.04")
+                  :cn-payroll-er-hf-payable   (ref-eid (d/db conn) :kontor.account/code "2211.04")
+                  :cn-payroll-iit             (ref-eid (d/db conn) :kontor.account/code "2221.IIT")}
         compute-provider (->MockCnCompute
                           {:per-emp {e1 {:ext-id "E001" :ee-name "张三" :province "CN-BJ"}
                                      e2 {:ext-id "E002" :ee-name "李四" :province "CN-SH"}

@@ -66,8 +66,8 @@
 ;; ============================================================================
 
 (def default-rate-type-by-account-type
-  "Default IAS 21 / ASC 830 rate-type by :account/type for MONETARY
-   accounts (the substrate consults `:account/monetary?` per-account
+  "Default IAS 21 / ASC 830 rate-type by :kontor.account/type for MONETARY
+   accounts (the substrate consults `:kontor.account/monetary?` per-account
    first; this map is the fallback when the attr is absent).
 
      :asset      → :closing   (monetary BS items — cash, AR, AP)
@@ -76,7 +76,7 @@
      :income     → :average   (P&L over the period)
      :expense    → :average
 
-   For NON-MONETARY asset/liability (per `:account/monetary? false`),
+   For NON-MONETARY asset/liability (per `:kontor.account/monetary? false`),
    `pick-rate-type` overrides this default and returns `:historical` —
    the IAS-21-correct treatment for PP&E, inventory-at-cost, prepaid
    expenses, etc. Per ADR-073 review P1-73-1."
@@ -100,15 +100,15 @@
 ;; ============================================================================
 
 (defn- account-info
-  "Pull both :account/type and :account/monetary? in one shot."
+  "Pull both :kontor.account/type and :kontor.account/monetary? in one shot."
   [db account-eid]
-  (d/pull db [:account/type :account/monetary?] account-eid))
+  (d/pull db [:kontor.account/type :kontor.account/monetary?] account-eid))
 
 (defn- pick-rate-type
   "Resolve the rate-type for an (account-eid, account-type) given:
 
      1. The :rate-type-by-account override map (per-account-eid wins).
-     2. The account's :account/monetary? — if explicitly `false` on an
+     2. The account's :kontor.account/monetary? — if explicitly `false` on an
         :asset or :liability, return :historical (IAS 21 non-monetary).
         If explicitly `true` or absent on those types, fall through
         to the type-default.
@@ -153,7 +153,7 @@
      :cta-account                 — :db/id of the CTA account in the
                                      consolidation chart. Receives the
                                      translation-plug posting.
-     :rate-type-by-account-type   — override map keyed by :account/type.
+     :rate-type-by-account-type   — override map keyed by :kontor.account/type.
                                      Defaults to
                                      [[default-rate-type-by-account-type]].
      :rate-type-by-account        — override map keyed by account eid
@@ -217,8 +217,8 @@
         per-account-translated
         (into {}
               (for [[acct cmap] tb
-                    :let [{acct-type :account/type
-                           monetary? :account/monetary?} (account-info db acct)
+                    :let [{acct-type :kontor.account/type
+                           monetary? :kontor.account/monetary?} (account-info db acct)
                           acct-type (or acct-type :other)
                           rt (pick-rate-type rate-type-by-account
                                              rate-type-by-account-type

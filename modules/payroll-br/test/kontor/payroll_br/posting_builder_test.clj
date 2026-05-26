@@ -7,7 +7,7 @@
 
 (def accounts
   "Synthetic eid-shaped account map. Real consumers feed eids from
-   (d/q ... :account/code) lookups."
+   (d/q ... :kontor.account/code) lookups."
   {:br-payroll-wages              :acct/wages
    :br-payroll-er-inss            :acct/er-inss
    :br-payroll-er-fgts            :acct/er-fgts
@@ -113,7 +113,7 @@
                         (jane-fact))]
     (testing "Every posting carries the CNPJ routing tag"
       (is (every? (fn [p]
-                    (some #(= % [:account-tag/name "br-cnpj-12345678000195"])
+                    (some #(= % [:kontor.account-tag/name "br-cnpj-12345678000195"])
                           (:posting/account-tags p)))
                   postings)))))
 

@@ -5,7 +5,7 @@
 ;;   query must return truthy iff invariant HOLDS.
 ;;
 ;; Semantics: every new posting's :posting/account must reference an
-;; account whose :account/active is true (or unset — we treat absent
+;; account whose :kontor.account/active is true (or unset — we treat absent
 ;; as active, mirroring Odoo's "no archive flag = active" default).
 ;;
 ;; Strategy: count posting→inactive-account violations via a subquery.
@@ -15,7 +15,7 @@
  :in $before $after $empty+txs $txs
  :where
  ;; Holds iff no posting in $empty+txs (the just-applied tx)
- ;; references an account that is :account/active false in the
+ ;; references an account that is :kontor.account/active false in the
  ;; resulting state $after.
  ;;
  ;; Datalog mechanics worth knowing for the next invariant author:
@@ -34,14 +34,14 @@
  ;;     from a previous function binding. Avoid the predicate-only
  ;;     form for derived values.
  ;;
- ;; Convention from Odoo: an account without :account/active set is
+ ;; Convention from Odoo: an account without :kontor.account/active set is
  ;; treated as active (the predicate filters explicitly on `false`,
  ;; so `nil` / missing passes through cleanly).
  [(q [:find ?p
       :in $after $empty+txs
       :where
       [$empty+txs ?p :posting/account ?account]
-      [$after ?account :account/active false]]
+      [$after ?account :kontor.account/active false]]
      $after $empty+txs)
   ?violators]
  [(count ?violators) ?n-violators]

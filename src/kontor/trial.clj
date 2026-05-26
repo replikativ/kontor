@@ -16,10 +16,10 @@
             [kontor.money :as money]))
 
 (defn- all-account-eids
-  "Every :account/path entity in the snapshot."
+  "Every :kontor.account/path entity in the snapshot."
   [db]
   (d/q '[:find [?a ...]
-         :where [?a :account/path _]]
+         :where [?a :kontor.account/path _]]
        db))
 
 (defn trial-balance

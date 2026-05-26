@@ -19,23 +19,23 @@
      :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
     {:db/id -2 :kontor.commodity/symbol "USD" :kontor.commodity/name "US Dollar"
      :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "USD"}
-    {:db/id -3 :account/path "Assets:Receivable" :account/name "AR"
-     :account/type :asset :account/active true}
-    {:db/id -4 :account/path "Income:Sales" :account/name "Sales"
-     :account/type :income :account/active true}
-    {:db/id -5 :account/path "Assets:USD-Bank" :account/name "USD"
-     :account/type :asset :account/active true}
-    {:db/id -6 :account/path "Income:USD-Sales" :account/name "USD Sales"
-     :account/type :income :account/active true}
+    {:db/id -3 :kontor.account/path "Assets:Receivable" :kontor.account/name "AR"
+     :kontor.account/type :asset :kontor.account/active true}
+    {:db/id -4 :kontor.account/path "Income:Sales" :kontor.account/name "Sales"
+     :kontor.account/type :income :kontor.account/active true}
+    {:db/id -5 :kontor.account/path "Assets:USD-Bank" :kontor.account/name "USD"
+     :kontor.account/type :asset :kontor.account/active true}
+    {:db/id -6 :kontor.account/path "Income:USD-Sales" :kontor.account/name "USD Sales"
+     :kontor.account/type :income :kontor.account/active true}
     {:db/id -7 :journal/code "INV" :journal/name "J"
      :journal/type :sale :journal/active true}])
   (let [db (d/db conn)]
     {:eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
      :usd (:db/id (d/entity db [:kontor.commodity/symbol "USD"]))
-     :rec (:db/id (d/entity db [:account/path "Assets:Receivable"]))
-     :rev (:db/id (d/entity db [:account/path "Income:Sales"]))
-     :usd-bank (:db/id (d/entity db [:account/path "Assets:USD-Bank"]))
-     :usd-rev  (:db/id (d/entity db [:account/path "Income:USD-Sales"]))
+     :rec (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
+     :rev (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
+     :usd-bank (:db/id (d/entity db [:kontor.account/path "Assets:USD-Bank"]))
+     :usd-rev  (:db/id (d/entity db [:kontor.account/path "Income:USD-Sales"]))
      :jnl (:db/id (d/entity db [:journal/code "INV"]))}))
 
 (defn- post-pair!

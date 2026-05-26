@@ -23,7 +23,7 @@
 
 (defn wage-base
   "The base-selector: marginalize (σ_E) the entity's wage-expense
-   postings — those on an account whose `:account/code` matches a
+   postings — those on an account whose `:kontor.account/code` matches a
    `wage-codes` pattern (exact, or `\"prefix%\"`) — over the period
    into one Money sum. `context` carries `:conn`, `:period`, and an
    optional `:entity` (ADR-031)."

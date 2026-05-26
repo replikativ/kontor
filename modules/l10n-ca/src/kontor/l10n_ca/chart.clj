@@ -12,9 +12,9 @@
   (->> chart (mapcat :tags) distinct vec))
 
 (defn- tag-tx [tags]
-  (mapv (fn [t] {:account-tag/name (name t)
-                 :account-tag/country-code "CA"
-                 :account-tag/applicability :account})
+  (mapv (fn [t] {:kontor.account-tag/name (name t)
+                 :kontor.account-tag/country-code "CA"
+                 :kontor.account-tag/applicability :account})
         tags))
 
 (defn- ensure-cad []
@@ -23,13 +23,13 @@
 
 (defn- account-tx
   [{:keys [code path type name reconcilable? tags]}]
-  (cond-> {:account/path path :account/code code :account/name name
-           :account/type type :account/active true
-           :account/commodity [:kontor.commodity/symbol "CAD"]
-           :account/reconcilable (boolean reconcilable?)}
+  (cond-> {:kontor.account/path path :kontor.account/code code :kontor.account/name name
+           :kontor.account/type type :kontor.account/active true
+           :kontor.account/commodity [:kontor.commodity/symbol "CAD"]
+           :kontor.account/reconcilable (boolean reconcilable?)}
     (seq tags)
-    (assoc :account/tags
-           (mapv (fn [t] [:account-tag/name (clojure.core/name t)]) tags))))
+    (assoc :kontor.account/tags
+           (mapv (fn [t] [:kontor.account-tag/name (clojure.core/name t)]) tags))))
 
 (defn install!
   ([conn] (install! conn (load-chart)))

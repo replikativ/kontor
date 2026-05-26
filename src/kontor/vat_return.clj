@@ -21,7 +21,7 @@
             [kontor.report :as report]))
 
 (defn- vat-total
-  "Marginalize the period's VAT postings on accounts whose `:account/
+  "Marginalize the period's VAT postings on accounts whose `:kontor.account/
    code` matches `codes` into one Money sum."
   [conn {:keys [from to entity]} codes commodity]
   (let [postings (report/report-postings

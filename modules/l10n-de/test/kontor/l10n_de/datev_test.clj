@@ -32,7 +32,7 @@
     conn))
 
 (defn- account-eid [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (defn- post-fixture-book!
   "Two transactions covering the canonical hand-crafted DATEV file:

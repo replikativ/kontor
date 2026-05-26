@@ -55,31 +55,31 @@
                {:kontor.partner/external-id "CUSTOMER" :kontor.partner/type :person
                 :kontor.partner/status :enabled :kontor.partner/name "Customer Jane"}
                ;; Accounts
-               {:account/code "1400" :account/name "Inventory"
-                :account/path "1400" :account/type :asset}
-               {:account/code "1200" :account/name "Accounts Receivable"
-                :account/path "1200" :account/type :asset}
-               {:account/code "4000" :account/name "Sales Revenue"
-                :account/path "4000" :account/type :revenue}
-               {:account/code "5000" :account/name "Purchase Expense"
-                :account/path "5000" :account/type :expense}
-               {:account/code "2000" :account/name "Accounts Payable"
-                :account/path "2000" :account/type :liability}
-               {:account/code "2150" :account/name "GR/IR Clearing"
-                :account/path "2150" :account/type :liability}
+               {:kontor.account/code "1400" :kontor.account/name "Inventory"
+                :kontor.account/path "1400" :kontor.account/type :asset}
+               {:kontor.account/code "1200" :kontor.account/name "Accounts Receivable"
+                :kontor.account/path "1200" :kontor.account/type :asset}
+               {:kontor.account/code "4000" :kontor.account/name "Sales Revenue"
+                :kontor.account/path "4000" :kontor.account/type :revenue}
+               {:kontor.account/code "5000" :kontor.account/name "Purchase Expense"
+                :kontor.account/path "5000" :kontor.account/type :expense}
+               {:kontor.account/code "2000" :kontor.account/name "Accounts Payable"
+                :kontor.account/path "2000" :kontor.account/type :liability}
+               {:kontor.account/code "2150" :kontor.account/name "GR/IR Clearing"
+                :kontor.account/path "2150" :kontor.account/type :liability}
                ;; GL defaults
                {:gl-account-default/account-type :inventory
-                :gl-account-default/account [:account/path "1400"]}
+                :gl-account-default/account [:kontor.account/path "1400"]}
                {:gl-account-default/account-type :ar
-                :gl-account-default/account [:account/path "1200"]}
+                :gl-account-default/account [:kontor.account/path "1200"]}
                {:gl-account-default/account-type :sales-revenue
-                :gl-account-default/account [:account/path "4000"]}
+                :gl-account-default/account [:kontor.account/path "4000"]}
                {:gl-account-default/account-type :purchase-expense
-                :gl-account-default/account [:account/path "5000"]}
+                :gl-account-default/account [:kontor.account/path "5000"]}
                {:gl-account-default/account-type :ap
-                :gl-account-default/account [:account/path "2000"]}
+                :gl-account-default/account [:kontor.account/path "2000"]}
                {:gl-account-default/account-type :gr-ir-clearing
-                :gl-account-default/account [:account/path "2150"]}
+                :gl-account-default/account [:kontor.account/path "2150"]}
                ;; Journals
                {:journal/code "PURCH" :journal/name "Purchase Journal"
                 :journal/type :purchase}
@@ -152,7 +152,7 @@
           (is (= 0 (.compareTo (bigdec "250.00")
                                (or (d/q '[:find (sum ?amt) .
                                           :where
-                                          [?a :account/path "1400"]
+                                          [?a :kontor.account/path "1400"]
                                           [?p :posting/account ?a]
                                           [?p :posting/amount ?amt]]
                                         db) 0M)))))
@@ -160,7 +160,7 @@
           (is (= 0 (.compareTo (bigdec "-250.00")
                                (or (d/q '[:find (sum ?amt) .
                                           :where
-                                          [?a :account/path "2150"]
+                                          [?a :kontor.account/path "2150"]
                                           [?p :posting/account ?a]
                                           [?p :posting/amount ?amt]]
                                         db) 0M)))))))))
@@ -258,7 +258,7 @@
           (is (= 0 (.compareTo (bigdec "430.00")
                                (d/q '[:find (sum ?amt) .
                                       :where
-                                      [?a :account/path "1400"]
+                                      [?a :kontor.account/path "1400"]
                                       [?p :posting/account ?a]
                                       [?p :posting/amount ?amt]]
                                     db)))))
@@ -266,7 +266,7 @@
           (is (= 0 (.compareTo (bigdec "-430.00")
                                (d/q '[:find (sum ?amt) .
                                       :where
-                                      [?a :account/path "2150"]
+                                      [?a :kontor.account/path "2150"]
                                       [?p :posting/account ?a]
                                       [?p :posting/amount ?amt]]
                                     db)))))))))
@@ -368,7 +368,7 @@
           (is (= 0 (.compareTo (bigdec "0")
                                (d/q '[:find (sum ?amt) .
                                       :where
-                                      [?a :account/path "2150"]
+                                      [?a :kontor.account/path "2150"]
                                       [?p :posting/account ?a]
                                       [?p :posting/amount ?amt]]
                                     db)))))
@@ -379,7 +379,7 @@
           (is (= 0 (.compareTo (bigdec "250.00")
                                (d/q '[:find (sum ?amt) .
                                       :where
-                                      [?a :account/path "1400"]
+                                      [?a :kontor.account/path "1400"]
                                       [?p :posting/account ?a]
                                       [?p :posting/amount ?amt]]
                                     db)))))
@@ -387,7 +387,7 @@
           (is (= 0 (.compareTo (bigdec "-250.00")
                                (d/q '[:find (sum ?amt) .
                                       :where
-                                      [?a :account/path "2000"]
+                                      [?a :kontor.account/path "2000"]
                                       [?p :posting/account ?a]
                                       [?p :posting/amount ?amt]]
                                     db)))))
@@ -572,7 +572,7 @@
           (is (= 0 (.compareTo (bigdec "75.00")
                                (d/q '[:find (sum ?amt) .
                                       :where
-                                      [?a :account/path "4000"]
+                                      [?a :kontor.account/path "4000"]
                                       [?p :posting/account ?a]
                                       [?p :posting/amount ?amt]]
                                     db)))))
@@ -580,7 +580,7 @@
           (is (= 0 (.compareTo (bigdec "-75.00")
                                (d/q '[:find (sum ?amt) .
                                       :where
-                                      [?a :account/path "1200"]
+                                      [?a :kontor.account/path "1200"]
                                       [?p :posting/account ?a]
                                       [?p :posting/amount ?amt]]
                                     db)))))

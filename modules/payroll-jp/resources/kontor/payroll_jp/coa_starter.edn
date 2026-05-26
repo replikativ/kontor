@@ -1,6 +1,6 @@
 ;; JP payroll-specific account starter — extends modules/l10n-jp/chart.edn
 ;; per ADR-084 §4 (CoA extension). Consumer overrides as needed; the
-;; load-bearing identifier is :account-tag/name (e.g. "jp-payroll-pension"),
+;; load-bearing identifier is :kontor.account-tag/name (e.g. "jp-payroll-pension"),
 ;; NOT the numeric code.
 ;;
 ;; Account-number convention: J-GAAP doesn't mandate one, but the

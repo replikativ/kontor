@@ -65,7 +65,7 @@
    ## Per-tool conventions
 
    - All eid-style args (account, posting, partner, …) accept either
-     an integer eid OR a lookup-ref tuple `[:account/code \"6020\"]` —
+     an integer eid OR a lookup-ref tuple `[:kontor.account/code \"6020\"]` —
      the handlers normalize via `d/q`.
    - Dates are ISO-8601 strings in the JSON shape; handlers parse via
      `java.util.Date.from(java.time.Instant.parse ...)`.

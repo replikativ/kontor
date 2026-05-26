@@ -27,12 +27,12 @@
                   :kontor.commodity/precision 2}
                  {:journal/code "GEN" :journal/type :general}
                  {:journal/code "PUR" :journal/type :purchase}
-                 {:account/path "Gastos:Sueldos" :account/code "6010"
-                  :account/type :expense}
-                 {:account/path "Activo:Banco"   :account/code "1010"
-                  :account/type :asset}])
-    (book/buy! conn {:debit-account  [:account/path "Gastos:Sueldos"]
-                     :credit-account [:account/path "Activo:Banco"]
+                 {:kontor.account/path "Gastos:Sueldos" :kontor.account/code "6010"
+                  :kontor.account/type :expense}
+                 {:kontor.account/path "Activo:Banco"   :kontor.account/code "1010"
+                  :kontor.account/type :asset}])
+    (book/buy! conn {:debit-account  [:kontor.account/path "Gastos:Sueldos"]
+                     :credit-account [:kontor.account/path "Activo:Banco"]
                      :amount 500000 :commodity [:kontor.commodity/symbol "MXN"]
                      :effective-date #inst "2026-03-31"})
     (let [provider (mx/mx-isn-provider {:state :cdmx :wage-codes ["6010"]})
@@ -146,12 +146,12 @@
                   :kontor.commodity/precision 2}
                  {:journal/code "GEN" :journal/type :general}
                  {:journal/code "SAL" :journal/type :sale}
-                 {:account/path "Ingresos:Honorarios" :account/code "4010"
-                  :account/type :income}
-                 {:account/path "Activo:Banco" :account/code "1010"
-                  :account/type :asset}])
-    (book/sell! conn {:debit-account  [:account/path "Activo:Banco"]
-                      :credit-account [:account/path "Ingresos:Honorarios"]
+                 {:kontor.account/path "Ingresos:Honorarios" :kontor.account/code "4010"
+                  :kontor.account/type :income}
+                 {:kontor.account/path "Activo:Banco" :kontor.account/code "1010"
+                  :kontor.account/type :asset}])
+    (book/sell! conn {:debit-account  [:kontor.account/path "Activo:Banco"]
+                      :credit-account [:kontor.account/path "Ingresos:Honorarios"]
                       :amount 600000 :commodity [:kontor.commodity/symbol "MXN"]
                       :effective-date #inst "2026-06-30"})
     (let [provider (mx/mx-isr-personal-provider {})

@@ -23,28 +23,28 @@
                   :kontor.commodity/precision 2}
                  {:journal/code "GEN" :journal/type :general}
                  {:journal/code "PUR" :journal/type :purchase}
-                 {:account/path "Expenses:Wages"   :account/code "6200"
-                  :account/type :expense}
-                 {:account/path "Expenses:Other"   :account/code "6900"
-                  :account/type :expense}
-                 {:account/path "Assets:Cash"      :account/code "1000"
-                  :account/type :asset}
-                 {:account/path "Expenses:Payroll-Tax" :account/code "6300"
-                  :account/type :expense}
-                 {:account/path "Liabilities:Payroll-Tax-Payable"
-                  :account/code "2300" :account/type :liability}])
+                 {:kontor.account/path "Expenses:Wages"   :kontor.account/code "6200"
+                  :kontor.account/type :expense}
+                 {:kontor.account/path "Expenses:Other"   :kontor.account/code "6900"
+                  :kontor.account/type :expense}
+                 {:kontor.account/path "Assets:Cash"      :kontor.account/code "1000"
+                  :kontor.account/type :asset}
+                 {:kontor.account/path "Expenses:Payroll-Tax" :kontor.account/code "6300"
+                  :kontor.account/type :expense}
+                 {:kontor.account/path "Liabilities:Payroll-Tax-Payable"
+                  :kontor.account/code "2300" :kontor.account/type :liability}])
     conn))
 
 (defn- book-expense! [conn path amount]
-  (book/buy! conn {:debit-account  [:account/path path]
-                   :credit-account [:account/path "Assets:Cash"]
+  (book/buy! conn {:debit-account  [:kontor.account/path path]
+                   :credit-account [:kontor.account/path "Assets:Cash"]
                    :amount amount :commodity eur
                    :effective-date #inst "2026-06-15"}))
 
 (defn- sum-account [conn path]
   (reduce + 0M
           (d/q '[:find [?amt ...] :in $ ?p
-                 :where [?a :account/path ?p] [?pp :posting/account ?a]
+                 :where [?a :kontor.account/path ?p] [?pp :posting/account ?a]
                  [?pp :posting/amount ?amt]]
                (d/db conn) path)))
 
@@ -83,8 +83,8 @@
                     {:id :test :schedule (ts/flat 0.03M)
                      :wage-codes ["6200"] :authority :test :commodity :EUR})
           builder  (trpb/make-static-tax-return-posting-builder
-                    {:expense-account [:account/path "Expenses:Payroll-Tax"]
-                     :payable-account [:account/path
+                    {:expense-account [:kontor.account/path "Expenses:Payroll-Tax"]
+                     :payable-account [:kontor.account/path
                                        "Liabilities:Payroll-Tax-Payable"]
                      :journal   [:journal/code "GEN"]
                      :commodity eur})

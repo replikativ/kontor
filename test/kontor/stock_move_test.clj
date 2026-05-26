@@ -25,35 +25,35 @@
         _ (d/transact conn
                       [{:db/id -1 :kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                         :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
-                       {:db/id -10 :account/path asset-acc-path
-                        :account/name "Inventory" :account/type :asset
-                        :account/active true}
-                       {:db/id -11 :account/path gr-ir-path
-                        :account/name "GR/IR clearing" :account/type :liability
-                        :account/active true}
-                       {:db/id -12 :account/path cogs-path
-                        :account/name "COGS" :account/type :expense
-                        :account/active true}
-                       {:db/id -13 :account/path variance-path
-                        :account/name "Price variance" :account/type :expense
-                        :account/active true}
-                       {:db/id -20 :account/path "Item:Widget"
-                        :account/name "Widget item" :account/type :asset
-                        :account/active true}
+                       {:db/id -10 :kontor.account/path asset-acc-path
+                        :kontor.account/name "Inventory" :kontor.account/type :asset
+                        :kontor.account/active true}
+                       {:db/id -11 :kontor.account/path gr-ir-path
+                        :kontor.account/name "GR/IR clearing" :kontor.account/type :liability
+                        :kontor.account/active true}
+                       {:db/id -12 :kontor.account/path cogs-path
+                        :kontor.account/name "COGS" :kontor.account/type :expense
+                        :kontor.account/active true}
+                       {:db/id -13 :kontor.account/path variance-path
+                        :kontor.account/name "Price variance" :kontor.account/type :expense
+                        :kontor.account/active true}
+                       {:db/id -20 :kontor.account/path "Item:Widget"
+                        :kontor.account/name "Widget item" :kontor.account/type :asset
+                        :kontor.account/active true}
                        {:db/id -30 :journal/code "STOCK"
                         :journal/name "Stock" :journal/type :general
                         :journal/active true}])
         db0 (d/db conn)]
     {:conn      conn
      :commodity (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
-     :item      (:db/id (d/entity db0 [:account/path "Item:Widget"]))
+     :item      (:db/id (d/entity db0 [:kontor.account/path "Item:Widget"]))
      :journal   (:db/id (d/entity db0 [:journal/code "STOCK"]))
      :book      (valuation/primary db0)}))
 
 (def account-fn
   "Simple role → account-lookup-ref mapper for the tests."
   (fn [_move role]
-    [:account/path (case role
+    [:kontor.account/path (case role
                      :inventory      asset-acc-path
                      :gr-ir-clearing gr-ir-path
                      :cogs           cogs-path
@@ -125,21 +125,21 @@
           asset-bal (d/q '[:find (sum ?amt) .
                            :in $ ?path
                            :where
-                           [?a :account/path ?path]
+                           [?a :kontor.account/path ?path]
                            [?p :posting/account ?a]
                            [?p :posting/amount ?amt]]
                          db asset-acc-path)
           var-bal (d/q '[:find (sum ?amt) .
                          :in $ ?path
                          :where
-                         [?a :account/path ?path]
+                         [?a :kontor.account/path ?path]
                          [?p :posting/account ?a]
                          [?p :posting/amount ?amt]]
                        db variance-path)
           gr-ir-bal (d/q '[:find (sum ?amt) .
                            :in $ ?path
                            :where
-                           [?a :account/path ?path]
+                           [?a :kontor.account/path ?path]
                            [?p :posting/account ?a]
                            [?p :posting/amount ?amt]]
                          db gr-ir-path)]
@@ -185,7 +185,7 @@
           cogs-bal (d/q '[:find (sum ?amt) .
                           :in $ ?path
                           :where
-                          [?a :account/path ?path]
+                          [?a :kontor.account/path ?path]
                           [?p :posting/account ?a]
                           [?p :posting/amount ?amt]]
                         db cogs-path)]

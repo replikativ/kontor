@@ -40,7 +40,7 @@
     conn))
 
 (defn- get-account-eid [db code]
-  (d/q '[:find ?e . :in $ ?c :where [?e :account/code ?c]] db code))
+  (d/q '[:find ?e . :in $ ?c :where [?e :kontor.account/code ?c]] db code))
 
 ;; ============================================================================
 ;; Mock compute provider — supplies a balanced fact per employment
@@ -198,7 +198,7 @@
                             [:transaction/external-id
                              {:posting/_transaction
                               [:posting/amount
-                               {:posting/account [:account/code]}]}]}]
+                               {:posting/account [:kontor.account/code]}]}]}]
                     run-eid)]
     (testing "payroll-run row created"
       (is (some? run-eid))
@@ -217,7 +217,7 @@
     (testing "PCG 431 (URSSAF) accumulates all URSSAF flow for both employees"
       (let [postings (-> run :payroll-run/payroll-transaction
                          :posting/_transaction)
-            by-code (group-by (comp :account/code :posting/account) postings)
+            by-code (group-by (comp :kontor.account/code :posting/account) postings)
             urssaf-431 (reduce (fn [a {:keys [posting/amount]}]
                                  (.add ^BigDecimal a ^BigDecimal amount))
                                0M (get by-code "431"))]
@@ -230,7 +230,7 @@
     (testing "PCG 421 (Net wages payable) totals both employees' net"
       (let [postings (-> run :payroll-run/payroll-transaction
                          :posting/_transaction)
-            by-code (group-by (comp :account/code :posting/account) postings)
+            by-code (group-by (comp :kontor.account/code :posting/account) postings)
             net-421 (reduce (fn [a {:keys [posting/amount]}]
                               (.add ^BigDecimal a ^BigDecimal amount))
                             0M (get by-code "421"))]
@@ -239,7 +239,7 @@
     (testing "PCG 4421 (PAS withholding) is non-zero"
       (let [postings (-> run :payroll-run/payroll-transaction
                          :posting/_transaction)
-            by-code (group-by (comp :account/code :posting/account) postings)
+            by-code (group-by (comp :kontor.account/code :posting/account) postings)
             pas-4421 (reduce (fn [a {:keys [posting/amount]}]
                                (.add ^BigDecimal a ^BigDecimal amount))
                              0M (get by-code "4421"))]
@@ -248,7 +248,7 @@
     (testing "Congés payés accrual lands on both 6412 (DR) and 4282 (CR)"
       (let [postings (-> run :payroll-run/payroll-transaction
                          :posting/_transaction)
-            by-code (group-by (comp :account/code :posting/account) postings)
+            by-code (group-by (comp :kontor.account/code :posting/account) postings)
             cp-4282 (reduce (fn [a {:keys [posting/amount]}]
                               (.add ^BigDecimal a ^BigDecimal amount))
                             0M (get by-code "4282"))]

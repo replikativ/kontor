@@ -18,7 +18,7 @@
     (let [conn (preset/create-de-db)
           db   (d/db conn)]
       (testing "SKR04 chart is present (incl. tax + dividend accounts per I-18)"
-        (let [paths (set (d/q '[:find [?path ...] :where [_ :account/path ?path]] db))]
+        (let [paths (set (d/q '[:find [?path ...] :where [_ :kontor.account/path ?path]] db))]
           (is (>= (count paths) 46) "expected ~50 SKR04 accounts")
           ;; F18 / I-18 regression: the corp-tax + dividend accounts must ship
           (is (contains? paths "Aufwendungen:Steuern:KSt"))
@@ -53,20 +53,20 @@
       ;; Opening capital
       (e (merge gj {:effective-date #inst "2026-01-02"
                     :narration "Opening Bank"
-                    :postings [{:account [:account/path "Umlaufvermögen:Bank"] :amount 50000M}
-                               {:account [:account/path "Eigenkapital:Privateinlagen"] :amount -50000M}]}))
+                    :postings [{:account [:kontor.account/path "Umlaufvermögen:Bank"] :amount 50000M}
+                               {:account [:kontor.account/path "Eigenkapital:Privateinlagen"] :amount -50000M}]}))
       ;; Service revenue €30k + €5.7k USt
       (e (merge cr {:effective-date #inst "2026-03-31"
                     :narration "Beratung Acme Q1"
-                    :postings [{:account [:account/path "Umlaufvermögen:Bank"] :amount 35700M}
-                               {:account [:account/path "Erträge:Erlöse:19%"]  :amount -30000M}
-                               {:account [:account/path "Verbindlichkeiten:Umsatzsteuer:19%"] :amount -5700M}]}))
+                    :postings [{:account [:kontor.account/path "Umlaufvermögen:Bank"] :amount 35700M}
+                               {:account [:kontor.account/path "Erträge:Erlöse:19%"]  :amount -30000M}
+                               {:account [:kontor.account/path "Verbindlichkeiten:Umsatzsteuer:19%"] :amount -5700M}]}))
       ;; Rent expense €18k + €3.42k Vorsteuer
       (e (merge cd {:effective-date #inst "2026-12-15"
                     :narration "Miete 2026"
-                    :postings [{:account [:account/path "Aufwendungen:Raum:Miete"]      :amount 18000M}
-                               {:account [:account/path "Umlaufvermögen:Vorsteuer:19%"]  :amount 3420M}
-                               {:account [:account/path "Umlaufvermögen:Bank"]           :amount -21420M}]}))
+                    :postings [{:account [:kontor.account/path "Aufwendungen:Raum:Miete"]      :amount 18000M}
+                               {:account [:kontor.account/path "Umlaufvermögen:Vorsteuer:19%"]  :amount 3420M}
+                               {:account [:kontor.account/path "Umlaufvermögen:Bank"]           :amount -21420M}]}))
 
       (testing "GuV (HGB §275 Abs. 2)"
         (let [guv (de-pnl/compute conn {:from #inst "2026-01-01"

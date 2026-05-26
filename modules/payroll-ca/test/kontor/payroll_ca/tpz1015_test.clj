@@ -87,12 +87,12 @@
    Uses Revenu Québec accounts (QC ITX, QPP, QPIP, FSS)."
   [conn {:keys [effective-date qc-itx qpp qpip fss rp-tag]}]
   (let [db (d/db conn)
-        wages (d/q '[:find ?e . :where [?e :account/code "5400"]] db)
-        qc-itx-acc (d/q '[:find ?e . :where [?e :account/code "2511"]] db)
-        qpp-acc    (d/q '[:find ?e . :where [?e :account/code "2521"]] db)
-        qpip-acc   (d/q '[:find ?e . :where [?e :account/code "2531"]] db)
-        fss-acc    (d/q '[:find ?e . :where [?e :account/code "2532"]] db)
-        net-acc    (d/q '[:find ?e . :where [?e :account/code "2550"]] db)
+        wages (d/q '[:find ?e . :where [?e :kontor.account/code "5400"]] db)
+        qc-itx-acc (d/q '[:find ?e . :where [?e :kontor.account/code "2511"]] db)
+        qpp-acc    (d/q '[:find ?e . :where [?e :kontor.account/code "2521"]] db)
+        qpip-acc   (d/q '[:find ?e . :where [?e :kontor.account/code "2531"]] db)
+        fss-acc    (d/q '[:find ?e . :where [?e :kontor.account/code "2532"]] db)
+        net-acc    (d/q '[:find ?e . :where [?e :kontor.account/code "2550"]] db)
         journal (d/q '[:find ?e . :where [?e :journal/code "PAY-CA"]] db)
         cad (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "CAD"]] db)
         gross (.add ^BigDecimal qc-itx
@@ -100,7 +100,7 @@
                           (.add ^BigDecimal qpip ^BigDecimal fss)))
         gross (.add ^BigDecimal gross 1000M)
         net-amt 1000M
-        tag (when rp-tag [[:account-tag/name rp-tag]])
+        tag (when rp-tag [[:kontor.account-tag/name rp-tag]])
         mk-post (fn [acct amount narration]
                   (cond-> {:posting/account acct
                            :posting/amount amount
@@ -146,12 +146,12 @@
 
 (deftest tpz1015-rp-routing-filters
   (let [conn (bootstrap-db)]
-    (d/transact conn [{:account-tag/name "qc-rq-employer-A"
-                       :account-tag/country-code "CA"
-                       :account-tag/applicability :account}
-                      {:account-tag/name "qc-rq-employer-B"
-                       :account-tag/country-code "CA"
-                       :account-tag/applicability :account}])
+    (d/transact conn [{:kontor.account-tag/name "qc-rq-employer-A"
+                       :kontor.account-tag/country-code "CA"
+                       :kontor.account-tag/applicability :account}
+                      {:kontor.account-tag/name "qc-rq-employer-B"
+                       :kontor.account-tag/country-code "CA"
+                       :kontor.account-tag/applicability :account}])
     (post-qc-payroll-tx! conn {:effective-date #inst "2026-05-10"
                                :qc-itx 1000M :qpp 300M :qpip 100M :fss 200M
                                :rp-tag "qc-rq-employer-A"})

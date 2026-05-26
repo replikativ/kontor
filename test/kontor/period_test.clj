@@ -27,18 +27,18 @@
    conn
    [{:db/id -1 :kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
      :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
-    {:db/id -2 :account/path "Assets:Receivable" :account/name "AR"
-     :account/type :asset :account/active true}
-    {:db/id -3 :account/path "Income:Sales" :account/name "Sales"
-     :account/type :income :account/active true}
+    {:db/id -2 :kontor.account/path "Assets:Receivable" :kontor.account/name "AR"
+     :kontor.account/type :asset :kontor.account/active true}
+    {:db/id -3 :kontor.account/path "Income:Sales" :kontor.account/name "Sales"
+     :kontor.account/type :income :kontor.account/active true}
     {:db/id -4 :journal/code "INV" :journal/name "Sales invoices"
      :journal/type :sale :journal/active true}
     {:db/id -5 :journal/code "GEN" :journal/name "General journal"
      :journal/type :general :journal/active true}])
   (let [db (d/db conn)]
     {:eur       (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-     :rec       (:db/id (d/entity db [:account/path "Assets:Receivable"]))
-     :rev       (:db/id (d/entity db [:account/path "Income:Sales"]))
+     :rec       (:db/id (d/entity db [:kontor.account/path "Assets:Receivable"]))
+     :rev       (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
      :sales-jnl (:db/id (d/entity db [:journal/code "INV"]))
      :gen-jnl   (:db/id (d/entity db [:journal/code "GEN"]))}))
 
@@ -281,15 +281,15 @@
         _ (v/install-invariants! conn)
         ;; Need real catalog with rec/rev account refs
         _ (d/transact conn
-                      [{:db/id -10 :account/path "Assets:Receivable"
-                        :account/name "AR" :account/type :asset
-                        :account/active true}
-                       {:db/id -11 :account/path "Income:Sales"
-                        :account/name "Sales" :account/type :income
-                        :account/active true}])
+                      [{:db/id -10 :kontor.account/path "Assets:Receivable"
+                        :kontor.account/name "AR" :kontor.account/type :asset
+                        :kontor.account/active true}
+                       {:db/id -11 :kontor.account/path "Income:Sales"
+                        :kontor.account/name "Sales" :kontor.account/type :income
+                        :kontor.account/active true}])
         {:keys [eur sales-jnl]} (catalog! conn)
-        rec (:db/id (d/entity (d/db conn) [:account/path "Assets:Receivable"]))
-        rev (:db/id (d/entity (d/db conn) [:account/path "Income:Sales"]))
+        rec (:db/id (d/entity (d/db conn) [:kontor.account/path "Assets:Receivable"]))
+        rev (:db/id (d/entity (d/db conn) [:kontor.account/path "Income:Sales"]))
         period-eid (open-period! conn feb-1 mar-1)
         tx (posting/build-transaction
             {:transaction
@@ -311,15 +311,15 @@
   (let [conn (core/create-test-db)
         _ (v/install-invariants! conn)
         _ (d/transact conn
-                      [{:db/id -10 :account/path "Assets:Receivable"
-                        :account/name "AR" :account/type :asset
-                        :account/active true}
-                       {:db/id -11 :account/path "Income:Sales"
-                        :account/name "Sales" :account/type :income
-                        :account/active true}])
+                      [{:db/id -10 :kontor.account/path "Assets:Receivable"
+                        :kontor.account/name "AR" :kontor.account/type :asset
+                        :kontor.account/active true}
+                       {:db/id -11 :kontor.account/path "Income:Sales"
+                        :kontor.account/name "Sales" :kontor.account/type :income
+                        :kontor.account/active true}])
         {:keys [eur sales-jnl]} (catalog! conn)
-        rec (:db/id (d/entity (d/db conn) [:account/path "Assets:Receivable"]))
-        rev (:db/id (d/entity (d/db conn) [:account/path "Income:Sales"]))
+        rec (:db/id (d/entity (d/db conn) [:kontor.account/path "Assets:Receivable"]))
+        rev (:db/id (d/entity (d/db conn) [:kontor.account/path "Income:Sales"]))
         period-eid (open-period! conn feb-1 mar-1)
         tx (-> (posting/build-transaction
                 {:transaction

@@ -175,7 +175,7 @@
 
 (defn- investment-income-base-selectors
   "Marginalize the GL income postings and split into the §20 sub-
-   categories by the canonical `:account/path` chart convention
+   categories by the canonical `:kontor.account/path` chart convention
    (note 147 §3.2). Returns a map of `{<lane-key> <bigdec>}`.
 
    Requires `:conn` in ctx (`report-postings` needs a connection for

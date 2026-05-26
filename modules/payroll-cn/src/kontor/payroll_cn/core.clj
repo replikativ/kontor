@@ -134,7 +134,7 @@
    :analytic-account/path).
 
    The :cn-province plan applies to *consumer-marked* wage / SI / HF
-   accounts via :account/required-analytic-plans (per ADR-022). We do
+   accounts via :kontor.account/required-analytic-plans (per ADR-022). We do
    NOT mark the accounts here — that's the consumer's chart install.
    We DO ship the plan + provinces so consumers don't need to."
   [conn]
@@ -159,7 +159,7 @@
 
 (def account-tags
   "The :account-tag entities the CN payroll adapter expects on the
-   consumer's chart. Installed idempotently as `:account-tag/name`
+   consumer's chart. Installed idempotently as `:kontor.account-tag/name`
    rows; the consumer then attaches these tags to the relevant chart
    accounts."
   [;; Expense side
@@ -183,9 +183,9 @@
   [conn]
   (d/transact conn
               (mapv (fn [t]
-                      {:account-tag/name (name t)
-                       :account-tag/country-code "CN"
-                       :account-tag/applicability :account})
+                      {:kontor.account-tag/name (name t)
+                       :kontor.account-tag/country-code "CN"
+                       :kontor.account-tag/applicability :account})
                     account-tags)))
 
 ;; ============================================================================

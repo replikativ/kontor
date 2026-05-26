@@ -30,10 +30,10 @@
      :transaction/effective-date some-date
      :transaction/narration      "Test invoice"}
     :postings
-    [{:posting/account   :account/receivable
+    [{:posting/account   :kontor.account/receivable
       :posting/amount    100.00M
       :posting/commodity :EUR}
-     {:posting/account   :account/revenue
+     {:posting/account   :kontor.account/revenue
       :posting/amount    -100.00M
       :posting/commodity :EUR}]}
    overrides))
@@ -66,10 +66,10 @@
     (let [r (posting/validate
              {:transaction (-> (balanced-sample) :transaction)
               :postings
-              [{:posting/account :account/usd-bank :posting/amount 50.00M  :posting/commodity :USD}
-               {:posting/account :account/usd-bank :posting/amount -50.00M :posting/commodity :USD}
-               {:posting/account :account/eur-bank :posting/amount 100.00M :posting/commodity :EUR}
-               {:posting/account :account/eur-bank :posting/amount -100.00M :posting/commodity :EUR}]})]
+              [{:posting/account :kontor.account/usd-bank :posting/amount 50.00M  :posting/commodity :USD}
+               {:posting/account :kontor.account/usd-bank :posting/amount -50.00M :posting/commodity :USD}
+               {:posting/account :kontor.account/eur-bank :posting/amount 100.00M :posting/commodity :EUR}
+               {:posting/account :kontor.account/eur-bank :posting/amount -100.00M :posting/commodity :EUR}]})]
       (is (:ok? r))
       (is (empty? (:unbalanced r))))))
 
@@ -77,10 +77,10 @@
   (let [r (posting/validate
            {:transaction (-> (balanced-sample) :transaction)
             :postings
-            [{:posting/account :account/usd-bank :posting/amount 50.00M  :posting/commodity :USD}
-             {:posting/account :account/usd-bank :posting/amount -50.00M :posting/commodity :USD}
-             {:posting/account :account/eur-bank :posting/amount 100.00M :posting/commodity :EUR}
-             {:posting/account :account/eur-bank :posting/amount -99.00M :posting/commodity :EUR}]})]
+            [{:posting/account :kontor.account/usd-bank :posting/amount 50.00M  :posting/commodity :USD}
+             {:posting/account :kontor.account/usd-bank :posting/amount -50.00M :posting/commodity :USD}
+             {:posting/account :kontor.account/eur-bank :posting/amount 100.00M :posting/commodity :EUR}
+             {:posting/account :kontor.account/eur-bank :posting/amount -99.00M :posting/commodity :EUR}]})]
     (is (not (:ok? r)))
     ;; Only EUR is unbalanced in the nil-ledger group; USD nets to zero.
     (is (= #{nil} (set (keys (:unbalanced r)))))
@@ -90,7 +90,7 @@
   (let [r (posting/validate
            {:transaction (-> (balanced-sample) :transaction)
             :postings
-            [{:posting/account :account/x :posting/amount 0.00M :posting/commodity :EUR}]})]
+            [{:posting/account :kontor.account/x :posting/amount 0.00M :posting/commodity :EUR}]})]
     (is (not (:ok? r)))
     (is (some #(= :too-few-postings (:error %)) (:errors r)))))
 
@@ -101,9 +101,9 @@
              {:transaction (-> (balanced-sample) :transaction)
               :postings
               [{:posting/display-type :section :posting/narration "Header"}
-               {:posting/account :account/x :posting/amount 100.00M :posting/commodity :EUR}
+               {:posting/account :kontor.account/x :posting/amount 100.00M :posting/commodity :EUR}
                {:posting/display-type :note :posting/narration "Footer note"}
-               {:posting/account :account/y :posting/amount -100.00M :posting/commodity :EUR}]})]
+               {:posting/account :kontor.account/y :posting/amount -100.00M :posting/commodity :EUR}]})]
       (is (:ok? r) (str "errors=" (:errors r))))))
 
 (deftest validate-rejects-unknown-display-type
@@ -119,8 +119,8 @@
            {:transaction (-> (balanced-sample) :transaction)
             :postings
             [{:posting/amount 100.00M :posting/commodity :EUR}     ;; missing account
-             {:posting/account :account/x :posting/commodity :EUR} ;; missing amount
-             {:posting/account :account/y :posting/amount 1.00M}]}) ;; missing commodity
+             {:posting/account :kontor.account/x :posting/commodity :EUR} ;; missing amount
+             {:posting/account :kontor.account/y :posting/amount 1.00M}]}) ;; missing commodity
         codes (set (map :error (:errors r)))]
     (is (not (:ok? r)))
     (is (codes :missing-account))
@@ -227,7 +227,7 @@
    :analytic-distribution/percent pct})
 
 (def ^:private one-posting-with-cc-60-40
-  {:posting/account   :account/cogs
+  {:posting/account   :kontor.account/cogs
    :posting/amount    100.00M
    :posting/commodity :EUR
    :posting/analytic-distributions [(cc "Eng" 60M) (cc "Sales" 40M)]})
@@ -247,7 +247,7 @@
     (is (every? #(= :p/acme (:posting/partner %)) children))
     (is (every? #(= "ACME services" (:posting/narration %)) children))
     (is (every? #(= [:ledger/code "ifrs"] (:posting/ledger %)) children))
-    (is (every? #(= :account/cogs (:posting/account %)) children))))
+    (is (every? #(= :kontor.account/cogs (:posting/account %)) children))))
 
 (deftest expand-each-child-carries-single-distribution-at-100
   (let [children (posting/expand-distribution one-posting-with-cc-60-40 cc-plan)]
@@ -367,12 +367,12 @@
   (d/transact conn
               [{:db/id -1 :kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                 :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
-               {:db/id -2 :account/path "Assets:Receivable"
-                :account/name "Trade receivables"
-                :account/type :asset :account/active true}
-               {:db/id -3 :account/path "Income:Sales"
-                :account/name "Sales revenue"
-                :account/type :income :account/active true}
+               {:db/id -2 :kontor.account/path "Assets:Receivable"
+                :kontor.account/name "Trade receivables"
+                :kontor.account/type :asset :kontor.account/active true}
+               {:db/id -3 :kontor.account/path "Income:Sales"
+                :kontor.account/name "Sales revenue"
+                :kontor.account/type :income :kontor.account/active true}
                {:db/id -4 :journal/code "INV" :journal/name "Customer invoices"
                 :journal/type :sale :journal/active true}])
   (d/db conn))
@@ -381,8 +381,8 @@
   (let [conn (core/create-test-db)
         _ (seed-catalog! conn)
         eur (:db/id (d/entity (d/db conn) [:kontor.commodity/symbol "EUR"]))
-        rec (:db/id (d/entity (d/db conn) [:account/path "Assets:Receivable"]))
-        rev (:db/id (d/entity (d/db conn) [:account/path "Income:Sales"]))
+        rec (:db/id (d/entity (d/db conn) [:kontor.account/path "Assets:Receivable"]))
+        rev (:db/id (d/entity (d/db conn) [:kontor.account/path "Income:Sales"]))
         jnl (:db/id (d/entity (d/db conn) [:journal/code "INV"]))
         tx-data (posting/build-transaction
                  {:transaction
@@ -414,8 +414,8 @@
   (let [conn (core/create-test-db)
         _ (seed-catalog! conn)
         eur (:db/id (d/entity (d/db conn) [:kontor.commodity/symbol "EUR"]))
-        rec (:db/id (d/entity (d/db conn) [:account/path "Assets:Receivable"]))
-        rev (:db/id (d/entity (d/db conn) [:account/path "Income:Sales"]))
+        rec (:db/id (d/entity (d/db conn) [:kontor.account/path "Assets:Receivable"]))
+        rev (:db/id (d/entity (d/db conn) [:kontor.account/path "Income:Sales"]))
         jnl (:db/id (d/entity (d/db conn) [:journal/code "INV"]))
         tx-data (posting/build-transaction
                  {:transaction
@@ -453,8 +453,8 @@
   (let [conn (core/create-test-db)
         _ (seed-catalog! conn)
         eur (:db/id (d/entity (d/db conn) [:kontor.commodity/symbol "EUR"]))
-        rec (:db/id (d/entity (d/db conn) [:account/path "Assets:Receivable"]))
-        rev (:db/id (d/entity (d/db conn) [:account/path "Income:Sales"]))
+        rec (:db/id (d/entity (d/db conn) [:kontor.account/path "Assets:Receivable"]))
+        rev (:db/id (d/entity (d/db conn) [:kontor.account/path "Income:Sales"]))
         jnl (:db/id (d/entity (d/db conn) [:journal/code "INV"]))
         posted-at #inst "2026-05-13T10:00:00Z"
         _ (posting/post-transaction!

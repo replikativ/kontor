@@ -232,17 +232,17 @@
 ;; Account — chart-of-accounts entry.
 ;;
 ;; PTA-style: a hierarchical name like \"Assets:Bank:Checking\" is the
-;; canonical identity. We additionally carry the Odoo-style :account/code
+;; canonical identity. We additionally carry the Odoo-style :kontor.account/code
 ;; (a numeric or alphanumeric tag — SKR03 has 1200, QBO uses 1010, etc.)
 ;; for compatibility with country charts that ship code-keyed.
 ;;
-;; Account hierarchy uses :account/parent (single-parent tree). Code-prefix
+;; Account hierarchy uses :kontor.account/parent (single-parent tree). Code-prefix
 ;; rollup (Odoo's account_group) is a query-time concept on top, not a
 ;; schema concept.
 ;; ============================================================================
 
 (def ^:private account-attrs
-  [{:db/ident       :account/path
+  [{:db/ident       :kontor.account/path
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
@@ -250,50 +250,50 @@
                      \"Assets:Bank:Checking\" or
                      \"Income:Sales:EU\". Identity attribute."}
 
-   {:db/ident       :account/code
+   {:db/ident       :kontor.account/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true
     :db/doc         "Optional country-specific code (SKR03 \"1200\",
                      QBO \"1010\"). Indexed for prefix-rollup queries."}
 
-   {:db/ident       :account/name
+   {:db/ident       :kontor.account/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Human-readable name, possibly localized."}
 
-   {:db/ident       :account/type
+   {:db/ident       :kontor.account/type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "One of: :asset :liability :equity :income :expense.
                      Determines balance-sheet vs P&L classification and
                      the natural sign of postings."}
 
-   {:db/ident       :account/parent
+   {:db/ident       :kontor.account/parent
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Parent account in the hierarchy. nil for roots."}
 
-   {:db/ident       :account/commodity
+   {:db/ident       :kontor.account/commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Default commodity. nil = polymorphic
                      (postings carry their own commodity)."}
 
-   {:db/ident       :account/active
+   {:db/ident       :kontor.account/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "Inactive accounts cannot be posted to but remain
                      in historical reports."}
 
-   {:db/ident       :account/reconcilable
+   {:db/ident       :kontor.account/reconcilable
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "Whether postings against this account can be
                      reconciled (typically true for receivables, payables,
                      bank accounts)."}
 
-   {:db/ident       :account/tags
+   {:db/ident       :kontor.account/tags
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Account-tag refs for report-time aggregation
@@ -307,7 +307,7 @@
    ;; the historical rate from acquisition. Default for asset/liability
    ;; is monetary; equity is non-monetary; income/expense translates
    ;; at the average rate so :monetary? is don't-care.
-   {:db/ident       :account/monetary?
+   {:db/ident       :kontor.account/monetary?
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one
     :db/doc         "IAS 21 / ASC 830 monetary classification. Default
@@ -320,28 +320,28 @@
                      translates them at :historical rate per ADR-073."}
 
    ;; ADR-019: regulator-specific external codes. The single
-   ;; :account/code above is the kernel-facing code (often = the
+   ;; :kontor.account/code above is the kernel-facing code (often = the
    ;; dominant regulator's code, e.g. SKR04 in DE). When an account
    ;; answers to multiple regulators (BR analytical → Plano
    ;; Referencial → SPED Contábil; DE internal → SKR04 → DATEV; or
    ;; management → IFRS group), the :account-code entities each
    ;; carry one (regulator, code) pairing.
-   {:db/ident       :account/external-codes
+   {:db/ident       :kontor.account/external-codes
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Many-ref to :account-code entities, one per
                      (account, regulator) pair. See ADR-019."}
 
    ;; ADR-090: data-centric concept-iri seam — generalized from
-   ;; :account-tag/concept-iri. Lets an account carry one IRI from an
+   ;; :kontor.account-tag/concept-iri. Lets an account carry one IRI from an
    ;; external concept vocabulary (XBRL line item, FIBO Account class,
-   ;; internal gist URI, etc.). Distinct from :account/external-codes
+   ;; internal gist URI, etc.). Distinct from :kontor.account/external-codes
    ;; (which carries regulator short-codes via M2M :account-code refs)
    ;; — concept-iri is the *cross-system concept identity* a McComb-style
    ;; consumer dereferences; external-codes are the *per-regulator
    ;; reporting codes* a country module routes to. Both can coexist on
    ;; one account; neither is required.
-   {:db/ident       :account/concept-iri
+   {:db/ident       :kontor.account/concept-iri
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -423,32 +423,32 @@
                      namespace). ADR-090."}])
 
 (def ^:private account-code-attrs
-  [{:db/ident       :account-code/account
+  [{:db/ident       :kontor.account-code/account
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Back-ref to the account this code is for."}
 
-   {:db/ident       :account-code/regulator
+   {:db/ident       :kontor.account-code/regulator
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Identifies the regulator / mapping target.
                      Conventions: :br/plano-referencial, :br/sped-contabil,
                      :cn/asbe, :cn/assbe, :de/datev, :ifrs/group, etc."}
 
-   {:db/ident       :account-code/code
+   {:db/ident       :kontor.account-code/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "The code in the regulator's system."}
 
-   {:db/ident       :account-code/identity
+   {:db/ident       :kontor.account-code/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:account-code/account :account-code/regulator]
+    :db/tupleAttrs  [:kontor.account-code/account :kontor.account-code/regulator]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Composite identity. One (account, regulator)
                      pairing exists at most once per DB."}
 
-   {:db/ident       :account-code/note
+   {:db/ident       :kontor.account-code/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional human-readable explanation."}])
@@ -463,15 +463,15 @@
 ;; ============================================================================
 
 (def ^:private account-tag-attrs
-  [{:db/ident       :account-tag/name
+  [{:db/ident       :kontor.account-tag/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Identity attribute — one entity per tag name. Lets
-                     consumers reference tags via [:account-tag/name
+                     consumers reference tags via [:kontor.account-tag/name
                      \"ust-66\"] lookup refs in tx-data."}
 
-   {:db/ident       :account-tag/country-code
+   {:db/ident       :kontor.account-tag/country-code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -479,7 +479,7 @@
                      country-scoped (a German VAT report tag is not
                      meaningful on a US sale)."}
 
-   {:db/ident       :account-tag/applicability
+   {:db/ident       :kontor.account-tag/applicability
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "One of: :account :tax. Indicates which kind of
@@ -506,7 +506,7 @@
    ;; consistency is companion-tier — see research note 78 §7-9 +
    ;; note 88 for the design space. ADR-019 + ADR-090 carry the
    ;; rationale.
-   {:db/ident       :account-tag/concept-iri
+   {:db/ident       :kontor.account-tag/concept-iri
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -1703,30 +1703,30 @@
 
 (def ^:private account-type-direction-attrs
   ;; ADR-041: debit/credit data table replacing hardcoded map.
-  [{:db/ident       :account-type-direction/invoice-type
+  [{:db/ident       :kontor.account-type-direction/invoice-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":sales | :purchase | :credit-memo | :debit-memo"}
 
-   {:db/ident       :account-type-direction/account-type
+   {:db/ident       :kontor.account-type-direction/account-type
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "GL routing key; same vocabulary as
                      :invoice-line/gl-account-type."}
 
-   {:db/ident       :account-type-direction/direction
+   {:db/ident       :kontor.account-type-direction/direction
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":debit | :credit"}
 
-   {:db/ident       :account-type-direction/active
+   {:db/ident       :kontor.account-type-direction/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :account-type-direction/identity
+   {:db/ident       :kontor.account-type-direction/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:account-type-direction/invoice-type
-                     :account-type-direction/account-type]
+    :db/tupleAttrs  [:kontor.account-type-direction/invoice-type
+                     :kontor.account-type-direction/account-type]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
@@ -3056,7 +3056,7 @@
 ;; ============================================================================
 
 (def ^:private account-analytic-attrs
-  [{:db/ident       :account/required-analytic-plans
+  [{:db/ident       :kontor.account/required-analytic-plans
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Set of :analytic-plan entities that postings

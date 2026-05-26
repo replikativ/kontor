@@ -44,7 +44,7 @@
     conn))
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (defn- make-draft! [conn]
   (let [db (d/db conn)
@@ -127,7 +127,7 @@
                     :where
                     [?p :posting/transaction ?tx]
                     [?p :posting/account ?a]
-                    [?a :account/code ?code]
+                    [?a :kontor.account/code ?code]
                     [?p :posting/amount ?amt]]
                   db transaction-eid)
         by-code (into {} (map (juxt first second) rows))]

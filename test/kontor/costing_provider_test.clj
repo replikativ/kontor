@@ -24,15 +24,15 @@
                       [{:db/id -1 :kontor.commodity/symbol "EUR"
                         :kontor.commodity/name "Euro" :kontor.commodity/precision 2
                         :kontor.commodity/iso-4217 "EUR"}
-                       {:db/id -2 :account/path "Item:Widget"
-                        :account/name "Widget" :account/type :asset
-                        :account/active true}
+                       {:db/id -2 :kontor.account/path "Item:Widget"
+                        :kontor.account/name "Widget" :kontor.account/type :asset
+                        :kontor.account/active true}
                        {:db/id -3 :journal/code "STOCK"
                         :journal/name "Stock" :journal/type :general
                         :journal/active true}])
         db0 (d/db conn)
         eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
-        itm (:db/id (d/entity db0 [:account/path "Item:Widget"]))
+        itm (:db/id (d/entity db0 [:kontor.account/path "Item:Widget"]))
         jnl (:db/id (d/entity db0 [:journal/code "STOCK"]))
         book (valuation/primary db0)
         receipt! (fn [qty unit-cost date]

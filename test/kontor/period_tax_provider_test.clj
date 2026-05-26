@@ -212,12 +212,12 @@
                  {:journal/code "SALE" :journal/type :sale}
                  {:journal/code "PUR"  :journal/type :purchase}
                  {:journal/code "GEN"  :journal/type :general}
-                 {:account/path "Assets:Cash"          :account/type :asset}
-                 {:account/path "Assets:Receivable"    :account/type :asset}
-                 {:account/path "Income:Sales"         :account/type :income}
-                 {:account/path "Expenses:Goods"       :account/type :expense}
-                 {:account/path "Expenses:Income-Tax"  :account/type :expense}
-                 {:account/path "Liabilities:Tax-Payable" :account/type :liability}])
+                 {:kontor.account/path "Assets:Cash"          :kontor.account/type :asset}
+                 {:kontor.account/path "Assets:Receivable"    :kontor.account/type :asset}
+                 {:kontor.account/path "Income:Sales"         :kontor.account/type :income}
+                 {:kontor.account/path "Expenses:Goods"       :kontor.account/type :expense}
+                 {:kontor.account/path "Expenses:Income-Tax"  :kontor.account/type :expense}
+                 {:kontor.account/path "Liabilities:Tax-Payable" :kontor.account/type :liability}])
     conn))
 
 (def ^:private eur [:kontor.commodity/symbol "EUR"])
@@ -253,24 +253,24 @@
 (defn- sum-account [conn path]
   (reduce + 0M
           (d/q '[:find [?amt ...] :in $ ?p
-                 :where [?a :account/path ?p] [?pp :posting/account ?a]
+                 :where [?a :kontor.account/path ?p] [?pp :posting/account ?a]
                  [?pp :posting/amount ?amt]]
                (d/db conn) path)))
 
 (deftest synthetic-provider-full-pipeline
   (let [conn (fresh)]
     ;; a year's trading — 1000 income, 400 expense → 600 taxable
-    (book/sell! conn {:debit-account [:account/path "Assets:Receivable"]
-                      :credit-account [:account/path "Income:Sales"]
+    (book/sell! conn {:debit-account [:kontor.account/path "Assets:Receivable"]
+                      :credit-account [:kontor.account/path "Income:Sales"]
                       :amount 1000 :commodity eur :effective-date #inst "2026-04-01"})
-    (book/buy! conn {:debit-account [:account/path "Expenses:Goods"]
-                     :credit-account [:account/path "Assets:Cash"]
+    (book/buy! conn {:debit-account [:kontor.account/path "Expenses:Goods"]
+                     :credit-account [:kontor.account/path "Assets:Cash"]
                      :amount 400 :commodity eur :effective-date #inst "2026-05-01"})
     (let [provider (synthetic-corp-tax-provider 0.25M)
           builder  (trpb/make-static-tax-return-posting-builder
-                    {:expense-account [:account/path "Expenses:Income-Tax"]
-                     :payable-account [:account/path "Liabilities:Tax-Payable"]
-                     :cash-account    [:account/path "Assets:Cash"]
+                    {:expense-account [:kontor.account/path "Expenses:Income-Tax"]
+                     :payable-account [:kontor.account/path "Liabilities:Tax-Payable"]
+                     :cash-account    [:kontor.account/path "Assets:Cash"]
                      :journal         [:journal/code "GEN"]
                      :commodity       eur})
           facts    (ptp/period-tax-facts provider {:entity 1 :period fy-2026 :conn conn})]

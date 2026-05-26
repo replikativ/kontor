@@ -52,10 +52,10 @@
      - Ley del IEPS (federal excise on tobacco/alcohol/fuels/sugar)
      - Ley del ISR, Art. 11 (fiscal-year = calendar year)
 
-   Idempotent: `:account/path` is `:db.unique/identity` in the kernel
+   Idempotent: `:kontor.account/path` is `:db.unique/identity` in the kernel
    schema, so re-installing replaces values without duplication. Tags
-   materialise as `:account-tag/*` entities (one per distinct keyword)
-   and link via `:account/tags`."
+   materialise as `:kontor.account-tag/*` entities (one per distinct keyword)
+   and link via `:kontor.account/tags`."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [datahike.api :as d]))
@@ -84,9 +84,9 @@
 (defn- tag-tx-data
   [tags]
   (mapv (fn [tag]
-          {:account-tag/name (name tag)
-           :account-tag/country-code "MX"
-           :account-tag/applicability :account})
+          {:kontor.account-tag/name (name tag)
+           :kontor.account-tag/country-code "MX"
+           :kontor.account-tag/applicability :account})
         tags))
 
 ;; ============================================================================
@@ -107,19 +107,19 @@
 
 (defn- account-tx-entry
   "Build the kernel-side account entity-map for one chart entry.
-   `:account/path` is the unique identity; tags become refs via the
+   `:kontor.account/path` is the unique identity; tags become refs via the
    materialized `:account-tag` entities."
   [{:keys [code path type name reconcilable? tags]}]
-  (cond-> {:account/path        path
-           :account/code        code
-           :account/name        name
-           :account/type        type
-           :account/active      true
-           :account/commodity   [:kontor.commodity/symbol "MXN"]
-           :account/reconcilable (boolean reconcilable?)}
+  (cond-> {:kontor.account/path        path
+           :kontor.account/code        code
+           :kontor.account/name        name
+           :kontor.account/type        type
+           :kontor.account/active      true
+           :kontor.account/commodity   [:kontor.commodity/symbol "MXN"]
+           :kontor.account/reconcilable (boolean reconcilable?)}
     (seq tags)
-    (assoc :account/tags
-           (mapv (fn [t] [:account-tag/name (clojure.core/name t)]) tags))))
+    (assoc :kontor.account/tags
+           (mapv (fn [t] [:kontor.account-tag/name (clojure.core/name t)]) tags))))
 
 ;; ============================================================================
 ;; Public installer
@@ -199,4 +199,4 @@
 (defn account-by-code
   "Resolve `code` to an account entity-id against `db`, or nil."
   [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))

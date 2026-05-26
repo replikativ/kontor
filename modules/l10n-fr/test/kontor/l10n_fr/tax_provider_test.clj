@@ -16,10 +16,10 @@
   (let [conn (core/create-test-db)]
     (d/transact conn
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
-                 {:account/code "44571" :account/path "TVA-20" :account/type :liability}
-                 {:account/code "44572" :account/path "TVA-10" :account/type :liability}
-                 {:account/code "44573" :account/path "TVA-5.5" :account/type :liability}
-                 {:account/code "44574" :account/path "TVA-2.1" :account/type :liability}])
+                 {:kontor.account/code "44571" :kontor.account/path "TVA-20" :kontor.account/type :liability}
+                 {:kontor.account/code "44572" :kontor.account/path "TVA-10" :kontor.account/type :liability}
+                 {:kontor.account/code "44573" :kontor.account/path "TVA-5.5" :kontor.account/type :liability}
+                 {:kontor.account/code "44574" :kontor.account/path "TVA-2.1" :kontor.account/type :liability}])
     conn))
 
 (def ^:private eur [:kontor.commodity/symbol "EUR"])
@@ -67,8 +67,8 @@
         db   (d/db conn)
         prov (frp/make-fr-tax-rate-provider)
         bld  (frp/make-fr-tax-posting-builder)
-        a44571 (d/q '[:find ?a . :where [?a :account/code "44571"]] db)
-        a44573 (d/q '[:find ?a . :where [?a :account/code "44573"]] db)
+        a44571 (d/q '[:find ?a . :where [?a :kontor.account/code "44571"]] db)
+        a44573 (d/q '[:find ?a . :where [?a :kontor.account/code "44573"]] db)
         post  (fn [opts] (tpb/compute-tax-postings
                           prov bld
                           (merge {:base 1000M :commodity eur} opts)

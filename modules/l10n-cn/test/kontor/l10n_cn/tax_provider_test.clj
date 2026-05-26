@@ -17,8 +17,8 @@
     (d/transact conn
                 [{:kontor.commodity/symbol "CNY" :kontor.commodity/name "Renminbi"
                   :kontor.commodity/precision 2}
-                 {:account/code "2221.01.01" :account/path "Output-VAT"
-                  :account/type :liability}])
+                 {:kontor.account/code "2221.01.01" :kontor.account/path "Output-VAT"
+                  :kontor.account/type :liability}])
     conn))
 
 (def ^:private cny [:kontor.commodity/symbol "CNY"])
@@ -85,7 +85,7 @@
         db   (d/db conn)
         prov (cnp/make-cn-tax-rate-provider)
         bld  (cnp/make-cn-tax-posting-builder)
-        a2221 (d/q '[:find ?a . :where [?a :account/code "2221.01.01"]] db)
+        a2221 (d/q '[:find ?a . :where [?a :kontor.account/code "2221.01.01"]] db)
         post  (fn [ctx] (tpb/compute-tax-postings
                          prov bld
                          (merge {:base 1000M :commodity cny} ctx)
@@ -131,12 +131,12 @@
 
 (deftest builder-honours-output-vat-code-override
   (let [conn (fresh)]
-    (d/transact conn [{:account/code "2221.99" :account/path "Output-VAT-alt"
-                       :account/type :liability}])
+    (d/transact conn [{:kontor.account/code "2221.99" :kontor.account/path "Output-VAT-alt"
+                       :kontor.account/type :liability}])
     (let [db   (d/db conn)
           prov (cnp/make-cn-tax-rate-provider)
           bld  (cnp/make-cn-tax-posting-builder {:output-vat-code "2221.99"})
-          a99  (d/q '[:find ?a . :where [?a :account/code "2221.99"]] db)
+          a99  (d/q '[:find ?a . :where [?a :kontor.account/code "2221.99"]] db)
           p    (first (tpb/compute-tax-postings
                        prov bld
                        {:base 1000M :rate 0.13M :commodity cny}

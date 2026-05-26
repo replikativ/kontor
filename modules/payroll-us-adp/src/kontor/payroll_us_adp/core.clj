@@ -135,7 +135,7 @@
    :db.unique/identity on :analytic-plan/code + :analytic-account/path).
 
    The :state plan applies to *consumer-marked* wage / payroll-tax /
-   benefit accounts via :account/required-analytic-plans (per ADR-022).
+   benefit accounts via :kontor.account/required-analytic-plans (per ADR-022).
    We do NOT mark the accounts here — that's the consumer's chart
    install. We DO ship the plan + states so consumers don't need to."
   [conn]

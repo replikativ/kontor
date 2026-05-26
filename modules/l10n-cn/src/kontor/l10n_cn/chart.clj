@@ -2,7 +2,7 @@
   "Chinese chart-of-accounts loader.
 
    Loads an ASBE / ASSBE-coded small-business subset into a datahike
-   connection. Each account also carries an `:account/external-codes`
+   connection. Each account also carries an `:kontor.account/external-codes`
    ref to an `:account-code` entity with `:cn/asbe` as the regulator
    key (per ADR-019), so statutory reports can look up the canonical
    ASBE code without ambiguity.
@@ -19,9 +19,9 @@
   (->> chart (mapcat :tags) distinct vec))
 
 (defn- tag-tx [tags]
-  (mapv (fn [t] {:account-tag/name (name t)
-                 :account-tag/country-code "CN"
-                 :account-tag/applicability :account})
+  (mapv (fn [t] {:kontor.account-tag/name (name t)
+                 :kontor.account-tag/country-code "CN"
+                 :kontor.account-tag/applicability :account})
         tags))
 
 (defn- ensure-cny []
@@ -32,13 +32,13 @@
 
 (defn- account-tx
   [{:keys [code path type name reconcilable? tags]}]
-  (cond-> {:account/path path :account/code code :account/name name
-           :account/type type :account/active true
-           :account/commodity [:kontor.commodity/symbol "CNY"]
-           :account/reconcilable (boolean reconcilable?)}
+  (cond-> {:kontor.account/path path :kontor.account/code code :kontor.account/name name
+           :kontor.account/type type :kontor.account/active true
+           :kontor.account/commodity [:kontor.commodity/symbol "CNY"]
+           :kontor.account/reconcilable (boolean reconcilable?)}
     (seq tags)
-    (assoc :account/tags
-           (mapv (fn [t] [:account-tag/name (clojure.core/name t)]) tags))))
+    (assoc :kontor.account/tags
+           (mapv (fn [t] [:kontor.account-tag/name (clojure.core/name t)]) tags))))
 
 (defn- external-code-tx
   "For each account that carries :external-codes, emit one
@@ -49,10 +49,10 @@
     (fn [{:keys [path external-codes]}]
       (when (and path external-codes)
         (map (fn [[regulator code]]
-               {:account-code/account   [:account/path path]
-                :account-code/regulator regulator
-                :account-code/code      code
-                :account-code/note      "ASBE-coded — see ADR-019"})
+               {:kontor.account-code/account   [:kontor.account/path path]
+                :kontor.account-code/regulator regulator
+                :kontor.account-code/code      code
+                :kontor.account-code/note      "ASBE-coded — see ADR-019"})
              external-codes)))
     chart)))
 
@@ -64,7 +64,7 @@
    (d/transact conn (tag-tx (distinct-tags chart)))
    (d/transact conn (mapv account-tx chart))
    ;; External codes go in a separate tx because they reference the
-   ;; accounts created above by their :account/path identity.
+   ;; accounts created above by their :kontor.account/path identity.
    (let [codes (external-code-tx chart)]
      (when (seq codes)
        (d/transact conn codes)))))

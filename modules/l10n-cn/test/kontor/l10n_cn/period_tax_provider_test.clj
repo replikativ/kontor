@@ -92,13 +92,13 @@
                 [{:kontor.commodity/symbol "CNY" :kontor.commodity/name "Renminbi"
                   :kontor.commodity/precision 2}
                  {:journal/code "SALE" :journal/type :sale}
-                 {:account/path "Income:Salary" :account/type :income}
-                 {:account/path "Assets:Bank"   :account/type :asset}])
+                 {:kontor.account/path "Income:Salary" :kontor.account/type :income}
+                 {:kontor.account/path "Assets:Bank"   :kontor.account/type :asset}])
     conn))
 
 (defn- book-income! [conn amount]
-  (book/sell! conn {:debit-account  [:account/path "Assets:Bank"]
-                    :credit-account [:account/path "Income:Salary"]
+  (book/sell! conn {:debit-account  [:kontor.account/path "Assets:Bank"]
+                    :credit-account [:kontor.account/path "Income:Salary"]
                     :amount amount :commodity cny
                     :effective-date #inst "2026-06-30"}))
 

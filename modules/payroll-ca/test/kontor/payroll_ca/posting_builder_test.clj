@@ -7,7 +7,7 @@
 
 (def accounts
   "Synthetic eid-shaped account map. Real consumers feed eids from
-   (d/q ... :account/code) lookups."
+   (d/q ... :kontor.account/code) lookups."
   {:ca-payroll-wages              :acct/wages
    :ca-payroll-er-cpp             :acct/er-cpp
    :ca-payroll-er-ei              :acct/er-ei
@@ -106,7 +106,7 @@
   (let [postings (build {:rp-account-tag "ca-cra-rp-RP0001"} (jane-fact))]
     (testing "Every posting carries the RP routing tag"
       (is (every? (fn [p]
-                    (some #(= % [:account-tag/name "ca-cra-rp-RP0001"])
+                    (some #(= % [:kontor.account-tag/name "ca-cra-rp-RP0001"])
                           (:posting/account-tags p)))
                   postings)))))
 

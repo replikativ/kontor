@@ -18,11 +18,11 @@
     (d/transact conn
                 [{:kontor.commodity/symbol "CAD" :kontor.commodity/name "Canadian Dollar"
                   :kontor.commodity/precision 2}
-                 {:account/code "2310" :account/path "GST-HST" :account/type :liability}
-                 {:account/code "2320" :account/path "BC-PST"  :account/type :liability}
-                 {:account/code "2321" :account/path "SK-PST"  :account/type :liability}
-                 {:account/code "2322" :account/path "MB-RST"  :account/type :liability}
-                 {:account/code "2330" :account/path "QST"     :account/type :liability}])
+                 {:kontor.account/code "2310" :kontor.account/path "GST-HST" :kontor.account/type :liability}
+                 {:kontor.account/code "2320" :kontor.account/path "BC-PST"  :kontor.account/type :liability}
+                 {:kontor.account/code "2321" :kontor.account/path "SK-PST"  :kontor.account/type :liability}
+                 {:kontor.account/code "2322" :kontor.account/path "MB-RST"  :kontor.account/type :liability}
+                 {:kontor.account/code "2330" :kontor.account/path "QST"     :kontor.account/type :liability}])
     conn))
 
 (def ^:private cad [:kontor.commodity/symbol "CAD"])
@@ -123,7 +123,7 @@
         db   (d/db conn)
         prov (cap/make-ca-tax-rate-provider)
         bld  (cap/make-ca-tax-posting-builder)
-        a    (fn [code] (d/q '[:find ?e . :in $ ?c :where [?e :account/code ?c]]
+        a    (fn [code] (d/q '[:find ?e . :in $ ?c :where [?e :kontor.account/code ?c]]
                              db code))
         post (fn [province]
                (tpb/compute-tax-postings
@@ -165,7 +165,7 @@
         db   (d/db conn)
         prov (cap/make-ca-tax-rate-provider)
         bld  (cap/make-ca-tax-posting-builder)
-        a    (fn [code] (d/q '[:find ?e . :in $ ?c :where [?e :account/code ?c]]
+        a    (fn [code] (d/q '[:find ?e . :in $ ?c :where [?e :kontor.account/code ?c]]
                              db code))
         raw  (mapcat (fn [base]
                        (tpb/compute-tax-postings
@@ -188,13 +188,13 @@
 (deftest builder-honours-code-overrides
   (testing ":codes override pins a different GST/HST account"
     (let [conn (fresh)
-          _    (d/transact conn [{:account/code "9999"
-                                  :account/path "Custom-GST"
-                                  :account/type :liability}])
+          _    (d/transact conn [{:kontor.account/code "9999"
+                                  :kontor.account/path "Custom-GST"
+                                  :kontor.account/type :liability}])
           db   (d/db conn)
           prov (cap/make-ca-tax-rate-provider)
           bld  (cap/make-ca-tax-posting-builder {:codes {:gst-hst-code "9999"}})
-          a9999 (d/q '[:find ?e . :where [?e :account/code "9999"]] db)
+          a9999 (d/q '[:find ?e . :where [?e :kontor.account/code "9999"]] db)
           p    (first (tpb/compute-tax-postings
                        prov bld
                        {:base 1000M :ship-to-province :ON :commodity cad}

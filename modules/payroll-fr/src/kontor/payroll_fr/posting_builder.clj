@@ -32,7 +32,7 @@
 
    ## Per-établissement routing
 
-   Per ADR-079: multi-SIRET businesses route via `:account-tag/name`
+   Per ADR-079: multi-SIRET businesses route via `:kontor.account-tag/name`
    convention (e.g. `\"fr-etab-12345678900012\"`); the consumer's
    `:etab-account-tag` opt is a string the builder appends to every
    posting via `:posting/account-tags`, letting downstream DSN
@@ -94,7 +94,7 @@
   (if (and etab-account-tag (not (str/blank? etab-account-tag)))
     (update posting :posting/account-tags
             (fnil conj [])
-            [:account-tag/name etab-account-tag])
+            [:kontor.account-tag/name etab-account-tag])
     posting))
 
 ;; ============================================================================
@@ -136,7 +136,7 @@
                    etab-account-tag
                    (update :posting/account-tags
                            (fnil conj [])
-                           [:account-tag/name etab-account-tag])))))))
+                           [:kontor.account-tag/name etab-account-tag])))))))
 
 (defn- deduction-legs
   "For each negative employee-side deduction component, CR the
@@ -162,7 +162,7 @@
                    etab-account-tag
                    (update :posting/account-tags
                            (fnil conj [])
-                           [:account-tag/name etab-account-tag])))))))
+                           [:kontor.account-tag/name etab-account-tag])))))))
 
 (defn- employer-side-legs
   "For each employer-side component, DR the expense account AND CR the
@@ -190,7 +190,7 @@
                               etab-account-tag
                               (update :posting/account-tags
                                       (fnil conj [])
-                                      [:account-tag/name etab-account-tag]))]
+                                      [:kontor.account-tag/name etab-account-tag]))]
                      pay-acct
                      (conj (cond->
                             {:posting/account pay-acct
@@ -201,7 +201,7 @@
                              etab-account-tag
                              (update :posting/account-tags
                                      (fnil conj [])
-                                     [:account-tag/name etab-account-tag])))))))))
+                                     [:kontor.account-tag/name etab-account-tag])))))))))
 
 (defn- net-wages-leg
   "CR personnel-net for the net amount (gross + sum of deductions —
@@ -217,7 +217,7 @@
        etab-account-tag
        (update :posting/account-tags
                (fnil conj [])
-               [:account-tag/name etab-account-tag]))]))
+               [:kontor.account-tag/name etab-account-tag]))]))
 
 (defn fact->postings
   "Translate one PayrollFact into a balanced set of posting maps. The

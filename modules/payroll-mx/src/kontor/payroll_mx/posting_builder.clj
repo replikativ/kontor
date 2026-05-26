@@ -29,7 +29,7 @@
      Cr 206.06  INFONAVIT por pagar          (trabajador + patrón)
 
    The kernel `build-transaction` checks sum-to-zero. The account
-   eids are resolved by `:account/code` via
+   eids are resolved by `:kontor.account/code` via
    `core/account-by-codigo-agrupador`. If a required account is
    missing, posting raises with a clear message.
 

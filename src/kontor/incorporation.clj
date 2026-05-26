@@ -75,7 +75,7 @@
                                      {:got x :class (class x)}))))
 
 (defn- resolve-account
-  "Resolve an account spec (eid, `[:account/path …]`, `[:account/code …]`)
+  "Resolve an account spec (eid, `[:kontor.account/path …]`, `[:kontor.account/code …]`)
    to an eid. Throws on miss."
   [db spec]
   (or (cond

@@ -13,7 +13,7 @@
 (def ^:const default-journal-code "CLOSE")
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (defn close-fiscal-year!
   "Close a fiscal-year period using SKR04 conventions.

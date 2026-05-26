@@ -30,7 +30,7 @@
     conn))
 
 (defn- account-eid [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (defn- post-sale!
   "Post an Austrian VAT-rated sale.
@@ -120,7 +120,7 @@
   (let [conn (core/create-test-db)
         _ (chart/install! conn)
         db (d/db conn)
-        n (count (d/q '[:find [?a ...] :where [_ :account/code ?a]] db))]
+        n (count (d/q '[:find [?a ...] :where [_ :kontor.account/code ?a]] db))]
     (is (>= n 25) (str "Loaded " n " accounts"))
     (is (account-eid db "4000") "Erlöse 20%")
     (is (account-eid db "4010") "Erlöse 13%")

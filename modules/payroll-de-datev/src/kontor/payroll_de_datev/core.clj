@@ -105,7 +105,7 @@
 
    kontor.hr.core/install! must already have run; kontor.l10n-de.chart/install!
    should also have run if you intend to use the default SKR04
-   account-map via :account/code lookup-refs."
+   account-map via :kontor.account/code lookup-refs."
   [conn]
   (d/transact conn extra-schema))
 

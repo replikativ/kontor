@@ -36,7 +36,7 @@
     conn))
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (defn- post-state-sale!
   "Post a US sale with state-level sales tax.
@@ -114,7 +114,7 @@
   (let [conn (core/create-test-db)
         _ (chart/install! conn)
         db (d/db conn)
-        n (count (d/q '[:find [?a ...] :where [_ :account/code ?a]] db))]
+        n (count (d/q '[:find [?a ...] :where [_ :kontor.account/code ?a]] db))]
     (is (>= n 25) (str "loaded " n " accounts"))
     (is (ace db "2210") "CA sales tax payable")
     (is (ace db "2211") "TX sales tax payable")

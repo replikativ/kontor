@@ -19,36 +19,36 @@
                   :kontor.commodity/precision 2
                   :kontor.commodity/iso-4217 "MXN"}
                  ;; SAT Código Agrupador chart — minimal
-                 {:account/code "601.01" :account/path "Gastos:Sueldos"
-                  :account/name "Sueldos y Salarios"
-                  :account/type :expense :account/active true}
-                 {:account/code "601.02" :account/path "Gastos:Aguinaldo"
-                  :account/name "Gratificación Anual"
-                  :account/type :expense :account/active true}
-                 {:account/code "601.05" :account/path "Gastos:IMSS-Patron"
-                  :account/name "Cuotas IMSS patronales"
-                  :account/type :expense :account/active true}
-                 {:account/code "601.06" :account/path "Gastos:INFONAVIT-Patron"
-                  :account/name "Aportaciones INFONAVIT"
-                  :account/type :expense :account/active true}
-                 {:account/code "601.84" :account/path "Gastos:Prestaciones"
-                  :account/name "Otras prestaciones"
-                  :account/type :expense :account/active true}
-                 {:account/code "206.01" :account/path "Pasivos:SueldosPorPagar"
-                  :account/name "Sueldos por pagar"
-                  :account/type :liability :account/active true}
-                 {:account/code "206.04" :account/path "Pasivos:ISRPorPagar"
-                  :account/name "Impuestos por pagar (ISR)"
-                  :account/type :liability :account/active true}
-                 {:account/code "206.05" :account/path "Pasivos:IMSSPorPagar"
-                  :account/name "IMSS por pagar"
-                  :account/type :liability :account/active true}
-                 {:account/code "206.06" :account/path "Pasivos:INFONAVITPorPagar"
-                  :account/name "INFONAVIT por pagar"
-                  :account/type :liability :account/active true}
-                 {:account/code "206.07" :account/path "Pasivos:ProvisionAguinaldo"
-                  :account/name "Provisión Aguinaldo"
-                  :account/type :liability :account/active true}
+                 {:kontor.account/code "601.01" :kontor.account/path "Gastos:Sueldos"
+                  :kontor.account/name "Sueldos y Salarios"
+                  :kontor.account/type :expense :kontor.account/active true}
+                 {:kontor.account/code "601.02" :kontor.account/path "Gastos:Aguinaldo"
+                  :kontor.account/name "Gratificación Anual"
+                  :kontor.account/type :expense :kontor.account/active true}
+                 {:kontor.account/code "601.05" :kontor.account/path "Gastos:IMSS-Patron"
+                  :kontor.account/name "Cuotas IMSS patronales"
+                  :kontor.account/type :expense :kontor.account/active true}
+                 {:kontor.account/code "601.06" :kontor.account/path "Gastos:INFONAVIT-Patron"
+                  :kontor.account/name "Aportaciones INFONAVIT"
+                  :kontor.account/type :expense :kontor.account/active true}
+                 {:kontor.account/code "601.84" :kontor.account/path "Gastos:Prestaciones"
+                  :kontor.account/name "Otras prestaciones"
+                  :kontor.account/type :expense :kontor.account/active true}
+                 {:kontor.account/code "206.01" :kontor.account/path "Pasivos:SueldosPorPagar"
+                  :kontor.account/name "Sueldos por pagar"
+                  :kontor.account/type :liability :kontor.account/active true}
+                 {:kontor.account/code "206.04" :kontor.account/path "Pasivos:ISRPorPagar"
+                  :kontor.account/name "Impuestos por pagar (ISR)"
+                  :kontor.account/type :liability :kontor.account/active true}
+                 {:kontor.account/code "206.05" :kontor.account/path "Pasivos:IMSSPorPagar"
+                  :kontor.account/name "IMSS por pagar"
+                  :kontor.account/type :liability :kontor.account/active true}
+                 {:kontor.account/code "206.06" :kontor.account/path "Pasivos:INFONAVITPorPagar"
+                  :kontor.account/name "INFONAVIT por pagar"
+                  :kontor.account/type :liability :kontor.account/active true}
+                 {:kontor.account/code "206.07" :kontor.account/path "Pasivos:ProvisionAguinaldo"
+                  :kontor.account/name "Provisión Aguinaldo"
+                  :kontor.account/type :liability :kontor.account/active true}
                  {:journal/code "NOM"
                   :journal/name "Nómina"
                   :journal/type :general
@@ -60,7 +60,7 @@
 
 (defn- mxn [db] (ref-eid db :kontor.commodity/symbol "MXN"))
 (defn- journal [db] (ref-eid db :journal/code "NOM"))
-(defn- acct [db code] (ref-eid db :account/code code))
+(defn- acct [db code] (ref-eid db :kontor.account/code code))
 
 (def sample-facts
   "One semi-monthly period for two employees, mirroring the CONTPAQi

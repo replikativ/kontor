@@ -120,7 +120,7 @@
    :db.unique/identity on :analytic-plan/code + :analytic-account/path).
 
    The :in-state plan applies to *consumer-marked* wage / payroll-tax
-   / PT-payable accounts via :account/required-analytic-plans (per
+   / PT-payable accounts via :kontor.account/required-analytic-plans (per
    ADR-022). We do NOT mark the accounts here — that's the consumer's
    chart install. We DO ship the plan + states so consumers don't
    need to."
@@ -154,9 +154,9 @@
   (->> chart (mapcat :tags) distinct vec))
 
 (defn- tag-tx [tags]
-  (mapv (fn [t] {:account-tag/name (name t)
-                 :account-tag/country-code "IN"
-                 :account-tag/applicability :account})
+  (mapv (fn [t] {:kontor.account-tag/name (name t)
+                 :kontor.account-tag/country-code "IN"
+                 :kontor.account-tag/applicability :account})
         tags))
 
 (defn- account-tx
@@ -164,13 +164,13 @@
   ;; the kernel schema doesn't have a typed slot for it (per
   ;; modules/l10n-in/chart.clj convention — also drops :tax-payable?).
   [{:keys [code path type name reconcilable? tags]}]
-  (cond-> {:account/path path :account/code code :account/name name
-           :account/type type :account/active true
-           :account/commodity [:kontor.commodity/symbol "INR"]
-           :account/reconcilable (boolean reconcilable?)}
+  (cond-> {:kontor.account/path path :kontor.account/code code :kontor.account/name name
+           :kontor.account/type type :kontor.account/active true
+           :kontor.account/commodity [:kontor.commodity/symbol "INR"]
+           :kontor.account/reconcilable (boolean reconcilable?)}
     (seq tags)
-    (assoc :account/tags
-           (mapv (fn [t] [:account-tag/name (clojure.core/name t)]) tags))))
+    (assoc :kontor.account/tags
+           (mapv (fn [t] [:kontor.account-tag/name (clojure.core/name t)]) tags))))
 
 (defn install-tags!
   "Idempotent install of just the :account-tag entities (no accounts).

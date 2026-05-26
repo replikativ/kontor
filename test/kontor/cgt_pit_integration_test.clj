@@ -52,18 +52,18 @@
                  {:journal/code "GEN"  :journal/type :general :journal/active true}
                  {:journal/code "SALE" :journal/type :sale    :journal/active true}
                  ;; Account skeleton (minimal for Form 1040 + cap gains story).
-                 {:account/path "Income:Wages-W2"       :account/type :income
-                  :account/commodity usd}
-                 {:account/path "Assets:Bank"           :account/type :asset
-                  :account/commodity usd}
-                 {:account/path "Assets:Brokerage"      :account/type :asset
-                  :account/commodity usd}
-                 {:account/path "Income:Capital-Gains"  :account/type :income
-                  :account/commodity usd}
-                 {:account/path "Expenses:Income-Tax"   :account/type :expense
-                  :account/commodity usd}
-                 {:account/path "Liabilities:Tax-Payable" :account/type :liability
-                  :account/commodity usd}])
+                 {:kontor.account/path "Income:Wages-W2"       :kontor.account/type :income
+                  :kontor.account/commodity usd}
+                 {:kontor.account/path "Assets:Bank"           :kontor.account/type :asset
+                  :kontor.account/commodity usd}
+                 {:kontor.account/path "Assets:Brokerage"      :kontor.account/type :asset
+                  :kontor.account/commodity usd}
+                 {:kontor.account/path "Income:Capital-Gains"  :kontor.account/type :income
+                  :kontor.account/commodity usd}
+                 {:kontor.account/path "Expenses:Income-Tax"   :kontor.account/type :expense
+                  :kontor.account/commodity usd}
+                 {:kontor.account/path "Liabilities:Tax-Payable" :kontor.account/type :liability
+                  :kontor.account/commodity usd}])
     conn))
 
 (defn- holdco-eid [conn entity-code]
@@ -82,8 +82,8 @@
   ;; credit Income:Wages-W2 — the kontor.book sell! verb is a
   ;; convenient way to book income (despite the verb name; sell! is
   ;; just "credit income, debit something").
-  (book/sell! conn {:debit-account  [:account/path "Assets:Bank"]
-                    :credit-account [:account/path "Income:Wages-W2"]
+  (book/sell! conn {:debit-account  [:kontor.account/path "Assets:Bank"]
+                    :credit-account [:kontor.account/path "Income:Wages-W2"]
                     :amount         180000M
                     :commodity      usd
                     :effective-date #inst "2026-12-31"}))

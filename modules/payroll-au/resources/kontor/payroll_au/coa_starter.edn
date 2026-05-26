@@ -1,6 +1,6 @@
 ;; AU payroll-specific account starter — extends modules/l10n-au/chart.edn.
 ;; Consumer overrides as needed; the load-bearing identifier is
-;; :account-tag/name (e.g. "au-payroll-paygw"), not :code.
+;; :kontor.account-tag/name (e.g. "au-payroll-paygw"), not :code.
 ;;
 ;; Per-state allocation (note 79 §5.3 + ADR-080): the AU adapter uses
 ;; the `:state` analytic plan with ISO-3166-2:AU codes (mirrors the
@@ -11,7 +11,7 @@
 ;; Account code numbering follows Xero's default AU chart (477/478/
 ;; 480/814/825/826) where it makes sense; consumers re-number as
 ;; needed. The codes are conventions only — load-bearing is the
-;; :account-tag/name.
+;; :kontor.account-tag/name.
 ;;
 ;; Reference: ADR-080, Xero AU default chart (public help-centre).
 

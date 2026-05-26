@@ -41,12 +41,12 @@
                  {:db/id "ent-us" :kontor.entity/code "US-LLC"  :kontor.entity/name "Acme US LLC"
                   :kontor.entity/kind :operating}
                  ;; GL accounts — minimal DE chart.
-                 {:db/id "acct-wages-de" :account/code "4120"
-                  :account/name "Löhne und Gehälter"
-                  :account/type :expense :account/active true}
-                 {:db/id "acct-wages-payable-de" :account/code "1741"
-                  :account/name "Verbindlichkeiten LuG"
-                  :account/type :liability :account/active true}
+                 {:db/id "acct-wages-de" :kontor.account/code "4120"
+                  :kontor.account/name "Löhne und Gehälter"
+                  :kontor.account/type :expense :kontor.account/active true}
+                 {:db/id "acct-wages-payable-de" :kontor.account/code "1741"
+                  :kontor.account/name "Verbindlichkeiten LuG"
+                  :kontor.account/type :liability :kontor.account/active true}
                  ;; Journal + period (kernel-required by build-transaction).
                  {:db/id "journal-payroll-de" :journal/code "PAY-DE"
                   :journal/name "Payroll (DE)" :journal/type :general}
@@ -376,8 +376,8 @@
         eur (ref-eid db :kontor.commodity/symbol "EUR")
         period (ref-eid db :period/name "2026-05")
         journal (ref-eid db :journal/code "PAY-DE")
-        wages-exp (ref-eid db :account/code "4120")
-        wages-pay (ref-eid db :account/code "1741")
+        wages-exp (ref-eid db :kontor.account/code "4120")
+        wages-pay (ref-eid db :kontor.account/code "1741")
         _ (employment/hire! conn {:code "EMP-DE-jane" :person jane :entity de
                                   :start-date #inst "2026-05-01"})
         emp-eid (hr/employment-by-code (d/db conn) "EMP-DE-jane")
@@ -457,8 +457,8 @@
         eur (ref-eid db :kontor.commodity/symbol "EUR")
         period (ref-eid db :period/name "2026-05")
         journal (ref-eid db :journal/code "PAY-DE")
-        wages-exp (ref-eid db :account/code "4120")
-        wages-pay (ref-eid db :account/code "1741")
+        wages-exp (ref-eid db :kontor.account/code "4120")
+        wages-pay (ref-eid db :kontor.account/code "1741")
         _ (employment/hire! conn {:code "EMP-DE-jane" :person jane :entity de
                                   :start-date #inst "2026-05-01"})
         emp-eid (hr/employment-by-code (d/db conn) "EMP-DE-jane")

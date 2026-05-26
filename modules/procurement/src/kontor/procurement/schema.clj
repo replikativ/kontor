@@ -946,38 +946,38 @@
    in kontor.posting/receipt-postings; the invoice-side direction is
    what this table feeds. So both legs net to zero on the GR/IR
    account once the invoice posts."
-  [{:account-type-direction/invoice-type :purchase
-    :account-type-direction/account-type :gr-ir-clearing
-    :account-type-direction/direction :debit
-    :account-type-direction/active true}
-   {:account-type-direction/invoice-type :purchase
-    :account-type-direction/account-type :goods-receipt-accrual
-    :account-type-direction/direction :credit
-    :account-type-direction/active true}
-   {:account-type-direction/invoice-type :purchase
-    :account-type-direction/account-type :landed-cost-variance
-    :account-type-direction/direction :debit
-    :account-type-direction/active true}
-   {:account-type-direction/invoice-type :purchase
-    :account-type-direction/account-type :price-variance
-    :account-type-direction/direction :debit
-    :account-type-direction/active true}
-   {:account-type-direction/invoice-type :purchase
-    :account-type-direction/account-type :exchange-variance
-    :account-type-direction/direction :debit
-    :account-type-direction/active true}
-   {:account-type-direction/invoice-type :purchase
-    :account-type-direction/account-type :receive-reject-loss
-    :account-type-direction/direction :debit
-    :account-type-direction/active true}
-   {:account-type-direction/invoice-type :purchase
-    :account-type-direction/account-type :prepaid-expense
-    :account-type-direction/direction :debit
-    :account-type-direction/active true}
-   {:account-type-direction/invoice-type :purchase
-    :account-type-direction/account-type :asset-acquisition
-    :account-type-direction/direction :debit
-    :account-type-direction/active true}])
+  [{:kontor.account-type-direction/invoice-type :purchase
+    :kontor.account-type-direction/account-type :gr-ir-clearing
+    :kontor.account-type-direction/direction :debit
+    :kontor.account-type-direction/active true}
+   {:kontor.account-type-direction/invoice-type :purchase
+    :kontor.account-type-direction/account-type :goods-receipt-accrual
+    :kontor.account-type-direction/direction :credit
+    :kontor.account-type-direction/active true}
+   {:kontor.account-type-direction/invoice-type :purchase
+    :kontor.account-type-direction/account-type :landed-cost-variance
+    :kontor.account-type-direction/direction :debit
+    :kontor.account-type-direction/active true}
+   {:kontor.account-type-direction/invoice-type :purchase
+    :kontor.account-type-direction/account-type :price-variance
+    :kontor.account-type-direction/direction :debit
+    :kontor.account-type-direction/active true}
+   {:kontor.account-type-direction/invoice-type :purchase
+    :kontor.account-type-direction/account-type :exchange-variance
+    :kontor.account-type-direction/direction :debit
+    :kontor.account-type-direction/active true}
+   {:kontor.account-type-direction/invoice-type :purchase
+    :kontor.account-type-direction/account-type :receive-reject-loss
+    :kontor.account-type-direction/direction :debit
+    :kontor.account-type-direction/active true}
+   {:kontor.account-type-direction/invoice-type :purchase
+    :kontor.account-type-direction/account-type :prepaid-expense
+    :kontor.account-type-direction/direction :debit
+    :kontor.account-type-direction/active true}
+   {:kontor.account-type-direction/invoice-type :purchase
+    :kontor.account-type-direction/account-type :asset-acquisition
+    :kontor.account-type-direction/direction :debit
+    :kontor.account-type-direction/active true}])
 
 (defn install!
   "Install the kontor-procurement companion schema + state-machine

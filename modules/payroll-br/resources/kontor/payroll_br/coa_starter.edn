@@ -1,6 +1,6 @@
 ;; BR payroll-specific account starter — extends modules/l10n-br/chart.edn
 ;; per ADR-081 §7. Consumer overrides as needed; the load-bearing
-;; identifier is :account-tag/name (e.g. "br-payroll-inss-payable"),
+;; identifier is :kontor.account-tag/name (e.g. "br-payroll-inss-payable"),
 ;; not :code. Codes use the 5-level dotted convention shared with
 ;; the existing BR chart (1.xx.xx.xx.xx / 2.xx.xx.xx.xx /
 ;; 3.xx.xx.xx.xx).

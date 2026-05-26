@@ -31,10 +31,10 @@
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                   :kontor.commodity/precision 2}
                  {:journal/code "SALE" :journal/type :sale}
-                 {:account/path "Income:Gehalt" :account/type :income}
-                 {:account/path "Aktiva:Bank"   :account/type :asset}])
-    (book/sell! conn {:debit-account  [:account/path "Aktiva:Bank"]
-                      :credit-account [:account/path "Income:Gehalt"]
+                 {:kontor.account/path "Income:Gehalt" :kontor.account/type :income}
+                 {:kontor.account/path "Aktiva:Bank"   :kontor.account/type :asset}])
+    (book/sell! conn {:debit-account  [:kontor.account/path "Aktiva:Bank"]
+                      :credit-account [:kontor.account/path "Income:Gehalt"]
                       :amount 120000 :commodity [:kontor.commodity/symbol "EUR"]
                       :effective-date #inst "2026-06-30"})
     (let [facts (ptp/period-tax-facts

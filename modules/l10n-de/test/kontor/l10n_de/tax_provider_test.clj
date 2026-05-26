@@ -16,8 +16,8 @@
   (let [conn (core/create-test-db)]
     (d/transact conn
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
-                 {:account/code "3801" :account/path "USt-19" :account/type :liability}
-                 {:account/code "3806" :account/path "USt-7" :account/type :liability}])
+                 {:kontor.account/code "3801" :kontor.account/path "USt-19" :kontor.account/type :liability}
+                 {:kontor.account/code "3806" :kontor.account/path "USt-7" :kontor.account/type :liability}])
     conn))
 
 (def ^:private eur [:kontor.commodity/symbol "EUR"])
@@ -67,8 +67,8 @@
         db   (d/db conn)
         prov (dtp/make-de-tax-rate-provider)
         bld  (dtp/make-de-tax-posting-builder)
-        a3801 (d/q '[:find ?a . :where [?a :account/code "3801"]] db)
-        a3806 (d/q '[:find ?a . :where [?a :account/code "3806"]] db)
+        a3801 (d/q '[:find ?a . :where [?a :kontor.account/code "3801"]] db)
+        a3806 (d/q '[:find ?a . :where [?a :kontor.account/code "3806"]] db)
         post  (fn [vr] (tpb/compute-tax-postings
                         prov bld
                         {:base 1000M :vat-rate vr :commodity eur}

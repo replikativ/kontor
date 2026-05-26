@@ -23,16 +23,16 @@
   (d/transact conn
               [{:db/id -1 :kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
                 :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
-               {:db/id -2 :account/path "Assets:Cash" :account/name "Cash"
-                :account/type :asset :account/active true}
-               {:db/id -3 :account/path "Income:Sales" :account/name "Sales"
-                :account/type :income :account/active true}
+               {:db/id -2 :kontor.account/path "Assets:Cash" :kontor.account/name "Cash"
+                :kontor.account/type :asset :kontor.account/active true}
+               {:db/id -3 :kontor.account/path "Income:Sales" :kontor.account/name "Sales"
+                :kontor.account/type :income :kontor.account/active true}
                {:db/id -4 :journal/code "GEN" :journal/name "General"
                 :journal/type :general :journal/active true}])
   (let [db (d/db conn)]
     {:eur  (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-     :cash (:db/id (d/entity db [:account/path "Assets:Cash"]))
-     :rev  (:db/id (d/entity db [:account/path "Income:Sales"]))
+     :cash (:db/id (d/entity db [:kontor.account/path "Assets:Cash"]))
+     :rev  (:db/id (d/entity db [:kontor.account/path "Income:Sales"]))
      :jnl  (:db/id (d/entity db [:journal/code "GEN"]))}))
 
 (defn- balanced-txn-step
@@ -53,12 +53,12 @@
 (deftest run-steps-threads-speculative-db
   (testing "each step sees a db reflecting every prior step's fragment"
     (let [conn (core/create-test-db)
-          mk   (fn [_db _ctx] [{:db/id "a" :account/path "X" :account/name "X"
-                                :account/type :asset}])
+          mk   (fn [_db _ctx] [{:db/id "a" :kontor.account/path "X" :kontor.account/name "X"
+                                :kontor.account/type :asset}])
           see  (fn [db ctx]
                  {:ctx (assoc ctx :seen
                               (d/q '[:find ?n . :where
-                                     [?e :account/path "X"] [?e :account/name ?n]]
+                                     [?e :kontor.account/path "X"] [?e :kontor.account/name ?n]]
                                    db))})
           {:keys [tx-data ctx]} (p/run-steps (d/db conn) {} [mk see])]
       (is (= 1 (count tx-data)) "the fragment accumulated")
@@ -117,8 +117,8 @@
           cat  (catalog! conn)
           _    (v/install-invariants! conn)
           ;; step 1: a valid stand-alone account.  step 2: an unbalanced txn.
-          mk-account (fn [_ _] [{:db/id "orphan" :account/path "Assets:Orphan"
-                                 :account/name "Orphan" :account/type :asset}])
+          mk-account (fn [_ _] [{:db/id "orphan" :kontor.account/path "Assets:Orphan"
+                                 :kontor.account/name "Orphan" :kontor.account/type :asset}])
           unbalanced (fn [_ _]
                        (posting/build-transaction
                         {:transaction {:transaction/journal        (:jnl cat)
@@ -130,20 +130,20 @@
                                         :posting/commodity (:eur cat)}]}))]
       (is (thrown? clojure.lang.ExceptionInfo
                    (p/run-process conn {:steps [mk-account unbalanced]})))
-      (is (nil? (d/entity (d/db conn) [:account/path "Assets:Orphan"]))
+      (is (nil? (d/entity (d/db conn) [:kontor.account/path "Assets:Orphan"]))
           "step 1's account was NOT committed — the process is atomic"))))
 
 (deftest run-process-owns-valid-time
   (testing "step-emitted tx-meta is stripped; one outer with-vt wins"
     (let [conn (core/create-test-db)
           _    (v/install-invariants! conn)
-          step (fn [_ _] [{:db/id "a" :account/path "VT" :account/name "VT"
-                           :account/type :asset}
+          step (fn [_ _] [{:db/id "a" :kontor.account/path "VT" :kontor.account/name "VT"
+                           :kontor.account/type :asset}
                           ;; a rogue step trying to set its own valid-time
                           {:db/id "datomic.tx" :db.valid/from #inst "1999-01-01"}])
           _    (p/run-process conn {:steps [step] :vt-from #inst "2020-06-01"})
           vf   (d/q '[:find ?vf . :where
-                      [?e :account/path "VT"] [?e _ _ ?tx] [?tx :db.valid/from ?vf]]
+                      [?e :kontor.account/path "VT"] [?e _ _ ?tx] [?tx :db.valid/from ?vf]]
                     (d/db conn))]
       (is (= #inst "2020-06-01" vf)
           "the run-process :vt-from won; the step's tx-meta was stripped"))))
@@ -153,14 +153,14 @@
             later step references it — one entity in the commit"
     (let [conn   (core/create-test-db)
           _      (v/install-invariants! conn)
-          parent (fn [_ _] [{:db/id "p" :account/path "Assets" :account/name "Assets"
-                             :account/type :asset}])
-          child  (fn [_ _] [{:db/id "c" :account/path "Assets:Sub" :account/name "Sub"
-                             :account/type :asset :account/parent "p"}])
+          parent (fn [_ _] [{:db/id "p" :kontor.account/path "Assets" :kontor.account/name "Assets"
+                             :kontor.account/type :asset}])
+          child  (fn [_ _] [{:db/id "c" :kontor.account/path "Assets:Sub" :kontor.account/name "Sub"
+                             :kontor.account/type :asset :kontor.account/parent "p"}])
           _      (p/run-process conn {:steps [parent child]})
           linked (d/q '[:find ?pp . :where
-                        [?c :account/path "Assets:Sub"] [?c :account/parent ?p]
-                        [?p :account/path ?pp]]
+                        [?c :kontor.account/path "Assets:Sub"] [?c :kontor.account/parent ?p]
+                        [?p :kontor.account/path ?pp]]
                       (d/db conn))]
       (is (= "Assets" linked) "child's parent resolved to the entity step 1 created"))))
 
@@ -183,20 +183,20 @@
   ;; speculative eid. This test fails loudly if that invariant breaks.
   (let [conn (core/create-test-db)
         db0 (d/db conn)
-        frag1 [{:db/id "round-trip-x" :account/path "RT-X" :account/name "RT"
-                :account/type :asset}]
+        frag1 [{:db/id "round-trip-x" :kontor.account/path "RT-X" :kontor.account/name "RT"
+                :kontor.account/type :asset}]
         spec-db (d/db-with db0 frag1)
-        spec-eid (d/q '[:find ?e . :where [?e :account/path "RT-X"]] spec-db)
+        spec-eid (d/q '[:find ?e . :where [?e :kontor.account/path "RT-X"]] spec-db)
         ;; Append a second fragment that references the speculative eid
         ;; as a literal long — the inventory pattern. If the round-trip
         ;; holds, the final commit's tempid "round-trip-x" resolves to
         ;; the SAME spec-eid and the cross-fragment ref is consistent.
-        frag2 [{:db/id "round-trip-y" :account/path "RT-Y" :account/name "RT"
-                :account/type :asset :account/parent spec-eid}]
+        frag2 [{:db/id "round-trip-y" :kontor.account/path "RT-Y" :kontor.account/name "RT"
+                :kontor.account/type :asset :kontor.account/parent spec-eid}]
         report (d/transact conn (into (vec frag1) frag2))
         final-eid (get (:tempids report) "round-trip-x")
         parent-of-y (d/q '[:find ?p . :where
-                           [?y :account/path "RT-Y"] [?y :account/parent ?p]]
+                           [?y :kontor.account/path "RT-Y"] [?y :kontor.account/parent ?p]]
                          (:db-after report))]
     (is (= spec-eid final-eid)
         "string tempid in frag1 must round-trip to the SAME numeric eid
@@ -209,10 +209,10 @@
   (testing ":commit lets a caller bypass the gate (e.g. for tests)"
     (let [conn (core/create-test-db)
           seen (atom nil)
-          step (fn [_ _] [{:db/id "a" :account/path "Q" :account/name "Q"
-                           :account/type :asset}])]
+          step (fn [_ _] [{:db/id "a" :kontor.account/path "Q" :kontor.account/name "Q"
+                           :kontor.account/type :asset}])]
       (p/run-process conn {:steps  [step]
                            :commit (fn [_conn tx-data] (reset! seen tx-data) :ok)})
       (is (seq @seen) "the override saw the assembled tx-data")
-      (is (nil? (d/entity (d/db conn) [:account/path "Q"]))
+      (is (nil? (d/entity (d/db conn) [:kontor.account/path "Q"]))
           "the override did not actually transact"))))

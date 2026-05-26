@@ -133,7 +133,7 @@
                     {:accounts synthetic-accounts :commodity :eur
                      :etab-account-tag "fr-etab-12345678900012"})]
       (is (every? (fn [p]
-                    (some #(= [:account-tag/name "fr-etab-12345678900012"] %)
+                    (some #(= [:kontor.account-tag/name "fr-etab-12345678900012"] %)
                           (:posting/account-tags p)))
                   postings))))
   (testing "When :etab-account-tag is nil, no etab tag is attached"

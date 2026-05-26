@@ -5,13 +5,13 @@
             [kontor.l10n-cn.chart :as chart]))
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (deftest chart-installs
   (let [conn (core/create-test-db)
         _ (chart/install! conn)
         db (d/db conn)
-        n (count (d/q '[:find [?c ...] :where [_ :account/code ?c]] db))]
+        n (count (d/q '[:find [?c ...] :where [_ :kontor.account/code ?c]] db))]
     (is (>= n 50) (str "loaded " n " accounts — expanded with MOF-canonical 2221 sub-tree"))
     (testing "Key ASBE-coded accounts present"
       (is (ace db "1001") "Cash on hand 库存现金")
@@ -40,7 +40,7 @@
   (let [conn (core/create-test-db)
         _ (chart/install! conn)
         db (d/db conn)
-        names (set (d/q '[:find [?n ...] :where [_ :account-tag/name ?n]] db))]
+        names (set (d/q '[:find [?n ...] :where [_ :kontor.account-tag/name ?n]] db))]
     (testing "Per-rate sales tags (revenue side)"
       (is (contains? names "cn-vat-line-sales-13"))
       (is (contains? names "cn-vat-line-sales-9"))
@@ -64,9 +64,9 @@
           asbe-codes (d/q '[:find [?code ...]
                             :in $ ?acc
                             :where
-                            [?ec :account-code/account ?acc]
-                            [?ec :account-code/regulator :cn/asbe]
-                            [?ec :account-code/code ?code]]
+                            [?ec :kontor.account-code/account ?acc]
+                            [?ec :kontor.account-code/regulator :cn/asbe]
+                            [?ec :kontor.account-code/code ?code]]
                           db cash-id)]
       (is (= ["1001"] asbe-codes)
           "Account 1001 should have ASBE code 1001 attached"))))

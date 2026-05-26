@@ -60,20 +60,20 @@
       {:period/name "2026" :period/start #inst "2026-01-01"
        :period/end #inst "2027-01-01"}
       ;; SKR04 payroll accounts (matching the fixture)
-      {:account/code "6010" :account/name "Löhne" :account/type :expense :account/active true}
-      {:account/code "6020" :account/name "Gehälter" :account/type :expense :account/active true}
-      {:account/code "6035" :account/name "Urlaubsrück-Aufw" :account/type :expense :account/active true}
-      {:account/code "6060" :account/name "Soziale Aufw (freiwillig)" :account/type :expense :account/active true}
-      {:account/code "6110" :account/name "Soziale Aufw (gesetzlich)" :account/type :expense :account/active true}
-      {:account/code "3066" :account/name "Urlaubsrückstellung" :account/type :liability :account/active true}
-      {:account/code "3720" :account/name "Verb LuG" :account/type :liability :account/active true}
-      {:account/code "3730" :account/name "Verb LSt" :account/type :liability :account/active true}
-      {:account/code "3740" :account/name "Verb SV" :account/type :liability :account/active true}
-      {:account/code "3790" :account/name "Verrechnung" :account/type :liability :account/active true}
+      {:kontor.account/code "6010" :kontor.account/name "Löhne" :kontor.account/type :expense :kontor.account/active true}
+      {:kontor.account/code "6020" :kontor.account/name "Gehälter" :kontor.account/type :expense :kontor.account/active true}
+      {:kontor.account/code "6035" :kontor.account/name "Urlaubsrück-Aufw" :kontor.account/type :expense :kontor.account/active true}
+      {:kontor.account/code "6060" :kontor.account/name "Soziale Aufw (freiwillig)" :kontor.account/type :expense :kontor.account/active true}
+      {:kontor.account/code "6110" :kontor.account/name "Soziale Aufw (gesetzlich)" :kontor.account/type :expense :kontor.account/active true}
+      {:kontor.account/code "3066" :kontor.account/name "Urlaubsrückstellung" :kontor.account/type :liability :kontor.account/active true}
+      {:kontor.account/code "3720" :kontor.account/name "Verb LuG" :kontor.account/type :liability :kontor.account/active true}
+      {:kontor.account/code "3730" :kontor.account/name "Verb LSt" :kontor.account/type :liability :kontor.account/active true}
+      {:kontor.account/code "3740" :kontor.account/name "Verb SV" :kontor.account/type :liability :kontor.account/active true}
+      {:kontor.account/code "3790" :kontor.account/name "Verrechnung" :kontor.account/type :liability :kontor.account/active true}
       ;; Operating accounts for the misclassification story
-      {:account/code "4660" :account/name "Reisekosten AN" :account/type :expense :account/active true}
-      {:account/code "4650" :account/name "Bewirtungskosten 70%" :account/type :expense :account/active true}
-      {:account/code "1000" :account/name "Kasse" :account/type :asset :account/active true}])
+      {:kontor.account/code "4660" :kontor.account/name "Reisekosten AN" :kontor.account/type :expense :kontor.account/active true}
+      {:kontor.account/code "4650" :kontor.account/name "Bewirtungskosten 70%" :kontor.account/type :expense :kontor.account/active true}
+      {:kontor.account/code "1000" :kontor.account/name "Kasse" :kontor.account/type :asset :kontor.account/active true}])
     conn))
 
 (deftest multi-year-de-gmbh-end-to-end
@@ -139,10 +139,10 @@
                                          :transaction/effective-date #inst "2026-11-22"
                                          :transaction/narration "Misclassified business dinner"}
                            :postings
-                           [{:posting/account (ref-eid (d/db conn) :account/code "4660")
+                           [{:posting/account (ref-eid (d/db conn) :kontor.account/code "4660")
                              :posting/amount 1200.00M
                              :posting/commodity eur}
-                            {:posting/account (ref-eid (d/db conn) :account/code "1000")
+                            {:posting/account (ref-eid (d/db conn) :kontor.account/code "1000")
                              :posting/amount -1200.00M
                              :posting/commodity eur}]})
                          #inst "2026-11-22"))
@@ -156,7 +156,7 @@
                        :where
                        [?p :posting/account ?a]
                        [?p :posting/amount ?amt]]
-                     db (ref-eid (d/db conn) :account/code "4660"))]
+                     db (ref-eid (d/db conn) :kontor.account/code "4660"))]
             (is (= #{[1200.00M]} postings)
                 "original Reisekosten posting visible at 2026-12-31")))
 
@@ -199,10 +199,10 @@
                            :transaction/effective-date #inst "2026-11-22"
                            :transaction/narration "Bewirtungskosten correction Oct 2027"}
              :postings
-             [{:posting/account (ref-eid (d/db conn) :account/code "4650")
+             [{:posting/account (ref-eid (d/db conn) :kontor.account/code "4650")
                :posting/amount 1200.00M
                :posting/commodity eur}
-              {:posting/account (ref-eid (d/db conn) :account/code "1000")
+              {:posting/account (ref-eid (d/db conn) :kontor.account/code "1000")
                :posting/amount -1200.00M
                :posting/commodity eur}]})
            #inst "2027-10-15"))
@@ -213,11 +213,11 @@
               (is (= #{[1200.00M]}
                      (d/q '[:find ?amt :in $ ?a
                             :where [?p :posting/account ?a] [?p :posting/amount ?amt]]
-                          db (ref-eid (d/db conn) :account/code "4660"))))
+                          db (ref-eid (d/db conn) :kontor.account/code "4660"))))
               (is (= #{}
                      (d/q '[:find ?amt :in $ ?a
                             :where [?p :posting/account ?a] [?p :posting/amount ?amt]]
-                          db (ref-eid (d/db conn) :account/code "4650")))
+                          db (ref-eid (d/db conn) :kontor.account/code "4650")))
                   "the Bewirtungskosten correction wasn't recorded yet at Y1 end")))
 
           (testing "AT 2027-11-01 (post-correction): restated Bewirtungskosten visible"
@@ -225,12 +225,12 @@
               (is (= #{}
                      (d/q '[:find ?amt :in $ ?a
                             :where [?p :posting/account ?a] [?p :posting/amount ?amt]]
-                          db (ref-eid (d/db conn) :account/code "4660")))
+                          db (ref-eid (d/db conn) :kontor.account/code "4660")))
                   "the original misclassified posting is no longer authoritative")
               (is (= #{[1200.00M]}
                      (d/q '[:find ?amt :in $ ?a
                             :where [?p :posting/account ?a] [?p :posting/amount ?amt]]
-                          db (ref-eid (d/db conn) :account/code "4650")))
+                          db (ref-eid (d/db conn) :kontor.account/code "4650")))
                   "the corrected posting IS authoritative"))))
 
         ;; ===== Year 3 DSAR + retention sweep =====

@@ -5,13 +5,13 @@
    computed by an *engine* (see `engines` below). The two kernel
    engines, per the user's Phase-1.5 scope cut:
 
-     :account-codes — sum postings whose `:account/code` matches
+     :account-codes — sum postings whose `:kontor.account/code` matches
                       any of the given prefix patterns. The DE UStVA
                       uses this for boxes that key off konto-number
                       patterns (e.g. \"all 4400/4410/4420 sales 19%\").
 
      :tax-tags      — sum postings whose `:posting/account-tags`
-                      (or whose account's `:account/tags`) include
+                      (or whose account's `:kontor.account/tags`) include
                       any of the given tag keywords. Used by the
                       DE UStVA for box-keyed aggregations
                       (e.g. :ust-81 = sales 19%, :ust-86 = sales 7%,
@@ -84,11 +84,11 @@
                         {:posting/ledger [:db/id]}
                         {:posting/entity [:db/id]}
                         {:posting/partner [:db/id]}
-                        {:posting/account [:account/code
-                                           :account/path
-                                           :account/type
-                                           :account/tags]}
-                        {:posting/account-tags [:account-tag/name]}
+                        {:posting/account [:kontor.account/code
+                                           :kontor.account/path
+                                           :kontor.account/type
+                                           :kontor.account/tags]}
+                        {:posting/account-tags [:kontor.account-tag/name]}
                         {:posting/dimensions [:posting-dimension/axis
                                               :posting-dimension/value]}]
                        p)
@@ -104,16 +104,16 @@
                   [(get-else $ ?tx :db.valid/from ?ti) ?vf]]
                 db p)
         ;; Account tags from the M2M; flatten to keywords
-        acct-tag-names (->> (:account/tags account)
+        acct-tag-names (->> (:kontor.account/tags account)
                             (map (fn [t]
-                                   (or (:account-tag/name (d/pull db [:account-tag/name] (:db/id t)))
-                                       (:account-tag/name t))))
+                                   (or (:kontor.account-tag/name (d/pull db [:kontor.account-tag/name] (:db/id t)))
+                                       (:kontor.account-tag/name t))))
                             (filter some?)
                             (map keyword)
                             set)
         ;; Posting-level tags (materialized at posting time)
         posting-tag-names (->> (:posting/account-tags pulled)
-                               (map :account-tag/name)
+                               (map :kontor.account-tag/name)
                                (filter some?)
                                (map keyword)
                                set)
@@ -129,9 +129,9 @@
            :ledger-eid (:db/id (:posting/ledger pulled))
            :entity-eid (:db/id (:posting/entity pulled))
            :partner-eid (:db/id (:posting/partner pulled))
-           :account-code (:account/code account)
-           :account-path (:account/path account)
-           :account-type (:account/type account)
+           :account-code (:kontor.account/code account)
+           :account-path (:kontor.account/path account)
+           :account-type (:kontor.account/type account)
            :dimensions dimensions
            :all-tags (clojure.set/union acct-tag-names posting-tag-names))))
 

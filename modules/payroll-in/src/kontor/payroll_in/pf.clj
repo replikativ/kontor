@@ -97,8 +97,8 @@
   (let [q '[:find ?p ?amount
             :in $ ?tag ?start ?end
             :where
-            [?acct :account/tags ?at]
-            [?at :account-tag/name ?tag]
+            [?acct :kontor.account/tags ?at]
+            [?at :kontor.account-tag/name ?tag]
             [?p :posting/account ?acct]
             [?p :posting/amount ?amount]
             [?p :posting/transaction ?tx]
@@ -108,12 +108,12 @@
         q-with-est '[:find ?p ?amount
                      :in $ ?tag ?est ?start ?end
                      :where
-                     [?acct :account/tags ?at]
-                     [?at :account-tag/name ?tag]
+                     [?acct :kontor.account/tags ?at]
+                     [?at :kontor.account-tag/name ?tag]
                      [?p :posting/account ?acct]
                      [?p :posting/amount ?amount]
                      [?p :posting/account-tags ?rt]
-                     [?rt :account-tag/name ?est]
+                     [?rt :kontor.account-tag/name ?est]
                      [?p :posting/transaction ?tx]
                      [?tx :transaction/effective-date ?ed]
                      [(.before ^java.util.Date ?ed ?end)]

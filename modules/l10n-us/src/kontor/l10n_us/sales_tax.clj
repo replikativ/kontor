@@ -29,7 +29,7 @@
 (def state-codes
   "Map of state-code keyword → {label / authority / tag-prefix}.
    Authority is what prints on the filing — used by the bookkeeper
-   to know who to remit to. Tag-prefix is the :account-tag/name
+   to know who to remit to. Tag-prefix is the :kontor.account-tag/name
    that the chart's per-state liability accounts use."
   {:ca {:label "California" :authority :us-ca-cdtfa
         :tag :us-ca-state-line-1}

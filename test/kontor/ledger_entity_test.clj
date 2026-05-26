@@ -74,10 +74,10 @@
       (is (= :db.cardinality/one  (:db/cardinality attr))))))
 
 (deftest account-required-analytic-plans-attr-installed
-  (testing ":account/required-analytic-plans attribute is part of
+  (testing ":kontor.account/required-analytic-plans attribute is part of
             the schema (ADR-022)"
     (let [conn (core/create-test-db)
           db   (d/db conn)
-          attr (d/pull db '[*] :account/required-analytic-plans)]
+          attr (d/pull db '[*] :kontor.account/required-analytic-plans)]
       (is (= :db.type/ref          (:db/valueType attr)))
       (is (= :db.cardinality/many  (:db/cardinality attr))))))

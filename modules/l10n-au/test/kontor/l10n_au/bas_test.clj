@@ -189,8 +189,8 @@
     (let [conn (bootstrap)
           db (d/db conn)
           aud-eid (:db/id (d/entity db [:kontor.commodity/symbol "AUD"]))
-          gst-recv (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db "11700")
-          bank     (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db "11100")
+          gst-recv (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db "11700")
+          bank     (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db "11100")
           jnl (:db/id (d/entity db [:journal/code "INV"]))
           date #inst "2026-02-15T00:00:00Z"
           tx-data (posting/build-transaction

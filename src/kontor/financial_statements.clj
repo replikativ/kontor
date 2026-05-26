@@ -198,7 +198,7 @@
 ;; ============================================================================
 
 (defn- account-codes-money
-  "Sum the postings whose `:account/code` matches `codes` over the
+  "Sum the postings whose `:kontor.account/code` matches `codes` over the
    given window / ledger, via the `:account-codes` report engine.
    Always returns a Money (zero when nothing matches)."
   [conn codes {:keys [from to as-of-tx include-states ledger sign commodity]

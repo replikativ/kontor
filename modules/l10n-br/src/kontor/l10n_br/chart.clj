@@ -3,7 +3,7 @@
 
    Loads a Plano de Contas Referencial-aligned starter (~60 accounts)
    into a datahike connection. Each account carries an
-   `:account/external-codes` mapping to its RFB Plano Referencial
+   `:kontor.account/external-codes` mapping to its RFB Plano Referencial
    code (per ADR-019) so ECF filing's De/Para (from/to) mapping is
    already in place.
 
@@ -19,9 +19,9 @@
   (->> chart (mapcat :tags) distinct vec))
 
 (defn- tag-tx [tags]
-  (mapv (fn [t] {:account-tag/name (name t)
-                 :account-tag/country-code "BR"
-                 :account-tag/applicability :account})
+  (mapv (fn [t] {:kontor.account-tag/name (name t)
+                 :kontor.account-tag/country-code "BR"
+                 :kontor.account-tag/applicability :account})
         tags))
 
 (defn- ensure-brl []
@@ -32,13 +32,13 @@
 
 (defn- account-tx
   [{:keys [code path type name reconcilable? tags]}]
-  (cond-> {:account/path path :account/code code :account/name name
-           :account/type type :account/active true
-           :account/commodity [:kontor.commodity/symbol "BRL"]
-           :account/reconcilable (boolean reconcilable?)}
+  (cond-> {:kontor.account/path path :kontor.account/code code :kontor.account/name name
+           :kontor.account/type type :kontor.account/active true
+           :kontor.account/commodity [:kontor.commodity/symbol "BRL"]
+           :kontor.account/reconcilable (boolean reconcilable?)}
     (seq tags)
-    (assoc :account/tags
-           (mapv (fn [t] [:account-tag/name (clojure.core/name t)]) tags))))
+    (assoc :kontor.account/tags
+           (mapv (fn [t] [:kontor.account-tag/name (clojure.core/name t)]) tags))))
 
 (defn- external-code-tx [chart]
   (vec
@@ -46,9 +46,9 @@
     (fn [{:keys [path external-codes]}]
       (when (and path external-codes)
         (map (fn [[regulator code]]
-               {:account-code/account   [:account/path path]
-                :account-code/regulator regulator
-                :account-code/code      code})
+               {:kontor.account-code/account   [:kontor.account/path path]
+                :kontor.account-code/regulator regulator
+                :kontor.account-code/code      code})
              external-codes)))
     chart)))
 

@@ -86,19 +86,19 @@
                               :job-title "Senior Engineer (QLD)"}))))
 
 (defn- accounts-map [db]
-  {:au-payroll-wages              (ref-eid db :account/code "477")
-   :au-payroll-er-super           (ref-eid db :account/code "478")
-   :au-payroll-er-state-tax       (ref-eid db :account/code "479")
-   :au-payroll-er-workers-comp    (ref-eid db :account/code "480")
-   :au-payroll-net-wages          (ref-eid db :account/code "814")
-   :au-payroll-paygw              (ref-eid db :account/code "825")
-   :au-payroll-super              (ref-eid db :account/code "826")
-   :au-payroll-super-employee     (ref-eid db :account/code "827")
-   :au-payroll-salary-sacrifice   (ref-eid db :account/code "828")
-   :au-payroll-state-tax          (ref-eid db :account/code "829")
-   :au-payroll-workers-comp       (ref-eid db :account/code "830")
-   :au-payroll-child-support      (ref-eid db :account/code "831")
-   :au-payroll-other-deduction    (ref-eid db :account/code "832")})
+  {:au-payroll-wages              (ref-eid db :kontor.account/code "477")
+   :au-payroll-er-super           (ref-eid db :kontor.account/code "478")
+   :au-payroll-er-state-tax       (ref-eid db :kontor.account/code "479")
+   :au-payroll-er-workers-comp    (ref-eid db :kontor.account/code "480")
+   :au-payroll-net-wages          (ref-eid db :kontor.account/code "814")
+   :au-payroll-paygw              (ref-eid db :kontor.account/code "825")
+   :au-payroll-super              (ref-eid db :kontor.account/code "826")
+   :au-payroll-super-employee     (ref-eid db :kontor.account/code "827")
+   :au-payroll-salary-sacrifice   (ref-eid db :kontor.account/code "828")
+   :au-payroll-state-tax          (ref-eid db :kontor.account/code "829")
+   :au-payroll-workers-comp       (ref-eid db :kontor.account/code "830")
+   :au-payroll-child-support      (ref-eid db :kontor.account/code "831")
+   :au-payroll-other-deduction    (ref-eid db :kontor.account/code "832")})
 
 (def pay-element-codes
   {"OTE"              :ordinary-time-earnings
@@ -183,7 +183,7 @@
                              [:transaction/external-id
                               {:posting/_transaction
                                [:posting/amount
-                                {:posting/account [:account/code]}
+                                {:posting/account [:kontor.account/code]}
                                 {:posting/analytic-distributions
                                  [:analytic-distribution/percent
                                   {:analytic-distribution/account

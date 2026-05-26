@@ -24,7 +24,7 @@
 (def jan-1-26 #inst "2026-01-01T00:00:00Z")
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
 
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
@@ -267,7 +267,7 @@
           planned (mx-closing/plan-mx-fiscal-year-close-tx-data
                    db {:period-eid period-eid})
           expected (d/q '[:find ?a . :in $ ?c
-                          :where [?a :account/code ?c]]
+                          :where [?a :kontor.account/code ?c]]
                         db chart/utilidades-retenidas-code)]
       (is (= expected (:retained-earnings-eid planned))))))
 
@@ -281,7 +281,7 @@
                    db {:period-eid period-eid
                        :retained-code "306.01.001"})
           expected (d/q '[:find ?a . :in $ ?c
-                          :where [?a :account/code ?c]]
+                          :where [?a :kontor.account/code ?c]]
                         db "306.01.001")]
       (is (= expected (:retained-earnings-eid planned))))))
 

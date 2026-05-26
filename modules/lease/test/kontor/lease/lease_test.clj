@@ -38,11 +38,11 @@
                   :audit-doc/type :lease-contract
                   :audit-doc/storage-uri "s3://docs/lease-1"
                   :audit-doc/uploaded-at #inst "2026-01-01"}
-                 {:db/id "acct-lease-exp" :account/code "6740"
-                  :account/name "Short-term Lease Expense"
-                  :account/type :expense :account/active true}
-                 {:db/id "acct-cash" :account/code "1800" :account/name "Bank"
-                  :account/type :asset :account/active true}
+                 {:db/id "acct-lease-exp" :kontor.account/code "6740"
+                  :kontor.account/name "Short-term Lease Expense"
+                  :kontor.account/type :expense :kontor.account/active true}
+                 {:db/id "acct-cash" :kontor.account/code "1800" :kontor.account/name "Bank"
+                  :kontor.account/type :asset :kontor.account/active true}
                  {:db/id "journal-gen" :journal/code "GEN" :journal/name "General"
                   :journal/type :general}])
     conn))
@@ -52,7 +52,7 @@
 
 (defn- commodity [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- p   [db code] (ref-eid db :kontor.partner/external-id code))
-(defn- acct [db code] (ref-eid db :account/code code))
+(defn- acct [db code] (ref-eid db :kontor.account/code code))
 (defn- journal [db] (ref-eid db :journal/code "GEN"))
 (defn- class-eid [db] (ref-eid db :asset-class/code "rou-property"))
 (defn- adoc [db] (ref-eid db :audit-doc/code "LEASE-CONTRACT-1"))

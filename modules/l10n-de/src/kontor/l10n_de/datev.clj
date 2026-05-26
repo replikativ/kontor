@@ -200,7 +200,7 @@
         pulled (mapv (fn [p]
                        (let [pe (d/pull db
                                         [:posting/amount
-                                         {:posting/account [:account/code :account/type]}
+                                         {:posting/account [:kontor.account/code :kontor.account/type]}
                                          {:posting/transaction
                                           [:db/id :transaction/effective-date :transaction/narration]}]
                                         p)
@@ -215,8 +215,8 @@
                          {:posting-eid p
                           :amount (:posting/amount pe)
                           :valid-from vf
-                          :account-code (-> pe :posting/account :account/code)
-                          :account-type (-> pe :posting/account :account/type)
+                          :account-code (-> pe :posting/account :kontor.account/code)
+                          :account-type (-> pe :posting/account :kontor.account/type)
                           :tx-eid (:db/id tx)
                           :tx-text (:transaction/narration tx)}))
                      posting-ids)

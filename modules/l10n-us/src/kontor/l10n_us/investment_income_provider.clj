@@ -103,7 +103,7 @@
 
 (defn- investment-income-base-selectors
   "Marginalize the GL income postings and split into the dividend +
-   interest lanes per the canonical `:account/path` chart convention
+   interest lanes per the canonical `:kontor.account/path` chart convention
    (note 148 §3.1). Returns a map of `{<lane-key> <bigdec>}` keyed by
    chart prefix.
 

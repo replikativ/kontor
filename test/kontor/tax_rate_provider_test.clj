@@ -17,10 +17,10 @@
   (let [conn (core/create-test-db)]
     (d/transact conn
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
-                 {:account/path "Income:Sales"           :account/type :income}
-                 {:account/path "Expenses:Supplies"      :account/type :expense}
-                 {:account/path "Liabilities:VAT-Payable" :account/type :liability}
-                 {:account/path "Assets:VAT-Receivable"  :account/type :asset}
+                 {:kontor.account/path "Income:Sales"           :kontor.account/type :income}
+                 {:kontor.account/path "Expenses:Supplies"      :kontor.account/type :expense}
+                 {:kontor.account/path "Liabilities:VAT-Payable" :kontor.account/type :liability}
+                 {:kontor.account/path "Assets:VAT-Receivable"  :kontor.account/type :asset}
                  {:db/id "grp" :tax-group/name "DE VAT" :tax-group/country-code "DE"}
                  ;; current sale tax — DE VAT 19%
                  {:db/id "t-sale" :tax/code "DE-VAT-19-SALE" :tax/name "DE VAT 19% (sale)"
@@ -29,7 +29,7 @@
                   :tax/recoverable? true :tax/active true :tax/tax-group "grp"}
                  {:tax-rep/tax "t-sale" :tax-rep/document-type :invoice
                   :tax-rep/repartition-type :tax :tax-rep/factor-percent 100M
-                  :tax-rep/account [:account/path "Liabilities:VAT-Payable"]
+                  :tax-rep/account [:kontor.account/path "Liabilities:VAT-Payable"]
                   :tax-rep/sequence 0}
                  ;; current purchase tax — DE VAT 19% input
                  {:db/id "t-pur" :tax/code "DE-VAT-19-PUR" :tax/name "DE VAT 19% (purchase)"
@@ -38,7 +38,7 @@
                   :tax/recoverable? true :tax/active true :tax/tax-group "grp"}
                  {:tax-rep/tax "t-pur" :tax-rep/document-type :invoice
                   :tax-rep/repartition-type :tax :tax-rep/factor-percent 100M
-                  :tax-rep/account [:account/path "Assets:VAT-Receivable"]
+                  :tax-rep/account [:kontor.account/path "Assets:VAT-Receivable"]
                   :tax-rep/sequence 0}
                  ;; expired sale tax — 16%, ended 2020 — must be filtered out
                  {:db/id "t-old" :tax/code "DE-VAT-16-OLD" :tax/name "DE VAT 16% (expired)"
@@ -112,7 +112,7 @@
                                     :country-code "DE" :tax-use :sale :at at})
         ps    (tpb/tax-postings bld facts {})
         vat-payable (d/q '[:find ?a . :where
-                           [?a :account/path "Liabilities:VAT-Payable"]]
+                           [?a :kontor.account/path "Liabilities:VAT-Payable"]]
                          (d/db conn))]
     (is (= 1 (count ps)))
     (let [p (first ps)]
@@ -156,7 +156,7 @@
 ;; ============================================================================
 
 (defn- acct [conn path]
-  (d/q '[:find ?a . :in $ ?p :where [?a :account/path ?p]] (d/db conn) path))
+  (d/q '[:find ?a . :in $ ?p :where [?a :kontor.account/path ?p]] (d/db conn) path))
 
 (defn- fresh-mechanism-db
   "A db with reverse-charge taxes (country \"RC\", buyer + seller side)
@@ -167,13 +167,13 @@
   (let [conn (core/create-test-db)]
     (d/transact conn
                 [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
-                 {:account/path "Assets:Input-VAT"       :account/type :asset}
-                 {:account/path "Liabilities:Output-VAT" :account/type :liability}
-                 {:account/path "Assets:WH-Receivable"   :account/type :asset}
+                 {:kontor.account/path "Assets:Input-VAT"       :kontor.account/type :asset}
+                 {:kontor.account/path "Liabilities:Output-VAT" :kontor.account/type :liability}
+                 {:kontor.account/path "Assets:WH-Receivable"   :kontor.account/type :asset}
                  ;; reverse charge needs a :tax-group with BOTH accounts
                  {:db/id "rc-grp" :tax-group/name "RC VAT" :tax-group/country-code "RC"
-                  :tax-group/payable-account    [:account/path "Liabilities:Output-VAT"]
-                  :tax-group/receivable-account [:account/path "Assets:Input-VAT"]}
+                  :tax-group/payable-account    [:kontor.account/path "Liabilities:Output-VAT"]
+                  :tax-group/receivable-account [:kontor.account/path "Assets:Input-VAT"]}
                  {:db/id "t-rc-pur" :tax/code "RC-19-PUR" :tax/name "RC 19% (purchase)"
                   :tax/country-code "RC" :tax/type-tax-use :purchase
                   :tax/amount-type :percent :tax/amount 0.19M
@@ -191,7 +191,7 @@
                   :tax/mechanism :withholding}
                  {:tax-rep/tax "t-wh" :tax-rep/document-type :invoice
                   :tax-rep/repartition-type :tax :tax-rep/factor-percent 100M
-                  :tax-rep/account [:account/path "Assets:WH-Receivable"]
+                  :tax-rep/account [:kontor.account/path "Assets:WH-Receivable"]
                   :tax-rep/sequence 0}])
     conn))
 
