@@ -51,7 +51,7 @@
                                                  :invoice-line/unit-price 1000M}]})
   ;; Office expense: €600 paid in cash on Feb 15.
   (let [db (d/db conn)
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         kassa  (ace db "2700")          ; Kassa
         office (ace db "7400")          ; Bürobedarf
         exp-jnl (:db/id (d/entity db [:journal/code "EXP"]))]
@@ -92,7 +92,7 @@
     (let [conn (bootstrap)]
       (seed-fy2025! conn)
       (let [db (d/db conn)
-            eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+            eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
             rev    (ace db "4000")
             office (ace db "7400")]
         (is (= -1500M (-> (balance/account-balance conn rev
@@ -124,14 +124,14 @@
             "Period soft-closed after the closing tx")
         ;; net-by-commodity should reflect the net P&L = -900 (profit).
         (let [db (d/db conn)
-              eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+              eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
               net (get-in close-result [:net-by-commodity eur :amount])]
           (is (= -900M net)
               "Net P&L: revenue -1500 + Bürobedarf 600 = -900
                (sign convention: income credits are negative)"))
         ;; P&L accounts at the new year start: should be zero.
         (let [db (d/db conn)
-              eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+              eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
               rev      (ace db "4000")
               office   (ace db "7400")
               retained (ace db "9460")
@@ -260,7 +260,7 @@
                                            :retained-code "9200"
                                            :external-id "FY25-9200"})
         (let [db (d/db conn)
-              eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+              eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
               rueckl (ace db "9200")
               bilanz (ace db "9460")
               bal (fn [eid] (-> (balance/account-balance conn eid

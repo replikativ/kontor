@@ -45,7 +45,7 @@
      2310 GST/HST coll CREDIT  13%"
   [conn external-id date net]
   (let [db (d/db conn)
-        cad (:db/id (d/entity db [:commodity/symbol "CAD"]))
+        cad (:db/id (d/entity db [:kontor.commodity/symbol "CAD"]))
         rec (ace db "1100") rev (ace db "4000")
         coll (ace db "2310")
         jnl (:db/id (d/entity db [:journal/code "INV"]))
@@ -76,7 +76,7 @@
      2320 BC PST coll   CREDIT 7% (BC Finance)"
   [conn external-id date net]
   (let [db (d/db conn)
-        cad (:db/id (d/entity db [:commodity/symbol "CAD"]))
+        cad (:db/id (d/entity db [:kontor.commodity/symbol "CAD"]))
         rec (ace db "1100") rev (ace db "4000")
         gst (ace db "2310") pst (ace db "2320")
         jnl (:db/id (d/entity db [:journal/code "INV"]))
@@ -110,7 +110,7 @@
      2330 QST collected  CREDIT 9.975%"
   [conn external-id date net]
   (let [db (d/db conn)
-        cad (:db/id (d/entity db [:commodity/symbol "CAD"]))
+        cad (:db/id (d/entity db [:kontor.commodity/symbol "CAD"]))
         rec (ace db "1100") rev (ace db "4000")
         gst (ace db "2310") qst (ace db "2330")
         jnl (:db/id (d/entity db [:journal/code "INV"]))
@@ -142,7 +142,7 @@
      2000 payable     CREDIT  net + 5%"
   [conn external-id date net]
   (let [db (d/db conn)
-        cad (:db/id (d/entity db [:commodity/symbol "CAD"]))
+        cad (:db/id (d/entity db [:kontor.commodity/symbol "CAD"]))
         exp (ace db "6000") itc (ace db "1310") pay (ace db "2000")
         jnl (:db/id (d/entity db [:journal/code "INV"]))
         net-bd (bigdec net)

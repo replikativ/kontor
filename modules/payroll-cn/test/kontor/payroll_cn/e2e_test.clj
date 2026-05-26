@@ -171,7 +171,7 @@
         _ (setup-employees conn)
         db (d/db conn)
         ent (ref-eid db :entity/code "ACME-CN")
-        cny (ref-eid db :commodity/symbol "CNY")
+        cny (ref-eid db :kontor.commodity/symbol "CNY")
         period (ref-eid db :period/name "2026-04")
         journal (ref-eid db :journal/code "PAY-CN")
         e1 (hr/employment-by-code db "E001")

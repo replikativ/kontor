@@ -31,14 +31,14 @@
   []
   (let [conn (core/create-test-db)]
     (inv-statute/install! conn)
-    (d/transact conn [{:commodity/symbol "CNY" :commodity/name "Chinese Yuan"
-                       :commodity/precision 2}
+    (d/transact conn [{:kontor.commodity/symbol "CNY" :kontor.commodity/name "Chinese Yuan"
+                       :kontor.commodity/precision 2}
                       {:entity/code "HOLDCO" :entity/name "HoldCo"
                        :entity/kind :company :entity/country "CN"
-                       :entity/functional-commodity [:commodity/symbol "CNY"]}])
+                       :entity/functional-commodity [:kontor.commodity/symbol "CNY"]}])
     conn))
 
-(def ^:private cny [:commodity/symbol "CNY"])
+(def ^:private cny [:kontor.commodity/symbol "CNY"])
 
 (defn- holdco-eid [conn]
   (d/q '[:find ?e . :where [?e :entity/code "HOLDCO"]] (d/db conn)))

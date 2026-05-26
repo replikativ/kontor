@@ -23,8 +23,8 @@
 (deftest isn-end-to-end
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:commodity/symbol "MXN" :commodity/name "Mexican Peso"
-                  :commodity/precision 2}
+                [{:kontor.commodity/symbol "MXN" :kontor.commodity/name "Mexican Peso"
+                  :kontor.commodity/precision 2}
                  {:journal/code "GEN" :journal/type :general}
                  {:journal/code "PUR" :journal/type :purchase}
                  {:account/path "Gastos:Sueldos" :account/code "6010"
@@ -33,7 +33,7 @@
                   :account/type :asset}])
     (book/buy! conn {:debit-account  [:account/path "Gastos:Sueldos"]
                      :credit-account [:account/path "Activo:Banco"]
-                     :amount 500000 :commodity [:commodity/symbol "MXN"]
+                     :amount 500000 :commodity [:kontor.commodity/symbol "MXN"]
                      :effective-date #inst "2026-03-31"})
     (let [provider (mx/mx-isn-provider {:state :cdmx :wage-codes ["6010"]})
           facts    (ptp/period-tax-facts
@@ -142,8 +142,8 @@
   ;; personales (under the Art. 151 cap), claiming the subsidio.
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:commodity/symbol "MXN" :commodity/name "Mexican Peso"
-                  :commodity/precision 2}
+                [{:kontor.commodity/symbol "MXN" :kontor.commodity/name "Mexican Peso"
+                  :kontor.commodity/precision 2}
                  {:journal/code "GEN" :journal/type :general}
                  {:journal/code "SAL" :journal/type :sale}
                  {:account/path "Ingresos:Honorarios" :account/code "4010"
@@ -152,7 +152,7 @@
                   :account/type :asset}])
     (book/sell! conn {:debit-account  [:account/path "Activo:Banco"]
                       :credit-account [:account/path "Ingresos:Honorarios"]
-                      :amount 600000 :commodity [:commodity/symbol "MXN"]
+                      :amount 600000 :commodity [:kontor.commodity/symbol "MXN"]
                       :effective-date #inst "2026-06-30"})
     (let [provider (mx/mx-isr-personal-provider {})
           facts    (ptp/period-tax-facts

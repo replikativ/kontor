@@ -304,7 +304,7 @@
   [disposal {:keys [db as-of]}]
   (let [raw           (realized-gain disposal)
         asset-class   (:disposal/asset-class disposal)
-        commodity-sym (or (:commodity/symbol (:disposal/proceeds-commodity disposal))
+        commodity-sym (or (:kontor.commodity/symbol (:disposal/proceeds-commodity disposal))
                           "AUD")
         regimes       (elective-regime-set disposal)
         below-thresh  (below-threshold-exempt? disposal db as-of)

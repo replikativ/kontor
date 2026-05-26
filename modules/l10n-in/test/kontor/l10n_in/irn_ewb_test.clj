@@ -148,8 +148,8 @@
    off it."
   [conn]
   (d/transact conn
-              [{:db/id -1 :commodity/symbol "INR" :commodity/name "Indian Rupee"
-                :commodity/precision 2 :commodity/iso-4217 "INR"}
+              [{:db/id -1 :kontor.commodity/symbol "INR" :kontor.commodity/name "Indian Rupee"
+                :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "INR"}
                {:db/id -2 :account/path "Assets:Receivable"
                 :account/name "AR" :account/type :asset :account/active true}
                {:db/id -3 :account/path "Income:Sales"

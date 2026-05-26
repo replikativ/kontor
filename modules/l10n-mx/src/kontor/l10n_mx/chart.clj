@@ -96,10 +96,10 @@
 (defn- ensure-mxn
   "Idempotent MXN commodity. Peso Mexicano, precision 2."
   []
-  {:commodity/symbol "MXN"
-   :commodity/name "Peso Mexicano"
-   :commodity/precision 2
-   :commodity/iso-4217 "MXN"})
+  {:kontor.commodity/symbol "MXN"
+   :kontor.commodity/name "Peso Mexicano"
+   :kontor.commodity/precision 2
+   :kontor.commodity/iso-4217 "MXN"})
 
 ;; ============================================================================
 ;; Account materialization
@@ -115,7 +115,7 @@
            :account/name        name
            :account/type        type
            :account/active      true
-           :account/commodity   [:commodity/symbol "MXN"]
+           :account/commodity   [:kontor.commodity/symbol "MXN"]
            :account/reconcilable (boolean reconcilable?)}
     (seq tags)
     (assoc :account/tags

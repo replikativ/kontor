@@ -35,7 +35,7 @@
    rate-pct ∈ {20 10 5.5 2.1}"
   [conn external-id date net rate-pct]
   (let [db (d/db conn)
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         client (ace db "4111")
         revenue (case rate-pct
                   20  (ace db "706")
@@ -72,7 +72,7 @@
   "Vendor bill 20% VAT — déductible. Postings: 606 expense + 44566 TVA déd + 401 fournisseur."
   [conn external-id date net]
   (let [db (d/db conn)
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         exp (ace db "606")
         vor (ace db "44566")
         pay (ace db "401")

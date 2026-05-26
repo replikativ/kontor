@@ -12,14 +12,14 @@
 ;; Fixture — a founder entity, USD commodity, journals, chart skeleton
 ;; ============================================================================
 
-(def ^:private usd [:commodity/symbol "USD"])
+(def ^:private usd [:kontor.commodity/symbol "USD"])
 
 (defn- fresh []
   (let [conn (core/create-test-db)]
     (disposal/install! conn)
     (d/transact conn
-                [{:commodity/symbol "USD" :commodity/name "US Dollar"
-                  :commodity/precision 2}
+                [{:kontor.commodity/symbol "USD" :kontor.commodity/name "US Dollar"
+                  :kontor.commodity/precision 2}
                  ;; Founder entity (Sarah's individual books).
                  {:entity/code "SARAH"  :entity/name "Sarah Chen (Individual)"
                   :entity/kind :individual :entity/country "US"

@@ -51,7 +51,7 @@
   "Sales invoice: 1190 EUR (1000 net + 19% USt) to a partner."
   [conn external-id partner-extid net]
   (let [db (d/db conn)
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         recv (ace db "1400")
         rev (ace db "4400")
         ust (ace db "3801")
@@ -140,7 +140,7 @@
           _ (seed-three-invoices conn)
           db (d/db conn)
           bank-acct (ace db "1200")
-          eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           opts {:source-account-eid bank-acct :commodity-eid eur}]
       (recon/ingest-statement! conn (bank-candidates) opts)
       (let [n1 (count (d/q '[:find [?bl ...] :where [?bl :bank-line/external-id _]]
@@ -162,7 +162,7 @@
           _ (seed-three-invoices conn)
           db (d/db conn)
           bank-acct (ace db "1200")
-          eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           _ (recon/ingest-statement! conn (bank-candidates)
                                      {:source-account-eid bank-acct
                                       :commodity-eid eur})
@@ -184,7 +184,7 @@
           _ (seed-three-invoices conn)
           db (d/db conn)
           bank-acct (ace db "1200")
-          eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           _ (recon/ingest-statement! conn (bank-candidates)
                                      {:source-account-eid bank-acct
                                       :commodity-eid eur})
@@ -209,7 +209,7 @@
           _ (post-invoice! conn "INV-2026-002" "BETA"  2000) ; 2380.00
           db (d/db conn)
           bank-acct (ace db "1200")
-          eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           consolidated [{:bank :test :date feb-5 :amount 1785.00M
                          :counterparty "ACME GmbH"
                          :description "Zahlung mehrere Rechnungen"
@@ -243,7 +243,7 @@
           _ (post-invoice! conn "INV-2026-002" "BETA"  2000)
           db0 (d/db conn)
           bank-acct (ace db0 "1200")
-          eur (:db/id (d/entity db0 [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           bank-jnl (:db/id (d/entity db0 [:journal/code "BANK"]))
           _ (recon/ingest-statement! conn
                                      [{:bank :test :date feb-5 :amount 1785.00M
@@ -271,7 +271,7 @@
           _ (seed-three-invoices conn)
           db (d/db conn)
           bank-acct (ace db "1200")
-          eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           _ (recon/ingest-statement! conn (bank-candidates)
                                      {:source-account-eid bank-acct
                                       :commodity-eid eur})
@@ -301,7 +301,7 @@
           _ (seed-three-invoices conn)
           db0 (d/db conn)
           bank-acct (ace db0 "1200")
-          eur (:db/id (d/entity db0 [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           inv-jnl (:db/id (d/entity db0 [:journal/code "INV"]))
           bank-jnl (:db/id (d/entity db0 [:journal/code "BANK"]))
           _ (recon/ingest-statement! conn (bank-candidates)
@@ -350,7 +350,7 @@
           _ (seed-three-invoices conn)
           db0 (d/db conn)
           bank-acct (ace db0 "1200")
-          eur (:db/id (d/entity db0 [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           bank-jnl (:db/id (d/entity db0 [:journal/code "BANK"]))
           _ (recon/ingest-statement! conn (bank-candidates)
                                      {:source-account-eid bank-acct
@@ -371,7 +371,7 @@
           _ (seed-three-invoices conn)
           db0 (d/db conn)
           bank-acct (ace db0 "1200")
-          eur (:db/id (d/entity db0 [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           bank-jnl (:db/id (d/entity db0 [:journal/code "BANK"]))
           _ (recon/ingest-statement! conn (bank-candidates)
                                      {:source-account-eid bank-acct

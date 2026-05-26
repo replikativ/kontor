@@ -54,7 +54,7 @@
                                                  :invoice-line/unit-price 1000M}]})
   ;; Office supplies expense: $300 paid from bank Feb 15.
   (let [db (d/db conn)
-        mxn (:db/id (d/entity db [:commodity/symbol "MXN"]))
+        mxn (:db/id (d/entity db [:kontor.commodity/symbol "MXN"]))
         bank (ace db chart/bank-code)
         cash (ace db chart/cash-code)
         office (ace db "601.08.001")    ; Papelería
@@ -104,7 +104,7 @@
     (let [conn (bootstrap)]
       (seed-fy2025! conn)
       (let [db (d/db conn)
-            mxn (:db/id (d/entity db [:commodity/symbol "MXN"]))
+            mxn (:db/id (d/entity db [:kontor.commodity/symbol "MXN"]))
             rev    (ace db chart/sales-domestic-16-code)
             office (ace db "601.08.001")
             rent   (ace db "601.03.001")]
@@ -140,13 +140,13 @@
             "Period soft-closed after the closing tx")
         ;; Net P&L = -300 (profit; income credits are negative).
         (let [db (d/db conn)
-              mxn (:db/id (d/entity db [:commodity/symbol "MXN"]))
+              mxn (:db/id (d/entity db [:kontor.commodity/symbol "MXN"]))
               net (get-in close-result [:net-by-commodity mxn :amount])]
           (is (= -300M net)
               "Net P&L: revenue -1000 + office 300 + rent 400 = -300"))
         ;; P&L accounts zero at the new year start.
         (let [db (d/db conn)
-              mxn (:db/id (d/entity db [:commodity/symbol "MXN"]))
+              mxn (:db/id (d/entity db [:kontor.commodity/symbol "MXN"]))
               rev    (ace db chart/sales-domestic-16-code)
               office (ace db "601.08.001")
               rent   (ace db "601.03.001")

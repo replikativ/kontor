@@ -129,7 +129,7 @@
    Required opts:
      :db          — datahike value used to resolve accounts
      :journal     — :journal eid OR [:journal/code 'NOM']
-     :commodity   — :commodity eid OR [:commodity/symbol 'MXN']
+     :commodity   — :commodity eid OR [:kontor.commodity/symbol 'MXN']
      :period      — {:start <inst> :end <inst> :payment-date <inst>}
      :facts       — vector of :payroll-facts maps
 

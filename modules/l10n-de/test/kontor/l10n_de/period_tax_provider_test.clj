@@ -28,14 +28,14 @@
 (deftest est-with-soli-end-to-end
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:commodity/symbol "EUR" :commodity/name "Euro"
-                  :commodity/precision 2}
+                [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                  :kontor.commodity/precision 2}
                  {:journal/code "SALE" :journal/type :sale}
                  {:account/path "Income:Gehalt" :account/type :income}
                  {:account/path "Aktiva:Bank"   :account/type :asset}])
     (book/sell! conn {:debit-account  [:account/path "Aktiva:Bank"]
                       :credit-account [:account/path "Income:Gehalt"]
-                      :amount 120000 :commodity [:commodity/symbol "EUR"]
+                      :amount 120000 :commodity [:kontor.commodity/symbol "EUR"]
                       :effective-date #inst "2026-06-30"})
     (let [facts (ptp/period-tax-facts
                  (de/de-income-tax-provider {})

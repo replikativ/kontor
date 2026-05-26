@@ -29,58 +29,58 @@
    {:account/code "6000" :account/path "Aufwendungen:Personal:Gehälter"
     :account/type :expense :account/name "Gehälter"
     :account/active true
-    :account/commodity [:commodity/symbol "EUR"]}
+    :account/commodity [:kontor.commodity/symbol "EUR"]}
    {:account/code "6400" :account/path "Aufwendungen:Personal:Urlaubsremuneration"
     :account/type :expense :account/name "Urlaubsremuneration (13.)"
     :account/active true
-    :account/commodity [:commodity/symbol "EUR"]}
+    :account/commodity [:kontor.commodity/symbol "EUR"]}
    {:account/code "6410" :account/path "Aufwendungen:Personal:Weihnachtsremuneration"
     :account/type :expense :account/name "Weihnachtsremuneration (14.)"
     :account/active true
-    :account/commodity [:commodity/symbol "EUR"]}
+    :account/commodity [:kontor.commodity/symbol "EUR"]}
    {:account/code "6500" :account/path "Aufwendungen:Personal:SV-AG"
     :account/type :expense :account/name "Sozialaufwand-Arbeitgeber"
     :account/active true
-    :account/commodity [:commodity/symbol "EUR"]}
+    :account/commodity [:kontor.commodity/symbol "EUR"]}
    {:account/code "6510" :account/path "Aufwendungen:Personal:DB-FLAG"
     :account/type :expense :account/name "DB FLAG (4.1%)"
     :account/active true
-    :account/commodity [:commodity/symbol "EUR"]}
+    :account/commodity [:kontor.commodity/symbol "EUR"]}
    {:account/code "6520" :account/path "Aufwendungen:Personal:KomSt"
     :account/type :expense :account/name "Kommunalsteuer (3%)"
     :account/active true
-    :account/commodity [:commodity/symbol "EUR"]}
+    :account/commodity [:kontor.commodity/symbol "EUR"]}
    {:account/code "6530" :account/path "Aufwendungen:Personal:DZ"
     :account/type :expense :account/name "Zuschlag zum DB"
     :account/active true
-    :account/commodity [:commodity/symbol "EUR"]}
+    :account/commodity [:kontor.commodity/symbol "EUR"]}
    {:account/code "6800" :account/path "Aufwendungen:Personal:Sachbezüge"
     :account/type :expense :account/name "Sachbezugsaufwand"
     :account/active true
-    :account/commodity [:commodity/symbol "EUR"]}
+    :account/commodity [:kontor.commodity/symbol "EUR"]}
 
    ;; Verbindlichkeiten — class 3
    {:account/code "3540" :account/path "Verbindlichkeiten:SV"
     :account/type :liability :account/name "SV-Verbindlichkeit"
     :account/active true
-    :account/commodity [:commodity/symbol "EUR"]}
+    :account/commodity [:kontor.commodity/symbol "EUR"]}
    {:account/code "3550" :account/path "Verbindlichkeiten:DB"
     :account/type :liability :account/name "DB+DZ-Verbindlichkeit"
     :account/active true
-    :account/commodity [:commodity/symbol "EUR"]}
+    :account/commodity [:kontor.commodity/symbol "EUR"]}
    {:account/code "3560" :account/path "Verbindlichkeiten:KomSt"
     :account/type :liability :account/name "Kommunalsteuer-Verbindlichkeit"
     :account/active true
-    :account/commodity [:commodity/symbol "EUR"]}
+    :account/commodity [:kontor.commodity/symbol "EUR"]}
    {:account/code "3590" :account/path "Verbindlichkeiten:Sachbezug-Clearing"
     :account/type :liability :account/name "Sachbezug-Clearing"
     :account/active true
-    :account/commodity [:commodity/symbol "EUR"]}
+    :account/commodity [:kontor.commodity/symbol "EUR"]}
    ;; 3700 the net pay payable
    {:account/code "3700" :account/path "Verbindlichkeiten:Lohn"
     :account/type :liability :account/name "Verbindlichkeit Lohn"
     :account/active true
-    :account/commodity [:commodity/symbol "EUR"]}])
+    :account/commodity [:kontor.commodity/symbol "EUR"]}])
 
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
@@ -105,7 +105,7 @@
   (let [conn (bootstrap)
         db0 (d/db conn)
         jnl (:db/id (d/entity db0 [:journal/code "PAYROLL"]))
-        eur (:db/id (d/entity db0 [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
         result (compute/parse :bmd (fixture "bmd-2026-01.csv"))
         report (pb/post! conn
                          {:payroll-result result
@@ -133,7 +133,7 @@
     (let [conn (bootstrap)
           db0 (d/db conn)
           jnl (:db/id (d/entity db0 [:journal/code "PAYROLL"]))
-          eur (:db/id (d/entity db0 [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           result (compute/parse :bmd (fixture "bmd-2026-01.csv"))
           _ (pb/post! conn
                       {:payroll-result result
@@ -174,7 +174,7 @@
     (let [conn (bootstrap)
           db0 (d/db conn)
           jnl (:db/id (d/entity db0 [:journal/code "PAYROLL"]))
-          eur (:db/id (d/entity db0 [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           result (compute/parse :bmd (fixture "bmd-2026-06.csv"))
           _ (pb/post! conn
                       {:payroll-result result

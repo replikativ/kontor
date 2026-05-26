@@ -12,15 +12,15 @@
   [{:account/code "3710" :account/path "Verbindlichkeiten:Rueckstellung:Urlaub"
     :account/type :liability :account/name "Urlaubsrückstellung"
     :account/active true
-    :account/commodity [:commodity/symbol "EUR"]}
+    :account/commodity [:kontor.commodity/symbol "EUR"]}
    {:account/code "3720" :account/path "Verbindlichkeiten:Rueckstellung:Sonder"
     :account/type :liability :account/name "Rückstellung 13./14."
     :account/active true
-    :account/commodity [:commodity/symbol "EUR"]}
+    :account/commodity [:kontor.commodity/symbol "EUR"]}
    {:account/code "6000" :account/path "Aufwendungen:Personal:Gehälter"
     :account/type :expense :account/name "Gehälter"
     :account/active true
-    :account/commodity [:commodity/symbol "EUR"]}])
+    :account/commodity [:kontor.commodity/symbol "EUR"]}])
 
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
@@ -53,7 +53,7 @@
     (let [conn (bootstrap)
           db0 (d/db conn)
           jnl (:db/id (d/entity db0 [:journal/code "PAYROLL"]))
-          eur (:db/id (d/entity db0 [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           report (accrual/accrue-urlaubsrueckstellung!
                   conn
                   {:amount (bigdec "500.00")
@@ -84,7 +84,7 @@
     (let [conn (bootstrap)
           db0 (d/db conn)
           jnl (:db/id (d/entity db0 [:journal/code "PAYROLL"]))
-          eur (:db/id (d/entity db0 [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           _ (accrual/accrue-sonderzahlung!
              conn
              {:amount (bigdec "600.00")

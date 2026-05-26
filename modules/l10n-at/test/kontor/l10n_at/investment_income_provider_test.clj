@@ -35,8 +35,8 @@
   (let [conn (core/create-test-db)]
     (cgt-statute/install! conn)
     (inv-statute/install! conn)
-    (d/transact conn [{:commodity/symbol "EUR" :commodity/name "Euro"
-                       :commodity/precision 2}])
+    (d/transact conn [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                       :kontor.commodity/precision 2}])
     conn))
 
 (def ^:private p2026 {:from #inst "2026-01-01" :to #inst "2027-01-01"})

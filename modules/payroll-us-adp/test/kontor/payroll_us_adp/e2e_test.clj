@@ -45,7 +45,7 @@
         _ (hr/install! conn)
         _ (adp/install! conn)]
     (d/transact conn
-                [{:db/id "usd" :commodity/symbol "USD" :commodity/precision 2}
+                [{:db/id "usd" :kontor.commodity/symbol "USD" :kontor.commodity/precision 2}
                  {:db/id "ent-us" :entity/code "US-LLC" :entity/name "Acme US LLC"
                   :entity/kind :operating}
                  {:db/id "us-gaap" :ledger/code "us-gaap"
@@ -138,7 +138,7 @@
         _ (setup-employees conn)
         db (d/db conn)
         us-llc (ref-eid db :entity/code "US-LLC")
-        usd (ref-eid db :commodity/symbol "USD")
+        usd (ref-eid db :kontor.commodity/symbol "USD")
         gaap (ref-eid db :ledger/code "us-gaap")
         period (ref-eid db :period/name "2026-04")
         journal (ref-eid db :journal/code "PAY-US")

@@ -17,14 +17,14 @@
         tags))
 
 (defn- ensure-usd []
-  {:commodity/symbol "USD" :commodity/name "US Dollar"
-   :commodity/precision 2 :commodity/iso-4217 "USD"})
+  {:kontor.commodity/symbol "USD" :kontor.commodity/name "US Dollar"
+   :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "USD"})
 
 (defn- account-tx
   [{:keys [code path type name reconcilable? tags]}]
   (cond-> {:account/path path :account/code code :account/name name
            :account/type type :account/active true
-           :account/commodity [:commodity/symbol "USD"]
+           :account/commodity [:kontor.commodity/symbol "USD"]
            :account/reconcilable (boolean reconcilable?)}
     (seq tags)
     (assoc :account/tags

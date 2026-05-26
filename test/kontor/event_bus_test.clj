@@ -89,8 +89,8 @@
   [conn]
   (ledger/install-defaults! conn)
   (d/transact conn
-              [{:db/id -1 :commodity/symbol "EUR" :commodity/name "Euro"
-                :commodity/precision 2 :commodity/iso-4217 "EUR"}
+              [{:db/id -1 :kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
                {:db/id -2 :account/path "Assets:Receivable"
                 :account/name "Trade receivables"
                 :account/type :asset :account/active true}
@@ -105,7 +105,7 @@
   (let [conn  (core/create-test-db)
         _     (seed! conn)
         db    (d/db conn)
-        eur   (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur   (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         rec   (:db/id (d/entity db [:account/path "Assets:Receivable"]))
         rev   (:db/id (d/entity db [:account/path "Income:Sales"]))
         jnl   (:db/id (d/entity db [:journal/code "INV"]))
@@ -150,7 +150,7 @@
   (let [conn  (core/create-test-db)
         _     (seed! conn)
         db    (d/db conn)
-        eur   (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur   (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         rec   (:db/id (d/entity db [:account/path "Assets:Receivable"]))
         rev   (:db/id (d/entity db [:account/path "Income:Sales"]))
         jnl   (:db/id (d/entity db [:journal/code "INV"]))

@@ -23,9 +23,9 @@
   (let [conn (core/create-test-db)
         _ (chart/install! conn)
         db (d/db conn)
-        aud (d/entity db [:commodity/symbol "AUD"])]
-    (is (= 2 (:commodity/precision aud)))
-    (is (= "AUD" (:commodity/iso-4217 aud)))))
+        aud (d/entity db [:kontor.commodity/symbol "AUD"])]
+    (is (= 2 (:kontor.commodity/precision aud)))
+    (is (= "AUD" (:kontor.commodity/iso-4217 aud)))))
 
 (deftest bas-tags-installed
   (let [conn (core/create-test-db)

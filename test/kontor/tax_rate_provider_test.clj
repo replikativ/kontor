@@ -16,7 +16,7 @@
 (defn- fresh-tax-db []
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:commodity/symbol "EUR" :commodity/name "Euro" :commodity/precision 2}
+                [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
                  {:account/path "Income:Sales"           :account/type :income}
                  {:account/path "Expenses:Supplies"      :account/type :expense}
                  {:account/path "Liabilities:VAT-Payable" :account/type :liability}
@@ -48,7 +48,7 @@
                   :tax/effective-until #inst "2020-01-01"}])
     conn))
 
-(def ^:private eur [:commodity/symbol "EUR"])
+(def ^:private eur [:kontor.commodity/symbol "EUR"])
 (def ^:private at  #inst "2026-03-15")
 
 ;; ============================================================================
@@ -166,7 +166,7 @@
   []
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:commodity/symbol "EUR" :commodity/name "Euro" :commodity/precision 2}
+                [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
                  {:account/path "Assets:Input-VAT"       :account/type :asset}
                  {:account/path "Liabilities:Output-VAT" :account/type :liability}
                  {:account/path "Assets:WH-Receivable"   :account/type :asset}

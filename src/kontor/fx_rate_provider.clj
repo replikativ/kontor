@@ -64,7 +64,7 @@
      no opinion.
 
      Query keys:
-       :from-commodity  — commodity (:db/id or :commodity/symbol string).
+       :from-commodity  — commodity (:db/id or :kontor.commodity/symbol string).
        :to-commodity    — commodity, same shape as :from-commodity.
        :at-date         — java.util.Date. The valid-time at which the
                           rate should be evaluated.
@@ -110,7 +110,7 @@
 ;; ============================================================================
 
 (defn- coerce-commodity-eid
-  "Accept either an eid (long), a lookup ref [[:commodity/symbol \"EUR\"]],
+  "Accept either an eid (long), a lookup ref [[:kontor.commodity/symbol \"EUR\"]],
    or a bare string \"EUR\". Returns the eid or nil if not found."
   [db commodity]
   (cond
@@ -119,7 +119,7 @@
     (number? commodity)
     commodity
     (string? commodity)
-    (:db/id (d/entity db [:commodity/symbol commodity]))
+    (:db/id (d/entity db [:kontor.commodity/symbol commodity]))
     (vector? commodity)
     (:db/id (d/entity db commodity))
     (and (map? commodity) (:db/id commodity))
@@ -298,8 +298,8 @@
     (throw (ex-info "save-rate!-tx-data: required keys missing"
                     {:got #{(when from :from) (when to :to)
                             (when at-date :at-date) (when rate :rate)}})))
-  (cond-> {:fx-rate/from-commodity (if (string? from) [:commodity/symbol from] from)
-           :fx-rate/to-commodity   (if (string? to)   [:commodity/symbol to]   to)
+  (cond-> {:fx-rate/from-commodity (if (string? from) [:kontor.commodity/symbol from] from)
+           :fx-rate/to-commodity   (if (string? to)   [:kontor.commodity/symbol to]   to)
            :fx-rate/at-date        at-date
            :fx-rate/rate           (if (instance? BigDecimal rate) rate (bigdec rate))
            :fx-rate/rate-type      (or rate-type :spot)

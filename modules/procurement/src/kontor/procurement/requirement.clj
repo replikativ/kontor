@@ -35,7 +35,7 @@
   (when-let [eid (resolve-requirement db spec)]
     (d/pull db
             '[* {:requirement/entity [:entity/code :entity/name]
-                 :requirement/budget-commodity [:commodity/symbol]
+                 :requirement/budget-commodity [:kontor.commodity/symbol]
                  :requirement/cost-center [:analytic-account/code :analytic-account/name]}]
             eid)))
 

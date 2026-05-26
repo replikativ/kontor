@@ -57,29 +57,29 @@
 ;;
 ;; PTA-style: keep small. A commodity is identified by its symbol (EUR,
 ;; USD, BTC). Precision is the number of fractional digits used for
-;; storage and display. Currency commodities have :commodity/iso-4217
+;; storage and display. Currency commodities have :kontor.commodity/iso-4217
 ;; populated; non-currency commodities (stock, crypto) do not.
 ;; ============================================================================
 
 (def ^:private commodity-attrs
-  [{:db/ident       :commodity/symbol
+  [{:db/ident       :kontor.commodity/symbol
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "ISO-4217 code for fiat (EUR, USD, CAD), ticker for
                      other commodities. Identity attribute."}
 
-   {:db/ident       :commodity/name
+   {:db/ident       :kontor.commodity/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
-   {:db/ident       :commodity/precision
+   {:db/ident       :kontor.commodity/precision
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one
     :db/doc         "Number of fractional digits used for amounts in this
                      commodity. EUR/USD = 2; JPY = 0; BTC = 8."}
 
-   {:db/ident       :commodity/iso-4217
+   {:db/ident       :kontor.commodity/iso-4217
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "ISO-4217 alphabetic currency code, when applicable.
@@ -90,7 +90,7 @@
    ;; canonical IRIs for ISO-4217 codes. Substrate carries the IRI so a
    ;; consumer can RDF-export or align with FIBO without redoing the
    ;; mapping at every consumer.
-   {:db/ident       :commodity/concept-iri
+   {:db/ident       :kontor.commodity/concept-iri
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true
@@ -3128,13 +3128,13 @@
 ;; ============================================================================
 
 (def ^:private country-attrs
-  [{:db/ident       :country/code
+  [{:db/ident       :kontor.country/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "ISO 3166-1 alpha-2 (\"IN\", \"BR\", \"CA\")."}
 
-   {:db/ident       :country/code-iso3
+   {:db/ident       :kontor.country/code-iso3
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
@@ -3142,74 +3142,74 @@
                      Optional — only loaded by l10n modules that
                      need it."}
 
-   {:db/ident       :country/name
+   {:db/ident       :kontor.country/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "English name. Localized display names belong in
                      consumer apps."}
 
-   {:db/ident       :country/default-commodity
+   {:db/ident       :kontor.country/default-commodity
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Default trading commodity (INR, BRL, CAD…).
                      Hint only; does not constrain account commodity."}
 
-   {:db/ident       :country/external-codes
+   {:db/ident       :kontor.country/external-codes
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Refs to :country-code entities — per-regulator
                      aliases beyond ISO. Mirrors ADR-019."}
 
-   {:db/ident       :country/groups
+   {:db/ident       :kontor.country/groups
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Refs to :country-group entities (EU, EEA, NAFTA…).
                      Many-to-many; a country may belong to several."}
 
-   {:db/ident       :country/active
+   {:db/ident       :kontor.country/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}])
 
 (def ^:private country-code-attrs
-  [{:db/ident       :country-code/country
+  [{:db/ident       :kontor.country-code/country
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
     :db/doc         "Back-ref to the country this external code is for."}
 
-   {:db/ident       :country-code/regulator
+   {:db/ident       :kontor.country-code/regulator
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         "Identifies the regulator / mapping target.
                      Conventions: :iso-3166-1-numeric, :un/m49,
                      :sap/land1, :in/customs, …"}
 
-   {:db/ident       :country-code/code
+   {:db/ident       :kontor.country-code/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "The code in the regulator's system."}
 
-   {:db/ident       :country-code/identity
+   {:db/ident       :kontor.country-code/identity
     :db/valueType   :db.type/tuple
-    :db/tupleAttrs  [:country-code/country :country-code/regulator]
+    :db/tupleAttrs  [:kontor.country-code/country :kontor.country-code/regulator]
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Composite identity. One (country, regulator)
                      pairing exists at most once."}
 
-   {:db/ident       :country-code/note
+   {:db/ident       :kontor.country-code/note
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional human-readable explanation."}])
 
 (def ^:private country-group-attrs
-  [{:db/ident       :country-group/code
+  [{:db/ident       :kontor.country-group/code
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
     :db/doc         "Stable identifier (\"EU\", \"EEA\", \"NAFTA\",
                      \"G7\", \"USMCA\")."}
 
-   {:db/ident       :country-group/name
+   {:db/ident       :kontor.country-group/name
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}])
 

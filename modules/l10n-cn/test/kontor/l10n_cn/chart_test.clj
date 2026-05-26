@@ -32,9 +32,9 @@
   (let [conn (core/create-test-db)
         _ (chart/install! conn)
         db (d/db conn)
-        cny (d/entity db [:commodity/symbol "CNY"])]
-    (is (= 2 (:commodity/precision cny)))
-    (is (= "CNY" (:commodity/iso-4217 cny)))))
+        cny (d/entity db [:kontor.commodity/symbol "CNY"])]
+    (is (= 2 (:kontor.commodity/precision cny)))
+    (is (= "CNY" (:kontor.commodity/iso-4217 cny)))))
 
 (deftest vat-tags-installed
   (let [conn (core/create-test-db)

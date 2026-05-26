@@ -16,7 +16,7 @@
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
-    (d/transact conn [{:commodity/symbol "EUR" :commodity/precision 2}])
+    (d/transact conn [{:kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}])
     conn))
 
 (defn- post-tx-with-vt!
@@ -25,8 +25,8 @@
   [conn vt-from & [vt-to]]
   (let [tx-meta (cond-> {:db.valid/from vt-from}
                   vt-to (assoc :db.valid/to vt-to))
-        r (d/transact conn {:tx-data [{:commodity/symbol (str "X-" (random-uuid))
-                                       :commodity/precision 2}]
+        r (d/transact conn {:tx-data [{:kontor.commodity/symbol (str "X-" (random-uuid))
+                                       :kontor.commodity/precision 2}]
                             :tx-meta tx-meta})]
     (kbt/commit-tx-eid r)))
 
@@ -35,20 +35,20 @@
 ;; ============================================================================
 
 (deftest with-vt-appends-tx-meta-map
-  (let [tx-data [{:commodity/symbol "EUR"}]
+  (let [tx-data [{:kontor.commodity/symbol "EUR"}]
         result (kbt/with-vt tx-data jan-2)]
     (is (= 2 (count result)))
     (is (= {:db/id "datomic.tx" :db.valid/from jan-2}
            (last result)))))
 
 (deftest with-vt-3-arity-appends-both-bounds
-  (let [tx-data [{:commodity/symbol "EUR"}]
+  (let [tx-data [{:kontor.commodity/symbol "EUR"}]
         result (kbt/with-vt tx-data jan-2 feb-1)]
     (is (= {:db/id "datomic.tx" :db.valid/from jan-2 :db.valid/to feb-1}
            (last result)))))
 
 (deftest with-vt-replaces-prior-tx-meta
-  (let [tx-data [{:commodity/symbol "EUR"}
+  (let [tx-data [{:kontor.commodity/symbol "EUR"}
                  {:db/id "datomic.tx" :db.valid/from jan-15}]
         result (kbt/with-vt tx-data jan-2)
         tx-metas (filter #(and (map? %) (= "datomic.tx" (:db/id %))) result)]
@@ -73,7 +73,7 @@
   (let [conn (bootstrap)
         report (d/transact
                 conn
-                {:tx-data [{:commodity/symbol "TEST-COMMIT-TX" :commodity/precision 2}]
+                {:tx-data [{:kontor.commodity/symbol "TEST-COMMIT-TX" :kontor.commodity/precision 2}]
                  :tx-meta {:db.valid/from jan-2}})
         tx-eid (kbt/commit-tx-eid report)]
     (testing "returns a number (eid)"
@@ -96,7 +96,7 @@
       (let [db (d/db conn)
             biz-eid (d/q '[:find ?e .
                            :in $ ?sym
-                           :where [?e :commodity/symbol ?sym]]
+                           :where [?e :kontor.commodity/symbol ?sym]]
                          db "TEST-COMMIT-TX")]
         (is (not= biz-eid tx-eid)
             "commit-tx eid differs from any business entity in the tx")))))
@@ -106,17 +106,17 @@
     (let [conn (bootstrap)
           report (d/transact
                   conn
-                  {:tx-data [{:commodity/symbol "CT-RECIPE" :commodity/precision 2}]
+                  {:tx-data [{:kontor.commodity/symbol "CT-RECIPE" :kontor.commodity/precision 2}]
                    :tx-meta {:db.valid/from jan-15}})
           tx-eid (kbt/commit-tx-eid report)]
       ;; Before close — visible
       (is (some? (d/q '[:find ?e . :in $ ?s
-                        :where [?e :commodity/symbol ?s]]
+                        :where [?e :kontor.commodity/symbol ?s]]
                       (d/valid-at (d/db conn) feb-15) "CT-RECIPE")))
       (kbt/close-validity! conn tx-eid feb-1)
       ;; After close — not visible at feb-15
       (is (nil? (d/q '[:find ?e . :in $ ?s
-                       :where [?e :commodity/symbol ?s]]
+                       :where [?e :kontor.commodity/symbol ?s]]
                      (d/valid-at (d/db conn) feb-15) "CT-RECIPE"))))))
 
 (deftest commit-tx-eid-throws-on-malformed-report
@@ -144,7 +144,7 @@
                       (-> (d/q '[:find ?s
                                  :in $ ?vt-tx
                                  :where
-                                 [?e :commodity/symbol ?s ?vt-tx]]
+                                 [?e :kontor.commodity/symbol ?s ?vt-tx]]
                                db tx-eid)
                           first first))
           ;; Before close: visible at all vt >= vf

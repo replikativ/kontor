@@ -1056,7 +1056,7 @@
 
 (defn tax-id-for-country
   "Lookup the active tax-id string for `partner` in `country` (a ref
-   or :country/code string). Returns the string or nil.
+   or :kontor.country/code string). Returns the string or nil.
 
    When multiple tax-id-types apply in the same country (e.g. NL has
    :kvk-nl + :rsin-nl + :btw-nl), pass `:tax-id-type` opt to
@@ -1067,7 +1067,7 @@
          country-eid (cond
                        (string? country) (d/q '[:find ?c .
                                                 :in $ ?code
-                                                :where [?c :country/code ?code]]
+                                                :where [?c :kontor.country/code ?code]]
                                               db country)
                        :else country)
          tax-id-type (:tax-id-type opts)

@@ -7,7 +7,7 @@
             [kontor.trial :as trial]
             [kontor.treaty.de-ca :as treaty]))
 
-(def ^:private cad [:commodity/symbol "CAD"])
+(def ^:private cad [:kontor.commodity/symbol "CAD"])
 
 (deftest treaty-rates-lookup
   (testing "post-2017-protocol treaty rates"

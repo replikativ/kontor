@@ -27,7 +27,7 @@
   [{:keys [code path type name reconcilable? tags]}]
   (cond-> {:account/path path :account/code code :account/name name
            :account/type type :account/active true
-           :account/commodity [:commodity/symbol "CAD"]
+           :account/commodity [:kontor.commodity/symbol "CAD"]
            :account/reconcilable (boolean reconcilable?)}
     (seq tags)
     (assoc :account/tags

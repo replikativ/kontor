@@ -131,7 +131,7 @@
 (deftest bilingual-payroll-end-to-end
   (let [conn (bootstrap)
         db (d/db conn)
-        cad (d/q '[:find ?e . :where [?e :commodity/symbol "CAD"]] db)
+        cad (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "CAD"]] db)
         ent (d/q '[:find ?e . :where [?e :entity/code "ACME-CA"]] db)
         journal (d/q '[:find ?e . :where [?e :journal/code "PAY-CA"]] db)
         period (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)
@@ -318,7 +318,7 @@
   ;;       containing only Sophie's slip + a Sommaire1.
   (let [conn (bootstrap)
         db (d/db conn)
-        cad (d/q '[:find ?e . :where [?e :commodity/symbol "CAD"]] db)
+        cad (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "CAD"]] db)
         ent (d/q '[:find ?e . :where [?e :entity/code "ACME-CA"]] db)
         journal (d/q '[:find ?e . :where [?e :journal/code "PAY-CA"]] db)
         period (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)

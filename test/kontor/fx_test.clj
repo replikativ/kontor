@@ -28,14 +28,14 @@
 (def feb-1  #inst "2026-02-01T00:00:00Z")
 
 (defn- bootstrap-commodities! [conn]
-  (d/transact conn [{:commodity/symbol "EUR" :commodity/name "Euro"
-                     :commodity/precision 2 :commodity/iso-4217 "EUR"}
-                    {:commodity/symbol "USD" :commodity/name "US Dollar"
-                     :commodity/precision 2 :commodity/iso-4217 "USD"}
-                    {:commodity/symbol "GBP" :commodity/name "Pound Sterling"
-                     :commodity/precision 2 :commodity/iso-4217 "GBP"}
-                    {:commodity/symbol "JPY" :commodity/name "Yen"
-                     :commodity/precision 0 :commodity/iso-4217 "JPY"}])
+  (d/transact conn [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                     :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
+                    {:kontor.commodity/symbol "USD" :kontor.commodity/name "US Dollar"
+                     :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "USD"}
+                    {:kontor.commodity/symbol "GBP" :kontor.commodity/name "Pound Sterling"
+                     :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "GBP"}
+                    {:kontor.commodity/symbol "JPY" :kontor.commodity/name "Yen"
+                     :kontor.commodity/precision 0 :kontor.commodity/iso-4217 "JPY"}])
   conn)
 
 (defn- seed-rates! [conn]

@@ -27,7 +27,7 @@
   (let [conn (core/create-test-db)]
     (hr/install! conn)
     (d/transact conn
-                [{:db/id "usd" :commodity/symbol "USD" :commodity/precision 2}
+                [{:db/id "usd" :kontor.commodity/symbol "USD" :kontor.commodity/precision 2}
                  {:db/id "ent-us" :entity/code "US-LLC" :entity/name "Acme US LLC"
                   :entity/kind :operating}
                  ;; Two ledgers — book + tax — for the parallel-ledger split.
@@ -85,7 +85,7 @@
         pto-exp (by-code db :account/code "5040")
         pto-acc (by-code db :account/code "2290")
         gaap (by-code db :ledger/code "us-gaap")
-        usd  (by-code db :commodity/symbol "USD")
+        usd  (by-code db :kontor.commodity/symbol "USD")
         journal (by-code db :journal/code "PAY-US")
         tx-data (accrual/asc-710-pto-accrual-tx-data
                  {:pto-expense-account pto-exp
@@ -135,7 +135,7 @@
         pto-exp (by-code db :account/code "5040")
         pto-acc (by-code db :account/code "2290")
         gaap (by-code db :ledger/code "us-gaap")
-        usd  (by-code db :commodity/symbol "USD")
+        usd  (by-code db :kontor.commodity/symbol "USD")
         journal (by-code db :journal/code "PAY-US")
         report (accrual/asc-710-pto-accrual!
                 conn
@@ -165,7 +165,7 @@
         match-exp (by-code db :account/code "5310")
         match-pay (by-code db :account/code "2210")
         gaap (by-code db :ledger/code "us-gaap")
-        usd  (by-code db :commodity/symbol "USD")
+        usd  (by-code db :kontor.commodity/symbol "USD")
         journal (by-code db :journal/code "PAY-US")
         tx-data (accrual/er-401k-match-accrual-tx-data
                  {:match-expense-account match-exp
@@ -197,7 +197,7 @@
         match-exp (by-code db :account/code "5310")
         match-pay (by-code db :account/code "2210")
         tax (by-code db :ledger/code "us-tax")
-        usd  (by-code db :commodity/symbol "USD")
+        usd  (by-code db :kontor.commodity/symbol "USD")
         journal (by-code db :journal/code "PAY-US")
         tx-data (accrual/tax-recognize-401k-match-tx-data
                  {:match-expense-account match-exp

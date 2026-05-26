@@ -32,8 +32,8 @@
   []
   (let [conn (core/create-test-db)]
     (inv-statute/install! conn)
-    (d/transact conn [{:commodity/symbol "MXN" :commodity/name "Mexican Peso"
-                       :commodity/precision 2}])
+    (d/transact conn [{:kontor.commodity/symbol "MXN" :kontor.commodity/name "Mexican Peso"
+                       :kontor.commodity/precision 2}])
     conn))
 
 (def ^:private p2026   {:from #inst "2026-01-01" :to #inst "2027-01-01"})

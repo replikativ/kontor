@@ -33,7 +33,7 @@
 
      (posting-builder/make-builder
         {:catalog validated-catalog
-         :commodity [:commodity/symbol \"EUR\"]})
+         :commodity [:kontor.commodity/symbol \"EUR\"]})
 
      (emit/make-provider
         {:catalog validated-catalog

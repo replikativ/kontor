@@ -26,7 +26,7 @@
   []
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:commodity/symbol "EUR" :commodity/name "Euro" :commodity/precision 2}
+                [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
                  {:journal/code "SALE" :journal/type :sale}
                  {:journal/code "CASH" :journal/type :cash}
                  {:account-tag/name "revenue-box" :account-tag/applicability :account}
@@ -37,11 +37,11 @@
                  {:account/path "Expenses:Supplies"  :account/code "6000" :account/type :expense}])
     (book/sell! conn {:debit-account [:account/path "Assets:Receivable"]
                       :credit-account [:account/path "Income:Sales"]
-                      :amount 1000 :commodity [:commodity/symbol "EUR"]
+                      :amount 1000 :commodity [:kontor.commodity/symbol "EUR"]
                       :effective-date d1})
     (book/pay! conn {:debit-account [:account/path "Expenses:Supplies"]
                      :credit-account [:account/path "Assets:Cash"]
-                     :amount 300 :commodity [:commodity/symbol "EUR"]
+                     :amount 300 :commodity [:kontor.commodity/symbol "EUR"]
                      :effective-date d1})
     conn))
 
@@ -150,12 +150,12 @@
   []
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:commodity/symbol "EUR" :commodity/name "Euro" :commodity/precision 2}
+                [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
                  {:journal/code "GEN" :journal/type :general}
                  {:account/path "Expenses:Travel"  :account/type :expense}
                  {:account/path "Expenses:Meals"   :account/type :expense}
                  {:account/path "Assets:Cash"      :account/type :asset}])
-    (book/adjust! conn {:commodity [:commodity/symbol "EUR"]
+    (book/adjust! conn {:commodity [:kontor.commodity/symbol "EUR"]
                         :effective-date d1
                         :postings
                         [{:account [:account/path "Expenses:Travel"] :amount 60

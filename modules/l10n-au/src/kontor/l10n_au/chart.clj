@@ -21,16 +21,16 @@
         tags))
 
 (defn- ensure-aud []
-  {:commodity/symbol "AUD"
-   :commodity/name "Australian Dollar"
-   :commodity/precision 2
-   :commodity/iso-4217 "AUD"})
+  {:kontor.commodity/symbol "AUD"
+   :kontor.commodity/name "Australian Dollar"
+   :kontor.commodity/precision 2
+   :kontor.commodity/iso-4217 "AUD"})
 
 (defn- account-tx
   [{:keys [code path type name reconcilable? tags]}]
   (cond-> {:account/path path :account/code code :account/name name
            :account/type type :account/active true
-           :account/commodity [:commodity/symbol "AUD"]
+           :account/commodity [:kontor.commodity/symbol "AUD"]
            :account/reconcilable (boolean reconcilable?)}
     (seq tags)
     (assoc :account/tags

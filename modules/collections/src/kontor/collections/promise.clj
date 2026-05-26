@@ -41,7 +41,7 @@
     (d/pull db
             '[* {:payment-promise/case [:collection-case/code]
                  :payment-promise/invoice [:invoice/external-id]
-                 :payment-promise/commodity [:commodity/symbol]
+                 :payment-promise/commodity [:kontor.commodity/symbol]
                  :payment-promise/captured-by-uid [:create/uid]
                  :payment-promise/supporting-doc [:audit-doc/code]}]
             eid)))

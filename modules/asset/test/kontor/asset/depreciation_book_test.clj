@@ -33,7 +33,7 @@
   (let [conn (core/create-test-db)]
     (asset-schema/install! conn)
     (d/transact conn
-                [{:db/id "eur" :commodity/symbol "EUR" :commodity/precision 2}
+                [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
                  {:partner/external-id "U-buyer" :partner/name "Asset Buyer"}
                  ;; GL accounts.
                  {:db/id "acct-machinery"
@@ -84,7 +84,7 @@
   (d/q '[:find ?e . :in $ ?a ?v :where [?e ?a ?v]] db a v))
 
 (defn- uid       [db] (ref-eid db :partner/external-id "U-buyer"))
-(defn- commodity [db] (ref-eid db :commodity/symbol "EUR"))
+(defn- commodity [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- acct      [db code] (ref-eid db :account/code code))
 (defn- ledger    [db code] (ref-eid db :ledger/code code))
 (defn- journal   [db] (ref-eid db :journal/code "GEN"))

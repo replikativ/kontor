@@ -54,7 +54,7 @@
                                                  :invoice-line/unit-price 10000M}]})
   ;; Selling expense — CNY 6,000 paid from bank on Feb 15.
   (let [db (d/db conn)
-        cny (:db/id (d/entity db [:commodity/symbol "CNY"]))
+        cny (:db/id (d/entity db [:kontor.commodity/symbol "CNY"]))
         bank (ace db "1002")
         selling (ace db "5602")     ; 销售费用
         admin (ace db "5603")       ; 管理费用
@@ -113,7 +113,7 @@
     (let [conn (bootstrap)]
       (seed-fy2025! conn)
       (let [db (d/db conn)
-            cny (:db/id (d/entity db [:commodity/symbol "CNY"]))
+            cny (:db/id (d/entity db [:kontor.commodity/symbol "CNY"]))
             rev (ace db "5001.13")
             sell (ace db "5602")
             admin (ace db "5603")]
@@ -149,14 +149,14 @@
             "Period soft-closed after the closing tx")
         ;; net-by-commodity should reflect the net P&L = -5000 (profit).
         (let [db (d/db conn)
-              cny (:db/id (d/entity db [:commodity/symbol "CNY"]))
+              cny (:db/id (d/entity db [:kontor.commodity/symbol "CNY"]))
               net (get-in close-result [:net-by-commodity cny :amount])]
           (is (= -5000M net)
               "Net P&L: revenue -15,000 + selling 6,000 + admin 4,000 = -5,000
                (sign convention: income credits are negative)"))
         ;; P&L accounts at the new year start: should be zero.
         (let [db (d/db conn)
-              cny (:db/id (d/entity db [:commodity/symbol "CNY"]))
+              cny (:db/id (d/entity db [:kontor.commodity/symbol "CNY"]))
               rev   (ace db "5001.13")
               sell  (ace db "5602")
               admin (ace db "5603")

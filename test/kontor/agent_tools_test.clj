@@ -17,7 +17,7 @@
 (defn- seed-db []
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:commodity/symbol "EUR" :commodity/precision 2}
+                [{:kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
                  {:account/code "1000" :account/name "Bank"
                   :account/type :asset :account/active true
                   :account/concept-iri "urn:test:bank"}
@@ -167,11 +167,11 @@
                                   :postings
                                   [{:posting/account [:account/code "5000"]
                                     :posting/amount "100.00"
-                                    :posting/commodity [:commodity/symbol "EUR"]
+                                    :posting/commodity [:kontor.commodity/symbol "EUR"]
                                     :posting/narration "Office supplies"}
                                    {:posting/account [:account/code "1000"]
                                     :posting/amount "-100.00"
-                                    :posting/commodity [:commodity/symbol "EUR"]
+                                    :posting/commodity [:kontor.commodity/symbol "EUR"]
                                     :posting/narration "Paid from bank"}]}})]
           (is (nil? (:error result)) (str result))
           (is (some? (:result result)))
@@ -194,10 +194,10 @@
                                   :postings
                                   [{:posting/account [:account/code "5000"]
                                     :posting/amount "100.00"
-                                    :posting/commodity [:commodity/symbol "EUR"]}
+                                    :posting/commodity [:kontor.commodity/symbol "EUR"]}
                                    {:posting/account [:account/code "1000"]
                                     :posting/amount "-99.00"
-                                    :posting/commodity [:commodity/symbol "EUR"]}]}})]
+                                    :posting/commodity [:kontor.commodity/symbol "EUR"]}]}})]
           (is (some? (:error result))
               "unbalanced postings are rejected before any datom is written")
           (is (string? (:error result)))))

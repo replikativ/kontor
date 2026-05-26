@@ -52,9 +52,9 @@
   (let [conn (core/create-test-db)
         asset-eid (setup-asset! conn)
         _ (d/transact conn
-                      [{:db/id -1 :commodity/symbol "EUR" :commodity/name "Euro"
-                        :commodity/precision 2 :commodity/iso-4217 "EUR"}])
-        eur (:db/id (d/entity (d/db conn) [:commodity/symbol "EUR"]))
+                      [{:db/id -1 :kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                        :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}])
+        eur (:db/id (d/entity (d/db conn) [:kontor.commodity/symbol "EUR"]))
         _ (d/transact conn
                       [{:schedule/code           "bldg-100-dep"
                         :schedule/name           "Building 100 — straight-line 40yr"
@@ -115,8 +115,8 @@
   [conn]
   (let [asset-eid (setup-asset! conn)
         _ (d/transact conn
-                      [{:db/id -1 :commodity/symbol "EUR" :commodity/name "Euro"
-                        :commodity/precision 2 :commodity/iso-4217 "EUR"}
+                      [{:db/id -1 :kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                        :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
                        {:db/id -2 :account/path "Expense:Depreciation"
                         :account/name "Depreciation expense" :account/type :expense
                         :account/active true}
@@ -128,7 +128,7 @@
                         :journal/active true}])
         db (d/db conn)]
     {:asset asset-eid
-     :commodity (:db/id (d/entity db [:commodity/symbol "EUR"]))
+     :commodity (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
      :dep-expense (:db/id (d/entity db [:account/path "Expense:Depreciation"]))
      :accum-dep (:db/id (d/entity db [:account/path "Asset:AccumulatedDepreciation"]))
      :journal (:db/id (d/entity db [:journal/code "DEP"]))}))

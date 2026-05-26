@@ -62,7 +62,7 @@
                      :invoice-line/tax-rate 0.18M}]})
   ;; Expense: ₹6,000 office expense paid from bank, Sep 1
   (let [db (d/db conn)
-        inr (:db/id (d/entity db [:commodity/symbol "INR"]))
+        inr (:db/id (d/entity db [:kontor.commodity/symbol "INR"]))
         bank (ace db chart/bank-code)
         office (ace db "550800")
         rent   (ace db "550100")
@@ -112,7 +112,7 @@
     (let [conn (bootstrap)]
       (seed-fy-24-25! conn)
       (let [db (d/db conn)
-            inr (:db/id (d/entity db [:commodity/symbol "INR"]))
+            inr (:db/id (d/entity db [:kontor.commodity/symbol "INR"]))
             rev    (ace db chart/sales-domestic-code)
             office (ace db "550800")
             rent   (ace db "550100")]
@@ -148,14 +148,14 @@
             "Period soft-closed after the closing tx")
         ;; net-by-commodity reflects net P&L = -2000 (profit)
         (let [db (d/db conn)
-              inr (:db/id (d/entity db [:commodity/symbol "INR"]))
+              inr (:db/id (d/entity db [:kontor.commodity/symbol "INR"]))
               net (get-in close-result [:net-by-commodity inr :amount])]
           (is (= -2000M net)
               "Net P&L: revenue -10,000 + office 6,000 + rent 2,000 = -2,000
                (sign convention: income credits are negative)"))
         ;; P&L accounts at the new year start: should be zero
         (let [db (d/db conn)
-              inr (:db/id (d/entity db [:commodity/symbol "INR"]))
+              inr (:db/id (d/entity db [:kontor.commodity/symbol "INR"]))
               rev      (ace db chart/sales-domestic-code)
               office   (ace db "550800")
               rent     (ace db "550100")
@@ -306,7 +306,7 @@
                :external-id "FY25-GR"
                :retained-code "220200"}))
       (let [db (d/db conn)
-            inr (:db/id (d/entity db [:commodity/symbol "INR"]))
+            inr (:db/id (d/entity db [:kontor.commodity/symbol "INR"]))
             gen-reserve (ace db "220200")
             retained (ace db chart/retained-earnings-code)
             bal-of (fn [eid]

@@ -54,7 +54,7 @@
                                     '[* {:compensation/employment
                                          [:db/id :employment/code]
                                          :compensation/commodity
-                                         [:db/id :commodity/symbol]}]
+                                         [:db/id :kontor.commodity/symbol]}]
                                     %))
                       (map (fn [c]
                              (assoc c

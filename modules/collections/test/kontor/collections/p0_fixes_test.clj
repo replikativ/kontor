@@ -26,8 +26,8 @@
     (inv-schema/install! *conn*)
     (coll-schema/install! *conn*)
     (d/transact *conn*
-                [{:commodity/symbol "EUR" :commodity/name "Euro"
-                  :commodity/precision 2 :commodity/iso-4217 "EUR"}
+                [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                  :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
                  {:entity/code "ACME-DE" :entity/name "Acme GmbH"
                   :entity/kind :operating :entity/active true}
                  {:partner/external-id "CUST"
@@ -124,7 +124,7 @@
                 :entity (entity "ACME-DE")})))))
   ;; Partial-pay the first
   (let [inv1 (inv/by-external-id (d/db *conn*) "INV-CU-1")
-        eur (d/q '[:find ?c . :where [?c :commodity/symbol "EUR"]] (d/db *conn*))
+        eur (d/q '[:find ?c . :where [?c :kontor.commodity/symbol "EUR"]] (d/db *conn*))
         _ (d/transact *conn*
                       [{:transaction/external-id "PAY-CU-1"
                         :transaction/state :posted

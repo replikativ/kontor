@@ -24,10 +24,10 @@
 (defn- bootstrap! []
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
-    (d/transact conn [{:commodity/symbol "EUR" :commodity/name "Euro"
-                       :commodity/precision 2 :commodity/iso-4217 "EUR"}
-                      {:commodity/symbol "USD" :commodity/name "USD"
-                       :commodity/precision 2 :commodity/iso-4217 "USD"}])
+    (d/transact conn [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                       :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
+                      {:kontor.commodity/symbol "USD" :kontor.commodity/name "USD"
+                       :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "USD"}])
     (fxp/save-rates! conn [{:from "EUR" :to "USD" :at-date jan-2
                             :rate 1.08M :rate-type :closing :source :test}])
     conn))
@@ -59,7 +59,7 @@
                           :account/type :asset
                           :account/active true}])
           db0 (d/db conn)
-          eur (:db/id (d/entity db0 [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           income-eid (:db/id (d/entity db0 [:account/path "Income:Test"]))
           cash-eid (:db/id (d/entity db0 [:account/path "Assets:Cash"]))
           journal-eid (:db/id (d/entity db0 [:journal/code "INV"]))

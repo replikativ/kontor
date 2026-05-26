@@ -92,9 +92,9 @@
     (d/transact
      conn
      [;; Three commodities for the three jurisdictions.
-      {:db/id "eur" :commodity/symbol "EUR" :commodity/precision 2}
-      {:db/id "usd" :commodity/symbol "USD" :commodity/precision 2}
-      {:db/id "cad" :commodity/symbol "CAD" :commodity/precision 2}
+      {:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
+      {:db/id "usd" :kontor.commodity/symbol "USD" :kontor.commodity/precision 2}
+      {:db/id "cad" :kontor.commodity/symbol "CAD" :kontor.commodity/precision 2}
       ;; Three entities, one per country.
       {:db/id "ent-de" :entity/code "ACME-DE-GMBH"
        :entity/name "Acme DE GmbH" :entity/kind :operating}
@@ -155,9 +155,9 @@
         de (ref-eid db :entity/code "ACME-DE-GMBH")
         us (ref-eid db :entity/code "ACME-US-LLC")
         ca (ref-eid db :entity/code "ACME-CA-CORP")
-        eur (ref-eid db :commodity/symbol "EUR")
-        usd (ref-eid db :commodity/symbol "USD")
-        cad (ref-eid db :commodity/symbol "CAD")]
+        eur (ref-eid db :kontor.commodity/symbol "EUR")
+        usd (ref-eid db :kontor.commodity/symbol "USD")
+        cad (ref-eid db :kontor.commodity/symbol "CAD")]
     (employment/hire! conn {:code "EMP-JANE-DE" :person jane :entity de
                             :start-date #inst "2026-01-01"
                             :job-title "Senior Engineer"
@@ -314,7 +314,7 @@
                    [?e :employment/person ?p]
                    [?c :compensation/employment ?e]
                    [?c :compensation/commodity ?cm]
-                   [?cm :commodity/symbol ?sym]]
+                   [?cm :kontor.commodity/symbol ?sym]]
                  (d/db conn) jane)]
         (is (= #{"EUR" "USD" "CAD"} (set comp-currencies)))))
 
@@ -466,9 +466,9 @@
     (d/transact
      conn
      (concat
-      [{:db/id "eur" :commodity/symbol "EUR" :commodity/precision 2}
-       {:db/id "usd" :commodity/symbol "USD" :commodity/precision 2}
-       {:db/id "cad" :commodity/symbol "CAD" :commodity/precision 2}
+      [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
+       {:db/id "usd" :kontor.commodity/symbol "USD" :kontor.commodity/precision 2}
+       {:db/id "cad" :kontor.commodity/symbol "CAD" :kontor.commodity/precision 2}
        {:db/id "ent-de" :entity/code "ACME-DE-GMBH"
         :entity/name "Acme DE GmbH" :entity/kind :operating}
        {:db/id "ent-us" :entity/code "ACME-US-LLC"
@@ -523,9 +523,9 @@
         de (ref-eid db0 :entity/code "ACME-DE-GMBH")
         us (ref-eid db0 :entity/code "ACME-US-LLC")
         ca (ref-eid db0 :entity/code "ACME-CA-CORP")
-        eur (ref-eid db0 :commodity/symbol "EUR")
-        usd (ref-eid db0 :commodity/symbol "USD")
-        cad (ref-eid db0 :commodity/symbol "CAD")
+        eur (ref-eid db0 :kontor.commodity/symbol "EUR")
+        usd (ref-eid db0 :kontor.commodity/symbol "USD")
+        cad (ref-eid db0 :kontor.commodity/symbol "CAD")
         _ (employment/hire! conn {:code "EMP-JANE-DE" :person jane :entity de
                                   :start-date #inst "2025-01-01"
                                   :job-title "Senior Engineer"

@@ -8,14 +8,14 @@
   (let [conn (core/create-test-db)
         _ (states/install! conn)
         db (d/db conn)
-        india (d/entity db [:country/code "IN"])
+        india (d/entity db [:kontor.country/code "IN"])
         n-states (d/q '[:find (count ?s) .
                         :where
-                        [?c :country/code "IN"]
+                        [?c :kontor.country/code "IN"]
                         [?s :state/country ?c]]
                       db)]
-    (is (= "India" (:country/name india)))
-    (is (= "IND"   (:country/code-iso3 india)))
+    (is (= "India" (:kontor.country/name india)))
+    (is (= "IND"   (:kontor.country/code-iso3 india)))
     (is (>= n-states 37)
         "Should install at least the 37 active state codes (plus pseudo-codes 96/97)")))
 

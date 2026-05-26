@@ -136,7 +136,7 @@
 (deftest jp-payroll-monthly-end-to-end
   (let [conn (bootstrap)
         db (d/db conn)
-        jpy (d/q '[:find ?e . :where [?e :commodity/symbol "JPY"]] db)
+        jpy (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "JPY"]] db)
         ent (d/q '[:find ?e . :where [?e :entity/code "ACME-JP"]] db)
         journal (d/q '[:find ?e . :where [?e :journal/code "PAY-JP"]] db)
         period (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)
@@ -287,7 +287,7 @@
 (deftest jp-bonus-accrual-balances-and-transacts
   (let [conn (bootstrap)
         db (d/db conn)
-        jpy (d/q '[:find ?e . :where [?e :commodity/symbol "JPY"]] db)
+        jpy (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "JPY"]] db)
         journal (d/q '[:find ?e . :where [?e :journal/code "PAY-JP"]] db)
         bonus-exp-acct (get-account-eid db "614000")
         bonus-liab-acct (get-account-eid db "217000")

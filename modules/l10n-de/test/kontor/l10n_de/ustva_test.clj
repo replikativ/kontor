@@ -43,7 +43,7 @@
    This is the standard SKR04 sales-with-VAT shape."
   [conn external-id date net]
   (let [db (d/db conn)
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         receivable (account-eid db "1400")
         revenue    (account-eid db "4400")
         ust-19     (account-eid db "3801")
@@ -76,7 +76,7 @@
   "Same shape with VAT 7% (4300 → 3806)."
   [conn external-id date net]
   (let [db (d/db conn)
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         receivable (account-eid db "1400")
         revenue    (account-eid db "4300")
         ust-7      (account-eid db "3806")
@@ -112,7 +112,7 @@
      - Verbindlichkeiten (3300)        CREDIT net + 19% VAT"
   [conn external-id date net]
   (let [db (d/db conn)
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         expense    (account-eid db "6800")
         vorst-19   (account-eid db "1576")
         payable    (account-eid db "3300")
@@ -227,7 +227,7 @@
   (testing "Drafts don't contribute (default :include-states #{:posted})."
     (let [conn (bootstrap)
           db (d/db conn)
-          eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           receivable (account-eid db "1400")
           revenue    (account-eid db "4400")
           ust-19     (account-eid db "3801")

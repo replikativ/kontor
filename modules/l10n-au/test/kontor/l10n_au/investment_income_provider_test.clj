@@ -40,8 +40,8 @@
   []
   (let [conn (core/create-test-db)]
     (inv-statute/install! conn)
-    (d/transact conn [{:commodity/symbol "AUD" :commodity/name "Australian Dollar"
-                       :commodity/precision 2}])
+    (d/transact conn [{:kontor.commodity/symbol "AUD" :kontor.commodity/name "Australian Dollar"
+                       :kontor.commodity/precision 2}])
     conn))
 
 (def ^:private p2026

@@ -83,14 +83,14 @@
 ;; End-to-end annual reconciliation (年度汇算清缴)
 ;; ----------------------------------------------------------------------------
 
-(def ^:private cny [:commodity/symbol "CNY"])
+(def ^:private cny [:kontor.commodity/symbol "CNY"])
 (def ^:private fy {:from #inst "2026-01-01" :to #inst "2027-01-01"})
 
 (defn- fresh []
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:commodity/symbol "CNY" :commodity/name "Renminbi"
-                  :commodity/precision 2}
+                [{:kontor.commodity/symbol "CNY" :kontor.commodity/name "Renminbi"
+                  :kontor.commodity/precision 2}
                  {:journal/code "SALE" :journal/type :sale}
                  {:account/path "Income:Salary" :account/type :income}
                  {:account/path "Assets:Bank"   :account/type :asset}])

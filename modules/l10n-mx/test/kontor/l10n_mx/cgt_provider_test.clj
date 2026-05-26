@@ -28,14 +28,14 @@
   (let [conn (core/create-test-db)]
     (disposal/install! conn)
     (cgt-statute/install! conn)
-    (d/transact conn [{:commodity/symbol "MXN" :commodity/name "Mexican Peso"
-                       :commodity/precision 2}
+    (d/transact conn [{:kontor.commodity/symbol "MXN" :kontor.commodity/name "Mexican Peso"
+                       :kontor.commodity/precision 2}
                       {:entity/code "HOLDCO" :entity/name "HoldCo SA de CV"
                        :entity/kind :company :entity/country "MX"
-                       :entity/functional-commodity [:commodity/symbol "MXN"]}])
+                       :entity/functional-commodity [:kontor.commodity/symbol "MXN"]}])
     conn))
 
-(def ^:private mxn [:commodity/symbol "MXN"])
+(def ^:private mxn [:kontor.commodity/symbol "MXN"])
 (def ^:private holdco [:entity/code "HOLDCO"])
 
 (defn- record!

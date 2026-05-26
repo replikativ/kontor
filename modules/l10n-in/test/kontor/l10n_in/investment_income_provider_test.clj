@@ -21,9 +21,9 @@
   []
   (let [conn (core/create-test-db)]
     (inv-statute/install! conn)
-    (d/transact conn [{:commodity/symbol    "INR"
-                       :commodity/name      "Indian Rupee"
-                       :commodity/precision 2}])
+    (d/transact conn [{:kontor.commodity/symbol    "INR"
+                       :kontor.commodity/name      "Indian Rupee"
+                       :kontor.commodity/precision 2}])
     conn))
 
 ;; Indian fiscal year: 1 Apr → 31 Mar.

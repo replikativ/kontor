@@ -29,14 +29,14 @@
   (let [conn (core/create-test-db)]
     (disposal/install! conn)
     (cgt-statute/install! conn)
-    (d/transact conn [{:commodity/symbol "BRL" :commodity/name "Brazilian Real"
-                       :commodity/precision 2}
+    (d/transact conn [{:kontor.commodity/symbol "BRL" :kontor.commodity/name "Brazilian Real"
+                       :kontor.commodity/precision 2}
                       {:entity/code "HOLDCO" :entity/name "HoldCo BR"
                        :entity/kind :company :entity/country "BR"
-                       :entity/functional-commodity [:commodity/symbol "BRL"]}])
+                       :entity/functional-commodity [:kontor.commodity/symbol "BRL"]}])
     conn))
 
-(def ^:private brl [:commodity/symbol "BRL"])
+(def ^:private brl [:kontor.commodity/symbol "BRL"])
 (def ^:private holdco [:entity/code "HOLDCO"])
 
 (defn- record!

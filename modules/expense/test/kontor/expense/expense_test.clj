@@ -24,7 +24,7 @@
   (let [conn (core/create-test-db)]
     (expense-schema/install! conn)
     (d/transact conn
-                [{:db/id "eur" :commodity/symbol "EUR" :commodity/precision 2}
+                [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
                  ;; Employee + approver (:partner stand-ins for :create/uid).
                  {:partner/external-id "E-alice" :partner/name "Alice (employee)"}
                  {:partner/external-id "M-bob"   :partner/name "Bob (manager)"}
@@ -61,7 +61,7 @@
 (defn- p       [db code] (ref-eid db :partner/external-id code))
 (defn- acct    [db code] (ref-eid db :account/code code))
 (defn- doc     [db code] (ref-eid db :audit-doc/code code))
-(defn- eur     [db] (ref-eid db :commodity/symbol "EUR"))
+(defn- eur     [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- journal [db] (ref-eid db :journal/code "GEN"))
 
 ;; An EXP-1 report with two own-account lines (travel 200 + meals 50).

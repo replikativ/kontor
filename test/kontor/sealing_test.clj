@@ -17,8 +17,8 @@
   [conn]
   (d/transact
    conn
-   [{:db/id -1 :commodity/symbol "EUR" :commodity/name "Euro"
-     :commodity/precision 2 :commodity/iso-4217 "EUR"}
+   [{:db/id -1 :kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+     :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
     {:db/id -2 :account/path "Assets:Receivable" :account/name "AR"
      :account/type :asset :account/active true}
     {:db/id -3 :account/path "Income:Sales" :account/name "Sales"
@@ -26,7 +26,7 @@
     {:db/id -4 :journal/code "INV" :journal/name "J"
      :journal/type :sale :journal/active true}])
   (let [db (d/db conn)
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         rec (:db/id (d/entity db [:account/path "Assets:Receivable"]))
         rev (:db/id (d/entity db [:account/path "Income:Sales"]))
         jnl (:db/id (d/entity db [:journal/code "INV"]))
@@ -66,7 +66,7 @@
     (is (= [] (sealing/find-silent-retracts db-after [])))
     (is (= [] (sealing/find-silent-retracts
                db-after
-               [{:db/id -1 :commodity/symbol "USD"}])))))
+               [{:db/id -1 :kontor.commodity/symbol "USD"}])))))
 
 (deftest find-silent-retracts-flags-retract-of-posted
   (let [conn (core/create-test-db)
@@ -80,12 +80,12 @@
   (testing "Retracting attrs on a draft entity (no :posting/posted-at)
             is fine — only posted entities are sealed."
     (let [conn (core/create-test-db)
-          _ (d/transact conn [{:db/id -1 :commodity/symbol "EUR"
-                               :commodity/name "Euro"
-                               :commodity/precision 2}])
+          _ (d/transact conn [{:db/id -1 :kontor.commodity/symbol "EUR"
+                               :kontor.commodity/name "Euro"
+                               :kontor.commodity/precision 2}])
           db (d/db conn)
-          eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
-          retracts [[:db/retract eur :commodity/name "Euro"]]]
+          eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
+          retracts [[:db/retract eur :kontor.commodity/name "Euro"]]]
       (is (= [] (sealing/find-silent-retracts db retracts))))))
 
 ;; ============================================================================
@@ -117,8 +117,8 @@
     (is (nil? (sealing/assert-no-silent-retracts! db-after [])))
     (is (nil? (sealing/assert-no-silent-retracts!
                db-after
-               [{:db/id -1 :commodity/symbol "USD"
-                 :commodity/precision 2}])))))
+               [{:db/id -1 :kontor.commodity/symbol "USD"
+                 :kontor.commodity/precision 2}])))))
 
 ;; ============================================================================
 ;; transact-with-validation integration

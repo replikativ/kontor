@@ -53,7 +53,7 @@
   (when-let [eid (resolve-commitment db spec)]
     (d/pull db
             '[* {:commitment/counterparty [:partner/external-id]}
-              {:commitment/commodity [:commodity/symbol]}]
+              {:commitment/commodity [:kontor.commodity/symbol]}]
             eid)))
 
 (defn outstanding

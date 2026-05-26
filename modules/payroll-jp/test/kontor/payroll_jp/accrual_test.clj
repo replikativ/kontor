@@ -44,7 +44,7 @@
             {:bonus-accrual-expense-account :acct/bonus-accrual-exp
              :bonus-accrual-liability-account :acct/bonus-accrual-liab
              :amount 300000M
-             :commodity :commodity/jpy
+             :commodity :kontor.commodity/jpy
              :journal :journal/payroll
              :effective-date #inst "2026-05-31"
              :tx-code "BONUS-ACC-2026-05"})
@@ -69,7 +69,7 @@
             {:bonus-accrual-expense-account :acct/bonus-acc
              :bonus-accrual-liability-account :acct/bonus-liab
              :amount 333333.6667M
-             :commodity :commodity/jpy
+             :commodity :kontor.commodity/jpy
              :journal :journal/payroll
              :effective-date #inst "2026-05-31"
              :tx-code "BONUS-FRAC-2026-05"})
@@ -95,7 +95,7 @@
                          {:bonus-accrual-expense-account :acct/exp
                           ;; missing :bonus-accrual-liability-account
                           :amount 300000M
-                          :commodity :commodity/jpy
+                          :commodity :kontor.commodity/jpy
                           :journal :journal/payroll
                           :effective-date #inst "2026-05-31"
                           :tx-code "X"}))))
@@ -109,7 +109,7 @@
    {:si-expense-account :acct/er-si
     :si-liability-account :acct/si-liab
     :amount 25000M
-    :commodity :commodity/jpy
+    :commodity :kontor.commodity/jpy
     :journal :journal/payroll
     :effective-date #inst "2026-05-31"
     :tx-code "SI-TEST"}))
@@ -162,7 +162,7 @@
                          {:si-expense-account :acct/er-si
                           :si-liability-account :acct/si-liab
                           ;; missing :amount
-                          :commodity :commodity/jpy
+                          :commodity :kontor.commodity/jpy
                           :journal :journal/payroll
                           :effective-date #inst "2026-05-31"
                           :tx-code "X"}))))
@@ -172,7 +172,7 @@
             {:si-expense-account :acct/er-si
              :si-liability-account :acct/si-liab
              :amount 25000M
-             :commodity :commodity/jpy
+             :commodity :kontor.commodity/jpy
              :journal :journal/payroll
              :effective-date #inst "2026-05-31"
              :tx-code "SI-TEST"

@@ -34,15 +34,15 @@
 ;; Fixture — a US individual entity, USD commodity, all schemas installed
 ;; ============================================================================
 
-(def ^:private usd [:commodity/symbol "USD"])
+(def ^:private usd [:kontor.commodity/symbol "USD"])
 
 (defn- fresh []
   (let [conn (core/create-test-db)]
     (disposal/install! conn)
     (cgt-statute/install! conn)
     (d/transact conn
-                [{:commodity/symbol "USD" :commodity/name "US Dollar"
-                  :commodity/precision 2}
+                [{:kontor.commodity/symbol "USD" :kontor.commodity/name "US Dollar"
+                  :kontor.commodity/precision 2}
                  ;; Entity for Sarah.
                  {:entity/code "SARAH" :entity/name "Sarah Chen (Individual)"
                   :entity/kind :company :entity/country "US"

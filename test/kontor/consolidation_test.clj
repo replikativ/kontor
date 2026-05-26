@@ -27,10 +27,10 @@
     (v/install-invariants! conn)
     ;; Currencies
     (d/transact conn
-                [{:commodity/symbol "EUR" :commodity/name "Euro"
-                  :commodity/precision 2 :commodity/iso-4217 "EUR"}
-                 {:commodity/symbol "USD" :commodity/name "US Dollar"
-                  :commodity/precision 2 :commodity/iso-4217 "USD"}])
+                [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                  :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
+                 {:kontor.commodity/symbol "USD" :kontor.commodity/name "US Dollar"
+                  :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "USD"}])
     ;; FX rate (used by translation): 1 EUR = 1.08 USD on jan-2
     (fxp/save-rates! conn [{:from "EUR" :to "USD" :at-date jan-2
                             :rate 1.08M :rate-type :closing :source :test}
@@ -38,8 +38,8 @@
                             :rate 1.08M :rate-type :average :source :test}])
     ;; Entities — operating + group + elimination
     (d/transact conn
-                [{:db/id "eur" :commodity/symbol "EUR"}
-                 {:db/id "usd" :commodity/symbol "USD"}
+                [{:db/id "eur" :kontor.commodity/symbol "EUR"}
+                 {:db/id "usd" :kontor.commodity/symbol "USD"}
                  {:db/id "acme-group"
                   :entity/code "acme-group" :entity/name "ACME Group"
                   :entity/kind :consolidation
@@ -122,8 +122,8 @@
    Both tagged :transaction/intercompany-pair-id \"P-001\"."
   (let [db (d/db conn)
         ac (eids db ["1400-IC" "1600-IC" "4400-IC" "5400-IC"])
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
-        usd (:db/id (d/entity db [:commodity/symbol "USD"]))
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
+        usd (:db/id (d/entity db [:kontor.commodity/symbol "USD"]))
         jnl (:db/id (d/entity db [:journal/code "GEN"]))
         de (:db/id (d/entity db [:entity/code "acme-de"]))
         us (:db/id (d/entity db [:entity/code "acme-us"]))]
@@ -252,8 +252,8 @@
                     :date jan-2})
           postings (filter :posting/amount tx-data)
           amounts-by-commodity (group-by :posting/commodity postings)
-          eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
-          usd (:db/id (d/entity db [:commodity/symbol "USD"]))
+          eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
+          usd (:db/id (d/entity db [:kontor.commodity/symbol "USD"]))
           sum-eur (reduce (fn [^java.math.BigDecimal a p] (.add a (:posting/amount p)))
                           0M (amounts-by-commodity eur))
           sum-usd (reduce (fn [^java.math.BigDecimal a p] (.add a (:posting/amount p)))
@@ -326,8 +326,8 @@
           ;; Elimination entity trial balance (elimination postings went here)
           elim-tb (trial/trial-balance conn {:entity elim
                                              :include-states #{:draft :posted}})
-          eur (:db/id (d/entity (d/db conn) [:commodity/symbol "EUR"]))
-          usd (:db/id (d/entity (d/db conn) [:commodity/symbol "USD"]))]
+          eur (:db/id (d/entity (d/db conn) [:kontor.commodity/symbol "EUR"]))
+          usd (:db/id (d/entity (d/db conn) [:kontor.commodity/symbol "USD"]))]
       ;; The group entity should have translated postings — both DE and US
       ;; entries arrive in EUR.
       (is (seq group-tb)
@@ -522,7 +522,7 @@
           jnl (:db/id (d/entity db0 [:journal/code "GEN"]))
           ppe (:db/id (d/entity db0 [:account/path "Assets:PPE"]))
           ar (:db/id (d/entity db0 [:account/path "Assets:AR-Intercompany"]))
-          eur (:db/id (d/entity db0 [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           ;; Post a PP&E purchase in DE (just PP&E + offsetting AR)
           _ (posting/post-transaction!
              conn

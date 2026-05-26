@@ -48,7 +48,7 @@
    2214 (FL), 2230 (CO Denver)."
   [conn external-id date net rate-pct state-tax-code]
   (let [db (d/db conn)
-        usd (:db/id (d/entity db [:commodity/symbol "USD"]))
+        usd (:db/id (d/entity db [:kontor.commodity/symbol "USD"]))
         rec (ace db "1200")
         rev (ace db "4000")
         tax (ace db state-tax-code)
@@ -81,7 +81,7 @@
    line in this fixture (no CO state-level account exists yet)."
   [conn external-id date net]
   (let [db (d/db conn)
-        usd (:db/id (d/entity db [:commodity/symbol "USD"]))
+        usd (:db/id (d/entity db [:kontor.commodity/symbol "USD"]))
         rec (ace db "1200")
         rev (ace db "4000")
         denver (ace db "2230")

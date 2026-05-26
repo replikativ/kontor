@@ -41,7 +41,7 @@
     (asset-schema/install! conn)
     (lease-schema/install! conn)
     (d/transact conn
-                [{:db/id "eur" :commodity/symbol "EUR" :commodity/precision 2}
+                [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
                  {:partner/external-id "U-cfo"  :partner/name "CFO"}
                  {:partner/external-id "U-ctrl" :partner/name "Controller"}
                  {:partner/external-id "L-acme" :partner/name "Acme Properties"}
@@ -79,7 +79,7 @@
 (defn- ref-eid [db a v]
   (d/q '[:find ?e . :in $ ?a ?v :where [?e ?a ?v]] db a v))
 
-(defn- commodity [db] (ref-eid db :commodity/symbol "EUR"))
+(defn- commodity [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- p         [db code] (ref-eid db :partner/external-id code))
 (defn- acct      [db code] (ref-eid db :account/code code))
 (defn- journal   [db] (ref-eid db :journal/code "GEN"))

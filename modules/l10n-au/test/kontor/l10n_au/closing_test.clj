@@ -54,7 +54,7 @@
                                 :invoice/lines [{:invoice-line/quantity 1
                                                  :invoice-line/unit-price 1000M}]})
   (let [db (d/db conn)
-        aud (:db/id (d/entity db [:commodity/symbol "AUD"]))
+        aud (:db/id (d/entity db [:kontor.commodity/symbol "AUD"]))
         bank (ace db "11100")
         rent (ace db "61500")
         telecom (ace db "61700")
@@ -110,7 +110,7 @@
     (let [conn (bootstrap)]
       (seed-fy2026! conn)
       (let [db (d/db conn)
-            aud (:db/id (d/entity db [:commodity/symbol "AUD"]))
+            aud (:db/id (d/entity db [:kontor.commodity/symbol "AUD"]))
             rev    (ace db "41100")
             rent   (ace db "61500")
             telec  (ace db "61700")]
@@ -146,12 +146,12 @@
             "Period soft-closed after the closing tx")
         ;; Net = revenue -1500 + rent 300 + telecom 200 = -1000 (profit)
         (let [db (d/db conn)
-              aud (:db/id (d/entity db [:commodity/symbol "AUD"]))
+              aud (:db/id (d/entity db [:kontor.commodity/symbol "AUD"]))
               net (get-in close-result [:net-by-commodity aud :amount])]
           (is (= -1000M net)
               "Net P&L: revenue -1500 + 300 + 200 = -1000 (profit)"))
         (let [db (d/db conn)
-              aud (:db/id (d/entity db [:commodity/symbol "AUD"]))
+              aud (:db/id (d/entity db [:kontor.commodity/symbol "AUD"]))
               rev    (ace db "41100")
               rent   (ace db "61500")
               telec  (ace db "61700")

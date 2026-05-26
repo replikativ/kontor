@@ -31,7 +31,7 @@
    :ca-payroll-other-deduction    :acct/other-deduction
    :ca-payroll-garnishment        :acct/garnishment})
 
-(def commodity :commodity/cad)
+(def commodity :kontor.commodity/cad)
 
 (defn- jane-fact
   "A representative balanced CA payroll fact, ON province, $5000 gross."

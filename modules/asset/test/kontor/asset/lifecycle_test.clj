@@ -28,7 +28,7 @@
   (let [conn (core/create-test-db)]
     (asset-schema/install! conn)
     (d/transact conn
-                [{:db/id "eur" :commodity/symbol "EUR" :commodity/precision 2}
+                [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
                  ;; Actors — :create/uid is :db.type/ref, reuse :partner
                  ;; entities as actor stand-ins (the kernel convention).
                  {:partner/external-id "U-buyer"    :partner/name "Asset Buyer"}
@@ -76,7 +76,7 @@
 (defn- ref-eid [db tempid-attr v]
   (d/q '[:find ?e . :in $ ?a ?v :where [?e ?a ?v]] db tempid-attr v))
 
-(defn- commodity [db] (ref-eid db :commodity/symbol "EUR"))
+(defn- commodity [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- adoc [db code] (ref-eid db :audit-doc/code code))
 (defn- acct [db code] (ref-eid db :account/code code))
 (defn- entity-eid [db code] (ref-eid db :entity/code code))

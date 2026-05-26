@@ -31,7 +31,7 @@
   "10% standard-rate sale, net=`net` JPY."
   [conn external-id date net]
   (let [db (d/db conn)
-        jpy-eid (:db/id (d/entity db [:commodity/symbol "JPY"]))
+        jpy-eid (:db/id (d/entity db [:kontor.commodity/symbol "JPY"]))
         rec (ace db "121000")             ; AR
         rev (ace db "411000")             ; Sales 10%
         out-tax (ace db "215100")         ; Output JCT 10%
@@ -59,7 +59,7 @@
   "8% reduced-rate sale (e.g. food/newspaper)."
   [conn external-id date net]
   (let [db (d/db conn)
-        jpy-eid (:db/id (d/entity db [:commodity/symbol "JPY"]))
+        jpy-eid (:db/id (d/entity db [:kontor.commodity/symbol "JPY"]))
         rec (ace db "121000")
         rev (ace db "412000")
         out-tax (ace db "215200")

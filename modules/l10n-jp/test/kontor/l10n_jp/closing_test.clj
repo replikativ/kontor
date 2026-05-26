@@ -57,7 +57,7 @@
   "Standard-rate 10% sale (net + 10% JCT)."
   [conn external-id date net-amount]
   (let [db (d/db conn)
-        jpy (:db/id (d/entity db [:commodity/symbol "JPY"]))
+        jpy (:db/id (d/entity db [:kontor.commodity/symbol "JPY"]))
         rec (ace db "121000")       ; AR
         rev (ace db "411000")       ; Sales 10%
         out-tax (ace db "215100")   ; Output JCT 10%
@@ -87,7 +87,7 @@
   "Operating expense (no JCT for simplicity — exempt category)."
   [conn external-id date expense-code amount]
   (let [db (d/db conn)
-        jpy (:db/id (d/entity db [:commodity/symbol "JPY"]))
+        jpy (:db/id (d/entity db [:kontor.commodity/symbol "JPY"]))
         bank (ace db "110200")
         exp (ace db expense-code)
         jnl (:db/id (d/entity db [:journal/code "EXP"]))
@@ -130,7 +130,7 @@
                            :period-end   apr-1-26})]
       (seed-march31-fy! conn)
       (let [db (d/db conn)
-            jpy (:db/id (d/entity db [:commodity/symbol "JPY"]))
+            jpy (:db/id (d/entity db [:kontor.commodity/symbol "JPY"]))
             rev (ace db "411000")
             sal (ace db "610000")
             rent (ace db "620000")]
@@ -164,7 +164,7 @@
             "Period soft-closed after the closing tx")
         ;; Net P&L: profit 500,000 → net by commodity = -500,000.
         (let [db (d/db conn)
-              jpy (:db/id (d/entity db [:commodity/symbol "JPY"]))
+              jpy (:db/id (d/entity db [:kontor.commodity/symbol "JPY"]))
               net (get-in close-result [:net-by-commodity jpy :amount])]
           (is (= -500000M net)
               "Net P&L: revenue -1,500,000 + salaries 600,000 + rent
@@ -172,7 +172,7 @@
                credits are negative)"))
         ;; P&L accounts at the new year start: zero.
         (let [db (d/db conn)
-              jpy (:db/id (d/entity db [:commodity/symbol "JPY"]))
+              jpy (:db/id (d/entity db [:kontor.commodity/symbol "JPY"]))
               rev (ace db "411000")
               sal (ace db "610000")
               rent (ace db "620000")
@@ -224,7 +224,7 @@
                    :external-id "FY25-JP-CAL-CLOSE"})]
         (is (some? (:transaction-eid close-result)))
         (let [db (d/db conn)
-              jpy (:db/id (d/entity db [:commodity/symbol "JPY"]))
+              jpy (:db/id (d/entity db [:kontor.commodity/symbol "JPY"]))
               rev (ace db "411000")
               retained (ace db "330000")
               new-yr-bal (fn [eid]

@@ -121,8 +121,8 @@
 (defn- minimal-tx!
   [conn]
   (d/transact conn
-              [{:db/id -1 :commodity/symbol "MXN" :commodity/name "Mexican Peso"
-                :commodity/precision 2 :commodity/iso-4217 "MXN"}
+              [{:db/id -1 :kontor.commodity/symbol "MXN" :kontor.commodity/name "Mexican Peso"
+                :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "MXN"}
                {:db/id -2 :account/path "Assets:Receivable"
                 :account/name "AR" :account/type :asset :account/active true}
                {:db/id -3 :account/path "Income:Sales"

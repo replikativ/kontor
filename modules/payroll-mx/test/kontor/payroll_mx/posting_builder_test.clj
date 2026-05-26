@@ -14,10 +14,10 @@
   (let [conn (core/create-test-db)]
     (d/transact conn
                 [{:db/id "mxn"
-                  :commodity/symbol "MXN"
-                  :commodity/name "Peso mexicano"
-                  :commodity/precision 2
-                  :commodity/iso-4217 "MXN"}
+                  :kontor.commodity/symbol "MXN"
+                  :kontor.commodity/name "Peso mexicano"
+                  :kontor.commodity/precision 2
+                  :kontor.commodity/iso-4217 "MXN"}
                  ;; SAT Código Agrupador chart — minimal
                  {:account/code "601.01" :account/path "Gastos:Sueldos"
                   :account/name "Sueldos y Salarios"
@@ -58,7 +58,7 @@
 (defn- ref-eid [db a v]
   (d/q '[:find ?e . :in $ ?a ?v :where [?e ?a ?v]] db a v))
 
-(defn- mxn [db] (ref-eid db :commodity/symbol "MXN"))
+(defn- mxn [db] (ref-eid db :kontor.commodity/symbol "MXN"))
 (defn- journal [db] (ref-eid db :journal/code "NOM"))
 (defn- acct [db code] (ref-eid db :account/code code))
 
@@ -188,9 +188,9 @@
 
 (deftest missing-account-raises-actionably
   (let [conn (core/create-test-db)]
-    (d/transact conn [{:db/id "mxn" :commodity/symbol "MXN"
-                       :commodity/name "Peso" :commodity/precision 2
-                       :commodity/iso-4217 "MXN"}
+    (d/transact conn [{:db/id "mxn" :kontor.commodity/symbol "MXN"
+                       :kontor.commodity/name "Peso" :kontor.commodity/precision 2
+                       :kontor.commodity/iso-4217 "MXN"}
                       {:journal/code "NOM" :journal/name "Nómina"
                        :journal/type :general :journal/active true}])
     (let [db (d/db conn)]

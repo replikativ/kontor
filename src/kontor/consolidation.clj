@@ -87,11 +87,11 @@
    :expense   :average})
 
 (defn- coerce-commodity
-  "Accept commodity as eid, lookup-ref, or :commodity/symbol string."
+  "Accept commodity as eid, lookup-ref, or :kontor.commodity/symbol string."
   [db c]
   (cond
     (number? c) c
-    (string? c) (:db/id (d/entity db [:commodity/symbol c]))
+    (string? c) (:db/id (d/entity db [:kontor.commodity/symbol c]))
     (vector? c) (:db/id (d/entity db c))
     :else c))
 

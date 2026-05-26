@@ -41,7 +41,7 @@
      10% → 4020 / 3520"
   [conn external-id date net rate-pct]
   (let [db (d/db conn)
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         receivable (account-eid db "2000")
         revenue (case rate-pct
                   20 (account-eid db "4000")
@@ -83,7 +83,7 @@
    for office supplies. Postings: 7400 expense / 2500 vorsteuer / 3300 payable."
   [conn external-id date net]
   (let [db (d/db conn)
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         expense (account-eid db "7400")
         vor (account-eid db "2500")
         pay (account-eid db "3300")

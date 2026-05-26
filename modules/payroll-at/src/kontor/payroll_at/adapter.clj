@@ -67,7 +67,7 @@
 
    (def providers (adapter/make-at-kontor-providers
                    {:engine :bmd
-                    :commodity [:commodity/symbol \"EUR\"]
+                    :commodity [:kontor.commodity/symbol \"EUR\"]
                     :use-default-rlg-1? true
                     :language :de
                     :storage-uri-template \"s3://payroll/mbgm/%s.xml\"

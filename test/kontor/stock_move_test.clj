@@ -23,8 +23,8 @@
   []
   (let [conn (core/create-test-db)
         _ (d/transact conn
-                      [{:db/id -1 :commodity/symbol "EUR" :commodity/name "Euro"
-                        :commodity/precision 2 :commodity/iso-4217 "EUR"}
+                      [{:db/id -1 :kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                        :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
                        {:db/id -10 :account/path asset-acc-path
                         :account/name "Inventory" :account/type :asset
                         :account/active true}
@@ -45,7 +45,7 @@
                         :journal/active true}])
         db0 (d/db conn)]
     {:conn      conn
-     :commodity (:db/id (d/entity db0 [:commodity/symbol "EUR"]))
+     :commodity (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
      :item      (:db/id (d/entity db0 [:account/path "Item:Widget"]))
      :journal   (:db/id (d/entity db0 [:journal/code "STOCK"]))
      :book      (valuation/primary db0)}))

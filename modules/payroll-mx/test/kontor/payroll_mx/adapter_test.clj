@@ -38,10 +38,10 @@
     (d/transact
      conn
      [{:db/id "mxn"
-       :commodity/symbol "MXN"
-       :commodity/name "Peso mexicano"
-       :commodity/precision 2
-       :commodity/iso-4217 "MXN"}
+       :kontor.commodity/symbol "MXN"
+       :kontor.commodity/name "Peso mexicano"
+       :kontor.commodity/precision 2
+       :kontor.commodity/iso-4217 "MXN"}
       {:db/id "ent-acme-mx"
        :entity/code "ACME-MX"
        :entity/name "Acme México S.A. de C.V."
@@ -166,7 +166,7 @@
             postings + CFDI Nómina audit-docs in one atomic transaction."
     (let [conn (bootstrap)
           db   (d/db conn)
-          mxn       (d/q '[:find ?e . :where [?e :commodity/symbol "MXN"]] db)
+          mxn       (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "MXN"]] db)
           entity    (d/q '[:find ?e . :where [?e :entity/code "ACME-MX"]] db)
           journal   (d/q '[:find ?e . :where [?e :journal/code "NOM"]] db)
           fiscal-pp (d/q '[:find ?e . :where [?e :period/name "2026-05"]] db)
@@ -271,7 +271,7 @@
                             {:posting/_transaction
                              [:posting/amount
                               {:posting/account [:account/code]}
-                              {:posting/commodity [:commodity/symbol]}]}]}
+                              {:posting/commodity [:kontor.commodity/symbol]}]}]}
                         {:payroll-run/emit-docs
                          [:audit-doc/code
                           :audit-doc/category

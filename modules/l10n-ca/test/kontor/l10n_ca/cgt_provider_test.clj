@@ -34,14 +34,14 @@
   (let [conn (core/create-test-db)]
     (disposal/install! conn)
     (cgt-statute/install! conn)
-    (d/transact conn [{:commodity/symbol "CAD" :commodity/name "Canadian Dollar"
-                       :commodity/precision 2}
+    (d/transact conn [{:kontor.commodity/symbol "CAD" :kontor.commodity/name "Canadian Dollar"
+                       :kontor.commodity/precision 2}
                       {:entity/code "HOLDCO" :entity/name "HoldCo"
                        :entity/kind :company :entity/country "CA"
-                       :entity/functional-commodity [:commodity/symbol "CAD"]}])
+                       :entity/functional-commodity [:kontor.commodity/symbol "CAD"]}])
     conn))
 
-(def ^:private cad [:commodity/symbol "CAD"])
+(def ^:private cad [:kontor.commodity/symbol "CAD"])
 (def ^:private holdco [:entity/code "HOLDCO"])
 
 (defn- record!

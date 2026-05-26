@@ -91,8 +91,8 @@
 (deftest provision-posts-a-balanced-transaction
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:commodity/symbol "CAD" :commodity/name "Canadian Dollar"
-                  :commodity/precision 2}
+                [{:kontor.commodity/symbol "CAD" :kontor.commodity/name "Canadian Dollar"
+                  :kontor.commodity/precision 2}
                  {:journal/code "GEN" :journal/type :general}
                  {:account/path "Expenses:Income-Tax"     :account/type :expense}
                  {:account/path "Liabilities:Tax-Payable" :account/type :liability}])
@@ -101,7 +101,7 @@
                    {:expense-account [:account/path "Expenses:Income-Tax"]
                     :payable-account [:account/path "Liabilities:Tax-Payable"]
                     :journal         [:journal/code "GEN"]
-                    :commodity       [:commodity/symbol "CAD"]})]
+                    :commodity       [:kontor.commodity/symbol "CAD"]})]
       (validation/transact-with-validation
        conn (trpb/provision-tx-data builder facts
                                     {:effective-date #inst "2024-12-31"}))

@@ -62,10 +62,10 @@
   [db spec]
   (when-let [eid (resolve-disposal db spec)]
     (d/pull db
-            '[* {:disposal/proceeds-commodity            [:commodity/symbol]
-                 :disposal/basis-commodity               [:commodity/symbol]
-                 :disposal/depreciation-taken-commodity  [:commodity/symbol]
-                 :disposal/rollover-amount-commodity     [:commodity/symbol]}]
+            '[* {:disposal/proceeds-commodity            [:kontor.commodity/symbol]
+                 :disposal/basis-commodity               [:kontor.commodity/symbol]
+                 :disposal/depreciation-taken-commodity  [:kontor.commodity/symbol]
+                 :disposal/rollover-amount-commodity     [:kontor.commodity/symbol]}]
             eid)))
 
 ;; ============================================================================

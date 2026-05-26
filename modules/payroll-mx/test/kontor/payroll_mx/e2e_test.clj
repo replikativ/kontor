@@ -23,8 +23,8 @@
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:db/id "mxn" :commodity/symbol "MXN" :commodity/name "Peso mexicano"
-                  :commodity/precision 2 :commodity/iso-4217 "MXN"}
+                [{:db/id "mxn" :kontor.commodity/symbol "MXN" :kontor.commodity/name "Peso mexicano"
+                  :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "MXN"}
                  {:account/code "601.01" :account/path "Gastos:Sueldos"
                   :account/name "Sueldos y Salarios" :account/type :expense
                   :account/active true}
@@ -82,7 +82,7 @@
 
           ;; (2) Post: one balanced journal aggregating both employees.
           db (d/db conn)
-          mxn-eid (ref-eid db :commodity/symbol "MXN")
+          mxn-eid (ref-eid db :kontor.commodity/symbol "MXN")
           journal-eid (ref-eid db :journal/code "NOM")
           tx-data (pb/build-period-tx-data
                    {:db db :journal journal-eid :commodity mxn-eid
@@ -159,7 +159,7 @@
                  provider
                  (io/resource "kontor/payroll_mx/fixtures/aspel-sample.csv"))
           db (d/db conn)
-          mxn-eid (ref-eid db :commodity/symbol "MXN")
+          mxn-eid (ref-eid db :kontor.commodity/symbol "MXN")
           journal-eid (ref-eid db :journal/code "NOM")
           tx-data (pb/build-period-tx-data
                    {:db db :journal journal-eid :commodity mxn-eid

@@ -52,7 +52,7 @@
                                                  :invoice-line/unit-price 1000M}]})
   ;; Expense: €600 office supplies paid from bank on Feb 15.
   (let [db (d/db conn)
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         bank (ace db "5121")
         office (ace db "606")    ; Achats non stockés (fournitures)
         rent (ace db "613")      ; Locations
@@ -109,7 +109,7 @@
     (let [conn (bootstrap)]
       (seed-fy2025! conn)
       (let [db (d/db conn)
-            eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+            eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
             rev    (ace db "706")
             office (ace db "606")
             rent   (ace db "613")]
@@ -145,14 +145,14 @@
             "Period soft-closed after the closing tx")
         ;; net-by-commodity should reflect the net P&L = -500 (profit).
         (let [db (d/db conn)
-              eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+              eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
               net (get-in close-result [:net-by-commodity eur :amount])]
           (is (= -500M net)
               "Net P&L: revenue -1500 + office 600 + rent 400 = -500
                (sign convention: income credits are negative)"))
         ;; P&L accounts at the new year start: should be zero.
         (let [db (d/db conn)
-              eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+              eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
               rev      (ace db "706")
               office   (ace db "606")
               rent     (ace db "613")
@@ -193,7 +193,7 @@
                                            :external-id "FY25-FR-120"
                                            :retained-code "120"})
         (let [db (d/db conn)
-              eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+              eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
               resultat (ace db "120")
               report-an (ace db "110")
               new-yr-bal (fn [eid]

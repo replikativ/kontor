@@ -30,8 +30,8 @@
                 [{:partner/external-id "U-counsel" :partner/name "Counsel C"}
                  {:partner/external-id "U-records" :partner/name "Records Manager"}
                  ;; Two jurisdictions for the jurisdiction-precedence test.
-                 {:db/id "country-de" :country/code "DE" :country/name "Germany"}
-                 {:db/id "country-us" :country/code "US" :country/name "United States"}
+                 {:db/id "country-de" :kontor.country/code "DE" :kontor.country/name "Germany"}
+                 {:db/id "country-us" :kontor.country/code "US" :kontor.country/name "United States"}
                  ;; The retention schedule doc (ADR-038 :supporting-doc).
                  {:db/id "doc-schedule"
                   :audit-doc/code "RETENTION-SCHEDULE-2026"
@@ -57,7 +57,7 @@
   (d/q '[:find ?e . :in $ ?c :where [?e :audit-doc/code ?c]] db code))
 
 (defn- country-eid [db iso]
-  (d/q '[:find ?e . :in $ ?c :where [?e :country/code ?c]] db iso))
+  (d/q '[:find ?e . :in $ ?c :where [?e :kontor.country/code ?c]] db iso))
 
 ;; Seed an audit-doc whose :uploaded-at is the retention clock anchor.
 (defn- seed-doc! [conn code uploaded-at]

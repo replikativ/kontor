@@ -33,11 +33,11 @@
   (testing "Installing the chart creates the MXN commodity."
     (let [conn (bootstrap)
           db (d/db conn)
-          mxn (d/entity db [:commodity/symbol "MXN"])]
+          mxn (d/entity db [:kontor.commodity/symbol "MXN"])]
       (is (some? mxn))
-      (is (= "Peso Mexicano" (:commodity/name mxn)))
-      (is (= 2 (:commodity/precision mxn)))
-      (is (= "MXN" (:commodity/iso-4217 mxn))))))
+      (is (= "Peso Mexicano" (:kontor.commodity/name mxn)))
+      (is (= 2 (:kontor.commodity/precision mxn)))
+      (is (= "MXN" (:kontor.commodity/iso-4217 mxn))))))
 
 ;; ============================================================================
 ;; All five classes covered

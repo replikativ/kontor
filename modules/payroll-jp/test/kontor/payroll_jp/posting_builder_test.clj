@@ -22,7 +22,7 @@
    :jp-payroll-other-deduction        :acct/other
    :jp-payroll-net-wages              :acct/net-wages})
 
-(def commodity :commodity/jpy)
+(def commodity :kontor.commodity/jpy)
 
 (defn- tanaka-fact
   "A representative balanced JP monthly payroll fact (no bonus).

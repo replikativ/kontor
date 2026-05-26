@@ -25,8 +25,8 @@
     (inv-schema/install! *conn*)
     (coll-schema/install! *conn*)
     (d/transact *conn*
-                [{:commodity/symbol "EUR" :commodity/name "Euro"
-                  :commodity/precision 2 :commodity/iso-4217 "EUR"}
+                [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                  :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
                  {:entity/code "ACME-DE" :entity/name "Acme GmbH"
                   :entity/kind :operating :entity/active true}
                  {:partner/external-id "CUST"

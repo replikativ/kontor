@@ -152,7 +152,7 @@
         cad-gross      (+ cad-net-cash cad-creditable cad-refundable)]
     (book/entry! conn
       {:journal        (or journal [:journal/code "CR"])  ; default to Cash Receipts
-       :commodity      [:commodity/symbol "CAD"]
+       :commodity      [:kontor.commodity/symbol "CAD"]
        :effective-date effective-date
        :entity         entity
        :partner        payer-partner

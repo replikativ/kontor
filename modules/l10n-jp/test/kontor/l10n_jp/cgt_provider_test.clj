@@ -32,14 +32,14 @@
   (let [conn (core/create-test-db)]
     (disposal/install! conn)
     (cgt-statute/install! conn)
-    (d/transact conn [{:commodity/symbol "JPY" :commodity/name "Japanese Yen"
-                       :commodity/precision 0}
+    (d/transact conn [{:kontor.commodity/symbol "JPY" :kontor.commodity/name "Japanese Yen"
+                       :kontor.commodity/precision 0}
                       {:entity/code "JP-CO" :entity/name "JP Co"
                        :entity/kind :company :entity/country "JP"
-                       :entity/functional-commodity [:commodity/symbol "JPY"]}])
+                       :entity/functional-commodity [:kontor.commodity/symbol "JPY"]}])
     conn))
 
-(def ^:private jpy [:commodity/symbol "JPY"])
+(def ^:private jpy [:kontor.commodity/symbol "JPY"])
 (def ^:private jp-co [:entity/code "JP-CO"])
 
 (defn- record!

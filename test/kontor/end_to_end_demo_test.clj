@@ -69,7 +69,7 @@
 
 (defn- bal [conn code as-of]
   (let [db (d/db conn)
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))]
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))]
     (-> (balance/account-balance conn (ace db code) {:as-of-valid as-of})
         (get eur)
         :amount
@@ -128,7 +128,7 @@
   "Direct bank-paid expense (no input VAT). Net amount = gross."
   [conn ext-id date narration expense-code amount]
   (let [db (d/db conn)
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         bank (ace db "1200")
         exp (ace db expense-code)
         exp-jnl (:db/id (d/entity db [:journal/code "EXP"]))]
@@ -152,7 +152,7 @@
    flip the invoice to :paid via the reconciliation hook."
   [conn date amount counterparty memo]
   (let [db (d/db conn)
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         bank-acct (ace db "1200")
         bank-jnl (:db/id (d/entity db [:journal/code "BANK"]))
         _ (recon/ingest-statement!

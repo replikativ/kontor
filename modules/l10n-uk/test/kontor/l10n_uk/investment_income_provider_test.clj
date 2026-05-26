@@ -25,8 +25,8 @@
   []
   (let [conn (core/create-test-db)]
     (inv-statute/install! conn)
-    (d/transact conn [{:commodity/symbol "GBP" :commodity/name "Pound sterling"
-                       :commodity/precision 2}])
+    (d/transact conn [{:kontor.commodity/symbol "GBP" :kontor.commodity/name "Pound sterling"
+                       :kontor.commodity/precision 2}])
     conn))
 
 ;; Two periods to verify the April-2026 dividend rate cutover.

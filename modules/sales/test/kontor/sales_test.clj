@@ -28,10 +28,10 @@
 ;; ============================================================================
 
 (defn- seed-commodity! []
-  (d/transact *conn* [{:commodity/symbol "EUR"
-                       :commodity/name "Euro"
-                       :commodity/precision 2
-                       :commodity/iso-4217 "EUR"}]))
+  (d/transact *conn* [{:kontor.commodity/symbol "EUR"
+                       :kontor.commodity/name "Euro"
+                       :kontor.commodity/precision 2
+                       :kontor.commodity/iso-4217 "EUR"}]))
 
 (defn- seed-partners! []
   (d/transact *conn*
@@ -59,7 +59,7 @@
                 :order/status :order.status/created
                 :order/order-date #inst "2026-05-01"
                 :order/entry-date #inst "2026-05-01"
-                :order/currency [:commodity/symbol "EUR"]
+                :order/currency [:kontor.commodity/symbol "EUR"]
                 :order/bill-from-partner [:partner/external-id "SELLER"]
                 :order/bill-to-partner [:partner/external-id "BUYER"]
                 :order/invoice-per-shipment? false}

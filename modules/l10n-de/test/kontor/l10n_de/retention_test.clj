@@ -39,8 +39,8 @@
         (is (= :archive-to-cold-storage
                (:retention-policy/expiry-action row)))))
 
-    (testing ":country/code DE exists + is referenced"
-      (let [de-eid (ref-eid db :country/code "DE")
+    (testing ":kontor.country/code DE exists + is referenced"
+      (let [de-eid (ref-eid db :kontor.country/code "DE")
             row (d/pull db [:retention-policy/jurisdiction]
                         (ref-eid db :retention-policy/code
                                  "DE-HGB257-hr-personnel"))]
@@ -54,7 +54,7 @@
           tx-id-1 (:max-tx db1)
           _ (retention/install! conn)
           db2 (d/db conn)
-          ;; Note: install! always transacts the :country/code "DE" row
+          ;; Note: install! always transacts the :kontor.country/code "DE" row
           ;; once (idempotent on the unique attribute) so we don't
           ;; assert tx-id equality. The check is that no new
           ;; retention-policy rows landed.

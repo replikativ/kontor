@@ -25,11 +25,11 @@
   (let [conn (core/create-test-db)
         _ (chart/install! conn)
         db (d/db conn)
-        jpy (d/entity db [:commodity/symbol "JPY"])]
+        jpy (d/entity db [:kontor.commodity/symbol "JPY"])]
     (is jpy)
-    (is (= 0 (:commodity/precision jpy))
+    (is (= 0 (:kontor.commodity/precision jpy))
         "JPY has no fractional digits (commodity-precision)")
-    (is (= "JPY" (:commodity/iso-4217 jpy)))))
+    (is (= "JPY" (:kontor.commodity/iso-4217 jpy)))))
 
 (deftest jct-tags-installed
   (let [conn (core/create-test-db)

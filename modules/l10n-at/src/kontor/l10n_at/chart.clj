@@ -26,10 +26,10 @@
         tags))
 
 (defn- ensure-eur []
-  {:commodity/symbol "EUR"
-   :commodity/name "Euro"
-   :commodity/precision 2
-   :commodity/iso-4217 "EUR"})
+  {:kontor.commodity/symbol "EUR"
+   :kontor.commodity/name "Euro"
+   :kontor.commodity/precision 2
+   :kontor.commodity/iso-4217 "EUR"})
 
 (defn- account-tx-entry
   [{:keys [code path type name reconcilable? tags]}]
@@ -38,7 +38,7 @@
            :account/name        name
            :account/type        type
            :account/active      true
-           :account/commodity   [:commodity/symbol "EUR"]
+           :account/commodity   [:kontor.commodity/symbol "EUR"]
            :account/reconcilable (boolean reconcilable?)}
     (seq tags)
     (assoc :account/tags

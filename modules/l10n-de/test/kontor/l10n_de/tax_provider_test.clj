@@ -15,12 +15,12 @@
 (defn- fresh []
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:commodity/symbol "EUR" :commodity/name "Euro" :commodity/precision 2}
+                [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
                  {:account/code "3801" :account/path "USt-19" :account/type :liability}
                  {:account/code "3806" :account/path "USt-7" :account/type :liability}])
     conn))
 
-(def ^:private eur [:commodity/symbol "EUR"])
+(def ^:private eur [:kontor.commodity/symbol "EUR"])
 (def ^:private d1 #inst "2026-03-01")
 
 ;; ============================================================================

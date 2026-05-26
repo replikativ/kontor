@@ -62,7 +62,7 @@
 (deftest at-bridge-end-to-end-through-run-payroll!
   (let [conn (bootstrap)
         db (d/db conn)
-        eur (d/q '[:find ?e . :where [?e :commodity/symbol "EUR"]] db)
+        eur (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "EUR"]] db)
         ent (d/q '[:find ?e . :where [?e :entity/code "ACME-AT"]] db)
         journal (d/q '[:find ?e . :where [?e :journal/code "PAYROLL-AT"]] db)
         period (d/q '[:find ?e . :where [?e :period/name "2026-01"]] db)

@@ -21,14 +21,14 @@
   []
   (let [conn (core/create-test-db)]
     (disp/install! conn)
-    (d/transact conn [{:commodity/symbol "USD" :commodity/name "US Dollar"
-                       :commodity/precision 2}
+    (d/transact conn [{:kontor.commodity/symbol "USD" :kontor.commodity/name "US Dollar"
+                       :kontor.commodity/precision 2}
                       {:entity/code "HOLDCO" :entity/name "HoldCo"
                        :entity/kind :company :entity/country "US"
-                       :entity/functional-commodity [:commodity/symbol "USD"]}])
+                       :entity/functional-commodity [:kontor.commodity/symbol "USD"]}])
     conn))
 
-(def ^:private usd [:commodity/symbol "USD"])
+(def ^:private usd [:kontor.commodity/symbol "USD"])
 (def ^:private holdco [:entity/code "HOLDCO"])
 
 (defn- record-basic
@@ -38,7 +38,7 @@
    conn (merge {:entity          holdco
                 :external-id     xid
                 :kind            :sale
-                :subject         [:commodity/symbol "USD"]  ; any stable ref
+                :subject         [:kontor.commodity/symbol "USD"]  ; any stable ref
                 :subject-kind    :fixed-asset
                 :acquired-on     #inst "2020-01-01"
                 :disposed-on     #inst "2025-06-15"
@@ -93,7 +93,7 @@
       (is (= :recorded (:disposal/state d)))
       (is (== 100000M (:disposal/proceeds-amount d)))
       (is (== 60000M (:disposal/basis-amount d)))
-      (is (= "USD" (-> d :disposal/proceeds-commodity :commodity/symbol))))))
+      (is (= "USD" (-> d :disposal/proceeds-commodity :kontor.commodity/symbol))))))
 
 (deftest record-disposal-required-fields-trap
   (let [conn (fresh)]
@@ -114,7 +114,7 @@
   "Convenience — return ANY eid in the DB to act as a stand-in for a
    `:transaction` ref in tests that only care about the link target."
   [conn]
-  (d/q '[:find ?c . :where [?c :commodity/symbol "USD"]] (d/db conn)))
+  (d/q '[:find ?c . :where [?c :kontor.commodity/symbol "USD"]] (d/db conn)))
 
 (deftest recognize-advances-state
   (let [conn (fresh)]
@@ -198,8 +198,8 @@
 
 (deftest disposals-of-subject
   (let [conn (fresh)]
-    (d/transact conn [{:commodity/symbol "EUR" :commodity/name "Euro" :commodity/precision 2}])
-    (let [eur-eid (d/q '[:find ?c . :where [?c :commodity/symbol "EUR"]] (d/db conn))]
+    (d/transact conn [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}])
+    (let [eur-eid (d/q '[:find ?c . :where [?c :kontor.commodity/symbol "EUR"]] (d/db conn))]
       (record-basic conn "d-eur-1" 100M 50M {:subject eur-eid})
       (record-basic conn "d-eur-2" 200M 80M {:subject eur-eid})
       (record-basic conn "d-usd-1" 300M 100M)
@@ -218,7 +218,7 @@
 (deftest realized-gain-with-rollover-deferral
   (let [conn (fresh)]
     (record-basic conn "d-§1031" 100000M 60000M
-                  {:rollover {:into-asset [:commodity/symbol "USD"]
+                  {:rollover {:into-asset [:kontor.commodity/symbol "USD"]
                               :amount    30000M
                               :commodity usd
                               :deadline  #inst "2026-06-15"}})

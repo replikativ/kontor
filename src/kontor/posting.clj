@@ -441,7 +441,7 @@
 
 (defn- precision-for-amount
   "At the build/expansion layer we don't have DB access to query
-   :commodity/precision, so derive precision from the Money's amount
+   :kontor.commodity/precision, so derive precision from the Money's amount
    scale (max 2 for fiat). Per ADR-013."
   [^java.math.BigDecimal amt]
   (max 2 (.scale amt)))

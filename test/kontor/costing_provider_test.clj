@@ -21,9 +21,9 @@
   []
   (let [conn (core/create-test-db)
         _ (d/transact conn
-                      [{:db/id -1 :commodity/symbol "EUR"
-                        :commodity/name "Euro" :commodity/precision 2
-                        :commodity/iso-4217 "EUR"}
+                      [{:db/id -1 :kontor.commodity/symbol "EUR"
+                        :kontor.commodity/name "Euro" :kontor.commodity/precision 2
+                        :kontor.commodity/iso-4217 "EUR"}
                        {:db/id -2 :account/path "Item:Widget"
                         :account/name "Widget" :account/type :asset
                         :account/active true}
@@ -31,7 +31,7 @@
                         :journal/name "Stock" :journal/type :general
                         :journal/active true}])
         db0 (d/db conn)
-        eur (:db/id (d/entity db0 [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
         itm (:db/id (d/entity db0 [:account/path "Item:Widget"]))
         jnl (:db/id (d/entity db0 [:journal/code "STOCK"]))
         book (valuation/primary db0)

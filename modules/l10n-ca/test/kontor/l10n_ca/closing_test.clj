@@ -53,7 +53,7 @@
                                                  :invoice-line/unit-price 1000M}]})
   ;; Expense: $600 office expense paid from bank on Feb 15.
   (let [db (d/db conn)
-        cad (:db/id (d/entity db [:commodity/symbol "CAD"]))
+        cad (:db/id (d/entity db [:kontor.commodity/symbol "CAD"]))
         bank (ace db "1010")
         office (ace db "6000")    ; Expenses:Office
         rent (ace db "6100")      ; Expenses:Rent
@@ -116,7 +116,7 @@
     (let [conn (bootstrap)]
       (seed-fy2025! conn)
       (let [db (d/db conn)
-            cad (:db/id (d/entity db [:commodity/symbol "CAD"]))
+            cad (:db/id (d/entity db [:kontor.commodity/symbol "CAD"]))
             rev   (ace db "4000")
             office (ace db "6000")
             rent  (ace db "6100")]
@@ -152,14 +152,14 @@
             "Period soft-closed after the closing tx")
         ;; net-by-commodity should reflect the net P&L = -500 (profit).
         (let [db (d/db conn)
-              cad (:db/id (d/entity db [:commodity/symbol "CAD"]))
+              cad (:db/id (d/entity db [:kontor.commodity/symbol "CAD"]))
               net (get-in close-result [:net-by-commodity cad :amount])]
           (is (= -500M net)
               "Net P&L: revenue -1500 + office 600 + rent 400 = -500
                (sign convention: income credits are negative)"))
         ;; P&L accounts at the new year start: should be zero.
         (let [db (d/db conn)
-              cad (:db/id (d/entity db [:commodity/symbol "CAD"]))
+              cad (:db/id (d/entity db [:kontor.commodity/symbol "CAD"]))
               rev    (ace db "4000")
               office (ace db "6000")
               rent   (ace db "6100")

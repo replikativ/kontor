@@ -46,7 +46,7 @@
 ;; Helper: post a couple of revenue + expense entries inside FY2025.
 (defn- seed-pnl-activity! [conn]
   (let [db (d/db conn)
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         recv (ace db "1400")          ; AR
         rev19 (ace db "4400")         ; revenue 19%
         ust19 (ace db "3801")         ; output VAT
@@ -135,7 +135,7 @@
   (let [conn (bootstrap)]
     (seed-pnl-activity! conn)
     (let [db (d/db conn)
-          eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           rev (ace db "4400")
           rent (ace db "6300")]
       (is (= -3000M (-> (balance/account-balance conn rev
@@ -165,7 +165,7 @@
                                   :journal-eid inv-jnl
                                   :external-id "FY25-CLOSE"})
           db (d/db conn)
-          eur (:db/id (d/entity db [:commodity/symbol "EUR"]))]
+          eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))]
       (is (some? transaction-eid))
       ;; 3 P&L accounts had non-zero balance + 1 retained-earnings = 4 postings
       (is (= 4 postings-count))
@@ -246,7 +246,7 @@
           (de-closing/close-fiscal-year! conn {:period-eid period-eid})
           db (d/db conn)
           retained (ace db "2900")
-          eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           ret-bal (-> (balance/account-balance conn retained
                                                {:as-of-valid jan-1-26})
                       (get eur))

@@ -13,14 +13,14 @@
             [kontor.tax-schedule :as ts]
             [kontor.validation :as validation]))
 
-(def ^:private eur [:commodity/symbol "EUR"])
+(def ^:private eur [:kontor.commodity/symbol "EUR"])
 (def ^:private fy {:from #inst "2026-01-01" :to #inst "2027-01-01"})
 
 (defn- fresh []
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:commodity/symbol "EUR" :commodity/name "Euro"
-                  :commodity/precision 2}
+                [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                  :kontor.commodity/precision 2}
                  {:journal/code "SALE" :journal/type :sale}
                  {:journal/code "GEN"  :journal/type :general}
                  {:account/path "Income:Salary"        :account/type :income}

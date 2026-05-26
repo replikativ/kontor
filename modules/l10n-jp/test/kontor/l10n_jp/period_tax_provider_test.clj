@@ -127,8 +127,8 @@
 (defn- jpy-test-db []
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:commodity/symbol "JPY" :commodity/name "Japanese Yen"
-                  :commodity/precision 0}
+                [{:kontor.commodity/symbol "JPY" :kontor.commodity/name "Japanese Yen"
+                  :kontor.commodity/precision 0}
                  {:journal/code "SALE" :journal/type :sale}
                  {:account/path "Income:給料" :account/type :income}
                  {:account/path "Assets:銀行"  :account/type :asset}])
@@ -139,7 +139,7 @@
     ;; a salaried worker earns ¥7,000,000 gross in 2026
     (book/sell! conn {:debit-account  [:account/path "Assets:銀行"]
                       :credit-account [:account/path "Income:給料"]
-                      :amount 7000000 :commodity [:commodity/symbol "JPY"]
+                      :amount 7000000 :commodity [:kontor.commodity/symbol "JPY"]
                       :effective-date #inst "2026-06-30"})
     (let [facts (ptp/period-tax-facts
                  (jp/jp-income-tax-provider {})
@@ -192,7 +192,7 @@
     ;; income is earned in 2025 …
     (book/sell! conn {:debit-account  [:account/path "Assets:銀行"]
                       :credit-account [:account/path "Income:給料"]
-                      :amount 4000000 :commodity [:commodity/symbol "JPY"]
+                      :amount 4000000 :commodity [:kontor.commodity/symbol "JPY"]
                       :effective-date #inst "2025-09-30"})
     ;; … and the 住民税 is BILLED across the 2026 fiscal year.
     (let [facts (ptp/period-tax-facts
@@ -224,7 +224,7 @@
   (let [conn (jpy-test-db)]
     (book/sell! conn {:debit-account  [:account/path "Assets:銀行"]
                       :credit-account [:account/path "Income:給料"]
-                      :amount 3000000 :commodity [:commodity/symbol "JPY"]
+                      :amount 3000000 :commodity [:kontor.commodity/symbol "JPY"]
                       :effective-date #inst "2026-03-31"})
     (let [facts (ptp/period-tax-facts
                  (jp/jp-inhabitant-tax-provider {})

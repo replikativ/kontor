@@ -16,7 +16,7 @@
      200 {:kind :base-wage   :account-hint :lohn :uom :hours}
      300 {:kind :weihnachtsgeld :account-hint :freiwillig-st-pflichtig}}}))
 
-(def ^:private eur [:commodity/symbol "EUR"])
+(def ^:private eur [:kontor.commodity/symbol "EUR"])
 
 (def ^:private sample-fact
   {:employment "emp-1"

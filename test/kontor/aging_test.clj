@@ -54,7 +54,7 @@
 (defn- post-invoice-with-term!
   [conn {:keys [ext-id date net partner] :as fix}]
   (let [db (d/db conn)
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         recv (ace db "1400") rev (ace db "4400") ust (ace db "3801")
         jnl (:db/id (d/entity db [:journal/code "INV"]))
         partner-eid (:db/id (d/entity db [:partner/external-id partner]))
@@ -144,7 +144,7 @@
             date (treats it as due-on-receipt)."
     (let [conn (bootstrap)
           db (d/db conn)
-          eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           recv (ace db "1400") rev (ace db "4400") ust (ace db "3801")
           jnl (:db/id (d/entity db [:journal/code "INV"]))
           part (:db/id (d/entity db [:partner/external-id "ACME"]))

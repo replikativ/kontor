@@ -34,15 +34,15 @@
   []
   (let [conn (core/create-test-db)]
     (inv-statute/install! conn)
-    (d/transact conn [{:commodity/symbol    "BRL"
-                       :commodity/name      "Brazilian Real"
-                       :commodity/precision 2}
+    (d/transact conn [{:kontor.commodity/symbol    "BRL"
+                       :kontor.commodity/name      "Brazilian Real"
+                       :kontor.commodity/precision 2}
                       {:entity/code "PF-COSTA" :entity/name "Sra. Costa"
                        :entity/kind :person :entity/country "BR"
-                       :entity/functional-commodity [:commodity/symbol "BRL"]}
+                       :entity/functional-commodity [:kontor.commodity/symbol "BRL"]}
                       {:entity/code "PJ-CORPD" :entity/name "CorpD S.A."
                        :entity/kind :company :entity/country "BR"
-                       :entity/functional-commodity [:commodity/symbol "BRL"]}])
+                       :entity/functional-commodity [:kontor.commodity/symbol "BRL"]}])
     conn))
 
 (def ^:private p2026 {:from #inst "2026-01-01" :to #inst "2027-01-01"})

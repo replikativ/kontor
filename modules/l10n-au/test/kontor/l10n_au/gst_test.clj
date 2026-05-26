@@ -29,7 +29,7 @@
   "GST 10% sale: AR (gross) | Sales (net) | GST payable (10%)"
   [conn ext-id date net]
   (let [db (d/db conn)
-        aud-eid (:db/id (d/entity db [:commodity/symbol "AUD"]))
+        aud-eid (:db/id (d/entity db [:kontor.commodity/symbol "AUD"]))
         ar (ace db "11200")
         rev (ace db "41100")
         gst-acc (ace db "21500")

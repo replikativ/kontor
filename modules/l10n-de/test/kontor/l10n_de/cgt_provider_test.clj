@@ -29,14 +29,14 @@
     (disposal/install! conn)
     (cit-statute/install! conn)
     (cgt-statute/install! conn)
-    (d/transact conn [{:commodity/symbol "EUR" :commodity/name "Euro"
-                       :commodity/precision 2}
+    (d/transact conn [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                       :kontor.commodity/precision 2}
                       {:entity/code "HOLDCO" :entity/name "HoldCo"
                        :entity/kind :company :entity/country "DE"
-                       :entity/functional-commodity [:commodity/symbol "EUR"]}])
+                       :entity/functional-commodity [:kontor.commodity/symbol "EUR"]}])
     conn))
 
-(def ^:private eur [:commodity/symbol "EUR"])
+(def ^:private eur [:kontor.commodity/symbol "EUR"])
 (def ^:private holdco [:entity/code "HOLDCO"])
 
 (defn- record!

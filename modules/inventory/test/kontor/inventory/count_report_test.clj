@@ -37,7 +37,7 @@
     (sales-schema/install! conn)
     (inv-schema/install! conn)
     (d/transact conn
-                [{:db/id "eur" :commodity/symbol "EUR" :commodity/precision 2}
+                [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
                  {:partner/external-id "P-widget" :partner/name "Widget"}
                  {:partner/external-id "U-counter" :partner/name "Counter"}
                  {:partner/external-id "O-1"  :partner/name "Order 1"}
@@ -70,7 +70,7 @@
 (defn- acct    [db code] (ref-eid db :account/code code))
 (defn- book    [db] (ref-eid db :valuation-book/code "primary"))
 (defn- journal [db] (ref-eid db :journal/code "GEN"))
-(defn- eur     [db] (ref-eid db :commodity/symbol "EUR"))
+(defn- eur     [db] (ref-eid db :kontor.commodity/symbol "EUR"))
 (defn- lot     [db label] (ref-eid db :lot/label label))
 
 ;; account-fn for the standard receive/issue roles + count routing:

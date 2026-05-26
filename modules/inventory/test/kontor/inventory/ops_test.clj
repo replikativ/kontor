@@ -34,7 +34,7 @@
     (sales-schema/install! conn)
     (inv-schema/install! conn)
     (d/transact conn
-                [{:db/id "eur" :commodity/symbol "EUR" :commodity/precision 2}
+                [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
                  {:partner/external-id "P-widget" :partner/name "Widget"}
                  {:partner/external-id "O-1"  :partner/name "Order 1"}
                  {:partner/external-id "OI-1" :partner/name "Order line 1"}
@@ -92,7 +92,7 @@
         widget (p db "P-widget")
         {:keys [inventory-item transaction]}
         (ops/receive! conn {:product widget :facility wh :book (book db)
-                            :qty 100M :unit-cost 12.00M :commodity (ref-eid db :commodity/symbol "EUR")
+                            :qty 100M :unit-cost 12.00M :commodity (ref-eid db :kontor.commodity/symbol "EUR")
                             :journal (journal db) :account-fn (account-fn db)
                             :effective-date #inst "2026-03-01"})]
     (testing "the physical half — :inventory-detail brought QOH to 100"
@@ -119,7 +119,7 @@
         wh (warehouse! conn)
         db (d/db conn)
         widget (p db "P-widget")
-        eur (ref-eid db :commodity/symbol "EUR")
+        eur (ref-eid db :kontor.commodity/symbol "EUR")
         _ (ops/receive! conn {:product widget :facility wh :book (book db)
                               :qty 100M :unit-cost 12.00M :commodity eur
                               :journal (journal db) :account-fn (account-fn db)})
@@ -136,7 +136,7 @@
         wh (warehouse! conn)
         db (d/db conn)
         widget (p db "P-widget")
-        eur (ref-eid db :commodity/symbol "EUR")
+        eur (ref-eid db :kontor.commodity/symbol "EUR")
         {item :inventory-item}
         (ops/receive! conn {:product widget :facility wh :book (book db)
                             :qty 100M :unit-cost 12.00M :commodity eur
@@ -168,7 +168,7 @@
         wh (warehouse! conn)
         db (d/db conn)
         widget (p db "P-widget")
-        eur (ref-eid db :commodity/symbol "EUR")
+        eur (ref-eid db :kontor.commodity/symbol "EUR")
         _ (ops/receive! conn {:product widget :facility wh :book (book db)
                               :qty 20M :unit-cost 12.00M :commodity eur
                               :journal (journal db) :account-fn (account-fn db)})]
@@ -184,7 +184,7 @@
         wh (warehouse! conn)
         db (d/db conn)
         widget (p db "P-widget")
-        eur (ref-eid db :commodity/symbol "EUR")
+        eur (ref-eid db :kontor.commodity/symbol "EUR")
         _ (ops/receive! conn {:product widget :facility wh :book (book db)
                               :qty 20M :unit-cost 12.00M :commodity eur
                               :journal (journal db) :account-fn (account-fn db)})

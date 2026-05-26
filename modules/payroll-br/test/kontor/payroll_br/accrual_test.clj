@@ -85,7 +85,7 @@
 ;; ============================================================================
 
 (def base-opts
-  {:commodity :commodity/brl
+  {:commodity :kontor.commodity/brl
    :ledger :ledger/br-ifrs
    :journal :journal/payroll
    :effective-date #inst "2026-05-31"

@@ -12,7 +12,7 @@
 
    `convert` defaults to 2-digit fractional precision (typical fiat).
    That is NOT auto-derived from the target commodity's
-   `:commodity/precision` — this namespace is pure-on-`Money` and has
+   `:kontor.commodity/precision` — this namespace is pure-on-`Money` and has
    no db handle. JPY (precision 0) and BTC (precision 8) consumers
    must pass `:precision` explicitly. Pass `:precision nil` to skip
    rounding entirely and keep the full-precision product.
@@ -179,7 +179,7 @@
    The transaction-date is required because IAS 21 uses the *spot rate
    at the date of the transaction*."
   [m entity provider {:keys [at-date rate-type] :as opts}]
-  (let [fc (or (some-> entity :entity/functional-commodity :commodity/symbol)
+  (let [fc (or (some-> entity :entity/functional-commodity :kontor.commodity/symbol)
                (some-> entity :entity/functional-commodity)
                (:functional-commodity entity))]
     (cond

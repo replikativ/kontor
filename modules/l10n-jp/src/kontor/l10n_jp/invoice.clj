@@ -166,7 +166,7 @@
   (:db/id (d/entity db [:journal/code code])))
 
 (defn- commodity-by-symbol [db sym]
-  (:db/id (d/entity db [:commodity/symbol sym])))
+  (:db/id (d/entity db [:kontor.commodity/symbol sym])))
 
 ;; ============================================================================
 ;; Per-line helpers
@@ -174,7 +174,7 @@
 
 (defn- line-net
   "Per-line net amount = qty × unit-price, rounded HALF-EVEN to whole
-   yen (JPY :commodity/precision 0). Tolerates :invoice-line/line-
+   yen (JPY :kontor.commodity/precision 0). Tolerates :invoice-line/line-
    total when the caller pre-computed it."
   ^java.math.BigDecimal [{:invoice-line/keys [quantity unit-price line-total]}]
   (cond

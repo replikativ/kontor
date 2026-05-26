@@ -39,7 +39,7 @@
   (let [conn (bootstrap-full)
         db0 (d/db conn)
         jnl (:db/id (d/entity db0 [:journal/code "PAYROLL"]))
-        eur (:db/id (d/entity db0 [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
         {:keys [payroll-result gl-tx-report mbgm urlaubs-tx-report]}
         (payroll/run-payroll-period!
          conn
@@ -77,7 +77,7 @@
     (let [conn (bootstrap-full)
           db0 (d/db conn)
           jnl (:db/id (d/entity db0 [:journal/code "PAYROLL"]))
-          eur (:db/id (d/entity db0 [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           jan-result (payroll/run-payroll-period!
                       conn
                       {:engine :bmd
@@ -134,7 +134,7 @@
     (let [conn (bootstrap-full)
           db0 (d/db conn)
           jnl (:db/id (d/entity db0 [:journal/code "PAYROLL"]))
-          eur (:db/id (d/entity db0 [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           _ (payroll/run-payroll-period!
              conn
              {:engine :bmd

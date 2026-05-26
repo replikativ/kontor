@@ -63,7 +63,7 @@
         facts (compute/freee-facts parsed
                                    {:external-id->eid ext->eid
                                     :pay-period-eid :pp-2026-05
-                                    :commodity-eid :commodity/jpy})]
+                                    :commodity-eid :kontor.commodity/jpy})]
     (testing "One fact per employee"
       (is (= 2 (count facts))))
     (testing "Tanaka's gross / net"
@@ -86,7 +86,7 @@
                   {:csv-source (io/resource "kontor/payroll_jp/fixtures/freee_sample.csv")
                    :pay-element-codes freee-pay-element-codes
                    :external-id->eid {"E001" :emp/tanaka "E002" :emp/suzuki}
-                   :commodity-eid :commodity/jpy})]
+                   :commodity-eid :kontor.commodity/jpy})]
     (testing "Provider id"
       (is (= :freee (pp/provider-id provider))))
     (testing "compute-payroll yields the two facts"
@@ -147,7 +147,7 @@
                    :pay-element-codes mf-pay-element-codes
                    :external-id->eid {"EMP-100" :emp/yamada
                                       "EMP-200" :emp/sato}
-                   :commodity-eid :commodity/jpy})]
+                   :commodity-eid :kontor.commodity/jpy})]
     (testing "Provider id"
       (is (= :money-forward (pp/provider-id provider))))
     (testing "Two facts produced"

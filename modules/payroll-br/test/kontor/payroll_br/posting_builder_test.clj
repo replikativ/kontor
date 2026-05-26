@@ -29,7 +29,7 @@
    :br-payroll-13th-liability     :acct/thirteenth-liability
    :br-payroll-severance-liability :acct/severance-liability})
 
-(def commodity :commodity/brl)
+(def commodity :kontor.commodity/brl)
 
 (defn- jane-fact
   "A representative balanced BR payroll fact, $5000 base, INSS+IRRF

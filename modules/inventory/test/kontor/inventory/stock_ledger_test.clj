@@ -27,7 +27,7 @@
   (let [conn (core/create-test-db)]
     (inv-schema/install! conn)
     (d/transact conn
-                [{:db/id "eur" :commodity/symbol "EUR" :commodity/precision 2}
+                [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
                  ;; Legal entity — the facility owner (ADR-031).
                  {:db/id "entity-de" :entity/code "ACME-DE" :entity/name "Acme GmbH"}
                  ;; Products — :inventory-item/product is a generic ref;

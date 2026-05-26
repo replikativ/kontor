@@ -13,51 +13,51 @@
 
 (defn- install-inr! [conn]
   (d/transact conn
-              [{:commodity/symbol    "INR"
-                :commodity/name      "Indian Rupee"
-                :commodity/precision 2
-                :commodity/iso-4217  "INR"}])
+              [{:kontor.commodity/symbol    "INR"
+                :kontor.commodity/name      "Indian Rupee"
+                :kontor.commodity/precision 2
+                :kontor.commodity/iso-4217  "INR"}])
   (d/db conn))
 
 (deftest country-iso-2-is-unique-identity
   (let [conn (core/create-test-db)
         _    (install-inr! conn)
-        inr  (:db/id (d/entity (d/db conn) [:commodity/symbol "INR"]))]
+        inr  (:db/id (d/entity (d/db conn) [:kontor.commodity/symbol "INR"]))]
     (d/transact conn
-                [{:country/code              "IN"
-                  :country/code-iso3         "IND"
-                  :country/name              "India"
-                  :country/default-commodity inr
-                  :country/active            true}])
+                [{:kontor.country/code              "IN"
+                  :kontor.country/code-iso3         "IND"
+                  :kontor.country/name              "India"
+                  :kontor.country/default-commodity inr
+                  :kontor.country/active            true}])
     (let [db (d/db conn)
-          e1 (d/entity db [:country/code "IN"])
-          e2 (d/entity db [:country/code-iso3 "IND"])]
+          e1 (d/entity db [:kontor.country/code "IN"])
+          e2 (d/entity db [:kontor.country/code-iso3 "IND"])]
       (is (some? e1))
       (is (= (:db/id e1) (:db/id e2))
           "ISO-2 and ISO-3 must both resolve to the same entity")
-      (is (= "India" (:country/name e1)))
-      (is (= inr (:db/id (:country/default-commodity e1)))))))
+      (is (= "India" (:kontor.country/name e1)))
+      (is (= inr (:db/id (:kontor.country/default-commodity e1)))))))
 
 (deftest country-external-codes-roundtrip
   (testing "Per-regulator codes attach as :country-code entities with
             composite identity on (country, regulator) — ADR-019 mirror"
     (let [conn (core/create-test-db)
           _ (d/transact conn
-                        [{:db/id -1 :country/code "IN" :country/name "India" :country/active true}
-                         {:country-code/country   -1
-                          :country-code/regulator :iso-3166-1-numeric
-                          :country-code/code      "356"}
-                         {:country-code/country   -1
-                          :country-code/regulator :un/m49
-                          :country-code/code      "356"}])
+                        [{:db/id -1 :kontor.country/code "IN" :kontor.country/name "India" :kontor.country/active true}
+                         {:kontor.country-code/country   -1
+                          :kontor.country-code/regulator :iso-3166-1-numeric
+                          :kontor.country-code/code      "356"}
+                         {:kontor.country-code/country   -1
+                          :kontor.country-code/regulator :un/m49
+                          :kontor.country-code/code      "356"}])
           db (d/db conn)
-          india (d/entity db [:country/code "IN"])
+          india (d/entity db [:kontor.country/code "IN"])
           codes (->> (d/q '[:find ?reg ?code
                             :in $ ?c
                             :where
-                            [?cc :country-code/country ?c]
-                            [?cc :country-code/regulator ?reg]
-                            [?cc :country-code/code ?code]]
+                            [?cc :kontor.country-code/country ?c]
+                            [?cc :kontor.country-code/regulator ?reg]
+                            [?cc :kontor.country-code/code ?code]]
                           db (:db/id india))
                      (into {}))]
       (is (= "356" (codes :iso-3166-1-numeric)))
@@ -68,19 +68,19 @@
             pair overwrites rather than creating a duplicate"
     (let [conn (core/create-test-db)
           _ (d/transact conn
-                        [{:db/id -1 :country/code "IN" :country/name "India" :country/active true}
-                         {:country-code/country -1
-                          :country-code/regulator :iso-3166-1-numeric
-                          :country-code/code "356"}])
+                        [{:db/id -1 :kontor.country/code "IN" :kontor.country/name "India" :kontor.country/active true}
+                         {:kontor.country-code/country -1
+                          :kontor.country-code/regulator :iso-3166-1-numeric
+                          :kontor.country-code/code "356"}])
           _ (d/transact conn
-                        [{:country-code/country [:country/code "IN"]
-                          :country-code/regulator :iso-3166-1-numeric
-                          :country-code/code "356"
-                          :country-code/note "Re-asserted with note"}])
+                        [{:kontor.country-code/country [:kontor.country/code "IN"]
+                          :kontor.country-code/regulator :iso-3166-1-numeric
+                          :kontor.country-code/code "356"
+                          :kontor.country-code/note "Re-asserted with note"}])
           db (d/db conn)
           n (d/q '[:find (count ?cc) .
                    :where
-                   [?cc :country-code/regulator :iso-3166-1-numeric]]
+                   [?cc :kontor.country-code/regulator :iso-3166-1-numeric]]
                  db)]
       (is (= 1 n) "Composite identity must collapse duplicates"))))
 
@@ -92,26 +92,26 @@
   (testing "EU + EEA membership modeled as data, not flags"
     (let [conn (core/create-test-db)
           _ (d/transact conn
-                        [{:db/id -1 :country-group/code "EU"   :country-group/name "European Union"}
-                         {:db/id -2 :country-group/code "EEA"  :country-group/name "European Economic Area"}
-                         {:db/id -3 :country-group/code "EFTA" :country-group/name "European Free Trade Association"}
-                         {:country/code "DE" :country/name "Germany" :country/active true
-                          :country/groups [-1 -2]}
-                         {:country/code "NO" :country/name "Norway"  :country/active true
-                          :country/groups [-2 -3]}
-                         {:country/code "IN" :country/name "India"   :country/active true}])
+                        [{:db/id -1 :kontor.country-group/code "EU"   :kontor.country-group/name "European Union"}
+                         {:db/id -2 :kontor.country-group/code "EEA"  :kontor.country-group/name "European Economic Area"}
+                         {:db/id -3 :kontor.country-group/code "EFTA" :kontor.country-group/name "European Free Trade Association"}
+                         {:kontor.country/code "DE" :kontor.country/name "Germany" :kontor.country/active true
+                          :kontor.country/groups [-1 -2]}
+                         {:kontor.country/code "NO" :kontor.country/name "Norway"  :kontor.country/active true
+                          :kontor.country/groups [-2 -3]}
+                         {:kontor.country/code "IN" :kontor.country/name "India"   :kontor.country/active true}])
           db (d/db conn)
           eu-members (d/q '[:find [?code ...]
                             :where
-                            [?g :country-group/code "EU"]
-                            [?c :country/groups ?g]
-                            [?c :country/code ?code]]
+                            [?g :kontor.country-group/code "EU"]
+                            [?c :kontor.country/groups ?g]
+                            [?c :kontor.country/code ?code]]
                           db)
           eea-members (d/q '[:find [?code ...]
                              :where
-                             [?g :country-group/code "EEA"]
-                             [?c :country/groups ?g]
-                             [?c :country/code ?code]]
+                             [?g :kontor.country-group/code "EEA"]
+                             [?c :kontor.country/groups ?g]
+                             [?c :kontor.country/code ?code]]
                            db)]
       (is (= #{"DE"} (set eu-members)))
       (is (= #{"DE" "NO"} (set eea-members))
@@ -127,8 +127,8 @@
             exist alongside it under a different country)"
     (let [conn (core/create-test-db)
           _ (d/transact conn
-                        [{:db/id -1 :country/code "US" :country/name "United States" :country/active true}
-                         {:db/id -2 :country/code "CA" :country/name "Canada"        :country/active true}
+                        [{:db/id -1 :kontor.country/code "US" :kontor.country/name "United States" :kontor.country/active true}
+                         {:db/id -2 :kontor.country/code "CA" :kontor.country/name "Canada"        :kontor.country/active true}
                          {:state/country -1 :state/code "CA" :state/name "California" :state/active true}
                          {:state/country -2 :state/code "QC" :state/name "Quebec"     :state/active true}])
           db (d/db conn)
@@ -136,13 +136,13 @@
           ;; lookups, so query directly.
           us-ca (d/q '[:find ?s .
                        :where
-                       [?c :country/code "US"]
+                       [?c :kontor.country/code "US"]
                        [?s :state/country ?c]
                        [?s :state/code "CA"]]
                      db)
           ca-qc (d/q '[:find ?s .
                        :where
-                       [?c :country/code "CA"]
+                       [?c :kontor.country/code "CA"]
                        [?s :state/country ?c]
                        [?s :state/code "QC"]]
                      db)]
@@ -153,12 +153,12 @@
         ;; A CA-CA (Canadian "CA" state-code) could be added without
         ;; conflicting with US-CA — the tuple identity is on the pair.
         (d/transact conn
-                    [{:state/country [:country/code "CA"] :state/code "CA"
+                    [{:state/country [:kontor.country/code "CA"] :state/code "CA"
                       :state/name "(fake CA-CA for test)" :state/active true}])
         (let [db2 (d/db conn)
               ca-ca (d/q '[:find ?s .
                            :where
-                           [?c :country/code "CA"]
+                           [?c :kontor.country/code "CA"]
                            [?s :state/country ?c]
                            [?s :state/code "CA"]]
                          db2)]
@@ -171,7 +171,7 @@
             ADR-023 example"
     (let [conn (core/create-test-db)
           _ (d/transact conn
-                        [{:db/id -1 :country/code "IN" :country/name "India" :country/active true}
+                        [{:db/id -1 :kontor.country/code "IN" :kontor.country/name "India" :kontor.country/active true}
                          {:db/id -2 :state/country -1 :state/code "MH"
                           :state/name "Maharashtra" :state/active true}
                          {:state-code/state     -2
@@ -181,7 +181,7 @@
                           :state-code/regulator :iso-3166-2
                           :state-code/code      "IN-MH"}])
           db (d/db conn)
-          mh-eid (:db/id (d/entity db [:state/identity [[:country/code "IN"] "MH"]]))
+          mh-eid (:db/id (d/entity db [:state/identity [[:kontor.country/code "IN"] "MH"]]))
           codes (->> (d/q '[:find ?reg ?code
                             :in $ ?s
                             :where
@@ -198,9 +198,9 @@
             province with their respective external codes"
     (let [conn (core/create-test-db)
           _ (d/transact conn
-                        [{:db/id -1 :country/code "IN" :country/name "India"  :country/active true}
-                         {:db/id -2 :country/code "BR" :country/name "Brazil" :country/active true}
-                         {:db/id -3 :country/code "CA" :country/name "Canada" :country/active true}
+                        [{:db/id -1 :kontor.country/code "IN" :kontor.country/name "India"  :kontor.country/active true}
+                         {:db/id -2 :kontor.country/code "BR" :kontor.country/name "Brazil" :kontor.country/active true}
+                         {:db/id -3 :kontor.country/code "CA" :kontor.country/name "Canada" :kontor.country/active true}
                          {:db/id -10 :state/country -1 :state/code "MH" :state/name "Maharashtra" :state/active true}
                          {:db/id -20 :state/country -2 :state/code "SP" :state/name "São Paulo"   :state/active true}
                          {:db/id -30 :state/country -3 :state/code "QC" :state/name "Quebec"     :state/active true}
@@ -213,7 +213,7 @@
                    (d/q '[:find [?reg ?code]
                           :in $ ?iso ?st
                           :where
-                          [?c :country/code ?iso]
+                          [?c :kontor.country/code ?iso]
                           [?s :state/country ?c]
                           [?s :state/code ?st]
                           [?sc :state-code/state ?s]
@@ -231,7 +231,7 @@
 (deftest partner-state-roundtrip
   (let [conn (core/create-test-db)
         _ (d/transact conn
-                      [{:db/id -1 :country/code "IN" :country/name "India" :country/active true}
+                      [{:db/id -1 :kontor.country/code "IN" :kontor.country/name "India" :kontor.country/active true}
                        {:db/id -2 :state/country -1 :state/code "MH"
                         :state/name "Maharashtra" :state/active true}
                        {:db/id -3
@@ -243,7 +243,7 @@
         db (d/db conn)
         p  (d/entity db [:partner/external-id "CUST-001"])]
     (is (= "Maharashtra" (-> p :partner/state :state/name)))
-    (is (= "IN"          (-> p :partner/state :state/country :country/code))
+    (is (= "IN"          (-> p :partner/state :state/country :kontor.country/code))
         "Country dereferences cleanly via the state ref")))
 
 (deftest transaction-place-of-supply-roundtrip
@@ -252,7 +252,7 @@
             to KA)"
     (let [conn (core/create-test-db)
           _ (d/transact conn
-                        [{:db/id -1 :country/code "IN" :country/name "India" :country/active true}
+                        [{:db/id -1 :kontor.country/code "IN" :kontor.country/name "India" :kontor.country/active true}
                          {:db/id -10 :state/country -1 :state/code "MH" :state/name "Maharashtra" :state/active true}
                          {:db/id -20 :state/country -1 :state/code "KA" :state/name "Karnataka"   :state/active true}
                          {:db/id -100 :journal/code "INV-IN" :journal/name "Sales India"
@@ -266,7 +266,7 @@
           db (d/db conn)
           tx (d/entity db [:transaction/external-id "INV-2026-001"])]
       (is (= "KA" (-> tx :transaction/place-of-supply :state/code)))
-      (is (= "IN" (-> tx :transaction/place-of-supply :state/country :country/code))))))
+      (is (= "IN" (-> tx :transaction/place-of-supply :state/country :kontor.country/code))))))
 
 (deftest schema-attr-shapes
   (testing "ADR-023 attributes are present with expected typing"
@@ -277,7 +277,7 @@
           pos-attr   (d/pull db '[*] :transaction/place-of-supply)
           ;; tuple composite
           state-id   (d/pull db '[*] :state/identity)
-          country-id (d/pull db '[*] :country-code/identity)]
+          country-id (d/pull db '[*] :kontor.country-code/identity)]
       (is (= :db.type/ref         (:db/valueType state-attr)))
       (is (= :db.cardinality/one  (:db/cardinality state-attr)))
       (is (= :db.type/ref         (:db/valueType pos-attr)))

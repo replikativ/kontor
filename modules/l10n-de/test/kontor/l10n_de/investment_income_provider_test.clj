@@ -34,8 +34,8 @@
     (cit-statute/install! conn)
     (cgt-statute/install! conn)
     (inv-statute/install! conn)
-    (d/transact conn [{:commodity/symbol "EUR" :commodity/name "Euro"
-                       :commodity/precision 2}])
+    (d/transact conn [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                       :kontor.commodity/precision 2}])
     conn))
 
 (def ^:private p2026 {:from #inst "2026-01-01" :to #inst "2027-01-01"})
@@ -372,8 +372,8 @@
       (cit-statute/install! conn)
       (cgt-statute/install! conn)
       (inv-statute/install! conn)        ; ← the statute ns directly
-      (d/transact conn [{:commodity/symbol "EUR" :commodity/name "Euro"
-                         :commodity/precision 2}])
+      (d/transact conn [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                         :kontor.commodity/precision 2}])
       (let [provider (inv/de-investment-income-provider {})
             facts (ptp/period-tax-facts
                    provider
@@ -398,7 +398,7 @@
 (deftest gl-scan-resolves-against-account-path-convention
   (testing "GL-scan picks up dividend postings on `:account/path`-keyed chart"
     (let [conn (fresh)
-          eur  [:commodity/symbol "EUR"]]
+          eur  [:kontor.commodity/symbol "EUR"]]
       ;; Minimal chart using the canonical :account/path convention.
       (d/transact conn
         [{:account/path "Assets:Bank"               :account/type :asset

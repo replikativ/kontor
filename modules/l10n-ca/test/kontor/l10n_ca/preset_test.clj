@@ -8,7 +8,7 @@
             [kontor.l10n-ca.preset :as preset]
             [kontor.trial :as trial]))
 
-(def ^:private cad [:commodity/symbol "CAD"])
+(def ^:private cad [:kontor.commodity/symbol "CAD"])
 
 (deftest one-call-install-yields-working-stack
   (testing "(preset/create-ca-db) returns a fully wired CA conn"
@@ -21,7 +21,7 @@
         (let [n (count (d/q '[:find [?c ...] :where [_ :journal/code ?c]] db))]
           (is (= 5 n))))
       (testing "CAD commodity is present"
-        (is (some? (d/q '[:find ?e . :where [?e :commodity/symbol "CAD"]] db))))
+        (is (some? (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "CAD"]] db))))
       (testing "CA tax statutes are installed"
         (let [provisions (set (d/q '[:find [?code ...]
                                      :where [?p :provision/jurisdiction :ca]

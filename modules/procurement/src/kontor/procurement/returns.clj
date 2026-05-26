@@ -226,7 +226,7 @@
                        '[* {:return/from-party [:db/id]
                             :return/to-party [:db/id]
                             :return/entity [:db/id]
-                            :return/order [:db/id {:order/currency [:commodity/symbol]}]}]
+                            :return/order [:db/id {:order/currency [:kontor.commodity/symbol]}]}]
                        return-eid)
         return-type (:return/type return)
         invoice-type (credit-memo-invoice-type return-type)
@@ -239,7 +239,7 @@
         ;; debit-memo pattern).
         seller-eid (get-in return [:return/to-party :db/id])
         buyer-eid  (get-in return [:return/from-party :db/id])
-        currency (get-in return [:return/order :order/currency :commodity/symbol])
+        currency (get-in return [:return/order :order/currency :kontor.commodity/symbol])
         items (items-of db return-eid)
         invoice-tempid "credit-memo-1"
         line-tempids (mapv #(str "credit-line-" (inc %)) (range (count items)))

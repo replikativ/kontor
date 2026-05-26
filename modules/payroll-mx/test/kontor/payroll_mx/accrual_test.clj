@@ -51,9 +51,9 @@
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:db/id "mxn" :commodity/symbol "MXN"
-                  :commodity/name "Peso" :commodity/precision 2
-                  :commodity/iso-4217 "MXN"}
+                [{:db/id "mxn" :kontor.commodity/symbol "MXN"
+                  :kontor.commodity/name "Peso" :kontor.commodity/precision 2
+                  :kontor.commodity/iso-4217 "MXN"}
                  {:account/code "601.02" :account/path "Gastos:Aguinaldo"
                   :account/name "Gratificación Anual"
                   :account/type :expense :account/active true}
@@ -64,7 +64,7 @@
                   :journal/type :general :journal/active true}])
     conn))
 
-(defn- mxn [db] (d/q '[:find ?e . :where [?e :commodity/symbol "MXN"]] db))
+(defn- mxn [db] (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "MXN"]] db))
 (defn- journal [db] (d/q '[:find ?e . :where [?e :journal/code "NOM"]] db))
 
 (deftest aguinaldo-accrual-tx-is-balanced-and-transacts

@@ -429,7 +429,7 @@
             (throw (ex-info "make-invoice-from-order! requires :external-id"
                             {:order order-spec})))
         order (d/pull db
-                      '[* {:order/currency [:commodity/symbol]
+                      '[* {:order/currency [:kontor.commodity/symbol]
                            :order/bill-from-partner [:db/id]
                            :order/bill-to-partner [:db/id]
                            :order/entity [:db/id]}]
@@ -496,7 +496,7 @@
                              :invoice/order order-eid
                              :invoice/seller (get-in order [:order/bill-from-partner :db/id])
                              :invoice/buyer  (get-in order [:order/bill-to-partner :db/id])
-                             :invoice/currency (get-in order [:order/currency :commodity/symbol])
+                             :invoice/currency (get-in order [:order/currency :kontor.commodity/symbol])
                              :invoice/lines all-line-tempids}
                       invoice-entity-eid (assoc :invoice/entity invoice-entity-eid)
                       ship-group         (assoc :invoice/invoice-per-shipment-of ship-group))]

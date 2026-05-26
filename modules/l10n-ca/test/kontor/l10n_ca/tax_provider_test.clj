@@ -16,8 +16,8 @@
 (defn- fresh []
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:commodity/symbol "CAD" :commodity/name "Canadian Dollar"
-                  :commodity/precision 2}
+                [{:kontor.commodity/symbol "CAD" :kontor.commodity/name "Canadian Dollar"
+                  :kontor.commodity/precision 2}
                  {:account/code "2310" :account/path "GST-HST" :account/type :liability}
                  {:account/code "2320" :account/path "BC-PST"  :account/type :liability}
                  {:account/code "2321" :account/path "SK-PST"  :account/type :liability}
@@ -25,7 +25,7 @@
                  {:account/code "2330" :account/path "QST"     :account/type :liability}])
     conn))
 
-(def ^:private cad [:commodity/symbol "CAD"])
+(def ^:private cad [:kontor.commodity/symbol "CAD"])
 (def ^:private d1 #inst "2026-03-01")
 
 ;; ============================================================================

@@ -35,8 +35,8 @@
     (pr/install! conn)
     (d/transact conn
                 [{:db/id "eur"
-                  :commodity/symbol "EUR"
-                  :commodity/precision 2}
+                  :kontor.commodity/symbol "EUR"
+                  :kontor.commodity/precision 2}
                  {:db/id "ent"
                   :entity/code "ACME-DE-GMBH"
                   :entity/name "Acme DE GmbH"
@@ -48,7 +48,7 @@
 
 (deftest three-year-employee-lifecycle
   (let [conn (bootstrap)
-        eur (ref-eid (d/db conn) :commodity/symbol "EUR")
+        eur (ref-eid (d/db conn) :kontor.commodity/symbol "EUR")
         ent (ref-eid (d/db conn) :entity/code "ACME-DE-GMBH")
 
         ;; ===== Year 1 — hire =====

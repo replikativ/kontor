@@ -118,7 +118,7 @@
   (:db/id (d/entity db [:journal/code code])))
 
 (defn- commodity-by-symbol [db sym]
-  (:db/id (d/entity db [:commodity/symbol sym])))
+  (:db/id (d/entity db [:kontor.commodity/symbol sym])))
 
 ;; ============================================================================
 ;; Per-line revenue routing

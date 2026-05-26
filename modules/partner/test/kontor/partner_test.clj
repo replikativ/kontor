@@ -488,8 +488,8 @@
 
 (deftest bank-accounts-temporal-junction
   (d/transact *conn*
-              [{:commodity/symbol "EUR" :commodity/name "Euro"
-                :commodity/precision 2 :commodity/iso-4217 "EUR"}
+              [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
                {:partner/external-id "P-SUPPLIER"
                 :partner/type :org :partner/status :enabled
                 :partner/name "Supplier Co"}
@@ -497,7 +497,7 @@
                 :bank-account/iban "DE89370400440532013000"
                 :bank-account/bic "COBADEFFXXX"
                 :bank-account/bank-name "Commerzbank"
-                :bank-account/commodity [:commodity/symbol "EUR"]
+                :bank-account/commodity [:kontor.commodity/symbol "EUR"]
                 :bank-account/holder-name "Supplier Co GmbH"
                 :bank-account/active true}
                ;; Old account, thru-dated
@@ -548,13 +548,13 @@
 
 (deftest credit-limit-and-kyc-attrs-round-trip
   (d/transact *conn*
-              [{:commodity/symbol "EUR" :commodity/name "Euro"
-                :commodity/precision 2 :commodity/iso-4217 "EUR"}
+              [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
                {:partner/external-id "P-CREDIT"
                 :partner/type :org :partner/status :enabled
                 :partner/name "Credit Customer"
                 :partner/credit-limit 50000M
-                :partner/credit-commodity [:commodity/symbol "EUR"]
+                :partner/credit-commodity [:kontor.commodity/symbol "EUR"]
                 :partner/credit-status :open
                 :partner/kyc-status :cleared
                 :partner/kyc-source "Manual"
@@ -572,22 +572,22 @@
 
 (deftest partner-tax-id-multi-jurisdiction
   (d/transact *conn*
-              [{:country/code "DE" :country/name "Germany"}
-               {:country/code "AT" :country/name "Austria"}
+              [{:kontor.country/code "DE" :kontor.country/name "Germany"}
+               {:kontor.country/code "AT" :kontor.country/name "Austria"}
                {:partner/external-id "P-MULTI-VAT"
                 :partner/type :org :partner/status :enabled
                 :partner/name "Multi-VAT Inc"
                 :partner/tax-id "DE123456789"}
                ;; DE VAT
                {:partner-tax-id/partner [:partner/external-id "P-MULTI-VAT"]
-                :partner-tax-id/country [:country/code "DE"]
+                :partner-tax-id/country [:kontor.country/code "DE"]
                 :partner-tax-id/tax-id-type :vat-eu
                 :partner-tax-id/tax-id "DE123456789"
                 :partner-tax-id/from-date #inst "2024-01-01"
                 :partner-tax-id/verified? true}
                ;; AT VAT — separate jurisdiction
                {:partner-tax-id/partner [:partner/external-id "P-MULTI-VAT"]
-                :partner-tax-id/country [:country/code "AT"]
+                :partner-tax-id/country [:kontor.country/code "AT"]
                 :partner-tax-id/tax-id-type :vat-eu
                 :partner-tax-id/tax-id "ATU12345678"
                 :partner-tax-id/from-date #inst "2024-06-01"

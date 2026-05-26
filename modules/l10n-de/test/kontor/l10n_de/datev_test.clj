@@ -40,7 +40,7 @@
      Jan 25 — BILL-1: €200 net vendor bill @ 19% (6800 + 1576 → 3300)"
   [conn]
   (let [db (d/db conn)
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         jnl (:db/id (d/entity db [:journal/code "INV"]))
         rec (account-eid db "1400") rev (account-eid db "4400")
         ust (account-eid db "3801")

@@ -81,7 +81,7 @@
         ei  (d/q '[:find ?e . :where [?e :account/code "2530"]] db)
         net (d/q '[:find ?e . :where [?e :account/code "2550"]] db)
         journal (d/q '[:find ?e . :where [?e :journal/code "PAY-CA"]] db)
-        cad (d/q '[:find ?e . :where [?e :commodity/symbol "CAD"]] db)
+        cad (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "CAD"]] db)
         gross (.add ^java.math.BigDecimal itx-amount
                     (.add ^java.math.BigDecimal cpp-amount
                           ^java.math.BigDecimal ei-amount))

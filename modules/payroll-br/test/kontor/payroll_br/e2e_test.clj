@@ -87,7 +87,7 @@
 (deftest br-payroll-end-to-end
   (let [conn (bootstrap)
         db (d/db conn)
-        brl (d/q '[:find ?e . :where [?e :commodity/symbol "BRL"]] db)
+        brl (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "BRL"]] db)
         ent (d/q '[:find ?e . :where [?e :entity/code "ACME-BR"]] db)
         journal (d/q '[:find ?e . :where [?e :journal/code "PAY-BR"]] db)
         period (d/q '[:find ?e . :where [?e :period/name "2026-05-br"]] db)

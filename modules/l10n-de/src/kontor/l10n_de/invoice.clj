@@ -94,7 +94,7 @@
   (let [ext-id    (:invoice/external-id invoice)
         date      (:invoice/issue-date invoice)
         currency  (or commodity-symbol (:invoice/currency invoice) "EUR")
-        commodity (:db/id (d/entity db [:commodity/symbol currency]))
+        commodity (:db/id (d/entity db [:kontor.commodity/symbol currency]))
         recv      (ace db ar-code)
         jnl       (:db/id (d/entity db [:journal/code journal-code]))
         partner   (:db/id (:invoice/buyer invoice))

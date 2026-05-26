@@ -30,7 +30,7 @@
     (sales-schema/install! conn)
     (inv-schema/install! conn)
     (d/transact conn
-                [{:db/id "eur" :commodity/symbol "EUR" :commodity/precision 2}
+                [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
                  ;; Product + order-side refs — :inv-reservation/{order,
                  ;; order-item,ship-group} are bare refs; reuse :partner
                  ;; entities as stand-ins (the kernel test convention —

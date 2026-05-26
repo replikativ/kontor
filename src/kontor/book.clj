@@ -35,7 +35,7 @@
      :amount          — number, coerced to BigDecimal (required)
      :commodity       — commodity ref               (required). Accepts:
                         bare keyword `:EUR`, short string `\"EUR\"`,
-                        lookup-ref `[:commodity/symbol \"EUR\"]`, or
+                        lookup-ref `[:kontor.commodity/symbol \"EUR\"]`, or
                         an eid. Bare keyword/string are auto-promoted
                         to the lookup-ref (note 160 §I-2).
      :effective-date  — #inst, the bitemporal valid-time
@@ -98,7 +98,7 @@
   "Coerce a consumer-friendly `:commodity` value to a datahike
    reference. Note 160 §I-2: bare keyword `:EUR` or short string `\"EUR\"`
    are the natural ways to write a commodity in a verb call; both get
-   auto-promoted to the canonical `[:commodity/symbol \"EUR\"]`
+   auto-promoted to the canonical `[:kontor.commodity/symbol \"EUR\"]`
    lookup-ref. Pre-existing eid (Long) or explicit lookup-ref (vector)
    passes through unchanged."
   [c]
@@ -106,8 +106,8 @@
     (nil? c)              nil
     (vector? c)           c                       ; already a lookup-ref
     (number? c)           c                       ; already an eid
-    (keyword? c)          [:commodity/symbol (name c)]
-    (string? c)           [:commodity/symbol c]
+    (keyword? c)          [:kontor.commodity/symbol (name c)]
+    (string? c)           [:kontor.commodity/symbol c]
     :else                 c))
 
 (defn- ->dimension-value

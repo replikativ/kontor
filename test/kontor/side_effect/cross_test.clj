@@ -84,7 +84,7 @@
           router (mk-router {:tgt tgt})
           ;; Install a minimal account on target so the test tx targets
           ;; a real attr — but actually we can just use a generic attr.
-          target-tx [{:commodity/symbol "TEST" :commodity/precision 2}]
+          target-tx [{:kontor.commodity/symbol "TEST" :kontor.commodity/precision 2}]
           intent (cross/cross-tx-intent-tx-data
                   {:intent-key       "test-1"
                    :target-system-id :tgt
@@ -108,7 +108,7 @@
       ;; Target conn now has the TEST commodity AND the step-id marker
       (let [tgt-db (d/db tgt)
             commodity (d/q '[:find ?e .
-                             :where [?e :commodity/symbol "TEST"]]
+                             :where [?e :kontor.commodity/symbol "TEST"]]
                            tgt-db)
             sid-eid (d/q '[:find ?t .
                            :where [?t :cross-tx/step-id _]]
@@ -123,7 +123,7 @@
     (let [src (bootstrap!)
           tgt (bootstrap!)
           router (mk-router {:tgt tgt})
-          target-tx [{:commodity/symbol "X" :commodity/precision 2}]
+          target-tx [{:kontor.commodity/symbol "X" :kontor.commodity/precision 2}]
           intent (cross/cross-tx-intent-tx-data
                   {:intent-key       "idem-1"
                    :target-system-id :tgt
@@ -146,7 +146,7 @@
       (is (= 0 (:failed summary)))
       ;; Target still has exactly one TEST/X commodity
       (is (= 1 (count (d/q '[:find [?e ...]
-                             :where [?e :commodity/symbol "X"]]
+                             :where [?e :kontor.commodity/symbol "X"]]
                            (d/db tgt))))))))
 
 (deftest drain-failed-intent-records-error

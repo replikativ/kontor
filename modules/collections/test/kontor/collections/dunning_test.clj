@@ -23,8 +23,8 @@
     (inv-schema/install! *conn*)
     (coll-schema/install! *conn*)
     (d/transact *conn*
-                [{:commodity/symbol "EUR" :commodity/name "Euro"
-                  :commodity/precision 2 :commodity/iso-4217 "EUR"}
+                [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                  :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
                  {:entity/code "ACME-DE" :entity/name "Acme GmbH"
                   :entity/kind :operating :entity/active true}
                  {:partner/external-id "CUST"
@@ -43,7 +43,7 @@
 (defn- entity [c] (d/q '[:find ?e . :in $ ?c :where [?e :entity/code ?c]]
                        (d/db *conn*) c))
 (defn- actor [u] (partner (str "U-" u)))
-(defn- commodity [s] (d/q '[:find ?c . :in $ ?s :where [?c :commodity/symbol ?s]]
+(defn- commodity [s] (d/q '[:find ?c . :in $ ?s :where [?c :kontor.commodity/symbol ?s]]
                           (d/db *conn*) s))
 
 (defn- make-invoice! [external-id gross]

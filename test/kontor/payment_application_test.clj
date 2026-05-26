@@ -16,8 +16,8 @@
     ;; machine seeds; ADR-036/043 land them in modules/invoice/.
     (inv-schema/install! *conn*)
     (d/transact *conn*
-                [{:commodity/symbol "EUR" :commodity/name "Euro"
-                  :commodity/precision 2 :commodity/iso-4217 "EUR"}
+                [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                  :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
                  {:partner/external-id "ACME"
                   :partner/name "ACME GmbH"
                   :partner/kind :customer}
@@ -40,7 +40,7 @@
    Returns the invoice eid."
   [external-id gross]
   (let [db (d/db *conn*)
-        eur (d/q '[:find ?c . :where [?c :commodity/symbol "EUR"]] db)
+        eur (d/q '[:find ?c . :where [?c :kontor.commodity/symbol "EUR"]] db)
         seller (d/q '[:find ?p . :where [?p :partner/external-id "OWN"]] db)
         buyer  (d/q '[:find ?p . :where [?p :partner/external-id "ACME"]] db)
         invoice-tempid "inv-1"
@@ -84,7 +84,7 @@
          (d/db *conn*) external-id)))
 
 (defn- actor [] "actor-1")
-(defn- eur [] (d/q '[:find ?c . :where [?c :commodity/symbol "EUR"]] (d/db *conn*)))
+(defn- eur [] (d/q '[:find ?c . :where [?c :kontor.commodity/symbol "EUR"]] (d/db *conn*)))
 
 ;; ============================================================================
 ;; Full payment

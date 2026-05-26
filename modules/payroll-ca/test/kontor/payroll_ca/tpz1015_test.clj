@@ -94,7 +94,7 @@
         fss-acc    (d/q '[:find ?e . :where [?e :account/code "2532"]] db)
         net-acc    (d/q '[:find ?e . :where [?e :account/code "2550"]] db)
         journal (d/q '[:find ?e . :where [?e :journal/code "PAY-CA"]] db)
-        cad (d/q '[:find ?e . :where [?e :commodity/symbol "CAD"]] db)
+        cad (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "CAD"]] db)
         gross (.add ^BigDecimal qc-itx
                     (.add ^BigDecimal qpp
                           (.add ^BigDecimal qpip ^BigDecimal fss)))

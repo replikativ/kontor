@@ -174,7 +174,7 @@
           {:keys [transaction-eid]} (inv/send! conn inv-eid builder)
           db (d/db conn)
           bank-acct (ace db "1200")
-          eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+          eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           bank-jnl (:db/id (d/entity db [:journal/code "BANK"]))
           ;; Ingest a matching bank line
           _ (recon/ingest-statement! conn

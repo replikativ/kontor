@@ -192,7 +192,7 @@
 
      :catalog    — validated wage-type catalog (per
                     `kontor.payroll-de-datev.wage-types/validate-catalog`)
-     :commodity  — :commodity ref (typically EUR — `[:commodity/symbol \"EUR\"]`)
+     :commodity  — :commodity ref (typically EUR — `[:kontor.commodity/symbol \"EUR\"]`)
 
    The build-postings call receives a per-call :accounts override
    map (account-hint → account ref) that takes precedence over the

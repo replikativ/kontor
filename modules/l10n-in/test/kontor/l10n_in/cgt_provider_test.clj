@@ -28,21 +28,21 @@
   (let [conn (core/create-test-db)]
     (disposal/install! conn)
     (cgt-statute/install! conn)
-    (d/transact conn [{:commodity/symbol    "INR"
-                       :commodity/name      "Indian Rupee"
-                       :commodity/precision 2}
-                      {:commodity/symbol    "ROLLOVER-STUB"
-                       :commodity/name      "Rollover Stub (test placeholder)"
-                       :commodity/precision 0}
+    (d/transact conn [{:kontor.commodity/symbol    "INR"
+                       :kontor.commodity/name      "Indian Rupee"
+                       :kontor.commodity/precision 2}
+                      {:kontor.commodity/symbol    "ROLLOVER-STUB"
+                       :kontor.commodity/name      "Rollover Stub (test placeholder)"
+                       :kontor.commodity/precision 0}
                       {:entity/code                 "TAXPAYER"
                        :entity/name                 "Resident Individual"
                        :entity/kind                 :individual
                        :entity/country              "IN"
-                       :entity/functional-commodity [:commodity/symbol "INR"]}])
+                       :entity/functional-commodity [:kontor.commodity/symbol "INR"]}])
     conn))
 
-(def ^:private inr [:commodity/symbol "INR"])
-(def ^:private rollover-stub [:commodity/symbol "ROLLOVER-STUB"])
+(def ^:private inr [:kontor.commodity/symbol "INR"])
+(def ^:private rollover-stub [:kontor.commodity/symbol "ROLLOVER-STUB"])
 (def ^:private taxpayer [:entity/code "TAXPAYER"])
 
 (defn- record!

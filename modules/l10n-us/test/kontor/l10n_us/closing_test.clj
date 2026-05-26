@@ -54,7 +54,7 @@
                                                  :invoice-line/unit-price 1000M}]})
   ;; Expense: $600 office expense paid from bank on Feb 15.
   (let [db (d/db conn)
-        usd (:db/id (d/entity db [:commodity/symbol "USD"]))
+        usd (:db/id (d/entity db [:kontor.commodity/symbol "USD"]))
         bank (ace db "1100")
         office (ace db "6000")    ; Expenses:Office
         rent (ace db "6100")      ; Expenses:Rent
@@ -112,7 +112,7 @@
     (let [conn (bootstrap)]
       (seed-fy2025! conn)
       (let [db (d/db conn)
-            usd (:db/id (d/entity db [:commodity/symbol "USD"]))
+            usd (:db/id (d/entity db [:kontor.commodity/symbol "USD"]))
             rev   (ace db "4000")
             office (ace db "6000")
             rent  (ace db "6100")]
@@ -148,14 +148,14 @@
             "Period soft-closed after the closing tx")
         ;; net-by-commodity should reflect the net P&L = -500 (profit).
         (let [db (d/db conn)
-              usd (:db/id (d/entity db [:commodity/symbol "USD"]))
+              usd (:db/id (d/entity db [:kontor.commodity/symbol "USD"]))
               net (get-in close-result [:net-by-commodity usd :amount])]
           (is (= -500M net)
               "Net P&L: revenue -1500 + office 600 + rent 400 = -500
                (sign convention: income credits are negative)"))
         ;; P&L accounts at the new year start: should be zero.
         (let [db (d/db conn)
-              usd (:db/id (d/entity db [:commodity/symbol "USD"]))
+              usd (:db/id (d/entity db [:kontor.commodity/symbol "USD"]))
               rev    (ace db "4000")
               office (ace db "6000")
               rent   (ace db "6100")
@@ -262,7 +262,7 @@
                                            :retained-code "3000"
                                            :external-id "FY25-OWNER-CLOSE"})
         (let [db (d/db conn)
-              usd (:db/id (d/entity db [:commodity/symbol "USD"]))
+              usd (:db/id (d/entity db [:kontor.commodity/symbol "USD"]))
               owner (ace db "3000")
               retained (ace db "3100")
               bal (fn [eid] (-> (balance/account-balance conn eid

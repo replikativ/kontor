@@ -42,8 +42,8 @@
 
 (def ^:private fy-2026 {:from #inst "2026-01-01" :through #inst "2026-12-31"})
 (def ^:private far-future #inst "2030-01-01")  ; default :as-of-valid post-I-17
-(def ^:private eur [:commodity/symbol "EUR"])
-(def ^:private cad [:commodity/symbol "CAD"])
+(def ^:private eur [:kontor.commodity/symbol "EUR"])
+(def ^:private cad [:kontor.commodity/symbol "CAD"])
 
 (defn- ug-db
   "DE Hans-Tech UG: preset + entity + 2 partners + a few accounts the

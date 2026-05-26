@@ -116,7 +116,7 @@
         _ (setup-employees conn)
         db (d/db conn)
         ent (ref-eid db :entity/code "ACME-AU")
-        aud (ref-eid db :commodity/symbol "AUD")
+        aud (ref-eid db :kontor.commodity/symbol "AUD")
         journal (ref-eid db :journal/code "PAY-AU")
         period (ref-eid db :period/name "2026-05")
         e101 (hr/employment-by-code db "E101")

@@ -34,11 +34,11 @@
   (testing "Installing the chart creates the INR commodity."
     (let [conn (bootstrap)
           db (d/db conn)
-          inr (d/entity db [:commodity/symbol "INR"])]
+          inr (d/entity db [:kontor.commodity/symbol "INR"])]
       (is (some? inr))
-      (is (= "Indian Rupee" (:commodity/name inr)))
-      (is (= 2 (:commodity/precision inr)))
-      (is (= "INR" (:commodity/iso-4217 inr))))))
+      (is (= "Indian Rupee" (:kontor.commodity/name inr)))
+      (is (= 2 (:kontor.commodity/precision inr)))
+      (is (= "INR" (:kontor.commodity/iso-4217 inr))))))
 
 ;; ============================================================================
 ;; All five Schedule III classes covered

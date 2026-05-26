@@ -36,10 +36,10 @@
                 :db/valueType :db.type/keyword
                 :db/cardinality :db.cardinality/one}])
   (d/transact conn
-              [{:db/id -1 :commodity/symbol "EUR" :commodity/name "Euro"
-                :commodity/precision 2 :commodity/iso-4217 "EUR"
+              [{:db/id -1 :kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"
                 ;; ADR-090: optional concept-iri.
-                :commodity/concept-iri "https://www.omg.org/spec/EDMC-FIBO/iso4217/EUR"}
+                :kontor.commodity/concept-iri "https://www.omg.org/spec/EDMC-FIBO/iso4217/EUR"}
                {:db/id -2 :account/path "Assets:Receivable"
                 :account/name "Trade receivables"
                 :account/type :asset :account/active true
@@ -69,7 +69,7 @@
   "Post one balanced sales invoice. Returns [tx-eid posting-eids]."
   [conn external-id amount narration]
   (let [db  (d/db conn)
-        eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         rec (:db/id (d/entity db [:account/path "Assets:Receivable"]))
         rev (:db/id (d/entity db [:account/path "Income:Sales"]))
         jnl (:db/id (d/entity db [:journal/code "INV"]))
@@ -113,7 +113,7 @@
       (is (some? (:as-of-valid r)))
       (is (some? (:as-of-tx r))))
     (testing "balance equals sum of contributing postings"
-      (let [eur (:db/id (d/entity db [:commodity/symbol "EUR"]))
+      (let [eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
             bal (get (:balance r) eur)
             posting-monies (mapv :amount (:postings r))
             sum (m/sum posting-monies eur)]
@@ -251,7 +251,7 @@
   (let [conn (core/create-test-db)
         _    (seed! conn)
         db   (d/db conn)
-        eur  (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur  (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         r    (explain/entities-with-concept-iri
               db
               "https://www.omg.org/spec/EDMC-FIBO/iso4217/EUR")]

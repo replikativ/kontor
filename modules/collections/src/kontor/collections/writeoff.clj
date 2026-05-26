@@ -54,7 +54,7 @@
   (when sym
     (d/q '[:find ?c .
            :in $ ?sym
-           :where [?c :commodity/symbol ?sym]]
+           :where [?c :kontor.commodity/symbol ?sym]]
          db sym)))
 
 (defn- open-invoices-for-case

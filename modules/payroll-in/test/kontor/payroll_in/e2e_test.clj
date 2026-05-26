@@ -131,7 +131,7 @@
         _ (setup-employees conn)
         db (d/db conn)
         acme    (ref-eid db :entity/code "ACME-IN")
-        inr     (ref-eid db :commodity/symbol "INR")
+        inr     (ref-eid db :kontor.commodity/symbol "INR")
         ledger  (ref-eid db :ledger/code "ind-as")
         journal (ref-eid db :journal/code "PAY-IN")
         period  (ref-eid db :period/name "2026-05")

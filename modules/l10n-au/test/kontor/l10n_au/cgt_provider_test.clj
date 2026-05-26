@@ -20,14 +20,14 @@
   (let [conn (core/create-test-db)]
     (disposal/install! conn)
     (cgt-statute/install! conn)
-    (d/transact conn [{:commodity/symbol "AUD" :commodity/name "Australian Dollar"
-                       :commodity/precision 2}
+    (d/transact conn [{:kontor.commodity/symbol "AUD" :kontor.commodity/name "Australian Dollar"
+                       :kontor.commodity/precision 2}
                       {:entity/code "HOLDCO" :entity/name "HoldCo"
                        :entity/kind :company :entity/country "AU"
-                       :entity/functional-commodity [:commodity/symbol "AUD"]}])
+                       :entity/functional-commodity [:kontor.commodity/symbol "AUD"]}])
     conn))
 
-(def ^:private aud [:commodity/symbol "AUD"])
+(def ^:private aud [:kontor.commodity/symbol "AUD"])
 (def ^:private holdco [:entity/code "HOLDCO"])
 
 (defn- record!

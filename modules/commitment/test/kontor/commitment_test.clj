@@ -18,7 +18,7 @@
   (let [conn (core/create-test-db)]
     (commitment/install! conn)
     (d/transact conn
-                [{:commodity/symbol "EUR" :commodity/name "Euro" :commodity/precision 2}
+                [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
                  {:journal/code "SALE" :journal/type :sale}
                  {:journal/code "CASH" :journal/type :cash}
                  {:partner/external-id "CUST" :partner/name "A Customer"}
@@ -28,7 +28,7 @@
                  {:account/path "Income:Sales"      :account/type :income}])
     conn))
 
-(def ^:private eur   [:commodity/symbol "EUR"])
+(def ^:private eur   [:kontor.commodity/symbol "EUR"])
 (def ^:private cust  [:partner/external-id "CUST"])
 (def ^:private alice [:partner/external-id "U-alice"])
 

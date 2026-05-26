@@ -31,16 +31,16 @@
         tags))
 
 (defn- ensure-jpy []
-  {:commodity/symbol "JPY"
-   :commodity/name "Japanese Yen"
-   :commodity/precision 0
-   :commodity/iso-4217 "JPY"})
+  {:kontor.commodity/symbol "JPY"
+   :kontor.commodity/name "Japanese Yen"
+   :kontor.commodity/precision 0
+   :kontor.commodity/iso-4217 "JPY"})
 
 (defn- account-tx
   [{:keys [code path type name reconcilable? tags]}]
   (cond-> {:account/path path :account/code code :account/name name
            :account/type type :account/active true
-           :account/commodity [:commodity/symbol "JPY"]
+           :account/commodity [:kontor.commodity/symbol "JPY"]
            :account/reconcilable (boolean reconcilable?)}
     (seq tags)
     (assoc :account/tags

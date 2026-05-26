@@ -28,8 +28,8 @@
 
 (defn- seed-base! []
   (d/transact *conn*
-              [{:commodity/symbol "EUR" :commodity/name "Euro"
-                :commodity/precision 2 :commodity/iso-4217 "EUR"}
+              [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
                {:entity/code "ACME" :entity/name "Acme Inc"
                 :entity/kind :operating :entity/active true}
                {:partner/external-id "ACME-ORG" :partner/type :org
@@ -50,7 +50,7 @@
                 :order/status :order.status/created
                 :order/order-date #inst "2026-05-01"
                 :order/entry-date #inst "2026-05-01"
-                :order/currency [:commodity/symbol "EUR"]
+                :order/currency [:kontor.commodity/symbol "EUR"]
                 :order/bill-from-partner [:partner/external-id bill-from]
                 :order/bill-to-partner [:partner/external-id bill-to]
                 :order/entity [:entity/code "ACME"]}

@@ -11,7 +11,7 @@
             [kontor.l10n-de.preset :as preset]
             [kontor.period-tax-provider :as ptp]))
 
-(def ^:private eur [:commodity/symbol "EUR"])
+(def ^:private eur [:kontor.commodity/symbol "EUR"])
 
 (deftest one-call-install-yields-working-stack
   (testing "(preset/create-de-db) returns a fully wired DE conn"
@@ -30,7 +30,7 @@
         (let [n (count (d/q '[:find [?c ...] :where [_ :journal/code ?c]] db))]
           (is (= 5 n))))
       (testing "EUR commodity is present"
-        (is (some? (d/q '[:find ?e . :where [?e :commodity/symbol "EUR"]] db))))
+        (is (some? (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "EUR"]] db))))
       (testing "DE tax statutes are installed"
         (let [provisions (set (d/q '[:find [?code ...]
                                      :where [?p :provision/jurisdiction :de]

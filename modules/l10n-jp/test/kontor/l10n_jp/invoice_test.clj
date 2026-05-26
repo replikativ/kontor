@@ -67,7 +67,7 @@
    kernel returns Money keyed by the commodity *eid*; we compare bare
    amounts so the test is agnostic to symbol-vs-eid commodity keys."
   [conn code]
-  (let [jpy-eid (:db/id (d/entity (d/db conn) [:commodity/symbol "JPY"]))]
+  (let [jpy-eid (:db/id (d/entity (d/db conn) [:kontor.commodity/symbol "JPY"]))]
     (-> (balance/account-balance conn (ace (d/db conn) code))
         (get jpy-eid (money/money 0M :JPY))
         :amount)))

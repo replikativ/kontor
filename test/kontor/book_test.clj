@@ -23,7 +23,7 @@
   []
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:commodity/symbol "EUR" :commodity/name "Euro" :commodity/precision 2}
+                [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro" :kontor.commodity/precision 2}
                  {:journal/code "SALE" :journal/type :sale}
                  {:journal/code "PUR"  :journal/type :purchase}
                  {:journal/code "CASH" :journal/type :cash}
@@ -35,7 +35,7 @@
                  {:account/path "Expenses:Supplies"   :account/type :expense}])
     conn))
 
-(def ^:private eur  [:commodity/symbol "EUR"])
+(def ^:private eur  [:kontor.commodity/symbol "EUR"])
 (def ^:private cash [:account/path "Assets:Cash"])
 (def ^:private ar   [:account/path "Assets:Receivable"])
 (def ^:private ap   [:account/path "Liabilities:Payable"])
@@ -136,8 +136,8 @@
                                              :effective-date d1})))))
   (testing "missing journal type throws a clear error"
     (let [conn (core/create-test-db)]
-      (d/transact conn [{:commodity/symbol "EUR" :commodity/name "Euro"
-                         :commodity/precision 2}
+      (d/transact conn [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                         :kontor.commodity/precision 2}
                         {:account/path "A" :account/type :asset}
                         {:account/path "B" :account/type :income}])
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"no :journal of type"
@@ -243,7 +243,7 @@
               "Tomas's leg carries his :posting/partner"))))
 
     (testing "I-2 regression: bare keyword + short string :commodity
-              are auto-coerced to [:commodity/symbol …] lookup-ref"
+              are auto-coerced to [:kontor.commodity/symbol …] lookup-ref"
       ;; All three forms must succeed and produce identical postings.
       (let [d2 #inst "2026-04-01"
             mk (fn [c]
@@ -254,7 +254,7 @@
                     :postings [{:account rev :amount 10M}
                                {:account ap  :amount -10M}]}))]
         ;; Lookup-ref (canonical)
-        (mk [:commodity/symbol "EUR"])
+        (mk [:kontor.commodity/symbol "EUR"])
         ;; Bare keyword (Phase D / note 159 §F6)
         (mk :EUR)
         ;; Short string

@@ -216,7 +216,7 @@
         receipt (d/pull db
                         '[* {:receipt/order [:db/id
                                              {:order/entity [:db/id]
-                                              :order/currency [:db/id :commodity/symbol]}]}]
+                                              :order/currency [:db/id :kontor.commodity/symbol]}]}]
                         receipt-eid)
         _ (when-not (= :pending (:receipt/status receipt))
             (throw (ex-info "Receipt must be :pending to post"

@@ -25,9 +25,9 @@
   (let [conn (core/create-test-db)
         _ (chart/install! conn)
         db (d/db conn)
-        brl (d/entity db [:commodity/symbol "BRL"])]
-    (is (= 2 (:commodity/precision brl)))
-    (is (= "BRL" (:commodity/iso-4217 brl)))))
+        brl (d/entity db [:kontor.commodity/symbol "BRL"])]
+    (is (= 2 (:kontor.commodity/precision brl)))
+    (is (= "BRL" (:kontor.commodity/iso-4217 brl)))))
 
 (deftest legacy-and-new-vat-tags-installed
   (let [conn (core/create-test-db)

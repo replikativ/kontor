@@ -25,16 +25,16 @@
         tags))
 
 (defn- ensure-brl []
-  {:commodity/symbol "BRL"
-   :commodity/name "Brazilian Real"
-   :commodity/precision 2
-   :commodity/iso-4217 "BRL"})
+  {:kontor.commodity/symbol "BRL"
+   :kontor.commodity/name "Brazilian Real"
+   :kontor.commodity/precision 2
+   :kontor.commodity/iso-4217 "BRL"})
 
 (defn- account-tx
   [{:keys [code path type name reconcilable? tags]}]
   (cond-> {:account/path path :account/code code :account/name name
            :account/type type :account/active true
-           :account/commodity [:commodity/symbol "BRL"]
+           :account/commodity [:kontor.commodity/symbol "BRL"]
            :account/reconcilable (boolean reconcilable?)}
     (seq tags)
     (assoc :account/tags

@@ -58,7 +58,7 @@
                      :invoice-line/tax-classification :goods}]})
   ;; Expense: R$600 rent paid from bank on Feb 15.
   (let [db (d/db conn)
-        brl (:db/id (d/entity db [:commodity/symbol "BRL"]))
+        brl (:db/id (d/entity db [:kontor.commodity/symbol "BRL"]))
         bank   (ace db "1.01.01.02.01")   ; Bancos – No País
         rent   (ace db "3.04.02.01.01")   ; Aluguéis
         other  (ace db "3.04.99.01.01")   ; Outras Despesas Operacionais
@@ -122,7 +122,7 @@
     (let [conn (bootstrap)]
       (seed-fy2025! conn)
       (let [db (d/db conn)
-            brl (:db/id (d/entity db [:commodity/symbol "BRL"]))
+            brl (:db/id (d/entity db [:kontor.commodity/symbol "BRL"]))
             rev   (ace db "3.01.01.01.01")
             rent  (ace db "3.04.02.01.01")
             other (ace db "3.04.99.01.01")]
@@ -161,14 +161,14 @@
         ;; not P&L — they don't participate in the closing entry, which
         ;; is what we want).
         (let [db (d/db conn)
-              brl (:db/id (d/entity db [:commodity/symbol "BRL"]))
+              brl (:db/id (d/entity db [:kontor.commodity/symbol "BRL"]))
               net (get-in close-result [:net-by-commodity brl :amount])]
           (is (= -500M net)
               "Net P&L: revenue -1500 + rent 600 + other 400 = -500
                (sign convention: income credits are negative)"))
         ;; P&L accounts at the new year start: should be zero.
         (let [db (d/db conn)
-              brl (:db/id (d/entity db [:commodity/symbol "BRL"]))
+              brl (:db/id (d/entity db [:kontor.commodity/symbol "BRL"]))
               rev   (ace db "3.01.01.01.01")
               rent  (ace db "3.04.02.01.01")
               other (ace db "3.04.99.01.01")
@@ -295,7 +295,7 @@
       (seed-fy2025! conn)
       (let [db (d/db conn)
             period-eid (d/q '[:find ?p . :where [?p :period/name "FY2025"]] db)
-            brl (:db/id (d/entity db [:commodity/symbol "BRL"]))
+            brl (:db/id (d/entity db [:kontor.commodity/symbol "BRL"]))
             override "2.03.01.01.01"]
         (br-closing/close-br-fiscal-year! conn
                                           {:period-eid period-eid

@@ -188,7 +188,7 @@
               can claim the ITC'."
     (let [conn (bootstrap)
           db (d/db conn)
-          aud-eid (:db/id (d/entity db [:commodity/symbol "AUD"]))
+          aud-eid (:db/id (d/entity db [:kontor.commodity/symbol "AUD"]))
           gst-recv (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db "11700")
           bank     (d/q '[:find ?a . :in $ ?c :where [?a :account/code ?c]] db "11100")
           jnl (:db/id (d/entity db [:journal/code "INV"]))

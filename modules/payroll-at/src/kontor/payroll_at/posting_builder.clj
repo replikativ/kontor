@@ -177,7 +177,7 @@
    Required opts:
      :payroll-result   the normalized engine output
      :journal          journal ref (:journal/code lookup-ref works)
-     :commodity        :commodity ref ([:commodity/symbol \"EUR\"])
+     :commodity        :commodity ref ([:kontor.commodity/symbol \"EUR\"])
      :effective-date   the period-end #inst (drives :tx/valid-from)
 
    Optional opts:

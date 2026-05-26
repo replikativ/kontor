@@ -48,8 +48,8 @@
 (defn- fresh []
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:commodity/symbol "INR" :commodity/name "Indian Rupee"
-                  :commodity/precision 2}
+                [{:kontor.commodity/symbol "INR" :kontor.commodity/name "Indian Rupee"
+                  :kontor.commodity/precision 2}
                  {:journal/code "SALE" :journal/type :sale}
                  {:account/path "Income:Salary" :account/type :income}
                  {:account/path "Assets:Bank"   :account/type :asset}])
@@ -62,7 +62,7 @@
   (let [conn (fresh)]
     (book/sell! conn {:debit-account  [:account/path "Assets:Bank"]
                       :credit-account [:account/path "Income:Salary"]
-                      :amount taxable :commodity [:commodity/symbol "INR"]
+                      :amount taxable :commodity [:kontor.commodity/symbol "INR"]
                       :effective-date #inst "2026-06-30"})
     (first (:components
             (ptp/period-tax-facts
@@ -129,14 +129,14 @@
   (testing "4 % Health & Education cess in the adjustment layer"
     (let [conn (core/create-test-db)]
       (d/transact conn
-                  [{:commodity/symbol "INR" :commodity/name "Indian Rupee"
-                    :commodity/precision 2}
+                  [{:kontor.commodity/symbol "INR" :kontor.commodity/name "Indian Rupee"
+                    :kontor.commodity/precision 2}
                    {:journal/code "SALE" :journal/type :sale}
                    {:account/path "Income:Salary" :account/type :income}
                    {:account/path "Assets:Bank"   :account/type :asset}])
       (book/sell! conn {:debit-account  [:account/path "Assets:Bank"]
                         :credit-account [:account/path "Income:Salary"]
-                        :amount 2000000 :commodity [:commodity/symbol "INR"]
+                        :amount 2000000 :commodity [:kontor.commodity/symbol "INR"]
                         :effective-date #inst "2026-06-30"})
       (let [p     (in/in-income-tax-provider {:regime :new})
             facts (ptp/period-tax-facts
@@ -170,14 +170,14 @@
   ;; (note 104): they cannot be one :elect schedule over a shared base.
   (let [conn (core/create-test-db)
         _    (d/transact conn
-                         [{:commodity/symbol "INR" :commodity/name "Rupee"
-                           :commodity/precision 2}
+                         [{:kontor.commodity/symbol "INR" :kontor.commodity/name "Rupee"
+                           :kontor.commodity/precision 2}
                           {:journal/code "SALE" :journal/type :sale}
                           {:account/path "Income:Salary" :account/type :income}
                           {:account/path "Assets:Bank"   :account/type :asset}])
         _    (book/sell! conn {:debit-account  [:account/path "Assets:Bank"]
                                :credit-account [:account/path "Income:Salary"]
-                               :amount 1500000 :commodity [:commodity/symbol "INR"]
+                               :amount 1500000 :commodity [:kontor.commodity/symbol "INR"]
                                :effective-date #inst "2026-06-30"})
         period {:from #inst "2026-04-01" :to #inst "2027-04-01"}
         facts  (fn [regime deductions]

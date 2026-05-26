@@ -19,8 +19,8 @@
     (inv-schema/install! *conn*)
     (coll-schema/install! *conn*)
     (d/transact *conn*
-                [{:commodity/symbol "EUR" :commodity/name "Euro"
-                  :commodity/precision 2 :commodity/iso-4217 "EUR"}
+                [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                  :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
                  {:entity/code "ACME-DE" :entity/name "Acme GmbH"
                   :entity/kind :operating :entity/active true}
                  {:entity/code "ACME-US" :entity/name "Acme LLC"
@@ -30,7 +30,7 @@
                   :partner/kind :customer
                   :partner/credit-status :open
                   :partner/credit-limit 100000M
-                  :partner/credit-commodity [:commodity/symbol "EUR"]}
+                  :partner/credit-commodity [:kontor.commodity/symbol "EUR"]}
                  {:partner/external-id "SMALL-CUST"
                   :partner/name "Small Customer"
                   :partner/kind :customer
@@ -63,7 +63,7 @@
        (d/db *conn*) (str "U-" uid)))
 
 (defn- commodity [sym]
-  (d/q '[:find ?c . :in $ ?s :where [?c :commodity/symbol ?s]] (d/db *conn*) sym))
+  (d/q '[:find ?c . :in $ ?s :where [?c :kontor.commodity/symbol ?s]] (d/db *conn*) sym))
 
 ;; ============================================================================
 ;; Collection-case lifecycle

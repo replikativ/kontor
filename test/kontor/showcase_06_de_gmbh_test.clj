@@ -52,7 +52,7 @@
     (de-retention/install! conn)
     (d/transact
      conn
-     [{:commodity/symbol "EUR" :commodity/precision 2}
+     [{:kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
       {:entity/code "ACME-DE" :entity/name "Acme Manufacturing GmbH"
        :entity/active true}
       {:journal/code "PAY-DE" :journal/name "Payroll DE" :journal/type :general}
@@ -78,7 +78,7 @@
 
 (deftest multi-year-de-gmbh-end-to-end
   (let [conn (bootstrap)
-        eur (ref-eid (d/db conn) :commodity/symbol "EUR")
+        eur (ref-eid (d/db conn) :kontor.commodity/symbol "EUR")
         ent (ref-eid (d/db conn) :entity/code "ACME-DE")
         j-gen (ref-eid (d/db conn) :journal/code "GEN-DE")]
 

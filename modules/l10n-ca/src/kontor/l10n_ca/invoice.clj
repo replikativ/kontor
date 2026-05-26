@@ -99,7 +99,7 @@
   (:db/id (d/entity db [:journal/code code])))
 
 (defn- commodity-by-symbol [db sym]
-  (:db/id (d/entity db [:commodity/symbol sym])))
+  (:db/id (d/entity db [:kontor.commodity/symbol sym])))
 
 ;; Per-authority tax-payable account routing moved to
 ;; `kontor.l10n-ca.tax-provider` (ADR-071 migration). The default

@@ -32,7 +32,7 @@
      Meldungen). 6 years per AO §147 + §28f SGB IV.
 
    Consumers extend by transacting additional `:retention-policy` rows
-   with `:retention-policy/jurisdiction [:country/code \"DE\"]`. The
+   with `:retention-policy/jurisdiction [:kontor.country/code \"DE\"]`. The
    sweeper merges them with these seeds.
 
    ## Discipline
@@ -46,7 +46,7 @@
    ## Install
 
    Run AFTER `kontor.core/install-schema!` + after a `:country` row
-   with `:country/code \"DE\"` exists (the chart installer ensures
+   with `:kontor.country/code \"DE\"` exists (the chart installer ensures
    this if you also call `kontor.l10n-de.chart/install!`)."
   (:require [datahike.api :as d]))
 
@@ -59,7 +59,7 @@
   [{:retention-policy/code             "DE-HGB257-hr-personnel"
     :retention-policy/applies-to       [:audit-doc]
     :retention-policy/category         :hr-personnel
-    :retention-policy/jurisdiction     [:country/code "DE"]
+    :retention-policy/jurisdiction     [:kontor.country/code "DE"]
     :retention-policy/duration-years   6
     :retention-policy/triggered-by     :audit-doc/uploaded-at
     :retention-policy/expiry-action    :anonymize
@@ -70,7 +70,7 @@
    {:retention-policy/code             "DE-BDSG-hr-track-record"
     :retention-policy/applies-to       [:audit-doc]
     :retention-policy/category         :hr-track-record
-    :retention-policy/jurisdiction     [:country/code "DE"]
+    :retention-policy/jurisdiction     [:kontor.country/code "DE"]
     :retention-policy/duration-years   3
     :retention-policy/triggered-by     :audit-doc/uploaded-at
     :retention-policy/expiry-action    :anonymize
@@ -81,7 +81,7 @@
    {:retention-policy/code             "DE-GefStoffV-hr-medical"
     :retention-policy/applies-to       [:audit-doc]
     :retention-policy/category         :hr-medical
-    :retention-policy/jurisdiction     [:country/code "DE"]
+    :retention-policy/jurisdiction     [:kontor.country/code "DE"]
     :retention-policy/duration-years   30
     :retention-policy/triggered-by     :audit-doc/uploaded-at
     :retention-policy/expiry-action    :archive-to-cold-storage
@@ -92,7 +92,7 @@
    {:retention-policy/code             "DE-DSGVO-hr-activity-content-floor"
     :retention-policy/applies-to       [:audit-doc]
     :retention-policy/category         :hr-activity-content
-    :retention-policy/jurisdiction     [:country/code "DE"]
+    :retention-policy/jurisdiction     [:kontor.country/code "DE"]
     :retention-policy/duration-years   0
     :retention-policy/triggered-by     :audit-doc/uploaded-at
     :retention-policy/expiry-action    :purge
@@ -103,7 +103,7 @@
    {:retention-policy/code             "DE-DSGVO-hr-monitoring-consent"
     :retention-policy/applies-to       [:audit-doc]
     :retention-policy/category         :hr-monitoring-consent
-    :retention-policy/jurisdiction     [:country/code "DE"]
+    :retention-policy/jurisdiction     [:kontor.country/code "DE"]
     :retention-policy/duration-years   10
     :retention-policy/triggered-by     :audit-doc/uploaded-at
     :retention-policy/expiry-action    :archive-to-cold-storage
@@ -114,7 +114,7 @@
    {:retention-policy/code             "DE-BetrVG-hr-grievance"
     :retention-policy/applies-to       [:audit-doc]
     :retention-policy/category         :hr-grievance
-    :retention-policy/jurisdiction     [:country/code "DE"]
+    :retention-policy/jurisdiction     [:kontor.country/code "DE"]
     :retention-policy/duration-years   3
     :retention-policy/triggered-by     :audit-doc/uploaded-at
     :retention-policy/expiry-action    :anonymize
@@ -125,7 +125,7 @@
    {:retention-policy/code             "DE-AO147-payroll-filing"
     :retention-policy/applies-to       [:audit-doc]
     :retention-policy/category         :payroll-filing
-    :retention-policy/jurisdiction     [:country/code "DE"]
+    :retention-policy/jurisdiction     [:kontor.country/code "DE"]
     :retention-policy/duration-years   6
     :retention-policy/triggered-by     :audit-doc/uploaded-at
     :retention-policy/expiry-action    :archive-to-cold-storage
@@ -137,13 +137,13 @@
   "Idempotently transact the DE retention-policy seeds.
 
    Run AFTER `kontor.core/install-schema!` and AFTER a `:country` row
-   with `:country/code \"DE\"` exists. The function ensures that
+   with `:kontor.country/code \"DE\"` exists. The function ensures that
    `:country` row, since not every consumer also installs the
    l10n-de.chart."
   [conn]
   ;; Ensure :country row exists (idempotent — :db.unique/identity).
-  (d/transact conn [{:country/code "DE" :country/name "Germany"
-                     :country/active true}])
+  (d/transact conn [{:kontor.country/code "DE" :kontor.country/name "Germany"
+                     :kontor.country/active true}])
   (let [db (d/db conn)
         already? (boolean
                   (d/q '[:find ?e .

@@ -19,7 +19,7 @@
    namespace from the schema, update this set and the matching
    acceptance test below."
   #{"create" "write"
-    "commodity" "lot"
+    "kontor.commodity" "lot"
     "account" "account-tag"
     "journal" "partner" "fiscal-position"
     "tax" "tax-rep" "tax-group"
@@ -27,7 +27,7 @@
     "transaction" "posting"
     "analytic-plan" "analytic-account" "analytic-distribution"
     "ledger"
-    "country" "country-code" "country-group"
+    "kontor.country" "kontor.country-code" "kontor.country-group"
     "state" "state-code"
     "attestation" "complemento"
     "valuation-book"

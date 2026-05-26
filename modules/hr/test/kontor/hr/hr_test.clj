@@ -33,8 +33,8 @@
   (let [conn (core/create-test-db)]
     (hr/install! conn)
     (d/transact conn
-                [{:db/id "eur" :commodity/symbol "EUR" :commodity/precision 2}
-                 {:db/id "usd" :commodity/symbol "USD" :commodity/precision 2}
+                [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
+                 {:db/id "usd" :kontor.commodity/symbol "USD" :kontor.commodity/precision 2}
                  ;; Two entities — DE GmbH and US LLC — for multi-employment.
                  {:db/id "ent-de" :entity/code "DE-GMBH" :entity/name "Acme DE GmbH"
                   :entity/kind :operating}
@@ -176,7 +176,7 @@
         db (d/db conn)
         jane (hr/person-by-external-id db "P-jane")
         de (ref-eid db :entity/code "DE-GMBH")
-        eur (ref-eid db :commodity/symbol "EUR")
+        eur (ref-eid db :kontor.commodity/symbol "EUR")
         _ (employment/hire! conn {:code "EMP-DE-jane" :person jane :entity de
                                   :start-date #inst "2026-05-01"})
         emp-eid (hr/employment-by-code (d/db conn) "EMP-DE-jane")
@@ -206,7 +206,7 @@
         db (d/db conn)
         jane (hr/person-by-external-id db "P-jane")
         de (ref-eid db :entity/code "DE-GMBH")
-        eur (ref-eid db :commodity/symbol "EUR")
+        eur (ref-eid db :kontor.commodity/symbol "EUR")
         _ (employment/hire! conn {:code "EMP-DE-jane" :person jane :entity de
                                   :start-date #inst "2026-05-01"})
         emp-eid (hr/employment-by-code (d/db conn) "EMP-DE-jane")
@@ -373,7 +373,7 @@
         db (d/db conn)
         jane (hr/person-by-external-id db "P-jane")
         de (ref-eid db :entity/code "DE-GMBH")
-        eur (ref-eid db :commodity/symbol "EUR")
+        eur (ref-eid db :kontor.commodity/symbol "EUR")
         period (ref-eid db :period/name "2026-05")
         journal (ref-eid db :journal/code "PAY-DE")
         wages-exp (ref-eid db :account/code "4120")
@@ -454,7 +454,7 @@
         db (d/db conn)
         jane (hr/person-by-external-id db "P-jane")
         de (ref-eid db :entity/code "DE-GMBH")
-        eur (ref-eid db :commodity/symbol "EUR")
+        eur (ref-eid db :kontor.commodity/symbol "EUR")
         period (ref-eid db :period/name "2026-05")
         journal (ref-eid db :journal/code "PAY-DE")
         wages-exp (ref-eid db :account/code "4120")
@@ -513,7 +513,7 @@
         db (d/db conn)
         jane (hr/person-by-external-id db "P-jane")
         de (ref-eid db :entity/code "DE-GMBH")
-        eur (ref-eid db :commodity/symbol "EUR")
+        eur (ref-eid db :kontor.commodity/symbol "EUR")
         _ (employment/hire! conn {:code "EMP-DE-jane" :person jane :entity de
                                   :start-date #inst "2026-01-01"})
         emp-eid (hr/employment-by-code (d/db conn) "EMP-DE-jane")

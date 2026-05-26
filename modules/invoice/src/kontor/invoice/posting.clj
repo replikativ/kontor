@@ -149,7 +149,7 @@
   (when currency-str
     (d/q '[:find ?c .
            :in $ ?sym
-           :where [?c :commodity/symbol ?sym]]
+           :where [?c :kontor.commodity/symbol ?sym]]
          db currency-str)))
 
 (defn- build-input
@@ -178,7 +178,7 @@
                              :invoice-eid invoice-eid
                              :currency (:invoice/currency invoice)
                              :remediation "Seed a :commodity with the
-                                          matching :commodity/symbol
+                                          matching :kontor.commodity/symbol
                                           before posting."})))
         ledger-eid (or ledger-ref (ledger/primary db))
         lines (->> (d/q '[:find [?l ...]

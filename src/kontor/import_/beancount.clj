@@ -201,14 +201,14 @@ eol        = #'[ \\t]*\\n'
 
 (defn- ensure-commodity
   "Idempotent: return a tx-fragment that creates the commodity entity
-   only if it doesn't already exist (looked up by :commodity/symbol).
-   datahike's :db.unique/identity on :commodity/symbol gives us
+   only if it doesn't already exist (looked up by :kontor.commodity/symbol).
+   datahike's :db.unique/identity on :kontor.commodity/symbol gives us
    upsert-by-identity for free."
   [sym]
-  {:commodity/symbol sym
-   :commodity/name sym
-   :commodity/precision 2
-   :commodity/iso-4217 sym})
+  {:kontor.commodity/symbol sym
+   :kontor.commodity/name sym
+   :kontor.commodity/precision 2
+   :kontor.commodity/iso-4217 sym})
 
 (defn- ensure-account
   [path & {:keys [active?] :or {active? true}}]
@@ -252,7 +252,7 @@ eol        = #'[ \\t]*\\n'
            {:db/id              (str "p-" tx-id "-" idx)
             :posting/account    [:account/path account]
             :posting/amount     amount
-            :posting/commodity  [:commodity/symbol currency]
+            :posting/commodity  [:kontor.commodity/symbol currency]
             :posting/posted-at  date
             :posting/transaction tx-id
             :posting/display-type :product})
@@ -277,7 +277,7 @@ eol        = #'[ \\t]*\\n'
     :balance-assertion/account   [:account/path account]
     :balance-assertion/at        date
     :balance-assertion/amount    amount
-    :balance-assertion/commodity [:commodity/symbol currency]
+    :balance-assertion/commodity [:kontor.commodity/symbol currency]
     :balance-assertion/source    "Beancount import"}])
 
 ;; Beancount-specific schema fragments (just for option storage during
@@ -325,7 +325,7 @@ eol        = #'[ \\t]*\\n'
     ;; Options (preserved verbatim for dump).
     (when (seq opts)
       (d/transact conn (mapv option-tx opts)))
-    ;; Commodities (uniqued by :commodity/symbol).
+    ;; Commodities (uniqued by :kontor.commodity/symbol).
     (let [syms (->> opens (mapcat :currencies) distinct)]
       (when (seq syms)
         (d/transact conn (mapv ensure-commodity syms))))
@@ -483,7 +483,7 @@ eol        = #'[ \\t]*\\n'
                                     :where
                                     [?p :posting/account ?a]
                                     [?p :posting/commodity ?c]
-                                    [?c :commodity/symbol ?sym]]
+                                    [?c :kontor.commodity/symbol ?sym]]
                                   db eid)
                              distinct
                              sort
@@ -515,7 +515,7 @@ eol        = #'[ \\t]*\\n'
                          apath (-> pe :posting/account :db/id
                                    (#(:account/path (d/entity db %))))
                          csym (-> pe :posting/commodity :db/id
-                                  (#(:commodity/symbol (d/entity db %))))]
+                                  (#(:kontor.commodity/symbol (d/entity db %))))]
                      {:account apath
                       :amount  (:posting/amount pe)
                       :currency csym})))
@@ -539,7 +539,7 @@ eol        = #'[ \\t]*\\n'
                                     :balance-assertion/commodity] eid)
                       apath (:account/path
                              (d/entity db (-> b :balance-assertion/account :db/id)))
-                      csym (:commodity/symbol
+                      csym (:kontor.commodity/symbol
                             (d/entity db (-> b :balance-assertion/commodity :db/id)))]
                   {:date (:balance-assertion/at b)
                    :path apath

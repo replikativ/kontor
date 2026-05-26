@@ -20,8 +20,8 @@
 
 (def ^:private pull-spec
   "Datalog pull spec covering every attr a CGT provider may read.
-   Resolves commodity refs to `{:db/id :commodity/symbol :commodity/name}`
-   so providers can join on `:commodity/symbol`. Resolves the realizing
+   Resolves commodity refs to `{:db/id :kontor.commodity/symbol :kontor.commodity/name}`
+   so providers can join on `:kontor.commodity/symbol`. Resolves the realizing
    transaction ref to its db-id only — providers don't need the tx
    body to compute the gain (they need the GL posting only when
    building a remittance, which goes through `TaxReturnPostingBuilder`)."
@@ -35,17 +35,17 @@
    :disposal/disposed-on
    :disposal/holding-period
    :disposal/proceeds-amount
-   {:disposal/proceeds-commodity [:db/id :commodity/symbol :commodity/name]}
+   {:disposal/proceeds-commodity [:db/id :kontor.commodity/symbol :kontor.commodity/name]}
    :disposal/basis-amount
-   {:disposal/basis-commodity [:db/id :commodity/symbol :commodity/name]}
+   {:disposal/basis-commodity [:db/id :kontor.commodity/symbol :kontor.commodity/name]}
    :disposal/depreciation-taken-amount
-   {:disposal/depreciation-taken-commodity [:db/id :commodity/symbol :commodity/name]}
+   {:disposal/depreciation-taken-commodity [:db/id :kontor.commodity/symbol :kontor.commodity/name]}
    :disposal/ownership-fraction
    :disposal/residence?
    :disposal/elective-regime
    :disposal/exemption-claimed
    :disposal/rollover-amount
-   {:disposal/rollover-amount-commodity [:db/id :commodity/symbol :commodity/name]}
+   {:disposal/rollover-amount-commodity [:db/id :kontor.commodity/symbol :kontor.commodity/name]}
    :disposal/rollover-deadline
    :disposal/loss-bucket
    :disposal/state

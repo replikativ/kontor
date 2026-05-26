@@ -26,8 +26,8 @@
             [kontor.l10n-uk.investment-income-statute :as inv-statute]))
 
 (def ^:private default-commodity
-  [{:commodity/symbol "GBP" :commodity/name "Pound Sterling"
-    :commodity/precision 2}])
+  [{:kontor.commodity/symbol "GBP" :kontor.commodity/name "Pound Sterling"
+    :kontor.commodity/precision 2}])
 
 (def ^:private default-journals
   [{:journal/code "GJ" :journal/type :general :journal/name "General Journal"}

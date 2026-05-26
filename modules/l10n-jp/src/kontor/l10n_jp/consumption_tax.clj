@@ -43,7 +43,7 @@
 (defn- bd ^java.math.BigDecimal [m] (:amount m))
 (defn- m-zero [] (money/zero :JPY))
 (defn- m-cents [m]
-  ;; JPY has 0 fractional digits per :commodity/precision; round to whole yen.
+  ;; JPY has 0 fractional digits per :kontor.commodity/precision; round to whole yen.
   (money/money
    (.setScale (bd m) 0 java.math.RoundingMode/HALF_EVEN)
    :JPY))
@@ -119,7 +119,7 @@
       :jct-class  keyword     ; echoed
       :rate       BigDecimal} ; the rate applied (informational)
 
-   JPY has no sub-unit (`:commodity/precision 0`); every Money is
+   JPY has no sub-unit (`:kontor.commodity/precision 0`); every Money is
    rounded to whole yen HALF-EVEN — the same rounding the JCT return
    uses (`m-cents`). Rate logic is unchanged: `:standard` → 10%,
    `:reduced` → 8%, the three zero kinds → 0.

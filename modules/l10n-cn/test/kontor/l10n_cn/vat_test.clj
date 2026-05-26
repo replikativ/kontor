@@ -30,7 +30,7 @@
    output-VAT account 2221.01.01, rate-discrimination via revenue tag."
   [conn ext-id date net revenue-code rate-bd]
   (let [db (d/db conn)
-        cny-eid (:db/id (d/entity db [:commodity/symbol "CNY"]))
+        cny-eid (:db/id (d/entity db [:kontor.commodity/symbol "CNY"]))
         rec (ace db "1122")
         rev (ace db revenue-code)
         out-vat (ace db "2221.01.01")

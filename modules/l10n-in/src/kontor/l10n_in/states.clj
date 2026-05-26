@@ -8,7 +8,7 @@
      96 — Foreign Country (used for export buyers)
 
    Per ADR-023 these load as `:state` entities under
-   `:country/code \"IN\"`, with the GSTN code attached as
+   `:kontor.country/code \"IN\"`, with the GSTN code attached as
    `:state-code/regulator :in/gst`."
   (:require [clojure.java.io :as io]
             [clojure.edn :as edn]
@@ -67,21 +67,21 @@
    with the 2-digit GSTN state code as the canonical sub-jurisdiction
    identifier.
 
-   Idempotency is by **first-install guard** on `:country/code \"IN\"`:
+   Idempotency is by **first-install guard** on `:kontor.country/code \"IN\"`:
    composite-tuple `:db.unique/identity` doesn't auto-deduplicate at
    write time (unlike single-attribute identity), so we skip the
    second install entirely rather than reasserting the same data."
   [conn]
-  (when (d/entity (d/db conn) [:country/code "IN"])
+  (when (d/entity (d/db conn) [:kontor.country/code "IN"])
     ;; Already installed — nothing to do.
     #_:already-installed)
-  (when-not (d/entity (d/db conn) [:country/code "IN"])
+  (when-not (d/entity (d/db conn) [:kontor.country/code "IN"])
     (d/transact conn
                 [{:db/id     -1
-                  :country/code "IN"
-                  :country/code-iso3 "IND"
-                  :country/name "India"
-                  :country/active true}])
+                  :kontor.country/code "IN"
+                  :kontor.country/code-iso3 "IND"
+                  :kontor.country/name "India"
+                  :kontor.country/active true}])
     (let [tx-data
         (->> state-table
              (filter #(not (:legacy? %)))            ; skip legacy AD / DH
@@ -93,7 +93,7 @@
                                     ut?     "Union Territory"
                                     :else   nil)]
                          [{:db/id          state-tempid
-                           :state/country  [:country/code "IN"]
+                           :state/country  [:kontor.country/code "IN"]
                            :state/code     code
                            :state/name     name
                            :state/active   (not pseudo?)}

@@ -91,7 +91,7 @@
      :engine                  :bmd | :rzl
      :source                  anything io/reader accepts
      :journal                 ref (lookup-ref [:journal/code \"PAYROLL\"])
-     :commodity               ref (lookup-ref [:commodity/symbol \"EUR\"])
+     :commodity               ref (lookup-ref [:kontor.commodity/symbol \"EUR\"])
      :effective-date          period-end #inst
      :dienstgeber-beitragskonto  string
      :storage-uri             where the consumer files the mBGM XML

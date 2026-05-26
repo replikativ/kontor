@@ -61,7 +61,7 @@
 
 (defn- invoice-19! [conn id date net]
   (let [db (d/db conn)
-        eur-c (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur-c (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         net-bd (bigdec net)
         vat (.setScale (.multiply net-bd (bigdec "0.19"))
                        2 java.math.RoundingMode/HALF_EVEN)
@@ -73,7 +73,7 @@
 
 (defn- invoice-7! [conn id date net]
   (let [db (d/db conn)
-        eur-c (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur-c (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         net-bd (bigdec net)
         vat (.setScale (.multiply net-bd (bigdec "0.07"))
                        2 java.math.RoundingMode/HALF_EVEN)
@@ -85,7 +85,7 @@
 
 (defn- supplier-bill-19! [conn id date net expense-code]
   (let [db (d/db conn)
-        eur-c (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur-c (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         net-bd (bigdec net)
         vat (.setScale (.multiply net-bd (bigdec "0.19"))
                        2 java.math.RoundingMode/HALF_EVEN)
@@ -97,7 +97,7 @@
 
 (defn- rent-no-vat! [conn id date amount]
   (let [db (d/db conn)
-        eur-c (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur-c (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         bd (bigdec amount)]
     (post! conn id date
            [{:posting/account (ace db "6300") :posting/amount bd :posting/commodity eur-c}
@@ -105,7 +105,7 @@
 
 (defn- salary! [conn id date amount]
   (let [db (d/db conn)
-        eur-c (:db/id (d/entity db [:commodity/symbol "EUR"]))
+        eur-c (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         bd (bigdec amount)]
     (post! conn id date
            [{:posting/account (ace db "6020") :posting/amount bd :posting/commodity eur-c}

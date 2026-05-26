@@ -96,10 +96,10 @@
 (defn- ensure-inr
   "Idempotent INR commodity. Indian Rupee, precision 2."
   []
-  {:commodity/symbol "INR"
-   :commodity/name "Indian Rupee"
-   :commodity/precision 2
-   :commodity/iso-4217 "INR"})
+  {:kontor.commodity/symbol "INR"
+   :kontor.commodity/name "Indian Rupee"
+   :kontor.commodity/precision 2
+   :kontor.commodity/iso-4217 "INR"})
 
 ;; ============================================================================
 ;; Account materialization
@@ -115,7 +115,7 @@
            :account/name        name
            :account/type        type
            :account/active      true
-           :account/commodity   [:commodity/symbol "INR"]
+           :account/commodity   [:kontor.commodity/symbol "INR"]
            :account/reconcilable (boolean reconcilable?)}
     (seq tags)
     (assoc :account/tags
