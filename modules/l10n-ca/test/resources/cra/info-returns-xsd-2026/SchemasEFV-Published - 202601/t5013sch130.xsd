@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!--
+Description: Specialty Business Returns - Partnership Interest and Financing Expenses and Interest and Financing Revenues (CRA Form T5013 SCH 130 E )
+Contact: CRA, ITB, Solutions, RASD, Business Suite Assessing System, Other Levies
+Date created: September 2024
+Users of this schema:
+-Other Levies System
+
+-->
+<xsd:schema 
+xmlns:ols130="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/ols130/1-0-1" 
+xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+
+targetNamespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/ols130/1-0-1" 
+	elementFormDefault="qualified" attributeFormDefault="unqualified" version="ols130/1-0-1">
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/> 
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/> 	
+
+<!-- T5013Schedule130Data is also referenced by other schemas for importing purposes -->
+	<xsd:element name="T5013Schedule130Data" type="ols130:Schedule130DataType"/>
+	<xsd:complexType name="Schedule130DataType">
+		<xsd:sequence>
+		
+			<!-- Part 1A -->
+			<xsd:element ref="ols130:Schedule130ExemptExpensesDetails"  minOccurs="0" maxOccurs="2000"/> 
+			<xsd:element ref="ols130:Schedule130Part1AColumn4TotalAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols130:Schedule130Part1AColumn5TotalAmount"  minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 1B -->
+			<xsd:element ref="ols130:Schedule130InfoOnBorrowingsDetails"  minOccurs="0" maxOccurs="2000"/> 
+			<xsd:element ref="ols130:Schedule130Part1BTable1Column4TotalAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols130:Schedule130Part1BTable1Column5TotalAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols130:Schedule130Part1BTable1Column6TotalAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols130:Schedule130InfoOnLoansDetails"  minOccurs="0" maxOccurs="2000"/> 
+			<xsd:element ref="ols130:Schedule130Part1BTable2Column4TotalAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols130:Schedule130Part1BTable2Column5TotalAmount"  minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 2 -->
+			<xsd:element ref="ols130:Schedule130InterestFinancingExpensesDetails"  minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 3 -->
+			<xsd:element ref="ols130:Schedule130CapitalizedIFEDetails"  minOccurs="0" maxOccurs="2000"/> 
+			<xsd:element ref="ols130:Schedule130Part3Column5TotalAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols130:Schedule130Part3Column6TotalAmount"  minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 4 -->
+			<xsd:element ref="ols130:Schedule130InterestFinancingRevenuesDetails"  minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 5 -->
+			<xsd:element ref="ols130:Schedule130AllocationMembersDetails" minOccurs="0" maxOccurs="2000"/>
+
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	
+	<!-- Part 1A - Exempt interest and financing expenses -->
+	<xsd:element name="Schedule130ExemptExpensesDetails" type="ols130:Schedule130ExemptExpensesDetailsType"/>
+	<xsd:complexType name="Schedule130ExemptExpensesDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols130:NameOfPSAText" minOccurs="0" />
+			<xsd:element ref="ols130:BorrowOrOtherFinancingAmount" minOccurs="0" />
+			<xsd:element ref="ols130:InterestAndFinancingExpensesAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IncomeAmount" minOccurs="0" />
+			<xsd:element ref="ols130:LossAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="NameOfPSAText" type= "ccms:Character175TextType"/>
+	<xsd:element name="BorrowOrOtherFinancingAmount"  type= "sdt:AmountType"/>
+	<xsd:element name="InterestAndFinancingExpensesAmount" type="sdt:AmountType"/>
+	<xsd:element name="IncomeAmount" type="sdt:AmountType"/>
+	<xsd:element name="LossAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule130Part1AColumn4TotalAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule130Part1AColumn5TotalAmount" type="sdt:AmountType"/>
+	
+	
+	<!-- Part 1B - Information on borrowings, loans, and other financings -->
+	<xsd:element name="Schedule130InfoOnBorrowingsDetails" type="ols130:Schedule130InfoOnBorrowingsDetailsType"/>
+	<xsd:complexType name="Schedule130InfoOnBorrowingsDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols130:InfoOnBorrowingsRelationshipCode" minOccurs="0" />
+			<xsd:element ref="ols130:InfoOnBorrowingsBorrowedAmount" minOccurs="0" />
+			<xsd:element ref="ols130:InfoOnBorrowingsNotionalAmount" minOccurs="0" />
+			<xsd:element ref="ols130:InfoOnBorrowingsParagraphAVariableAIFEAmount" minOccurs="0" />
+			<xsd:element ref="ols130:InfoOnBorrowingsParagraphEVariableAIFEAmount" minOccurs="0" />
+			<xsd:element ref="ols130:InfoOnBorrowingsParagraphAVariableBIFEAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="InfoOnBorrowingsRelationshipCode" type="sdt:CodeType"/>
+	<xsd:element name="InfoOnBorrowingsBorrowedAmount"  type= "sdt:AmountType"/>
+	<xsd:element name="InfoOnBorrowingsNotionalAmount" type="sdt:AmountType"/>
+	<xsd:element name="InfoOnBorrowingsParagraphAVariableAIFEAmount" type="sdt:AmountType"/>
+	<xsd:element name="InfoOnBorrowingsParagraphEVariableAIFEAmount" type="sdt:AmountType"/>
+	<xsd:element name="InfoOnBorrowingsParagraphAVariableBIFEAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule130Part1BTable1Column4TotalAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule130Part1BTable1Column5TotalAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule130Part1BTable1Column6TotalAmount" type="sdt:AmountType"/>
+	
+	<xsd:element name="Schedule130InfoOnLoansDetails" type="ols130:Schedule130InfoOnLoansDetailsType"/>
+	<xsd:complexType name="Schedule130InfoOnLoansDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols130:InfoOnLoansRelationshipCode" minOccurs="0" />
+			<xsd:element ref="ols130:InfoOnLoansLoanAmount" minOccurs="0" />
+			<xsd:element ref="ols130:InfoOnLoansNotionalAmount" minOccurs="0" />
+			<xsd:element ref="ols130:InfoOnLoansParagraphDVariableAIFRAmount" minOccurs="0" />
+			<xsd:element ref="ols130:InfoOnLoansParagraphAVariableBIFRAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="InfoOnLoansRelationshipCode" type="sdt:CodeType"/>
+	<xsd:element name="InfoOnLoansLoanAmount"  type= "sdt:AmountType"/>
+	<xsd:element name="InfoOnLoansNotionalAmount" type="sdt:AmountType"/>
+	<xsd:element name="InfoOnLoansParagraphDVariableAIFRAmount" type="sdt:AmountType"/>
+	<xsd:element name="InfoOnLoansParagraphAVariableBIFRAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule130Part1BTable2Column4TotalAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule130Part1BTable2Column5TotalAmount" type="sdt:AmountType"/>
+
+	
+	<!-- Part 2 - Interest and Financing Expenses (IFE) -->
+	<xsd:element name="Schedule130InterestFinancingExpensesDetails" type="ols130:Schedule130InterestFinancingExpensesDetailsType"/>
+	<xsd:complexType name="Schedule130InterestFinancingExpensesDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols130:InterestPaidOrPayableAmount" minOccurs="0" />
+			<xsd:element ref="ols130:InterestPaidOrPayableOtherAmount" minOccurs="0" />
+			<xsd:element ref="ols130:DeductibleUnderAmount" minOccurs="0" />
+			<xsd:element ref="ols130:CapitalCostAllowanceAmount" minOccurs="0" />
+			<xsd:element ref="ols130:TerminallossAttributableToIFEAmount" minOccurs="0" />
+			<xsd:element ref="ols130:InterestPaidOrPayableDeductibleAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IFELossDeductibleAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IFECapitalLossReducesAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IncludedInInterestAndFinancingExpenseAmount" minOccurs="0" />
+			<xsd:element ref="ols130:ReducesIFEForYearAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IFELeaseFinancingAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IFEControlledForeignAffiliateAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IFEReceivedOrReceivableAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IFEGainIncludedInIncomeAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IFETotalAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="InterestPaidOrPayableAmount" type="sdt:AmountType"/>
+	<xsd:element name="InterestPaidOrPayableOtherAmount" type="sdt:AmountType"/>
+	<xsd:element name="DeductibleUnderAmount" type="sdt:AmountType"/>
+	<xsd:element name="CapitalCostAllowanceAmount" type="sdt:AmountType"/>
+	<xsd:element name="TerminallossAttributableToIFEAmount" type="sdt:AmountType"/>
+	<xsd:element name="InterestPaidOrPayableDeductibleAmount" type="sdt:AmountType"/>
+	<xsd:element name="IFELossDeductibleAmount" type="sdt:AmountType"/>
+	<xsd:element name="IFECapitalLossReducesAmount" type="sdt:AmountType"/>
+	<xsd:element name="IncludedInInterestAndFinancingExpenseAmount" type="sdt:AmountType"/>
+	<xsd:element name="ReducesIFEForYearAmount" type="sdt:AmountType"/>
+	<xsd:element name="IFELeaseFinancingAmount" type="sdt:AmountType"/>
+	<xsd:element name="IFEControlledForeignAffiliateAmount" type="sdt:AmountType"/>
+	<xsd:element name="IFEReceivedOrReceivableAmount" type="sdt:AmountType"/>
+	<xsd:element name="IFEGainIncludedInIncomeAmount" type="sdt:AmountType"/>
+	<xsd:element name="IFETotalAmount" type="sdt:AmountType"/>
+
+
+	<!-- Part 3 - Capitalized IFE In Depreciable Assets -->
+	<xsd:element name="Schedule130CapitalizedIFEDetails" type ="ols130:Schedule130CapitalizedIFEDetailsType" />
+		<xsd:complexType name="Schedule130CapitalizedIFEDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols130:ClassNumberText" minOccurs="0" />
+			<xsd:element ref="ols130:IFEInOpeningUCCAmount"  minOccurs="0" />
+			<xsd:element ref="ols130:IFEAmount" minOccurs="0" />
+			<xsd:element ref="ols130:UCCThatIsIFEAmount" minOccurs="0" />
+			<xsd:element ref="ols130:TerminalLossThatIsIFEAmount" minOccurs="0" />
+			<xsd:element ref="ols130:CCAThatIsIFEAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IFEInEndingUCCAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="ClassNumberText" type= "sdt:NumberType"/>
+	<xsd:element name="IFEInOpeningUCCAmount"  type= "sdt:AmountType"/>
+	<xsd:element name="IFEAmount" type="sdt:AmountType"/>
+	<xsd:element name="UCCThatIsIFEAmount" type="sdt:AmountType"/>
+	<xsd:element name="TerminalLossThatIsIFEAmount" type="sdt:AmountType"/>
+	<xsd:element name="CCAThatIsIFEAmount" type="sdt:AmountType"/>
+	<xsd:element name="IFEInEndingUCCAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule130Part3Column5TotalAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule130Part3Column6TotalAmount" type="sdt:AmountType"/>
+	
+	
+	<!-- Part 4 - Interest and Financing Revenues (IFR) -->
+	<xsd:element name="Schedule130InterestFinancingRevenuesDetails" type="ols130:Schedule130InterestFinancingRevenuesDetailsType"/>
+	<xsd:complexType name="Schedule130InterestFinancingRevenuesDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols130:InterestReceivedOrReceivableAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IncludedInIncomeAmount" minOccurs="0" />
+			<xsd:element ref="ols130:FeeOrSimilarAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IFRReceivedOrReceivableAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IFRGainIncludedInIncomeAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IFRLeaseFinancingAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IFRControlledForeignAffiliateAmount" minOccurs="0" />
+			<xsd:element ref="ols130:PaidOrPayableDeductibleAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IFRLossDeductibleAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IFRCapitalLossReducesAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IncludedInPartnershipIFRAmount" minOccurs="0" />
+			<xsd:element ref="ols130:ExemptFromTaxAmount" minOccurs="0" />
+			<xsd:element ref="ols130:IFRTotalAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="InterestReceivedOrReceivableAmount" type="sdt:AmountType"/>
+	<xsd:element name="IncludedInIncomeAmount" type="sdt:AmountType"/>
+	<xsd:element name="FeeOrSimilarAmount" type="sdt:AmountType"/>
+	<xsd:element name="IFRReceivedOrReceivableAmount" type="sdt:AmountType"/>
+	<xsd:element name="IFRGainIncludedInIncomeAmount" type="sdt:AmountType"/>
+	<xsd:element name="IFRLeaseFinancingAmount" type="sdt:AmountType"/>
+	<xsd:element name="IFRControlledForeignAffiliateAmount" type="sdt:AmountType"/>
+	<xsd:element name="PaidOrPayableDeductibleAmount" type="sdt:AmountType"/>
+	<xsd:element name="IFRLossDeductibleAmount" type="sdt:AmountType"/>
+	<xsd:element name="IFRCapitalLossReducesAmount" type="sdt:AmountType"/>
+	<xsd:element name="IncludedInPartnershipIFRAmount" type="sdt:AmountType"/>
+	<xsd:element name="ExemptFromTaxAmount" type="sdt:AmountType"/>
+	<xsd:element name="IFRTotalAmount" type="sdt:AmountType"/>
+
+	
+	<!-- Part 5 - Allocation to Members -->
+	<xsd:element name="Schedule130AllocationMembersDetails" type="ols130:Schedule130AllocationMembersDetailsType"/>
+	<xsd:complexType name="Schedule130AllocationMembersDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols130:MemberName" minOccurs="0"/>
+			<xsd:element ref="ols130:MemberIDNumber" minOccurs="0"/>
+			<xsd:element ref="ols130:MemberProportionAmount" minOccurs="0"/>
+			<xsd:element ref="ols130:ShareOfVariableAofIFEAmount" minOccurs="0"/>
+			<xsd:element ref="ols130:ShareOfVariableBofIFEAmount" minOccurs="0"/>
+			<xsd:element ref="ols130:ShareOfVariableAofIFRAmount" minOccurs="0"/>
+			<xsd:element ref="ols130:ShareOfVariableBofIFRAmount" minOccurs="0"/>
+			<xsd:element ref="ols130:TerminaLossIFEAmount" minOccurs="0"/>
+			<xsd:element ref="ols130:CapitalCostAllowanceIFEAmount" minOccurs="0"/>
+			<xsd:element ref="ols130:ShareIncomeDerivedFromExemptIFEAmount" minOccurs="0"/>
+			<xsd:element ref="ols130:ShareLossDerivedFromExemptIFEAmount" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="MemberName" type="ccms:Character175TextType"/>
+	<xsd:element name="MemberIDNumber">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="MemberProportionAmount" type="sdt:QuantityType"/>
+	<xsd:element name="ShareOfVariableAofIFEAmount" type="sdt:AmountType"/>
+	<xsd:element name="ShareOfVariableBofIFEAmount" type="sdt:AmountType"/>
+	<xsd:element name="ShareOfVariableAofIFRAmount" type="sdt:AmountType"/>
+	<xsd:element name="ShareOfVariableBofIFRAmount" type="sdt:AmountType"/>
+	<xsd:element name="TerminaLossIFEAmount" type="sdt:AmountType"/>
+	<xsd:element name="CapitalCostAllowanceIFEAmount" type="sdt:AmountType"/>
+	<xsd:element name="ShareIncomeDerivedFromExemptIFEAmount" type="sdt:AmountType"/>
+	<xsd:element name="ShareLossDerivedFromExemptIFEAmount" type="sdt:AmountType"/>
+	
+	
+</xsd:schema>

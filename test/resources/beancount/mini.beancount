@@ -1,0 +1,31 @@
+;; Minimal Beancount fixture for the round-trip acceptance test.
+;; Covers the load-bearing subset (per ADR-009):
+;;   * options
+;;   * open / close
+;;   * transactions with payee+narration and 2+ postings
+;;   * balance assertions
+;;   * comments
+
+option "title" "Datahike Accounting Test Book"
+option "operating_currency" "EUR"
+
+2026-01-01 open Assets:Bank          EUR
+2026-01-01 open Income:Sales         EUR
+2026-01-01 open Expenses:Office      EUR
+
+2026-01-15 * "ACME Corp" "Invoice 2026-0001"
+  Assets:Bank         500.00 EUR
+  Income:Sales       -500.00 EUR
+
+2026-01-20 * "Office Store" "Pens and paper"
+  Expenses:Office      25.00 EUR
+  Assets:Bank         -25.00 EUR
+
+2026-01-31 balance Assets:Bank      475.00 EUR
+
+2026-02-10 * "Beta Ltd" "Consulting"
+  Assets:Bank        1000.00 EUR
+  Income:Sales      -1000.00 EUR
+
+2026-02-28 balance Assets:Bank     1475.00 EUR
+2026-02-28 balance Income:Sales   -1500.00 EUR

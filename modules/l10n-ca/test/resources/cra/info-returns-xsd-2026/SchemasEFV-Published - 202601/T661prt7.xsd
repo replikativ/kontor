@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<xsd:schema 
+xmlns:olT661Parts7="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts7/1-0-0" 
+			xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+			xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+			xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+	targetNamespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts7/1-0-0" 
+	elementFormDefault="qualified" attributeFormDefault="unqualified" version="ols661/1-0-0">
+
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/> 
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/> 
+
+<xsd:element name="T661Part7Data" type="olT661Parts7:Part7DataType"/>
+	<xsd:complexType name="Part7DataType">
+		<xsd:sequence>
+			<xsd:element ref="olT661Parts7:Field605" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts7:Field600" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts7:Field602" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts7:Field604" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts7:Field606" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts7:Field608" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts7:Field610" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts7:Field612" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts7:Field614" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts7:Field616" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts7:Field618" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts7:Field620" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts7:Field622" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts7:Field632" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts7:Field634" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts7:Field636" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts7:Field638" minOccurs="0" maxOccurs="1"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:element name="Field605" type="sdt:AmountType"/>
+	<xsd:element name="Field600" type="sdt:PercentType"/>
+	<xsd:element name="Field602" type="sdt:PercentType"/>
+	<xsd:element name="Field604" type="sdt:PercentType"/>
+	<xsd:element name="Field606" type="sdt:PercentType"/>
+	<xsd:element name="Field608" type="sdt:PercentType"/>
+	<xsd:element name="Field610" type="sdt:PercentType"/>
+	<xsd:element name="Field612" type="sdt:PercentType"/>
+	<xsd:element name="Field614" type="sdt:PercentType"/>
+	<xsd:element name="Field616" type="sdt:PercentType"/>
+	<xsd:element name="Field618" type="sdt:PercentType"/>
+	<xsd:element name="Field620" type="ccms:OneCodeType"/>
+	<xsd:element name="Field622" type="ccms:OneCodeType"/>
+	<xsd:element name="Field632" type="sdt:CountType"/>
+	<xsd:element name="Field634" type="sdt:CountType"/>
+	<xsd:element name="Field636" type="sdt:CountType"/>
+	<xsd:element name="Field638" type="sdt:CountType"/>
+
+</xsd:schema>

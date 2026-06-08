@@ -1,0 +1,634 @@
+(ns kontor.l10n-jp.cit-statute
+  "JP corporate income tax — 法人税 + 地方法人税 + 防衛特別法人税 + 事業税 +
+   特別法人事業税 + 法人住民税 (法人税割 + 均等割) — encoded as
+   `kontor.tax.statute` data per ADR-101 / ADR-106. The first non-DE consumer
+   of the statute-as-data substrate; the deflated-DE template (one statute
+   namespace, one provider namespace, one test namespace).
+
+   The encoding splits cleanly along the substrate seams:
+
+   - **Parameters** (date-keyed value history) — every statutory rate:
+       JP.CIT.sme-reduced-rate (15 %),
+       JP.CIT.flat-rate (23.2 %),
+       JP.CIT.sme-kink (¥8 000 000),
+       JP.LocalCIT.rate (10.3 %),
+       JP.DefenseSurtax.rate (4 %, FY ≥ 2026-04-01),
+       JP.DefenseSurtax.deduction (¥5 000 000),
+       JP.Enterprise.sme-rate-1 (3.5 % ≤¥4M),
+       JP.Enterprise.sme-rate-2 (5.3 % ≤¥8M),
+       JP.Enterprise.sme-rate-3 (7.0 % >¥8M),
+       JP.Enterprise.sme-kink-1 (¥4 000 000),
+       JP.Enterprise.sme-kink-2 (¥8 000 000),
+       JP.Enterprise.flat-large-rate (1.18 %),
+       JP.SpecialCorpEnterprise.sme-rate (37 %),
+       JP.SpecialCorpEnterprise.large-rate (260 %),
+       JP.Inhabitant.income-levy-rate (7 % SME standard;
+                                       1 % prefectural + 6 % municipal).
+
+     Per-capita inhabitants' levy (均等割) values are NOT carried as
+     `:parameter`s — the lookup is a 10-cell table over `:tax-unit`
+     dimensions (capital × headcount) and reads cleanest as a compute-fn
+     that consults the consumer-supplied `:tax-unit`. Adding the 10
+     thresholds as parameters would inflate the substrate without
+     winning a real authoring affordance (the tiers haven't moved
+     since 2015).
+
+   - **Provisions** (per-jurisdiction rules) — the surtax / adjustment
+     paths:
+       JP-CIT-§66-large    — schedule-override to a flat 23.2 % schedule
+                             when [:eq [:tax-unit :is-sme?] false]
+       JP-LocalCIT-§9      — 10.3 % surtax on national CIT
+       JP-DefenseSurtax    — 4 % × (national CIT − ¥5M); from 2026-04-01
+       JP-Enterprise-§72   — schedule-override to large-co flat 1.18 %
+                             when not SME (income-base only; pro-forma
+                             value-added / capital deferred)
+       JP-SpecialCorpEnterprise-§7 — surtax on the enterprise-tax amount
+       JP-Inhabitant-income-levy   — 7 % surtax on national CIT
+                                     (consumed in the inhabitants'
+                                     component)
+       JP-Inhabitant-per-capita    — fixed per-capita levy from the
+                                     10-cell capital × headcount table
+
+   - **Scoping** — provisions are scoped to one component (`:national`
+     / `:enterprise` / `:inhabitant`) via a `:condition [:eq :component
+     <kw>]` predicate; the provider sets `:component` in ctx on each
+     per-component pass. Same convention as DE's `:kst` / `:gewst`.
+
+   Citations point at NTA (nta.go.jp), Tokyo Metropolitan Bureau of
+   Taxation, e-gov.go.jp statute text, and JETRO Section 3.3."
+  (:require [datahike.api :as d]
+            [kontor.tax.statute :as statute]))
+
+;; ============================================================================
+;; Parameters (date-keyed value history per ADR-101 :parameter)
+;; ============================================================================
+
+(def parameters
+  "JP CIT parameter definitions — one row per `:kontor.parameter/code`.
+   Values live in `parameter-values` keyed by `:effective-from`."
+  [;; ----- National corporation tax 法人税 -----
+   ;; Note 125 — the SME-large-income 17% rate (FY 2025-04-01+) is
+   ;; a separate parameter from the standard 15% SME reduced rate.
+   ;; Triggered when :is-sme? AND book-profit > ¥1B.
+   {:kontor.parameter/code         "JP.CIT.sme-reduced-rate-large-income"
+    :kontor.parameter/label        "Reduced rate on first ¥8M for SMEs with income > ¥1B (FY 2025+)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=340AC0000000034"}
+
+   {:kontor.parameter/code         "JP.CIT.sme-reduced-rate"
+    :kontor.parameter/label        "Hōjinzei (法人税) reduced SME rate on the first ¥8 000 000 of taxable income"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=340AC0000000034"}
+
+   {:kontor.parameter/code         "JP.CIT.flat-rate"
+    :kontor.parameter/label        "Hōjinzei (法人税) standard flat rate (above the SME kink / all-income for large corps)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=340AC0000000034"}
+
+   {:kontor.parameter/code         "JP.CIT.sme-kink"
+    :kontor.parameter/label        "Hōjinzei (法人税) SME reduced-rate kink (¥8 000 000)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=340AC0000000034"}
+
+   ;; ----- National local corporation tax 地方法人税 -----
+   {:kontor.parameter/code         "JP.LocalCIT.rate"
+    :kontor.parameter/label        "Chihō Hōjinzei (地方法人税) — 10.3 % surtax on the national CIT amount"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/hojin/5121.htm"}
+
+   ;; ----- Defense surtax 防衛特別法人税 (FY ≥ 2026-04-01) -----
+   {:kontor.parameter/code         "JP.DefenseSurtax.rate"
+    :kontor.parameter/label        "Bōei Tokubetsu Hōjinzei (防衛特別法人税) — 4 % surtax on (national CIT − ¥5M)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.mof.go.jp/tax_policy/summary/corporation/c01.htm"}
+
+   {:kontor.parameter/code         "JP.DefenseSurtax.deduction"
+    :kontor.parameter/label        "Bōei Tokubetsu Hōjinzei — basic deduction (¥5 000 000) applied before the 4 %"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.mof.go.jp/tax_policy/summary/corporation/c01.htm"}
+
+   ;; ----- Enterprise tax 事業税 (SME progressive ladder) -----
+   ;; SME schedule = 3-bracket progressive on income (Tokyo uses 3.75 /
+   ;; 5.665 / 7.48 %; we ship national-standard 3.5 / 5.3 / 7.0 % and
+   ;; let consumers override per-prefecture). Carried as 3 `:parameter`s
+   ;; + 2 kinks because the substrate's `:parameter-bracket` rows are an
+   ;; equally valid encoding; the flat-list form is closer to the
+   ;; statute text and parallels DE GewSt's flat-rate carriage.
+   {:kontor.parameter/code         "JP.Enterprise.sme-rate-1"
+    :kontor.parameter/label        "Jigyōzei (事業税) SME bracket 1 — 3.5 % on the first ¥4 000 000"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.tax.metro.tokyo.lg.jp/kazei/hojin_jigyou.html"}
+
+   {:kontor.parameter/code         "JP.Enterprise.sme-rate-2"
+    :kontor.parameter/label        "Jigyōzei (事業税) SME bracket 2 — 5.3 % on ¥4 000 001 .. ¥8 000 000"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.tax.metro.tokyo.lg.jp/kazei/hojin_jigyou.html"}
+
+   {:kontor.parameter/code         "JP.Enterprise.sme-rate-3"
+    :kontor.parameter/label        "Jigyōzei (事業税) SME bracket 3 — 7.0 % on income > ¥8 000 000"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.tax.metro.tokyo.lg.jp/kazei/hojin_jigyou.html"}
+
+   {:kontor.parameter/code         "JP.Enterprise.sme-kink-1"
+    :kontor.parameter/label        "Jigyōzei SME bracket 1 → 2 kink (¥4 000 000)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.tax.metro.tokyo.lg.jp/kazei/hojin_jigyou.html"}
+
+   {:kontor.parameter/code         "JP.Enterprise.sme-kink-2"
+    :kontor.parameter/label        "Jigyōzei SME bracket 2 → 3 kink (¥8 000 000)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.tax.metro.tokyo.lg.jp/kazei/hojin_jigyou.html"}
+
+   {:kontor.parameter/code         "JP.Enterprise.large-rate"
+    :kontor.parameter/label        "Jigyōzei (事業税) large-corporation income-base standard rate (flat 1.18 % — the Tokyo 超過税率 top-bracket approximation; the 3-bracket prefectural standard ladder 0.4/0.7/1.0 % is a v1.1 polish3)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.tax.metro.tokyo.lg.jp/kazei/hojin_jigyou.html"}
+
+   ;; ----- Pro-forma 外形標準課税 (large-corp value-added + capital bases) -----
+   ;; Note 182 §5.1 — five parameters that close (the large-corp
+   ;; pro-forma enterprise tax). The :tax-unit :is-sme? key (consumer-
+   ;; supplied) drives whether the value-added/capital provisions fire;
+   ;; the ¥100M paid-in-capital threshold is the statutory trigger, kept
+   ;; as data here for documentation + future regime-change tracking
+   ;; (令和 6 年度 reform added anti-avoidance rules —).
+
+   {:kontor.parameter/code         "JP.Enterprise.value-added-rate"
+    :kontor.parameter/label        "Jigyōzei 付加価値割 — value-added base standard rate (1.26 %, prefectural standard)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.tax.metro.tokyo.lg.jp/kazei/work/houjinji/gaikei/gaikei-01"}
+
+   {:kontor.parameter/code         "JP.Enterprise.capital-rate"
+    :kontor.parameter/label        "Jigyōzei 資本割 — capital base standard rate (0.525 %, prefectural standard)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.tax.metro.tokyo.lg.jp/kazei/work/houjinji/gaikei/gaikei-01"}
+
+   {:kontor.parameter/code         "JP.Enterprise.pro-forma-capital-threshold"
+    :kontor.parameter/label        "Jigyōzei 外形対象法人 trigger — paid-in capital > ¥100 000 000 (consumer drives via :tax-unit :is-sme?; this row documents the statutory amount)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=325AC0000000226"}
+
+   {:kontor.parameter/code         "JP.Enterprise.employment-stability-deduction-trigger"
+    :kontor.parameter/label        "Jigyōzei 雇用安定控除 trigger — fires when payroll / (収益配分額) > 70 % (地方税法 §72-20)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=325AC0000000226"}
+
+   {:kontor.parameter/code         "JP.Enterprise.employment-stability-deduction-coefficient"
+    :kontor.parameter/label        "Jigyōzei 雇用安定控除 coefficient — 70 % applied in the deduction formula (max(0, payroll − 収益配分額 × 70%))"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://elaws.e-gov.go.jp/document?lawid=325AC0000000226"}
+
+   ;; ----- Special corporate enterprise tax 特別法人事業税 -----
+   {:kontor.parameter/code         "JP.SpecialCorpEnterprise.sme-rate"
+    :kontor.parameter/label        "Tokubetsu Hōjin Jigyōzei (特別法人事業税) — 37 % SME surtax on enterprise-tax income-base amount"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/hojin/5765.htm"}
+
+   {:kontor.parameter/code         "JP.SpecialCorpEnterprise.large-rate"
+    :kontor.parameter/label        "Tokubetsu Hōjin Jigyōzei (特別法人事業税) — 260 % large-corp surtax on enterprise-tax income-base amount"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.nta.go.jp/taxes/shiraberu/taxanswer/hojin/5765.htm"}
+
+   ;; ----- Corporate inhabitants' tax 法人住民税 -----
+   {:kontor.parameter/code         "JP.Inhabitant.income-levy-rate"
+    :kontor.parameter/label        "Hōjin Jūminzei (法人住民税) 法人税割 — combined income levy on national CIT (7 % SME standard = 1 % prefectural + 6 % municipal; max 10.4 % Tokyo large)"
+    :kontor.parameter/jurisdiction :jp
+    :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.tax.metro.tokyo.lg.jp/kazei/hojin_jumin.html"}])
+
+(def parameter-values
+  "JP CIT parameter values with their statutory effective windows.
+   National rates have been stable for years; the defense surtax is
+   the only one with a future effective-from (FY ≥ 2026-04-01)."
+  [;; National CIT — both rates introduced in the 2018 Tax Reform Act,
+   ;; flat 23.2 % since 2018-04-01.
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CIT.sme-reduced-rate"]
+    :kontor.parameter-value/effective-from #inst "2018-04-01"
+    :kontor.parameter-value/decimal-value  0.15M
+    :kontor.parameter-value/citation       "法人税法 §66②; NTA No. 5759 (中小法人の税率特例)"}
+
+   ;; Note 125 — SME with income > ¥1B: 17% on first ¥8M (vs the
+   ;; standard 15% SME band). FY ≥ 2025-04-01 per Reiwa-7 Tax Reform Act.
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CIT.sme-reduced-rate-large-income"]
+    :kontor.parameter-value/effective-from #inst "2025-04-01"
+    :kontor.parameter-value/decimal-value  0.17M
+    :kontor.parameter-value/citation       "法人税法 §66② post-Reiwa-7 amendment; NTA No. 5759 — 17% on first ¥8M for SMEs with income > ¥1B"}
+
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CIT.flat-rate"]
+    :kontor.parameter-value/effective-from #inst "2018-04-01"
+    :kontor.parameter-value/decimal-value  0.232M
+    :kontor.parameter-value/citation       "法人税法 §66①; NTA No. 5759 — flat 23.2 % since 2018-04-01"}
+
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.CIT.sme-kink"]
+    :kontor.parameter-value/effective-from #inst "2018-04-01"
+    :kontor.parameter-value/decimal-value  8000000M
+    :kontor.parameter-value/citation       "法人税法 §66② — ¥8 000 000 kink for SME reduced-rate band"}
+
+   ;; Local CIT — introduced 2014-10-01 at 4.4 %, raised to 10.3 % on
+   ;; 2019-10-01 when prefectural inhabitant rates were correspondingly
+   ;; reduced (revenue-neutral reform).
+   {:kontor.parameter-value/parameter       [:kontor.parameter/code "JP.LocalCIT.rate"]
+    :kontor.parameter-value/effective-from  #inst "2014-10-01"
+    :kontor.parameter-value/effective-until #inst "2019-10-01"
+    :kontor.parameter-value/decimal-value   0.044M
+    :kontor.parameter-value/citation        "地方法人税法 §10 (introduction rate)"}
+
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.LocalCIT.rate"]
+    :kontor.parameter-value/effective-from #inst "2019-10-01"
+    :kontor.parameter-value/decimal-value  0.103M
+    :kontor.parameter-value/citation       "地方法人税法 §10 — 10.3 % from 2019-10-01"}
+
+   ;; Defense surtax — FY ≥ 2026-04-01 only.
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.DefenseSurtax.rate"]
+    :kontor.parameter-value/effective-from #inst "2026-04-01"
+    :kontor.parameter-value/decimal-value  0.04M
+    :kontor.parameter-value/citation       "防衛力強化のための税制措置 (MOF tax reform outline, 令和7年度)"}
+
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.DefenseSurtax.deduction"]
+    :kontor.parameter-value/effective-from #inst "2026-04-01"
+    :kontor.parameter-value/decimal-value  5000000M
+    :kontor.parameter-value/citation       "防衛特別法人税 — ¥5 000 000 basic deduction (MOF outline)"}
+
+   ;; Enterprise tax — SME ladder (national standard rates).
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.Enterprise.sme-rate-1"]
+    :kontor.parameter-value/effective-from #inst "2019-10-01"
+    :kontor.parameter-value/decimal-value  0.035M
+    :kontor.parameter-value/citation       "地方税法 §72-24-7 — national standard 3.5 % on ≤¥4M"}
+
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.Enterprise.sme-rate-2"]
+    :kontor.parameter-value/effective-from #inst "2019-10-01"
+    :kontor.parameter-value/decimal-value  0.053M
+    :kontor.parameter-value/citation       "地方税法 §72-24-7 — national standard 5.3 % on ¥4M..¥8M"}
+
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.Enterprise.sme-rate-3"]
+    :kontor.parameter-value/effective-from #inst "2019-10-01"
+    :kontor.parameter-value/decimal-value  0.07M
+    :kontor.parameter-value/citation       "地方税法 §72-24-7 — national standard 7.0 % above ¥8M"}
+
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.Enterprise.sme-kink-1"]
+    :kontor.parameter-value/effective-from #inst "2019-10-01"
+    :kontor.parameter-value/decimal-value  4000000M
+    :kontor.parameter-value/citation       "地方税法 §72-24-7 — SME bracket-1 ceiling"}
+
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.Enterprise.sme-kink-2"]
+    :kontor.parameter-value/effective-from #inst "2019-10-01"
+    :kontor.parameter-value/decimal-value  8000000M
+    :kontor.parameter-value/citation       "地方税法 §72-24-7 — SME bracket-2 ceiling"}
+
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.Enterprise.large-rate"]
+    :kontor.parameter-value/effective-from #inst "2019-10-01"
+    :kontor.parameter-value/decimal-value  0.0118M
+    :kontor.parameter-value/citation       "地方税法 §72-24-7 — large-corp income-base standard 1.18 %"}
+
+   ;; Special corp enterprise tax — 37 % SME / 260 % large since 2019-10-01.
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.SpecialCorpEnterprise.sme-rate"]
+    :kontor.parameter-value/effective-from #inst "2019-10-01"
+    :kontor.parameter-value/decimal-value  0.37M
+    :kontor.parameter-value/citation       "特別法人事業税及び特別法人事業譲与税に関する法律 §7 (SME 37 %)"}
+
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.SpecialCorpEnterprise.large-rate"]
+    :kontor.parameter-value/effective-from #inst "2019-10-01"
+    :kontor.parameter-value/decimal-value  2.60M
+    :kontor.parameter-value/citation       "特別法人事業税及び特別法人事業譲与税に関する法律 §7 (large 260 %)"}
+
+   ;; ----- Pro-forma 外形標準課税 parameter values -----
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.Enterprise.value-added-rate"]
+    :kontor.parameter-value/effective-from #inst "2019-10-01"
+    :kontor.parameter-value/decimal-value  0.0126M
+    :kontor.parameter-value/citation       "地方税法 §72-24-7 — 1.26 % prefectural standard"}
+
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.Enterprise.capital-rate"]
+    :kontor.parameter-value/effective-from #inst "2019-10-01"
+    :kontor.parameter-value/decimal-value  0.00525M
+    :kontor.parameter-value/citation       "地方税法 §72-24-7 — 0.525 % prefectural standard"}
+
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.Enterprise.pro-forma-capital-threshold"]
+    :kontor.parameter-value/effective-from #inst "2004-04-01"
+    :kontor.parameter-value/decimal-value  100000000M
+    :kontor.parameter-value/citation       "地方税法 §72-2 — ¥100 000 000 paid-in-capital trigger for 外形対象法人"}
+
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.Enterprise.employment-stability-deduction-trigger"]
+    :kontor.parameter-value/effective-from #inst "2004-04-01"
+    :kontor.parameter-value/decimal-value  0.70M
+    :kontor.parameter-value/citation       "地方税法 §72-20 — 70 % payroll/収益配分額 trigger"}
+
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.Enterprise.employment-stability-deduction-coefficient"]
+    :kontor.parameter-value/effective-from #inst "2004-04-01"
+    :kontor.parameter-value/decimal-value  0.70M
+    :kontor.parameter-value/citation       "地方税法 §72-20 — 70 % coefficient in max(0, payroll − 収益配分額 × 70 %)"}
+
+   ;; Inhabitants' income-levy — 7 % combined standard (1 % pref + 6 %
+   ;; municipal); same since the 2019-10-01 reform.
+   {:kontor.parameter-value/parameter      [:kontor.parameter/code "JP.Inhabitant.income-levy-rate"]
+    :kontor.parameter-value/effective-from #inst "2019-10-01"
+    :kontor.parameter-value/decimal-value  0.07M
+    :kontor.parameter-value/citation       "地方税法 §51 + §314-4 — combined 1 % prefectural + 6 % municipal standard"}])
+
+;; ============================================================================
+;; Per-capita levy 均等割 table (NOT carried as :parameters — see ns docstring)
+;; ============================================================================
+
+(def per-capita-levy-table
+  "Hōjin Jūminzei 均等割 — the corporate per-capita inhabitants' levy.
+   A 10-cell table over (paid-in-capital-class × headcount-class).
+   `:capital-class` keys (consumer-supplied via `:tax-unit`):
+     :capital-up-to-10m   capital ≤ ¥10 000 000
+     :capital-up-to-100m  ¥10M < capital ≤ ¥100M
+     :capital-up-to-1b    ¥100M < capital ≤ ¥1B
+     :capital-up-to-5b    ¥1B < capital ≤ ¥5B
+     :capital-above-5b    capital > ¥5B
+   `:headcount-class` (consumer-supplied via `:tax-unit`; default :small):
+     :small   ≤ 50 employees
+     :large   > 50 employees
+
+   Citation: 地方税法 §52 + §312 ; JETRO Section 3.3 table; Tokyo
+   Metropolitan Bureau of Taxation 法人都民税のあらまし. Tier
+   boundaries have been stable since 2015."
+  {[:capital-up-to-10m  :small] 70000M
+   [:capital-up-to-10m  :large] 140000M
+   [:capital-up-to-100m :small] 180000M
+   [:capital-up-to-100m :large] 200000M
+   [:capital-up-to-1b   :small] 290000M
+   [:capital-up-to-1b   :large] 530000M
+   [:capital-up-to-5b   :small] 950000M
+   [:capital-up-to-5b   :large] 2290000M
+   [:capital-above-5b   :small] 1210000M
+   [:capital-above-5b   :large] 3800000M})
+
+;; ============================================================================
+;; Provisions — JP CIT statute as :provision data
+;; ============================================================================
+
+(def provisions
+  "JP CIT statutory provisions encoded for the `kontor.tax.statute`
+   evaluator. Conditions reference `:component` (set by the provider on
+   each per-component pass — `:national` / `:enterprise` / `:inhabitant`)
+   and consumer-supplied facts under `[:tax-unit ...]` / `[:inputs ...]`.
+
+   Consequences are compute-fns, `:tax-context-fact` amounts, or
+   `:schedule-override`s. JP rates and tier amounts live in
+   `:parameter` data (or the `per-capita-levy-table` for the 10-cell
+   均等割 lookup), NOT inlined here."
+
+  [;; --------------------------------------------------------------------
+   ;; National CIT 法人税
+   ;; --------------------------------------------------------------------
+   ;; The default schedule (set in the provider) is the SME progressive
+   ;; ladder: 15 % on the first ¥8M, 23.2 % thereafter. For large
+   ;; corporations (capital > ¥100M ⇒ :is-sme? false) the schedule is
+   ;; overridden to a flat 23.2 %. The provision encodes the
+   ;; large-corp override per ADR-101 Addendum 1 `:op :schedule-override`.
+   {:kontor.provision/code            "JP-CIT-§66-large"
+    :kontor.provision/jurisdiction    :jp
+    :kontor.provision/concept         [:kontor.tax-concept/code :elective-regime]
+    :kontor.provision/title           "法人税法 §66① — flat 23.2 % schedule for large corporations (capital > ¥100M)"
+    :kontor.provision/citation        "https://elaws.e-gov.go.jp/document?lawid=340AC0000000034"
+    :kontor.provision/effective-from  #inst "2018-04-01"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:and
+                                        [:eq :component :national]
+                                        [:eq [:tax-unit :is-sme?] false]])
+    :kontor.provision/consequence     (pr-str {:op :schedule-override
+                                        :code :jp-cit-large-flat
+                                        :label "法人税 large-corporation flat 23.2 %"
+                                        :schedule {:kontor.schedule/type :flat
+                                                   :rate-from :parameter
+                                                   :parameter "JP.CIT.flat-rate"}})}
+
+   ;; Note 125 — SME with annual income > ¥1B: the §66② reduced
+   ;; rate jumps from 15 % to 17 % on the first ¥8M (the >¥8M band stays
+   ;; at 23.2 %). Effective FY 2025-04-01 per the Reiwa-7 Tax Reform Act.
+   ;; Mutually exclusive with JP-CIT-§66-large (this fires only when
+   ;; :is-sme? true; that fires only when :is-sme? false) — no ambiguity.
+   {:kontor.provision/code            "JP-CIT-§66②-large-income"
+    :kontor.provision/jurisdiction    :jp
+    :kontor.provision/concept         [:kontor.tax-concept/code :elective-regime]
+    :kontor.provision/title           "法人税法 §66② post-Reiwa-7 — SME 17 % first-¥8M band when income > ¥1B"
+    :kontor.provision/citation        "https://elaws.e-gov.go.jp/document?lawid=340AC0000000034"
+    :kontor.provision/effective-from  #inst "2025-04-01"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:and
+                                        [:eq :component :national]
+                                        [:eq [:tax-unit :is-sme?] true]
+                                        [:gt [:inputs :book-profit] 1000000000M]])
+    :kontor.provision/consequence     (pr-str {:op :schedule-override
+                                        :code :jp-cit-sme-large-income
+                                        :label "法人税 SME 17%/23.2% (income > ¥1B)"
+                                        :schedule {:kontor.schedule/type :formula
+                                                   :fn-from :compute-fn
+                                                   :fn :jp-cit-sme-large-income-schedule}})}
+
+   ;; 地方法人税 — 10.3 % surtax on the national CIT amount. Same shape
+   ;; as DE Soli (late-bound compute-fn reads `:running`).
+   {:kontor.provision/code            "JP-LocalCIT-§9"
+    :kontor.provision/jurisdiction    :jp
+    :kontor.provision/concept         [:kontor.tax-concept/code :surtax]
+    :kontor.provision/title           "地方法人税法 §9-§10 — 10.3 % surtax on national CIT"
+    :kontor.provision/citation        "https://elaws.e-gov.go.jp/document?lawid=426AC0000000011"
+    :kontor.provision/effective-from  #inst "2014-10-01"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:eq :component :national])
+    :kontor.provision/consequence     (pr-str {:op :surtax
+                                        :code :local-corporate-tax
+                                        :label "地方法人税 (Local Corporation Tax, 10.3 % × 法人税)"
+                                        :amount-from :compute-fn
+                                        :fn :jp-local-cit-on-national})}
+
+   ;; 防衛特別法人税 — 4 % × max(0, national CIT − ¥5M).
+   ;; FISCAL YEARS BEGINNING ON OR AFTER 2026-04-01 (NOT as-of) per
+   ;; the law text (Special Defense Corporation Tax Act, enacted
+   ;; 2025-03-31). A calendar-year corp with FY 2026-01-01 → 2026-12-31
+   ;; does NOT pay the surtax — only FY beginning 2027-01-01 onwards.
+   ;;
+   ;; The condition uses `period-from-on-or-after` (ADR-101 Addendum 2)
+   ;; to gate on the period START, not on :as-of. The `:effective-from`
+   ;; below documents the statute enactment for audit; the cliff
+   ;; semantics live in `:condition`.
+   ;;
+   ;; Note 125 §1.5 /.
+   {:kontor.provision/code            "JP-DefenseSurtax"
+    :kontor.provision/jurisdiction    :jp
+    :kontor.provision/concept         [:kontor.tax-concept/code :surtax]
+    :kontor.provision/title           "防衛特別法人税 — 4 % × max(0, national CIT − ¥5M); FY beginning on or after 2026-04-01"
+    :kontor.provision/citation        "https://www.mof.go.jp/tax_policy/summary/corporation/c01.htm"
+    :kontor.provision/effective-from  #inst "2026-04-01"  ; statute enactment (audit)
+    :kontor.provision/priority        200
+    :kontor.provision/condition       (pr-str
+                                 [:and
+                                  (statute/period-from-on-or-after #inst "2026-04-01")
+                                  [:eq :component :national]])
+    :kontor.provision/consequence     (pr-str {:op :surtax
+                                        :code :defense-surtax
+                                        :label "防衛特別法人税 (Defense Surtax, 4 % × (法人税 − ¥5M))"
+                                        :amount-from :compute-fn
+                                        :fn :jp-defense-surtax})}
+
+   ;; --------------------------------------------------------------------
+   ;; Enterprise tax 事業税
+   ;; --------------------------------------------------------------------
+   ;; Default schedule (set in the provider) is the SME progressive
+   ;; ladder. For large corporations the schedule overrides to flat
+   ;; 1.18 % on the income base. (Pro-forma value-added + capital bases
+   ;; deferred —.)
+   {:kontor.provision/code            "JP-Enterprise-§72-large"
+    :kontor.provision/jurisdiction    :jp
+    :kontor.provision/concept         [:kontor.tax-concept/code :elective-regime]
+    :kontor.provision/title           "地方税法 §72 — flat 1.18 % income-base for large corporations (pro-forma value-added/capital bases shipped 2026-06 —-out)"
+    :kontor.provision/citation        "https://www.tax.metro.tokyo.lg.jp/kazei/hojin_jigyou.html"
+    :kontor.provision/effective-from  #inst "2019-10-01"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:and
+                                        [:eq :component :enterprise]
+                                        [:eq [:tax-unit :is-sme?] false]])
+    :kontor.provision/consequence     (pr-str {:op :schedule-override
+                                        :code :jp-enterprise-large-flat
+                                        :label "事業税 large-corporation flat 1.18 %"
+                                        :schedule {:kontor.schedule/type :flat
+                                                   :rate-from :parameter
+                                                   :parameter "JP.Enterprise.large-rate"}})}
+
+   ;; --------------------------------------------------------------------
+   ;; Pro-forma 外形標準課税 — value-added base (付加価値割)
+   ;; --------------------------------------------------------------------
+   ;; Fires only on the new :component :enterprise-value-added pass that
+   ;; the provider runs for large corporations. The base IS the value-
+   ;; added amount the provider computed (収益配分額 + 単年度損益 −
+   ;; 雇用安定控除, floored at 0); this provision just swaps the schedule
+   ;; to the prefectural standard 1.26 % rate. Tokyo's 超過税率 for the
+   ;; value-added base is the SAME 1.26 % (Tokyo does NOT levy excess
+   ;; rates on the value-added base —), so no per-prefecture
+   ;; override is needed at this point.
+   {:kontor.provision/code            "JP-Enterprise-§72-pro-forma-value-added"
+    :kontor.provision/jurisdiction    :jp
+    :kontor.provision/concept         [:kontor.tax-concept/code :elective-regime]
+    :kontor.provision/title           "地方税法 §72-12 / §72-24-7 — 付加価値割 1.26 % on the value-added base for large corporations"
+    :kontor.provision/citation        "https://www.tax.metro.tokyo.lg.jp/kazei/work/houjinji/gaikei/gaikei-01"
+    :kontor.provision/effective-from  #inst "2019-10-01"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:and
+                                        [:eq :component :enterprise-value-added]
+                                        [:eq [:tax-unit :is-sme?] false]])
+    :kontor.provision/consequence     (pr-str {:op :schedule-override
+                                        :code :jp-enterprise-value-added-rate
+                                        :label "事業税 付加価値割 (Value-Added Base) 1.26 %"
+                                        :schedule {:kontor.schedule/type :flat
+                                                   :rate-from :parameter
+                                                   :parameter "JP.Enterprise.value-added-rate"}})}
+
+   ;; --------------------------------------------------------------------
+   ;; Pro-forma 外形標準課税 — capital base (資本割)
+   ;; --------------------------------------------------------------------
+   ;; Fires only on the new :component :enterprise-capital pass. The
+   ;; base is the consumer-supplied paid-in capital + capital reserves
+   ;; snapshotted at `:as-of` (default `:period :to` per Q4.1). This
+   ;; provision swaps the schedule to flat 0.525 %. The 令和 6 年度
+   ;; (2024) reform added anti-avoidance rules for capital-reduction
+   ;; arrangements; v1 trusts the consumer's
+   ;; `:tax-unit :paid-in-capital`, anti-avoidance triage is v1.x.
+   {:kontor.provision/code            "JP-Enterprise-§72-pro-forma-capital"
+    :kontor.provision/jurisdiction    :jp
+    :kontor.provision/concept         [:kontor.tax-concept/code :elective-regime]
+    :kontor.provision/title           "地方税法 §72-12 / §72-24-7 — 資本割 0.525 % on the paid-in-capital base for large corporations"
+    :kontor.provision/citation        "https://www.tax.metro.tokyo.lg.jp/kazei/work/houjinji/gaikei/gaikei-01"
+    :kontor.provision/effective-from  #inst "2019-10-01"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:and
+                                        [:eq :component :enterprise-capital]
+                                        [:eq [:tax-unit :is-sme?] false]])
+    :kontor.provision/consequence     (pr-str {:op :schedule-override
+                                        :code :jp-enterprise-capital-rate
+                                        :label "事業税 資本割 (Capital Base) 0.525 %"
+                                        :schedule {:kontor.schedule/type :flat
+                                                   :rate-from :parameter
+                                                   :parameter "JP.Enterprise.capital-rate"}})}
+
+   ;; 特別法人事業税 — 37 % SME / 260 % large surtax on the
+   ;; enterprise-tax income-base amount. The compute-fn reads
+   ;; `:running` (which inside the
+   ;; enterprise component IS the just-computed enterprise tax).
+   {:kontor.provision/code            "JP-SpecialCorpEnterprise-§7"
+    :kontor.provision/jurisdiction    :jp
+    :kontor.provision/concept         [:kontor.tax-concept/code :surtax]
+    :kontor.provision/title           "特別法人事業税及び特別法人事業譲与税に関する法律 §7 — 37 % SME / 260 % large surtax on enterprise tax"
+    :kontor.provision/citation        "https://www.nta.go.jp/taxes/shiraberu/taxanswer/hojin/5765.htm"
+    :kontor.provision/effective-from  #inst "2019-10-01"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:eq :component :enterprise])
+    :kontor.provision/consequence     (pr-str {:op :surtax
+                                        :code :special-corp-enterprise-tax
+                                        :label "特別法人事業税 (Special Corp Enterprise Tax)"
+                                        :amount-from :compute-fn
+                                        :fn :jp-special-corp-enterprise})}
+
+   ;; --------------------------------------------------------------------
+   ;; Inhabitants' tax 法人住民税 — TWO surtax provisions on the
+   ;; :inhabitant component (which carries a zero gross-liability;
+   ;; both pieces are layered as surtaxes that don't reference the
+   ;; component's own base — see provider docstring).
+   ;; --------------------------------------------------------------------
+   ;; 法人税割 — 7 % standard combined rate on the national CIT amount.
+   ;; The compute-fn reads `:national-cit-amount` from ctx (the provider
+   ;; injects it after computing the national component).
+   {:kontor.provision/code            "JP-Inhabitant-income-levy"
+    :kontor.provision/jurisdiction    :jp
+    :kontor.provision/concept         [:kontor.tax-concept/code :surtax]
+    :kontor.provision/title           "法人住民税 法人税割 — 7 % combined (1 % pref + 6 % municipal) on national CIT"
+    :kontor.provision/citation        "https://www.tax.metro.tokyo.lg.jp/kazei/hojin_jumin.html"
+    :kontor.provision/effective-from  #inst "2019-10-01"
+    :kontor.provision/priority        100
+    :kontor.provision/condition       (pr-str [:eq :component :inhabitant])
+    :kontor.provision/consequence     (pr-str {:op :surtax
+                                        :code :inhabitant-income-levy
+                                        :label "法人住民税 法人税割 (Inhabitants' Income Levy, 7 % × 法人税)"
+                                        :amount-from :compute-fn
+                                        :fn :jp-inhabitant-income-levy})}
+
+   ;; 均等割 — fixed per-capita levy from the 10-cell capital × headcount
+   ;; table. No statutory base; the compute-fn reads `:tax-unit`
+   ;; dimensions and looks up `per-capita-levy-table`.
+   {:kontor.provision/code            "JP-Inhabitant-per-capita"
+    :kontor.provision/jurisdiction    :jp
+    :kontor.provision/concept         [:kontor.tax-concept/code :surtax]
+    :kontor.provision/title           "法人住民税 均等割 — fixed per-capita levy (capital × headcount lookup)"
+    :kontor.provision/citation        "https://www.tax.metro.tokyo.lg.jp/kazei/hojin_jumin.html"
+    :kontor.provision/effective-from  #inst "2015-04-01"
+    :kontor.provision/priority        200
+    :kontor.provision/condition       (pr-str [:eq :component :inhabitant])
+    :kontor.provision/consequence     (pr-str {:op :surtax
+                                        :code :inhabitant-per-capita-levy
+                                        :label "法人住民税 均等割 (Per-Capita Inhabitants' Levy)"
+                                        :amount-from :compute-fn
+                                        :fn :jp-inhabitant-per-capita})}])
+
+;; ============================================================================
+;; Install! — transact parameters + provisions into a connection
+;; ============================================================================
+
+(defn install!
+  "Install JP CIT statute (parameters + parameter-values + provisions)
+   into `conn`. Idempotent — `:kontor.parameter/code` and `:kontor.provision/code`
+   are unique identity attrs, so re-running the install is a no-op on
+   unchanged rows."
+  [conn]
+  (d/transact conn parameters)
+  (d/transact conn parameter-values)
+  (d/transact conn provisions))

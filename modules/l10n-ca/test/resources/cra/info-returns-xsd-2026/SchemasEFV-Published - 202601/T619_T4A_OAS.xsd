@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+
+<!--
+Description	Layout topologie - Common Record Layout
+Version#:	1.26 (version #.yy)
+-->
+
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+	xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0">
+	<xsd:include schemaLocation="simple.xsd"/>
+	<xsd:include schemaLocation="complex.xsd"/>
+	<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/>
+
+	<!-- @@@@    Common Record Layout     @@@@ -->
+	<xsd:element name="Submission" type="ReturnType"/>
+	<xsd:complexType name="ReturnType">
+		<xsd:sequence>
+			<xsd:element name="T619" type="TransmitterType"/>
+			<xsd:element name="Return" type="T4A_OASReturnChoiceType" minOccurs="0" maxOccurs="unbounded"/>
+
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T4A_OASReturnChoiceType">
+		<xsd:choice>
+			<xsd:sequence>
+				<xsd:element name="T4A_OAS" type="T4A_OASReturnType" minOccurs="0">
+					<xsd:key name="Unique_T4OASBN_Name">
+						<xsd:selector xpath="T4A_OASSummary"/>
+						<xsd:field xpath="bn"/>
+					</xsd:key>
+					<xsd:keyref name="Slip_T4OASBN_Not_Equal_Summary_BN" refer="Unique_T4OASBN_Name">
+						<xsd:selector xpath="T4A_OASSlip"/>
+						<xsd:field xpath="bn"/>
+					</xsd:keyref>
+				</xsd:element>
+			</xsd:sequence>
+		</xsd:choice>
+	</xsd:complexType>
+</xsd:schema>

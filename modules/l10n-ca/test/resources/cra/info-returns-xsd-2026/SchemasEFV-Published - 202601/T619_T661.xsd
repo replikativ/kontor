@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+	xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0"
+	xmlns:olsbr="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olsbr/1-0-1"
+	xmlns:olT661="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661/1-0-0">
+	<xsd:include schemaLocation="complex.xsd"/>
+	<xsd:import namespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661/1-0-0" schemaLocation="T661.xsd"/>
+	<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/>
+
+	<xsd:element name="Submission" type="ReturnType" />
+	<xsd:complexType name="ReturnType">
+		<xsd:sequence>
+			<xsd:element name="T619" type="TransmitterType" />
+			<xsd:element ref="olT661:OLT661Data" minOccurs="0" maxOccurs="unbounded"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+</xsd:schema>

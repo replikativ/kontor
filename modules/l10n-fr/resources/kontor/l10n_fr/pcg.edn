@@ -1,0 +1,157 @@
+;; Plan Comptable Général (PCG) — load-bearing subset for CA3 TVA
+;; reporting.
+;;
+;; PCG class structure:
+;;   1 — Comptes de capitaux (equity / long-term debt)
+;;   2 — Comptes d'immobilisations (fixed assets)
+;;   3 — Comptes de stocks
+;;   4 — Comptes de tiers (third parties: customers / suppliers / state)
+;;   5 — Comptes financiers (bank / cash / loans)
+;;   6 — Comptes de charges (expenses)
+;;   7 — Comptes de produits (revenue)
+;;
+;; CA3 declaration field codes (Cerfa 3310-CA3 — official monthly TVA
+;; declaration):
+;;   01 — Ventes / prestations de service (base, taxable at 20%)
+;;   02 — Ventes / prestations de service (base, taxable at 10%)
+;;   03 — Ventes / prestations de service (base, taxable at 5.5%)
+;;   04 — Taux particuliers (2.1%)
+;;   05 — Achats de biens / services soumis à la TVA française
+;;   06 — Acquisitions intra-communautaires
+;;   08 — Total of bases (computed)
+;;   16 — TVA collectée (output VAT total)
+;;   20 — TVA déductible sur biens et services (input VAT)
+;;
+;; Note on :kontor.tax/exigibility — French rule: service providers default
+;; to TVA "sur les encaissements" (cash basis); option for "sur les
+;; débits" (accrual) by letter to the SIE. Goods sellers are always
+;; "sur les débits". The kernel's :kontor.tax/exigibility :on-payment vs
+;; :on-invoice already covers this distinction; the chart below
+;; doesn't pin it (set per-:tax entity at install-time).
+
+[;; Classe 1 — Capitaux propres (equity / shareholder funds)
+ ;; Per PCG 2014 art.934-1, the equity hierarchy is:
+ ;;   10  — Capital et réserves
+ ;;   11  — Report à nouveau (retained earnings — credit balance =
+ ;;         cumulative undistributed profit; the close target).
+ ;;   12  — Résultat de l'exercice (current-year P&L; closed AT
+ ;;         year-end into 11x or distributed to shareholders per
+ ;;         the assemblée générale).
+ ;;   13  — Subventions d'investissement
+ ;;
+ ;; The kontor closing kernel rolls P&L into ONE retained-earnings
+ ;; account; FR convention is `110` (Report à nouveau créditeur).
+ ;; A separate `120` Résultat de l'exercice is conventional for
+ ;; the intermediate "before-AG-distribution" entry, but the
+ ;; kontor close goes straight to `110` for simplicity. SARLs / SAS
+ ;; that need the two-step PCG flow (close P&L → 120, then AG
+ ;; distributes 120 → 110/106/dividends) override `:retained-code`
+ ;; per close call.
+ {:code "101"  :path "Capitaux:Capital-social"
+  :type :equity :name "Capital social"}
+ {:code "106"  :path "Capitaux:Réserves"
+  :type :equity :name "Réserves"}
+ {:code "110"  :path "Capitaux:Report-à-nouveau"
+  :type :equity :name "Report à nouveau (solde créditeur)"}
+ {:code "119"  :path "Capitaux:Report-à-nouveau-débiteur"
+  :type :equity :name "Report à nouveau (solde débiteur)"}
+ {:code "120"  :path "Capitaux:Résultat-exercice-bénéfice"
+  :type :equity :name "Résultat de l'exercice (bénéfice)"}
+ {:code "129"  :path "Capitaux:Résultat-exercice-perte"
+  :type :equity :name "Résultat de l'exercice (perte)"}
+
+ ;; Classe 2 — Immobilisations (fixed assets)
+ {:code "2154" :path "Immobilisations:Matériel-industriel"
+  :type :asset :name "Matériel industriel"}
+ {:code "2183" :path "Immobilisations:Matériel-bureau"
+  :type :asset :name "Matériel de bureau et informatique"}
+
+ ;; Classe 4 — Tiers (third parties)
+ {:code "401"  :path "Tiers:Fournisseurs"
+  :type :liability :name "Fournisseurs"
+  :reconcilable? true}
+ {:code "411"  :path "Tiers:Clients"
+  :type :asset :name "Clients"
+  :reconcilable? true}
+ {:code "4111" :path "Tiers:Clients:France"
+  :type :asset :name "Clients — France"
+  :reconcilable? true}
+ {:code "4112" :path "Tiers:Clients:UE"
+  :type :asset :name "Clients — Union européenne"
+  :reconcilable? true}
+
+ ;; Classe 4 — État, taxes (state, taxes)
+ ;; TVA collectée (output VAT) — :tax-payable?
+ {:code "44571" :path "État:TVA-collectée:20"
+  :type :liability :name "TVA collectée 20%"
+  :tax-payable? true :tags [:ca3-08-vt20]}
+ {:code "44572" :path "État:TVA-collectée:10"
+  :type :liability :name "TVA collectée 10%"
+  :tax-payable? true :tags [:ca3-08-vt10]}
+ {:code "44573" :path "État:TVA-collectée:5.5"
+  :type :liability :name "TVA collectée 5,5%"
+  :tax-payable? true :tags [:ca3-08-vt55]}
+ {:code "44574" :path "État:TVA-collectée:2.1"
+  :type :liability :name "TVA collectée 2,1%"
+  :tax-payable? true :tags [:ca3-08-vt21]}
+
+ ;; TVA déductible (input VAT) — :tax-recoverable?
+ {:code "44566" :path "État:TVA-déductible:Biens-services"
+  :type :asset :name "TVA déductible sur biens et services"
+  :tax-recoverable? true :tags [:ca3-20]}
+ {:code "44562" :path "État:TVA-déductible:Immobilisations"
+  :type :asset :name "TVA déductible sur immobilisations"
+  :tax-recoverable? true :tags [:ca3-20]}
+ {:code "4452"  :path "État:TVA-intracommunautaire-due"
+  :type :liability :name "TVA due intracommunautaire (auto-liquidation)"
+  :tax-payable? true :tags [:ca3-06-tva]}
+ {:code "44581" :path "État:TVA-à-régulariser"
+  :type :asset :name "Acomptes — Régime simplifié"}
+
+ ;; Classe 5 — Comptes financiers
+ {:code "512"  :path "Banque"
+  :type :asset :name "Banques" :reconcilable? true}
+ {:code "5121" :path "Banque:Compte-courant"
+  :type :asset :name "Banques — Compte courant" :reconcilable? true}
+ {:code "53"   :path "Caisse"
+  :type :asset :name "Caisse" :reconcilable? true}
+
+ ;; Classe 6 — Charges (expenses)
+ {:code "601"  :path "Charges:Achats-marchandises"
+  :type :expense :name "Achats stockés — Matières premières"}
+ {:code "606"  :path "Charges:Fournitures-bureau"
+  :type :expense :name "Achats non stockés"}
+ {:code "613"  :path "Charges:Locations"
+  :type :expense :name "Locations"}
+ {:code "616"  :path "Charges:Assurances"
+  :type :expense :name "Primes d'assurance"}
+ {:code "623"  :path "Charges:Publicité"
+  :type :expense :name "Publicité, publications, relations publiques"}
+ {:code "625"  :path "Charges:Déplacements"
+  :type :expense :name "Déplacements, missions et réceptions"}
+ {:code "626"  :path "Charges:Télécom"
+  :type :expense :name "Frais postaux et télécommunications"}
+ {:code "627"  :path "Charges:Banque"
+  :type :expense :name "Services bancaires et assimilés"}
+ {:code "641"  :path "Charges:Personnel"
+  :type :expense :name "Rémunérations du personnel"}
+
+ ;; Classe 7 — Produits (revenue)
+ {:code "706"  :path "Produits:Prestations-services"
+  :type :income :name "Prestations de services"
+  :tags [:ca3-01-base]}
+ {:code "707"  :path "Produits:Ventes-marchandises"
+  :type :income :name "Ventes de marchandises"
+  :tags [:ca3-01-base]}
+ {:code "7065" :path "Produits:Prestations-services:10"
+  :type :income :name "Prestations à 10%"
+  :tags [:ca3-02-base]}
+ {:code "7066" :path "Produits:Prestations-services:5.5"
+  :type :income :name "Prestations à 5,5%"
+  :tags [:ca3-03-base]}
+ {:code "7067" :path "Produits:Prestations-services:2.1"
+  :type :income :name "Prestations à 2,1%"
+  :tags [:ca3-04-base]}
+ {:code "7081" :path "Produits:Prestations:Intra-UE"
+  :type :income :name "Livraisons intra-UE — exonérées art.262 ter I"
+  :tags [:ca3-06-base]}]

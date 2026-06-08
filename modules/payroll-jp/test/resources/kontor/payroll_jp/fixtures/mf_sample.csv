@@ -1,0 +1,17 @@
+employee_code,name,item_code,category,amount
+EMP-100,Yamada Ichiro,salary,earning,350000
+EMP-100,Yamada Ichiro,commuting,earning,10000
+EMP-100,Yamada Ichiro,health_insurance,deduction,18200
+EMP-100,Yamada Ichiro,pension,deduction,33550
+EMP-100,Yamada Ichiro,employment_insurance,deduction,2160
+EMP-100,Yamada Ichiro,income_tax,deduction,9500
+EMP-100,Yamada Ichiro,resident_tax,deduction,19500
+EMP-200,Sato Jiro,salary,earning,500000
+EMP-200,Sato Jiro,commuting,earning,18000
+EMP-200,Sato Jiro,housing_allowance,earning,30000
+EMP-200,Sato Jiro,health_insurance,deduction,27500
+EMP-200,Sato Jiro,pension,deduction,50730
+EMP-200,Sato Jiro,long_term_care,deduction,4510
+EMP-200,Sato Jiro,employment_insurance,deduction,3288
+EMP-200,Sato Jiro,income_tax,deduction,22000
+EMP-200,Sato Jiro,resident_tax,deduction,29000

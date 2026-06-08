@@ -1,0 +1,48 @@
+;; INVARIANT: posting account must be active.
+;;
+;; ADR-011 + research note 04: invariant.datahike contract is
+;;   four sources: $before $after $empty+txs $txs
+;;   query must return truthy iff invariant HOLDS.
+;;
+;; Semantics: every new posting's :kontor.posting/account must reference an
+;; account whose :kontor.account/active is true (or unset — we treat absent
+;; as active, mirroring Odoo's "no archive flag = active" default).
+;;
+;; Strategy: count posting→inactive-account violations via a subquery.
+;; The invariant holds iff the count is zero. Using `not-join` with no
+;; binding vars also works but is harder to debug when it fires.
+[:find ?matches .
+ :in $before $after $empty+txs $txs
+ :where
+ ;; Holds iff no posting in $empty+txs (the just-applied tx)
+ ;; references an account that is :kontor.account/active false in the
+ ;; resulting state $after.
+ ;;
+ ;; Datalog mechanics worth knowing for the next invariant author:
+ ;;   * `(q ...)` is the function-form subquery that returns the raw
+ ;;     relation. We use it (not `subquery`) because the `subquery`
+ ;;     built-in returns [] on empty match sets and the [[?v]]
+ ;;     destructure then silently fails the whole invariant.
+ ;;   * `(empty? ?coll)` — DOES NOT work as a function binding in
+ ;;     datahike 0.8.x: the planner appears to treat collection-
+ ;;     valued args as relation sources and the binding produces the
+ ;;     wrong value. Use `count` + `=` instead.
+ ;;   * `[(= 0 ?n) ?matches]` is a function binding, fires reliably,
+ ;;     and produces a real boolean.
+ ;;   * Predicate filters `[(pred ?v)]` (no binding output) only
+ ;;     fire when ?v came from a database pattern, not from :in or
+ ;;     from a previous function binding. Avoid the predicate-only
+ ;;     form for derived values.
+ ;;
+ ;; Convention from Odoo: an account without :kontor.account/active set is
+ ;; treated as active (the predicate filters explicitly on `false`,
+ ;; so `nil` / missing passes through cleanly).
+ [(q [:find ?p
+      :in $after $empty+txs
+      :where
+      [$empty+txs ?p :kontor.posting/account ?account]
+      [$after ?account :kontor.account/active false]]
+     $after $empty+txs)
+  ?violators]
+ [(count ?violators) ?n-violators]
+ [(= 0 ?n-violators) ?matches]]

@@ -1,0 +1,86 @@
+;; FR payroll-specific account starter — extends modules/l10n-fr/pcg.edn
+;; per ADR-079 + doc/research/79 §5.3. Consumer overrides as needed.
+;;
+;; The load-bearing identifier is :kontor.account-tag/name (e.g.
+;; "fr-payroll-urssaf"), not :code. Codes follow PCG 2014 class-6 +
+;; class-4 conventions documented at:
+;;   https://www.economie.gouv.fr/files/files/directions_services/dgfip/Plan_Comptable_General.pdf
+;;
+;; Per-établissement routing (multi-SIRET businesses): use
+;; :kontor.posting/account-tags with a SIRET-keyed tag (e.g.
+;; "fr-etab-12345678900012") OR duplicate this chart with code-suffix
+;; discrimination, same convention as.2 (CA RP routing).
+
+[;; ──────────────────────────────────────────────────────────────────
+ ;; EXPENSE SIDE — Class 6 (Charges)
+ ;; ──────────────────────────────────────────────────────────────────
+ {:code "6411" :path "Charges:Personnel:Salaires"
+  :type :expense :name "Salaires et appointements (PCG 6411)"
+  :tags [:fr-payroll-salaires]}
+ {:code "6412" :path "Charges:Personnel:Congés-payés"
+  :type :expense :name "Congés payés (PCG 6412)"
+  :tags [:fr-payroll-conges-payes :fr-payroll-conges-accrual]}
+ {:code "6413" :path "Charges:Personnel:Primes"
+  :type :expense :name "Primes et gratifications (PCG 6413)"
+  :tags [:fr-payroll-primes]}
+ {:code "6414" :path "Charges:Personnel:Avantages-en-nature"
+  :type :expense :name "Indemnités et avantages divers (PCG 6414)"
+  :tags [:fr-payroll-avantages-nature]}
+ {:code "6451" :path "Charges:Sécurité-sociale:URSSAF"
+  :type :expense :name "Cotisations URSSAF (part employeur, PCG 6451)"
+  :tags [:fr-payroll-er-urssaf]}
+ {:code "6453" :path "Charges:Sécurité-sociale:Retraite"
+  :type :expense :name "Cotisations caisses de retraite ARRCO/AGIRC (employeur, PCG 6453)"
+  :tags [:fr-payroll-er-retraite]}
+ {:code "6454" :path "Charges:Sécurité-sociale:Pôle-emploi"
+  :type :expense :name "Cotisations Pôle emploi (employeur, PCG 6454)"
+  :tags [:fr-payroll-er-assedic]}
+ {:code "6455" :path "Charges:Sécurité-sociale:Prévoyance"
+  :type :expense :name "Cotisations prévoyance / mutuelle (employeur, PCG 6455)"
+  :tags [:fr-payroll-er-prevoyance]}
+
+ ;; ──────────────────────────────────────────────────────────────────
+ ;; LIABILITY SIDE — Class 4 (Tiers)
+ ;; ──────────────────────────────────────────────────────────────────
+ ;; 421 — net pay to employees (reconcilable against bank payouts)
+ {:code "421"  :path "Tiers:Personnel:Rémunérations-dues"
+  :type :liability :name "Personnel — Rémunérations dues (PCG 421)"
+  :tags [:fr-payroll-personnel-net]
+  :reconcilable? true}
+ {:code "425"  :path "Tiers:Personnel:Acomptes"
+  :type :liability :name "Personnel — Avances et acomptes (PCG 425)"
+  :tags [:fr-payroll-acomptes]
+  :reconcilable? true}
+ {:code "427"  :path "Tiers:Personnel:Oppositions"
+  :type :liability :name "Personnel — Oppositions (saisies sur salaire, PCG 427)"
+  :tags [:fr-payroll-oppositions]}
+
+ ;; 431 — URSSAF: cotisations SS + CSG/CRDS
+ {:code "431"  :path "Tiers:URSSAF"
+  :type :liability :name "Sécurité sociale — URSSAF (PCG 431)"
+  :tags [:fr-payroll-urssaf]}
+
+ ;; 437 — Autres organismes sociaux
+ {:code "4371" :path "Tiers:Retraite-complémentaire"
+  :type :liability :name "Caisses retraite complémentaire ARRCO/AGIRC (PCG 4371)"
+  :tags [:fr-payroll-retraite]}
+ {:code "4373" :path "Tiers:Pôle-emploi"
+  :type :liability :name "Pôle emploi / ASSEDIC (PCG 4373)"
+  :tags [:fr-payroll-pole-emploi]}
+ {:code "4374" :path "Tiers:Prévoyance-Mutuelle"
+  :type :liability :name "Caisses prévoyance / mutuelle (PCG 4374)"
+  :tags [:fr-payroll-prevoyance]}
+
+ ;; 4421 — PAS (Prélèvement à la source — withholding tax)
+ ;; Per DGFiP doctrine PAS is reported on the DSN block 50 and remitted
+ ;; via télé-règlement; account 4421 is the conventional PCG slot.
+ {:code "4421" :path "Tiers:État:PAS"
+  :type :liability :name "État — Impôt sur le revenu prélevé à la source (PCG 4421)"
+  :tags [:fr-payroll-pas]}
+
+ ;; 4282 — Charges à payer — congés payés (provision)
+ ;; PCG 428x is the "charges à payer" bucket; 4282 specifically for the
+ ;; congés-payés provision under PCG art. 943-44.
+ {:code "4282" :path "Tiers:Charges-à-payer:Congés-payés"
+  :type :liability :name "Dettes provisionnées — Congés payés (PCG 4282)"
+  :tags [:fr-payroll-conges-liability]}]

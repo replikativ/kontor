@@ -1,0 +1,227 @@
+;; kontor — double-entry accounting kernel on datahike.
+;;
+;; Kernel deps are deliberately minimal. Country-specific data,
+;; e-invoicing wrappers, and bank-statement importers ship as separate
+;; artifacts (see doc/architecture.md).
+;; Monorepo layout (per ADR-006 + iteration-speed concerns):
+;; the kernel ships from src/ + resources/; per-country / per-bank /
+;; per-format modules under modules/<name>/. Each module's src/ + test/
+;; + resources/ live next to its own README, but ALL paths are merged
+;; here so a single REPL / single bb ci sees the whole tree. When a
+;; module hardens enough to have external consumers, it can be split
+;; into its own artifact without code changes — only deps.edn moves.
+{:paths ["src" "resources"
+         "modules/partner/src"     "modules/partner/resources"
+         "modules/sales/src"       "modules/sales/resources"
+         "modules/invoice/src"     "modules/invoice/resources"
+         "modules/procurement/src" "modules/procurement/resources"
+         "modules/collections/src" "modules/collections/resources"
+         "modules/asset/src"       "modules/asset/resources"
+         "modules/inventory/src"   "modules/inventory/resources"
+         "modules/expense/src"     "modules/expense/resources"
+         "modules/lease/src"       "modules/lease/resources"
+         "modules/hr/src"          "modules/hr/resources"
+         "modules/payroll-us-adp/src" "modules/payroll-us-adp/resources"
+         "modules/l10n-de/src"     "modules/l10n-de/resources"
+         "modules/l10n-at/src"     "modules/l10n-at/resources"
+         "modules/l10n-fr/src"     "modules/l10n-fr/resources"
+         "modules/l10n-ca/src"     "modules/l10n-ca/resources"
+         "modules/l10n-us/src"     "modules/l10n-us/resources"
+         "modules/l10n-jp/src"     "modules/l10n-jp/resources"
+         "modules/l10n-au/src"     "modules/l10n-au/resources"
+         "modules/l10n-cn/src"     "modules/l10n-cn/resources"
+         "modules/l10n-br/src"     "modules/l10n-br/resources"
+         "modules/l10n-in/src"     "modules/l10n-in/resources"
+         "modules/l10n-mx/src"     "modules/l10n-mx/resources"
+         "modules/l10n-uk/src"     "modules/l10n-uk/resources"
+         "modules/payroll-ca/src"  "modules/payroll-ca/resources"
+         "modules/payroll-jp/src"  "modules/payroll-jp/resources"
+         "modules/payroll-br/src"  "modules/payroll-br/resources"
+         "modules/payroll-fr/src"  "modules/payroll-fr/resources"
+         "modules/payroll-au/src"  "modules/payroll-au/resources"
+         "modules/payroll-in/src"  "modules/payroll-in/resources"
+         "modules/payroll-mx/src"  "modules/payroll-mx/resources"
+         "modules/payroll-at/src"  "modules/payroll-at/resources"
+         "modules/bank-de/src"     "modules/bank-de/resources"
+         "modules/bank-at/src"     "modules/bank-at/resources"
+         "modules/bank-fr/src"     "modules/bank-fr/resources"
+         "modules/bank-ca/src"     "modules/bank-ca/resources"
+         "modules/bank-us/src"     "modules/bank-us/resources"
+         "modules/einvoice-de/src" "modules/einvoice-de/resources"
+         "modules/payroll-de-datev/src" "modules/payroll-de-datev/resources"
+         "modules/payroll-cn/src"  "modules/payroll-cn/resources"
+         "modules/import-gleif/src" "modules/import-gleif/resources"
+         "modules/import-edgar/src" "modules/import-edgar/resources"
+         "modules/people-record/src" "modules/people-record/resources"
+         "modules/disposal/src"    "modules/disposal/resources"
+         "modules/incorporation/src" "modules/incorporation/resources"
+         "modules/treaty-de-ca/src"]
+
+ :deps
+ {org.clojure/clojure              {:mvn/version "1.12.4"}
+  org.replikativ/datahike          {:mvn/version "0.8.1699"}
+  ;; ADR-011's declarative datalog invariants now live inline at
+  ;; `kontor.invariant` (vendored from datopia/invariant, MIT, maintained
+  ;; by us). Single-dep posture per ADR-001 preserved.
+  ;; Beancount parser (Phase 1 acceptance test — ADR-009). Small EPL
+  ;; library, no further transitive deps to speak of.
+  instaparse/instaparse            {:mvn/version "1.5.0"}
+  ;; CSV parsing — used by modules/bank-de. EPL.
+  org.clojure/data.csv             {:mvn/version "1.1.0"}
+  ;; XML generation — used by modules/l10n-ca/.../xml/ for CRA
+  ;; information-return XML (T4 / T5 / T5018) per ADR-015. EPL.
+  org.clojure/data.xml             {:mvn/version "0.2.0-alpha9"}
+  ;; JSON — used by modules/l10n-in/.../irn for the NIC IRP payload
+  ;; (ADR-024 multi-attestation). EPL.
+  org.clojure/data.json            {:mvn/version "2.5.0"}
+  ;; Mustang — Factur-X / XRechnung / ZUGFeRD generation + embedding.
+  ;; APL-2. Used by modules/einvoice-de. Heavy: pulls iText, Apache PDFBox,
+  ;; XOM, etc., so kernel-only consumers can drop this entry from their
+  ;; deps.edn at packaging time.
+  org.mustangproject/library       {:mvn/version "2.17.0"}}
+
+ :aliases
+ {:test
+  {:extra-paths ["test" "test/resources"
+                 "modules/partner/test"      "modules/partner/test/resources"
+                 "modules/sales/test"        "modules/sales/test/resources"
+                 "modules/invoice/test"      "modules/invoice/test/resources"
+                 "modules/procurement/test"  "modules/procurement/test/resources"
+                 "modules/collections/test"  "modules/collections/test/resources"
+                 "modules/asset/test"        "modules/asset/test/resources"
+                 "modules/inventory/test"    "modules/inventory/test/resources"
+                 "modules/expense/test"      "modules/expense/test/resources"
+                 "modules/lease/test"        "modules/lease/test/resources"
+                 "modules/hr/test"           "modules/hr/test/resources"
+                 "modules/payroll-us-adp/test" "modules/payroll-us-adp/test/resources"
+                 "modules/l10n-de/test"      "modules/l10n-de/test/resources"
+                 "modules/l10n-at/test"      "modules/l10n-at/test/resources"
+                 "modules/l10n-fr/test"      "modules/l10n-fr/test/resources"
+                 "modules/l10n-ca/test"      "modules/l10n-ca/test/resources"
+                 "modules/l10n-us/test"      "modules/l10n-us/test/resources"
+                 "modules/l10n-jp/test"      "modules/l10n-jp/test/resources"
+                 "modules/l10n-au/test"      "modules/l10n-au/test/resources"
+                 "modules/l10n-cn/test"      "modules/l10n-cn/test/resources"
+                 "modules/l10n-br/test"      "modules/l10n-br/test/resources"
+                 "modules/l10n-in/test"      "modules/l10n-in/test/resources"
+                 "modules/l10n-mx/test"      "modules/l10n-mx/test/resources"
+                 "modules/l10n-uk/test"      "modules/l10n-uk/test/resources"
+                 "modules/payroll-ca/test"   "modules/payroll-ca/test/resources"
+                 "modules/payroll-jp/test"   "modules/payroll-jp/test/resources"
+                 "modules/payroll-br/test"   "modules/payroll-br/test/resources"
+                 "modules/payroll-fr/test"   "modules/payroll-fr/test/resources"
+                 "modules/payroll-au/test"   "modules/payroll-au/test/resources"
+                 "modules/payroll-in/test"   "modules/payroll-in/test/resources"
+                 "modules/payroll-mx/test"   "modules/payroll-mx/test/resources"
+                 "modules/payroll-at/test"   "modules/payroll-at/test/resources"
+                 "modules/bank-de/test"      "modules/bank-de/test/resources"
+                 "modules/bank-at/test"      "modules/bank-at/test/resources"
+                 "modules/bank-fr/test"      "modules/bank-fr/test/resources"
+                 "modules/bank-ca/test"      "modules/bank-ca/test/resources"
+                 "modules/bank-us/test"      "modules/bank-us/test/resources"
+                 "modules/einvoice-de/test"  "modules/einvoice-de/test/resources"
+                 "modules/payroll-de-datev/test"
+                 "modules/payroll-de-datev/test/resources"
+                 "modules/payroll-cn/test"   "modules/payroll-cn/test/resources"
+                 "modules/import-gleif/test" "modules/import-gleif/test/resources"
+                 "modules/import-edgar/test" "modules/import-edgar/test/resources"
+                 "modules/people-record/test" "modules/people-record/test/resources"
+                 "modules/disposal/test"     "modules/disposal/test/resources"
+                 "modules/incorporation/test" "modules/incorporation/test/resources"]
+   :extra-deps  {lambdaisland/kaocha     {:mvn/version "1.91.1392"}
+                 org.clojure/test.check  {:mvn/version "1.1.1"}}
+   :main-opts   ["-m" "kaocha.runner"]}
+
+  ;; REPL with test sources on the classpath + nREPL for editor wiring.
+  ;; Mirrors the convention used in pg-datahike and beleg.
+  :dev
+  {:extra-paths ["test" "test/resources" "dev"
+                 "modules/partner/test"      "modules/partner/test/resources"
+                 "modules/sales/test"        "modules/sales/test/resources"
+                 "modules/invoice/test"      "modules/invoice/test/resources"
+                 "modules/procurement/test"  "modules/procurement/test/resources"
+                 "modules/collections/test"  "modules/collections/test/resources"
+                 "modules/asset/test"        "modules/asset/test/resources"
+                 "modules/inventory/test"    "modules/inventory/test/resources"
+                 "modules/expense/test"      "modules/expense/test/resources"
+                 "modules/lease/test"        "modules/lease/test/resources"
+                 "modules/hr/test"           "modules/hr/test/resources"
+                 "modules/payroll-us-adp/test" "modules/payroll-us-adp/test/resources"
+                 "modules/l10n-de/test"      "modules/l10n-de/test/resources"
+                 "modules/l10n-at/test"      "modules/l10n-at/test/resources"
+                 "modules/l10n-fr/test"      "modules/l10n-fr/test/resources"
+                 "modules/l10n-ca/test"      "modules/l10n-ca/test/resources"
+                 "modules/l10n-us/test"      "modules/l10n-us/test/resources"
+                 "modules/l10n-jp/test"      "modules/l10n-jp/test/resources"
+                 "modules/l10n-au/test"      "modules/l10n-au/test/resources"
+                 "modules/l10n-cn/test"      "modules/l10n-cn/test/resources"
+                 "modules/l10n-br/test"      "modules/l10n-br/test/resources"
+                 "modules/l10n-in/test"      "modules/l10n-in/test/resources"
+                 "modules/l10n-mx/test"      "modules/l10n-mx/test/resources"
+                 "modules/l10n-uk/test"      "modules/l10n-uk/test/resources"
+                 "modules/payroll-ca/test"   "modules/payroll-ca/test/resources"
+                 "modules/payroll-jp/test"   "modules/payroll-jp/test/resources"
+                 "modules/payroll-br/test"   "modules/payroll-br/test/resources"
+                 "modules/payroll-fr/test"   "modules/payroll-fr/test/resources"
+                 "modules/payroll-au/test"   "modules/payroll-au/test/resources"
+                 "modules/payroll-in/test"   "modules/payroll-in/test/resources"
+                 "modules/payroll-mx/test"   "modules/payroll-mx/test/resources"
+                 "modules/payroll-at/test"   "modules/payroll-at/test/resources"
+                 "modules/bank-de/test"      "modules/bank-de/test/resources"
+                 "modules/bank-at/test"      "modules/bank-at/test/resources"
+                 "modules/bank-fr/test"      "modules/bank-fr/test/resources"
+                 "modules/bank-ca/test"      "modules/bank-ca/test/resources"
+                 "modules/bank-us/test"      "modules/bank-us/test/resources"
+                 "modules/einvoice-de/test"  "modules/einvoice-de/test/resources"
+                 "modules/payroll-de-datev/test"
+                 "modules/payroll-de-datev/test/resources"
+                 "modules/payroll-cn/test"   "modules/payroll-cn/test/resources"
+                 "modules/import-gleif/test" "modules/import-gleif/test/resources"
+                 "modules/import-edgar/test" "modules/import-edgar/test/resources"
+                 "modules/people-record/test" "modules/people-record/test/resources"
+                 "modules/disposal/test"     "modules/disposal/test/resources"
+                 "modules/incorporation/test" "modules/incorporation/test/resources"]
+   :extra-deps  {nrepl/nrepl             {:mvn/version "1.3.0"}
+                 lambdaisland/kaocha     {:mvn/version "1.91.1392"}
+                 org.clojure/test.check  {:mvn/version "1.1.1"}
+                 cider/cider-nrepl       {:mvn/version "0.45.0"}}}
+
+  :format
+  {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.0"}}
+   :main-opts  ["-m" "cljfmt.main" "check"]}
+
+  :ffix
+  {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.0"}}
+   :main-opts  ["-m" "cljfmt.main" "fix"]}
+
+  :lint
+  {:replace-deps {clj-kondo/clj-kondo {:mvn/version "2025.07.28"}}
+   :main-opts    ["-m" "clj-kondo.main" "--lint" "src" "test"]}
+
+  :build
+  {:deps       {io.github.clojure/tools.build         {:mvn/version "0.10.6"}
+                slipset/deps-deploy                   {:mvn/version "0.2.2"}
+                io.github.borkdude/gh-release-artifact {:git/sha "b946558225a7839f6a0f644834e838e190dc2262"}
+                babashka/babashka.curl                {:mvn/version "0.1.2"}
+                babashka/fs                           {:mvn/version "0.3.17"}
+                cheshire/cheshire                     {:mvn/version "5.11.0"}}
+   :ns-default build}
+
+  ;; Spin up a pg-datahike SQL server fronting an accounting DB. Used
+  ;; for `clj -M:pg-server` experiments — clients can then connect via
+  ;; psql and issue SQL against the kernel schema.
+  :pg-server
+  {:extra-paths ["dev"
+                 "modules/l10n-de/test/resources"]
+   :extra-deps  {org.replikativ/pg-datahike
+                 {:git/url "https://github.com/replikativ/pg-datahike.git"
+                  :git/sha "f07a7c5743102d6f8aa2ee477e7a4f6d88709ea1"}}
+   :main-opts   ["-m" "kontor.dev.pg-experiment"]}
+
+  ;; Clay notebooks: live multi-national use-case showcases under
+  ;; doc/showcases/. Used to drive cross-cutting user-story validation
+  ;; per CLAUDE.md (DE Factur-X, US multi-state, IN IRN+TDS). Heavy
+  ;; deps — not a runtime concern.
+  :notebooks
+  {:extra-paths ["doc/showcases"]
+   :extra-deps  {org.scicloj/clay {:mvn/version "2.0.14"}}}}}

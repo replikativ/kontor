@@ -1,0 +1,94 @@
+;; IN payroll-specific account starter — extends modules/l10n-in/chart.edn
+;;3 C9 plan.
+;;
+;; Schedule III (Companies Act 2013, Division II Ind AS-aligned) groups
+;; payroll under "Employee Benefit Expense" — we use a 690000-series
+;; convention separate from the existing 520000-series in the base
+;; l10n-in chart. Both layouts work in production; the 690000 series
+;; here keeps payroll accounts visually distinct.
+;;
+;; Per.3:
+;;   - Statutory liabilities live under 33xxxx (matches existing IN
+;;     chart's TDS payable / GST payable convention).
+;;   - Bonus / leave / gratuity liabilities live under 32xxxx
+;;     (current liabilities, separate from statutory).
+;;
+;; The load-bearing identifier is :kontor.account-tag/name (e.g.
+;; "in-payroll-tds-payable"), not :code. Consumers can renumber freely.
+
+[;; ──────────────────────────────────────────────────────────────────
+ ;; EXPENSE SIDE (debit) — Employee Benefit Expense (Schedule III)
+ ;; ──────────────────────────────────────────────────────────────────
+ {:code "690000" :path "Expenses:Employee-Benefits:Salaries-and-Wages"
+  :type :expense :name "Salaries, Wages and Bonus"
+  :tags [:in-payroll-salaries-wages]}
+ {:code "690100" :path "Expenses:Employee-Benefits:Bonus"
+  :type :expense :name "Bonus expense (Payment of Bonus Act 1965)"
+  :tags [:in-payroll-bonus]}
+ {:code "690200" :path "Expenses:Employee-Benefits:Bonus-Accrual"
+  :type :expense :name "Bonus accrual expense (Payment of Bonus Act 1965)"
+  :tags [:in-payroll-bonus-accrual]}
+ {:code "690300" :path "Expenses:Employee-Benefits:Leave-Accrual"
+  :type :expense :name "Leave encashment accrual expense"
+  :tags [:in-payroll-leave-accrual]}
+ {:code "690400" :path "Expenses:Employee-Benefits:Gratuity-Paid"
+  :type :expense :name "Gratuity paid (Payment of Gratuity Act 1972)"
+  :tags [:in-payroll-gratuity-paid]}
+ {:code "690500" :path "Expenses:Employee-Benefits:Gratuity-Accrual"
+  :type :expense :name "Gratuity accrual expense (Ind AS 19; consumer-supplied actuarial)"
+  :tags [:in-payroll-gratuity-accrual]}
+ {:code "691000" :path "Expenses:Employee-Benefits:Employer-PF"
+  :type :expense :name "Contribution to PF / EPS / EDLI (employer 12% + 0.5%)"
+  :tags [:in-payroll-er-pf]}
+ {:code "691100" :path "Expenses:Employee-Benefits:Employer-ESI"
+  :type :expense :name "Contribution to ESI (employer 3.25%)"
+  :tags [:in-payroll-er-esi]}
+ {:code "691200" :path "Expenses:Employee-Benefits:Staff-Welfare"
+  :type :expense :name "Staff Welfare Expenses"
+  :tags [:in-payroll-staff-welfare]}
+
+ ;; ──────────────────────────────────────────────────────────────────
+ ;; LIABILITY SIDE — Statutory payables (33xxxx, mirroring base IN chart)
+ ;; ──────────────────────────────────────────────────────────────────
+ {:code "333500" :path "Liabilities:Statutory:TDS-Salary"
+  :type :liability :name "TDS Payable — Section 192 (Salaries)"
+  :tax-payable? true
+  :tags [:in-payroll-tds-payable :in-tds-payable]}
+ {:code "333600" :path "Liabilities:Statutory:PF-Payable"
+  :type :liability :name "EPFO — PF / EPS / EDLI payable"
+  :tax-payable? true
+  :tags [:in-payroll-pf-payable]}
+ {:code "333700" :path "Liabilities:Statutory:ESI-Payable"
+  :type :liability :name "ESIC — ESI premium payable"
+  :tax-payable? true
+  :tags [:in-payroll-esi-payable]}
+ {:code "333800" :path "Liabilities:Statutory:Professional-Tax"
+  :type :liability :name "Professional Tax payable (per-state)"
+  :tax-payable? true
+  :tags [:in-payroll-pt-payable]}
+
+ ;; ──────────────────────────────────────────────────────────────────
+ ;; LIABILITY SIDE — Other current liabilities (payroll-non-statutory)
+ ;; ──────────────────────────────────────────────────────────────────
+ {:code "323500" :path "Liabilities:Current:Wages-Payable-Net"
+  :type :liability :name "Wages payable (net to employees)"
+  :reconcilable? true
+  :tags [:in-payroll-net-wages]}
+ {:code "323600" :path "Liabilities:Current:Bonus-Payable"
+  :type :liability :name "Bonus payable (accrued under Payment of Bonus Act)"
+  :tags [:in-payroll-bonus-payable]}
+ {:code "323700" :path "Liabilities:Current:Leave-Liability"
+  :type :liability :name "Leave encashment liability (Ind AS 19 short-term)"
+  :tags [:in-payroll-leave-liability]}
+ {:code "323800" :path "Liabilities:Current:Gratuity-Liability"
+  :type :liability :name "Gratuity liability (Ind AS 19 defined-benefit)"
+  :tags [:in-payroll-gratuity-liability]}
+ {:code "323900" :path "Liabilities:Current:Other-Deductions"
+  :type :liability :name "Other voluntary employee deductions"
+  :tags [:in-payroll-other-deduction]}
+ {:code "323950" :path "Liabilities:Current:Loan-Recovery"
+  :type :liability :name "Employee loan recovery (offset against advance asset)"
+  :tags [:in-payroll-loan-recovery]}
+ {:code "323960" :path "Liabilities:Current:Garnishment"
+  :type :liability :name "Garnishments payable"
+  :tags [:in-payroll-garnishment]}]

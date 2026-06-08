@@ -1,0 +1,367 @@
+;; Mexican chart of accounts — SAT Código Agrupador starter set.
+;;
+;; The Servicio de Administración Tributaria (SAT) publishes a
+;; mandatory taxonomy (the "Código Agrupador del SAT") that every
+;; Mexican filing entity must map their internal chart to for the
+;; Contabilidad Electrónica monthly filing (catálogo de cuentas XML
+;; per Anexo 24 of the Resolución Miscelánea Fiscal). The taxonomy
+;; uses a 3-digit account group + 3-digit subaccount + (optional)
+;; 3-digit sub-subaccount, dot-separated.
+;;
+;; Top groups (Código Agrupador SAT):
+;;   100  Activos circulantes              (current assets)
+;;   110  Activos fijos                    (fixed assets)
+;;   119  Impuestos acreditables (IVA ITC) — split cobrado / no cobrado
+;;   200  Pasivos a corto plazo            (short-term liabilities)
+;;   208  Impuestos trasladados (output IVA / IEPS) — split cobrado / no cobrado
+;;   300  Pasivos a largo plazo            (long-term liabilities)
+;;   400  Capital contable                 (equity)
+;;   401  Capital social + Utilidades Retenidas
+;;   500  Ingresos                         (revenue)
+;;   600  Costos                           (cost of sales)
+;;   700  Gastos                           (operating expenses)
+;;   800  Otros ingresos / gastos
+;;   900  Cuentas de orden                 (memo accounts)
+;;
+;; Cash-basis IVA — the critical MX specific.
+;;
+;; Mexico recognises IVA on a CASH basis (Art. 1-B Ley del IVA). The
+;; supplier owes output IVA to SAT only when payment is received from
+;; the customer; until then it sits in a holding account ("no
+;; cobrado"). Symmetrically, the buyer claims input IVA credit only
+;; when payment goes out ("pagado"). The chart reflects this by
+;; splitting each side:
+;;
+;;   208.01.xxx  IVA trasladado COBRADO        — output IVA, owed to SAT
+;;   208.02.xxx  IVA trasladado NO COBRADO     — output IVA, pending receipt
+;;   119.01.xxx  IVA acreditable PAGADO        — input ITC, fully claimable
+;;   119.02.xxx  IVA acreditable PENDIENTE     — input ITC, pending payment
+;;
+;; A separate "payment-side" flow (out of this commit's scope) moves
+;; balances from 208.02 → 208.01 and from 119.02 → 119.01 when the
+;; matching AR / AP is settled.
+;;
+;; IEPS (Impuesto Especial sobre Producción y Servicios) — federal
+;; excise on tobacco, alcohol, fuels, sugary drinks, junk food. The
+;; chart provides the holding accounts; rate selection is per-product
+;; (out of scope here, see the tax-compute module).
+;;
+;; Retenciones — withholding at the point of payment (gobierno, large
+;; taxpayers, services). Two pairs (IVA + ISR) on both sides.
+;;
+;; Tag conventions (`:mx-dpi-...`) let the DPI / DIOT aggregators pull
+;; line totals without hard-coded code lookups.
+;;
+;; Schema fields per account:
+;;   :code            — dot-separated SAT code (e.g. "208.01.001")
+;;   :path            — hierarchical PTA-notation path
+;;   :type            — :asset | :liability | :equity | :income | :expense
+;;   :name            — Spanish label (per SAT Anexo 24)
+;;   :reconcilable?   — true for AR/AP/Bancos/Caja
+;;   :tax-recoverable?— true for IVA acreditable (ITC) accounts
+;;   :tax-payable?    — true for IVA trasladado + IEPS payable accounts
+;;   :tags            — vector of tag keywords for report aggregation
+;;
+;; Public sources (non-copyrightable):
+;;   - Anexo 24 RMF (SAT)            — Código Agrupador del SAT
+;;   - Ley del IVA, Art. 1-B          — cash-basis recognition
+;;   - Ley del IEPS                   — excise scope
+;;   - Ley del ISR, Art. 11 + Art. 76 — fiscal-year + retentions
+
+[;; ============================================================================
+ ;; 100 — ACTIVOS CIRCULANTES (current assets)
+ ;; ============================================================================
+ {:code "101.01.001" :path "Activo:Circulante:Caja"
+  :type :asset :name "Caja"
+  :reconcilable? true}
+ {:code "102.01.001" :path "Activo:Circulante:Bancos:Nacional"
+  :type :asset :name "Bancos nacionales — Cuenta corriente"
+  :reconcilable? true}
+ {:code "102.02.001" :path "Activo:Circulante:Bancos:Extranjero"
+  :type :asset :name "Bancos extranjeros"
+  :reconcilable? true}
+ {:code "103.01.001" :path "Activo:Circulante:Inversiones"
+  :type :asset :name "Inversiones temporales"}
+
+ {:code "105.01.001" :path "Activo:Circulante:Clientes"
+  :type :asset :name "Clientes nacionales"
+  :reconcilable? true}
+ {:code "105.02.001" :path "Activo:Circulante:Clientes:Extranjero"
+  :type :asset :name "Clientes extranjeros"
+  :reconcilable? true}
+ {:code "106.01.001" :path "Activo:Circulante:Cuentas-por-Cobrar"
+  :type :asset :name "Cuentas por cobrar diversas"
+  :reconcilable? true}
+ {:code "107.01.001" :path "Activo:Circulante:Deudores-Diversos"
+  :type :asset :name "Deudores diversos"
+  :reconcilable? true}
+ {:code "108.01.001" :path "Activo:Circulante:Anticipos-Proveedores"
+  :type :asset :name "Anticipos a proveedores"
+  :reconcilable? true}
+
+ ;; --- 115 — Inventarios ---
+ {:code "115.01.001" :path "Activo:Circulante:Inventarios:Materia-Prima"
+  :type :asset :name "Inventario — materia prima"}
+ {:code "115.02.001" :path "Activo:Circulante:Inventarios:Productos-en-Proceso"
+  :type :asset :name "Inventario — productos en proceso"}
+ {:code "115.03.001" :path "Activo:Circulante:Inventarios:Productos-Terminados"
+  :type :asset :name "Inventario — productos terminados"}
+ {:code "115.04.001" :path "Activo:Circulante:Inventarios:Mercancias"
+  :type :asset :name "Inventario — mercancías en almacén"}
+
+ ;; --- 119 — IVA acreditable (input ITC) ---
+ ;; Cash-basis split: 119.01 = pagado (recoverable now);
+ ;;                    119.02 = pendiente (recoverable when paid).
+ {:code "119.01.001" :path "Activo:IVA-Acreditable:Pagado:16"
+  :type :asset :name "IVA acreditable pagado — 16%"
+  :tax-recoverable? true
+  :tags [:mx-dpi-iva-acreditable :mx-dpi-iva-acreditable-16]}
+ {:code "119.01.002" :path "Activo:IVA-Acreditable:Pagado:8"
+  :type :asset :name "IVA acreditable pagado — 8% frontera"
+  :tax-recoverable? true
+  :tags [:mx-dpi-iva-acreditable :mx-dpi-iva-acreditable-8]}
+ {:code "119.01.003" :path "Activo:IVA-Acreditable:Pagado:0"
+  :type :asset :name "IVA acreditable pagado — 0%"
+  :tax-recoverable? true
+  :tags [:mx-dpi-iva-acreditable :mx-dpi-iva-acreditable-0]}
+
+ {:code "119.02.001" :path "Activo:IVA-Acreditable:Pendiente:16"
+  :type :asset :name "IVA acreditable pendiente de pago — 16%"
+  :tax-recoverable? true
+  :tags [:mx-dpi-iva-acreditable-pendiente]}
+ {:code "119.02.002" :path "Activo:IVA-Acreditable:Pendiente:8"
+  :type :asset :name "IVA acreditable pendiente de pago — 8% frontera"
+  :tax-recoverable? true
+  :tags [:mx-dpi-iva-acreditable-pendiente]}
+
+ ;; --- 120 — Retentions receivable (ISR / IVA withheld by customer) ---
+ {:code "120.01.001" :path "Activo:Retenciones-por-Cobrar:ISR"
+  :type :asset :name "ISR retenido por terceros (acreditable)"
+  :tax-recoverable? true
+  :tags [:mx-dpi-isr-retenido-cobrar]}
+ {:code "120.02.001" :path "Activo:Retenciones-por-Cobrar:IVA"
+  :type :asset :name "IVA retenido por terceros (acreditable)"
+  :tax-recoverable? true
+  :tags [:mx-dpi-iva-retenido-cobrar]}
+
+ ;; --- 121 — Pagos provisionales ISR (advance income-tax payments) ---
+ {:code "121.01.001" :path "Activo:Pagos-Provisionales:ISR"
+  :type :asset :name "Pagos provisionales de ISR (acreditable contra anual)"
+  :tax-recoverable? true}
+
+ ;; ============================================================================
+ ;; 110 — ACTIVOS FIJOS (fixed assets)
+ ;; ============================================================================
+ {:code "151.01.001" :path "Activo:Fijo:Terrenos"
+  :type :asset :name "Terrenos"}
+ {:code "152.01.001" :path "Activo:Fijo:Edificios"
+  :type :asset :name "Edificios"}
+ {:code "153.01.001" :path "Activo:Fijo:Maquinaria"
+  :type :asset :name "Maquinaria y equipo industrial"}
+ {:code "154.01.001" :path "Activo:Fijo:Mobiliario"
+  :type :asset :name "Mobiliario y equipo de oficina"}
+ {:code "155.01.001" :path "Activo:Fijo:Equipo-Transporte"
+  :type :asset :name "Equipo de transporte"}
+ {:code "156.01.001" :path "Activo:Fijo:Equipo-Computo"
+  :type :asset :name "Equipo de cómputo"}
+ {:code "165.01.001" :path "Activo:Fijo:Depreciacion-Acumulada"
+  :type :asset :name "Depreciación acumulada (contra-activo)"}
+
+ ;; --- 170 — Intangibles ---
+ {:code "172.01.001" :path "Activo:Intangible:Software"
+  :type :asset :name "Software y licencias"}
+ {:code "172.02.001" :path "Activo:Intangible:Marcas"
+  :type :asset :name "Marcas y patentes"}
+
+ ;; ============================================================================
+ ;; 200 — PASIVOS A CORTO PLAZO (short-term liabilities)
+ ;; ============================================================================
+ {:code "201.01.001" :path "Pasivo:Corto-Plazo:Proveedores"
+  :type :liability :name "Proveedores nacionales"
+  :reconcilable? true}
+ {:code "201.02.001" :path "Pasivo:Corto-Plazo:Proveedores:Extranjero"
+  :type :liability :name "Proveedores extranjeros"
+  :reconcilable? true}
+ {:code "202.01.001" :path "Pasivo:Corto-Plazo:Documentos-por-Pagar"
+  :type :liability :name "Documentos por pagar a corto plazo"
+  :reconcilable? true}
+ {:code "203.01.001" :path "Pasivo:Corto-Plazo:Acreedores-Diversos"
+  :type :liability :name "Acreedores diversos"
+  :reconcilable? true}
+ {:code "204.01.001" :path "Pasivo:Corto-Plazo:Anticipos-Clientes"
+  :type :liability :name "Anticipos de clientes"
+  :reconcilable? true}
+
+ ;; --- 205 — Impuestos por pagar (federal payable other than IVA/IEPS) ---
+ {:code "205.01.001" :path "Pasivo:Impuestos-por-Pagar:ISR"
+  :type :liability :name "ISR por pagar (Impuesto sobre la Renta)"
+  :tax-payable? true
+  :tags [:mx-dpi-isr-por-pagar]}
+
+ ;; --- 206 — Retenciones por pagar (taxes withheld FROM others) ---
+ ;; The buyer withholds and remits these on behalf of the supplier.
+ {:code "206.01.001" :path "Pasivo:Retenciones-por-Pagar:ISR-Honorarios"
+  :type :liability :name "ISR retenido por pagar — Honorarios (10%)"
+  :tax-payable? true
+  :tags [:mx-dpi-isr-retenido-pagar]}
+ {:code "206.01.002" :path "Pasivo:Retenciones-por-Pagar:ISR-Arrendamiento"
+  :type :liability :name "ISR retenido por pagar — Arrendamiento (10%)"
+  :tax-payable? true
+  :tags [:mx-dpi-isr-retenido-pagar]}
+ {:code "206.02.001" :path "Pasivo:Retenciones-por-Pagar:IVA"
+  :type :liability :name "IVA retenido por pagar (2/3 ó 4%)"
+  :tax-payable? true
+  :tags [:mx-dpi-iva-retenido-pagar]}
+
+ ;; --- 208 — IVA trasladado (output VAT, cash-basis split) ---
+ ;; The KEY cash-basis structure: 208.01 = cobrado (owed now);
+ ;;                                208.02 = no cobrado (holding).
+ {:code "208.01.001" :path "Pasivo:IVA-Trasladado:Cobrado:16"
+  :type :liability :name "IVA trasladado cobrado — 16%"
+  :tax-payable? true
+  :tags [:mx-dpi-iva-cobrado :mx-dpi-iva-cobrado-16]}
+ {:code "208.01.002" :path "Pasivo:IVA-Trasladado:Cobrado:8"
+  :type :liability :name "IVA trasladado cobrado — 8% frontera"
+  :tax-payable? true
+  :tags [:mx-dpi-iva-cobrado :mx-dpi-iva-cobrado-8]}
+ {:code "208.01.003" :path "Pasivo:IVA-Trasladado:Cobrado:0"
+  :type :liability :name "IVA trasladado cobrado — 0%"
+  :tax-payable? true
+  :tags [:mx-dpi-iva-cobrado :mx-dpi-iva-cobrado-0]}
+
+ {:code "208.02.001" :path "Pasivo:IVA-Trasladado:NoCobrado:16"
+  :type :liability :name "IVA trasladado NO cobrado — 16% (pendiente de causación)"
+  :tax-payable? true
+  :tags [:mx-dpi-iva-no-cobrado]}
+ {:code "208.02.002" :path "Pasivo:IVA-Trasladado:NoCobrado:8"
+  :type :liability :name "IVA trasladado NO cobrado — 8% frontera"
+  :tax-payable? true
+  :tags [:mx-dpi-iva-no-cobrado]}
+ {:code "208.02.003" :path "Pasivo:IVA-Trasladado:NoCobrado:0"
+  :type :liability :name "IVA trasladado NO cobrado — 0%"
+  :tax-payable? true
+  :tags [:mx-dpi-iva-no-cobrado]}
+
+ ;; --- 209 — IEPS trasladado (output excise) ---
+ ;; IEPS rates vary 3% – 160%+ by product category; the chart provides
+ ;; the holding account, the rate-table is per-line at invoice time.
+ {:code "209.01.001" :path "Pasivo:IEPS-Trasladado:Cobrado"
+  :type :liability :name "IEPS trasladado cobrado"
+  :tax-payable? true
+  :tags [:mx-dpi-ieps-cobrado]}
+ {:code "209.02.001" :path "Pasivo:IEPS-Trasladado:NoCobrado"
+  :type :liability :name "IEPS trasladado NO cobrado"
+  :tax-payable? true
+  :tags [:mx-dpi-ieps-no-cobrado]}
+
+ ;; --- 216 — IEPS acreditable (input excise — recoverable for manufacturers) ---
+ {:code "216.01.001" :path "Activo:IEPS-Acreditable:Pagado"
+  :type :asset :name "IEPS acreditable pagado"
+  :tax-recoverable? true
+  :tags [:mx-dpi-ieps-acreditable]}
+
+ ;; ============================================================================
+ ;; 300 — PASIVOS A LARGO PLAZO (long-term liabilities)
+ ;; ============================================================================
+ {:code "251.01.001" :path "Pasivo:Largo-Plazo:Acreedores-Hipotecarios"
+  :type :liability :name "Acreedores hipotecarios"
+  :reconcilable? true}
+ {:code "252.01.001" :path "Pasivo:Largo-Plazo:Prestamos"
+  :type :liability :name "Préstamos bancarios a largo plazo"
+  :reconcilable? true}
+
+ ;; ============================================================================
+ ;; 400 — CAPITAL CONTABLE (equity)
+ ;; ============================================================================
+ {:code "301.01.001" :path "Capital:Capital-Social"
+  :type :equity :name "Capital social fijo"}
+ {:code "301.02.001" :path "Capital:Capital-Social:Variable"
+  :type :equity :name "Capital social variable"}
+ {:code "303.01.001" :path "Capital:Reserva-Legal"
+  :type :equity :name "Reserva legal"}
+ {:code "304.01.001" :path "Capital:Utilidades-Ejercicio"
+  :type :equity :name "Utilidad del ejercicio (current year)"}
+ {:code "305.01.001" :path "Capital:Utilidades-Retenidas"
+  :type :equity :name "Resultados de ejercicios anteriores (Utilidades Retenidas)"}
+ {:code "306.01.001" :path "Capital:Perdidas-Ejercicios-Anteriores"
+  :type :equity :name "Pérdidas de ejercicios anteriores"}
+
+ ;; ============================================================================
+ ;; 500 — INGRESOS (revenue)
+ ;; ============================================================================
+ ;; Split by IVA-rate so the DPI report aggregates per-rate without an
+ ;; extra dimension. Sub-account 401.xx mirrors the SAT taxonomy.
+ {:code "401.01.001" :path "Ingresos:Ventas:Nacional:16"
+  :type :income :name "Ingresos por ventas — tasa general 16%"
+  :tags [:mx-dpi-ingresos :mx-dpi-ingresos-16]}
+ {:code "401.01.002" :path "Ingresos:Ventas:Nacional:8"
+  :type :income :name "Ingresos por ventas — tasa frontera 8%"
+  :tags [:mx-dpi-ingresos :mx-dpi-ingresos-8]}
+ {:code "401.01.003" :path "Ingresos:Ventas:Nacional:0"
+  :type :income :name "Ingresos por ventas — tasa 0% (alimentos / medicinas / libros)"
+  :tags [:mx-dpi-ingresos :mx-dpi-ingresos-0]}
+ {:code "401.01.004" :path "Ingresos:Ventas:Exentas"
+  :type :income :name "Ingresos por ventas — actos exentos (renta habitacional, salud)"
+  :tags [:mx-dpi-ingresos :mx-dpi-ingresos-exentos]}
+ {:code "401.02.001" :path "Ingresos:Ventas:Exportacion"
+  :type :income :name "Ingresos por exportación (tasa 0%)"
+  :tags [:mx-dpi-ingresos :mx-dpi-ingresos-exportacion]}
+ {:code "402.01.001" :path "Ingresos:Servicios"
+  :type :income :name "Ingresos por servicios prestados"
+  :tags [:mx-dpi-ingresos :mx-dpi-ingresos-16]}
+
+ ;; --- 405 — Otros ingresos (operational, non-tax) ---
+ {:code "405.01.001" :path "Ingresos:Otros:Intereses"
+  :type :income :name "Ingresos por intereses"}
+ {:code "405.02.001" :path "Ingresos:Otros:Cambiarios"
+  :type :income :name "Utilidad cambiaria (FX gain)"}
+
+ ;; ============================================================================
+ ;; 600 — COSTOS (cost of sales)
+ ;; ============================================================================
+ {:code "501.01.001" :path "Costos:Costo-de-Ventas"
+  :type :expense :name "Costo de lo vendido"}
+ {:code "501.02.001" :path "Costos:Compras-Nacionales"
+  :type :expense :name "Compras nacionales (mercancías)"}
+ {:code "501.03.001" :path "Costos:Compras-Importacion"
+  :type :expense :name "Compras de importación"}
+
+ ;; ============================================================================
+ ;; 700 — GASTOS (operating expenses)
+ ;; ============================================================================
+ {:code "601.01.001" :path "Gastos:Generales:Sueldos"
+  :type :expense :name "Sueldos y salarios"}
+ {:code "601.02.001" :path "Gastos:Generales:Prestaciones"
+  :type :expense :name "Prestaciones al personal"}
+ {:code "601.03.001" :path "Gastos:Generales:Renta"
+  :type :expense :name "Renta de inmuebles"}
+ {:code "601.04.001" :path "Gastos:Generales:Servicios-Publicos"
+  :type :expense :name "Servicios públicos (luz, agua, gas)"}
+ {:code "601.05.001" :path "Gastos:Generales:Telecomunicaciones"
+  :type :expense :name "Telefonía e internet"}
+ {:code "601.06.001" :path "Gastos:Generales:Honorarios"
+  :type :expense :name "Honorarios profesionales"}
+ {:code "601.07.001" :path "Gastos:Generales:Mantenimiento"
+  :type :expense :name "Mantenimiento y reparaciones"}
+ {:code "601.08.001" :path "Gastos:Generales:Papeleria"
+  :type :expense :name "Papelería y útiles de oficina"}
+ {:code "601.09.001" :path "Gastos:Generales:Combustibles"
+  :type :expense :name "Combustibles y lubricantes"}
+ {:code "601.10.001" :path "Gastos:Generales:Viaticos"
+  :type :expense :name "Viáticos y gastos de viaje"}
+ {:code "601.11.001" :path "Gastos:Generales:Publicidad"
+  :type :expense :name "Publicidad y propaganda"}
+ {:code "601.12.001" :path "Gastos:Generales:Seguros"
+  :type :expense :name "Primas de seguros"}
+ {:code "601.13.001" :path "Gastos:Generales:Depreciacion"
+  :type :expense :name "Depreciación del ejercicio"}
+ {:code "601.14.001" :path "Gastos:Financieros:Intereses"
+  :type :expense :name "Intereses pagados"}
+ {:code "601.15.001" :path "Gastos:Financieros:Comisiones-Bancarias"
+  :type :expense :name "Comisiones y gastos bancarios"}
+ {:code "601.16.001" :path "Gastos:Financieros:Perdida-Cambiaria"
+  :type :expense :name "Pérdida cambiaria (FX loss)"}
+
+ ;; --- 700 — Gastos no deducibles (memo for ISR reconciliation) ---
+ {:code "701.01.001" :path "Gastos:No-Deducibles"
+  :type :expense :name "Gastos no deducibles (memo)"}]

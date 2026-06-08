@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+
+<!--
+Description		T550 Return Data Element Types
+Version#:		1.26 (version #.yy)
+-->
+
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+	<xsd:include schemaLocation="complex.xsd"/>
+	<xsd:element name="Submission" type="ReturnType" />
+	<xsd:complexType name="ReturnType">
+		<xsd:sequence>
+			<xsd:element name="T619" type="TransmitterType" />
+			<xsd:element name="T550" type="T550Type" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+
+
+</xsd:schema>

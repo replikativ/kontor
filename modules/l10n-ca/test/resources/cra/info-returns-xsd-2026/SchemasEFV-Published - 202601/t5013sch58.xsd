@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!--
+Description: Specialty Business Returns - Canadian Journalism Labour Tax Credit (CRA Form T5013 SCH 58)
+Contact: CRA, ITB, Solutions, RASD, Business Suite Assessing System, Other Levies
+Date created: July 2020
+Users of this schema:
+-Other Levies System
+-->
+<xsd:schema 
+xmlns:ols58="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/ols58/1-0-1" 
+xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+
+targetNamespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/ols58/1-0-1" 
+	elementFormDefault="qualified" attributeFormDefault="unqualified" version="ols58/1-0-1">
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/> 
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/> 	
+
+	<xsd:element name="T5013Schedule58Data" type="ols58:Schedule58DataType"/>
+	<xsd:complexType name="Schedule58DataType">
+		<xsd:sequence>
+			<xsd:element ref="ols58:Schedule58MeetConditions" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols58:Schedule58FromDate" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols58:Schedule58ToDate" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols58:Schedule58QCJODesignationNumber" minOccurs="0" maxOccurs="1"/>
+			
+			<xsd:element ref="ols58:Schedule58CanadianJournalismLabourTaxCreditDetails" minOccurs="0" maxOccurs="2000"/>
+
+			<xsd:element ref="ols58:Schedule58AmountReceivedFromTheAidToPublishers" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols58:Schedule58CanadianJournalismLabourTaxCreditNetAmount" minOccurs="0" maxOccurs="1"/>
+
+			<xsd:element ref="ols58:Schedule58AllocationOfCreditToEligibleMembersOfAPartnershipDetails" minOccurs="0" maxOccurs="2000"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:element name="Schedule58CanadianJournalismLabourTaxCreditDetails" type="ols58:Schedule58CanadianJournalismLabourTaxCreditDetailsType"/>
+	<xsd:element name="Schedule58AllocationOfCreditToEligibleMembersOfAPartnershipDetails" type="ols58:Schedule58AllocationOfCreditToEligibleMembersOfAPartnershipDetailsType"/>
+	
+	<xsd:complexType name="Schedule58CanadianJournalismLabourTaxCreditDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols58:Schedule58NameOfEligibleNewsroomEmployee" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols58:Schedule58SINOfEligibleNewsroomEmployee" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols58:Schedule58SalaryOrWagesPayable" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols58:Schedule58AmountOfAssistanceReceivedOrReceivable" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols58:Schedule58QualifyingLabourExpenditure" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols58:Schedule58QualifyingLabourExpenditure122" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols58:Schedule58LabourTaxCredit" minOccurs="0" maxOccurs="1"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:complexType name="Schedule58AllocationOfCreditToEligibleMembersOfAPartnershipDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols58:Schedule58NameOfEligiblePartner" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols58:Schedule58SINBusinessNumberTrustAccountNumberOfEligiblePartner" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols58:Schedule58AmountAllocated" minOccurs="0" maxOccurs="1"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	
+
+	<!--   Data Elements -->
+	<xsd:element name="Schedule58MeetConditions" type="ccms:OneTwoCodeType"/>
+	<xsd:element name="Schedule58FromDate" type="sdt:DateType"/>
+	<xsd:element name="Schedule58ToDate" type="sdt:DateType"/>
+	<xsd:element name="Schedule58QCJODesignationNumber" >
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="7"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+
+	<xsd:element name="Schedule58NameOfEligibleNewsroomEmployee" type="ccms:Name175CharacterType"/>
+	<xsd:element name="Schedule58SINOfEligibleNewsroomEmployee" type="ccms:SINType"/>
+	<xsd:element name="Schedule58SalaryOrWagesPayable" type="sdt:AmountType"/>
+	<xsd:element name="Schedule58AmountOfAssistanceReceivedOrReceivable" type="sdt:AmountType"/>
+	<xsd:element name="Schedule58QualifyingLabourExpenditure" type="sdt:AmountType"/>
+	<xsd:element name="Schedule58QualifyingLabourExpenditure122" type="sdt:AmountType"/>
+	<xsd:element name="Schedule58LabourTaxCredit" type="sdt:AmountType"/>
+
+	<xsd:element name="Schedule58AmountReceivedFromTheAidToPublishers" type="sdt:AmountType"/>
+	<xsd:element name="Schedule58CanadianJournalismLabourTaxCreditNetAmount" type="sdt:AmountType"/>
+
+	<xsd:element name="Schedule58NameOfEligiblePartner" type="ccms:Name175CharacterType"/>
+	<xsd:element name="Schedule58SINBusinessNumberTrustAccountNumberOfEligiblePartner" >
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="Schedule58AmountAllocated" type="sdt:AmountType"/>
+			
+</xsd:schema>

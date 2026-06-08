@@ -1,0 +1,229 @@
+;; Brazilian chart of accounts — 5-level dotted-code starter aligned to
+;; the Plano de Contas Referencial (RFB) structure. ~60 accounts; the
+;; full Plano Referencial (~600-800 lines depending on regime) is a
+;; mechanical extension — the kernel + this starter validate the data
+;; model.
+;;
+;; Codes use the 5-level dotted convention: 1.01.01.01.01.
+;;
+;; Each account carries `:external-codes` per ADR-019:
+;;   :br/plano-referencial — the RFB Plano de Contas Referencial code
+;;                            used in ECF filing.
+;;   :br/sped-contabil     — the SPED Contábil reference code.
+;;
+;; Per ADR-018 NF-e issuance flows through :pending-attestation; the
+;; resulting SEFAZ 44-digit access key (chave de acesso) lands in
+;; :kontor.transaction/clearance-token.
+
+[
+ ;; ---------- 1.01.xx.xx.xx Ativo Circulante (Current Assets) ----------
+ {:code "1.01.01.01.01" :path "Assets:Cash:HeadOffice"
+  :name "Caixa Matriz / Cash – Head Office"
+  :type :asset :reconcilable? false
+  :external-codes {:br/plano-referencial "L100A_1.01.01.01.01"}}
+ {:code "1.01.01.02.01" :path "Assets:Bank:National"
+  :name "Bancos Conta Movimento – No País / Banks – In the Country"
+  :type :asset :reconcilable? true
+  :external-codes {:br/plano-referencial "L100A_1.01.01.02.01"}}
+ {:code "1.01.01.02.02" :path "Assets:Bank:Foreign"
+  :name "Bancos Conta Movimento – No Exterior / Banks – Abroad"
+  :type :asset :reconcilable? true}
+ {:code "1.01.02.01.01" :path "Assets:Investment:Short"
+  :name "Aplicações Financeiras de Curto Prazo / Short-Term Investments"
+  :type :asset}
+ {:code "1.01.03.01.01" :path "Assets:Receivable:Domestic"
+  :name "Clientes Nacionais / Domestic Customers"
+  :type :asset :reconcilable? true
+  :external-codes {:br/plano-referencial "L100A_1.01.03.01.01"}}
+ {:code "1.01.03.01.02" :path "Assets:Receivable:Foreign"
+  :name "Clientes Estrangeiros / Foreign Customers"
+  :type :asset :reconcilable? true}
+ {:code "1.01.03.99.01" :path "Assets:Receivable:Allowance"
+  :name "(-) Provisão p/ Créditos de Liquidação Duvidosa / Allowance"
+  :type :asset}                                          ;; contra
+ {:code "1.01.04.01.01" :path "Assets:Inventory:RawMaterials"
+  :name "Estoques de Matéria-Prima / Raw Materials"
+  :type :asset}
+ {:code "1.01.04.02.01" :path "Assets:Inventory:Products"
+  :name "Estoques de Produtos Acabados / Finished Goods"
+  :type :asset}
+
+ ;; ICMS / IPI / PIS / COFINS receivable (recoverable) accounts
+ {:code "1.01.05.01.01" :path "Assets:Tax:ICMS-Recoverable"
+  :name "ICMS a Recuperar / ICMS recoverable (input)"
+  :type :asset
+  :tags [:br-icms-input]}
+ {:code "1.01.05.01.02" :path "Assets:Tax:IPI-Recoverable"
+  :name "IPI a Recuperar / IPI recoverable"
+  :type :asset
+  :tags [:br-ipi-input]}
+ {:code "1.01.05.01.03" :path "Assets:Tax:PIS-Recoverable"
+  :name "PIS a Recuperar (não-cumulativo) / PIS recoverable"
+  :type :asset
+  :tags [:br-pis-input]}
+ {:code "1.01.05.01.04" :path "Assets:Tax:COFINS-Recoverable"
+  :name "COFINS a Recuperar (não-cumulativo) / COFINS recoverable"
+  :type :asset
+  :tags [:br-cofins-input]}
+ ;; CBS/IBS recoverable accounts (post-2026 reform; scaffold)
+ {:code "1.01.05.02.01" :path "Assets:Tax:CBS-Recoverable"
+  :name "CBS a Recuperar / CBS recoverable (post-2026 reform)"
+  :type :asset
+  :tags [:br-cbs-input]}
+ {:code "1.01.05.02.02" :path "Assets:Tax:IBS-Recoverable"
+  :name "IBS a Recuperar / IBS recoverable (post-2026 reform)"
+  :type :asset
+  :tags [:br-ibs-input]}
+
+ ;; ---------- 1.02.xx Ativo Não Circulante ----------
+ {:code "1.02.03.01.01" :path "Assets:Fixed:Land"
+  :name "Terrenos / Land"
+  :type :asset}
+ {:code "1.02.03.02.01" :path "Assets:Fixed:Buildings"
+  :name "Edifícios / Buildings"
+  :type :asset}
+ {:code "1.02.03.99.01" :path "Assets:Fixed:AccumDep"
+  :name "(-) Depreciação Acumulada / Accumulated Depreciation"
+  :type :asset}                                          ;; contra
+ {:code "1.02.04.01.01" :path "Assets:Intangible"
+  :name "Ativo Intangível / Intangible Assets"
+  :type :asset}
+
+ ;; ---------- 2.01.xx Passivo Circulante (Current Liabilities) ----------
+ {:code "2.01.01.01.01" :path "Liabilities:Payable:Suppliers"
+  :name "Fornecedores Nacionais / Domestic Suppliers"
+  :type :liability :reconcilable? true
+  :external-codes {:br/plano-referencial "L100A_2.01.01.01.01"}}
+ {:code "2.01.01.01.02" :path "Liabilities:Payable:ForeignSuppliers"
+  :name "Fornecedores Estrangeiros / Foreign Suppliers"
+  :type :liability :reconcilable? true}
+ {:code "2.01.02.01.01" :path "Liabilities:Loan:Short"
+  :name "Empréstimos e Financiamentos / Short-Term Loans"
+  :type :liability}
+ {:code "2.01.03.01.01" :path "Liabilities:Wages"
+  :name "Salários a Pagar / Wages Payable"
+  :type :liability}
+ {:code "2.01.03.02.01" :path "Liabilities:INSS"
+  :name "INSS a Recolher / INSS (Social Security) Payable"
+  :type :liability}
+ {:code "2.01.03.02.02" :path "Liabilities:FGTS"
+  :name "FGTS a Recolher / FGTS Payable"
+  :type :liability}
+
+ ;; Output taxes (collected, payable)
+ {:code "2.01.04.01.01" :path "Liabilities:Tax:ICMS-Payable"
+  :name "ICMS a Recolher / ICMS payable"
+  :type :liability
+  :tags [:br-icms-output]}
+ {:code "2.01.04.01.02" :path "Liabilities:Tax:IPI-Payable"
+  :name "IPI a Recolher / IPI payable"
+  :type :liability
+  :tags [:br-ipi-output]}
+ {:code "2.01.04.01.03" :path "Liabilities:Tax:PIS-Payable"
+  :name "PIS a Recolher / PIS payable"
+  :type :liability
+  :tags [:br-pis-output]}
+ {:code "2.01.04.01.04" :path "Liabilities:Tax:COFINS-Payable"
+  :name "COFINS a Recolher / COFINS payable"
+  :type :liability
+  :tags [:br-cofins-output]}
+ {:code "2.01.04.01.05" :path "Liabilities:Tax:ISS-Payable"
+  :name "ISS a Recolher / ISS (Municipal Service Tax) payable"
+  :type :liability
+  :tags [:br-iss-output]}
+ {:code "2.01.04.01.06" :path "Liabilities:Tax:IRPJ-Payable"
+  :name "IRPJ a Recolher / IRPJ payable"
+  :type :liability
+  :tags [:br-irpj]}
+ {:code "2.01.04.01.07" :path "Liabilities:Tax:CSLL-Payable"
+  :name "CSLL a Recolher / CSLL payable"
+  :type :liability
+  :tags [:br-csll]}
+ ;; CBS/IBS payable (post-2026 reform; scaffold)
+ {:code "2.01.04.02.01" :path "Liabilities:Tax:CBS-Payable"
+  :name "CBS a Recolher / CBS payable (post-2026 reform)"
+  :type :liability
+  :tags [:br-cbs-output]}
+ {:code "2.01.04.02.02" :path "Liabilities:Tax:IBS-Payable"
+  :name "IBS a Recolher / IBS payable (post-2026 reform)"
+  :type :liability
+  :tags [:br-ibs-output]}
+
+ ;; ---------- 2.03.xx Patrimônio Líquido (Equity) ----------
+ {:code "2.03.01.01.01" :path "Equity:Capital"
+  :name "Capital Social / Share Capital"
+  :type :equity}
+ {:code "2.03.04.01.01" :path "Equity:RetainedEarnings"
+  :name "Lucros / Prejuízos Acumulados / Retained Earnings"
+  :type :equity}
+
+ ;; ---------- 3.01.xx Receitas (Revenue) ----------
+ {:code "3.01.01.01.01" :path "Income:Sales:Goods-Domestic"
+  :name "Receita Bruta — Mercadorias / Goods Revenue (domestic)"
+  :type :income
+  :tags [:br-sales-icms]}
+ {:code "3.01.01.01.02" :path "Income:Sales:Services-Domestic"
+  :name "Receita Bruta — Serviços / Services Revenue (domestic)"
+  :type :income
+  :tags [:br-sales-iss]}
+ {:code "3.01.01.02.01" :path "Income:Sales:Export"
+  :name "Receita Bruta — Exportação / Export Revenue"
+  :type :income
+  :tags [:br-sales-export]}
+
+ ;; ---------- 3.02.xx Deduções (Deductions from gross revenue) ----------
+ {:code "3.02.01.01.01" :path "Expense:Tax:ICMS-Deduction"
+  :name "(-) ICMS sobre Vendas / ICMS on sales (deduction)"
+  :type :expense
+  :tags [:br-icms-sales-deduction]}
+ {:code "3.02.01.01.02" :path "Expense:Tax:PIS-Deduction"
+  :name "(-) PIS sobre Vendas / PIS on sales (deduction)"
+  :type :expense
+  :tags [:br-pis-sales-deduction]}
+ {:code "3.02.01.01.03" :path "Expense:Tax:COFINS-Deduction"
+  :name "(-) COFINS sobre Vendas / COFINS on sales (deduction)"
+  :type :expense
+  :tags [:br-cofins-sales-deduction]}
+ {:code "3.02.01.01.04" :path "Expense:Tax:ISS-Deduction"
+  :name "(-) ISS sobre Vendas / ISS on services (deduction)"
+  :type :expense
+  :tags [:br-iss-sales-deduction]}
+
+ ;; ---------- 3.03.xx Custo das Mercadorias Vendidas ----------
+ {:code "3.03.01.01.01" :path "Expense:COGS"
+  :name "Custo das Mercadorias Vendidas / Cost of Goods Sold"
+  :type :expense}
+
+ ;; ---------- 3.04.xx Despesas Operacionais ----------
+ {:code "3.04.01.01.01" :path "Expense:Salaries"
+  :name "Salários e Encargos / Salaries and Benefits"
+  :type :expense}
+ {:code "3.04.02.01.01" :path "Expense:Rent"
+  :name "Aluguéis / Rent"
+  :type :expense}
+ {:code "3.04.03.01.01" :path "Expense:Utilities"
+  :name "Energia, Água, Telefone / Utilities"
+  :type :expense}
+ {:code "3.04.04.01.01" :path "Expense:Depreciation"
+  :name "Depreciação / Depreciation"
+  :type :expense}
+ {:code "3.04.99.01.01" :path "Expense:Other"
+  :name "Outras Despesas Operacionais / Other Operating Expenses"
+  :type :expense}
+
+ ;; ---------- 3.07.xx Resultado financeiro ----------
+ {:code "3.07.01.01.01" :path "Income:Interest"
+  :name "Receitas Financeiras / Financial Income"
+  :type :income}
+ {:code "3.07.02.01.01" :path "Expense:Interest"
+  :name "Despesas Financeiras / Financial Expense"
+  :type :expense}
+
+ ;; ---------- 3.10.xx IRPJ / CSLL ----------
+ {:code "3.10.01.01.01" :path "Expense:Tax:IRPJ"
+  :name "Provisão para IRPJ / Provision for Corporate Income Tax"
+  :type :expense}
+ {:code "3.10.01.01.02" :path "Expense:Tax:CSLL"
+  :name "Provisão para CSLL / Provision for Social Contribution"
+  :type :expense}
+ ]

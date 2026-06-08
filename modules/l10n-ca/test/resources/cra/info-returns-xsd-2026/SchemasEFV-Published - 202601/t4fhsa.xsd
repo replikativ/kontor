@@ -1,0 +1,146 @@
+<?xml version="1.0"?>
+
+<!--
+Description:
+T4 First Home Savings Account (T4FHSA) Return Complex and Element Types
+Version#:	1.26 (version #.yy)
+-->
+<xsd:schema xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+	xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+	xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+	<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/>
+	<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/>
+
+	<xsd:complexType name="T4FHSASlipType">
+		<xsd:sequence>
+			<xsd:element name="T4FHSASlipTransaction" type="T4FHSASlipTransactionType" minOccurs="0" maxOccurs="unbounded"/>
+			<xsd:element name="T4FHSASlipIdentification" type="T4FHSASlipIdentificationType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T4FHSASlipIdentificationType">
+		<xsd:all>
+			<xsd:element name="UniqueSlipNumber" type="Length20AlphanumericWithDashType"/>
+			<xsd:element ref="SlipReportTypeCode"/>
+			<xsd:element name="FilerAccountNumber" type="BNRPType"/>
+			<xsd:element name="FHSAIdentificationNumber" type="numeric8Type"/>
+			<xsd:element name="FHSAContractNumber" type="Length30Alphanumeric7CharType"/>
+			<xsd:element name="SlipRecipientSIN" type="ccms:SINType"/>
+			<xsd:element name="SlipRecipientName" type="SlipRecipientNameType"/>
+			<xsd:element name="SlipRecipientAddress" type="OptionalLine2CountryCodeAddressType"/>
+			<xsd:element name="SlipRecipientBirthDate" type="YYYYMMDDDateType"/>
+			<xsd:element name="SlipRecipientDeathDate" type="YYYYMMDDDateType" minOccurs="0"/>
+			<xsd:element name="HolderDeathFairMarketValueAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="FHSANewAccountIndicator" type="indicatorYesNoType"/>
+			<xsd:element name="FHSAAccountClosedIndicator" type="indicatorYesNoType"/>
+			<xsd:element name="FHSAAccountClosedDate" type="YYYYMMDDDateType" minOccurs="0"/>
+			<xsd:element name="FHSASuccessorAccountIndicator" type="indicatorYesNoType" minOccurs="0"/>
+			<xsd:element name="FHSABeneficiaryIndicator" type="indicatorYesNoType" minOccurs="0"/>
+			<xsd:element name="TotalFHSADistributionBeneficiaryCount" type="Length1to3CountType" minOccurs="0"/>
+			<xsd:element name="DeceasedAccountHolderFHSAContractNumber" type="Length30Alphanumeric7CharType" minOccurs="0"/>
+			<xsd:element name="DeceasedAccountHolderSIN" type="ccms:SINType" minOccurs="0"/>
+			<xsd:element name="DeceasedAccountHolderDeathDate" type="YYYYMMDDDateType" minOccurs="0"/>
+			<xsd:element name="CalendarYearEndFairMarketValueAmount" type="Decimal11AmountType"/>
+			<xsd:element name="T4FHSASlipTotalTransactionCount" type="Length1to4CountType"/>
+			<xsd:element name="T4FHSASlipTotalTransactionAmount" type="T4FHSASlipTotalAmountType" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="T4FHSASlipTransactionType">
+		<xsd:all>
+			<xsd:element name="TransactionDate" type="YYYYMMDDDateType"/>
+			<xsd:element name="ContributionAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="FHSADeemedTransferAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="QualifyingWithdrawalAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TaxableWithdrawalAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="IncomeTaxDeductedAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="FHSATransferInAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="FHSATransferOutAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="RRSPTransferInAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="SpousalRRSPTransferInAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="FairMarketValueImmediatelyPriorTransferOut" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="RRSPRRIFTransferOutAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="DesignatedRRSPRRIFTransferOutAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="DesignatedWithdrawalAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="FHSABeneficiaryDistributionOutAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="FHSABeneficiaryDistributionReceivedAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="FHSATransferOutToSurvivorAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="RRSPRRIFTransferOutToSurvivorAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="SurvivorFHSATransferInAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="FHSACessationHolderDeemedReceivedAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="SecurityForALoanAmount" type="SignedDecimal11AmountType" minOccurs="0"/>
+			<xsd:element name="NonQualifiedInvestmentAcquisitionAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="NonQualifiedInvestmentDispositionAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="AccountHolderFormerSpouseName" type="FamilyGivenNameType" minOccurs="0"/>
+			<xsd:element name="AccountHolderFormerSpouseSIN" type="ccms:SINType" minOccurs="0"/>
+			<xsd:element name="MarriageBreakdownFHSATransferInAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="MarriageBreakdownFHSATransferOutAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="MarriageBreakdownRRSPRRIFTransferOutAmount" type="Decimal11AmountType" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="T4FHSASlipTotalAmountType">
+		<xsd:all>
+			<xsd:element name="TotalContributionAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalFHSADeemedTransferAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalQualifyingWithdrawalAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalTaxableWithdrawalAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalIncomeTaxDeductedAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalFHSATransferInAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalFHSATransferOutAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalRRSPTransferInAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalSpousalRRSPTransferInAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalRRSPRRIFTransferOutAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalDesignatedRRSPRRIFTransferOutAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalDesignatedWithdrawalAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalFHSABeneficiaryDistributionOutAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalFHSABeneficiaryDistributionReceivedAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalFHSATransferOutToSurvivorAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalRRSPRRIFTransferOutToSurvivorAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalSurvivorFHSATransferInAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalFHSACessationHolderDeemedReceivedAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalSecurityForALoanAmount" type="SignedDecimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalMarriageBreakdownFHSATransferInAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalMarriageBreakdownFHSATransferOutAmount" type="Decimal11AmountType" minOccurs="0"/>
+			<xsd:element name="TotalMarriageBreakdownRRSPRRIFTransferOutAmount" type="Decimal11AmountType" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="T4FHSASummaryType">
+		<xsd:all>
+			<xsd:element name="FilerAccountNumber" type="BNRPType"/>
+			<xsd:element ref="SummaryReportTypeCode"/>
+			<xsd:element name="FilerAmendmentNote" type="char2000Type" minOccurs="0"/>
+			<xsd:element name="ReturnTaxationYear" type="yearType"/>
+			<xsd:element name="FHSAIdentificationNumber" type="numeric8Type"/>
+			<xsd:element ref="TotalSlipCount"/>
+			<xsd:element name="FilerName" type="FilerNameType"/>
+			<xsd:element name="FilerAddress" type="OptionalLine2CountryCodeAddressType"/>
+			<xsd:element name="FilerContact" type="FilerContactType"/>
+			<xsd:element name="T4FHSATotalAmount" type="T4FHSASummaryTotalAmountType"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="T4FHSASummaryTotalAmountType">
+		<xsd:all>
+			<xsd:element name="TotalContributionAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalFHSADeemedTransferAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalQualifyingWithdrawalAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalTaxableWithdrawalAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalIncomeTaxDeductedAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalFHSATransferInAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalFHSATransferOutAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalRRSPTransferInAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalSpousalRRSPTransferInAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalRRSPRRIFTransferOutAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalDesignatedRRSPRRIFTransferOutAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalDesignatedWithdrawalAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalFHSABeneficiaryDistributionOutAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalFHSABeneficiaryDistributionReceivedAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalFHSATransferOutToSurvivorAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalRRSPRRIFTransferOutToSurvivorAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalSurvivorFHSATransferInAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalFHSACessationHolderDeemedReceivedAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalSecurityForALoanAmount" type="SignedDecimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalMarriageBreakdownFHSATransferInAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalMarriageBreakdownFHSATransferOutAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalMarriageBreakdownRRSPRRIFTransferOutAmount" type="Decimal15AmountType" minOccurs="0"/>
+			<xsd:element name="TotalCalendarYearEndFairMarketValueAmount" type="Decimal15AmountType"/>
+		</xsd:all>
+	</xsd:complexType>
+</xsd:schema>

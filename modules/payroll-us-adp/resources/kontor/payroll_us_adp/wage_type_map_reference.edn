@@ -1,0 +1,197 @@
+;; ADP GLI wage-type → CoA reference mapping.
+;;
+;; This is a REFERENCE FIXTURE. Consumers copy this file, edit it to
+;; match their own chart of accounts + ADP description vocabulary,
+;; and pass the loaded EDN to `kontor.payroll-us-adp.core/install!`.
+;;
+;; Format:
+;;   :vendor              — :adp (other payroll-engine CSV variants use
+;;                          the same parser with a different column-map)
+;;   :csv-format          — column layout + parser policy
+;;   :reference-mappings  — which Reference column carries which analytic
+;;                          axis (cost-center, state, ...)
+;;   :description-rules   — regex → CoA + ledger-set + W-2-box flags
+;;
+;; Source: ADP General Ledger Interface 10-column spec, public format
+;; documentation.
+;;
+;; License posture (ADR-005 / ADR-071 / ADR-077): NO bundled tax tables,
+;; NO bundled vendor credentials, NO bundled customer CoA. This file is
+;; a *starting point* — the consumer owns the live mapping.
+{:vendor :adp
+ :csv-format
+ {:columns
+  [{:idx 0 :role :client-code}
+   {:idx 1 :role :gl-account            :required true}
+   {:idx 2 :role :journal-source-code}
+   {:idx 3 :role :date                  :format "MMddyyyy"}
+   {:idx 4 :role :amount-signed         :credit-sign :negative}
+   {:idx 5 :role :reference-1}
+   {:idx 6 :role :description}
+   {:idx 7 :role :reference-2}
+   {:idx 8 :role :reference-3}
+   {:idx 9 :role :record-code}]
+  :has-header false
+  :encoding :ascii
+  :delimiter \,
+  :quote \"
+  :balance-check :sum-to-zero}
+
+ :reference-mappings
+ [{:column :reference-2 :plan "cost-center" :role :cost-center}
+  {:column :reference-3 :plan "state"        :role :state}]
+
+ :description-rules
+ [;; Earnings — debits to wage-expense
+  {:match "^GROSS$"                :role :wage-expense
+   :account-key :wages-expense
+   :ledgers #{:us-gaap :us-tax}}
+
+  {:match "^REGULAR$"              :role :wage-expense
+   :account-key :wages-expense
+   :ledgers #{:us-gaap :us-tax}}
+
+  {:match "^OVERTIME$"             :role :wage-expense
+   :account-key :wages-expense
+   :ledgers #{:us-gaap :us-tax}}
+
+  {:match "^BONUS$"                :role :wage-expense
+   :account-key :wages-expense
+   :ledgers #{:us-gaap :us-tax}
+   :w2-supplemental? true}
+
+  {:match "^COMMISSION$"           :role :wage-expense
+   :account-key :wages-expense
+   :ledgers #{:us-gaap :us-tax}}
+
+  {:match "^PTO PAID$"             :role :pto-paid
+   :account-key :wages-expense
+   :ledgers #{:us-gaap :us-tax}
+   :reverses-accrual :asc-710-pto}
+
+  ;; Employer-side taxes
+  {:match "^ER SOCIAL SECURITY$"   :role :er-fica-ss
+   :account-key :er-fica-ss
+   :ledgers #{:us-gaap :us-tax}}
+
+  {:match "^ER MEDICARE$"          :role :er-fica-medicare
+   :account-key :er-fica-medicare
+   :ledgers #{:us-gaap :us-tax}}
+
+  {:match "^FUTA TAX$"             :role :er-futa
+   :account-key :er-futa
+   :ledgers #{:us-gaap :us-tax}}
+
+  ;; (.{2}) SUI variant — state code from regex capture group 1.
+  {:match "^([A-Z]{2}) SUI$"       :role :er-suta
+   :account-key :er-suta
+   :ledgers #{:us-gaap :us-tax}
+   :state-from-group 1}
+
+  {:match "^ER SUI TAX$"           :role :er-suta
+   :account-key :er-suta
+   :ledgers #{:us-gaap :us-tax}}
+
+  ;; Employer benefits
+  {:match "^ER HEALTH$"            :role :er-health
+   :account-key :er-health
+   :ledgers #{:us-gaap :us-tax}
+   :w2-box "12" :w2-code "DD"}
+
+  {:match "^ER 401K MATCH$"        :role :er-401k-match
+   :account-key :er-401k-match
+   :ledgers #{:us-gaap}
+   :irc-404a6? true}
+
+  {:match "^WORKERS COMP$"         :role :er-workers-comp
+   :account-key :er-workers-comp
+   :ledgers #{:us-gaap :us-tax}}
+
+  ;; Employee withholdings — credit to payable liabilities
+  {:match "^EE FEDERAL TAX$"       :role :ee-fed-withheld
+   :account-key :ee-fed-withheld
+   :ledgers #{:us-gaap :us-tax}
+   :w2-box "2"}
+
+  {:match "^([A-Z]{2}) TAX$"       :role :ee-state-withheld
+   :account-key :ee-state-withheld
+   :ledgers #{:us-gaap :us-tax}
+   :state-from-group 1
+   :w2-box "17"}
+
+  {:match "^EE LOCAL TAX$"         :role :ee-local-withheld
+   :account-key :ee-local-withheld
+   :ledgers #{:us-gaap :us-tax}
+   :w2-box "19"}
+
+  {:match "^EE SOCIAL SECURITY$"   :role :ee-fica-ss
+   :account-key :ee-fica-ss
+   :ledgers #{:us-gaap :us-tax}
+   :w2-box "4"}
+
+  {:match "^EE MEDICARE$"          :role :ee-fica-medicare
+   :account-key :ee-fica-medicare
+   :ledgers #{:us-gaap :us-tax}
+   :w2-box "6"}
+
+  {:match "^EE 401K$"              :role :ee-401k-deferral
+   :account-key :ee-401k-deferral
+   :ledgers #{:us-gaap :us-tax}
+   :w2-box "12" :w2-code "D"
+   :reduces-box-1? true}
+
+  {:match "^EE ROTH 401K$"         :role :ee-roth-deferral
+   :account-key :ee-roth-deferral
+   :ledgers #{:us-gaap :us-tax}
+   :w2-box "12" :w2-code "AA"
+   :reduces-box-1? false}
+
+  {:match "^EE HEALTH$"            :role :ee-section125
+   :account-key :ee-section125
+   :ledgers #{:us-gaap :us-tax}
+   :section-125? true
+   :reduces-box-1? true
+   :reduces-box-3? true
+   :reduces-box-5? true}
+
+  {:match "^EE HSA$"               :role :ee-hsa
+   :account-key :ee-hsa
+   :ledgers #{:us-gaap :us-tax}
+   :w2-box "12" :w2-code "W"
+   :reduces-box-1? true
+   :reduces-box-3? true
+   :reduces-box-5? true}
+
+  {:match "^EE FSA$"               :role :ee-fsa
+   :account-key :ee-fsa
+   :ledgers #{:us-gaap :us-tax}
+   :section-125? true
+   :reduces-box-1? true
+   :reduces-box-3? true
+   :reduces-box-5? true}
+
+  {:match "^EE DEP CARE FSA$"      :role :ee-dep-care-fsa
+   :account-key :ee-dep-care-fsa
+   :ledgers #{:us-gaap :us-tax}
+   :w2-box "10"
+   :reduces-box-1? true}
+
+  {:match "^GARNISHMENT$"          :role :garnishment
+   :account-key :garnishment
+   :ledgers #{:us-gaap :us-tax}}
+
+  {:match "^CHILD SUPPORT$"        :role :child-support
+   :account-key :child-support
+   :ledgers #{:us-gaap :us-tax}}
+
+  ;; Final liability — net pay credit (the large counter-balancing row)
+  {:match "^NET PAY$"              :role :net-pay-liability
+   :account-key :net-pay-payable
+   :ledgers #{:us-gaap :us-tax}}
+
+  ;; Catch-all — any unmatched description routes to a suspense
+  ;; account so the parser never silently drops a row.
+  {:match ".*"                     :role :unmapped
+   :account-key :unmapped-suspense
+   :ledgers #{:us-gaap :us-tax}
+   :flag-for-review? true}]}

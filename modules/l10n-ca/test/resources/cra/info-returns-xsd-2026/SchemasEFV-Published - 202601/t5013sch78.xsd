@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!--
+Description: Carbon Capture, Utilization, and Storage Investment Tax Credit (CRA Form T5013 SCH 78 E )
+Contact: CRA, ITB, Solutions, RASD, Business Suite Assessing System, Other Levies
+Date created: October 2024
+Users of this schema:
+-Other Levies System
+
+-->
+<xsd:schema 
+xmlns:ols78="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/ols78/1-0-1" 
+xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+
+targetNamespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/ols78/1-0-1" 
+	elementFormDefault="qualified" attributeFormDefault="unqualified" version="ols78/1-0-1">
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/> 
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/> 	
+
+<!-- T5013Schedule78Data is also referenced by other schemas for importing purposes -->
+	<xsd:element name="T5013Schedule78Data" type="ols78:Schedule78DataType"/>
+	<xsd:complexType name="Schedule78DataType">
+		<xsd:sequence>
+			<xsd:element ref="ols78:Schedule78NRCANProjectCode"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78FirstDayCommercialOperationsDate"  minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 1 -->
+			<xsd:element ref="ols78:Schedule78ExpenditureDetails"  minOccurs="0" maxOccurs="2000"/> 
+			<xsd:element ref="ols78:Schedule78CummulativeCurrentFiscalYearAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78CummulativePreviousFiscalYearAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78CurrentFiscalYearAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78RefurbishmentTaxCreditAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78ITCAllocatedFromPartnershipAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78ITCAmount"  minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 2 -->
+			<xsd:element ref="ols78:Schedule78AllocationDetails"  minOccurs="0" maxOccurs="2000"/>
+
+			<!-- Part 3 -->
+			<xsd:element ref="ols78:Schedule78AttestationElectionDetails" minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 4 -->
+			<xsd:element ref="ols78:Schedule78LabourRequirementsDetails" minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 5 -->
+			<xsd:element ref="ols78:Schedule78AllocationOfLabourRequirementsDetails"  minOccurs="0" maxOccurs="2000"/> 
+            <xsd:element ref="ols78:Schedule78ElectingToPayLabourRequirements"  minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 6 -->
+			<xsd:element ref="ols78:Schedule78ProjectPeriod"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78TaxEligibleUseDetails"  minOccurs="0" maxOccurs="2000"/>
+			<xsd:element ref="ols78:Schedule78RODCummulativePreviousFiscalYearAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78RODCummulativeCurrentFiscalYearAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78RODCurrentTaxCreditAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78DCRCummulativeFiscalYearAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78DCRAmountDeterminedForLine603"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78DCRDevelopmentTaxCreditPaidAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78DCRAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78RCRRefurbishmentCurrentOrPreviousFiscalPeriod"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78RCRAmountDeterminedForLine607"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78RCRRefurbishmentPreviouslyPaid"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78RCRAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78TaxDetails"  minOccurs="0" maxOccurs="2000"/>
+			<xsd:element ref="ols78:Schedule78DevelopmentPropertyDispositionAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78RefurbishmentPropertyDispositionAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78TaxAllocatedFromPartnershipsAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols78:Schedule78TaxPayableTotalAmount"  minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 7 -->
+			<xsd:element ref="ols78:Schedule78AllocationOfPartXII7Details" minOccurs="0" maxOccurs="1"/>
+            <xsd:element ref="ols78:Schedule78ElectingToPayPartXII7"  minOccurs="0" maxOccurs="1"/>
+
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	
+	
+	<xsd:element name="Schedule78NRCANProjectCode">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="10"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="Schedule78FirstDayCommercialOperationsDate" type="sdt:DateType"/>
+	<xsd:element name="Schedule78CRDProducedDisclosedDate" type="sdt:DateType"/>
+
+
+	<!-- Part 1 -€“ CCUS ITC -->
+	<xsd:element name="Schedule78ExpenditureDetails" type="ols78:Schedule78ExpenditureDetailsType"/>
+	<xsd:complexType name="Schedule78ExpenditureDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols78:ExpenditureCCAClassNumberText" minOccurs="0" />
+			<xsd:element ref="ols78:ExpenditureDescriptionCode" minOccurs="0" />
+			<xsd:element ref="ols78:ExpenditureDualUseEquipement" minOccurs="0" />
+            <xsd:element ref="ols78:ExpenditureProvinceAndWorkSite" minOccurs="0" />			
+            <xsd:element ref="ols78:ExpenditureProvince" minOccurs="0" />
+            <xsd:element ref="ols78:ExpenditureDesignatedWorkSite" minOccurs="0" />           
+			<xsd:element ref="ols78:ExpenditureCurrentYearAmount" minOccurs="0" />
+			<xsd:element ref="ols78:ExpenditureAdjustmentsAmount" minOccurs="0" />
+			<xsd:element ref="ols78:ExpenditureAssistanceRepaidAmount" minOccurs="0" />
+			<xsd:element ref="ols78:ExpenditureEligibleExpenditureAmount" minOccurs="0" />
+			<xsd:element ref="ols78:ExpenditureQualifiedExpenditureFormulaAmount" minOccurs="0" />
+			<xsd:element ref="ols78:ExpenditureQualifiedCCUSExpenditureAmount" minOccurs="0" />
+			<xsd:element ref="ols78:ExpenditureSpecifiedPercentage" minOccurs="0" />
+			<xsd:element ref="ols78:ExpenditureITCCurrentYearAmount" minOccurs="0" />
+			<xsd:element ref="ols78:ExpenditureElecting" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="ExpenditureCCAClassNumberText" type= "sdt:NumberType"/>
+	<xsd:element name="ExpenditureDescriptionCode">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:CodeType">
+				<xsd:length value="2"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="ExpenditureDualUseEquipement"  type= "ccms:OneTwoCodeType"/>   
+	 
+	 
+    <xsd:element name="ExpenditureProvinceAndWorkSite"  type= "ccms:Character175TextType"/>   
+	
+    <xsd:element name="ExpenditureProvince"  type= "ccms:CanadianProvinceTerritoryCodeType"/>
+    
+    <xsd:element name="ExpenditureDesignatedWorkSite"  type= "ccms:Character175TextType"/>
+	<xsd:element name="ExpenditureCurrentYearAmount" type="sdt:AmountType"/>
+	<xsd:element name="ExpenditureAdjustmentsAmount" type="sdt:AmountType"/>
+	<xsd:element name="ExpenditureAssistanceRepaidAmount" type="sdt:AmountType"/>
+	<xsd:element name="ExpenditureEligibleExpenditureAmount" type="sdt:AmountType"/>
+	<xsd:element name="ExpenditureQualifiedExpenditureFormulaAmount" type="sdt:AmountType"/>
+	<xsd:element name="ExpenditureQualifiedCCUSExpenditureAmount" type="sdt:AmountType"/>
+	<xsd:element name="ExpenditureSpecifiedPercentage" type="sdt:PercentType"/>
+	<xsd:element name="ExpenditureITCCurrentYearAmount" type="sdt:AmountType"/>
+	<xsd:element name="ExpenditureElecting" type="ccms:OneTwoCodeType"/>
+
+	<xsd:element name="Schedule78CummulativeCurrentFiscalYearAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule78CummulativePreviousFiscalYearAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule78CurrentFiscalYearAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule78RefurbishmentTaxCreditAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule78ITCAllocatedFromPartnershipAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule78ITCAmount" type="sdt:AmountType"/>
+	
+	
+	<!-- Part 2 - Allocation of CCUS ITC to qualified members -->
+	<xsd:element name="Schedule78AllocationDetails" type="ols78:Schedule78AllocationDetailsType"/>
+	<xsd:complexType name="Schedule78AllocationDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols78:AllocationMemberNameText" minOccurs="0" />
+			<xsd:element ref="ols78:AllocationAccountNumber" minOccurs="0" />
+			<xsd:element ref="ols78:AllocationProportionPercentage" minOccurs="0" />
+			<xsd:element ref="ols78:AllocationAllocatedAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="AllocationMemberNameText"  type= "ccms:Character175TextType"/>
+	<xsd:element name="AllocationAccountNumber">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="AllocationProportionPercentage" type="sdt:PercentType"/>
+	<xsd:element name="AllocationAllocatedAmount" type="sdt:AmountType"/>
+
+
+	<!-- Part 3 - Attestation and election to meet labour requirements -->
+	<xsd:element name="Schedule78AttestationElectionDetails" type="ols78:Schedule78AttestationElectionDetailsType"/>
+	<xsd:complexType name="Schedule78AttestationElectionDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols78:AttestationElectionLastName" minOccurs="0"/>
+			<xsd:element ref="ols78:AttestationElectionFirstName" minOccurs="0"/>
+			<xsd:element ref="ols78:AttestationElectionPositionOfficeRank" minOccurs="0"/>
+			<xsd:element ref="ols78:AttestationElectionDate" minOccurs="0"/>
+			<xsd:element ref="ols78:AttestationElectionTelephoneNumber" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="AttestationElectionLastName" type="ccms:Character175TextType"/>
+	<xsd:element name="AttestationElectionFirstName" type="ccms:Character175TextType"/>
+	<xsd:element name="AttestationElectionPositionOfficeRank" type="ccms:Character175TextType"/>
+	<xsd:element name="AttestationElectionDate" type="sdt:DateType"/>
+	<xsd:element name="AttestationElectionTelephoneNumber" type="ccms:Character175TextType"/>
+	
+	
+	<!-- Part 4 - Labour requirements addition to tax -->
+	<xsd:element name="Schedule78LabourRequirementsDetails" type ="ols78:Schedule78LabourRequirementsDetailsType" />
+	<xsd:complexType name="Schedule78LabourRequirementsDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols78:ElectedToMeetLabourRequirements" minOccurs="0" />
+			<xsd:element ref="ols78:NumberOfCoveredWorkersPaidBelowWageRequirements" minOccurs="0" />
+			<xsd:element ref="ols78:TotalNumberOfDays" minOccurs="0" />
+			<xsd:element ref="ols78:WageRequirementsAmount" minOccurs="0" />
+			<xsd:element ref="ols78:TotalHoursOfLabourRequiredByApprentices" minOccurs="0" />
+			<xsd:element ref="ols78:TotalHoursOfLabourPerformedByApprentices" minOccurs="0" />
+			<xsd:element ref="ols78:ApprenticeshipRequirementsAmount" minOccurs="0" />
+			<xsd:element ref="ols78:LabourRequirementsAmount" minOccurs="0" />
+			<xsd:element ref="ols78:LabourRequirementsTotalAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="ElectedToMeetLabourRequirements" type="ccms:OneTwoCodeType"/>
+	<xsd:element name="NumberOfCoveredWorkersPaidBelowWageRequirements" type="sdt:QuantityType"/>
+	<xsd:element name="TotalNumberOfDays" type="sdt:QuantityType"/>
+	<xsd:element name="WageRequirementsAmount" type="sdt:AmountType"/>
+	<xsd:element name="TotalHoursOfLabourRequiredByApprentices" type="sdt:QuantityType"/>
+	<xsd:element name="TotalHoursOfLabourPerformedByApprentices" type="sdt:QuantityType"/>
+	<xsd:element name="ApprenticeshipRequirementsAmount" type="sdt:AmountType"/>
+	<xsd:element name="LabourRequirementsAmount" type="sdt:AmountType"/>
+	<xsd:element name="LabourRequirementsTotalAmount" type="sdt:AmountType"/>
+
+	
+	<!-- Part 5 - Allocation of labour requirements addition to tax to qualified members -->
+	<xsd:element name="Schedule78AllocationOfLabourRequirementsDetails" type="ols78:Schedule78AllocationOfLabourRequirementsDetailsType"/>
+	<xsd:complexType name="Schedule78AllocationOfLabourRequirementsDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols78:AllocationOfLabourRequirementsMemberNameText" minOccurs="0" />
+			<xsd:element ref="ols78:AllocationOfLabourRequirementsAccountNumber" minOccurs="0" />
+			<xsd:element ref="ols78:AllocationOfLabourRequirementsProportionPercentage" minOccurs="0" />
+			<xsd:element ref="ols78:AllocationOfLabourRequirementsAllocatedAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="AllocationOfLabourRequirementsMemberNameText"  type= "ccms:Character175TextType"/>
+	<xsd:element name="AllocationOfLabourRequirementsAccountNumber">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="AllocationOfLabourRequirementsProportionPercentage" type="sdt:PercentType"/>
+	<xsd:element name="AllocationOfLabourRequirementsAllocatedAmount" type="sdt:AmountType"/>
+        
+    <xsd:element name="Schedule78ElectingToPayLabourRequirements" type="ccms:OneTwoCodeType"/>  
+	
+
+	<!-- Part 6 - Part XII.7 tax -->
+	<xsd:element name="Schedule78ProjectPeriod">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="1"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	
+	<xsd:element name="Schedule78TaxEligibleUseDetails" type="ols78:Schedule78TaxEligibleUseDetailsType"/>
+	<xsd:complexType name="Schedule78TaxEligibleUseDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols78:ProjectedEligibleUsePercentage" minOccurs="0" />
+			<xsd:element ref="ols78:ActualEligibleUsePercentage" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="ProjectedEligibleUsePercentage" type="sdt:PercentType"/>
+	<xsd:element name="ActualEligibleUsePercentage" type="sdt:PercentType"/>
+	
+	<xsd:element name="Schedule78RODCummulativePreviousFiscalYearAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule78RODCummulativeCurrentFiscalYearAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule78RODCurrentTaxCreditAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule78DCRCummulativeFiscalYearAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule78DCRAmountDeterminedForLine603" type="sdt:AmountType"/>
+	<xsd:element name="Schedule78DCRDevelopmentTaxCreditPaidAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule78DCRAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule78RCRRefurbishmentCurrentOrPreviousFiscalPeriod" type="sdt:AmountType"/>
+	<xsd:element name="Schedule78RCRAmountDeterminedForLine607" type="sdt:AmountType"/>
+	<xsd:element name="Schedule78RCRRefurbishmentPreviouslyPaid" type="sdt:AmountType"/>
+	<xsd:element name="Schedule78RCRAmount" type="sdt:AmountType"/>
+	
+	<xsd:element name="Schedule78TaxDetails" type="ols78:Schedule78TaxDetailsType"/>
+	<xsd:complexType name="Schedule78TaxDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols78:TaxCCAClassNumberText" minOccurs="0" />
+			<xsd:element ref="ols78:TaxDescriptionCode" minOccurs="0" />
+			<xsd:element ref="ols78:TaxITCAmount" minOccurs="0" />
+			<xsd:element ref="ols78:TaxProceedAmount" minOccurs="0" />
+			<xsd:element ref="ols78:TaxQualifiedExpenditureAmount" minOccurs="0" />
+			<xsd:element ref="ols78:TaxTotalField616F" minOccurs="0" />
+			<xsd:element ref="ols78:TaxRecoveryAmount" minOccurs="0" />
+			<xsd:element ref="ols78:TaxTotalField618H" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="TaxCCAClassNumberText" type= "sdt:NumberType"/>
+	<xsd:element name="TaxDescriptionCode">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:CodeType">
+				<xsd:length value="2"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="TaxITCAmount"  type= "sdt:AmountType"/>
+	<xsd:element name="TaxProceedAmount"  type= "sdt:AmountType"/>
+	<xsd:element name="TaxQualifiedExpenditureAmount" type="sdt:AmountType"/>
+	<xsd:element name="TaxTotalField616F" type="sdt:AmountType"/>
+	<xsd:element name="TaxRecoveryAmount" type="sdt:AmountType"/>
+	<xsd:element name="TaxTotalField618H" type="sdt:AmountType"/>
+
+	<xsd:element name="Schedule78DevelopmentPropertyDispositionAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule78RefurbishmentPropertyDispositionAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule78TaxAllocatedFromPartnershipsAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule78TaxPayableTotalAmount" type="sdt:AmountType"/>
+	
+
+	<!-- Part 7 - Allocation of Part XII.7 tax to qualified members -->
+	<xsd:element name="Schedule78AllocationOfPartXII7Details" type="ols78:Schedule78AllocationOfPartXII7DetailsType"/>
+	<xsd:complexType name="Schedule78AllocationOfPartXII7DetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols78:AllocationOfPartXII7MemberNameText" minOccurs="0" />
+			<xsd:element ref="ols78:AllocationOfPartXII7AccountNumber" minOccurs="0" />
+			<xsd:element ref="ols78:AllocationOfPartXII7ProportionPercentage" minOccurs="0" />
+			<xsd:element ref="ols78:AllocationOfPartXII7AllocatedAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="AllocationOfPartXII7MemberNameText"  type= "ccms:Character175TextType"/>
+	<xsd:element name="AllocationOfPartXII7AccountNumber">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="AllocationOfPartXII7ProportionPercentage" type="sdt:PercentType"/>
+	<xsd:element name="AllocationOfPartXII7AllocatedAmount" type="sdt:AmountType"/>
+        
+    <xsd:element name="Schedule78ElectingToPayPartXII7" type="ccms:OneTwoCodeType"/>  
+
+</xsd:schema>

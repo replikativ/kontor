@@ -1,0 +1,318 @@
+(ns kontor.compliance.dsar-test
+  "ADR-052: data-subject-access requests + the bitemporal collect walk.
+
+   Covers:
+   - file-request! → :received, :deadline-at computed, status-history.
+   - collect returns entities referencing the subject, keyed by the
+     registered partner-attr.
+   - bitemporal collect: an older db value excludes later-added data.
+   - partner-merge: :include-merged? folds in data referencing the
+     merged-from duplicate.
+   - legal-hold composition: collect reports :on-legal-hold? +
+     :legal-holds for a held subject.
+   - register-partner-attr!: a newly-registered attr is walked.
+   - advance-state! fulfillment requires SoD + supporting-doc;
+     denial requires supporting-doc + reason-note (ADR-038)."
+  (:require [clojure.test :refer [deftest is testing]]
+            [datahike.api :as d]
+            [kontor.core :as core]
+            [kontor.compliance.dsar :as dsar]
+            [kontor.compliance.legal-hold :as lhold]))
+
+;; ============================================================================
+;; Fixture
+;; ============================================================================
+
+(defn- bootstrap []
+  (let [conn (core/create-test-db)]
+    (d/transact conn
+                [{:kontor.partner/external-id "SUBJECT" :kontor.partner/name "Jane Subject"
+                  :kontor.partner/kind :customer}
+                 {:kontor.partner/external-id "U-intake" :kontor.partner/name "Intake Officer"}
+                 {:kontor.partner/external-id "U-dpo"    :kontor.partner/name "Data Protection Officer"}
+                 {:kontor.partner/external-id "U-counsel" :kontor.partner/name "Counsel C"}
+                 {:db/id "doc-intake"
+                  :kontor.audit-doc/code "DSAR-INTAKE-001"
+                  :kontor.audit-doc/type :dsar-intake-form
+                  :kontor.audit-doc/storage-uri "s3://docs/dsar-intake-001"
+                  :kontor.audit-doc/uploaded-at #inst "2026-05-14"}
+                 {:db/id "doc-bundle"
+                  :kontor.audit-doc/code "DSAR-BUNDLE-001"
+                  :kontor.audit-doc/type :dsar-fulfillment-package
+                  :kontor.audit-doc/storage-uri "s3://docs/dsar-bundle-001"
+                  :kontor.audit-doc/uploaded-at #inst "2026-05-20"}
+                 {:db/id "doc-hold"
+                  :kontor.audit-doc/code "HOLD-ORDER-DSAR"
+                  :kontor.audit-doc/type :legal-hold-order
+                  :kontor.audit-doc/storage-uri "s3://docs/hold-dsar"
+                  :kontor.audit-doc/uploaded-at #inst "2026-05-15"}])
+    conn))
+
+(defn- pe [db xid]
+  (d/q '[:find ?e . :in $ ?x :where [?e :kontor.partner/external-id ?x]] db xid))
+
+(defn- adoc [db code]
+  (d/q '[:find ?e . :in $ ?c :where [?e :kontor.audit-doc/code ?c]] db code))
+
+;; ============================================================================
+;; file-request!
+;; ============================================================================
+
+(deftest file-request-sets-received-and-deadline
+  (let [conn (bootstrap)
+        subject (pe (d/db conn) "SUBJECT")
+        _ (dsar/file-request! conn
+                              {:external-id "DSAR-2026-001"
+                               :partner subject
+                               :kind :access
+                               :received-at #inst "2026-05-14"
+                               :deadline-days 30
+                               :received-via :portal
+                               :supporting-doc (adoc (d/db conn) "DSAR-INTAKE-001")
+                               :changed-by-uid (pe (d/db conn) "U-intake")})
+        db (d/db conn)
+        req-eid (dsar/by-external-id db "DSAR-2026-001")
+        req (d/pull db '[*] req-eid)
+        history (d/q '[:find [?h ...]
+                       :in $ ?e
+                       :where
+                       [?h :kontor.status-history/entity ?e]
+                       [?h :kontor.status-history/facet :kontor.dsar-request/state]]
+                     db req-eid)]
+    (is (= :received (:kontor.dsar-request/state req)))
+    (is (= :access (:kontor.dsar-request/kind req)))
+    (is (= #inst "2026-06-13" (:kontor.dsar-request/deadline-at req))
+        "deadline-at = received-at + 30 days.")
+    (is (= 1 (count history)) "Exactly one :status-history row for nil → :received.")))
+
+;; ============================================================================
+;; collect — the bitemporal reference walk
+;; ============================================================================
+
+(deftest collect-returns-referencing-entities
+  (let [conn (bootstrap)
+        subject (pe (d/db conn) "SUBJECT")
+        ;; Two entities referencing the subject via different attrs.
+        _ (d/transact conn
+                      [{:kontor.invoice/external-id "INV-SUBJ-1" :kontor.invoice/buyer subject}
+                       {:kontor.partner-bank-account/partner subject}])
+        result (dsar/collect (d/db conn) subject {})]
+    (testing "collect surfaces the subject + the referencing entities"
+      (is (= subject (:db/id (:partner result))))
+      (is (contains? (:references result) :kontor.invoice/buyer))
+      (is (contains? (:references result) :kontor.partner-bank-account/partner))
+      (is (= 1 (count (get-in result [:references :kontor.invoice/buyer]))))
+      (is (= "INV-SUBJ-1"
+             (-> result :references :kontor.invoice/buyer first :kontor.invoice/external-id))))
+    (testing "a partner with no referencing data has empty :references"
+      (is (empty? (:references (dsar/collect (d/db conn)
+                                             (pe (d/db conn) "U-dpo") {})))))))
+
+(deftest collect-walks-indirect-transaction-refs
+  ;; P0-1: a great deal of subject data references
+  ;; a :transaction, not the :partner directly. collect's indirect
+  ;; axis walks from the subject's transactions outward.
+  (let [conn (bootstrap)
+        subject (pe (d/db conn) "SUBJECT")
+        ;; A transaction belonging to the subject…
+        _ (d/transact conn [{:db/id "subj-tx"
+                             :kontor.transaction/external-id "TX-SUBJ-1"
+                             :kontor.transaction/partner subject}
+                            ;; …and a :status-history row that references
+                            ;; that tx via :origin-transaction — it does
+                            ;; NOT reference the :partner directly.
+                            {:kontor.status-history/entity "subj-tx"
+                             :kontor.status-history/entity-type :transaction
+                             :kontor.status-history/facet :kontor.transaction/state
+                             :kontor.status-history/to :posted
+                             :kontor.status-history/changed-at #inst "2026-05-14"
+                             :kontor.status-history/origin-transaction "subj-tx"}])
+        result (dsar/collect (d/db conn) subject {})]
+    (testing "the transaction itself is in the direct :references"
+      (is (= 1 (count (get-in result [:references :kontor.transaction/partner])))))
+    (testing "the status-history row surfaces in :indirect-references"
+      (is (contains? (:indirect-references result)
+                     :kontor.status-history/origin-transaction))
+      (is (= 1 (count (get-in result [:indirect-references
+                                      :kontor.status-history/origin-transaction])))))
+    (testing "register-tx-attr! extends the indirect walk"
+      ;; :kontor.transaction/reverses is kernel-seeded; confirm a freshly-
+      ;; registered tx-attr is also walked.
+      (let [had? (contains? (dsar/tx-attrs) :kontor.asset-event/transaction)]
+        (is (not had?))
+        (dsar/register-tx-attr! :kontor.asset-event/transaction)
+        (is (contains? (dsar/tx-attrs) :kontor.asset-event/transaction))
+        ;; restore
+        (swap! dsar/tx-attrs-registry disj :kontor.asset-event/transaction)))))
+
+(deftest collect-is-bitemporal
+  (let [conn (bootstrap)
+        subject (pe (d/db conn) "SUBJECT")
+        ;; Snapshot the db BEFORE any invoice exists.
+        db-before (d/db conn)
+        _ (d/transact conn [{:kontor.invoice/external-id "INV-LATE" :kontor.invoice/buyer subject}])
+        db-after (d/db conn)]
+    (testing "collect on the older db value does not see later-added data"
+      (is (empty? (:references (dsar/collect db-before subject {})))))
+    (testing "collect on the current db value sees it"
+      (is (= 1 (count (get-in (dsar/collect db-after subject {})
+                              [:references :kontor.invoice/buyer])))))))
+
+(deftest collect-folds-in-merged-from-partners
+  (let [conn (bootstrap)
+        subject (pe (d/db conn) "SUBJECT")
+        ;; A duplicate partner that was merged INTO the subject, with
+        ;; an invoice that still references the duplicate.
+        _ (d/transact conn
+                      [{:kontor.partner/external-id "SUBJECT-DUP" :kontor.partner/name "Jane Dup"}
+                       {:kontor.invoice/external-id "INV-DUP-1"
+                        :kontor.invoice/buyer [:kontor.partner/external-id "SUBJECT-DUP"]}])
+        dup (pe (d/db conn) "SUBJECT-DUP")
+        _ (d/transact conn
+                      [{:kontor.partner-merge/duplicate-of subject
+                        :kontor.partner-merge/superseded dup}])]
+    (testing ":include-merged? true folds the duplicate's data into the package"
+      (let [result (dsar/collect (d/db conn) subject {:include-merged? true})]
+        (is (= [dup] (:merged-from result)))
+        (is (= 1 (count (get-in result [:references :kontor.invoice/buyer]))))))
+    (testing ":include-merged? false ignores the merge chain"
+      (let [result (dsar/collect (d/db conn) subject {:include-merged? false})]
+        (is (empty? (:merged-from result)))
+        (is (not (contains? (:references result) :kontor.invoice/buyer)))))))
+
+(deftest collect-reports-legal-holds
+  (let [conn (bootstrap)
+        subject (pe (d/db conn) "SUBJECT")
+        _ (lhold/place! conn
+                        {:code "HOLD-ON-SUBJECT"
+                         :matter-name "Subject under preservation"
+                         :issued-by-uid (pe (d/db conn) "U-counsel")
+                         :issued-at #inst "2026-05-15"
+                         :supporting-doc (adoc (d/db conn) "HOLD-ORDER-DSAR")
+                         :reason-note "Preserve all subject data."
+                         :scope-eids [subject]})
+        result (dsar/collect (d/db conn) subject {})]
+    (testing "collect reports the subject is on legal hold"
+      (is (true? (:on-legal-hold? result)))
+      (is (= 1 (count (:legal-holds result))))
+      (is (= "HOLD-ON-SUBJECT"
+             (:kontor.legal-hold/code
+              (d/pull (d/db conn) [:kontor.legal-hold/code]
+                      (first (:legal-holds result)))))))
+    (testing "an unheld partner reports :on-legal-hold? false"
+      (is (false? (:on-legal-hold? (dsar/collect (d/db conn)
+                                                 (pe (d/db conn) "U-dpo") {})))))))
+
+;; ============================================================================
+;; register-partner-attr!
+;; ============================================================================
+
+(deftest register-partner-attr-extends-collect
+  (let [conn (bootstrap)
+        subject (pe (d/db conn) "SUBJECT")
+        ;; :kontor.dsar-request/partner is NOT a kernel-seeded partner-attr —
+        ;; a DSAR request references the subject but isn't part of the
+        ;; default walk. Register it and confirm collect picks it up.
+        had? (contains? (dsar/partner-attrs) :kontor.dsar-request/partner)
+        _ (dsar/file-request! conn
+                              {:external-id "DSAR-REG-1"
+                               :partner subject
+                               :kind :access
+                               :received-at #inst "2026-05-14"
+                               :deadline-days 30
+                               :changed-by-uid (pe (d/db conn) "U-intake")})]
+    (testing "before registration, collect does not walk :kontor.dsar-request/partner"
+      (is (not had?))
+      (is (not (contains? (:references (dsar/collect (d/db conn) subject {}))
+                          :kontor.dsar-request/partner))))
+    (testing "after register-partner-attr!, collect walks it"
+      (dsar/register-partner-attr! :kontor.dsar-request/partner)
+      (is (contains? (dsar/partner-attrs) :kontor.dsar-request/partner))
+      (is (= 1 (count (get-in (dsar/collect (d/db conn) subject {})
+                              [:references :kontor.dsar-request/partner])))))
+    ;; Restore the registry so the test is order-independent.
+    (swap! dsar/partner-attrs-registry disj :kontor.dsar-request/partner)))
+
+;; ============================================================================
+;; advance-state! — fulfillment + denial governance (ADR-038)
+;; ============================================================================
+
+(deftest fulfillment-requires-sod-and-supporting-doc
+  (let [conn (bootstrap)
+        subject (pe (d/db conn) "SUBJECT")
+        intake (pe (d/db conn) "U-intake")
+        dpo (pe (d/db conn) "U-dpo")
+        _ (dsar/file-request! conn
+                              {:external-id "DSAR-FUL-1"
+                               :partner subject
+                               :kind :access
+                               :received-at #inst "2026-05-14"
+                               :deadline-days 30
+                               :changed-by-uid intake})
+        ;; received → verifying-identity → in-progress
+        _ (dsar/advance-state! conn {:request "DSAR-FUL-1" :to :verifying-identity
+                                     :changed-by-uid intake :reason :dsar-id-check})
+        _ (dsar/advance-state! conn {:request "DSAR-FUL-1" :to :in-progress
+                                     :changed-by-uid intake :reason :dsar-id-verified})]
+    (testing ":identity-verified-at stamped on the verifying → in-progress edge"
+      (is (some? (:kontor.dsar-request/identity-verified-at
+                  (d/pull (d/db conn) [:kontor.dsar-request/identity-verified-at]
+                          (dsar/by-external-id (d/db conn) "DSAR-FUL-1"))))))
+    (testing "fulfillment without :supporting-doc is rejected (ADR-038)"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"(?i)approval-policy"
+           (dsar/advance-state! conn {:request "DSAR-FUL-1" :to :fulfilled
+                                      :changed-by-uid dpo
+                                      :reason :dsar-fulfilled}))))
+    (testing "fulfillment by the intake person is rejected (:no-self-approval)"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"(?i)approval-policy"
+           (dsar/advance-state! conn {:request "DSAR-FUL-1" :to :fulfilled
+                                      :changed-by-uid intake     ; = creator!
+                                      :reason :dsar-fulfilled
+                                      :supporting-doc (adoc (d/db conn) "DSAR-BUNDLE-001")}))))
+    (testing "fulfillment by a different actor with the bundle succeeds"
+      (dsar/advance-state! conn {:request "DSAR-FUL-1" :to :fulfilled
+                                 :changed-by-uid dpo
+                                 :reason :dsar-fulfilled
+                                 :supporting-doc (adoc (d/db conn) "DSAR-BUNDLE-001")
+                                 :fulfilled-package (adoc (d/db conn) "DSAR-BUNDLE-001")})
+      (let [req (d/pull (d/db conn) '[*]
+                        (dsar/by-external-id (d/db conn) "DSAR-FUL-1"))]
+        (is (= :fulfilled (:kontor.dsar-request/state req)))
+        (is (some? (:kontor.dsar-request/fulfilled-at req)))
+        (is (some? (:kontor.dsar-request/fulfilled-package req)))))))
+
+(deftest denial-requires-supporting-doc-and-reason-note
+  (let [conn (bootstrap)
+        subject (pe (d/db conn) "SUBJECT")
+        intake (pe (d/db conn) "U-intake")
+        dpo (pe (d/db conn) "U-dpo")
+        _ (dsar/file-request! conn
+                              {:external-id "DSAR-DEN-1"
+                               :partner subject
+                               :kind :erasure
+                               :received-at #inst "2026-05-14"
+                               :deadline-days 30
+                               :changed-by-uid intake})
+        _ (dsar/advance-state! conn {:request "DSAR-DEN-1" :to :verifying-identity
+                                     :changed-by-uid intake :reason :dsar-id-check})
+        _ (dsar/advance-state! conn {:request "DSAR-DEN-1" :to :in-progress
+                                     :changed-by-uid intake :reason :dsar-id-verified})]
+    (testing "denial without supporting-doc + reason-note is rejected (ADR-038)"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"(?i)approval-policy"
+           (dsar/advance-state! conn {:request "DSAR-DEN-1" :to :denied
+                                      :changed-by-uid dpo
+                                      :reason :dsar-denied}))))
+    (testing "denial with both succeeds and records :denied-reason"
+      (dsar/advance-state! conn {:request "DSAR-DEN-1" :to :denied
+                                 :changed-by-uid dpo
+                                 :reason :dsar-denied
+                                 :reason-note "Records exempt under statutory retention."
+                                 :supporting-doc (adoc (d/db conn) "DSAR-INTAKE-001")
+                                 :denied-reason :exempt-records})
+      (let [req (d/pull (d/db conn) '[*]
+                        (dsar/by-external-id (d/db conn) "DSAR-DEN-1"))]
+        (is (= :denied (:kontor.dsar-request/state req)))
+        (is (= :exempt-records (:kontor.dsar-request/denied-reason req)))))))

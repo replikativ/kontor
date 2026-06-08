@@ -1,0 +1,106 @@
+;; CA payroll-specific account starter — extends modules/l10n-ca/chart.edn
+;;2. Consumer overrides as needed; the load-bearing
+;; identifier is :kontor.account-tag/name (e.g. "ca-payroll-itx"), not :code.
+;;
+;; PD7A program-account routing: when a business has
+;; multiple RP accounts (RP0001 for Division A, RP0002 for Division B),
+;; consumers either:
+;;   (a) duplicate this chart with code-suffix discrimination
+;;       ("2310-RP0001" + "2310-RP0002") and tag-name discrimination
+;;       (:ca-cra-rp-RP0001 / :ca-cra-rp-RP0002 added to :tags), OR
+;;   (b) keep one chart and tag postings with the RP at posting time
+;;       via :kontor.posting/account-tags.
+;;
+;; Either way, the PD7A helper + T4 builder filter by an RP-routing
+;; tag.
+
+[;; ──────────────────────────────────────────────────────────────────
+ ;; EXPENSE SIDE (debit)
+ ;; ──────────────────────────────────────────────────────────────────
+ {:code "5400" :path "Expenses:Payroll:Wages-and-salaries"
+  :type :expense :name "Wages and salaries"
+  :tags [:ca-payroll-wages]}
+ {:code "5410" :path "Expenses:Payroll:Employer-CPP"
+  :type :expense :name "Employer CPP / CPP2 contributions"
+  :tags [:ca-payroll-er-cpp]}
+ {:code "5411" :path "Expenses:Payroll:Employer-EI"
+  :type :expense :name "Employer EI premiums (1.4x employee)"
+  :tags [:ca-payroll-er-ei]}
+ {:code "5412" :path "Expenses:Payroll:Vacation-Accrual"
+  :type :expense :name "Vacation pay accrual expense"
+  :tags [:ca-payroll-vacation-accrual]}
+ {:code "5413" :path "Expenses:Payroll:Employer-RPP"
+  :type :expense :name "Employer RPP match"
+  :tags [:ca-payroll-er-rpp]}
+ {:code "5414" :path "Expenses:Payroll:Benefits"
+  :type :expense :name "Other taxable / non-cash employer benefits"
+  :tags [:ca-payroll-benefits]}
+ {:code "5415" :path "Expenses:Payroll:Employer-EHT"
+  :type :expense :name "Employer Health Tax (provincial)"
+  :tags [:ca-payroll-er-eht]}
+ {:code "5416" :path "Expenses:Payroll:Employer-WSIB"
+  :type :expense :name "WSIB / WCB premiums (provincial)"
+  :tags [:ca-payroll-er-wsib]}
+
+ ;; ──────────────────────────────────────────────────────────────────
+ ;; LIABILITY SIDE — CRA statutory (PD7A buckets)
+ ;; Three distinct buckets3; NEVER collapsed.
+ ;; ──────────────────────────────────────────────────────────────────
+ {:code "2510" :path "Liabilities:Payroll:CRA-Income-Tax"
+  :type :liability :name "CRA — Income tax withheld (RP)"
+  :tags [:ca-payroll-itx :ca-cra-pd7a]}
+ {:code "2520" :path "Liabilities:Payroll:CRA-CPP"
+  :type :liability :name "CRA — CPP / CPP2 (employee + employer)"
+  :tags [:ca-payroll-cpp :ca-cra-pd7a]}
+ {:code "2530" :path "Liabilities:Payroll:CRA-EI"
+  :type :liability :name "CRA — EI (employee + 1.4x employer)"
+  :tags [:ca-payroll-ei :ca-cra-pd7a]}
+
+ ;; LIABILITY SIDE — non-CRA payroll
+ {:code "2540" :path "Liabilities:Payroll:Vacation-Liability"
+  :type :liability :name "Vacation pay liability"
+  :tags [:ca-payroll-vacation-liability]}
+ {:code "2550" :path "Liabilities:Payroll:Wages-Payable-Net"
+  :type :liability :name "Wages payable (net to employees)"
+  :tags [:ca-payroll-net-wages]
+  :reconcilable? true}
+ {:code "2560" :path "Liabilities:Payroll:RPP-Contributions"
+  :type :liability :name "RPP contributions payable (employee + employer)"
+  :tags [:ca-payroll-rpp]}
+ {:code "2570" :path "Liabilities:Payroll:Union-Dues"
+  :type :liability :name "Union dues payable"
+  :tags [:ca-payroll-union]}
+ {:code "2580" :path "Liabilities:Payroll:Charity-Donations"
+  :type :liability :name "Charitable donations payable (United Way etc.)"
+  :tags [:ca-payroll-charity]}
+ {:code "2581" :path "Liabilities:Payroll:Garnishments"
+  :type :liability :name "Garnishments payable"
+  :tags [:ca-payroll-garnishment]}
+ {:code "2582" :path "Liabilities:Payroll:Other-Deductions"
+  :type :liability :name "Other voluntary employee deductions"
+  :tags [:ca-payroll-other-deduction]}
+ {:code "2585" :path "Liabilities:Payroll:Provincial-EHT"
+  :type :liability :name "Provincial EHT payable"
+  :tags [:ca-payroll-eht]}
+ {:code "2586" :path "Liabilities:Payroll:Provincial-WSIB"
+  :type :liability :name "WSIB / WCB premiums payable"
+  :tags [:ca-payroll-wsib]}
+
+ ;; ──────────────────────────────────────────────────────────────────
+ ;; QC carve-out (Revenu Québec) — C4.1 emit (ADR-087)
+ ;; ──────────────────────────────────────────────────────────────────
+ {:code "2521" :path "Liabilities:Payroll:RQ-QPP"
+  :type :liability :name "Revenu Québec — QPP / QPP2"
+  :tags [:ca-payroll-qpp :qc-rq-tpz1015 :qc-rq-rl1]}
+ {:code "2531" :path "Liabilities:Payroll:RQ-QPIP"
+  :type :liability :name "Revenu Québec — QPIP"
+  :tags [:ca-payroll-qpip :qc-rq-tpz1015 :qc-rq-rl1]}
+ {:code "2511" :path "Liabilities:Payroll:RQ-Income-Tax"
+  :type :liability :name "Revenu Québec — Provincial income tax"
+  :tags [:ca-payroll-qc-itx :qc-rq-tpz1015 :qc-rq-rl1]}
+ {:code "2532" :path "Liabilities:Payroll:RQ-FSS"
+  :type :liability :name "Revenu Québec — Fonds des services de santé (FSS)"
+  :tags [:ca-payroll-fss :qc-rq-tpz1015 :qc-rq-rl1]}
+ {:code "5417" :path "Expenses:Payroll:Employer-FSS"
+  :type :expense :name "Employer FSS (Quebec Health Services Fund)"
+  :tags [:ca-payroll-er-fss]}]

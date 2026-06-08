@@ -1,0 +1,534 @@
+(ns kontor.invoice.bridge
+  "Public surface of the `kontor-invoice` companion — ADR-036.
+
+   IMPORTANT: namespace is `kontor.invoice.bridge`, NOT
+   `kontor.invoice`. The kernel ships its own `kontor.invoice`
+   (`src/kontor/invoice.clj`) with create!/send!/mark-paid!/cancel!
+   for non-order-aware flows. This bridge namespace adds the order-
+   aware machinery on top: order→invoice construction, status-
+   machine wrappers using ADR-034 transitions, and the posting
+   trigger.
+
+   Resolution, pulls, status-transition wrappers, order→invoice
+   bridge (`make-invoice-from-order!`), and the posting trigger
+   (which delegates to kontor.invoice.posting/post-to-ledger!).
+
+   The order→invoice bridge logic:
+     1. Pull the :order header + items + adjustments.
+     2. Create an :invoice with :kontor.invoice/order back-ref.
+     3. For each :order-item, create one :invoice-line + one
+        :order-item-billing junction row.
+     4. For each :order-adjustment, create a derived :invoice-line
+        with :kontor.invoice-line/parent-line pointing at the parent
+        product line."
+  (:require [datahike.api :as d]
+            [kontor.invoice.posting :as posting]
+            [kontor.workflow.status-machine :as sm]
+            [kontor.validation :as validation]))
+
+;; ============================================================================
+;; Resolution
+;; ============================================================================
+
+(defn by-external-id
+  "Resolve an invoice eid by :kontor.invoice/external-id."
+  [db external-id]
+  (d/q '[:find ?e .
+         :in $ ?xid
+         :where [?e :kontor.invoice/external-id ?xid]]
+       db external-id))
+
+(defn resolve-invoice
+  "Coerce `spec` to an invoice eid (string → lookup, eid → identity)."
+  [db spec]
+  (cond
+    (nil? spec)    nil
+    (string? spec) (by-external-id db spec)
+    :else          spec))
+
+;; ============================================================================
+;; Pulls
+;; ============================================================================
+
+(defn pull-invoice
+  [db spec]
+  (when-let [eid (resolve-invoice db spec)]
+    (d/pull db
+            '[* {:kontor.invoice/order   [:kontor.order/external-id :kontor.order/type]
+                 :kontor.invoice/entity  [:kontor.entity/code :kontor.entity/name]
+                 :kontor.invoice/buyer   [:kontor.partner/external-id :kontor.partner/name]
+                 :kontor.invoice/seller  [:kontor.partner/external-id :kontor.partner/name]
+                 :kontor.invoice/transaction [:db/id]}]
+            eid)))
+
+(defn lines-of
+  "Pulled :invoice-line rows ordered by :kontor.invoice-line/sequence."
+  [db spec]
+  (when-let [eid (resolve-invoice db spec)]
+    (->> (d/q '[:find [?l ...]
+                :in $ ?i
+                :where [?l :kontor.invoice-line/invoice ?i]]
+              db eid)
+         (map #(d/pull db '[*] %))
+         (sort-by :kontor.invoice-line/sequence)
+         vec)))
+
+;; ============================================================================
+;; Totals
+;; ============================================================================
+
+(defn total-of
+  "Sum of :kontor.invoice-line/amount across all lines. Returns bigdec."
+  [db spec]
+  (when-let [eid (resolve-invoice db spec)]
+    (reduce (fn [acc {:kontor.invoice-line/keys [amount]}]
+              (.add ^java.math.BigDecimal acc
+                    ^java.math.BigDecimal (or amount 0M)))
+            0M
+            (lines-of db eid))))
+
+(defn partial-billed-quantity
+  "Sum of :kontor.order-item-billing/quantity across all junctions for the
+   given :order-item entity-id. Returns bigdec.
+
+   Used by the bridge to subtract already-invoiced quantity when
+   constructing a second invoice for the same order."
+  [db order-item-eid]
+  (or (d/q '[:find (sum ?q) .
+             :with ?b
+             :in $ ?oi
+             :where
+             [?b :kontor.order-item-billing/order-item ?oi]
+             [?b :kontor.order-item-billing/quantity ?q]]
+           db order-item-eid)
+      0M))
+
+;; ============================================================================
+;; Status transitions
+;; ============================================================================
+
+(defn make-ready-tx-data
+  "Pure tx-data builder for `make-ready!` (ADR-068). Composes the
+   `:kontor.invoice/status :draft → :ready` status-machine transition into
+   a vector ready to transact, so consumer orchestrations can fold
+   the transition into a larger `kontor.workflow.process` step list."
+  [db invoice opts]
+  (let [eid (resolve-invoice db invoice)]
+    (sm/record-status-change-tx-data
+     db (merge {:entity eid
+                :entity-type :invoice
+                :facet :kontor.invoice/status
+                :to :ready}
+               opts))))
+
+(defn make-ready!
+  "Finalize an invoice (:draft → :ready). Locks edits. Routes through
+   the gate (ADR-068).
+
+   The pure tx-data builder is `make-ready-tx-data`."
+  ([conn invoice] (make-ready! conn invoice nil))
+  ([conn invoice opts]
+   (validation/transact-with-validation
+    conn (make-ready-tx-data (d/db conn) invoice opts))))
+
+(defn post-to-ledger!
+  "Post the invoice to the GL. Delegates to kontor.invoice.posting/
+   post-to-ledger!. See that fn for details."
+  ([conn invoice] (post-to-ledger! conn invoice nil))
+  ([conn invoice opts]
+   (posting/post-to-ledger! conn invoice opts)))
+
+(defn mark-paid-tx-data
+  "Pure tx-data builder for `mark-paid!` (ADR-068). Composes the
+   `:kontor.invoice/status :sent → :paid` status-machine transition into a
+   vector ready to transact — useful when reconciliation needs to
+   atomically apply payment + flip the invoice in one tx."
+  [db invoice opts]
+  (let [eid (resolve-invoice db invoice)]
+    (sm/record-status-change-tx-data
+     db (merge {:entity eid
+                :entity-type :invoice
+                :facet :kontor.invoice/status
+                :to :paid}
+               opts))))
+
+(defn mark-paid!
+  "Transition :sent → :paid. Typically called by reconciliation
+   when the bank-line settles. Routes through the gate (ADR-068).
+
+   The pure tx-data builder is `mark-paid-tx-data`."
+  ([conn invoice] (mark-paid! conn invoice nil))
+  ([conn invoice opts]
+   (validation/transact-with-validation
+    conn (mark-paid-tx-data (d/db conn) invoice opts))))
+
+(defn cancel-tx-data
+  "Pure tx-data builder for `cancel!` (ADR-068). Composes the
+   `:kontor.invoice/status → :cancelled` status-machine transition into a
+   vector ready to transact — useful when the consumer needs to
+   atomically link cancellation to a reversing journal entry."
+  [db invoice opts]
+  (let [eid (resolve-invoice db invoice)]
+    (sm/record-status-change-tx-data
+     db (merge {:entity eid
+                :entity-type :invoice
+                :facet :kontor.invoice/status
+                :to :cancelled}
+               opts))))
+
+(defn cancel!
+  "Transition any non-cancelled state → :cancelled. If already :sent,
+   the consumer is responsible for creating a reversal :transaction
+   per ADR-007 sealing. Routes through the gate (ADR-068).
+
+   The pure tx-data builder is `cancel-tx-data`."
+  ([conn invoice] (cancel! conn invoice nil))
+  ([conn invoice opts]
+   (validation/transact-with-validation
+    conn (cancel-tx-data (d/db conn) invoice opts))))
+
+;; ============================================================================
+;; Order → invoice bridge
+;; ============================================================================
+
+(defn- gl-account-type-for-item-line
+  "Dispatch on (invoice-type, :kontor.procurement.order-item/category) → :kontor.invoice-line/
+   gl-account-type. ADR-042: polymorphism for procurement invoices.
+
+   Sales / credit-memo: always :sales-revenue (category ignored).
+
+   Purchase invoices:
+     :direct   → :gr-ir-clearing  (canonical receipt-first flow:
+                                   inventory was Dr'd at receipt;
+                                   invoice clears the GR-IR credit)
+     :indirect → :purchase-expense (no receipt → direct expense)
+     :services → :purchase-expense
+     :asset    → :asset-acquisition (CapEx; receipt-side handled
+                                     out-of-band)
+     nil       → :purchase-expense
+
+   Direct-purchase WITHOUT a prior receipt (e.g. vendor-managed
+   inventory, prepayment) must override via :kontor.invoice-line/account
+   to route to :inventory instead of clearing a non-existent GR-IR
+   credit.
+
+   Debit memos (vendor returns):
+     :direct   → :inventory       (credits inventory back; caller
+                                   typically also fires plan-stock-
+                                   move :out for valuation)
+     :asset    → :asset-acquisition
+     :indirect → :purchase-expense
+     :services → :purchase-expense
+     nil       → :purchase-expense"
+  [invoice-type order-item]
+  (case invoice-type
+    (:sales :credit-memo)
+    :sales-revenue
+
+    :purchase
+    (case (:kontor.procurement.order-item/category order-item)
+      :direct   :gr-ir-clearing
+      :indirect :purchase-expense
+      :services :purchase-expense
+      :asset    :asset-acquisition
+      :purchase-expense)
+
+    :debit-memo
+    (case (:kontor.procurement.order-item/category order-item)
+      :direct   :inventory
+      :indirect :purchase-expense
+      :services :purchase-expense
+      :asset    :asset-acquisition
+      :purchase-expense)
+
+    :sales-revenue))
+
+(defn- gl-account-type-for-adjustment-line
+  "Dispatch on (invoice-type, :kontor.order-adjustment/type) → :kontor.invoice-line/
+   gl-account-type. ADR-042: polymorphism for procurement adjustments."
+  [invoice-type adj-type]
+  (case [invoice-type adj-type]
+    [:sales :tax]            :sales-tax-payable
+    [:sales :discount]       :discount-given
+    [:sales :shipping]       :shipping-income
+    [:credit-memo :tax]      :sales-tax-payable
+    [:credit-memo :discount] :discount-given
+    [:credit-memo :shipping] :shipping-income
+    [:purchase :tax]         :purchase-tax-recoverable
+    [:purchase :discount]    :purchase-discount
+    [:purchase :shipping]    :shipping-expense
+    [:debit-memo :tax]       :purchase-tax-recoverable
+    [:debit-memo :discount]  :purchase-discount
+    [:debit-memo :shipping]  :shipping-expense
+    ;; fallback per invoice-type
+    (case invoice-type
+      (:sales :credit-memo)    :sales-revenue
+      (:purchase :debit-memo)  :purchase-expense
+      :sales-revenue)))
+
+(defn- make-invoice-line-from-order-item
+  "Build an :invoice-line + :order-item-billing junction for one
+   order-item. The line's quantity is the remaining un-billed
+   quantity (subtract :kontor.order-item-billing/quantity totals).
+
+   `invoice-type` (ADR-042) drives the GL routing via
+   `gl-account-type-for-item-line`."
+  [db invoice-type order-item invoice-tempid sequence line-tempid]
+  (let [order-item-eid (:db/id order-item)
+        ordered-qty (:kontor.sales.order-item/quantity order-item)
+        cancelled-qty (or (:kontor.sales.order-item/cancel-quantity order-item) 0M)
+        already-billed (partial-billed-quantity db order-item-eid)
+        bill-qty (.subtract ^java.math.BigDecimal
+                            (.subtract ^java.math.BigDecimal ordered-qty cancelled-qty)
+                            ^java.math.BigDecimal already-billed)
+        gl-type (gl-account-type-for-item-line invoice-type order-item)]
+    (cond
+      ;; Nothing left to bill (already fully invoiced) — emit a zero-
+      ;; quantity line. Caller `make-invoice-from-order!` filters.
+      (zero? (.signum ^java.math.BigDecimal bill-qty))
+      [{:db/id line-tempid
+        :kontor.invoice-line/invoice invoice-tempid
+        :kontor.invoice-line/sequence sequence
+        :kontor.invoice-line/order-item order-item-eid
+        :kontor.invoice-line/name (or (:kontor.sales.order-item/description order-item)
+                               (:kontor.sales.order-item/product-id order-item))
+        :kontor.invoice-line/quantity 0M
+        :kontor.invoice-line/unit-price (:kontor.sales.order-item/unit-price order-item)
+        :kontor.invoice-line/amount 0M
+        :kontor.invoice-line/gl-account-type gl-type}
+       nil]
+
+      ;; Negative remaining quantity = cancellation increased past
+      ;; already-billed. Refuse — caller must issue a credit memo
+      ;; rather than try to net it on the next invoice.
+      (neg? (.signum ^java.math.BigDecimal bill-qty))
+      (throw (ex-info "Refusing to invoice negative quantity"
+                      {:type :kontor.invoice/over-billed-or-over-cancelled
+                       :order-item order-item-eid
+                       :ordered-qty ordered-qty
+                       :cancelled-qty cancelled-qty
+                       :already-billed already-billed
+                       :computed-bill-qty bill-qty
+                       :remediation "Issue a credit memo for the
+                                     already-billed quantity instead
+                                     of attempting to net on a new
+                                     invoice."}))
+
+      :else
+      (let [unit-price (:kontor.sales.order-item/unit-price order-item)
+            line-amount (.multiply ^java.math.BigDecimal bill-qty
+                                   ^java.math.BigDecimal unit-price)
+            override-acct (when-let [a (:kontor.sales.order-item/override-gl-account order-item)]
+                            (:db/id a))
+            ;; ADR-042: FIFO-allocate the bill-qty across
+            ;; :accepted receipts of this order-item, emit one
+            ;; :receipt-invoice-billing junction per receipt that
+            ;; gets allocated. v1 simplification: doesn't subtract
+            ;; previously-billed receipt quantities — the composite
+            ;; identity [receipt, invoice-line] keeps the row unique
+            ;; per pair, and re-invoicing produces a new line-tempid.
+            receipts (->> (d/q '[:find ?r (sum ?q)
+                                 :with ?ri
+                                 :in $ ?oi
+                                 :where
+                                 [?ri :kontor.receipt-item/order-item ?oi]
+                                 [?ri :kontor.receipt-item/quantity-accepted ?q]
+                                 [?ri :kontor.receipt-item/receipt ?r]
+                                 [?r :kontor.receipt/status :accepted]
+                                 [?r :kontor.receipt/received-at ?when]]
+                               db order-item-eid)
+                          (sort-by (fn [[r _]]
+                                     (or (:kontor.receipt/received-at
+                                          (d/pull db [:kontor.receipt/received-at] r))
+                                         (java.util.Date. 0)))))
+            allocations (loop [remaining bill-qty
+                               receipts receipts
+                               out []]
+                          (if (or (empty? receipts)
+                                  (zero? (.signum
+                                          ^java.math.BigDecimal remaining)))
+                            out
+                            (let [[r-eid r-qty] (first receipts)
+                                  alloc (if (>= (.compareTo
+                                                 ^java.math.BigDecimal r-qty
+                                                 ^java.math.BigDecimal remaining) 0)
+                                          remaining
+                                          r-qty)]
+                              (recur (.subtract ^java.math.BigDecimal remaining
+                                                ^java.math.BigDecimal alloc)
+                                     (rest receipts)
+                                     (conj out [r-eid alloc])))))
+            ri-billings (mapv (fn [[r-eid alloc]]
+                                {:kontor.receipt-invoice-billing/receipt r-eid
+                                 :kontor.receipt-invoice-billing/invoice-line line-tempid
+                                 :kontor.receipt-invoice-billing/quantity alloc})
+                              allocations)]
+        [(cond-> {:db/id line-tempid
+                  :kontor.invoice-line/invoice invoice-tempid
+                  :kontor.invoice-line/sequence sequence
+                  :kontor.invoice-line/order-item order-item-eid
+                  :kontor.invoice-line/name (or (:kontor.sales.order-item/description order-item)
+                                         (:kontor.sales.order-item/product-id order-item))
+                  :kontor.invoice-line/quantity bill-qty
+                  :kontor.invoice-line/unit-price unit-price
+                  :kontor.invoice-line/amount line-amount
+                  :kontor.invoice-line/gl-account-type gl-type}
+           override-acct (assoc :kontor.invoice-line/account override-acct))
+         (cond-> {:kontor.order-item-billing/order-item order-item-eid
+                  :kontor.order-item-billing/invoice-line line-tempid
+                  :kontor.order-item-billing/quantity bill-qty})
+         ri-billings]))))
+
+(defn- make-invoice-line-from-adjustment
+  "Build an :invoice-line for one :order-adjustment. The line is
+   parented to the parent product line if the adjustment is
+   line-scoped, otherwise is header-level on the invoice.
+
+   ADR-042: `invoice-type` drives the GL routing via
+   `gl-account-type-for-adjustment-line` (e.g. :purchase + :tax →
+   :purchase-tax-recoverable, mirror of :sales + :tax →
+   :sales-tax-payable)."
+  [invoice-type adjustment invoice-tempid sequence line-tempid parent-line-tempid]
+  (let [adj-type (:kontor.order-adjustment/type adjustment)
+        gl-type (gl-account-type-for-adjustment-line invoice-type adj-type)
+        amount (:kontor.order-adjustment/amount adjustment)
+        override-acct (when-let [a (:kontor.order-adjustment/override-gl-account adjustment)]
+                        (:db/id a))
+        tax-auth-party (when-let [p (:kontor.order-adjustment/tax-auth-party adjustment)]
+                         (:db/id p))]
+    (cond-> {:db/id line-tempid
+             :kontor.invoice-line/invoice invoice-tempid
+             :kontor.invoice-line/sequence sequence
+             :kontor.invoice-line/order-adjustment (:db/id adjustment)
+             :kontor.invoice-line/name (str (name adj-type))
+             :kontor.invoice-line/quantity 1M
+             :kontor.invoice-line/unit-price amount
+             :kontor.invoice-line/amount amount
+             :kontor.invoice-line/gl-account-type gl-type}
+      parent-line-tempid    (assoc :kontor.invoice-line/parent-line parent-line-tempid)
+      override-acct         (assoc :kontor.invoice-line/account override-acct)
+      tax-auth-party        (assoc :kontor.invoice-line/tax-auth-party tax-auth-party)
+      (:kontor.order-adjustment/tax-auth-geo-id adjustment)
+      (assoc :kontor.invoice-line/tax-auth-geo-id (:kontor.order-adjustment/tax-auth-geo-id adjustment)))))
+
+(declare make-invoice-from-order-tx-data)
+
+(defn make-invoice-from-order-tx-data
+  "Pure tx-data builder for `make-invoice-from-order!` (ADR-068).
+   Returns the vector ready to transact."
+  [db order-spec {:keys [external-id issue-date type entity ship-group]}]
+  (let [order-eid (cond
+                    (string? order-spec)
+                    (d/q '[:find ?e . :in $ ?xid
+                           :where [?e :kontor.order/external-id ?xid]]
+                         db order-spec)
+                    :else order-spec)
+        _ (when-not order-eid
+            (throw (ex-info "Order not found" {:spec order-spec})))
+        _ (when-not external-id
+            (throw (ex-info "make-invoice-from-order! requires :external-id"
+                            {:order order-spec})))
+        order (d/pull db
+                      '[* {:kontor.order/currency [:kontor.commodity/symbol]
+                           :kontor.order/bill-from-partner [:db/id]
+                           :kontor.order/bill-to-partner [:db/id]
+                           :kontor.order/entity [:db/id]}]
+                      order-eid)
+        items (->> (d/q '[:find [?i ...]
+                          :in $ ?o
+                          :where [?i :kontor.sales.order-item/order ?o]]
+                        db order-eid)
+                   (map #(d/pull db '[*] %))
+                   (sort-by :kontor.sales.order-item/seq-id))
+        adjustments (->> (d/q '[:find [?a ...]
+                                :in $ ?o
+                                :where [?a :kontor.order-adjustment/order ?o]]
+                              db order-eid)
+                         (map #(d/pull db '[*] %)))
+        invoice-tempid "inv-1"
+        ;; ADR-042: default :kontor.invoice/type from :kontor.order/type (was hardcoded :sales).
+        invoice-type (or type
+                         (case (:kontor.order/type order)
+                           :purchase :purchase
+                           :sales))
+        invoice-entity-eid (or entity (get-in order [:kontor.order/entity :db/id]))
+        ;; Build product lines + billing junctions (ADR-042: invoice-type
+        ;; threads through to gl-account-type dispatch).
+        item-results (map-indexed
+                      (fn [idx item]
+                        (make-invoice-line-from-order-item db invoice-type item
+                                                           invoice-tempid
+                                                           (inc idx)
+                                                           (str "line-" (inc idx))))
+                      items)
+        item-line-rows (map first item-results)
+        item-billings  (remove nil? (map second item-results))
+        ;; ADR-042: per-(receipt, invoice-line) junctions for the
+        ;; 3-way match audit trail.
+        ri-billings    (mapcat #(nth % 2 nil) item-results)
+        ;; fix: also set the :kontor.invoice/lines forward-ref (kernel
+        ;; maintains both forward + back-ref; consumers of
+        ;; kontor.invoice/send! walk :kontor.invoice/lines).
+        ;; Map :order-item eid → its line tempid (for line-scoped
+        ;; adjustments)
+        order-item-eid->tempid (into {}
+                                    (map (fn [item line]
+                                           [(:db/id item) (:db/id line)])
+                                         items item-line-rows))
+        ;; Build adjustment lines (ADR-042: invoice-type threads through)
+        adj-line-rows (map-indexed
+                       (fn [idx adj]
+                         (let [scope-eid (get-in adj [:kontor.order-adjustment/scope :db/id])
+                               parent-tempid (get order-item-eid->tempid scope-eid)
+                               adj-seq (+ (count items) (inc idx))]
+                           (make-invoice-line-from-adjustment
+                            invoice-type adj invoice-tempid adj-seq
+                            (str "adj-" (inc idx))
+                            parent-tempid)))
+                       adjustments)
+        all-line-tempids (into (mapv :db/id item-line-rows)
+                               (map :db/id adj-line-rows))
+        invoice-row (cond-> {:db/id invoice-tempid
+                             :kontor.invoice/external-id external-id
+                             :kontor.invoice/issue-date (or issue-date (java.util.Date.))
+                             :kontor.invoice/type invoice-type
+                             :kontor.invoice/status :draft
+                             :kontor.invoice/order order-eid
+                             :kontor.invoice/seller (get-in order [:kontor.order/bill-from-partner :db/id])
+                             :kontor.invoice/buyer  (get-in order [:kontor.order/bill-to-partner :db/id])
+                             :kontor.invoice/currency (get-in order [:kontor.order/currency :kontor.commodity/symbol])
+                             :kontor.invoice/lines all-line-tempids}
+                      invoice-entity-eid (assoc :kontor.invoice/entity invoice-entity-eid)
+                      ship-group         (assoc :kontor.invoice/invoice-per-shipment-of ship-group))]
+    (vec (concat [invoice-row]
+                 item-line-rows
+                 item-billings
+                 ri-billings
+                 adj-line-rows))))
+
+(defn make-invoice-from-order!
+  "Build an :invoice + :invoice-line rows + :order-item-billing
+   junctions from the given :order. Returns the tx-report. Routes
+   through the gate (ADR-068).
+
+   Args:
+     conn       — datahike connection
+     order-spec — :order eid or :kontor.order/external-id string
+     opts       — map with:
+       :external-id  — :kontor.invoice/external-id (required)
+       :issue-date   — :kontor.invoice/issue-date (default now)
+       :type         — :kontor.invoice/type, default :sales
+       :entity       — :kontor.invoice/entity (overrides :kontor.order/entity if set)
+       :ship-group   — optional :ship-group ref; when set, the invoice
+                       is only for items in that ship group
+                       (per-shipment invoicing). Currently a
+                       placeholder — full ship-group filtering is a
+                       follow-up.
+
+   The :kontor.invoice/status starts at :draft. Caller invokes
+   `(post-to-ledger! conn invoice)` to transition to :sent.
+
+   The pure tx-data builder is `make-invoice-from-order-tx-data`."
+  [conn order-spec opts]
+  (validation/transact-with-validation
+   conn (make-invoice-from-order-tx-data (d/db conn) order-spec opts)))

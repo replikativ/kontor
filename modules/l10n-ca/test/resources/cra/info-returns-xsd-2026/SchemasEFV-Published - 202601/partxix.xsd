@@ -1,0 +1,523 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!--
+Description	Part XIX Return Data Element Types
+Version#:	1.26 (version #.yy)
+-->
+
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0">
+	<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/>
+	<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/>
+	<xsd:include schemaLocation="simple.xsd"/>
+	
+	<!-- P19 Slip -->
+	<xsd:complexType name="PartXIXSlipType">
+		<xsd:sequence>
+			<xsd:element name="DocumentSpecification" type="P19SlipDocSpecType"/>
+			<xsd:element name="ClientAccountNumber" type="P19ClientAccountNumberType"/>
+			<xsd:element name="AccountHolder" type="P19AccountHolderType"/>
+			<xsd:group ref="P19AccountBalanceGroup"/>
+			<xsd:element name="Payment" type="P19PaymentType" minOccurs="0" maxOccurs="4" />   
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:group name="P19AccountBalanceGroup">  
+		<xsd:sequence>
+			<xsd:element name="AccountBalanceAmount" type="Decimal15AmountType"/>
+			<xsd:element ref="AccountBalanceCurrencyTypeCode"/>
+		</xsd:sequence>
+	</xsd:group>
+
+	<xsd:element name="AccountBalanceCurrencyTypeCode" type="CurrencyCodeType"/>
+	
+	<xsd:complexType name="P19PaymentType"> 
+		<xsd:sequence>
+			<xsd:element ref="PaymentType"/> 
+			<xsd:group ref="P19PaymentGroup"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:group name="P19PaymentGroup">  
+		<xsd:sequence>
+			<xsd:element ref="PaymentAmount"/>
+			<xsd:element ref="CurrencyTypeCode"/>
+		</xsd:sequence>
+	</xsd:group>
+
+	<xsd:complexType name="P19ClientAccountNumberType">
+		<xsd:sequence>
+			<xsd:element name="AccountNumber" type="P19AccountNumberType" /> 
+			<xsd:group ref="P19AccountNumberTypeGroup"/>  
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:group name="P19AccountNumberTypeGroup">  
+		<xsd:sequence>
+			<xsd:element name="AccountNumberType" type="P19AccountNumberTypeCodeType" minOccurs="0"/>
+			<xsd:element name="UndocumentedAccount" type="indicatorYesNoType" />  
+			<xsd:element name="ClosedAccount" type="indicatorYesNoType" />
+			<xsd:element name="DormantAccount" type="indicatorYesNoType" />
+		</xsd:sequence>
+	</xsd:group>
+
+	<xsd:simpleType name="P19AccountNumberTypeCodeType">
+		<xsd:restriction base="sdt:CodeType"> 
+			<xsd:enumeration value="OECD601"/>
+			<xsd:enumeration value="OECD602"/>
+			<xsd:enumeration value="OECD603"/>
+			<xsd:enumeration value="OECD604"/>
+			<xsd:enumeration value="OECD605"/>
+			<xsd:enumeration value="oecd601"/>
+			<xsd:enumeration value="oecd602"/>
+			<xsd:enumeration value="oecd603"/>
+			<xsd:enumeration value="oecd604"/>
+			<xsd:enumeration value="oecd605"/>
+		</xsd:restriction>
+	</xsd:simpleType>		
+
+	<xsd:element name="PaymentType" type="P19PaymentCodeType" />   
+	<xsd:element name="PaymentAmount" type="Decimal13AmountType" /> 
+	<xsd:element name="CurrencyTypeCode" type="CurrencyCodeType" />
+
+	<xsd:simpleType name="P19PaymentCodeType"> 
+		<xsd:restriction base="sdt:CodeType"> 
+			<xsd:enumeration value="CRS501"/>
+			<xsd:enumeration value="CRS502"/>
+			<xsd:enumeration value="CRS503"/>
+			<xsd:enumeration value="CRS504"/>
+			<xsd:enumeration value="crs501"/>
+			<xsd:enumeration value="crs502"/>
+			<xsd:enumeration value="crs503"/>
+			<xsd:enumeration value="crs504"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+
+	<xsd:simpleType name="P19SlipDocRefIdType">
+		<xsd:annotation>
+			<xsd:documentation>Format: CA-YY-BN15-SL-SEQ#, e.g. CA-17-123456789RZ0001-SL-123456789</xsd:documentation>
+		</xsd:annotation>
+		<xsd:restriction base="sdt:NumberType">
+			<xsd:pattern value="(CA)-\d{2}-\d{9}\p{Lu}{2}\d{4}-(SL)-\d{9}"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	<xsd:complexType name="P19SlipDocSpecType">
+		<xsd:all>
+			<xsd:element name="DocumentTypeCode" type="P19SlipCodeType"/>
+			<xsd:element name="DocumentReferenceIdentifier" type="P19SlipDocRefIdType"/>
+			<xsd:element name="CorrectedDocumentReferenceIdentifier" type="P19SlipDocRefIdType" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+
+	<xsd:simpleType name="P19SlipCodeType">
+		<xsd:restriction base="sdt:CodeType">
+			<xsd:enumeration value="O"/>
+			<xsd:enumeration value="A"/>
+			<xsd:enumeration value="C"/>
+			<xsd:enumeration value="F"/>
+			<xsd:enumeration value="M"/>
+			<xsd:enumeration value="o"/>
+			<xsd:enumeration value="a"/>
+			<xsd:enumeration value="c"/>
+			<xsd:enumeration value="f"/>
+			<xsd:enumeration value="m"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+		 
+	<xsd:simpleType name="P19AccountNumberType">
+		<xsd:restriction base="sdt:CodeType">
+			<xsd:minLength value="1"/>
+			<xsd:maxLength value="30"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	<xsd:complexType name="P19AccountHolderType">
+		<xsd:sequence>
+			<xsd:element name="AccountHolderTypeCode" type="P19AHType"/>			
+			<xsd:group ref="P19AccountHolderGroup"/> 
+			<xsd:element name="AccountHolderAddress" type="P19IndOrgAddressType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:group name="P19AccountHolderGroup">
+		<xsd:choice>
+			<xsd:element ref="Individual"/>
+			<xsd:element ref="Organization"/>
+		</xsd:choice>
+	</xsd:group>
+	
+	<xsd:element name="Individual" type="IndResTinInformationType"/>
+	<xsd:complexType name="IndResTinInformationType">
+		<xsd:sequence>
+			<xsd:element name="ResidenceAndTINInformation" type="P19IndAHType" maxOccurs="5"/>	
+			<xsd:element ref="IndividualIdentificationNumber" minOccurs="0"/>
+			<xsd:element name="AccountHolderName" type="P19IndividualNameType"/>  
+			<xsd:element ref="AccountHolderBirthInformation" minOccurs="0"/>					
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:element name="Organization" type="OrgResTinInformationType"/>
+	<xsd:complexType name="OrgResTinInformationType">
+		<xsd:sequence>
+			<xsd:element name="ResidenceAndTINInformation" type="P19OrgAHType" maxOccurs="5"/>
+			<xsd:element name="BusinessNumber" type="BNTrustTypes" minOccurs="0"/>
+			<xsd:element name="AccountHolderName" type="P19OrganizationNameType"/>
+			<xsd:element name="OrganizationAccountHolderTypeCode" type="P19OrgAHTypeCodeType"/>	
+			<xsd:element name="ControllingPerson" type="P19CPType" minOccurs="0" maxOccurs="unbounded"/>						
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:complexType name="P19IndOrgAddressType">
+		<xsd:sequence>
+			<xsd:element name="Address" type="P19AddressType" maxOccurs="5"/>						
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:complexType name="P19AddressType">
+		<xsd:sequence>
+			<xsd:element ref="AddressType" minOccurs="0"/>			
+			<xsd:group ref="P19RequiredCityCountryAddressGroup"/> 
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:element name="AddressType" type="P19AddressTypeCodeType"/>
+		
+	<xsd:group name="P19RequiredCityCountryAddressGroup">
+		<xsd:sequence>
+			<xsd:element ref="AddressLine1Text" minOccurs="0"/>
+			<xsd:element ref="AddressLine2Text" minOccurs="0"/>
+			<xsd:element ref="CityName"/>
+			<xsd:element ref="CountrySubentity" minOccurs="0"/>
+			<xsd:element name="CountryCode" type="Length2CountryCodeType"/>
+			<xsd:element ref="PostCode" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:group>
+
+	<xsd:simpleType name="P19AddressTypeCodeType">
+		<xsd:restriction base="sdt:CodeType"> 
+			<xsd:enumeration value="OECD301"/>
+			<xsd:enumeration value="OECD302"/>
+			<xsd:enumeration value="OECD303"/>
+			<xsd:enumeration value="OECD304"/>
+			<xsd:enumeration value="OECD305"/>
+			<xsd:enumeration value="oecd301"/>
+			<xsd:enumeration value="oecd302"/>
+			<xsd:enumeration value="oecd303"/>
+			<xsd:enumeration value="oecd304"/>
+			<xsd:enumeration value="oecd305"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	
+	<xsd:element name="CountrySubentity" type="Length1to30TextType"/>
+	<xsd:element name="PostCode" type="P19PostCodeType"/>
+
+	<xsd:simpleType name="P19PostCodeType">
+		<xsd:restriction base="sdt:CodeType">
+			<xsd:minLength value="1"/>
+			<xsd:maxLength value="12"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+		
+	<xsd:simpleType name="P19AHType">
+		<xsd:annotation>
+			<xsd:documentation>1-individual account holder; 3-organization account holder.</xsd:documentation>
+		</xsd:annotation>
+		<xsd:restriction base="sdt:CodeType">
+			<xsd:pattern value="1|3"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+
+	<!-- Individual account holder -->
+	<xsd:complexType name="P19IndAHType">
+		<xsd:sequence>
+			<xsd:element ref="ResidenceCountryCode"/>
+			<xsd:element ref="IndividualTINInformation"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:element name="IndividualTINInformation" type="P19IndividualTINInformationType"/>
+
+	<xsd:complexType name="P19IndividualTINInformationType">
+		<xsd:sequence>
+			<xsd:group ref="P19IndividualTINGroup"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:group name="P19IndividualTINGroup">
+		<xsd:choice>
+			<xsd:element name="IndividualTIN" type="P19IndividualTINType"/>
+ 			<xsd:element ref="NoTINReasonCode"/>  
+		</xsd:choice>
+	</xsd:group>
+	 
+	
+ 	<xsd:element name="NoTINReasonCode" type="indicator1-3Type"/>
+	 
+	<xsd:complexType name="P19IndividualTINType">
+		<xsd:sequence>
+ 			<xsd:element ref="TIN"/> 
+ 			<xsd:element ref="TINIssueCountryCode" minOccurs="0"/> 
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:element name="TIN" type="P19TINType"/>
+	
+	<xsd:simpleType name="P19TINType">
+		<xsd:restriction base="sdt:CodeType">
+			<xsd:minLength value="1"/>
+			<xsd:maxLength value="30"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+		
+	<xsd:complexType name="P19IndividualNameType">
+		<xsd:sequence>
+			<xsd:element ref="IndividualNameType" minOccurs="0"/>
+			<xsd:group ref="P19IndividualNameGroup"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:element name="IndividualNameType" type="P19IndNameTypeCodeType"/> 
+	
+	<xsd:group name="P19IndividualNameGroup">
+		<xsd:sequence>
+			<xsd:element ref="FirstName"/>
+			<xsd:element ref="MiddleName" minOccurs="0"/>
+			<xsd:element ref="LastName"/>
+		</xsd:sequence>
+	</xsd:group>	
+	
+	<xsd:simpleType name="P19IndNameTypeCodeType">
+		<xsd:restriction base="sdt:CodeType">
+			<xsd:enumeration value="OECD202"/>
+			<xsd:enumeration value="OECD203"/>
+			<xsd:enumeration value="OECD204"/>
+			<xsd:enumeration value="OECD205"/>
+			<xsd:enumeration value="OECD207"/>
+			<xsd:enumeration value="OECD208"/>
+			<xsd:enumeration value="oecd202"/>
+			<xsd:enumeration value="oecd203"/>
+			<xsd:enumeration value="oecd204"/>
+			<xsd:enumeration value="oecd205"/>
+			<xsd:enumeration value="oecd207"/>
+			<xsd:enumeration value="oecd208"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	
+	<!-- Organization account holder -->
+	<xsd:complexType name="P19OrgAHType">
+		<xsd:sequence>
+			<xsd:element ref="ResidenceCountryCode"/>
+			<xsd:element ref="OrganizationTINInformation"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:element name="OrganizationTINInformation" type="P19OrganizationTINInformationType"/>
+
+	<xsd:complexType name="P19OrganizationTINInformationType">
+		<xsd:sequence>
+			<xsd:group ref="P19OrganizationTINGroup"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:group name="P19OrganizationTINGroup">
+		<xsd:choice>
+			<xsd:element name="OrganizationTIN" type="P19OrganizationTINType"/>
+			<xsd:element ref="NoTINReasonCode"/>
+		</xsd:choice>
+	</xsd:group>
+	  
+	<xsd:complexType name="P19OrganizationTINType">
+		<xsd:sequence>
+			<xsd:element ref="TIN"/>
+			<xsd:element ref="TINIssueCountryCode" minOccurs="0"/>
+			<xsd:element ref="TINType" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:element name="TINType" type="P19TINTypeType"/>
+
+	<xsd:simpleType name="P19TINTypeType">
+		<xsd:restriction base="sdt:CodeType">
+			<xsd:minLength value="1"/>
+			<xsd:maxLength value="20"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+			
+	<xsd:complexType name="P19OrganizationNameType">
+		<xsd:sequence>
+			<xsd:element name="OrganizationNameType" type="P19OrgNameTypeCodeType" minOccurs="0"/>
+			<xsd:group ref="P19OrganizationNameGroup"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:group name="P19OrganizationNameGroup">
+		<xsd:sequence>
+			<xsd:element name="NameLine1Text" type="Length35NameType"/>
+			<xsd:element name="NameLine2Text" type="Length35NameType" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:group>	
+
+	<xsd:simpleType name="P19OrgNameTypeCodeType">
+		<xsd:restriction base="sdt:CodeType">
+			<xsd:enumeration value="OECD206"/>
+			<xsd:enumeration value="OECD207"/>
+			<xsd:enumeration value="oecd206"/>
+			<xsd:enumeration value="oecd207"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	
+	<xsd:simpleType name="P19OrgAHTypeCodeType">
+		<xsd:restriction base="sdt:CodeType">
+			<xsd:enumeration value="CRS101"/>
+			<xsd:enumeration value="CRS102"/>
+			<xsd:enumeration value="CRS103"/>
+			<xsd:enumeration value="crs101"/>
+			<xsd:enumeration value="crs102"/>
+			<xsd:enumeration value="crs103"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+
+	<!-- Controlling Person -->
+	<xsd:complexType name="P19CPType">
+		<xsd:sequence>
+			<xsd:element name="ResidenceAndTINInformation" type="P19IndAHType" maxOccurs="5"/>	
+			<xsd:element ref="IndividualIdentificationNumber" minOccurs="0"/>
+			<xsd:element name="ControllingPersonName" type="P19IndividualNameType"/>
+			<xsd:element name="ControllingPersonAddress" type="P19IndOrgAddressType"/>
+			<xsd:element name="ControllingPersonBirthInformation" type="BirthInformationType" minOccurs="0"/>
+			<xsd:element name="ControllingPersonType" type="P19ControllingPersonTypeCodeType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:simpleType name="P19ControllingPersonTypeCodeType">
+		<xsd:restriction base="sdt:CodeType">
+			<xsd:enumeration value="CRS801"/>
+			<xsd:enumeration value="CRS802"/>
+			<xsd:enumeration value="CRS803"/>
+			<xsd:enumeration value="CRS804"/>
+			<xsd:enumeration value="CRS805"/>
+			<xsd:enumeration value="CRS806"/>
+			<xsd:enumeration value="CRS807"/>
+			<xsd:enumeration value="CRS808"/>
+			<xsd:enumeration value="CRS809"/>
+			<xsd:enumeration value="CRS810"/>
+			<xsd:enumeration value="CRS811"/>
+			<xsd:enumeration value="CRS812"/>
+			<xsd:enumeration value="CRS813"/>
+			<xsd:enumeration value="crs801"/>
+			<xsd:enumeration value="crs802"/>
+			<xsd:enumeration value="crs803"/>
+			<xsd:enumeration value="crs804"/>
+			<xsd:enumeration value="crs805"/>
+			<xsd:enumeration value="crs806"/>
+			<xsd:enumeration value="crs807"/>
+			<xsd:enumeration value="crs808"/>
+			<xsd:enumeration value="crs809"/>
+			<xsd:enumeration value="crs810"/>
+			<xsd:enumeration value="crs811"/>
+			<xsd:enumeration value="crs812"/>
+			<xsd:enumeration value="crs813"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+
+
+	<!-- P19 Summary -->
+	<xsd:complexType name="PartXIXSummaryType">
+		<xsd:sequence>
+			<xsd:element name="FilerAccountNumber" type="bnRZType"/>
+			<xsd:element name="SummaryReportTypeCode" type="P19SummaryCodeType"/>
+			<xsd:element name="PartXIXTypeCode" type="P19TypeCodeType"/>
+			<xsd:element ref="TaxationYear"/>
+			<xsd:element name="FilerContact" type="ContactType5"/>
+			<xsd:element name="ReportingFinancialInstitution" type="P19ReportingFIType"/>
+			<xsd:element ref="TotalSlipCount"/>
+			<xsd:element name="TotalAccountBalanceAmount" type="Decimal15AmountType"/>
+			<xsd:element name="TotalPayment" type="P19TotalPaymentType" minOccurs="0" maxOccurs="4"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:simpleType name="P19SummaryCodeType">
+		<xsd:restriction base="sdt:CodeType">
+			<xsd:length value="1"/>
+			<xsd:enumeration value="O"/>
+			<xsd:enumeration value="A"/>
+			<xsd:enumeration value="F"/>
+			<xsd:enumeration value="M"/>
+			<xsd:enumeration value="o"/>
+			<xsd:enumeration value="a"/>
+			<xsd:enumeration value="f"/>
+			<xsd:enumeration value="m"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	
+	<xsd:simpleType name="P19TypeCodeType">
+		<xsd:restriction base="sdt:CodeType">
+			<xsd:pattern value="(CRS)"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+
+	<!-- Reporting FI -->
+	<xsd:complexType name="P19ReportingFIType">
+		<xsd:all>
+			<xsd:element name="DocumentSpecification" type="P19FIDocSpecType"/>
+			<xsd:element name="ResidenceCountryCode" type="partXixResidenceCountryCode"/>
+			<xsd:element name="IdentificationNumber" type="BNTrustType"/> 
+			<xsd:element name="INIssueCountryCode" type="Length2CountryCodeType" minOccurs="0"/>									
+			<xsd:element name="INType" type="P19TINTypeType" minOccurs="0"/>  
+			<xsd:element name="ReportingFinancialInstitutionName" type="P19FINameType"/>
+			<xsd:element name="ReportingFinancialInstitutionAddress" type="P19IndOrgAddressType"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="P19FIDocSpecType">
+		<xsd:all>
+			<xsd:element name="DocumentTypeCode" type="P19FIDocCodeType"/>
+			<xsd:element name="DocumentReferenceIdentifier" type="P19FIDocRefIdType"/>
+			<xsd:element name="CorrectedDocumentReferenceIdentifier" type="P19FIDocRefIdType" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	
+	<xsd:simpleType name="P19FIDocCodeType">
+		<xsd:restriction base="sdt:CodeType">
+			<xsd:length value="1"/>
+			<xsd:enumeration value="O"/>
+			<xsd:enumeration value="A"/>
+			<xsd:enumeration value="R"/>
+			<xsd:enumeration value="C"/>
+			<xsd:enumeration value="F"/>
+			<xsd:enumeration value="M"/>
+			<xsd:enumeration value="o"/>
+			<xsd:enumeration value="a"/>
+			<xsd:enumeration value="r"/>
+			<xsd:enumeration value="c"/>
+			<xsd:enumeration value="f"/>
+			<xsd:enumeration value="m"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	
+	<xsd:simpleType name="P19FIDocRefIdType">
+		<xsd:annotation>
+			<xsd:documentation>Format: CA-YY-BN15-FI-SEQ#, e.g. CA-16-123456789RZ0001-FI-123456789</xsd:documentation>
+		</xsd:annotation>
+		<xsd:restriction base="sdt:NumberType">
+			<xsd:pattern value="(CA)-\d{2}-\d{9}\p{Lu}{2}\d{4}-(FI)-\d{9}"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	
+		<xsd:complexType name="P19FINameType">
+		<xsd:sequence>
+			<xsd:element name="ReportingFINameType" type="P19FINameTypeCodeType" minOccurs="0"/>
+			<xsd:group ref="P19OrganizationNameGroup"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:simpleType name="P19FINameTypeCodeType">
+		<xsd:restriction base="sdt:CodeType">
+			<xsd:enumeration value="OECD206"/>
+			<xsd:enumeration value="OECD207"/>
+			<xsd:enumeration value="oecd206"/>
+			<xsd:enumeration value="oecd207"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	
+	<xsd:complexType name="P19TotalPaymentType">
+		<xsd:sequence>
+			<xsd:element ref="PaymentType"/> 
+			<xsd:element name="TotalPaymentAmount" type="Decimal15AmountType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+</xsd:schema>

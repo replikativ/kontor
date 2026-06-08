@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!--
+Description: Specialty Business Returns -Net Income(Loss) For Income Tax Purposes (CRA Form T5013 SCH 6 E(11) )
+Contact: CRA, ITB, Solutions, RASD, Business Suite Assessing System, Other Levies
+Date created: October 2012
+Updates: ols65/1-0-1 - November 2013 - added Min and Max for sequence elements 
+         sdt/updated reference to sdt/2-2-0
+Users of this schema:
+-Other Levies System
+
+-->
+<xsd:schema 
+xmlns:ols65="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/ols65/1-0-1" 
+xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+
+targetNamespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/ols65/1-0-1" 
+    elementFormDefault="qualified" attributeFormDefault="unqualified" version="ols65/1-0-1">
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/> 
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/>    
+
+<!-- T5013Schedule6Data is also referenced by other schemas for importing purposes -->
+    <xsd:element name="T5013Schedule65Data" type="ols65:Schedule65DataType"/>
+    <xsd:complexType name="Schedule65DataType">
+        <xsd:sequence>
+            <!-- Part 1  -->
+            <xsd:element ref="ols65:Schedule65LocationExpenseDetails"  minOccurs="0" maxOccurs="2000"/>
+            <!-- Part 2  --> 
+            <xsd:element ref="ols65:Schedule65AgreementBetweenEntitiesDetails"  minOccurs="0" maxOccurs="2000"/>
+            <!-- Part 3  --> 
+            <xsd:element ref="ols65:Schedule65TotalLocationExpenses" minOccurs="0" maxOccurs="1"/>
+            <xsd:element ref="ols65:Schedule65Percentage" minOccurs="0" maxOccurs="1"/>
+            <xsd:element ref="ols65:Schedule65TotalVentilationExpensePriorFiscal" minOccurs="0" maxOccurs="1"/>
+            <xsd:element ref="ols65:Schedule65TotalVentilationExpense" minOccurs="0" maxOccurs="1"/>
+            <xsd:element ref="ols65:Schedule65CumulativeTotalVentilationExpense" minOccurs="0" maxOccurs="1"/>
+            <!-- Part 4  --> 
+            <xsd:element ref="ols65:Schedule65Field500" minOccurs="0" maxOccurs="1"/>
+            <xsd:element ref="ols65:Schedule65AirQualityImprovTaxCreditAllocatedPartnerships" minOccurs="0" maxOccurs="1"/>
+            <xsd:element ref="ols65:Schedule65AirQualityImprovTaxCredit" minOccurs="0" maxOccurs="1"/>
+            <!-- Part 5  --> 
+            <xsd:element ref="ols65:Schedule65AllocationOfCreditDetails" minOccurs="0" maxOccurs="2000"/>
+        </xsd:sequence>
+    </xsd:complexType>
+    
+    <!-- Part 1  -->
+    <xsd:element name="Schedule65LocationExpenseDetails" type="ols65:Schedule65LocationExpenseDetailsType"/>
+    <xsd:complexType name="Schedule65LocationExpenseDetailsType">
+        <xsd:sequence>
+            <xsd:element ref="ols65:Schedule65NameAddress" minOccurs="0" />
+            <xsd:element ref="ols65:Schedule65QualifyingExpenditures" minOccurs="0" />
+            <xsd:element ref="ols65:Schedule65AmountAssistance" minOccurs="0" />
+            <xsd:element ref="ols65:Schedule65TotalQualifyExpendPartnershipCreditPriorFiscal" minOccurs="0" />
+            <xsd:element ref="ols65:Schedule65TotalQualifyingExpenditures" minOccurs="0" />
+            <xsd:element ref="ols65:Schedule65TotalPerLocationExpense" minOccurs="0" />
+            <xsd:element ref="ols65:Schedule65CumulativeQualifyingExpendituresPartnership" minOccurs="0" />
+        </xsd:sequence>
+    </xsd:complexType>
+    
+    <xsd:element name="Schedule65NameAddress" type= "ccms:Name175CharacterType"/>
+    <xsd:element name="Schedule65QualifyingExpenditures"  type= "sdt:AmountType"/>
+    <xsd:element name="Schedule65AmountAssistance"  type= "sdt:AmountType"/>
+    <xsd:element name="Schedule65TotalQualifyExpendPartnershipCreditPriorFiscal" type="sdt:AmountType"/>
+    <xsd:element name="Schedule65TotalQualifyingExpenditures" type="sdt:AmountType"/>
+    <xsd:element name="Schedule65TotalPerLocationExpense" type="sdt:AmountType"/>
+    <xsd:element name="Schedule65CumulativeQualifyingExpendituresPartnership" type="sdt:AmountType"/>
+    
+    <!-- Part 2 -->
+    
+    <xsd:element name="Schedule65AgreementBetweenEntitiesDetails" type="ols65:Schedule65AgreementBetweenEntitiesDetailsType"/>
+    <xsd:complexType name="Schedule65AgreementBetweenEntitiesDetailsType">
+        <xsd:sequence>
+            <xsd:element ref="ols65:Schedule65NameEligibleEntity" minOccurs="0" />
+            <xsd:element ref="ols65:Schedule65Part2IdentificationNumber" minOccurs="0" />
+            <xsd:element ref="ols65:Schedule65PercentageAssignedAgreement" minOccurs="0" />
+        </xsd:sequence>
+    </xsd:complexType>
+    
+    <xsd:element name="Schedule65NameEligibleEntity"  type= "ccms:Name175CharacterType"/>
+    <xsd:element name="Schedule65Part2IdentificationNumber" >
+       <xsd:simpleType>
+           <xsd:restriction base="sdt:NumberType">
+               <xsd:maxLength value="15"/>
+           </xsd:restriction>
+       </xsd:simpleType>
+    </xsd:element>
+    <xsd:element name="Schedule65PercentageAssignedAgreement" type="sdt:PercentType"/>
+    
+    <!-- Part 3 -->
+    <xsd:element name="Schedule65TotalLocationExpenses" type="sdt:AmountType"/>
+    <xsd:element name="Schedule65Percentage" type="sdt:PercentType"/>
+    <xsd:element name="Schedule65TotalVentilationExpensePriorFiscal" type="sdt:AmountType"/>
+    <xsd:element name="Schedule65TotalVentilationExpense" type="sdt:AmountType"/>
+    <xsd:element name="Schedule65CumulativeTotalVentilationExpense" type="sdt:AmountType"/>
+    
+    <!-- Part 4 -->
+    <xsd:element name="Schedule65Field500" type="sdt:AmountType"/>
+    <xsd:element name="Schedule65AirQualityImprovTaxCreditAllocatedPartnerships" type="sdt:AmountType"/>
+    <xsd:element name="Schedule65AirQualityImprovTaxCredit" type="sdt:AmountType"/>
+        
+    <!-- Part 5 -->
+    <xsd:element name="Schedule65AllocationOfCreditDetails" type ="ols65:Schedule65AllocationOfCreditDetailsType" />
+    
+        <xsd:complexType name="Schedule65AllocationOfCreditDetailsType">
+        <xsd:sequence>
+            <xsd:element ref="ols65:Schedule65NameQualifyingMember" minOccurs="0" />
+            <xsd:element ref="ols65:Schedule65Part5IdentificationNumber"  minOccurs="0" />
+            <xsd:element ref="ols65:Schedule65SpecifiedProportionQualifyingMember" minOccurs="0" />
+            <xsd:element ref="ols65:Schedule65AmountAllocated" minOccurs="0" />
+        </xsd:sequence>
+    </xsd:complexType>
+    
+    <xsd:element name="Schedule65NameQualifyingMember" type= "ccms:Name175CharacterType"/>
+    <xsd:element name="Schedule65Part5IdentificationNumber" >
+        <xsd:simpleType>
+            <xsd:restriction base="sdt:NumberType">
+                <xsd:maxLength value="15"/>
+            </xsd:restriction>
+        </xsd:simpleType>
+    </xsd:element>
+    <xsd:element name="Schedule65SpecifiedProportionQualifyingMember"  type= "sdt:PercentType"/>
+    <xsd:element name="Schedule65AmountAllocated" type="sdt:AmountType"/>
+    
+</xsd:schema>

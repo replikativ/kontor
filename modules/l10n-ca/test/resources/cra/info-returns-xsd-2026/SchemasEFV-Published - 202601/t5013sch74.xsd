@@ -1,0 +1,361 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!--
+Description: Carbon Capture, Utilization, and Storage Investment Tax Credit (CRA Form T5013 SCH 74 E )
+Contact: CRA, ITB, Solutions, RASD, Business Suite Assessing System, Other Levies
+Date created: October 2024
+Users of this schema:
+-Other Levies System
+
+-->
+<xsd:schema 
+xmlns:ols74="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/ols74/1-0-1" 
+xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+
+targetNamespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/ols74/1-0-1" 
+	elementFormDefault="qualified" attributeFormDefault="unqualified" version="ols74/1-0-1">
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/> 
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/> 	
+
+<!-- T5013Schedule74Data is also referenced by other schemas for importing purposes -->
+	<xsd:element name="T5013Schedule74Data" type="ols74:Schedule74DataType"/>
+	<xsd:complexType name="Schedule74DataType">
+		<xsd:sequence>
+			<xsd:element ref="ols74:Schedule74NRCANProjectCode"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols74:Schedule74EligiblePathwayCode"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols74:Schedule74FirstDayHydrogenProducedDate"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols74:Schedule74SubmitFinalDetailed"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols74:Schedule74MakingFirstElection"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols74:Schedule74MakingSecondElection"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols74:Schedule74FirstDayCompliancePeriodDate"  minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 1 -->
+			<xsd:element ref="ols74:Schedule74CalculationDetails"  minOccurs="0" maxOccurs="2000"/> 
+			<xsd:element ref="ols74:Schedule74CalculationCleanHydrogenITCAllocatedAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols74:Schedule74CalculationCleanHydrogenITCAmount"  minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 2 -->
+			<xsd:element ref="ols74:Schedule74AllocationToMembersDetails"  minOccurs="0" maxOccurs="2000"/>
+
+			<!-- Part 3 -->
+			<xsd:element ref="ols74:Schedule74AttestationElectionDetails" minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 4 -->
+			<xsd:element ref="ols74:Schedule74LabourRequirementsDetails" minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 5 -->
+			<xsd:element ref="ols74:Schedule74ElectingToPayLabourRequirements"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols74:Schedule74AllocationOfLabourRequirementsDetails"  minOccurs="0" maxOccurs="2000"/>
+
+			<!-- Part 6 -->
+			<xsd:element ref="ols74:Schedule74ITCRecaptureDetails" minOccurs="0" maxOccurs="2000"/>
+			<xsd:element ref="ols74:Schedule74ITCRecaptureAllocatedAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols74:Schedule74ITCRecaptureTotalAmount"  minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 7 -->
+			<xsd:element ref="ols74:Schedule74ElectingToPayITCRecapture"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols74:Schedule74AllocationITCRecaptureDetails" minOccurs="0" maxOccurs="2000"/>
+
+			<!-- Part 8 -->
+			<xsd:element ref="ols74:Schedule74ExpectedCarbonIntensity"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols74:Schedule74CompliancePeriodEndedDate"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols74:Schedule74ActualCarbonIntensity"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols74:Schedule74RevisedProjectPlanFile"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols74:Schedule74ExpectedCarbonIntensityRevisedPlan"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols74:Schedule74ITCRecoveryTaxDetails" minOccurs="0" maxOccurs="2000"/>
+			<xsd:element ref="ols74:Schedule74ITCRecoveryTaxAllocatedAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols74:Schedule74ITCRecoveryTaxTotalAmount"  minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 9 -->
+			<xsd:element ref="ols74:Schedule74ElectingToPayITCRecoveryTax"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols74:Schedule74AllocationITCRecoveryTaxDetails" minOccurs="0" maxOccurs="2000"/>
+
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	
+	
+	<xsd:element name="Schedule74NRCANProjectCode">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="10"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+		<xsd:element name="Schedule74EligiblePathwayCode">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:CodeType">
+				<xsd:length value="2"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="Schedule74FirstDayHydrogenProducedDate" type="sdt:DateType"/>
+	<xsd:element name="Schedule74SubmitFinalDetailed" type="ccms:OneTwoCodeType"/>
+	<xsd:element name="Schedule74MakingFirstElection" type="ccms:OneTwoCodeType"/>
+	<xsd:element name="Schedule74MakingSecondElection" type="ccms:OneTwoCodeType"/>
+	<xsd:element name="Schedule74FirstDayCompliancePeriodDate" type="sdt:DateType"/>
+
+
+	<!-- Part 1 -€“ Clean hydrogen ITC calculation -->
+	<xsd:element name="Schedule74CalculationDetails" type="ols74:Schedule74CalculationDetailsType"/>
+	<xsd:complexType name="Schedule74CalculationDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols74:CalculationClassNumberText" minOccurs="0" />
+			<xsd:element ref="ols74:CalculationPropertyDescriptionCode" minOccurs="0" />
+			<xsd:element ref="ols74:CalculationProvince" minOccurs="0" />
+			<xsd:element ref="ols74:CalculationAvailableForUseDate" minOccurs="0" />
+			<xsd:element ref="ols74:CalculationDesignatedWorkSite" minOccurs="0" />
+			<xsd:element ref="ols74:CalculationCapitalCostAmount" minOccurs="0" />
+			<xsd:element ref="ols74:CalculationAdjustmentsAmount" minOccurs="0" />
+			<xsd:element ref="ols74:CalculationAssistanceRepaidAmount" minOccurs="0" />
+			<xsd:element ref="ols74:CalculationEligibleForITCAmount" minOccurs="0" />
+			<xsd:element ref="ols74:CalculationHydrogenProjectPercentage" minOccurs="0" />
+			<xsd:element ref="ols74:CalculationCleanHydrogenPortionAmount" minOccurs="0" />
+			<xsd:element ref="ols74:CalculationHydrogenProductionPercentage" minOccurs="0" />
+			<xsd:element ref="ols74:CalculationAmmoniaProductionPercentage" minOccurs="0" />
+			<xsd:element ref="ols74:CalculationSpecifiedHydrogenPercentage" minOccurs="0" />
+			<xsd:element ref="ols74:CalculationSpecifiedAmmoniaPercentage" minOccurs="0" />
+			<xsd:element ref="ols74:CalculationCleanHydrogenITCAmount" minOccurs="0" />
+			<xsd:element ref="ols74:CalculationElecting" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="CalculationClassNumberText" type= "sdt:NumberType"/>
+	<xsd:element name="CalculationPropertyDescriptionCode">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:CodeType">
+				<xsd:length value="2"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="CalculationProvince"  type= "ccms:CanadianProvinceTerritoryCodeType"/>
+	<xsd:element name="CalculationAvailableForUseDate"  type= "sdt:DateType"/>
+	<xsd:element name="CalculationDesignatedWorkSite"  type= "ccms:Character175TextType"/>
+	<xsd:element name="CalculationCapitalCostAmount" type="sdt:AmountType"/>
+	<xsd:element name="CalculationAdjustmentsAmount" type="sdt:AmountType"/>
+	<xsd:element name="CalculationAssistanceRepaidAmount" type="sdt:AmountType"/>
+	<xsd:element name="CalculationEligibleForITCAmount" type="sdt:AmountType"/>
+	<xsd:element name="CalculationHydrogenProjectPercentage" type="sdt:PercentType"/>
+	<xsd:element name="CalculationCleanHydrogenPortionAmount" type="sdt:AmountType"/>
+	<xsd:element name="CalculationHydrogenProductionPercentage" type="sdt:PercentType"/>
+	<xsd:element name="CalculationAmmoniaProductionPercentage" type="sdt:PercentType"/>
+	<xsd:element name="CalculationSpecifiedHydrogenPercentage" type="sdt:PercentType"/>
+	<xsd:element name="CalculationSpecifiedAmmoniaPercentage" type="sdt:PercentType"/>
+	<xsd:element name="CalculationCleanHydrogenITCAmount" type="sdt:AmountType"/>
+	<xsd:element name="CalculationElecting" type="ccms:OneTwoCodeType"/>
+
+	<xsd:element name="Schedule74CalculationCleanHydrogenITCAllocatedAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule74CalculationCleanHydrogenITCAmount" type="sdt:AmountType"/>
+	
+	
+	<!-- Part 2 - Allocation of clean hydrogen ITC to members -->
+	<xsd:element name="Schedule74AllocationToMembersDetails" type="ols74:Schedule74AllocationToMembersDetailsType"/>
+	<xsd:complexType name="Schedule74AllocationToMembersDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols74:AllocationToMembersNameText" minOccurs="0" />
+			<xsd:element ref="ols74:AllocationToMembersNumber" minOccurs="0" />
+			<xsd:element ref="ols74:AllocationToMembersProportionPercentage" minOccurs="0" />
+			<xsd:element ref="ols74:AllocationToMembersAllocatedAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="AllocationToMembersNameText"  type= "ccms:Character175TextType"/>
+	<xsd:element name="AllocationToMembersNumber">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="AllocationToMembersProportionPercentage" type="sdt:PercentType"/>
+	<xsd:element name="AllocationToMembersAllocatedAmount" type="sdt:AmountType"/>
+
+
+	<!-- Part 3 - Attestation and election to meet labour requirements -->
+	<xsd:element name="Schedule74AttestationElectionDetails" type="ols74:Schedule74AttestationElectionDetailsType"/>
+	<xsd:complexType name="Schedule74AttestationElectionDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols74:AttestationElectionLastName" minOccurs="0"/>
+			<xsd:element ref="ols74:AttestationElectionFirstName" minOccurs="0"/>
+			<xsd:element ref="ols74:AttestationElectionPositionOfficeTitle" minOccurs="0"/>
+			<xsd:element ref="ols74:AttestationElectionDate" minOccurs="0"/>
+			<xsd:element ref="ols74:AttestationElectionTelephoneNumber" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="AttestationElectionLastName" type="ccms:Character175TextType"/>
+	<xsd:element name="AttestationElectionFirstName" type="ccms:Character175TextType"/>
+	<xsd:element name="AttestationElectionPositionOfficeTitle" type="ccms:Character175TextType"/>
+	<xsd:element name="AttestationElectionDate" type="sdt:DateType"/>
+	<xsd:element name="AttestationElectionTelephoneNumber" type="ccms:Character175TextType"/>
+	
+	
+	<!-- Part 4 - Labour requirements addition to tax -->
+	<xsd:element name="Schedule74LabourRequirementsDetails" type ="ols74:Schedule74LabourRequirementsDetailsType" />
+	<xsd:complexType name="Schedule74LabourRequirementsDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols74:ElectedToMeetLabourRequirements" minOccurs="0" />
+			<xsd:element ref="ols74:NumberOfCoveredWorkersPaidBelowWageRequirements" minOccurs="0" />
+			<xsd:element ref="ols74:TotalNumberOfDays" minOccurs="0" />
+			<xsd:element ref="ols74:WageRequirementsAmount" minOccurs="0" />
+			<xsd:element ref="ols74:TotalHoursOfLabourRequiredByApprentices" minOccurs="0" />
+			<xsd:element ref="ols74:TotalHoursOfLabourPerformedByApprentices" minOccurs="0" />
+			<xsd:element ref="ols74:ApprenticeshipRequirementsAmount" minOccurs="0" />
+			<xsd:element ref="ols74:LabourRequirementsAmount" minOccurs="0" />
+			<xsd:element ref="ols74:LabourRequirementsTotalAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="ElectedToMeetLabourRequirements" type="ccms:OneTwoCodeType"/>
+	<xsd:element name="NumberOfCoveredWorkersPaidBelowWageRequirements" type="sdt:QuantityType"/>
+	<xsd:element name="TotalNumberOfDays" type="sdt:QuantityType"/>
+	<xsd:element name="WageRequirementsAmount" type="sdt:AmountType"/>
+	<xsd:element name="TotalHoursOfLabourRequiredByApprentices" type="sdt:QuantityType"/>
+	<xsd:element name="TotalHoursOfLabourPerformedByApprentices" type="sdt:QuantityType"/>
+	<xsd:element name="ApprenticeshipRequirementsAmount" type="sdt:AmountType"/>
+	<xsd:element name="LabourRequirementsAmount" type="sdt:AmountType"/>
+	<xsd:element name="LabourRequirementsTotalAmount" type="sdt:AmountType"/>
+
+	
+	<!-- Part 5 - Allocation of labour requirements addition to tax to members -->
+	<xsd:element name="Schedule74ElectingToPayLabourRequirements" type="ccms:OneTwoCodeType"/>
+	
+	<xsd:element name="Schedule74AllocationOfLabourRequirementsDetails" type="ols74:Schedule74AllocationOfLabourRequirementsDetailsType"/>
+	<xsd:complexType name="Schedule74AllocationOfLabourRequirementsDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols74:AllocationOfLabourRequirementsNameText" minOccurs="0" />
+			<xsd:element ref="ols74:AllocationOfLabourRequirementsNumber" minOccurs="0" />
+			<xsd:element ref="ols74:AllocationOfLabourRequirementsProportionPercentage" minOccurs="0" />
+			<xsd:element ref="ols74:AllocationOfLabourRequirementsAllocatedAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="AllocationOfLabourRequirementsNameText"  type= "ccms:Character175TextType"/>
+	<xsd:element name="AllocationOfLabourRequirementsNumber">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="AllocationOfLabourRequirementsProportionPercentage" type="sdt:PercentType"/>
+	<xsd:element name="AllocationOfLabourRequirementsAllocatedAmount" type="sdt:AmountType"/>
+	
+
+	<!-- Part 6 - Recapture of clean hydrogen ITC -->
+	<xsd:element name="Schedule74ITCRecaptureDetails" type="ols74:Schedule74ITCRecaptureDetailsType"/>
+	<xsd:complexType name="Schedule74ITCRecaptureDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols74:ITCRecaptureClassNumberText" minOccurs="0" />
+			<xsd:element ref="ols74:ITCRecapturePropertyDescriptionCode" minOccurs="0" />
+			<xsd:element ref="ols74:ITCRecaptureProvince" minOccurs="0" />
+			<xsd:element ref="ols74:ITCRecaptureITCAmount" minOccurs="0" />
+			<xsd:element ref="ols74:ITCRecaptureRecoveryAmount" minOccurs="0" />
+			<xsd:element ref="ols74:ITCRecaptureProceedsAmount" minOccurs="0" />
+			<xsd:element ref="ols74:ITCRecaptureCapitalCostAmount" minOccurs="0" />
+			<xsd:element ref="ols74:ITCRecaptureEligibleForITCAmount" minOccurs="0" />
+			<xsd:element ref="ols74:ITCRecaptureITCRecapturedAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="ITCRecaptureClassNumberText" type= "sdt:NumberType"/>
+	<xsd:element name="ITCRecapturePropertyDescriptionCode">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:CodeType">
+				<xsd:length value="2"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="ITCRecaptureProvince"  type= "ccms:CanadianProvinceTerritoryCodeType"/>
+	<xsd:element name="ITCRecaptureITCAmount"  type= "sdt:AmountType"/>
+	<xsd:element name="ITCRecaptureRecoveryAmount"  type= "sdt:AmountType"/>
+	<xsd:element name="ITCRecaptureProceedsAmount"  type= "sdt:AmountType"/>
+	<xsd:element name="ITCRecaptureCapitalCostAmount" type="sdt:AmountType"/>
+	<xsd:element name="ITCRecaptureEligibleForITCAmount" type="sdt:AmountType"/>
+	<xsd:element name="ITCRecaptureITCRecapturedAmount" type="sdt:AmountType"/>
+
+	<xsd:element name="Schedule74ITCRecaptureAllocatedAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule74ITCRecaptureTotalAmount" type="sdt:AmountType"/>
+	
+
+	<!-- Part 7 - Allocation of clean hydrogen ITC recapture to members -->
+	<xsd:element name="Schedule74ElectingToPayITCRecapture" type="ccms:OneTwoCodeType"/>
+	
+	<xsd:element name="Schedule74AllocationITCRecaptureDetails" type="ols74:Schedule74AllocationITCRecaptureDetailsType"/>
+	<xsd:complexType name="Schedule74AllocationITCRecaptureDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols74:AllocationITCRecaptureNameText" minOccurs="0" />
+			<xsd:element ref="ols74:AllocationITCRecaptureNumber" minOccurs="0" />
+			<xsd:element ref="ols74:AllocationITCRecaptureProportionPercentage" minOccurs="0" />
+			<xsd:element ref="ols74:AllocationITCRecaptureAllocatedAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="AllocationITCRecaptureNameText"  type= "ccms:Character175TextType"/>
+	<xsd:element name="AllocationITCRecaptureNumber">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="AllocationITCRecaptureProportionPercentage" type="sdt:PercentType"/>
+	<xsd:element name="AllocationITCRecaptureAllocatedAmount" type="sdt:AmountType"/>
+
+
+	<!-- Part 8 -€“ Clean hydrogen ITC recovery tax -->
+	<xsd:element name="Schedule74ExpectedCarbonIntensity" type="sdt:QuantityType"/>
+	<xsd:element name="Schedule74CompliancePeriodEndedDate" type="sdt:DateType"/>
+	<xsd:element name="Schedule74ActualCarbonIntensity" type="sdt:QuantityType"/>
+	<xsd:element name="Schedule74RevisedProjectPlanFile" type="ccms:OneTwoCodeType"/>
+	<xsd:element name="Schedule74ExpectedCarbonIntensityRevisedPlan" type="sdt:QuantityType"/>
+	
+	<xsd:element name="Schedule74ITCRecoveryTaxDetails" type="ols74:Schedule74ITCRecoveryTaxDetailsType"/>
+	<xsd:complexType name="Schedule74ITCRecoveryTaxDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols74:ITCRecoveryTaxClassNumberText" minOccurs="0" />
+			<xsd:element ref="ols74:ITCRecoveryTaxPropertyDescriptionCode" minOccurs="0" />
+			<xsd:element ref="ols74:ITCRecoveryTaxProvince" minOccurs="0" />
+			<xsd:element ref="ols74:ITCRecoveryTaxCapitalCostAmount" minOccurs="0" />
+			<xsd:element ref="ols74:ITCRecoveryTaxPreviouslyDeductedITCPercentage" minOccurs="0" />
+			<xsd:element ref="ols74:ITCRecoveryTaxAppliedPercentage" minOccurs="0" />
+			<xsd:element ref="ols74:ITCRecoveryTaxRecoveryTaxAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="ITCRecoveryTaxClassNumberText" type= "sdt:NumberType"/>
+	<xsd:element name="ITCRecoveryTaxPropertyDescriptionCode">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:CodeType">
+				<xsd:length value="2"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="ITCRecoveryTaxProvince"  type= "ccms:CanadianProvinceTerritoryCodeType"/>
+	<xsd:element name="ITCRecoveryTaxCapitalCostAmount" type="sdt:AmountType"/>
+	<xsd:element name="ITCRecoveryTaxPreviouslyDeductedITCPercentage" type="sdt:PercentType"/>
+	<xsd:element name="ITCRecoveryTaxAppliedPercentage" type="sdt:PercentType"/>
+	<xsd:element name="ITCRecoveryTaxRecoveryTaxAmount" type="sdt:AmountType"/>
+
+	<xsd:element name="Schedule74ITCRecoveryTaxAllocatedAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule74ITCRecoveryTaxTotalAmount" type="sdt:AmountType"/>
+
+
+	<!-- Part 9 - Allocation of clean hydrogen ITC recovery tax to members -->
+	<xsd:element name="Schedule74ElectingToPayITCRecoveryTax" type="ccms:OneTwoCodeType"/>
+	
+	<xsd:element name="Schedule74AllocationITCRecoveryTaxDetails" type="ols74:Schedule74AllocationITCRecoveryTaxDetailsType"/>
+	<xsd:complexType name="Schedule74AllocationITCRecoveryTaxDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols74:AllocationITCRecoveryTaxNameText" minOccurs="0" />
+			<xsd:element ref="ols74:AllocationITCRecoveryTaxNumber" minOccurs="0" />
+			<xsd:element ref="ols74:AllocationITCRecoveryTaxProportionPercentage" minOccurs="0" />
+			<xsd:element ref="ols74:AllocationITCRecoveryTaxAllocatedAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="AllocationITCRecoveryTaxNameText"  type= "ccms:Character175TextType"/>
+	<xsd:element name="AllocationITCRecoveryTaxNumber">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="AllocationITCRecoveryTaxProportionPercentage" type="sdt:PercentType"/>
+	<xsd:element name="AllocationITCRecoveryTaxAllocatedAmount" type="sdt:AmountType"/>
+
+
+</xsd:schema>

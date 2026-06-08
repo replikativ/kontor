@@ -1,0 +1,413 @@
+;; China — ASSBE (Accounting Standards for Small Business Enterprises)
+;; chart of accounts. 4-digit base codes + standard sub-accounts under
+;; 2221 应交税费 per MOF Cai Kuai [2006] No. 18 + the ASSBE 2013
+;; small-business companion document.
+;;
+;; ASBE-large companion (4xxx equity + 6xxx P&L classified) is
+;; deferred to a sibling `kontor-l10n-cn-asbe-large` per the BR/CN
+;; agent advice — keep this module focused on ASSBE.
+;;
+;; ## 2221 应交税费 sub-tree (the MOF-canonical structure)
+;;
+;; Per-rate aggregation (13% / 9% / 6%) is via :kontor.tax-application/rate
+;; (ADR-016) + per-posting account-tags, NOT via per-rate accounts.
+;; The MOF chart has ONE output-VAT account and ONE input-VAT account;
+;; this kernel previously had non-standard per-rate sub-accounts —
+;; corrected 2026-05-11 per CN verification agent's gap analysis.
+;;
+;; ## Numeric-code convention (kontor-internal)
+;;
+;; MOF Cai Kuai [2016] No. 22 names the detail accounts as **专栏
+;; (memo-columns)** under `应交税费——应交增值税` — without numeric
+;; suffixes. The `2221.01.NN` codes here are kontor's internal
+;; flattening of MOF's column convention; mapping is 1:1 to MOF's
+;; column names but **not statutory**. Exports to Chinese
+;; accounting-software interchange formats should use the column-NAME
+;; form, not the numeric code. `:cn/asbe-column` carries the statutory
+;; Chinese name alongside `:cn/asbe` for that case.
+;;
+;; Sub-accounts 2221.11-2221.16 (CIT + surcharges + others) use
+;; kontor-internal ordering — MOF doesn't prescribe numbers below
+;; 2221.10. Different Chinese ERPs use different orderings.
+;;
+;; Per Cai Kuai [2016] No. 22, 应交增值税 has 10 statutory **专栏
+;; (memo-columns)**. 代扣代交增值税 and 简易计税 are SEPARATE 二级
+;; detail accounts under 应交税费 — NOT columns inside 应交增值税.
+;; Corrected 2026-05-11 per second-pass CN verification.
+;;
+;; 2221.01 应交增值税 — the 10 MOF-canonical 专栏:
+;;   2221.01.01 销项税额                       Output VAT (collected on sales)
+;;   2221.01.02 进项税额                       Input VAT (paid on purchases)
+;;   2221.01.03 销项税额抵减                   Output VAT offset (差额征税)
+;;   2221.01.04 进项税额转出                   Input VAT reversal
+;;   2221.01.05 出口退税                       Export tax refund
+;;   2221.01.06 出口抵减内销产品应纳税额        Export-offset domestic VAT
+;;   2221.01.07 转出未交增值税                 Transferred unpaid VAT
+;;   2221.01.08 转出多交增值税                 Transferred excess VAT
+;;   2221.01.09 已交税金                       Taxes paid (intra-period)
+;;   2221.01.10 减免税款                       Tax reduction
+;;   2221.01.99 进项税加计抵减                 Additional input deduction
+;;                                            (POST-2019, Cai Shui [2019] No. 87)
+;;                                            — NOT in the original 10; numbered
+;;                                            .99 so its non-statutory status is
+;;                                            obvious. Policy-driven, periodically
+;;                                            extended.
+;;
+;; 二级 detail accounts under 2221 应交税费 (NOT columns inside 应交增值税):
+;;   2221.02 未交增值税            Unpaid VAT (period-close balance)
+;;   2221.03 预交增值税            Prepaid VAT
+;;   2221.04 待抵扣进项税额        Pending-deduction input
+;;   2221.05 待认证进项税额        Pending-certification input
+;;   2221.06 待转销项税额          Pending-transfer output
+;;   2221.07 留抵税额              Retained credit (transitional 营改增 carryforwards;
+;;                                  many firms no longer use)
+;;   2221.09 简易计税              Simplified taxation
+;;   2221.10 代扣代交增值税        Withheld-and-remitted VAT (cross-border services)
+;;   2221.11 应交所得税            Corporate Income Tax payable
+;;   2221.12 城建税                Urban Maintenance & Construction Tax
+;;   2221.13 教育费附加            Education surcharge
+;;   2221.14 地方教育费附加        Local education surcharge
+;;   2221.15 消费税                Consumption tax (specific products)
+;;   2221.16 印花税                Stamp duty
+;;
+;; Per ADR-019, every account carries `:external-codes` so the
+;; statutory MOF code is queryable.
+
+[
+ ;; ---------- 1xxx Assets / 资产 ----------
+ {:code "1001" :path "Assets:Cash:OnHand"
+  :name "Cash on hand / 库存现金"
+  :type :asset :reconcilable? false
+  :external-codes {:cn/asbe "1001"}}
+ {:code "1002" :path "Assets:Bank:Deposits"
+  :name "Bank deposits / 银行存款"
+  :type :asset :reconcilable? true
+  :external-codes {:cn/asbe "1002"}}
+ {:code "1121" :path "Assets:Receivable:Notes"
+  :name "Notes receivable / 应收票据"
+  :type :asset
+  :external-codes {:cn/asbe "1121"}}
+ {:code "1122" :path "Assets:Receivable"
+  :name "Accounts receivable / 应收账款"
+  :type :asset :reconcilable? true
+  :external-codes {:cn/asbe "1122"}}
+ {:code "1123" :path "Assets:Prepayments"
+  :name "Prepayments / 预付账款"
+  :type :asset
+  :external-codes {:cn/asbe "1123"}}
+ {:code "1221" :path "Assets:Receivable:Other"
+  :name "Other receivables / 其他应收款"
+  :type :asset
+  :external-codes {:cn/asbe "1221"}}
+ {:code "1231" :path "Assets:Receivable:Allowance"
+  :name "Allowance for doubtful debts / 坏账准备"
+  :type :asset                                            ;; contra
+  :external-codes {:cn/asbe "1231"}}
+ {:code "1403" :path "Assets:Inventory:RawMaterials"
+  :name "Raw materials / 原材料"
+  :type :asset
+  :external-codes {:cn/asbe "1403"}}
+ {:code "1405" :path "Assets:Inventory:Finished"
+  :name "Inventory / finished goods / 库存商品"
+  :type :asset
+  :external-codes {:cn/asbe "1405"}}
+ {:code "1406" :path "Assets:Inventory:WIP"
+  :name "Work in progress / 在产品"
+  :type :asset
+  :external-codes {:cn/asbe "1406"}}
+ {:code "1601" :path "Assets:Fixed"
+  :name "Fixed assets / 固定资产"
+  :type :asset
+  :external-codes {:cn/asbe "1601"}}
+ {:code "1602" :path "Assets:Fixed:AccumDep"
+  :name "Accumulated depreciation / 累计折旧"
+  :type :asset                                            ;; contra
+  :external-codes {:cn/asbe "1602"}}
+ {:code "1604" :path "Assets:Fixed:ConstructionInProgress"
+  :name "Construction in progress / 在建工程"
+  :type :asset
+  :external-codes {:cn/asbe "1604"}}
+ {:code "1701" :path "Assets:Intangible"
+  :name "Intangible assets / 无形资产"
+  :type :asset
+  :external-codes {:cn/asbe "1701"}}
+ {:code "1702" :path "Assets:Intangible:AccumAmort"
+  :name "Accumulated amortization / 累计摊销"
+  :type :asset
+  :external-codes {:cn/asbe "1702"}}
+
+ ;; ---------- 2xxx Liabilities / 负债 ----------
+ {:code "2001" :path "Liabilities:Loan:Short"
+  :name "Short-term borrowings / 短期借款"
+  :type :liability
+  :external-codes {:cn/asbe "2001"}}
+ {:code "2201" :path "Liabilities:Payable:Notes"
+  :name "Notes payable / 应付票据"
+  :type :liability
+  :external-codes {:cn/asbe "2201"}}
+ {:code "2202" :path "Liabilities:Payable"
+  :name "Accounts payable / 应付账款"
+  :type :liability :reconcilable? true
+  :external-codes {:cn/asbe "2202"}}
+ {:code "2203" :path "Liabilities:Advances"
+  :name "Advances from customers / 预收账款"
+  :type :liability
+  :external-codes {:cn/asbe "2203"}}
+ {:code "2211" :path "Liabilities:EmployeeComp"
+  :name "Employee compensation payable / 应付职工薪酬"
+  :type :liability
+  :external-codes {:cn/asbe "2211"}}
+
+ ;; ---------- 2221 应交税费 — MOF-canonical sub-tree ----------
+ {:code "2221" :path "Liabilities:Tax"
+  :name "Taxes payable / 应交税费"
+  :type :liability
+  :external-codes {:cn/asbe "2221"}}
+
+ ;; 2221.01 应交增值税 — the 10 MOF-canonical 专栏
+ ;; (Cai Kuai [2016] No. 22). Per-rate aggregation (13% / 9% / 6%) is
+ ;; via :kontor.tax-application/rate + revenue-account tags, NOT via per-rate
+ ;; output accounts.
+ {:code "2221.01.01" :path "Liabilities:Tax:VAT:OutputVAT"
+  :name "Output VAT / 销项税额"
+  :type :liability
+  :tags [:cn-vat-output]
+  :external-codes {:cn/asbe "2221.01.01"
+                   :cn/asbe-column "销项税额"}}
+ {:code "2221.01.02" :path "Assets:Tax:VAT:InputVAT"
+  :name "Input VAT (deductible) / 进项税额"
+  :type :asset
+  :tags [:cn-vat-input]
+  :external-codes {:cn/asbe "2221.01.02"
+                   :cn/asbe-column "进项税额"}}
+ {:code "2221.01.03" :path "Liabilities:Tax:VAT:OutputOffset"
+  :name "Output VAT offset / 销项税额抵减"
+  :type :liability
+  :external-codes {:cn/asbe "2221.01.03"
+                   :cn/asbe-column "销项税额抵减"}}
+ {:code "2221.01.04" :path "Liabilities:Tax:VAT:InputReversal"
+  :name "Input VAT reversal / 进项税额转出"
+  :type :liability
+  :external-codes {:cn/asbe "2221.01.04"
+                   :cn/asbe-column "进项税额转出"}}
+ {:code "2221.01.05" :path "Assets:Tax:VAT:ExportRefund"
+  :name "Export tax refund / 出口退税"
+  :type :asset
+  :external-codes {:cn/asbe "2221.01.05"
+                   :cn/asbe-column "出口退税"}}
+ {:code "2221.01.06" :path "Liabilities:Tax:VAT:ExportOffsetDomestic"
+  :name "Export-offset domestic VAT / 出口抵减内销产品应纳税额"
+  :type :liability
+  :external-codes {:cn/asbe "2221.01.06"
+                   :cn/asbe-column "出口抵减内销产品应纳税额"}}
+ {:code "2221.01.07" :path "Liabilities:Tax:VAT:TransferredUnpaid"
+  :name "Transferred unpaid VAT / 转出未交增值税"
+  :type :liability
+  :external-codes {:cn/asbe "2221.01.07"
+                   :cn/asbe-column "转出未交增值税"}}
+ {:code "2221.01.08" :path "Liabilities:Tax:VAT:TransferredExcess"
+  :name "Transferred excess VAT / 转出多交增值税"
+  :type :liability
+  :external-codes {:cn/asbe "2221.01.08"
+                   :cn/asbe-column "转出多交增值税"}}
+ {:code "2221.01.09" :path "Liabilities:Tax:VAT:TaxesPaid"
+  :name "Taxes paid (intra-period) / 已交税金"
+  :type :liability
+  :external-codes {:cn/asbe "2221.01.09"
+                   :cn/asbe-column "已交税金"}}
+ {:code "2221.01.10" :path "Liabilities:Tax:VAT:TaxReduction"
+  :name "Tax reduction / 减免税款"
+  :type :liability
+  :external-codes {:cn/asbe "2221.01.10"
+                   :cn/asbe-column "减免税款"}}
+
+ ;; Non-MOF-statutory column — POST-2019 加计抵减 policy
+ ;; (Cai Shui [2019] No. 87 + renewals). NOT in the 10-column list of
+ ;; Cai Kuai [2016] No. 22; numbered 2221.01.99 so its non-statutory
+ ;; status is obvious. Policy-driven, periodically extended; verify
+ ;; applicability per current taxable period.
+ {:code "2221.01.99" :path "Liabilities:Tax:VAT:AdditionalDeduction"
+  :name "Additional input deduction / 进项税加计抵减"
+  :type :liability
+  :external-codes {:cn/asbe-column "进项税加计抵减"}}
+
+ ;; 2221.02 - 2221.10: 二级 detail accounts under 应交税费
+ ;; (NOT columns inside 2221.01 应交增值税).
+ {:code "2221.02" :path "Liabilities:Tax:VAT:Unpaid"
+  :name "Unpaid VAT / 未交增值税"
+  :type :liability
+  :tags [:cn-vat-net-payable]
+  :external-codes {:cn/asbe "2221.02"}}
+ {:code "2221.03" :path "Liabilities:Tax:VAT:Prepaid"
+  :name "Prepaid VAT / 预交增值税"
+  :type :liability
+  :external-codes {:cn/asbe "2221.03"}}
+ {:code "2221.04" :path "Assets:Tax:VAT:PendingDeduction"
+  :name "Pending-deduction input VAT / 待抵扣进项税额"
+  :type :asset
+  :external-codes {:cn/asbe "2221.04"}}
+ {:code "2221.05" :path "Assets:Tax:VAT:PendingCertification"
+  :name "Pending-certification input VAT / 待认证进项税额"
+  :type :asset
+  :external-codes {:cn/asbe "2221.05"}}
+ {:code "2221.06" :path "Liabilities:Tax:VAT:PendingTransferOutput"
+  :name "Pending-transfer output / 待转销项税额"
+  :type :liability
+  :external-codes {:cn/asbe "2221.06"}}
+ {:code "2221.07" :path "Assets:Tax:VAT:RetainedCredit"
+  :name "Retained input credit / 留抵税额"
+  :type :asset
+  :external-codes {:cn/asbe "2221.07"}}
+ {:code "2221.09" :path "Liabilities:Tax:VAT:Simplified"
+  :name "Simplified taxation / 简易计税"
+  :type :liability
+  :external-codes {:cn/asbe "2221.09"}}
+ {:code "2221.10" :path "Liabilities:Tax:VAT:WithheldRemitted"
+  :name "Withheld-and-remitted VAT / 代扣代交增值税"
+  :type :liability
+  ;; Booked when buying cross-border services and acting as
+  ;; withholding agent (扣缴义务人). Settles separately to the STA
+  ;; rather than netting through 销项/进项. Confirmed as a 二级
+  ;; detail account (NOT a 应交增值税 memo-column) per second-pass
+  ;; CN verification.
+  :external-codes {:cn/asbe "2221.10"}}
+
+ ;; 2221.11+ — other tax sub-accounts (CIT + surcharges + others)
+ {:code "2221.11" :path "Liabilities:Tax:CIT"
+  :name "Corporate income tax payable / 应交所得税"
+  :type :liability
+  :external-codes {:cn/asbe "2221.11"}}
+ {:code "2221.12" :path "Liabilities:Tax:UrbanMaintenance"
+  :name "Urban Maintenance & Construction Tax / 城建税"
+  :type :liability
+  :tags [:cn-surcharge-umct]
+  :external-codes {:cn/asbe "2221.12"}}
+ {:code "2221.13" :path "Liabilities:Tax:EducationSurcharge"
+  :name "Education surcharge / 教育费附加"
+  :type :liability
+  :tags [:cn-surcharge-edu]
+  :external-codes {:cn/asbe "2221.13"}}
+ {:code "2221.14" :path "Liabilities:Tax:LocalEducationSurcharge"
+  :name "Local education surcharge / 地方教育费附加"
+  :type :liability
+  :tags [:cn-surcharge-local-edu]
+  :external-codes {:cn/asbe "2221.14"}}
+ {:code "2221.15" :path "Liabilities:Tax:ConsumptionTax"
+  :name "Consumption tax / 消费税"
+  :type :liability
+  :external-codes {:cn/asbe "2221.15"}}
+ {:code "2221.16" :path "Liabilities:Tax:StampDuty"
+  :name "Stamp duty / 印花税"
+  :type :liability
+  ;; NOTE: Chinese practitioner convention typically expenses stamp duty
+  ;; directly to 税金及附加 at payment time WITHOUT accruing through
+  ;; 应交税费 (no statutory accrual basis — due at document execution).
+  ;; This account supports the alternate "accrue first, pay later"
+  ;; treatment, but most enterprises won't use it.
+  :external-codes {:cn/asbe "2221.16"}}
+
+ {:code "2401" :path "Liabilities:Loan:Long"
+  :name "Long-term borrowings / 长期借款"
+  :type :liability
+  :external-codes {:cn/asbe "2401"}}
+
+ ;; ---------- 3xxx Equity / 所有者权益 (ASSBE convention) ----------
+ {:code "3001" :path "Equity:PaidInCapital"
+  :name "Paid-in capital / 实收资本"
+  :type :equity
+  :external-codes {:cn/asbe "3001"}}
+ {:code "3002" :path "Equity:CapitalSurplus"
+  :name "Capital surplus / 资本公积"
+  :type :equity
+  :external-codes {:cn/asbe "3002"}}
+ {:code "3101" :path "Equity:SurplusReserves"
+  :name "Surplus reserves / 盈余公积"
+  :type :equity
+  :external-codes {:cn/asbe "3101"}}
+ {:code "3103" :path "Equity:ProfitOfYear"
+  :name "Profit for the year / 本年利润"
+  :type :equity
+  :external-codes {:cn/asbe "3103"}}
+ {:code "3104" :path "Equity:RetainedEarnings"
+  :name "Retained earnings / 利润分配"
+  :type :equity
+  :external-codes {:cn/asbe "3104"}}
+
+ ;; ---------- 4xxx Production costs / 成本 (manufacturers only) ----------
+ {:code "4101" :path "Expense:ProductionCost"
+  :name "Production cost / 生产成本"
+  :type :expense
+  :external-codes {:cn/asbe "4101"}}
+ {:code "4105" :path "Expense:ManufacturingOverhead"
+  :name "Manufacturing overhead / 制造费用"
+  :type :expense
+  :external-codes {:cn/asbe "4105"}}
+
+ ;; ---------- 5xxx Revenue + COGS (ASSBE flattened convention) ----------
+ ;; Per-rate revenue split is a kontor convenience for VAT-return
+ ;; aggregation. MOF doesn't subdivide revenue by rate; tags carry the
+ ;; rate-bucketing information used by `vat/compute-return`.
+ {:code "5001.13" :path "Income:Sales:13pct"
+  :name "Main business revenue — 13% / 主营业务收入(13%)"
+  :type :income
+  :tags [:cn-vat-line-sales-13]
+  :external-codes {:cn/asbe "5001"}}
+ {:code "5001.9" :path "Income:Sales:9pct"
+  :name "Main business revenue — 9% / 主营业务收入(9%)"
+  :type :income
+  :tags [:cn-vat-line-sales-9]
+  :external-codes {:cn/asbe "5001"}}
+ {:code "5001.6" :path "Income:Sales:6pct"
+  :name "Main business revenue — 6% / 主营业务收入(6%)"
+  :type :income
+  :tags [:cn-vat-line-sales-6]
+  :external-codes {:cn/asbe "5001"}}
+ {:code "5001.0" :path "Income:Sales:Export"
+  :name "Main business revenue — 0% export / 出口销售"
+  :type :income
+  :tags [:cn-vat-line-sales-export]
+  :external-codes {:cn/asbe "5001"}}
+ {:code "5051" :path "Income:Other"
+  :name "Other business revenue / 其他业务收入"
+  :type :income
+  :external-codes {:cn/asbe "5051"}}
+ {:code "5201" :path "Income:Investment"
+  :name "Investment income / 投资收益"
+  :type :income
+  :external-codes {:cn/asbe "5201"}}
+
+ {:code "5401" :path "Expense:COGS"
+  :name "Main business cost / 主营业务成本"
+  :type :expense
+  :external-codes {:cn/asbe "5401"}}
+ {:code "5601" :path "Expense:Tax-Surcharges"
+  :name "Business tax and surcharges / 营业税金及附加"
+  :type :expense
+  :external-codes {:cn/asbe "5601"}}
+ {:code "5602" :path "Expense:Selling"
+  :name "Selling expenses / 销售费用"
+  :type :expense
+  :external-codes {:cn/asbe "5602"}}
+ {:code "5603" :path "Expense:Admin"
+  :name "Administrative expenses / 管理费用"
+  :type :expense
+  :external-codes {:cn/asbe "5603"}}
+ {:code "5604" :path "Expense:Financial"
+  :name "Financial expenses / 财务费用"
+  :type :expense
+  :external-codes {:cn/asbe "5604"}}
+
+ ;; ---------- 6xxx Non-operating & income tax ----------
+ {:code "6001" :path "Income:NonOperating"
+  :name "Non-operating income / 营业外收入"
+  :type :income
+  :external-codes {:cn/asbe "6001"}}
+ {:code "6101" :path "Expense:NonOperating"
+  :name "Non-operating expense / 营业外支出"
+  :type :expense
+  :external-codes {:cn/asbe "6101"}}
+ {:code "6301" :path "Expense:IncomeTax"
+  :name "Income tax expense / 所得税费用"
+  :type :expense
+  :external-codes {:cn/asbe "6301"}}
+ ]

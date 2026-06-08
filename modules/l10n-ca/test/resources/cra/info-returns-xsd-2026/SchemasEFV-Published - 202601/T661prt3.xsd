@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<xsd:schema 
+xmlns:olT661Parts3="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts3/1-0-0" 
+			xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+			xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+			xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+	targetNamespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts3/1-0-0" 
+	elementFormDefault="qualified" attributeFormDefault="unqualified" version="ols661/1-0-0">
+
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/> 
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/> 
+
+<xsd:element name="T661Part3Data" type="olT661Parts3:Part3DataType"/>
+<xsd:complexType name="Part3DataType">
+	<xsd:sequence>
+	    <xsd:element ref="olT661Parts3:Field160" minOccurs="0" maxOccurs="1"/>
+	    <xsd:element ref="olT661Parts3:Field162" minOccurs="0" maxOccurs="1"/>
+		<xsd:element ref="olT661Parts3:Part3LineAmounts" minOccurs="0" maxOccurs="200"/>
+	</xsd:sequence>
+</xsd:complexType>
+
+<xsd:element name="Part3LineAmounts" type="ccms:FieldCodeAmountType"/>
+	<xsd:annotation>
+		<xsd:documentation>
+			Employees other than specified employees for work performed in Canada   300
+			Specified employees for work performed in Canada   305
+			Subtotal (add lines 300 and 305)   306
+			Employees other than specified employees for work performed outside Canada (subject to limitations - see guide)   307
+			Specified employees for work performed outside Canada (subject to limitations - see guide)   309
+			Salary or wages identified on line 315 in prior years that were paid in this tax year   310
+			Salary or wages incurred in the year but not paid within 180 days of the tax year end   315
+			Cost of materials consumed in performing SRED   320
+			Cost of materials transformed in performing SRED   325
+			Arm's length contracts (see note 1)   340
+			Non-arm's length contracts (see note 1)   345
+			Overhead and other expenditures (enter "0" if you use the proxy method)   360
+			Third-party payments (see note 2) (complete Form T1263*)   370
+			Total allowable SRED expenditures   380
+			Amount from line 380   420
+			provincial government assistance for expenditures included on line 380   429
+			other government assistance for expenditures included on line 380   431
+			non-government assistance for expenditures included on line 380   432
+			SRED ITCs applied and/or refunded in the prior year (see guide)   435
+			sale of SRED capital assets and other deductions   440
+			Subtotal (line 420 minus lines 429 to 440)   442
+			repayments of government and non-government assistance that previously reduced the SRED expenditure pool   445
+			prior year's pool balance of deductible SRED expenditures (from line 470 of prior year T661)   450
+			SRED expenditure pool transfer from amalgamation or wind-up   452
+			amount of SRED ITC recaptured in the prior year   453
+			Amount available for deduction (add lines 442 to 453) (enter positive amount only, include negative amount in income)   455
+			Deduction claimed in the year (Corporations should enter this amount on line 411 of schedule T2SCH1)   460
+			Pool balance of deductible SRED expenditures to be carried forward to future years (line 455 minus 460)   470
+		</xsd:documentation>
+	</xsd:annotation>
+  
+  <xsd:element name="Field160"  type="ccms:OneCodeType"/>
+  <xsd:element name="Field162"  type="ccms:OneCodeType"/>
+
+</xsd:schema>

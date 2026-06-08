@@ -1,0 +1,33 @@
+;; INVARIANT: posting commodity must match the account's commodity
+;; when the account specifies one.
+;;
+;; Holds when, for every newly-written posting (in $empty+txs), one of:
+;;   (a) the account does NOT specify :kontor.account/commodity (polymorphic
+;;       account — any posting commodity is OK), OR
+;;   (b) the posting's :kontor.posting/commodity equals the account's
+;;       :kontor.account/commodity.
+;;
+;; Phrased equivalently: there is no posting in $empty+txs whose
+;; account in $after has a :kontor.account/commodity that differs from the
+;; posting's :kontor.posting/commodity.
+;;
+;; See `account_active.edn` for the canonical datalog gotcha
+;; commentary; we use the same `q` + `count` + `=` pattern here.
+[:find ?matches .
+ :in $before $after $empty+txs $txs
+ :where
+ [(q [:find ?p
+      :in $after $empty+txs
+      :where
+      [$empty+txs ?p :kontor.posting/account ?account]
+      [$empty+txs ?p :kontor.posting/commodity ?p-commodity]
+      ;; The account specifies a commodity (polymorphic accounts
+      ;; have :kontor.account/commodity unset and never trigger this clause).
+      [$after ?account :kontor.account/commodity ?a-commodity]
+      ;; ...and the posting commodity does NOT match. Both sides come
+      ;; from database patterns so the predicate filter fires.
+      [(not= ?p-commodity ?a-commodity)]]
+     $after $empty+txs)
+  ?violators]
+ [(count ?violators) ?n-violators]
+ [(= 0 ?n-violators) ?matches]]

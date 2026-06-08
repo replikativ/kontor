@@ -1,0 +1,97 @@
+;; BR payroll-specific account starter — extends modules/l10n-br/chart.edn
+;; per ADR-081 §7. Consumer overrides as needed; the load-bearing
+;; identifier is :kontor.account-tag/name (e.g. "br-payroll-inss-payable"),
+;; not :code. Codes use the 5-level dotted convention shared with
+;; the existing BR chart (1.xx.xx.xx.xx / 2.xx.xx.xx.xx /
+;; 3.xx.xx.xx.xx).
+;;
+;; Per ADR-081 the BR substrate ships passthrough to the eSocial
+;; engine (Senior, RH Sistemas, Pluxee, Datasul, ContaAzul) — kontor
+;; does NOT compute INSS / IRRF / FGTS / contribuição sindical, only
+;; consumes what the engine emits and routes to the matching CoA
+;; accounts.
+;;
+;; Three load-bearing accrual liabilities per CPC 33 / IAS 19 — these
+;; are mandatory for a Brazilian employer's balance sheet:
+;;   - Férias + 1/3 adicional (vacation + constitutional bonus)
+;;   - 13º salário (thirteenth-month salary)
+;;   - Multa rescisória de 40% sobre FGTS (40% severance on FGTS
+;;     balance, triggered on involuntary termination)
+
+[;; ──────────────────────────────────────────────────────────────────
+ ;; EXPENSE SIDE — wages + employer charges + accruals (debit)
+ ;; ──────────────────────────────────────────────────────────────────
+ {:code "4.1.1.01" :path "Expenses:Payroll:Wages-Salaries"
+  :type :expense :name "Salários e Ordenados / Wages and Salaries"
+  :tags [:br-payroll-wages]}
+ {:code "4.1.1.05" :path "Expenses:Payroll:Social-Charges"
+  :type :expense :name "Encargos sociais / Social charges (INSS empregador + FGTS)"
+  :tags [:br-payroll-er-charges]}
+ {:code "4.1.1.06" :path "Expenses:Payroll:INSS-Employer"
+  :type :expense :name "INSS empregador (CPP) — contribuição previdenciária patronal"
+  :tags [:br-payroll-er-inss]}
+ {:code "4.1.1.07" :path "Expenses:Payroll:FGTS-Employer"
+  :type :expense :name "FGTS empregador (8% mandatory)"
+  :tags [:br-payroll-er-fgts]}
+ {:code "4.1.1.10" :path "Expenses:Payroll:Vacation-Accrual"
+  :type :expense :name "Provisão de férias + 1/3 adicional — CPC 33"
+  :tags [:br-payroll-ferias-accrual]}
+ {:code "4.1.1.15" :path "Expenses:Payroll:13th-Salary-Accrual"
+  :type :expense :name "Provisão de 13º salário — CPC 33"
+  :tags [:br-payroll-13th-accrual]}
+ {:code "4.1.1.20" :path "Expenses:Payroll:Severance-Accrual"
+  :type :expense :name "Provisão de multa rescisória 40% FGTS"
+  :tags [:br-payroll-severance-accrual]}
+ {:code "4.1.1.25" :path "Expenses:Payroll:VR-VT"
+  :type :expense :name "Vale-refeição / Vale-transporte (employer share)"
+  :tags [:br-payroll-vr-vt]}
+ {:code "4.1.1.30" :path "Expenses:Payroll:Other-Benefits"
+  :type :expense :name "Outros benefícios — adicionais diversos"
+  :tags [:br-payroll-benefits]}
+
+ ;; ──────────────────────────────────────────────────────────────────
+ ;; LIABILITY SIDE — wages payable + statutory payables
+ ;; The four canonical BR statutory buckets per ADR-081 §3.2 (NEVER
+ ;; collapsed: INSS-EE / INSS-ER / FGTS / IRRF have distinct GFIP
+ ;; lines + distinct due dates + distinct DARF codes).
+ ;; ──────────────────────────────────────────────────────────────────
+ {:code "2.1.1.01" :path "Liabilities:Payroll:Wages-Payable"
+  :type :liability :name "Salários a pagar / Wages payable (net)"
+  :tags [:br-payroll-net-wages]
+  :reconcilable? true}
+ {:code "2.1.1.05" :path "Liabilities:Payroll:INSS-Employee"
+  :type :liability :name "INSS a recolher — empregado / INSS employee withholding"
+  :tags [:br-payroll-inss-employee :br-payroll-esocial-s1210]}
+ {:code "2.1.1.06" :path "Liabilities:Payroll:INSS-Employer"
+  :type :liability :name "INSS a recolher — empregador / INSS employer (CPP)"
+  :tags [:br-payroll-inss-employer :br-payroll-esocial-s1210]}
+ {:code "2.1.1.10" :path "Liabilities:Payroll:FGTS-Payable"
+  :type :liability :name "FGTS a recolher / FGTS payable (8% mandatory)"
+  :tags [:br-payroll-fgts]}
+ {:code "2.1.1.15" :path "Liabilities:Payroll:IRRF-Payable"
+  :type :liability :name "IRRF a recolher / Personal income tax withholding"
+  :tags [:br-payroll-irrf]}
+ {:code "2.1.1.20" :path "Liabilities:Payroll:Union-Dues"
+  :type :liability :name "Contribuição sindical a recolher / Union dues"
+  :tags [:br-payroll-union-dues]}
+ {:code "2.1.1.25" :path "Liabilities:Payroll:Garnishment"
+  :type :liability :name "Pensão alimentícia / garnishments payable"
+  :tags [:br-payroll-garnishment]}
+ {:code "2.1.1.30" :path "Liabilities:Payroll:Other-Deductions"
+  :type :liability :name "Outras retenções / Other voluntary deductions"
+  :tags [:br-payroll-other-deduction]}
+
+ ;; ──────────────────────────────────────────────────────────────────
+ ;; LIABILITY — accrual liabilities (CPC 33 mandatory employer
+ ;; obligations; sit on the balance sheet permanently for an active
+ ;; workforce).
+ ;; ──────────────────────────────────────────────────────────────────
+ {:code "2.1.2.01" :path "Liabilities:Payroll:Vacation-Liability"
+  :type :liability :name "Férias a pagar (CPC 33) / Vacation liability + 1/3"
+  :tags [:br-payroll-ferias-liability]}
+ {:code "2.1.2.05" :path "Liabilities:Payroll:13th-Salary-Liability"
+  :type :liability :name "13º salário a pagar (CPC 33) / 13th-month liability"
+  :tags [:br-payroll-13th-liability]}
+ {:code "2.1.2.10" :path "Liabilities:Payroll:Severance-Liability"
+  :type :liability :name "Provisão para multas rescisórias / Severance accrual"
+  :tags [:br-payroll-severance-liability]}]

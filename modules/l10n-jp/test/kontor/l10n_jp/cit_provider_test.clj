@@ -1,0 +1,537 @@
+(ns kontor.l10n-jp.cit-provider-test
+  "JP corporate income tax provider tests — ADR-101 / ADR-106
+   substrate's second end-to-end consumer after DE. Validates that
+   the statute-as-data path (`:parameter` + `:provision` rows +
+   `kontor.tax.statute/apply-provisions` fold) computes real JP CIT
+   against published worked examples.
+
+   Cases:
+     §1 SME worked example — Tokyo SME @ ¥10M
+        income, capital ≤¥10M, ≤50 employees. Expected total
+        ¥2,625,912 (without 均等割) / ¥2,695,912 (with).
+     §2 Large-corporation flat schedule — capital >¥100M @ ¥1B
+        income → 23.2 % flat national CIT, defense surtax fires
+        (post-2026-04-01). Exercises ADR-101-Addendum-1
+        `:op :schedule-override`.
+     §3 Defense surtax temporal gate — as-of 2025-06-30 ⇒ no
+        defense surtax; as-of 2026-06-30 ⇒ defense surtax fires.
+     §4 Per-capita levy tier coverage — three tiers from the 10-cell
+        table.
+     §5 Substrate-property sanity — `:tax-unit` keys required,
+        idempotent install, `:provenance` records the provisions
+        that fired, `:JPY` on every Money, schedule-override audit
+        trail records the swap."
+  (:require [clojure.test :refer [deftest is testing]]
+            [datahike.api :as d]
+            [kontor.core :as core]
+            [kontor.l10n-jp.cit-provider :as jp-cit]
+            [kontor.l10n-jp.cit-statute :as cit-statute]
+            [kontor.tax.period-tax-provider :as ptp]))
+
+(defn- fresh
+  "Fresh test DB with the JP CIT statute installed."
+  []
+  (let [conn (core/create-test-db)]
+    (cit-statute/install! conn)
+    conn))
+
+(defn- compute
+  "Run the JP CIT provider over `tax-unit` + `inputs` + an as-of
+   instant; return the `TaxReturnFacts`. The period defaults to
+   FY 2025-04-01 .. 2026-04-01 (the standard JP fiscal year that
+   ENDS at the cusp of the defense surtax effective date but does
+   not begin on or after it). The 4-arg overload lets a test
+   override the period for fiscal-year-cliff scenarios (per
+   ADR-101 Addendum 2 /.5)."
+  ([tax-unit inputs]
+   (compute tax-unit inputs #inst "2025-06-30"
+            {:from #inst "2025-04-01" :to #inst "2026-04-01"}))
+  ([tax-unit inputs as-of]
+   (compute tax-unit inputs as-of
+            {:from #inst "2025-04-01" :to #inst "2026-04-01"}))
+  ([tax-unit inputs as-of period]
+   (let [conn (fresh)]
+     (ptp/period-tax-facts
+      (jp-cit/jp-cit-provider {})
+      {:entity   :kk
+       :period   period
+       :db       (d/db conn)
+       :as-of    as-of
+       :tax-unit tax-unit
+       :inputs   inputs}))))
+
+(defn- component
+  "Pull the first component matching `authority` out of a
+   `TaxReturnFacts`."
+  [facts authority]
+  (->> facts :components (filter #(= authority (:authority %))) first))
+
+(defn- total-liability [facts]
+  (reduce + 0M (map (comp :amount :liability) (:components facts))))
+
+(defn- surtax-amount
+  "Amount of the surtax with `code` on `component-map` (nil if absent)."
+  [component-map code]
+  (some (fn [s] (when (= code (:code s)) (:amount s)))
+        (:surtaxes component-map)))
+
+;; ============================================================================
+;; §1. SME worked example — Tokyo SME @ ¥10M income, ≤50 emp
+;; ============================================================================
+;;
+;; Per
+;;   National CIT     = 0.15 × 8M + 0.232 × 2M       = ¥1,664,000
+;;   Local CIT        = 0.103 × 1,664,000            = ¥171,392
+;;   Inhabitant levy  = 0.07 × 1,664,000             = ¥116,480
+;;   Per-capita       = tier(≤¥10M cap, ≤50 emp)     = ¥70,000
+;;   Enterprise       = 0.035×4M + 0.053×4M + 0.07×2M = ¥492,000
+;;   Special corp     = 0.37 × 492,000               = ¥182,040
+;;   Total no per-cap                                = ¥2,625,912
+;;   Total with per-cap                              = ¥2,695,912
+
+(deftest sme-worked-example
+  (testing "Tokyo SME @ ¥10M income"
+    (let [facts (compute {:is-sme?         true
+                          :capital-class   :capital-up-to-10m
+                          :headcount-class :small
+                          :prefecture      :tokyo}
+                         {:book-profit 10000000M})
+          nat   (component facts :jp-nta)
+          ent   (component facts :jp-prefecture)
+          inh   (component facts :jp-municipality)]
+      (testing "National CIT: progressive 15 % / 23.2 % around ¥8M kink"
+        (is (== 10000000M (:amount (:base nat))))
+        (is (== 1664000M  (:amount (:gross-liability nat))))
+        (testing "local CIT (10.3 %) is the only surtax — defense surtax not yet effective"
+          (is (== 171392M (surtax-amount nat :local-corporate-tax)))
+          (is (nil? (surtax-amount nat :defense-surtax))))
+        (is (== 1835392M (:amount (:liability nat)))
+            "national-component liability = 法人税 + 地方法人税"))
+      (testing "Enterprise tax: SME 3-bracket progressive 3.5 / 5.3 / 7.0 %"
+        (is (== 10000000M (:amount (:base ent))))
+        (is (== 492000M   (:amount (:gross-liability ent))))
+        (testing "special corp enterprise tax 37 % surtax"
+          (is (== 182040M (surtax-amount ent :special-corp-enterprise-tax))))
+        (is (== 674040M (:amount (:liability ent)))))
+      (testing "Inhabitants' tax: 7 % income-levy on national CIT + ¥70k per-capita"
+        (is (== 0M     (:amount (:base inh))))
+        (is (== 0M     (:amount (:gross-liability inh))))
+        (is (== 116480M (surtax-amount inh :inhabitant-income-levy))
+            "0.07 × 1,664,000 = 116,480")
+        (is (== 70000M (surtax-amount inh :inhabitant-per-capita-levy))
+            "tier (≤¥10M capital, ≤50 employees) = ¥70k")
+        (is (== 186480M (:amount (:liability inh)))))
+      (testing "Total: ¥2,695,912 (with per-capita) / ¥2,625,912 (without)"
+        (is (== 2695912M (total-liability facts)))
+        (is (== 2625912M (- (total-liability facts)
+                            (surtax-amount inh :inhabitant-per-capita-levy))))))))
+
+;; ============================================================================
+;; §2. Large-corporation flat schedule (capital ≥ ¥100M)
+;; ============================================================================
+
+(deftest large-corp-flat-23-2-percent
+  (testing "Large corporation (capital >¥100M, :is-sme? false) — flat 23.2 %
+            schedule via :op :schedule-override; defense surtax fires post-2026"
+    (let [facts (compute {:is-sme?         false
+                          :capital-class   :capital-up-to-1b
+                          :headcount-class :small
+                          :prefecture      :tokyo}
+                         {:book-profit 1000000000M}     ;; ¥1B book profit
+                         #inst "2026-06-30"             ;; post defense-surtax effective
+                         {:from #inst "2026-04-01"
+                          :to   #inst "2027-04-01"})    ;; FY begins on the cliff
+          nat   (component facts :jp-nta)
+          ent   (component facts :jp-prefecture)]
+      (testing "National CIT: flat 23.2 % schedule override active"
+        (is (= :flat (:kontor.schedule/type (:schedule nat)))
+            "schedule swapped from SME progressive to large-corp flat")
+        (is (== 0.232M (:rate (:schedule nat)))
+            "flat rate sourced from JP.CIT.flat-rate parameter")
+        (is (== 232000000M (:amount (:gross-liability nat)))
+            "0.232 × ¥1B = ¥232M"))
+      (testing "Local CIT: 10.3 % × ¥232M = ¥23,896,000"
+        (is (== 23896000M (surtax-amount nat :local-corporate-tax))))
+      (testing "Defense surtax: 4 % × max(0, 232,000,000 − 5,000,000) = 9,080,000"
+        (is (== 9080000M (surtax-amount nat :defense-surtax))))
+      (testing "Enterprise tax: large-corp flat 1.18 % override fires (income base only; value-added / capital bases deferred)"
+        (is (= :flat (:kontor.schedule/type (:schedule ent))))
+        (is (== 0.0118M (:rate (:schedule ent))))
+        (is (== 11800000M (:amount (:gross-liability ent)))
+            "0.0118 × ¥1B = ¥11.8M"))
+      (testing "Special corp enterprise tax for large corps: 260 % surtax"
+        (is (== 30680000M (surtax-amount ent :special-corp-enterprise-tax))
+            "2.60 × 11,800,000 = 30,680,000"))
+      (testing "the schedule-override is recorded in :provisions-applied"
+        (is (contains? (set (-> nat :provenance :provisions-applied))
+                       "JP-CIT-§66-large"))
+        (is (contains? (set (-> ent :provenance :provisions-applied))
+                       "JP-Enterprise-§72-large"))))))
+
+;; ============================================================================
+;; §2b. Note 125 — SME with income > ¥1B (post-Reiwa-7 17% band)
+;; ============================================================================
+
+(deftest sme-17pct-band-above-1b
+  (testing "Note 125 — SME with income > ¥1B (FY 2025-04-01+) jumps
+            the first-¥8M band from 15% to 17%; above-¥8M stays at 23.2%."
+    (let [tax-unit  {:is-sme?         true
+                     :capital-class   :capital-up-to-100m
+                     :headcount-class :small
+                     :prefecture      :tokyo}
+          asof-post #inst "2026-06-30"]
+      (testing "income ≤ ¥1B → default SME 15% schedule fires"
+        (let [facts (compute tax-unit {:book-profit 800000000M} asof-post)
+              nat   (component facts :jp-nta)]
+          ;; 15% on first ¥8M = 1,200,000; 23.2% on remaining 792M = 183,744,000
+          ;; total = 184,944,000
+          (is (== 184944000M (:amount (:gross-liability nat))))
+          (is (not (contains? (set (-> nat :provenance :provisions-applied))
+                              "JP-CIT-§66②-large-income"))
+              "JP-CIT-§66②-large-income should NOT fire below ¥1B")))
+      (testing "income > ¥1B → JP-CIT-§66②-large-income fires, 17% on first ¥8M"
+        (let [facts (compute tax-unit {:book-profit 1500000000M} asof-post)
+              nat   (component facts :jp-nta)]
+          ;; 17% on first ¥8M = 1,360,000; 23.2% on remaining 1,492M = 346,144,000
+          ;; total = 347,504,000
+          (is (== 347504000M (:amount (:gross-liability nat)))
+              "1,360,000 + 346,144,000 = 347,504,000")
+          (is (contains? (set (-> nat :provenance :provisions-applied))
+                         "JP-CIT-§66②-large-income"))))
+      (testing "pre-2025-04-01 → §66② provision NOT in effect; default SME schedule fires"
+        (let [facts (compute tax-unit {:book-profit 1500000000M} #inst "2025-03-31")
+              nat   (component facts :jp-nta)]
+          ;; 15% on first ¥8M + 23.2% on 1,492M = 1,200,000 + 346,144,000
+          (is (== 347344000M (:amount (:gross-liability nat))))
+          (is (not (contains? (set (-> nat :provenance :provisions-applied))
+                              "JP-CIT-§66②-large-income"))))))))
+
+;; ============================================================================
+;; §3. Defense surtax temporal gate
+;; ============================================================================
+
+(deftest defense-surtax-temporal-gate
+  (testing "Defense surtax (4 %) gates on FY-START ≥ 2026-04-01,
+            NOT on as-of (per ADR-101 Addendum 2 /.5)"
+    (let [tax-unit {:is-sme?         false
+                    :capital-class   :capital-up-to-1b
+                    :headcount-class :small}
+          inputs   {:book-profit 1000000000M}
+          ;; FY beginning 2025-04-01 — pre-cliff. Default period.
+          pre  (compute tax-unit inputs #inst "2025-06-30")
+          ;; FY beginning 2026-04-01 — first eligible FY.
+          post (compute tax-unit inputs #inst "2026-06-30"
+                        {:from #inst "2026-04-01" :to #inst "2027-04-01"})
+          ;; FY 2026-01-01 → 2026-12-31 (calendar-year corp) — the
+          ;; cliff-trap case.5 explicitly named: as-of
+          ;; CROSSES 2026-04-01 within the period, but the period
+          ;; itself BEGAN before the cliff → surtax does NOT fire.
+          cal-year (compute tax-unit inputs #inst "2026-06-30"
+                            {:from #inst "2026-01-01" :to #inst "2026-12-31"})
+          nat-pre      (component pre      :jp-nta)
+          nat-post     (component post     :jp-nta)
+          nat-cal-year (component cal-year :jp-nta)]
+      (is (nil? (surtax-amount nat-pre :defense-surtax))
+          "pre-cliff FY (2025-04-01..) — no defense surtax")
+      (is (== 9080000M (surtax-amount nat-post :defense-surtax))
+          "post-cliff FY (2026-04-01..) — defense surtax fires")
+      (is (nil? (surtax-amount nat-cal-year :defense-surtax))
+          "calendar-year FY (2026-01-01..) — does NOT fire even with
+           as-of past 2026-04-01; FY did not BEGIN on or after the cliff")
+      (testing "local CIT fires on all three (unchanged by the gate)"
+        (is (some? (surtax-amount nat-pre      :local-corporate-tax)))
+        (is (some? (surtax-amount nat-post     :local-corporate-tax)))
+        (is (some? (surtax-amount nat-cal-year :local-corporate-tax)))))))
+
+;; ============================================================================
+;; §4. Per-capita levy tier coverage
+;; ============================================================================
+
+(deftest per-capita-levy-tiers
+  (testing "per-capita inhabitants' levy 均等割 looks up the 10-cell tier table"
+    (let [as-of #inst "2025-06-30"
+          inputs {:book-profit 5000000M}
+          run    (fn [cap hc]
+                   (compute {:is-sme?         true
+                             :capital-class   cap
+                             :headcount-class hc}
+                            inputs
+                            as-of))
+          lvy    #(surtax-amount (component % :jp-municipality)
+                                 :inhabitant-per-capita-levy)]
+      (is (== 70000M  (lvy (run :capital-up-to-10m  :small))))
+      (is (== 140000M (lvy (run :capital-up-to-10m  :large))))
+      (is (== 180000M (lvy (run :capital-up-to-100m :small))))
+      (is (== 2290000M (lvy (run :capital-up-to-5b  :large))))
+      (is (== 3800000M (lvy (run :capital-above-5b  :large)))))))
+
+;; ============================================================================
+;; §5. Substrate-property sanity
+;; ============================================================================
+
+(deftest book-profit-missing-raises
+  (testing "JP CIT requires :inputs :book-profit"
+    (let [conn (fresh)]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"book-profit"
+                            (ptp/period-tax-facts
+                             (jp-cit/jp-cit-provider {})
+                             {:entity   :kk
+                              :period   {:from #inst "2025-04-01" :to #inst "2026-04-01"}
+                              :db       (d/db conn)
+                              :as-of    #inst "2025-06-30"
+                              :tax-unit {:is-sme?         true
+                                         :capital-class   :capital-up-to-10m
+                                         :headcount-class :small}
+                              :inputs   {}}))))))
+
+(deftest is-sme-missing-raises
+  (testing "JP CIT requires :tax-unit :is-sme? (true|false) for schedule fan-out"
+    (let [conn (fresh)]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #":is-sme\?"
+                            (ptp/period-tax-facts
+                             (jp-cit/jp-cit-provider {})
+                             {:entity   :kk
+                              :period   {:from #inst "2025-04-01" :to #inst "2026-04-01"}
+                              :db       (d/db conn)
+                              :as-of    #inst "2025-06-30"
+                              :tax-unit {:capital-class :capital-up-to-10m}
+                              :inputs   {:book-profit 1000000M}}))))))
+
+(deftest capital-class-missing-raises
+  (testing "JP CIT 均等割 requires :tax-unit :capital-class for the per-capita lookup"
+    (let [conn (fresh)]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"capital-class"
+                            (ptp/period-tax-facts
+                             (jp-cit/jp-cit-provider {})
+                             {:entity   :kk
+                              :period   {:from #inst "2025-04-01" :to #inst "2026-04-01"}
+                              :db       (d/db conn)
+                              :as-of    #inst "2025-06-30"
+                              :tax-unit {:is-sme? true}
+                              :inputs   {:book-profit 1000000M}}))))))
+
+(deftest installable-is-idempotent
+  (testing "install! is idempotent (re-run is a no-op on identity attrs)"
+    (let [conn (core/create-test-db)]
+      (cit-statute/install! conn)
+      (cit-statute/install! conn)
+      (let [params (d/q '[:find [?code ...]
+                          :where [_ :kontor.parameter/code ?code]]
+                        (d/db conn))
+            provs  (d/q '[:find [?code ...]
+                          :where [_ :kontor.provision/code ?code]]
+                        (d/db conn))
+            ;; restrict to JP-prefixed only (other modules may seed their own)
+            jp-params (filter #(.startsWith ^String % "JP.") params)
+            jp-provs  (filter #(.startsWith ^String % "JP-") provs)]
+        (is (= (count cit-statute/parameters) (count jp-params)))
+        (is (= (count cit-statute/provisions) (count jp-provs)))))))
+
+(deftest provenance-records-applied-provisions
+  (testing "every component records the provisions that fired in :provenance"
+    (let [facts (compute {:is-sme?         true
+                          :capital-class   :capital-up-to-10m
+                          :headcount-class :small}
+                         {:book-profit 10000000M}
+                         #inst "2025-06-30")
+          nat   (component facts :jp-nta)
+          ent   (component facts :jp-prefecture)
+          inh   (component facts :jp-municipality)]
+      (testing "SME path: no large-corp schedule overrides; surtaxes fire"
+        (is (= #{"JP-LocalCIT-§9"}
+               (set (-> nat :provenance :provisions-applied)))
+            "national: local CIT only (defense surtax not yet effective; no override for SME)"))
+      (is (= #{"JP-SpecialCorpEnterprise-§7"}
+             (set (-> ent :provenance :provisions-applied)))
+          "enterprise: special corp enterprise surtax only")
+      (is (= #{"JP-Inhabitant-income-levy" "JP-Inhabitant-per-capita"}
+             (set (-> inh :provenance :provisions-applied)))
+          "inhabitant: both income-levy and per-capita"))))
+
+(deftest inhabitant-records-cross-component-dependency
+  (testing "the inhabitants' component records :composed-of [:corporate-income-tax]
+            and :depends-on {:component :national :national-cit-amount ...}
+"
+    (let [facts (compute {:is-sme?         true
+                          :capital-class   :capital-up-to-10m
+                          :headcount-class :small}
+                         {:book-profit 10000000M})
+          inh   (component facts :jp-municipality)]
+      (is (= [:corporate-income-tax] (:composed-of inh)))
+      (is (= :national (-> inh :provenance :depends-on :component)))
+      (is (== 1664000M (-> inh :provenance :depends-on :national-cit-amount))))))
+
+(deftest functional-commodity-is-jpy-on-every-money
+  (let [facts (compute {:is-sme?         true
+                        :capital-class   :capital-up-to-10m
+                        :headcount-class :small}
+                       {:book-profit 10000000M})]
+    (is (every? #(= :JPY (:commodity (:base %)))
+                (:components facts)))
+    (is (every? #(= :JPY (:commodity (:liability %)))
+                (:components facts)))
+    (is (every? #(= :JPY (:commodity (:gross-liability %)))
+                (:components facts)))))
+
+;; ============================================================================
+;; §6. Pro-forma 外形標準課税 — large-corp value-added + capital bases
+;;
+;; Large corporations (外形対象法人 — consumer-driven via
+;; :tax-unit :is-sme? false) get THREE prefectural
+;; components instead of one: the existing income-base + 付加価値割
+;; (1.26 %) + 資本割 (0.525 %). The special corporate enterprise tax
+;; (260 % surtax) continues to ride only on the income-base GROSS
+;;.
+;;
+;; v1 keeps the existing flat 1.18 % income-base schedule; the standard-
+;; prefecture 3-bracket ladder (0.4/0.7/1.0 %) is a v1.1 polish per
+;;.3. So Example A's income-base figure here uses the
+;; flat 1.18 % rate, not the ladder's 1,964,000 figure.
+;; ============================================================================
+
+(defn- prefectural-components
+  "All `:jp-prefecture` components in `facts` (income / value-added /
+   capital for large-corp; just income for SME)."
+  [facts]
+  (filter #(= :jp-prefecture (:authority %)) (:components facts)))
+
+(defn- component-with-provision
+  "Find the prefectural component whose `:provenance :provisions-applied`
+   contains `provision-code`. Used to disambiguate income / value-added
+   / capital when all three share `:authority :jp-prefecture`."
+  [facts provision-code]
+  (->> (prefectural-components facts)
+       (filter (fn [c]
+                 (contains? (set (-> c :provenance :provisions-applied))
+                            provision-code)))
+       first))
+
+(deftest large-corp-three-component-pro-forma-osaka
+  ;; Note 182 §2 — Example A (Osaka standard-rate, ¥500M capital, ¥800M
+  ;; payroll, +¥30M interest, +¥40M rent, ¥200M income). All four
+  ;; value-added inputs supplied by the consumer. Income-base uses the
+  ;; existing flat 1.18 % (v1.1 polish per §5.3 will move to ladder).
+  ;;
+  ;;   収益配分額 = 800M + 30M + 40M = 870M
+  ;;   payroll/SDR = 800M/870M ≈ 91.95 % > 70 % ⇒ deduction fires
+  ;;   雇用安定控除 = max(0, 800M − 870M × 0.70) = 191M
+  ;;   付加価値額   = max(0, 870M + 200M − 191M) = 879M
+  ;;
+  ;;   付加価値割 = 879M × 0.0126 = 11,075,400
+  ;;   資本割     = 500M × 0.00525 = 2,625,000
+  ;;   所得割     = 200M × 0.0118 = 2,360,000 (v1 flat; v1.1 ladder = 1,964,000)
+  ;;   特別法人事業税 = 2.60 × 2,360,000 = 6,136,000 (rides income-base only)
+  (testing "Large corporation (Osaka, capital ¥500M, payroll ¥800M, income ¥200M)
+            gets THREE prefectural components — income + value-added + capital"
+    (let [facts (compute {:is-sme?          false
+                          :capital-class    :capital-up-to-1b
+                          :headcount-class  :small
+                          :paid-in-capital  500000000M
+                          :capital-reserves 0M
+                          :prefecture       :osaka}
+                         {:book-profit                       200000000M
+                          :jp/value-added-payroll            800000000M
+                          :jp/value-added-net-interest        30000000M
+                          :jp/value-added-net-rent            40000000M
+                          :jp/value-added-single-year-pl     200000000M})
+          ent-income    (component-with-provision facts "JP-Enterprise-§72-large")
+          ent-value-add (component-with-provision facts "JP-Enterprise-§72-pro-forma-value-added")
+          ent-capital   (component-with-provision facts "JP-Enterprise-§72-pro-forma-capital")]
+      (testing "three distinct prefectural components fire"
+        (is (= 3 (count (prefectural-components facts)))
+            "Large-corp 外形対象法人 gets income + value-added + capital"))
+      (testing "income-base (flat 1.18 % v1) + 260 % special-corp surtax"
+        (is (== 2360000M (:amount (:gross-liability ent-income)))
+            "0.0118 × ¥200M = ¥2,360,000")
+        (is (== 6136000M (surtax-amount ent-income :special-corp-enterprise-tax))
+            "260 % × 2,360,000 = 6,136,000"))
+      (testing "value-added base ¥879M × 1.26 % = ¥11,075,400"
+        (is (== 879000000M (:amount (:base ent-value-add)))
+            "post-stability-deduction value-added base")
+        (is (== 11075400M (:amount (:gross-liability ent-value-add))))
+        (is (nil? (surtax-amount ent-value-add :special-corp-enterprise-tax))
+            "260 % surtax does NOT ride on value-added base"))
+      (testing "capital base ¥500M × 0.525 % = ¥2,625,000"
+        (is (== 500000000M (:amount (:base ent-capital))))
+        (is (== 2625000M (:amount (:gross-liability ent-capital))))
+        (is (nil? (surtax-amount ent-capital :special-corp-enterprise-tax))
+            "260 % surtax does NOT ride on capital base")))))
+
+(deftest large-corp-value-added-loss-floors-at-zero
+  ;; Note 182 §6 / Example D — loss-year value-added base.
+  ;; Inputs: payroll ¥300M, no interest, rent ¥10M, single-year loss
+  ;; −¥800M, income ¥0, capital ¥200M (Osaka).
+  ;;   収益配分額 = 310M
+  ;;   payroll/SDR = 300/310 ≈ 96.8 % > 70 % ⇒ deduction fires
+  ;;   雇用安定控除 = max(0, 300M − 310M × 0.70) = 83M
+  ;;   付加価値額  = max(0, 310M + (−800M) − 83M) = max(0, −573M) = 0
+  ;; ⇒ value-added 付加価値割 = 0; capital base still levies; income = 0
+  (testing "Loss year — value-added base floors at 0 per §72-14 (3)"
+    (let [facts (compute {:is-sme?          false
+                          :capital-class    :capital-up-to-1b
+                          :headcount-class  :small
+                          :paid-in-capital  200000000M
+                          :capital-reserves 0M
+                          :prefecture       :osaka}
+                         {:book-profit                            0M
+                          :jp/value-added-payroll        300000000M
+                          :jp/value-added-net-interest            0M
+                          :jp/value-added-net-rent        10000000M
+                          :jp/value-added-single-year-pl -800000000M})
+          ent-value-add (component-with-provision facts "JP-Enterprise-§72-pro-forma-value-added")
+          ent-capital   (component-with-provision facts "JP-Enterprise-§72-pro-forma-capital")
+          ent-income    (component-with-provision facts "JP-Enterprise-§72-large")]
+      (is (== 0M       (:amount (:base ent-value-add)))
+          "value-added base floors at 0 per §72-14 (3)")
+      (is (== 0M       (:amount (:gross-liability ent-value-add))))
+      (is (== 1050000M (:amount (:gross-liability ent-capital)))
+          "0.00525 × ¥200M = ¥1,050,000 — capital base unaffected by income/loss")
+      (is (== 0M       (:amount (:gross-liability ent-income)))
+          "0.0118 × ¥0 = 0"))))
+
+(deftest sme-still-one-prefectural-component
+  ;; Gate test — SME with capital ≤ ¥100M must NOT get the pro-forma
+  ;; value-added or capital components, even if the consumer accidentally
+  ;; supplies value-added inputs (the :is-sme? flag governs).
+  (testing "SME — exactly 1 prefectural component, never 3"
+    (let [facts (compute {:is-sme?          true
+                          :capital-class    :capital-up-to-100m
+                          :headcount-class  :small
+                          ;; Even with consumer-supplied value-added
+                          ;; inputs, an SME must not see the pro-forma
+                          ;; components (the :is-sme? gate wins).
+                          :paid-in-capital   50000000M
+                          :capital-reserves  0M
+                          :prefecture        :osaka}
+                         {:book-profit                       10000000M
+                          :jp/value-added-payroll            50000000M
+                          :jp/value-added-net-interest               0M
+                          :jp/value-added-net-rent             5000000M
+                          :jp/value-added-single-year-pl     10000000M})]
+      (is (= 1 (count (prefectural-components facts)))
+          "SME path produces exactly the income-base prefectural component")
+      (is (nil? (component-with-provision facts "JP-Enterprise-§72-pro-forma-value-added")))
+      (is (nil? (component-with-provision facts "JP-Enterprise-§72-pro-forma-capital"))))))
+
+(deftest large-corp-just-over-threshold-gets-three-components
+  ;; Note 182 §7 E.2 — capital ¥100,000,001 (just-over-threshold).
+  ;; The :is-sme? flag is consumer-driven; once false, the three-component
+  ;; shape fires regardless of how close to the threshold the capital is.
+  (testing "Just-over-threshold (capital ¥100,000,001, :is-sme? false) → 3 components"
+    (let [facts (compute {:is-sme?           false
+                          :capital-class     :capital-up-to-1b
+                          :headcount-class   :small
+                          :paid-in-capital   100000001M
+                          :capital-reserves          0M
+                          :prefecture        :osaka}
+                         {:book-profit                       50000000M
+                          :jp/value-added-payroll            10000000M
+                          :jp/value-added-net-interest               0M
+                          :jp/value-added-net-rent             5000000M
+                          :jp/value-added-single-year-pl     50000000M})]
+      (is (= 3 (count (prefectural-components facts))))
+      (testing "capital base reads paid-in-capital + capital-reserves at as-of"
+        (let [ent-capital (component-with-provision facts "JP-Enterprise-§72-pro-forma-capital")]
+          (is (== 100000001M (:amount (:base ent-capital))))
+          ;; 0.00525 × 100000001 = 525000.00525 (BigDecimal exact)
+          (is (== 525000.00525M (:amount (:gross-liability ent-capital)))))))))

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSpy v2005 sp1 U (http://www.xmlspy.com) by Steria Benelux sa/nv (Steria Benelux sa/nv) -->
+<xsd:schema xmlns="urn:oecd:ties:stf:v2.2" xmlns:xsd="http://www.w3.org/2001/XMLSchema" targetNamespace="urn:oecd:ties:stf:v2.2" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xsd:include schemaLocation="stftypes-2.2.xsd"/>
+	<xsd:complexType name="STF_Direct_Type">
+		<xsd:sequence>
+			<xsd:element name="DocSpec" type="DocSpec_Type">
+				<xsd:annotation>
+					<xsd:documentation>General information concerning this  document - document specification</xsd:documentation>
+				</xsd:annotation>
+			</xsd:element>
+			<xsd:element name="RecipientBeneficialOwner" type="Party_Type">
+				<xsd:annotation>
+					<xsd:documentation>This is the Recipient Beneficial Owner party of stfdirect. The recipient beneficial owner is the person (legal person or individual), resident of a contracting State, that is entitled to the income for tax purposes and has the benefit thereof, taking into account the economic, legal, factual, and other relevant circumstances (e.g. the relevant double taxation treaty) under which the income is received.
+					</xsd:documentation>
+				</xsd:annotation>
+			</xsd:element>
+			<xsd:element name="RecipientAgentOrIntermediary" type="Party_Type" minOccurs="0">
+				<xsd:annotation>
+					<xsd:documentation>Recipient Agent or Intermediary party of stfdirect. This is a party that received the payment in question but is known not to be the recipient beneficial owner (e.g., an intermediary such as a financial institution). 							</xsd:documentation>
+				</xsd:annotation>
+			</xsd:element>
+			<xsd:choice>
+				<xsd:element name="PayerAgentOrIntermediary" type="Party_Type">
+					<xsd:annotation>
+						<xsd:documentation>Payer - Agent or Intermediary party of stfdirect. This is a party through which the actual payer has effected the payment.
+						</xsd:documentation>
+					</xsd:annotation>
+				</xsd:element>
+				<xsd:sequence>
+					<xsd:element name="ActualPayer" type="Party_Type">
+						<xsd:annotation>
+							<xsd:documentation>Actual Payer party of stfdirect. This is the source of the payment that is described in this STF-Direct element, as determined by or documented to the sending country.
+							</xsd:documentation>
+						</xsd:annotation>
+					</xsd:element>
+					<xsd:element name="PayerAgentOrIntermediary" type="Party_Type" minOccurs="0">
+						<xsd:annotation>
+							<xsd:documentation>Payer - Agent or Intermediary party of stfdirect. This is a party through which the actual payer has effected the payment.
+							</xsd:documentation>
+						</xsd:annotation>
+					</xsd:element>
+				</xsd:sequence>
+			</xsd:choice>
+			<xsd:element name="PaymentData" type="PaymentData_Type">
+				<xsd:annotation>
+					<xsd:documentation>The information about the payment that this STF-Direct element is to communicate to the receiving country. The term "payment" embodies the concept of the legal obligation to put funds at the disposal of the recipient beneficial owner of the income in the manner required by contract or by custom ("constructive receipt of income"). Therefore the interpretation of this term should not be restricted to the actual physical payment of the income (cf.:comment on Model Tax Convention Art.10 and Art.11)
+					</xsd:documentation>
+				</xsd:annotation>
+			</xsd:element>
+			<xsd:element name="OtherInfo" type="OtherInfo_Type">
+				<xsd:annotation>
+					<xsd:documentation>Any other information regarding this STF-Direct element, e.g. errors when transforming from SMF, Filler info from SMF-Records
+					</xsd:documentation>
+				</xsd:annotation>
+			</xsd:element>
+		</xsd:sequence>
+		<xsd:attribute name="version" fixed="1.0"/>
+	</xsd:complexType>
+	<xsd:element name="STF_OECD">
+		<xsd:complexType>
+			<xsd:sequence>
+				<xsd:element name="MessageSpec" type="MessageSpec_Type"/>
+				<xsd:element name="STF_DIRECT" type="STF_Direct_Type" maxOccurs="unbounded"/>
+			</xsd:sequence>
+			<xsd:attribute name="version" fixed="2.0"/>
+		</xsd:complexType>
+	</xsd:element>
+</xsd:schema>

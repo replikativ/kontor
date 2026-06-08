@@ -1,0 +1,298 @@
+(ns kontor.clearance-test
+  "Tests for ADR-024 (multi-attestation), ADR-025 (document
+   composition / complementos), and ADR-026 (effective-dated tax
+   rates). These three ADRs are kernel-only schema lifts; the
+   per-jurisdiction wiring lives in the l10n modules."
+  (:require [clojure.test :refer [deftest is testing]]
+            [datahike.api :as d]
+            [kontor.core :as core]))
+
+;; ============================================================================
+;; ADR-024 — Multi-attestation
+;; ============================================================================
+
+(defn- minimal-tx!
+  "Plant a balanced 2-line transaction so we have something to attest."
+  [conn]
+  (d/transact conn
+              [{:db/id -1 :kontor.commodity/symbol "INR" :kontor.commodity/name "Indian Rupee"
+                :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "INR"}
+               {:db/id -2 :kontor.account/path "Assets:Receivable"
+                :kontor.account/name "AR" :kontor.account/type :asset :kontor.account/active true}
+               {:db/id -3 :kontor.account/path "Income:Sales"
+                :kontor.account/name "Sales" :kontor.account/type :income :kontor.account/active true}
+               {:db/id -4 :kontor.journal/code "INV-IN" :kontor.journal/name "Sales India"
+                :kontor.journal/type :sale :kontor.journal/active true}
+               {:db/id -10
+                :kontor.transaction/external-id    "INV-2026-IN-0001"
+                :kontor.transaction/journal        -4
+                :kontor.transaction/effective-date #inst "2026-05-11"
+                :kontor.transaction/narration      "Test invoice"}])
+  (:db/id (d/entity (d/db conn) [:kontor.transaction/external-id "INV-2026-IN-0001"])))
+
+(deftest single-attestation-roundtrip
+  (testing "Brazilian NF-e style (one attestation per transaction)"
+    (let [conn (core/create-test-db)
+          tx   (minimal-tx! conn)]
+      (d/transact conn
+                  [{:db/id -100
+                    :kontor.attestation/transaction tx
+                    :kontor.attestation/format      :br/nfe-44
+                    :kontor.attestation/token       "35260112345678000100550010000000011234567897"
+                    :kontor.attestation/state       :issued
+                    :kontor.attestation/issued-at   #inst "2026-05-11T10:00:00Z"}
+                   {:db/id tx :kontor.transaction/attestations -100}])
+      (let [db (d/db conn)
+            tx-entity (d/entity db tx)
+            attestations (:kontor.transaction/attestations tx-entity)]
+        (is (= 1 (count attestations)))
+        (let [a (first attestations)]
+          (is (= :br/nfe-44 (:kontor.attestation/format a)))
+          (is (= :issued    (:kontor.attestation/state a))))))))
+
+(deftest india-irn-plus-ewb-with-depends-on
+  (testing "India: IRN attestation + EWB attestation, EWB depends-on IRN"
+    (let [conn (core/create-test-db)
+          tx   (minimal-tx! conn)
+          ;; First the IRN
+          _ (d/transact conn
+                        [{:db/id -100
+                          :kontor.attestation/transaction tx
+                          :kontor.attestation/format      :in/irn
+                          :kontor.attestation/token       "f8b3a1c9-irn-hash-for-test"
+                          :kontor.attestation/state       :issued
+                          :kontor.attestation/issued-at   #inst "2026-05-11T10:23:00Z"}
+                         {:db/id tx :kontor.transaction/attestations -100}])
+          irn-eid (d/q '[:find ?a .
+                         :in $ ?t
+                         :where
+                         [?a :kontor.attestation/transaction ?t]
+                         [?a :kontor.attestation/format :in/irn]]
+                       (d/db conn) tx)
+          ;; Then the EWB Part A, depends-on the IRN
+          _ (d/transact conn
+                        [{:db/id -200
+                          :kontor.attestation/transaction tx
+                          :kontor.attestation/format      :in/ewb-part-a
+                          :kontor.attestation/token       "1234567890123"
+                          :kontor.attestation/state       :issued
+                          :kontor.attestation/issued-at   #inst "2026-05-11T10:24:00Z"
+                          :kontor.attestation/valid-from  #inst "2026-05-11T10:24:00Z"
+                          ;; 400 km @ 1d/200km → ~48h validity
+                          :kontor.attestation/valid-until #inst "2026-05-13T10:24:00Z"
+                          :kontor.attestation/depends-on  [irn-eid]}
+                         {:db/id tx :kontor.transaction/attestations -200}])]
+      (let [db (d/db conn)
+            tx-entity (d/entity db tx)
+            attestations (:kontor.transaction/attestations tx-entity)
+            by-format (into {} (map (juxt :kontor.attestation/format identity) attestations))]
+        (is (= 2 (count attestations)))
+        (is (contains? by-format :in/irn))
+        (is (contains? by-format :in/ewb-part-a))
+        (let [ewb (by-format :in/ewb-part-a)
+              deps (set (map :db/id (:kontor.attestation/depends-on ewb)))]
+          (is (= #{irn-eid} deps)
+              "EWB Part A depends on the IRN")
+          (is (some? (:kontor.attestation/valid-from ewb)))
+          (is (some? (:kontor.attestation/valid-until ewb))))))))
+
+(deftest attestation-identity-collapses-reissue
+  (testing "Re-issuing an attestation for the same (transaction, format)
+            updates rather than duplicates — composite identity"
+    (let [conn (core/create-test-db)
+          tx   (minimal-tx! conn)
+          _ (d/transact conn
+                        [{:kontor.attestation/transaction tx
+                          :kontor.attestation/format      :in/irn
+                          :kontor.attestation/token       "first-token"
+                          :kontor.attestation/state       :issued}])
+          _ (d/transact conn
+                        [{:kontor.attestation/transaction tx
+                          :kontor.attestation/format      :in/irn
+                          :kontor.attestation/token       "first-token"
+                          :kontor.attestation/state       :revoked
+                          :kontor.attestation/note        "Re-issued"}])
+          db (d/db conn)
+          n (d/q '[:find (count ?a) .
+                   :in $ ?t
+                   :where
+                   [?a :kontor.attestation/transaction ?t]
+                   [?a :kontor.attestation/format :in/irn]]
+                 db tx)
+          a (d/entity db (d/q '[:find ?a .
+                                :in $ ?t
+                                :where
+                                [?a :kontor.attestation/transaction ?t]
+                                [?a :kontor.attestation/format :in/irn]]
+                              db tx))]
+      (is (= 1 n) "Re-issuing must not duplicate")
+      (is (= :revoked (:kontor.attestation/state a))
+          "State on the original entity updates"))))
+
+(deftest attestation-payload-and-hash
+  (testing "Cryptographic-stamp regimes (KSA, Korea, Turkey) require
+            byte-exact payload storage"
+    (let [conn (core/create-test-db)
+          tx   (minimal-tx! conn)
+          payload "<canonical-xml>...</canonical-xml>"
+          hash   "fd34c9...abc123"]   ; Test value; real impl computes SHA-256
+      (d/transact conn
+                  [{:kontor.attestation/transaction tx
+                    :kontor.attestation/format      :sa/zatca-icv
+                    :kontor.attestation/token       "INV-1"
+                    :kontor.attestation/state       :issued
+                    :kontor.attestation/payload     payload
+                    :kontor.attestation/payload-hash hash}])
+      (let [a (d/entity (d/db conn)
+                        (d/q '[:find ?a . :where
+                               [?a :kontor.attestation/format :sa/zatca-icv]]
+                             (d/db conn)))]
+        (is (= payload (:kontor.attestation/payload a)))
+        (is (= hash    (:kontor.attestation/payload-hash a)))))))
+
+;; ============================================================================
+;; ADR-025 — Document composition / complementos
+;; ============================================================================
+
+(deftest mexico-cfdi-with-three-complementos
+  (testing "CFDI envelope + Pagos + Carta Porte + TimbreFiscalDigital
+            — three complementos in defined order"
+    (let [conn (core/create-test-db)
+          tx   (minimal-tx! conn)
+          _ (d/transact conn
+                        [{:db/id -100
+                          :kontor.complemento/transaction tx
+                          :kontor.complemento/namespace   "http://www.sat.gob.mx/Pagos20"
+                          :kontor.complemento/format      :mx/cfdi-pagos-2.0
+                          :kontor.complemento/sequence    100
+                          :kontor.complemento/payload     "<pago20:Pagos>...</pago20:Pagos>"
+                          :kontor.complemento/active      true}
+                         {:db/id -200
+                          :kontor.complemento/transaction tx
+                          :kontor.complemento/namespace   "http://www.sat.gob.mx/CartaPorte31"
+                          :kontor.complemento/format      :mx/cfdi-carta-porte-3.1
+                          :kontor.complemento/sequence    200
+                          :kontor.complemento/payload     "<cartaporte31:CartaPorte>...</cartaporte31:CartaPorte>"
+                          :kontor.complemento/active      true}
+                         {:db/id -300
+                          :kontor.complemento/transaction tx
+                          :kontor.complemento/namespace   "http://www.sat.gob.mx/TimbreFiscalDigital"
+                          :kontor.complemento/format      :mx/cfdi-tfd-1.1
+                          :kontor.complemento/sequence    9999       ; TFD always last
+                          :kontor.complemento/payload     "<tfd:TimbreFiscalDigital ... UUID=\"...\"/>"
+                          :kontor.complemento/active      true}
+                         {:db/id tx
+                          :kontor.transaction/complementos [-100 -200 -300]}])
+          db (d/db conn)
+          comps (->> (d/q '[:find [?c ...]
+                            :in $ ?t
+                            :where [?c :kontor.complemento/transaction ?t]]
+                          db tx)
+                     (map #(d/pull db '[*] %))
+                     (sort-by :kontor.complemento/sequence))]
+      (is (= 3 (count comps)))
+      (is (= [:mx/cfdi-pagos-2.0 :mx/cfdi-carta-porte-3.1 :mx/cfdi-tfd-1.1]
+             (mapv :kontor.complemento/format comps))))))
+
+(deftest complemento-identity-by-namespace
+  (testing "One complemento per (transaction, namespace) — re-emit replaces"
+    (let [conn (core/create-test-db)
+          tx   (minimal-tx! conn)
+          _ (d/transact conn
+                        [{:kontor.complemento/transaction tx
+                          :kontor.complemento/namespace   "http://www.sat.gob.mx/Pagos20"
+                          :kontor.complemento/format      :mx/cfdi-pagos-2.0
+                          :kontor.complemento/sequence    100
+                          :kontor.complemento/payload     "<v1/>"
+                          :kontor.complemento/active      true}])
+          _ (d/transact conn
+                        [{:kontor.complemento/transaction tx
+                          :kontor.complemento/namespace   "http://www.sat.gob.mx/Pagos20"
+                          :kontor.complemento/format      :mx/cfdi-pagos-2.0
+                          :kontor.complemento/sequence    100
+                          :kontor.complemento/payload     "<v2-corrected/>"
+                          :kontor.complemento/active      true}])
+          db (d/db conn)
+          n (d/q '[:find (count ?c) .
+                   :in $ ?t
+                   :where [?c :kontor.complemento/transaction ?t]]
+                 db tx)
+          c (d/entity db (d/q '[:find ?c .
+                                :in $ ?t
+                                :where [?c :kontor.complemento/transaction ?t]]
+                              db tx))]
+      (is (= 1 n) "Composite identity must collapse")
+      (is (= "<v2-corrected/>" (:kontor.complemento/payload c))))))
+
+;; ============================================================================
+;; ADR-026 — Effective-dated tax rates
+;; ============================================================================
+
+(deftest tax-effective-window-attrs-present
+  (testing ":kontor.tax/effective-from / :kontor.tax/effective-until are usable attrs"
+    (let [conn (core/create-test-db)]
+      (d/transact conn
+                  [{:db/id -1 :kontor.tax/name "IGST 18% (pre-GST-2.0)"
+                    :kontor.tax/country-code "IN"
+                    :kontor.tax/type-tax-use :sale
+                    :kontor.tax/amount-type :percent
+                    :kontor.tax/amount 18.00M
+                    :kontor.tax/effective-until #inst "2025-09-22T00:00:00+05:30"
+                    :kontor.tax/active true}
+                   {:db/id -2 :kontor.tax/name "IGST 18% (post-GST-2.0)"
+                    :kontor.tax/country-code "IN"
+                    :kontor.tax/type-tax-use :sale
+                    :kontor.tax/amount-type :percent
+                    :kontor.tax/amount 18.00M
+                    :kontor.tax/effective-from #inst "2025-09-22T00:00:00+05:30"
+                    :kontor.tax/active true}])
+      (let [db (d/db conn)
+            ;; Pre-cutover: 2025-09-01 falls in the OLD record's window.
+            pre  (d/q '[:find [?n ...]
+                        :in $ ?d
+                        :where
+                        [?t :kontor.tax/name ?n]
+                        [?t :kontor.tax/country-code "IN"]
+                        ;; Effective-until > D (or absent)
+                        [(get-else $ ?t :kontor.tax/effective-from #inst "1970-01-01") ?ef]
+                        [(<= ?ef ?d)]
+                        [(get-else $ ?t :kontor.tax/effective-until #inst "9999-12-31") ?eu]
+                        [(< ?d ?eu)]]
+                      db #inst "2025-09-01")
+            ;; Post-cutover: 2026-01-01 falls in the NEW record's window.
+            post (d/q '[:find [?n ...]
+                        :in $ ?d
+                        :where
+                        [?t :kontor.tax/name ?n]
+                        [?t :kontor.tax/country-code "IN"]
+                        [(get-else $ ?t :kontor.tax/effective-from #inst "1970-01-01") ?ef]
+                        [(<= ?ef ?d)]
+                        [(get-else $ ?t :kontor.tax/effective-until #inst "9999-12-31") ?eu]
+                        [(< ?d ?eu)]]
+                      db #inst "2026-01-01")]
+        (is (= ["IGST 18% (pre-GST-2.0)"]  pre)
+            "2025-09-01 must resolve to the pre-GST-2.0 rate")
+        (is (= ["IGST 18% (post-GST-2.0)"] post)
+            "2026-01-01 must resolve to the post-GST-2.0 rate")))))
+
+(deftest tax-without-window-is-always-effective
+  (testing "Legacy taxes without effective-from/until match any date"
+    (let [conn (core/create-test-db)]
+      (d/transact conn
+                  [{:kontor.tax/name "VAT 19% (always)"
+                    :kontor.tax/country-code "DE"
+                    :kontor.tax/type-tax-use :sale
+                    :kontor.tax/amount-type :percent
+                    :kontor.tax/amount 19.00M
+                    :kontor.tax/active true}])
+      (let [db (d/db conn)
+            hits (d/q '[:find [?n ...]
+                        :in $ ?d
+                        :where
+                        [?t :kontor.tax/name ?n]
+                        [(get-else $ ?t :kontor.tax/effective-from #inst "1970-01-01") ?ef]
+                        [(<= ?ef ?d)]
+                        [(get-else $ ?t :kontor.tax/effective-until #inst "9999-12-31") ?eu]
+                        [(< ?d ?eu)]]
+                      db #inst "2024-06-15")]
+        (is (= ["VAT 19% (always)"] hits))))))

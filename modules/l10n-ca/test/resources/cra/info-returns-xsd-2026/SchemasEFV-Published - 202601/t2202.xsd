@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<!--
+Description	T2202 Return Complex and Element Types
+Version#:	1.26 (version #.yy)
+-->
+
+<xsd:schema xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+	xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+	xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+	<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/>
+	<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/>
+
+	<xsd:complexType name="T2202SlipType">
+		<xsd:sequence>
+			<xsd:element ref="SlipReportTypeCode"/>
+			<xsd:element name="FilerAccountNumber" type="BNRZType"/>
+			<xsd:element name="PostSecondaryEducationalSchoolProgramName" type="char100Type"/>
+
+			<!-- School type code:
+				1. University
+				2. College
+				3. Other education institution providing courses at a post-secondary school level
+				4. Certified by the Minister of Employment and Social Development Canada
+				5. Flying school or club
+			-->
+			<xsd:element name="PostSecondaryEducationalSchoolTypeCode" type="OneToFiveCodeType"/>
+
+			<!-- Flying school or club course type code. Must have a value if School type code is 5,
+			     should be blank if school type code is 1-4. Valid values:
+				1. Private pilot's license
+				2. Commercial pilot's licence
+				3. Civil flying instructor rating
+				4. Helicopter category rating
+				5. Instrument rating
+				6. Other
+			-->
+			<xsd:element name="FlyingSchoolClubCourseTypeCode" type="OneToSixCodeType" minOccurs="0"/>
+			<xsd:element name="StudentName" type="IndividualNameType"/>
+			<xsd:element name="SocialInsuranceNumber" type="ccms:SINType"/>
+			<xsd:element name="StudentNumber" type="Length1to20TextType" minOccurs="0"/>
+			<xsd:element name="StudentAddress" type="T2202RequiredLine1AddressType"/>
+			<xsd:element name="SchoolSession" type="SchoolSessionType" minOccurs="1" maxOccurs="4"/>
+			<xsd:element name="TotalEligibleTuitionFeeAmount" type="Decimal13AmountType" minOccurs="0"/>
+			<xsd:element name="TotalPartTimeStudentMonthCount" type="ZeroToTwelveCountType"/>
+			<xsd:element name="TotalFullTimeStudentMonthCount" type="ZeroToTwelveCountType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:complexType name="SchoolSessionType">
+		<xsd:all>
+			<xsd:element name="StartYearMonth" type="YYMMType"/>
+			<xsd:element name="EndYearMonth" type="YYMMType"/>
+			<xsd:element name="EligibleTuitionFeeAmount" type="positiveDecimal11Type" minOccurs="0"/>
+			<xsd:element name="PartTimeStudentMonthCount" type="ZeroToTwelveCountType"/>
+			<xsd:element name="FullTimeStudentMonthCount" type="ZeroToTwelveCountType"/>
+		</xsd:all>
+	</xsd:complexType>
+
+	<xsd:complexType name="T2202SummaryType">
+		<xsd:all>
+			<xsd:element name="FilerAccountNumber" type="BNRZType"/>
+			<xsd:element ref="SummaryReportTypeCode"/>
+			<xsd:element name="FilerAmendmentNote" type="char2000Type" minOccurs="0"/>
+			<xsd:element ref="TaxationYear"/>
+			<xsd:element ref="TotalSlipCount"/>
+			<xsd:element name="PostSecondaryEducationalInstitutionName" type="T2202ThreeLinedLength100NameType"/>
+			<xsd:element name="PostSecondaryEducationalInstitutionMailingAddress" type="T2202RequiredLine1AddressType"/>
+			<xsd:element name="ContactInformation" type="ContactType3" minOccurs="0"/>
+			<xsd:element name="TotalEligibleTuitionFeeAmount" type="positiveDecimal15AmountType"/>
+		</xsd:all>
+	</xsd:complexType>
+</xsd:schema>

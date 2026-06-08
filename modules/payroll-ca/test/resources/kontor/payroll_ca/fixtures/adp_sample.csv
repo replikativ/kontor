@@ -1,0 +1,11 @@
+client-code,gl-account,description,fiscal-date,amount,debit-credit-indicator,employee-external-id,pay-element-code,cost-center,run-id
+ACME01,5400,Regular wages,2026-05-15,5000.00,D,E-jane,REG,HQ,RUN001
+ACME01,2510,Federal income tax,2026-05-15,850.00,C,E-jane,FED-TAX,HQ,RUN001
+ACME01,2520,CPP employee,2026-05-15,260.30,C,E-jane,CPP-EE,HQ,RUN001
+ACME01,2530,EI employee,2026-05-15,81.50,C,E-jane,EI-EE,HQ,RUN001
+ACME01,5410,CPP employer expense,2026-05-15,260.30,D,E-jane,CPP-ER,HQ,RUN001
+ACME01,2520,CPP employer payable,2026-05-15,260.30,C,E-jane,CPP-ER-PAY,HQ,RUN001
+ACME01,5411,EI employer expense,2026-05-15,114.10,D,E-jane,EI-ER,HQ,RUN001
+ACME01,2530,EI employer payable,2026-05-15,114.10,C,E-jane,EI-ER-PAY,HQ,RUN001
+ACME01,2550,Net wages payable,2026-05-15,3808.20,C,E-jane,NET-WAGES,HQ,RUN001
+ACME01,,Balance check,2026-05-15,0.00,D,,,HQ,RUN001

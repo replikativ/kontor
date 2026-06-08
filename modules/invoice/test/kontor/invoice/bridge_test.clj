@@ -1,0 +1,532 @@
+(ns kontor.invoice.bridge-test
+  "Tests for kontor-invoice — ADR-036.
+
+   Schema install, status-transition seeds, three-tier GL resolution,
+   order→invoice bridge (full, partial-invoice via :order-item-
+   billing), AcctgTrans posting (sum-to-zero balance, partner
+   attribution), post-then-cancel."
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [datahike.api :as d]
+            [kontor.core :as core]
+            [kontor.invoice.bridge :as inv]
+            [kontor.invoice.posting :as posting]
+            [kontor.invoice.schema :as inv-schema]
+            [kontor.partner.schema :as partner-schema]
+            [kontor.sales.schema :as sales-schema]
+            [kontor.workflow.status-machine :as sm]))
+
+(def ^:dynamic *conn* nil)
+
+(defn- bootstrap [f]
+  (binding [*conn* (core/create-test-db)]
+    (partner-schema/install! *conn*)
+    (sales-schema/install! *conn*)
+    (inv-schema/install! *conn*)
+    (f)))
+
+(use-fixtures :each bootstrap)
+
+;; ============================================================================
+;; Setup helpers
+;; ============================================================================
+
+(defn- seed-commodity! []
+  (d/transact *conn* [{:kontor.commodity/symbol "EUR"
+                       :kontor.commodity/name "Euro"
+                       :kontor.commodity/precision 2
+                       :kontor.commodity/iso-4217 "EUR"}]))
+
+(defn- seed-partners! []
+  (d/transact *conn*
+              [{:kontor.partner/external-id "SELLER"
+                :kontor.partner/type :org
+                :kontor.partner/status :enabled
+                :kontor.partner/name "Seller Co"}
+               {:kontor.partner/external-id "BUYER"
+                :kontor.partner/type :person
+                :kontor.partner/status :enabled
+                :kontor.partner/name "Customer Person"}]))
+
+(defn- seed-accounts!
+  "Seed minimal accounts for sales-revenue, sales-tax-payable, AR."
+  []
+  (d/transact *conn*
+              [{:kontor.account/code "4000"
+                :kontor.account/name "Sales Revenue"
+                :kontor.account/path "4000"
+                :kontor.account/type :revenue}
+               {:kontor.account/code "1500"
+                :kontor.account/name "Accounts Receivable"
+                :kontor.account/path "1500"
+                :kontor.account/type :asset}
+               {:kontor.account/code "3800"
+                :kontor.account/name "VAT Payable 19%"
+                :kontor.account/path "3800"
+                :kontor.account/type :liability}]))
+
+(defn- seed-gl-defaults!
+  "Seed tenant-wide :gl-account-default rows."
+  []
+  (d/transact *conn*
+              [{:kontor.gl-account-default/account-type :sales-revenue
+                :kontor.gl-account-default/account [:kontor.account/path "4000"]}
+               {:kontor.gl-account-default/account-type :ar
+                :kontor.gl-account-default/account [:kontor.account/path "1500"]}
+               {:kontor.gl-account-default/account-type :sales-tax-payable
+                :kontor.gl-account-default/account [:kontor.account/path "3800"]}]))
+
+(defn- seed-journal!
+  "Seed a sales journal for posting."
+  []
+  (d/transact *conn*
+              [{:kontor.journal/code "SALES"
+                :kontor.journal/name "Sales Journal"
+                :kontor.journal/type :sale}]))
+
+(defn- minimal-order! []
+  (seed-commodity!)
+  (seed-partners!)
+  (d/transact *conn*
+              [{:kontor.order/external-id "ORD-1"
+                :kontor.order/type :sales
+                :kontor.order/status :order.status/created
+                :kontor.order/order-date #inst "2026-05-01"
+                :kontor.order/entry-date #inst "2026-05-01"
+                :kontor.order/currency [:kontor.commodity/symbol "EUR"]
+                :kontor.order/bill-from-partner [:kontor.partner/external-id "SELLER"]
+                :kontor.order/bill-to-partner [:kontor.partner/external-id "BUYER"]}
+               {:kontor.sales.order-item/order [:kontor.order/external-id "ORD-1"]
+                :kontor.sales.order-item/seq-id "00001"
+                :kontor.sales.order-item/type :product
+                :kontor.sales.order-item/product-id "WIDGET-A"
+                :kontor.sales.order-item/description "Widget A"
+                :kontor.sales.order-item/quantity 10M
+                :kontor.sales.order-item/unit-price 25M
+                :kontor.sales.order-item/cancel-quantity 0M
+                :kontor.sales.order-item/status :order-item.status/approved}])
+  (d/q '[:find ?e .
+         :in $ ?xid
+         :where [?e :kontor.order/external-id ?xid]]
+       (d/db *conn*) "ORD-1"))
+
+;; ============================================================================
+;; Schema + seeds
+;; ============================================================================
+
+(deftest schema-attrs-and-seeds-present
+  (let [db (d/db *conn*)
+        idents (set (d/q '[:find [?i ...] :where [_ :db/ident ?i]] db))]
+    (doseq [a [:kontor.invoice/type :kontor.invoice/order :kontor.invoice/entity
+               :kontor.invoice-line/parent-line :kontor.invoice-line/order-item
+               :kontor.invoice-line/gl-account-type :kontor.invoice-line/tax-auth-party
+               :kontor.invoice-line/amount
+               :kontor.order-item-billing/order-item :kontor.order-item-billing/invoice-line
+               :kontor.order-item-billing/quantity :kontor.order-item-billing/identity
+               :kontor.gl-account-default/account-type :kontor.gl-account-default/entity
+               :kontor.gl-account-default/account :kontor.gl-account-default/identity]]
+      (is (contains? idents a) (str "missing: " a)))
+    (testing "invoice status transitions are seeded"
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/status
+                                       :draft :ready)))
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/status
+                                       :ready :sent)))
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/status
+                                       :draft :sent)))
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/status
+                                       :sent :paid))))))
+
+;; ============================================================================
+;; Three-tier GL resolution
+;; ============================================================================
+
+(deftest gl-resolution-tier-1-explicit-override
+  (seed-accounts!)
+  (let [db (d/db *conn*)
+        override-eid (d/q '[:find ?a . :where [?a :kontor.account/path "4000"]] db)]
+    (is (= override-eid
+           (posting/resolve-gl-account
+            db {:override-account override-eid
+                :account-type :sales-revenue
+                :entity nil})))))
+
+(deftest gl-resolution-tier-2-tenant-default
+  (seed-accounts!)
+  (seed-gl-defaults!)
+  (let [db (d/db *conn*)
+        revenue-eid (d/q '[:find ?a . :where [?a :kontor.account/path "4000"]] db)]
+    (is (= revenue-eid
+           (posting/resolve-gl-account
+            db {:account-type :sales-revenue
+                :entity nil})))))
+
+(deftest gl-resolution-throws-on-missing
+  (seed-accounts!)
+  ;; No defaults seeded — should throw
+  (let [db (d/db *conn*)]
+    (is (thrown? Exception
+                 (posting/resolve-gl-account
+                  db {:account-type :sales-revenue
+                      :entity nil})))))
+
+(deftest gl-resolution-tier-1-trumps-tier-2
+  (seed-accounts!)
+  (seed-gl-defaults!)
+  (let [db (d/db *conn*)
+        ar-eid (d/q '[:find ?a . :where [?a :kontor.account/path "1500"]] db)]
+    ;; tier 1 wins even though tier 2 would point at the revenue acct
+    (is (= ar-eid
+           (posting/resolve-gl-account
+            db {:override-account ar-eid
+                :account-type :sales-revenue
+                :entity nil})))))
+
+;; ============================================================================
+;; Order → invoice bridge
+;; ============================================================================
+
+(deftest make-invoice-from-order-creates-line-and-billing
+  (let [order-eid (minimal-order!)]
+    (inv/make-invoice-from-order! *conn* "ORD-1"
+                                  {:external-id "INV-2026-0001"
+                                   :issue-date #inst "2026-05-05"})
+    (let [db (d/db *conn*)
+          inv-eid (inv/by-external-id db "INV-2026-0001")
+          invoice (inv/pull-invoice db inv-eid)
+          lines (inv/lines-of db inv-eid)]
+      (testing "invoice was created with order back-ref"
+        (is (some? inv-eid))
+        (is (= :sales (:kontor.invoice/type invoice)))
+        (is (= "ORD-1" (-> invoice :kontor.invoice/order :kontor.order/external-id)))
+        (is (= :draft (:kontor.invoice/status invoice))))
+      (testing "one line per order-item, with order-item ref + amount"
+        (is (= 1 (count lines)))
+        (let [line (first lines)
+              order-item-eid (d/q '[:find ?i . :in $ ?o
+                                    :where [?i :kontor.sales.order-item/order ?o]
+                                            [?i :kontor.sales.order-item/seq-id "00001"]]
+                                  db order-eid)]
+          (is (= order-item-eid (-> line :kontor.invoice-line/order-item :db/id)))
+          (is (= 10M (:kontor.invoice-line/quantity line)))
+          (is (= 25M (:kontor.invoice-line/unit-price line)))
+          (is (= 250M (:kontor.invoice-line/amount line)))
+          (is (= :sales-revenue (:kontor.invoice-line/gl-account-type line)))))
+      (testing ":order-item-billing junction was created"
+        (let [order-item-eid (d/q '[:find ?i . :in $ ?o
+                                    :where [?i :kontor.sales.order-item/order ?o]]
+                                  db order-eid)]
+          (is (= 10M (inv/partial-billed-quantity db order-item-eid))))))))
+
+(deftest partial-invoice-subtracts-already-billed-quantity
+  (let [order-eid (minimal-order!)
+        item-eid (d/q '[:find ?i . :in $ ?o
+                        :where [?i :kontor.sales.order-item/order ?o]]
+                      (d/db *conn*) order-eid)]
+    ;; Make a first invoice for ALL 10 first; then prepare a second
+    ;; invoice that should bill 0 (everything already billed).
+    (inv/make-invoice-from-order! *conn* "ORD-1"
+                                  {:external-id "INV-2026-0001"})
+    (is (= 10M (inv/partial-billed-quantity (d/db *conn*) item-eid))
+        "first invoice billed 10 units")
+    ;; Second invoice — bill-qty should be 0
+    (inv/make-invoice-from-order! *conn* "ORD-1"
+                                  {:external-id "INV-2026-0002"})
+    (let [lines-2 (inv/lines-of (d/db *conn*) "INV-2026-0002")]
+      (is (= 1 (count lines-2)))
+      (is (= 0M (-> lines-2 first :kontor.invoice-line/quantity))
+          "second invoice has zero remaining quantity")
+      (is (= 0M (-> lines-2 first :kontor.invoice-line/amount))))))
+
+(deftest adjustment-lines-include-tax-discount-shipping
+  (let [order-eid (minimal-order!)
+        item-eid (d/q '[:find ?i . :in $ ?o
+                        :where [?i :kontor.sales.order-item/order ?o]]
+                      (d/db *conn*) order-eid)]
+    (d/transact *conn*
+                [;; Header-level discount
+                 {:kontor.order-adjustment/order order-eid
+                  :kontor.order-adjustment/scope order-eid
+                  :kontor.order-adjustment/type :discount
+                  :kontor.order-adjustment/amount -10M}
+                 ;; Line-level tax
+                 {:kontor.order-adjustment/order order-eid
+                  :kontor.order-adjustment/scope item-eid
+                  :kontor.order-adjustment/type :tax
+                  :kontor.order-adjustment/amount 47.50M
+                  :kontor.order-adjustment/tax-auth-geo-id "DE"}])
+    (inv/make-invoice-from-order! *conn* "ORD-1"
+                                  {:external-id "INV-ADJ-1"})
+    (let [db (d/db *conn*)
+          lines (inv/lines-of db "INV-ADJ-1")
+          types (set (map :kontor.invoice-line/gl-account-type lines))]
+      (is (= 3 (count lines)) "1 product + 1 discount + 1 tax line")
+      (is (= #{:sales-revenue :discount-given :sales-tax-payable} types)))))
+
+;; ============================================================================
+;; Posting bridge
+;; ============================================================================
+
+(deftest post-to-ledger-creates-balanced-transaction
+  (let [_order-eid (minimal-order!)]
+    (seed-accounts!)
+    (seed-gl-defaults!)
+    (seed-journal!)
+    (inv/make-invoice-from-order! *conn* "ORD-1"
+                                  {:external-id "INV-POST-1"})
+    (let [{:keys [transaction-eid invoice-eid]}
+          (inv/post-to-ledger! *conn* "INV-POST-1"
+                               {:posted-at #inst "2026-05-10"
+                                :journal-ref [:kontor.journal/code "SALES"]})
+          db (d/db *conn*)
+          postings (->> (d/q '[:find [?p ...]
+                               :in $ ?tx
+                               :where [?p :kontor.posting/transaction ?tx]]
+                             db transaction-eid)
+                        (map #(d/pull db '[*] %)))
+          sum (reduce (fn [acc {:kontor.posting/keys [amount]}]
+                        (.add ^java.math.BigDecimal acc
+                              ^java.math.BigDecimal amount))
+                      0M postings)]
+      (testing "invoice transitioned to :sent + has posted transaction"
+        (let [inv (inv/pull-invoice db invoice-eid)]
+          (is (= :sent (:kontor.invoice/status inv)))
+          ;; :kontor.invoice/transaction presence is the 'posted to GL' sentinel
+          ;; (the posted-at timestamp lives in :status-history + :tx/valid-from)
+          (is (some? (:kontor.invoice/transaction inv)))))
+      (testing "postings sum to zero (sum-to-zero invariant)"
+        (is (= 0 (.compareTo ^java.math.BigDecimal sum 0M))))
+      (testing "one product line (credit revenue) + one AR (debit)"
+        (is (= 2 (count postings)))))))
+
+(deftest post-to-ledger-rejects-already-posted-invoice
+  (let [_ (minimal-order!)
+        _ (seed-accounts!)
+        _ (seed-gl-defaults!)
+        _ (seed-journal!)
+        _ (inv/make-invoice-from-order! *conn* "ORD-1"
+                                        {:external-id "INV-POST-2"})]
+    (inv/post-to-ledger! *conn* "INV-POST-2" {:journal-ref [:kontor.journal/code "SALES"]})
+    (testing "posting an already-:sent invoice throws"
+      (is (thrown? Exception
+                   (inv/post-to-ledger! *conn* "INV-POST-2" {:journal-ref [:kontor.journal/code "SALES"]}))))))
+
+(deftest post-then-mark-paid
+  (let [_ (minimal-order!)
+        _ (seed-accounts!)
+        _ (seed-gl-defaults!)
+        _ (seed-journal!)
+        _ (inv/make-invoice-from-order! *conn* "ORD-1"
+                                        {:external-id "INV-PAID-1"})]
+    (inv/post-to-ledger! *conn* "INV-PAID-1" {:journal-ref [:kontor.journal/code "SALES"]})
+    (inv/mark-paid! *conn* "INV-PAID-1" {:reason :reconciliation-match
+                                          :reason-note "bank reconciled"})
+    (let [db (d/db *conn*)
+          inv (inv/pull-invoice db "INV-PAID-1")]
+      (is (= :paid (:kontor.invoice/status inv))))))
+
+;; ============================================================================
+;; P0 regression tests
+;; ============================================================================
+
+(deftest negative-bill-qty-after-cancel-throws
+  ;; Order 10, first invoice for 7. Then cancel 5 (more than the 3
+  ;; remaining-unbilled). Second-invoice attempt must throw rather
+  ;; than emit a negative-quantity line.
+  (let [order-eid (minimal-order!)
+        item-eid (d/q '[:find ?i . :in $ ?o
+                        :where [?i :kontor.sales.order-item/order ?o]]
+                      (d/db *conn*) order-eid)]
+    ;; Manually create a billing junction for 7 (simulating a
+    ;; first partial invoice) — bypasses make-invoice-from-order!
+    ;; to keep the setup focused.
+    (d/transact *conn*
+                [{:kontor.invoice/external-id "INV-PRE-1"
+                  :kontor.invoice/status :sent
+                  :kontor.invoice/issue-date #inst "2026-04-15"
+                  :kontor.invoice/type :sales
+                  :db/id "inv-pre"}
+                 {:kontor.invoice-line/invoice "inv-pre"
+                  :kontor.invoice-line/sequence 1
+                  :kontor.invoice-line/order-item item-eid
+                  :kontor.invoice-line/quantity 7M
+                  :kontor.invoice-line/unit-price 25M
+                  :kontor.invoice-line/amount 175M
+                  :db/id "line-pre"}
+                 {:kontor.order-item-billing/order-item item-eid
+                  :kontor.order-item-billing/invoice-line "line-pre"
+                  :kontor.order-item-billing/quantity 7M}])
+    ;; Bump cancel-quantity past the remaining 3
+    (d/transact *conn*
+                [{:db/id item-eid
+                  :kontor.sales.order-item/cancel-quantity 5M}])
+    (testing "negative bill-qty raises :kontor.invoice/over-billed-or-over-cancelled"
+      (is (thrown-with-msg? Exception #"negative quantity"
+                            (inv/make-invoice-from-order! *conn* "ORD-1"
+                                                          {:external-id "INV-NEG-1"}))))))
+
+(deftest post-to-locked-period-rejected
+  ;; Per ADR-014: posting into a locked period is "the cardinal sin."
+  ;; The bridge must reject.
+  (let [_ (minimal-order!)
+        _ (seed-accounts!)
+        _ (seed-gl-defaults!)
+        _ (seed-journal!)]
+    ;; Seed a locked period covering 2026-04-01 → 2026-05-01 (range is [start, end))
+    (d/transact *conn*
+                [{:kontor.period/name "2026-04"
+                  :kontor.period/start #inst "2026-04-01"
+                  :kontor.period/end #inst "2026-05-01"
+                  :kontor.period/locked-at #inst "2026-05-05"
+                  :kontor.period/tag :normal}])
+    (inv/make-invoice-from-order! *conn* "ORD-1"
+                                  {:external-id "INV-LOCKED-1"})
+    (testing "posting with :posted-at inside a locked period throws"
+      (is (thrown? Exception
+                   (inv/post-to-ledger! *conn* "INV-LOCKED-1"
+                                        {:posted-at #inst "2026-04-15"
+                                         :journal-ref [:kontor.journal/code "SALES"]}))))
+    (testing "posting after the locked period succeeds"
+      (let [{:keys [transaction-eid]}
+            (inv/post-to-ledger! *conn* "INV-LOCKED-1"
+                                 {:posted-at #inst "2026-05-15"
+                                  :journal-ref [:kontor.journal/code "SALES"]})]
+        (is (some? transaction-eid))))))
+
+(deftest cancel-draft-invoice
+  (let [_ (minimal-order!)
+        _ (inv/make-invoice-from-order! *conn* "ORD-1"
+                                        {:external-id "INV-CANCEL-1"})]
+    (inv/cancel! *conn* "INV-CANCEL-1" {:reason :customer-request
+                                         :reason-note "customer abandoned"})
+    (is (= :cancelled
+           (:kontor.invoice/status (inv/pull-invoice (d/db *conn*) "INV-CANCEL-1"))))))
+
+;; ============================================================================
+;; Totals
+;; ============================================================================
+
+(deftest total-of-sums-line-amounts
+  (minimal-order!)
+  (inv/make-invoice-from-order! *conn* "ORD-1" {:external-id "INV-T-1"})
+  (is (= 0 (.compareTo ^java.math.BigDecimal
+                       (inv/total-of (d/db *conn*) "INV-T-1")
+                       250M))
+      "10 × 25 = 250"))
+
+;; ============================================================================
+;; ADR-040 — Jurisdiction primitives
+;; ============================================================================
+
+(deftest tax-inclusive-flag-on-invoice
+  (let [_ (minimal-order!)]
+    (inv/make-invoice-from-order! *conn* "ORD-1"
+                                  {:external-id "INV-TI-1"})
+    ;; Default is false (kernel attr unset; bridge doesn't set it)
+    (testing "default :tax-inclusive? is nil/false"
+      (let [inv (inv/pull-invoice (d/db *conn*) "INV-TI-1")]
+        (is (or (nil? (:kontor.invoice/tax-inclusive? inv))
+                (false? (:kontor.invoice/tax-inclusive? inv))))))))
+
+(deftest invoice-line-recognition-deferred-routes-to-deferred-revenue
+  (let [_order-eid (minimal-order!)]
+    (seed-accounts!)
+    (seed-journal!)
+    ;; Add a deferred-revenue account + seed defaults
+    (d/transact *conn*
+                [{:kontor.account/code "2900"
+                  :kontor.account/name "Deferred Revenue"
+                  :kontor.account/path "2900"
+                  :kontor.account/type :liability}
+                 {:kontor.gl-account-default/account-type :sales-revenue
+                  :kontor.gl-account-default/account [:kontor.account/path "4000"]}
+                 {:kontor.gl-account-default/account-type :sales-revenue-deferred
+                  :kontor.gl-account-default/account [:kontor.account/path "2900"]}
+                 {:kontor.gl-account-default/account-type :ar
+                  :kontor.gl-account-default/account [:kontor.account/path "1500"]}])
+    (inv/make-invoice-from-order! *conn* "ORD-1"
+                                  {:external-id "INV-REC-1"})
+    ;; Mark the invoice line as :deferred (post-bridge)
+    (let [line-eid (d/q '[:find ?l . :in $ ?xid ?seq
+                          :where
+                          [?inv :kontor.invoice/external-id ?xid]
+                          [?l :kontor.invoice-line/invoice ?inv]
+                          [?l :kontor.invoice-line/sequence ?seq]]
+                        (d/db *conn*) "INV-REC-1" 1)]
+      (d/transact *conn*
+                  [{:db/id line-eid
+                    :kontor.invoice-line/gl-account-type :sales-revenue-deferred
+                    :kontor.invoice-line/recognition :deferred}])
+      ;; Post and verify the credit went to the deferred-revenue account
+      (inv/post-to-ledger! *conn* "INV-REC-1"
+                           {:journal-ref [:kontor.journal/code "SALES"]
+                            :posted-at #inst "2026-05-15"})
+      (let [db (d/db *conn*)
+            inv (inv/pull-invoice db "INV-REC-1")
+            tx-eid (get-in inv [:kontor.invoice/transaction :db/id])
+            postings (->> (d/q '[:find [?p ...]
+                                 :in $ ?tx
+                                 :where [?p :kontor.posting/transaction ?tx]]
+                               db tx-eid)
+                          (map #(d/pull db '[* {:kontor.posting/account [:kontor.account/path]}] %)))
+            credit-line (->> postings
+                             (filter #(neg? (.signum ^java.math.BigDecimal
+                                                     (:kontor.posting/amount %))))
+                             first)]
+        (testing "deferred-revenue line credits the liability account"
+          (is (= "2900" (-> credit-line :kontor.posting/account :kontor.account/path))))))))
+
+(deftest invoice-clearance-transitions-seeded
+  (let [db (d/db *conn*)]
+    (testing ":draft → :pending-attestation is legal"
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/status
+                                       :draft :pending-attestation))))
+    (testing ":pending-attestation → :sent is legal"
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/status
+                                       :pending-attestation :sent))))
+    (testing ":pending-attestation → :rejected is legal"
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/status
+                                       :pending-attestation :rejected))))
+    (testing ":rejected → :draft (resubmit) is legal"
+      (is (true? (sm/legal-transition? db :invoice :kontor.invoice/status
+                                       :rejected :draft))))))
+
+;; ============================================================================
+;; ADR-068 — `*-tx-data` builder shape
+;; ============================================================================
+
+(deftest make-ready-mark-paid-cancel-tx-data-are-pure-vectors
+  ;; The new ADR-068 builders must return tx-data vectors without
+  ;; mutating the DB; a follow-up transact then applies them. This
+  ;; lets consumers compose the transitions into `kontor.workflow.process`
+  ;; step lists.
+  (let [_ (minimal-order!)
+        _ (inv/make-invoice-from-order! *conn* "ORD-1"
+                                        {:external-id "INV-TXD-1"})
+        db-before (d/db *conn*)
+        tx-before (:max-tx db-before)
+        inv-eid (inv/by-external-id db-before "INV-TXD-1")
+        ready-tx (inv/make-ready-tx-data db-before inv-eid nil)
+        cancel-tx (inv/cancel-tx-data db-before inv-eid nil)]
+    (testing "ready + cancel builders return non-empty vectors"
+      (is (vector? ready-tx))
+      (is (vector? cancel-tx))
+      (is (seq ready-tx))
+      (is (seq cancel-tx)))
+    (testing "builders are pure (no side effects on conn)"
+      (is (= tx-before (:max-tx (d/db *conn*)))))
+    (testing "transacting the make-ready-tx-data flips :kontor.invoice/status to :ready"
+      (d/transact *conn* ready-tx)
+      (is (= :ready (:kontor.invoice/status (inv/pull-invoice (d/db *conn*)
+                                                       "INV-TXD-1")))))
+    (testing "mark-paid-tx-data composes once the invoice reaches :sent"
+      ;; :ready → :sent → :paid path; the builder validates against
+      ;; the supplied db, so we read after the prior transact.
+      (sm/record-status-change! *conn* {:entity inv-eid
+                                        :entity-type :invoice
+                                        :facet :kontor.invoice/status
+                                        :to :sent})
+      (let [paid-tx (inv/mark-paid-tx-data (d/db *conn*) inv-eid nil)]
+        (is (vector? paid-tx))
+        (is (seq paid-tx))
+        (d/transact *conn* paid-tx)
+        (is (= :paid (:kontor.invoice/status (inv/pull-invoice (d/db *conn*)
+                                                        "INV-TXD-1"))))))))

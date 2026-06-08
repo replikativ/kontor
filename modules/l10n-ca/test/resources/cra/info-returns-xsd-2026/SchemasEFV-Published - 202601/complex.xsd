@@ -1,0 +1,1125 @@
+<?xml version="1.0"?>
+
+<!--
+Description: 	COMPLEX TYPE DEFINITIONS
+Version#:	1.26 (version #.yy)
+-->
+
+<xsd:schema xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0"
+	xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0"
+	xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+	<xsd:import namespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olsbr/1-0-1" schemaLocation="t5013main.xsd"/>
+	<xsd:import namespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661/1-0-0" schemaLocation="T661.xsd"/>
+	<xsd:import namespace="http://www.cra.gc.ca/pmr/p20/v1" schemaLocation="PartXX_v3.0.xsd"/>
+	<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/>
+	<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/>
+	<xsd:include schemaLocation="t4.xsd"/>
+	<xsd:include schemaLocation="t4a.xsd"/>
+	<xsd:include schemaLocation="t4a-nr.xsd"/>
+	<xsd:include schemaLocation="t4rif.xsd"/>
+	<xsd:include schemaLocation="t4rsp.xsd"/>
+	<xsd:include schemaLocation="rrsp.xsd"/>
+	<xsd:include schemaLocation="t215.xsd"/>
+	<xsd:include schemaLocation="t4a-oas.xsd"/>
+	<xsd:include schemaLocation="t4a-p.xsd"/>
+	<xsd:include schemaLocation="t1204.xsd"/>
+	<xsd:include schemaLocation="agr-1.xsd"/>
+	<xsd:include schemaLocation="t5018.xsd"/>
+	<xsd:include schemaLocation="nr4.xsd"/>
+	<xsd:include schemaLocation="t5.xsd"/>
+	<xsd:include schemaLocation="t5007.xsd"/>
+	<xsd:include schemaLocation="t5008.xsd"/>
+	<xsd:include schemaLocation="t3.xsd"/>
+	<xsd:include schemaLocation="safer.xsd"/>
+	<xsd:include schemaLocation="t4e.xsd"/>
+	<xsd:include schemaLocation="tfsa.xsd"/>
+	<xsd:include schemaLocation="prpp.xsd"/>
+	<xsd:include schemaLocation="rrsp-rrif-nqi.xsd"/>
+	<xsd:include schemaLocation="partxviii.xsd"/>
+	<xsd:include schemaLocation="partxix.xsd"/>
+	<xsd:include schemaLocation="t2202.xsd"/>
+	<!-- <xsd:include schemaLocation="t5013.xsd"/> -->
+	<xsd:include schemaLocation="t244.xsd"/>
+	<xsd:include schemaLocation="t550.xsd"/>
+	<xsd:include schemaLocation="t4fhsa.xsd"/>
+	<xsd:complexType name="TransmitterType">
+		<xsd:all>
+			<xsd:element name="TransmitterAccountNumber" type="TransmitterAccountNumberType"/>
+			<xsd:element name="TransmitterRepID" type="TransmitterRepIDType" minOccurs="0"/>
+			<xsd:element name="sbmt_ref_id" type="char8Type" minOccurs="0"/>
+			<xsd:element name="summ_cnt" type="int6Type" minOccurs="0"/>
+			<xsd:element name="lang_cd" type="languageType"/>
+			<xsd:element name="TransmitterName" type="Line1Type" minOccurs="0"/>
+			<xsd:element name="TransmitterCountryCode" type="countryType"/>
+			<xsd:element name="CNTC" type="TransmitterContactType"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="ReturnChoiceType">
+		<xsd:choice>
+			<xsd:sequence>
+				<xsd:element name="T4" type="T4ReturnType" minOccurs="0">
+				</xsd:element>
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="T4A" type="T4AReturnType" minOccurs="0">
+				</xsd:element>				
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="T4A_NR" type="T4A_NRReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="T4RIF" type="T4RIFReturnType" minOccurs="0">
+				</xsd:element>						
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="T4RSP" type="T4RSPReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="RRSP" type="RRSPReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="T215" type="T215ReturnType" minOccurs="0"/>
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="T4A_OAS" type="T4A_OASReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="T4A_P" type="T4A_PReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="T1204" type="T1204ReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="AGR-1" type="AGR-1ReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="T4E" type="T4EReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="T5018" type="T5018ReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="T5007" type="T5007ReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="T5" type="T5ReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="T5008" type="T5008ReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="T3" type="T3ReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="SAFER" type="SAFERReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="NR4" type="NR4ReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="TFSA" type="TFSAReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="PRPP" type="PRPPReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="RRSPOrRRIFNonQualifiedInvestment" type="RRSPOrRRIFNQIReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="PartXVIII" type="PartXVIIIReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="PartXIX" type="PartXIXReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="T2202" type="T2202ReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+			<xsd:sequence>
+				<xsd:element name="T4FHSA" type="T4FHSAReturnType" minOccurs="0">
+				</xsd:element>					
+			</xsd:sequence>
+		</xsd:choice>
+	</xsd:complexType>
+	<xsd:complexType name="T4ReturnType">
+		<xsd:sequence>
+			<xsd:element name="T4Slip" type="T4SlipType" maxOccurs="unbounded"/>
+			<xsd:element name="T4Summary" type="T4SummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T4AReturnType">
+		<xsd:sequence>
+			<xsd:element name="T4ASlip" type="T4ASlipType" maxOccurs="unbounded"/>
+			<xsd:element name="T4ASummary" type="T4ASummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T4A_NRReturnType">
+		<xsd:sequence>
+			<xsd:element name="T4A_NRSlip" type="T4A_NRSlipType" maxOccurs="unbounded"/>
+			<xsd:element name="T4A_NRSummary" type="T4A_NRSummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T4RIFReturnType">
+		<xsd:sequence>
+			<xsd:element name="T4RIFSlip" type="T4RIFSlipType" maxOccurs="unbounded"/>
+			<xsd:element name="T4RIFSummary" type="T4RIFSummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T4RSPReturnType">
+		<xsd:sequence>
+			<xsd:element name="T4RSPSlip" type="T4RSPSlipType" maxOccurs="unbounded"/>
+			<xsd:element name="T4RSPSummary" type="T4RSPSummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="RRSPReturnType">
+		<xsd:sequence>
+			<xsd:element name="RRSP_CNTRB_SLP" type="RRSPSlipType" maxOccurs="unbounded"/>
+			<xsd:element name="RRSP_CNTRB_SUMM" type="RRSPSummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T215ReturnType">
+		<xsd:sequence>
+			<xsd:element name="T215Slip" type="T215SlipType" maxOccurs="unbounded"/>
+			<xsd:element name="T215Summary" type="T215SummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T4A_OASReturnType">
+		<xsd:sequence>
+			<xsd:element name="T4A_OASSlip" type="T4A_OASSlipType" maxOccurs="unbounded"/>
+			<xsd:element name="T4A_OASSummary" type="T4A_OASSummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T4A_PReturnType">
+		<xsd:sequence>
+			<xsd:element name="T4A_PSlip" type="T4A_PSlipType" maxOccurs="unbounded"/>
+			<xsd:element name="T4A_PSummary" type="T4A_PSummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T1204ReturnType">
+		<xsd:sequence>
+			<xsd:element name="T1204Slip" type="T1204SlipType" maxOccurs="unbounded"/>
+			<xsd:element name="T1204Summary" type="T1204SummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="AGR-1ReturnType">
+		<xsd:sequence>
+			<xsd:element name="AGR-1Slip" type="AGR-1SlipType" maxOccurs="unbounded"/>
+			<xsd:element name="AGR-1Summary" type="AGR-1SummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T5ReturnType">
+		<xsd:sequence>
+			<xsd:element name="T5Slip" type="T5SlipType" maxOccurs="unbounded"/>
+			<xsd:element name="T5Summary" type="T5SummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T5008ReturnType">
+		<xsd:sequence>
+			<xsd:element name="T5008Slip" type="T5008SlipType" maxOccurs="unbounded"/>
+			<xsd:element name="T5008Summary" type="T5008SummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="TFSAReturnType">
+		<xsd:sequence>
+			<xsd:element name="TFSA_SLP" type="TFSASlipType" maxOccurs="unbounded"/>
+			<xsd:element name="TFSA_SUMM" type="TFSASummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T5007ReturnType">
+		<xsd:sequence>
+			<xsd:element name="T5007Slip" type="T5007SlipType" maxOccurs="unbounded"/>
+			<xsd:element name="T5007Summary" type="T5007SummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T3ReturnType">
+		<xsd:sequence>
+			<xsd:element name="T3Slip" type="T3SlipType" maxOccurs="unbounded"/>
+			<xsd:element name="T3Summary" type="T3SummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="NR4ReturnType">
+		<xsd:sequence>
+			<xsd:element name="NR4Slip" type="NR4SlipType" minOccurs="0" maxOccurs="unbounded"/>
+			<xsd:element name="NR4Summary" type="NR4SummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="SAFERReturnType">
+		<xsd:sequence>
+			<xsd:element name="SAFERSlip" type="SAFERSlipType" maxOccurs="unbounded"/>
+			<xsd:element name="SAFERSummary" type="SAFERSummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T4EReturnType">
+		<xsd:sequence>
+			<xsd:element name="T4ESlip" type="T4ESlipType" maxOccurs="unbounded"/>
+			<xsd:element name="T4ESummary" type="T4ESummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T5018ReturnType">
+		<xsd:sequence>
+			<xsd:element name="T5018Slip" type="T5018SlipType" maxOccurs="unbounded"/>
+			<xsd:element name="T5018Summary" type="T5018SummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="PRPPReturnType">
+		<xsd:sequence>
+			<xsd:element name="PRPPSlip" type="PRPPSlipType" maxOccurs="unbounded"/>
+			<xsd:element name="PRPPSummary" type="PRPPSummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="RRSPOrRRIFNQIReturnType">
+		<xsd:sequence>
+			<xsd:element name="RRSPOrRRIFNQISlip" type="RRSPOrRRIFNQISlipType" maxOccurs="unbounded"/>
+			<xsd:element name="RRSPOrRRIFNQISummary" type="RRSPOrRRIFNQISummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="PartXVIIIReturnType">
+		<xsd:sequence>
+			<xsd:element name="PartXVIIISlip" type="PartXVIIISlipType" minOccurs="0" maxOccurs="unbounded"/>
+			<xsd:element name="PartXVIIISummary" type="PartXVIIISummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="PartXIXReturnType">
+		<xsd:sequence>
+			<xsd:element name="PartXIXSlip" type="PartXIXSlipType" minOccurs="0" maxOccurs="unbounded"/>
+			<xsd:element name="PartXIXSummary" type="PartXIXSummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T2202ReturnType">
+		<xsd:sequence>
+			<xsd:element name="T2202Slip" type="T2202SlipType" minOccurs="0" maxOccurs="unbounded"/>
+			<xsd:element name="T2202Summary" type="T2202SummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T4FHSAReturnType">
+		<xsd:sequence>
+			<xsd:element name="T4FHSASlip" type="T4FHSASlipType" maxOccurs="unbounded"/>
+			<xsd:element name="T4FHSASummary" type="T4FHSASummaryType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:complexType name="CanadaAddressType">
+		<xsd:all>
+			<xsd:element name="addr_l1_txt" type="char100Type" minOccurs="0"/>
+			<xsd:element name="addr_l2_txt" type="char100Type" minOccurs="0"/>
+			<xsd:element name="cty_nm" type="char100Type" minOccurs="0"/>
+			<xsd:element name="prov_cd" type="provinceStateType" minOccurs="0"/>
+			<xsd:element name="cntry_cd" type="countryType" minOccurs="0"/>
+			<xsd:element name="pstl_cd" type="pcType" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="CanadaOnlyAddressType">
+		<xsd:all>
+			<xsd:element name="addr_l1_txt" type="char100Type" minOccurs="0"/>
+			<xsd:element name="addr_l2_txt" type="char100Type" minOccurs="0"/>
+			<xsd:element name="cty_nm" type="char100Type" minOccurs="0"/>
+			<xsd:element name="prov_cd" type="provinceType" minOccurs="0"/>
+			<xsd:element name="cntry_cd" type="countryType" minOccurs="0"/>
+			<xsd:element name="pstl_cd" type="pcType" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="NR4CanadaAddressType">
+		<xsd:all>
+			<xsd:element name="addr_l1_txt" type="char100Type" minOccurs="0"/>
+			<xsd:element name="addr_l2_txt" type="char100Type" minOccurs="0"/>
+			<xsd:element name="cty_nm" type="char100Type" minOccurs="0"/>
+			<xsd:element name="prov_cd" type="provinceStateType" minOccurs="0"/>
+			<xsd:element name="cntry_cd" type="nr4CountryType" minOccurs="0"/>
+			<xsd:element name="pstl_cd" type="pcType" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="NR4ForeignAddressType">
+		<xsd:all>
+			<xsd:element name="addr_l1_txt" type="char100Type" minOccurs="0"/>
+			<xsd:element name="addr_l2_txt" type="char100Type" minOccurs="0"/>
+			<xsd:element name="cty_nm" type="char100Type" minOccurs="0"/>
+			<xsd:element name="ste_cd" type="forcesProvinceStateType" minOccurs="0"/>
+			<xsd:element name="cntry_cd" type="nr4CountryType" minOccurs="0"/>
+			<xsd:element name="fgn_pstl_cd" type="pcType" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="ForeignAddressType">
+		<xsd:all>
+			<xsd:element name="addr_l1_txt" type="char100Type" minOccurs="0"/>
+			<xsd:element name="addr_l2_txt" type="char100Type" minOccurs="0"/>
+			<xsd:element name="cty_nm" type="char100Type" minOccurs="0"/>
+			<xsd:element name="ste_cd" type="provinceStateType" minOccurs="0"/>
+			<xsd:element name="cntry_cd" type="countryType" minOccurs="0"/>
+			<xsd:element name="fgn_pstl_cd" type="pcType" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="T5SlipAddressType">
+		<xsd:all>
+			<xsd:element name="addr_l1_txt" type="char100Type" minOccurs="0"/>
+			<xsd:element name="addr_l2_txt" type="char100Type" minOccurs="0"/>
+			<xsd:element name="cty_nm" type="char100Type" minOccurs="0"/>
+			<xsd:element name="prov_cd" type="forcesProvinceStateType" minOccurs="0"/>
+			<xsd:element name="cntry_cd" type="countryType" minOccurs="0"/>
+			<xsd:element name="pstl_cd" type="pcType" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="NR4SlipForeignAddressType">
+		<xsd:all>
+			<xsd:element name="addr_l1_txt" type="char100Type" minOccurs="0"/>
+			<xsd:element name="addr_l2_txt" type="char100Type" minOccurs="0"/>
+			<xsd:element name="cty_nm" type="char100Type" minOccurs="0"/>
+			<xsd:element name="ste_cd" type="forcesProvinceStateType" minOccurs="0"/>
+			<xsd:element name="cntry_cd" type="countryType" minOccurs="0"/>
+			<xsd:element name="fgn_pstl_cd" type="pcType" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="RequiredPstlCdAddressType">
+		<xsd:all>
+			<xsd:element name="addr_l1_txt" type="char100Type" minOccurs="0"/>
+			<xsd:element name="addr_l2_txt" type="char100Type" minOccurs="0"/>
+			<xsd:element name="cty_nm" type="char100Type" minOccurs="0"/>
+			<xsd:element name="prov_cd" type="provinceStateType" minOccurs="0"/>
+			<xsd:element name="cntry_cd" type="countryType" minOccurs="0"/>
+			<xsd:element name="pstl_cd" type="pcType"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="NameType">
+		<xsd:all>
+			<xsd:element name="snm" type="char100Type"/>
+			<xsd:element name="gvn_nm" type="char100Type" minOccurs="0"/>
+			<xsd:element name="init" type="char1Type" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="NameType_2">
+		<xsd:all>
+			<xsd:element name="sec_snm" type="char100Type"/>
+			<xsd:element name="sec_gvn_nm" type="char100Type" minOccurs="0"/>
+			<xsd:element name="sec_init" type="char1Type" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="Former_Spouse_NameType">
+		<xsd:all>
+			<xsd:element name="frmr_sps_snm" type="char100Type" minOccurs="0"/>
+			<xsd:element name="frmr_sps_gvn_nm" type="char100Type" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="ContactType">
+		<xsd:all>
+			<xsd:element name="cntc_nm" type="char22Type"/>
+			<xsd:element name="cntc_area_cd" type="numeric3Type"/>
+			<xsd:element name="cntc_phn_nbr" type="phoneType"/>
+			<xsd:element name="cntc_extn_nbr" type="int7Type" minOccurs="0"/>
+			<xsd:element name="cntc_email_area" type="char60Type"/>
+			<xsd:element name="sec_cntc_email_area" type="char60Type" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="TransmitterContactType">
+		<xsd:all>
+			<xsd:element name="cntc_nm" type="char35Type"/>
+			<xsd:element name="cntc_area_cd" type="numeric3Type"/>
+			<xsd:element name="cntc_phn_nbr" type="phoneType"/>
+			<xsd:element name="cntc_extn_nbr" type="int12Type" minOccurs="0"/>
+			<xsd:element name="cntc_email_area" type="char60Type"/>
+			<xsd:element name="sec_cntc_email_area" type="char60Type" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="ContactType2">
+		<xsd:all>
+			<xsd:element name="cntc_nm" type="char100Type"/>
+			<xsd:element name="cntc_area_cd" type="numeric3Type"/>
+			<xsd:element name="cntc_phn_nbr" type="phoneType"/>
+			<xsd:element name="cntc_extn_nbr" type="int7Type" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="Line2Type">
+		<xsd:all>
+			<xsd:element name="l1_nm" type="char100Type"/>
+			<xsd:element name="l2_nm" type="char100Type" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="Line1Type">
+		<xsd:all>
+			<xsd:element name="l1_nm" type="char35Type"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="NR4_Line2Type">
+		<xsd:all>
+			<xsd:element name="l1_nm" type="char100Type"/>
+			<xsd:element name="l2_nm" type="char100Type" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="Line3Type">
+		<xsd:all>
+			<xsd:element name="l1_nm" type="char100Type"/>
+			<xsd:element name="l2_nm" type="char100Type" minOccurs="0"/>
+			<xsd:element name="l3_nm" type="char100Type" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="Line3Len35Type">
+		<xsd:all>
+			<xsd:element name="l1_nm" type="char100Type"/>
+			<xsd:element name="l2_nm" type="char100Type" minOccurs="0"/>
+			<xsd:element name="l3_nm" type="char100Type" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="RecipientNumberType">
+		<xsd:all>
+			<xsd:element name="sin" type="sinType" minOccurs="0"/>
+			<xsd:element name="fssn" type="char20Type" minOccurs="0"/>
+			<xsd:element name="rcpnt_bn" type="bnType" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="TransmitterAccountNumberType">
+		<xsd:all>
+			<!-- <xsd:element name="sin" type="sinType"/> -->
+			<xsd:element name="nr4" type="nrType" minOccurs="0"/>
+			<xsd:element name="trust" type="trustType" minOccurs="0"/>
+			<xsd:element name="bn15" type="bnType" minOccurs="0"/>
+			<xsd:element name="bn9" type="bnRootType" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="TransmitterRepIDType">
+		<xsd:all>
+			<xsd:element name="RepID" type="char7Type" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="PropSinType">
+		<xsd:all>
+			<xsd:element name="pprtr_1_sin" type="sinType"/>
+			<xsd:element name="pprtr_2_sin" type="sinType" minOccurs="0"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="DateType">
+		<xsd:all>
+			<xsd:element name="dy" type="dayType"/>
+			<xsd:element name="mo" type="monthType"/>
+			<xsd:element name="yr" type="yearType"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="DateType2">
+		<xsd:all>
+			<xsd:element name="sec_dy" type="dayType"/>
+			<xsd:element name="sec_mo" type="monthType"/>
+			<xsd:element name="sec_yr" type="yearType"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="DayMonthType">
+		<xsd:all>
+			<xsd:element name="dy" type="dayType"/>
+			<xsd:element name="mo" type="monthType"/>
+		</xsd:all>
+	</xsd:complexType>
+
+	<xsd:complexType name="TapeType">
+		<xsd:all>
+			<xsd:element name="TAPE_INFO" type="InfoType"/>
+			<xsd:element name="sbmt_gbl_1_ecd" type="xsd:string"/>
+			<xsd:element name="oe_trnmtr_nbr" type="transNbrType"/>
+			<xsd:element name="oe_cler_uid" type="xsd:string"/>
+			<xsd:element name="OE_CLER_TSTMP" type="DateTimeType"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="InfoType">
+		<xsd:all>
+			<xsd:element name="t_rec_len" type="xsd:string"/>
+			<xsd:element name="t_mom_cd" type="xsd:string"/>
+			<xsd:element name="t_mode_tcd" type="xsd:string"/>
+			<xsd:element name="t_blp_cd" type="xsd:string"/>
+			<xsd:element name="t_vol_senbr" type="xsd:string"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:simpleType name="hourType">
+		<xsd:restriction base="xsd:unsignedShort">
+			<xsd:minInclusive value="0"/>
+			<xsd:maxInclusive value="23"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	<xsd:simpleType name="minuteType">
+		<xsd:restriction base="xsd:unsignedShort">
+			<xsd:minInclusive value="0"/>
+			<xsd:maxInclusive value="59"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	<xsd:simpleType name="secondType">
+		<xsd:restriction base="xsd:unsignedShort">
+			<xsd:minInclusive value="0"/>
+			<xsd:maxInclusive value="59"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+	<xsd:complexType name="DateTimeType">
+		<xsd:all>
+			<xsd:element name="ss" type="secondType"/>
+			<xsd:element name="mm" type="minuteType"/>
+			<xsd:element name="hh" type="hourType"/>
+			<xsd:element name="dy" type="dayType"/>
+			<xsd:element name="mo" type="monthType"/>
+			<xsd:element name="yr" type="yearType"/>
+		</xsd:all>
+	</xsd:complexType>
+	<xsd:complexType name="T2202RequiredLine1AddressType">
+		<xsd:sequence>
+			<xsd:element name="AddressLine1Text" type="char100Type"/>
+			<xsd:element name="AddressLine2Text" type="char100Type" minOccurs="0"/>
+			<xsd:element name="CityName" type="char100Type" minOccurs="0"/>
+			<xsd:element ref="ProvinceStateCode" minOccurs="0"/>
+			<xsd:element ref="CountryCode" minOccurs="0"/>
+			<xsd:element name="PostalZipCode" type="pcType" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T2202ThreeLinedLength100NameType">
+		<xsd:sequence>
+			<xsd:element name="NameLine1Text" type="char100Type"/>
+			<xsd:element name="NameLine2Text" type="char100Type" minOccurs="0"/>
+			<xsd:element name="NameLine3Text" type="char100Type" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T5013IndividualNameType">
+		<xsd:sequence>
+			<xsd:element name="FamilyName" type="char100Type"/>
+			<xsd:element name="GivenName" type="char100Type" minOccurs="0"/>
+			<xsd:element ref="NameInitialText" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="T5013ContactType3">
+		<xsd:sequence>
+			<xsd:element name="ContactName" type="char100Type"/>
+			<xsd:element ref="ContactAreaCode"/>
+			<xsd:element ref="ContactPhoneNumber"/>
+			<xsd:element name="ContactExtensionNumber" type="Length1to7NumberType" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<!--<xsd:complexType name="T5013RequiredPostalCodeAddressType">
+		<xsd:sequence>
+			<xsd:element name="AddressLine1Text" type="char100Type" minOccurs="0"/>
+			<xsd:element name="AddressLine2Text" type="char100Type" minOccurs="0"/>
+			<xsd:element name="CityName" type="char100Type" minOccurs="0"/>
+			<xsd:element ref="ProvinceStateCode" minOccurs="0"/>
+			<xsd:element ref="CountryCode" minOccurs="0"/>
+			<xsd:element name="PostalZipCode" type="pcType"/>
+		</xsd:sequence>
+	</xsd:complexType>-->
+	<xsd:complexType name="RequiredPostalCodeAddressLength100Type">
+		<xsd:sequence>
+			<xsd:element name="AddressLine1Text" type="char100Type" minOccurs="0"/>
+			<xsd:element name="AddressLine2Text" type="char100Type" minOccurs="0"/>
+			<xsd:element name="CityName" type="char100Type" minOccurs="0"/>
+			<xsd:element ref="ProvinceStateCode" minOccurs="0"/>
+			<xsd:element ref="CountryCode" minOccurs="0"/>
+			<xsd:element name="PostalZipCode" type="pcType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:complexType name="ThreeLinedLength100NameType">
+		<xsd:sequence>
+			<xsd:element name="NameLine1Text" type="char100Type"/>
+			<xsd:element name="NameLine2Text" type="char100Type" minOccurs="0"/>
+			<xsd:element name="NameLine3Text" type="char100Type" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<!--================== Complex Types =======================-->
+
+	<!--                                                        -->
+	<!-- Character definitions (1,3,10,12,15,20,22,25,28,30,60) -->
+	<!--                                                        -->
+	<xsd:complexType name="Length1TextType">
+		<xsd:simpleContent>
+			<xsd:restriction base="sdt:TextType">
+				<xsd:pattern value="\p{L}{1}"/>
+			</xsd:restriction>
+		</xsd:simpleContent>
+	</xsd:complexType>
+
+	<xsd:complexType name="Length1to8TextType">
+		<xsd:simpleContent>
+			<xsd:restriction base="sdt:TextType">
+				<xsd:minLength value="1"/>
+				<xsd:maxLength value="8"/>
+			</xsd:restriction>
+		</xsd:simpleContent>
+	</xsd:complexType>
+
+	<xsd:complexType name="Length1to9TextType">
+		<xsd:simpleContent>
+			<xsd:restriction base="sdt:TextType">
+				<xsd:minLength value="1"/>
+				<xsd:maxLength value="9"/>
+			</xsd:restriction>
+		</xsd:simpleContent>
+	</xsd:complexType>
+
+	<xsd:complexType name="Length1to12TextType">
+		<xsd:simpleContent>
+			<xsd:restriction base="sdt:TextType">
+				<xsd:minLength value="1"/>
+				<xsd:maxLength value="12"/>
+				
+			</xsd:restriction>
+		</xsd:simpleContent>
+	</xsd:complexType>
+
+	<xsd:complexType name="Length1to20TextType">
+		<xsd:simpleContent>
+			<xsd:restriction base="sdt:TextType">
+				<xsd:minLength value="1"/>
+				<xsd:maxLength value="20"/>
+			</xsd:restriction>
+		</xsd:simpleContent>
+	</xsd:complexType>
+
+	<xsd:complexType name="Length1to22TextType">
+		<xsd:simpleContent>
+			<xsd:restriction base="sdt:TextType">
+				<xsd:minLength value="1"/>
+				<xsd:maxLength value="22"/>
+			</xsd:restriction>
+		</xsd:simpleContent>
+	</xsd:complexType>
+
+	<xsd:complexType name="Length1to25TextType">
+		<xsd:simpleContent>
+			<xsd:restriction base="sdt:TextType">
+				<xsd:minLength value="1"/>
+				<xsd:maxLength value="25"/>
+			</xsd:restriction>
+		</xsd:simpleContent>
+	</xsd:complexType>
+
+	<xsd:complexType name="Length1to28TextType">
+		<xsd:simpleContent>
+			<xsd:restriction base="sdt:TextType">
+				<xsd:minLength value="1"/>
+				<xsd:maxLength value="28"/>
+			</xsd:restriction>
+		</xsd:simpleContent>
+	</xsd:complexType>
+
+	<xsd:complexType name="Length1to30TextType">
+		<xsd:simpleContent>
+			<xsd:restriction base="sdt:TextType">
+				<xsd:minLength value="1"/>
+				<xsd:maxLength value="30"/>
+			</xsd:restriction>
+		</xsd:simpleContent>
+	</xsd:complexType>
+
+	<xsd:complexType name="Length1to46TextType">
+		<xsd:simpleContent>
+			<xsd:restriction base="sdt:TextType">
+				<xsd:minLength value="1"/>
+				<xsd:maxLength value="46"/>
+			</xsd:restriction>
+		</xsd:simpleContent>
+	</xsd:complexType>
+
+	<xsd:complexType name="Length1to60TextType">
+		<xsd:simpleContent>
+			<xsd:restriction base="sdt:TextType">
+				<xsd:minLength value="1"/>
+				<xsd:maxLength value="60"/>
+			</xsd:restriction>
+		</xsd:simpleContent>
+	</xsd:complexType>
+
+	<xsd:complexType name="Length1to1309TextType">
+		<xsd:simpleContent>
+			<xsd:restriction base="sdt:TextType">
+				<xsd:minLength value="1"/>
+				<xsd:maxLength value="1309"/>
+			</xsd:restriction>
+		</xsd:simpleContent>
+	</xsd:complexType>
+
+	<xsd:complexType name="EmailLength1to60TextType">
+		<xsd:simpleContent>
+			<xsd:restriction base="sdt:TextType">
+				<xsd:minLength value="1"/>
+				<xsd:maxLength value="60"/>
+			</xsd:restriction>
+		</xsd:simpleContent>
+	</xsd:complexType>
+
+	<!--                                                        -->
+	<!--  Name Types                                            -->
+	<!--                                                        -->
+	<xsd:complexType name="Length1NameType">
+		<xsd:simpleContent>
+			<xsd:restriction base="sdt:NameType">
+				<xsd:length value="1"/>
+			</xsd:restriction>
+		</xsd:simpleContent>
+	</xsd:complexType>
+
+	<xsd:complexType name="Length28NameType">
+		<xsd:simpleContent>
+			<xsd:restriction base="sdt:NameType">
+				<xsd:minLength value="1"/>
+				<xsd:maxLength value="28"/>
+			</xsd:restriction>
+		</xsd:simpleContent>
+	</xsd:complexType>
+
+	<xsd:complexType name="Length30NameType">
+		<xsd:simpleContent>
+			<xsd:restriction base="sdt:NameType">
+				<xsd:minLength value="1"/>
+				<xsd:maxLength value="30"/>
+			</xsd:restriction>
+		</xsd:simpleContent>
+	</xsd:complexType>
+
+	<xsd:complexType name="Length35NameType">
+		<xsd:simpleContent>
+			<xsd:restriction base="sdt:NameType">
+				<xsd:minLength value="1"/>
+				<xsd:maxLength value="35"/>
+			</xsd:restriction>
+		</xsd:simpleContent>
+	</xsd:complexType>
+
+	<xsd:complexType name="AddressType">
+		<xsd:sequence>
+			<xsd:element ref="AddressLine1Text" minOccurs="0"/>
+			<xsd:element ref="AddressLine2Text" minOccurs="0"/>
+			<xsd:element ref="CityName" minOccurs="0"/>
+			<xsd:element ref="ProvinceStateCode" minOccurs="0"/>
+			<xsd:element ref="CountryCode" minOccurs="0"/>
+			<xsd:element ref="PostalZipCode" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:complexType name="RequiredPostalCodeAddressType">
+		<xsd:sequence>
+			<xsd:element ref="AddressLine1Text" minOccurs="0"/>
+			<xsd:element ref="AddressLine2Text" minOccurs="0"/>
+			<xsd:element ref="CityName" minOccurs="0"/>
+			<xsd:element ref="ProvinceStateCode" minOccurs="0"/>
+			<xsd:element ref="CountryCode" minOccurs="0"/>
+			<xsd:element ref="PostalZipCode"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:complexType name="RequiredCityCountryAddressType">
+		<xsd:sequence>
+			<xsd:element ref="AddressLine1Text" minOccurs="0"/>
+			<xsd:element ref="AddressLine2Text" minOccurs="0"/>
+			<xsd:element ref="CityName" minOccurs="0"/>
+			<xsd:element ref="ProvinceStateCodeOrName" minOccurs="0"/>
+			<xsd:element name="CountryCode" type="Length2CountryCodeType"/>
+			<xsd:element name="PostalZipCode" type="pcType" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<!-- Added for T3 special returns -->
+	<xsd:complexType name="CountryCodeAddressType">
+		<xsd:sequence>
+			<xsd:element ref="AddressLine1Text"/>
+			<xsd:element ref="AddressLine2Text" minOccurs="0"/>
+			<xsd:element name="MunicipalityName" type="Length28NameType"/>
+			<xsd:element ref="ProvinceStateCode"/>
+			<xsd:element ref="CountryCode" minOccurs="0"/>
+			<xsd:element ref="PostalZipCode"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<!-- Added for T2202 return -->
+	<xsd:complexType name="RequiredLine1AddressType">
+		<xsd:sequence>
+			<xsd:element ref="AddressLine1Text"/>
+			<xsd:element ref="AddressLine2Text" minOccurs="0"/>
+			<xsd:element ref="CityName" minOccurs="0"/>
+			<xsd:element ref="ProvinceStateCode" minOccurs="0"/>
+			<xsd:element ref="CountryCode" minOccurs="0"/>
+			<xsd:element ref="PostalZipCode" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:complexType name="IndividualNameType">
+		<xsd:sequence>
+			<xsd:element ref="FamilyName"/>
+			<xsd:element ref="GivenName" minOccurs="0"/>
+			<xsd:element ref="NameInitialText" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:complexType name="ContactType3">
+		<xsd:sequence>
+			<xsd:element ref="ContactName"/>
+			<xsd:element ref="ContactAreaCode"/>
+			<xsd:element ref="ContactPhoneNumber"/>
+			<xsd:element ref="ContactExtensionNumber" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:complexType name="ContactType4">
+		<xsd:all>
+			<xsd:element ref="ContactName"/>
+			<xsd:element ref="ContactPhoneAreaCode"/>
+			<xsd:element ref="ContactPhoneNumber"/>
+			<xsd:element ref="ContactPhoneExtensionNumber" minOccurs="0"/>
+			<xsd:element ref="ContactEmailAddress"/>
+		</xsd:all>
+	</xsd:complexType>
+
+	<xsd:complexType name="ContactType5">
+		<xsd:sequence>
+			<xsd:element ref="ContactName"/>
+			<xsd:element ref="ContactPhoneAreaCode"/>
+			<xsd:element ref="ContactPhoneNumber"/>
+			<xsd:element name="ContactPhoneExtensionNumber" type="Length1to7NumberType" minOccurs="0"/>
+			<xsd:element ref="ContactEmailAddress" maxOccurs="5"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+
+	<xsd:complexType name="TwoLinedLength30NameType">
+		<xsd:sequence>
+			<xsd:element name="NameLine1Text" type="ccms:Character30TextType"/>
+			<xsd:element name="NameLine2Text" type="ccms:Character30TextType" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:complexType name="TwoLinedLength35NameType">
+		<xsd:sequence>
+			<xsd:element name="NameLine1Text" type="Length35NameType"/>
+			<xsd:element name="NameLine2Text" type="Length35NameType" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:complexType name="TwoLinedLength100NameType">
+		<xsd:sequence>
+			<xsd:element name="NameLine1Text" type="char100Type"/>
+			<xsd:element name="NameLine2Text" type="char100Type" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:complexType name="ThreeLinedLength30NameType">
+		<xsd:sequence>
+			<xsd:element name="NameLine1Text" type="ccms:Character30TextType"/>
+			<xsd:element name="NameLine2Text" type="ccms:Character30TextType" minOccurs="0"/>
+			<xsd:element name="NameLine3Text" type="ccms:Character30TextType" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:complexType name="ThreeLinedLength35NameType">
+		<xsd:sequence>
+			<xsd:element name="NameLine1Text" type="ccms:Character35TextType"/>
+			<xsd:element name="NameLine2Text" type="ccms:Character35TextType" minOccurs="0"/>
+			<xsd:element name="NameLine3Text" type="ccms:Character35TextType" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<!-- Added for T3 special returns -->
+	<xsd:complexType name="SurGivenNameType">
+		<xsd:sequence>
+			<xsd:element name="Surname" type="Length30NameType"/>
+			<xsd:element name="GivenName" type="Length30NameType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<!-- Added for T3 special returns -->
+	<xsd:complexType name="ThreeFieldPhoneNumberType">
+		<xsd:sequence>
+			<xsd:element name="PhoneAreaCode" type="PhoneAreaCodeType"/>
+			<xsd:element name="PhoneNumber" type="PhoneNumberType"/>
+			<xsd:element name="PhoneExtensionNumber" type="Length1to5NumberType" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:complexType name="YYYYMMDDDateType">
+		<xsd:sequence>
+			<xsd:element ref="Year"/>
+			<xsd:element ref="Month"/>
+			<xsd:element ref="Day"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<!-- Added for T2202 -->
+	<xsd:simpleType name="YYMMType">
+		<xsd:restriction base="sdt:NumberType">
+			<xsd:pattern value="\d{2}(0[1-9]|1[012])"/>
+		</xsd:restriction>
+	</xsd:simpleType>
+
+	<!--                                                        -->
+	<!-- Element definistions                                   -->
+	<!--                                                        -->
+
+	<xsd:element name="AddressLine1Text" type="char100Type"/>
+
+	<xsd:element name="AddressLine2Text" type="char100Type"/>
+
+	<xsd:element name="CityName" type="char100Type"/>
+
+	<xsd:element name="ProvinceStateCode" type="ccms:ProvinceTerritoryStateCodeType"/>
+
+	<!-- Length 3 country code -->
+	<xsd:element name="CountryCode" type="ccms:CountryCodeType"/>
+
+	<xsd:element name="PostalZipCode" type="PostalZipCodeType"/>
+
+
+	<xsd:element name="FamilyName">
+		<xsd:complexType >
+			<xsd:simpleContent>
+				<xsd:restriction base="ccms:FamilyNameType">
+					<xsd:minLength value="1"/>
+					<xsd:maxLength value="20"/>
+				</xsd:restriction>
+			</xsd:simpleContent>
+		</xsd:complexType>
+	</xsd:element>
+
+	<xsd:element name="GivenName">
+		<xsd:complexType >
+			<xsd:simpleContent>
+				<xsd:restriction base="ccms:GivenNameType">
+					<xsd:minLength value="1"/>
+					<xsd:maxLength value="12"/>
+				</xsd:restriction>
+			</xsd:simpleContent>
+		</xsd:complexType>
+	</xsd:element>
+
+	<xsd:element name="NameInitialText">
+		<xsd:complexType >
+			<xsd:simpleContent>
+				<xsd:restriction base="sdt:NameType">
+					<xsd:pattern value="\p{L}{1}"/>
+				</xsd:restriction>
+			</xsd:simpleContent>
+		</xsd:complexType>
+	</xsd:element>
+
+	<xsd:element name="ContactName">
+		<xsd:complexType>
+			<xsd:simpleContent>
+				<xsd:restriction base="sdt:NameType">
+					<xsd:minLength value="1"/>
+					<xsd:maxLength value="100"/>
+				</xsd:restriction>
+			</xsd:simpleContent>
+		</xsd:complexType>
+	</xsd:element>
+
+	<xsd:element name="ContactAreaCode" type="PhoneAreaCodeType"/>
+	<xsd:element name="ContactPhoneAreaCode" type="PhoneAreaCodeType"/>
+	<xsd:element name="ContactPhoneNumber" type="PhoneNumberType"/>
+	<xsd:element name="ContactExtensionNumber" type="Length1to5NumberType"/>
+	<xsd:element name="ContactPhoneExtensionNumber" type="Length1to5NumberType"/>
+	<xsd:element name="SummaryReportTypeCode" type="otherDataType"/>
+	<xsd:element name="SlipReportTypeCode" type="slipDataType"/>
+	<xsd:element name="TaxationYear" type="sdt:YearType"/>
+	<xsd:element name="TotalSlipCount" type="Length1to7CountType"/>
+	<xsd:element name="FilerAccountNumber" type="BNType"/>
+	<xsd:element name="ContactFamilyName" type="char100Type"/>
+	<xsd:element name="ContactGivenName" type="char100Type"/>
+	<xsd:element name="ContactEmailAddress" type="EmailLength1to60TextType"/>
+	<xsd:element name="FirstName" type="Length30NameType"/>
+	<xsd:element name="MiddleName" type="Length30NameType"/>
+	<xsd:element name="LastName" type="Length30NameType"/>
+	<xsd:element name="Day" type="sdt:DayType"/>
+	<xsd:element name="Month" type="sdt:MonthType"/>
+	<xsd:element name="Year" type="sdt:YearType"/>
+	<xsd:element name="ProvinceStateCodeOrName" type="Length1to30TextType"/>
+
+	<!-- P18 - P19 Shared Element -->
+	<xsd:element name="BusinessNumber" type="BNType"/>
+	<xsd:element name="ResidenceCountryCode" type="Length2CountryCodeType"/>
+	<xsd:element name="TINIssueCountryCode" type="Length2CountryCodeType"/>
+	<xsd:element name="IndividualIdentificationNumber" type="ccms:SINType"/>
+	<xsd:element name="AccountHolderBirthInformation" type="BirthInformationType"/>
+
+	<xsd:complexType name="BirthInformationType">
+		<xsd:all>
+			<xsd:element ref="Day"/>
+			<xsd:element ref="Month"/>
+			<xsd:element name="Year" type="year1900_2099Type"/>
+		</xsd:all>
+	</xsd:complexType>
+
+	<!-- Added for T4FHSA return -->
+	<xsd:complexType name="SlipRecipientNameType">
+		<xsd:all>
+			<xsd:element name="FamilyName" type="Length30AlphaWithFrench5CharType"></xsd:element>
+			<xsd:element name="GivenName" type="Length30AlphaWithFrench5CharType"></xsd:element>
+			<xsd:element name="Initial" minOccurs="0">
+				<xsd:complexType >
+					<xsd:simpleContent>
+						<xsd:restriction base="sdt:NameType">
+							<xsd:pattern value="[a-zA-Z]{1}"/>
+						</xsd:restriction>
+					</xsd:simpleContent>
+				</xsd:complexType>
+			</xsd:element>
+		</xsd:all>
+	</xsd:complexType>
+
+	<!-- Added for T4FHSA return -->
+	<xsd:complexType name="FamilyGivenNameType">
+		<xsd:all>
+			<xsd:element name="FamilyName" type="Length30AlphaWithFrench5CharType"></xsd:element>
+			<xsd:element name="GivenName" type="Length30AlphaWithFrench5CharType" minOccurs="0"></xsd:element>
+		</xsd:all>
+	</xsd:complexType>
+
+	<!-- Added for T4FHSA return -->
+	<xsd:complexType name="SlipRecipientAddressType">
+		<xsd:all>
+			<xsd:element name="AddressLine1Text" type="Length30Alphanumeric5CharType"/>
+			<xsd:element name="AddressLine2Text" type="Length30Alphanumeric5CharType" minOccurs="0"/>
+			<xsd:element name="CityName" type="Length28Alphanumeric5CharType"/>
+			<xsd:element ref="ProvinceStateCode"/>
+			<xsd:element ref="CountryCode" minOccurs="0"/>
+			<xsd:element name="PostalZipCode" type="Length10AlphanumericType"/>
+		</xsd:all>
+	</xsd:complexType>
+
+	<!-- Added for T4FHSA return -->
+	<xsd:complexType name="FilerNameType">
+		<xsd:sequence>
+			<xsd:element name="NameLine1Text" type="Length35AlphaWithFrench11CharType"/>
+			<xsd:element name="NameLine2Text" type="Length35AlphaWithFrench11CharType" minOccurs="0"/>
+			<xsd:element name="NameLine3Text" type="Length35AlphaWithFrench11CharType" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<!-- Added for T4FHSA return -->
+	<xsd:complexType name="OptionalLine2CountryCodeAddressType">
+		<xsd:sequence>
+			<xsd:element name="AddressLine1Text" type="Length30AlphaWithFrench5CharType"/>
+			<xsd:element name="AddressLine2Text" type="Length30AlphaWithFrench5CharType" minOccurs="0"/>
+			<xsd:element name="CityName" type="Length28AlphaWithFrench5CharType"/>
+			<xsd:element ref="ProvinceStateCode"/>
+			<xsd:element ref="CountryCode" minOccurs="0"/>
+			<xsd:element name="PostalZipCode" type="Length10AlphanumericType"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<!-- Added for T4FHSA return -->
+	<xsd:complexType name="FilerContactType">
+		<xsd:sequence>
+			<xsd:element name="ContactFamilyName" type="Length30AlphaWithFrench11CharType"/>
+			<xsd:element name="ContactGivenName" type="Length30AlphaWithFrench11CharType"/>
+			<xsd:element ref="ContactPhoneAreaCode"/>
+			<xsd:element ref="ContactPhoneNumber"/>
+			<xsd:element name="ContactPhoneExtensionNumber" type="Length1to5NumberType" minOccurs="0"/>
+			<xsd:element ref="ContactEmailAddress"/>
+		</xsd:sequence>
+	</xsd:complexType>
+
+</xsd:schema>

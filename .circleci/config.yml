@@ -1,0 +1,45 @@
+version: 2.1
+
+orbs:
+  tools: replikativ/clj-tools@0
+
+# kontor is JVM-Clojure only (ADR-001) — no CLJS, no npm, no Python
+# interop. The `docker-deploy` CircleCI context supplies Docker Hub
+# credentials to the orb's image pulls.
+#
+# tools/deploy publishes to Clojars (needs `clojars-deploy` context
+# with CLOJARS_USERNAME + CLOJARS_PASSWORD). tools/release publishes a
+# GitHub release with the jar attached (needs `github-token` context
+# with GITHUB_TOKEN). Both jobs are gated to the `main` branch.
+workflows:
+  build-test-and-deploy:
+    jobs:
+      - tools/setup:
+          context: docker-deploy
+      - tools/format:
+          context: docker-deploy
+          requires:
+            - tools/setup
+      - tools/unittest:
+          context: docker-deploy
+          requires:
+            - tools/setup
+      - tools/deploy:
+          context:
+            - clojars-deploy
+            - docker-deploy
+          filters:
+            branches:
+              only: main
+          requires:
+            - tools/format
+            - tools/unittest
+      - tools/release:
+          context:
+            - github-token
+            - docker-deploy
+          filters:
+            branches:
+              only: main
+          requires:
+            - tools/deploy

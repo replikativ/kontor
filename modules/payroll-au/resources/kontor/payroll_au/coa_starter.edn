@@ -1,0 +1,66 @@
+;; AU payroll-specific account starter — extends modules/l10n-au/chart.edn.
+;; Consumer overrides as needed; the load-bearing identifier is
+;; :kontor.account-tag/name (e.g. "au-payroll-paygw"), not :code.
+;;
+;; Per-state allocation: the AU adapter uses
+;; the `:state` analytic plan with ISO-3166-2:AU codes (mirrors the
+;; US ADP adapter per ADR-077). Consumers do NOT need per-state
+;; account splits; the existing single-account model + analytic
+;; distribution is enough for an AU SMB / mid-market.
+;;
+;; Account code numbering follows Xero's default AU chart (477/478/
+;; 480/814/825/826) where it makes sense; consumers re-number as
+;; needed. The codes are conventions only — load-bearing is the
+;; :kontor.account-tag/name.
+;;
+;; Reference: ADR-080, Xero AU default chart (public help-centre).
+
+[;; ──────────────────────────────────────────────────────────────────
+ ;; EXPENSE SIDE (debit)
+ ;; ──────────────────────────────────────────────────────────────────
+ {:code "477" :path "Expenses:Payroll:Wages-and-salaries"
+  :type :expense :name "Wages and salaries"
+  :tags [:au-payroll-wages :au-bas-w1-total-wages]}
+ {:code "478" :path "Expenses:Payroll:Superannuation"
+  :type :expense :name "Superannuation expense (employer SG)"
+  :tags [:au-payroll-er-super]}
+ {:code "479" :path "Expenses:Payroll:State-Payroll-Tax"
+  :type :expense :name "State payroll tax expense (employer)"
+  :tags [:au-payroll-er-state-tax]}
+ {:code "480" :path "Expenses:Payroll:Workers-Comp"
+  :type :expense :name "Workers compensation premium expense"
+  :tags [:au-payroll-er-workers-comp]}
+
+ ;; ──────────────────────────────────────────────────────────────────
+ ;; LIABILITY SIDE — ATO statutory + super payable
+ ;; ──────────────────────────────────────────────────────────────────
+ {:code "814" :path "Liabilities:Payroll:Wages-Payable-Net"
+  :type :liability :name "Wages payable (net to employees)"
+  :tags [:au-payroll-net-wages]
+  :reconcilable? true}
+ {:code "825" :path "Liabilities:Payroll:PAYGW"
+  :type :liability :name "PAYG withholding payable (ATO)"
+  :tags [:au-payroll-paygw :au-bas-w2-payg-w]
+  :reconcilable? true}
+ {:code "826" :path "Liabilities:Payroll:Super-Payable"
+  :type :liability :name "Superannuation payable (SuperStream)"
+  :tags [:au-payroll-super]
+  :reconcilable? true}
+ {:code "827" :path "Liabilities:Payroll:Super-Employee"
+  :type :liability :name "Employee super contributions payable"
+  :tags [:au-payroll-super-employee]}
+ {:code "828" :path "Liabilities:Payroll:Salary-Sacrifice"
+  :type :liability :name "Salary-sacrifice deductions clearing"
+  :tags [:au-payroll-salary-sacrifice]}
+ {:code "829" :path "Liabilities:Payroll:State-Payroll-Tax"
+  :type :liability :name "State payroll tax payable (per-state via :state analytic)"
+  :tags [:au-payroll-state-tax]}
+ {:code "830" :path "Liabilities:Payroll:Workers-Comp"
+  :type :liability :name "Workers compensation premium payable"
+  :tags [:au-payroll-workers-comp]}
+ {:code "831" :path "Liabilities:Payroll:Child-Support"
+  :type :liability :name "Child support deductions payable (Services Australia)"
+  :tags [:au-payroll-child-support]}
+ {:code "832" :path "Liabilities:Payroll:Other-Deductions"
+  :type :liability :name "Other voluntary employee deductions"
+  :tags [:au-payroll-other-deduction]}]

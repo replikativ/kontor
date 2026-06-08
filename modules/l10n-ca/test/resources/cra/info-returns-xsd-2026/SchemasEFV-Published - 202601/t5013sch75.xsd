@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!--
+Description: Specialty Business Returns - Clean Technology Investment Tax Credit (CRA Form T5013 SCH 75 E )
+Contact: CRA, ITB, Solutions, RASD, Business Suite Assessing System, Other Levies
+Date created: October 2024
+Users of this schema:
+-Other Levies System
+
+-->
+<xsd:schema 
+xmlns:ols75="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/ols75/1-0-1" 
+xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+
+targetNamespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/ols75/1-0-1" 
+	elementFormDefault="qualified" attributeFormDefault="unqualified" version="ols75/1-0-1">
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/> 
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/> 	
+
+<!-- T5013Schedule75Data is also referenced by other schemas for importing purposes -->
+	<xsd:element name="T5013Schedule75Data" type="ols75:Schedule75DataType"/>
+	<xsd:complexType name="Schedule75DataType">
+		<xsd:sequence>
+			<!-- Part 1 -->
+			<xsd:element ref="ols75:Schedule75CalculationDetails"  minOccurs="0" maxOccurs="2000"/> 
+			<xsd:element ref="ols75:Schedule75CalculationAllocatedAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols75:Schedule75CalculationTotalAmount"  minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 2 -->
+			<xsd:element ref="ols75:Schedule75AllocationDetails"  minOccurs="0" maxOccurs="2000"/>
+
+			<!-- Part 3 -->
+			<xsd:element ref="ols75:Schedule75RecaptureDetails"  minOccurs="0" maxOccurs="2000"/> 
+			<xsd:element ref="ols75:Schedule75RecaptureAllocatedAmount"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols75:Schedule75RecaptureTotalAmount"  minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 4 -->
+			<xsd:element ref="ols75:Schedule75AllocationRecaptureDetails"  minOccurs="0" maxOccurs="2000"/>
+
+			<!-- Part 5 -->
+			<xsd:element ref="ols75:Schedule75AttestationElectionDetails" minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 6 -->
+			<xsd:element ref="ols75:Schedule75LabourRequirementsDetails" minOccurs="0" maxOccurs="1"/>
+
+			<!-- Part 7 -->
+			<xsd:element ref="ols75:ElectedToMeetLabourRequirementsAddition"  minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="ols75:Schedule75AllocationOfLabourRequirementsDetails"  minOccurs="0" maxOccurs="2000"/>
+
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	
+	<!-- Part 1 Clean technology ITC calculation -->
+	<xsd:element name="Schedule75CalculationDetails" type="ols75:Schedule75CalculationDetailsType"/>
+	<xsd:complexType name="Schedule75CalculationDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols75:CalculationCCAClassNumberText" minOccurs="0" />
+			<xsd:element ref="ols75:CalculationPropertyDescriptionCode" minOccurs="0" />
+			<xsd:element ref="ols75:CalculationProvince" minOccurs="0" />
+			<xsd:element ref="ols75:CalculationAvailableForUseDate" minOccurs="0" />
+			<xsd:element ref="ols75:CalculationDesignatedWorkSite" minOccurs="0" />
+			<xsd:element ref="ols75:CalculationCapitalCostAmount" minOccurs="0" />
+			<xsd:element ref="ols75:CalculationAdjustmentsAmount" minOccurs="0" />
+			<xsd:element ref="ols75:CalculationAssistanceRepaidAmount" minOccurs="0" />
+			<xsd:element ref="ols75:CalculationEligibleAmount" minOccurs="0" />
+			<xsd:element ref="ols75:CalculationSpecifiedPercentage" minOccurs="0" />
+			<xsd:element ref="ols75:CalculationITCAmount" minOccurs="0" />
+			<xsd:element ref="ols75:CalculationElecting" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="CalculationCCAClassNumberText" type= "sdt:NumberType"/>
+	<xsd:element name="CalculationPropertyDescriptionCode">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:CodeType">
+				<xsd:length value="2"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="CalculationProvince"  type= "ccms:CanadianProvinceTerritoryCodeType"/>
+	<xsd:element name="CalculationAvailableForUseDate" type="sdt:DateType"/>
+	<xsd:element name="CalculationDesignatedWorkSite" type="ccms:Character175TextType"/>
+	<xsd:element name="CalculationCapitalCostAmount" type="sdt:AmountType"/>
+	<xsd:element name="CalculationAdjustmentsAmount" type="sdt:AmountType"/>
+	<xsd:element name="CalculationAssistanceRepaidAmount" type="sdt:AmountType"/>
+	<xsd:element name="CalculationEligibleAmount" type="sdt:AmountType"/>
+	<xsd:element name="CalculationSpecifiedPercentage" type="sdt:PercentType"/>
+	<xsd:element name="CalculationITCAmount" type="sdt:AmountType"/>
+	<xsd:element name="CalculationElecting" type="ccms:OneTwoCodeType"/>
+	<xsd:element name="Schedule75CalculationAllocatedAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule75CalculationTotalAmount" type="sdt:AmountType"/>
+	
+	
+	<!-- Part 2 Allocation of clean technology ITC to qualified members -->
+	<xsd:element name="Schedule75AllocationDetails" type="ols75:Schedule75AllocationDetailsType"/>
+	<xsd:complexType name="Schedule75AllocationDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols75:AllocationMemberNameText" minOccurs="0" />
+			<xsd:element ref="ols75:AllocationAccountNumber" minOccurs="0" />
+			<xsd:element ref="ols75:AllocationProportionPercentage" minOccurs="0" />
+			<xsd:element ref="ols75:AllocationAllocatedAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="AllocationMemberNameText"  type= "ccms:Character175TextType"/>
+	<xsd:element name="AllocationAccountNumber">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="AllocationProportionPercentage" type="sdt:PercentType"/>
+	<xsd:element name="AllocationAllocatedAmount" type="sdt:AmountType"/>
+
+
+	<!-- Part 3 Recapture of clean technology ITC -->
+	<xsd:element name="Schedule75RecaptureDetails" type ="ols75:Schedule75RecaptureDetailsType" />
+		<xsd:complexType name="Schedule75RecaptureDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols75:RecaptureCCAClassNumberText" minOccurs="0" />
+			<xsd:element ref="ols75:RecapturePropertyDescriptionCode"  minOccurs="0" />
+			<xsd:element ref="ols75:RecaptureProvince" minOccurs="0" />
+			<xsd:element ref="ols75:RecaptureITCAmount" minOccurs="0" />
+			<xsd:element ref="ols75:RecaptureProportionPercentage" minOccurs="0" />
+			<xsd:element ref="ols75:RecapturePropertyValueAmount" minOccurs="0" />
+			<xsd:element ref="ols75:RecaptureCapitalCostAmount" minOccurs="0" />
+			<xsd:element ref="ols75:RecaptureCalculationAmount" minOccurs="0" />
+			<xsd:element ref="ols75:RecaptureITCRecapturedAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="RecaptureCCAClassNumberText" type= "sdt:NumberType"/>
+	<xsd:element name="RecapturePropertyDescriptionCode">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:CodeType">
+				<xsd:length value="2"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="RecaptureProvince"  type= "ccms:CanadianProvinceTerritoryCodeType"/>
+	<xsd:element name="RecaptureITCAmount" type="sdt:AmountType"/>
+	<xsd:element name="RecaptureProportionPercentage" type="sdt:PercentType"/>
+	<xsd:element name="RecapturePropertyValueAmount" type="sdt:AmountType"/>
+	<xsd:element name="RecaptureCapitalCostAmount" type="sdt:AmountType"/>
+	<xsd:element name="RecaptureCalculationAmount" type="sdt:AmountType"/>
+	<xsd:element name="RecaptureITCRecapturedAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule75RecaptureAllocatedAmount" type="sdt:AmountType"/>
+	<xsd:element name="Schedule75RecaptureTotalAmount" type="sdt:AmountType"/>
+	
+	
+	<!-- Part 4 Allocation of clean technology ITC recapture to qualified members -->
+	<xsd:element name="Schedule75AllocationRecaptureDetails" type="ols75:Schedule75AllocationRecaptureDetailsType"/>
+	<xsd:complexType name="Schedule75AllocationRecaptureDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols75:AllocationRecaptureMemberNameText" minOccurs="0" />
+			<xsd:element ref="ols75:AllocationRecaptureAccountNumber" minOccurs="0" />
+			<xsd:element ref="ols75:AllocationRecaptureProportionPercentage" minOccurs="0" />
+			<xsd:element ref="ols75:AllocationRecaptureAllocatedAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="AllocationRecaptureMemberNameText"  type= "ccms:Character175TextType"/>
+	<xsd:element name="AllocationRecaptureAccountNumber">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="AllocationRecaptureProportionPercentage" type="sdt:PercentType"/>
+	<xsd:element name="AllocationRecaptureAllocatedAmount" type="sdt:AmountType"/>
+
+	
+	<!-- Part 5 Attestation and election to meet labour requirements -->
+	<xsd:element name="Schedule75AttestationElectionDetails" type="ols75:Schedule75AttestationElectionDetailsType"/>
+	<xsd:complexType name="Schedule75AttestationElectionDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols75:AttestationElectionLastName" minOccurs="0"/>
+			<xsd:element ref="ols75:AttestationElectionFirstName" minOccurs="0"/>
+			<xsd:element ref="ols75:AttestationElectionPositionOfficeRank" minOccurs="0"/>
+			<xsd:element ref="ols75:AttestationElectionDate" minOccurs="0"/>
+			<xsd:element ref="ols75:AttestationElectionTelephoneNumber" minOccurs="0"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="AttestationElectionLastName" type="ccms:Character175TextType"/>
+	<xsd:element name="AttestationElectionFirstName" type="ccms:Character175TextType"/>
+	<xsd:element name="AttestationElectionPositionOfficeRank" type="ccms:Character175TextType"/>
+	<xsd:element name="AttestationElectionDate" type="sdt:DateType"/>
+	<xsd:element name="AttestationElectionTelephoneNumber" type="ccms:Character175TextType"/>
+	
+	
+	<!-- Part 6 Labour requirements addition to tax -->
+	<xsd:element name="Schedule75LabourRequirementsDetails" type ="ols75:Schedule75LabourRequirementsDetailsType" />
+	<xsd:complexType name="Schedule75LabourRequirementsDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols75:ElectedToMeetLabourRequirements" minOccurs="0" />
+			<xsd:element ref="ols75:NumberOfCoveredWorkersPaidBelowWageRequirements" minOccurs="0" />
+			<xsd:element ref="ols75:TotalNumberOfDays" minOccurs="0" />
+			<xsd:element ref="ols75:WageRequirementsAmount" minOccurs="0" />
+			<xsd:element ref="ols75:TotalHoursOfLabourRequiredByApprentices" minOccurs="0" />
+			<xsd:element ref="ols75:TotalHoursOfLabourPerformedByApprentices" minOccurs="0" />
+			<xsd:element ref="ols75:ApprenticeshipRequirementsAmount" minOccurs="0" />
+			<xsd:element ref="ols75:LabourRequirementsAmount" minOccurs="0" />
+			<xsd:element ref="ols75:LabourRequirementsTotalAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="ElectedToMeetLabourRequirements" type="ccms:OneTwoCodeType"/>
+	<xsd:element name="NumberOfCoveredWorkersPaidBelowWageRequirements" type="sdt:QuantityType"/>
+	<xsd:element name="TotalNumberOfDays" type="sdt:QuantityType"/>
+	<xsd:element name="WageRequirementsAmount" type="sdt:AmountType"/>
+	<xsd:element name="TotalHoursOfLabourRequiredByApprentices" type="sdt:QuantityType"/>
+	<xsd:element name="TotalHoursOfLabourPerformedByApprentices" type="sdt:QuantityType"/>
+	<xsd:element name="ApprenticeshipRequirementsAmount" type="sdt:AmountType"/>
+	<xsd:element name="LabourRequirementsAmount" type="sdt:AmountType"/>
+	<xsd:element name="LabourRequirementsTotalAmount" type="sdt:AmountType"/>
+
+	
+	<!-- Part 7 Allocation of labour requirements addition to tax to qualified members -->
+	<xsd:element name="Schedule75AllocationOfLabourRequirementsDetails" type="ols75:Schedule75AllocationOfLabourRequirementsDetailsType"/>
+	<xsd:complexType name="Schedule75AllocationOfLabourRequirementsDetailsType">
+		<xsd:sequence>
+			<xsd:element ref="ols75:AllocationOfLabourRequirementsMemberNameText" minOccurs="0" />
+			<xsd:element ref="ols75:AllocationOfLabourRequirementsAccountNumber" minOccurs="0" />
+			<xsd:element ref="ols75:AllocationOfLabourRequirementsProportionPercentage" minOccurs="0" />
+			<xsd:element ref="ols75:AllocationOfLabourRequirementsAllocatedAmount" minOccurs="0" />
+		</xsd:sequence>
+	</xsd:complexType>
+	<xsd:element name="ElectedToMeetLabourRequirementsAddition" type="ccms:OneTwoCodeType"/>
+	<xsd:element name="AllocationOfLabourRequirementsMemberNameText"  type= "ccms:Character175TextType"/>
+	<xsd:element name="AllocationOfLabourRequirementsAccountNumber">
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="AllocationOfLabourRequirementsProportionPercentage" type="sdt:PercentType"/>
+	<xsd:element name="AllocationOfLabourRequirementsAllocatedAmount" type="sdt:AmountType"/>
+	
+</xsd:schema>

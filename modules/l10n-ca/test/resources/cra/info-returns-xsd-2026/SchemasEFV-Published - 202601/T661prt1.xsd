@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<xsd:schema 
+xmlns:olT661Parts1="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts1/1-0-0" 
+			xmlns:sdt="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" 
+			xmlns:ccms="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" 
+			xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+	targetNamespace="http://www.cra-arc.gc.ca/enov/ol/interfaces/efile/partnership/olT661Parts1/1-0-0" 
+	elementFormDefault="qualified" attributeFormDefault="unqualified" version="ols661/1-0-0">
+	
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/sdt/2-2-0" schemaLocation="standarddatatypes.xsd"/> 
+<xsd:import namespace="http://www.cra-arc.gc.ca/xmlns/ccms/1-0-0" schemaLocation="cracommonstructures.xsd"/> 
+
+<xsd:element name="T661Part1Data" type="olT661Parts1:Part1DataType"/>
+	<xsd:complexType name="Part1DataType">
+		<xsd:sequence>
+			<xsd:element ref="olT661Parts1:BN" minOccurs="1"/>
+			<xsd:element ref="olT661Parts1:PeriodStartDate" minOccurs="1"/>
+			<xsd:element ref="olT661Parts1:PeriodEndDate" minOccurs="1"/>
+			<xsd:element ref="olT661Parts1:Field010" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts1:Field050" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts1:Field100" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts1:Field105" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts1:Field110" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts1:Field115" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts1:Field120" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts1:Field125" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts1:Field151" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts1:Part1TableData" minOccurs="0" maxOccurs="200"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	
+	<xsd:element name="BN" type="ccms:BN15Type"/>
+	<xsd:element name="PeriodStartDate" type="sdt:DateType"/>
+	<xsd:element name="PeriodEndDate" type="sdt:DateType"/>
+	<xsd:element name="Field010" type="ccms:Name175CharacterType"/>
+	<xsd:element name="Field050" type="sdt:CountType"/>
+	<xsd:element name="Field100" type="ccms:Name175CharacterType"/>
+	<xsd:element name="Field105" type="ccms:Name30CharacterType"/>
+	<xsd:element name="Field110" type="ccms:Name30CharacterType"/>
+	<xsd:element name="Field115" type="ccms:Name175CharacterType"/>
+	<xsd:element name="Field120" type="ccms:Name30CharacterType"/>
+	<xsd:element name="Field125" type="ccms:Name30CharacterType"/>
+	<xsd:element name="Field151" type="ccms:OneTwoCodeType"/>
+	
+	<xsd:element name="Part1TableData" type="olT661Parts1:Part1TableData"/>
+	<xsd:complexType name="Part1TableData">
+		<xsd:annotation>
+			<xsd:documentation>
+				Part 1 Table data
+				Enter each partner name and their values for fields 153, 156, 157
+			</xsd:documentation>	
+		</xsd:annotation>
+		<xsd:sequence>
+			<xsd:element ref="olT661Parts1:NamesOfThePartners" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts1:Percent" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="olT661Parts1:BnTable" minOccurs="0" maxOccurs="1"/>
+		</xsd:sequence>
+	</xsd:complexType>
+	
+	<xsd:element name="NamesOfThePartners" type="ccms:Name175CharacterType" />
+	<xsd:element name="Percent" type="sdt:PercentType"/>
+	<xsd:element name="BnTable" >
+		<xsd:simpleType>
+			<xsd:restriction base="sdt:NumberType">
+				<xsd:maxLength value="15"/>
+			</xsd:restriction>
+		</xsd:simpleType>
+	</xsd:element>
+	
+</xsd:schema>	
+	
+	
+	
+	

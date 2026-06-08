@@ -1,0 +1,44 @@
+(ns kontor.l10n-au.chart
+  "Australian chart-of-accounts loader. Mirrors the JP / CA pattern.
+
+   The ATO does not mandate a CoA; this is a starter. Tags map each
+   account to its BAS label so the BAS report engine aggregates
+   correctly without re-tagging downstream."
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
+            [datahike.api :as d]))
+
+(defn load-chart []
+  (-> "kontor/l10n_au/chart.edn" io/resource slurp edn/read-string))
+
+(defn- distinct-tags [chart]
+  (->> chart (mapcat :tags) distinct vec))
+
+(defn- tag-tx [tags]
+  (mapv (fn [t] {:kontor.account-tag/name (name t)
+                 :kontor.account-tag/country-code "AU"
+                 :kontor.account-tag/applicability :account})
+        tags))
+
+(defn- ensure-aud []
+  {:kontor.commodity/symbol "AUD"
+   :kontor.commodity/name "Australian Dollar"
+   :kontor.commodity/precision 2
+   :kontor.commodity/iso-4217 "AUD"})
+
+(defn- account-tx
+  [{:keys [code path type name reconcilable? tags]}]
+  (cond-> {:kontor.account/path path :kontor.account/code code :kontor.account/name name
+           :kontor.account/type type :kontor.account/active true
+           :kontor.account/commodity [:kontor.commodity/symbol "AUD"]
+           :kontor.account/reconcilable (boolean reconcilable?)}
+    (seq tags)
+    (assoc :kontor.account/tags
+           (mapv (fn [t] [:kontor.account-tag/name (clojure.core/name t)]) tags))))
+
+(defn install!
+  ([conn] (install! conn (load-chart)))
+  ([conn chart]
+   (d/transact conn [(ensure-aud)])
+   (d/transact conn (tag-tx (distinct-tags chart)))
+   (d/transact conn (mapv account-tx chart))))
