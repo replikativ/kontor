@@ -73,7 +73,7 @@ change.
 (require '[kontor.l10n-us.preset :as us]
          '[kontor.l10n-us.cit-provider :as us-cit])
 
-;; In-memory datahike + USD commodity + QBO-style US chart of accounts
+;; In-memory datahike + USD commodity + a US chart of accounts
 ;; + IRC §11 / §1(h) / §1(j) statute parameters, in one call.
 (def us-conn (us/create-us-db))
 
@@ -109,6 +109,20 @@ substrate — consumers integrate Avalara, TaxJar, TaxCloud, or their
 own engines via the protocol seams. Same logic in DE for trade-tax
 Hebesatz: substrate provides the schedule algebra; consumers supply
 the per-municipality multiplier.
+
+## Try it
+
+We use `kontor` ourselves — for our own business work, and as the
+accounting layer for [simm.is](http://simm.is), where the books are
+part of the business simulation rather than a stub.
+
+If you're considering kontor for your project, please try it. The
+fastest way to get on the same page is text chat — ping us on the
+[Clojurians Slack](https://clojurians.slack.com/) `#simmis` channel
+with what you're trying to do, what worked, and what didn't. A
+GitHub issue works too. We'll try to address requirements and
+features you need to our abilities. Real use is what hardens the
+substrate.
 
 ## Why kontor?
 
@@ -199,7 +213,7 @@ or XSD they were sized against.
 
 ```clojure
 ;; deps.edn
-{:deps {org.replikativ/kontor {:mvn/version "0.1.0-alpha"}}}
+{:deps {org.replikativ/kontor {:mvn/version "LATEST"}}}
 ```
 
 The repo is a monorepo: the kernel ships from `src/`, and each companion
