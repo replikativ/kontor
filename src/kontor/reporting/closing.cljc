@@ -34,11 +34,15 @@
    it refuses if the period already has a closing transaction
    (`:kontor.transaction/closes-period`)."
   (:require [datahike.api :as d]
+            [kontor.money :as m]
             [kontor.reporting.balance :as balance]
             [kontor.compliance.period :as period]
-            [kontor.posting :as posting]
+            [kontor.posting.build :as posting]
             [kontor.validation :as validation])
-  (:import [java.util Date]))
+)
+
+(defn- ->ms [x] #?(:clj (.getTime ^java.util.Date x) :cljs (if (number? x) x (.getTime x))))
+(defn- date-from-millis [ms] #?(:clj (java.util.Date. (long ms)) :cljs (js/Date. ms)))
 
 ;; ============================================================================
 ;; Find P&L accounts with non-zero closing balance
@@ -73,7 +77,7 @@
     (vec
      (for [a accs
            [c m] (account-period-end-balance conn a period-end-date)
-           :when (not (zero? (compare (:amount m) 0M)))]
+           :when (not (m/amount-zero? (:amount m)))]
        {:account-eid a
         :commodity-eid c
         :amount (:amount m)
@@ -94,12 +98,12 @@
         per-commodity-net
         (reduce (fn [acc {:keys [commodity-eid amount]}]
                   (update acc commodity-eid
-                          (fnil #(.add ^java.math.BigDecimal % amount) 0M)))
+                          (fnil #(m/add-amount % amount) (m/zero-amount))))
                 {} non-zero)
         zero-out (mapv (fn [{:keys [account-eid commodity-eid amount]}]
                          {:kontor.posting/account account-eid
                           :kontor.posting/commodity commodity-eid
-                          :kontor.posting/amount (.negate ^java.math.BigDecimal amount)
+                          :kontor.posting/amount (m/negate-amount amount)
                           :kontor.posting/posted-at period-end-date})
                        non-zero)
         retained (mapv (fn [[c net]]
@@ -166,7 +170,7 @@
           end (:kontor.period/end period)
           ;; Last instant inside [start, end). end is exclusive, so we
           ;; subtract 1ms to land on the period's actual close moment.
-          posted-at (or at (Date. (- (.getTime ^Date end) 1)))
+          posted-at (or at (date-from-millis (- (->ms end) 1)))
           non-zero (non-zero-pnl conn posted-at)]
       (if (empty? non-zero)
         ;; Nothing to close — return a sentinel rather than posting an
@@ -206,7 +210,7 @@
                               (d/db conn) ext))
               per-c (reduce (fn [acc {:keys [commodity-eid money]}]
                               (update acc commodity-eid
-                                      #(if % {:amount (.add ^java.math.BigDecimal (:amount %) (:amount money))
+                                      #(if % {:amount (m/add-amount (:amount %) (:amount money))
                                               :commodity (:commodity money)}
                                            money)))
                             {} non-zero)]

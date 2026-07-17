@@ -45,9 +45,7 @@
    substrate is just the protocol + the StaticTable backing store."
   (:require [datahike.api :as d]
             [kontor.gate :as gate]
-            [kontor.money :as money])
-  (:import [java.math BigDecimal]
-           [java.util Date]))
+            [kontor.money :as money]))
 
 ;; ============================================================================
 ;; Protocol
@@ -139,8 +137,8 @@
   "Treat 0M as nil (no rate). Per ADR-072 review P1-72-3 zero is the
    substrate-wide sentinel for \"rate unavailable\" — never \"the rate
    is literally zero\" — so direct and chained lookups behave the same."
-  [^BigDecimal r]
-  (when (and r (not (zero? (.signum r))))
+  [r]
+  (when (and r (not (money/amount-zero? r)))
     r))
 
 (defn- query-exact
@@ -150,7 +148,7 @@
    `[?e :kontor.fx-rate/by-tuple [?from ?to ?date ?type]]` does NOT do tuple
    equality — datahike treats the position-vector as a fresh binding
    for each slot."
-  [db from-eid to-eid ^Date at-date rate-type]
+  [db from-eid to-eid at-date rate-type]
   (non-zero
    (d/q '[:find ?r .
           :in $ ?tuple
@@ -162,7 +160,7 @@
 (defn- query-last-on-or-before
   "Fallback: most recent sample with date ≤ at-date.
    Returns BigDecimal or nil."
-  [db from-eid to-eid ^Date at-date rate-type]
+  [db from-eid to-eid at-date rate-type]
   (let [hits (d/q '[:find ?date ?r
                     :in $ ?from ?to ?cutoff ?type
                     :where
@@ -182,18 +180,18 @@
 
 (defn- query-inverse
   "If from→to is missing, try to→from and invert."
-  [db from-eid to-eid ^Date at-date rate-type fallback?]
+  [db from-eid to-eid at-date rate-type fallback?]
   (when-let [inv (if fallback?
                    (query-last-on-or-before db to-eid from-eid at-date rate-type)
                    (query-exact db to-eid from-eid at-date rate-type))]
-    (when-not (zero? (.signum ^BigDecimal inv))
-      (.divide BigDecimal/ONE ^BigDecimal inv 12 java.math.RoundingMode/HALF_EVEN))))
+    (when-not (money/amount-zero? inv)
+      (money/divide-amounts (money/->amount 1) inv 12 :half-even))))
 
 (defn- lookup-leg
   "Resolve ONE (from→to) rate using exact + (optionally) fallback +
    (optionally) inverse. Returns BigDecimal or nil. The triangulation
    step composes two of these."
-  [db from-eid to-eid ^Date at-date rate-type fallback? inverse?]
+  [db from-eid to-eid at-date rate-type fallback? inverse?]
   (or (query-exact db from-eid to-eid at-date rate-type)
       (and fallback?
            (query-last-on-or-before db from-eid to-eid at-date rate-type))
@@ -205,11 +203,11 @@
    the via pivot can be used even when one leg is only stored as the
    reverse direction (typical for ECB-style feeds where EUR is the
    only base)."
-  [db from-eid to-eid via-eid ^Date at-date rate-type fallback? inverse?]
+  [db from-eid to-eid via-eid at-date rate-type fallback? inverse?]
   (let [f->v (lookup-leg db from-eid via-eid at-date rate-type fallback? inverse?)
         v->t (lookup-leg db via-eid to-eid at-date rate-type fallback? inverse?)]
     (when (and f->v v->t)
-      (.multiply ^BigDecimal f->v ^BigDecimal v->t))))
+      (money/multiply-amounts f->v v->t))))
 
 (defrecord StaticTableProvider [conn opts]
   FxRateProvider
@@ -232,7 +230,7 @@
                          :to-commodity   to-commodity})))
       (cond
         (= from-eid to-eid)
-        BigDecimal/ONE
+        (money/->amount 1)
 
         :else
         (or (lookup-leg db from-eid to-eid at-date rate-type fallback? allow-inv?)
@@ -302,7 +300,7 @@
   (cond-> {:kontor.fx-rate/from-commodity (if (string? from) [:kontor.commodity/symbol from] from)
            :kontor.fx-rate/to-commodity   (if (string? to)   [:kontor.commodity/symbol to]   to)
            :kontor.fx-rate/at-date        at-date
-           :kontor.fx-rate/rate           (if (instance? BigDecimal rate) rate (bigdec rate))
+           :kontor.fx-rate/rate           #?(:clj (if (instance? BigDecimal rate) rate (bigdec rate)) :cljs (money/->amount rate))
            :kontor.fx-rate/rate-type      (or rate-type :spot)
            :kontor.fx-rate/source         (or source :manual)}
     source-doc (assoc :kontor.fx-rate/source-doc source-doc)))
@@ -397,7 +395,7 @@
               (fn [{:keys [at-date rates]}]
                 (mapv
                  (fn [[ccy r]]
-                   (let [bd (if (instance? BigDecimal r) r (bigdec r))]
+                   (let [bd #?(:clj (if (instance? BigDecimal r) r (bigdec r)) :cljs (money/->amount r))]
                      {:from "EUR" :to ccy :at-date at-date :rate bd
                       :rate-type :spot :source :ecb
                       :source-doc "eurofxref-daily"}))
@@ -451,8 +449,8 @@
   (resolve-rate [_ q]
     (some (fn [p]
             (when-let [r (resolve-rate p q)]
-              (when (and (instance? BigDecimal r)
-                         (not (zero? (.signum ^BigDecimal r))))
+              (when (and (money/amount? r)
+                         (not (money/amount-zero? r)))
                 r)))
           providers))
   (resolve-period-rates [_ q]

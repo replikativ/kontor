@@ -72,3 +72,48 @@
   (let [frag (m/money->posting-fragment (m/money "12.34" :EUR))
         back (m/posting->money frag)]
     (is (m/equiv? (m/money "12.34" :EUR) back))))
+
+(defn- rstr [s prec mode] (m/money->str (m/round (m/money s :EUR) prec mode)))
+
+(deftest round-half-even
+  (testing "ties round to even — bit-identical JVM ↔ cljs"
+    (is (= "1.00 EUR" (rstr "1.005" 2 :half-even)) "tie, preceding digit even → stays")
+    (is (= "1.02 EUR" (rstr "1.015" 2 :half-even)) "tie, preceding digit odd → up")
+    (is (= "2 EUR"    (rstr "2.5" 0 :half-even)))
+    (is (= "4 EUR"    (rstr "3.5" 0 :half-even)))
+    (is (= "-1.00 EUR" (rstr "-1.005" 2 :half-even)) "sign-symmetric")
+    (is (= "-2 EUR"   (rstr "-2.5" 0 :half-even)))))
+
+(deftest round-other-modes
+  (is (= "1.01 EUR" (rstr "1.005" 2 :half-up)))
+  (is (= "1.00 EUR" (rstr "1.004" 2 :half-up)))
+  (is (= "1.24 EUR" (rstr "1.231" 2 :ceiling)))
+  (is (= "1.23 EUR" (rstr "1.239" 2 :floor)))
+  (is (= "1.23 EUR" (rstr "1.239" 2 :down)))
+  (is (= "1.24 EUR" (rstr "1.231" 2 :up)))
+  (is (= "-1.24 EUR" (rstr "-1.231" 2 :floor)) "floor goes toward -inf")
+  (testing "scaling up pads exactly"
+    (is (= "1.2000 EUR" (rstr "1.2" 4 :half-even))))
+  (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+               (m/round (m/money "1.00" :EUR) 2 :bogus))))
+
+(deftest multiply-amounts-exact
+  (testing "amount × rate, exact (scale = sum of scales); round after"
+    (let [a (:amount (m/money "1.10" :EUR))
+          b (:amount (m/money "1.10" :EUR))
+          prod (m/->Money (m/multiply-amounts a b) :EUR)]
+      (is (= "1.2100 EUR" (m/money->str prod)) "1.10 × 1.10 = 1.2100 (scale 4)")
+      (is (= "1.21 EUR" (m/money->str (m/round prod 2 :half-even)))))
+    (let [amt (:amount (m/money "100.00" :EUR))
+          rate (:amount (m/money "0.8375" :EUR))
+          conv (m/round (m/->Money (m/multiply-amounts amt rate) :EUR) 2 :half-even)]
+      (is (= "83.75 EUR" (m/money->str conv)) "100.00 × 0.8375 = 83.7500 → 83.75"))))
+
+(deftest divide-amounts-parity
+  (let [d (fn [a b n] (m/money->str (m/->Money (m/divide-amounts (:amount (m/money a :EUR))
+                                                                 (:amount (m/money b :EUR)) n)
+                                               :EUR)))]
+    (is (= "0.333333333333 EUR" (d "1" "3" 12)) "1/3 to 12 places, half-even")
+    (is (= "0.666666666667 EUR" (d "2" "3" 12)) "2/3 rounds the last digit up")
+    (is (= "1.194029850746 EUR" (d "1" "0.8375" 12)) "reciprocal of a rate")
+    (is (= "-0.25 EUR" (d "-1" "4" 2)) "sign-aware")))

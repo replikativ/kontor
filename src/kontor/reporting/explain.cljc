@@ -234,7 +234,7 @@
           {:policy     policy
            :deadline   deadline
            :eligible?  elig?})))
-    (catch Throwable _ nil)))
+    (catch #?(:clj Throwable :cljs :default) _ nil)))
 
 (defn explain-posting
   "Return the full provenance chain for one `:posting` entity.

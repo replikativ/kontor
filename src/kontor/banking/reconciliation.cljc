@@ -46,10 +46,14 @@
    These are real but rare for the SMB workflows the kernel targets;
    v2 layer can address them on top of the v1 schema."
   (:require [clojure.string :as str]
+            [kontor.money :as money]
             [datahike.api :as d]
-            [kontor.posting :as posting]
+            [kontor.posting.build :as posting]
             [kontor.validation :as validation])
-  (:import [java.util Date]))
+)
+
+(defn- ->ms [x] #?(:clj (.getTime ^java.util.Date x) :cljs (if (number? x) x (.getTime x))))
+(defn- now [] #?(:clj (java.util.Date.) :cljs (js/Date.)))
 
 ;; ============================================================================
 ;; Ingestion
@@ -67,8 +71,8 @@
    same date with the same amount don't collide."
   [{:keys [bank date amount] :as candidate}]
   (let [raw (raw-row-text candidate)
-        digest (-> raw .hashCode Integer/toString)
-        date-ms (when date (.getTime ^Date date))]
+        digest #?(:clj (-> raw .hashCode Integer/toString) :cljs (str (hash raw)))
+        date-ms (when date (->ms date))]
     (str (name (or bank :unknown))
          "/" (or date-ms "0")
          "/" amount
@@ -86,7 +90,7 @@
     (cond-> {:kontor.bank-line/external-id    (bank-line-external-id candidate)
              :kontor.bank-line/source-account source-account-eid
              :kontor.bank-line/commodity      commodity-eid
-             :kontor.bank-line/amount         (bigdec amount)
+             :kontor.bank-line/amount         #?(:clj (bigdec amount) :cljs (money/->amount amount))
              :kontor.bank-line/status         :unmatched
              :kontor.bank-line/raw-row        (raw-row-text candidate)}
       bank             (assoc :kontor.bank-line/bank bank)
@@ -167,7 +171,7 @@
                      (assoc-in [tx :date] (when (not= date :__null__) date))
                      (assoc-in [tx :journal-type] jtype)
                      (assoc-in [tx :state] state)
-                     (update-in [tx :ar-amount] (fnil #(.add ^java.math.BigDecimal % amt) 0M))))
+                     (update-in [tx :ar-amount] (fnil #(money/add-amount % amt) (money/zero-amount)))))
                {}
                rows)
         ;; For each candidate sales tx, find any other transactions
@@ -183,16 +187,16 @@
                        [?p :kontor.posting/amount ?amount]]
                      db ar-account-codes)
         settled-by (reduce (fn [acc [tx amt]]
-                             (update acc tx (fnil #(.add ^java.math.BigDecimal % amt) 0M)))
+                             (update acc tx (fnil #(money/add-amount % amt) (money/zero-amount))))
                            {} settled)]
     (->> by-tx
          (keep (fn [[tx fields]]
                  (when (and (= :posted (:state fields))
                             (= :sale (:journal-type fields)))
                    (let [original (:ar-amount fields)
-                         offset (or (settled-by tx) 0M)
-                         open (.add ^java.math.BigDecimal original offset)]
-                     (when (pos? (.signum ^java.math.BigDecimal open))
+                         offset (or (settled-by tx) (money/zero-amount))
+                         open (money/add-amount original offset)]
+                     (when (money/amount-positive? open)
                        {:transaction-eid tx
                         :external-id (:external-id fields)
                         :original-amount original
@@ -229,7 +233,7 @@
                      (assoc-in [tx :date] (when (not= date :__null__) date))
                      (assoc-in [tx :journal-type] jtype)
                      (assoc-in [tx :state] state)
-                     (update-in [tx :ap-amount] (fnil #(.add ^java.math.BigDecimal % amt) 0M))))
+                     (update-in [tx :ap-amount] (fnil #(money/add-amount % amt) (money/zero-amount)))))
                {}
                rows)
         settled (d/q '[:find ?settled ?amount
@@ -242,16 +246,16 @@
                        [?p :kontor.posting/amount ?amount]]
                      db ap-account-codes)
         settled-by (reduce (fn [acc [tx amt]]
-                             (update acc tx (fnil #(.add ^java.math.BigDecimal % amt) 0M)))
+                             (update acc tx (fnil #(money/add-amount % amt) (money/zero-amount))))
                            {} settled)]
     (->> by-tx
          (keep (fn [[tx fields]]
                  (when (and (= :posted (:state fields))
                             (= :purchase (:journal-type fields)))
                    (let [original (:ap-amount fields)
-                         offset (or (settled-by tx) 0M)
-                         open (.add ^java.math.BigDecimal original offset)]
-                     (when (neg? (.signum ^java.math.BigDecimal open))
+                         offset (or (settled-by tx) (money/zero-amount))
+                         open (money/add-amount original offset)]
+                     (when (money/amount-negative? open)
                        {:transaction-eid tx
                         :external-id (:external-id fields)
                         :original-amount original
@@ -282,9 +286,9 @@
    match when bank-amount = open-amount. For AP (payable), invoice
    open is negative; bank outflow is negative → match when
    bank-amount = open-amount."
-  [^java.math.BigDecimal bank-amount ^java.math.BigDecimal open-amount]
+  [bank-amount open-amount]
   (and bank-amount open-amount
-       (zero? (.compareTo bank-amount open-amount))))
+       (zero? (money/compare-amounts bank-amount open-amount))))
 
 (defn- counterparty-matches-partner?
   "True when bank-line counterparty text plausibly refers to the
@@ -308,14 +312,14 @@
      - skip when the running sum + remaining > target * 2 (no chance
        to reach target without overshooting)
      - prefer smaller subsets (caller sorts results by count)"
-  [opens ^java.math.BigDecimal target & {:keys [max-results min-size]
+  [opens target & {:keys [max-results min-size]
                                          :or {max-results 5 min-size 2}}]
   (let [opens (vec (take max-subset-search opens))
         n (count opens)
         results (atom [])]
     (letfn [(go [start picked sum]
               (when (< (count @results) max-results)
-                (let [cmp (.compareTo ^java.math.BigDecimal sum target)]
+                (let [cmp (money/compare-amounts sum target)]
                   (cond
                     (zero? cmp)
                     (when (>= (count picked) min-size)
@@ -325,8 +329,8 @@
                     :else
                     (doseq [i (range start n)]
                       (let [open (nth opens i)
-                            new-sum (.add ^java.math.BigDecimal sum
-                                          ^java.math.BigDecimal (:open-amount open))]
+                            new-sum (money/add-amount sum
+                                          (:open-amount open))]
                         (go (inc i) (conj picked open) new-sum)))))))]
       (go 0 [] 0M)
       @results)))
@@ -362,7 +366,7 @@
         desc (:kontor.bank-line/description bl)
         cp (:kontor.bank-line/counterparty bl)
         cat (:kontor.bank-line/category bl)
-        inflow? (and amount (pos? (.signum ^java.math.BigDecimal amount)))
+        inflow? (and amount (money/amount-positive? amount))
         opens (if inflow?
                 (open-receivables-by-tx db ar-codes)
                 (open-payables-by-tx db ap-codes))
@@ -497,7 +501,7 @@
         bank-acct (:db/id (:kontor.bank-line/source-account bl))
         commodity (:db/id (:kontor.bank-line/commodity bl))
         date (:kontor.bank-line/date bl)
-        inflow? (pos? (.signum ^java.math.BigDecimal amount))
+        inflow? (money/amount-positive? amount)
         contra (case (:kind match)
                  :settle    (ar-or-ap-account db (:transactions match)
                                               ar-codes ap-codes inflow?)
@@ -527,13 +531,13 @@
             :kontor.posting/commodity commodity
             :kontor.posting/posted-at date}
            {:kontor.posting/account contra
-            :kontor.posting/amount (.negate ^java.math.BigDecimal amount)
+            :kontor.posting/amount (money/negate-amount amount)
             :kontor.posting/commodity commodity
             :kontor.posting/posted-at date}]})]
     (conj (vec payment-tx)
           {:db/id bank-line-eid
            :kontor.bank-line/status :reconciled
-           :kontor.bank-line/reconciled-at (Date.)
+           :kontor.bank-line/reconciled-at (now)
            :kontor.bank-line/posting "pay-tx-p0"})))
 
 (defn unmatched-queue

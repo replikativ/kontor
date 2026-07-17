@@ -14,9 +14,11 @@
    Sits on top of `reconciliation/open-receivables-by-tx` and the
    `:kontor.transaction/due-date` attr (set by `payment-term.clj`)."
   (:require [datahike.api :as d]
-            [kontor.banking.reconciliation :as recon])
-  (:import [java.time Instant ZoneOffset]
-           [java.util Date]))
+            [kontor.money :as money]
+            [kontor.banking.reconciliation :as recon]))
+
+(defn- ->ms [x] #?(:clj (.getTime ^java.util.Date x) :cljs (if (number? x) x (.getTime x))))
+(defn- now [] #?(:clj (java.util.Date.) :cljs (js/Date.)))
 
 ;; ============================================================================
 ;; Bucketing
@@ -33,10 +35,8 @@
 
 (defn- days-between
   "Calendar days from `from` to `to` (positive when to > from)."
-  [^Date from ^Date to]
-  (let [from-i (.toInstant from)
-        to-i   (.toInstant to)]
-    (.toDays (java.time.Duration/between from-i to-i))))
+  [from to]
+  (quot (- (->ms to) (->ms from)) 86400000))
 
 (defn- bucket-for
   "Pick the bucket label for `days-overdue`. Returns :not-yet-due
@@ -65,7 +65,7 @@
    (e.g. #{\"1400\"} for SKR04 receivables)."
   [db account-codes
    & {:keys [as-of buckets ar-or-ap]
-      :or {as-of (Date.) buckets default-buckets ar-or-ap :ar}}]
+      :or {as-of (now) buckets default-buckets ar-or-ap :ar}}]
   (let [opens (case ar-or-ap
                 :ar (recon/open-receivables-by-tx db account-codes)
                 :ap (recon/open-payables-by-tx db account-codes))]
@@ -95,11 +95,11 @@
    sums are signed accordingly (caller can `abs` for display)."
   [db account-codes & opts]
   (let [rows (apply aging-rows db account-codes opts)
-        zero (bigdec 0)]
+        zero (money/zero-amount)]
     (reduce (fn [acc r]
               (-> acc
-                  (update (:bucket r) (fnil #(.add ^java.math.BigDecimal % (:open-amount r)) zero))
-                  (update :total      (fnil #(.add ^java.math.BigDecimal % (:open-amount r)) zero))))
+                  (update (:bucket r) (fnil #(money/add-amount % (:open-amount r)) zero))
+                  (update :total      (fnil #(money/add-amount % (:open-amount r)) zero))))
             {:not-yet-due zero :0-30 zero :31-60 zero :61-90 zero :90+ zero
              :total zero}
             rows)))
@@ -114,16 +114,16 @@
    exposures first."
   [db account-codes & opts]
   (let [rows (apply aging-rows db account-codes opts)
-        zero (bigdec 0)]
+        zero (money/zero-amount)]
     (->> rows
          (group-by :partner-eid)
          (map (fn [[partner-eid partner-rows]]
-                (let [total (reduce #(.add ^java.math.BigDecimal %1 (:open-amount %2))
+                (let [total (reduce #(money/add-amount %1 (:open-amount %2))
                                     zero partner-rows)
                       by-bucket (reduce
                                  (fn [acc r]
                                    (update acc (:bucket r)
-                                           (fnil #(.add ^java.math.BigDecimal % (:open-amount r))
+                                           (fnil #(money/add-amount % (:open-amount r))
                                                  zero)))
                                  {} partner-rows)]
                   {:partner-eid partner-eid
@@ -131,6 +131,6 @@
                    :total total
                    :buckets by-bucket
                    :rows partner-rows})))
-         (sort-by (fn [r] (- (.signum ^java.math.BigDecimal (:total r))
-                             (Math/abs (.doubleValue ^java.math.BigDecimal (:total r))))))
+         (sort-by (fn [r] (- (money/amount-sign (:total r))
+                             (Math/abs (money/amount->double (:total r))))))
          vec)))

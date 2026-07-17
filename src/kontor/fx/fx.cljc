@@ -41,7 +41,7 @@
    coupled to a specific feed."
   (:require [kontor.fx.fx-rate-provider :as fx-rate]
             [kontor.money :as money])
-  (:import [java.math BigDecimal RoundingMode]))
+  #?(:clj (:import [java.math BigDecimal])))
 
 ;; ============================================================================
 ;; Single-Money conversion
@@ -106,8 +106,7 @@
                            {:from from :to to :at-date at-date
                             :rate-type rate-type
                             :provider-id (fx-rate/provider-id provider)})))
-         (let [amt (.multiply ^BigDecimal (:amount m) ^BigDecimal rate)
-               raw (money/->Money amt to)]
+         (let [raw (money/->Money (money/multiply-amounts (:amount m) rate) to)]
            (if (nil? precision)
              raw
              (money/round raw precision rounding))))))))
@@ -149,7 +148,8 @@
   (when (nil? to) (throw (ex-info "translate-amounts-by-commodity: :to required" {})))
   (->> amounts
        (mapv (fn [[commodity amt]]
-               (money/->Money (if (instance? BigDecimal amt) amt (bigdec amt))
+               (money/->Money #?(:clj  (if (instance? BigDecimal amt) amt (bigdec amt))
+                                 :cljs (money/->amount amt))
                               commodity)))
        (#(translate-money-seq % provider opts))))
 

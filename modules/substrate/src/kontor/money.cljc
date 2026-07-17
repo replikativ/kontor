@@ -66,7 +66,67 @@
           s]))
      (defn- bd-add [a b] (let [[ua ub s] (bd-align a b)] (bd/bigdec (bi+ ua ub) s)))
      (defn- bd-sub [a b] (let [[ua ub s] (bd-align a b)] (bd/bigdec (bi- ua ub) s)))
-     (defn- bd-neg [a]   (bd/bigdec (bineg (bd/->unscaled a)) (bd/->scale a)))))
+     (defn- bd-neg [a]   (bd/bigdec (bineg (bd/->unscaled a)) (bd/->scale a)))
+     (defn- bi-abs  [a]   (js* "(~{} < 0n ? -~{} : ~{})" a a a))
+     (defn- bi*     [a b] (js* "(~{} * ~{})" a b))
+     (defn- biquot  [a b] (js* "(~{} / ~{})" a b)) ; BigInt division truncates toward zero
+     (defn- bi-odd? [a]   (js* "((~{} % 2n) !== 0n)" a))
+     (defn- bi<     [a b] (js* "(~{} < ~{})" a b))
+     (defn- bi>     [a b] (js* "(~{} > ~{})" a b))
+     (defn- bi>=    [a b] (js* "(~{} >= ~{})" a b))
+     ;; Exact multiply: product scale = sum of operand scales (no rounding).
+     (defn- bd-mul [a b]
+       (bd/bigdec (bi* (bd/->unscaled a) (bd/->unscaled b))
+                  (+ (bd/->scale a) (bd/->scale b))))
+     ;; Round a Bigdec to `n` fractional places under `mode`. Pads (exact) when
+     ;; scaling up; otherwise BigInt-divides the magnitude by 10^(s-n) and
+     ;; rounds the quotient per mode (tie compares 2·remainder to the divisor).
+     (defn- bd-round [m n mode]
+       (let [u (bd/->unscaled m) s (bd/->scale m)]
+         (if (<= s n)
+           (bd/bigdec (bi* u (pow10 (- n s))) n)
+           (let [sign  (bi-sign u)
+                 au    (bi-abs u)
+                 d     (pow10 (- s n))
+                 q     (biquot au d)
+                 r     (bi- au (bi* q d))
+                 two-r (bi* (big 2) r)
+                 up?   (case mode
+                         :down      false
+                         :up        (bi> r (big 0))
+                         :floor     (and (= sign -1) (bi> r (big 0)))
+                         :ceiling   (and (= sign 1)  (bi> r (big 0)))
+                         :half-up   (bi>= two-r d)
+                         :half-down (bi> two-r d)
+                         :half-even (cond (bi< two-r d) false
+                                          (bi> two-r d) true
+                                          :else (bi-odd? q)))
+                 q2    (if up? (bi+ q (big 1)) q)]
+             (bd/bigdec (if (= sign -1) (bineg q2) q2) n)))))
+     ;; a / b to `n` fractional places under `mode` (BigInt long division of the
+     ;; scale-aligned magnitudes, then round the quotient).
+     (defn- bd-divide [a b n mode]
+       (let [ua (bd/->unscaled a) sa (bd/->scale a)
+             ub (bd/->unscaled b) sb (bd/->scale b)
+             shift (+ n (- sb sa))
+             num   (if (>= shift 0) (bi* ua (pow10 shift)) (biquot ua (pow10 (- shift))))
+             rsign (* (bi-sign num) (bi-sign ub))
+             an    (bi-abs num) ad (bi-abs ub)
+             q     (biquot an ad)
+             r     (bi- an (bi* q ad))
+             two-r (bi* (big 2) r)
+             up?   (case mode
+                     :down      false
+                     :up        (bi> r (big 0))
+                     :floor     (and (neg? rsign) (bi> r (big 0)))
+                     :ceiling   (and (pos? rsign) (bi> r (big 0)))
+                     :half-up   (bi>= two-r ad)
+                     :half-down (bi> two-r ad)
+                     :half-even (cond (bi< two-r ad) false
+                                      (bi> two-r ad) true
+                                      :else (bi-odd? q)))
+             q2    (if up? (bi+ q (big 1)) q)]
+         (bd/bigdec (if (neg? rsign) (bineg q2) q2) n)))))
 
 ;; ============================================================================
 ;; Construction
@@ -113,6 +173,13 @@
     (throw (ex-info "Money requires a commodity" {:amount amount})))
   (->Money (coerce-amount amount) commodity))
 
+(defn amount?
+  "True iff `x` is a platform decimal (BigDecimal on the JVM, fress Bigdec in
+   cljs) — the raw type inside a Money's `:amount`."
+  [x]
+  #?(:clj  (instance? BigDecimal x)
+     :cljs (bd/bigdec? x)))
+
 (defn ->amount
   "Coerce `x` (string \"1234.56\", integer, or a platform decimal) to the
    platform decimal — BigDecimal on the JVM, fress `Bigdec` in cljs. Rejects
@@ -151,6 +218,38 @@
   [x]
   #?(:clj  (== 0 (.signum ^BigDecimal x))
      :cljs (bi-zero? (bd/->unscaled x))))
+
+(defn amount-positive?
+  "True iff a raw platform decimal is > 0. cljc."
+  [x]
+  #?(:clj  (pos? (.signum ^BigDecimal x))
+     :cljs (pos? (bi-sign (bd/->unscaled x)))))
+
+(defn amount-sign
+  "Sign of a raw platform decimal: -1, 0, or 1. cljc."
+  [x]
+  #?(:clj  (.signum ^BigDecimal x)
+     :cljs (bi-sign (bd/->unscaled x))))
+
+(defn amount-negative?
+  "True iff a raw platform decimal is < 0. cljc."
+  [x]
+  #?(:clj  (neg? (.signum ^BigDecimal x))
+     :cljs (neg? (bi-sign (bd/->unscaled x)))))
+
+(defn compare-amounts
+  "Compare two raw platform decimals, returning a negative/zero/positive int
+   like `compareTo` (scale-insensitive). cljc."
+  [a b]
+  #?(:clj  (.compareTo ^BigDecimal a ^BigDecimal b)
+     :cljs (bi-sign (bd/->unscaled (bd-sub a b)))))
+
+(defn amount->double
+  "Approximate double value of a raw platform decimal — for sort keys / display
+   only, NOT arithmetic (lossy). cljc."
+  [x]
+  #?(:clj  (.doubleValue ^BigDecimal x)
+     :cljs (js/parseFloat (bd/->str x))))
 
 (defn zero
   "Money with zero amount in the given commodity."
@@ -275,20 +374,43 @@
       :down      RoundingMode/DOWN
       :up        RoundingMode/UP}))
 
-#?(:clj
-   (defn round
-     "Round a Money to the given fractional precision (default 2). Mode keyword
-      from `rounding-modes` (default :half-even). Returns a new Money."
-     (^Money [^Money m]
-      (round m 2 :half-even))
-     (^Money [^Money m precision]
-      (round m precision :half-even))
-     (^Money [^Money m precision mode]
-      (let [rm (or (get rounding-modes mode)
-                   (throw (ex-info "Unknown rounding mode"
-                                   {:mode mode :supported (keys rounding-modes)})))]
-        (->Money (.setScale ^BigDecimal (:amount m) (int precision) ^RoundingMode rm)
-                 (:commodity m))))))
+(def valid-rounding-modes
+  "The rounding-mode keywords `round` accepts (ADR-013). cljc — the JVM maps
+   these to java.math.RoundingMode; cljs implements them over js/BigInt."
+  #{:half-even :half-up :half-down :ceiling :floor :down :up})
+
+(defn multiply-amounts
+  "Multiply two raw platform decimals (BigDecimal / Bigdec) EXACTLY — the
+   product's scale is the sum of the operands' scales, no rounding. cljc; for
+   FX conversion (amount × rate) before an explicit `round`."
+  [a b]
+  #?(:clj  (.multiply ^BigDecimal a ^BigDecimal b)
+     :cljs (bd-mul a b)))
+
+(defn divide-amounts
+  "Divide raw platform decimal `a` by `b` to `scale` fractional places using
+   `mode` (default :half-even). cljc; for FX reciprocal rates (1 / rate)."
+  ([a b scale] (divide-amounts a b scale :half-even))
+  ([a b scale mode]
+   (when-not (contains? valid-rounding-modes mode)
+     (throw (ex-info "Unknown rounding mode" {:mode mode :supported valid-rounding-modes})))
+   #?(:clj  (.divide ^BigDecimal a ^BigDecimal b (int scale) ^RoundingMode (get rounding-modes mode))
+      :cljs (bd-divide a b scale mode))))
+
+(defn round
+  "Round a Money to `precision` fractional places (default 2) using `mode` (a
+   keyword from `valid-rounding-modes`, default :half-even). Returns a new
+   Money. cljc — bit-identical HALF_EVEN etc. on JVM and in the browser."
+  ([m] (round m 2 :half-even))
+  ([m precision] (round m precision :half-even))
+  ([m precision mode]
+   (when-not (contains? valid-rounding-modes mode)
+     (throw (ex-info "Unknown rounding mode"
+                     {:mode mode :supported valid-rounding-modes})))
+   (->Money #?(:clj  (.setScale ^BigDecimal (:amount m) (int precision)
+                                ^RoundingMode (get rounding-modes mode))
+               :cljs (bd-round (:amount m) precision mode))
+            (:commodity m))))
 
 #?(:clj
    (defn split-by-percentages

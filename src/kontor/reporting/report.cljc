@@ -54,10 +54,7 @@
   (:require [clojure.set]
             [clojure.string :as str]
             [datahike.api :as d]
-            ;; fx (multi-currency :translate-to) is JVM-only — it needs a bigdec
-            ;; rounding shim cljs money doesn't have yet (note 191). Single-currency
-            ;; reports never touch it; the cljs :translate-to path throws below.
-            #?(:clj [kontor.fx.fx :as fx])
+            [kontor.fx.fx :as fx]
             [kontor.money :as money]))
 
 ;; ============================================================================
@@ -508,12 +505,10 @@
                                    :line/postings postings}]
                          (if translate-to
                            (assoc line :line/value-translated
-                                  #?(:clj (fx/convert value fx-provider
-                                                      {:to translate-to
-                                                       :at-date translate-at
-                                                       :rate-type rate-type})
-                                     :cljs (throw (ex-info "report :translate-to is JVM-only for now (needs a cljs bigdec rounding shim)"
-                                                           {:type :kontor.report/translate-cljs-unsupported}))))
+                                  (fx/convert value fx-provider
+                                              {:to translate-to
+                                               :at-date translate-at
+                                               :rate-type rate-type}))
                            line)))
                      (:report/lines report))]
      {:report/name (:report/name report)
