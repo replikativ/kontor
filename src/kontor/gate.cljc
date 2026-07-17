@@ -131,8 +131,10 @@
                       {:error :gate/not-registered})))
     (let [diags (-> []
                     (into (try (inv/assert-invariants conn tx-data) nil
-                               (catch clojure.lang.ExceptionInfo e [(ex->diagnostic e)])))
+                               (catch #?(:clj clojure.lang.ExceptionInfo :cljs cljs.core/ExceptionInfo) e
+                                 [(ex->diagnostic e)])))
                     (into (try (f @conn tx-data) nil        ; run validators against the live db; no commit
-                               (catch clojure.lang.ExceptionInfo e [(ex->diagnostic e)]))))]
+                               (catch #?(:clj clojure.lang.ExceptionInfo :cljs cljs.core/ExceptionInfo) e
+                                 [(ex->diagnostic e)]))))]
       {:ok?         (empty? diags)
        :diagnostics (vec diags)})))

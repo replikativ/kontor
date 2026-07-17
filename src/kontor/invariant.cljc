@@ -37,13 +37,20 @@
    inside invariant queries; preserved here."
   (:refer-clojure :exclude [+])
   (:require [clojure.edn :as edn]
+            [clojure.string :as str]
             [clojure.walk :as walk]
             [datahike.api :as d]
             [datahike.core :as dc]
             [datahike.query :as dq]
-            [datalog.parser :as p]))
+            [datalog.parser :as p]
+            [datalog.parser.type]))
 
-(alter-var-root #'dq/built-ins assoc 'subquery datahike.api/q)
+;; JVM-only: register `subquery` as a query built-in. Kontor's shipped
+;; invariants use the `(q …)` FUNCTION-FORM subquery (a first-class datahike
+;; built-in, present in cljs too — see resources/invariants/account_active.edn
+;; and note 192), NOT the `subquery` built-in, so cljs needs no registration.
+;; (`alter-var-root` is JVM-only anyway.)
+#?(:clj (alter-var-root #'dq/built-ins assoc 'subquery datahike.api/q))
 
 ;; ============================================================================
 ;; Query validator (was invariant.query)
@@ -63,8 +70,11 @@
    if your invariants need to call additional pure fns."
   (into #{'subquery} (keys datahike.query/built-ins)))
 
-(let [fn-selector (comp #{datalog.parser.type.Function
-                          datalog.parser.type.Predicate} type)]
+(let [fn-selector (comp #?(:clj  #{datalog.parser.type.Function
+                                   datalog.parser.type.Predicate}
+                           :cljs #{datalog.parser.type/Function
+                                   datalog.parser.type/Predicate})
+                        type)]
   (defn assert-valid-query
     "Walk `query` and reject if it (a) doesn't have exactly 4 sources
      (`$before $after $empty-with-txs $tx-seq`), (b) calls a fn that
@@ -221,7 +231,7 @@
        (let [ns (namespace (first x))]
          (or (nil? ns)
              (and (not= ns "db")
-                  (not (.startsWith ^String ns "db.")))))))
+                  (not (str/starts-with? ns "db.")))))))
 
 (defn- collect-lookup-refs
   "Walk `tx-data` and return the set of every lookup-ref `[:attr value]`
@@ -283,16 +293,21 @@
 ;; base engine. The toggle is resolved dynamically so kontor still loads on
 ;; datahike versions predating it (where the var — and the bug — don't exist).
 (def ^:private disable-planner-var
-  (try (requiring-resolve 'datahike.query/*disable-planner*)
-       (catch Throwable _ nil)))
+  #?(:clj  (try (requiring-resolve 'datahike.query/*disable-planner*)
+                (catch Throwable _ nil))
+     ;; cljs: no `requiring-resolve`; the JVM-planner scope-leak bug this
+     ;; mitigates doesn't apply to the cljs engine (the smoke test confirms
+     ;; `(q …)` invariants evaluate correctly), so fall back to plain `d/q`.
+     :cljs nil))
 
 (defn- run-inv-query
   "Run an invariant query with the datahike planner disabled (base engine),
    falling back to a plain `d/q` when the toggle is unavailable."
   [q & sources]
-  (if disable-planner-var
-    (with-bindings {disable-planner-var true} (apply d/q q sources))
-    (apply d/q q sources)))
+  #?(:clj  (if disable-planner-var
+             (with-bindings {disable-planner-var true} (apply d/q q sources))
+             (apply d/q q sources))
+     :cljs (apply d/q q sources)))
 
 (defn- invariant-holds? [inv-qs conn tx-data schema]
   ;; Datahike's `dc/empty-db` defaults to `:schema-flexibility :read`,
