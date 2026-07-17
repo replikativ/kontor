@@ -269,6 +269,31 @@
             {:db/id (str "kontor.invariant/seed-" i) a v})))
        vec))
 
+;; The datahike query planner (default-on since datahike 0.8.1705) can
+;; mis-plan the invariant queries below — a nested `(q …)` subquery bound to
+;; a var, then reduced to a boolean via `count`/`=` — on realistically-sized
+;; `$after` databases: it returns `nil` for the scalar find where the base
+;; (relational) engine correctly returns `true`, fabricating a spurious
+;; invariant mismatch. Confirmed cardinality-dependent (a tiny reconstruction
+;; plans correctly; only a large db trips it). See research note 190; a
+;; minimal repro is tracked as a datahike bug.
+;;
+;; Integrity invariants are correctness checks where the planner's *speed* is
+;; irrelevant but its *correctness* is essential, so we evaluate them on the
+;; base engine. The toggle is resolved dynamically so kontor still loads on
+;; datahike versions predating it (where the var — and the bug — don't exist).
+(def ^:private disable-planner-var
+  (try (requiring-resolve 'datahike.query/*disable-planner*)
+       (catch Throwable _ nil)))
+
+(defn- run-inv-query
+  "Run an invariant query with the datahike planner disabled (base engine),
+   falling back to a plain `d/q` when the toggle is unavailable."
+  [q & sources]
+  (if disable-planner-var
+    (with-bindings {disable-planner-var true} (apply d/q q sources))
+    (apply d/q q sources)))
+
 (defn- invariant-holds? [inv-qs conn tx-data schema]
   ;; Datahike's `dc/empty-db` defaults to `:schema-flexibility :read`,
   ;; whose validator rejects predeclared scalar types
@@ -293,14 +318,14 @@
         seed        (seed-from-lookup-refs db refs)
         empty-db    (dc/empty-db schema {:schema-flexibility flex})
         empty+seed  (if (seq seed) (dc/db-with empty-db seed) empty-db)]
-    (d/q (edn/read-string inv-qs)
-         ;; current state
-         db
-         ;; apply transaction to current state
-         (dc/db-with db tx-data)
-         ;; empty database + lookup-ref seeds, with transaction applied
-         (dc/db-with empty+seed tx-data)
-         tx-data)))
+    (run-inv-query (edn/read-string inv-qs)
+                   ;; current state
+                   db
+                   ;; apply transaction to current state
+                   (dc/db-with db tx-data)
+                   ;; empty database + lookup-ref seeds, with transaction applied
+                   (dc/db-with empty+seed tx-data)
+                   tx-data)))
 
 (defn- spread-attrs
   "`get-attribute` returns either a single attribute (for tuple tx forms)

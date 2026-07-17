@@ -11,6 +11,11 @@
 ;; module hardens enough to have external consumers, it can be split
 ;; into its own artifact without code changes — only deps.edn moves.
 {:paths ["src" "resources"
+         ;; substrate — dep-light value layer (kontor.money); own deps.edn
+         ;; because dvergr consumes it standalone. See modules/substrate/README.
+         "modules/substrate/src"
+         ;; metering — usage-subledger → GL accrual summarizer (note 190 Piece C)
+         "modules/metering/src"
          "modules/partner/src"     "modules/partner/resources"
          "modules/sales/src"       "modules/sales/resources"
          "modules/invoice/src"     "modules/invoice/resources"
@@ -59,7 +64,11 @@
 
  :deps
  {org.clojure/clojure              {:mvn/version "1.12.4"}
-  org.replikativ/datahike          {:mvn/version "0.8.1699"}
+  ;; 0.8.1734: bitemporal-v1 in mainline + the query planner (default-on
+  ;; since 0.8.1705). 0.8.1734 fixes the planner scope-leak bugs (#883)
+  ;; surfaced by kontor's invariants + report queries (nested-q function-var
+  ;; scope leak; variable-binding type confusion). Kept in step with simmis.
+  org.replikativ/datahike          {:mvn/version "0.8.1734"}
   ;; ADR-011's declarative datalog invariants now live inline at
   ;; `kontor.invariant` (vendored from datopia/invariant, MIT, maintained
   ;; by us). Single-dep posture per ADR-001 preserved.
@@ -83,6 +92,8 @@
  :aliases
  {:test
   {:extra-paths ["test" "test/resources"
+                 "modules/substrate/test"
+                 "modules/metering/test"
                  "modules/partner/test"      "modules/partner/test/resources"
                  "modules/sales/test"        "modules/sales/test/resources"
                  "modules/invoice/test"      "modules/invoice/test/resources"
@@ -136,6 +147,8 @@
   ;; Mirrors the convention used in pg-datahike and beleg.
   :dev
   {:extra-paths ["test" "test/resources" "dev"
+                 "modules/substrate/test"
+                 "modules/metering/test"
                  "modules/partner/test"      "modules/partner/test/resources"
                  "modules/sales/test"        "modules/sales/test/resources"
                  "modules/invoice/test"      "modules/invoice/test/resources"
