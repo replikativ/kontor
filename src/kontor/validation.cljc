@@ -29,9 +29,10 @@
    validators in order. Per T-2 of note 160 the gate API itself
    lives in `kontor.gate`; this namespace registers the composed
    `validate-and-apply` into `kontor.gate` at load time."
-  (:require [clojure.java.io :as io]
+  (:require #?(:clj [clojure.java.io :as io])
             [datahike.api :as d]
             [kontor.gate :as gate]
+            [kontor.money :as money]
             [kontor.compliance.legal-hold :as legal-hold]
             [kontor.compliance.period :as period]
             [kontor.compliance.sealing :as sealing]
@@ -49,16 +50,53 @@
 ;; depends on the EDN-on-disk + the registration sequencing.
 ;; ============================================================================
 
-(defn- read-invariant
-  "Read an invariant query from resources/invariants/<name>.edn and
-   return the EDN string ready for storage."
-  [resource-name]
-  (let [r (io/resource (str "invariants/" resource-name ".edn"))]
-    (when-not r
-      (throw (ex-info "Invariant resource not found"
-                      {:name resource-name
-                       :looked-in (str "resources/invariants/" resource-name ".edn")})))
-    (slurp r)))
+#?(:clj
+   (defn- read-invariant
+     "Read an invariant query from resources/invariants/<name>.edn and
+      return the EDN string ready for storage. JVM-only: the browser can't
+      slurp resources, so cljs inlines the same queries below."
+     [resource-name]
+     (let [r (io/resource (str "invariants/" resource-name ".edn"))]
+       (when-not r
+         (throw (ex-info "Invariant resource not found"
+                         {:name resource-name
+                          :looked-in (str "resources/invariants/" resource-name ".edn")})))
+       (slurp r))))
+
+;; The invariant queries: JVM reads them verbatim from resources/invariants/;
+;; cljs inlines the equivalent EDN string (edn/read-string parses to the same
+;; query — the resource copy carries datalog-gotcha comments the reader drops).
+(def ^:private account-active-query
+  #?(:clj  (read-invariant "account_active")
+     :cljs "[:find ?matches .
+             :in $before $after $empty+txs $txs
+             :where
+             [(q [:find ?p
+                  :in $after $empty+txs
+                  :where
+                  [$empty+txs ?p :kontor.posting/account ?account]
+                  [$after ?account :kontor.account/active false]]
+                 $after $empty+txs)
+              ?violators]
+             [(count ?violators) ?n-violators]
+             [(= 0 ?n-violators) ?matches]]"))
+
+(def ^:private commodity-match-query
+  #?(:clj  (read-invariant "commodity_match")
+     :cljs "[:find ?matches .
+             :in $before $after $empty+txs $txs
+             :where
+             [(q [:find ?p
+                  :in $after $empty+txs
+                  :where
+                  [$empty+txs ?p :kontor.posting/account ?account]
+                  [$empty+txs ?p :kontor.posting/commodity ?p-commodity]
+                  [$after ?account :kontor.account/commodity ?a-commodity]
+                  [(not= ?p-commodity ?a-commodity)]]
+                 $after $empty+txs)
+              ?violators]
+             [(count ?violators) ?n-violators]
+             [(= 0 ?n-violators) ?matches]]"))
 
 (def kernel-invariants
   "The built-in invariants the kernel installs. Each is `{:rule attr
@@ -69,9 +107,9 @@
    Two invariants on different rule attrs both fire when a typical
    posting tx touches both attributes."
   [{:rule  :kontor.posting/account
-    :query (read-invariant "account_active")}
+    :query account-active-query}
    {:rule  :kontor.posting/commodity
-    :query (read-invariant "commodity_match")}])
+    :query commodity-match-query}])
 
 (defn install-invariants!
   "Register the kernel's built-in invariants (account-active +
@@ -106,8 +144,9 @@
   [tx-data]
   (let [add-amt
         (fn [acc tx-eid commodity amount]
-          (update-in acc [tx-eid commodity]
-                     (fnil #(.add ^java.math.BigDecimal % (bigdec amount)) 0M)))]
+          (let [amt #?(:clj (bigdec amount) :cljs (money/->amount amount))]
+            (update-in acc [tx-eid commodity]
+                       (fnil #(money/add-amount % amt) (money/zero-amount)))))]
     (reduce
      (fn [acc entry]
        (cond
@@ -146,7 +185,7 @@
           :when (not= tx-eid :__by-posting-eid__)
           [commodity total] commodities
           :when (and total
-                     (not (zero? (.signum ^java.math.BigDecimal total))))]
+                     (not (money/amount-zero? total)))]
     (throw (ex-info (str "Postings for transaction " tx-eid
                          " do not sum to zero per commodity.")
                     {:type :validation/sum-to-zero

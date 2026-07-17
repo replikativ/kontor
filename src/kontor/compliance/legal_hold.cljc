@@ -51,6 +51,11 @@
             [kontor.gate :as gate]
             [kontor.workflow.status-machine :as sm]))
 
+(defn- now
+  "Current instant — a Date on the JVM, a js/Date in cljs."
+  []
+  #?(:clj (java.util.Date.) :cljs (js/Date.)))
+
 ;; legal-hold is a validator INSIDE `kontor.validation`'s gate
 ;; (`assert-no-hold-violating-destructive-writes!`). Per T-2
 ;; the gate API lives in `kontor.gate`, a leaf ns that doesn't
@@ -220,11 +225,11 @@
   (when (and (string? s) (not (clojure.string/blank? s)))
     (let [q (try
               (edn/read-string s)
-              (catch Exception e
+              (catch #?(:clj Exception :cljs :default) e
                 (throw (ex-info "Invalid EDN in :scope-query"
                                 {:type :kontor.legal-hold/invalid-scope-query
                                  :scope-query s
-                                 :cause (.getMessage e)}))))]
+                                 :cause (ex-message e)}))))]
       (when-not (and (vector? q) (= :find (first q)))
         (throw (ex-info ":scope-query must be a [:find ?eid :where …] vector"
                         {:type :kontor.legal-hold/invalid-scope-query
@@ -438,7 +443,7 @@
   ;; P2-1: validate the scope-query at placement time — a malformed
   ;; query throws here rather than at the first purge.
   (parse-scope-query scope-query)
-  (let [placed-at (or placed-at (java.util.Date.))
+  (let [placed-at (or placed-at (now))
         row (cond-> {:db/id tempid
                      :kontor.legal-hold/code code
                      :kontor.legal-hold/matter-name matter-name
@@ -504,7 +509,7 @@
 
    The pure tx-data builder is `place-tx-data` (ADR-068)."
   [conn {:keys [vt-from vt-to] :as opts}]
-  (let [placed-at (java.util.Date.)
+  (let [placed-at (now)
         opts (assoc opts :placed-at placed-at)]
     (gate/transact-with-validation
      conn (kbt/with-vt (place-tx-data (d/db conn) opts)
@@ -527,7 +532,7 @@
     :entity-type :legal-hold
     :facet :kontor.legal-hold/state
     :to :released
-    :changed-at (or released-at (java.util.Date.))
+    :changed-at (or released-at (now))
     :changed-by-uid released-by-uid
     :reason (or reason :hold-released)
     :reason-note reason-note
@@ -551,7 +556,7 @@
 
    The pure tx-data builder is `release-tx-data` (ADR-068)."
   [conn {:keys [vt-from vt-to] :as opts}]
-  (let [now (java.util.Date.)
+  (let [now (now)
         opts (assoc opts :released-at now)]
     (gate/transact-with-validation
      conn (kbt/with-vt (release-tx-data (d/db conn) opts)

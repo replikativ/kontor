@@ -31,8 +31,12 @@
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
             [kontor.gate :as gate]
-            [kontor.money :as money])
-  (:import [java.util Date]))
+            [kontor.money :as money]))
+
+(defn- now
+  "Current instant — a Date on the JVM, a js/Date in cljs."
+  []
+  #?(:clj (java.util.Date.) :cljs (js/Date.)))
 
 ;; period is a validator INSIDE `kontor.validation`'s gate
 ;; (`assert-not-in-locked-period!` / `assert-no-write-on-sealed!`).
@@ -74,7 +78,7 @@
 
 (defn- in-range?
   "[start, end) range check."
-  [^Date d ^Date start ^Date end]
+  [d start end]
   (and (some? d)
        (>= (.compareTo d start) 0)
        (< (.compareTo d end) 0)))
@@ -88,7 +92,7 @@
      (d) match the posting's `:period-tag` (or are the :normal period
          when the posting tag is :normal — both sides default to
          :normal when absent)."
-  [db ^Date valid-from journal-eid period-tag]
+  [db valid-from journal-eid period-tag]
   (->> (d/q '[:find ?p ?start ?end ?j ?tag ?locked ?sealed
               :in $
               :where
@@ -102,7 +106,7 @@
               (or [?p :kontor.period/locked-at]
                   [?p :kontor.period/sealed-at])]
             db)
-       (keep (fn [[p ^Date start ^Date end j tag locked sealed]]
+       (keep (fn [[p start end j tag locked sealed]]
                (when (and (in-range? valid-from start end)
                           (or (= j :__none) (= j journal-eid))
                           (= tag period-tag))
@@ -321,7 +325,7 @@
    as a `:db.type/long` value; that denorm is metadata and stays
    outside the gated lock event."
   [db period-eid {:keys [at pre-checks]
-                  :or {at (Date.) pre-checks default-pre-close-checks}}]
+                  :or {at (now) pre-checks default-pre-close-checks}}]
   (when-not (open? db period-eid)
     (throw (ex-info "Period already closed"
                     {:type :kontor.period/already-closed
@@ -372,7 +376,7 @@
 
 (defn seal-tx-data
   "Pure tx-data builder for `seal!` (ADR-068)."
-  [db period-eid {:keys [at sealed-by] :or {at (Date.)}}]
+  [db period-eid {:keys [at sealed-by] :or {at (now)}}]
   (let [this (d/pull db [:kontor.period/end :kontor.period/locked-at :kontor.period/sealed-at] period-eid)]
     (when (some? (:kontor.period/sealed-at this))
       (throw (ex-info "Period already sealed"

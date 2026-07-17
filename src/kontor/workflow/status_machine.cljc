@@ -38,6 +38,17 @@
   (:require [datahike.api :as d]
             [kontor.gate :as gate]))
 
+(defn- now
+  "Current instant — a Date on the JVM, a js/Date in cljs."
+  []
+  #?(:clj (java.util.Date.) :cljs (js/Date.)))
+
+(defn- millis-ago
+  "An instant `millis` before now."
+  [millis]
+  #?(:clj  (java.util.Date. (- (System/currentTimeMillis) millis))
+     :cljs (js/Date. (- (.getTime (js/Date.)) millis))))
+
 ;; status-machine is used by kontor.compliance.legal-hold (a sub-validator inside
 ;; kontor.validation's gate). Per T-2, the gate API lives in
 ;; the leaf ns `kontor.gate`, which depends on neither this ns nor
@@ -341,7 +352,7 @@
                            :kontor.status-history/entity-type entity-type
                            :kontor.status-history/facet       facet
                            :kontor.status-history/to          to
-                           :kontor.status-history/changed-at  (or changed-at (java.util.Date.))}
+                           :kontor.status-history/changed-at  (or changed-at (now))}
                     from               (assoc :kontor.status-history/from from)
                     changed-by-uid     (assoc :kontor.status-history/changed-by-uid changed-by-uid)
                     reason             (assoc :kontor.status-history/reason reason)
@@ -418,7 +429,7 @@
    transition out of from-state. Bitemporal: counts wall-clock time
    from :kontor.status-history/changed-at, not datahike tx-time."
   [db entity-type facet from-state millis]
-  (let [threshold (java.util.Date. (- (System/currentTimeMillis) millis))
+  (let [threshold (millis-ago millis)
         rows (d/q '[:find ?entity ?from-when
                     :in $ ?et ?facet ?from
                     :where

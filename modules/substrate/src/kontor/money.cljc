@@ -130,6 +130,28 @@
   #?(:clj  (.negate ^BigDecimal x)
      :cljs (bd-neg x)))
 
+(defn add-amount
+  "Add two raw platform decimals (BigDecimal / Bigdec). cljc — for validators
+   that accumulate posting amounts without wrapping each in `Money`."
+  [a b]
+  #?(:clj  (.add ^BigDecimal a ^BigDecimal b)
+     :cljs (bd-add a b)))
+
+(defn zero-amount
+  "The platform-decimal zero (BigDecimal `0M` / Bigdec 0) — a `fnil` seed for
+   an amount accumulator."
+  []
+  #?(:clj  0M
+     :cljs (str->bigdec "0")))
+
+(defn amount-zero?
+  "True iff a raw platform decimal is zero (scale-insensitive). NB this ns
+   excludes core `zero?` (it defines a Money-level `zero?`), so compare the
+   sign directly rather than calling `zero?`."
+  [x]
+  #?(:clj  (== 0 (.signum ^BigDecimal x))
+     :cljs (bi-zero? (bd/->unscaled x))))
+
 (defn zero
   "Money with zero amount in the given commodity."
   [commodity]
