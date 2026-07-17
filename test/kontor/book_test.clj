@@ -280,3 +280,59 @@
             "Hans's AP leg must not show under UG's per-entity TB")
         (is (not (contains? paths "Expenses:Supplies"))
             "Hans's Exp leg must not show under UG's per-entity TB")))))
+
+;; ============================================================================
+;; validate-entry — the non-committing "web-form check" (research note 190)
+;; ============================================================================
+
+(deftest validate-entry-passes-a-good-entry
+  (let [conn (fresh-book)
+        r (book/validate-entry conn {:journal-type :cash
+                                     :debit-account cash :credit-account rev
+                                     :amount 100 :commodity :EUR})]
+    (is (:ok? r))
+    (is (empty? (:diagnostics r)))))
+
+(deftest validate-entry-catches-tier1-imbalance
+  (testing "pure balance failure surfaces without touching the db"
+    (let [conn (fresh-book)
+          r (book/validate-entry conn {:journal-type :cash :commodity :EUR
+                                       :postings [{:account cash :amount 100}
+                                                  {:account rev :amount -99}]})]
+      (is (not (:ok? r)))
+      (is (some #(= :unbalanced (:code %)) (:diagnostics r))))))
+
+(deftest validate-entry-catches-malformed-entry
+  (testing "a missing required field is reported, not thrown"
+    (let [conn (fresh-book)
+          r (book/validate-entry conn {:journal-type :cash
+                                       :debit-account cash :credit-account rev
+                                       :commodity :EUR})]      ; no :amount
+      (is (not (:ok? r)))
+      (is (some #(= :book/malformed-entry (:code %)) (:diagnostics r))))))
+
+(deftest validate-entry-catches-tier2-unknown-account
+  (testing "a structurally-balanced entry against a non-existent account
+            fails at the db tier, mirroring what a commit would reject"
+    (let [conn  (fresh-book)
+          ghost [:kontor.account/path "Nope:Ghost"]
+          dry   (book/validate-entry conn {:journal-type :cash
+                                           :debit-account ghost :credit-account rev
+                                           :amount 5 :commodity :EUR})
+          commit (try (book/receive! conn {:debit-account ghost :credit-account rev
+                                           :amount 5 :commodity :EUR})
+                      :committed
+                      (catch Exception _ :rejected))]
+      (is (not (:ok? dry)))
+      (is (seq (:diagnostics dry)))
+      (is (= :rejected commit)
+          "the dry-run and the real commit agree — no drift"))))
+
+(deftest validate-entry-does-not-persist
+  (testing "validate-entry never writes, even on a valid candidate"
+    (let [conn (fresh-book)
+          tx-count #(count (d/q '[:find ?t :where [?t :kontor.transaction/journal _]] (d/db conn)))
+          before (tx-count)]
+      (book/validate-entry conn {:journal-type :cash :debit-account cash
+                                 :credit-account rev :amount 100 :commodity :EUR})
+      (is (= before (tx-count))))))

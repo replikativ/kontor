@@ -102,7 +102,10 @@
   [e]
   (let [d (ex-data e)]
     {:severity :error
-     :code     (:type d)
+     ;; kontor invariants carry `:type`; datahike substrate errors
+     ;; (lookup-ref miss, schema) carry `:error` — fall back so the
+     ;; diagnostic code is never nil.
+     :code     (or (:type d) (:error d))
      :message  (ex-message e)
      :data     (dissoc d :tx-data)}))
 

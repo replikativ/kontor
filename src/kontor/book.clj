@@ -81,6 +81,7 @@
    negates the amount on the credit leg; sum-to-zero (`Ker(σ)`)
    holds by construction."
   (:require [datahike.api :as d]
+            [kontor.gate :as gate]
             [kontor.posting :as posting]))
 
 ;; ============================================================================
@@ -275,6 +276,66 @@
      (posting/post-transaction! conn
                                 (build-input opts')
                                 (merge (post-opts opts') extra-post-opts)))))
+
+;; ============================================================================
+;; Non-committing validation — the "web-form check" (research note 190)
+;; ============================================================================
+
+(defn- structural->diagnostics
+  "Map `kontor.posting.validate/validate`'s `:errors` into the uniform
+   diagnostic shape `kontor.gate/validate-candidate` returns, so tier-1
+   (pure balance) and tier-2 (db invariants) surface as one list."
+  [report]
+  (mapv (fn [e]
+          {:severity :error
+           :code     (:error e)
+           :message  (:message e)
+           :data     (dissoc e :error :message)})
+        (:errors report)))
+
+(defn validate-entry
+  "Non-committing dry-run of a `kontor.book` verb entry — the same
+   check `entry!` runs at commit, but returning structured diagnostics
+   instead of throwing, and never persisting. Two tiers, one predicate
+   set (research note 190; the Odoo onchange↔constrains discipline):
+
+   - **tier-1** — pure structure + sum-to-zero balance via
+     `kontor.posting.validate/validate` (no db). This half is `.cljc`;
+     the browser runs it standalone on every edit for instant feedback.
+   - **tier-2** — db invariants + sealing / legal-hold / period-lock /
+     state-machine via `kontor.gate/validate-candidate` (needs the db).
+     Skipped when tier-1 already failed (the tx-data won't build).
+
+   Resolves `:journal`/`:effective-date` exactly like `entry!`, so the
+   candidate mirrors what a commit would attempt. Returns
+   `{:ok? boolean :diagnostics [{:severity :code :message :data} …]}`.
+
+   Intended server-side over distributed-scope: the client shows tier-1
+   instantly and calls this for tier-2, but only `entry!` (through the
+   gate) ever writes — an optimistic UI can never persist a posting the
+   gate would reject."
+  [conn opts]
+  (let [opts' (cond-> opts
+                (and (nil? (:journal opts)) (:journal-type opts))
+                (assoc :journal (resolve-journal (d/db conn) (:journal-type opts)))
+
+                (nil? (:effective-date opts))
+                (assoc :effective-date (java.util.Date.)))
+        built (try {:input (build-input opts')}
+                   (catch clojure.lang.ExceptionInfo e
+                     {:diag {:severity :error
+                             :code     :book/malformed-entry
+                             :message  (ex-message e)
+                             :data     (ex-data e)}}))]
+    (if-let [d (:diag built)]
+      {:ok? false :diagnostics [d]}
+      (let [t1 (structural->diagnostics (posting/validate (:input built)))
+            t2 (if (seq t1)
+                 []                       ; tx-data won't build while structure is broken
+                 (:diagnostics (gate/validate-candidate conn (entry-tx-data opts'))))
+            diags (vec (concat t1 t2))]
+        {:ok?         (empty? diags)
+         :diagnostics diags}))))
 
 ;; ============================================================================
 ;; The verbs — `!`-side conveniences over `entry!`
