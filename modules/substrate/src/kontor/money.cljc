@@ -113,6 +113,23 @@
     (throw (ex-info "Money requires a commodity" {:amount amount})))
   (->Money (coerce-amount amount) commodity))
 
+(defn ->amount
+  "Coerce `x` (string \"1234.56\", integer, or a platform decimal) to the
+   platform decimal — BigDecimal on the JVM, fress `Bigdec` in cljs. Rejects
+   floats/JS-numbers (lossy). Public so cross-platform builders
+   (`kontor.book.build`) can coerce posting amounts without reaching into the
+   private constructor path."
+  [x]
+  (coerce-amount x))
+
+(defn negate-amount
+  "Negate a raw platform decimal (BigDecimal / Bigdec) — for builders that
+   construct a credit leg from a debit amount without wrapping in `Money`.
+   cljc: `(- amt)` doesn't work on a cljs Bigdec."
+  [x]
+  #?(:clj  (.negate ^BigDecimal x)
+     :cljs (bd-neg x)))
+
 (defn zero
   "Money with zero amount in the given commodity."
   [commodity]
