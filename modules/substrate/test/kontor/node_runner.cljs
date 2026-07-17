@@ -10,7 +10,8 @@
    `-test`) so the JVM kaocha suite never tries to load this cljs-only ns."
   (:require [cljs.test :as t]
             [kontor.money-portable-test]
-            [kontor.posting.validate-test]))
+            [kontor.posting.validate-test]
+            [kontor.cljs-smoke-test]))
 
 ;; Exit 0 only when every test passes — otherwise Node exits 1 and CI fails.
 (defmethod t/report [::t/default :end-run-tests] [m]
@@ -18,4 +19,5 @@
 
 (defn -main []
   (t/run-tests 'kontor.money-portable-test
-               'kontor.posting.validate-test))
+               'kontor.posting.validate-test
+               'kontor.cljs-smoke-test))
