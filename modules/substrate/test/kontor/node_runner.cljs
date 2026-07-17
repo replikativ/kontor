@@ -12,7 +12,8 @@
             [kontor.money-portable-test]
             [kontor.posting.validate-test]
             [kontor.cljs-smoke-test]
-            [kontor.invariant-cljs-test]))
+            [kontor.invariant-cljs-test]
+            [kontor.bitemporal-entity-cljs-test]))
 
 ;; Exit 0 only when every test passes — otherwise Node exits 1 and CI fails.
 (defmethod t/report [::t/default :end-run-tests] [m]
@@ -22,4 +23,5 @@
   (t/run-tests 'kontor.money-portable-test
                'kontor.posting.validate-test
                'kontor.cljs-smoke-test
-               'kontor.invariant-cljs-test))
+               'kontor.invariant-cljs-test
+               'kontor.bitemporal-entity-cljs-test))

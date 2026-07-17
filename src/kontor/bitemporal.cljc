@@ -23,10 +23,9 @@
    step-fragment accumulation, and the `forever` upper-bound sentinel
    for callers that want to be explicit about the open-ended case
    (semantically identical to omitting `:db.valid/to`)."
-  (:require [kontor.gate :as gate])
-  (:import [java.util Date]))
+  (:require [kontor.gate :as gate]))
 
-(def ^Date forever
+(def forever
   "Sentinel upper-bound used when a caller wants to be explicit about
    an open-ended valid-time. Semantically equivalent to omitting
    `:db.valid/to` (datahike's built-in `valid-at` rule defaults to
@@ -95,10 +94,12 @@
    `:db/txInstant` datom (which would indicate a malformed report)."
   [tx-report]
   (let [d (->> (:tx-data tx-report)
-               (filter #(= :db/txInstant (.-a %)))
+               ;; Datom is [e a v tx added] on both platforms; JVM keeps the
+               ;; direct field access, cljs reads the indexed slot.
+               (filter #(= :db/txInstant #?(:clj (.-a %) :cljs (nth % 1))))
                first)]
     (if d
-      (.-tx d)
+      #?(:clj (.-tx d) :cljs (nth d 3))
       (throw (ex-info "tx-report has no :db/txInstant datom"
                       {:type :kontor.bitemporal/no-commit-tx
                        :tx-report (select-keys tx-report [:tempids :max-tx])})))))
