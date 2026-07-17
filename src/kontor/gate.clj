@@ -93,3 +93,43 @@
                       {:error :gate/not-registered})))
     (inv/assert-invariants conn tx-data)
     (d/transact conn [[:db.fn/call f tx-data]])))
+
+;; ============================================================================
+;; Dry-run — the "web-form check" half (research note 190)
+;; ============================================================================
+
+(defn- ex->diagnostic
+  [e]
+  (let [d (ex-data e)]
+    {:severity :error
+     :code     (:type d)
+     :message  (ex-message e)
+     :data     (dissoc d :tx-data)}))
+
+(defn validate-candidate
+  "Non-committing dry-run of the full gate against `tx-data`: runs the SAME
+   datalog invariants AND transactor-side structural validators (sealing,
+   legal-hold, period-lock, state-machine, sum-to-zero) that
+   `transact-with-validation` enforces at commit — but returns structured
+   diagnostics instead of throwing, and never persists.
+
+   Because it reuses the *same* predicate functions as the gate, live
+   form-validation feedback and the authoritative commit cannot drift (the
+   Odoo onchange↔constrains discipline; research note 190). Intended to be
+   called server-side (e.g. over distributed-scope) on each form edit, with
+   the pure balance half (`kontor.posting/validate`) run client-side.
+
+   Returns `{:ok? boolean :diagnostics [{:severity :code :message :data} …]}`.
+   Both phases run independently so multiple issues surface together."
+  [conn tx-data]
+  (let [f @validate-and-apply-fn]
+    (when-not f
+      (throw (ex-info "kontor.gate: no validate-and-apply registered (require kontor.validation)."
+                      {:error :gate/not-registered})))
+    (let [diags (-> []
+                    (into (try (inv/assert-invariants conn tx-data) nil
+                               (catch clojure.lang.ExceptionInfo e [(ex->diagnostic e)])))
+                    (into (try (f @conn tx-data) nil        ; run validators against the live db; no commit
+                               (catch clojure.lang.ExceptionInfo e [(ex->diagnostic e)]))))]
+      {:ok?         (empty? diags)
+       :diagnostics (vec diags)})))
