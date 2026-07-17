@@ -199,6 +199,20 @@
                  org.clojure/test.check  {:mvn/version "1.1.1"}
                  cider/cider-nrepl       {:mvn/version "0.45.0"}}}
 
+  ;; ClojureScript test lane (Phase 0, research note 191). shadow-cljs
+  ;; reads this alias for the cljs classpath; the substrate `.cljc` units
+  ;; compile to a Node bundle so portability is verified in CI.
+  ;; fress supplies the browser BigDecimal (fress.impl.bigdec) that
+  ;; kontor.money's cljs branch uses; kept as a local dep until the
+  ;; upstream BIGDEC-handler release lands (pkpkpk/fress#8).
+  ;; Run: clojure -M:cljs -m shadow.cljs.devtools.cli compile node-test
+  ;;      && node target/node-test.js
+  :cljs
+  {:extra-paths ["modules/substrate/test"]
+   :extra-deps  {org.clojure/clojurescript {:mvn/version "1.12.134"}
+                 thheller/shadow-cljs      {:mvn/version "3.3.6"}
+                 com.github.pkpkpk/fress    {:local/root "../fress"}}}
+
   :format
   {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.0"}}
    :main-opts  ["-m" "cljfmt.main" "check"]}

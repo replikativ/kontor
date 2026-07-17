@@ -1,0 +1,19 @@
+;; ClojureScript test lane (Phase 0, research note 191).
+;;
+;; Compiles the cross-platform (`.cljc`) kontor substrate + its tests to a
+;; Node bundle so portability is verified in CI, not discovered when it
+;; breaks. Classpath + deps come from the `:cljs` alias in deps.edn (which
+;; adds ClojureScript, shadow-cljs, and the fress local dep that supplies
+;; the browser BigDecimal). Only namespaces reachable from the runner's
+;; `:require` list are compiled — the JVM-only bulk of the kernel is never
+;; touched.
+;;
+;; Run:  clojure -M:cljs -m shadow.cljs.devtools.cli compile node-test \
+;;         && node target/node-test.js
+;; (or `bb cljs-test` once a bb.edn exists.)
+{:deps  {:aliases [:cljs]}
+ :builds
+ {:node-test
+  {:target    :node-script
+   :output-to "target/node-test.js"
+   :main      kontor.node-runner/-main}}}
