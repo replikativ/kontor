@@ -16,8 +16,7 @@
       parallel-ledger entity above."
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
-            [kontor.money :as money])
-  (:import [java.util Date]))
+            [kontor.money :as money]))
 
 ;; ============================================================================
 ;; Parallel-ledger entity (ADR-021)
@@ -75,9 +74,9 @@
 ;; Account-statement view (per-account history)
 ;; ============================================================================
 
-(defn- now ^Date [] (Date.))
+(defn- now [] #?(:clj (java.util.Date.) :cljs (js/Date.)))
 
-(defn- before-or-eq? [^Date a ^Date b] (<= (.compareTo a b) 0))
+(defn- before-or-eq? [a b] (<= (.getTime a) (.getTime b)))
 
 (def ^:private default-included-states #{:posted})
 

@@ -15,7 +15,8 @@
             [kontor.invariant-cljs-test]
             [kontor.bitemporal-entity-cljs-test]
             [kontor.book-build-cljs-test]
-            [kontor.validation-cljs-test]))
+            [kontor.validation-cljs-test]
+            [kontor.reporting-cljs-test]))
 
 ;; Exit 0 only when every test passes — otherwise Node exits 1 and CI fails.
 (defmethod t/report [::t/default :end-run-tests] [m]
@@ -28,4 +29,5 @@
                'kontor.invariant-cljs-test
                'kontor.bitemporal-entity-cljs-test
                'kontor.book-build-cljs-test
-               'kontor.validation-cljs-test))
+               'kontor.validation-cljs-test
+               'kontor.reporting-cljs-test))

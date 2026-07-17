@@ -16,8 +16,7 @@
    in multiple commodities (multi-currency books). The map is empty
    when an account has no postings."
   (:require [datahike.api :as d]
-            [kontor.money :as money])
-  (:import [java.util Date]))
+            [kontor.money :as money]))
 
 ;; ============================================================================
 ;; Internal: bitemporal-aware posting lookup
@@ -31,12 +30,13 @@
    would double-count)."
   #{:posted})
 
-(defn- now ^Date [] (Date.))
+(defn- now [] #?(:clj (java.util.Date.) :cljs (js/Date.)))
 
 (defn- before-or-eq?
-  "True iff a is on-or-before b (inclusive on both ends)."
-  [^Date a ^Date b]
-  (<= (.compareTo a b) 0))
+  "True iff a is on-or-before b (inclusive on both ends). `.getTime` works
+   on both a JVM Date and a js/Date, so no `.compareTo` (js/Date lacks it)."
+  [a b]
+  (<= (.getTime a) (.getTime b)))
 
 (defn- include-posting?
   "Filter a pulled posting against `as-of-valid` and `included-states`.
