@@ -8,7 +8,8 @@
   (:require [cljs.test :refer [deftest is async]]
             [cljs.core.async :refer [go <!] :include-macros true]
             [datahike.api :as d]
-            [kontor.invariant :as inv]))
+            [kontor.invariant :as inv]
+            [kontor.money :as money]))
 
 ;; The shipped invariant queries (resources/invariants/*.edn), inlined as the
 ;; stored EDN strings. cljs can't slurp resources; validation.cljc will inline
@@ -38,7 +39,10 @@
    {:db/ident :kontor.account/active :db/valueType :db.type/boolean :db/cardinality :db.cardinality/one}
    {:db/ident :kontor.account/commodity :db/valueType :db.type/keyword :db/cardinality :db.cardinality/one}
    {:db/ident :kontor.posting/account :db/valueType :db.type/ref :db/cardinality :db.cardinality/one}
-   {:db/ident :kontor.posting/commodity :db/valueType :db.type/keyword :db/cardinality :db.cardinality/one}])
+   {:db/ident :kontor.posting/commodity :db/valueType :db.type/keyword :db/cardinality :db.cardinality/one}
+   ;; bigdec amount — the speculative db-with in assert-invariants now applies
+   ;; a posting carrying a fress Bigdec (unblocked by the datahike-cljs fix).
+   {:db/ident :kontor.posting/amount :db/valueType :db.type/bigdec :db/cardinality :db.cardinality/one}])
 
 (def cash [:kontor.account/path "Assets:Cash"])
 (def old  [:kontor.account/path "Assets:Old"])
@@ -57,17 +61,17 @@
                                       {:kontor.account/path "Assets:Old"  :kontor.account/active false :kontor.account/commodity :EUR}]))
           ;; GOOD: active account, matching commodity → both invariants hold.
                (is (true? (inv/assert-invariants
-                           conn [{:kontor.posting/account cash :kontor.posting/commodity :EUR}]))
+                           conn [{:kontor.posting/account cash :kontor.posting/commodity :EUR :kontor.posting/amount (money/->amount "100.00")}]))
                    "good posting passes both invariants in cljs")
           ;; VIOLATION: inactive account.
                (is (thrown? cljs.core/ExceptionInfo
                             (inv/assert-invariants
-                             conn [{:kontor.posting/account old :kontor.posting/commodity :EUR}]))
+                             conn [{:kontor.posting/account old :kontor.posting/commodity :EUR :kontor.posting/amount (money/->amount "50.00")}]))
                    "posting against an INACTIVE account throws in cljs")
           ;; VIOLATION: commodity mismatch (account EUR, posting USD).
                (is (thrown? cljs.core/ExceptionInfo
                             (inv/assert-invariants
-                             conn [{:kontor.posting/account cash :kontor.posting/commodity :USD}]))
+                             conn [{:kontor.posting/account cash :kontor.posting/commodity :USD :kontor.posting/amount (money/->amount "25.00")}]))
                    "commodity mismatch throws in cljs"))
              (<! (d/delete-database cfg))
              (done)))))

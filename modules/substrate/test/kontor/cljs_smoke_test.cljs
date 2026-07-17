@@ -51,27 +51,27 @@
 
 (deftest subquery-invariant-runs-in-cljs
   (async done
-    (go
-      (let [cfg {:store {:backend :memory :id (random-uuid)}
-                 :schema-flexibility :write
-                 :keep-history? true}]
-        (<! (d/create-database cfg))
-        (let [conn (d/connect cfg)]
-          (<! (d/transact! conn mini-schema))
+         (go
+           (let [cfg {:store {:backend :memory :id (random-uuid)}
+                      :schema-flexibility :write
+                      :keep-history? true}]
+             (<! (d/create-database cfg))
+             (let [conn (d/connect cfg)]
+               (<! (d/transact! conn mini-schema))
           ;; Violation: a posting against an INACTIVE account.
-          (<! (d/transact! conn [{:db/id -1 :kontor.account/path "A:Bad"
-                                  :kontor.account/active false}
-                                 {:kontor.posting/account -1}]))
-          (let [db @conn
-                holds? (d/q account-active-q db db db db)]
-            (is (= false holds?)
-                "inactive-account violation → invariant does NOT hold (?matches false)"))
+               (<! (d/transact! conn [{:db/id -1 :kontor.account/path "A:Bad"
+                                       :kontor.account/active false}
+                                      {:kontor.posting/account -1}]))
+               (let [db @conn
+                     holds? (d/q account-active-q db db db db)]
+                 (is (= false holds?)
+                     "inactive-account violation → invariant does NOT hold (?matches false)"))
           ;; Fix: flip the account active; the invariant should now hold.
-          (<! (d/transact! conn [{:kontor.account/path "A:Bad"
-                                  :kontor.account/active true}]))
-          (let [db @conn
-                holds? (d/q account-active-q db db db db)]
-            (is (= true holds?)
-                "active account → invariant holds (?matches true)")))
-        (<! (d/delete-database cfg))
-        (done)))))
+               (<! (d/transact! conn [{:kontor.account/path "A:Bad"
+                                       :kontor.account/active true}]))
+               (let [db @conn
+                     holds? (d/q account-active-q db db db db)]
+                 (is (= true holds?)
+                     "active account → invariant holds (?matches true)")))
+             (<! (d/delete-database cfg))
+             (done)))))

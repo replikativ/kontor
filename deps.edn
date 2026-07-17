@@ -208,9 +208,14 @@
   ;; Run: clojure -M:cljs -m shadow.cljs.devtools.cli compile node-test
   ;;      && node target/node-test.js
   :cljs
+  ;; cljs build runs against the local datahike worktree carrying the
+  ;; :db.type/bigdec fix (branch fix/cljs-bigdec-schema — accept the fress
+  ;; Bigdec). Build its Java first: (cd ../datahike-bigdec && bb jcompile).
+  ;; JVM :test stays on the Maven 0.8.1734 pin; repoint both once the fix ships.
   {:extra-paths ["modules/substrate/test"]
    :extra-deps  {org.clojure/clojurescript {:mvn/version "1.12.134"}
                  thheller/shadow-cljs      {:mvn/version "3.3.6"}
+                 org.replikativ/datahike   {:local/root "../datahike-bigdec"}
                  com.github.pkpkpk/fress    {:local/root "../fress"}}}
 
   :format
