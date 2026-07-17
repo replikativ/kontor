@@ -32,11 +32,12 @@
 
 (defn- now [] #?(:clj (java.util.Date.) :cljs (js/Date.)))
 
+(defn- ->ms [x] #?(:clj (.getTime ^java.util.Date x) :cljs (if (number? x) x (inst-ms x))))
 (defn- before-or-eq?
   "True iff a is on-or-before b (inclusive on both ends). `.getTime` works
    on both a JVM Date and a js/Date, so no `.compareTo` (js/Date lacks it)."
   [a b]
-  (<= (.getTime a) (.getTime b)))
+  (<= (->ms a) (->ms b)))
 
 (defn- include-posting?
   "Filter a pulled posting against `as-of-valid` and `included-states`.

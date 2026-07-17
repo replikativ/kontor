@@ -49,9 +49,9 @@
             [kontor.bitemporal :as kbt]
             [kontor.compliance.legal-hold :as legal-hold]
             [kontor.workflow.status-machine :as sm]
-            [kontor.validation :as validation])
-  (:import [java.time ZoneOffset]
-           [java.util Date]))
+            [kontor.validation :as validation]))
+
+(defn- now [] #?(:clj (java.util.Date.) :cljs (js/Date.)))
 
 ;; ============================================================================
 ;; Status-transition + approval-policy seeds
@@ -120,9 +120,9 @@
 (defn- in-effect?
   "True iff `as-of` falls in [effective-from, effective-until). A nil
    effective-until is open-ended."
-  [^Date as-of ^Date from ^Date until]
-  (and (>= (.compareTo as-of from) 0)
-       (or (nil? until) (< (.compareTo as-of until) 0))))
+  [as-of from until]
+  (and (>= (.getTime as-of) (.getTime from))
+       (or (nil? until) (< (.getTime as-of) (.getTime until)))))
 
 (defn policy-for
   "Resolve the active `:retention-policy` for `entity-type` at valid-
@@ -150,7 +150,7 @@
                        (so callers who haven't classified their data
                        see the legacy generic-floor behavior)."
   [db entity-type {:keys [jurisdiction as-of category]}]
-  (let [as-of (or as-of (Date.))
+  (let [as-of (or as-of (now))
         ;; get-else rejects a nil default, so use sentinels and
         ;; normalize them back to nil after the query.
         candidates
@@ -189,7 +189,7 @@
              (sort-by (fn [[p from _ juris cat]]
                         [(if (and category (= cat category)) 1 0)
                          (if (= juris jurisdiction) 1 0)
-                         (.getTime ^Date from)
+                         (.getTime from)
                          (- p)])))]
     (first (last candidates))))
 
@@ -198,15 +198,21 @@
 ;; ============================================================================
 
 (defn- plus-years
-  "Add `n` whole years to a `java.util.Date`, returning a Date."
-  ^Date [^Date d n]
-  (-> (.toInstant d)
-      (.atZone ZoneOffset/UTC)
-      (.toLocalDate)
-      (.plusYears n)
-      (.atStartOfDay ZoneOffset/UTC)
-      (.toInstant)
-      (Date/from)))
+  "Add `n` whole years to a date, at start-of-day UTC. Returns a Date/js-Date."
+  [d n]
+  #?(:clj
+     (-> (.toInstant d)
+         (.atZone java.time.ZoneOffset/UTC)
+         (.toLocalDate)
+         (.plusYears n)
+         (.atStartOfDay java.time.ZoneOffset/UTC)
+         (.toInstant)
+         (java.util.Date/from))
+     :cljs
+     (let [d2 (js/Date. (.getTime d))]
+       (.setUTCFullYear d2 (+ n (.getUTCFullYear d2)))
+       (.setUTCHours d2 0 0 0 0)
+       d2)))
 
 (defn retention-deadline
   "Compute the retention deadline `Date` for `entity-eid` under
@@ -220,7 +226,7 @@
                     :kontor.retention-policy/duration-years]
                 policy-eid)
         anchor (get (d/pull db [triggered-by] entity-eid) triggered-by)]
-    (when (instance? Date anchor)
+    (when (instance? #?(:clj java.util.Date :cljs js/Date) anchor)
       (plus-years anchor duration-years))))
 
 (defn eligible?
@@ -230,11 +236,11 @@
    feature — the load-bearing guarantee is that `apply-expiry!`
    routes through the ADR-049 hold-middleware."
   [db entity-eid policy-eid {:keys [as-of]}]
-  (let [as-of (or as-of (Date.))
+  (let [as-of (or as-of (now))
         deadline (retention-deadline db entity-eid policy-eid)]
     (boolean
      (and deadline
-          (<= (.compareTo deadline as-of) 0)
+          (<= (.getTime deadline) (.getTime as-of))
           (not (legal-hold/entity-held? db entity-eid))))))
 
 ;; ============================================================================
@@ -306,14 +312,14 @@
 
    `:limit` caps the candidate set (default nil = unbounded)."
   [db policy-eid {:keys [as-of limit]}]
-  (let [as-of (or as-of (Date.))
+  (let [as-of (or as-of (now))
         {:kontor.retention-policy/keys [expiry-action]}
         (d/pull db [:kontor.retention-policy/expiry-action] policy-eid)
         cands (candidate-eids db policy-eid limit)
         past-deadline
         (keep (fn [eid]
                 (when-let [deadline (retention-deadline db eid policy-eid)]
-                  (when (<= (.compareTo deadline as-of) 0)
+                  (when (<= (.getTime deadline) (.getTime as-of))
                     {:entity-eid eid
                      :policy-eid policy-eid
                      :action expiry-action
@@ -471,7 +477,7 @@
                             :facet :kontor.retention-policy/state
                             :from :nil
                             :to :draft
-                            :changed-at (or drafted-at (Date.))
+                            :changed-at (or drafted-at (now))
                             :reason :policy-drafted}
                      changed-by-uid (assoc :changed-by-uid changed-by-uid)))]
     (into [row] status-tx)))
@@ -505,7 +511,7 @@
 
    The pure tx-data builder is `define-policy-tx-data` (ADR-068)."
   [conn {:keys [vt-from vt-to] :as opts}]
-  (let [now (Date.)]
+  (let [now (now)]
     (validation/transact-with-validation
      conn (kbt/with-vt (define-policy-tx-data
                          (d/db conn) (assoc opts :drafted-at now))
@@ -523,7 +529,7 @@
               [?e :kontor.retention-policy/code ?c]
               [?e :kontor.retention-policy/effective-from ?from]]
             db code)
-       (sort-by (fn [[_ ^Date from]] (.getTime from)))
+       (sort-by (fn [[_ from]] (.getTime from)))
        last
        first))
 
@@ -541,7 +547,7 @@
                             :entity-type :retention-policy
                             :facet :kontor.retention-policy/state
                             :to :active
-                            :changed-at (or changed-at (Date.))
+                            :changed-at (or changed-at (now))
                             :reason (or reason :policy-activated)
                             :reason-note reason-note
                             :supporting-doc supporting-doc}
@@ -563,7 +569,7 @@
 
    The pure tx-data builder is `activate-policy-tx-data`."
   [conn {:keys [vt-from vt-to] :as opts}]
-  (let [now (Date.)]
+  (let [now (now)]
     (validation/transact-with-validation
      conn (kbt/with-vt (activate-policy-tx-data
                         (d/db conn) (assoc opts :changed-at now))
@@ -585,7 +591,7 @@
     :entity-type :retention-policy
     :facet :kontor.retention-policy/state
     :to :superseded
-    :changed-at (or changed-at (Date.))
+    :changed-at (or changed-at (now))
     :changed-by-uid changed-by-uid
     :reason (or reason :policy-superseded)
     :reason-note reason-note
@@ -604,7 +610,7 @@
 
    The pure tx-data builder is `supersede-policy-tx-data`."
   [conn {:keys [vt-from vt-to] :as opts}]
-  (let [now (Date.)]
+  (let [now (now)]
     (validation/transact-with-validation
      conn (kbt/with-vt (supersede-policy-tx-data
                         (d/db conn) (assoc opts :changed-at now))

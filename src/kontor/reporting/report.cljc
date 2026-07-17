@@ -54,9 +54,11 @@
   (:require [clojure.set]
             [clojure.string :as str]
             [datahike.api :as d]
-            [kontor.fx.fx :as fx]
-            [kontor.money :as money])
-  (:import [java.util Date]))
+            ;; fx (multi-currency :translate-to) is JVM-only — it needs a bigdec
+            ;; rounding shim cljs money doesn't have yet (note 191). Single-currency
+            ;; reports never touch it; the cljs :translate-to path throws below.
+            #?(:clj [kontor.fx.fx :as fx])
+            [kontor.money :as money]))
 
 ;; ============================================================================
 ;; Internal: bitemporal posting fetch
@@ -64,10 +66,12 @@
 
 (def ^:private default-included-states #{:posted})
 
-(defn- now ^Date [] (Date.))
+(defn- now [] #?(:clj (java.util.Date.) :cljs (js/Date.)))
 
-(defn- before-or-eq? [^Date a ^Date b] (<= (.compareTo a b) 0))
-(defn- on-or-after?  [^Date a ^Date b] (>= (.compareTo a b) 0))
+(defn- ->ms [x] #?(:clj (.getTime ^java.util.Date x) :cljs (if (number? x) x (inst-ms x))))
+(defn- before-or-eq? [a b] (<= (->ms a) (->ms b)))
+(defn- on-or-after?  [a b] (>= (->ms a) (->ms b)))
+(defn- date-from-millis [ms] #?(:clj (java.util.Date. (long ms)) :cljs (js/Date. ms)))
 
 (defn- pull-posting
   "Pull the posting + its account's commodity/code/type/tags + tx state.
@@ -141,7 +145,7 @@
   (let [vf (:valid-from posting)]
     (and (some? vf)
          (or (nil? from) (on-or-after? vf from))
-         (or (nil? to-exclusive) (before-or-eq? vf (Date. (dec (.getTime ^Date to-exclusive)))))
+         (or (nil? to-exclusive) (before-or-eq? vf (date-from-millis (dec (->ms to-exclusive)))))
          ;; the (dec) makes this strictly before; cleaner-looking than `< end`
          )))
 
@@ -157,7 +161,7 @@
    accounts we negate the stored signed amount."
   [account-type stored-amount]
   (case account-type
-    (:liability :equity :income) (.negate ^java.math.BigDecimal stored-amount)
+    (:liability :equity :income) (money/negate-amount stored-amount)
     stored-amount))
 
 ;; ============================================================================
@@ -200,9 +204,9 @@
                          {:type :report/mixed-commodity
                           :commodities cs
                           :postings (mapv :db/id postings)})))))
-   (let [sum (reduce (fn [^java.math.BigDecimal acc p]
-                       (.add acc ^java.math.BigDecimal (amount-of p sign)))
-                     java.math.BigDecimal/ZERO
+   (let [sum (reduce (fn [acc p]
+                       (money/add-amount acc (amount-of p sign)))
+                     (money/zero-amount)
                      postings)]
      {:value    (money/money sum (or commodity :EUR))
       :postings (mapv :db/id postings)})))
@@ -375,8 +379,8 @@
 (defn- ->day-after
   "Inclusive `through` → exclusive `to`: midnight of the following day.
    Note 160 §I-10."
-  ^java.util.Date [^java.util.Date through]
-  (Date. (+ (.getTime through) (* 1000 60 60 24))))
+  [through]
+  (date-from-millis (+ (->ms through) (* 1000 60 60 24))))
 
 (defn- resolve-window-bounds
   "Translate `:through` (inclusive end) into the canonical exclusive
@@ -504,10 +508,12 @@
                                    :line/postings postings}]
                          (if translate-to
                            (assoc line :line/value-translated
-                                  (fx/convert value fx-provider
-                                              {:to translate-to
-                                               :at-date translate-at
-                                               :rate-type rate-type}))
+                                  #?(:clj (fx/convert value fx-provider
+                                                      {:to translate-to
+                                                       :at-date translate-at
+                                                       :rate-type rate-type})
+                                     :cljs (throw (ex-info "report :translate-to is JVM-only for now (needs a cljs bigdec rounding shim)"
+                                                           {:type :kontor.report/translate-cljs-unsupported}))))
                            line)))
                      (:report/lines report))]
      {:report/name (:report/name report)

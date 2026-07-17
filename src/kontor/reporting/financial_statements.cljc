@@ -56,10 +56,9 @@
                  = should be 0 for a balanced ledger; non-zero
                  surfaces an out-of-balance condition."
   (:require [kontor.money :as money]
-            [kontor.reporting.report :as report])
-  (:import [java.util Date]))
+            [kontor.reporting.report :as report]))
 
-(defn- now ^Date [] (Date.))
+(defn- now [] #?(:clj (java.util.Date.) :cljs (js/Date.)))
 
 (defn- line->expression
   "Translate a line spec to the :account-codes report-engine input."
@@ -102,7 +101,7 @@
                                  ;; reduces cash / equity).
                                  v (if (and v (:line/negate l))
                                      (update v :amount
-                                             #(.negate ^java.math.BigDecimal %))
+                                             #(money/negate-amount %))
                                      v)]
                              {:line/code     (:line/code l)
                               :line/label    (:line/label l)
@@ -322,7 +321,7 @@
                                    (assoc base :from from :to to :sign :inflow))
                                 v (if (:movement/negate m)
                                     (update v :amount
-                                            #(.negate ^java.math.BigDecimal %))
+                                            #(money/negate-amount %))
                                     v)]
                             {:movement/code  (:movement/code m)
                              :movement/label (:movement/label m)

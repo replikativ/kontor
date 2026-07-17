@@ -36,10 +36,9 @@
             [kontor.reporting.balance :as balance]
             [kontor.reporting.ledger :as ledger]
             [kontor.compliance.legal-hold :as legal-hold]
-            [kontor.compliance.retention :as retention])
-  (:import [java.util Date]))
+            [kontor.compliance.retention :as retention]))
 
-(defn- now ^Date [] (Date.))
+(defn- now [] #?(:clj (java.util.Date.) :cljs (js/Date.)))
 
 ;; ============================================================================
 ;; explain-balance — the postings that compose a balance

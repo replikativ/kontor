@@ -76,7 +76,8 @@
 
 (defn- now [] #?(:clj (java.util.Date.) :cljs (js/Date.)))
 
-(defn- before-or-eq? [a b] (<= (.getTime a) (.getTime b)))
+(defn- ->ms [x] #?(:clj (.getTime ^java.util.Date x) :cljs (if (number? x) x (inst-ms x))))
+(defn- before-or-eq? [a b] (<= (->ms a) (->ms b)))
 
 (def ^:private default-included-states #{:posted})
 
