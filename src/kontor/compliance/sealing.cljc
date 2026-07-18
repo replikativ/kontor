@@ -17,19 +17,32 @@
    the *state* half lives in `validation.clj` (via the invariant lib).
 
    Implementation note: we inspect the proposed `tx-data` BEFORE
-   handing it to `d/transact`. We treat any `[:db/retract eid attr v]`
-   tuple where the entity has `:kontor.posting/posted-at` set as a violation.
-   We do NOT inspect entity-map updates that *retract* by re-asserting
-   a different value — datahike does not support that shape against
-   a unique attribute, and our posted lifecycle uses tuple-form retracts
-   when consumers actually mean to retract."
+   handing it to `d/transact`. Two silent-mutation shapes are rejected
+   against a posted entity:
+
+     1. RETRACTS — any `[:db/retract …]`, `[:db/retractEntity eid]`,
+        `[:db.fn/retractEntity eid]`, or `[:db.fn/retractAttribute …]`
+        tuple targeting the entity. (Both the `:db/retractEntity` and
+        the `:db.fn/retractEntity` op spellings; datahike accepts both,
+        and missing the former let a posted posting be silently deleted
+        — the A2 corruption vector, note on invariant red-teaming.)
+
+     2. IN-PLACE EDITS — an entity-map `{:db/id <eid> attr v …}` that
+        *changes* an already-present attribute value on a posted entity.
+        datahike upserts cardinality-one attrs (internally retract+add),
+        so `{:db/id p :kontor.posting/amount 9999M}` silently rewrites a
+        sealed amount — the A4 corruption vector. Re-asserting the SAME
+        value is a no-op and allowed; the draft→posted transition itself
+        is not blocked because the entity is not yet posted when
+        `:kontor.posting/posted-at` is first set."
   (:require [datahike.api :as d]))
 
 (defn- retract-tuple?
-  "True iff tx is a `[:db/retract eid attr v]` 4-tuple."
+  "True iff tx is a retract/retract-entity tuple (either op spelling)."
   [tx]
   (and (vector? tx)
-       (#{:db/retract :db.fn/retractAttribute :db.fn/retractEntity} (first tx))))
+       (#{:db/retract :db/retractEntity
+          :db.fn/retractAttribute :db.fn/retractEntity} (first tx))))
 
 (defn- retracted-eid
   "Extract the entity-id from a retract tx tuple. Returns nil for
@@ -49,16 +62,60 @@
   (vec
    (keep (fn [tx]
            (when-let [eid (retracted-eid tx)]
-             (when (and (integer? eid) (posted? db eid))
+             (when (and (integer? eid) (pos? eid) (posted? db eid))
                {:tx tx :eid eid})))
          tx-data)))
 
+(defn- entity-map?
+  "True iff tx is an entity-map with a :db/id (upsert/assert shape)."
+  [tx]
+  (and (map? tx) (contains? tx :db/id)))
+
+(defn- ->eid
+  "Normalize a ref-shaped value to a concrete eid where possible, so a
+   ref re-asserted in a different shape (eid vs lookup-ref vs pulled
+   `{:db/id n}`) doesn't read as a change. Scalars pass through."
+  [db v]
+  (cond
+    (and (map? v) (contains? v :db/id)) (:db/id v)          ; pulled ref
+    (vector? v)                         (or (:db/id (d/entity db v)) v) ; lookup-ref
+    :else                               v))
+
+(defn- resolvable-eid
+  "Concrete eid for a `:db/id` that could reference an EXISTING entity
+   (positive eid or lookup-ref). nil for tempids (negative int / string),
+   new entities, or anything unresolvable — none of which can be posted."
+  [db id]
+  (when (or (and (integer? id) (pos? id))
+            (and (vector? id) (keyword? (first id))))
+    (try (:db/id (d/entity db id))
+         (catch #?(:clj Exception :cljs :default) _ nil))))
+
+(defn find-silent-modifications
+  "Return {:tx :eid :attr :old :new} for every entity-map assertion in
+   `tx-data` that CHANGES an already-present attribute value on a posted
+   entity (a silent in-place edit of sealed data). Re-asserting the same
+   value is a no-op and not reported."
+  [db tx-data]
+  (vec
+   (for [tx tx-data
+         :when (entity-map? tx)
+         :let  [eid (resolvable-eid db (:db/id tx))]        ; nil for tempids/new entities
+         :when (and eid (posted? db eid))
+         [attr new-val] tx
+         :when (not= attr :db/id)
+         :let  [cur (get (d/pull db [attr] eid) attr)]
+         :when (and (some? cur)
+                    (not= (->eid db cur) (->eid db new-val)))]
+     {:tx tx :eid eid :attr attr :old cur :new new-val})))
+
 (defn assert-no-silent-retracts!
   "Throws ex-info with type :sealing/silent-retract-of-posted if
-   `tx-data` includes a retract against any posted entity. Otherwise
-   returns nil."
+   `tx-data` includes a retract OR an in-place edit against any posted
+   entity. Otherwise returns nil."
   [db tx-data]
-  (let [violations (find-silent-retracts db tx-data)]
+  (let [violations (into (find-silent-retracts db tx-data)
+                         (find-silent-modifications db tx-data))]
     (when (seq violations)
       (throw (ex-info "Sealing violation: silent retract of posted entries"
                       {:type        :sealing/silent-retract-of-posted

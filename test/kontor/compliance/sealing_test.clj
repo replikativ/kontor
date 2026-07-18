@@ -111,6 +111,39 @@
           db-after
           [[:db.fn/retractEntity posting-eid]])))))
 
+(deftest assert-throws-on-db-retract-entity-of-posted
+  ;; ADR-118 / A2: the `:db/retractEntity` op spelling was unrecognised — only
+  ;; `:db.fn/retractEntity` was — so a posted posting could be silently deleted.
+  (let [conn (core/create-test-db)
+        {:keys [db-after posting-eid]} (seed-and-post! conn)]
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo #"Sealing violation"
+         (sealing/assert-no-silent-retracts!
+          db-after
+          [[:db/retractEntity posting-eid]])))))
+
+(deftest assert-throws-on-in-place-edit-of-posted
+  ;; ADR-118 / A4: an entity-map upsert that CHANGES a posted value (datahike
+  ;; upserts card-one attrs as retract+add) was previously uninspected.
+  (let [conn (core/create-test-db)
+        {:keys [db-after posting-eid]} (seed-and-post! conn)
+        edit [{:db/id posting-eid :kontor.posting/amount 9999M}]]
+    (is (= 1 (count (sealing/find-silent-modifications db-after edit)))
+        "changing a posted amount is a silent modification")
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo #"Sealing violation"
+         (sealing/assert-no-silent-retracts! db-after edit)))))
+
+(deftest assert-allows-noop-reassert-of-posted
+  ;; ADR-118: re-asserting the SAME value on a posted row is a no-op, allowed
+  ;; (no false positive) — only *changes* to existing values are sealed.
+  (let [conn (core/create-test-db)
+        {:keys [db-after posting-eid]} (seed-and-post! conn)
+        cur (:kontor.posting/amount (d/pull db-after [:kontor.posting/amount] posting-eid))
+        noop [{:db/id posting-eid :kontor.posting/amount cur}]]
+    (is (= [] (sealing/find-silent-modifications db-after noop)))
+    (is (nil? (sealing/assert-no-silent-retracts! db-after noop)))))
+
 (deftest assert-passes-on-no-retracts
   (let [conn (core/create-test-db)
         {:keys [db-after]} (seed-and-post! conn)]
