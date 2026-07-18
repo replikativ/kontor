@@ -38,8 +38,7 @@
             [kontor.reporting.balance :as balance]
             [kontor.compliance.period :as period]
             [kontor.posting.build :as posting]
-            [kontor.validation :as validation])
-)
+            [kontor.validation :as validation]))
 
 (defn- ->ms [x] #?(:clj (.getTime ^java.util.Date x) :cljs (if (number? x) x (.getTime x))))
 (defn- date-from-millis [ms] #?(:clj (java.util.Date. (long ms)) :cljs (js/Date. ms)))

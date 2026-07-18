@@ -49,8 +49,7 @@
             [kontor.money :as money]
             [datahike.api :as d]
             [kontor.posting.build :as posting]
-            [kontor.validation :as validation])
-)
+            [kontor.validation :as validation]))
 
 (defn- ->ms [x] #?(:clj (.getTime ^java.util.Date x) :cljs (if (number? x) x (.getTime x))))
 (defn- now [] #?(:clj (java.util.Date.) :cljs (js/Date.)))
@@ -313,7 +312,7 @@
        to reach target without overshooting)
      - prefer smaller subsets (caller sorts results by count)"
   [opens target & {:keys [max-results min-size]
-                                         :or {max-results 5 min-size 2}}]
+                   :or {max-results 5 min-size 2}}]
   (let [opens (vec (take max-subset-search opens))
         n (count opens)
         results (atom [])]
@@ -330,7 +329,7 @@
                     (doseq [i (range start n)]
                       (let [open (nth opens i)
                             new-sum (money/add-amount sum
-                                          (:open-amount open))]
+                                                      (:open-amount open))]
                         (go (inc i) (conj picked open) new-sum)))))))]
       (go 0 [] 0M)
       @results)))
