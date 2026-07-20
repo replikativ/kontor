@@ -110,6 +110,8 @@ kontor is bitemporal — but **lean** rather than full. Two axes:
 
 A posting transitions from draft to **posted** by setting `:posting/posted-at`. After that, *silent* retraction is forbidden by middleware in `kontor.compliance.sealing`. **Explicit `:db/purge` IS allowed** but is itself a recorded commit; the audit story is "the chain documents the purge", not "deletion is impossible". This composes naturally with retention/DSAR (§4.2): deletion happens through legitimate channels that leave their own audit trail. (ADR-007)
 
+Sealing rejects every *silent-mutation* shape against a posted row, not just tuple retracts: `[:db/retract …]`, `[:db/retractEntity …]` / `[:db.fn/retractEntity …]`, and **entity-map in-place edits** — `{:db/id p :posting/amount 9999M}` that *change* an already-present value (datahike upserts card-one attrs as retract+add). No-op re-asserts, brand-new annotations, and the draft→posted transition itself stay allowed. (ADR-118, which closed two red-teamed corruption vectors — `:db/retractEntity` was an unrecognised op spelling; entity-map edits were previously uninspected.) The general root fix — evaluate invariants **post-resolution on the tx-report** rather than on the pre-resolution `$empty+txs` reconstruction — is designed but deferred to the datopia writer-hook work.
+
 ### 4.2 Audit-doc + governance
 
 Five interlocking governance primitives, each a thin kernel schema:

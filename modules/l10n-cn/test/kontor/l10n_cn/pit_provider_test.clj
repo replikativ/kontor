@@ -207,8 +207,13 @@
                                    :where
                                    [?p :kontor.provision/jurisdiction ?juris]
                                    [?p :kontor.provision/code ?code]
-                                   [(or (.startsWith ^String ?code "CN-IITLaw-")
-                                        (.startsWith ^String ?code "CN-STA-"))]]
+                                   ;; clause-level `or` — the query planner (default
+                                   ;; since datahike 0.8.1705, analyzer tightened by
+                                   ;; #883/#861) rejects `or` as a predicate-expression
+                                   ;; head `[(or (pred) (pred))]`; the disjunction must
+                                   ;; be expressed as `(or [pred] [pred])`.
+                                   (or [(.startsWith ^String ?code "CN-IITLaw-")]
+                                       [(.startsWith ^String ?code "CN-STA-")])]
                                  (d/db conn) :cn))
             n-comp-brackets (count (d/q '[:find ?b
                                           :where

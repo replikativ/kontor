@@ -1,0 +1,27 @@
+;; kontor-substrate — the dependency-light value layer of the kontor kernel.
+;;
+;; This is the FIRST kontor module carved out with its own deps.edn, because
+;; it is the first with an EXTERNAL consumer: the dvergr agent harness depends
+;; on `kontor.money` to represent LLM/compute costs as commodity-tagged
+;; BigDecimals (its metering subledger) WITHOUT pulling the full accounting
+;; kernel (datahike, instaparse, mustang, …). See kontor research note 190.
+;;
+;; Contents today: `kontor.money` (Money record + commodity-checked arithmetic
+;; + HALF_EVEN rounding, ADR-013). It has ZERO datahike dependency — the
+;; `{:db/id N}` handling in `posting->money` is pure map-shape matching. As more
+;; genuinely dep-light primitives prove reusable (commodity/dimension
+;; vocabulary), they land here.
+;;
+;; The kontor monorepo root deps.edn also merges `modules/substrate/src` onto
+;; its shared classpath, so the kernel keeps seeing `kontor.money` unchanged —
+;; this file only makes the module independently consumable via :local/root
+;; (or, later, a published `org.replikativ/kontor-substrate` coordinate).
+{:paths ["src"]
+ :deps  {org.clojure/clojure {:mvn/version "1.12.4"}}
+
+ :aliases
+ {:test
+  {:extra-paths ["test"]
+   :extra-deps  {lambdaisland/kaocha    {:mvn/version "1.91.1392"}
+                 org.clojure/test.check {:mvn/version "1.1.1"}}
+   :main-opts   ["-m" "kaocha.runner"]}}}

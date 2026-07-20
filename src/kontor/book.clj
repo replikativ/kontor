@@ -81,130 +81,21 @@
    negates the amount on the credit leg; sum-to-zero (`Ker(σ)`)
    holds by construction."
   (:require [datahike.api :as d]
+            [kontor.book.build :as build]
+            [kontor.gate :as gate]
             [kontor.posting :as posting]))
 
 ;; ============================================================================
 ;; Internals
 ;; ============================================================================
 
-(defn- ->bigdec
-  [x]
-  (cond
-    (instance? BigDecimal x) x
-    (nil? x)                 nil
-    :else                    (bigdec x)))
+;; The pure builder half — value coercion + build-input + entry-tx-data —
+;; moved to kontor.book.build (.cljc) so the browser materializes verb
+;; tx-data client-side (rung 1, note 192). build-input + post-opts are
+;; re-exported (private) for the conn-bound verbs below.
 
-(defn- ->commodity-ref
-  "Coerce a consumer-friendly `:commodity` value to a datahike
-   reference. Note 160 §I-2: bare keyword `:EUR` or short string `\"EUR\"`
-   are the natural ways to write a commodity in a verb call; both get
-   auto-promoted to the canonical `[:kontor.commodity/symbol \"EUR\"]`
-   lookup-ref. Pre-existing eid (Long) or explicit lookup-ref (vector)
-   passes through unchanged."
-  [c]
-  (cond
-    (nil? c)              nil
-    (vector? c)           c                       ; already a lookup-ref
-    (number? c)           c                       ; already an eid
-    (keyword? c)          [:kontor.commodity/symbol (name c)]
-    (string? c)           [:kontor.commodity/symbol c]
-    :else                 c))
-
-(defn- ->dimension-value
-  "Coerce a friendly dimension value to the schema's string."
-  [v]
-  (cond
-    (string? v)  v
-    (keyword? v) (name v)
-    :else        (str v)))
-
-(defn- ->dimensions
-  "Map a friendly `{axis value-or-coll}` dimensions map into a vector
-   of `:posting-dimension` entity maps (ADR-097). A collection value
-   expands to one dimension per element."
-  [dimensions]
-  (vec (for [[axis v] dimensions
-             one      (if (coll? v) v [v])]
-         {:kontor.posting-dimension/axis  axis
-          :kontor.posting-dimension/value (->dimension-value one)})))
-
-(defn- ->posting
-  "Map a friendly `{:account :amount :commodity? :entity? :partner?
-   :dimensions?}` posting (used in `:postings` for multi-leg entries)
-   into the kernel `:kontor.posting/*` shape, defaulting commodity + entity +
-   partner to the entry-level ones. Per-posting overrides:
-   - `:entity`  — ADR-031 intercompany pattern (per-entity sum-to-zero)
-   - `:partner` — per-leg counterparty (e.g. multi-shareholder dividend
-                  declaration; note 160 §I-15)."
-  [default-commodity default-entity default-partner
-   {:keys [account amount commodity entity partner dimensions] :as p}]
-  (when (nil? account)
-    (throw (ex-info "kontor.book: each :postings entry needs :account" {:posting p})))
-  (when (nil? amount)
-    (throw (ex-info "kontor.book: each :postings entry needs :amount" {:posting p})))
-  (let [c  (->commodity-ref (or commodity default-commodity))
-        e  (or entity    default-entity)
-        pa (or partner   default-partner)]
-    (when (nil? c)
-      (throw (ex-info "kontor.book: posting needs :commodity (or an entry-level :commodity)"
-                      {:posting p})))
-    (cond-> {:kontor.posting/account   account
-             :kontor.posting/amount    (->bigdec amount)
-             :kontor.posting/commodity c}
-      e                (assoc :kontor.posting/entity e)
-      pa               (assoc :kontor.posting/partner pa)
-      (seq dimensions) (assoc :kontor.posting/dimensions (->dimensions dimensions)))))
-
-(defn- build-input
-  "Translate a verb options map into the `{:transaction … :postings …}`
-   shape `kontor.posting/post-transaction-tx-data` expects. Pure;
-   throws `ex-info` on a missing required field.
-
-   `:entity` (optional, ADR-031) is stamped on every posting via
-   `:kontor.posting/entity` — required for per-entity trial-balance / BS / GuV
-   filters to scope correctly. Per-posting `:entity` overrides the
-   entry-level one (intercompany)."
-  [{:keys [debit-account credit-account amount commodity journal
-           effective-date narration partner external-id entity postings]}]
-  (when (nil? journal)
-    (throw (ex-info "kontor.book: :journal is required" {})))
-  (when (nil? effective-date)
-    (throw (ex-info "kontor.book: :effective-date is required" {})))
-  (let [ps (cond
-             (seq postings)
-             (mapv #(->posting commodity entity partner %) postings)
-
-             :else
-             (let [amt (->bigdec amount)
-                   c   (->commodity-ref commodity)]
-               (when (nil? debit-account)
-                 (throw (ex-info "kontor.book: :debit-account is required" {})))
-               (when (nil? credit-account)
-                 (throw (ex-info "kontor.book: :credit-account is required" {})))
-               (when (nil? amt)
-                 (throw (ex-info "kontor.book: :amount is required" {})))
-               (when (nil? c)
-                 (throw (ex-info "kontor.book: :commodity is required" {})))
-               [(cond-> {:kontor.posting/account   debit-account
-                         :kontor.posting/amount    amt
-                         :kontor.posting/commodity c}
-                  entity (assoc :kontor.posting/entity entity))
-                (cond-> {:kontor.posting/account   credit-account
-                         :kontor.posting/amount    (- amt)
-                         :kontor.posting/commodity c}
-                  entity (assoc :kontor.posting/entity entity))]))]
-    {:transaction (cond-> {:kontor.transaction/journal        journal
-                           :kontor.transaction/effective-date effective-date}
-                    narration   (assoc :kontor.transaction/narration narration)
-                    partner     (assoc :kontor.transaction/partner partner)
-                    external-id (assoc :kontor.transaction/external-id external-id))
-     :postings    ps}))
-
-(defn- post-opts
-  "The subset of an options map that is forwarded to
-   `post-transaction-tx-data` as builder opts."
-  [opts]
-  (select-keys opts [:posted-at :vt-from :vt-to]))
+(def ^:private build-input build/build-input)
+(def ^:private post-opts build/post-opts)
 
 (defn- resolve-journal
   "Resolve a journal entity from a `:kontor.journal/type` keyword, for the
@@ -231,16 +122,14 @@
 ;; The one builder (ADR-068)
 ;; ============================================================================
 
-(defn entry-tx-data
-  "Pure tx-data builder for a balanced, sealed transaction — the
-   single ADR-068 builder behind every `kontor.book` verb. Composable
-   into a `kontor.workflow.process` step list.
-
-   Requires `:journal` and `:effective-date` explicitly (it is pure).
-   Use `entry!` / the named verbs for the ergonomic path (journal
-   resolved by type, `:effective-date` defaulted to now)."
-  [opts]
-  (posting/post-transaction-tx-data (build-input opts) (post-opts opts)))
+(def entry-tx-data
+  "Pure tx-data builder for a balanced, sealed transaction — re-exported
+   from kontor.book.build (.cljc). The single ADR-068 builder behind every
+   kontor.book verb; composable into a kontor.workflow.process step list.
+   Requires :journal + :effective-date explicitly (it is pure). Use entry! /
+   the named verbs for the ergonomic path (journal resolved by type,
+   effective-date defaulted to now)."
+  build/entry-tx-data)
 
 (defn entry!
   "Build + seal a balanced transaction, routed through the validation
@@ -275,6 +164,66 @@
      (posting/post-transaction! conn
                                 (build-input opts')
                                 (merge (post-opts opts') extra-post-opts)))))
+
+;; ============================================================================
+;; Non-committing validation — the "web-form check" (research note 190)
+;; ============================================================================
+
+(defn- structural->diagnostics
+  "Map `kontor.posting.validate/validate`'s `:errors` into the uniform
+   diagnostic shape `kontor.gate/validate-candidate` returns, so tier-1
+   (pure balance) and tier-2 (db invariants) surface as one list."
+  [report]
+  (mapv (fn [e]
+          {:severity :error
+           :code     (:error e)
+           :message  (:message e)
+           :data     (dissoc e :error :message)})
+        (:errors report)))
+
+(defn validate-entry
+  "Non-committing dry-run of a `kontor.book` verb entry — the same
+   check `entry!` runs at commit, but returning structured diagnostics
+   instead of throwing, and never persisting. Two tiers, one predicate
+   set (research note 190; the Odoo onchange↔constrains discipline):
+
+   - **tier-1** — pure structure + sum-to-zero balance via
+     `kontor.posting.validate/validate` (no db). This half is `.cljc`;
+     the browser runs it standalone on every edit for instant feedback.
+   - **tier-2** — db invariants + sealing / legal-hold / period-lock /
+     state-machine via `kontor.gate/validate-candidate` (needs the db).
+     Skipped when tier-1 already failed (the tx-data won't build).
+
+   Resolves `:journal`/`:effective-date` exactly like `entry!`, so the
+   candidate mirrors what a commit would attempt. Returns
+   `{:ok? boolean :diagnostics [{:severity :code :message :data} …]}`.
+
+   Intended server-side over distributed-scope: the client shows tier-1
+   instantly and calls this for tier-2, but only `entry!` (through the
+   gate) ever writes — an optimistic UI can never persist a posting the
+   gate would reject."
+  [conn opts]
+  (let [opts' (cond-> opts
+                (and (nil? (:journal opts)) (:journal-type opts))
+                (assoc :journal (resolve-journal (d/db conn) (:journal-type opts)))
+
+                (nil? (:effective-date opts))
+                (assoc :effective-date (java.util.Date.)))
+        built (try {:input (build-input opts')}
+                   (catch clojure.lang.ExceptionInfo e
+                     {:diag {:severity :error
+                             :code     :book/malformed-entry
+                             :message  (ex-message e)
+                             :data     (ex-data e)}}))]
+    (if-let [d (:diag built)]
+      {:ok? false :diagnostics [d]}
+      (let [t1 (structural->diagnostics (posting/validate (:input built)))
+            t2 (if (seq t1)
+                 []                       ; tx-data won't build while structure is broken
+                 (:diagnostics (gate/validate-candidate conn (entry-tx-data opts'))))
+            diags (vec (concat t1 t2))]
+        {:ok?         (empty? diags)
+         :diagnostics diags}))))
 
 ;; ============================================================================
 ;; The verbs — `!`-side conveniences over `entry!`

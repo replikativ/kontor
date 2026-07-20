@@ -11,6 +11,11 @@
 ;; module hardens enough to have external consumers, it can be split
 ;; into its own artifact without code changes — only deps.edn moves.
 {:paths ["src" "resources"
+         ;; substrate — dep-light value layer (kontor.money); own deps.edn
+         ;; because dvergr consumes it standalone. See modules/substrate/README.
+         "modules/substrate/src"
+         ;; metering — usage-subledger → GL accrual summarizer (note 190 Piece C)
+         "modules/metering/src"
          "modules/partner/src"     "modules/partner/resources"
          "modules/sales/src"       "modules/sales/resources"
          "modules/invoice/src"     "modules/invoice/resources"
@@ -59,7 +64,18 @@
 
  :deps
  {org.clojure/clojure              {:mvn/version "1.12.4"}
-  org.replikativ/datahike          {:mvn/version "0.8.1699"}
+  ;; 0.8.1744: `datahike.tx-preds` — the store-level, writer-run transaction
+  ;; predicate that `kontor.governance` registers via `govern!` to validate the
+  ;; fully-resolved tx-report in the writer (#861; also brings `:db.attr/preds`
+  ;; + `:db/maxLength` + the opt-in `:value-caps` resource model). #888 fixes the
+  ;; planner's `get-else` with a VARIABLE default (e.g. balance.cljc defaulting a
+  ;; posting's valid-from to its tx's `:db/txInstant`) — it returned the raw symbol
+  ;; under the planner, breaking the cljs as-of-valid read path. #895 makes cljs
+  ;; `:db.type/bigdec` accept the fress Bigdec (via konserve 0.9.363 → fress
+  ;; 0.4.317), so the browser lane needs NO datahike/fress worktree — it runs on
+  ;; this same published artifact (see the :cljs alias). Carries forward the planner
+  ;; scope-leak fixes (#883) kontor's invariants + report queries depend on.
+  org.replikativ/datahike          {:mvn/version "0.8.1744"}
   ;; ADR-011's declarative datalog invariants now live inline at
   ;; `kontor.invariant` (vendored from datopia/invariant, MIT, maintained
   ;; by us). Single-dep posture per ADR-001 preserved.
@@ -83,6 +99,8 @@
  :aliases
  {:test
   {:extra-paths ["test" "test/resources"
+                 "modules/substrate/test"
+                 "modules/metering/test"
                  "modules/partner/test"      "modules/partner/test/resources"
                  "modules/sales/test"        "modules/sales/test/resources"
                  "modules/invoice/test"      "modules/invoice/test/resources"
@@ -136,6 +154,8 @@
   ;; Mirrors the convention used in pg-datahike and beleg.
   :dev
   {:extra-paths ["test" "test/resources" "dev"
+                 "modules/substrate/test"
+                 "modules/metering/test"
                  "modules/partner/test"      "modules/partner/test/resources"
                  "modules/sales/test"        "modules/sales/test/resources"
                  "modules/invoice/test"      "modules/invoice/test/resources"
@@ -185,6 +205,23 @@
                  lambdaisland/kaocha     {:mvn/version "1.91.1392"}
                  org.clojure/test.check  {:mvn/version "1.1.1"}
                  cider/cider-nrepl       {:mvn/version "0.45.0"}}}
+
+  ;; ClojureScript test lane (Phase 0, research note 191). shadow-cljs
+  ;; reads this alias for the cljs classpath; the substrate `.cljc` units
+  ;; compile to a Node bundle so portability is verified in CI.
+  ;; Run: clojure -M:cljs -m shadow.cljs.devtools.cli compile node-test
+  ;;      && node target/node-test.js
+  :cljs
+  ;; Fully Maven — no local worktrees. datahike 0.8.1744 (#895) makes cljs
+  ;; `:db.type/bigdec` accept the fress Bigdec via konserve 0.9.363 → fress
+  ;; 0.4.317, so the browser lane runs on the SAME published datahike as the JVM
+  ;; :test lane. fress 0.4.317 supplies the browser BigDecimal (fress.impl.bigdec)
+  ;; that kontor.money's cljs branch stores; datahike pulls it transitively (via
+  ;; konserve), and kontor pins it explicitly here so kontor.money resolves it too.
+  {:extra-paths ["modules/substrate/test"]
+   :extra-deps  {org.clojure/clojurescript {:mvn/version "1.12.134"}
+                 thheller/shadow-cljs      {:mvn/version "3.3.6"}
+                 com.github.pkpkpk/fress    {:mvn/version "0.4.317"}}}
 
   :format
   {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.0"}}

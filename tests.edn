@@ -1,6 +1,8 @@
 #kaocha/v1
 {:tests [{:id :unit
           :test-paths ["test"
+                       "modules/substrate/test"
+                       "modules/metering/test"
                        "modules/partner/test"
                        "modules/sales/test"
                        "modules/invoice/test"

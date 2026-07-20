@@ -157,13 +157,19 @@ The `TaxProvider` protocol is the only abstraction the kernel uses to compute ta
 ## Useful one-liners
 
 ```bash
-clojure -M:test                     # kaocha unit tests
+clojure -M:test                     # kaocha unit tests (JVM)
 clojure -M:dev -m nrepl.cmdline \
         --middleware '[cider.nrepl/cider-middleware]'   # REPL + nREPL
 clojure -M:format                   # cljfmt check
 clojure -M:ffix                     # cljfmt fix
 clojure -M:lint                     # clj-kondo (src + test)
 clojure -M:format && clojure -M:lint && clojure -M:test   # pre-push trio
+
+# ClojureScript test lane (Phase 0, research note 191) — runs the
+# cross-platform (.cljc) substrate on Node so portability can't rot
+# silently. Add new .cljc `-test` namespaces to kontor.node-runner.
+clojure -M:cljs -m shadow.cljs.devtools.cli compile node-test \
+        && node target/node-test.js
 ```
 
 ```clojure
