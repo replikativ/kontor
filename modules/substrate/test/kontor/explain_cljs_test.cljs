@@ -27,14 +27,22 @@
    {:db/ident :kontor.posting/amount :db/valueType :db.type/bigdec :db/cardinality :db.cardinality/one}
    {:db/ident :kontor.posting/commodity :db/valueType :db.type/keyword :db/cardinality :db.cardinality/one}
    {:db/ident :kontor.posting/transaction :db/valueType :db.type/ref :db/cardinality :db.cardinality/one}
+   ;; ledger.cljc (via explain-balance) pulls :kontor.posting/partner — declare it
+   ;; so the pull resolves (current-main datahike raises on an undeclared attr
+   ;; under :write flexibility, where the old cljs base returned nil).
+   {:db/ident :kontor.posting/partner :db/valueType :db.type/ref :db/cardinality :db.cardinality/one}
    {:db/ident :kontor.posting/ledger :db/valueType :db.type/ref :db/cardinality :db.cardinality/one}
    {:db/ident :kontor.posting/entity :db/valueType :db.type/ref :db/cardinality :db.cardinality/one}
    {:db/ident :kontor.posting/narration :db/valueType :db.type/string :db/cardinality :db.cardinality/one}
    {:db/ident :kontor.transaction/state :db/valueType :db.type/keyword :db/cardinality :db.cardinality/one}
    {:db/ident :kontor.transaction/journal :db/valueType :db.type/keyword :db/cardinality :db.cardinality/one}
    {:db/ident :kontor.transaction/narration :db/valueType :db.type/string :db/cardinality :db.cardinality/one}
-   {:db/ident :kontor.transaction/effective-date :db/valueType :db.type/instant :db/cardinality :db.cardinality/one}
-   {:db/ident :db.valid/from :db/valueType :db.type/instant :db/cardinality :db.cardinality/one}])
+   {:db/ident :kontor.transaction/effective-date :db/valueType :db.type/instant :db/cardinality :db.cardinality/one}])
+;; NB: `:db.valid/from` is a datahike-upstream system attribute (ADR-048) — it
+;; must NOT be declared in a user schema (datahike rejects `db`-namespaced idents).
+;; Rely on the system attr so the bigdec seed actually commits and explain-balance
+;; walks a real as-of-valid `get-else` path (fixed in datahike #888 — variable
+;; get-else default resolves in cljs instead of leaking the raw symbol).
 
 (deftest explain-balance-executes-in-cljs
   (async done
@@ -56,7 +64,9 @@
                                        :kontor.posting/amount (money/->amount "-100.00") :kontor.posting/commodity :EUR}]))
                (let [cash-eid (d/q '[:find ?e . :in $ ?p :where [?e :kontor.account/path ?p]] @conn "Assets:Cash")
                      ex (explain/explain-balance conn cash-eid)]
+                 (is (some? cash-eid) "the bigdec seed committed — cash account resolves to a real eid (guards against a vacuous nil-eid pass)")
                  (is (= cash-eid (:account ex)) "explain-balance runs in cljs and echoes the account")
+                 (is (seq (:postings ex)) "explain-balance walks the real postings via the as-of-valid get-else path (datahike #888)")
                  (is (contains? ex :balance) "returns a :balance map")
                  (is (contains? ex :postings) "returns a :postings vector")
                  (is (some? (:as-of-valid ex)) "carries the resolved bitemporal axes")))

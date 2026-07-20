@@ -16,6 +16,7 @@
             [kontor.bitemporal-entity-cljs-test]
             [kontor.book-build-cljs-test]
             [kontor.validation-cljs-test]
+            [kontor.governance-cljs-test]
             [kontor.reporting-cljs-test]
             [kontor.reports-cljs-test]
             [kontor.explain-cljs-test]
@@ -34,6 +35,7 @@
                'kontor.bitemporal-entity-cljs-test
                'kontor.book-build-cljs-test
                'kontor.validation-cljs-test
+               'kontor.governance-cljs-test
                'kontor.reporting-cljs-test
                'kontor.reports-cljs-test
                'kontor.explain-cljs-test

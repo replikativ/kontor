@@ -58,16 +58,24 @@
 (defn balance-violations
   "Re-sum each delta-touched transaction from `db-after`, per commodity. Returns
    a vector of `{:transaction :commodity :sum}` for every non-zero group (empty
-   = balanced)."
+   = balanced).
+
+   Sums via `money/add-amount` (the cljc bigdec-aware fold) rather than
+   datahike's `(sum ?amt)` aggregate: the aggregate adds with core `+`, which
+   does not add cljs fress `Bigdec` values, so the datalog aggregate would make
+   this validator JVM-only. The query binds `?p` so equal amounts on distinct
+   postings are not collapsed by :find's set semantics."
   [{:keys [db-after] :as report}]
   (vec
    (for [tx (touched-tx-eids report)
-         [c s] (d/q '[:find ?c (sum ?amt) :in $ ?tx :where
-                      [?p :kontor.posting/transaction ?tx]
-                      [?p :kontor.posting/commodity ?c]
-                      [?p :kontor.posting/amount ?amt]]
-                    db-after tx)
-         :when (and s (not (money/amount-zero? s)))]
+         [c rows] (group-by second
+                            (d/q '[:find ?p ?c ?amt :in $ ?tx :where
+                                   [?p :kontor.posting/transaction ?tx]
+                                   [?p :kontor.posting/commodity ?c]
+                                   [?p :kontor.posting/amount ?amt]]
+                                 db-after tx))
+         :let [s (reduce money/add-amount (money/zero-amount) (map #(nth % 2) rows))]
+         :when (not (money/amount-zero? s))]
      {:transaction tx :commodity c :sum s})))
 
 ;; ============================================================================
