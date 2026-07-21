@@ -92,6 +92,33 @@
     (is (= :accepted
            (outcome (fn [{:keys [pd]}] [{:db/id pd :kontor.posting/amount 1000M}]))))))
 
+(deftest short-circuits-source-construction-when-nothing-is-keyed
+  ;; `invariant-violations` resolves WHICH invariants apply before building the
+  ;; sources they need. That ordering is load-bearing: `report-empty+txs` builds
+  ;; an empty db over the store's ENTIRE schema, so it scales with the schema
+  ;; rather than the delta, and `validate-report` runs in the writer on every
+  ;; committed transaction — including writes from a co-tenant (chat, wiki) that
+  ;; keys no invariant at all. Asserted structurally rather than by timing, which
+  ;; would be flaky, and here rather than nowhere, because reverting the ordering
+  ;; keeps every behavioural test in this namespace green.
+  (let [{:keys [conn]} (setup)
+        ;; opening an account touches no attribute any invariant is keyed on
+        ;; (the kernel keys :kontor.posting/account + :kontor.posting/commodity)
+        unkeyed (dc/with @conn [{:kontor.account/path "Assets:Bank"
+                                 :kontor.account/type :asset
+                                 :kontor.account/active true}])
+        keyed   (dc/with @conn (build/entry-tx-data {:debit-account cash :credit-account rev :amount 12
+                                                     :commodity eur :journal gen :effective-date d1}))
+        calls   (atom 0)
+        real    @#'gov/report-empty+txs]
+    (with-redefs [gov/report-empty+txs (fn [r] (swap! calls inc) (real r))]
+      (testing "no keyed attribute — the sources are never built"
+        (is (= [] (gov/invariant-violations unkeyed)))
+        (is (zero? @calls)))
+      (testing "a keyed attribute — the sources ARE built, exactly once"
+        (is (= [] (gov/invariant-violations keyed)))
+        (is (= 1 @calls))))))
+
 (deftest violation-fns-are-pure-over-the-report
   (let [{:keys [conn]} (setup)
         good (dc/with @conn (build/entry-tx-data {:debit-account cash :credit-account rev :amount 7
