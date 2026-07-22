@@ -56,9 +56,13 @@
 
 (defn aging-rows
   "Per-invoice aging rows. Each row:
-     {:transaction-eid :external-id :open-amount
+     {:transaction-eid :external-id :open-amount :commodity
       :due-date :days-overdue :bucket
       :partner-eid :partner-name}
+
+   `:open-amount` is a bare platform decimal; `:commodity` is its
+   commodity eid. Filter on `:commodity` to age a multi-currency ledger
+   one currency at a time — the summary fns below refuse to blend.
 
    `as-of` defaults to today. `buckets` defaults to `default-buckets`.
    `account-codes` is the set of chart codes treated as AR / AP
@@ -88,18 +92,85 @@
          (sort-by :due-date)
          vec)))
 
+(declare rows-commodity)
+
+(defn- codes-commodity
+  "The commodity the AR / AP accounts themselves are pinned to via
+   `:kontor.account/commodity`, when they agree on one.
+
+   This is what denominates the zeros when there are NO open items —
+   the happy case, where everything has been paid. Without it an empty
+   aging has no commodity to report and the summary cannot build a
+   typed zero."
+  [db account-codes]
+  (let [cs (set (d/q '[:find [?c ...]
+                       :in $ [?code ...]
+                       :where
+                       [?a :kontor.account/code ?code]
+                       [?a :kontor.account/commodity ?c]]
+                     db account-codes))]
+    (when (= 1 (count cs)) (first cs))))
+
+(defn- summary-commodity
+  "Resolve the commodity a summary is denominated in: the caller's
+   explicit `:commodity` wins, then the open items themselves, then the
+   commodity the AR / AP accounts are pinned to.
+
+   Throws when none of the three answers, which happens only for an
+   empty aging over accounts that pin no commodity — pass `:commodity`."
+  [db account-codes rows explicit]
+  (or explicit
+      (rows-commodity rows)
+      (codes-commodity db account-codes)
+      (throw (ex-info (str "aging: cannot denominate zero — no open items, and "
+                           "these accounts pin no :kontor.account/commodity. "
+                           "Pass :commodity explicitly.")
+                      {:type :aging/indeterminate-commodity
+                       :account-codes account-codes}))))
+
+(defn- rows-commodity
+  "The single commodity `rows` are denominated in, or nil for no rows.
+   Throws when they span several.
+
+   These summaries fold every open item into one number per bucket, and
+   that number is only meaningful within one currency. The fold used to
+   run over bare platform decimals with no commodity anywhere, so a book
+   holding EUR and USD receivables produced a silently meaningless total
+   that the docstrings nonetheless described as Money. Refusing is the
+   same stance `report/sum-postings` takes under `:strict-commodity?`.
+
+   To age a multi-currency ledger, filter `aging-rows` by `:commodity`
+   and summarise each currency separately."
+  [rows]
+  (let [cs (into #{} (keep :commodity) rows)]
+    (when (> (count cs) 1)
+      (throw (ex-info "aging: open items span multiple commodities"
+                      {:type :aging/mixed-commodity :commodities cs})))
+    (first cs)))
+
 (defn aging-summary-by-bucket
   "Sum open amounts per bucket. Returns
      {:not-yet-due Money :0-30 Money :31-60 Money :61-90 Money :90+ Money :total Money}
    For AR (positive open amounts) and AP (negative open amounts) the
-   sums are signed accordingly (caller can `abs` for display)."
+   sums are signed accordingly (caller can `abs` for display).
+
+   Every value is a real Money — commodity included. Throws
+   `:aging/mixed-commodity` if the open items span more than one
+   currency; see [[rows-commodity]].
+
+   `:commodity` (optional) denominates the result explicitly. It is only
+   needed when there are no open items AND the AR / AP accounts pin no
+   `:kontor.account/commodity` — otherwise the commodity is inferred, in
+   that order. See [[summary-commodity]]."
   [db account-codes & opts]
   (let [rows (apply aging-rows db account-codes opts)
-        zero (money/zero-amount)]
+        c    (summary-commodity db account-codes rows (:commodity (apply hash-map opts)))
+        zero (money/zero c)
+        add  (fn [m r] (money/add (or m zero) (money/money (:open-amount r) c)))]
     (reduce (fn [acc r]
               (-> acc
-                  (update (:bucket r) (fnil #(money/add-amount % (:open-amount r)) zero))
-                  (update :total      (fnil #(money/add-amount % (:open-amount r)) zero))))
+                  (update (:bucket r) add r)
+                  (update :total      add r)))
             {:not-yet-due zero :0-30 zero :31-60 zero :61-90 zero :90+ zero
              :total zero}
             rows)))
@@ -114,23 +185,21 @@
    exposures first."
   [db account-codes & opts]
   (let [rows (apply aging-rows db account-codes opts)
-        zero (money/zero-amount)]
+        c    (summary-commodity db account-codes rows (:commodity (apply hash-map opts)))
+        zero (money/zero c)
+        add  (fn [m r] (money/add (or m zero) (money/money (:open-amount r) c)))]
     (->> rows
          (group-by :partner-eid)
          (map (fn [[partner-eid partner-rows]]
-                (let [total (reduce #(money/add-amount %1 (:open-amount %2))
-                                    zero partner-rows)
+                (let [total (reduce add zero partner-rows)
                       by-bucket (reduce
-                                 (fn [acc r]
-                                   (update acc (:bucket r)
-                                           (fnil #(money/add-amount % (:open-amount r))
-                                                 zero)))
+                                 (fn [acc r] (update acc (:bucket r) add r))
                                  {} partner-rows)]
                   {:partner-eid partner-eid
                    :partner-name (:partner-name (first partner-rows))
                    :total total
                    :buckets by-bucket
                    :rows partner-rows})))
-         (sort-by (fn [r] (- (money/amount-sign (:total r))
-                             (Math/abs (money/amount->double (:total r))))))
+         (sort-by (fn [r] (- (money/amount-sign (:amount (:total r)))
+                             (Math/abs (money/amount->double (:amount (:total r)))))))
          vec)))

@@ -115,13 +115,21 @@
 (deftest aging-summary-by-bucket-totals
   (let [conn (bootstrap)
         _ (seed-fixtures conn)
-        sum (aging/aging-summary-by-bucket (d/db conn) #{"1400"} :as-of as-of)]
-    (is (= 1190.00M (:not-yet-due sum)) "INV-A 1000 + 19% = 1190")
-    (is (= 595.00M  (:0-30 sum))         "INV-B 500 + 19% = 595")
-    (is (= 952.00M  (:31-60 sum))        "INV-C 800 + 19% = 952")
-    (is (= 357.00M  (:61-90 sum))        "INV-D 300 + 19% = 357")
-    (is (= 714.00M  (:90+ sum))          "INV-E 600 + 19% = 714")
-    (is (= 3808.00M (:total sum))        "all five = 3808")))
+        db  (d/db conn)
+        eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
+        sum (aging/aging-summary-by-bucket db #{"1400"} :as-of as-of)]
+    (is (= 1190.00M (:amount (:not-yet-due sum))) "INV-A 1000 + 19% = 1190")
+    (is (= 595.00M  (:amount (:0-30 sum)))        "INV-B 500 + 19% = 595")
+    (is (= 952.00M  (:amount (:31-60 sum)))       "INV-C 800 + 19% = 952")
+    (is (= 357.00M  (:amount (:61-90 sum)))       "INV-D 300 + 19% = 357")
+    (is (= 714.00M  (:amount (:90+ sum)))         "INV-E 600 + 19% = 714")
+    (is (= 3808.00M (:amount (:total sum)))       "all five = 3808")
+    (testing "values are Money, as the docstring has always claimed"
+      ;; they used to be bare platform decimals with the commodity nowhere
+      ;; in sight, so a EUR+USD ledger produced a silently blended total
+      (is (= eur (:commodity (:total sum))))
+      (is (every? #(= eur (:commodity (get sum %)))
+                  [:not-yet-due :0-30 :31-60 :61-90 :90+])))))
 
 (deftest aging-by-partner-groups-correctly
   (let [conn (bootstrap)
@@ -129,13 +137,13 @@
         per-partner (aging/aging-by-partner (d/db conn) #{"1400"} :as-of as-of)
         by-name (into {} (map (juxt :partner-name identity)) per-partner)]
     (is (= 3 (count per-partner)) "ACME / BETA / GAMMA")
-    (is (= 1785.00M (:total (get by-name "ACME GmbH")))   "INV-A + INV-B")
-    (is (= 1309.00M (:total (get by-name "Beta AG")))      "INV-C + INV-D")
-    (is (= 714.00M  (:total (get by-name "Gamma KG"))))
+    (is (= 1785.00M (:amount (:total (get by-name "ACME GmbH"))))  "INV-A + INV-B")
+    (is (= 1309.00M (:amount (:total (get by-name "Beta AG"))))    "INV-C + INV-D")
+    (is (= 714.00M  (:amount (:total (get by-name "Gamma KG")))))
     ;; ACME has both not-yet-due and 0-30
     (let [acme-buckets (:buckets (get by-name "ACME GmbH"))]
-      (is (= 1190.00M (:not-yet-due acme-buckets)))
-      (is (= 595.00M  (:0-30 acme-buckets))))))
+      (is (= 1190.00M (:amount (:not-yet-due acme-buckets))))
+      (is (= 595.00M  (:amount (:0-30 acme-buckets)))))))
 
 (deftest aging-honours-due-date-when-payment-term-omitted
   (testing "If a transaction has no :payment-term but DOES have an
@@ -173,3 +181,43 @@
       (is (= #inst "2026-04-15T00:00:00Z" (:due-date inv-man)))
       (is (= 15 (:days-overdue inv-man)))
       (is (= :0-30 (:bucket inv-man))))))
+
+(deftest empty-aging-still-reports-a-commodity
+  ;; The happy case — everything paid — has no rows to infer a commodity
+  ;; from, and a Money cannot be built without one. The AR accounts' own
+  ;; :kontor.account/commodity denominates the zeros. Missed on the first
+  ;; pass because every fixture here has open items; caught by CI in
+  ;; end-to-end-demo-test.
+  (let [conn (bootstrap)                     ; chart installed, no invoices
+        db   (d/db conn)
+        eur  (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
+        sum  (aging/aging-summary-by-bucket db #{"1400"} :as-of as-of)]
+    (is (= 0M (:amount (:total sum))))
+    (is (= eur (:commodity (:total sum)))
+        "denominated from :kontor.account/commodity on the AR account")
+    (is (every? #(= eur (:commodity (get sum %)))
+                [:not-yet-due :0-30 :31-60 :61-90 :90+]))
+    (testing "aging-by-partner is empty rather than erroring"
+      (is (= [] (aging/aging-by-partner db #{"1400"} :as-of as-of))))
+    (testing "an explicit :commodity wins"
+      (let [usd-sum (aging/aging-summary-by-bucket db #{"1400"} :as-of as-of
+                                                   :commodity :made-up)]
+        (is (= :made-up (:commodity (:total usd-sum))))))))
+
+(deftest empty-aging-over-unpinned-accounts-says-so
+  ;; No rows and no pinned commodity: there is genuinely no answer, so it
+  ;; says which accounts it could not denominate rather than inventing one.
+  (let [conn (bootstrap)]
+    (d/transact conn [{:kontor.account/path "Assets:Receivable:Unpinned"
+                       :kontor.account/code "1498" :kontor.account/type :asset
+                       :kontor.account/active true}])
+    (let [e (try (aging/aging-summary-by-bucket (d/db conn) #{"1498"} :as-of as-of)
+                 nil
+                 (catch clojure.lang.ExceptionInfo ex ex))]
+      (is (some? e))
+      (is (= :aging/indeterminate-commodity (:type (ex-data e))))
+      (is (= #{"1498"} (:account-codes (ex-data e)))))
+    (testing "and :commodity resolves it"
+      (is (= :EUR (:commodity (:total (aging/aging-summary-by-bucket
+                                       (d/db conn) #{"1498"} :as-of as-of
+                                       :commodity :EUR))))))))

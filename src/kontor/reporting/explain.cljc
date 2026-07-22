@@ -60,19 +60,27 @@
    from the result.
 
    Options (all optional):
-     :as-of-valid    Date  — default now
+     :as-of-valid    Date  — **default nil (all valid time)**, matching
+                     `balance/account-balance`. This fn used to coerce nil
+                     to wall-clock now and then push that into the opts it
+                     forwarded, so `(:balance (explain-balance …))` could
+                     differ from `(account-balance …)` for the same account
+                     whenever the book held a future-dated posting — the
+                     explanation disagreed with the number it explained.
      :as-of-tx       Date  — default now
      :include-states set   — default #{:posted}
      :entity         eid   — restrict to one :kontor.posting/entity (ADR-031)
+     :ledger         eid   — restrict to one book (ADR-021)
      :order          :asc  | :desc — default :asc on :valid-from
 
    ADR-091."
   ([conn account-eid] (explain-balance conn account-eid {}))
   ([conn account-eid {:keys [as-of-valid as-of-tx]
                       :as opts}]
-   (let [as-of-valid (or as-of-valid (now))
-         as-of-tx    (or as-of-tx (now))
-         opts        (assoc opts :as-of-valid as-of-valid :as-of-tx as-of-tx)
+   (let [as-of-tx    (or as-of-tx (now))
+         ;; :as-of-valid is forwarded EXACTLY as given (nil included) so the
+         ;; balance and the postings itemising it see one window.
+         opts        (assoc opts :as-of-tx as-of-tx)
          balance     (balance/account-balance conn account-eid opts)
          postings    (ledger/postings-against conn account-eid opts)]
      {:account      account-eid

@@ -62,6 +62,31 @@
          (or (nil? as-of-valid) (before-or-eq? vf as-of-valid))
          (contains? included-states st))))
 
+(defn ledger-match-fn
+  "Resolve a `:ledger` option to a predicate over a posting's LEDGER EID.
+
+   Per ADR-021 a posting carrying no `:kontor.posting/ledger` is
+   conceptually in the PRIMARY book, so when the requested ledger is
+   `:kontor.ledger/type :primary` a nil ledger-eid matches too. Returns
+   `(constantly true)` when no ledger is requested.
+
+   Takes the eid rather than the posting so the read side can share ONE
+   definition of this rule across namespaces that pull postings into
+   different shapes (`kontor.reporting.report` keeps `:ledger-eid`; this
+   namespace pulls a ref map). Having the rule written twice is how the
+   two drift — which is the shape of the bug this option is fixing."
+  [db ledger-spec]
+  (if (nil? ledger-spec)
+    (constantly true)
+    (let [{:keys [db/id] :kontor.ledger/keys [type]}
+          (d/pull db [:db/id :kontor.ledger/type] ledger-spec)]
+      (when-not id
+        (throw (ex-info "kontor.reporting: :ledger not found" {:ledger ledger-spec})))
+      (let [primary? (= :primary type)]
+        (fn [ledger-eid]
+          (or (= ledger-eid id)
+              (and primary? (nil? ledger-eid))))))))
+
 (defn- pull-postings-against
   "Pull all postings against `account-eid` from `db` (already
    tx-time-snapshotted by the caller). Each posting is a flat map
@@ -96,13 +121,15 @@
                                     [:kontor.posting/amount
                                      :kontor.posting/commodity
                                      :kontor.posting/transaction
-                                     :kontor.posting/entity]
+                                     :kontor.posting/entity
+                                     :kontor.posting/ledger]
                                     p)
                      tx-state (-> (d/pull db [:kontor.transaction/state]
                                           (-> pulled :kontor.posting/transaction :db/id))
                                   :kontor.transaction/state)]
                  (assoc pulled
                         :valid-from vf
+                        :ledger-eid (:db/id (:kontor.posting/ledger pulled))
                         :kontor.transaction/state tx-state))))))
 
 ;; ============================================================================
@@ -131,6 +158,14 @@
                        sum-to-zero, so entity-filtered balances are
                        independently balanced and meaningful for trans-
                        national reports.
+     :ledger         — restrict to postings of a given :kontor.posting/ledger
+                       (eid or lookup-ref). Default: ALL ledgers, which
+                       for a book running parallel valuations (ADR-021 —
+                       HGB alongside IFRS) means the returned balance is
+                       a blend of them and belongs to no framework. Pass
+                       the ledger explicitly for a per-book figure. A
+                       posting with no ledger counts as the primary book
+                       (see [[ledger-match-fn]]).
 
    Example:
      (account-balance conn rec)
@@ -141,7 +176,7 @@
      ;; DE GmbH only
      (account-balance conn rec {:entity [:kontor.entity/code \"DE-GMBH\"]})"
   ([conn account-eid] (account-balance conn account-eid {}))
-  ([conn account-eid {:keys [as-of-valid as-of-tx include-states entity]
+  ([conn account-eid {:keys [as-of-valid as-of-tx include-states entity ledger]
                       :or   {include-states default-included-states}}]
    (let [as-of-tx    (or as-of-tx (now))
          db          (d/db conn)
@@ -150,9 +185,11 @@
                        (or (:db/id (d/pull tx-snap [:db/id] entity))
                            (throw (ex-info "account-balance: :entity not found"
                                            {:entity entity}))))
+         ledger-ok?  (ledger-match-fn tx-snap ledger)
          postings    (pull-postings-against tx-snap account-eid entity-eid)
-         included    (filter (partial include-posting? as-of-valid include-states)
-                             postings)]
+         included    (->> postings
+                          (filter (partial include-posting? as-of-valid include-states))
+                          (filter (comp ledger-ok? :ledger-eid)))]
      (->> included
           (keep money/posting->money)
           money/sum-by-commodity))))

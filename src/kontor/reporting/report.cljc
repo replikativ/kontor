@@ -55,7 +55,8 @@
             [clojure.string :as str]
             [datahike.api :as d]
             [kontor.fx.fx :as fx]
-            [kontor.money :as money]))
+            [kontor.money :as money]
+            [kontor.reporting.balance :as balance]))
 
 ;; ============================================================================
 ;; Internal: bitemporal posting fetch
@@ -339,23 +340,14 @@
 ;; ============================================================================
 
 (defn- ledger-filter-pred
-  "Build a posting predicate for the optional `:ledger` report
-   filter. `ledger-spec` is an eid or lookup-ref. Per ADR-021 a
-   posting with no `:kontor.posting/ledger` is conceptually in the PRIMARY
-   book — so when the requested ledger is `:kontor.ledger/type :primary`,
-   nil-ledger postings pass too. Returns `(constantly true)` when no
-   ledger filter is requested."
+  "Posting predicate for the optional `:ledger` report filter.
+
+   The RULE (nil ledger = primary book, per ADR-021) lives in
+   `balance/ledger-match-fn` so the report engine and the balance-side
+   readers cannot disagree about it; this just applies it to the shape
+   `pull-posting` produces."
   [db ledger-spec]
-  (if (nil? ledger-spec)
-    (constantly true)
-    (let [{:keys [db/id] :kontor.ledger/keys [type]} (d/pull db [:db/id :kontor.ledger/type] ledger-spec)]
-      (when-not id
-        (throw (ex-info "compute-report: :ledger not found" {:ledger ledger-spec})))
-      (let [primary? (= :primary type)]
-        (fn [p]
-          (let [le (:ledger-eid p)]
-            (or (= le id)
-                (and primary? (nil? le)))))))))
+  (comp (balance/ledger-match-fn db ledger-spec) :ledger-eid))
 
 (defn- entity-filter-pred
   "Build a posting predicate for the optional `:entity` report filter.
@@ -488,8 +480,10 @@
      :from           — inclusive lower bound on the posting's valid-from
                        (resolved via :tx/valid-from on the creating tx).
                        Default: nil = beginning of time.
-     :to             — EXCLUSIVE upper bound (default: nil = today+1d).
-                       Pass `:to #inst \"2027-01-01\"` for FY 2026.
+     :to             — EXCLUSIVE upper bound. Default nil = NO upper
+                       bound at all (future-dated postings included),
+                       matching `balance/account-balance` per note 160
+                       §I-17. Pass `:to #inst \"2027-01-01\"` for FY 2026.
      :through        — INCLUSIVE upper bound (sugar over :to). Pass
                        `:through #inst \"2026-12-31\"` for FY 2026 —
                        reads natural. Mutually exclusive with :to.

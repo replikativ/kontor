@@ -268,8 +268,12 @@
       (let [summary (aging/aging-summary-by-bucket
                      (d/db conn) #{"1400"}
                      :as-of jan-1-26 :ar-or-ap :ar)]
-        (is (= 0M (:total summary))
-            "Both invoices settled → AR total zero")))
+        ;; values are Money now; with no open items the zero is denominated
+        ;; from the AR accounts' own :kontor.account/commodity
+        (is (= 0M (:amount (:total summary)))
+            "Both invoices settled → AR total zero")
+        (is (some? (:commodity (:total summary)))
+            "an empty aging still reports which currency the zero is in")))
 
     ;; --------------------------------------------------------------
     ;; 7. EÜR FY2025 — full-year P&L
