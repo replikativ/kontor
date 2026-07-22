@@ -508,13 +508,21 @@
 (defn install!
   "Install the IN CIT statute (parameters + parameter-values +
    parameter-brackets + regimes + provisions) into `conn`. Idempotent —
-   `:kontor.parameter/code`, `:kontor.regime/code`, and `:kontor.provision/code` are unique
-   identity attrs, so re-running the install is a no-op on unchanged
-   rows. (`:parameter-value` and `:parameter-bracket` lack a natural
-   identity attr; the FR CIT statute has a small dedup helper for the
-   bracket case — re-running install would duplicate bracket rows.
-   v1 follows the JP / DE convention of trusting one-shot install per
-   conn — the test fixture creates a fresh DB per test.)"
+   every row upserts. `:kontor.parameter/code`, `:kontor.regime/code` and
+   `:kontor.provision/code` are unique identity attrs; values and
+   brackets carry the composite identities
+   `:kontor.parameter-value/identity` (parameter, effective-from) and
+   `:kontor.parameter-bracket/identity` (parameter, index,
+   effective-from).
+
+   Until note 194 this docstring said the opposite — that values and
+   brackets had no identity, so re-running would duplicate them, and
+   that v1 trusted one-shot install per conn. It was accurate about the
+   code and quietly contradicted by `preset/install-all!` one file over,
+   which claimed idempotency outright. A second install doubled the
+   surcharge ladder and, because a ladder is read positionally, made the
+   top band its own predecessor — the marginal-relief threshold came
+   back nil and the relief was skipped."
   [conn]
   (d/transact conn parameters)
   (d/transact conn parameter-values)

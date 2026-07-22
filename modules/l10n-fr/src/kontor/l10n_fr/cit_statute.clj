@@ -302,38 +302,21 @@
 ;; Install! — transact parameters + provisions into a connection
 ;; ============================================================================
 
-(defn- bracket-row-already-present?
-  "True iff a `:parameter-bracket` row with the same `(parameter-code,
-   index, effective-from)` triple is already in `db`. Used to make the
-   bracket install idempotent — `:parameter-bracket` carries no
-   `:db/unique :db.unique/identity` attr in the kernel schema (the
-   parent `:kontor.parameter/code` is the natural-key seam; the bracket's
-   identity is the `(parent, index, effective-from)` triple), so the
-   provider must do the dedup itself."
-  [db {:kontor.parameter-bracket/keys [parameter index effective-from]}]
-  (boolean
-   (seq
-    (d/q '[:find ?b
-           :in $ ?code ?idx ?from
-           :where
-           [?p :kontor.parameter/code ?code]
-           [?b :kontor.parameter-bracket/parameter ?p]
-           [?b :kontor.parameter-bracket/index ?idx]
-           [?b :kontor.parameter-bracket/effective-from ?from]]
-         db (second parameter) index effective-from))))
-
 (defn install!
   "Install FR CIT statute (parameters + parameter-values +
    parameter-brackets + provisions) into `conn`. Idempotent —
-   `:kontor.parameter/code` and `:kontor.provision/code` are unique identity attrs
-   (upsert on re-install); parameter-brackets get explicit dedup via
-   `bracket-row-already-present?` since the kernel schema does not
-   carry a `:db/unique` on them."
+   Every row upserts on re-install: `:kontor.parameter/code` and
+   `:kontor.provision/code` are unique identity attrs, and values and
+   brackets carry the composite identities
+   `:kontor.parameter-value/identity` / `:kontor.parameter-bracket/identity`.
+
+   This namespace used to hand-roll a `bracket-row-already-present?`
+   check over exactly the (parameter, index, effective-from) triple that
+   is now the kernel's composite identity — it was the only module that
+   noticed the gap, and it fixed it for itself alone. The schema carries
+   it for all twelve now. Note 194."
   [conn]
   (d/transact conn parameters)
   (d/transact conn parameter-values)
-  (let [db (d/db conn)
-        new-brackets (remove #(bracket-row-already-present? db %) parameter-brackets)]
-    (when (seq new-brackets)
-      (d/transact conn (vec new-brackets))))
+  (d/transact conn parameter-brackets)
   (d/transact conn provisions))

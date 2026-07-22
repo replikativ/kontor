@@ -249,7 +249,17 @@
                (map first)
                (sort-by :kontor.parameter-bracket/index)
                (mapv (fn [{:kontor.parameter-bracket/keys [rate upper]}]
-                       {:rate rate :upper upper}))))))))
+                       {:rate rate :upper upper}))
+               ;; Collapse identical bands. `:kontor.parameter-bracket/identity`
+               ;; now stops duplicates being installed in the first place, but a
+               ;; ladder is consumed POSITIONALLY — providers read the band below
+               ;; a band to find the threshold it starts at — so a duplicate does
+               ;; not merely repeat a row, it makes a band its own predecessor and
+               ;; the threshold reads as if there were none. A legitimate ladder
+               ;; never holds two bands with the same (rate, upper); collapsing
+               ;; them here means no provider can be handed that shape. Note 194.
+               distinct
+               vec))))))
 
 ;; ============================================================================
 ;; Provision applicability — query + condition fold + regime gate

@@ -112,31 +112,41 @@
       (some-> ctx :period :to)
       (java.util.Date.)))
 
-(defn- band-for-amount
-  "Return the active bracket (a `{:rate :upper}` map) for `amount` from
-   a vector of brackets sorted ascending by `:upper` (nil upper = open
-   top band)."
+(defn- band-index-for-amount
+  "POSITION of the active bracket for `amount` in `brackets` (sorted
+   ascending by `:upper`, nil upper = open top band).
+
+   Returns the index rather than the band itself because the caller also
+   needs the band BELOW it, and a ladder can legitimately contain two
+   bands with equal contents. Locating a band by walking for an
+   `identical?` element — which this did — silently returns the wrong
+   neighbour as soon as the ladder holds a duplicate: with the IN
+   surcharge ladder doubled by a second `install!`, the predecessor of
+   the top open band was the other copy of itself, so `prior-upper` read
+   nil and the statutory marginal relief was skipped. The schema now
+   prevents the duplicate (note 194 §2 / `:kontor.parameter-bracket/identity`),
+   but a lookup that cannot express the question correctly should not be
+   the thing standing between a consumer and a wrong tax figure."
   [brackets ^java.math.BigDecimal amount]
-  (or (some (fn [b]
-              (when (and (:upper b) (<= (compare amount (:upper b)) 0))
-                b))
-            brackets)
-      (last brackets)))
+  (or (first (keep-indexed (fn [i b]
+                             (when (and (:upper b) (<= (compare amount (:upper b)) 0))
+                               i))
+                           brackets))
+      (dec (count brackets))))
+
+(defn- band-for-amount
+  "The active bracket (a `{:rate :upper}` map) for `amount`."
+  [brackets ^java.math.BigDecimal amount]
+  (nth brackets (band-index-for-amount brackets amount) nil))
 
 (defn- prior-upper
-  "The `:upper` of the bracket immediately below `band`'s position in
-   `brackets` — i.e. the threshold this band starts at. Returns nil for
-   the lowest band (no threshold means surcharge starts at zero income —
+  "The `:upper` of the bracket immediately below position `idx` — i.e.
+   the threshold the band at `idx` starts at. nil for the lowest band
+   (no threshold means the surcharge starts at zero income, so there is
    no marginal-relief cliff)."
-  [brackets band]
-  (let [idx (loop [i 0
-                   bs brackets]
-              (cond
-                (empty? bs)        nil
-                (identical? (first bs) band) i
-                :else              (recur (inc i) (rest bs))))]
-    (when (and idx (pos? idx))
-      (:upper (nth brackets (dec idx))))))
+  [brackets idx]
+  (when (pos? idx)
+    (:upper (nth brackets (dec idx)))))
 
 (defn- in-cit-surcharge-standard
   "Banded surcharge with statutory marginal relief at each band
@@ -156,9 +166,10 @@
         as-of (as-of-from-ctx ctx)
         bands (statute/parameter-brackets-at db "IN.CIT.standard.surcharge-brackets" as-of)]
     (fn [{:keys [base running] :as _ctx-w-running}]
-      (let [band      (band-for-amount bands base)
+      (let [idx       (band-index-for-amount bands base)
+            band      (nth bands idx nil)
             raw-surch (* running (:rate band))
-            threshold (prior-upper bands band)]
+            threshold (prior-upper bands idx)]
         (if (and threshold (pos? raw-surch))
           ;; Marginal-relief check: cap = tax-at-threshold + (base − threshold).
           ;; Tax-at-threshold is `(threshold/base) × running` since the
