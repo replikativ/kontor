@@ -548,7 +548,17 @@
          filtered     (report-postings conn opts)
          translate-at (or to (now))
          lines (mapv (fn [{:keys [:line/code :line/label :line/expression]}]
-                       (let [{:keys [value postings]} (run-engine filtered expression {})
+                       ;; A report-level :strict-commodity? is a DEFAULT for
+                       ;; every line: the engines read the flag off the
+                       ;; expression, so without this it would be an option
+                       ;; accepted and then ignored — the exact failure
+                       ;; `check-options!` exists to prevent. A line that
+                       ;; sets it explicitly still wins.
+                       (let [expression (cond-> expression
+                                          (and (contains? opts :strict-commodity?)
+                                               (not (contains? expression :strict-commodity?)))
+                                          (assoc :strict-commodity? (:strict-commodity? opts)))
+                             {:keys [value postings]} (run-engine filtered expression {})
                              line {:line/code code
                                    :line/label label
                                    :line/value value

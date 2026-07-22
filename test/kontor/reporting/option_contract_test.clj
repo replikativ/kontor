@@ -171,6 +171,33 @@
         ":through is reported back as the canonical exclusive :to")
     (is (= #inst "2026-01-01" (:from (:statement/window computed))))))
 
+(deftest strict-commodity-reaches-the-line-engines
+  ;; `:strict-commodity?` is read off a line's EXPRESSION by the engines, so
+  ;; listing it in known-options without plumbing it would make it accepted
+  ;; and ignored — the failure this whole contract exists to prevent.
+  (let [conn (book)
+        ;; a second commodity on the same account, so the line spans two
+        _ (gate/transact-with-validation
+           conn [{:kontor.commodity/symbol "USD" :kontor.commodity/name "US Dollar"
+                  :kontor.commodity/precision 2}])
+        _ (book/entry! conn {:debit-account  [:kontor.account/path "Assets:Cash"]
+                             :credit-account [:kontor.account/path "Income:Sales"]
+                             :amount         5M
+                             :commodity      [:kontor.commodity/symbol "USD"]
+                             :journal        [:kontor.journal/code "GJ"]
+                             :effective-date #inst "2026-08-01"})]
+    (testing "off by default — the pre-existing silent-sum behaviour"
+      (is (some? (fs/compute-statement conn statement {}))))
+    (testing "a report-level flag defaults every line"
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (fs/compute-statement conn statement {:strict-commodity? true}))))
+    (testing "a line can set it on its own"
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (fs/compute-statement
+                    conn (update-in statement [:statement/sections 0 :section/lines 0]
+                                    assoc :line/strict-commodity? true)
+                    {}))))))
+
 (deftest posting-filter-is-honoured-by-compute-statement
   ;; A second forwarded option, to show the fix is general rather than a
   ;; special case for :through.

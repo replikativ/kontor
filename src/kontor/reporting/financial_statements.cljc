@@ -62,11 +62,15 @@
 
 (defn- line->expression
   "Translate a line spec to the :account-codes report-engine input."
-  [{:line/keys [codes sign commodity] :or {sign :inflow commodity :EUR}}]
-  {:engine    :account-codes
-   :codes     codes
-   :sign      sign
-   :commodity commodity})
+  [{:line/keys [codes sign commodity strict-commodity?]
+    :or {sign :inflow commodity :EUR}}]
+  (cond-> {:engine    :account-codes
+           :codes     codes
+           :sign      sign
+           :commodity commodity}
+    ;; opt-in per line; a report-level :strict-commodity? supplies the
+    ;; default for lines that do not set it (see compute-report)
+    (some? strict-commodity?) (assoc :strict-commodity? strict-commodity?)))
 
 (defn- line->report-line [line]
   {:line/code       (:line/code line)
