@@ -1363,6 +1363,25 @@
     :db/doc         "Optional URL to the authority publication asserting
                      this value (BMF Schreiben, IRS Rev. Proc., …)."}
 
+   {:db/ident       :kontor.parameter-value/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:kontor.parameter-value/parameter
+                     :kontor.parameter-value/effective-from]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Composite identity (parameter, effective-from) — one
+                     value per parameter per statutory effective date.
+
+                     Load-bearing for the idempotency every l10n preset
+                     claims. Without it each `install!` re-transacted its
+                     value rows unconditionally: running an installer
+                     twice took l10n-in from 69 value rows to 138, and
+                     `parameter-value-at` then picked arbitrarily among
+                     duplicates. Re-transacting the same (parameter,
+                     date) now replaces the prior :decimal-value /
+                     :effective-until / :citation instead of adding a
+                     row. Note 194 §1."}
+
    {:db/ident       :kontor.parameter-bracket/parameter
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
@@ -1391,7 +1410,26 @@
 
    {:db/ident       :kontor.parameter-bracket/effective-until
     :db/valueType   :db.type/instant
-    :db/cardinality :db.cardinality/one}])
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :kontor.parameter-bracket/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:kontor.parameter-bracket/parameter
+                     :kontor.parameter-bracket/index
+                     :kontor.parameter-bracket/effective-from]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Composite identity (parameter, index, effective-from)
+                     — one band per position per statutory effective date.
+
+                     A duplicated bracket ladder is worse than a
+                     duplicated scalar: a second `install!` took the IN
+                     surcharge from 3 bands to 6, and the provider's
+                     `prior-upper` walks the vector by identity, so the
+                     predecessor of the top open band became the OTHER
+                     COPY OF ITSELF — the marginal-relief threshold read
+                     nil instead of ₹100,000,000 and the relief was
+                     silently skipped. Note 194 §1."}])
 
 ;; ============================================================================
 
