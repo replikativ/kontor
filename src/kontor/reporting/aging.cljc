@@ -92,6 +92,42 @@
          (sort-by :due-date)
          vec)))
 
+(declare rows-commodity)
+
+(defn- codes-commodity
+  "The commodity the AR / AP accounts themselves are pinned to via
+   `:kontor.account/commodity`, when they agree on one.
+
+   This is what denominates the zeros when there are NO open items —
+   the happy case, where everything has been paid. Without it an empty
+   aging has no commodity to report and the summary cannot build a
+   typed zero."
+  [db account-codes]
+  (let [cs (set (d/q '[:find [?c ...]
+                       :in $ [?code ...]
+                       :where
+                       [?a :kontor.account/code ?code]
+                       [?a :kontor.account/commodity ?c]]
+                     db account-codes))]
+    (when (= 1 (count cs)) (first cs))))
+
+(defn- summary-commodity
+  "Resolve the commodity a summary is denominated in: the caller's
+   explicit `:commodity` wins, then the open items themselves, then the
+   commodity the AR / AP accounts are pinned to.
+
+   Throws when none of the three answers, which happens only for an
+   empty aging over accounts that pin no commodity — pass `:commodity`."
+  [db account-codes rows explicit]
+  (or explicit
+      (rows-commodity rows)
+      (codes-commodity db account-codes)
+      (throw (ex-info (str "aging: cannot denominate zero — no open items, and "
+                           "these accounts pin no :kontor.account/commodity. "
+                           "Pass :commodity explicitly.")
+                      {:type :aging/indeterminate-commodity
+                       :account-codes account-codes}))))
+
 (defn- rows-commodity
   "The single commodity `rows` are denominated in, or nil for no rows.
    Throws when they span several.
@@ -120,10 +156,15 @@
 
    Every value is a real Money — commodity included. Throws
    `:aging/mixed-commodity` if the open items span more than one
-   currency; see [[rows-commodity]]."
+   currency; see [[rows-commodity]].
+
+   `:commodity` (optional) denominates the result explicitly. It is only
+   needed when there are no open items AND the AR / AP accounts pin no
+   `:kontor.account/commodity` — otherwise the commodity is inferred, in
+   that order. See [[summary-commodity]]."
   [db account-codes & opts]
   (let [rows (apply aging-rows db account-codes opts)
-        c    (rows-commodity rows)
+        c    (summary-commodity db account-codes rows (:commodity (apply hash-map opts)))
         zero (money/zero c)
         add  (fn [m r] (money/add (or m zero) (money/money (:open-amount r) c)))]
     (reduce (fn [acc r]
@@ -144,7 +185,7 @@
    exposures first."
   [db account-codes & opts]
   (let [rows (apply aging-rows db account-codes opts)
-        c    (rows-commodity rows)
+        c    (summary-commodity db account-codes rows (:commodity (apply hash-map opts)))
         zero (money/zero c)
         add  (fn [m r] (money/add (or m zero) (money/money (:open-amount r) c)))]
     (->> rows

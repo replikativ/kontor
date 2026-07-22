@@ -181,3 +181,43 @@
       (is (= #inst "2026-04-15T00:00:00Z" (:due-date inv-man)))
       (is (= 15 (:days-overdue inv-man)))
       (is (= :0-30 (:bucket inv-man))))))
+
+(deftest empty-aging-still-reports-a-commodity
+  ;; The happy case — everything paid — has no rows to infer a commodity
+  ;; from, and a Money cannot be built without one. The AR accounts' own
+  ;; :kontor.account/commodity denominates the zeros. Missed on the first
+  ;; pass because every fixture here has open items; caught by CI in
+  ;; end-to-end-demo-test.
+  (let [conn (bootstrap)                     ; chart installed, no invoices
+        db   (d/db conn)
+        eur  (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
+        sum  (aging/aging-summary-by-bucket db #{"1400"} :as-of as-of)]
+    (is (= 0M (:amount (:total sum))))
+    (is (= eur (:commodity (:total sum)))
+        "denominated from :kontor.account/commodity on the AR account")
+    (is (every? #(= eur (:commodity (get sum %)))
+                [:not-yet-due :0-30 :31-60 :61-90 :90+]))
+    (testing "aging-by-partner is empty rather than erroring"
+      (is (= [] (aging/aging-by-partner db #{"1400"} :as-of as-of))))
+    (testing "an explicit :commodity wins"
+      (let [usd-sum (aging/aging-summary-by-bucket db #{"1400"} :as-of as-of
+                                                   :commodity :made-up)]
+        (is (= :made-up (:commodity (:total usd-sum))))))))
+
+(deftest empty-aging-over-unpinned-accounts-says-so
+  ;; No rows and no pinned commodity: there is genuinely no answer, so it
+  ;; says which accounts it could not denominate rather than inventing one.
+  (let [conn (bootstrap)]
+    (d/transact conn [{:kontor.account/path "Assets:Receivable:Unpinned"
+                       :kontor.account/code "1498" :kontor.account/type :asset
+                       :kontor.account/active true}])
+    (let [e (try (aging/aging-summary-by-bucket (d/db conn) #{"1498"} :as-of as-of)
+                 nil
+                 (catch clojure.lang.ExceptionInfo ex ex))]
+      (is (some? e))
+      (is (= :aging/indeterminate-commodity (:type (ex-data e))))
+      (is (= #{"1498"} (:account-codes (ex-data e)))))
+    (testing "and :commodity resolves it"
+      (is (= :EUR (:commodity (:total (aging/aging-summary-by-bucket
+                                       (d/db conn) #{"1498"} :as-of as-of
+                                       :commodity :EUR))))))))
