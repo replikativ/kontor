@@ -76,8 +76,14 @@
               "Umsatzerlöse")
           (is (== 18000M (some-> (get sections "6") :section/subtotal :amount))
               "Sonstige betriebliche Aufwendungen")
+          ;; :statement/total is the § 275 Abs. 2 Nr. 17 Jahresüberschuss.
+          ;; No tax is booked in this fixture, so it equals the pre-tax
+          ;; figure; the two are asserted separately because they are
+          ;; different statutory objects.
           (is (== 12000M (some-> guv :statement/total :amount))
-              "Gewinn vor Steuern = 30k − 18k = 12k")))
+              "Jahresüberschuss = 30k − 18k = 12k, no tax booked")
+          (is (== 12000M (some-> guv :de.pnl/ergebnis-vor-steuern :amount))
+              "Ergebnis vor Steuern — the § 265 Abs. 5 voluntary subtotal")))
 
       (testing "Bilanz (HGB)"
         (let [aktiva  (de-bs/compute-aktiva  conn {:through #inst "2026-12-31"})
@@ -86,10 +92,20 @@
           ;;        = 67.7k
           (is (== 67700M (some-> aktiva :statement/total :amount))
               "Aktiva total")
-          ;; Passiva = Eigenkapital 50k + USt 5.7k = 55.7k
-          ;;          (difference = 12k = unbooked profit — correct mid-period)
-          (is (== 55700M (some-> passiva :statement/total :amount))
-              "Passiva total — Aktiva − Passiva = 12k = pre-closing profit"))))))
+          ;; Passiva = Eigenkapital 50k + USt 5.7k + A.V Jahresüberschuss 12k
+          ;;         = 67.7k, i.e. equal to Aktiva.
+          ;;
+          ;; This assertion used to read 55700M, with the 12k gap described
+          ;; as "correct mid-period". It was not correct: § 266 Abs. 3 A.V
+          ;; Jahresüberschuß/Jahresfehlbetrag is the statutory home of an
+          ;; un-appropriated period result, and without it every interim
+          ;; Bilanz was short by exactly the period's profit. The test had
+          ;; encoded the defect as the expectation. Note 194 §2.
+          (is (== 67700M (some-> passiva :statement/total :amount))
+              "Passiva total — balances against Aktiva, A.V carrying the period result")
+          (is (== 0M (- (some-> aktiva :statement/total :amount)
+                        (some-> passiva :statement/total :amount)))
+              "the accounting equation holds mid-period, not just after closing"))))))
 
 (deftest investment-income-works-via-preset
   (testing "IC provider produces correct Abgeltungsteuer + Soli with NO extra

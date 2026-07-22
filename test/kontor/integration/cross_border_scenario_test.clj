@@ -151,8 +151,15 @@
           "Umsatzerlöse")
       (is (== 15000M (some-> sections (get "6") :section/subtotal :amount))
           "Sonstige betriebliche Aufwendungen (Miete + Steuerberater + Sonstige)")
-      (is (== 25000M (some-> guv :statement/total :amount))
-          "Gewinn vor Steuern"))
+      ;; This scenario books its KSt/GewSt provision before reading the
+      ;; GuV, so the two figures genuinely differ — which is the point of
+      ;; distinguishing them. "Gewinn vor Steuern" is the § 265 Abs. 5
+      ;; voluntary subtotal; :statement/total is the § 275 Abs. 2 Nr. 17
+      ;; Jahresüberschuss, the statutory bottom line. Note 194 §3.
+      (is (== 25000M (some-> guv :de.pnl/ergebnis-vor-steuern :amount))
+          "Ergebnis vor Steuern = 40k − 15k")
+      (is (== 16756.25M (some-> guv :statement/total :amount))
+          "Jahresüberschuss = 25k − 3,956.25 KSt+Soli − 4,287.50 GewSt"))
 
     (testing "DE CIT provider on €25k profit @ Hebesatz 490: KSt+Soli €3,956.25 + GewSt €4,287.50"
       (let [facts (ptp/period-tax-facts (de-cit/de-cit-provider {})

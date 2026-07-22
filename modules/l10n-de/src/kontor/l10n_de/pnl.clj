@@ -8,10 +8,30 @@
    shape as the default; consumers can build their own
    :statement/sections vector against the kernel for the alternative.
 
-   Account-code prefixes target SKR04. Adjust for SKR03 in a per-
-   tenant override. We use prefix patterns ('4%' = all 4xxx) where
-   possible to be tolerant of customer-added accounts."
-  (:require [kontor.reporting.financial-statements :as fs]))
+   Account codes target SKR04. Adjust for SKR03 in a per-tenant
+   override.
+
+   Lines enumerate codes PER ACCOUNT rather than by number range, which
+   is the German convention and not merely a style choice: DATEV's
+   published SKR04 binds each account individually to its HGB position
+   and its E-Bilanz taxonomy position, and adjacent accounts routinely
+   diverge — 3040 Körperschaftsteuerrückstellung, 3050 Rückstellung für
+   sonstige Steuern, 3060 Rückstellungen für latente Steuern and 3065
+   passive latente Steuern land on four different targets, while 3810
+   maps into the same family as 3050 across a number block. No prefix
+   rule can express that. Since JStG 2024 the filing regime itself works
+   per account: § 5b Abs. 1 EStG requires unverdichtete Kontennachweise
+   mit Kontensalden for fiscal years beginning after 2024-12-31.
+
+   This docstring previously claimed the definitions used prefix
+   patterns \"to be tolerant of customer-added accounts\"; they never did,
+   and per the above they should not. A code enumerated here that the
+   shipped chart does not carry is deliberate — the definitions cover a
+   fuller SKR04 than the module seeds — and
+   `financial-statements/statement-coverage` reports those separately
+   from accounts that no line covers, which is the real defect. Note 194."
+  (:require [kontor.money :as money]
+            [kontor.reporting.financial-statements :as fs]))
 
 (def gkv-definition
   "Gesamtkostenverfahren — total-cost method P&L per HGB §275 Abs. 2."
@@ -72,19 +92,55 @@
       {:line/code "6.7" :line/label "Beratungskosten / Steuerberater"
        :line/codes ["6850" "6855"]}
       {:line/code "6.8" :line/label "Sonstige Aufwendungen"
-       :line/codes ["6900" "6910" "6990"]}]}]})
+       :line/codes ["6900" "6910" "6990"]}]}
+
+    ;; § 275 Abs. 2 Nr. 14. KSt, GewSt and SolZ all belong here — the
+    ;; special item takes precedence over Nr. 16 sonstige Steuern.
+    {:section/code  "14"
+     :section/label "Steuern vom Einkommen und vom Ertrag"
+     :section/lines
+     [{:line/code "14.1" :line/label "Körperschaftsteuer (inkl. SolZ)"
+       :line/codes ["7600" "7603" "7610"]}
+      {:line/code "14.2" :line/label "Gewerbesteuer"
+       :line/codes ["7620" "7681"]}]}
+
+    ;; § 275 Abs. 2 Nr. 16
+    {:section/code  "16"
+     :section/label "Sonstige Steuern"
+     :section/lines
+     [{:line/code "16.1" :line/label "Sonstige Steuern"
+       :line/codes ["7685" "7690"]}]}]})
+
+(def ^:private sign-map
+  "Income sections add, expense sections subtract. Including the tax
+   blocks makes `:statement/total` the § 275 Abs. 2 Nr. 17
+   Jahresüberschuss/Jahresfehlbetrag — the statutory bottom line."
+  {"1" :+ "2" :+ "3" :- "4" :- "5" :- "6" :- "14" :- "16" :-})
 
 (defn compute
-  "Compute the GKV P&L over [from, to). All section subtotals are in
-   EUR. Total = (1+2) - (3+4+5+6) = Gewinn vor Steuern.
+  "Compute the GKV P&L over [from, to). All section subtotals are in EUR.
 
-   Use `:total-sign-map` so income sections add and expense sections
-   subtract:
-     income sections {1, 2}        → :+
-     expense sections {3, 4, 5, 6} → :-"
+   `:statement/total` is the § 275 Abs. 2 Nr. 17 Jahresüberschuss/
+   Jahresfehlbetrag. Two derived subtotals come alongside:
+
+     :de.pnl/ergebnis-vor-steuern  = (1+2) − (3+4+5+6)
+     :de.pnl/jahresueberschuss     = the statement total
+
+   `ergebnis-vor-steuern` is the § 265 Abs. 5 voluntary Zwischensumme,
+   not a § 275 position — there is no statutory item called \"Ergebnis
+   vor Steuern\". It is exposed because it is the meaningful bottom line
+   for an Einzelunternehmen or ordinary Personengesellschaft, which
+   §§ 264 ff. do not bind and for whose owner income tax is a private
+   matter rather than a company expense."
   ([conn opts]
    (compute conn gkv-definition opts))
   ([conn definition opts]
-   (let [sign-map {"1" :+ "2" :+ "3" :- "4" :- "5" :- "6" :-}]
-     (fs/compute-statement conn definition
-                           (assoc opts :total-sign-map sign-map)))))
+   (let [computed (fs/compute-statement conn definition
+                                        (assoc opts :total-sign-map sign-map))
+         sub  #(fs/section-subtotal computed %)
+         pre  (reduce money/sub
+                      (reduce money/add (map sub ["1" "2"]))
+                      (map sub ["3" "4" "5" "6"]))]
+     (assoc computed
+            :de.pnl/ergebnis-vor-steuern pre
+            :de.pnl/jahresueberschuss    (:statement/total computed)))))
