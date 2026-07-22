@@ -16,6 +16,13 @@
      then PIT (§1(j) brackets × 4 statuses × 6 years + §63 std deduction
      + §24 CTC/ACTC + cgt/investment-income lane folds; ADR-108 US slice).
 
+   Financial statements are NOT installed — they are pure definitions,
+   not data. Require them directly: `kontor.l10n-us.pnl/compute` for the
+   multi-step income statement and `kontor.l10n-us.bs/compute` (or
+   `bs/check`, which reports whether the accounting equation holds) for
+   the classified balance sheet. Both run against the chart this preset
+   installs.
+
    Federal-only — state income taxes are out of scope per ADR-005 /
    ADR-010 (consumers integrate Avalara / Vertex / TaxJar for
    sub-federal income / sales taxes).

@@ -379,10 +379,14 @@
   [through]
   (date-from-millis (+ (->ms through) (* 1000 60 60 24))))
 
-(defn- resolve-window-bounds
+(defn resolve-window
   "Translate `:through` (inclusive end) into the canonical exclusive
    `:to` the engine uses. Errors if both are supplied — pick one.
-   Note 160 §I-10."
+   Note 160 §I-10.
+
+   Public because a wrapper that INTERPRETS the window — rather than
+   forwarding it — has to normalise first, or it reads `:to` as nil
+   while the caller believes they bounded the period."
   [{:keys [to through] :as opts}]
   (when (and to through)
     (throw (ex-info "kontor.report: pass either :to (exclusive) or :through (inclusive), not both"
@@ -390,6 +394,51 @@
   (cond-> opts
     through (-> (dissoc :through)
                 (assoc :to (->day-after through)))))
+
+;; ============================================================================
+;; Option contract
+;;
+;; Every option the read side understands, declared once. `check-options!`
+;; rejects anything else, which is what makes a WRAPPER's mistake loud:
+;; a layer that rebuilds this map from an allowlist (`(cond-> {} from
+;; (assoc :from from) …)`) silently drops every key it was not written to
+;; know about, and the caller gets a plausible number computed under
+;; different semantics than they asked for. That is how `:through` came to
+;; be accepted here, documented here, and discarded by `compute-statement`
+;; — a statement scoped `:through #inst "2026-12-31"` silently fell back
+;; to no upper bound at all and pulled in later fiscal years.
+;;
+;; So: wrappers FORWARD the option map (dissoc'ing only their own keys)
+;; instead of rebuilding it, and this predicate turns any key nobody
+;; recognises into an error rather than a silent default. New engine
+;; options must be added here, and a wrapper that intercepts an option of
+;; its own must dissoc it before forwarding.
+;; ============================================================================
+
+(def known-options
+  "Every option key `compute-report` / `report-postings` accept. See
+   `compute-report`'s docstring for the meaning of each."
+  #{:from :to :through :as-of-tx :include-states :posting-filter
+    :ledger :entity :translate-to :fx-provider :rate-type
+    :strict-commodity?})
+
+(defn check-options!
+  "Throw `:report/unknown-option` if `opts` carries a key outside
+   [[known-options]]. `context` names the caller in the error.
+
+   Deliberately strict: a mistyped or dropped option is otherwise
+   indistinguishable from an intentional default, and the result is a
+   number that looks right."
+  ([opts] (check-options! opts "kontor.report"))
+  ([opts context]
+   (let [unknown (clojure.set/difference (set (keys opts)) known-options)]
+     (when (seq unknown)
+       (throw (ex-info (str context ": unknown option " (pr-str (vec (sort-by str unknown))))
+                       {:type    :report/unknown-option
+                        :unknown unknown
+                        :known   known-options
+                        :context context}))))
+   opts))
 
 (defn report-postings
   "Fetch + bitemporally filter the postings a report sees, returning a
@@ -409,7 +458,7 @@
   ([conn opts]
    (let [{:keys [from to as-of-tx include-states ledger entity posting-filter]
           :or   {include-states default-included-states}}
-         (resolve-window-bounds opts)
+         (resolve-window (check-options! opts "kontor.report/report-postings"))
          as-of-tx    (or as-of-tx (now))
          db          (-> conn d/db (d/as-of as-of-tx))
          ledger-pred (ledger-filter-pred db ledger)
@@ -491,14 +540,25 @@
    (when (and translate-to (nil? fx-provider))
      (throw (ex-info "compute-report: :translate-to requires :fx-provider"
                      {:translate-to translate-to})))
+   (check-options! opts "kontor.report/compute-report")
    ;; Resolve :through → :to up front so the :report/window payload
    ;; reflects the canonical exclusive bound.
-   (let [opts         (resolve-window-bounds opts)
+   (let [opts         (resolve-window opts)
          {:keys [from to]} opts
          filtered     (report-postings conn opts)
          translate-at (or to (now))
          lines (mapv (fn [{:keys [:line/code :line/label :line/expression]}]
-                       (let [{:keys [value postings]} (run-engine filtered expression {})
+                       ;; A report-level :strict-commodity? is a DEFAULT for
+                       ;; every line: the engines read the flag off the
+                       ;; expression, so without this it would be an option
+                       ;; accepted and then ignored — the exact failure
+                       ;; `check-options!` exists to prevent. A line that
+                       ;; sets it explicitly still wins.
+                       (let [expression (cond-> expression
+                                          (and (contains? opts :strict-commodity?)
+                                               (not (contains? expression :strict-commodity?)))
+                                          (assoc :strict-commodity? (:strict-commodity? opts)))
+                             {:keys [value postings]} (run-engine filtered expression {})
                              line {:line/code code
                                    :line/label label
                                    :line/value value

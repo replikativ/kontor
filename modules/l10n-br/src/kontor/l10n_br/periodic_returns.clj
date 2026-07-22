@@ -132,11 +132,24 @@
 
 (defn- resolve-window
   "Accept either an explicit `:from`/`:to` window or a `:year`/`:month`/
-   `:quarter` shorthand. Returns the explicit `{:from :to ...}` map."
+   `:quarter` shorthand. Returns the DESCRIPTIVE window map — `:from` and
+   `:to` plus the `:kind` / `:year` / `:month` provenance the returns
+   echo back as `:kontor.return/period`."
   [opts]
   (if (:from opts)
     (select-keys opts [:from :to])
     (period-bounds opts)))
+
+(defn- window->report-opts
+  "The window as `kontor.reporting.report` options — i.e. the bounds only.
+
+   `resolve-window`'s `:kind` / `:year` / `:month` describe the filing
+   period for the return payload; they are not report options, and the
+   engine now rejects unknown keys rather than ignoring them (see
+   `report/check-options!`). Keeping the two shapes distinct here is the
+   point: the descriptive map is for humans, this is for the engine."
+  [window]
+  (select-keys window [:from :to]))
 
 ;; ============================================================================
 ;; PIS + COFINS (federal — monthly EFD-Contribuições / DCTFWeb)
@@ -197,7 +210,7 @@
       :report/lines        — drill-down per line (postings included)}"
   [conn opts]
   (let [window (resolve-window opts)
-        r (report/compute-report conn pis-cofins-definition window)
+        r (report/compute-report conn pis-cofins-definition (window->report-opts window))
         line (into {} (map (fn [l] [(:line/code l) (:line/value l)]))
                    (:report/lines r))
         zero (money/zero :BRL)
@@ -272,7 +285,7 @@
       :report/lines       — drill-down per line}"
   [conn {:keys [state] :as opts}]
   (let [window (resolve-window opts)
-        r (report/compute-report conn icms-definition window)
+        r (report/compute-report conn icms-definition (window->report-opts window))
         line (into {} (map (fn [l] [(:line/code l) (:line/value l)]))
                    (:report/lines r))
         zero (money/zero :BRL)
@@ -324,7 +337,7 @@
       :report/lines    — drill-down}"
   [conn opts]
   (let [window (resolve-window opts)
-        r (report/compute-report conn ipi-definition window)
+        r (report/compute-report conn ipi-definition (window->report-opts window))
         line (into {} (map (fn [l] [(:line/code l) (:line/value l)]))
                    (:report/lines r))
         zero (money/zero :BRL)
@@ -393,7 +406,7 @@
       :report/lines             — drill-down}"
   [conn opts]
   (let [window (resolve-window opts)
-        r (report/compute-report conn iss-definition window)
+        r (report/compute-report conn iss-definition (window->report-opts window))
         line (into {} (map (fn [l] [(:line/code l) (:line/value l)]))
                    (:report/lines r))
         zero (money/zero :BRL)

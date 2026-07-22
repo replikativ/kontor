@@ -62,11 +62,15 @@
 
 (defn- line->expression
   "Translate a line spec to the :account-codes report-engine input."
-  [{:line/keys [codes sign commodity] :or {sign :inflow commodity :EUR}}]
-  {:engine    :account-codes
-   :codes     codes
-   :sign      sign
-   :commodity commodity})
+  [{:line/keys [codes sign commodity strict-commodity?]
+    :or {sign :inflow commodity :EUR}}]
+  (cond-> {:engine    :account-codes
+           :codes     codes
+           :sign      sign
+           :commodity commodity}
+    ;; opt-in per line; a report-level :strict-commodity? supplies the
+    ;; default for lines that do not set it (see compute-report)
+    (some? strict-commodity?) (assoc :strict-commodity? strict-commodity?)))
 
 (defn- line->report-line [line]
   {:line/code       (:line/code line)
@@ -119,40 +123,37 @@
      (:statement/sections statement))))
 
 (defn compute-statement
-  "Run a P&L or BS definition against `conn`. Options forwarded to
-   `report/compute-report`:
-     :from / :to           — window (BS typically uses :from nil, :to
-                              the as-of cutoff)
-     :as-of-tx             — datahike snapshot
-     :include-states       — set; defaults to #{:posted}
-     :total-sign-map       — optional map {section-code → :+ | :-}; if
-                              provided, the :statement/total is computed
-                              as Σ(sign × subtotal). If absent, we sum
-                              all subtotals as-is.
-     :ledger               — optional ledger eid / lookup-ref; restrict
-                              the statement to one parallel book (the
-                              HGB-vs-IFRS Jahresabschluss prerequisite —
-                              ADR-021). A nil-ledger posting counts as
-                              the primary book.
-     :entity               — optional entity eid / lookup-ref (ADR-031);
-                              restrict the statement to a single legal
-                              entity. Trans-national groups produce
-                              per-entity statements before consolidation.
+  "Run a P&L or BS definition against `conn`.
+
+   EVERY option `report/compute-report` accepts is forwarded — `:from`
+   `:to` `:through` `:as-of-tx` `:include-states` `:posting-filter`
+   `:ledger` `:entity` `:translate-to` `:fx-provider` `:rate-type` — see
+   that fn's docstring for each. Note in particular that `:to` is
+   EXCLUSIVE and `:through` is the inclusive form: for calendar 2026 pass
+   `:through #inst \"2026-12-31\"`, not `:to #inst \"2026-12-31\"`, or
+   every entry posted ON December 31 (year-end depreciation, accruals)
+   drops out of the statement.
+
+   This fn adds one option of its own:
+     :total-sign-map — optional map {section-code → :+ | :-}; if
+                       provided, the :statement/total is computed as
+                       Σ(sign × subtotal). If absent, we sum all
+                       subtotals as-is.
+
+   Unknown options throw `:report/unknown-option` rather than being
+   ignored — see `report/check-options!` for why that matters here.
 
    Line specs may carry :line/negate true to flip a line's sign — the
    knob the indirect cash-flow + equity statements use for
    working-capital / dividend lines."
   ([conn statement] (compute-statement conn statement {}))
-  ([conn statement {:keys [from to as-of-tx include-states total-sign-map ledger entity]}]
+  ([conn statement {:keys [total-sign-map] :as opts}]
    (let [report-def (definition->report-def statement)
+         ;; Forward everything EXCEPT this fn's own option. Rebuilding
+         ;; the map from an allowlist here is what used to discard
+         ;; :through / :translate-to / :posting-filter silently.
          computed (report/compute-report conn report-def
-                                         (cond-> {}
-                                           from           (assoc :from from)
-                                           to             (assoc :to to)
-                                           as-of-tx       (assoc :as-of-tx as-of-tx)
-                                           include-states (assoc :include-states include-states)
-                                           ledger         (assoc :ledger ledger)
-                                           entity         (assoc :entity entity)))
+                                         (dissoc opts :total-sign-map))
          sections (bucket-by-section statement computed)
          currency (or (some-> sections first :section/subtotal :commodity)
                       :EUR)
@@ -171,7 +172,10 @@
                          sections))]
      {:statement/name      (:statement/name statement)
       :statement/country   (:statement/country statement)
-      :statement/window    {:from from :to to}
+      ;; Take the window from the computed report, not from the raw opts:
+      ;; the engine has already resolved :through into the canonical
+      ;; exclusive :to, so this reports the bounds actually applied.
+      :statement/window    (:report/window computed)
       :statement/sections  sections
       :statement/total     total
       :statement/computed-at (now)})))
@@ -200,8 +204,7 @@
   "Sum the postings whose `:kontor.account/code` matches `codes` over the
    given window / ledger, via the `:account-codes` report engine.
    Always returns a Money (zero when nothing matches)."
-  [conn codes {:keys [from to as-of-tx include-states ledger sign commodity]
-               :or {sign :inflow commodity :EUR}}]
+  [conn codes {:keys [sign commodity] :or {sign :inflow commodity :EUR} :as opts}]
   (let [rep {:report/name "_internal"
              :report/lines [{:line/code "v"
                              :line/label "v"
@@ -209,14 +212,10 @@
                                                :codes     codes
                                                :sign      sign
                                                :commodity commodity}}]}
-        computed (report/compute-report
-                  conn rep
-                  (cond-> {}
-                    from           (assoc :from from)
-                    to             (assoc :to to)
-                    as-of-tx       (assoc :as-of-tx as-of-tx)
-                    include-states (assoc :include-states include-states)
-                    ledger         (assoc :ledger ledger)))]
+        ;; `:sign` / `:commodity` are consumed here into the line
+        ;; expression; everything else is a real engine option and gets
+        ;; forwarded verbatim.
+        computed (report/compute-report conn rep (dissoc opts :sign :commodity))]
     (or (report/line-value computed "v") (money/zero commodity))))
 
 (defn compute-cash-flow
@@ -244,17 +243,17 @@
                         indirect-method statement should reconcile to
                         the real movement on the cash accounts."
   ([conn statement] (compute-cash-flow conn statement {}))
-  ([conn statement {:keys [from to reconcile-codes] :as opts}]
-   (when-not (and from to)
-     (throw (ex-info "compute-cash-flow requires :from and :to (it is a window statement)"
-                     {:from from :to to})))
-   (let [computed   (compute-statement conn statement opts)
+  ([conn statement {:keys [from to through reconcile-codes] :as opts}]
+   (when-not (and from (or to through))
+     (throw (ex-info "compute-cash-flow requires :from and :to/:through (it is a window statement)"
+                     {:from from :to to :through through})))
+   (let [computed   (compute-statement conn statement (dissoc opts :reconcile-codes))
          net-change (:statement/total computed)
          recon (when reconcile-codes
                  (let [actual (account-codes-money
                                conn reconcile-codes
-                               (assoc (select-keys opts [:as-of-tx :include-states :ledger])
-                                      :from from :to to :sign :inflow
+                               (assoc (dissoc opts :reconcile-codes :total-sign-map)
+                                      :sign :inflow
                                       :commodity (:commodity net-change)))
                        diff (money/sub actual net-change)]
                    {:expected   net-change
@@ -298,14 +297,19 @@
    component's window activity, it reconciles; the kernel just runs
    it and checks.
 
-   Requires `:from` and `:to`. Opts: `:as-of-tx` `:include-states`
-   `:ledger`."
+   Requires `:from` and `:to` (or `:through`, the inclusive form). Every
+   other `report/compute-report` option is forwarded."
   ([conn statement] (compute-equity-changes conn statement {}))
-  ([conn statement {:keys [from to] :as opts}]
-   (when-not (and from to)
-     (throw (ex-info "compute-equity-changes requires :from and :to"
-                     {:from from :to to})))
-   (let [base (select-keys opts [:as-of-tx :include-states :ledger])
+  ([conn statement opts]
+   ;; This fn INTERPRETS the window — it re-queries each component at
+   ;; :from and at :to — so it must normalise :through up front rather
+   ;; than forward it, or `to` below reads nil on a bounded request.
+   (let [{:keys [from to] :as opts} (report/resolve-window opts)
+         _ (when-not (and from to)
+             (throw (ex-info "compute-equity-changes requires :from and :to/:through"
+                             {:from from :to to})))
+         ;; the window is supplied per query below, so strip it here
+         base (dissoc opts :from :to)
          components
          (mapv
           (fn [comp]
