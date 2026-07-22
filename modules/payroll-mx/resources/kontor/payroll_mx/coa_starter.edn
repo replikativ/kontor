@@ -1,0 +1,59 @@
+;; Mexican payroll starter accounts — the Nómina extension to the
+;; l10n-mx chart. Layered ON TOP of kontor.l10n-mx.chart: install that
+;; first for the SAT Código Agrupador base, then this.
+;;
+;; Why this exists (note 194 §2 PR 7). payroll-mx posts to ten accounts
+;; keyed by SAT Código Agrupador — five Klasse-601 expenses and five
+;; Klasse-206 payables — and resolves them with an EXACT match on
+;; `:kontor.account/code` (`core/account-by-codigo-agrupador`). The
+;; l10n-mx base chart ships NONE of them: it carries `601.05.001`
+;; Telecomunicaciones and `601.06.001` Honorarios (three-level codes),
+;; so a payroll run resolving the two-level agrupador `601.05` /
+;; `601.06` matched nothing and every run threw "Missing GL account."
+;; Worse, `601.05` / `601.06` are the SAT agrupadores for employer
+;; social-security and INFONAVIT — the base chart had placed unrelated
+;; general expenses under them.
+;;
+;; The fix is chart OWNERSHIP, per the au/br/ca/fr/in/jp/at convention
+;; (ADR-119): the payroll module ships its own posting accounts and owns
+;; a code range disjoint from the l10n base, keyed on the unique
+;; `:kontor.account/path`. Because `:kontor.account/code` is NOT
+;; `:db/unique` (schema.cljc), two accounts may carry the same code and
+;; an exact-match resolve then returns an arbitrary one — so these codes
+;; are chosen to NOT equal any l10n-mx code (the base ships `601.05.001`,
+;; never bare `601.05`; these ship bare `601.05`, never `.001`), and
+;; `payroll-mx-codes-are-disjoint-from-l10n-mx` in
+;; `kontor.payroll-mx.chart-test` holds them apart.
+;;
+;; Codes are the SAT Catálogo de cuentas (Código Agrupador, Anexo 24 of
+;; the RMF); the Cr 206.xx payables follow the conventional
+;; provisiones-y-pasivos-laborales grouping. These are STARTER codes:
+;; `posting-builder` / `accrual` take an override, so a consumer on a
+;; different catálogo remaps without touching this file.
+;;
+;; Reference: ADR-082 (payroll-mx), ADR-119 (chart ownership); SAT RMF
+;; Anexo 24 (Contabilidad Electrónica — Código Agrupador).
+
+[;; ── Klase 601 — Gastos: Personal (expense, Dr) ──────────────────────
+ {:code "601.01" :path "Gastos:Sueldos"
+  :type :expense :name "Sueldos, salarios, rayas y jornales"}
+ {:code "601.02" :path "Gastos:Aguinaldo"
+  :type :expense :name "Aguinaldo y prima vacacional"}
+ {:code "601.05" :path "Gastos:IMSS-Patron"
+  :type :expense :name "Cuotas patronales de seguridad social (IMSS/RCV)"}
+ {:code "601.06" :path "Gastos:INFONAVIT-Patron"
+  :type :expense :name "Aportaciones patronales al INFONAVIT"}
+ {:code "601.84" :path "Gastos:Prestaciones"
+  :type :expense :name "Otras prestaciones (vales, fondo de ahorro)"}
+
+ ;; ── Klase 206 — Pasivos: nómina por pagar (liability, Cr) ───────────
+ {:code "206.01" :path "Pasivos:SueldosPorPagar"
+  :type :liability :name "Sueldos y salarios por pagar (neto)" :reconcilable? true}
+ {:code "206.04" :path "Pasivos:ISRPorPagar"
+  :type :liability :name "ISR retenido por pagar" :reconcilable? true}
+ {:code "206.05" :path "Pasivos:IMSSPorPagar"
+  :type :liability :name "Cuotas IMSS por pagar (trabajador + patrón)" :reconcilable? true}
+ {:code "206.06" :path "Pasivos:INFONAVITPorPagar"
+  :type :liability :name "INFONAVIT por pagar (trabajador + patrón)" :reconcilable? true}
+ {:code "206.07" :path "Pasivos:ProvisionAguinaldo"
+  :type :liability :name "Provisión de aguinaldo (pasivo laboral)" :reconcilable? true}]

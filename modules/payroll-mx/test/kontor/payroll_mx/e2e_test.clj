@@ -10,6 +10,7 @@
             [datahike.api :as d]
             [kontor.compliance.audit-doc :as audit-doc]
             [kontor.core :as core]
+            [kontor.payroll-mx.chart :as chart]
             [kontor.payroll-mx.compute :as compute]
             [kontor.payroll-mx.core :as pmx-core]
             [kontor.payroll-mx.emit :as emit]
@@ -23,37 +24,14 @@
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:db/id "mxn" :kontor.commodity/symbol "MXN" :kontor.commodity/name "Peso mexicano"
+                [{:kontor.commodity/symbol "MXN" :kontor.commodity/name "Peso mexicano"
                   :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "MXN"}
-                 {:kontor.account/code "601.01" :kontor.account/path "Gastos:Sueldos"
-                  :kontor.account/name "Sueldos y Salarios" :kontor.account/type :expense
-                  :kontor.account/active true}
-                 {:kontor.account/code "601.02" :kontor.account/path "Gastos:Aguinaldo"
-                  :kontor.account/name "Aguinaldo" :kontor.account/type :expense
-                  :kontor.account/active true}
-                 {:kontor.account/code "601.05" :kontor.account/path "Gastos:IMSS-Patron"
-                  :kontor.account/name "IMSS patrón" :kontor.account/type :expense
-                  :kontor.account/active true}
-                 {:kontor.account/code "601.06" :kontor.account/path "Gastos:INFONAVIT-Patron"
-                  :kontor.account/name "INFONAVIT patrón" :kontor.account/type :expense
-                  :kontor.account/active true}
-                 {:kontor.account/code "601.84" :kontor.account/path "Gastos:Prestaciones"
-                  :kontor.account/name "Otras prestaciones" :kontor.account/type :expense
-                  :kontor.account/active true}
-                 {:kontor.account/code "206.01" :kontor.account/path "Pasivos:SueldosPorPagar"
-                  :kontor.account/name "Sueldos por pagar" :kontor.account/type :liability
-                  :kontor.account/active true}
-                 {:kontor.account/code "206.04" :kontor.account/path "Pasivos:ISRPorPagar"
-                  :kontor.account/name "ISR por pagar" :kontor.account/type :liability
-                  :kontor.account/active true}
-                 {:kontor.account/code "206.05" :kontor.account/path "Pasivos:IMSSPorPagar"
-                  :kontor.account/name "IMSS por pagar" :kontor.account/type :liability
-                  :kontor.account/active true}
-                 {:kontor.account/code "206.06" :kontor.account/path "Pasivos:INFONAVITPorPagar"
-                  :kontor.account/name "INFONAVIT por pagar" :kontor.account/type :liability
-                  :kontor.account/active true}
                  {:kontor.journal/code "NOM" :kontor.journal/name "Nómina"
                   :kontor.journal/type :general :kontor.journal/active true}])
+    ;; The Nómina posting accounts come from the module's own starter
+    ;; chart (ADR-119) — the same install! a consumer runs. Exercising it
+    ;; here is what keeps the starter provably sufficient for a real run.
+    (chart/install! conn)
     conn))
 
 (defn- ref-eid [db a v]

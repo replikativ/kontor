@@ -118,7 +118,7 @@
   (or (core/account-by-codigo-agrupador db codigo)
       (throw (ex-info "Missing GL account for SAT Código Agrupador"
                       {:codigo-agrupador codigo
-                       :hint "Install kontor.l10n-mx chart-of-accounts first."}))))
+                       :hint "Install kontor.payroll-mx.chart/install! (the Nómina posting accounts); the l10n-mx base chart does not carry them."}))))
 
 (defn build-period-tx-data
   "Build the `kontor.posting/build-transaction` payload for one

@@ -301,6 +301,8 @@ A **companion module** (`kontor-asset`, `kontor-lease`, `kontor-inventory`, `kon
 - exposes `*-tx-data` builders for every business write (ADR-068),
 - ships its own tests + README. (ADR-002, ADR-068)
 
+A module that posts to a fixed set of GL accounts (the `payroll-*` adapters) **owns those accounts** — a `coa_starter.edn` + an idempotent `install!` keyed on the unique `:kontor.account/path`, in a code range disjoint from the l10n base chart — rather than resolving them by `:kontor.account/code` against the l10n chart. `:kontor.account/code` is `:db/index` but not `:db/unique`, so cross-module code resolution returns an arbitrary match on collision (a silent mis-post); owning the accounts keeps resolution unambiguous. A `chart-test` asserts the payroll and l10n code sets are disjoint. (ADR-119)
+
 The kernel exposes `kontor.core/install-all-companions!` for the "one connection, every companion" case, and one-by-one `kontor-asset/install!` etc. for the "I only want this one" case.
 
 ---
