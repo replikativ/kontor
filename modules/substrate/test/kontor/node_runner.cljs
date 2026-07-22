@@ -18,6 +18,7 @@
             [kontor.validation-cljs-test]
             [kontor.governance-cljs-test]
             [kontor.reporting-cljs-test]
+            [kontor.ledger-cljs-test]
             [kontor.reports-cljs-test]
             [kontor.explain-cljs-test]
             [kontor.fx-cljs-test]
@@ -37,6 +38,7 @@
                'kontor.validation-cljs-test
                'kontor.governance-cljs-test
                'kontor.reporting-cljs-test
+               'kontor.ledger-cljs-test
                'kontor.reports-cljs-test
                'kontor.explain-cljs-test
                'kontor.fx-cljs-test
