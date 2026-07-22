@@ -60,22 +60,26 @@
   "Period-end balance on `account-eid` — uses balance.clj's bitemporal
    reader on the *valid-time* axis at the period's last instant. The
    tx-time axis intentionally defaults to NOW so corrections recorded
-   later (but valid-dated within the period) are picked up by the close."
-  [conn account-eid as-of-date]
+   later (but valid-dated within the period) are picked up by the close.
+
+   `ledger` scopes the read to one parallel book (ADR-021); nil reads
+   every ledger, which is only correct for a single-book install."
+  [conn account-eid as-of-date ledger]
   (balance/account-balance conn account-eid
-                           {:as-of-valid as-of-date}))
+                           (cond-> {:as-of-valid as-of-date}
+                             ledger (assoc :ledger ledger))))
 
 (defn- non-zero-pnl
   "For each P&L account, pull its period-end balance map and keep
    the (account, commodity, money) triples whose money is non-zero.
 
    Returns vec of {:account-eid :commodity-eid :amount :money}."
-  [conn period-end-date]
+  [conn period-end-date ledger]
   (let [db (d/db conn)
         accs (pnl-accounts db)]
     (vec
      (for [a accs
-           [c m] (account-period-end-balance conn a period-end-date)
+           [c m] (account-period-end-balance conn a period-end-date ledger)
            :when (not (m/amount-zero? (:amount m)))]
        {:account-eid a
         :commodity-eid c
@@ -91,7 +95,7 @@
    retained-earnings counter-posting per commodity that sums to the
    net result. The kernel's posting/build-transaction will then assert
    sum-to-zero."
-  [non-zero retained-eid period-end-date]
+  [non-zero retained-eid period-end-date ledger-eid]
   (let [;; Per-commodity net of P&L (income credits are negative; expense
         ;; debits are positive). Sum = +loss / −profit.
         per-commodity-net
@@ -99,17 +103,23 @@
                   (update acc commodity-eid
                           (fnil #(m/add-amount % amount) (m/zero-amount))))
                 {} non-zero)
+        ;; Tag every closing posting with the ledger being closed, so the
+        ;; entry lands in the same book whose result it carries. Without
+        ;; this the retained-earnings posting is ledger-less — i.e. in the
+        ;; primary book — even when it closes a secondary one.
+        tag      (fn [posting] (cond-> posting
+                                 ledger-eid (assoc :kontor.posting/ledger ledger-eid)))
         zero-out (mapv (fn [{:keys [account-eid commodity-eid amount]}]
-                         {:kontor.posting/account account-eid
-                          :kontor.posting/commodity commodity-eid
-                          :kontor.posting/amount (m/negate-amount amount)
-                          :kontor.posting/posted-at period-end-date})
+                         (tag {:kontor.posting/account account-eid
+                               :kontor.posting/commodity commodity-eid
+                               :kontor.posting/amount (m/negate-amount amount)
+                               :kontor.posting/posted-at period-end-date}))
                        non-zero)
         retained (mapv (fn [[c net]]
-                         {:kontor.posting/account retained-eid
-                          :kontor.posting/commodity c
-                          :kontor.posting/amount net
-                          :kontor.posting/posted-at period-end-date})
+                         (tag {:kontor.posting/account retained-eid
+                               :kontor.posting/commodity c
+                               :kontor.posting/amount net
+                               :kontor.posting/posted-at period-end-date}))
                        per-commodity-net)]
     (into zero-out retained)))
 
@@ -148,11 +158,26 @@
                       \"Period close\")
      :at            — when to post; default = period's :kontor.period/end - 1ms
                       (i.e. on the last instant of the period)
+     :ledger        — eid / lookup-ref of the parallel book to close
+                      (ADR-021). The P&L balances are read for THAT
+                      ledger only and every closing posting is tagged
+                      with it, so an HGB book and an IFRS book close to
+                      their own equity independently.
+
+                      Default nil = read every ledger and tag nothing,
+                      which is right for a single-book install and WRONG
+                      for parallel books: it rolls the blended figure
+                      into one untagged retained-earnings posting. Close
+                      each ledger separately when you run more than one.
 
    Idempotent-ish: refuses if a closing transaction already exists for
-   `period-eid` (look up via `:kontor.transaction/closes-period`)."
+   `period-eid` (look up via `:kontor.transaction/closes-period`). Note
+   that guard is per PERIOD, not per (period, ledger) — closing a second
+   ledger for the same period needs a distinct `:external-id` and is
+   currently refused. Tracked in note 194; single-book installs are
+   unaffected."
   [conn {:keys [period-eid retained-earnings-eid journal-eid
-                external-id narration at]
+                external-id narration at ledger]
          :or {narration "Period close"}}]
   (when-not period-eid
     (throw (ex-info ":period-eid is required" {})))
@@ -170,7 +195,11 @@
           ;; Last instant inside [start, end). end is exclusive, so we
           ;; subtract 1ms to land on the period's actual close moment.
           posted-at (or at (date-from-millis (- (->ms end) 1)))
-          non-zero (non-zero-pnl conn posted-at)]
+          ledger-eid (when ledger
+                       (or (:db/id (d/pull db [:db/id] ledger))
+                           (throw (ex-info "close-period!: :ledger not found"
+                                           {:ledger ledger}))))
+          non-zero (non-zero-pnl conn posted-at ledger)]
       (if (empty? non-zero)
         ;; Nothing to close — return a sentinel rather than posting an
         ;; empty (and sum-to-zero-violating) transaction.
@@ -178,7 +207,7 @@
          :postings-count 0
          :net-by-commodity {}
          :note :no-pnl-activity}
-        (let [postings (closing-postings non-zero retained-earnings-eid posted-at)
+        (let [postings (closing-postings non-zero retained-earnings-eid posted-at ledger-eid)
               ext (or external-id (str "CLOSE-" period-eid))
               tx-input
               {:transaction

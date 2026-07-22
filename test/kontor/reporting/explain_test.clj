@@ -110,7 +110,16 @@
       (is (= rec (:account r)))
       (is (map? (:balance r)))
       (is (vector? (:postings r)))
-      (is (some? (:as-of-valid r)))
+      ;; :as-of-valid echoes the window ACTUALLY applied, and the default
+      ;; is nil = all valid time (note 160 §I-17). It used to echo
+      ;; wall-clock now, which both lied about the window and made
+      ;; explain-balance disagree with account-balance on any book holding
+      ;; a future-dated posting — see read-side-contract-test.
+      (is (contains? r :as-of-valid))
+      (is (nil? (:as-of-valid r)) "unbounded unless the caller bounds it")
+      (is (= #inst "2026-06-30"
+             (:as-of-valid (explain/explain-balance conn rec {:as-of-valid #inst "2026-06-30"})))
+          "and echoes an explicit bound back")
       (is (some? (:as-of-tx r))))
     (testing "balance equals sum of contributing postings"
       (let [eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))

@@ -61,15 +61,16 @@
    - `:entity`  — ADR-031 intercompany pattern (per-entity sum-to-zero)
    - `:partner` — per-leg counterparty (e.g. multi-shareholder dividend
                   declaration; note 160 §I-15)."
-  [default-commodity default-entity default-partner
-   {:keys [account amount commodity entity partner dimensions] :as p}]
+  [default-commodity default-entity default-partner default-ledger
+   {:keys [account amount commodity entity partner ledger dimensions] :as p}]
   (when (nil? account)
     (throw (ex-info "kontor.book: each :postings entry needs :account" {:posting p})))
   (when (nil? amount)
     (throw (ex-info "kontor.book: each :postings entry needs :amount" {:posting p})))
   (let [c  (->commodity-ref (or commodity default-commodity))
         e  (or entity    default-entity)
-        pa (or partner   default-partner)]
+        pa (or partner   default-partner)
+        lg (or ledger    default-ledger)]
     (when (nil? c)
       (throw (ex-info "kontor.book: posting needs :commodity (or an entry-level :commodity)"
                       {:posting p})))
@@ -78,6 +79,7 @@
              :kontor.posting/commodity c}
       e                (assoc :kontor.posting/entity e)
       pa               (assoc :kontor.posting/partner pa)
+      lg               (assoc :kontor.posting/ledger lg)
       (seq dimensions) (assoc :kontor.posting/dimensions (->dimensions dimensions)))))
 
 (defn build-input
@@ -88,16 +90,24 @@
    `:entity` (optional, ADR-031) is stamped on every posting via
    `:kontor.posting/entity` — required for per-entity trial-balance / BS / GuV
    filters to scope correctly. Per-posting `:entity` overrides the
-   entry-level one (intercompany)."
+   entry-level one (intercompany).
+
+   `:ledger` (optional, ADR-021) is stamped the same way via
+   `:kontor.posting/ledger` — the parallel-book axis (HGB alongside IFRS).
+   Omitting it means the primary book. It is an entry-level option
+   BECAUSE it was previously reachable through neither: this builder
+   rebuilt each posting from a fixed key list, so a `:ledger` passed in
+   `:postings` was silently discarded and ADR-021 parallel books could
+   not be written through `kontor.book` at all."
   [{:keys [debit-account credit-account amount commodity journal
-           effective-date narration partner external-id entity postings]}]
+           effective-date narration partner external-id entity ledger postings]}]
   (when (nil? journal)
     (throw (ex-info "kontor.book: :journal is required" {})))
   (when (nil? effective-date)
     (throw (ex-info "kontor.book: :effective-date is required" {})))
   (let [ps (cond
              (seq postings)
-             (mapv #(->posting commodity entity partner %) postings)
+             (mapv #(->posting commodity entity partner ledger %) postings)
 
              :else
              (let [amt (->bigdec amount)
@@ -113,11 +123,13 @@
                [(cond-> {:kontor.posting/account   debit-account
                          :kontor.posting/amount    amt
                          :kontor.posting/commodity c}
-                  entity (assoc :kontor.posting/entity entity))
+                  entity (assoc :kontor.posting/entity entity)
+                  ledger (assoc :kontor.posting/ledger ledger))
                 (cond-> {:kontor.posting/account   credit-account
                          :kontor.posting/amount    (money/negate-amount amt)
                          :kontor.posting/commodity c}
-                  entity (assoc :kontor.posting/entity entity))]))]
+                  entity (assoc :kontor.posting/entity entity)
+                  ledger (assoc :kontor.posting/ledger ledger))]))]
     {:transaction (cond-> {:kontor.transaction/journal        journal
                            :kontor.transaction/effective-date effective-date}
                     narration   (assoc :kontor.transaction/narration narration)

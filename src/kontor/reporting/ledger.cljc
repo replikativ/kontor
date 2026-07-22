@@ -16,7 +16,8 @@
       parallel-ledger entity above."
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
-            [kontor.money :as money]))
+            [kontor.money :as money]
+            [kontor.reporting.balance :as balance]))
 
 ;; ============================================================================
 ;; Parallel-ledger entity (ADR-021)
@@ -95,18 +96,26 @@
       :tx-state    keyword}
 
    Options (all optional):
-     :as-of-valid    Date — default now
+     :as-of-valid    Date — **default nil (all valid time)**, matching
+                     `balance/account-balance`. Note 160 §I-17 reversed the
+                     wall-clock-now default there because it silently
+                     dropped future-dated postings from simulations and
+                     forward-looking accruals; this namespace kept the old
+                     default until it was caught disagreeing with the
+                     balance it is supposed to itemise.
      :as-of-tx       Date — default now
      :include-states set  — default #{:posted}
      :entity         eid or lookup-ref — restrict to a single
                      `:kontor.posting/entity` (ADR-031 trans-national books).
+     :ledger         eid or lookup-ref — restrict to one book (ADR-021).
+                     Default: all ledgers. A posting with no ledger counts
+                     as the primary book.
      :order          :asc | :desc — default :asc on :valid-from"
   ([conn account-eid] (postings-against conn account-eid {}))
-  ([conn account-eid {:keys [as-of-valid as-of-tx include-states entity order]
+  ([conn account-eid {:keys [as-of-valid as-of-tx include-states entity ledger order]
                       :or   {include-states default-included-states
                              order :asc}}]
-   (let [as-of-valid (or as-of-valid (now))
-         as-of-tx    (or as-of-tx (now))
+   (let [as-of-tx    (or as-of-tx (now))
          db          (d/db conn)
          tx-snap     (if as-of-tx (d/as-of db as-of-tx) db)
          entity-eid  (when entity
@@ -139,7 +148,8 @@
                                             :kontor.posting/commodity
                                             :kontor.posting/transaction
                                             :kontor.posting/narration
-                                            :kontor.posting/partner]
+                                            :kontor.posting/partner
+                                            :kontor.posting/ledger]
                                            p)
                             tx-id (-> pulled :kontor.posting/transaction :db/id)
                             tx-state (:kontor.transaction/state
@@ -154,12 +164,16 @@
                                         (if (map? c) (:db/id c) c))
                          :narration   (or (:kontor.posting/narration pulled) tx-narr)
                          :partner     (some-> (:kontor.posting/partner pulled) :db/id)
+                         :ledger      (some-> (:kontor.posting/ledger pulled) :db/id)
                          :tx-state    tx-state}))))
+         ledger-ok? (balance/ledger-match-fn tx-snap ledger)
          filtered
-         (filter (fn [{:keys [valid-from tx-state]}]
+         (filter (fn [{:keys [valid-from tx-state] :as row}]
                    (and (some? valid-from)
-                        (before-or-eq? valid-from as-of-valid)
-                        (contains? include-states tx-state)))
+                        ;; nil as-of-valid = all valid time (note 160 §I-17)
+                        (or (nil? as-of-valid) (before-or-eq? valid-from as-of-valid))
+                        (contains? include-states tx-state)
+                        (ledger-ok? (:ledger row))))
                  rows)
          comparator (case order
                       :asc  #(compare (:valid-from %1) (:valid-from %2))
