@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o pipefail
+
+echo "Running ClojureScript tests on Node"
+
+# The cross-platform (.cljc) substrate + its tests, compiled to a Node bundle
+# by the `:node-test` build in shadow-cljs.edn (entry point:
+# kontor.node-runner). Without this lane, portability rots silently: the JVM
+# suite passes while the cljs branch of kontor.money / kontor.governance /
+# kontor.invariant breaks.
+#
+# shadow-cljs is resolved through the `:cljs` alias in deps.edn (Maven), NOT
+# through npm — kontor has no package.json and wants none (CLAUDE.md: no
+# second runtime beyond what the clojure aliases need). This is why the
+# CircleCI workflow drives `tools/cljstest` directly instead of the orb's
+# `setup_cljs` / `build_cljs` parameters, which assume `npm ci` plus a `:ci`
+# shadow build.
+
+rm -f target/node-test.js
+clojure -M:cljs -m shadow.cljs.devtools.cli compile node-test
+node target/node-test.js

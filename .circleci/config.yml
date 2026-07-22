@@ -3,9 +3,17 @@ version: 2.1
 orbs:
   tools: replikativ/clj-tools@0
 
-# kontor is JVM-Clojure only (ADR-001) — no CLJS, no npm, no Python
-# interop. The `docker-deploy` CircleCI context supplies Docker Hub
-# credentials to the orb's image pulls.
+# kontor is JVM-Clojure plus a ClojureScript lane over the cross-platform
+# (.cljc) substrate — no npm, no Python interop. The `docker-deploy`
+# CircleCI context supplies Docker Hub credentials to the orb's image pulls.
+#
+# tools/unittest runs ./bin/run-unittests (kaocha on the JVM); tools/cljstest
+# runs ./bin/run-cljstests (the .cljc substrate on Node), so a portability
+# regression fails CI instead of rotting until someone next runs the lane by
+# hand. Both scripts drive the build through deps.edn aliases, which is why
+# neither the orb's `setup_cljs` (it runs `npm ci`, and kontor has no
+# package.json) nor `build_cljs` (it expects a `:ci` shadow build) is used —
+# see the comment in bin/run-cljstests.
 #
 # tools/deploy publishes to Clojars (needs `clojars-deploy` context
 # with CLOJARS_USERNAME + CLOJARS_PASSWORD). tools/release publishes a
@@ -24,6 +32,10 @@ workflows:
           context: docker-deploy
           requires:
             - tools/setup
+      - tools/cljstest:
+          context: docker-deploy
+          requires:
+            - tools/setup
       - tools/deploy:
           context:
             - clojars-deploy
@@ -34,6 +46,7 @@ workflows:
           requires:
             - tools/format
             - tools/unittest
+            - tools/cljstest
       - tools/release:
           context:
             - github-token
