@@ -138,7 +138,10 @@
   (let [conn (bootstrap)
         r (pnl/compute conn {:from jan-1 :to apr-1})]
     (is (money/zero? (:statement/total r)) "no postings → no profit")
-    (is (= 6 (count (:statement/sections r))))))
+    ;; 6 operating sections + § 275 Abs. 2 Nr. 14 (Steuern vom Einkommen
+    ;; und vom Ertrag) and Nr. 16 (sonstige Steuern) — the statutory
+    ;; Staffel does not stop before taxes
+    (is (= 8 (count (:statement/sections r))))))
 
 (deftest pnl-q1-totals
   (testing "Sales 3500 (3000 19% + 500 7%), expenses 700 supplier-bills
@@ -197,12 +200,15 @@
       (let [c (fs/section-subtotal passiva "C")]
         (is (some? c))
         ;; Lieferantenverbindlichkeiten = 200×1.19 + 400×1.19 + 100×1.19 = 833
-        (is (= 833.00M (:amount (fs/line-value passiva "C" "C.2"))))
+        ;; § 266 Abs. 3 C.4 "Verbindlichkeiten aus Lieferungen und
+        ;; Leistungen" — the C.* line codes are the statutory ones now
+        (is (= 833.00M (:amount (fs/line-value passiva "C" "C.4"))))
         ;; USt sammlung (3801 + 3806 = collected − paid on receivables side):
         ;; 3801 = 1000×19% × 3 = 570  (but receivables aren't yet paid;
         ;;                              the credit lives here regardless)
         ;; 3806 = 500×7% = 35
-        (is (= 605.00M (:amount (fs/line-value passiva "C" "C.3"))))))))
+        ;; § 266 Abs. 3 C.8 carries tax liabilities as a davon-Vermerk
+        (is (= 605.00M (:amount (fs/line-value passiva "C" "C.8.a"))))))))
 
 (deftest bs-balance-check-flags-imbalance
   (testing "Empty book → balance-check returns balanced? = true."

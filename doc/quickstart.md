@@ -102,7 +102,8 @@ asserts on, so you can copy-paste and verify.
 ```clojure
 (def fy-2026 {:from #inst "2026-01-01" :through #inst "2026-12-31"})
 
-;; GuV — Gewinn vor Steuern = €40k revenue − €15k expenses = €25k
+;; GuV — no tax booked yet, so the Jahresüberschuss (§ 275 Abs. 2 Nr. 17)
+;; is still €40k revenue − €15k expenses = €25k
 (-> (de-pnl/compute conn fy-2026) :statement/total :amount)
 ;; => 25000M
 
@@ -156,10 +157,22 @@ every other business write — there is no special "tax write" path.
                {:account [:kontor.account/path "Verbindlichkeiten:Steuern:GewSt-Rückstellung"] :amount -4287.50M}]})
 ```
 
-The book is now closed. Bilanz computes correctly; the trial
-balance is still zero; and the year's reportable Gewinn vor Steuern
-shows €25,000 with €8,243.75 in tax provisions sitting on the
-liability side ready for payment in 2027.
+The book is now closed. The trial balance is still zero, the Bilanz
+balances, and the GuV reports both figures § 275 Abs. 2 distinguishes:
+
+```clojure
+(-> (de-pnl/compute conn fy-2026) :de.pnl/ergebnis-vor-steuern :amount)  ; => 25000M
+(-> (de-pnl/compute conn fy-2026) :de.pnl/jahresueberschuss :amount)     ; => 16756.25M
+```
+
+`:statement/total` is the Jahresüberschuss (§ 275 Abs. 2 Nr. 17) — the
+statutory bottom line. `Ergebnis vor Steuern` is a § 265 Abs. 5
+voluntary subtotal, not a § 275 position; it is exposed because it is
+the meaningful figure for an Einzelunternehmen, whose owner's income tax
+is a private matter rather than a company expense.
+
+The €8,243.75 of provisions sits on the Passivseite under
+§ 266 Abs. 3 B.2 Steuerrückstellungen, ready for payment in 2027.
 
 ## Where next
 

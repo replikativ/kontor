@@ -55,7 +55,8 @@
      BS total  = Σ assets − Σ (liabilities + equity)
                  = should be 0 for a balanced ledger; non-zero
                  surfaces an out-of-balance condition."
-  (:require [kontor.money :as money]
+  (:require [datahike.api :as d]
+            [kontor.money :as money]
             [kontor.reporting.report :as report]))
 
 (defn- now [] #?(:clj (java.util.Date.) :cljs (js/Date.)))
@@ -355,3 +356,82 @@
       :statement/total-opening total-opening
       :statement/total-closing total-closing
       :statement/computed-at (now)})))
+
+;; ============================================================================
+;; Definition ↔ chart coverage
+;; ============================================================================
+
+(defn statement-coverage
+  "Check a statement DEFINITION against the accounts actually in `db`.
+
+   A statement line claims a set of account codes. Nothing has ever
+   checked that claim against the chart, and both directions bite:
+
+   - An account matched by NO line is money the statement cannot show.
+     If it is a balance-sheet account, the statement stops balancing —
+     silently, and by exactly that account's balance. This is how the
+     shipped DE Bilanz came to omit the tax-provision accounts that
+     `doc/quickstart.md` tells the reader to post to (note 194 §1).
+   - An account matched by MORE THAN ONE line inside the same statement
+     is counted twice.
+   - A code no account matches is a line that renders as a permanent
+     zero. That is not always a defect — a definition may deliberately
+     cover a fuller chart than the module ships — so it is reported
+     separately and judged by the caller.
+
+   Returns
+
+     {:covered        {account-eid [line-code …]}
+      :uncovered      [{:code :path :type :eid} …]
+      :double-counted [{:code :path :lines [line-code …]} …]
+      :dangling       [pattern …]}
+
+   `opts`:
+     :account-types — set of `:kontor.account/type` values to require
+                      coverage of. A balance sheet passes
+                      `#{:asset :liability :equity}`, a P&L
+                      `#{:income :expense}`; without it every account in
+                      the chart must be covered.
+
+   Accounts carrying no `:kontor.account/code` are skipped — the
+   `:account-codes` engine cannot see them either."
+  ([db statement] (statement-coverage db statement {}))
+  ([db statement {:keys [account-types]}]
+   (let [lines    (mapcat :section/lines (:statement/sections statement))
+         accounts (->> (d/q '[:find ?a ?code
+                              :where
+                              [?a :kontor.account/code ?code]]
+                            db)
+                       (mapv (fn [[eid code]]
+                               (merge {:eid eid :code code}
+                                      (d/pull db [:kontor.account/path
+                                                  :kontor.account/type] eid)))))
+         in-scope (if account-types
+                    (filter #(contains? account-types (:kontor.account/type %)) accounts)
+                    accounts)
+         hits     (fn [{:keys [code]}]
+                    (into [] (keep (fn [l]
+                                     (when (report/code-prefix-match? code (:line/codes l))
+                                       (:line/code l))))
+                          lines))
+         by-acct  (into {} (map (juxt identity hits)) in-scope)]
+     {:covered (into {} (keep (fn [[a ls]] (when (seq ls) [(:eid a) ls]))) by-acct)
+      :uncovered (->> by-acct
+                      (keep (fn [[a ls]]
+                              (when (empty? ls)
+                                {:code (:code a) :path (:kontor.account/path a)
+                                 :type (:kontor.account/type a) :eid (:eid a)})))
+                      (sort-by :code) vec)
+      :double-counted (->> by-acct
+                           (keep (fn [[a ls]]
+                                   (when (> (count ls) 1)
+                                     {:code (:code a) :path (:kontor.account/path a)
+                                      :lines ls})))
+                           (sort-by :code) vec)
+      :dangling (->> lines
+                     (mapcat :line/codes)
+                     distinct
+                     (remove (fn [pattern]
+                               (some #(report/code-prefix-match? (:code %) [pattern])
+                                     accounts)))
+                     sort vec)})))

@@ -282,7 +282,13 @@
    and returns {:value Money :postings [<eid>...]}."
   (fn [_postings expression _opts] (:engine expression)))
 
-(defn- code-prefix-match?
+(defn code-prefix-match?
+  "True iff `code` matches any of `patterns`. A pattern ending in `%` is a
+   prefix (`\"6%\"` matches every 6xxx); anything else is an exact code.
+
+   Public because it defines what a statement line CLAIMS, and anything
+   checking a definition against a chart has to ask the same question the
+   engine will — see `financial-statements/statement-coverage`."
   [^String code patterns]
   (some (fn [^String p]
           (cond
