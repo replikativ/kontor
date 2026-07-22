@@ -76,7 +76,15 @@
      - state-machine raises `:type :state-machine/forbidden-transition`
      - sum-to-zero raises `:type :validation/sum-to-zero`
 
-   Returns the resulting tx-report on success.
+   Returns the resulting tx-report on success **on the JVM**. On
+   ClojureScript, datahike has no synchronous `transact`, so this commits
+   via `transact!` and returns its async result (a promise-channel /
+   whatever the cljs datahike build yields) — the same convention as
+   calling `d/transact!` directly. The validation is identical on both:
+   the invariant pass runs eagerly, then the structural validators compose
+   in-transactor via `[:db.fn/call validate-and-apply …]`. This is what
+   lets a browser commit a gate-validated entry with the same code the
+   server uses (exercised by `kontor.posting-write-cljs-test`).
 
    Throws a helpful error if `kontor.validation` has not been loaded
    yet (the atom is nil) — typically means the caller's classpath
@@ -92,7 +100,10 @@
                            "consumer paths.")
                       {:error :gate/not-registered})))
     (inv/assert-invariants conn tx-data)
-    (d/transact conn [[:db.fn/call f tx-data]])))
+    ;; datahike's synchronous `transact` is JVM-only; cljs must use the
+    ;; async `transact!`. The tx-fn wrap + validation are identical.
+    #?(:clj  (d/transact conn [[:db.fn/call f tx-data]])
+       :cljs (d/transact! conn [[:db.fn/call f tx-data]]))))
 
 ;; ============================================================================
 ;; Dry-run — the "web-form check" half (research note 190)

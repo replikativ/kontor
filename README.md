@@ -138,7 +138,7 @@ kontor puts the substrate in your `deps.edn`. Your invoice is a `:transaction`
 year-end close is a Datalog query over the same indexes that serve your
 dashboards.
 
-Three properties shape the design:
+Four properties shape the design:
 
 - 🕰️ **Bitemporal by default.** Every read takes `:as-of-valid` +
   `:as-of-tx`. A Y1 misclassification caught 18 months later writes a new
@@ -153,6 +153,12 @@ Three properties shape the design:
   `:parameter` are entities you query. One evaluator (`apply-provisions`)
   folds the rules of 11 jurisdictions; per-country files match
   authority-published worked examples to the cent.
+- 🌐 **Runs in the browser, not just the JVM.** The substrate is `.cljc`
+  and executes on ClojureScript against datahike-cljs — the *same code*,
+  not a reimplementation. A frontend builds an entry, commits it through
+  the validation gate, and reads back a trial balance or financial
+  statement locally, offline or ahead of a server round-trip, producing
+  numbers identical to the backend. A CI lane runs it on Node every build.
 
 ## What's included
 
