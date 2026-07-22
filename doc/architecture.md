@@ -596,6 +596,35 @@ All atomic. Sum-to-zero validated. Bitemporally indexed. The reverse — voiding
 
 ---
 
+## Cross-platform: the read side runs in the browser
+
+kontor's substrate is `.cljc`, and the whole **read side runs on
+ClojureScript against datahike-cljs** — not as a reimplementation, but
+the *same code*. `account-balance`, `trial-balance`, the account-ledger
+statement (`postings-against` / `running-balance`), the declarative report
+engine, and the financial statements (`compute-statement` → P&L / balance
+sheet) all execute in a browser or Node runtime and produce numbers
+identical to the JVM, because they *are* the JVM code. `Money`
+(BigDecimal-backed on the JVM, fress `Bigdec` on cljs) and the bitemporal
+resolver are `.cljc` too, so amounts store and sum with full decimal
+fidelity client-side.
+
+This is what lets a consumer compute a trial balance or a statement
+locally — offline, or optimistically ahead of a server round-trip —
+without a second, drifting implementation. The write/validate substrate
+(`gate`, `validation`, `invariant`, `governance`, `bitemporal`, `book/build`)
+is portable on the same terms; the transaction-building primitive
+(`kontor.posting`) and the `!` verb facade (`kontor.book`) remain
+JVM-only for now, so client-side *posting* is not yet wired end-to-end.
+
+The portable core lives in `modules/substrate/`; the read namespaces live
+in `src/kontor/reporting/*.cljc`. A Node test lane
+(`kontor.node-runner`, run by `./bin/run-cljstests` in CI) executes every
+portable namespace against a real datahike-cljs db, and
+`kontor.reporting-portability-test` (JVM) fails the build if a reporting
+namespace ever ships without a cljs exercise — the guarantee cannot rot
+silently. ADR-118-era research notes 191 / 192 record the port.
+
 ## What lives where
 
 | Concern | Layer |
