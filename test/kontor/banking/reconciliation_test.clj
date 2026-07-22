@@ -384,3 +384,99 @@
             best (first (recon/suggest-match db acme-bl {}))]
         (recon/commit-match! conn acme-bl (:match best) bank-jnl {}))
       (is (= 3 (count (recon/unmatched-queue (d/db conn))))))))
+
+;; ============================================================================
+;; Open-item queries and :find's set semantics (research note 194)
+;; ============================================================================
+
+(deftest equal-legs-on-one-invoice-are-not-collapsed
+  ;; The open-item queries used to `:find` the transaction, amount and a few
+  ;; scalars WITHOUT the posting eid. Datalog `:find` has SET semantics, so an
+  ;; invoice carrying two receivable legs of the SAME amount produced ONE tuple
+  ;; and half the receivable silently disappeared — from open items, from
+  ;; aging, and therefore from any collections process reading them.
+  ;;
+  ;; `governance/balance-violations` already documents this exact trap ("the
+  ;; query binds ?p so equal amounts on distinct postings are not collapsed");
+  ;; this namespace had it in four queries.
+  (let [conn (bootstrap)
+        db0  (d/db conn)
+        eur  (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
+        acct (fn [code] (ace db0 code))   ; :kontor.account/code is not :db/unique
+        jnl  (:db/id (d/entity db0 [:kontor.journal/code "INV"]))
+        part (:db/id (d/entity db0 [:kontor.partner/external-id "ACME"]))
+        leg  (fn [account amount]
+               {:kontor.posting/account account :kontor.posting/amount amount
+                :kontor.posting/commodity eur :kontor.posting/posted-at jan-15})]
+    (v/transact-with-validation
+     conn (posting/build-transaction
+           {:transaction {:kontor.transaction/external-id "INV-TWO-EQUAL-LEGS"
+                          :kontor.transaction/journal jnl
+                          :kontor.transaction/partner part
+                          :kontor.transaction/effective-date jan-15
+                          :kontor.transaction/state :posted
+                          :kontor.transaction/posted-at jan-15}
+            ;; two receivable legs of exactly 100 — indistinguishable to a
+            ;; :find that does not return the posting
+            :postings [(leg (acct "1400") 100.00M)
+                       (leg (acct "1400") 100.00M)
+                       (leg (acct "4400") -200.00M)]}))
+    (let [open (->> (recon/open-receivables-by-tx (d/db conn) #{"1400"})
+                    (filter #(= "INV-TWO-EQUAL-LEGS" (:external-id %)))
+                    first)]
+      (is (some? open))
+      (is (= 200.00M (:open-amount open))
+          "both legs count — 100 + 100, not one collapsed 100")
+      (is (= eur (:commodity open))
+          "and the row carries the commodity the amount is denominated in"))))
+
+(deftest open-items-refuse-to-blend-commodities
+  ;; A summed open-item figure only means something within one currency. It
+  ;; used to be produced with no commodity anywhere in sight, so a mixed book
+  ;; yielded a silently meaningless number that the aging docstrings then
+  ;; described as Money.
+  ;;
+  ;; A genuinely multi-currency receivable is an account with NO
+  ;; `:kontor.account/commodity` pin — the commodity-match invariant treats an
+  ;; absent pin as "any", and correctly refuses USD into a EUR-pinned one.
+  (let [conn (bootstrap)
+        db0  (d/db conn)
+        eur  (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
+        jnl  (:db/id (d/entity db0 [:kontor.journal/code "INV"]))]
+    (d/transact conn [{:kontor.commodity/symbol "USD" :kontor.commodity/name "US Dollar"
+                       :kontor.commodity/precision 2}
+                      ;; both legs unpinned — the commodity-match invariant
+                      ;; rightly refuses USD into a EUR-pinned account
+                      {:kontor.account/path "Assets:Receivable:Multi-Currency"
+                       :kontor.account/code "1499" :kontor.account/type :asset
+                       :kontor.account/active true}
+                      {:kontor.account/path "Income:Sales:Multi-Currency"
+                       :kontor.account/code "4499" :kontor.account/type :income
+                       :kontor.account/active true}])
+    (let [db1 (d/db conn)
+          usd (:db/id (d/entity db1 [:kontor.commodity/symbol "USD"]))
+          ar  (ace db1 "1499")
+          rev (ace db1 "4499")
+          leg (fn [account amount commodity]
+                {:kontor.posting/account account :kontor.posting/amount amount
+                 :kontor.posting/commodity commodity :kontor.posting/posted-at jan-15})]
+      (v/transact-with-validation
+       conn (posting/build-transaction
+             {:transaction {:kontor.transaction/external-id "INV-MIXED"
+                            :kontor.transaction/journal jnl
+                            :kontor.transaction/effective-date jan-15
+                            :kontor.transaction/state :posted
+                            :kontor.transaction/posted-at jan-15}
+              ;; sum-to-zero holds per commodity, so this is a legal write
+              :postings [(leg ar 100.00M eur) (leg rev -100.00M eur)
+                         (leg ar  50.00M usd) (leg rev  -50.00M usd)]}))
+      (testing "the blend is refused rather than reported"
+        (let [e (try (recon/open-receivables-by-tx (d/db conn) #{"1499"})
+                     nil
+                     (catch clojure.lang.ExceptionInfo ex ex))]
+          (is (some? e) "a mixed-commodity open item throws")
+          (is (= :reconciliation/mixed-commodity (:type (ex-data e))))
+          (is (= #{eur usd} (:commodities (ex-data e))))))
+      ;; single-commodity open items stay unaffected — covered by
+      ;; open-receivables-finds-three-invoices above
+      )))

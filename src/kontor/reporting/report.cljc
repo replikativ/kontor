@@ -480,8 +480,10 @@
      :from           — inclusive lower bound on the posting's valid-from
                        (resolved via :tx/valid-from on the creating tx).
                        Default: nil = beginning of time.
-     :to             — EXCLUSIVE upper bound (default: nil = today+1d).
-                       Pass `:to #inst \"2027-01-01\"` for FY 2026.
+     :to             — EXCLUSIVE upper bound. Default nil = NO upper
+                       bound at all (future-dated postings included),
+                       matching `balance/account-balance` per note 160
+                       §I-17. Pass `:to #inst \"2027-01-01\"` for FY 2026.
      :through        — INCLUSIVE upper bound (sugar over :to). Pass
                        `:through #inst \"2026-12-31\"` for FY 2026 —
                        reads natural. Mutually exclusive with :to.

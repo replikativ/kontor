@@ -133,6 +133,26 @@
 ;; Open AR / AP discovery
 ;; ============================================================================
 
+(defn- single-commodity
+  "The one commodity a transaction's open-item postings are denominated
+   in. Throws when they span several.
+
+   The open-item queries sum a transaction's receivable (or payable)
+   legs into one number; that number only means something if the legs
+   share a commodity. Rather than return a blended figure the callers
+   would then wrap in an arbitrary currency tag, refuse — the same
+   stance `report/sum-postings` takes under `:strict-commodity?`.
+   Genuine multi-currency AR needs per-commodity open items, which is
+   the deferred FX work noted at the top of this namespace."
+  [tx fields]
+  (let [cs (:commodities fields)]
+    (when (> (count cs) 1)
+      (throw (ex-info "open items: transaction spans multiple commodities"
+                      {:type :reconciliation/mixed-commodity
+                       :transaction-eid tx
+                       :commodities cs})))
+    (first cs)))
+
 (defn open-receivables-by-tx
   "For each posted transaction whose journal type is :sale, compute
    the AR amount remaining open: gross-AR − sum-of-settling-payments.
@@ -147,12 +167,13 @@
   [db ar-account-codes]
   (let [;; All postings on AR accounts, with their transaction's
         ;; external-id, partner, date, and state.
-        rows (d/q '[:find ?tx ?ext-id ?amount ?partner ?date ?journal-type ?state
+        rows (d/q '[:find ?p ?tx ?ext-id ?amount ?commodity ?partner ?date ?journal-type ?state
                     :in $ [?ar-code ...]
                     :where
                     [?a :kontor.account/code ?ar-code]
                     [?p :kontor.posting/account ?a]
                     [?p :kontor.posting/amount ?amount]
+                    [?p :kontor.posting/commodity ?commodity]
                     [?p :kontor.posting/transaction ?tx]
                     [?tx :kontor.transaction/external-id ?ext-id]
                     [?tx :kontor.transaction/state ?state]
@@ -163,20 +184,26 @@
                   db ar-account-codes)
         ;; Group postings by transaction and sum.
         by-tx (reduce
-               (fn [acc [tx ext amt partner date jtype state]]
+               ;; `?p` is bound and returned so two legs of the SAME amount on
+               ;; one transaction are distinct tuples. :find has SET semantics,
+               ;; so without it an invoice with 100 + 100 on the receivable
+               ;; collapsed to a single 100 and half the balance vanished from
+               ;; every open-item and aging figure downstream.
+               (fn [acc [_p tx ext amt commodity partner date jtype state]]
                  (-> acc
                      (assoc-in [tx :external-id] ext)
                      (assoc-in [tx :partner-eid] (when (not= partner :__null__) partner))
                      (assoc-in [tx :date] (when (not= date :__null__) date))
                      (assoc-in [tx :journal-type] jtype)
                      (assoc-in [tx :state] state)
+                     (update-in [tx :commodities] (fnil conj #{}) commodity)
                      (update-in [tx :ar-amount] (fnil #(money/add-amount % amt) (money/zero-amount)))))
                {}
                rows)
         ;; For each candidate sales tx, find any other transactions
         ;; that :kontor.transaction/settles → it; subtract their AR-side
         ;; offsets to get the open amount.
-        settled (d/q '[:find ?settled ?amount
+        settled (d/q '[:find ?p ?settled ?amount
                        :in $ [?ar-code ...]
                        :where
                        [?settler :kontor.transaction/settles ?settled]
@@ -185,7 +212,7 @@
                        [?a :kontor.account/code ?ar-code]
                        [?p :kontor.posting/amount ?amount]]
                      db ar-account-codes)
-        settled-by (reduce (fn [acc [tx amt]]
+        settled-by (reduce (fn [acc [_p tx amt]]
                              (update acc tx (fnil #(money/add-amount % amt) (money/zero-amount))))
                            {} settled)]
     (->> by-tx
@@ -200,6 +227,7 @@
                         :external-id (:external-id fields)
                         :original-amount original
                         :open-amount open
+                        :commodity (single-commodity tx fields)
                         :partner-eid (:partner-eid fields)
                         :date (:date fields)})))))
          (sort-by :date)
@@ -210,12 +238,13 @@
    on the payable account, so the original amount is negative; the
    open amount stays negative (debt) until settled."
   [db ap-account-codes]
-  (let [rows (d/q '[:find ?tx ?ext-id ?amount ?partner ?date ?journal-type ?state
+  (let [rows (d/q '[:find ?p ?tx ?ext-id ?amount ?commodity ?partner ?date ?journal-type ?state
                     :in $ [?ap-code ...]
                     :where
                     [?a :kontor.account/code ?ap-code]
                     [?p :kontor.posting/account ?a]
                     [?p :kontor.posting/amount ?amount]
+                    [?p :kontor.posting/commodity ?commodity]
                     [?p :kontor.posting/transaction ?tx]
                     [?tx :kontor.transaction/external-id ?ext-id]
                     [?tx :kontor.transaction/state ?state]
@@ -225,17 +254,23 @@
                     [(get-else $ ?j :kontor.journal/type :__null__) ?journal-type]]
                   db ap-account-codes)
         by-tx (reduce
-               (fn [acc [tx ext amt partner date jtype state]]
+               ;; `?p` is bound and returned so two legs of the SAME amount on
+               ;; one transaction are distinct tuples. :find has SET semantics,
+               ;; so without it an invoice with 100 + 100 on the receivable
+               ;; collapsed to a single 100 and half the balance vanished from
+               ;; every open-item and aging figure downstream.
+               (fn [acc [_p tx ext amt commodity partner date jtype state]]
                  (-> acc
                      (assoc-in [tx :external-id] ext)
                      (assoc-in [tx :partner-eid] (when (not= partner :__null__) partner))
                      (assoc-in [tx :date] (when (not= date :__null__) date))
                      (assoc-in [tx :journal-type] jtype)
                      (assoc-in [tx :state] state)
+                     (update-in [tx :commodities] (fnil conj #{}) commodity)
                      (update-in [tx :ap-amount] (fnil #(money/add-amount % amt) (money/zero-amount)))))
                {}
                rows)
-        settled (d/q '[:find ?settled ?amount
+        settled (d/q '[:find ?p ?settled ?amount
                        :in $ [?ap-code ...]
                        :where
                        [?settler :kontor.transaction/settles ?settled]
@@ -244,7 +279,7 @@
                        [?a :kontor.account/code ?ap-code]
                        [?p :kontor.posting/amount ?amount]]
                      db ap-account-codes)
-        settled-by (reduce (fn [acc [tx amt]]
+        settled-by (reduce (fn [acc [_p tx amt]]
                              (update acc tx (fnil #(money/add-amount % amt) (money/zero-amount))))
                            {} settled)]
     (->> by-tx
@@ -259,6 +294,7 @@
                         :external-id (:external-id fields)
                         :original-amount original
                         :open-amount open
+                        :commodity (single-commodity tx fields)
                         :partner-eid (:partner-eid fields)
                         :date (:date fields)})))))
          (sort-by :date)

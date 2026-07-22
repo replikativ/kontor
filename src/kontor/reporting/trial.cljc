@@ -15,6 +15,8 @@
             [kontor.reporting.balance :as balance]
             [kontor.money :as money]))
 
+(defn- now [] #?(:clj (java.util.Date.) :cljs (js/Date.)))
+
 (defn- all-account-eids
   "Every :kontor.account/path entity in the snapshot."
   [db]
@@ -27,15 +29,25 @@
    Same options as balance/account-balance — including `:entity` to
    restrict to a single legal entity (ADR-031 per-(entity, ledger,
    commodity) sum-to-zero, so an entity-filtered trial balance is
-   itself balanced) — plus:
+   itself balanced) — including `:ledger` to scope to one parallel book
+   (ADR-021; without it the figures blend every book) — plus:
      :accounts — restrict to a specific seq of account eids
      :include-zero? — if true, retain accounts/commodities that net
                       to zero (defaults false; results are smaller)
 
-   Returns `{account-eid {commodity-eid Money}}`."
+   Returns `{account-eid {commodity-eid Money}}`.
+
+   The whole report is ONE snapshot. `:as-of-tx` is resolved once here
+   and passed down, so every account is read from the same db value;
+   previously each per-account call re-derefed the connection and, with
+   no `:as-of-tx` given, computed its own wall-clock `now`, so a write
+   landing mid-report could leave the result internally inconsistent —
+   a trial balance that does not balance for no visible reason."
   ([conn] (trial-balance conn {}))
-  ([conn {:keys [accounts include-zero?] :as opts}]
-   (let [eids (or accounts (all-account-eids (d/db conn)))
+  ([conn {:keys [accounts include-zero? as-of-tx] :as opts}]
+   (let [as-of-tx (or as-of-tx (now))
+         opts     (assoc opts :as-of-tx as-of-tx)
+         eids (or accounts (all-account-eids (d/as-of (d/db conn) as-of-tx)))
          ;; balance/account-balance handles the bitemporal slicing per-call;
          ;; we just iterate the candidate accounts.
          per-account

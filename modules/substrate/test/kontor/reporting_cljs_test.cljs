@@ -20,6 +20,8 @@
    {:db/ident :kontor.account/type        :db/valueType :db.type/keyword :db/cardinality :db.cardinality/one}
    {:db/ident :kontor.posting/account     :db/valueType :db.type/ref     :db/cardinality :db.cardinality/one}
    {:db/ident :kontor.posting/entity      :db/valueType :db.type/ref     :db/cardinality :db.cardinality/one}
+   ;; the balance-side readers pull :ledger to scope to a parallel book (ADR-021)
+   {:db/ident :kontor.posting/ledger      :db/valueType :db.type/ref     :db/cardinality :db.cardinality/one}
    {:db/ident :kontor.posting/amount      :db/valueType :db.type/bigdec  :db/cardinality :db.cardinality/one}
    {:db/ident :kontor.posting/commodity   :db/valueType :db.type/keyword :db/cardinality :db.cardinality/one}
    {:db/ident :kontor.posting/transaction :db/valueType :db.type/ref     :db/cardinality :db.cardinality/one}

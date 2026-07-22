@@ -69,6 +69,12 @@
                  (is (seq (:postings ex)) "explain-balance walks the real postings via the as-of-valid get-else path (datahike #888)")
                  (is (contains? ex :balance) "returns a :balance map")
                  (is (contains? ex :postings) "returns a :postings vector")
-                 (is (some? (:as-of-valid ex)) "carries the resolved bitemporal axes")))
+                 ;; :as-of-valid echoes the window ACTUALLY applied; the default
+                 ;; is nil = all valid time (note 160 §I-17). It used to echo
+                 ;; wall-clock now, which made explain-balance disagree with
+                 ;; account-balance on any book holding a future-dated posting.
+                 (is (contains? ex :as-of-valid) "carries the bitemporal axes")
+                 (is (nil? (:as-of-valid ex)) "unbounded unless the caller bounds it")
+                 (is (some? (:as-of-tx ex)) "tx-time still resolves to a snapshot")))
              (<! (d/delete-database cfg))
              (done)))))
