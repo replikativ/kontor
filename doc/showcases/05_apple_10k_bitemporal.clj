@@ -44,7 +44,7 @@
 
    Substrate exercised:
 
-     - `kontor.import-edgar.schema`     `:reported-fact/*` external
+     - `kontor.import-edgar.schema`     `:kontor.reported-fact/*` external
                                         regulator-attested facts
      - `kontor.import-edgar.core`       JSON parsing + bitemporal
                                         ingest with supersession
@@ -82,14 +82,14 @@
 (edgar-schema/install! conn)
 
 (d/transact conn
-            [{:entity/code "APPLE"
-              :entity/name "Apple Inc."
-              :entity/active true
-              :entity/lei  "HWUPKR0MPOU8FGXBT394"
-              :entity/source-id "showcase-05-fixture"}])
+            [{:kontor.entity/code "APPLE"
+              :kontor.entity/name "Apple Inc."
+              :kontor.entity/active true
+              :kontor.entity/lei  "HWUPKR0MPOU8FGXBT394"
+              :kontor.entity/source-id "showcase-05-fixture"}])
 
 (def apple-eid
-  (d/q '[:find ?e . :where [?e :entity/code "APPLE"]] (d/db conn)))
+  (d/q '[:find ?e . :where [?e :kontor.entity/code "APPLE"]] (d/db conn)))
 
 apple-eid
 ;; => an eid (your number will differ; the schema uses sequential IDs)
@@ -147,14 +147,14 @@ apple-eid
                       #inst "2009-12-01"))
 
 (select-keys pre-amendment-view
-             [:reported-fact/value-bigdec
-              :reported-fact/form
-              :reported-fact/filed
-              :reported-fact/accession-number])
-;; => {:reported-fact/value-bigdec 3719000000M
-;;     :reported-fact/form "10-K"
-;;     :reported-fact/filed #inst "2009-10-27"
-;;     :reported-fact/accession-number "0001193125-09-214859"}
+             [:kontor.reported-fact/value-bigdec
+              :kontor.reported-fact/form
+              :kontor.reported-fact/filed
+              :kontor.reported-fact/accession-number])
+;; => {:kontor.reported-fact/value-bigdec 3719000000M
+;;     :kontor.reported-fact/form "10-K"
+;;     :kontor.reported-fact/filed #inst "2009-10-27"
+;;     :kontor.reported-fact/accession-number "0001193125-09-214859"}
 
 ;; ## Apple files the 10-K/A on 2010-01-25
 ;;
@@ -186,14 +186,14 @@ apple-eid
                       #inst "2010-02-01"))
 
 (select-keys post-amendment-view
-             [:reported-fact/value-bigdec
-              :reported-fact/form
-              :reported-fact/filed
-              :reported-fact/accession-number])
-;; => {:reported-fact/value-bigdec 4224000000M
-;;     :reported-fact/form "10-K/A"
-;;     :reported-fact/filed #inst "2010-01-25"
-;;     :reported-fact/accession-number "0001193125-10-012091"}
+             [:kontor.reported-fact/value-bigdec
+              :kontor.reported-fact/form
+              :kontor.reported-fact/filed
+              :kontor.reported-fact/accession-number])
+;; => {:kontor.reported-fact/value-bigdec 4224000000M
+;;     :kontor.reported-fact/form "10-K/A"
+;;     :kontor.reported-fact/filed #inst "2010-01-25"
+;;     :kontor.reported-fact/accession-number "0001193125-10-012091"}
 ;; The amended value: +$505M vs. the original 10-K.
 
 ;; ## The full supersession history
@@ -204,10 +204,10 @@ apple-eid
                       fy2008-end :usd))
 
 (map (fn [f]
-       {:filed (:reported-fact/filed f)
-        :form  (:reported-fact/form f)
-        :value (:reported-fact/value-bigdec f)
-        :superseded? (some? (:reported-fact/superseded-by f))})
+       {:filed (:kontor.reported-fact/filed f)
+        :form  (:kontor.reported-fact/form f)
+        :value (:kontor.reported-fact/value-bigdec f)
+        :superseded? (some? (:kontor.reported-fact/superseded-by f))})
      fy2008-history)
 ;; =>
 ;; ({:filed #inst "2009-10-27" :form "10-K"   :value 3719000000M :superseded? true}
@@ -231,10 +231,10 @@ apple-eid
                       fy2008-end :usd
                       #inst "2010-02-01"))
 
-[(when oci-pre  {:date "2009-12-01" :form (:reported-fact/form oci-pre)
-                 :value (:reported-fact/value-bigdec oci-pre)})
- (when oci-post {:date "2010-02-01" :form (:reported-fact/form oci-post)
-                 :value (:reported-fact/value-bigdec oci-post)})]
+[(when oci-pre  {:date "2009-12-01" :form (:kontor.reported-fact/form oci-pre)
+                 :value (:kontor.reported-fact/value-bigdec oci-pre)})
+ (when oci-post {:date "2010-02-01" :form (:kontor.reported-fact/form oci-post)
+                 :value (:kontor.reported-fact/value-bigdec oci-post)})]
 ;; =>
 ;; [{:date "2009-12-01" :form "10-K"   :value 8000000M}
 ;;  {:date "2010-02-01" :form "10-K/A" :value -9000000M}]
@@ -242,7 +242,7 @@ apple-eid
 
 ;; ## Bitemporal substrate verification via `d/valid-at`
 ;;
-;; The supersession chain is observable via `:reported-fact/superseded-by`
+;; The supersession chain is observable via `:kontor.reported-fact/superseded-by`
 ;; refs, but the deeper substrate guarantee is that `d/valid-at`
 ;; returns the AUTHORITATIVE fact for the chosen reporting timestamp.
 ;; The original fact's `:tx/valid-from` window is closed at the
@@ -255,25 +255,25 @@ apple-eid
     (->> (d/q '[:find [?f ...]
                 :in $ ?e ?c ?p ?u
                 :where
-                [?f :reported-fact/entity ?e]
-                [?f :reported-fact/concept-iri ?c]
-                [?f :reported-fact/period-end ?p]
-                [?f :reported-fact/unit ?u]]
+                [?f :kontor.reported-fact/entity ?e]
+                [?f :kontor.reported-fact/concept-iri ?c]
+                [?f :kontor.reported-fact/period-end ?p]
+                [?f :kontor.reported-fact/unit ?u]]
               db apple-eid "us-gaap:AccruedLiabilitiesCurrent"
               fy2008-end :usd)
-         (mapv #(d/pull db '[:reported-fact/value-bigdec
-                             :reported-fact/form
-                             :reported-fact/filed] %)))))
+         (mapv #(d/pull db '[:kontor.reported-fact/value-bigdec
+                             :kontor.reported-fact/form
+                             :kontor.reported-fact/filed] %)))))
 
 (fact-at #inst "2009-12-01")
-;; => [{:reported-fact/value-bigdec 3719000000M
-;;       :reported-fact/form "10-K"
-;;       :reported-fact/filed #inst "2009-10-27"}]
+;; => [{:kontor.reported-fact/value-bigdec 3719000000M
+;;       :kontor.reported-fact/form "10-K"
+;;       :kontor.reported-fact/filed #inst "2009-10-27"}]
 
 (fact-at #inst "2010-02-01")
-;; => [{:reported-fact/value-bigdec 4224000000M
-;;       :reported-fact/form "10-K/A"
-;;       :reported-fact/filed #inst "2010-01-25"}]
+;; => [{:kontor.reported-fact/value-bigdec 4224000000M
+;;       :kontor.reported-fact/form "10-K/A"
+;;       :kontor.reported-fact/filed #inst "2010-01-25"}]
 
 ;; ## What this demonstrates
 ;;
@@ -284,7 +284,7 @@ apple-eid
 ;;   records WHEN each fact became authoritative (the SEC `:filed`
 ;;   date) and exposes "what was known at time T" via `d/valid-at`.
 ;; - **Supersession chain** queryable structurally
-;;   (`:reported-fact/superseded-by`) AND bitemporally
+;;   (`:kontor.reported-fact/superseded-by`) AND bitemporally
 ;;   (`d/valid-at`).
 ;; - **No XBRL parser required.** The SEC JSON `companyfacts` API
 ;;   ships pre-parsed XBRL facts in JSON form. A future
@@ -301,7 +301,7 @@ apple-eid
 ;;   statement layout via the XBRL calculation linkbase is a future
 ;;   `kontor-xbrl` companion deliverable.
 ;; - **Taxonomy mapping to kontor's chart of accounts.** The
-;;   `:account/concept-iri` substrate seam (ADR-090) is the bridge;
+;;   `:kontor.account/concept-iri` substrate seam (ADR-090) is the bridge;
 ;;   a consumer wanting to project EDGAR facts onto kontor accounts
 ;;   would add the mapping in a thin bridge layer.
 ;; - **Cross-company consolidation.** ADR-073's `kontor.entity/family`

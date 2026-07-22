@@ -12,9 +12,9 @@
        attestation
      - GSTR-1 export shape (B2B vs B2CL vs export buckets)
      - Reverse-Charge Mechanism (RCM) for imports of services
-       — `:invoice-line/reverse-charge?` (ADR-040)
+       — `:kontor.invoice-line/reverse-charge?` (ADR-040)
      - TDS (Tax Deducted at Source) withholding on vendor payments
-       — `:invoice-line/withholding-on-payment?` (ADR-040)
+       — `:kontor.invoice-line/withholding-on-payment?` (ADR-040)
      - Partial payment with TDS deduction (#22 replayable allocation)
      - Bitemporal dispute lifecycle (#15 substrate win)
 
@@ -42,9 +42,9 @@
             [kontor.l10n-in.irn :as irn]
             [kontor.l10n-in.taxes :as gst]
             [kontor.partner.schema :as partner-schema]
-            [kontor.payment-application :as papp]
+            [kontor.banking.payment-application :as papp]
             [kontor.sales.schema :as sales-schema]
-            [kontor.status-machine :as sm]))
+            [kontor.workflow.status-machine :as sm]))
 
 ;; # The story
 ;;
@@ -60,7 +60,7 @@
 ;;    line/reverse-charge?` flag triggers the buyer (Bharat) to
 ;;    self-assess IGST.
 ;; 4. **Pay a Pune consultant** — withholds 10% TDS under §194J
-;;    via `:invoice-line/withholding-on-payment?`.
+;;    via `:kontor.invoice-line/withholding-on-payment?`.
 ;; 5. **Karnataka customer disputes** quality on one line; resolves;
 ;;    customer eventually pays. Bharat self-clears with NIC IRP for
 ;;    a credit note.
@@ -76,75 +76,75 @@
 ;; ## Seeds: chart of accounts, partners, GSTINs
 
 (d/transact conn
-            [{:commodity/symbol "INR" :commodity/name "Indian Rupee"
-              :commodity/precision 2 :commodity/iso-4217 "INR"}
-             {:commodity/symbol "EUR" :commodity/name "Euro"
-              :commodity/precision 2 :commodity/iso-4217 "EUR"}
-             {:entity/code "BHARAT-MC"
-              :entity/name "Bharat Metalcraft Pvt Ltd"
-              :entity/kind :operating :entity/active true}
+            [{:kontor.commodity/symbol "INR" :kontor.commodity/name "Indian Rupee"
+              :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "INR"}
+             {:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+              :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
+             {:kontor.entity/code "BHARAT-MC"
+              :kontor.entity/name "Bharat Metalcraft Pvt Ltd"
+              :kontor.entity/kind :operating :kontor.entity/active true}
              ;; Accounts (Indian GAAP / Schedule III shape)
-             {:account/code "1200" :account/path "1200"
-              :account/name "Sundry Debtors (AR)" :account/type :asset}
-             {:account/code "2100" :account/path "2100"
-              :account/name "Sundry Creditors (AP)" :account/type :liability}
-             {:account/code "4000" :account/path "4000"
-              :account/name "Sales of Goods" :account/type :revenue}
-             {:account/code "5000" :account/path "5000"
-              :account/name "Consultancy Expense" :account/type :expense}
+             {:kontor.account/code "1200" :kontor.account/path "1200"
+              :kontor.account/name "Sundry Debtors (AR)" :kontor.account/type :asset}
+             {:kontor.account/code "2100" :kontor.account/path "2100"
+              :kontor.account/name "Sundry Creditors (AP)" :kontor.account/type :liability}
+             {:kontor.account/code "4000" :kontor.account/path "4000"
+              :kontor.account/name "Sales of Goods" :kontor.account/type :revenue}
+             {:kontor.account/code "5000" :kontor.account/path "5000"
+              :kontor.account/name "Consultancy Expense" :kontor.account/type :expense}
              ;; GST accounts
-             {:account/code "2210" :account/path "2210"
-              :account/name "CGST Output Payable" :account/type :liability}
-             {:account/code "2211" :account/path "2211"
-              :account/name "SGST Output Payable" :account/type :liability}
-             {:account/code "2212" :account/path "2212"
-              :account/name "IGST Output Payable" :account/type :liability}
-             {:account/code "1410" :account/path "1410"
-              :account/name "IGST Input Credit (recoverable)"
-              :account/type :asset}
-             {:account/code "2310" :account/path "2310"
-              :account/name "TDS Payable - §194J" :account/type :liability}
+             {:kontor.account/code "2210" :kontor.account/path "2210"
+              :kontor.account/name "CGST Output Payable" :kontor.account/type :liability}
+             {:kontor.account/code "2211" :kontor.account/path "2211"
+              :kontor.account/name "SGST Output Payable" :kontor.account/type :liability}
+             {:kontor.account/code "2212" :kontor.account/path "2212"
+              :kontor.account/name "IGST Output Payable" :kontor.account/type :liability}
+             {:kontor.account/code "1410" :kontor.account/path "1410"
+              :kontor.account/name "IGST Input Credit (recoverable)"
+              :kontor.account/type :asset}
+             {:kontor.account/code "2310" :kontor.account/path "2310"
+              :kontor.account/name "TDS Payable - §194J" :kontor.account/type :liability}
              ;; GL defaults
-             {:gl-account-default/account-type :ar
-              :gl-account-default/account [:account/path "1200"]}
-             {:gl-account-default/account-type :ap
-              :gl-account-default/account [:account/path "2100"]}
-             {:gl-account-default/account-type :sales-revenue
-              :gl-account-default/account [:account/path "4000"]}
-             {:gl-account-default/account-type :purchase-expense
-              :gl-account-default/account [:account/path "5000"]}
+             {:kontor.gl-account-default/account-type :ar
+              :kontor.gl-account-default/account [:kontor.account/path "1200"]}
+             {:kontor.gl-account-default/account-type :ap
+              :kontor.gl-account-default/account [:kontor.account/path "2100"]}
+             {:kontor.gl-account-default/account-type :sales-revenue
+              :kontor.gl-account-default/account [:kontor.account/path "4000"]}
+             {:kontor.gl-account-default/account-type :purchase-expense
+              :kontor.gl-account-default/account [:kontor.account/path "5000"]}
              ;; Journals
-             {:journal/code "AR" :journal/name "Sales" :journal/type :sales}
-             {:journal/code "AP" :journal/name "Purchases" :journal/type :purchase}
+             {:kontor.journal/code "AR" :kontor.journal/name "Sales" :kontor.journal/type :sales}
+             {:kontor.journal/code "AP" :kontor.journal/name "Purchases" :kontor.journal/type :purchase}
              ;; Partners (Indian B2B GSTINs + a vendor + a foreign supplier)
-             {:partner/external-id "KA-CUST"
-              :partner/name "Mysore Industrial Co"
-              :partner/kind :customer
-              :partner/country-code "IN"
-              :partner/tax-id "29ABCDE1111F1Z5"  ; KA GSTIN (29 = Karnataka)
-              :partner/credit-status :open}
-             {:partner/external-id "MH-CUST"
-              :partner/name "Pune Forging Ltd"
-              :partner/kind :customer
-              :partner/country-code "IN"
-              :partner/tax-id "27ABCDE2222F1Z5"  ; MH GSTIN (27 = Maharashtra)
-              :partner/credit-status :open}
-             {:partner/external-id "IE-VENDOR"
-              :partner/name "Dublin SaaS Ltd"
-              :partner/kind :vendor
-              :partner/country-code "IE"}
-             {:partner/external-id "PUNE-CONSULTANT"
-              :partner/name "ABC Tax Consultants"
-              :partner/kind :vendor
-              :partner/country-code "IN"
-              :partner/tax-id "27ABCDE3333F1Z5"}
-             {:partner/external-id "U-alice" :partner/name "Alice (collector)"}
-             {:partner/external-id "U-bob"   :partner/name "Bob (manager)"}])
+             {:kontor.partner/external-id "KA-CUST"
+              :kontor.partner/name "Mysore Industrial Co"
+              :kontor.partner/kind :customer
+              :kontor.partner/country-code "IN"
+              :kontor.partner/tax-id "29ABCDE1111F1Z5"  ; KA GSTIN (29 = Karnataka)
+              :kontor.partner/credit-status :open}
+             {:kontor.partner/external-id "MH-CUST"
+              :kontor.partner/name "Pune Forging Ltd"
+              :kontor.partner/kind :customer
+              :kontor.partner/country-code "IN"
+              :kontor.partner/tax-id "27ABCDE2222F1Z5"  ; MH GSTIN (27 = Maharashtra)
+              :kontor.partner/credit-status :open}
+             {:kontor.partner/external-id "IE-VENDOR"
+              :kontor.partner/name "Dublin SaaS Ltd"
+              :kontor.partner/kind :vendor
+              :kontor.partner/country-code "IE"}
+             {:kontor.partner/external-id "PUNE-CONSULTANT"
+              :kontor.partner/name "ABC Tax Consultants"
+              :kontor.partner/kind :vendor
+              :kontor.partner/country-code "IN"
+              :kontor.partner/tax-id "27ABCDE3333F1Z5"}
+             {:kontor.partner/external-id "U-alice" :kontor.partner/name "Alice (collector)"}
+             {:kontor.partner/external-id "U-bob"   :kontor.partner/name "Bob (manager)"}])
 
-(def bharat (d/q '[:find ?e . :where [?e :entity/code "BHARAT-MC"]] (d/db conn)))
-(def inr    (d/q '[:find ?c . :where [?c :commodity/symbol "INR"]] (d/db conn)))
-(def alice  (d/q '[:find ?p . :where [?p :partner/external-id "U-alice"]] (d/db conn)))
-(def bob    (d/q '[:find ?p . :where [?p :partner/external-id "U-bob"]] (d/db conn)))
+(def bharat (d/q '[:find ?e . :where [?e :kontor.entity/code "BHARAT-MC"]] (d/db conn)))
+(def inr    (d/q '[:find ?c . :where [?c :kontor.commodity/symbol "INR"]] (d/db conn)))
+(def alice  (d/q '[:find ?p . :where [?p :kontor.partner/external-id "U-alice"]] (d/db conn)))
+(def bob    (d/q '[:find ?p . :where [?p :kontor.partner/external-id "U-bob"]] (d/db conn)))
 
 ;; ## Verify supplier identifiers
 ;;
@@ -192,41 +192,41 @@
 
 (d/transact conn
             [{:db/id "inv-KA"
-              :invoice/external-id "BMC/2026-27/0001"
-              :invoice/type :sales
-              :invoice/status :pending-attestation   ; awaiting IRN
-              :invoice/issue-date #inst "2026-04-10"
-              :invoice/seller (d/q '[:find ?p . :where [?p :partner/external-id "MH-CUST"]] (d/db conn))
+              :kontor.invoice/external-id "BMC/2026-27/0001"
+              :kontor.invoice/type :sales
+              :kontor.invoice/status :pending-attestation   ; awaiting IRN
+              :kontor.invoice/issue-date #inst "2026-04-10"
+              :kontor.invoice/seller (d/q '[:find ?p . :where [?p :kontor.partner/external-id "MH-CUST"]] (d/db conn))
                                                     ;; reuse a partner as placeholder for "self"
-              :invoice/buyer  (d/q '[:find ?p . :where [?p :partner/external-id "KA-CUST"]] (d/db conn))
-              :invoice/entity bharat
-              :invoice/currency "INR"
-              :invoice/total-net 100000M
-              :invoice/total-vat 18000M
-              :invoice/total-gross 118000M
-              :invoice/lines ["l-KA-1" "l-KA-tax"]}
+              :kontor.invoice/buyer  (d/q '[:find ?p . :where [?p :kontor.partner/external-id "KA-CUST"]] (d/db conn))
+              :kontor.invoice/entity bharat
+              :kontor.invoice/currency "INR"
+              :kontor.invoice/total-net 100000M
+              :kontor.invoice/total-vat 18000M
+              :kontor.invoice/total-gross 118000M
+              :kontor.invoice/lines ["l-KA-1" "l-KA-tax"]}
              {:db/id "l-KA-1"
-              :invoice-line/invoice "inv-KA"
-              :invoice-line/sequence 1
-              :invoice-line/name "Steel Forging Set, Grade EN8"
-              :invoice-line/quantity 50M
-              :invoice-line/unit-price 2000M
-              :invoice-line/amount 100000M
-              :invoice-line/gl-account-type :sales-revenue
-              :invoice-line/vat-rate 18M
-              :invoice-line/vat-category "STANDARD"
-              :invoice-line/description "HSN 73269099 (forgings)"}
+              :kontor.invoice-line/invoice "inv-KA"
+              :kontor.invoice-line/sequence 1
+              :kontor.invoice-line/name "Steel Forging Set, Grade EN8"
+              :kontor.invoice-line/quantity 50M
+              :kontor.invoice-line/unit-price 2000M
+              :kontor.invoice-line/amount 100000M
+              :kontor.invoice-line/gl-account-type :sales-revenue
+              :kontor.invoice-line/vat-rate 18M
+              :kontor.invoice-line/vat-category "STANDARD"
+              :kontor.invoice-line/description "HSN 73269099 (forgings)"}
              {:db/id "l-KA-tax"
-              :invoice-line/invoice "inv-KA"
-              :invoice-line/sequence 2
-              :invoice-line/name "IGST 18%"
-              :invoice-line/quantity 1M
-              :invoice-line/unit-price 18000M
-              :invoice-line/amount 18000M
-              :invoice-line/account (d/q '[:find ?a . :where [?a :account/path "2212"]]
+              :kontor.invoice-line/invoice "inv-KA"
+              :kontor.invoice-line/sequence 2
+              :kontor.invoice-line/name "IGST 18%"
+              :kontor.invoice-line/quantity 1M
+              :kontor.invoice-line/unit-price 18000M
+              :kontor.invoice-line/amount 18000M
+              :kontor.invoice-line/account (d/q '[:find ?a . :where [?a :kontor.account/path "2212"]]
                                           (d/db conn))
-              :invoice-line/gl-account-type :sales-tax-payable
-              :invoice-line/vat-category "IGST"}])
+              :kontor.invoice-line/gl-account-type :sales-tax-payable
+              :kontor.invoice-line/vat-category "IGST"}])
 
 ;; ### Compute IRN + payload
 ;;
@@ -269,7 +269,7 @@ ka-irn
 (sm/record-status-change! conn
                           {:entity (inv/by-external-id (d/db conn) "BMC/2026-27/0001")
                            :entity-type :invoice
-                           :facet :invoice/status
+                           :facet :kontor.invoice/status
                            :to :sent
                            :changed-by-uid alice
                            :reason :authority-cleared
@@ -297,90 +297,90 @@ ka-irn
 
 (d/transact conn
             [{:db/id "inv-MH"
-              :invoice/external-id "BMC/2026-27/0002"
-              :invoice/type :sales
-              :invoice/status :sent
-              :invoice/issue-date #inst "2026-04-12"
-              :invoice/buyer (d/q '[:find ?p . :where [?p :partner/external-id "MH-CUST"]]
+              :kontor.invoice/external-id "BMC/2026-27/0002"
+              :kontor.invoice/type :sales
+              :kontor.invoice/status :sent
+              :kontor.invoice/issue-date #inst "2026-04-12"
+              :kontor.invoice/buyer (d/q '[:find ?p . :where [?p :kontor.partner/external-id "MH-CUST"]]
                                    (d/db conn))
-              :invoice/entity bharat
-              :invoice/currency "INR"
-              :invoice/total-net 50000M
-              :invoice/total-vat 9000M
-              :invoice/total-gross 59000M
-              :invoice/lines ["l-MH-1" "l-MH-cgst" "l-MH-sgst"]}
+              :kontor.invoice/entity bharat
+              :kontor.invoice/currency "INR"
+              :kontor.invoice/total-net 50000M
+              :kontor.invoice/total-vat 9000M
+              :kontor.invoice/total-gross 59000M
+              :kontor.invoice/lines ["l-MH-1" "l-MH-cgst" "l-MH-sgst"]}
              {:db/id "l-MH-1"
-              :invoice-line/invoice "inv-MH"
-              :invoice-line/sequence 1
-              :invoice-line/name "Custom CNC Job"
-              :invoice-line/quantity 1M
-              :invoice-line/unit-price 50000M
-              :invoice-line/amount 50000M
-              :invoice-line/gl-account-type :sales-revenue
-              :invoice-line/vat-rate 18M
-              :invoice-line/vat-category "STANDARD"
-              :invoice-line/description "HSN 84614021 (CNC services)"}
+              :kontor.invoice-line/invoice "inv-MH"
+              :kontor.invoice-line/sequence 1
+              :kontor.invoice-line/name "Custom CNC Job"
+              :kontor.invoice-line/quantity 1M
+              :kontor.invoice-line/unit-price 50000M
+              :kontor.invoice-line/amount 50000M
+              :kontor.invoice-line/gl-account-type :sales-revenue
+              :kontor.invoice-line/vat-rate 18M
+              :kontor.invoice-line/vat-category "STANDARD"
+              :kontor.invoice-line/description "HSN 84614021 (CNC services)"}
              {:db/id "l-MH-cgst"
-              :invoice-line/invoice "inv-MH"
-              :invoice-line/sequence 2
-              :invoice-line/name "CGST 9%"
-              :invoice-line/quantity 1M
-              :invoice-line/unit-price 4500M
-              :invoice-line/amount 4500M
-              :invoice-line/account (d/q '[:find ?a . :where [?a :account/path "2210"]]
+              :kontor.invoice-line/invoice "inv-MH"
+              :kontor.invoice-line/sequence 2
+              :kontor.invoice-line/name "CGST 9%"
+              :kontor.invoice-line/quantity 1M
+              :kontor.invoice-line/unit-price 4500M
+              :kontor.invoice-line/amount 4500M
+              :kontor.invoice-line/account (d/q '[:find ?a . :where [?a :kontor.account/path "2210"]]
                                           (d/db conn))
-              :invoice-line/gl-account-type :sales-tax-payable
-              :invoice-line/vat-category "CGST"}
+              :kontor.invoice-line/gl-account-type :sales-tax-payable
+              :kontor.invoice-line/vat-category "CGST"}
              {:db/id "l-MH-sgst"
-              :invoice-line/invoice "inv-MH"
-              :invoice-line/sequence 3
-              :invoice-line/name "SGST 9%"
-              :invoice-line/quantity 1M
-              :invoice-line/unit-price 4500M
-              :invoice-line/amount 4500M
-              :invoice-line/account (d/q '[:find ?a . :where [?a :account/path "2211"]]
+              :kontor.invoice-line/invoice "inv-MH"
+              :kontor.invoice-line/sequence 3
+              :kontor.invoice-line/name "SGST 9%"
+              :kontor.invoice-line/quantity 1M
+              :kontor.invoice-line/unit-price 4500M
+              :kontor.invoice-line/amount 4500M
+              :kontor.invoice-line/account (d/q '[:find ?a . :where [?a :kontor.account/path "2211"]]
                                           (d/db conn))
-              :invoice-line/gl-account-type :sales-tax-payable
-              :invoice-line/vat-category "SGST"}])
+              :kontor.invoice-line/gl-account-type :sales-tax-payable
+              :kontor.invoice-line/vat-category "SGST"}])
 
 ;; ## Vendor invoice 3: SaaS from Ireland — reverse-charge import
 ;;
 ;; IGST Act §5(3) makes the buyer (Bharat) self-assess IGST on
-;; imported services. `:invoice-line/reverse-charge? true` is the
+;; imported services. `:kontor.invoice-line/reverse-charge? true` is the
 ;; kontor primitive (ADR-040).
 ;;
 ;; The Dublin vendor bills €500 (₹45'000 at notional rate). Per
 ;; reverse-charge, Bharat books 18% IGST on themselves (Dr IGST
 ;; Input / Cr IGST Output) and pays the vendor net.
 ;;
-;; Schematically: Bharat receives an inbound invoice — `:invoice/
-;; type :purchase` with `:invoice-line/reverse-charge? true`.
+;; Schematically: Bharat receives an inbound invoice — `:kontor.invoice/
+;; type :purchase` with `:kontor.invoice-line/reverse-charge? true`.
 
 (d/transact conn
             [{:db/id "inv-IE"
-              :invoice/external-id "VENDOR/DUB-SAAS/2026/Q2"
-              :invoice/type :purchase
-              :invoice/status :sent
-              :invoice/issue-date #inst "2026-04-20"
-              :invoice/seller (d/q '[:find ?p . :where [?p :partner/external-id "IE-VENDOR"]]
+              :kontor.invoice/external-id "VENDOR/DUB-SAAS/2026/Q2"
+              :kontor.invoice/type :purchase
+              :kontor.invoice/status :sent
+              :kontor.invoice/issue-date #inst "2026-04-20"
+              :kontor.invoice/seller (d/q '[:find ?p . :where [?p :kontor.partner/external-id "IE-VENDOR"]]
                                     (d/db conn))
-              :invoice/buyer bharat
-              :invoice/entity bharat
-              :invoice/currency "INR"           ; recorded in INR after FX
-              :invoice/total-net 45000M
-              :invoice/total-vat 0M             ; no GST on the inbound;
+              :kontor.invoice/buyer bharat
+              :kontor.invoice/entity bharat
+              :kontor.invoice/currency "INR"           ; recorded in INR after FX
+              :kontor.invoice/total-net 45000M
+              :kontor.invoice/total-vat 0M             ; no GST on the inbound;
                                                 ; we self-assess
-              :invoice/total-gross 45000M
-              :invoice/lines ["l-IE-1"]}
+              :kontor.invoice/total-gross 45000M
+              :kontor.invoice/lines ["l-IE-1"]}
              {:db/id "l-IE-1"
-              :invoice-line/invoice "inv-IE"
-              :invoice-line/sequence 1
-              :invoice-line/name "Dublin SaaS — Q2 Subscription"
-              :invoice-line/quantity 3M
-              :invoice-line/unit-price 15000M
-              :invoice-line/amount 45000M
-              :invoice-line/gl-account-type :purchase-expense
-              :invoice-line/reverse-charge? true}]) ; ADR-040 flag
+              :kontor.invoice-line/invoice "inv-IE"
+              :kontor.invoice-line/sequence 1
+              :kontor.invoice-line/name "Dublin SaaS — Q2 Subscription"
+              :kontor.invoice-line/quantity 3M
+              :kontor.invoice-line/unit-price 15000M
+              :kontor.invoice-line/amount 45000M
+              :kontor.invoice-line/gl-account-type :purchase-expense
+              :kontor.invoice-line/reverse-charge? true}]) ; ADR-040 flag
 
 ;; In a complete RCM flow the consumer would now post:
 ;; Dr Consultancy-Expense 45'000 / Dr IGST-Input-Recoverable 8'100
@@ -390,10 +390,10 @@ ka-irn
 ;; and emits the four-leg journal entry. For this showcase we
 ;; demonstrate only the data shape — actual emission deferred.
 
-(:invoice-line/reverse-charge?
- (d/pull (d/db conn) [:invoice-line/reverse-charge?]
-         (d/q '[:find ?l . :where [?l :invoice-line/invoice ?i]
-                               [?i :invoice/external-id "VENDOR/DUB-SAAS/2026/Q2"]]
+(:kontor.invoice-line/reverse-charge?
+ (d/pull (d/db conn) [:kontor.invoice-line/reverse-charge?]
+         (d/q '[:find ?l . :where [?l :kontor.invoice-line/invoice ?i]
+                               [?i :kontor.invoice/external-id "VENDOR/DUB-SAAS/2026/Q2"]]
               (d/db conn))))
 ;; → true
 
@@ -404,66 +404,66 @@ ka-irn
 ;; (= 50'000 - 5'000 TDS + 9'000 GST) and deposits ₹5'000 with
 ;; the income-tax department within the 7-day window.
 ;;
-;; `:invoice-line/withholding-on-payment? true` is the ADR-040 flag.
+;; `:kontor.invoice-line/withholding-on-payment? true` is the ADR-040 flag.
 
 (d/transact conn
             [{:db/id "inv-CON"
-              :invoice/external-id "CON/2026/APR/15"
-              :invoice/type :purchase
-              :invoice/status :sent
-              :invoice/issue-date #inst "2026-04-15"
-              :invoice/seller (d/q '[:find ?p . :where [?p :partner/external-id "PUNE-CONSULTANT"]]
+              :kontor.invoice/external-id "CON/2026/APR/15"
+              :kontor.invoice/type :purchase
+              :kontor.invoice/status :sent
+              :kontor.invoice/issue-date #inst "2026-04-15"
+              :kontor.invoice/seller (d/q '[:find ?p . :where [?p :kontor.partner/external-id "PUNE-CONSULTANT"]]
                                     (d/db conn))
-              :invoice/buyer bharat
-              :invoice/entity bharat
-              :invoice/currency "INR"
-              :invoice/total-net 50000M
-              :invoice/total-vat 9000M
-              :invoice/total-gross 59000M
-              :invoice/lines ["l-CON-1" "l-CON-cgst" "l-CON-sgst"]}
+              :kontor.invoice/buyer bharat
+              :kontor.invoice/entity bharat
+              :kontor.invoice/currency "INR"
+              :kontor.invoice/total-net 50000M
+              :kontor.invoice/total-vat 9000M
+              :kontor.invoice/total-gross 59000M
+              :kontor.invoice/lines ["l-CON-1" "l-CON-cgst" "l-CON-sgst"]}
              {:db/id "l-CON-1"
-              :invoice-line/invoice "inv-CON"
-              :invoice-line/sequence 1
-              :invoice-line/name "Tax consultancy services"
-              :invoice-line/quantity 1M
-              :invoice-line/unit-price 50000M
-              :invoice-line/amount 50000M
-              :invoice-line/gl-account-type :purchase-expense
-              :invoice-line/withholding-on-payment? true
-              :invoice-line/description "§194J — 10% TDS on professional services"}
+              :kontor.invoice-line/invoice "inv-CON"
+              :kontor.invoice-line/sequence 1
+              :kontor.invoice-line/name "Tax consultancy services"
+              :kontor.invoice-line/quantity 1M
+              :kontor.invoice-line/unit-price 50000M
+              :kontor.invoice-line/amount 50000M
+              :kontor.invoice-line/gl-account-type :purchase-expense
+              :kontor.invoice-line/withholding-on-payment? true
+              :kontor.invoice-line/description "§194J — 10% TDS on professional services"}
              {:db/id "l-CON-cgst"
-              :invoice-line/invoice "inv-CON"
-              :invoice-line/sequence 2
-              :invoice-line/name "CGST 9%"
-              :invoice-line/quantity 1M
-              :invoice-line/unit-price 4500M
-              :invoice-line/amount 4500M
-              :invoice-line/gl-account-type :purchase-tax-recoverable
-              :invoice-line/vat-category "CGST"}
+              :kontor.invoice-line/invoice "inv-CON"
+              :kontor.invoice-line/sequence 2
+              :kontor.invoice-line/name "CGST 9%"
+              :kontor.invoice-line/quantity 1M
+              :kontor.invoice-line/unit-price 4500M
+              :kontor.invoice-line/amount 4500M
+              :kontor.invoice-line/gl-account-type :purchase-tax-recoverable
+              :kontor.invoice-line/vat-category "CGST"}
              {:db/id "l-CON-sgst"
-              :invoice-line/invoice "inv-CON"
-              :invoice-line/sequence 3
-              :invoice-line/name "SGST 9%"
-              :invoice-line/quantity 1M
-              :invoice-line/unit-price 4500M
-              :invoice-line/amount 4500M
-              :invoice-line/gl-account-type :purchase-tax-recoverable
-              :invoice-line/vat-category "SGST"}])
+              :kontor.invoice-line/invoice "inv-CON"
+              :kontor.invoice-line/sequence 3
+              :kontor.invoice-line/name "SGST 9%"
+              :kontor.invoice-line/quantity 1M
+              :kontor.invoice-line/unit-price 4500M
+              :kontor.invoice-line/amount 4500M
+              :kontor.invoice-line/gl-account-type :purchase-tax-recoverable
+              :kontor.invoice-line/vat-category "SGST"}])
 
 ;; ## Customer (KA) partial payment + dispute on Inv 1
 ;;
 ;; **2026-05-01**: Mysore Industrial pays ₹70'000 on account. Open
 ;; balance: ₹48'000.
 
-(d/transact conn [{:transaction/external-id "NEFT-2026-05-01"
-                   :transaction/state :posted
-                   :transaction/effective-date #inst "2026-05-01"
-                   :transaction/posted-at #inst "2026-05-01"
-                   :transaction/partner (d/q '[:find ?p . :where [?p :partner/external-id "KA-CUST"]]
+(d/transact conn [{:kontor.transaction/external-id "NEFT-2026-05-01"
+                   :kontor.transaction/state :posted
+                   :kontor.transaction/effective-date #inst "2026-05-01"
+                   :kontor.transaction/posted-at #inst "2026-05-01"
+                   :kontor.transaction/partner (d/q '[:find ?p . :where [?p :kontor.partner/external-id "KA-CUST"]]
                                               (d/db conn))}])
 
 (papp/apply-payment! conn
-                     {:payment (d/q '[:find ?t . :where [?t :transaction/external-id "NEFT-2026-05-01"]]
+                     {:payment (d/q '[:find ?t . :where [?t :kontor.transaction/external-id "NEFT-2026-05-01"]]
                                      (d/db conn))
                       :invoice (inv/by-external-id (d/db conn) "BMC/2026-27/0001")
                       :amount 70000M
@@ -486,15 +486,15 @@ ka-irn
 ;; **2026-05-15**: Independent metallurgical lab confirms EN8 spec
 ;; was correct. Customer concedes; pays ₹48'000.
 
-(d/transact conn [{:transaction/external-id "NEFT-2026-05-15"
-                   :transaction/state :posted
-                   :transaction/effective-date #inst "2026-05-15"
-                   :transaction/posted-at #inst "2026-05-15"
-                   :transaction/partner (d/q '[:find ?p . :where [?p :partner/external-id "KA-CUST"]]
+(d/transact conn [{:kontor.transaction/external-id "NEFT-2026-05-15"
+                   :kontor.transaction/state :posted
+                   :kontor.transaction/effective-date #inst "2026-05-15"
+                   :kontor.transaction/posted-at #inst "2026-05-15"
+                   :kontor.transaction/partner (d/q '[:find ?p . :where [?p :kontor.partner/external-id "KA-CUST"]]
                                               (d/db conn))}])
 
 (papp/apply-payment! conn
-                     {:payment (d/q '[:find ?t . :where [?t :transaction/external-id "NEFT-2026-05-15"]]
+                     {:payment (d/q '[:find ?t . :where [?t :kontor.transaction/external-id "NEFT-2026-05-15"]]
                                      (d/db conn))
                       :invoice (inv/by-external-id (d/db conn) "BMC/2026-27/0001")
                       :amount 48000M
@@ -504,7 +504,7 @@ ka-irn
 
 (sm/current-status (d/db conn)
                    (inv/by-external-id (d/db conn) "BMC/2026-27/0001")
-                   :invoice/status)
+                   :kontor.invoice/status)
 ;; → :paid
 
 ;; ## GSTR-1 export shape
@@ -527,26 +527,26 @@ ka-irn
   (d/q '[:find (count ?i) .
          :in $ ?from ?to
          :where
-         [?i :invoice/type :sales]
-         [?i :invoice/issue-date ?d]
-         [?i :invoice/status :sent]
+         [?i :kontor.invoice/type :sales]
+         [?i :kontor.invoice/issue-date ?d]
+         [?i :kontor.invoice/status :sent]
          [(.compareTo ^java.util.Date ?d ?from) ?cf]
          [(>= ?cf 0)]
          [(.compareTo ^java.util.Date ?d ?to) ?ct]
          [(<= ?ct 0)]
-         [?i :invoice/buyer ?b]
-         [?b :partner/tax-id _]
-         [?b :partner/country-code "IN"]]
+         [?i :kontor.invoice/buyer ?b]
+         [?b :kontor.partner/tax-id _]
+         [?b :kontor.partner/country-code "IN"]]
        (d/db conn) #inst "2026-04-01" #inst "2026-04-30"))
 
 gstr-1-b2b-count
 ;; → 2 (KA-CUST + MH-CUST invoices both filed in April)
 
 ;; HSN summary (Table 12): production tenants encode the HSN on
-;; `:invoice-line/description` (as we do here) or via a custom attr
-;; like `:invoice-line/hsn-code` (a kontor-l10n-in schema extension
+;; `:kontor.invoice-line/description` (as we do here) or via a custom attr
+;; like `:kontor.invoice-line/hsn-code` (a kontor-l10n-in schema extension
 ;; — not yet shipped in the kernel). The aggregation pattern is the
-;; same as the B2B count above with an `:invoice-line/description`
+;; same as the B2B count above with an `:kontor.invoice-line/description`
 ;; regex match — kept out of this notebook for brevity.
 
 ;; ## What this showcase exercised

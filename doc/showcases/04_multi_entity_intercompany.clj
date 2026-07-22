@@ -53,7 +53,7 @@
             [kontor.partner.schema :as partner-schema]
             [kontor.posting :as posting]
             [kontor.sales.schema :as sales-schema]
-            [kontor.status-machine :as sm]))
+            [kontor.workflow.status-machine :as sm]))
 
 ;; # The story
 ;;
@@ -90,107 +90,107 @@
 ;; ## Seeds: entities, accounts, ledgers, cost-centers, partners
 
 (d/transact conn
-            [{:commodity/symbol "EUR" :commodity/name "Euro"
-              :commodity/precision 2 :commodity/iso-4217 "EUR"}
-             {:commodity/symbol "USD" :commodity/name "US Dollar"
-              :commodity/precision 2 :commodity/iso-4217 "USD"}
+            [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+              :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
+             {:kontor.commodity/symbol "USD" :kontor.commodity/name "US Dollar"
+              :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "USD"}
              ;; Multi-entity (ADR-031)
-             {:entity/code "DE-PARENT"
-              :entity/name "Acme Industries Holding GmbH"
-              :entity/kind :operating :entity/active true}
-             {:entity/code "US-SUB"
-              :entity/name "Acme NA LLC"
-              :entity/kind :operating :entity/active true}
+             {:kontor.entity/code "DE-PARENT"
+              :kontor.entity/name "Acme Industries Holding GmbH"
+              :kontor.entity/kind :operating :kontor.entity/active true}
+             {:kontor.entity/code "US-SUB"
+              :kontor.entity/name "Acme NA LLC"
+              :kontor.entity/kind :operating :kontor.entity/active true}
              ;; Two ledgers: GAAP-DE (primary for DE-PARENT) + GAAP-US
              ;; (primary for US-SUB). Same posting often lives in both
              ;; via parallel-ledger.
-             {:ledger/code "PRIMARY" :ledger/name "Primary group"
-              :ledger/type :primary}
-             {:ledger/code "GAAP-DE" :ledger/name "DE HGB"
-              :ledger/type :secondary :ledger/framework :HGB}
-             {:ledger/code "GAAP-US" :ledger/name "US GAAP"
-              :ledger/type :secondary :ledger/framework :US-GAAP}
+             {:kontor.ledger/code "PRIMARY" :kontor.ledger/name "Primary group"
+              :kontor.ledger/type :primary}
+             {:kontor.ledger/code "GAAP-DE" :kontor.ledger/name "DE HGB"
+              :kontor.ledger/type :secondary :kontor.ledger/framework :HGB}
+             {:kontor.ledger/code "GAAP-US" :kontor.ledger/name "US GAAP"
+              :kontor.ledger/type :secondary :kontor.ledger/framework :US-GAAP}
              ;; Accounts (simplified; production would import a full chart)
-             {:account/code "1200" :account/path "1200"
-              :account/name "Accounts Receivable" :account/type :asset}
-             {:account/code "1300" :account/path "1300"
-              :account/name "Intercompany Receivable - US-SUB"
-              :account/type :asset}
-             {:account/code "1400" :account/path "1400"
-              :account/name "Raw Materials Inventory" :account/type :asset}
-             {:account/code "2100" :account/path "2100"
-              :account/name "Accounts Payable" :account/type :liability}
-             {:account/code "2200" :account/path "2200"
-              :account/name "Intercompany Payable - DE-PARENT"
-              :account/type :liability}
-             {:account/code "2150" :account/path "2150"
-              :account/name "GR-IR Clearing" :account/type :liability}
-             {:account/code "4000" :account/path "4000"
-              :account/name "Product Revenue" :account/type :revenue}
-             {:account/code "4500" :account/path "4500"
-              :account/name "Intercompany Service Revenue"
-              :account/type :revenue}
-             {:account/code "5000" :account/path "5000"
-              :account/name "Cost of Goods Sold" :account/type :expense}
-             {:account/code "5500" :account/path "5500"
-              :account/name "Intercompany Service Expense"
-              :account/type :expense}
+             {:kontor.account/code "1200" :kontor.account/path "1200"
+              :kontor.account/name "Accounts Receivable" :kontor.account/type :asset}
+             {:kontor.account/code "1300" :kontor.account/path "1300"
+              :kontor.account/name "Intercompany Receivable - US-SUB"
+              :kontor.account/type :asset}
+             {:kontor.account/code "1400" :kontor.account/path "1400"
+              :kontor.account/name "Raw Materials Inventory" :kontor.account/type :asset}
+             {:kontor.account/code "2100" :kontor.account/path "2100"
+              :kontor.account/name "Accounts Payable" :kontor.account/type :liability}
+             {:kontor.account/code "2200" :kontor.account/path "2200"
+              :kontor.account/name "Intercompany Payable - DE-PARENT"
+              :kontor.account/type :liability}
+             {:kontor.account/code "2150" :kontor.account/path "2150"
+              :kontor.account/name "GR-IR Clearing" :kontor.account/type :liability}
+             {:kontor.account/code "4000" :kontor.account/path "4000"
+              :kontor.account/name "Product Revenue" :kontor.account/type :revenue}
+             {:kontor.account/code "4500" :kontor.account/path "4500"
+              :kontor.account/name "Intercompany Service Revenue"
+              :kontor.account/type :revenue}
+             {:kontor.account/code "5000" :kontor.account/path "5000"
+              :kontor.account/name "Cost of Goods Sold" :kontor.account/type :expense}
+             {:kontor.account/code "5500" :kontor.account/path "5500"
+              :kontor.account/name "Intercompany Service Expense"
+              :kontor.account/type :expense}
              ;; Cost-centers (analytic accounts, ADR-022)
-             {:analytic-plan/code "DEFAULT" :analytic-plan/name "Default"}
-             {:analytic-account/code "CC-MFG"
-              :analytic-account/name "Manufacturing"
-              :analytic-account/plan [:analytic-plan/code "DEFAULT"]
-              :analytic-account/active true}
-             {:analytic-account/code "CC-SALES"
-              :analytic-account/name "Sales"
-              :analytic-account/plan [:analytic-plan/code "DEFAULT"]
-              :analytic-account/active true}
-             {:analytic-account/code "CC-CORP"
-              :analytic-account/name "Corporate Allocation"
-              :analytic-account/plan [:analytic-plan/code "DEFAULT"]
-              :analytic-account/active true}
+             {:kontor.analytic-plan/code "DEFAULT" :kontor.analytic-plan/name "Default"}
+             {:kontor.analytic-account/code "CC-MFG"
+              :kontor.analytic-account/name "Manufacturing"
+              :kontor.analytic-account/plan [:kontor.analytic-plan/code "DEFAULT"]
+              :kontor.analytic-account/active true}
+             {:kontor.analytic-account/code "CC-SALES"
+              :kontor.analytic-account/name "Sales"
+              :kontor.analytic-account/plan [:kontor.analytic-plan/code "DEFAULT"]
+              :kontor.analytic-account/active true}
+             {:kontor.analytic-account/code "CC-CORP"
+              :kontor.analytic-account/name "Corporate Allocation"
+              :kontor.analytic-account/plan [:kontor.analytic-plan/code "DEFAULT"]
+              :kontor.analytic-account/active true}
              ;; Journals
-             {:journal/code "AR" :journal/name "Sales" :journal/type :sales}
-             {:journal/code "AP" :journal/name "Purchases" :journal/type :purchase}
-             {:journal/code "IC" :journal/name "Intercompany" :journal/type :general}
+             {:kontor.journal/code "AR" :kontor.journal/name "Sales" :kontor.journal/type :sales}
+             {:kontor.journal/code "AP" :kontor.journal/name "Purchases" :kontor.journal/type :purchase}
+             {:kontor.journal/code "IC" :kontor.journal/name "Intercompany" :kontor.journal/type :general}
              ;; Partners
-             {:partner/external-id "STEEL"
-              :partner/name "Steel-Supply Co"
-              :partner/kind :vendor :partner/country-code "US"}
-             {:partner/external-id "MEGACORP"
-              :partner/name "Megacorp Inc"
-              :partner/kind :customer :partner/country-code "US"
-              :partner/credit-status :open
-              :partner/credit-limit 1000000M
-              :partner/credit-commodity [:commodity/symbol "USD"]}
+             {:kontor.partner/external-id "STEEL"
+              :kontor.partner/name "Steel-Supply Co"
+              :kontor.partner/kind :vendor :kontor.partner/country-code "US"}
+             {:kontor.partner/external-id "MEGACORP"
+              :kontor.partner/name "Megacorp Inc"
+              :kontor.partner/kind :customer :kontor.partner/country-code "US"
+              :kontor.partner/credit-status :open
+              :kontor.partner/credit-limit 1000000M
+              :kontor.partner/credit-commodity [:kontor.commodity/symbol "USD"]}
              ;; "Internal customer" / "internal vendor" for intercompany
              ;; (kontor design: intercompany flows treat each entity as
              ;; a partner-of the other).
-             {:partner/external-id "INTER-DE"
-              :partner/name "Acme DE (intercompany)"
-              :partner/kind :company}
-             {:partner/external-id "INTER-US"
-              :partner/name "Acme US (intercompany)"
-              :partner/kind :company}
-             {:partner/external-id "U-eve" :partner/name "Eve (sales)"}
-             {:partner/external-id "U-frank" :partner/name "Frank (manager)"}])
+             {:kontor.partner/external-id "INTER-DE"
+              :kontor.partner/name "Acme DE (intercompany)"
+              :kontor.partner/kind :company}
+             {:kontor.partner/external-id "INTER-US"
+              :kontor.partner/name "Acme US (intercompany)"
+              :kontor.partner/kind :company}
+             {:kontor.partner/external-id "U-eve" :kontor.partner/name "Eve (sales)"}
+             {:kontor.partner/external-id "U-frank" :kontor.partner/name "Frank (manager)"}])
 
-(def de-parent (d/q '[:find ?e . :where [?e :entity/code "DE-PARENT"]] (d/db conn)))
-(def us-sub    (d/q '[:find ?e . :where [?e :entity/code "US-SUB"]]    (d/db conn)))
-(def primary-ledger (d/q '[:find ?l . :where [?l :ledger/code "PRIMARY"]] (d/db conn)))
-(def gaap-us   (d/q '[:find ?l . :where [?l :ledger/code "GAAP-US"]]   (d/db conn)))
-(def gaap-de   (d/q '[:find ?l . :where [?l :ledger/code "GAAP-DE"]]   (d/db conn)))
-(def usd       (d/q '[:find ?c . :where [?c :commodity/symbol "USD"]]  (d/db conn)))
-(def eur       (d/q '[:find ?c . :where [?c :commodity/symbol "EUR"]]  (d/db conn)))
+(def de-parent (d/q '[:find ?e . :where [?e :kontor.entity/code "DE-PARENT"]] (d/db conn)))
+(def us-sub    (d/q '[:find ?e . :where [?e :kontor.entity/code "US-SUB"]]    (d/db conn)))
+(def primary-ledger (d/q '[:find ?l . :where [?l :kontor.ledger/code "PRIMARY"]] (d/db conn)))
+(def gaap-us   (d/q '[:find ?l . :where [?l :kontor.ledger/code "GAAP-US"]]   (d/db conn)))
+(def gaap-de   (d/q '[:find ?l . :where [?l :kontor.ledger/code "GAAP-DE"]]   (d/db conn)))
+(def usd       (d/q '[:find ?c . :where [?c :kontor.commodity/symbol "USD"]]  (d/db conn)))
+(def eur       (d/q '[:find ?c . :where [?c :kontor.commodity/symbol "EUR"]]  (d/db conn)))
 
 (defn account [path]
-  (d/q '[:find ?a . :in $ ?p :where [?a :account/path ?p]] (d/db conn) path))
+  (d/q '[:find ?a . :in $ ?p :where [?a :kontor.account/path ?p]] (d/db conn) path))
 
 (defn partner [xid]
-  (d/q '[:find ?p . :in $ ?x :where [?p :partner/external-id ?x]] (d/db conn) xid))
+  (d/q '[:find ?p . :in $ ?x :where [?p :kontor.partner/external-id ?x]] (d/db conn) xid))
 
 (defn cc [code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :analytic-account/code ?c]] (d/db conn) code))
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.analytic-account/code ?c]] (d/db conn) code))
 
 ;; ## Step 1: US sub buys raw steel (procurement P2P)
 ;;
@@ -208,25 +208,25 @@
 (d/transact
  conn
  (posting/build-transaction
-  {:transaction {:transaction/journal [:journal/code "AP"]
-                 :transaction/effective-date #inst "2026-04-05"
-                 :transaction/state :posted
-                 :transaction/posted-at #inst "2026-04-05"
-                 :transaction/narration "Raw steel purchase from Steel-Supply Co"
-                 :transaction/partner (partner "STEEL")
-                 :transaction/external-id "STEEL-INV-2026-04-001"}
-   :postings [{:posting/account (account "1400")
-               :posting/amount 50000M
-               :posting/commodity usd
-               :posting/partner (partner "STEEL")
-               :posting/entity us-sub
-               :posting/ledger primary-ledger}
-              {:posting/account (account "2100")
-               :posting/amount -50000M
-               :posting/commodity usd
-               :posting/partner (partner "STEEL")
-               :posting/entity us-sub
-               :posting/ledger primary-ledger}]}))
+  {:transaction {:kontor.transaction/journal [:kontor.journal/code "AP"]
+                 :kontor.transaction/effective-date #inst "2026-04-05"
+                 :kontor.transaction/state :posted
+                 :kontor.transaction/posted-at #inst "2026-04-05"
+                 :kontor.transaction/narration "Raw steel purchase from Steel-Supply Co"
+                 :kontor.transaction/partner (partner "STEEL")
+                 :kontor.transaction/external-id "STEEL-INV-2026-04-001"}
+   :postings [{:kontor.posting/account (account "1400")
+               :kontor.posting/amount 50000M
+               :kontor.posting/commodity usd
+               :kontor.posting/partner (partner "STEEL")
+               :kontor.posting/entity us-sub
+               :kontor.posting/ledger primary-ledger}
+              {:kontor.posting/account (account "2100")
+               :kontor.posting/amount -50000M
+               :kontor.posting/commodity usd
+               :kontor.posting/partner (partner "STEEL")
+               :kontor.posting/entity us-sub
+               :kontor.posting/ledger primary-ledger}]}))
 
 ;; Tag the postings with the manufacturing cost-center (ADR-022).
 ;; ADR-022's pattern: `:posting-analytic` rows link postings to
@@ -235,17 +235,17 @@
 (let [postings (d/q '[:find [?p ...]
                       :in $ ?ext-id
                       :where
-                      [?t :transaction/external-id ?ext-id]
-                      [?p :posting/transaction ?t]]
+                      [?t :kontor.transaction/external-id ?ext-id]
+                      [?p :kontor.posting/transaction ?t]]
                     (d/db conn) "STEEL-INV-2026-04-001")
       cc-mfg (cc "CC-MFG")]
   (d/transact
    conn
    (mapv (fn [p]
-           {:analytic-distribution/posting p
-            :analytic-distribution/account cc-mfg
-            :analytic-distribution/percent 100M
-            :analytic-distribution/plan (d/q (quote [:find ?p . :where [?p :analytic-plan/code "DEFAULT"]])
+           {:kontor.analytic-distribution/posting p
+            :kontor.analytic-distribution/account cc-mfg
+            :kontor.analytic-distribution/percent 100M
+            :kontor.analytic-distribution/plan (d/q (quote [:find ?p . :where [?p :kontor.analytic-plan/code "DEFAULT"]])
                                               (d/db conn))})  ; 100%
          postings)))
 
@@ -257,40 +257,40 @@
 (d/transact
  conn
  (posting/build-transaction
-  {:transaction {:transaction/journal [:journal/code "AR"]
-                 :transaction/effective-date #inst "2026-04-20"
-                 :transaction/state :posted
-                 :transaction/posted-at #inst "2026-04-20"
-                 :transaction/narration "Sale of finished goods to Megacorp"
-                 :transaction/partner (partner "MEGACORP")
-                 :transaction/external-id "MEGA-INV-2026-04-001"}
-   :postings [{:posting/account (account "1200")
-               :posting/amount 80000M
-               :posting/commodity usd
-               :posting/partner (partner "MEGACORP")
-               :posting/entity us-sub
-               :posting/ledger primary-ledger}
-              {:posting/account (account "4000")
-               :posting/amount -80000M
-               :posting/commodity usd
-               :posting/partner (partner "MEGACORP")
-               :posting/entity us-sub
-               :posting/ledger primary-ledger}]}))
+  {:transaction {:kontor.transaction/journal [:kontor.journal/code "AR"]
+                 :kontor.transaction/effective-date #inst "2026-04-20"
+                 :kontor.transaction/state :posted
+                 :kontor.transaction/posted-at #inst "2026-04-20"
+                 :kontor.transaction/narration "Sale of finished goods to Megacorp"
+                 :kontor.transaction/partner (partner "MEGACORP")
+                 :kontor.transaction/external-id "MEGA-INV-2026-04-001"}
+   :postings [{:kontor.posting/account (account "1200")
+               :kontor.posting/amount 80000M
+               :kontor.posting/commodity usd
+               :kontor.posting/partner (partner "MEGACORP")
+               :kontor.posting/entity us-sub
+               :kontor.posting/ledger primary-ledger}
+              {:kontor.posting/account (account "4000")
+               :kontor.posting/amount -80000M
+               :kontor.posting/commodity usd
+               :kontor.posting/partner (partner "MEGACORP")
+               :kontor.posting/entity us-sub
+               :kontor.posting/ledger primary-ledger}]}))
 
 (let [postings (d/q '[:find [?p ...]
                       :in $ ?ext-id
                       :where
-                      [?t :transaction/external-id ?ext-id]
-                      [?p :posting/transaction ?t]]
+                      [?t :kontor.transaction/external-id ?ext-id]
+                      [?p :kontor.posting/transaction ?t]]
                     (d/db conn) "MEGA-INV-2026-04-001")
       cc-sales (cc "CC-SALES")]
   (d/transact
    conn
    (mapv (fn [p]
-           {:analytic-distribution/posting p
-            :analytic-distribution/account cc-sales
-            :analytic-distribution/percent 100M
-            :analytic-distribution/plan (d/q (quote [:find ?p . :where [?p :analytic-plan/code "DEFAULT"]])
+           {:kontor.analytic-distribution/posting p
+            :kontor.analytic-distribution/account cc-sales
+            :kontor.analytic-distribution/percent 100M
+            :kontor.analytic-distribution/plan (d/q (quote [:find ?p . :where [?p :kontor.analytic-plan/code "DEFAULT"]])
                                               (d/db conn))})
          postings)))
 
@@ -322,38 +322,38 @@
 (d/transact
  conn
  (posting/build-transaction
-  {:transaction {:transaction/journal [:journal/code "IC"]
-                 :transaction/effective-date #inst "2026-04-30"
-                 :transaction/state :posted
-                 :transaction/posted-at #inst "2026-04-30"
-                 :transaction/narration "Intercompany services Q1 2026"
-                 :transaction/external-id "IC-2026-Q1-001"}
+  {:transaction {:kontor.transaction/journal [:kontor.journal/code "IC"]
+                 :kontor.transaction/effective-date #inst "2026-04-30"
+                 :kontor.transaction/state :posted
+                 :kontor.transaction/posted-at #inst "2026-04-30"
+                 :kontor.transaction/narration "Intercompany services Q1 2026"
+                 :kontor.transaction/external-id "IC-2026-Q1-001"}
    :postings [;; DE-PARENT side (two legs)
-              {:posting/account (account "1300")
-               :posting/amount 100000M
-               :posting/commodity usd
-               :posting/partner (partner "INTER-US")
-               :posting/entity de-parent
-               :posting/ledger primary-ledger}
-              {:posting/account (account "4500")
-               :posting/amount -100000M
-               :posting/commodity usd
-               :posting/partner (partner "INTER-US")
-               :posting/entity de-parent
-               :posting/ledger primary-ledger}
+              {:kontor.posting/account (account "1300")
+               :kontor.posting/amount 100000M
+               :kontor.posting/commodity usd
+               :kontor.posting/partner (partner "INTER-US")
+               :kontor.posting/entity de-parent
+               :kontor.posting/ledger primary-ledger}
+              {:kontor.posting/account (account "4500")
+               :kontor.posting/amount -100000M
+               :kontor.posting/commodity usd
+               :kontor.posting/partner (partner "INTER-US")
+               :kontor.posting/entity de-parent
+               :kontor.posting/ledger primary-ledger}
               ;; US-SUB side (two legs)
-              {:posting/account (account "5500")
-               :posting/amount 100000M
-               :posting/commodity usd
-               :posting/partner (partner "INTER-DE")
-               :posting/entity us-sub
-               :posting/ledger primary-ledger}
-              {:posting/account (account "2200")
-               :posting/amount -100000M
-               :posting/commodity usd
-               :posting/partner (partner "INTER-DE")
-               :posting/entity us-sub
-               :posting/ledger primary-ledger}]}))
+              {:kontor.posting/account (account "5500")
+               :kontor.posting/amount 100000M
+               :kontor.posting/commodity usd
+               :kontor.posting/partner (partner "INTER-DE")
+               :kontor.posting/entity us-sub
+               :kontor.posting/ledger primary-ledger}
+              {:kontor.posting/account (account "2200")
+               :kontor.posting/amount -100000M
+               :kontor.posting/commodity usd
+               :kontor.posting/partner (partner "INTER-DE")
+               :kontor.posting/entity us-sub
+               :kontor.posting/ledger primary-ledger}]}))
 
 ;; Tag the US-SUB side with the corporate-allocation cost-center
 ;; (DE-PARENT side is just the revenue arm — usually no cost-center
@@ -362,18 +362,18 @@
 (let [postings (d/q '[:find [?p ...]
                       :in $ ?ext-id ?ent
                       :where
-                      [?t :transaction/external-id ?ext-id]
-                      [?p :posting/transaction ?t]
-                      [?p :posting/entity ?ent]]
+                      [?t :kontor.transaction/external-id ?ext-id]
+                      [?p :kontor.posting/transaction ?t]
+                      [?p :kontor.posting/entity ?ent]]
                     (d/db conn) "IC-2026-Q1-001" us-sub)
       cc-corp (cc "CC-CORP")]
   (d/transact
    conn
    (mapv (fn [p]
-           {:analytic-distribution/posting p
-            :analytic-distribution/account cc-corp
-            :analytic-distribution/percent 100M
-            :analytic-distribution/plan (d/q (quote [:find ?p . :where [?p :analytic-plan/code "DEFAULT"]])
+           {:kontor.analytic-distribution/posting p
+            :kontor.analytic-distribution/account cc-corp
+            :kontor.analytic-distribution/percent 100M
+            :kontor.analytic-distribution/plan (d/q (quote [:find ?p . :where [?p :kontor.analytic-plan/code "DEFAULT"]])
                                               (d/db conn))})
          postings)))
 
@@ -386,8 +386,8 @@
   (d/q '[:find (sum ?a) .
          :in $ ?e
          :where
-         [?p :posting/entity ?e]
-         [?p :posting/amount ?a]]
+         [?p :kontor.posting/entity ?e]
+         [?p :kontor.posting/amount ?a]]
        (d/db conn) entity-eid))
 
 (do
@@ -399,7 +399,7 @@
          "DE-PARENT postings sum to zero")
  (assert (zero? (.compareTo (bigdec "0")
                             (or (d/q '[:find (sum ?a) .
-                                       :where [?p :posting/amount ?a]]
+                                       :where [?p :kontor.posting/amount ?a]]
                                      (d/db conn)) 0M)))
          "Tenant-wide ledger sums to zero (sanity)"))
 
@@ -413,9 +413,9 @@
   (or (d/q '[:find (sum ?amt) .
              :in $ ?cc
              :where
-             [?pa :analytic-distribution/account ?cc]
-             [?pa :analytic-distribution/posting ?p]
-             [?p :posting/amount ?amt]]
+             [?pa :kontor.analytic-distribution/account ?cc]
+             [?pa :kontor.analytic-distribution/posting ?p]
+             [?p :kontor.posting/amount ?amt]]
            (d/db conn) cc-eid)
       0M))
 
@@ -444,9 +444,9 @@
   (or (d/q '[:find (sum ?amt) .
              :in $ ?cc
              :where
-             [?pa :analytic-distribution/account ?cc]
-             [?pa :analytic-distribution/posting ?p]
-             [?p :posting/amount ?amt]
+             [?pa :kontor.analytic-distribution/account ?cc]
+             [?pa :kontor.analytic-distribution/posting ?p]
+             [?p :kontor.posting/amount ?amt]
              [(pos? ^java.math.BigDecimal ?amt)]]
            (d/db conn) cc-eid)
       0M))
@@ -457,24 +457,24 @@
 ;; ## Step 5: Intercompany pair query
 ;;
 ;; "Show me all intercompany postings between US-SUB and DE-PARENT
-;; in Q2 2026." The :transaction/external-id "IC-*" convention is
+;; in Q2 2026." The :kontor.transaction/external-id "IC-*" convention is
 ;; common; the query joins postings on the intercompany account
 ;; codes (1300 / 2200).
 
 (d/q '[:find ?ext ?e1 ?a1 ?amt1 ?e2 ?a2 ?amt2
        :where
-       [?t :transaction/external-id ?ext]
+       [?t :kontor.transaction/external-id ?ext]
        [(.startsWith ^String ?ext "IC-")]
-       [?p1 :posting/transaction ?t]
-       [?p1 :posting/account ?ac1]
-       [?ac1 :account/path ?a1]
-       [?p1 :posting/entity ?e1]
-       [?p1 :posting/amount ?amt1]
-       [?p2 :posting/transaction ?t]
-       [?p2 :posting/account ?ac2]
-       [?ac2 :account/path ?a2]
-       [?p2 :posting/entity ?e2]
-       [?p2 :posting/amount ?amt2]
+       [?p1 :kontor.posting/transaction ?t]
+       [?p1 :kontor.posting/account ?ac1]
+       [?ac1 :kontor.account/path ?a1]
+       [?p1 :kontor.posting/entity ?e1]
+       [?p1 :kontor.posting/amount ?amt1]
+       [?p2 :kontor.posting/transaction ?t]
+       [?p2 :kontor.posting/account ?ac2]
+       [?ac2 :kontor.account/path ?a2]
+       [?p2 :kontor.posting/entity ?e2]
+       [?p2 :kontor.posting/amount ?amt2]
        [(!= ?e1 ?e2)]
        [(!= ?p1 ?p2)]]
      (d/db conn))
@@ -488,27 +488,27 @@
 ;; that should fail.
 
 (d/transact conn
-            [{:approval-policy/entity-type :invoice
-              :approval-policy/facet :invoice/status
-              :approval-policy/transition-from :sent
-              :approval-policy/transition-to :paid
-              :approval-policy/rule :no-self-approval
-              :approval-policy/active true}])
+            [{:kontor.approval-policy/entity-type :invoice
+              :kontor.approval-policy/facet :kontor.invoice/status
+              :kontor.approval-policy/transition-from :sent
+              :kontor.approval-policy/transition-to :paid
+              :kontor.approval-policy/rule :no-self-approval
+              :kontor.approval-policy/active true}])
 
 ;; Create an invoice + transition with same creator + changer-by-uid
 
 (d/transact conn
             [{:db/id "approval-test-inv"
-              :invoice/external-id "APPROVAL-TEST"
-              :invoice/type :sales
-              :invoice/status :sent
-              :invoice/issue-date #inst "2026-05-01"
-              :create/uid (partner "U-eve")
-              :invoice/currency "USD"
-              :invoice/total-gross 5000M}])
+              :kontor.invoice/external-id "APPROVAL-TEST"
+              :kontor.invoice/type :sales
+              :kontor.invoice/status :sent
+              :kontor.invoice/issue-date #inst "2026-05-01"
+              :kontor.audit/create-uid (partner "U-eve")
+              :kontor.invoice/currency "USD"
+              :kontor.invoice/total-gross 5000M}])
 
 (def approval-test-inv-eid
-  (d/q '[:find ?e . :where [?e :invoice/external-id "APPROVAL-TEST"]]
+  (d/q '[:find ?e . :where [?e :kontor.invoice/external-id "APPROVAL-TEST"]]
        (d/db conn)))
 
 ;; Try: same actor (Eve, who created) tries to mark-paid → :no-
@@ -518,13 +518,13 @@
   (sm/record-status-change! conn
                             {:entity approval-test-inv-eid
                              :entity-type :invoice
-                             :facet :invoice/status
+                             :facet :kontor.invoice/status
                              :to :paid
                              :changed-by-uid (partner "U-eve")
                              :reason :paid-by-self})
   (catch clojure.lang.ExceptionInfo e
     (do
-     (assert (= :approval-policy/violation
+     (assert (= :kontor.approval-policy/violation
                 (:type (ex-data e))))
      (assert (some #(= :no-self-approval (:rule %))
                    (:violations (ex-data e)))))
@@ -537,12 +537,12 @@
 (sm/record-status-change! conn
                           {:entity approval-test-inv-eid
                            :entity-type :invoice
-                           :facet :invoice/status
+                           :facet :kontor.invoice/status
                            :to :paid
                            :changed-by-uid (partner "U-frank")
                            :reason :approved-by-manager})
 
-(sm/current-status (d/db conn) approval-test-inv-eid :invoice/status)
+(sm/current-status (d/db conn) approval-test-inv-eid :kontor.invoice/status)
 ;; → :paid
 
 ;; ## What this showcase exercised
@@ -551,7 +551,7 @@
 ;;   per-entity, sum-to-zero invariant verified per-entity
 ;; - **ADR-022 analytic-account**: three cost-centers, posting-
 ;;   analytic distribution rows, cost-center balance queries
-;; - **ADR-021 parallel ledger**: `:posting/ledger` set explicitly
+;; - **ADR-021 parallel ledger**: `:kontor.posting/ledger` set explicitly
 ;;   on every posting; primary + statutory ledgers seeded (the
 ;;   actual parallel-posting flow is at consumer level — we set the
 ;;   ref)
