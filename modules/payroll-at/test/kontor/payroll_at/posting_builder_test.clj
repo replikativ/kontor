@@ -10,6 +10,7 @@
             [datahike.api :as d]
             [kontor.core :as core]
             [kontor.l10n-at.chart :as chart]
+            [kontor.payroll-at.chart :as payroll-chart]
             [kontor.payroll-at.compute :as compute]
             [kontor.payroll-at.posting-builder :as pb]
             [kontor.validation :as v]))
@@ -21,73 +22,15 @@
 ;; Fixtures
 ;; ============================================================================
 
-(def payroll-wage-accounts
-  "The wage / payable accounts the posting builder routes to. NOT in
-   the l10n-at Kontenrahmen (which is a UVA-focused subset); test
-   fixture installs them on top."
-  [;; Aufwendungen — class 6
-   {:kontor.account/code "6000" :kontor.account/path "Aufwendungen:Personal:Gehälter"
-    :kontor.account/type :expense :kontor.account/name "Gehälter"
-    :kontor.account/active true
-    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:kontor.account/code "6400" :kontor.account/path "Aufwendungen:Personal:Urlaubsremuneration"
-    :kontor.account/type :expense :kontor.account/name "Urlaubsremuneration (13.)"
-    :kontor.account/active true
-    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:kontor.account/code "6410" :kontor.account/path "Aufwendungen:Personal:Weihnachtsremuneration"
-    :kontor.account/type :expense :kontor.account/name "Weihnachtsremuneration (14.)"
-    :kontor.account/active true
-    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:kontor.account/code "6500" :kontor.account/path "Aufwendungen:Personal:SV-AG"
-    :kontor.account/type :expense :kontor.account/name "Sozialaufwand-Arbeitgeber"
-    :kontor.account/active true
-    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:kontor.account/code "6510" :kontor.account/path "Aufwendungen:Personal:DB-FLAG"
-    :kontor.account/type :expense :kontor.account/name "DB FLAG (4.1%)"
-    :kontor.account/active true
-    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:kontor.account/code "6520" :kontor.account/path "Aufwendungen:Personal:KomSt"
-    :kontor.account/type :expense :kontor.account/name "Kommunalsteuer (3%)"
-    :kontor.account/active true
-    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:kontor.account/code "6530" :kontor.account/path "Aufwendungen:Personal:DZ"
-    :kontor.account/type :expense :kontor.account/name "Zuschlag zum DB"
-    :kontor.account/active true
-    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:kontor.account/code "6800" :kontor.account/path "Aufwendungen:Personal:Sachbezüge"
-    :kontor.account/type :expense :kontor.account/name "Sachbezugsaufwand"
-    :kontor.account/active true
-    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
-
-   ;; Verbindlichkeiten — class 3
-   {:kontor.account/code "3540" :kontor.account/path "Verbindlichkeiten:SV"
-    :kontor.account/type :liability :kontor.account/name "SV-Verbindlichkeit"
-    :kontor.account/active true
-    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:kontor.account/code "3550" :kontor.account/path "Verbindlichkeiten:DB"
-    :kontor.account/type :liability :kontor.account/name "DB+DZ-Verbindlichkeit"
-    :kontor.account/active true
-    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:kontor.account/code "3560" :kontor.account/path "Verbindlichkeiten:KomSt"
-    :kontor.account/type :liability :kontor.account/name "Kommunalsteuer-Verbindlichkeit"
-    :kontor.account/active true
-    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:kontor.account/code "3590" :kontor.account/path "Verbindlichkeiten:Sachbezug-Clearing"
-    :kontor.account/type :liability :kontor.account/name "Sachbezug-Clearing"
-    :kontor.account/active true
-    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
-   ;; 3700 the net pay payable
-   {:kontor.account/code "3700" :kontor.account/path "Verbindlichkeiten:Lohn"
-    :kontor.account/type :liability :kontor.account/name "Verbindlichkeit Lohn"
-    :kontor.account/active true
-    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}])
-
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
     (chart/install! conn)
-    ;; install the payroll wage accounts on top
-    (d/transact conn payroll-wage-accounts)
+    ;; The payroll accounts come from the module's own starter chart now.
+    ;; This fixture used to hand-roll them, which is exactly the documented
+    ;; workaround that put Lohnsteuer on 3500 — the l10n-at output-VAT
+    ;; account — and inflated the filed UVA. Note 194 §1 P0-4.
+    (payroll-chart/install! conn)
     (d/transact conn [{:kontor.journal/code "PAYROLL"
                        :kontor.journal/name "Lohn- und Gehaltsabrechnung"
                        :kontor.journal/type :general
@@ -162,10 +105,14 @@
       ;; KomSt sum 165.00
       (is (= 0 (.compareTo (bigdec "165.00") (balance-on "6520"))))
       ;; Liabilities (Cr → negative on the account)
-      ;; LSt 880 → -880
-      (is (= 0 (.compareTo (bigdec "-880.00") (balance-on "3500"))))
-      ;; SV-Verbindl: -996.60 (AN) + -1167.65 (AG) = -2164.25
-      (is (= 0 (.compareTo (bigdec "-2164.25") (balance-on "3540"))))
+      ;; LSt 880 → -880. On 3540 (Verbindlichkeiten aus Steuern), NOT on
+      ;; 3500, which the l10n-at chart ships as Umsatzsteuer 20 % — see
+      ;; kontor.payroll-at.chart-test. Note 194 §1 P0-4.
+      (is (= 0 (.compareTo (bigdec "-880.00") (balance-on "3540"))))
+      (is (= 0 (.compareTo (bigdec "0") (balance-on "3500"))))
+      ;; SV-Verbindl: -996.60 (AN) + -1167.65 (AG) = -2164.25, on 3600
+      ;; (Verbindlichkeiten im Rahmen der sozialen Sicherheit)
+      (is (= 0 (.compareTo (bigdec "-2164.25") (balance-on "3600"))))
       ;; Net pay payable: -3623.40
       (is (= 0 (.compareTo (bigdec "-3623.40") (balance-on "3700")))))))
 

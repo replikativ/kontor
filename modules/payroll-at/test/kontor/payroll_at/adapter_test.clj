@@ -21,6 +21,7 @@
             [kontor.hr.payroll :as payroll]
             [kontor.hr.person :as person]
             [kontor.l10n-at.chart :as at-chart]
+            [kontor.payroll-at.chart :as payroll-chart]
             [kontor.payroll-at.adapter :as adapter]
             [kontor.payroll-at.posting-builder-test :as pb-test]
             [kontor.validation :as v])
@@ -39,7 +40,8 @@
     (v/install-invariants! conn)
     (hr/install! conn)
     (at-chart/install! conn)
-    (d/transact conn pb-test/payroll-wage-accounts)
+    ;; payroll accounts from the module's own starter chart (note 194 §1 P0-4)
+    (payroll-chart/install! conn)
     (d/transact conn [{:db/id "ent-acme"
                        :kontor.entity/code "ACME-AT"
                        :kontor.entity/name "Acme GmbH"
@@ -168,10 +170,12 @@
         (is (= 0 (.compareTo (bigdec "1167.65") ^BigDecimal (sum-of "6500"))))
         ;; KomSt expense: 90 + 75 = 165
         (is (= 0 (.compareTo (bigdec 165) ^BigDecimal (sum-of "6520"))))
-        ;; LSt-Verbindlichkeit (Cr): -500 + -380 = -880
-        (is (= 0 (.compareTo (bigdec -880) ^BigDecimal (sum-of "3500"))))
+        ;; LSt-Verbindlichkeit (Cr): -500 + -380 = -880, on 3540. It used
+        ;; to land on 3500 — the l10n-at Umsatzsteuer account — which put
+        ;; it in box 022 of the filed UVA. Note 194 §1 P0-4.
+        (is (= 0 (.compareTo (bigdec -880) ^BigDecimal (sum-of "3540"))))
         ;; SV-Verbindl. (AN 543.60 + 453 = 996.60 ; AG 636.90 + 530.75 = 1167.65 → sum -2164.25)
-        (is (= 0 (.compareTo (bigdec "-2164.25") ^BigDecimal (sum-of "3540"))))
+        (is (= 0 (.compareTo (bigdec "-2164.25") ^BigDecimal (sum-of "3600"))))
         ;; Nettogehalt payable: -1956.40 + -1667 = -3623.40
         (is (= 0 (.compareTo (bigdec "-3623.40") ^BigDecimal (sum-of "3700"))))))
     (testing "mBGM :audit-doc landed with :payroll-filing category + :de language"

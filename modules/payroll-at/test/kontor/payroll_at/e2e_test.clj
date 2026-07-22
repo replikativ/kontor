@@ -11,6 +11,7 @@
             [kontor.compliance.audit-doc :as audit-doc]
             [kontor.core :as core]
             [kontor.l10n-at.chart :as chart]
+            [kontor.payroll-at.chart :as payroll-chart]
             [kontor.payroll-at.core :as payroll]
             [kontor.payroll-at.posting-builder-test :as pb-test]
             [kontor.payroll-at.accrual-test :as acc-test]
@@ -27,7 +28,8 @@
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
     (chart/install! conn)
-    (d/transact conn pb-test/payroll-wage-accounts)
+    ;; payroll accounts from the module's own starter chart (note 194 §1 P0-4)
+    (payroll-chart/install! conn)
     (d/transact conn acc-test/accrual-rueck-accounts)
     (d/transact conn [{:kontor.journal/code "PAYROLL"
                        :kontor.journal/name "Lohn- und Gehaltsabrechnung"

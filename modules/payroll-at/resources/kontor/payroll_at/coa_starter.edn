@@ -1,0 +1,58 @@
+;; Austrian payroll starter accounts — the Personalverrechnung extension
+;; to the l10n-at Einheitskontenrahmen subset.
+;;
+;; Layered ON TOP of kontor.l10n-at.chart: install that first for the
+;; UGB/UVA base, then this. Only accounts the base does not ship appear
+;; here — 6000 Gehälter is deliberately NOT redefined, because payroll
+;; expense belongs on the book's own salary account and that is the
+;; interop working as intended.
+;;
+;; Numbering per KFS/BW 6 (Kammer der Wirtschaftstreuhänder,
+;; Fachgutachten Einheitskontenrahmen), Kontenklasse 3:
+;;
+;;   350 – 359  Verbindlichkeiten aus Steuern
+;;              "sämtliche Steuern und Abgaben, die Gebietskörperschaften
+;;               geschuldet werden … Lohnsteuer, Umsatzsteuer,
+;;               Kommunalsteuer" — so Lohnsteuer and Umsatzsteuer share a
+;;              Kontengruppe and must not share an ACCOUNT. l10n-at uses
+;;              3500/3510/3520/3530 for the USt variants; payroll takes
+;;              3540/3545/3550.
+;;   360 – 369  Verbindlichkeiten im Rahmen der sozialen Sicherheit
+;;              "gegenüber Sozialversicherungsanstalten (Dienstnehmer- und
+;;               Dienstgeberanteil)" — both SV shares belong here.
+;;   370 – 389  Übrige sonstige Verbindlichkeiten — net pay, clearing.
+;;
+;; These are STARTER codes. `wage-types/account-code-for` takes an
+;; override map, so a consumer on a different Kontenplan remaps without
+;; touching this file.
+
+[;; ── Klasse 3 — Verbindlichkeiten ────────────────────────────────────
+ {:code "3540" :path "Verbindlichkeiten:Steuern:Lohnsteuer"
+  :type :liability :name "Lohnsteuer-Verbindlichkeit" :reconcilable? true}
+ {:code "3545" :path "Verbindlichkeiten:Steuern:Kommunalsteuer"
+  :type :liability :name "Kommunalsteuer-Verbindlichkeit" :reconcilable? true}
+ {:code "3550" :path "Verbindlichkeiten:Steuern:DB-DZ"
+  :type :liability :name "DB / DZ-Verbindlichkeit (FLAF)" :reconcilable? true}
+ {:code "3600" :path "Verbindlichkeiten:Sozialversicherung"
+  :type :liability :name "SV-Verbindlichkeit (DN- und DG-Anteil)" :reconcilable? true}
+ {:code "3700" :path "Verbindlichkeiten:Personal:Nettobezuege"
+  :type :liability :name "Verbindlichkeiten aus Bezügen (Nettolohn)" :reconcilable? true}
+ {:code "3790" :path "Verbindlichkeiten:Personal:Sachbezug-Verrechnung"
+  :type :liability :name "Sachbezugsverrechnung (Clearing)"}
+
+ ;; ── Klasse 6 — Personalaufwand ──────────────────────────────────────
+ ;; 6000 Gehälter comes from the l10n-at base chart on purpose.
+ {:code "6400" :path "Aufwendungen:Personal:Urlaubsremuneration"
+  :type :expense :name "Urlaubsremuneration (13. Bezug)"}
+ {:code "6410" :path "Aufwendungen:Personal:Weihnachtsremuneration"
+  :type :expense :name "Weihnachtsremuneration (14. Bezug)"}
+ {:code "6500" :path "Aufwendungen:Personal:Sozialaufwand"
+  :type :expense :name "Gesetzlicher Sozialaufwand (DG-Anteil SV)"}
+ {:code "6510" :path "Aufwendungen:Personal:DB"
+  :type :expense :name "Dienstgeberbeitrag zum FLAF (DB)"}
+ {:code "6520" :path "Aufwendungen:Personal:Kommunalsteuer"
+  :type :expense :name "Kommunalsteuer"}
+ {:code "6530" :path "Aufwendungen:Personal:DZ"
+  :type :expense :name "Zuschlag zum Dienstgeberbeitrag (DZ)"}
+ {:code "6800" :path "Aufwendungen:Personal:Sachbezug"
+  :type :expense :name "Sachbezugsaufwand"}]

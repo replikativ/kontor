@@ -61,9 +61,17 @@
    Pure data — consumers can fork it and pass an override map to
    `kontor.payroll-at.posting-builder/build-tx-data`.
 
-   The codes follow the RLG-1 (Einheitskontenrahmen) standard:
-     6xxx — Personalaufwand (Aufwand)
-     35xx / 37xx — Verbindlichkeiten
+   The codes follow the Einheitskontenrahmen (KFS/BW 6, Kammer der
+   Wirtschaftstreuhänder). The Kontengruppen that matter here:
+     6xxx      — Personalaufwand (Aufwand)
+     350 – 359 — Verbindlichkeiten aus Steuern (LSt, USt, KomSt, DB/DZ)
+     360 – 369 — Verbindlichkeiten im Rahmen der sozialen Sicherheit
+                 (SV, Dienstnehmer- UND Dienstgeberanteil)
+     370 – 389 — Übrige sonstige Verbindlichkeiten (Nettolohn, Clearing)
+
+   6000 Gehälter is deliberately SHARED with the l10n-at Kontenrahmen —
+   payroll expense belongs on the book's own salary account. Liability
+   codes must NOT be shared: see the :lohnsteuer note below.
 
    :nettogehalt is special — it's the clearing leg to the employee's
    payable; it has NO expense side (the expense is split across the
@@ -83,8 +91,15 @@
    :kommunalsteuer           "6520"   ; KomSt
 
    ;; Withholdings — Verbindlichkeit (credit side)
-   :lohnsteuer               "3500"   ; LSt-Verbindlichkeit
-   :sv-arbeitnehmer          "3540"   ; SV-Verbindlichkeit (employee share)
+   ;; 350–359 is "Verbindlichkeiten aus Steuern", which KFS/BW 6 lists as
+   ;; covering "Lohnsteuer, Umsatzsteuer, Kommunalsteuer" together — so LSt
+   ;; and USt share a Kontengruppe and MUST NOT share an account. This was
+   ;; "3500", which the l10n-at Kontenrahmen ships as Umsatzsteuer 20%
+   ;; tagged :uva-022-ust; a payroll run credited withheld Lohnsteuer into
+   ;; the output-VAT account and inflated box 022 of the filed UVA by the
+   ;; withholding. Note 194 §1 P0-4.
+   :lohnsteuer               "3540"   ; LSt-Verbindlichkeit (350–359 Steuern)
+   :sv-arbeitnehmer          "3600"   ; SV-Verbindlichkeit (360–369 soziale Sicherheit)
 
    ;; Net pay — Verbindlichkeit
    :nettogehalt              "3700"   ; Verbindlichkeit Lohn
@@ -94,11 +109,16 @@
   "The 'where does this credit go' for the employer-borne side. The
    posting-builder uses this to route the credit leg of each Aufwand
    line — DB goes to a different payable than KomSt, etc."
-  {:sv-arbeitgeber           "3540"   ; same SV-Verbindlichkeit
-   :dienstgeberbeitrag-fond  "3550"   ; DB-Verbindlichkeit
+  {:sv-arbeitgeber           "3600"   ; same SV-Verbindlichkeit (360–369)
+   :dienstgeberbeitrag-fond  "3550"   ; DB-Verbindlichkeit (Finanzamt → 350–359)
    :zuschlag-zum-db          "3550"   ; DZ → same DB-Verbindlichkeit
-   :kommunalsteuer           "3560"   ; KomSt-Verbindlichkeit
-   :sachbezüge               "3590"   ; clearing — sachbezug is non-cash;
+   ;; KomSt is a Steuer owed to the Gemeinde, which KFS/BW 6 places in
+   ;; 350–359 ("Verbindlichkeiten gegenüber Gemeinde/Stadtkasse"), not in
+   ;; the 360–369 soziale-Sicherheit group where it used to sit.
+   :kommunalsteuer           "3545"   ; KomSt-Verbindlichkeit (350–359)
+   ;; a non-cash clearing account is neither a Steuer nor soziale
+   ;; Sicherheit → 370–389 übrige sonstige Verbindlichkeiten
+   :sachbezüge               "3790"   ; clearing — sachbezug is non-cash;
                                        ; the contra-leg is recorded as
                                        ; a clearing entry that consumer
                                        ; reconciles to the actual benefit
