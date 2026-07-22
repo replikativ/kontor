@@ -3,6 +3,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
             [kontor.core :as core]
+            [kontor.payroll-mx.chart :as chart]
             [kontor.payroll-mx.posting-builder :as pb]
             [kontor.validation :as validation]))
 
@@ -13,46 +14,17 @@
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
     (d/transact conn
-                [{:db/id "mxn"
-                  :kontor.commodity/symbol "MXN"
+                [{:kontor.commodity/symbol "MXN"
                   :kontor.commodity/name "Peso mexicano"
                   :kontor.commodity/precision 2
                   :kontor.commodity/iso-4217 "MXN"}
-                 ;; SAT Código Agrupador chart — minimal
-                 {:kontor.account/code "601.01" :kontor.account/path "Gastos:Sueldos"
-                  :kontor.account/name "Sueldos y Salarios"
-                  :kontor.account/type :expense :kontor.account/active true}
-                 {:kontor.account/code "601.02" :kontor.account/path "Gastos:Aguinaldo"
-                  :kontor.account/name "Gratificación Anual"
-                  :kontor.account/type :expense :kontor.account/active true}
-                 {:kontor.account/code "601.05" :kontor.account/path "Gastos:IMSS-Patron"
-                  :kontor.account/name "Cuotas IMSS patronales"
-                  :kontor.account/type :expense :kontor.account/active true}
-                 {:kontor.account/code "601.06" :kontor.account/path "Gastos:INFONAVIT-Patron"
-                  :kontor.account/name "Aportaciones INFONAVIT"
-                  :kontor.account/type :expense :kontor.account/active true}
-                 {:kontor.account/code "601.84" :kontor.account/path "Gastos:Prestaciones"
-                  :kontor.account/name "Otras prestaciones"
-                  :kontor.account/type :expense :kontor.account/active true}
-                 {:kontor.account/code "206.01" :kontor.account/path "Pasivos:SueldosPorPagar"
-                  :kontor.account/name "Sueldos por pagar"
-                  :kontor.account/type :liability :kontor.account/active true}
-                 {:kontor.account/code "206.04" :kontor.account/path "Pasivos:ISRPorPagar"
-                  :kontor.account/name "Impuestos por pagar (ISR)"
-                  :kontor.account/type :liability :kontor.account/active true}
-                 {:kontor.account/code "206.05" :kontor.account/path "Pasivos:IMSSPorPagar"
-                  :kontor.account/name "IMSS por pagar"
-                  :kontor.account/type :liability :kontor.account/active true}
-                 {:kontor.account/code "206.06" :kontor.account/path "Pasivos:INFONAVITPorPagar"
-                  :kontor.account/name "INFONAVIT por pagar"
-                  :kontor.account/type :liability :kontor.account/active true}
-                 {:kontor.account/code "206.07" :kontor.account/path "Pasivos:ProvisionAguinaldo"
-                  :kontor.account/name "Provisión Aguinaldo"
-                  :kontor.account/type :liability :kontor.account/active true}
                  {:kontor.journal/code "NOM"
                   :kontor.journal/name "Nómina"
                   :kontor.journal/type :general
                   :kontor.journal/active true}])
+    ;; SAT Código Agrupador posting accounts from the module's own
+    ;; starter chart (ADR-119).
+    (chart/install! conn)
     conn))
 
 (defn- ref-eid [db a v]
