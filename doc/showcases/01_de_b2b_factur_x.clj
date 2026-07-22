@@ -41,10 +41,10 @@
             [kontor.invoice.bridge :as inv]
             [kontor.invoice.schema :as inv-schema]
             [kontor.partner.schema :as partner-schema]
-            [kontor.payment-application :as papp]
-            [kontor.payment-term :as pt]
+            [kontor.banking.payment-application :as papp]
+            [kontor.banking.payment-term :as pt]
             [kontor.sales.schema :as sales-schema]
-            [kontor.status-machine :as sm]))
+            [kontor.workflow.status-machine :as sm]))
 
 ;; # The story
 ;;
@@ -84,55 +84,55 @@
 ;; directly:
 
 (d/transact conn
-            [{:commodity/symbol "EUR" :commodity/name "Euro"
-              :commodity/precision 2 :commodity/iso-4217 "EUR"}
-             {:entity/code "SCHCODE-DE" :entity/name "Schnitzel & Code GmbH"
-              :entity/kind :operating :entity/active true}
+            [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+              :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
+             {:kontor.entity/code "SCHCODE-DE" :kontor.entity/name "Schnitzel & Code GmbH"
+              :kontor.entity/kind :operating :kontor.entity/active true}
              ;; SKR04 codes
-             {:account/code "1200" :account/path "1200"
-              :account/name "Forderungen aL"     ; AR
-              :account/type :asset}
-             {:account/code "1800" :account/path "1800"
-              :account/name "Bank"
-              :account/type :asset}
-             {:account/code "4400" :account/path "4400"
-              :account/name "Erlöse 19% USt"
-              :account/type :revenue}
-             {:account/code "3806" :account/path "3806"
-              :account/name "USt 19% an FA"
-              :account/type :liability}
-             {:account/code "6920" :account/path "6920"
-              :account/name "Forderungsverluste"   ; Bad debt
-              :account/type :expense}
+             {:kontor.account/code "1200" :kontor.account/path "1200"
+              :kontor.account/name "Forderungen aL"     ; AR
+              :kontor.account/type :asset}
+             {:kontor.account/code "1800" :kontor.account/path "1800"
+              :kontor.account/name "Bank"
+              :kontor.account/type :asset}
+             {:kontor.account/code "4400" :kontor.account/path "4400"
+              :kontor.account/name "Erlöse 19% USt"
+              :kontor.account/type :revenue}
+             {:kontor.account/code "3806" :kontor.account/path "3806"
+              :kontor.account/name "USt 19% an FA"
+              :kontor.account/type :liability}
+             {:kontor.account/code "6920" :kontor.account/path "6920"
+              :kontor.account/name "Forderungsverluste"   ; Bad debt
+              :kontor.account/type :expense}
              ;; GL defaults
-             {:gl-account-default/account-type :ar
-              :gl-account-default/account [:account/path "1200"]}
-             {:gl-account-default/account-type :sales-revenue
-              :gl-account-default/account [:account/path "4400"]}
-             {:gl-account-default/account-type :sales-tax-payable
-              :gl-account-default/account [:account/path "3806"]}
-             {:gl-account-default/account-type :bad-debt-expense
-              :gl-account-default/account [:account/path "6920"]}
+             {:kontor.gl-account-default/account-type :ar
+              :kontor.gl-account-default/account [:kontor.account/path "1200"]}
+             {:kontor.gl-account-default/account-type :sales-revenue
+              :kontor.gl-account-default/account [:kontor.account/path "4400"]}
+             {:kontor.gl-account-default/account-type :sales-tax-payable
+              :kontor.gl-account-default/account [:kontor.account/path "3806"]}
+             {:kontor.gl-account-default/account-type :bad-debt-expense
+              :kontor.gl-account-default/account [:kontor.account/path "6920"]}
              ;; Journal
-             {:journal/code "AR" :journal/name "Forderungen"
-              :journal/type :sales}
+             {:kontor.journal/code "AR" :kontor.journal/name "Forderungen"
+              :kontor.journal/type :sales}
              ;; Partners
-             {:partner/external-id "BREZEL"
-              :partner/name "Goldener Brezel GmbH"
-              :partner/kind :customer
-              :partner/country-code "DE"
-              :partner/tax-id "DE229000000"
-              :partner/credit-status :open
-              :partner/credit-limit 50000M
-              :partner/credit-commodity [:commodity/symbol "EUR"]}
-             {:partner/external-id "U-alice" :partner/name "Alice (collector)"}
-             {:partner/external-id "U-bob"   :partner/name "Bob (manager)"}])
+             {:kontor.partner/external-id "BREZEL"
+              :kontor.partner/name "Goldener Brezel GmbH"
+              :kontor.partner/kind :customer
+              :kontor.partner/country-code "DE"
+              :kontor.partner/tax-id "DE229000000"
+              :kontor.partner/credit-status :open
+              :kontor.partner/credit-limit 50000M
+              :kontor.partner/credit-commodity [:kontor.commodity/symbol "EUR"]}
+             {:kontor.partner/external-id "U-alice" :kontor.partner/name "Alice (collector)"}
+             {:kontor.partner/external-id "U-bob"   :kontor.partner/name "Bob (manager)"}])
 
-(def schcode-eid    (d/q '[:find ?e . :where [?e :entity/code "SCHCODE-DE"]] (d/db conn)))
-(def brezel-eid     (d/q '[:find ?p . :where [?p :partner/external-id "BREZEL"]] (d/db conn)))
-(def alice          (d/q '[:find ?p . :where [?p :partner/external-id "U-alice"]] (d/db conn)))
-(def bob            (d/q '[:find ?p . :where [?p :partner/external-id "U-bob"]] (d/db conn)))
-(def eur            (d/q '[:find ?c . :where [?c :commodity/symbol "EUR"]] (d/db conn)))
+(def schcode-eid    (d/q '[:find ?e . :where [?e :kontor.entity/code "SCHCODE-DE"]] (d/db conn)))
+(def brezel-eid     (d/q '[:find ?p . :where [?p :kontor.partner/external-id "BREZEL"]] (d/db conn)))
+(def alice          (d/q '[:find ?p . :where [?p :kontor.partner/external-id "U-alice"]] (d/db conn)))
+(def bob            (d/q '[:find ?p . :where [?p :kontor.partner/external-id "U-bob"]] (d/db conn)))
+(def eur            (d/q '[:find ?c . :where [?c :kontor.commodity/symbol "EUR"]] (d/db conn)))
 
 ;; ## Issue the invoice
 ;;
@@ -165,38 +165,38 @@
   (d/transact
    conn
    [{:db/id invoice-tempid
-     :invoice/external-id "R-2026-0042"
-     :invoice/type :sales
-     :invoice/status :draft
-     :invoice/issue-date #inst "2026-04-01"
-     :invoice/seller schcode-eid
-     :invoice/buyer brezel-eid
-     :invoice/entity schcode-eid
-     :invoice/currency "EUR"
-     :invoice/total-net 16750M
-     :invoice/total-vat 3182.50M
-     :invoice/total-gross 19932.50M
-     :invoice/lines ["line-1" "line-2"]}
+     :kontor.invoice/external-id "R-2026-0042"
+     :kontor.invoice/type :sales
+     :kontor.invoice/status :draft
+     :kontor.invoice/issue-date #inst "2026-04-01"
+     :kontor.invoice/seller schcode-eid
+     :kontor.invoice/buyer brezel-eid
+     :kontor.invoice/entity schcode-eid
+     :kontor.invoice/currency "EUR"
+     :kontor.invoice/total-net 16750M
+     :kontor.invoice/total-vat 3182.50M
+     :kontor.invoice/total-gross 19932.50M
+     :kontor.invoice/lines ["line-1" "line-2"]}
     {:db/id "line-1"
-     :invoice-line/invoice invoice-tempid
-     :invoice-line/sequence 1
-     :invoice-line/name "Beratung Strategie Q1"
-     :invoice-line/quantity 40M
-     :invoice-line/unit-price 300M
-     :invoice-line/amount 12000M
-     :invoice-line/gl-account-type :sales-revenue
-     :invoice-line/vat-rate 19.0M
-     :invoice-line/vat-category "S"}
+     :kontor.invoice-line/invoice invoice-tempid
+     :kontor.invoice-line/sequence 1
+     :kontor.invoice-line/name "Beratung Strategie Q1"
+     :kontor.invoice-line/quantity 40M
+     :kontor.invoice-line/unit-price 300M
+     :kontor.invoice-line/amount 12000M
+     :kontor.invoice-line/gl-account-type :sales-revenue
+     :kontor.invoice-line/vat-rate 19.0M
+     :kontor.invoice-line/vat-category "S"}
     {:db/id "line-2"
-     :invoice-line/invoice invoice-tempid
-     :invoice-line/sequence 2
-     :invoice-line/name "Deliverable B — Codereview"
-     :invoice-line/quantity 1M
-     :invoice-line/unit-price 4750M
-     :invoice-line/amount 4750M
-     :invoice-line/gl-account-type :sales-revenue
-     :invoice-line/vat-rate 19.0M
-     :invoice-line/vat-category "S"}]))
+     :kontor.invoice-line/invoice invoice-tempid
+     :kontor.invoice-line/sequence 2
+     :kontor.invoice-line/name "Deliverable B — Codereview"
+     :kontor.invoice-line/quantity 1M
+     :kontor.invoice-line/unit-price 4750M
+     :kontor.invoice-line/amount 4750M
+     :kontor.invoice-line/gl-account-type :sales-revenue
+     :kontor.invoice-line/vat-rate 19.0M
+     :kontor.invoice-line/vat-category "S"}]))
 
 (def invoice-eid (inv/by-external-id (d/db conn) "R-2026-0042"))
 
@@ -208,13 +208,13 @@
 (sm/record-status-change! conn
                           {:entity invoice-eid
                            :entity-type :invoice
-                           :facet :invoice/status
+                           :facet :kontor.invoice/status
                            :from :draft
                            :to :sent
                            :changed-by-uid alice
                            :reason :invoice-issued})
 
-(sm/current-status (d/db conn) invoice-eid :invoice/status)
+(sm/current-status (d/db conn) invoice-eid :kontor.invoice/status)
 
 ;; ## Partial payment 1: 8'000 EUR on time
 ;;
@@ -225,14 +225,14 @@
 ;; the cash receipt to the invoice. Status flips :sent →
 ;; :partially-paid automatically.
 
-(d/transact conn [{:transaction/external-id "SEPA-2026-04-25-001"
-                   :transaction/state :posted
-                   :transaction/effective-date #inst "2026-04-25"
-                   :transaction/posted-at #inst "2026-04-25"
-                   :transaction/partner brezel-eid}])
+(d/transact conn [{:kontor.transaction/external-id "SEPA-2026-04-25-001"
+                   :kontor.transaction/state :posted
+                   :kontor.transaction/effective-date #inst "2026-04-25"
+                   :kontor.transaction/posted-at #inst "2026-04-25"
+                   :kontor.transaction/partner brezel-eid}])
 
 (def payment-1-eid
-  (d/q '[:find ?t . :where [?t :transaction/external-id "SEPA-2026-04-25-001"]]
+  (d/q '[:find ?t . :where [?t :kontor.transaction/external-id "SEPA-2026-04-25-001"]]
        (d/db conn)))
 
 (papp/apply-payment! conn
@@ -247,7 +247,7 @@
 
 ;; Status now `:partially-paid`; open = 11932.50
 
-(sm/current-status (d/db conn) invoice-eid :invoice/status)
+(sm/current-status (d/db conn) invoice-eid :kontor.invoice/status)
 (papp/open-amount-of-invoice (d/db conn) invoice-eid)
 
 ;; ## Dispute opened on Deliverable B
@@ -262,8 +262,8 @@
 ;; recoverable after the resolution lands.
 
 (def line-2-eid
-  (d/q '[:find ?l . :in $ ?inv :where [?l :invoice-line/invoice ?inv]
-                                       [?l :invoice-line/sequence 2]]
+  (d/q '[:find ?l . :in $ ?inv :where [?l :kontor.invoice-line/invoice ?inv]
+                                       [?l :kontor.invoice-line/sequence 2]]
        (d/db conn) invoice-eid))
 
 (kdispute/raise-dispute! conn
@@ -294,11 +294,11 @@
 ;; Directive 2011/7/EU.
 
 (d/transact conn
-            [{:dunning-policy/code "DE-MAHNUNG"
-              :dunning-policy/name "Standard DE Mahnverfahren"
-              :dunning-policy/entity schcode-eid
-              :dunning-policy/applies-to-segment :default
-              :dunning-policy/levels (pr-str
+            [{:kontor.dunning-policy/code "DE-MAHNUNG"
+              :kontor.dunning-policy/name "Standard DE Mahnverfahren"
+              :kontor.dunning-policy/entity schcode-eid
+              :kontor.dunning-policy/applies-to-segment :default
+              :kontor.dunning-policy/levels (pr-str
                                       [{:ordinal 1 :trigger-days 14
                                         :template-ref :erinnerung
                                         :late-fee-pct 0M}
@@ -309,14 +309,14 @@
                                         :template-ref :letzte-mahnung
                                         :late-fee-pct 0.08M
                                         :late-fee-fixed 40M}])
-              :dunning-policy/frequency-cap-window-days 7
-              :dunning-policy/frequency-cap-max-events 1
-              :dunning-policy/pause-on-dispute? true
-              :dunning-policy/pause-on-open-promise? true
-              :dunning-policy/active true}])
+              :kontor.dunning-policy/frequency-cap-window-days 7
+              :kontor.dunning-policy/frequency-cap-max-events 1
+              :kontor.dunning-policy/pause-on-dispute? true
+              :kontor.dunning-policy/pause-on-open-promise? true
+              :kontor.dunning-policy/active true}])
 
 (def policy
-  (d/pull (d/db conn) '[*] (d/q '[:find ?p . :where [?p :dunning-policy/code "DE-MAHNUNG"]] (d/db conn))))
+  (d/pull (d/db conn) '[*] (d/q '[:find ?p . :where [?p :kontor.dunning-policy/code "DE-MAHNUNG"]] (d/db conn))))
 
 (def case-eid (kcase/by-code (d/db conn) "CASE-BREZEL-Q2"))
 
@@ -332,7 +332,7 @@
 
 ;; The plan emits `{:skipped? true :skip-reason :open-dispute}` —
 ;; auto-suppression. No Mahnung is sent. Verified: kontor's
-;; bitemporal-default + `:dispute/state` predicate is structurally
+;; bitemporal-default + `:kontor.dispute/state` predicate is structurally
 ;; what SAP/NetSuite require manual workarounds for.
 
 ;; ## Resolve the dispute (Deliverable B: customer concedes)
@@ -384,14 +384,14 @@ plan-may-25
 ;; mailer renders the Factur-X PDF with both the open principal and
 ;; the accrued interest. Here we just record the event.
 
-(d/transact conn [{:transaction/external-id "SEPA-2026-06-02-001"
-                   :transaction/state :posted
-                   :transaction/effective-date #inst "2026-06-02"
-                   :transaction/posted-at #inst "2026-06-02"
-                   :transaction/partner brezel-eid}])
+(d/transact conn [{:kontor.transaction/external-id "SEPA-2026-06-02-001"
+                   :kontor.transaction/state :posted
+                   :kontor.transaction/effective-date #inst "2026-06-02"
+                   :kontor.transaction/posted-at #inst "2026-06-02"
+                   :kontor.transaction/partner brezel-eid}])
 
 (papp/apply-payment! conn
-                     {:payment (d/q '[:find ?t . :where [?t :transaction/external-id "SEPA-2026-06-02-001"]]
+                     {:payment (d/q '[:find ?t . :where [?t :kontor.transaction/external-id "SEPA-2026-06-02-001"]]
                                     (d/db conn))
                       :invoice invoice-eid
                       :amount 5000M
@@ -404,13 +404,13 @@ plan-may-25
 
 ;; ## Mahnstufe 2 — manager approval + audit-doc
 
-(kcase/advance-state! conn
+(kcase/advance-case-state! conn
                       {:case "CASE-BREZEL-Q2"
                        :to :dunning-l1
                        :changed-by-uid alice
                        :reason :dunning-l1-sent})
 
-(kcase/advance-state! conn
+(kcase/advance-case-state! conn
                       {:case "CASE-BREZEL-Q2"
                        :to :dunning-l2
                        :changed-by-uid alice
@@ -422,14 +422,14 @@ plan-may-25
 ;; interest. For the showcase we only record the principal — the
 ;; interest fee is a separate `:invoice-line` in a real flow.
 
-(d/transact conn [{:transaction/external-id "SEPA-2026-06-22-001"
-                   :transaction/state :posted
-                   :transaction/effective-date #inst "2026-06-22"
-                   :transaction/posted-at #inst "2026-06-22"
-                   :transaction/partner brezel-eid}])
+(d/transact conn [{:kontor.transaction/external-id "SEPA-2026-06-22-001"
+                   :kontor.transaction/state :posted
+                   :kontor.transaction/effective-date #inst "2026-06-22"
+                   :kontor.transaction/posted-at #inst "2026-06-22"
+                   :kontor.transaction/partner brezel-eid}])
 
 (papp/apply-payment! conn
-                     {:payment (d/q '[:find ?t . :where [?t :transaction/external-id "SEPA-2026-06-22-001"]]
+                     {:payment (d/q '[:find ?t . :where [?t :kontor.transaction/external-id "SEPA-2026-06-22-001"]]
                                     (d/db conn))
                       :invoice invoice-eid
                       :amount 6932.50M
@@ -439,18 +439,18 @@ plan-may-25
                       :strategy :customer-instruction
                       :reason :remittance-received})
 
-(sm/current-status (d/db conn) invoice-eid :invoice/status)
+(sm/current-status (d/db conn) invoice-eid :kontor.invoice/status)
 
 ;; The invoice is now `:paid`. The collection-case state advances
 ;; one final time:
 
-(kcase/advance-state! conn
+(kcase/advance-case-state! conn
                       {:case "CASE-BREZEL-Q2"
                        :to :paid
                        :changed-by-uid alice
                        :reason :closed-paid})
 
-(sm/current-status (d/db conn) case-eid :collection-case/state)
+(sm/current-status (d/db conn) case-eid :kontor.collection-case/state)
 
 ;; ## Bitemporal replay: aging snapshot at 2026-05-20 vs 2026-06-10
 ;;
@@ -485,7 +485,7 @@ plan-may-25
 ;;
 ;; - kontor kernel: `:payment-application` partial payment, status-
 ;;   machine, bitemporal `:as-of-valid` queries
-;; - `kontor-invoice`: `:invoice/status` lifecycle through partial-
+;; - `kontor-invoice`: `:kontor.invoice/status` lifecycle through partial-
 ;;   paid + paid
 ;; - `kontor-collections`: `:collection-case`, `:dispute` (line-
 ;;   level), dunning-policy + plan + emission, suppression gates

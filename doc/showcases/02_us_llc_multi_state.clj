@@ -40,9 +40,9 @@
             [kontor.invoice.bridge :as inv]
             [kontor.invoice.schema :as inv-schema]
             [kontor.partner.schema :as partner-schema]
-            [kontor.payment-application :as papp]
+            [kontor.banking.payment-application :as papp]
             [kontor.sales.schema :as sales-schema]
-            [kontor.status-machine :as sm]))
+            [kontor.workflow.status-machine :as sm]))
 
 ;; # The story
 ;;
@@ -80,55 +80,55 @@
 ;; ## Seeds: chart of accounts (simplified US GAAP), partners
 
 (d/transact conn
-            [{:commodity/symbol "USD" :commodity/name "US Dollar"
-              :commodity/precision 2 :commodity/iso-4217 "USD"}
-             {:entity/code "SKYLINE" :entity/name "Skyline Analytics LLC"
-              :entity/kind :operating :entity/active true}
+            [{:kontor.commodity/symbol "USD" :kontor.commodity/name "US Dollar"
+              :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "USD"}
+             {:kontor.entity/code "SKYLINE" :kontor.entity/name "Skyline Analytics LLC"
+              :kontor.entity/kind :operating :kontor.entity/active true}
              ;; Accounts
-             {:account/code "1200" :account/path "1200"
-              :account/name "Accounts Receivable" :account/type :asset}
-             {:account/code "4000" :account/path "4000"
-              :account/name "SaaS Revenue" :account/type :revenue}
-             {:account/code "2200" :account/path "2200"
-              :account/name "Sales Tax Payable - CA" :account/type :liability}
-             {:account/code "2201" :account/path "2201"
-              :account/name "Sales Tax Payable - NY" :account/type :liability}
-             {:account/code "2202" :account/path "2202"
-              :account/name "Sales Tax Payable - TX" :account/type :liability}
-             {:account/code "2203" :account/path "2203"
-              :account/name "Sales Tax Payable - WA" :account/type :liability}
+             {:kontor.account/code "1200" :kontor.account/path "1200"
+              :kontor.account/name "Accounts Receivable" :kontor.account/type :asset}
+             {:kontor.account/code "4000" :kontor.account/path "4000"
+              :kontor.account/name "SaaS Revenue" :kontor.account/type :revenue}
+             {:kontor.account/code "2200" :kontor.account/path "2200"
+              :kontor.account/name "Sales Tax Payable - CA" :kontor.account/type :liability}
+             {:kontor.account/code "2201" :kontor.account/path "2201"
+              :kontor.account/name "Sales Tax Payable - NY" :kontor.account/type :liability}
+             {:kontor.account/code "2202" :kontor.account/path "2202"
+              :kontor.account/name "Sales Tax Payable - TX" :kontor.account/type :liability}
+             {:kontor.account/code "2203" :kontor.account/path "2203"
+              :kontor.account/name "Sales Tax Payable - WA" :kontor.account/type :liability}
              ;; GL defaults
-             {:gl-account-default/account-type :ar
-              :gl-account-default/account [:account/path "1200"]}
-             {:gl-account-default/account-type :sales-revenue
-              :gl-account-default/account [:account/path "4000"]}
+             {:kontor.gl-account-default/account-type :ar
+              :kontor.gl-account-default/account [:kontor.account/path "1200"]}
+             {:kontor.gl-account-default/account-type :sales-revenue
+              :kontor.gl-account-default/account [:kontor.account/path "4000"]}
              ;; Journal
-             {:journal/code "AR" :journal/name "Accounts Receivable"
-              :journal/type :sales}
+             {:kontor.journal/code "AR" :kontor.journal/name "Accounts Receivable"
+              :kontor.journal/type :sales}
              ;; Customers
-             {:partner/external-id "CA-CUST"
-              :partner/name "GoldenGate Analytics Inc"
-              :partner/kind :customer :partner/country-code "US"
-              :partner/credit-status :open}
-             {:partner/external-id "NY-CUST"
-              :partner/name "Empire State Software LLC"
-              :partner/kind :customer :partner/country-code "US"
-              :partner/credit-status :open}
-             {:partner/external-id "TX-CUST"
-              :partner/name "Lone Star Data Co"
-              :partner/kind :customer :partner/country-code "US"
-              :partner/credit-status :open}
-             {:partner/external-id "WA-CUST"
-              :partner/name "Cascadia Cloud LLC"
-              :partner/kind :customer :partner/country-code "US"
-              :partner/credit-status :open}
-             {:partner/external-id "U-alice" :partner/name "Alice (collector)"}
-             {:partner/external-id "U-bob"   :partner/name "Bob (manager)"}])
+             {:kontor.partner/external-id "CA-CUST"
+              :kontor.partner/name "GoldenGate Analytics Inc"
+              :kontor.partner/kind :customer :kontor.partner/country-code "US"
+              :kontor.partner/credit-status :open}
+             {:kontor.partner/external-id "NY-CUST"
+              :kontor.partner/name "Empire State Software LLC"
+              :kontor.partner/kind :customer :kontor.partner/country-code "US"
+              :kontor.partner/credit-status :open}
+             {:kontor.partner/external-id "TX-CUST"
+              :kontor.partner/name "Lone Star Data Co"
+              :kontor.partner/kind :customer :kontor.partner/country-code "US"
+              :kontor.partner/credit-status :open}
+             {:kontor.partner/external-id "WA-CUST"
+              :kontor.partner/name "Cascadia Cloud LLC"
+              :kontor.partner/kind :customer :kontor.partner/country-code "US"
+              :kontor.partner/credit-status :open}
+             {:kontor.partner/external-id "U-alice" :kontor.partner/name "Alice (collector)"}
+             {:kontor.partner/external-id "U-bob"   :kontor.partner/name "Bob (manager)"}])
 
-(def skyline (d/q '[:find ?e . :where [?e :entity/code "SKYLINE"]] (d/db conn)))
-(def usd     (d/q '[:find ?c . :where [?c :commodity/symbol "USD"]] (d/db conn)))
-(def alice   (d/q '[:find ?p . :where [?p :partner/external-id "U-alice"]] (d/db conn)))
-(def bob     (d/q '[:find ?p . :where [?p :partner/external-id "U-bob"]] (d/db conn)))
+(def skyline (d/q '[:find ?e . :where [?e :kontor.entity/code "SKYLINE"]] (d/db conn)))
+(def usd     (d/q '[:find ?c . :where [?c :kontor.commodity/symbol "USD"]] (d/db conn)))
+(def alice   (d/q '[:find ?p . :where [?p :kontor.partner/external-id "U-alice"]] (d/db conn)))
+(def bob     (d/q '[:find ?p . :where [?p :kontor.partner/external-id "U-bob"]] (d/db conn)))
 
 ;; ## The TaxProvider stub
 ;;
@@ -168,46 +168,46 @@
                             2 java.math.RoundingMode/HALF_UP)
         gross (.add ^java.math.BigDecimal net ^java.math.BigDecimal tax-amt)
         partner-eid (d/q '[:find ?p . :in $ ?x
-                           :where [?p :partner/external-id ?x]]
+                           :where [?p :kontor.partner/external-id ?x]]
                          (d/db conn) partner-ext-id)
         tax-acct (d/q '[:find ?a . :in $ ?p
-                        :where [?a :account/path ?p]]
+                        :where [?a :kontor.account/path ?p]]
                       (d/db conn) (:gl-account tax-info))
         inv-tempid (str "inv-" external-id)
         prod-tempid (str "pl-prod-" external-id)
         tax-tempid (str "pl-tax-" external-id)]
     (d/transact conn
                 [{:db/id inv-tempid
-                  :invoice/external-id external-id
-                  :invoice/type :sales
-                  :invoice/status :sent
-                  :invoice/issue-date #inst "2026-04-01"
-                  :invoice/buyer partner-eid
-                  :invoice/entity skyline
-                  :invoice/currency "USD"
-                  :invoice/total-net net
-                  :invoice/total-vat tax-amt
-                  :invoice/total-gross gross
-                  :invoice/lines [prod-tempid tax-tempid]}
+                  :kontor.invoice/external-id external-id
+                  :kontor.invoice/type :sales
+                  :kontor.invoice/status :sent
+                  :kontor.invoice/issue-date #inst "2026-04-01"
+                  :kontor.invoice/buyer partner-eid
+                  :kontor.invoice/entity skyline
+                  :kontor.invoice/currency "USD"
+                  :kontor.invoice/total-net net
+                  :kontor.invoice/total-vat tax-amt
+                  :kontor.invoice/total-gross gross
+                  :kontor.invoice/lines [prod-tempid tax-tempid]}
                  {:db/id prod-tempid
-                  :invoice-line/invoice inv-tempid
-                  :invoice-line/sequence 1
-                  :invoice-line/name "Skyline SaaS Pro - Monthly"
-                  :invoice-line/quantity 1M
-                  :invoice-line/unit-price net
-                  :invoice-line/amount net
-                  :invoice-line/gl-account-type :sales-revenue}
+                  :kontor.invoice-line/invoice inv-tempid
+                  :kontor.invoice-line/sequence 1
+                  :kontor.invoice-line/name "Skyline SaaS Pro - Monthly"
+                  :kontor.invoice-line/quantity 1M
+                  :kontor.invoice-line/unit-price net
+                  :kontor.invoice-line/amount net
+                  :kontor.invoice-line/gl-account-type :sales-revenue}
                  {:db/id tax-tempid
-                  :invoice-line/invoice inv-tempid
-                  :invoice-line/sequence 2
-                  :invoice-line/name (str (:state tax-info) " Sales Tax")
-                  :invoice-line/quantity 1M
-                  :invoice-line/unit-price tax-amt
-                  :invoice-line/amount tax-amt
-                  :invoice-line/account tax-acct
-                  :invoice-line/gl-account-type :sales-tax-payable
-                  :invoice-line/vat-rate (.multiply rate 100M)
-                  :invoice-line/vat-category "STATE"}])
+                  :kontor.invoice-line/invoice inv-tempid
+                  :kontor.invoice-line/sequence 2
+                  :kontor.invoice-line/name (str (:state tax-info) " Sales Tax")
+                  :kontor.invoice-line/quantity 1M
+                  :kontor.invoice-line/unit-price tax-amt
+                  :kontor.invoice-line/amount tax-amt
+                  :kontor.invoice-line/account tax-acct
+                  :kontor.invoice-line/gl-account-type :sales-tax-payable
+                  :kontor.invoice-line/vat-rate (.multiply rate 100M)
+                  :kontor.invoice-line/vat-category "STATE"}])
     {:external-id external-id :gross gross :tax tax-amt :rate rate
      :state (:state tax-info)}))
 
@@ -223,22 +223,22 @@
 
 (defn pay-in-full! [invoice-external-id payment-external-id]
   (let [buyer (d/q '[:find ?b . :in $ ?i
-                     :where [?inv :invoice/external-id ?i]
-                     [?inv :invoice/buyer ?b]]
+                     :where [?inv :kontor.invoice/external-id ?i]
+                     [?inv :kontor.invoice/buyer ?b]]
                    (d/db conn) invoice-external-id)
-        gross (:invoice/total-gross
-               (d/pull (d/db conn) [:invoice/total-gross]
-                       [:invoice/external-id invoice-external-id]))]
+        gross (:kontor.invoice/total-gross
+               (d/pull (d/db conn) [:kontor.invoice/total-gross]
+                       [:kontor.invoice/external-id invoice-external-id]))]
     (d/transact conn
-                [{:transaction/external-id payment-external-id
-                  :transaction/state :posted
-                  :transaction/effective-date #inst "2026-04-15"
-                  :transaction/posted-at #inst "2026-04-15"
-                  :transaction/partner buyer}])
+                [{:kontor.transaction/external-id payment-external-id
+                  :kontor.transaction/state :posted
+                  :kontor.transaction/effective-date #inst "2026-04-15"
+                  :kontor.transaction/posted-at #inst "2026-04-15"
+                  :kontor.transaction/partner buyer}])
     (papp/apply-payment!
      conn
      {:payment (d/q '[:find ?t . :in $ ?x
-                      :where [?t :transaction/external-id ?x]]
+                      :where [?t :kontor.transaction/external-id ?x]]
                     (d/db conn) payment-external-id)
       :invoice (inv/by-external-id (d/db conn) invoice-external-id)
       :amount gross
@@ -253,7 +253,7 @@
 
 (map #(sm/current-status (d/db conn)
                          (inv/by-external-id (d/db conn) %)
-                         :invoice/status)
+                         :kontor.invoice/status)
      ["SKY-2026-CA-001" "SKY-2026-NY-001" "SKY-2026-TX-001" "SKY-2026-WA-001"])
 
 ;; ## Open collection cases for the past-due trio + Reg-F policy
@@ -262,7 +262,7 @@
                             ["CASE-NY" "NY-CUST"]
                             ["CASE-WA" "WA-CUST"]]]
   (let [partner-eid (d/q '[:find ?p . :in $ ?x
-                           :where [?p :partner/external-id ?x]]
+                           :where [?p :kontor.partner/external-id ?x]]
                          (d/db conn) partner-ext)]
     (kcase/open-case! conn
                       {:code code
@@ -280,11 +280,11 @@
 ;; small-balance accounts (configurable up to the regulatory cap).
 
 (d/transact conn
-            [{:dunning-policy/code "REG-F-CONSERVATIVE"
-              :dunning-policy/name "US Reg-F-compliant"
-              :dunning-policy/entity skyline
-              :dunning-policy/applies-to-segment :default
-              :dunning-policy/levels (pr-str
+            [{:kontor.dunning-policy/code "REG-F-CONSERVATIVE"
+              :kontor.dunning-policy/name "US Reg-F-compliant"
+              :kontor.dunning-policy/entity skyline
+              :kontor.dunning-policy/applies-to-segment :default
+              :kontor.dunning-policy/levels (pr-str
                                       [{:ordinal 1 :trigger-days 14
                                         :template-ref :reminder
                                         :late-fee-pct 0M}
@@ -295,15 +295,15 @@
                                         :template-ref :final-demand
                                         :late-fee-pct 0M
                                         :late-fee-fixed 25M}])
-              :dunning-policy/frequency-cap-window-days 7
-              :dunning-policy/frequency-cap-max-events 2  ; conservative
-              :dunning-policy/pause-on-dispute? true
-              :dunning-policy/pause-on-open-promise? true
-              :dunning-policy/active true}])
+              :kontor.dunning-policy/frequency-cap-window-days 7
+              :kontor.dunning-policy/frequency-cap-max-events 2  ; conservative
+              :kontor.dunning-policy/pause-on-dispute? true
+              :kontor.dunning-policy/pause-on-open-promise? true
+              :kontor.dunning-policy/active true}])
 
 (def policy
   (d/pull (d/db conn) '[*]
-          (d/q '[:find ?p . :where [?p :dunning-policy/code "REG-F-CONSERVATIVE"]]
+          (d/q '[:find ?p . :where [?p :kontor.dunning-policy/code "REG-F-CONSERVATIVE"]]
                (d/db conn))))
 
 (def tpl-provider
@@ -358,9 +358,9 @@ plan-l1
 (def wa-tax-line-eid
   (d/q '[:find ?l . :in $ ?inv
          :where
-         [?inv :invoice/external-id "SKY-2026-WA-001"]
-         [?l :invoice-line/invoice ?inv]
-         [?l :invoice-line/sequence 2]]
+         [?inv :kontor.invoice/external-id "SKY-2026-WA-001"]
+         [?l :kontor.invoice-line/invoice ?inv]
+         [?l :kontor.invoice-line/sequence 2]]
        (d/db conn)))
 
 (kdispute/raise-dispute! conn
@@ -390,7 +390,7 @@ plan-l2
 ;; :open-dispute`.
 ;;
 ;; This is the **substrate win the market-pain delta verified**:
-;; the bitemporal default + `:dispute/state` predicate means the
+;; the bitemporal default + `:kontor.dispute/state` predicate means the
 ;; dispute auto-suppresses dunning. SAP FSCM requires a manual
 ;; pause action that drifts; NetSuite Dunning Schedules have no
 ;; concept of suppression on dispute at all.
@@ -447,13 +447,13 @@ plan-may-16
 
 (map #(sm/current-status (d/db conn)
                          (inv/by-external-id (d/db conn) %)
-                         :invoice/status)
+                         :kontor.invoice/status)
      ["SKY-2026-CA-001" "SKY-2026-NY-001" "SKY-2026-TX-001" "SKY-2026-WA-001"])
 
 ;; Close the cases.
 
 (doseq [code ["CASE-CA" "CASE-NY" "CASE-WA"]]
-  (kcase/advance-state! conn
+  (kcase/advance-case-state! conn
                         {:case code :to :paid
                          :changed-by-uid alice
                          :reason :closed-paid}))
@@ -467,9 +467,9 @@ plan-may-16
   (or (d/q '[:find (sum ?a) .
              :in $ ?p
              :where
-             [?ac :account/path ?p]
-             [?p* :posting/account ?ac]
-             [?p* :posting/amount ?a]]
+             [?ac :kontor.account/path ?p]
+             [?p* :kontor.posting/account ?ac]
+             [?p* :kontor.posting/amount ?a]]
            (d/db conn) acct-path)
       0M))
 
@@ -491,7 +491,7 @@ plan-may-16
 ;;
 ;; What it didn't exercise (deferred):
 ;;
-;; - 1099-MISC withholding via `:invoice-line/withholding-on-
+;; - 1099-MISC withholding via `:kontor.invoice-line/withholding-on-
 ;;   payment?` (ADR-040) — needs a vendor-side flow. Showcase 3
 ;;   exercises this.
 ;; - Avalara API integration — kernel ships the protocol; per

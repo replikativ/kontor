@@ -55,10 +55,10 @@
    kontor.l10n-de.ustva)."
   (:require [clojure.java.io :as io]
             [datahike.api :as d]
-            [kontor.audit-doc :as audit-doc]
+            [kontor.compliance.audit-doc :as audit-doc]
             [kontor.bitemporal :as kbt]
             [kontor.core :as core]
-            [kontor.dsar :as dsar]
+            [kontor.compliance.dsar :as dsar]
             [kontor.hr.compensation :as comp]
             [kontor.hr.consent :as consent]
             [kontor.hr.core :as hr]
@@ -72,7 +72,7 @@
             [kontor.people-record.core :as pr]
             [kontor.people-record.schema :as pr-schema]
             [kontor.posting :as posting]
-            [kontor.retention :as retention]
+            [kontor.compliance.retention :as retention]
             [kontor.validation :as validation])
   (:import [java.util Date]))
 
@@ -100,71 +100,71 @@
 
 (d/transact
  conn
- [{:db/id "eur" :commodity/symbol "EUR" :commodity/precision 2}
-  {:db/id "ent" :entity/code "ACME-DE" :entity/name "Acme Manufacturing GmbH"
-   :entity/active true}
-  {:db/id "j-pay" :journal/code "PAY-DE" :journal/name "Payroll DE"
-   :journal/type :general}
-  {:db/id "j-gen" :journal/code "GEN-DE" :journal/name "General DE"
-   :journal/type :general}
+ [{:db/id "eur" :kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
+  {:db/id "ent" :kontor.entity/code "ACME-DE" :kontor.entity/name "Acme Manufacturing GmbH"
+   :kontor.entity/active true}
+  {:db/id "j-pay" :kontor.journal/code "PAY-DE" :kontor.journal/name "Payroll DE"
+   :kontor.journal/type :general}
+  {:db/id "j-gen" :kontor.journal/code "GEN-DE" :kontor.journal/name "General DE"
+   :kontor.journal/type :general}
 
   ;; Annual fiscal periods 2026/2027/2028
-  {:db/id "p-2026" :period/name "2026"
-   :period/start #inst "2026-01-01"
-   :period/end   #inst "2027-01-01"}
-  {:db/id "p-2027" :period/name "2027"
-   :period/start #inst "2027-01-01"
-   :period/end   #inst "2028-01-01"}
-  {:db/id "p-2028" :period/name "2028"
-   :period/start #inst "2028-01-01"
-   :period/end   #inst "2029-01-01"}
+  {:db/id "p-2026" :kontor.period/name "2026"
+   :kontor.period/start #inst "2026-01-01"
+   :kontor.period/end   #inst "2027-01-01"}
+  {:db/id "p-2027" :kontor.period/name "2027"
+   :kontor.period/start #inst "2027-01-01"
+   :kontor.period/end   #inst "2028-01-01"}
+  {:db/id "p-2028" :kontor.period/name "2028"
+   :kontor.period/start #inst "2028-01-01"
+   :kontor.period/end   #inst "2029-01-01"}
 
   ;; SKR04 payroll accounts (the 10 load-bearing ones)
-  {:db/id "a-6020" :account/code "6020" :account/name "Gehälter"
-   :account/type :expense :account/active true}
-  {:db/id "a-6035" :account/code "6035"
-   :account/name "Aufwendungen Urlaubsrückstellung"
-   :account/type :expense :account/active true}
-  {:db/id "a-6060" :account/code "6060"
-   :account/name "Freiwillige soziale Aufwendungen, lohnsteuerpflichtig"
-   :account/type :expense :account/active true}
-  {:db/id "a-6110" :account/code "6110"
-   :account/name "Gesetzliche soziale Aufwendungen"
-   :account/type :expense :account/active true}
-  {:db/id "a-3066" :account/code "3066"
-   :account/name "Urlaubsrückstellung"
-   :account/type :liability :account/active true}
-  {:db/id "a-3720" :account/code "3720"
-   :account/name "Verbindlichkeiten LuG"
-   :account/type :liability :account/active true}
-  {:db/id "a-3730" :account/code "3730"
-   :account/name "Verbindlichkeiten LSt+KiSt+Soli"
-   :account/type :liability :account/active true}
-  {:db/id "a-3740" :account/code "3740"
-   :account/name "Verbindlichkeiten SV"
-   :account/type :liability :account/active true}
-  {:db/id "a-3790" :account/code "3790"
-   :account/name "Lohn- und Gehaltsverrechnungskonto"
-   :account/type :liability :account/active true}
-  {:db/id "a-6010" :account/code "6010" :account/name "Löhne"
-   :account/type :expense :account/active true}
+  {:db/id "a-6020" :kontor.account/code "6020" :kontor.account/name "Gehälter"
+   :kontor.account/type :expense :kontor.account/active true}
+  {:db/id "a-6035" :kontor.account/code "6035"
+   :kontor.account/name "Aufwendungen Urlaubsrückstellung"
+   :kontor.account/type :expense :kontor.account/active true}
+  {:db/id "a-6060" :kontor.account/code "6060"
+   :kontor.account/name "Freiwillige soziale Aufwendungen, lohnsteuerpflichtig"
+   :kontor.account/type :expense :kontor.account/active true}
+  {:db/id "a-6110" :kontor.account/code "6110"
+   :kontor.account/name "Gesetzliche soziale Aufwendungen"
+   :kontor.account/type :expense :kontor.account/active true}
+  {:db/id "a-3066" :kontor.account/code "3066"
+   :kontor.account/name "Urlaubsrückstellung"
+   :kontor.account/type :liability :kontor.account/active true}
+  {:db/id "a-3720" :kontor.account/code "3720"
+   :kontor.account/name "Verbindlichkeiten LuG"
+   :kontor.account/type :liability :kontor.account/active true}
+  {:db/id "a-3730" :kontor.account/code "3730"
+   :kontor.account/name "Verbindlichkeiten LSt+KiSt+Soli"
+   :kontor.account/type :liability :kontor.account/active true}
+  {:db/id "a-3740" :kontor.account/code "3740"
+   :kontor.account/name "Verbindlichkeiten SV"
+   :kontor.account/type :liability :kontor.account/active true}
+  {:db/id "a-3790" :kontor.account/code "3790"
+   :kontor.account/name "Lohn- und Gehaltsverrechnungskonto"
+   :kontor.account/type :liability :kontor.account/active true}
+  {:db/id "a-6010" :kontor.account/code "6010" :kontor.account/name "Löhne"
+   :kontor.account/type :expense :kontor.account/active true}
 
   ;; Operating accounts used for the Y1 misclassification story
-  {:db/id "a-4660" :account/code "4660"
-   :account/name "Reisekosten Arbeitnehmer"
-   :account/type :expense :account/active true}
-  {:db/id "a-4650" :account/code "4650"
-   :account/name "Bewirtungskosten 70% abziehbar"
-   :account/type :expense :account/active true}
-  {:db/id "a-1000" :account/code "1000"
-   :account/name "Kasse"
-   :account/type :asset :account/active true}])
+  {:db/id "a-4660" :kontor.account/code "4660"
+   :kontor.account/name "Reisekosten Arbeitnehmer"
+   :kontor.account/type :expense :kontor.account/active true}
+  {:db/id "a-4650" :kontor.account/code "4650"
+   :kontor.account/name "Bewirtungskosten 70% abziehbar"
+   :kontor.account/type :expense :kontor.account/active true}
+  {:db/id "a-1000" :kontor.account/code "1000"
+   :kontor.account/name "Kasse"
+   :kontor.account/type :asset :kontor.account/active true}])
 
-(def eur (d/q '[:find ?e . :where [?e :commodity/symbol "EUR"]] (d/db conn)))
-(def ent (d/q '[:find ?e . :where [?e :entity/code "ACME-DE"]] (d/db conn)))
-(def j-pay (d/q '[:find ?e . :where [?e :journal/code "PAY-DE"]] (d/db conn)))
-(def j-gen (d/q '[:find ?e . :where [?e :journal/code "GEN-DE"]] (d/db conn)))
-(def p-2026 (d/q '[:find ?e . :where [?e :period/name "2026"]] (d/db conn)))
+(def eur (d/q '[:find ?e . :where [?e :kontor.commodity/symbol "EUR"]] (d/db conn)))
+(def ent (d/q '[:find ?e . :where [?e :kontor.entity/code "ACME-DE"]] (d/db conn)))
+(def j-pay (d/q '[:find ?e . :where [?e :kontor.journal/code "PAY-DE"]] (d/db conn)))
+(def j-gen (d/q '[:find ?e . :where [?e :kontor.journal/code "GEN-DE"]] (d/db conn)))
+(def p-2026 (d/q '[:find ?e . :where [?e :kontor.period/name "2026"]] (d/db conn)))
 
 ;; ## Year 1 — hire 2 employees + grant consents
 ;;
@@ -195,7 +195,7 @@
        :category :hr-monitoring-consent})
 
 (def dpia (d/q '[:find ?e . :in $ ?c
-                 :where [?e :audit-doc/code ?c]]
+                 :where [?e :kontor.audit-doc/code ?c]]
                (d/db conn) "DPIA-acme-employees-2026"))
 
 (doseq [[code subject] [["CONS-mueller-2026" mueller]
@@ -269,16 +269,16 @@
     :catalog/wage-types {100 {:kind :base-salary :account-hint :gehalt}}}))
 
 (def accounts-map
-  {:lohn                        (d/q '[:find ?e . :where [?e :account/code "6010"]] (d/db conn))
-   :gehalt                      (d/q '[:find ?e . :where [?e :account/code "6020"]] (d/db conn))
-   :freiwillig-st-pflichtig     (d/q '[:find ?e . :where [?e :account/code "6060"]] (d/db conn))
-   :soziale-aufwendungen        (d/q '[:find ?e . :where [?e :account/code "6110"]] (d/db conn))
-   :urlaubsrueckstellung-aufw   (d/q '[:find ?e . :where [?e :account/code "6035"]] (d/db conn))
-   :urlaubsrueckstellung        (d/q '[:find ?e . :where [?e :account/code "3066"]] (d/db conn))
-   :verb-lohn                   (d/q '[:find ?e . :where [?e :account/code "3720"]] (d/db conn))
-   :verb-lohnsteuer             (d/q '[:find ?e . :where [?e :account/code "3730"]] (d/db conn))
-   :verb-sozialversicherung     (d/q '[:find ?e . :where [?e :account/code "3740"]] (d/db conn))
-   :verrechnung                 (d/q '[:find ?e . :where [?e :account/code "3790"]] (d/db conn))})
+  {:lohn                        (d/q '[:find ?e . :where [?e :kontor.account/code "6010"]] (d/db conn))
+   :gehalt                      (d/q '[:find ?e . :where [?e :kontor.account/code "6020"]] (d/db conn))
+   :freiwillig-st-pflichtig     (d/q '[:find ?e . :where [?e :kontor.account/code "6060"]] (d/db conn))
+   :soziale-aufwendungen        (d/q '[:find ?e . :where [?e :kontor.account/code "6110"]] (d/db conn))
+   :urlaubsrueckstellung-aufw   (d/q '[:find ?e . :where [?e :kontor.account/code "6035"]] (d/db conn))
+   :urlaubsrueckstellung        (d/q '[:find ?e . :where [?e :kontor.account/code "3066"]] (d/db conn))
+   :verb-lohn                   (d/q '[:find ?e . :where [?e :kontor.account/code "3720"]] (d/db conn))
+   :verb-lohnsteuer             (d/q '[:find ?e . :where [?e :kontor.account/code "3730"]] (d/db conn))
+   :verb-sozialversicherung     (d/q '[:find ?e . :where [?e :kontor.account/code "3740"]] (d/db conn))
+   :verrechnung                 (d/q '[:find ?e . :where [?e :kontor.account/code "3790"]] (d/db conn))})
 
 (def fixture-buchungsbeleg
   (slurp (io/resource "kontor/payroll_de_datev/fixtures/buchungsbeleg-2025-11.csv")
@@ -330,19 +330,19 @@
    conn
    (kbt/with-vt
      (posting/post-transaction-tx-data
-      {:transaction {:transaction/external-id "TX-MUELLER-DINNER-2026-11"
-                     :transaction/journal j-gen
-                     :transaction/effective-date #inst "2026-11-22"
-                     :transaction/narration "Geschäftsessen Kundenakquise (misclassified)"}
+      {:transaction {:kontor.transaction/external-id "TX-MUELLER-DINNER-2026-11"
+                     :kontor.transaction/journal j-gen
+                     :kontor.transaction/effective-date #inst "2026-11-22"
+                     :kontor.transaction/narration "Geschäftsessen Kundenakquise (misclassified)"}
        :postings
-       [{:posting/account (d/q '[:find ?e . :where [?e :account/code "4660"]] (d/db conn))
-         :posting/amount 1200.00M
-         :posting/commodity eur
-         :posting/narration "Wrong account — should have been Bewirtungskosten"}
-        {:posting/account (d/q '[:find ?e . :where [?e :account/code "1000"]] (d/db conn))
-         :posting/amount -1200.00M
-         :posting/commodity eur
-         :posting/narration "Kasse"}]})
+       [{:kontor.posting/account (d/q '[:find ?e . :where [?e :kontor.account/code "4660"]] (d/db conn))
+         :kontor.posting/amount 1200.00M
+         :kontor.posting/commodity eur
+         :kontor.posting/narration "Wrong account — should have been Bewirtungskosten"}
+        {:kontor.posting/account (d/q '[:find ?e . :where [?e :kontor.account/code "1000"]] (d/db conn))
+         :kontor.posting/amount -1200.00M
+         :kontor.posting/commodity eur
+         :kontor.posting/narration "Kasse"}]})
      #inst "2026-11-22")))
 
 ;; The datahike commit-tx eid (NOT the kontor :transaction entity).
@@ -364,7 +364,7 @@ misclassified-tx-eid
        :type :promotion-letter
        :storage-uri "s3://acme/promo-schmidt.pdf"
        :category :hr-track-record})
-(def promo-doc (d/q '[:find ?e . :in $ ?c :where [?e :audit-doc/code ?c]]
+(def promo-doc (d/q '[:find ?e . :in $ ?c :where [?e :kontor.audit-doc/code ?c]]
                     (d/db conn) "PROMO-LETTER-schmidt-2027"))
 
 ;; New compensation envelope (kontor-hr's supersession story).
@@ -377,8 +377,8 @@ misclassified-tx-eid
   (d/q '[:find ?c .
          :in $ ?emp ?ef
          :where
-         [?c :compensation/employment ?emp]
-         [?c :compensation/effective-from ?ef]]
+         [?c :kontor.compensation/employment ?emp]
+         [?c :kontor.compensation/effective-from ?ef]]
        (d/db conn) emp-schmidt #inst "2027-03-01"))
 
 (pr/record-position!
@@ -388,10 +388,10 @@ misclassified-tx-eid
        :at #inst "2027-03-01"})
 
 (def pos-schmidt-old (d/q '[:find ?p . :in $ ?ext
-                            :where [?p :position-held/external-id ?ext]]
+                            :where [?p :kontor.position-held/external-id ?ext]]
                           (d/db conn) "POS-schmidt-vs-1"))
 (def pos-schmidt-new (d/q '[:find ?p . :in $ ?ext
-                            :where [?p :position-held/external-id ?ext]]
+                            :where [?p :kontor.position-held/external-id ?ext]]
                           (d/db conn) "POS-schmidt-leiter-1"))
 
 (pr/record-promotion!
@@ -432,31 +432,31 @@ misclassified-tx-eid
  conn
  (kbt/with-vt
    (posting/post-transaction-tx-data
-    {:transaction {:transaction/external-id "TX-MUELLER-DINNER-2026-11-CORR"
-                   :transaction/journal j-gen
-                   :transaction/effective-date #inst "2026-11-22"
-                   :transaction/narration "Bewirtungskosten Geschäftsessen (correction Oct 2027)"}
+    {:transaction {:kontor.transaction/external-id "TX-MUELLER-DINNER-2026-11-CORR"
+                   :kontor.transaction/journal j-gen
+                   :kontor.transaction/effective-date #inst "2026-11-22"
+                   :kontor.transaction/narration "Bewirtungskosten Geschäftsessen (correction Oct 2027)"}
      :postings
-     [{:posting/account (d/q '[:find ?e . :where [?e :account/code "4650"]] (d/db conn))
-       :posting/amount 1200.00M
-       :posting/commodity eur
-       :posting/narration "Bewirtungsaufwand 100% (70% abziehbar per EStG §4(5) Nr. 2)"}
-      {:posting/account (d/q '[:find ?e . :where [?e :account/code "1000"]] (d/db conn))
-       :posting/amount -1200.00M
-       :posting/commodity eur
-       :posting/narration "Kasse (no cash impact — reclassification only)"}]})
+     [{:kontor.posting/account (d/q '[:find ?e . :where [?e :kontor.account/code "4650"]] (d/db conn))
+       :kontor.posting/amount 1200.00M
+       :kontor.posting/commodity eur
+       :kontor.posting/narration "Bewirtungsaufwand 100% (70% abziehbar per EStG §4(5) Nr. 2)"}
+      {:kontor.posting/account (d/q '[:find ?e . :where [?e :kontor.account/code "1000"]] (d/db conn))
+       :kontor.posting/amount -1200.00M
+       :kontor.posting/commodity eur
+       :kontor.posting/narration "Kasse (no cash impact — reclassification only)"}]})
    #inst "2027-10-15"))
 
 ;; Verify the bitemporal-correction story end-to-end
 (defn account-postings-at [account-code as-of-vt]
-  (let [acct (d/q '[:find ?e . :in $ ?c :where [?e :account/code ?c]] (d/db conn) account-code)
+  (let [acct (d/q '[:find ?e . :in $ ?c :where [?e :kontor.account/code ?c]] (d/db conn) account-code)
         db (d/valid-at (d/db conn) as-of-vt)]
     (d/q '[:find ?p ?amt ?narr
            :in $ ?a
            :where
-           [?p :posting/account ?a]
-           [?p :posting/amount ?amt]
-           [?p :posting/narration ?narr]]
+           [?p :kontor.posting/account ?a]
+           [?p :kontor.posting/amount ?amt]
+           [?p :kontor.posting/narration ?narr]]
          db acct)))
 
 ;; Before the correction (within Y1) — books show the ORIGINAL misclassification
@@ -480,13 +480,13 @@ misclassified-tx-eid
 ;; The DSAR walk needs a :partner row for Schmidt. The kontor-hr
 ;; substrate links :partner → :person; we add the partner row first.
 (d/transact conn
-            [{:partner/external-id "PARTNER-schmidt"
-              :partner/name "Anna Schmidt"
-              :partner/kind :employee
-              :partner/person schmidt}])
+            [{:kontor.partner/external-id "PARTNER-schmidt"
+              :kontor.partner/name "Anna Schmidt"
+              :kontor.partner/kind :employee
+              :kontor.partner/person schmidt}])
 
 (def schmidt-partner (d/q '[:find ?p . :in $ ?x
-                            :where [?p :partner/external-id ?x]]
+                            :where [?p :kontor.partner/external-id ?x]]
                           (d/db conn) "PARTNER-schmidt"))
 
 ;; Kernel-level DSAR walk (per ADR-052 + the note 86 P1-86-5 fix —
@@ -517,7 +517,7 @@ misclassified-tx-eid
 (def dpia-policy
   (d/q '[:find ?p .
          :in $ ?code
-         :where [?p :retention-policy/code ?code]]
+         :where [?p :kontor.retention-policy/code ?code]]
        (d/db conn) "DE-DSGVO-hr-monitoring-consent"))
 
 (def dpia-deadline (retention/retention-deadline (d/db conn) dpia dpia-policy))
