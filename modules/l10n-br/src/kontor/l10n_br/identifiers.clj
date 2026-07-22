@@ -73,16 +73,16 @@
 (defn- digit-vec
   "[String] → [Long] of decimal digits."
   [s]
-  (mapv #(- (long %) (long \0)) s))
+  (mapv #(- (int %) (int \0)) s))
 
 (defn- alnum-vec
   "[String of 0-9A-Z] → [Long] using the RFB-NT 49/2024 per-character
    value formula: (ord c) - (ord \\0)."
   [s]
-  (mapv #(- (long %) (long \0)) s))
+  (mapv #(- (int %) (int \0)) s))
 
 (defn- digit-char? [^Character c]
-  (and (>= (long c) (long \0)) (<= (long c) (long \9))))
+  (and (>= (int c) (int \0)) (<= (int c) (int \9))))
 
 (defn- all-same?
   "True iff all chars are the same."
@@ -159,8 +159,8 @@
                base (subvec ds 0 12)
                dv1-expected (check-digit base cnpj-weights-1)
                dv2-expected (check-digit (conj base dv1-expected) cnpj-weights-2)
-               dv1-actual (- (long (.charAt d 12)) (long \0))
-               dv2-actual (- (long (.charAt d 13)) (long \0))]
+               dv1-actual (- (int (.charAt d 12)) (int \0))
+               dv2-actual (- (int (.charAt d 13)) (int \0))]
            (and (= dv1-expected dv1-actual)
                 (= dv2-expected dv2-actual))))))
 

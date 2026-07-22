@@ -31,6 +31,11 @@
     (is (not (gleif/valid-lei? "HWUPKR0MPOU FGXBT394"))))
   (testing "nil and non-strings reject"
     (is (not (gleif/valid-lei? nil)))
+    ;; deliberately the wrong type — the point is that the validator
+    ;; rejects rather than throws. clj-kondo infers a string parameter
+    ;; and flags the literal, which is the linter being right about the
+    ;; signature and wrong about the intent.
+    #_{:clj-kondo/ignore [:type-mismatch]}
     (is (not (gleif/valid-lei? 12345)))))
 
 (deftest import-level-1-loads-entities-with-lei-and-status

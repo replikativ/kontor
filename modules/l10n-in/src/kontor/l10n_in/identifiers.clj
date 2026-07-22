@@ -93,7 +93,7 @@
 (defn- char-value
   "Mod-36 char value: '0'..'9' → 0..9, 'A'..'Z' → 10..35."
   [^Character c]
-  (let [ic (long c)
+  (let [ic (int c)
         v  (cond
              (and (>= ic 48) (<= ic 57)) (- ic 48)             ; '0'..'9'
              (and (>= ic 65) (<= ic 90)) (+ 10 (- ic 65))      ; 'A'..'Z'
@@ -104,8 +104,8 @@
   "Inverse of char-value: 0..9 → '0'..'9', 10..35 → 'A'..'Z'."
   ^Character [v]
   (cond
-    (and (>= v 0) (<= v 9))   (char (+ (long \0) v))
-    (and (>= v 10) (<= v 35)) (char (+ (long \A) (- v 10)))
+    (and (>= v 0) (<= v 9))   (char (+ (int \0) v))
+    (and (>= v 10) (<= v 35)) (char (+ (int \A) (- v 10)))
     :else (throw (ex-info "Value outside mod-36 alphabet" {:value v}))))
 
 (defn gstin-check-char

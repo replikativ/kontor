@@ -85,12 +85,12 @@
 (defn- digit-vec
   "Convert a digit string to a vector of integer values 0..9."
   [^String s]
-  (mapv #(- (long %) (long \0)) s))
+  (mapv #(- (int %) (int \0)) s))
 
 (defn- all-digits? [^String s]
   (and (some? s)
        (pos? (count s))
-       (every? #(<= (long \0) (long %) (long \9)) s)))
+       (every? #(<= (int \0) (int %) (int \9)) s)))
 
 ;; ============================================================================
 ;; ABN — 11-digit, weighted mod-89 check
