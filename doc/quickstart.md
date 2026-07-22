@@ -33,8 +33,8 @@ Soli + GewSt + CGT + investment income.
          '[kontor.l10n-de.cit-provider :as de-cit]
          '[kontor.l10n-de.pnl :as de-pnl]
          '[kontor.l10n-de.bs :as de-bs]
-         '[kontor.period-tax-provider :as ptp]
-         '[kontor.trial :as trial])
+         '[kontor.tax.period-tax-provider :as ptp]
+         '[kontor.reporting.trial :as trial])
 
 (def conn (de/create-de-db))
 ```
