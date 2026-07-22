@@ -98,13 +98,13 @@
     (let [valid "8700110005901"]
       (doseq [i (range 13)]
         (let [c (.charAt ^String valid i)
-              d (- (long c) (long \0))
+              d (- (long c) (int \0))
               ;; Pick a perturbation whose contribution to the
               ;; weighted sum is non-zero mod 9.
               delta (if (= d 9) 2 1)
               new-d (mod (+ d delta) 10)
               tampered (str (subs valid 0 i)
-                            (char (+ (long \0) new-d))
+                            (char (+ (int \0) new-d))
                             (subs valid (inc i)))]
           (is (not (id/valid-corporate-number? tampered))
               (str "Tampered position " i ": " tampered " must fail")))))))

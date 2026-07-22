@@ -171,7 +171,7 @@
   (let [weights [3 7 1]
         sum (->> (range 17)
                  (map (fn [i]
-                        (let [d (- (long (.charAt clabe-17 (int i))) (long \0))
+                        (let [d (- (int (.charAt clabe-17 (int i))) (int \0))
                               w (nth weights (mod i 3))
                               p (* d w)]
                           (mod p 10))))   ; units digit of product
@@ -184,7 +184,7 @@
   (boolean
    (and (string? s)
         (re-matches clabe-pattern s)
-        (= (- (long (.charAt ^String s 17)) (long \0))
+        (= (- (int (.charAt ^String s 17)) (int \0))
            (clabe-check-digit (subs s 0 17))))))
 
 (defn clabe-bank-code

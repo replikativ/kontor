@@ -1,7 +1,8 @@
 (ns kontor.bitemporal-test
   "Tests for the kontor.bitemporal write-side helpers — `with-vt`,
    `strip-tx-meta`, `forever`, and the `close-validity` family."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.set :as set]
+            [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
             [kontor.bitemporal :as kbt]
             [kontor.core :as core]
@@ -180,7 +181,7 @@
           before-datoms (set (d/datoms (d/db conn) :eavt tx-eid))]
       (kbt/close-validity! conn tx-eid feb-15)
       (let [after-datoms (set (d/datoms (d/db conn) :eavt tx-eid))
-            new-datoms (clojure.set/difference after-datoms before-datoms)]
+            new-datoms (set/difference after-datoms before-datoms)]
         (is (= 1 (count new-datoms))
             "exactly one new datom on the prior tx-entity")
         (let [d (first new-datoms)]

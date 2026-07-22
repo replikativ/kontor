@@ -102,7 +102,7 @@
     (Date/from ^java.time.Instant d)
     (instance? java.time.LocalDate d)
     (Date/from (.toInstant (.atStartOfDay ^java.time.LocalDate d
-                                          (java.time.ZoneOffset/UTC))))
+                                          java.time.ZoneOffset/UTC)))
     :else
     (throw (ex-info (str "Cannot coerce to Date: " (class d) " = " d)
                     {:value d}))))

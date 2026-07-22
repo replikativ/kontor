@@ -273,8 +273,8 @@
           (and (re-matches ust-idnr-pattern trimmed)
                (let [body   (subs trimmed 2)            ; drop "DE"
                      base   (subs body 0 8)
-                     actual (- (long (.charAt body 8)) (long \0))
-                     digits (mapv #(- (long %) (long \0)) base)]
+                     actual (- (int (.charAt body 8)) (int \0))
+                     digits (mapv #(- (int %) (int \0)) base)]
                  (= actual (ust-idnr-check-digit digits))))))))
 
 (defn assert-ust-idnr!

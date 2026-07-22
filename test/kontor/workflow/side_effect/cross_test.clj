@@ -1,6 +1,7 @@
 (ns kontor.workflow.side-effect.cross-test
   "Tests for kontor.workflow.side-effect.cross — ADR-074."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.edn :as edn]
+            [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
             [kontor.core :as core]
             [kontor.workflow.side-effect.cross :as cross]
@@ -54,7 +55,7 @@
     (is (= :cross-tx-post (:kontor.side-effect-intent/type m)))
     (is (= :pending (:kontor.side-effect-intent/status m)))
     (is (= 5 (:kontor.side-effect-intent/max-retries m)))
-    (let [payload (clojure.edn/read-string (:kontor.side-effect-intent/payload m))]
+    (let [payload (edn/read-string (:kontor.side-effect-intent/payload m))]
       (is (= :other (:target/system-id payload)))
       (is (= [{:foo 1}] (:target/tx-data payload)))
       (is (string? (:step-id payload)))

@@ -38,7 +38,7 @@
   [donations taxable-income]
   (let [d (bd donations)
         ti (bd taxable-income)
-        zero (BigDecimal/ZERO)
+        zero BigDecimal/ZERO
         low-cap k/federal-donation-low-tier-cap
         low-portion (.min d low-cap)
         excess (.max zero (.subtract d low-cap))

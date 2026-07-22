@@ -408,7 +408,7 @@
   "Compute the cDV (check digit) for a 43-digit chave-de-acesso prefix.
    Returns a 1-character string ('0'..'9')."
   [^String prefix-43]
-  (let [digits (mapv #(- (long %) (long \0)) prefix-43)
+  (let [digits (mapv #(- (int %) (int \0)) prefix-43)
         weights (cycle [2 3 4 5 6 7 8 9])         ; right-to-left
         sum (reduce + (map * (reverse digits) weights))
         rest (mod sum 11)]

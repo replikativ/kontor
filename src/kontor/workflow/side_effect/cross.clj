@@ -84,6 +84,7 @@
    missing the drain worker raises a `:kontor.cross-tx/target-schema-missing`
    ex-info before transacting."
   (:require [clojure.edn :as edn]
+            [clojure.string :as str]
             [datahike.api :as d]
             [kontor.workflow.side-effect :as se]
             [kontor.validation :as validation])
@@ -116,17 +117,17 @@
   [x]
   (cond
     (map? x)    (str "{"
-                     (clojure.string/join
+                     (str/join
                       " "
                       (mapv (fn [[k v]]
                               (str (canonical-edn k) " " (canonical-edn v)))
                             (sort-by (comp pr-str key) x)))
                      "}")
-    (set? x)    (str "#{" (clojure.string/join " "
-                                               (mapv canonical-edn
-                                                     (sort-by pr-str x)))
+    (set? x)    (str "#{" (str/join " "
+                                    (mapv canonical-edn
+                                          (sort-by pr-str x)))
                      "}")
-    (sequential? x) (str "[" (clojure.string/join " " (mapv canonical-edn x)) "]")
+    (sequential? x) (str "[" (str/join " " (mapv canonical-edn x)) "]")
     :else       (pr-str x)))
 
 (defn step-id
@@ -143,7 +144,7 @@
         hash  (.digest md bytes)
         enc   (.encodeToString (Base64/getUrlEncoder) hash)]
     ;; strip padding (Base64/getUrlEncoder.withoutPadding requires JDK 11+)
-    (clojure.string/replace enc #"=+$" "")))
+    (str/replace enc #"=+$" "")))
 
 ;; ============================================================================
 ;; Source-side: build the intent

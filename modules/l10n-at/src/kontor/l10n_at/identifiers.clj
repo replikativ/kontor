@@ -124,8 +124,8 @@
           (and (re-matches uid-pattern trimmed)
                (let [body   (subs trimmed 3)              ; drop "ATU"
                      base   (subs body 0 7)
-                     actual (- (long (.charAt body 7)) (long \0))
-                     digits (mapv #(- (long %) (long \0)) base)]
+                     actual (- (int (.charAt body 7)) (int \0))
+                     digits (mapv #(- (int %) (int \0)) base)]
                  (= actual (uid-check-digit digits))))))))
 
 (defn parse-uid

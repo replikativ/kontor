@@ -342,9 +342,9 @@
    (and (string? s)
         (let [d (str/replace s #"[\s\-]" "")]
           (and (= 9 (count d))
-               (every? #(<= (long \0) (long %) (long \9)) d)
+               (every? #(<= (int \0) (int %) (int \9)) d)
                (not= "000000000" d)
-               (let [ds (mapv #(- (long %) (long \0)) d)
+               (let [ds (mapv #(- (int %) (int \0)) d)
                      sum (reduce + (map * ds tfn-weights))]
                  (zero? (mod sum 11))))))))
 
