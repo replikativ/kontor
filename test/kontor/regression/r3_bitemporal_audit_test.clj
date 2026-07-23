@@ -232,7 +232,7 @@
 ;; write guard (account_move_line.py:1781-1790) fires on `_field_will_change`,
 ;; which returns True for a nil→value transition — so setting partner_id on a
 ;; hashed (posted) line raises "You cannot edit the following fields".
-(deftest ^:kaocha/pending augmenting-sealed-posting-with-new-attr-should-be-refused
+(deftest augmenting-sealed-posting-with-new-attr-should-be-refused
   (let [conn (fresh-book)
         _ (book/sell! conn {:debit-account ar :credit-account rev
                             :amount 800 :commodity eur

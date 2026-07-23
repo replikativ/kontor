@@ -52,7 +52,14 @@
     (second tx)))
 
 (defn- posted? [db eid]
-  (some? (:kontor.posting/posted-at (d/pull db [:kontor.posting/posted-at] eid))))
+  ;; A POSTING is sealed by :kontor.posting/posted-at; the containing
+  ;; TRANSACTION is sealed by :kontor.transaction/posted-at. Both must be
+  ;; protected — an upsert that reuses a posted transaction's identity (its
+  ;; unique :external-id) would otherwise silently pollute the sealed entry
+  ;; with extra postings + a rewritten narration (note 198 R3-REVNUM-4).
+  (let [e (d/pull db [:kontor.posting/posted-at :kontor.transaction/posted-at] eid)]
+    (or (some? (:kontor.posting/posted-at e))
+        (some? (:kontor.transaction/posted-at e)))))
 
 (defn find-silent-retracts
   "Return a vector of {:tx <tx-form> :eid <eid>} for every retract in
@@ -91,23 +98,54 @@
     (try (:db/id (d/entity db id))
          (catch #?(:clj Exception :cljs :default) _ nil))))
 
+(defn- unique-identity-attrs
+  "The set of attributes declared `:db.unique/identity` in the live schema —
+   datahike UPSERTS an entity-map carrying one of these onto the existing
+   entity that already holds that value, even when the map's `:db/id` is a
+   fresh tempid."
+  [db]
+  (into #{}
+        (keep (fn [[a spec]]
+                (when (and (keyword? a) (map? spec)
+                           (= :db.unique/identity (:db/unique spec)))
+                  a)))
+        (d/schema db)))
+
+(defn- effective-target-eid
+  "The EXISTING entity an entity-map actually writes to: its resolvable
+   `:db/id`, or — for a tempid/new `:db/id` — the entity a `:db.unique/identity`
+   attribute in the map upserts onto. nil for a genuinely new entity."
+  [db uid-attrs tx]
+  (or (resolvable-eid db (:db/id tx))
+      (some (fn [[a v]]
+              (when (and (not= a :db/id) (contains? uid-attrs a))
+                (try (:db/id (d/entity db [a v]))
+                     (catch #?(:clj Exception :cljs :default) _ nil))))
+            tx)))
+
 (defn find-silent-modifications
   "Return {:tx :eid :attr :old :new} for every entity-map assertion in
-   `tx-data` that CHANGES an already-present attribute value on a posted
-   entity (a silent in-place edit of sealed data). Re-asserting the same
-   value is a no-op and not reported."
+   `tx-data` that would silently mutate a posted entity: either CHANGING an
+   already-present attribute value (an in-place edit of sealed data) OR
+   AUGMENTING the entity with a previously-ABSENT attribute (which still
+   rewrites the sealed entry's audit meaning — note 198 G1). Re-asserting the
+   SAME value is a no-op and not reported. The target is resolved through
+   `:db.unique/identity` upserts, not only an explicit eid (note 198
+   R3-REVNUM-4)."
   [db tx-data]
-  (vec
-   (for [tx tx-data
-         :when (entity-map? tx)
-         :let  [eid (resolvable-eid db (:db/id tx))]        ; nil for tempids/new entities
-         :when (and eid (posted? db eid))
-         [attr new-val] tx
-         :when (not= attr :db/id)
-         :let  [cur (get (d/pull db [attr] eid) attr)]
-         :when (and (some? cur)
-                    (not= (->eid db cur) (->eid db new-val)))]
-     {:tx tx :eid eid :attr attr :old cur :new new-val})))
+  (let [uid-attrs (unique-identity-attrs db)]
+    (vec
+     (for [tx tx-data
+           :when (entity-map? tx)
+           :let  [eid (effective-target-eid db uid-attrs tx)] ; nil for genuinely-new entities
+           :when (and eid (posted? db eid))
+           [attr new-val] tx
+           :when (not= attr :db/id)
+           :let  [cur (get (d/pull db [attr] eid) attr)]
+           ;; report a CHANGE (cur present + differs) OR an AUGMENTATION
+           ;; (cur absent); a same-value re-assert is (not= v v) = false.
+           :when (not= (->eid db cur) (->eid db new-val))]
+       {:tx tx :eid eid :attr attr :old cur :new new-val}))))
 
 (defn assert-no-silent-retracts!
   "Throws ex-info with type :sealing/silent-retract-of-posted if

@@ -220,7 +220,7 @@
 ;; the inalterable_hash chain (account_move.py:353-354) — a posted move's fields
 ;; cannot be rewritten. DESIRED: reusing a posted legal number is rejected, or at
 ;; minimum never mutates the sealed original. Remove ^:kaocha/pending once fixed.
-(deftest ^:kaocha/pending duplicate-legal-number-does-not-mutate-sealed-original
+(deftest duplicate-legal-number-does-not-mutate-sealed-original
   (testing "a second post reusing a posted legal number must not merge onto it"
     (let [conn (de/create-de-db)]
       (sell-1000! conn)
