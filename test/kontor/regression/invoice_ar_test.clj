@@ -265,12 +265,11 @@
         (testing "one open AR invoice, net open = 100.00 (gross 297.50 − 197.50)"
           (is (= 1 (count opens)))
           (is (zero? (.compareTo 100.00M (:open-amount (first opens)))))
-          ;; NEW(P3): open-ar-invoices reports :gross straight from
-          ;; :kontor.invoice/total-gross with no fallback, so a bridge/line-based
-          ;; invoice (which never sets total-gross) reports :gross nil even
-          ;; though :open-amount correctly falls back to the line sum. The two
-          ;; fields disagree on how to derive the invoice value.
-          (is (nil? (:gross (first opens)))))
+          ;; N4 FIXED (note 196): a bridge/line-based invoice never sets
+          ;; :kontor.invoice/total-gross, so open-ar-invoices now falls back to
+          ;; summing the invoice lines — :gross = 297.50 (the line total),
+          ;; consistent with how :open-amount is derived. Was nil before.
+          (is (zero? (.compareTo 297.50M (:gross (first opens))))))
         (testing "aging row lands in :90+ carrying the NET open, not the gross"
           (is (= 1 (count rows)))
           (is (= :90+ (:bucket (first rows))))

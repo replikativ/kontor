@@ -216,6 +216,24 @@
           {:bs/keys [balanced?]} (bs/balance-check conn {:to apr-1})]
       (is balanced?))))
 
+(deftest bs-honors-through-inclusive-N6
+  ;; N6 (note 196): compute-aktiva/compute-passiva dropped :through, so a
+  ;; year-end Bilanz silently excluded entries dated ON the closing day.
+  ;; :through is the INCLUSIVE bound; :to is EXCLUSIVE.
+  (let [conn   (bootstrap)
+        eur    [:kontor.commodity/symbol "EUR"]
+        dec-31 #inst "2026-12-31T00:00:00Z"]
+    ;; a capital injection booked ON Dec 31: Dr 1200 Bank / Cr 2900 Kapital
+    (post! conn "YE-CAP" dec-31
+           [{:kontor.posting/account (ace (d/db conn) "1200") :kontor.posting/amount 5000M :kontor.posting/commodity eur}
+            {:kontor.posting/account (ace (d/db conn) "2900") :kontor.posting/amount -5000M :kontor.posting/commodity eur}])
+    (testing ":through Dec-31 INCLUDES the Dec-31 entry"
+      (is (= 5000M (:amount (:statement/total (bs/compute-aktiva conn {:through dec-31}))))))
+    (testing ":to Dec-31 (exclusive) EXCLUDES it"
+      (is (= 0M (:amount (:statement/total (bs/compute-aktiva conn {:to dec-31}))))))
+    (testing "the Bilanz balances as-of the inclusive year-end"
+      (is (:bs/balanced? (bs/balance-check conn {:through dec-31}))))))
+
 ;; ============================================================================
 ;; EÜR
 ;; ============================================================================
