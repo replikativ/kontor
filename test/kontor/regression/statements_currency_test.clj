@@ -391,15 +391,12 @@
        (catch Exception _ false)))
 
 (deftest l10n-pnl-bs-parity
-  (testing "US and DE ship statement definitions"
-    (is (ns-loadable? 'kontor.l10n-us.pnl))
-    (is (ns-loadable? 'kontor.l10n-us.bs))
-    (is (ns-loadable? 'kontor.l10n-de.pnl))
-    (is (ns-loadable? 'kontor.l10n-de.bs)))
-  (testing "F4: CA / JP / AU ship NO pnl/bs namespace (parity gap)"
-    (is (not (ns-loadable? 'kontor.l10n-ca.pnl)) "CA should ship a pnl def")
-    (is (not (ns-loadable? 'kontor.l10n-ca.bs))  "CA should ship a bs def")
-    (is (not (ns-loadable? 'kontor.l10n-jp.pnl)) "JP should ship a pnl def")
-    (is (not (ns-loadable? 'kontor.l10n-jp.bs))  "JP should ship a bs def")
-    (is (not (ns-loadable? 'kontor.l10n-au.pnl)) "AU should ship a pnl def")
-    (is (not (ns-loadable? 'kontor.l10n-au.bs))  "AU should ship a bs def")))
+  ;; F4 FIXED (note 196): every shipped l10n jurisdiction now provides a P&L
+  ;; and balance-sheet definition — the parity gap that opened the sweep is
+  ;; closed. Was: only US + DE shipped these; CA/JP/AU/… shipped none.
+  (testing "every l10n jurisdiction ships a pnl + bs statement definition"
+    (doseq [cc ["us" "de" "ca" "jp" "au" "fr" "br" "in" "mx" "cn" "at" "uk"]]
+      (is (ns-loadable? (symbol (str "kontor.l10n-" cc ".pnl")))
+          (str cc " should ship a pnl def"))
+      (is (ns-loadable? (symbol (str "kontor.l10n-" cc ".bs")))
+          (str cc " should ship a bs def")))))
