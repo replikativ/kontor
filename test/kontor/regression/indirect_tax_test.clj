@@ -25,6 +25,7 @@
             [kontor.l10n-ca.gst-hst :as gst]
             [kontor.l10n-ca.preset :as ca]
             [kontor.l10n-de.preset :as de]
+            [kontor.l10n-de.ustva :as ustva]
             [kontor.l10n-mx.invoice :as mxinv]
             [kontor.l10n-mx.preset :as mx]
             [kontor.l10n-mx.returns :as mxret]
@@ -153,25 +154,31 @@
         (is (money/equiv? (money/money "190.00" :EUR) (:output-vat r))
             "only the INSIDE invoice's 190 output VAT is counted")))))
 
-(deftest ^:kaocha/pending de-kernel-vat-return-needs-no-manual-codes
-  ;; PENDING(F8): kontor.tax.vat-return/compute-vat-return ships NO
-  ;; per-jurisdiction default VAT-code set. CA's gst-hst/compute-return bakes
-  ;; in the GST34-2 definition and is turnkey; the DE consumer must instead
-  ;; KNOW the SKR04 codes ("3801"/"3806" output, "1576" input) and pass them
-  ;; by hand. Called WITHOUT :output-vat-codes/:input-vat-codes, the kernel
-  ;; silently matches nothing and returns net 0 — the most dangerous shape
-  ;; (a plausible zero, not an error). This test asserts the intended
-  ;; behaviour: a DE book should net to its true 187 without the caller
-  ;; supplying codes. It will pass once F8 ships DE defaults (or a DE wrapper
-  ;; of the kernel vat-return mirroring CA gst-hst/compute-return).
-  (testing "kernel VAT return should carry DE defaults like CA is turnkey"
-    (let [conn (de/create-de-db)]
-      (de-sale-19!     conn "INV-1"  1000M 190M jan-15)
-      (de-sale-7!      conn "INV-2"   500M  35M jan-20)
-      (de-purchase-19! conn "BILL-1"  200M  38M jan-25)
-      (let [r (vat/compute-vat-return conn {:from jan-1 :to feb-1 :commodity :EUR})]
-        (is (money/equiv? (money/money "187.00" :EUR) (:net-vat r))
-            "without hand-supplied codes, a DE consumer still gets 187 net")))))
+(deftest de-vat-return-is-turnkey-and-kernel-refuses-codeless-F8
+  ;; F8 fix (note 196). Two halves:
+  ;;  1. DE has a TURNKEY VAT return — kontor.l10n-de.ustva/compute (UStVA) —
+  ;;     tag-driven off the SKR04 :ust-* account tags, mirroring CA's
+  ;;     gst-hst/compute-return. A DE consumer nets to 187 WITHOUT knowing any
+  ;;     codes.
+  ;;  2. The general kernel compute-vat-return no longer silently returns net 0
+  ;;     when called with no codes (the dangerous "plausible zero"); it throws
+  ;;     :vat-return/no-codes pointing at the l10n wrappers.
+  (let [conn (de/create-de-db)]
+    (de-sale-19!     conn "INV-1"  1000M 190M jan-15)
+    (de-sale-7!      conn "INV-2"   500M  35M jan-20)
+    (de-purchase-19! conn "BILL-1"  200M  38M jan-25)
+    (testing "DE turnkey UStVA: zahllast = 190 + 35 − 38 = 187, no codes needed"
+      (let [r (ustva/compute conn {:from jan-1 :to feb-1})]
+        (is (money/equiv? (money/money "187.00" :EUR) (:ustva/zahllast r)))))
+    (testing "the general kernel fn refuses a codeless call instead of returning 0"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"supply :output-vat-codes"
+           (vat/compute-vat-return conn {:from jan-1 :to feb-1 :commodity :EUR}))))
+    (testing "and still works when the DE consumer does pass the SKR04 codes"
+      (let [r (vat/compute-vat-return conn {:from jan-1 :to feb-1 :commodity :EUR
+                                            :output-vat-codes ["3801" "3806"]
+                                            :input-vat-codes ["1576"]})]
+        (is (money/equiv? (money/money "187.00" :EUR) (:net-vat r)))))))
 
 ;; ============================================================================
 ;; CA — GST34-2 turnkey return (CRA)

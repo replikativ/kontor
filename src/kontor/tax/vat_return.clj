@@ -43,8 +43,24 @@
      :input-vat-codes    — account-code patterns for input VAT
      :commodity          — the functional commodity
    Returns `{:period :output-vat :input-vat :net-vat}` — `:net-vat`
-   positive ⇒ payable to the authority, negative ⇒ a refund due."
+   positive ⇒ payable to the authority, negative ⇒ a refund due.
+
+   This is the GENERAL engine: it needs the account codes, which are
+   jurisdiction-specific. Calling it with NEITHER `:output-vat-codes` nor
+   `:input-vat-codes` throws (`:vat-return/no-codes`) rather than silently
+   matching nothing and returning a plausible net 0 (note-196 F8). For a
+   turnkey per-country return use the l10n wrapper —
+   `kontor.l10n-de.ustva/compute` (UStVA) or
+   `kontor.l10n-ca.gst-hst/compute-return` (GST34-2) — which supply the
+   codes/tags for you."
   [conn {:keys [from to output-vat-codes input-vat-codes commodity] :as opts}]
+  (when (and (empty? output-vat-codes) (empty? input-vat-codes))
+    (throw (ex-info (str "compute-vat-return: supply :output-vat-codes and/or "
+                         ":input-vat-codes (jurisdiction-specific — e.g. DE SKR04 "
+                         "output \"3801\"/\"3806\", input \"1576\"), or use a turnkey "
+                         "l10n wrapper: kontor.l10n-de.ustva/compute or "
+                         "kontor.l10n-ca.gst-hst/compute-return.")
+                    {:type :vat-return/no-codes})))
   (let [output (vat-total conn opts output-vat-codes commodity)
         input  (vat-total conn opts input-vat-codes commodity)]
     {:period     {:from from :to to}
