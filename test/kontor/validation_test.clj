@@ -111,7 +111,7 @@
                   [{:kontor.posting/account rec :kontor.posting/amount  100M :kontor.posting/commodity eur}
                    {:kontor.posting/account rev :kontor.posting/amount -100M :kontor.posting/commodity eur}]})]
     (is (thrown-with-msg?
-         clojure.lang.ExceptionInfo #"Invariant mismatch"
+         clojure.lang.ExceptionInfo #"Invariant violated"
          (v/transact-with-validation conn tx-data))
         "Receivable account is inactive — invariant fires.")))
 
@@ -177,7 +177,7 @@
                   [{:kontor.posting/account rec :kontor.posting/amount  100M :kontor.posting/commodity usd}
                    {:kontor.posting/account rev :kontor.posting/amount -100M :kontor.posting/commodity usd}]})]
     (is (thrown-with-msg?
-         clojure.lang.ExceptionInfo #"Invariant mismatch"
+         clojure.lang.ExceptionInfo #"Invariant violated"
          (v/transact-with-validation conn tx-data))
         "Posting commodity USD vs account commodity EUR — invariant fires.")))
 
