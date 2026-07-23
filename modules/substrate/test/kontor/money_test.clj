@@ -67,6 +67,39 @@
        clojure.lang.ExceptionInfo #"Cross-commodity :add is forbidden"
        (m/add (m/money "1" :EUR) (m/money "1" :USD)))))
 
+(deftest add-zero-is-cross-commodity-identity
+  ;; note 196 F5b: a zero is the additive identity in ANY commodity, so an
+  ;; empty statement line (a zero of the engine's default commodity) folds
+  ;; into a real-commodity total without a spurious cross-commodity throw.
+  (testing "(add zero-X y) => y, carrying y's commodity"
+    (let [r (m/add (m/zero :EUR) (m/money "5.00" :CAD))]
+      (is (= 0 (.compareTo (BigDecimal. "5.00") (:amount r))))
+      (is (= :CAD (:commodity r)))))
+  (testing "(add x zero-Y) => x, carrying x's commodity"
+    (let [r (m/add (m/money "5.00" :CAD) (m/zero :EUR))]
+      (is (= :CAD (:commodity r)))
+      (is (= 0 (.compareTo (BigDecimal. "5.00") (:amount r))))))
+  (testing "two zeros of different commodity do not throw"
+    (is (m/zero? (m/add (m/zero :EUR) (m/zero :CAD)))))
+  (testing "two NON-zero operands of different commodity still throw"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo #"Cross-commodity :add is forbidden"
+         (m/add (m/money "1" :EUR) (m/money "1" :USD))))))
+
+(deftest sub-zero-is-cross-commodity-identity
+  (testing "(sub x zero-Y) => x"
+    (let [r (m/sub (m/money "5.00" :CAD) (m/zero :EUR))]
+      (is (= :CAD (:commodity r)))
+      (is (= 0 (.compareTo (BigDecimal. "5.00") (:amount r))))))
+  (testing "(sub zero-X y) => (neg y)"
+    (let [r (m/sub (m/zero :EUR) (m/money "5.00" :CAD))]
+      (is (= :CAD (:commodity r)))
+      (is (= 0 (.compareTo (BigDecimal. "-5.00") (:amount r))))))
+  (testing "two NON-zero operands of different commodity still throw"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo #"Cross-commodity :sub is forbidden"
+         (m/sub (m/money "1" :EUR) (m/money "1" :USD))))))
+
 (deftest sub-and-neg
   (is (m/equiv? (m/money "1.00" :EUR)
                 (m/sub (m/money "3.00" :EUR) (m/money "2.00" :EUR))))

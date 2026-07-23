@@ -37,6 +37,20 @@
   (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
                (m/add (m/money "1.00" :EUR) (m/money "1.00" :USD)))))
 
+(deftest zero-is-cross-commodity-additive-identity
+  ;; note 196 F5b — must hold on the cljs branch too (bd-add/bd-neg + the
+  ;; cljs zero? path): a zero is the additive identity in ANY commodity.
+  (testing "add: a zero of either commodity carries the other's commodity"
+    (is (m/equiv? (m/money "5.00" :CAD) (m/add (m/zero :EUR) (m/money "5.00" :CAD))))
+    (is (m/equiv? (m/money "5.00" :CAD) (m/add (m/money "5.00" :CAD) (m/zero :EUR))))
+    (is (m/zero? (m/add (m/zero :EUR) (m/zero :CAD)))))
+  (testing "sub: zero is the identity; (sub 0-X y) => -y"
+    (is (m/equiv? (m/money "5.00" :CAD)  (m/sub (m/money "5.00" :CAD) (m/zero :EUR))))
+    (is (m/equiv? (m/money "-5.00" :CAD) (m/sub (m/zero :EUR) (m/money "5.00" :CAD)))))
+  (testing "two NON-zero mismatched operands still throw"
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (m/sub (m/money "1.00" :EUR) (m/money "1.00" :USD))))))
+
 (deftest predicates
   (is (m/zero?     (m/zero :EUR)))
   (is (m/positive? (m/money "0.01" :EUR)))

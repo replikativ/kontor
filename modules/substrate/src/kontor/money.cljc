@@ -299,20 +299,41 @@
 ;; ============================================================================
 
 (defn add
-  "Add two same-commodity Monies. Throws on commodity mismatch."
+  "Add two Monies. Same-commodity required for two non-zero operands.
+
+   A zero operand is the additive identity in ANY commodity:
+   `(add (zero :EUR) x)` => `x`, `(add x (zero :CAD))` => `x`. This is
+   what makes empty aggregation seeds and absent-data statement lines
+   compose cleanly — an empty statement line is a zero, and a zero of the
+   'wrong' commodity contributes nothing numerically, so it must not raise
+   a spurious cross-commodity error (note 196 F5b). Two NON-zero operands
+   of different commodities still throw; the sum-to-zero balance check runs
+   per-commodity via `sum-by-commodity`, so this does not weaken it."
   [a b]
-  (assert-same-commodity a b :add)
-  (->Money #?(:clj  (.add ^BigDecimal (:amount a) ^BigDecimal (:amount b))
-              :cljs (bd-add (:amount a) (:amount b)))
-           (:commodity a)))
+  (cond
+    (zero? a) b
+    (zero? b) a
+    :else
+    (do (assert-same-commodity a b :add)
+        (->Money #?(:clj  (.add ^BigDecimal (:amount a) ^BigDecimal (:amount b))
+                    :cljs (bd-add (:amount a) (:amount b)))
+                 (:commodity a)))))
 
 (defn sub
-  "Subtract b from a. Same-commodity required."
+  "Subtract b from a. Same-commodity required for two non-zero operands; a
+   zero operand acts as the additive identity in any commodity (see `add`):
+   `(sub x (zero :CAD))` => `x`, `(sub (zero :EUR) x)` => `(neg x)`."
   [a b]
-  (assert-same-commodity a b :sub)
-  (->Money #?(:clj  (.subtract ^BigDecimal (:amount a) ^BigDecimal (:amount b))
-              :cljs (bd-sub (:amount a) (:amount b)))
-           (:commodity a)))
+  (cond
+    (zero? b) a
+    (zero? a) (->Money #?(:clj  (.negate ^BigDecimal (:amount b))
+                          :cljs (bd-neg (:amount b)))
+                       (:commodity b))
+    :else
+    (do (assert-same-commodity a b :sub)
+        (->Money #?(:clj  (.subtract ^BigDecimal (:amount a) ^BigDecimal (:amount b))
+                    :cljs (bd-sub (:amount a) (:amount b)))
+                 (:commodity a)))))
 
 (defn neg
   "Unary negation. Useful for credit-side construction."
