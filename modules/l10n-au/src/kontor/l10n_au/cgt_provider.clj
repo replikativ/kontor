@@ -360,8 +360,17 @@
    and apply them to taxable gains BEFORE the Div 115 discount and the
    Subdiv 152 cascade (ITAA 1997 s102-5 Method Statement Steps 1-3).
 
-   Walks `:taxable-gain` classifications in input order, reducing each
-   raw-gain in turn until the loss pool is exhausted. Returns:
+   ORDERING (note 197): s102-5 lets the taxpayer choose which gains a loss
+   reduces, and the tax-minimising choice — the ATO's standard guidance and
+   every AU tax package — is to apply losses to NON-DISCOUNTABLE gains FIRST,
+   preserving the 50% Div 115 discount for the discountable gains. So the loss
+   pool is absorbed non-discountable-first (stable within each group), NOT in
+   arbitrary disposal-recording order — otherwise a loss could eat a
+   discountable gain and roughly double the assessable amount, order-dependent.
+
+   The RETURNED `:classifications` stay in the ORIGINAL disposal order (the
+   Subdiv 152 retirement-cap threading downstream depends on it); only the
+   absorption order is discount-aware. Returns:
 
      {:classifications <vec>           each :taxable-gain now has
                                         `:netted-gain` (≥ 0) set; other
@@ -371,26 +380,38 @@
 
    Personal-use `:loss-disregarded` entries DO NOT contribute to the
    pool — they are statutorily disregarded per s108-20(1)."
-  [classifications carry-in]
+  [classifications carry-in kind cutoff-days]
   (let [current-year-losses (->> classifications
                                  (filter #(= :loss (:class %)))
                                  (map (comp #(- %) :raw-gain))
                                  (reduce + 0M))
         loss-pool (+ current-year-losses (or carry-in 0M))
-        ;; Walk taxable gains in input order, consuming the pool FIFO.
-        {:keys [acc remaining]}
+        ;; Absorb the pool over taxable-gain entries NON-DISCOUNTABLE FIRST.
+        ;; sort-by is stable, so 0 (non-discountable) precede 1 (discountable)
+        ;; and original order is kept within each group. Keyed by index so we
+        ;; can restore original order afterwards.
+        gain-idxs (->> (map-indexed vector classifications)
+                       (filter #(= :taxable-gain (:class (second %))))
+                       (sort-by (fn [[_ c]]
+                                  (if (discount-eligible? (:disposal c) kind cutoff-days) 1 0))))
+        {absorbed-by-idx :acc remaining :remaining}
         (reduce
-         (fn [{:keys [acc remaining]} c]
-           (if (= :taxable-gain (:class c))
-             (let [absorbed (min remaining (:raw-gain c))
-                   netted   (- (:raw-gain c) absorbed)]
-               {:acc       (conj acc (assoc c
-                                            :netted-gain netted
-                                            :loss-absorbed absorbed))
-                :remaining (- remaining absorbed)})
-             {:acc (conj acc c) :remaining remaining}))
-         {:acc [] :remaining loss-pool}
-         classifications)]
+         (fn [{:keys [acc remaining]} [i c]]
+           (let [absorbed (min remaining (:raw-gain c))]
+             {:acc (assoc acc i absorbed) :remaining (- remaining absorbed)}))
+         {:acc {} :remaining loss-pool}
+         gain-idxs)
+        ;; Rebuild in ORIGINAL order, stamping the absorbed amount per gain.
+        acc (into []
+                  (map-indexed
+                   (fn [i c]
+                     (if (= :taxable-gain (:class c))
+                       (let [absorbed (get absorbed-by-idx i 0M)]
+                         (assoc c
+                                :netted-gain (- (:raw-gain c) absorbed)
+                                :loss-absorbed absorbed))
+                       c)))
+                  classifications)]
     {:classifications acc :loss-carry-forward remaining}))
 
 ;; ============================================================================
@@ -606,7 +627,7 @@
           ;; gains absorb — surfaced for a future v2 :emits-inputs
           ;; carry-forward channel; v1 does not flow it back.
           {:keys [classifications]}
-          (apply-losses classifications carry-amt)
+          (apply-losses classifications carry-amt kind cutoff-days)
           ;; PHASE 2b — apply Div 115 discount + Subdiv 152 cascade to
           ;; each taxable-gain's post-loss `:netted-gain`. Thread the
           ;; retirement-cap headroom in disposal order so later

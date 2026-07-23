@@ -336,13 +336,19 @@
 ;; the discountable gain first, wasting the 50 % discount.
 ;; ============================================================================
 
-(deftest ^:kaocha/pending au-loss-order-overtaxes-discountable
+(deftest au-loss-order-overtaxes-discountable
+  ;; FIXED (note 197): apply-losses now absorbs the loss pool NON-discountable
+  ;; gains first (stable within group), regardless of disposal-recording order,
+  ;; so the 50% Div 115 discount is preserved on the discountable gain. This
+  ;; record order [nondisc disc loss] previously over-taxed to $10,000; it now
+  ;; yields the ATO-optimal $5,000. Authority: ITAA 1997 s102-5 Method
+  ;; Statement + ATO "Using capital losses" guidance.
   (testing "loss should hit the non-discountable gain first → $5k, not $10k"
     (let [conn (base-db "AUD" "Australian Dollar" "AU")
           _    (au-cgt-statute/install! conn)
           aud  [:kontor.commodity/symbol "AUD"]]
-      ;; Record order [nondisc disc loss] → the loss pool consumes the
-      ;; DISCOUNTABLE gain first → $10,000 assessable (over-taxed).
+      ;; Record order [nondisc disc loss] — the discount-aware walk still
+      ;; absorbs the loss into the non-discountable gain first.
       (record! conn "AUD"
                {:external-id "au-nondisc-gain"      ; held <12mo → no discount
                 :asset-class :au-listed-shares
