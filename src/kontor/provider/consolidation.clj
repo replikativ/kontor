@@ -87,12 +87,16 @@
    :expense   :average})
 
 (defn- coerce-commodity
-  "Accept commodity as eid, lookup-ref, or :kontor.commodity/symbol string."
+  "Normalize a commodity to a bare eid. Accepts an eid (number), a
+   lookup-ref (vector), a symbol string (\"EUR\"), or a Money-style symbol
+   keyword (:EUR). `:kontor.commodity/symbol` stores strings, so a keyword
+   is resolved by its name. (note 196 N5 — one commodity shape out.)"
   [db c]
   (cond
-    (number? c) c
-    (string? c) (:db/id (d/entity db [:kontor.commodity/symbol c]))
-    (vector? c) (:db/id (d/entity db c))
+    (number? c)  c
+    (string? c)  (:db/id (d/entity db [:kontor.commodity/symbol c]))
+    (keyword? c) (:db/id (d/entity db [:kontor.commodity/symbol (name c)]))
+    (vector? c)  (:db/id (d/entity db c))
     :else c))
 
 ;; ============================================================================
@@ -363,7 +367,11 @@
                  :kontor.posting/account      (-> p :kontor.posting/account :db/id)
                  :kontor.posting/amount       (.negate ^java.math.BigDecimal
                                                (:kontor.posting/amount p))
-                 :kontor.posting/commodity    (:kontor.posting/commodity p)
+                 ;; N5 (note 196): normalize the ref to a bare eid, matching
+                 ;; :account above and translate-trial-balance's emissions —
+                 ;; d/pull returns {:db/id N} for a ref, which transacts fine
+                 ;; but was the one inconsistent commodity shape in the module.
+                 :kontor.posting/commodity    (-> p :kontor.posting/commodity :db/id)
                  :kontor.posting/entity       elimination-entity
                  :kontor.posting/display-type :product})
               (range)

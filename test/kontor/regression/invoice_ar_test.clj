@@ -280,6 +280,40 @@
           (is (zero? (.compareTo 100.00M (:total sum))))
           (is (zero? (.compareTo 0M (:not-yet-due sum)))))))))
 
+(deftest aging-valid-time-is-a-separate-explicit-axis-N7
+  ;; N7 (note 196): aging has TWO temporal axes that must not be conflated —
+  ;;   :as-of       the reference date for days-overdue bucketing, and
+  ;;   :as-of-valid the bitemporal cursor deciding which payment-applications
+  ;;                are visible.
+  ;; For a coherent point-in-time report :as-of-valid defaults to :as-of, so a
+  ;; *historical* aging correctly excludes cash received after the report date
+  ;; (the money wasn't in yet) — that exclusion is right, not a silent drop.
+  ;; Passing :as-of-valid explicitly decouples the axes: age by a past date
+  ;; but with today's payment knowledge.
+  (testing "the valid-time axis is explicit and independently controllable"
+    (let [invoice (open-invoice! "ORD-7" 10M 25M VAT)      ; gross 297.50
+          pay     (payment! "PAY-7")]
+      ;; cash applied at valid-time 2026-06-01 — AFTER the historical as-of below
+      (papp/apply-payment! *conn* {:payment pay :invoice invoice :amount 197.50M
+                                   :commodity (eur) :applied-by-uid (actor)
+                                   :applied-at #inst "2026-06-01"})
+      (let [db  (d/db *conn*)
+            ent (entity)
+            hist     (caging/aging-rows db {:entity-eid ent :method :invoice-date
+                                            :as-of #inst "2026-04-30"})
+            hist+now (caging/aging-rows db {:entity-eid ent :method :invoice-date
+                                            :as-of #inst "2026-04-30"
+                                            :as-of-valid #inst "2026-07-01"})
+            curr     (caging/aging-rows db {:entity-eid ent :method :invoice-date
+                                            :as-of #inst "2026-07-01"})]
+        (testing "historical aging (as-of 2026-04-30) excludes the June payment → full gross"
+          (is (= 1 (count hist)))
+          (is (zero? (.compareTo 297.50M (:open-amount (first hist))))))
+        (testing "explicit :as-of-valid recovers current knowledge under a past as-of → net"
+          (is (zero? (.compareTo 100.00M (:open-amount (first hist+now))))))
+        (testing "current aging (as-of 2026-07-01) sees the June payment → net open"
+          (is (zero? (.compareTo 100.00M (:open-amount (first curr))))))))))
+
 ;; ══════════════════════════════════════════════════════════════════════
 ;; 5. Kernel Money-typed aging over posted AR + a partial :settles offset
 ;; ══════════════════════════════════════════════════════════════════════

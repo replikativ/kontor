@@ -84,7 +84,7 @@
 ;; Defaults (overridable per call)
 ;; ============================================================================
 
-(def ^:const default-journal-code "INV")
+(def ^:const default-journal-code "SJ")
 (def ^:const default-commodity "INR")
 
 (defn- default-codes []
@@ -349,7 +349,7 @@
                      `:output-sgst-code`, `:output-igst-code`,
                      `:output-utgst-code`, `:output-cess-code`).
      :commodity    — commodity symbol (default \"INR\").
-     :journal-code — journal code (default \"INV\").
+     :journal-code — journal code (default \"SJ\").
 
    Returns a tx-data vector ready for
    `kontor.validation/transact-with-validation`.

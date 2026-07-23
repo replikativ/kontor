@@ -18,7 +18,7 @@
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
     (chart/install! conn)
-    (d/transact conn [{:kontor.journal/code "INV" :kontor.journal/name "Sales"
+    (d/transact conn [{:kontor.journal/code "SJ" :kontor.journal/name "Sales"
                        :kontor.journal/type :sale :kontor.journal/active true}])
     conn))
 
@@ -33,7 +33,7 @@
         ar (ace db "11200")
         rev (ace db "41100")
         gst-acc (ace db "21500")
-        jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "SJ"]))
         net-bd (bigdec net)
         tax-bd (.setScale (.multiply net-bd 0.10M) 2 java.math.RoundingMode/HALF_EVEN)
         gross (.add net-bd tax-bd)

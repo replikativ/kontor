@@ -80,7 +80,7 @@
 ;; Defaults (overridable per call)
 ;; ============================================================================
 
-(def ^:const default-journal-code "INV")
+(def ^:const default-journal-code "SJ")
 (def ^:const default-commodity "MXN")
 
 (defn- default-codes []
@@ -380,7 +380,7 @@
    Opts:
      :codes        — map of code overrides (any of the default-codes keys)
      :commodity    — commodity symbol (default \"MXN\")
-     :journal-code — journal code (default \"INV\")
+     :journal-code — journal code (default \"SJ\")
 
    Returns a tx-data vector ready for
    `kontor.validation/transact-with-validation`. Enforces sum-to-zero

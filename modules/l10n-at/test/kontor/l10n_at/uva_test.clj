@@ -23,7 +23,7 @@
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
     (chart/install! conn)
-    (d/transact conn [{:kontor.journal/code "INV"
+    (d/transact conn [{:kontor.journal/code "SJ"
                        :kontor.journal/name "Verkaufsrechnungen"
                        :kontor.journal/type :sale
                        :kontor.journal/active true}])
@@ -51,7 +51,7 @@
                   20 (account-eid db "3500")
                   13 (account-eid db "3510")
                   10 (account-eid db "3520"))
-        jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "SJ"]))
         net-bd (bigdec net)
         rate-frac (/ (bigdec rate-pct) (bigdec 100))
         vat-bd (.setScale (.multiply net-bd rate-frac)
@@ -87,7 +87,7 @@
         expense (account-eid db "7400")
         vor (account-eid db "2500")
         pay (account-eid db "3300")
-        jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
+        jnl (:db/id (d/entity db [:kontor.journal/code "SJ"]))
         net-bd (bigdec net)
         vat-bd (.setScale (.multiply net-bd (bigdec "0.20"))
                           2 java.math.RoundingMode/HALF_EVEN)

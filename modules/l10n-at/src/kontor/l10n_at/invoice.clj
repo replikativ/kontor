@@ -78,7 +78,7 @@
 (def ^:const default-ust-standard-code "3500")
 (def ^:const default-ust-reduced-13-code "3510")
 (def ^:const default-ust-reduced-10-code "3520")
-(def ^:const default-journal-code "INV")
+(def ^:const default-journal-code "SJ")
 (def ^:const default-commodity "EUR")
 
 (def ^:private vat-class->revenue-code
@@ -238,7 +238,7 @@
                      `:reverse-charge-code`, `:standard-ust-code`,
                      `:reduced-13-ust-code`, `:reduced-10-ust-code`).
      :commodity    — commodity symbol (default \"EUR\").
-     :journal-code — journal code (default \"INV\").
+     :journal-code — journal code (default \"SJ\").
 
    Returns a tx-data vector ready for
    `kontor.validation/transact-with-validation`.

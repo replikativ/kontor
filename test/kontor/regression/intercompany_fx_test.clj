@@ -244,16 +244,18 @@
                 {:db db :pair-id "P-IC-2023" :elimination-entity elim
                  :journal (jnl db) :date dec-31})
           postings (filter :kontor.posting/amount txd)
-          ;; the builder copies the pulled commodity ref, which arrives as a
-          ;; {:db/id N} map — normalise to a bare eid for grouping.
-          comm-of  (fn [p] (let [c (:kontor.posting/commodity p)]
-                             (if (map? c) (:db/id c) c)))
-          by-comm  (group-by comm-of postings)
+          by-comm  (group-by :kontor.posting/commodity postings)
           sum-c    (fn [ps] (reduce (fn [a p]
                                       (.add ^java.math.BigDecimal a
                                             ^java.math.BigDecimal (:kontor.posting/amount p)))
                                     0M ps))]
       (is (= 4 (count postings)) "4 elimination postings — 2 per source tx")
+      ;; N5 FIXED (note 196): the builder now emits :kontor.posting/commodity
+      ;; as a bare eid (like :account and translate-trial-balance), not the
+      ;; {:db/id N} pull-map it used to copy through. Pin that shape here so
+      ;; the grouping above is not silently absorbing an inconsistency.
+      (is (every? number? (map :kontor.posting/commodity postings))
+          "commodity emitted as a bare eid, one consistent shape")
       (is (every? #(= elim (:kontor.posting/entity %)) postings)
           "every elimination posting is stamped with the elimination entity")
       (is (amt= 0M (sum-c (by-comm eur))) "EUR side of the elimination nets to zero")

@@ -303,12 +303,10 @@
   ;;   IVA net = cobrado − acreditable = 200 − 800 = −400 (saldo a favor).
   (testing "DPI nets cobrado output IVA against pagado input ITC"
     (let [conn (mx/create-mx-db)]
-      ;; post-mx-invoice! posts to a journal coded "INV" (see l10n-mx invoice.clj);
-      ;; the preset ships "SJ" — add the INV sales journal the invoice helper needs.
-      (d/transact conn [{:kontor.journal/code "INV"
-                         :kontor.journal/name "Ventas"
-                         :kontor.journal/type :sale
-                         :kontor.journal/active true}])
+      ;; N2 FIXED (note 196): post-mx-invoice! now defaults to journal "SJ",
+      ;; the sales journal every preset ships — so a preset consumer can post
+      ;; an invoice with no extra journal setup. No manual "INV" journal here;
+      ;; that this test posts at all is the regression guard.
       ;; three cash sales + one credit sale (mirrors the module's own seed)
       (mxinv/post-mx-invoice!
        conn {:kontor.invoice/external-id "INV-CASH-16"
