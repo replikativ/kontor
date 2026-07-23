@@ -115,7 +115,13 @@
                          (:section/lines section))
              subtotal (reduce (fn [acc l]
                                 (money/add acc (:line/value l)))
-                              (money/zero (or (:section/commodity section) :EUR))
+                              ;; Seed the subtotal in the section's own currency —
+                              ;; derived from its computed lines when not declared —
+                              ;; so a non-EUR book does not hit an EUR-seed mismatch
+                              ;; (note-196 F5). :EUR only if there is nothing to derive.
+                              (money/zero (or (:section/commodity section)
+                                              (some->> lines (keep (comp :commodity :line/value)) first)
+                                              :EUR))
                               lines)]
          {:section/code     (:section/code section)
           :section/label    (:section/label section)

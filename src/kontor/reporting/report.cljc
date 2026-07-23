@@ -71,6 +71,26 @@
 (defn- on-or-after?  [a b] (>= (->ms a) (->ms b)))
 (defn- date-from-millis [ms] #?(:clj (java.util.Date. (long ms)) :cljs (js/Date. ms)))
 
+(defn- resolve-commodity-symbol
+  "Normalize a `:kontor.posting/commodity` value to a symbol keyword
+   (e.g. :EUR / :CAD). Handles a keyword (already a symbol — cljs books
+   store it directly), a pulled ref `{:db/id n}` or a bare eid (the kernel
+   schema types it `:db.type/ref`), or a `[:kontor.commodity/symbol s]`
+   lookup-ref. Falls back to the raw value if it can't resolve, so a
+   consumer never silently loses the commodity.
+
+   This is the fix for note-196 F5/F1: reads never resolved the commodity
+   ref, so statements defaulted to :EUR and trial balances keyed by a raw
+   commodity eid. Resolving once, here, gives every read the real symbol."
+  [db c]
+  (cond
+    (keyword? c) c
+    (and (vector? c) (= :kontor.commodity/symbol (first c))) (keyword (second c))
+    :else
+    (let [eid (if (map? c) (:db/id c) c)
+          sym (when eid (:kontor.commodity/symbol (d/pull db [:kontor.commodity/symbol] eid)))]
+      (if sym (keyword sym) c))))
+
 (defn- pull-posting
   "Pull the posting + its account's commodity/code/type/tags + tx state.
    Returns a flat map suitable for predicate filtering. Adds
@@ -128,6 +148,7 @@
     (assoc pulled
            :valid-from vf
            :tx-state tx-state
+           :commodity-symbol (resolve-commodity-symbol db (:kontor.posting/commodity pulled))
            :ledger-eid (:db/id (:kontor.posting/ledger pulled))
            :entity-eid (:db/id (:kontor.posting/entity pulled))
            :partner-eid (:db/id (:kontor.posting/partner pulled))
@@ -205,8 +226,13 @@
    (let [sum (reduce (fn [acc p]
                        (money/add-amount acc (amount-of p sign)))
                      (money/zero-amount)
-                     postings)]
-     {:value    (money/money sum (or commodity :EUR))
+                     postings)
+         ;; Derive the currency from the postings actually summed (they are
+         ;; mono-commodity per line — enforced under :strict-commodity?), so
+         ;; a non-EUR book is not silently mislabelled :EUR (note-196 F5).
+         ;; The passed `commodity` is only the empty-line fallback now.
+         derived (some :commodity-symbol postings)]
+     {:value    (money/money sum (or derived commodity :EUR))
       :postings (mapv :db/id postings)})))
 
 ;; The built-in classification dimensions a `marginalize` / `:dimension`
