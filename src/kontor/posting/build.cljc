@@ -57,9 +57,19 @@
   [{:keys [transaction postings tx-tempid] :as input}]
   (let [report (pv/validate input)]
     (when-not (:ok? report)
-      (throw (ex-info "build-transaction: input failed structural validation"
-                      {:report report
-                       :input input}))))
+      ;; Carry a typed :type so callers dispatch uniformly across BOTH write
+      ;; paths: a sum-to-zero imbalance here raises the SAME
+      ;; :validation/sum-to-zero the gate's transactor-side check raises
+      ;; (note-196 F2); other structural failures get :posting/structural-invalid.
+      (let [unbalanced? (some #(= :unbalanced (:error %)) (:errors report))]
+        (throw (ex-info (if unbalanced?
+                          "Postings do not sum to zero per commodity"
+                          "build-transaction: input failed structural validation")
+                        {:type   (if unbalanced?
+                                   :validation/sum-to-zero
+                                   :posting/structural-invalid)
+                         :report report
+                         :input  input})))))
   (let [tx-tempid (or tx-tempid -1)
         posting-tempid (if (string? tx-tempid)
                          (fn [i] (str tx-tempid "-p" i))

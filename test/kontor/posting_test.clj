@@ -344,7 +344,7 @@
 
 (deftest build-transaction-throws-on-unbalanced
   (is (thrown-with-msg?
-       clojure.lang.ExceptionInfo #"failed structural validation"
+       clojure.lang.ExceptionInfo #"sum to zero"
        (posting/build-transaction
         (assoc-in (balanced-sample)
                   [:postings 1 :kontor.posting/amount]
