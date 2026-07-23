@@ -178,9 +178,41 @@
                              (pr-str as-of) " for " (pr-str fs))
                         {:as-of as-of :filing-status fs :code code})))))
 
+(defn- ctc-phased-potential
+  "§24(b)/(h)(3) — the CTC potential ($per-child × children) reduced by $50
+   for each $1 000 (or fraction thereof) of modified AGI over the applicable
+   threshold ($400 000 MFJ / $200 000 any other case), floored at zero.
+
+   MAGI = AGI + amounts excluded under §§911/931/933; the substrate does not
+   yet model those exclusions, so `:inputs :gross-income` stands in for MAGI
+   (equal for a domestic filer). Authority: 26 USC §24(b)(1), §24(h)(3)."
+  ^java.math.BigDecimal [ctx db as-of]
+  (let [n      (or (get-in ctx [:tax-unit :qualifying-children-under-17]) 0)
+        per    (or (statute/parameter-value-at db "US.PIT.§24.ctc-per-child" as-of)
+                   (throw (ex-info "US PIT: no §24 CTC per-child amount at as-of (TCJA sunset?)"
+                                   {:as-of as-of})))
+        pot    (* (bigdec n) per)]
+    (if (zero? (.signum ^java.math.BigDecimal pot))
+      pot
+      (let [status (or (get-in ctx [:tax-unit :filing-status]) :single)
+            thresh (statute/parameter-value-at
+                    db (if (= status :mfj)
+                         "US.PIT.§24.phaseout-threshold-mfj"
+                         "US.PIT.§24.phaseout-threshold-other")
+                    as-of)
+            per-1k (statute/parameter-value-at db "US.PIT.§24.phaseout-per-1000" as-of)
+            magi   (or (get-in ctx [:inputs :gross-income]) 0M)
+            excess (max 0M (- magi thresh))]
+        (if (or (nil? thresh) (nil? per-1k) (zero? (.signum ^java.math.BigDecimal excess)))
+          pot
+          ;; ceil(excess / 1000) whole $1 000 units, each cutting $50
+          (let [units     (.divide ^java.math.BigDecimal excess 1000M 0 java.math.RoundingMode/CEILING)
+                reduction (* per-1k units)]
+            (max 0M (- pot reduction))))))))
+
 (defn- us-ctc-non-refundable
   "§24(a) Child Tax Credit non-refundable portion =
-   min(tax-before-credits, $2 000 × qualifying-children).
+   min(tax-before-credits, §24(b)-phased CTC potential).
 
    Returns a `(fn [ctx-with-:running])` so `apply-adjustments` late-
    binds the running tax at fold time (same shape as the DE Soli
@@ -190,11 +222,9 @@
   [ctx]
   (let [db    (:db ctx)
         as-of (as-of-from-ctx ctx)
-        n     (or (get-in ctx [:tax-unit :qualifying-children-under-17]) 0)
-        per   (or (statute/parameter-value-at db "US.PIT.§24.ctc-per-child" as-of)
-                  (throw (ex-info "US PIT: no §24 CTC per-child amount at as-of (TCJA sunset?)"
-                                  {:as-of as-of})))
-        total (* (bigdec n) per)]
+        ;; §24(b) MAGI phase-out is applied to the potential BEFORE the
+        ;; min-with-running cap (Schedule 8812 lines 9-11 precede line 12).
+        total (ctc-phased-potential ctx db as-of)]
     (fn [ctx-w-running]
       (let [running (or (:running ctx-w-running) 0M)]
         ;; apply-adjustments will floor at zero for non-refundable
@@ -224,9 +254,10 @@
         as-of      (as-of-from-ctx ctx)
         n          (or (get-in ctx [:tax-unit :qualifying-children-under-17]) 0)
         n-bd       (bigdec n)
-        ctc-per    (or (statute/parameter-value-at db "US.PIT.§24.ctc-per-child" as-of)
-                       (throw (ex-info "US PIT: no §24 CTC per-child amount at as-of (TCJA sunset?)"
-                                       {:as-of as-of})))
+        ;; §24(b): the refundable ACTC residual is measured against the
+        ;; PHASED CTC potential, so a high-MAGI filer whose CTC phases to $0
+        ;; gets $0 ACTC too (the refundable leg is a subset of the credit).
+        phased-pot (ctc-phased-potential ctx db as-of)
         actc-per   (or (statute/parameter-value-at db "US.PIT.§24.actc-per-child" as-of)
                        (throw (ex-info "US PIT: no §24 ACTC per-child amount at as-of (TCJA sunset?)"
                                        {:as-of as-of})))
@@ -235,7 +266,7 @@
         earned     (or (get-in ctx [:inputs :earned-income]) 0M)]
     (fn [ctx-w-running]
       (let [tax-before    (or (:tax-before-credits ctx-w-running) 0M)
-            total-ctc-pot (* n-bd ctc-per)
+            total-ctc-pot phased-pot
             non-ref-applied (min total-ctc-pot tax-before)
             actc-residual   (- total-ctc-pot non-ref-applied)
             cap-per-child   (* n-bd actc-per)

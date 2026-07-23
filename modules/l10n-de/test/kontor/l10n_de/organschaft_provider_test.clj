@@ -72,8 +72,12 @@
                    {:entity (ent db "Müller-Industries") :role :sub
                     :ownership-fraction 1M}
                    {:entity (ent db "Müller-Logistik") :role :sub
-                    :ownership-fraction 1M}]})]
-    (get-in result [:tempids "fiscal-unit"])))
+                    :ownership-fraction 1M}]})
+        fu-eid (get-in result [:tempids "fiscal-unit"])]
+    ;; note 197: bring the election in force (:proposed → :elected → :active) —
+    ;; run-group-tax! now requires an :active election.
+    (fu/activate! conn fu-eid)
+    fu-eid))
 
 ;; ============================================================================
 ;; The canonical worked example — KSt + Soli to the cent

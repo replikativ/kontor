@@ -332,11 +332,21 @@
    of all paired transactions — stamped with
    `:kontor.posting/entity = elimination-entity`.
 
-   The math is straightforward: the source txs each balance per
-   (entity, commodity), so the union of their negated postings balances
-   too, just on the elimination entity. No FX needed — eliminations
-   stay in their original commodities; the elimination entity itself is
-   later translated by [[translate-trial-balance-tx-data]] if needed.
+   Same-currency pairs: the source txs each balance per (entity, commodity),
+   so the union of their negated postings balances too, just on the
+   elimination entity. No FX needed.
+
+   Cross-currency pairs (note 197 / IAS 21.45): when `:presentation-commodity`
+   + `:fx-provider` are supplied, each eliminated posting is TRANSLATED to the
+   presentation commodity at its account-type rate (monetary → closing, P&L →
+   average, equity → historical — the same rates as
+   [[translate-trial-balance-tx-data]]) BEFORE the reversing entry is posted,
+   so an intercompany pair booked in different currencies actually nets to zero
+   in the presentation currency. Translating the two sides at different rates
+   leaves a residual FX difference; per IAS 21.45 that intragroup-monetary FX
+   difference is posted to `:fx-gain-loss-account` (P&L) — NOT to CTA (that is
+   the general-translation difference, IAS 21.39) and NOT force-to-zero. A
+   residual with no `:fx-gain-loss-account` supplied is an error.
 
    Inputs:
      :db                  — db value
@@ -346,36 +356,91 @@
      :journal             — :db/id of the journal to post to
      :date                — effective date for the elimination tx
      :tx-tempid           — optional string tempid (default \"elim-tx\")
+     :presentation-commodity / :fx-provider / :at-date  — supply all three to
+                            translate the elimination into presentation
+                            currency (cross-currency case).
+     :rate-type-by-account-type / :rate-type-by-account — optional rate
+                            overrides (see translate-trial-balance-tx-data).
+     :fx-gain-loss-account — P&L account eid for the intragroup FX residual
+                            (required only when a cross-currency residual arises).
      :vt-from / :vt-to    — optional bitemporal stamps for direct
                             callers (ADR-068). `consolidate!` does
                             its own valid-time plumbing via
                             `kontor.workflow.process/run-process` and does NOT
                             consume these."
-  [{:keys [db pair-id elimination-entity journal date tx-tempid vt-from vt-to]
-    :or   {tx-tempid "elim-tx"}}]
+  [{:keys [db pair-id elimination-entity journal date tx-tempid vt-from vt-to
+           presentation-commodity fx-provider at-date
+           rate-type-by-account-type rate-type-by-account fx-gain-loss-account]
+    :or   {tx-tempid "elim-tx"
+           rate-type-by-account-type default-rate-type-by-account-type
+           rate-type-by-account      {}}}]
   (when-not db                  (throw (ex-info ":db required" {})))
   (when-not pair-id             (throw (ex-info ":pair-id required" {})))
   (when-not elimination-entity  (throw (ex-info ":elimination-entity required" {})))
   (when-not journal             (throw (ex-info ":journal required" {})))
   (when-not date                (throw (ex-info ":date required" {})))
   (let [pair-postings (find-pair-postings db pair-id)
+        ;; IAS 21.45 cross-currency elimination is OPT-IN via :fx-gain-loss-
+        ;; account — supplying it (together with the presentation commodity +
+        ;; provider) signals "translate the elimination into presentation
+        ;; currency and route the FX residual to this P&L account." Without it,
+        ;; the elimination stays in the source commodities (the pre-note-197
+        ;; behaviour), correct for same-currency groups.
+        translate?    (boolean (and presentation-commodity fx-provider fx-gain-loss-account))
+        pres-eid      (when translate? (coerce-commodity db presentation-commodity))
+        fx-date       (or at-date date)
         tempid (fn [i] (str tx-tempid "-p" i))
+        ;; Per posting: negate, then (cross-currency) translate to the
+        ;; presentation commodity at the account-type rate.
+        elim-lines
+        (mapv (fn [p]
+                (let [acct    (-> p :kontor.posting/account :db/id)
+                      neg-amt (.negate ^java.math.BigDecimal (:kontor.posting/amount p))
+                      src     (-> p :kontor.posting/commodity :db/id)]
+                  (if translate?
+                    (let [{acct-type :kontor.account/type
+                           monetary? :kontor.account/monetary?} (account-info db acct)
+                          rt (pick-rate-type rate-type-by-account rate-type-by-account-type
+                                             acct (or acct-type :other) monetary?)
+                          m  (fx/convert (money/money neg-amt src) fx-provider
+                                         {:to pres-eid :at-date fx-date :rate-type rt})]
+                      {:acct acct :amount (:amount m) :commodity pres-eid})
+                    {:acct acct :amount neg-amt :commodity src})))
+              pair-postings)
+        ;; Cross-currency residual = the translated postings no longer sum to
+        ;; zero (each side at its own rate); IAS 21.45 → P&L, via a plug.
+        residual (when translate?
+                   (reduce (fn [^java.math.BigDecimal a l]
+                             (.add a ^java.math.BigDecimal (:amount l)))
+                           0M elim-lines))
+        residual? (and residual (not (zero? (.signum ^java.math.BigDecimal residual))))
+        _ (when (and residual? (nil? fx-gain-loss-account))
+            (throw (ex-info (str "eliminate-intercompany-pair-tx-data: cross-currency "
+                                 "elimination leaves an FX residual (" residual ") but no "
+                                 ":fx-gain-loss-account was supplied (IAS 21.45 → P&L)")
+                            {:pair-id pair-id :residual residual})))
         elim-postings
-        (mapv (fn [i p]
-                {:db/id                (tempid i)
+        (cond-> (into []
+                      (map-indexed
+                       (fn [i l]
+                         {:db/id                       (tempid i)
+                          :kontor.posting/transaction  tx-tempid
+                          :kontor.posting/account      (:acct l)
+                          :kontor.posting/amount       (:amount l)
+                          :kontor.posting/commodity    (:commodity l)
+                          :kontor.posting/entity       elimination-entity
+                          :kontor.posting/display-type :product}))
+                      elim-lines)
+          residual?
+          (conj {:db/id                       (tempid (count elim-lines))
                  :kontor.posting/transaction  tx-tempid
-                 :kontor.posting/account      (-> p :kontor.posting/account :db/id)
-                 :kontor.posting/amount       (.negate ^java.math.BigDecimal
-                                               (:kontor.posting/amount p))
-                 ;; N5 (note 196): normalize the ref to a bare eid, matching
-                 ;; :account above and translate-trial-balance's emissions —
-                 ;; d/pull returns {:db/id N} for a ref, which transacts fine
-                 ;; but was the one inconsistent commodity shape in the module.
-                 :kontor.posting/commodity    (-> p :kontor.posting/commodity :db/id)
+                 :kontor.posting/account      fx-gain-loss-account
+                 ;; plug = −residual so the elimination tx balances; a debit
+                 ;; (positive) here is an FX loss on the intragroup monetary item
+                 :kontor.posting/amount       (.negate ^java.math.BigDecimal residual)
+                 :kontor.posting/commodity    pres-eid
                  :kontor.posting/entity       elimination-entity
-                 :kontor.posting/display-type :product})
-              (range)
-              pair-postings)]
+                 :kontor.posting/display-type :product}))]
     (let [base (into [{:db/id                              tx-tempid
                        :kontor.transaction/journal                journal
                        :kontor.transaction/effective-date         date
@@ -426,6 +491,14 @@
      :rate-type-by-account-type   — optional override (see
                                      translate-trial-balance-tx-data).
      :rate-type-by-account        — optional override per account eid.
+     :fx-gain-loss-account        — optional P&L account eid. Supplying it
+                                     enables IAS 21.45 cross-currency
+                                     elimination: each eliminated posting is
+                                     translated to the presentation commodity
+                                     and the intragroup FX residual is posted
+                                     here. Omit for same-currency groups (the
+                                     elimination then stays in source
+                                     commodities). (note 197.)
 
    Returns the vector of tx-data fragments. Callers stitch:
      `(reduce into [] (consolidate-tx-data ...))` for one flat tx-data,
@@ -433,7 +506,7 @@
      `consolidate!` wrapper does this)."
   [{:keys [conn group-root consolidation-entity elimination-entity
            presentation-commodity fx-provider at-date journal cta-account
-           rate-type-by-account-type rate-type-by-account]
+           rate-type-by-account-type rate-type-by-account fx-gain-loss-account]
     :or   {rate-type-by-account-type default-rate-type-by-account-type
            rate-type-by-account      {}}}]
   (when-not conn                   (throw (ex-info ":conn required" {})))
@@ -544,12 +617,20 @@
           (fn [i pid]
             (when-not (elimination-exists? pid)
               (eliminate-intercompany-pair-tx-data
-               {:db                 db
-                :pair-id            pid
-                :elimination-entity elimination-entity
-                :journal            journal
-                :date               at-date
-                :tx-tempid          (str "elim-" i)})))
+               {:db                        db
+                :pair-id                   pid
+                :elimination-entity        elimination-entity
+                :journal                   journal
+                :date                      at-date
+                ;; IAS 21.45 (note 197): translate the elimination into the
+                ;; presentation currency so cross-currency pairs actually net.
+                :presentation-commodity    presentation-commodity
+                :fx-provider               fx-provider
+                :at-date                   at-date
+                :rate-type-by-account-type rate-type-by-account-type
+                :rate-type-by-account      rate-type-by-account
+                :fx-gain-loss-account      fx-gain-loss-account
+                :tx-tempid                 (str "elim-" i)})))
           pair-ids))]
     (into translations eliminations)))
 

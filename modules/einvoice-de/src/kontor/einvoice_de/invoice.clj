@@ -113,12 +113,26 @@
   (.setScale (.multiply (bigdec quantity) (bigdec unit-price))
              2 java.math.RoundingMode/HALF_EVEN))
 
+;; German VAT rounding is kaufmännische Rundung (DIN 1333) = HALF_UP, and it is
+;; applied per VAT-BREAKDOWN CATEGORY on the summed base (EN16931 BR-CO-17 /
+;; BT-117 = BT-116 × BT-119), NOT by summing per-line-rounded VAT. This is what
+;; org.mustangproject emits in the Factur-X document (verified: this invoice ->
+;; CalculatedAmount 302.01, GrandTotalAmount 1891.51), so booking totals from
+;; here reconcile to the cent with the legal document sent to the customer/tax
+;; office. Scoped to the l10n-de e-invoice path; kernel money stays HALF_EVEN
+;; (CLAUDE.md sanctions per-jurisdiction VAT HALF-UP overrides). note 197.
+(defn- category-vat
+  "EN16931 BR-CO-17 category VAT = round(base × rate%, 2, HALF_UP)."
+  ^java.math.BigDecimal [^java.math.BigDecimal base ^java.math.BigDecimal rate-pct]
+  (.setScale (.multiply base (.divide rate-pct (bigdec 100) 6 java.math.RoundingMode/HALF_UP))
+             2 java.math.RoundingMode/HALF_UP))
+
 (defn line-vat
   ^java.math.BigDecimal [item]
-  (.setScale (.multiply (line-net item)
-                        (.divide (bigdec (:item/vat-rate item))
-                                 (bigdec 100) 6 java.math.RoundingMode/HALF_EVEN))
-             2 java.math.RoundingMode/HALF_EVEN))
+  ;; Per-line VAT is a DISPLAY figure only (EN16931 has no per-line VAT); the
+  ;; legally-operative amount is the per-category `category-vat`. Rounded
+  ;; HALF_UP to stay consistent with the category figure.
+  (category-vat (line-net item) (bigdec (:item/vat-rate item))))
 
 (defn line-gross ^java.math.BigDecimal [item]
   (.add (line-net item) (line-vat item)))
@@ -129,12 +143,13 @@
   (->> items
        (group-by :item/vat-rate)
        (map (fn [[rate group]]
-              {:vat/rate     (bigdec rate)
-               :vat/category (or (some :item/vat-category group) "S")
-               :vat/base     (reduce #(.add ^java.math.BigDecimal %1 (line-net %2))
-                                     0M group)
-               :vat/tax      (reduce #(.add ^java.math.BigDecimal %1 (line-vat %2))
-                                     0M group)}))
+              (let [base (reduce #(.add ^java.math.BigDecimal %1 (line-net %2)) 0M group)]
+                {:vat/rate     (bigdec rate)
+                 :vat/category (or (some :item/vat-category group) "S")
+                 :vat/base     base
+                 ;; EN16931 BR-CO-17: category tax = round(base × rate) once,
+                 ;; NOT Σ(per-line-rounded VAT) — matches the emitted document.
+                 :vat/tax      (category-vat base (bigdec rate))})))
        (sort-by :vat/rate)
        vec))
 

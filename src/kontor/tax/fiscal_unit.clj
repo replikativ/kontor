@@ -32,7 +32,8 @@
    (composing the elected vs separate outcome via
    `compose-aggregate-of`)."
   (:require [datahike.api :as d]
-            [kontor.tax.period-tax-provider :as ptp]))
+            [kontor.tax.period-tax-provider :as ptp]
+            [kontor.workflow.status-machine :as sm]))
 
 ;; ============================================================================
 ;; Allowed regimes + computation styles (closed-by-ADR enums)
@@ -252,6 +253,29 @@
   [conn opts]
   (d/transact conn (elect-tx-data opts)))
 
+(defn activate!
+  "Bring an elected fiscal unit INTO FORCE: advance the ADR-034 status
+   `:proposed → :elected → :active` and set `:kontor.fiscal-unit/active true`.
+   `elect!` only lays down the `:proposed` row; a group return may not be run
+   until the election is in force (`run-group-tax!` enforces this) — a
+   consolidated/group filing requires a valid in-force election/consent for the
+   period (26 CFR §1.1502-75 consent; §14 KStG a valid Gewinnabführungsvertrag
+   in force). note 197.
+
+   `fiscal-unit` is the unit eid. Optional opts thread ADR-038 audit metadata
+   (`:changed-by-uid` / `:reason` / `:supporting-doc`) onto both transitions.
+   Throws `:status-machine/illegal-transition` if the unit is not currently
+   `:proposed`. Returns the tx-report of the activation."
+  ([conn fiscal-unit] (activate! conn fiscal-unit {}))
+  ([conn fiscal-unit opts]
+   (let [base (merge {:entity fiscal-unit
+                      :entity-type :fiscal-unit
+                      :facet :kontor.fiscal-unit/status}
+                     opts)]
+     (sm/record-status-change! conn (assoc base :to :elected))
+     (sm/record-status-change! conn (assoc base :to :active))
+     (d/transact conn [[:db/add fiscal-unit :kontor.fiscal-unit/active true]]))))
+
 (defn exit-tx-data
   "Pure tx-data builder for exiting a fiscal-unit member. Sets
    `:left-on` on the member row at the given date. Does NOT walk
@@ -324,11 +348,41 @@
                      '[:db/id :kontor.fiscal-unit/code
                        :kontor.fiscal-unit/computation-style
                        :kontor.fiscal-unit/regime
+                       :kontor.fiscal-unit/status
+                       :kontor.fiscal-unit/active
+                       :kontor.fiscal-unit/elected-from
+                       :kontor.fiscal-unit/elected-until
                        {:kontor.fiscal-unit/parent-entity [:db/id]}]
                      fiscal-unit)
         _ (when-not (:kontor.fiscal-unit/computation-style unit)
             (throw (ex-info ":fiscal-unit not found or missing :computation-style"
                             {:fiscal-unit fiscal-unit})))
+        ;; Election-in-force gate (note 197): a group return may only be filed
+        ;; for an ACTIVE election. Reject :proposed (never activated), :exited,
+        ;; and :voided-retro (the authority retroactively broke the group) — a
+        ;; group filing for an election not in force is a materially wrong tax
+        ;; result. 26 CFR §1.1502-75 (consent); §14 KStG (valid GAV in force).
+        _ (when-not (and (= :active (:kontor.fiscal-unit/status unit))
+                         (true? (:kontor.fiscal-unit/active unit)))
+            (throw (ex-info (str "run-group-tax!: fiscal-unit election is not in force "
+                                 "(status " (:kontor.fiscal-unit/status unit)
+                                 ", active " (:kontor.fiscal-unit/active unit)
+                                 ") — activate! it first, or file the members separately")
+                            {:type        :kontor.fiscal-unit/election-not-in-force
+                             :fiscal-unit fiscal-unit
+                             :status      (:kontor.fiscal-unit/status unit)
+                             :active      (:kontor.fiscal-unit/active unit)})))
+        ;; Bitemporal window: the election must cover the requested period.
+        elected-from  (:kontor.fiscal-unit/elected-from unit)
+        elected-until (:kontor.fiscal-unit/elected-until unit)
+        _ (when (or (and elected-from  (.after ^java.util.Date elected-from  ^java.util.Date (:from period)))
+                    (and elected-until (.before ^java.util.Date elected-until ^java.util.Date (:to period))))
+            (throw (ex-info "run-group-tax!: election window does not cover the requested period"
+                            {:type          :kontor.fiscal-unit/election-not-in-force
+                             :fiscal-unit   fiscal-unit
+                             :elected-from  elected-from
+                             :elected-until elected-until
+                             :period        period})))
         style (:kontor.fiscal-unit/computation-style unit)
         parent (:db/id (:kontor.fiscal-unit/parent-entity unit))
         as-of (or as-of (:to period))]
