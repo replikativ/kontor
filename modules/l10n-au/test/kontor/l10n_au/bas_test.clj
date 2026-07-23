@@ -17,7 +17,7 @@
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
     (chart/install! conn)
-    (d/transact conn [{:kontor.journal/code "INV" :kontor.journal/name "Sales"
+    (d/transact conn [{:kontor.journal/code "SJ" :kontor.journal/name "Sales"
                        :kontor.journal/type :sale :kontor.journal/active true}])
     conn))
 
@@ -191,7 +191,7 @@
           aud-eid (:db/id (d/entity db [:kontor.commodity/symbol "AUD"]))
           gst-recv (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db "11700")
           bank     (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db "11100")
-          jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
+          jnl (:db/id (d/entity db [:kontor.journal/code "SJ"]))
           date #inst "2026-02-15T00:00:00Z"
           tx-data (posting/build-transaction
                    {:transaction

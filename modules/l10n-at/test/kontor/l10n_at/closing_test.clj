@@ -30,7 +30,7 @@
     (v/install-invariants! conn)
     (chart/install! conn)
     (d/transact conn
-                [{:kontor.journal/code "INV" :kontor.journal/name "Verkaufsrechnungen"
+                [{:kontor.journal/code "SJ" :kontor.journal/name "Verkaufsrechnungen"
                   :kontor.journal/type :sale :kontor.journal/active true}
                  {:kontor.journal/code "EXP" :kontor.journal/name "Aufwendungen"
                   :kontor.journal/type :purchase :kontor.journal/active true}
@@ -181,7 +181,7 @@
           _ (v/install-invariants! conn)
           _ (chart/install! conn)
           ;; INV + EXP for seeding; deliberately no CLOSE journal
-          _ (d/transact conn [{:kontor.journal/code "INV" :kontor.journal/name "Verkaufsrechnungen"
+          _ (d/transact conn [{:kontor.journal/code "SJ" :kontor.journal/name "Verkaufsrechnungen"
                                :kontor.journal/type :sale :kontor.journal/active true}
                               {:kontor.journal/code "EXP" :kontor.journal/name "Aufwendungen"
                                :kontor.journal/type :purchase :kontor.journal/active true}
