@@ -109,14 +109,13 @@
 ;; $400,000 (MFJ). MAGI $500,000 → excess $100,000 → 100 × $50 = $5,000
 ;; reduction ≥ $4,000 potential → CTC fully phased out to $0.
 ;; Authority: IRC §24(b), law.cornell.edu/uscode/text/26/24.
-(deftest ^:kaocha/pending us-mfj-500k-two-children-ctc-phaseout
-  ;; PENDING(NEW): the US PIT provider applies the full §24 CTC regardless
-  ;; of income — `us-ctc-non-refundable` is min($2,000×n, running) with NO
-  ;; §24(b) MAGI phase-out. A MFJ filer at $500k with 2 kids is granted the
-  ;; full $4,000 credit when the statute phases it out to $0, understating
-  ;; the liability by $4,000. The statute docstring lists §32 EITC / §199A
-  ;; QBI / AMT as out-of-scope but NOT the CTC phase-out, so a consumer
-  ;; passing :qualifying-children-under-17 gets a silently-wrong result.
+(deftest us-mfj-500k-two-children-ctc-phaseout
+  ;; FIXED (note 197): the US PIT provider now applies the §24(b) MAGI phase-out
+  ;; — the CTC potential is cut $50 per $1,000 (or fraction) of MAGI over
+  ;; $400,000 MFJ / $200,000 other (§24(h)(3)), floored at $0, before both the
+  ;; non-refundable cap and the refundable ACTC residual. A MFJ filer at $500k
+  ;; MAGI (excess $100k → $5,000 reduction ≥ $4,000 potential) gets CTC $0, so
+  ;; liability = gross. Authority: 26 USC §24(b)(1) / §24(h)(3) (Cornell LII).
   (testing "MFJ, AGI $500,000, 2 kids — §24(b) fully phases out the CTC"
     (let [f (us {:filing-status :mfj :qualifying-children-under-17 2}
                 {:gross-income 500000M :earned-income 500000M})]

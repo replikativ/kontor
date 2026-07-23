@@ -186,6 +186,25 @@
     :kontor.parameter/label        "IRC §24(d)(1)(B)(ii) — ACTC 15 % of (earned-income − floor) cap rate"
     :kontor.parameter/jurisdiction :us
     :kontor.parameter/unit         :rate
+    :kontor.parameter/concept-iri  "https://www.law.cornell.edu/uscode/text/26/24"}
+
+   ;; --- §24(b)/(h)(3) CTC phase-out (TCJA) ---
+   {:kontor.parameter/code         "US.PIT.§24.phaseout-threshold-mfj"
+    :kontor.parameter/label        "IRC §24(h)(3) — CTC phase-out threshold, married filing jointly ($400 000)"
+    :kontor.parameter/jurisdiction :us
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.law.cornell.edu/uscode/text/26/24"}
+
+   {:kontor.parameter/code         "US.PIT.§24.phaseout-threshold-other"
+    :kontor.parameter/label        "IRC §24(h)(3) — CTC phase-out threshold, any other filing status ($200 000)"
+    :kontor.parameter/jurisdiction :us
+    :kontor.parameter/unit         :amount-money
+    :kontor.parameter/concept-iri  "https://www.law.cornell.edu/uscode/text/26/24"}
+
+   {:kontor.parameter/code         "US.PIT.§24.phaseout-per-1000"
+    :kontor.parameter/label        "IRC §24(b)(1) — CTC reduction per $1 000 (or fraction) of MAGI over threshold ($50)"
+    :kontor.parameter/jurisdiction :us
+    :kontor.parameter/unit         :amount-money
     :kontor.parameter/concept-iri  "https://www.law.cornell.edu/uscode/text/26/24"}])
 
 (def parameter-values
@@ -366,7 +385,24 @@
       :kontor.parameter-value/effective-from  #inst "2018-01-01"
       :kontor.parameter-value/effective-until #inst "2026-01-01"
       :kontor.parameter-value/decimal-value   0.15M
-      :kontor.parameter-value/citation        "IRC §24(d)(1)(B)(ii) (TCJA §11022) — 15 % ACTC earned-income cap rate 2018-2025"}])))
+      :kontor.parameter-value/citation        "IRC §24(d)(1)(B)(ii) (TCJA §11022) — 15 % ACTC earned-income cap rate 2018-2025"}
+
+     ;; --- §24(b)/(h)(3) CTC phase-out thresholds + rate (TCJA-stable) ---
+     {:kontor.parameter-value/parameter       [:kontor.parameter/code "US.PIT.§24.phaseout-threshold-mfj"]
+      :kontor.parameter-value/effective-from  #inst "2018-01-01"
+      :kontor.parameter-value/effective-until #inst "2026-01-01"
+      :kontor.parameter-value/decimal-value   400000M
+      :kontor.parameter-value/citation        "IRC §24(h)(3) (TCJA §11022) — $400 000 MFJ CTC phase-out threshold 2018-2025"}
+     {:kontor.parameter-value/parameter       [:kontor.parameter/code "US.PIT.§24.phaseout-threshold-other"]
+      :kontor.parameter-value/effective-from  #inst "2018-01-01"
+      :kontor.parameter-value/effective-until #inst "2026-01-01"
+      :kontor.parameter-value/decimal-value   200000M
+      :kontor.parameter-value/citation        "IRC §24(h)(3) (TCJA §11022) — $200 000 (any other case) CTC phase-out threshold 2018-2025"}
+     {:kontor.parameter-value/parameter       [:kontor.parameter/code "US.PIT.§24.phaseout-per-1000"]
+      :kontor.parameter-value/effective-from  #inst "2018-01-01"
+      :kontor.parameter-value/effective-until #inst "2026-01-01"
+      :kontor.parameter-value/decimal-value   50M
+      :kontor.parameter-value/citation        "IRC §24(b)(1) — CTC reduced $50 per $1 000 (or fraction) of MAGI over threshold"}])))
 
 ;; ============================================================================
 ;; §1(j) progressive bracket scales (4 statuses × 6 years × 7 bands = 168 rows)
