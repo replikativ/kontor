@@ -51,77 +51,64 @@
   (:require [kontor.money :as money]
             [kontor.reporting.financial-statements :as fs]))
 
-;; The kernel report engine derives each line's commodity from the
-;; postings it sums (note-196 F5), so a populated MXN line is tagged MXN
-;; automatically. Empty lines and empty sections have no postings to
-;; derive from and would fall back to the engine's :EUR default; adding
-;; an :EUR zero to an MXN subtotal throws `Cross-commodity :add`. Stamping
-;; :MXN keeps those zeros in-currency so a partially-populated chart
-;; still computes. On populated lines the postings-derived MXN wins, so
-;; this stamp never masks a real currency.
-(defn- in-mxn [statement]
-  (update statement :statement/sections
-          (fn [sections]
-            (mapv (fn [s]
-                    (-> s
-                        (assoc :section/commodity :MXN)
-                        (update :section/lines
-                                (fn [ls] (mapv #(assoc % :line/commodity :MXN) ls)))))
-                  sections))))
-
+;; Commodity needs no per-line stamp: the report engine derives each
+;; populated line's commodity from the postings it sums (note 196 F5), a
+;; zero is the additive identity across commodities so empty lines and
+;; empty sections fold cleanly (F5b), and an all-empty section inherits
+;; the book commodity — so a partially-populated MXN chart reports :MXN
+;; throughout.
 (def definition
   "Multi-step Estado de Resultados over the `kontor.l10n-mx.chart` codes."
-  (in-mxn
-   {:statement/name    "Estado de Resultados"
-    :statement/country "MX"
-    :statement/sections
-    [{:section/code  "1"
-      :section/label "Ingresos"
-      :section/lines
-      [{:line/code "1.1" :line/label "Ventas netas"
-        :line/codes ["401%"]}
-       {:line/code "1.2" :line/label "Servicios"
-        :line/codes ["402%"]}]}
+  {:statement/name    "Estado de Resultados"
+   :statement/country "MX"
+   :statement/sections
+   [{:section/code  "1"
+     :section/label "Ingresos"
+     :section/lines
+     [{:line/code "1.1" :line/label "Ventas netas"
+       :line/codes ["401%"]}
+      {:line/code "1.2" :line/label "Servicios"
+       :line/codes ["402%"]}]}
 
-     {:section/code  "2"
-      :section/label "Costo de ventas"
-      :section/lines
-      [{:line/code "2.1" :line/label "Costo de lo vendido"
-        :line/codes ["501%"]}]}
+    {:section/code  "2"
+     :section/label "Costo de ventas"
+     :section/lines
+     [{:line/code "2.1" :line/label "Costo de lo vendido"
+       :line/codes ["501%"]}]}
 
-     {:section/code  "3"
-      :section/label "Gastos de operación"
-      :section/lines
-      [{:line/code "3.1" :line/label "Sueldos y prestaciones"
-        :line/codes ["601.01.001" "601.02.001"]}
-       {:line/code "3.2" :line/label "Renta y servicios públicos"
-        :line/codes ["601.03.001" "601.04.001" "601.05.001"]}
-       {:line/code "3.3" :line/label "Honorarios y mantenimiento"
-        :line/codes ["601.06.001" "601.07.001"]}
-       {:line/code "3.4" :line/label "Papelería, combustibles y viáticos"
-        :line/codes ["601.08.001" "601.09.001" "601.10.001"]}
-       {:line/code "3.5" :line/label "Publicidad y seguros"
-        :line/codes ["601.11.001" "601.12.001"]}
-       {:line/code "3.6" :line/label "Depreciación del ejercicio"
-        :line/codes ["601.13.001"]}
+    {:section/code  "3"
+     :section/label "Gastos de operación"
+     :section/lines
+     [{:line/code "3.1" :line/label "Sueldos y prestaciones"
+       :line/codes ["601.01.001" "601.02.001"]}
+      {:line/code "3.2" :line/label "Renta y servicios públicos"
+       :line/codes ["601.03.001" "601.04.001" "601.05.001"]}
+      {:line/code "3.3" :line/label "Honorarios y mantenimiento"
+       :line/codes ["601.06.001" "601.07.001"]}
+      {:line/code "3.4" :line/label "Papelería, combustibles y viáticos"
+       :line/codes ["601.08.001" "601.09.001" "601.10.001"]}
+      {:line/code "3.5" :line/label "Publicidad y seguros"
+       :line/codes ["601.11.001" "601.12.001"]}
+      {:line/code "3.6" :line/label "Depreciación del ejercicio"
+       :line/codes ["601.13.001"]}
        ;; Non-deductible expenses reduce book profit even though ISR
        ;; disallows them; they belong in the P&L (and in the BS current-
        ;; period result) so the two stay consistent.
-       {:line/code "3.7" :line/label "Gastos no deducibles"
-        :line/codes ["701%"]}]}
+      {:line/code "3.7" :line/label "Gastos no deducibles"
+       :line/codes ["701%"]}]}
 
-     {:section/code  "4"
-      :section/label "Otros ingresos (productos financieros)"
-      :section/lines
-      [{:line/code "4.1" :line/label "Intereses y utilidad cambiaria"
-        :line/codes ["405%"]}]}
+    {:section/code  "4"
+     :section/label "Otros ingresos (productos financieros)"
+     :section/lines
+     [{:line/code "4.1" :line/label "Intereses y utilidad cambiaria"
+       :line/codes ["405%"]}]}
 
-     {:section/code  "5"
-      :section/label "Gastos financieros"
-      :section/lines
-      [{:line/code "5.1" :line/label "Intereses pagados" :line/codes ["601.14.001"]}
-       {:line/code "5.2" :line/label "Comisiones bancarias" :line/codes ["601.15.001"]}
-       {:line/code "5.3" :line/label "Pérdida cambiaria" :line/codes ["601.16.001"]}]}]}))
+    {:section/code  "5"
+     :section/label "Gastos financieros"
+     :section/lines
+     [{:line/code "5.1" :line/label "Intereses pagados" :line/codes ["601.14.001"]}
+      {:line/code "5.2" :line/label "Comisiones bancarias" :line/codes ["601.15.001"]}
+      {:line/code "5.3" :line/label "Pérdida cambiaria" :line/codes ["601.16.001"]}]}]})
 
 (def ^:private sign-map
   "Ingresos y otros ingresos suman; costo, gastos de operación y gastos

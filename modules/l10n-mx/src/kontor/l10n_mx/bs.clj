@@ -45,102 +45,90 @@
             [kontor.reporting.financial-statements :as fs]))
 
 ;; See the note in kontor.l10n-mx.pnl — populated lines derive MXN from
-;; their postings (note-196 F5), but empty lines/sections would fall back
-;; to the engine's :EUR default and break the cross-commodity add. Stamp
-;; :MXN so a partially-populated chart still computes; the derived MXN
-;; wins on every populated line.
-(defn- in-mxn [statement]
-  (update statement :statement/sections
-          (fn [sections]
-            (mapv (fn [s]
-                    (-> s
-                        (assoc :section/commodity :MXN)
-                        (update :section/lines
-                                (fn [ls] (mapv #(assoc % :line/commodity :MXN) ls)))))
-                  sections))))
-
+;; their postings (note 196 F5), empty lines/sections fold as the additive
+;; identity (F5b), and an all-empty section inherits the book commodity,
+;; so a partially-populated MXN chart reports :MXN with no per-line stamp.
 (def definition
   "Classified Balance General over the `kontor.l10n-mx.chart` codes."
-  (in-mxn
-   {:statement/name    "Balance General"
-    :statement/country "MX"
-    :statement/sections
-    [{:section/code  "A"
-      :section/label "Activo circulante"
-      :section/lines
-      [{:line/code "A.1" :line/label "Efectivo, bancos e inversiones"
-        :line/codes ["101%" "102%" "103%"]}
-       {:line/code "A.2" :line/label "Clientes"
-        :line/codes ["105%"]}
-       {:line/code "A.3" :line/label "Otras cuentas por cobrar y anticipos"
-        :line/codes ["106%" "107%" "108%"]}
-       {:line/code "A.4" :line/label "Inventarios"
-        :line/codes ["115%"]}
+  {:statement/name    "Balance General"
+   :statement/country "MX"
+   :statement/sections
+   [{:section/code  "A"
+     :section/label "Activo circulante"
+     :section/lines
+     [{:line/code "A.1" :line/label "Efectivo, bancos e inversiones"
+       :line/codes ["101%" "102%" "103%"]}
+      {:line/code "A.2" :line/label "Clientes"
+       :line/codes ["105%"]}
+      {:line/code "A.3" :line/label "Otras cuentas por cobrar y anticipos"
+       :line/codes ["106%" "107%" "108%"]}
+      {:line/code "A.4" :line/label "Inventarios"
+       :line/codes ["115%"]}
        ;; IVA acreditable / retenciones por cobrar / pagos provisionales
        ;; / IEPS acreditable are all `:asset` — impuestos a favor.
-       {:line/code "A.5" :line/label "Impuestos a favor"
-        :line/codes ["119%" "120%" "121%" "216%"]}]}
+      {:line/code "A.5" :line/label "Impuestos a favor"
+       :line/codes ["119%" "120%" "121%" "216%"]}]}
 
-     {:section/code  "B"
-      :section/label "Activo fijo (neto)"
-      :section/lines
-      [{:line/code "B.1" :line/label "Terrenos y edificios"
-        :line/codes ["151%" "152%"]}
-       {:line/code "B.2" :line/label "Maquinaria, mobiliario y equipo"
-        :line/codes ["153%" "154%" "155%" "156%"]}
+    {:section/code  "B"
+     :section/label "Activo fijo (neto)"
+     :section/lines
+     [{:line/code "B.1" :line/label "Terrenos y edificios"
+       :line/codes ["151%" "152%"]}
+      {:line/code "B.2" :line/label "Maquinaria, mobiliario y equipo"
+       :line/codes ["153%" "154%" "155%" "156%"]}
        ;; contra-activo: :asset type, credit balance, nets negative
-       {:line/code "B.3" :line/label "Menos: depreciación acumulada"
-        :line/codes ["165%"]}]}
+      {:line/code "B.3" :line/label "Menos: depreciación acumulada"
+       :line/codes ["165%"]}]}
 
-     {:section/code  "C"
-      :section/label "Activo intangible y diferido"
-      :section/lines
-      [{:line/code "C.1" :line/label "Intangibles (software, marcas)"
-        :line/codes ["172%"]}]}
+    {:section/code  "C"
+     :section/label "Activo intangible y diferido"
+     :section/lines
+     [{:line/code "C.1" :line/label "Intangibles (software, marcas)"
+       :line/codes ["172%"]}]}
 
-     {:section/code  "D"
-      :section/label "Pasivo a corto plazo"
-      :section/lines
-      [{:line/code "D.1" :line/label "Proveedores"
-        :line/codes ["201%"]}
-       {:line/code "D.2" :line/label "Documentos y acreedores diversos"
-        :line/codes ["202%" "203%"]}
-       {:line/code "D.3" :line/label "Anticipos de clientes"
-        :line/codes ["204%"]}
-       {:line/code "D.4" :line/label "Impuestos y retenciones por pagar"
-        :line/codes ["205%" "206%"]}
+    {:section/code  "D"
+     :section/label "Pasivo a corto plazo"
+     :section/lines
+     [{:line/code "D.1" :line/label "Proveedores"
+       :line/codes ["201%"]}
+      {:line/code "D.2" :line/label "Documentos y acreedores diversos"
+       :line/codes ["202%" "203%"]}
+      {:line/code "D.3" :line/label "Anticipos de clientes"
+       :line/codes ["204%"]}
+      {:line/code "D.4" :line/label "Impuestos y retenciones por pagar"
+       :line/codes ["205%" "206%"]}
        ;; Cash-basis output IVA owed to SAT — a liability, not revenue.
-       {:line/code "D.5" :line/label "IVA trasladado por pagar"
-        :line/codes ["208%"]}
-       {:line/code "D.6" :line/label "IEPS trasladado por pagar"
-        :line/codes ["209%"]}]}
+      {:line/code "D.5" :line/label "IVA trasladado por pagar"
+       :line/codes ["208%"]}
+      {:line/code "D.6" :line/label "IEPS trasladado por pagar"
+       :line/codes ["209%"]}]}
 
-     {:section/code  "E"
-      :section/label "Pasivo a largo plazo"
-      :section/lines
-      [{:line/code "E.1" :line/label "Préstamos y acreedores hipotecarios"
-        :line/codes ["251%" "252%"]}]}
+    {:section/code  "E"
+     :section/label "Pasivo a largo plazo"
+     :section/lines
+     [{:line/code "E.1" :line/label "Préstamos y acreedores hipotecarios"
+       :line/codes ["251%" "252%"]}]}
 
-     {:section/code  "F"
-      :section/label "Capital contable"
-      :section/lines
-      [{:line/code "F.1" :line/label "Capital social"
-        :line/codes ["301%"]}
-       {:line/code "F.2" :line/label "Reserva legal"
-        :line/codes ["303%"]}
+    {:section/code  "F"
+     :section/label "Capital contable"
+     :section/lines
+     [{:line/code "F.1" :line/label "Capital social"
+       :line/codes ["301%"]}
+      {:line/code "F.2" :line/label "Reserva legal"
+       :line/codes ["303%"]}
        ;; 306 pérdidas de ejercicios anteriores is `:equity` with a debit
        ;; balance, so it nets negative here automatically.
-       {:line/code "F.3" :line/label "Resultados de ejercicios anteriores"
-        :line/codes ["305%" "306%"]}
-       {:line/code "F.4" :line/label "Utilidad del ejercicio (cerrada)"
-        :line/codes ["304%"]}
+      {:line/code "F.3" :line/label "Resultados de ejercicios anteriores"
+       :line/codes ["305%" "306%"]}
+      {:line/code "F.4" :line/label "Utilidad del ejercicio (cerrada)"
+       :line/codes ["304%"]}
        ;; Current-period result, held outside capital until the fiscal
        ;; year is closed — see the namespace docstring.
-       {:line/code "F.5" :line/label "Resultado del periodo — ingresos"
-        :line/codes ["401%" "402%" "405%"]}
-       {:line/code "F.6" :line/label "Resultado del periodo — costos y gastos"
-        :line/codes ["501%" "601%" "701%"]
-        :line/negate true}]}]}))
+      {:line/code "F.5" :line/label "Resultado del periodo — ingresos"
+       :line/codes ["401%" "402%" "405%"]}
+      {:line/code "F.6" :line/label "Resultado del periodo — costos y gastos"
+       :line/codes ["501%" "601%" "701%"]
+       :line/negate true}]}]})
 
 (def ^:private sign-map
   "Activo suma; pasivo y capital restan. El total es activo − (pasivo +

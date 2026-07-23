@@ -50,27 +50,14 @@
   (:require [kontor.money :as money]
             [kontor.reporting.financial-statements :as fs]))
 
-;; See the note in kontor.l10n-cn.pnl. F5 (note-196) derives a line's
-;; commodity from the postings it sums, but an EMPTY line (a BS always
-;; has several — no notes payable this year, no capital surplus, …) has
-;; nothing to derive from and falls back to the per-line :EUR default.
-;; Summing a CNY line with an empty :EUR line in the same section throws
-;; "Cross-commodity :add is forbidden", so every line is stamped :CNY to
-;; make the empty-line fallback CNY too.
-(defn- in-cny [statement]
-  (update statement :statement/sections
-          (fn [sections]
-            (mapv (fn [s]
-                    (-> s
-                        (assoc :section/commodity :CNY)
-                        (update :section/lines
-                                (fn [ls] (mapv #(assoc % :line/commodity :CNY) ls)))))
-                  sections))))
-
+;; See the note in kontor.l10n-cn.pnl. F5 derives a line's commodity from
+;; the postings it sums, a zero is the additive identity across
+;; commodities so the empty lines a BS always has (no notes payable this
+;; year, no capital surplus, …) fold cleanly (F5b), and an all-empty
+;; section inherits the book commodity — so a CNY book reports :CNY.
 (def definition
   "Classified 资产负债表 over the `kontor.l10n-cn.chart` codes."
-  (in-cny
-   {:statement/name    "资产负债表 (Balance Sheet)"
+  {:statement/name    "资产负债表 (Balance Sheet)"
    :statement/country "CN"
    :statement/sections
    [{:section/code  "A"
@@ -147,7 +134,7 @@
        :line/codes ["5001%" "5051" "5201" "6001"]}
       {:line/code "F.6" :line/label "本期利润 — 费用类 Current-period expense accounts"
        :line/codes ["5401" "5601" "5602" "5603" "5604" "6101" "6301"]
-       :line/negate true}]}]}))
+       :line/negate true}]}]})
 
 (def ^:private sign-map
   "Assets add; liabilities and equity subtract. Total = assets −

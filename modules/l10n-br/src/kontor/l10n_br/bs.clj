@@ -32,12 +32,11 @@
 
    Commodity is derived from the POSTINGS (note-196 F5 —
    `resolve-commodity-symbol` wins over a line's declared `:commodity`),
-   so every populated line is tagged `:BRL` off its own postings. An
-   EMPTY line (codes that match no posting) has nothing to derive from
-   and would fall back to the engine's `:EUR` default; `in-brl` supplies
-   `:BRL` as that fallback so the several optional sections here
-   (Passivo Não Circulante, reservas, tributos a recuperar on a book
-   without them) stay `:BRL` and do not trip a cross-commodity add.
+   so every populated line is tagged `:BRL` off its own postings. F5b
+   makes a zero the additive identity across commodities, so the several
+   optional sections here (Passivo Não Circulante, reservas, tributos a
+   recuperar on a book without them) fold cleanly as empty BRL, and an
+   all-empty section inherits the book commodity — :BRL throughout.
 
    ## Why equity carries a current-period result
 
@@ -63,25 +62,9 @@
   (:require [kontor.money :as money]
             [kontor.reporting.financial-statements :as fs]))
 
-(defn- in-brl
-  "Stamp `:BRL` as the section + per-line commodity FALLBACK. On a
-   populated line the postings-derived symbol still wins (note-196 F5);
-   this only decides the commodity of an EMPTY line so a section mixing
-   populated and empty lines does not hit a cross-commodity add."
-  [statement]
-  (update statement :statement/sections
-          (fn [sections]
-            (mapv (fn [s]
-                    (-> s
-                        (assoc :section/commodity :BRL)
-                        (update :section/lines
-                                (fn [ls] (mapv #(assoc % :line/commodity :BRL) ls)))))
-                  sections))))
-
 (def definition
   "Classified Balanço Patrimonial over the `kontor.l10n-br.chart` codes."
-  (in-brl
-   {:statement/name    "Balanço Patrimonial"
+  {:statement/name    "Balanço Patrimonial"
    :statement/country "BR"
    :statement/sections
    [{:section/code  "A"
@@ -140,7 +123,7 @@
        :line/codes ["3.01%" "3.07.01%"]}
       {:line/code "E.5" :line/label "Resultado do exercício — custos e despesas"
        :line/codes ["3.02%" "3.03%" "3.04%" "3.07.02%" "3.10%"]
-       :line/negate true}]}]}))
+       :line/negate true}]}]})
 
 (def ^:private sign-map
   "Assets add; liabilities and equity subtract. Total = ativo −

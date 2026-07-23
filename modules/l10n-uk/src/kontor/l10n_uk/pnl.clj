@@ -52,31 +52,17 @@
   (:require [kontor.money :as money]
             [kontor.reporting.financial-statements :as fs]))
 
-;; F5 (note-196) makes the report engine DERIVE a line's commodity from
-;; its postings, so a populated GBP line is correctly tagged GBP with no
-;; help. But a line whose codes match no account in the chart has no
-;; postings to derive from and falls back to the engine's :EUR default;
-;; several lines below deliberately cover a fuller UK nominal ledger than
-;; any single consumer ships, so they are empty here. Stamping :GBP makes
-;; those empty lines zero-GBP rather than zero-EUR, so a section subtotal
-;; never hits a cross-commodity add. Populated lines still derive GBP from
-;; their postings — this only pins the empty ones.
-(defn- in-gbp [statement]
-  (update statement :statement/sections
-          (fn [sections]
-            (mapv (fn [s]
-                    (-> s
-                        (assoc :section/commodity :GBP)
-                        (update :section/lines
-                                (fn [ls] (mapv #(assoc % :line/commodity :GBP) ls)))))
-                  sections))))
-
+;; Commodity needs no per-line stamp: the report engine derives a
+;; populated line's commodity from its postings (note 196 F5), a zero is
+;; the additive identity across commodities so the empty lines here (this
+;; def deliberately covers a fuller UK nominal ledger than any single
+;; consumer ships) fold cleanly (F5b), and an all-empty section inherits
+;; the book commodity — so a GBP book reports :GBP throughout.
 (def definition
   "Companies Act 2006 Sch 1 Format 1 P&L over the UK nominal codes."
-  (in-gbp
-   {:statement/name    "Profit and Loss Account"
-    :statement/country "GB"
-    :statement/sections
+  {:statement/name    "Profit and Loss Account"
+   :statement/country "GB"
+   :statement/sections
    [{:section/code  "1"
      :section/label "Turnover"
      :section/lines
@@ -127,7 +113,7 @@
      :section/label "Interest payable and similar charges"
      :section/lines
      [{:line/code "7.1" :line/label "Interest payable on loans and overdrafts"
-       :line/codes ["8000" "8010"]}]}]}))
+       :line/codes ["8000" "8010"]}]}]})
 
 (def ^:private sign-map
   "Turnover, other operating income and interest receivable add; cost of
