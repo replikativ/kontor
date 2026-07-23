@@ -127,6 +127,10 @@
                  {:db/id "purch-ic" :kontor.account/path "Expenses:Purchases-IC"
                   :kontor.account/code "5400" :kontor.account/name "Purchases — Intercompany"
                   :kontor.account/type :expense :kontor.account/active true}
+                 {:db/id "fx-elim" :kontor.account/path "Expenses:FX-Elimination"
+                  :kontor.account/code "5900"
+                  :kontor.account/name "FX gain/loss on intragroup elimination (IAS 21.45)"
+                  :kontor.account/type :expense :kontor.account/active true}
                  {:db/id "jnl" :kontor.journal/code "GEN"
                   :kontor.journal/name "General" :kontor.journal/type :misc
                   :kontor.journal/active true}])
@@ -343,12 +347,13 @@
               :consolidation-entity grp :elimination-entity elim
               :presentation-commodity "EUR" :fx-provider p
               :at-date dec-31 :journal (jnl db0)
-              :cta-account (acct db0 "Equity:CTA")})
+              :cta-account (acct db0 "Equity:CTA")
+              :fx-gain-loss-account (acct db0 "Expenses:FX-Elimination")})
           states {:include-states #{:draft :posted}}
           group-tb (trial/trial-balance conn (merge {:entity grp} states))
           elim-tb  (trial/trial-balance conn (merge {:entity elim} states))
           db   (d/db conn)
-          eur  (comm db "EUR") usd (comm db "USD")
+          eur  (comm db "EUR")
           ar   (acct db "Assets:AR-IC")   sales (acct db "Income:Sales-IC")
           cta  (acct db "Equity:CTA")]
       ;; --- The group's own EUR postings balance (each translation entry
@@ -379,9 +384,27 @@
         (is (money/zero? (rolled sales eur))
             "Sales-IC at group level = 0 EUR"))
 
-      ;; --- The elimination carries the ORIGINAL USD amounts on the US side.
-      (is (amt= 110500M (:amount (get-in elim-tb [(acct db "Liabilities:AP-IC") usd])))
-          "elim AP-IC = +110,500 USD (negation of US sub's -110,500)"))))
+      ;; --- FIXED (note 197): the cross-currency US legs are now translated
+      ;;     into the presentation currency during elimination (IAS 21.45), so
+      ;;     Purchases-IC and AP-IC ALSO net to zero across group + elim — they
+      ;;     did NOT before, when the elim stayed in USD. The residual from
+      ;;     translating the two US legs at different rates goes to P&L:
+      ;;       elim: AR -100,000 + Sales +100,000 (EUR identity)
+      ;;           + Purchases -100,555 (@avg 0.9100) + AP +100,002.50 (@closing 0.9050)
+      ;;           = -552.50 → +552.50 FX loss plug.
+      (let [rolled (fn [a c]
+                     (reduce (fn [acc m] (money/add acc m))
+                             (money/zero c)
+                             (keep #(get-in % [a c]) [group-tb elim-tb])))
+            purch (acct db "Expenses:Purchases-IC")
+            ap    (acct db "Liabilities:AP-IC")
+            fx    (acct db "Expenses:FX-Elimination")]
+        (is (money/zero? (rolled purch eur))
+            "Purchases-IC nets to 0 EUR (elimination translated to presentation currency)")
+        (is (money/zero? (rolled ap eur))
+            "AP-IC nets to 0 EUR (elimination translated to presentation currency)")
+        (is (amt= 552.50M (:amount (get-in elim-tb [fx eur])))
+            "intragroup FX residual (552.50 EUR) lands in P&L per IAS 21.45")))))
 
 ;; ===========================================================================
 ;; 6. consolidate! is idempotent on re-run (no duplicate CTA / drafts)
@@ -399,7 +422,8 @@
                  :consolidation-entity grp :elimination-entity elim
                  :presentation-commodity "EUR" :fx-provider p
                  :at-date dec-31 :journal (jnl db0)
-                 :cta-account (acct db0 "Equity:CTA")}
+                 :cta-account (acct db0 "Equity:CTA")
+                 :fx-gain-loss-account (acct db0 "Expenses:FX-Elimination")}
           count-translations #(d/q '[:find (count ?t) .
                                      :where [?t :kontor.transaction/consolidation-kind :translation]]
                                    (d/db conn))

@@ -131,6 +131,10 @@
                  {:db/id "purch-ic" :kontor.account/path "Expenses:Purchases-IC"
                   :kontor.account/code "5400" :kontor.account/name "Purchases — Intercompany"
                   :kontor.account/type :expense :kontor.account/active true}
+                 {:db/id "fx-elim" :kontor.account/path "Expenses:FX-Elimination"
+                  :kontor.account/code "5900"
+                  :kontor.account/name "FX gain/loss on intragroup elimination (IAS 21.45)"
+                  :kontor.account/type :expense :kontor.account/active true}
                  {:db/id "jnl" :kontor.journal/code "GEN"
                   :kontor.journal/name "General" :kontor.journal/type :misc
                   :kontor.journal/active true}])
@@ -255,7 +259,8 @@
               :consolidation-entity grp :elimination-entity elim
               :presentation-commodity "USD" :fx-provider p
               :at-date year-end :journal (jnl db0)
-              :cta-account (acct db0 "Equity:CTA")})
+              :cta-account (acct db0 "Equity:CTA")
+              :fx-gain-loss-account (acct db0 "Expenses:FX-Elimination")})
           group-tb (trial/trial-balance conn (merge {:entity grp} states))
           elim-tb  (trial/trial-balance conn (merge {:entity elim} states))
           db   (d/db conn)
@@ -348,24 +353,22 @@
           "KSt + Soli = 395,625 to the cent"))))
 
 ;; ===========================================================================
-;; D. PENDING — cross-currency intercompany does NOT eliminate in USD
+;; D. FIXED — cross-currency intercompany eliminates in presentation currency
 ;; ===========================================================================
 
-(deftest ^:kaocha/pending cross-currency-intercompany-should-eliminate-in-presentation-currency
-  ;; PENDING(NEW): `consolidate!` never translates the :elimination entity,
-  ;; so its postings stay in the SOURCE commodity (EUR) and cannot offset
-  ;; the translated (USD) postings of the operating entities. The result:
-  ;; the EUR-sub's intercompany Purchases-IC / AP-IC survive into the
-  ;; consolidated USD accounts un-eliminated.
+(deftest cross-currency-intercompany-should-eliminate-in-presentation-currency
+  ;; FIXED (note 197): eliminate-intercompany-pair-tx-data now TRANSLATES each
+  ;; eliminated posting to the presentation commodity at its account-type rate
+  ;; (IAS 21.45 / IFRS 10 B86(c)) before reversing, so a cross-currency pair
+  ;; nets to zero in USD. The residual from translating the two sides at
+  ;; different rates (Purchases-IC @ average 1.15, AP-IC @ closing 1.10) is
+  ;; posted to the :fx-gain-loss-account (P&L), not CTA and not force-to-zero.
   ;;
-  ;; Repro (US parent USD sells to DE sub EUR, present in USD):
-  ;;   DE Purchases-IC 100,000 EUR → translated @ average 1.15 = +115,000 USD (on grp)
-  ;;   Elimination of the DE side  → -100,000 EUR (on elim, NEVER translated)
-  ;;   grp+elim net for Purchases-IC in USD = +115,000 USD  (should be ~0)
-  ;;   grp+elim net for AP-IC       in USD = -110,000 USD  (should be ~0)
-  ;; The USD consolidated income statement therefore reports 115,000 USD of
-  ;; intercompany purchases that a correct IAS 27/IFRS 10 consolidation
-  ;; would have eliminated (leaving only a small translation-driven residual).
+  ;;   DE Purchases-IC 100,000 EUR → grp +115,000 USD (@avg 1.15);
+  ;;     elim −115,000 USD (@avg 1.15) → net 0 in USD.
+  ;;   DE AP-IC −100,000 EUR → grp −110,000 USD (@closing 1.10);
+  ;;     elim +110,000 USD (@closing 1.10) → net 0 in USD.
+  ;;   Elim FX residual = −5,000 USD → +5,000 USD FX loss to P&L (balances elim).
   (testing "cross-currency intercompany Purchases-IC / AP-IC net to zero in USD"
     (let [conn (bootstrap!)
           _    (book-ic-pair! conn)
@@ -377,19 +380,23 @@
               :consolidation-entity grp :elimination-entity elim
               :presentation-commodity "USD" :fx-provider p
               :at-date year-end :journal (jnl db0)
-              :cta-account (acct db0 "Equity:CTA")})
+              :cta-account (acct db0 "Equity:CTA")
+              :fx-gain-loss-account (acct db0 "Expenses:FX-Elimination")})
           group-tb (trial/trial-balance conn (merge {:entity grp} states))
           elim-tb  (trial/trial-balance conn (merge {:entity elim} states))
           db   (d/db conn)
           usd  (comm db "USD")
           purch (acct db "Expenses:Purchases-IC")
           ap    (acct db "Liabilities:AP-IC")
+          fx    (acct db "Expenses:FX-Elimination")
           rolled-usd (fn [a]
                        (reduce (fn [acc m] (money/add acc m))
                                (money/zero usd)
                                (keep #(get-in % [a usd]) [group-tb elim-tb])))]
       (is (money/zero? (rolled-usd purch))
-          "consolidated intercompany Purchases-IC should net to ~0 in USD")
+          "consolidated intercompany Purchases-IC nets to 0 in USD")
+      (is (amt= 5000M (:amount (rolled-usd fx)))
+          "the intragroup FX residual (5,000 USD loss) lands in P&L per IAS 21.45")
       (is (money/zero? (rolled-usd ap))
           "consolidated intercompany AP-IC should net to ~0 in USD"))))
 
