@@ -611,11 +611,21 @@ fidelity client-side.
 
 This is what lets a consumer compute a trial balance or a statement
 locally — offline, or optimistically ahead of a server round-trip —
-without a second, drifting implementation. The write/validate substrate
-(`gate`, `validation`, `invariant`, `governance`, `bitemporal`, `book/build`)
-is portable on the same terms; the transaction-building primitive
-(`kontor.posting`) and the `!` verb facade (`kontor.book`) remain
-JVM-only for now, so client-side *posting* is not yet wired end-to-end.
+without a second, drifting implementation.
+
+**The write path is portable too.** A browser can build a balanced,
+sealed entry (`kontor.book.build/entry-tx-data`), commit it through the
+same validation gate the server uses (`kontor.gate/transact-with-validation`
+— the invariant pass plus the `[:db.fn/call validate-and-apply …]`
+structural validators), and read it straight back — all on datahike-cljs
+with real `:db.type/bigdec` amounts. The gate commits via datahike's
+async `transact!` on cljs and the synchronous `transact` on the JVM; the
+validation is identical, so an unbalanced entry is rejected in the browser
+with the same `:validation/sum-to-zero` it raises on the server
+(`kontor.posting-write-cljs-test`). What remains JVM-only is the
+`kontor.book` `!` verb facade (thin sugar over the portable builder) and
+`kontor.posting`'s inventory-costing helpers (`plan-stock-move`) — a
+backend concern, not something a client posts.
 
 The portable core lives in `modules/substrate/`; the read namespaces live
 in `src/kontor/reporting/*.cljc`. A Node test lane
