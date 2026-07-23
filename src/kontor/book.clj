@@ -99,24 +99,46 @@
 
 (defn- resolve-journal
   "Resolve a journal entity from a `:kontor.journal/type` keyword, for the
-   `!`-side verb conveniences. Returns the eid when exactly one
-   journal of that type exists; throws a clear error otherwise so the
-   caller knows to pass `:journal` explicitly."
-  [db journal-type]
-  (let [js (d/q '[:find [?j ...]
-                  :in $ ?t
-                  :where [?j :kontor.journal/type ?t]]
-                db journal-type)]
-    (cond
-      (= 1 (count js)) (first js)
-      (empty? js)
-      (throw (ex-info (str "kontor.book: no :journal of type " journal-type
-                           " in the db — create one, or pass :journal explicitly")
-                      {:journal-type journal-type}))
-      :else
-      (throw (ex-info (str "kontor.book: " (count js) " journals of type " journal-type
-                           " — ambiguous; pass :journal explicitly")
-                      {:journal-type journal-type :found js})))))
+   `!`-side verb conveniences. Returns the eid when exactly one journal of
+   that type exists.
+
+   The `:cash` type is routinely NOT unique: every kontor preset seeds a
+   Cash Receipts journal (code \"CR\") and a Cash Disbursements journal
+   (code \"CD\"), both `:kontor.journal/type :cash` — the textbook split of
+   cash inflows from outflows. So a cash verb also passes the DIRECTION it
+   encodes as `prefer-code` (\"CR\" for inflows: receive/receive-payment;
+   \"CD\" for outflows: pay/pay-bill/distribute-dividend), and when several
+   journals share the type we narrow by `:kontor.journal/code` to that one.
+   A consumer whose preset codes its cash journals differently still gets
+   the informative ambiguity error telling them to pass `:journal`
+   explicitly. (note 197 — cash-journal-ambiguous P1.)"
+  ([db journal-type] (resolve-journal db journal-type nil))
+  ([db journal-type prefer-code]
+   (let [js (d/q '[:find [?j ...]
+                   :in $ ?t
+                   :where [?j :kontor.journal/type ?t]]
+                 db journal-type)]
+     (cond
+       (= 1 (count js)) (first js)
+       (empty? js)
+       (throw (ex-info (str "kontor.book: no :journal of type " journal-type
+                            " in the db — create one, or pass :journal explicitly")
+                       {:journal-type journal-type}))
+       :else
+       (let [narrowed (when prefer-code
+                        (d/q '[:find [?j ...]
+                               :in $ ?t ?c
+                               :where
+                               [?j :kontor.journal/type ?t]
+                               [?j :kontor.journal/code ?c]]
+                             db journal-type prefer-code))]
+         (if (= 1 (count narrowed))
+           (first narrowed)
+           (throw (ex-info (str "kontor.book: " (count js) " journals of type " journal-type
+                                (when prefer-code
+                                  (str " and " (count narrowed) " coded \"" prefer-code "\""))
+                                " — ambiguous; pass :journal explicitly")
+                           {:journal-type journal-type :found js :prefer-code prefer-code}))))))))
 
 ;; ============================================================================
 ;; The one builder (ADR-068)
@@ -155,9 +177,10 @@
    `:db-after` should pull it from the last entry of `:reports`."
   ([conn opts] (entry! conn opts {}))
   ([conn opts extra-post-opts]
-   (let [opts' (cond-> opts
+   (let [opts' (cond-> (dissoc opts :journal-code-hint)
                  (and (nil? (:journal opts)) (:journal-type opts))
-                 (assoc :journal (resolve-journal (d/db conn) (:journal-type opts)))
+                 (assoc :journal (resolve-journal (d/db conn) (:journal-type opts)
+                                                  (:journal-code-hint opts)))
 
                  (nil? (:effective-date opts))
                  (assoc :effective-date (java.util.Date.)))]
@@ -203,9 +226,10 @@
    gate) ever writes — an optimistic UI can never persist a posting the
    gate would reject."
   [conn opts]
-  (let [opts' (cond-> opts
+  (let [opts' (cond-> (dissoc opts :journal-code-hint)
                 (and (nil? (:journal opts)) (:journal-type opts))
-                (assoc :journal (resolve-journal (d/db conn) (:journal-type opts)))
+                (assoc :journal (resolve-journal (d/db conn) (:journal-type opts)
+                                                 (:journal-code-hint opts)))
 
                 (nil? (:effective-date opts))
                 (assoc :effective-date (java.util.Date.)))
@@ -240,7 +264,7 @@
    asset — cash/bank); credit its source (an income account, or a
    liability/equity account). Journal type `:cash`."
   ([conn opts] (receive! conn opts {}))
-  ([conn opts extra] (entry! conn (assoc opts :journal-type :cash) extra)))
+  ([conn opts extra] (entry! conn (assoc opts :journal-type :cash :journal-code-hint "CR") extra)))
 
 (defn pay!
   "Book value flowing OUT in cash — an expense paid, a liability
@@ -248,7 +272,7 @@
    account, or the liability being settled); credit the cash/bank
    account. Journal type `:cash`."
   ([conn opts] (pay! conn opts {}))
-  ([conn opts extra] (entry! conn (assoc opts :journal-type :cash) extra)))
+  ([conn opts extra] (entry! conn (assoc opts :journal-type :cash :journal-code-hint "CD") extra)))
 
 (defn sell!
   "Book a sale on account (accrual revenue). Debit the receivable
@@ -270,14 +294,14 @@
    cash/bank account; credit the receivable account being settled.
    Journal type `:cash`."
   ([conn opts] (receive-payment! conn opts {}))
-  ([conn opts extra] (entry! conn (assoc opts :journal-type :cash) extra)))
+  ([conn opts extra] (entry! conn (assoc opts :journal-type :cash :journal-code-hint "CR") extra)))
 
 (defn pay-bill!
   "Book a payment settling a payable. Debit the payable account
    being settled; credit the cash/bank account. Journal type
    `:cash`."
   ([conn opts] (pay-bill! conn opts {}))
-  ([conn opts extra] (entry! conn (assoc opts :journal-type :cash) extra)))
+  ([conn opts extra] (entry! conn (assoc opts :journal-type :cash :journal-code-hint "CD") extra)))
 
 (defn transfer!
   "Book a move of value between two of your own accounts (e.g. bank
@@ -335,4 +359,4 @@
 
    Note 107 §2.6."
   ([conn opts] (distribute-dividend! conn opts {}))
-  ([conn opts extra] (entry! conn (assoc opts :journal-type :cash) extra)))
+  ([conn opts extra] (entry! conn (assoc opts :journal-type :cash :journal-code-hint "CD") extra)))
