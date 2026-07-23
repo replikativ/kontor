@@ -64,6 +64,34 @@
                eids)]
      per-account)))
 
+(defn trial-balance-readable
+  "Like [[trial-balance]] but keyed for HUMANS: the outer key is each
+   account's `:kontor.account/path` and the inner key is the commodity
+   SYMBOL keyword (`:EUR`), instead of raw datahike eids (note-196 F1).
+
+   Use this for display / inspection / a frontend. [[trial-balance]]
+   deliberately keeps the raw-eid shape because write-back consumers
+   (`kontor.reporting.closing`, `kontor.provider.consolidation`) read its
+   commodity key and re-transact it as a `:db.type/ref`; resolving to a
+   symbol there would break them. This view is presentation-only, so it
+   resolves. Same options as [[trial-balance]]."
+  ([conn] (trial-balance-readable conn {}))
+  ([conn opts]
+   (let [as-of-tx (or (:as-of-tx opts) (now))
+         snap     (d/as-of (d/db conn) as-of-tx)
+         raw      (trial-balance conn (assoc opts :as-of-tx as-of-tx))
+         path-of  (fn [eid]
+                    (or (:kontor.account/path (d/pull snap [:kontor.account/path] eid)) eid))]
+     (into {}
+           (map (fn [[acct-eid inner]]
+                  [(path-of acct-eid)
+                   (into {}
+                         (map (fn [[c-eid m]]
+                                (let [sym (balance/resolve-commodity-symbol snap c-eid)]
+                                  [sym (money/money (:amount m) sym)])))
+                         inner)]))
+           raw))))
+
 (defn balanced?
   "Sanity check: a correctly-kept set of books has trial-balance
    summing to zero per commodity across ALL accounts. (Sums across
