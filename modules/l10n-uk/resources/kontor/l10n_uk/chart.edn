@@ -1,0 +1,83 @@
+;; UK nominal-ledger starter chart — the codes the shipped l10n-uk P&L
+;; (Companies Act 2006 Sch 1 Format 1) + Balance Sheet reference. Conventional
+;; UK SME nominal ranges: 0xxx fixed assets, 1xxx current assets, 2xxx
+;; creditors, 3xxx capital & reserves, 4xxx income, 5xxx cost of sales,
+;; 6xxx distribution, 7xxx administrative, 8xxx finance. note 197.
+[;; ── 0xxx Fixed assets ──────────────────────────────────────────────
+ {:code "0010" :path "FixedAssets:Intangible:Goodwill" :type :asset :name "Goodwill"}
+ {:code "0011" :path "FixedAssets:Intangible:Other" :type :asset :name "Other intangible assets"}
+ {:code "0020" :path "FixedAssets:Tangible:LandAndBuildings:Cost" :type :asset :name "Land and buildings — cost"}
+ ;; accumulated depreciation carries :asset so its credit balance nets against
+ ;; gross cost under :sign :inflow ("tangible assets, net" needs no special case)
+ {:code "0021" :path "FixedAssets:Tangible:LandAndBuildings:Depreciation" :type :asset :name "Land and buildings — accumulated depreciation"}
+ {:code "0030" :path "FixedAssets:Tangible:PlantAndMachinery:Cost" :type :asset :name "Plant and machinery — cost"}
+ {:code "0031" :path "FixedAssets:Tangible:PlantAndMachinery:Depreciation" :type :asset :name "Plant and machinery — accumulated depreciation"}
+ {:code "0040" :path "FixedAssets:Investments" :type :asset :name "Investments"}
+
+ ;; ── 1xxx Current assets ────────────────────────────────────────────
+ {:code "1000" :path "CurrentAssets:Stock:Goods" :type :asset :name "Stock — finished goods"}
+ {:code "1010" :path "CurrentAssets:Stock:WorkInProgress" :type :asset :name "Stock — work in progress"}
+ {:code "1100" :path "CurrentAssets:Debtors:Trade" :type :asset :name "Trade debtors" :reconcilable? true}
+ {:code "1110" :path "CurrentAssets:Debtors:Other" :type :asset :name "Other debtors"}
+ {:code "1120" :path "CurrentAssets:Debtors:VATRecoverable" :type :asset :name "VAT recoverable (input tax)"}
+ {:code "1200" :path "CurrentAssets:Bank:Current" :type :asset :name "Bank current account" :reconcilable? true}
+ {:code "1210" :path "CurrentAssets:Bank:Deposit" :type :asset :name "Bank deposit account" :reconcilable? true}
+ {:code "1220" :path "CurrentAssets:CashInHand" :type :asset :name "Cash in hand"}
+ {:code "1300" :path "CurrentAssets:Prepayments" :type :asset :name "Prepayments"}
+ {:code "1310" :path "CurrentAssets:AccruedIncome" :type :asset :name "Accrued income"}
+
+ ;; ── 2xxx Creditors ─────────────────────────────────────────────────
+ {:code "2100" :path "Creditors:Trade" :type :liability :name "Trade creditors" :reconcilable? true}
+ {:code "2200" :path "Creditors:Tax:VATPayable" :type :liability :name "VAT payable (output tax)"}
+ {:code "2210" :path "Creditors:Tax:PAYE-NIC" :type :liability :name "PAYE and NIC payable"}
+ {:code "2220" :path "Creditors:Tax:CorporationTax" :type :liability :name "Corporation tax payable"}
+ {:code "2300" :path "Creditors:Accruals" :type :liability :name "Accruals"}
+ {:code "2310" :path "Creditors:DeferredIncome" :type :liability :name "Deferred income"}
+ {:code "2320" :path "Creditors:Other" :type :liability :name "Other creditors"}
+ {:code "2330" :path "Creditors:DirectorsLoan" :type :liability :name "Directors' loan account"}
+ {:code "2400" :path "Creditors:LongTerm:BankLoans" :type :liability :name "Bank loans (> 1 year)"}
+ {:code "2410" :path "Creditors:LongTerm:Overdrafts" :type :liability :name "Bank overdrafts"}
+
+ ;; ── 3xxx Capital and reserves ──────────────────────────────────────
+ {:code "3000" :path "Capital:ShareCapital" :type :equity :name "Called-up share capital"}
+ {:code "3100" :path "Capital:SharePremium" :type :equity :name "Share premium account"}
+ {:code "3200" :path "Capital:RetainedEarnings" :type :equity :name "Profit and loss account (retained earnings)"}
+ {:code "3300" :path "Capital:Dividends" :type :equity :name "Dividends"}
+
+ ;; ── 4xxx Income (turnover + other income) ──────────────────────────
+ {:code "4000" :path "Income:Sales:Goods:Standard" :type :income :name "Sale of goods — standard rate"}
+ {:code "4010" :path "Income:Sales:Goods:Reduced" :type :income :name "Sale of goods — reduced rate"}
+ {:code "4020" :path "Income:Sales:Goods:ZeroExempt" :type :income :name "Sale of goods — zero-rated / exempt"}
+ {:code "4100" :path "Income:Services:Standard" :type :income :name "Rendering of services"}
+ {:code "4110" :path "Income:Services:Other" :type :income :name "Other services income"}
+ {:code "4900" :path "Income:Other:GrantsAndRents" :type :income :name "Grants and rents receivable"}
+ {:code "4910" :path "Income:Other:Sundry" :type :income :name "Sundry income"}
+ {:code "4950" :path "Income:Interest:Bank" :type :income :name "Bank interest receivable"}
+ {:code "4960" :path "Income:Interest:Other" :type :income :name "Other interest receivable"}
+
+ ;; ── 5xxx Cost of sales ─────────────────────────────────────────────
+ {:code "5000" :path "CostOfSales:Purchases" :type :expense :name "Purchases / materials"}
+ {:code "5100" :path "CostOfSales:DirectLabour" :type :expense :name "Direct labour"}
+ {:code "5200" :path "CostOfSales:OtherDirectCosts" :type :expense :name "Other direct costs"}
+
+ ;; ── 6xxx Distribution costs ────────────────────────────────────────
+ {:code "6000" :path "Distribution:Carriage" :type :expense :name "Carriage and delivery"}
+ {:code "6100" :path "Distribution:Advertising" :type :expense :name "Advertising and marketing"}
+
+ ;; ── 7xxx Administrative expenses ───────────────────────────────────
+ {:code "7000" :path "Admin:WagesAndSalaries" :type :expense :name "Wages and salaries"}
+ {:code "7010" :path "Admin:EmployersNIC" :type :expense :name "Employer's NIC"}
+ {:code "7100" :path "Admin:RentAndRates" :type :expense :name "Rent and rates"}
+ {:code "7110" :path "Admin:Utilities" :type :expense :name "Utilities (light, heat, power)"}
+ {:code "7200" :path "Admin:Insurance" :type :expense :name "Insurance"}
+ {:code "7300" :path "Admin:LegalAndProfessional" :type :expense :name "Legal and professional fees"}
+ {:code "7400" :path "Admin:DepreciationAndAmortisation" :type :expense :name "Depreciation and amortisation"}
+ {:code "7500" :path "Admin:OfficeCosts" :type :expense :name "Office and administrative costs"}
+ {:code "7600" :path "Admin:TravelAndSubsistence" :type :expense :name "Travel and subsistence"}
+ {:code "7700" :path "Admin:RepairsAndMaintenance" :type :expense :name "Repairs and maintenance"}
+ {:code "7800" :path "Admin:BankCharges" :type :expense :name "Bank charges"}
+ {:code "7900" :path "Admin:SundryExpenses" :type :expense :name "Sundry administrative expenses"}
+
+ ;; ── 8xxx Finance costs ─────────────────────────────────────────────
+ {:code "8000" :path "Finance:LoanInterest" :type :expense :name "Interest payable on loans"}
+ {:code "8010" :path "Finance:OverdraftInterest" :type :expense :name "Overdraft and other interest payable"}]

@@ -202,24 +202,18 @@
 ;; PENDING — genuine coverage gaps
 ;; ===========================================================================
 
-;; PENDING(NEW): l10n-uk ships financial-statement definitions (uk.pnl / uk.bs,
-;; Companies-Act-2006 Sch-1 Format-1) but its preset installs NO chart of
-;; accounts at all — `(create-uk-db)` yields a DB with zero accounts. Every
-;; exact code the shipped statements reference therefore dangles (28 in the
-;; P&L, 31 in the balance sheet), and `uk.bs/compute` returns an all-zero,
-;; trivially-"balanced" sheet out of the box. Documented ("a UK consumer brings
-;; their own nominal ledger") but it means the UK module's own reports are
-;; non-functional against its own preset.
-(deftest ^:kaocha/pending uk-preset-ships-no-chart
+;; FIXED (note 197): l10n-uk now ships a nominal-ledger starter chart
+;; (kontor.l10n-uk.chart), installed by create-uk-db, covering every exact code
+;; the shipped Companies-Act-2006 Sch-1 Format-1 P&L + Balance Sheet reference —
+;; so the UK module's own reports work against its own preset out of the box.
+(deftest uk-preset-ships-no-chart
   (let [db @(uk/create-uk-db)]
-    ;; the gap: these are NON-empty (all dangle). A shipped UK chart would
-    ;; make both []. Hand-derived counts from the shipped defs.
     (is (= [] (dangling-exact db uk-pnl/definition))
-        "UK P&L exact codes should resolve to shipped accounts")
+        "UK P&L exact codes resolve to shipped accounts")
     (is (= [] (dangling-exact db uk-bs/definition))
-        "UK balance-sheet exact codes should resolve to shipped accounts")
-    (is (zero? (count (present-codes db)))
-        "documents that create-uk-db installs zero accounts")))
+        "UK balance-sheet exact codes resolve to shipped accounts")
+    (is (pos? (count (present-codes db)))
+        "create-uk-db installs a nominal-ledger chart")))
 
 ;; FIXED (note 197): the PCG skeleton now ships 44567 (Crédit de TVA à reporter)
 ;; and 44583 (Remboursement de TVA demandé) — the two VAT-asset codes the Bilan

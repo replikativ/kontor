@@ -7,19 +7,20 @@
    What it installs:
    - Kernel schema (re-call is idempotent)
    - GBP commodity
+   - UK nominal-ledger starter chart (`kontor.l10n-uk.chart` — the codes the
+     shipped P&L + Balance Sheet reference; note 197)
    - Default journals: GJ / CR / CD / SJ / PJ
    - Statutes: CGT (AEA + 18/24 % std + BADR £1M cap + SSE corporate +
      post-Autumn-Budget-2024 rates), investment-income (CTA 2009 Part 9A
      distribution exemption + savings allowance + dividend allowance).
 
-   UK does not yet ship a chart module — consumers either bring their
-   own chart or post against ad-hoc accounts. UK does not yet ship an
-   ADR-101 CIT statute; the period-tax provider carries the rate
-   (record-shape, pre-ADR-101). The iXBRL filing gate is deferred.
+   UK does not yet ship an ADR-101 CIT statute; the period-tax provider carries
+   the rate (record-shape, pre-ADR-101). The iXBRL filing gate is deferred.
 
    Idempotent."
   (:require [datahike.api :as d]
             [kontor.core :as core]
+            [kontor.l10n-uk.chart :as chart]
             [kontor.l10n-uk.cgt-statute :as cgt-statute]
             [kontor.l10n-uk.investment-income-provider]  ; load compute-fns
             [kontor.l10n-uk.investment-income-statute :as inv-statute]))
@@ -40,6 +41,7 @@
    reports + period taxes. See namespace docstring."
   [conn]
   (d/transact conn default-commodity)
+  (chart/install! conn)
   (cgt-statute/install! conn)
   (inv-statute/install! conn)
   (d/transact conn default-journals)
