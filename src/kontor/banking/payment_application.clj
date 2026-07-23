@@ -57,6 +57,15 @@
                         db spec)
     :else          spec))
 
+(defn- commodity-symbol
+  "Resolve a `:commodity` opt (eid, lookup-ref, keyword, or symbol string) to
+   its ISO symbol string, for comparison with :kontor.invoice/currency."
+  [db commodity]
+  (cond
+    (string? commodity)  commodity
+    (keyword? commodity) (name commodity)
+    :else                (:kontor.commodity/symbol (d/entity db commodity))))
+
 (defn- pull-invoice-min [db invoice-eid]
   (d/pull db
           [:db/id :kontor.invoice/external-id :kontor.invoice/status :kontor.invoice/currency
@@ -252,6 +261,25 @@
         _ (when-not invoice-eid
             (throw (ex-info "Invoice not found" {:spec invoice})))
         inv (pull-invoice-min db invoice-eid)
+        ;; note 198 FX-C: a :payment-application nets its :amount against the
+        ;; invoice gross number-for-number, so a payment in a DIFFERENT commodity
+        ;; than the invoice currency would silently corrupt the open-item figure
+        ;; (a 1,200 USD payment on a 1,000 EUR invoice reading open = -200). Until
+        ;; cross-currency settlement (convert + realized-FX GL, FX-A/FX-B) lands
+        ;; on this path, refuse the mismatch loudly — honouring the docstring
+        ;; contract and matching reconciliation.cljc's DEFER-don't-corrupt stance.
+        inv-currency (:kontor.invoice/currency inv)
+        pay-symbol   (commodity-symbol db commodity)
+        _ (when (and inv-currency pay-symbol (not= inv-currency pay-symbol))
+            (throw (ex-info (str "apply-payment!: payment commodity " pay-symbol
+                                 " ≠ invoice currency " inv-currency
+                                 " — cross-currency settlement is not yet supported on the "
+                                 "payment-application path (it would need a realized-FX posting). "
+                                 "Settle in the invoice currency, or convert the payment first.")
+                            {:type              :payment-application/commodity-mismatch
+                             :invoice-currency  inv-currency
+                             :payment-commodity pay-symbol
+                             :invoice           invoice-eid})))
         current-status (:kontor.invoice/status inv)
         applied-at (or applied-at (java.util.Date.))
         app-tempid (str "pay-app" tempid-suffix)

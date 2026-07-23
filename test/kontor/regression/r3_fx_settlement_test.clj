@@ -333,7 +333,7 @@
 ;; once either a guard or a conversion path lands.
 ;; ===========================================================================
 
-(deftest ^:kaocha/pending apply-payment-should-not-silently-accept-commodity-mismatch
+(deftest apply-payment-should-not-silently-accept-commodity-mismatch
   (testing "a USD payment on a EUR invoice must not be silently number-netted;
             apply-payment! should reject the commodity mismatch (or convert)."
     (let [inv (make-invoice! "INV-XCUR-C" 1000M "EUR")
