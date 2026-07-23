@@ -280,6 +280,35 @@
    :jurisdiction-specific-codes {:pit-base-additions [net-st]
                                  :lane :st}})
 
+(defn- net-loss-1211b-component
+  "IRC §1211(b) / §1212(b) — a net capital LOSS year.
+
+   §1211(b): capital losses of a non-corporate taxpayer are allowed against
+   ordinary income up to the lower of the statutory cap ($3,000; $1,500 for
+   married-filing-separately) or the excess of losses over gains. §1212(b)
+   carries the unabsorbed remainder forward INDEFINITELY (no expiry for
+   individuals), preserving short-/long-term character; the current-year
+   offset absorbs net short-term loss first (§1212(b)(1)).
+
+   `offset` is the (positive) amount allowed against ordinary income this
+   year; it reaches the PIT base as a NEGATIVE `:pit-base-additions` entry
+   (a deduction). `carryforward` is `{:short _ :long _}` (zeros dropped),
+   consumable next period via `:capital-loss-carryforward` inputs."
+  [{:keys [commodity authority]} ^java.math.BigDecimal offset carryforward]
+  {:kind            :capital-gains-tax
+   :authority       authority
+   :base            (money/money (- offset) commodity)
+   :schedule        nil
+   :gross-liability (money/zero commodity)
+   :liability       (money/zero commodity)
+   :prepaid         (money/zero commodity)
+   :line-items      [{:line :§1211b-offset
+                      :label "IRC §1211(b) net capital loss offset (ordinary income)"
+                      :value (money/money (- offset) commodity)}]
+   :jurisdiction-specific-codes {:pit-base-additions        [(- offset)]
+                                 :capital-loss-carryforward carryforward
+                                 :lane                      :net-loss}})
+
 (defn- lt-component
   "Individual LT component with its own §1(h) progressive-bracket
    schedule. The bracket thresholds are filing-status-conditioned;
@@ -426,28 +455,69 @@
           (case kind
             :individual
             (let [recapture (sum-recapture classified)
-                  st-net    (net-lane (sum-lane classified :st)
-                                      (:short carry-in))
-                  lt-net    (net-lane (sum-lane classified :lt)
-                                      (:long carry-in))
-                  §1250-net (net-lane (sum-lane classified :§1250-unrecaptured)
-                                      (:§1250 carry-in))
-                  lt-cmp    (when (pos? lt-net)    (lt-component opts ctx lt-net))
-                  §1250-cmp (when (pos? §1250-net) (§1250-component opts ctx §1250-net))
-                  st-cmp    (when (pos? st-net)    (st-component opts st-net))
-                  rec-cmp   (when (pos? recapture)
-                              (ordinary-recapture-component opts ctx recapture :individual))
-                  running   (+ (or (some-> lt-cmp :gross-liability :amount) 0M)
-                               (or (some-> §1250-cmp :gross-liability :amount) 0M))
-                  ;; NIIT only fires when this provider owns it (default
-                  ;; for backwards-compat; the investment-income provider
-                  ;; opts out by constructing CGT with :emit-niit? false
-                  ;; so the surtax doesn't double-fire).
-                  niit-cmp  (when (and emit-niit? (pos? running))
-                              (niit-component opts ctx running))]
-              (->> [lt-cmp §1250-cmp st-cmp rec-cmp niit-cmp]
-                   (remove nil?)
-                   vec))
+                  ;; RAW nets (may be negative) for the §1211(b)/§1222
+                  ;; loss-netting test — distinct from the floored `net-lane`
+                  ;; values the gain path uses. §1250 unrecaptured is a
+                  ;; long-term gain slice, so it folds into the LT raw here.
+                  st-raw    (- (sum-lane classified :st) (or (:short carry-in) 0M))
+                  lt-raw    (- (+ (sum-lane classified :lt)
+                                  (sum-lane classified :§1250-unrecaptured))
+                               (or (:long carry-in) 0M)
+                               (or (:§1250 carry-in) 0M))
+                  combined  (+ st-raw lt-raw)]
+              (if (neg? combined)
+                ;; ── net capital LOSS year — §1211(b) / §1212(b) ───────────
+                ;; All current gains are absorbed by losses, so no gain
+                ;; component flows to income; §1222 cross-nets ST/LT, then the
+                ;; ordinary offset absorbs short-term character first.
+                (let [total-loss  (- combined)
+                      st-loss     (max 0M (- st-raw))
+                      lt-loss     (max 0M (- lt-raw))
+                      ;; a gain in one lane reduces the other lane's loss
+                      ;; (§1222 netting); the surviving loss keeps its
+                      ;; character, and total = st-loss' + lt-loss' = total-loss
+                      st-loss'    (if (pos? lt-raw) (max 0M (- st-loss lt-raw)) st-loss)
+                      lt-loss'    (if (pos? st-raw) (max 0M (- lt-loss st-raw)) lt-loss)
+                      status      (or (get-in ctx [:tax-unit :filing-status]) :single)
+                      cap         (statute/parameter-value-at
+                                   db "US.CGT.§1211b.ordinary-offset-cap" as-of)
+                      ;; §1211(b): $1,500 for married-filing-separately
+                      cap'        (if (= status :mfs) (.divide ^java.math.BigDecimal cap 2M) cap)
+                      offset      (min cap' total-loss)
+                      ;; §1212(b)(1): the offset absorbs net short-term first
+                      st-absorbed (min offset st-loss')
+                      lt-absorbed (- offset st-absorbed)
+                      carry       (cond-> {}
+                                    (pos? (- st-loss' st-absorbed))
+                                    (assoc :short (- st-loss' st-absorbed))
+                                    (pos? (- lt-loss' lt-absorbed))
+                                    (assoc :long (- lt-loss' lt-absorbed)))
+                      rec-cmp     (when (pos? recapture)
+                                    (ordinary-recapture-component opts ctx recapture :individual))]
+                  (->> [(net-loss-1211b-component opts offset carry) rec-cmp]
+                       (remove nil?)
+                       vec))
+                ;; ── net capital GAIN year — unchanged gain assembly ───────
+                (let [st-net    (net-lane (sum-lane classified :st) (:short carry-in))
+                      lt-net    (net-lane (sum-lane classified :lt) (:long carry-in))
+                      §1250-net (net-lane (sum-lane classified :§1250-unrecaptured)
+                                          (:§1250 carry-in))
+                      lt-cmp    (when (pos? lt-net)    (lt-component opts ctx lt-net))
+                      §1250-cmp (when (pos? §1250-net) (§1250-component opts ctx §1250-net))
+                      st-cmp    (when (pos? st-net)    (st-component opts st-net))
+                      rec-cmp   (when (pos? recapture)
+                                  (ordinary-recapture-component opts ctx recapture :individual))
+                      running   (+ (or (some-> lt-cmp :gross-liability :amount) 0M)
+                                   (or (some-> §1250-cmp :gross-liability :amount) 0M))
+                      ;; NIIT only fires when this provider owns it (default
+                      ;; for backwards-compat; the investment-income provider
+                      ;; opts out by constructing CGT with :emit-niit? false
+                      ;; so the surtax doesn't double-fire).
+                      niit-cmp  (when (and emit-niit? (pos? running))
+                                  (niit-component opts ctx running))]
+                  (->> [lt-cmp §1250-cmp st-cmp rec-cmp niit-cmp]
+                       (remove nil?)
+                       vec))))
 
             :corporation
             (let [recapture (sum-recapture classified)

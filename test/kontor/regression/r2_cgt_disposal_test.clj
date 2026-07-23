@@ -282,7 +282,11 @@
 ;; and the carryforward is lost.
 ;; ============================================================================
 
-(deftest ^:kaocha/pending us-individual-net-loss-1211b-dropped
+(deftest us-individual-net-loss-1211b-dropped
+  ;; FIXED (note 197): the US individual CGT provider now consumes the shipped
+  ;; US.CGT.§1211b.ordinary-offset-cap ($3,000) — a net capital loss surfaces a
+  ;; −$3,000 ordinary-income offset (§1211(b)) and a $7,000 long-term carry-
+  ;; forward (§1212(b)). Authority: 26 USC §1211(b) / §1212(b) (Cornell LII).
   (testing "$10k LT net loss should surface a §1211(b) $3k ordinary offset + $7k carry"
     (let [conn (base-db "USD" "US Dollar" "US")
           _    (us-cgt-statute/install! conn)
@@ -299,11 +303,17 @@
             ;; A correct impl surfaces §1211(b): a −$3,000 ordinary
             ;; (PIT-base) deduction, and a $7,000 carryforward output.
             offsets  (mapcat #(get-in % [:jurisdiction-specific-codes :pit-base-additions])
-                             (:components facts))]
+                             (:components facts))
+            carry    (some #(get-in % [:jurisdiction-specific-codes :capital-loss-carryforward])
+                           (:components facts))]
         (is (seq (:components facts))
-            "§1211(b) net-loss component should be emitted (it is not)")
+            "§1211(b) net-loss component is emitted")
         (is (some #(= -3000M %) offsets)
-            "a −$3,000 ordinary-income offset should reach the PIT base")))))
+            "a −$3,000 ordinary-income offset reaches the PIT base")
+        (is (== 7000M (:long carry))
+            "§1212(b): the $7,000 excess carries forward as a long-term loss")
+        (is (nil? (:short carry))
+            "no short-term carryforward on an all-long-term loss")))))
 
 ;; ============================================================================
 ;; §7. GAP — AU loss ordering: loss eats the DISCOUNTABLE gain first,
