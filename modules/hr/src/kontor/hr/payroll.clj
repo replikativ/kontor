@@ -177,7 +177,14 @@
                            (mapv check-facts))
                 postings (pp/build-postings
                           posting-builder facts
+                          ;; note 197: thread the db so a posting builder that
+                          ;; ships a default account-code map (e.g. DE SKR04)
+                          ;; can resolve its codes → eids; without it the
+                          ;; shipped default map was unreachable through the
+                          ;; orchestrator and a consumer had to hand-build
+                          ;; :accounts even when the module ships one.
                           (cond-> {:accounts accounts
+                                   :db db
                                    :ledger ledger
                                    :fx-provider fx-provider}
                             ledgers-map        (assoc :ledgers-map ledgers-map)
