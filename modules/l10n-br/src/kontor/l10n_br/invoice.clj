@@ -95,7 +95,7 @@
 (def ^:const default-pis-code            "2.01.04.01.03")  ; PIS a Recolher
 (def ^:const default-cofins-code         "2.01.04.01.04")  ; COFINS a Recolher
 (def ^:const default-iss-code            "2.01.04.01.05")  ; ISS a Recolher
-(def ^:const default-journal-code        "INV")
+(def ^:const default-journal-code        "SJ")
 (def ^:const default-commodity           "BRL")
 
 ;; ============================================================================

@@ -80,7 +80,7 @@
 (def ^:const default-sales-gst-free-code "41200")
 (def ^:const default-sales-input-taxed-code "41400")
 (def ^:const default-gst-payable-code "21500")
-(def ^:const default-journal-code "INV")
+(def ^:const default-journal-code "SJ")
 (def ^:const default-commodity "AUD")
 
 ;; ============================================================================
@@ -237,7 +237,7 @@
                      `:sales-taxable-code`, `:sales-gst-free-code`,
                      `:sales-input-taxed-code`, `:gst-payable-code`).
      :commodity    — commodity symbol (default \"AUD\").
-     :journal-code — journal code (default \"INV\").
+     :journal-code — journal code (default \"SJ\").
 
    Returns a tx-data vector ready for
    `kontor.validation/transact-with-validation`.
