@@ -46,7 +46,8 @@
    account map ships as code (not bundled rate table); HGB §249 is
    facts of law not subject to copyright; the algorithm sketch is
    clean-room from the cited public sources (Haufe / hrworks)."
-  (:require [kontor.payroll-de-datev.wage-types :as wage-types]
+  (:require [datahike.api :as d]
+            [kontor.payroll-de-datev.wage-types :as wage-types]
             [kontor.provider.payroll-provider :as pp])
   (:import [java.math BigDecimal RoundingMode]))
 
@@ -54,18 +55,44 @@
 ;; Account ref resolution
 ;; ============================================================================
 
+(defn- resolve-default-code
+  "Resolve a default SKR04/03 code to a TRANSACTABLE account ref. Because
+   `:kontor.account/code` is NOT `:db/unique` (ADR-119), a bare
+   `[:kontor.account/code c]` lookup-ref cannot be transacted (note-196 N1)
+   — so when a `db` is available, resolve the code to an eid within THIS
+   book (code-as-convenience-within-a-book, the sanctioned ADR-119 use).
+   Exactly one match → its eid; none → nil (caller throws \"no account\");
+   more than one → a clear ambiguity error naming the fix. With no `db`,
+   fall back to the code lookup-ref (works only if the caller later resolves
+   it or the store happens to make code unique)."
+  [db code]
+  (if db
+    (let [eids (d/q '[:find [?a ...] :in $ ?c :where [?a :kontor.account/code ?c]] db code)]
+      (cond
+        (= 1 (count eids)) (first eids)
+        (empty? eids)      nil
+        :else (throw (ex-info (str "DE payroll: SKR04 code " code " matches "
+                                   (count eids) " accounts — :kontor.account/code is not "
+                                   "unique (ADR-119). Supply an explicit :accounts ref "
+                                   "(eid or [:kontor.account/path …]).")
+                              {:type :payroll/ambiguous-account-code
+                               :code code :matches eids}))))
+    [:kontor.account/code code]))
+
 (defn resolve-account-ref
   "Resolve an account-hint to a kontor account ref. Strategy:
      1. Consumer-supplied `:accounts` map keyed by account-hint
-        (e.g. {:gehalt 12345} or {:gehalt [:kontor.account/code \"6020\"]}).
+        (e.g. {:gehalt 12345} or {:gehalt [:kontor.account/path \"Aufwand:Gehälter\"]}).
      2. Catalog's `account-overrides`.
-     3. Default-account-maps[coa] → [:kontor.account/code <code>] lookup-ref.
+     3. Default-account-maps[coa], resolved code→eid against `:db`
+        (ADR-119: code is not unique, so it is resolved within the book,
+        not emitted as a bare code lookup-ref — note-196 N1).
    Returns nil when no mapping available — caller decides how to
    surface (throw, route to manual review)."
-  [{:keys [accounts catalog]} account-hint]
+  [{:keys [accounts catalog db]} account-hint]
   (or (get accounts account-hint)
       (when-let [code (wage-types/resolve-account-code catalog account-hint)]
-        [:kontor.account/code code])))
+        (resolve-default-code db code))))
 
 (defn- account-ref-or-throw
   [ctx account-hint role]
@@ -176,7 +203,7 @@
 
 (defrecord DatevLodasPostingBuilder [opts]
   pp/PayrollPostingBuilder
-  (build-postings [_ facts {:keys [accounts ledger fx-provider]}]
+  (build-postings [_ facts {:keys [accounts ledger fx-provider db]}]
     (let [{:keys [catalog commodity]} opts
           _ (when-not commodity
               (throw (ex-info ":commodity required (typically EUR ref)" {})))
@@ -184,7 +211,11 @@
                :accounts accounts
                :commodity commodity
                :ledger ledger
-               :fx-provider fx-provider}]
+               :fx-provider fx-provider
+               ;; :db lets the default SKR04 routing resolve codes → eids
+               ;; within this book (ADR-119; note-196 N1). Omit it and pass
+               ;; an explicit :accounts map for db-free builds.
+               :db db}]
       (vec (mapcat #(gross-postings % ctx) facts)))))
 
 (defn make-builder
