@@ -242,7 +242,7 @@
 ;; emits :kontor.account/path refs, OR the kernel makes :kontor.account/code
 ;; a unique-identity attr. P2 usability footgun; the error is also untyped
 ;; (:type nil in ex-data — cf. F3). Remove ^:kaocha/pending once fixed.
-(deftest ^:kaocha/pending de-default-routed-journal-should-post
+(deftest de-default-routed-journal-should-post
   (let [conn (core/create-test-db)]
     (d/transact conn
                 (into [{:kontor.commodity/symbol "EUR" :kontor.commodity/precision 2}
@@ -255,9 +255,11 @@
           builder (de-pb/make-builder {:catalog de-catalog :commodity eur})
           fact (de-fact {:pnr "3011" :gross 4000M :net 2500M
                          :wht 700M :ee-si 800M :er-si 800M})
-          ;; accounts {} → builder uses SKR04 code lookup-refs as defaults
+          ;; accounts {} + :db → builder resolves its default SKR04 codes to
+          ;; eids within this book (ADR-119; N1 fix), producing transactable
+          ;; refs instead of the non-unique [:kontor.account/code …].
           postings (pp/build-postings builder [fact]
-                                      {:accounts {} :ledger nil :fx-provider nil})
+                                      {:accounts {} :ledger nil :fx-provider nil :db db})
           report (posting/post-transaction!
                   conn
                   {:transaction {:kontor.transaction/journal journal
