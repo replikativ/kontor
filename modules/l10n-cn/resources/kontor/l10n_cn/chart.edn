@@ -334,13 +334,17 @@
   :external-codes {:cn/asbe "3104"}}
 
  ;; ---------- 4xxx Production costs / 成本 (manufacturers only) ----------
- {:code "4101" :path "Expense:ProductionCost"
+ ;; 成本类 (cost-category) accounts — WIP cost-gathering that capitalises into
+ ;; inventory (1405/1406) and clears into 营业成本 (5401); their period-end
+ ;; balance is unfinished work-in-progress, an ASSET, not a P&L expense (ASBE).
+ ;; note 197: typed :asset (was :expense, which the income statement had to skip).
+ {:code "4101" :path "Asset:WIP:ProductionCost"
   :name "Production cost / 生产成本"
-  :type :expense
+  :type :asset
   :external-codes {:cn/asbe "4101"}}
- {:code "4105" :path "Expense:ManufacturingOverhead"
+ {:code "4105" :path "Asset:WIP:ManufacturingOverhead"
   :name "Manufacturing overhead / 制造费用"
-  :type :expense
+  :type :asset
   :external-codes {:cn/asbe "4105"}}
 
  ;; ---------- 5xxx Revenue + COGS (ASSBE flattened convention) ----------

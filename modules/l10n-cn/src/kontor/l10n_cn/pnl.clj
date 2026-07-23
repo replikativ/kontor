@@ -36,8 +36,9 @@
 
    The manufacturer cost-gathering accounts 4101 生产成本 / 4105 制造费用
    are deliberately absent — they accumulate into inventory (1405/1406)
-   and clear into 营业成本 (5401), so their balances are not a P&L line of
-   their own under the ASSBE model."
+   and clear into 营业成本 (5401), so their balances are WIP inventory (an
+   asset, typed :asset in the chart since note 197), not a P&L line of
+   their own under the ASBE model; the Balance Sheet 存货 line carries them."
   (:require [kontor.money :as money]
             [kontor.reporting.financial-statements :as fs]))
 
