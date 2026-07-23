@@ -47,83 +47,70 @@
    `check` reports whether the accounting equation actually holds — see
    its docstring for what a non-zero difference means.
 
-   Currency: see the note in `kontor.l10n-in.pnl` — every line is stamped
-   `:INR` as the empty-line fallback on this non-EUR book; the note-196
-   F5 derivation still wins for any populated line."
+   Currency: see the note in `kontor.l10n-in.pnl` — commodity is derived
+   from the postings (F5) and empty lines fold as the additive identity
+   (F5b), so this non-EUR book reports :INR with no per-line stamp."
   (:require [kontor.money :as money]
             [kontor.reporting.financial-statements :as fs]))
-
-(defn- in-inr
-  "Stamp every section + line commodity :INR (empty-line fallback)."
-  [statement]
-  (update statement :statement/sections
-          (fn [sections]
-            (mapv (fn [s]
-                    (-> s
-                        (assoc :section/commodity :INR)
-                        (update :section/lines
-                                (fn [ls] (mapv #(assoc % :line/commodity :INR) ls)))))
-                  sections))))
 
 (def definition
   "Schedule III vertical Balance Sheet over the `kontor.l10n-in.chart`
    codes."
-  (in-inr
-   {:statement/name    "Balance Sheet"
-    :statement/country "IN"
-    :statement/sections
-    [;; ── ASSETS ───────────────────────────────────────────────────────
-     {:section/code  "A"
-      :section/label "Non-current assets"
-      :section/lines
-      [{:line/code "A.1" :line/label "Property, plant and equipment (net)"
-        :line/codes ["110000" "110100" "110200" "110300" "110400"
-                     "110500" "110600" "110900"]}
-       {:line/code "A.2" :line/label "Intangible assets" :line/codes ["111%"]}
-       {:line/code "A.3" :line/label "Non-current investments" :line/codes ["115%"]}
-       {:line/code "A.4" :line/label "Long-term loans and advances" :line/codes ["116%"]}]}
+  {:statement/name    "Balance Sheet"
+   :statement/country "IN"
+   :statement/sections
+   [;; ── ASSETS ───────────────────────────────────────────────────────
+    {:section/code  "A"
+     :section/label "Non-current assets"
+     :section/lines
+     [{:line/code "A.1" :line/label "Property, plant and equipment (net)"
+       :line/codes ["110000" "110100" "110200" "110300" "110400"
+                    "110500" "110600" "110900"]}
+      {:line/code "A.2" :line/label "Intangible assets" :line/codes ["111%"]}
+      {:line/code "A.3" :line/label "Non-current investments" :line/codes ["115%"]}
+      {:line/code "A.4" :line/label "Long-term loans and advances" :line/codes ["116%"]}]}
 
-     {:section/code  "B"
-      :section/label "Current assets"
-      :section/lines
-      [{:line/code "B.1" :line/label "Inventories" :line/codes ["120%"]}
-       {:line/code "B.2" :line/label "Trade receivables" :line/codes ["121%"]}
-       {:line/code "B.3" :line/label "Cash and cash equivalents" :line/codes ["122%"]}
-       {:line/code "B.4" :line/label "Short-term loans and advances"
-        :line/codes ["123%" "124%"]}
+    {:section/code  "B"
+     :section/label "Current assets"
+     :section/lines
+     [{:line/code "B.1" :line/label "Inventories" :line/codes ["120%"]}
+      {:line/code "B.2" :line/label "Trade receivables" :line/codes ["121%"]}
+      {:line/code "B.3" :line/label "Cash and cash equivalents" :line/codes ["122%"]}
+      {:line/code "B.4" :line/label "Short-term loans and advances"
+       :line/codes ["123%" "124%"]}
        ;; GST input-tax credit + TDS receivable are recoverable assets
-       {:line/code "B.5" :line/label "Balances with government (ITC + TDS receivable)"
-        :line/codes ["13%"]}]}
+      {:line/code "B.5" :line/label "Balances with government (ITC + TDS receivable)"
+       :line/codes ["13%"]}]}
 
      ;; ── EQUITY AND LIABILITIES ───────────────────────────────────────
-     {:section/code  "C"
-      :section/label "Non-current liabilities"
-      :section/lines
-      [{:line/code "C.1" :line/label "Long-term borrowings" :line/codes ["310%"]}
-       {:line/code "C.2" :line/label "Long-term provisions" :line/codes ["311%"]}]}
+    {:section/code  "C"
+     :section/label "Non-current liabilities"
+     :section/lines
+     [{:line/code "C.1" :line/label "Long-term borrowings" :line/codes ["310%"]}
+      {:line/code "C.2" :line/label "Long-term provisions" :line/codes ["311%"]}]}
 
-     {:section/code  "D"
-      :section/label "Current liabilities"
-      :section/lines
-      [{:line/code "D.1" :line/label "Short-term borrowings" :line/codes ["322%"]}
-       {:line/code "D.2" :line/label "Trade payables" :line/codes ["320%"]}
-       {:line/code "D.3" :line/label "Other current liabilities and advances"
-        :line/codes ["321%" "323%"]}
-       {:line/code "D.4" :line/label "Short-term provisions" :line/codes ["324%"]}
+    {:section/code  "D"
+     :section/label "Current liabilities"
+     :section/lines
+     [{:line/code "D.1" :line/label "Short-term borrowings" :line/codes ["322%"]}
+      {:line/code "D.2" :line/label "Trade payables" :line/codes ["320%"]}
+      {:line/code "D.3" :line/label "Other current liabilities and advances"
+       :line/codes ["321%" "323%"]}
+      {:line/code "D.4" :line/label "Short-term provisions" :line/codes ["324%"]}
        ;; statutory heads: output GST + RCM + TDS payable
-       {:line/code "D.5" :line/label "GST / RCM / TDS payable" :line/codes ["33%"]}]}
+      {:line/code "D.5" :line/label "GST / RCM / TDS payable" :line/codes ["33%"]}]}
 
-     {:section/code  "E"
-      :section/label "Shareholders' funds"
-      :section/lines
-      [{:line/code "E.1" :line/label "Share capital" :line/codes ["21%"]}
-       {:line/code "E.2" :line/label "Reserves and surplus" :line/codes ["22%"]}
+    {:section/code  "E"
+     :section/label "Shareholders' funds"
+     :section/lines
+     [{:line/code "E.1" :line/label "Share capital" :line/codes ["21%"]}
+      {:line/code "E.2" :line/label "Reserves and surplus" :line/codes ["22%"]}
        ;; Current-period result, held outside reserves until the year is
        ;; closed — see the namespace docstring.
-       {:line/code "E.3" :line/label "Surplus for the period — revenue"
-        :line/codes ["4%"]}
-       {:line/code "E.4" :line/label "Surplus for the period — expenses"
-        :line/codes ["5%"] :line/negate true}]}]}))
+      {:line/code "E.3" :line/label "Surplus for the period — revenue"
+       :line/codes ["4%"]}
+      {:line/code "E.4" :line/label "Surplus for the period — expenses"
+       :line/codes ["5%"] :line/negate true}]}]})
 
 (def ^:private sign-map
   "Assets add; liabilities and equity subtract. Total = assets −

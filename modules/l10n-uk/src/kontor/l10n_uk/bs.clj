@@ -57,27 +57,15 @@
             [kontor.reporting.financial-statements :as fs]))
 
 ;; See the note in kontor.l10n-uk.pnl: F5 derives a populated line's
-;; commodity from its postings, but a line matching no account has none to
-;; derive from and defaults to :EUR. Several BS lines deliberately cover a
-;; fuller nominal ledger than a single consumer ships, so stamping :GBP
-;; keeps those empty lines zero-GBP and a section subtotal never hits a
-;; cross-commodity add.
-(defn- in-gbp [statement]
-  (update statement :statement/sections
-          (fn [sections]
-            (mapv (fn [s]
-                    (-> s
-                        (assoc :section/commodity :GBP)
-                        (update :section/lines
-                                (fn [ls] (mapv #(assoc % :line/commodity :GBP) ls)))))
-                  sections))))
-
+;; commodity from its postings, a zero is the additive identity across
+;; commodities so the empty lines here (a fuller nominal ledger than any
+;; single consumer ships) fold cleanly (F5b), and an all-empty section
+;; inherits the book commodity — so a GBP book reports :GBP, no stamp.
 (def definition
   "Classified balance sheet over the UK nominal codes."
-  (in-gbp
-   {:statement/name    "Balance Sheet"
-    :statement/country "GB"
-    :statement/sections
+  {:statement/name    "Balance Sheet"
+   :statement/country "GB"
+   :statement/sections
    [{:section/code  "A"
      :section/label "Fixed assets"
      :section/lines
@@ -134,7 +122,7 @@
        :line/codes ["4%"]}
       {:line/code "E.6" :line/label "Current-period expenses"
        :line/codes ["5%" "6%" "7%" "8%"]
-       :line/negate true}]}]}))
+       :line/negate true}]}]})
 
 (def ^:private sign-map
   "Assets add; liabilities and equity subtract. Total = assets −

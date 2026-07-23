@@ -311,8 +311,13 @@
    per-commodity via `sum-by-commodity`, so this does not weaken it."
   [a b]
   (cond
-    (zero? a) b
+    ;; Check b first so that when BOTH are zero the LEFT operand wins: in a
+    ;; left fold `(reduce add (zero seed-commodity) coll)` the seed's
+    ;; commodity then survives an all-zero collection (e.g. an all-empty
+    ;; statement section keeps the book commodity instead of adopting a
+    ;; zero line's :EUR fallback). note 196 F5b.
     (zero? b) a
+    (zero? a) b
     :else
     (do (assert-same-commodity a b :add)
         (->Money #?(:clj  (.add ^BigDecimal (:amount a) ^BigDecimal (:amount b))

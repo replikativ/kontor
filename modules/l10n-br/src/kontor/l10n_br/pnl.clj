@@ -52,36 +52,16 @@
    Commodity is derived from the POSTINGS (note-196 F5 —
    `kontor.reporting.report/resolve-commodity-symbol` wins over a line's
    declared `:commodity` in `sum-postings`), so every populated line is
-   tagged `:BRL` off its own postings. The one gap F5 cannot close is an
-   EMPTY line — a line whose codes match no posting has nothing to derive
-   from and falls back to the engine's `:EUR` default; a section that then
-   mixes a populated (`:BRL`) line with an empty one throws a
-   cross-commodity `money/add`. `in-brl` supplies `:BRL` as that fallback
-   so optional lines (e.g. ISS on a goods-only book) stay `:BRL`; it does
-   NOT override the postings-derived value on populated lines."
+   tagged `:BRL` off its own postings. F5b makes a zero the additive
+   identity across commodities, so an empty line (e.g. ISS on a goods-only
+   book) folds cleanly into a BRL subtotal, and an all-empty section
+   inherits the book commodity — :BRL throughout, with no per-line stamp."
   (:require [kontor.money :as money]
             [kontor.reporting.financial-statements :as fs]))
 
-(defn- in-brl
-  "Stamp `:BRL` as the section + per-line commodity FALLBACK. On a
-   populated line the postings-derived symbol still wins (note-196 F5 —
-   see `kontor.reporting.report/sum-postings`); this only decides the
-   commodity of an EMPTY line so a section mixing populated and empty
-   lines does not hit a cross-commodity add."
-  [statement]
-  (update statement :statement/sections
-          (fn [sections]
-            (mapv (fn [s]
-                    (-> s
-                        (assoc :section/commodity :BRL)
-                        (update :section/lines
-                                (fn [ls] (mapv #(assoc % :line/commodity :BRL) ls)))))
-                  sections))))
-
 (def definition
   "DRE per Lei 6.404/76 art. 187 over the `kontor.l10n-br.chart` codes."
-  (in-brl
-   {:statement/name    "Demonstração do Resultado do Exercício"
+  {:statement/name    "Demonstração do Resultado do Exercício"
    :statement/country "BR"
    :statement/sections
    [{:section/code  "1"
@@ -126,7 +106,7 @@
      :section/label "Provisão para IRPJ e CSLL"
      :section/lines
      [{:line/code "7.1" :line/label "Provisão para IRPJ" :line/codes ["3.10.01.01.01"]}
-      {:line/code "7.2" :line/label "Provisão para CSLL" :line/codes ["3.10.01.01.02"]}]}]}))
+      {:line/code "7.2" :line/label "Provisão para CSLL" :line/codes ["3.10.01.01.02"]}]}]})
 
 (def ^:private sign-map
   "Revenue and finance income add; deductions, cost, operating

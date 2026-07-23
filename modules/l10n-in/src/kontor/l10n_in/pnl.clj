@@ -47,86 +47,69 @@
 
    ## Currency
 
-   note-196 F5 lets the report engine derive each line's commodity from
+   note 196 F5 lets the report engine derive each line's commodity from
    the postings it sums, so a line that matches INR postings reads INR
-   without being told. The one gap is an EMPTY line on a non-EUR book:
-   with nothing to derive from it falls back to the engine's `:EUR`
-   default, and a section that mixes an empty (EUR-zero) line with a
-   populated (INR) line would raise a cross-commodity add. Stamping every
-   line `:INR` closes that gap — the derived value still wins wherever
-   there are postings, so this only supplies the empty-line fallback."
+   without being told. F5b makes a zero the additive identity across
+   commodities, so an empty line folds cleanly into an INR subtotal, and
+   an all-empty section inherits the book commodity — the statement reports
+   :INR throughout with no per-line stamp."
   (:require [kontor.money :as money]
             [kontor.reporting.financial-statements :as fs]))
-
-(defn- in-inr
-  "Stamp every section + line commodity :INR — the empty-line fallback on
-   this non-EUR book (see the namespace docstring). The F5 derivation
-   still wins for any line that actually has postings."
-  [statement]
-  (update statement :statement/sections
-          (fn [sections]
-            (mapv (fn [s]
-                    (-> s
-                        (assoc :section/commodity :INR)
-                        (update :section/lines
-                                (fn [ls] (mapv #(assoc % :line/commodity :INR) ls)))))
-                  sections))))
 
 (def definition
   "Schedule III Statement of Profit and Loss over the
    `kontor.l10n-in.chart` codes."
-  (in-inr
-   {:statement/name    "Statement of Profit and Loss"
-    :statement/country "IN"
-    :statement/sections
-    [{:section/code  "I"
-      :section/label "Revenue from operations"
-      :section/lines
-      [{:line/code "I.1" :line/label "Sale of products and services (taxable)"
-        :line/codes ["410000" "410100" "410900"]}
-       {:line/code "I.2" :line/label "Exports (zero-rated)"
-        :line/codes ["410200"]}
-       {:line/code "I.3" :line/label "Exempt / nil-rated supplies"
-        :line/codes ["410300"]}]}
+  {:statement/name    "Statement of Profit and Loss"
+   :statement/country "IN"
+   :statement/sections
+   [{:section/code  "I"
+     :section/label "Revenue from operations"
+     :section/lines
+     [{:line/code "I.1" :line/label "Sale of products and services (taxable)"
+       :line/codes ["410000" "410100" "410900"]}
+      {:line/code "I.2" :line/label "Exports (zero-rated)"
+       :line/codes ["410200"]}
+      {:line/code "I.3" :line/label "Exempt / nil-rated supplies"
+       :line/codes ["410300"]}]}
 
-     {:section/code  "II"
-      :section/label "Other income"
-      :section/lines
-      [{:line/code "II.1" :line/label "Interest income" :line/codes ["420100"]}
-       {:line/code "II.2" :line/label "Other non-operating income"
-        :line/codes ["420000" "420200"]}]}
+    {:section/code  "II"
+     :section/label "Other income"
+     :section/lines
+     [{:line/code "II.1" :line/label "Interest income" :line/codes ["420100"]}
+      {:line/code "II.2" :line/label "Other non-operating income"
+       :line/codes ["420000" "420200"]}]}
 
-     {:section/code  "III"
-      :section/label "Cost of materials consumed"
-      :section/lines
-      [{:line/code "III.1" :line/label "Purchases of raw materials / stock-in-trade"
-        :line/codes ["510000" "510100" "510200"]}
-       {:line/code "III.2" :line/label "Changes in inventories of FG / WIP / stock-in-trade"
-        :line/codes ["511000"]}]}
+    {:section/code  "III"
+     :section/label "Cost of materials consumed"
+     :section/lines
+     [{:line/code "III.1" :line/label "Purchases of raw materials / stock-in-trade"
+       :line/codes ["510000" "510100" "510200"]}
+      {:line/code "III.2" :line/label "Changes in inventories of FG / WIP / stock-in-trade"
+       :line/codes ["511000"]}]}
 
-     {:section/code  "IV"
-      :section/label "Employee benefits expense"
-      :section/lines
-      [{:line/code "IV.1" :line/label "Salaries, wages and staff welfare"
-        :line/codes ["52%"]}]}
+    {:section/code  "IV"
+     :section/label "Employee benefits expense"
+     :section/lines
+     [{:line/code "IV.1" :line/label "Salaries, wages and staff welfare"
+       :line/codes ["52%"]}]}
 
-     {:section/code  "V"
-      :section/label "Finance costs"
-      :section/lines
-      [{:line/code "V.1" :line/label "Interest and bank charges"
-        :line/codes ["53%"]}]}
+    {:section/code  "V"
+     :section/label "Finance costs"
+     :section/lines
+     [{:line/code "V.1" :line/label "Interest and bank charges"
+       :line/codes ["53%"]}]}
 
-     {:section/code  "VI"
-      :section/label "Depreciation and amortisation expense"
-      :section/lines
-      [{:line/code "VI.1" :line/label "Depreciation and amortisation"
-        :line/codes ["54%"]}]}
+    {:section/code  "VI"
+     :section/label "Depreciation and amortisation expense"
+     :section/lines
+     [{:line/code "VI.1" :line/label "Depreciation and amortisation"
+       :line/codes ["54%"]}]}
 
-     {:section/code  "VII"
-      :section/label "Other expenses"
-      :section/lines
-      [{:line/code "VII.1" :line/label "Rent, power, repairs, insurance, admin"
-        :line/codes ["55%"]}]}]}))
+    {:section/code  "VII"
+     :section/label "Other expenses"
+     :section/lines
+     [{:line/code "VII.1" :line/label "Rent, power, repairs, insurance, admin"
+       :line/codes ["55%"]}]}]})
 
 (def ^:private sign-map
   "Revenue and other income add; every expense head subtracts.

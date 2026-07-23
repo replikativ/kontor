@@ -268,13 +268,13 @@
           p    (pnl/compute conn {:from soy :to eoy})
           b    (bs/compute conn {:to eoy})
           monies (concat
-                  (map :section/subtotal (:statement/sections p))
-                  (map :section/subtotal (:statement/sections b))
-                  [(:statement/total p) (:statement/total b)
-                   (:br.pnl/receita-liquida p) (:br.pnl/lucro-bruto p)
-                   (:br.pnl/resultado-operacional p) (:br.pnl/lucro-liquido p)
-                   (:br.bs/total-ativo b) (:br.bs/total-passivo b)
-                   (:br.bs/total-pl b) (:br.bs/difference b)])]
-      (doseq [m monies]
+                  (map (fn [s] [(str "p-sub-" (:section/code s)) (:section/subtotal s)]) (:statement/sections p))
+                  (map (fn [s] [(str "b-sub-" (:section/code s)) (:section/subtotal s)]) (:statement/sections b))
+                  [["total-p" (:statement/total p)] ["total-b" (:statement/total b)]
+                   ["receita-liquida" (:br.pnl/receita-liquida p)] ["lucro-bruto" (:br.pnl/lucro-bruto p)]
+                   ["resultado-op" (:br.pnl/resultado-operacional p)] ["lucro-liquido" (:br.pnl/lucro-liquido p)]
+                   ["total-ativo" (:br.bs/total-ativo b)] ["total-passivo" (:br.bs/total-passivo b)]
+                   ["total-pl" (:br.bs/total-pl b)] ["difference" (:br.bs/difference b)]])]
+      (doseq [[label m] monies]
         (is (= :BRL (:commodity m))
-            (str "expected :BRL, got " (:commodity m) " on " m))))))
+            (str "expected :BRL, got " (:commodity m) " on " label))))))

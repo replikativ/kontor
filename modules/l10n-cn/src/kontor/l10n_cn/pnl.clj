@@ -41,28 +41,14 @@
   (:require [kontor.money :as money]
             [kontor.reporting.financial-statements :as fs]))
 
-;; F5 (note-196) makes the report engine DERIVE a line's commodity from
-;; the postings it sums, so a line that matches CNY postings is tagged
-;; :CNY without help. But a line that matches NO posting has nothing to
-;; derive from and falls back to the per-line `:line/commodity` default,
-;; which is :EUR — and a balance sheet / P&L always has empty lines. When
-;; a section mixes a CNY line with an empty :EUR line, summing the two
-;; throws "Cross-commodity :add is forbidden". Stamping every line :CNY
-;; makes the empty-line fallback CNY too, so sparse sections still add.
-(defn- in-cny [statement]
-  (update statement :statement/sections
-          (fn [sections]
-            (mapv (fn [s]
-                    (-> s
-                        (assoc :section/commodity :CNY)
-                        (update :section/lines
-                                (fn [ls] (mapv #(assoc % :line/commodity :CNY) ls)))))
-                  sections))))
-
+;; Commodity needs no per-line stamp: the report engine derives a line's
+;; commodity from the postings it sums (note 196 F5), a zero is the
+;; additive identity across commodities so the empty lines a P&L always
+;; has fold cleanly (F5b), and an all-empty section inherits the book
+;; commodity — so a CNY book reports :CNY throughout.
 (def definition
   "Single-step 利润表 over the `kontor.l10n-cn.chart` codes."
-  (in-cny
-   {:statement/name    "利润表 (Income Statement)"
+  {:statement/name    "利润表 (Income Statement)"
    :statement/country "CN"
    :statement/sections
    [{:section/code  "1"
@@ -125,7 +111,7 @@
      :section/label "所得税费用 Income tax expense"
      :section/lines
      [{:line/code "10.1" :line/label "所得税费用 Income tax expense"
-       :line/codes ["6301"]}]}]}))
+       :line/codes ["6301"]}]}]})
 
 (def ^:private sign-map
   "Revenue and gains add; costs, expenses and income tax subtract.

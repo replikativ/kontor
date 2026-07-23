@@ -89,10 +89,31 @@
                         (mapcat :section/lines)
                         (mapv line->report-line))})
 
+(defn- first-posted-commodity
+  "Commodity of the first line that actually has postings. Empty lines carry
+   a zero in the engine's :EUR fallback commodity, so they MUST be skipped —
+   otherwise the derived currency reads :EUR whenever an empty line comes
+   first. Used both per-section and book-wide."
+  [lines]
+  (some (fn [l]
+          (when (seq (:line/postings l))
+            (:commodity (:line/value l))))
+        lines))
+
+(defn- book-commodity
+  "The book's commodity, derived once from the computed report — the first
+   posted line's commodity across ALL sections. Stable no matter which
+   section carries data, so an all-empty section inherits the real book
+   currency instead of the :EUR fallback. (note 196 F5b — this is what
+   lets the l10n statement defs drop their per-line :USD/:CAD/… stamps.)"
+  [computed]
+  (first-posted-commodity (:report/lines computed)))
+
 (defn- bucket-by-section
   [statement computed]
   (let [computed-by-code (into {} (map (juxt :line/code identity))
-                               (:report/lines computed))]
+                               (:report/lines computed))
+        book-comm (book-commodity computed)]
     (mapv
      (fn [section]
        (let [lines (mapv (fn [l]
@@ -116,11 +137,14 @@
              subtotal (reduce (fn [acc l]
                                 (money/add acc (:line/value l)))
                               ;; Seed the subtotal in the section's own currency —
-                              ;; derived from its computed lines when not declared —
-                              ;; so a non-EUR book does not hit an EUR-seed mismatch
-                              ;; (note-196 F5). :EUR only if there is nothing to derive.
+                              ;; its declared commodity, else this section's own
+                              ;; lines, else the book commodity (so an all-empty
+                              ;; section still labels the book currency, not the
+                              ;; :EUR fallback) — so a non-EUR book never hits an
+                              ;; EUR-seed mismatch (note-196 F5 / F5b).
                               (money/zero (or (:section/commodity section)
-                                              (some->> lines (keep (comp :commodity :line/value)) first)
+                                              (first-posted-commodity lines)
+                                              book-comm
                                               :EUR))
                               lines)]
          {:section/code     (:section/code section)
@@ -162,7 +186,8 @@
          computed (report/compute-report conn report-def
                                          (dissoc opts :total-sign-map))
          sections (bucket-by-section statement computed)
-         currency (or (some-> sections first :section/subtotal :commodity)
+         currency (or (book-commodity computed)
+                      (some-> sections first :section/subtotal :commodity)
                       :EUR)
          total (if total-sign-map
                  (reduce
