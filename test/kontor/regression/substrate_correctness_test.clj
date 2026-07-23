@@ -227,7 +227,7 @@
 ;; `:type :validation/sum-to-zero`. A consumer dispatching on
 ;; `(:type (ex-data e))` gets nil from the facade path (note 196 F2, P2).
 ;; The vocabulary should be uniform across both write paths.
-(deftest ^:kaocha/pending unbalanced-entry-raises-typed-sum-to-zero-F2
+(deftest unbalanced-entry-raises-typed-sum-to-zero-F2
   (let [conn (fresh-book)
         ex (try
              (book/adjust! conn {:effective-date jan-15
@@ -250,7 +250,7 @@
 ;; (the account's expected commodity vs the posting's actual). A consumer
 ;; can't tell commodity-match from account-active from the error (note 196
 ;; F3, P2). ex-data should carry a `:violations`/`:rule` + offending value.
-(deftest ^:kaocha/pending invariant-violation-names-rule-and-value-F3
+(deftest invariant-violation-names-rule-and-value-F3
   (let [conn (fresh-book)
         ex (try
              (book/transfer! conn {:debit-account usd-cash :credit-account cash
