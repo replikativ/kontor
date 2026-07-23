@@ -378,9 +378,25 @@
             :let  [inv-qs (d/q invariant-query @conn a)]
             :when inv-qs]
       (when-not (invariant-holds? inv-qs conn tx-data schema)
-        (throw (ex-info "Invariant mismatch."
-                        {:type      :invariant/invariant-mismatch
-                         :attribute a
-                         :invariant (edn/read-string inv-qs)
-                         :tx-data   tx-data}))))
+        ;; Name the rule + surface the offending values, so the exception is
+        ;; self-diagnosing rather than an opaque "Invariant mismatch"
+        ;; (note-196 F3). `:rule` is the keyed attribute — the invariant's
+        ;; identity (e.g. :kontor.posting/commodity = commodity-match);
+        ;; `:offending-values` are the distinct values of that attribute in
+        ;; the delta, i.e. the candidates that triggered the check.
+        (let [offending (->> tx-data
+                             (keep (fn [tx]
+                                     (cond
+                                       (and (vector? tx) (= 4 (count tx)) (= a (nth tx 2)))
+                                       (nth tx 3)
+                                       (and (map? tx) (contains? tx a))
+                                       (get tx a))))
+                             distinct vec)]
+          (throw (ex-info (str "Invariant violated: " a)
+                          {:type             :invariant/invariant-mismatch
+                           :attribute        a
+                           :rule             a
+                           :offending-values offending
+                           :invariant        (edn/read-string inv-qs)
+                           :tx-data          tx-data})))))
     true))
