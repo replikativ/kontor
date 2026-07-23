@@ -77,21 +77,25 @@
     (is (= 285.00M  (inv/line-vat beratung))   "10 × 150 × 19% = 285")
     (is (= 1785.00M (inv/line-gross beratung)))
     (is (= 89.50M   (inv/line-net reise)))
-    (is (= 17.00M   (inv/line-vat reise))
-        "89.50 × 19% = 17.005; HALF_EVEN rounds to even → 17.00 (.0 even)")
-    (is (= 106.50M  (inv/line-gross reise)))))
+    ;; note 197: German VAT rounding is HALF_UP (DIN 1333), matching what
+    ;; Mustang emits — 89.50 × 19% = 17.005 → 17.01 (was 17.00 under HALF_EVEN).
+    (is (= 17.01M   (inv/line-vat reise))
+        "89.50 × 19% = 17.005; HALF_UP (kaufmännische Rundung) → 17.01")
+    (is (= 106.51M  (inv/line-gross reise)))))
 
 (deftest invoice-totals-correct
   (let [t (inv/invoice-totals sample-invoice)]
     (is (= 1589.50M (:kontor.invoice/total-net t))   "1500 + 89.50")
-    (is (= 302.00M  (:kontor.invoice/total-vat t))   "285.00 + 17.00")
-    (is (= 1891.50M (:kontor.invoice/total-gross t)) "1589.50 + 302.00")
+    ;; note 197: category VAT = round(1589.50 × 19%, HALF_UP) = 302.01 — the
+    ;; figure org.mustangproject stamps on the emitted Factur-X document.
+    (is (= 302.01M  (:kontor.invoice/total-vat t))   "category-level HALF_UP")
+    (is (= 1891.51M (:kontor.invoice/total-gross t)) "1589.50 + 302.01")
     (is (= 1 (count (:kontor.invoice/vat-breakdown t))) "single 19% bucket")
     (let [bucket (first (:kontor.invoice/vat-breakdown t))]
       (is (= 19.0M (:vat/rate bucket)))
       (is (= "S"   (:vat/category bucket)))
       (is (= 1589.50M (:vat/base bucket)))
-      (is (= 302.00M  (:vat/tax bucket))))))
+      (is (= 302.01M  (:vat/tax bucket))))))
 
 ;; ============================================================================
 ;; factur-x.clj — XML generation

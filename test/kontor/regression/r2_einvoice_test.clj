@@ -65,10 +65,13 @@
     (let [t (de-inv/invoice-totals de-sample)]
       ;; 10 x 150 = 1500.00 ; 1 x 89.50 = 89.50 ; net = 1589.50
       (is (bd= 1589.50M (:kontor.invoice/total-net t)))
-      ;; per-line VAT: 1500 x 19% = 285.00 ; 89.50 x 19% = 17.005 -> HALF_EVEN 17.00
-      ;; helper sums the per-line rounded amounts: 285.00 + 17.00 = 302.00
-      (is (bd= 302.00M (:kontor.invoice/total-vat t)))
-      (is (bd= 1891.50M (:kontor.invoice/total-gross t))))))
+      ;; FIXED (note 197): VAT is computed per category on the summed base
+      ;; (EN16931 BR-CO-17) with HALF_UP (DIN 1333 kaufmännische Rundung) —
+      ;; round(1589.50 x 19%) = round(302.005) = 302.01 — matching exactly what
+      ;; org.mustangproject emits in the Factur-X document (verified: XML
+      ;; CalculatedAmount/TaxTotalAmount 302.01, GrandTotalAmount 1891.51).
+      (is (bd= 302.01M (:kontor.invoice/total-vat t)))
+      (is (bd= 1891.51M (:kontor.invoice/total-gross t))))))
 
 (deftest de-factur-x-required-fields-present
   (testing "EN16931 CII carries the load-bearing seller/buyer/currency fields"
@@ -82,23 +85,16 @@
   (testing "XRechnung profile URN reflected in document context"
     (is (str/includes? (fx/generate-xml-string de-sample :xrechnung) "xrechnung"))))
 
-;; --- FINDING: emitted Factur-X total != kontor's booked total -----------------
-;; The EN16931 document Mustang emits computes the VAT per tax-category on the
-;; summed base (EN16931 rule BR-CO-17: category tax = round(base x rate)), i.e.
-;; 1589.50 x 19% = 302.005 -> 302.01, GrandTotal 1891.51.
-;; kontor's invoice-totals instead SUMS the per-line rounded VAT
-;; (285.00 + 17.00 = 302.00), GrandTotal 1891.50.
-;; A consumer who books AR/output-VAT from invoice-totals therefore ships a
-;; legal Factur-X to the customer/tax authority whose GRAND TOTAL is one cent
-;; higher than what it booked. The two must agree.
-(deftest ^:kaocha/pending de-factur-x-grand-total-matches-booked-total
-  ;; PENDING(NEW): kontor.einvoice-de.invoice/invoice-totals disagrees with the
-  ;; Factur-X document generate-xml emits for the SAME invoice (per-line-rounded
-  ;; VAT vs EN16931 BR-CO-17 category-level rounding). 1891.50 booked vs 1891.51
-  ;; on the emitted document.
+;; --- FIXED (note 197): emitted Factur-X total == kontor's booked total --------
+;; kontor.einvoice-de.invoice now computes VAT per tax-category on the summed
+;; base with HALF_UP (EN16931 BR-CO-17 + DIN 1333), matching what Mustang emits:
+;; 1589.50 x 19% = 302.005 -> 302.01, GrandTotal 1891.51. Previously it summed
+;; per-line HALF_EVEN VAT (302.00 / 1891.50) and shipped a document one cent
+;; higher than it booked. Verified against the actually-emitted XML.
+(deftest de-factur-x-grand-total-matches-booked-total
   (let [t         (de-inv/invoice-totals de-sample)
-        booked    (:kontor.invoice/total-gross t)      ; 1891.50
-        booked-vat (:kontor.invoice/total-vat t)        ; 302.00
+        booked    (:kontor.invoice/total-gross t)      ; 1891.51
+        booked-vat (:kontor.invoice/total-vat t)        ; 302.01
         xml       (fx/generate-xml-string de-sample :en16931)
         doc-gross (bigdec (xml-val xml "GrandTotalAmount"))
         doc-vat   (bigdec (xml-val xml "TaxTotalAmount"))]
@@ -107,22 +103,20 @@
     (is (bd= booked doc-gross)
         "grand total booked must equal the grand total on the emitted Factur-X")))
 
-;; A second, larger-magnitude repro of the same gap: many sub-cent-VAT lines.
-;; 10 lines x 0.10 EUR = 1.00 net. Per-line VAT 0.10 x 19% = 0.019 -> 0.02 each,
-;; summed = 0.20. Category-level (document): 1.00 x 19% = 0.19. Off by a cent.
-(deftest ^:kaocha/pending de-factur-x-per-line-vat-aggregation
-  ;; PENDING(NEW): invoice-totals sums per-line rounded VAT (0.20) while the
-  ;; emitted EN16931 document computes category VAT once (0.19). Same gap as
-  ;; de-factur-x-grand-total-matches-booked-total, magnified by many small lines.
+;; A second, larger-magnitude case: many sub-cent-VAT lines. 10 lines x 0.10 EUR
+;; = 1.00 net. Category-level (both kontor and the document now): 1.00 x 19% =
+;; 0.19 — where the old per-line sum was 0.20. FIXED (note 197).
+(deftest de-factur-x-per-line-vat-aggregation
   (let [inv (assoc de-sample :kontor.invoice/items
                    (vec (repeat 10 {:item/name "Kleinposten" :item/quantity 1
                                     :item/unit-code "EA" :item/unit-price 0.10M
                                     :item/vat-rate 19.0M :item/vat-category "S"})))
-        booked-vat (:kontor.invoice/total-vat (de-inv/invoice-totals inv))  ; 0.20
+        booked-vat (:kontor.invoice/total-vat (de-inv/invoice-totals inv))  ; 0.19
         doc-vat    (bigdec (xml-val (fx/generate-xml-string inv :en16931)
                                     "TaxTotalAmount"))]                       ; 0.19
     (is (bd= booked-vat doc-vat)
-        "booked VAT (0.20) must equal the emitted document VAT (0.19)")))
+        "booked VAT (0.19) equals the emitted document VAT (0.19)")
+    (is (bd= 0.19M booked-vat) "category-level VAT is 0.19, not the per-line-summed 0.20")))
 
 ;; ============================================================================
 ;; IN — IRN payload driven off a REAL booked ledger
