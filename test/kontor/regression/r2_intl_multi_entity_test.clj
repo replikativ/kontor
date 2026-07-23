@@ -316,6 +316,7 @@
             fresh hand-derived figure."
     (let [conn   (tax-bootstrap)
           fu-eid (elect-acme! conn)
+          _      (fu/activate! conn fu-eid)   ; note 197: election must be in force
           db     (d/db conn)
           ;; Holding +€3,000,000 ; Sub −€500,000 → consolidated zvE €2,500,000.
           ;; KSt  (KStG §23 Abs.1, 15%)          = 0.15 × 2,500,000 = €375,000
@@ -396,14 +397,13 @@
 ;; E. PENDING — run-group-tax! has no status gate
 ;; ===========================================================================
 
-(deftest ^:kaocha/pending run-group-tax-should-reject-inactive-fiscal-unit
-  ;; PENDING(NEW): `kontor.tax.fiscal-unit/run-group-tax!` consults neither
-  ;; `:kontor.fiscal-unit/status` nor `:kontor.fiscal-unit/active`. A unit
-  ;; that was merely PROPOSED (never walked to :elected → :active), or one
-  ;; driven to :voided-retro (the tax authority retroactively broke the
-  ;; Organschaft), still yields a full group tax filing. A group filing for
-  ;; an election that is not in force is a materially wrong tax result and
-  ;; the substrate offers no guard against it.
+(deftest run-group-tax-should-reject-inactive-fiscal-unit
+  ;; FIXED (note 197): run-group-tax! now gates on :kontor.fiscal-unit/status +
+  ;; :active — only an in-force (:active) election may file. A merely :proposed
+  ;; unit (or one driven to :voided-retro) is rejected with
+  ;; :kontor.fiscal-unit/election-not-in-force. Authority: 26 CFR §1.1502-75
+  ;; (consent); §14 KStG (valid GAV in force). Use fu/activate! to bring an
+  ;; election in force before filing.
   (testing "a group tax run against a non-active (:proposed) fiscal unit is rejected"
     (let [conn   (tax-bootstrap)
           fu-eid (elect-acme! conn)      ;; leaves the unit in :proposed / active=false

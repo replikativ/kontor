@@ -258,7 +258,10 @@
                       :computation-style :per-member-with-netting
                       :elected-from #inst "2026-01-01"
                       :members [{:entity (ent db "P-Holding") :role :parent}]})
-        fu-eid (ref-eid (d/db conn) :kontor.fiscal-unit/code "JP-stub-2026")]
+        fu-eid (ref-eid (d/db conn) :kontor.fiscal-unit/code "JP-stub-2026")
+        ;; note 197: activate so the style-dispatch stub is reached (the
+        ;; election-in-force gate runs before dispatch).
+        _ (fu/activate! conn fu-eid)]
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"not yet implemented"
