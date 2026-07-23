@@ -88,7 +88,15 @@
                   {:invoice-eid (:db/id pulled)
                    :external-id (:kontor.invoice/external-id pulled)
                    :open-amount open
-                   :gross (:kontor.invoice/total-gross pulled)
+                   ;; N4 (note 196): :kontor.invoice/total-gross is unset on
+                   ;; line-based (bridge) invoices, which reported :gross nil.
+                   ;; Fall back to summing the invoice lines.
+                   :gross (or (:kontor.invoice/total-gross pulled)
+                              (d/q '[:find (sum ?amt) . :in $ ?i :where
+                                     [?l :kontor.invoice-line/invoice ?i]
+                                     [?l :kontor.invoice-line/amount ?amt]]
+                                   db (:db/id pulled))
+                              0M)
                    :issue-date (:kontor.invoice/issue-date pulled)
                    :due-date (get-in pulled [:kontor.invoice/transaction
                                              :kontor.transaction/due-date])

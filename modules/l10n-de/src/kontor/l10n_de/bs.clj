@@ -152,22 +152,33 @@
        :line/codes ["3900" "3910"]}]}]})
 
 (defn compute-aktiva
-  "Compute the Aktiva (assets) side as-of `to` (point-in-time)."
-  [conn {:keys [to as-of-tx include-states] :as opts}]
+  "Compute the Aktiva (assets) side point-in-time. Accepts `:to`
+   (EXCLUSIVE) or `:through` (INCLUSIVE, e.g. `:through #inst \"2026-12-31\"`
+   for a year-end Bilanz that includes Dec-31 entries), plus `:as-of-tx`,
+   `:include-states`, `:entity`, `:ledger`. Note-196 N6: `:through` was
+   previously dropped here, so a year-end Bilanz silently omitted Dec-31."
+  [conn {:keys [to through as-of-tx include-states entity ledger]}]
   (fs/compute-statement conn aktiva-definition
                         (cond-> {:from nil}
                           to             (assoc :to to)
+                          through        (assoc :through through)
                           as-of-tx       (assoc :as-of-tx as-of-tx)
-                          include-states (assoc :include-states include-states))))
+                          include-states (assoc :include-states include-states)
+                          entity         (assoc :entity entity)
+                          ledger         (assoc :ledger ledger))))
 
 (defn compute-passiva
-  "Compute the Passiva (equity + liabilities) side as-of `to`."
-  [conn {:keys [to as-of-tx include-states] :as opts}]
+  "Compute the Passiva (equity + liabilities) side point-in-time. Same
+   options as [[compute-aktiva]] (incl. `:through` — note-196 N6)."
+  [conn {:keys [to through as-of-tx include-states entity ledger]}]
   (fs/compute-statement conn passiva-definition
                         (cond-> {:from nil}
                           to             (assoc :to to)
+                          through        (assoc :through through)
                           as-of-tx       (assoc :as-of-tx as-of-tx)
-                          include-states (assoc :include-states include-states))))
+                          include-states (assoc :include-states include-states)
+                          entity         (assoc :entity entity)
+                          ledger         (assoc :ledger ledger))))
 
 (defn balance-check
   "Run both sides and return {:aktiva _ :passiva _ :balanced? bool
