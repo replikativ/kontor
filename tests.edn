@@ -44,6 +44,7 @@
                        "modules/payroll-cn/test"
                        "modules/import-gleif/test"
                        "modules/import-edgar/test"
+                       "modules/import-datev/test"
                        "modules/people-record/test"
                        "modules/disposal/test"
                        "modules/incorporation/test"
