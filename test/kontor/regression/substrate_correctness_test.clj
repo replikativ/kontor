@@ -196,18 +196,26 @@
 ;; with RAW eids for both the account and the commodity — unusable to
 ;; eyeball or render without hand-joining eids (note 196 F1, P1). It SHOULD
 ;; key by the account's code/path and use the commodity SYMBOL.
-(deftest ^:kaocha/pending trial-balance-should-be-human-readable-F1
+(deftest trial-balance-should-be-human-readable-F1
+  ;; F1 fix (note 196): trial-balance itself stays eid-keyed because write-back
+  ;; consumers (closing, consolidation) re-transact its commodity as a ref;
+  ;; trial-balance-readable is the presentation view that resolves eids →
+  ;; account path + commodity symbol.
   (let [conn (fresh-book)
         _ (book/sell! conn {:debit-account ar :credit-account rev
                             :amount 4000 :commodity eur
                             :effective-date jan-15 :narration "Sale"})
-        tb (trial/trial-balance conn)]
+        tb (trial/trial-balance-readable conn)]
     (testing "the outer map should be addressable by account code or path"
       (is (some (fn [k] (contains? #{"Income:Sales" "4000"} k)) (keys tb))
-          "trial-balance should key by account code/path, not a raw eid"))
+          "trial-balance-readable should key by account code/path, not a raw eid"))
     (testing "the inner map should be keyed by the commodity SYMBOL"
-      (is (some (fn [inner] (contains? (set (keys inner)) "EUR")) (vals tb))
-          "commodity should be the symbol \"EUR\", not a raw eid"))))
+      ;; kontor's commodity symbol is the keyword :EUR (money/money, the cljs
+      ;; reads, and every posting all use the keyword form) — not a string.
+      (is (some (fn [inner] (contains? (set (keys inner)) :EUR)) (vals tb))
+          "commodity should be the symbol :EUR, not a raw eid")
+      (is (every? (fn [inner] (every? keyword? (keys inner))) (vals tb))
+          "every inner commodity key is a symbol keyword, never an eid"))))
 
 ;; ============================================================================
 ;; F2 — unbalanced book/entry! should raise the typed :validation/sum-to-zero

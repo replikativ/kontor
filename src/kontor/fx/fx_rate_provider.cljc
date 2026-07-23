@@ -109,14 +109,18 @@
 ;; ============================================================================
 
 (defn- coerce-commodity-eid
-  "Accept either an eid (long), a lookup ref [[:kontor.commodity/symbol \"EUR\"]],
-   or a bare string \"EUR\". Returns the eid or nil if not found."
+  "Accept an eid (long), a lookup ref [[:kontor.commodity/symbol \"EUR\"]], a
+   bare string \"EUR\", or a symbol keyword :EUR (kontor's canonical Money
+   commodity — what the reporting layer now carries). Returns the eid or nil
+   if not found."
   [db commodity]
   (cond
     (nil? commodity)
     nil
     (number? commodity)
     commodity
+    (keyword? commodity)
+    (:db/id (d/entity db [:kontor.commodity/symbol (name commodity)]))
     (string? commodity)
     (:db/id (d/entity db [:kontor.commodity/symbol commodity]))
     (vector? commodity)

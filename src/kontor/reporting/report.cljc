@@ -128,6 +128,7 @@
     (assoc pulled
            :valid-from vf
            :tx-state tx-state
+           :commodity-symbol (balance/resolve-commodity-symbol db (:kontor.posting/commodity pulled))
            :ledger-eid (:db/id (:kontor.posting/ledger pulled))
            :entity-eid (:db/id (:kontor.posting/entity pulled))
            :partner-eid (:db/id (:kontor.posting/partner pulled))
@@ -205,8 +206,13 @@
    (let [sum (reduce (fn [acc p]
                        (money/add-amount acc (amount-of p sign)))
                      (money/zero-amount)
-                     postings)]
-     {:value    (money/money sum (or commodity :EUR))
+                     postings)
+         ;; Derive the currency from the postings actually summed (they are
+         ;; mono-commodity per line — enforced under :strict-commodity?), so
+         ;; a non-EUR book is not silently mislabelled :EUR (note-196 F5).
+         ;; The passed `commodity` is only the empty-line fallback now.
+         derived (some :commodity-symbol postings)]
+     {:value    (money/money sum (or derived commodity :EUR))
       :postings (mapv :db/id postings)})))
 
 ;; The built-in classification dimensions a `marginalize` / `:dimension`

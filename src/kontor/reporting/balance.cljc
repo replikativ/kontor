@@ -19,6 +19,30 @@
             [kontor.money :as money]))
 
 ;; ============================================================================
+;; Commodity + account reference resolution (note-196 F1/F5)
+;;
+;; `:kontor.posting/commodity` is a `:db.type/ref` and reads never resolved
+;; it, so balances keyed by (and Money wrapped) a raw commodity eid. Resolve
+;; once, here — the shared home, since `kontor.reporting.report` already
+;; requires this ns (no cycle) and reuses it.
+;; ============================================================================
+
+(defn resolve-commodity-symbol
+  "Normalize a `:kontor.posting/commodity` value to a symbol keyword (:EUR /
+   :CAD). Handles a keyword (already a symbol — cljs books store it directly),
+   a pulled ref `{:db/id n}` / bare eid (the kernel schema types it
+   `:db.type/ref`), or a `[:kontor.commodity/symbol s]` lookup-ref. Falls
+   back to the raw value if it can't resolve, so a commodity is never lost."
+  [db c]
+  (cond
+    (keyword? c) c
+    (and (vector? c) (= :kontor.commodity/symbol (first c))) (keyword (second c))
+    :else
+    (let [eid (if (map? c) (:db/id c) c)
+          sym (when eid (:kontor.commodity/symbol (d/pull db [:kontor.commodity/symbol] eid)))]
+      (if sym (keyword sym) c))))
+
+;; ============================================================================
 ;; Internal: bitemporal-aware posting lookup
 ;; ============================================================================
 

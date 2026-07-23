@@ -19,14 +19,14 @@
 
    CA / JP / AU ship NO statement definitions (F4), so this suite drives
    the generic `kontor.reporting.financial-statements/compute-statement`
-   with a hand-built definition per chart. The arithmetic is correct, but
-   every returned Money is tagged :EUR regardless of the book's real
-   currency — that is F5, the report engine's silent default. The
-   arithmetic deftests pass; the commodity deftests are ^:kaocha/pending
-   PENDING(F5) and will pass once the engine derives the default from the
-   book's own commodity.
+   with a hand-built definition per chart. The arithmetic is correct, and
+   every returned Money is now tagged the book's real currency — F5 is
+   FIXED: the report engine derives the statement commodity from the
+   postings it sums (kontor.reporting.report/resolve-commodity-symbol),
+   instead of the old :EUR default. The commodity deftests (ca/jp/au)
+   assert exactly that and pass.
 
-   This is the flagship F5 reproduction across nations.
+   This was the flagship F5 reproduction across nations; it now guards the fix.
 
    Expected figures are hand-computed in the comment block above each
    jurisdiction's seed — a golden-value capture would pass just as
@@ -264,7 +264,7 @@
       (is (== 52000M (amt equity)) "owner 40000 + net income 12000")
       (is (== 0M (amt total)) "assets - (liab + equity) = 0"))))
 
-(deftest ^:kaocha/pending ca-statement-commodity
+(deftest ca-statement-commodity
   ;; PENDING(F5): the generic report engine defaults statement commodity
   ;; to :EUR. A CAD book returns correct amounts tagged :EUR. Every Money
   ;; below SHOULD be :CAD. Passes once the engine derives the default from
@@ -320,7 +320,7 @@
       (is (== 5200000M (amt equity)))
       (is (== 0M (amt total))))))
 
-(deftest ^:kaocha/pending jp-statement-commodity
+(deftest jp-statement-commodity
   ;; PENDING(F5): JPY book, generic engine returns :EUR. Should be :JPY.
   (let [conn (seed-jp! (jp/create-jp-db))
         p    (fs/compute-statement conn jp-pnl-def (assoc fy :total-sign-map generic-pnl-signs))
@@ -371,7 +371,7 @@
       (is (== 87000M  (amt equity)))
       (is (== 0M (amt total))))))
 
-(deftest ^:kaocha/pending au-statement-commodity
+(deftest au-statement-commodity
   ;; PENDING(F5): AUD book, generic engine returns :EUR. Should be :AUD.
   (let [conn (seed-au! (au/create-au-db))
         p    (fs/compute-statement conn au-pnl-def (assoc fy :total-sign-map generic-pnl-signs))
