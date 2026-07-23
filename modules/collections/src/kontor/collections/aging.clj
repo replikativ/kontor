@@ -115,10 +115,19 @@
    Optional opts:
      :method                :due-date | :invoice-date | :statement-date
                             (default :due-date)
-     :as-of                 reference date (default today)
-     :as-of-valid           bitemporal value-time cursor for the
-                            invoice's :payment-application net
-                            (default :as-of)
+     :as-of                 reference date for days-overdue bucketing
+                            (default today)
+     :as-of-valid           bitemporal value-time cursor deciding which
+                            :payment-applications are visible in the open
+                            amount. Defaults to :as-of, NOT to now — this
+                            is deliberate: an aging report \"as of D\" must
+                            reflect the cash that had actually been applied
+                            by D, so a historical run correctly excludes
+                            payments received after D (they weren't in yet).
+                            Pass :as-of-valid explicitly to decouple the two
+                            axes — e.g. age by a past date but with today's
+                            payment knowledge. (note 196 N7 — the two axes
+                            are separate and independently controllable.)
      :buckets               vector of [label upper-day]
                             (default kontor.reporting.aging/default-buckets)
      :partner-payment-terms map of partner-eid → grace-days; the
