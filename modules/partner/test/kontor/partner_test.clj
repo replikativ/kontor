@@ -605,3 +605,158 @@
     (testing "tax-ids-of returns all active"
       (let [hits (p/tax-ids-of db "P-MULTI-VAT" {:as-of #inst "2025-01-01"})]
         (is (= 2 (count hits)))))))
+
+;; ============================================================================
+;; note 198 audit — unordered-`d/q` tie-breaks and the throws that replaced
+;; the arbitrary picks (H4 / H6 / H7 / M5)
+;; ============================================================================
+
+(defn- two-supplier-accounts!
+  "One supplier with TWO simultaneously-active disbursement IBANs. Legal:
+   `:kontor.partner-bank-account/identity` is [partner bank-account from-date]."
+  [pref-a? pref-b?]
+  (d/transact *conn*
+              [{:kontor.commodity/symbol "EUR" :kontor.commodity/name "Euro"
+                :kontor.commodity/precision 2 :kontor.commodity/iso-4217 "EUR"}
+               {:kontor.partner/external-id "P-TWO-IBAN"
+                :kontor.partner/type :org :kontor.partner/status :enabled
+                :kontor.partner/name "Two-IBAN Supplier"}
+               {:kontor.bank-account/code "ACCT-A"
+                :kontor.bank-account/iban "DE89370400440532013000"
+                :kontor.bank-account/commodity [:kontor.commodity/symbol "EUR"]
+                :kontor.bank-account/active true}
+               {:kontor.bank-account/code "ACCT-B"
+                :kontor.bank-account/iban "DE02120300000000202051"
+                :kontor.bank-account/commodity [:kontor.commodity/symbol "EUR"]
+                :kontor.bank-account/active true}
+               (cond-> {:kontor.partner-bank-account/partner [:kontor.partner/external-id "P-TWO-IBAN"]
+                        :kontor.partner-bank-account/bank-account [:kontor.bank-account/code "ACCT-A"]
+                        :kontor.partner-bank-account/from-date #inst "2025-01-01"
+                        :kontor.partner-bank-account/purpose :disbursement}
+                 pref-a? (assoc :kontor.partner-bank-account/preferred? true))
+               (cond-> {:kontor.partner-bank-account/partner [:kontor.partner/external-id "P-TWO-IBAN"]
+                        :kontor.partner-bank-account/bank-account [:kontor.bank-account/code "ACCT-B"]
+                        :kontor.partner-bank-account/from-date #inst "2025-06-01"
+                        :kontor.partner-bank-account/purpose :disbursement}
+                 pref-b? (assoc :kontor.partner-bank-account/preferred? true))]))
+
+(deftest primary-disbursement-account-newest-wins-when-none-preferred
+  ;; H4: `:preferred?` is read through `get-else … false`, so in practice
+  ;; NOTHING is flagged and the old code fell through to `(first active)` —
+  ;; an arbitrary IBAN for a payment run.
+  (two-supplier-accounts! false false)
+  (let [db (d/db *conn*)
+        primary (p/primary-disbursement-account db "P-TWO-IBAN"
+                                                {:as-of #inst "2025-09-01"})]
+    (testing "the account with the latest from-date wins, deterministically"
+      (is (= "DE02120300000000202051" (:kontor.bank-account/iban primary))))
+    (testing "and repeated reads of the same db agree"
+      (is (= (:db/id primary)
+             (:db/id (p/primary-disbursement-account db "P-TWO-IBAN"
+                                                     {:as-of #inst "2025-09-01"}))
+             (:db/id (p/primary-disbursement-account db "P-TWO-IBAN"
+                                                     {:as-of #inst "2025-09-01"})))))))
+
+(deftest primary-disbursement-account-explicit-preferred-beats-newer
+  (two-supplier-accounts! true false)
+  (let [primary (p/primary-disbursement-account (d/db *conn*) "P-TWO-IBAN"
+                                                {:as-of #inst "2025-09-01"})]
+    (is (= "DE89370400440532013000" (:kontor.bank-account/iban primary)))))
+
+(deftest primary-disbursement-account-two-preferred-throws
+  ;; Two IBANs flagged preferred is a data error the substrate cannot settle:
+  ;; either could be the one the supplier wants paid.
+  (two-supplier-accounts! true true)
+  (let [ex (is (thrown? clojure.lang.ExceptionInfo
+                        (p/primary-disbursement-account (d/db *conn*) "P-TWO-IBAN"
+                                                        {:as-of #inst "2025-09-01"})))]
+    (is (= :kontor.partner-bank-account/ambiguous-preferred (:type (ex-data ex))))
+    (is (= 2 (count (:bank-accounts (ex-data ex)))))))
+
+(deftest contact-mech-by-purpose-breaks-from-date-ties
+  ;; H6: a bulk import stamps ONE `now` across every contact mech it writes,
+  ;; so two billing addresses tie on from-date and the winner used to be
+  ;; whichever the result set surfaced first.
+  (d/transact *conn*
+              [{:kontor.partner/external-id "P-BULK"
+                :kontor.partner/type :org :kontor.partner/status :enabled
+                :kontor.partner/name "Bulk-Imported Co"}
+               {:kontor.contact-mech/code "CM-OLD" :kontor.contact-mech/type :postal-address}
+               {:kontor.contact-mech/code "CM-NEW" :kontor.contact-mech/type :postal-address}
+               {:kontor.partner-contact-mech-purpose/partner [:kontor.partner/external-id "P-BULK"]
+                :kontor.partner-contact-mech-purpose/contact-mech [:kontor.contact-mech/code "CM-OLD"]
+                :kontor.partner-contact-mech-purpose/purpose-type :billing-address
+                :kontor.partner-contact-mech-purpose/from-date #inst "2026-01-01"}
+               {:kontor.partner-contact-mech-purpose/partner [:kontor.partner/external-id "P-BULK"]
+                :kontor.partner-contact-mech-purpose/contact-mech [:kontor.contact-mech/code "CM-NEW"]
+                :kontor.partner-contact-mech-purpose/purpose-type :billing-address
+                :kontor.partner-contact-mech-purpose/from-date #inst "2026-01-01"}])
+  (let [db (d/db *conn*)
+        newer (d/q '[:find ?e . :where [?e :kontor.contact-mech/code "CM-NEW"]] db)
+        picks (repeatedly 5 #(p/contact-mech-by-purpose db "P-BULK" :billing-address
+                                                        {:as-of #inst "2026-03-01"}))]
+    (testing "the tie resolves to the later-written row, and does so every time"
+      (is (= #{newer} (set picks))))))
+
+(deftest tax-id-for-country-ambiguous-throws
+  ;; H7: NL routinely carries :kvk-nl + :rsin-nl + :btw-nl at once. Returning
+  ;; "the first match" could print a Chamber-of-Commerce number where the
+  ;; invoice wants the VAT number.
+  (d/transact *conn*
+              [{:kontor.country/code "NL" :kontor.country/name "Netherlands"}
+               {:kontor.partner/external-id "P-NL"
+                :kontor.partner/type :org :kontor.partner/status :enabled
+                :kontor.partner/name "Nederland BV"}
+               {:kontor.partner-tax-id/partner [:kontor.partner/external-id "P-NL"]
+                :kontor.partner-tax-id/country [:kontor.country/code "NL"]
+                :kontor.partner-tax-id/tax-id-type :vat-eu
+                :kontor.partner-tax-id/tax-id "NL123456789B01"
+                :kontor.partner-tax-id/from-date #inst "2024-01-01"}
+               {:kontor.partner-tax-id/partner [:kontor.partner/external-id "P-NL"]
+                :kontor.partner-tax-id/country [:kontor.country/code "NL"]
+                :kontor.partner-tax-id/tax-id-type :company-registration
+                :kontor.partner-tax-id/tax-id "12345678"
+                :kontor.partner-tax-id/from-date #inst "2024-01-01"}])
+  (let [db (d/db *conn*)]
+    (testing "without :tax-id-type the substrate refuses to guess"
+      (let [ex (is (thrown? clojure.lang.ExceptionInfo
+                            (p/tax-id-for-country db "P-NL" "NL")))]
+        (is (= :kontor.partner-tax-id/ambiguous (:type (ex-data ex))))
+        (is (= [:company-registration :vat-eu]
+               (:tax-id-types (ex-data ex))))))
+    (testing ":tax-id-type disambiguates and still answers"
+      (is (= "NL123456789B01"
+             (p/tax-id-for-country db "P-NL" "NL" {:tax-id-type :vat-eu})))
+      (is (= "12345678"
+             (p/tax-id-for-country db "P-NL" "NL" {:tax-id-type :company-registration}))))
+    (testing "a single match is untouched — no throw"
+      (is (nil? (p/tax-id-for-country db "P-NL" "NL"
+                                      {:tax-id-type :nowhere-near}))))))
+
+(deftest merge-rejects-double-merge
+  ;; M5: `A→B` then `A→C` used to transact cleanly, leaving A with two
+  ;; `:partner-merge` rows and `resolve-canonical-partner` picking at random.
+  (d/transact *conn*
+              [{:kontor.partner/external-id "P-A" :kontor.partner/type :org
+                :kontor.partner/status :enabled :kontor.partner/name "A"}
+               {:kontor.partner/external-id "P-B" :kontor.partner/type :org
+                :kontor.partner/status :enabled :kontor.partner/name "B"}
+               {:kontor.partner/external-id "P-C" :kontor.partner/type :org
+                :kontor.partner/status :enabled :kontor.partner/name "C"}])
+  (let [db (d/db *conn*)
+        a (p/by-external-id db "P-A")
+        b (p/by-external-id db "P-B")
+        c (p/by-external-id db "P-C")]
+    (p/merge-partners! *conn* b a {:reason :duplicate})
+    (testing "merging the SAME superseded partner a second time is rejected"
+      (let [ex (is (thrown? clojure.lang.ExceptionInfo
+                            (p/merge-partners! *conn* c a {:reason :duplicate})))]
+        (is (= :kontor.partner-merge/already-superseded (:type (ex-data ex))))
+        (is (= b (:existing-canonical (ex-data ex))))))
+    (testing "merging INTO an already-superseded partner is rejected too"
+      (let [ex (is (thrown? clojure.lang.ExceptionInfo
+                            (p/merge-partners! *conn* a c {:reason :duplicate})))]
+        (is (= :kontor.partner-merge/canonical-superseded (:type (ex-data ex))))))
+    (testing "the legitimate chain (merge the head) still works"
+      (p/merge-partners! *conn* c b {:reason :duplicate})
+      (is (= c (p/resolve-canonical-partner (d/db *conn*) a))))))

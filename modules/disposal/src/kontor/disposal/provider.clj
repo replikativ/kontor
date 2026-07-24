@@ -85,7 +85,18 @@
                              [?d :kontor.disposal/state ?st]
                              [(not= ?st :voided)]]
                            db (:from period) (:to period)))]
-      (mapv #(d/pull db pull-spec %) eids))))
+      ;; note 198 audit (H8): this returned the raw `d/q` SET order. CGT
+      ;; providers fold the result ORDER-DEPENDENTLY over stateful caps and
+      ;; pools — AU absorbs the loss pool and elects Subdiv 152 concessions
+      ;; per disposal in sequence, IN consumes the ₹50L §54EC cap first-come
+      ;; across lanes taxed at different rates. So set iteration order chose
+      ;; which disposal got the relief, and the tax owed on an unchanged
+      ;; ledger was not reproducible. Chronological, then eid for same-day
+      ;; disposals (dates are day-granular).
+      (->> eids
+           (mapv #(d/pull db pull-spec %))
+           (sort-by (juxt :kontor.disposal/disposed-on :db/id))
+           vec))))
 
 (defn datahike-provider
   "Build a `DisposalProvider` backed by `kontor-disposal`'s

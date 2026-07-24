@@ -45,7 +45,7 @@
    The provider does NOT round — it forwards whatever
    `kontor.l10n-fr.tax/compute-tax` produces (HALF-EVEN at 2dp per
    that ns's documented mode). Rounding stays the rate ns's concern."
-  (:require [datahike.api :as d]
+  (:require [kontor.account :as kacct]
             [kontor.l10n-fr.tax :as tax]
             [kontor.tax.tax-posting-builder :as tpb]
             [kontor.tax.tax-rate-provider :as trp]))
@@ -113,7 +113,7 @@
 ;; ============================================================================
 
 (defn- account-by-code [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
+  (kacct/resolve-code db code {:context "FR tax posting builder"}))
 
 (defrecord FrTaxPostingBuilder [opts]
   tpb/TaxPostingBuilder

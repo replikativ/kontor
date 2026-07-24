@@ -111,6 +111,7 @@
    posting_builder,emit}.clj` for the closest analog adapter trio,
    and ADR-086 for the AT-specific decisions this bridge respects."
   (:require [datahike.api :as d]
+            [kontor.account :as kacct]
             [kontor.compliance.audit-doc :as audit-doc]
             [kontor.payroll-at.compute :as compute]
             [kontor.payroll-at.elda :as elda]
@@ -324,8 +325,7 @@
                      (get wt/default-payable-codes kind)
                      (get wt/default-rlg-1-map kind))]
           (when code
-            (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]]
-                 db code))))
+            (kacct/resolve-code db code {:context "AT payroll (RLG-1 defaults)"}))))
       (throw (ex-info
               "No account configured for component-kind"
               {:kind kind

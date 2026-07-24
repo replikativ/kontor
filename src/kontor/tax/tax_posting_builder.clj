@@ -89,7 +89,13 @@
             db tax-eid document-type)
        (map #(d/pull db '[* {:kontor.tax-rep/account [:db/id]}
                           {:kontor.tax-rep/tags [:db/id]}] %))
-       (sort-by #(:kontor.tax-rep/sequence % 0))))
+       ;; note 198 audit (LOW): `:kontor.tax-rep/sequence` is optional and
+       ;; defaults to 0 here, so a tax whose repartition lines carry no
+       ;; sequence had ALL its lines tied — and `aggregate-postings` below
+       ;; stamps the group's `:kontor.posting/tax-rep` provenance from
+       ;; `(first group)`. The audit trail then attributed the tax posting to
+       ;; whichever repartition line set iteration surfaced. Eid breaks it.
+       (sort-by (juxt #(:kontor.tax-rep/sequence % 0) :db/id))))
 
 (defn- postings-from-rep-lines
   "Materialize one posting per `:repartition-type :tax` repartition

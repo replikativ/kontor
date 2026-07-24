@@ -447,18 +447,23 @@
                           lines))
          by-acct  (into {} (map (juxt identity hits)) in-scope)]
      {:covered (into {} (keep (fn [[a ls]] (when (seq ls) [(:eid a) ls]))) by-acct)
+      ;; note 198 audit (LOW): accounts sorted on `:code` alone, but
+      ;; `:kontor.account/code` is neither unique nor mandatory — a chart
+      ;; with several code-less accounts had them all tie on nil, so this
+      ;; coverage diagnostic listed the same gaps in a different order every
+      ;; time and could not be diffed across runs. `:path` IS unique.
       :uncovered (->> by-acct
                       (keep (fn [[a ls]]
                               (when (empty? ls)
                                 {:code (:code a) :path (:kontor.account/path a)
                                  :type (:kontor.account/type a) :eid (:eid a)})))
-                      (sort-by :code) vec)
+                      (sort-by (juxt :code :path)) vec)
       :double-counted (->> by-acct
                            (keep (fn [[a ls]]
                                    (when (> (count ls) 1)
                                      {:code (:code a) :path (:kontor.account/path a)
                                       :lines ls})))
-                           (sort-by :code) vec)
+                           (sort-by (juxt :code :path)) vec)
       :dangling (->> lines
                      (mapcat :line/codes)
                      distinct

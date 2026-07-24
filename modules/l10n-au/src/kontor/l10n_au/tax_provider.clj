@@ -36,7 +36,7 @@
    `invoice.clj` keeps). The AU class rides the component's
    `:jurisdiction-specific-codes` so a downstream consumer can still
    tell the two apart."
-  (:require [datahike.api :as d]
+  (:require [kontor.account :as kacct]
             [kontor.l10n-au.tax :as tax]
             [kontor.tax.tax-posting-builder :as tpb]
             [kontor.tax.tax-rate-provider :as trp]))
@@ -89,7 +89,7 @@
 ;; ============================================================================
 
 (defn- account-by-code [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
+  (kacct/resolve-code db code {:context "AU tax posting builder"}))
 
 (defrecord AuTaxPostingBuilder [opts]
   tpb/TaxPostingBuilder

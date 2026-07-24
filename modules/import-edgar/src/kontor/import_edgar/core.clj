@@ -161,9 +161,19 @@
         ;; latest-:filed without a :superseded-by reference. (A row
         ;; might have an older :filed but still be the head if the
         ;; supersession chain points elsewhere.)
+        ;;
+        ;; note 198 audit (H10): `:filed` is date-only, and a 10-K plus a
+        ;; same-day 10-K/A amending it is an ordinary EDGAR pattern — so
+        ;; sorting on `:filed` alone over the unordered `d/q` result left
+        ;; "latest" to set iteration, and the ORIGINAL figure could win over
+        ;; its own restatement. The accession number is the SEC's own
+        ;; within-day sequence key, so it settles the tie the way the filer
+        ;; itself does; `:db/id` backstops a missing accession.
         head (->> rows
                   (remove :kontor.reported-fact/superseded-by)
-                  (sort-by :kontor.reported-fact/filed)
+                  (sort-by (juxt :kontor.reported-fact/filed
+                                 #(or (:kontor.reported-fact/accession-number %) "")
+                                 :db/id))
                   last)]
     head))
 
@@ -330,10 +340,17 @@
          ;; The head of the chain (latest non-superseded fact); the
          ;; bitemporal window pruning already removes facts whose
          ;; tx-vt window has closed.
+         ;;
+         ;; note 198 audit (H10): same tie as `find-prior-fact` — day-
+         ;; granular `:filed` plus a same-day amendment meant this public
+         ;; read could report the superseded number. Accession number is
+         ;; the SEC's within-day ordering key.
          rows (mapv #(d/pull db '[*] %) eids)]
      (->> rows
           (remove :kontor.reported-fact/superseded-by)
-          (sort-by :kontor.reported-fact/filed)
+          (sort-by (juxt :kontor.reported-fact/filed
+                         #(or (:kontor.reported-fact/accession-number %) "")
+                         :db/id))
           last))))
 
 (defn fact-history
@@ -352,4 +369,8 @@
                   db entity-eid concept-iri period-end unit)]
     (->> eids
          (mapv #(d/pull db '[*] %))
-         (sort-by :kontor.reported-fact/filed))))
+         ;; note 198 audit (H10): same-day filings tie on the date-only
+         ;; `:filed`, which reordered the restatement history between reads.
+         (sort-by (juxt :kontor.reported-fact/filed
+                        #(or (:kontor.reported-fact/accession-number %) "")
+                        :db/id)))))

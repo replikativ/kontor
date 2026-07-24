@@ -2091,7 +2091,12 @@
 (def ^:private fiscal-position-attrs
   [{:db/ident       :kontor.fiscal-position/name
     :db/valueType   :db.type/string
-    :db/cardinality :db.cardinality/one}
+    :db/cardinality :db.cardinality/one
+    ;; Indexed, not unique: a book may legitimately hold "EU B2B" positions
+    ;; for two entities. `kontor.tax.fiscal-position/by-name` therefore
+    ;; refuses to guess when a name resolves to more than one — note 198
+    ;; audit (M9), same posture as `kontor.account/resolve-code`.
+    :db/index       true}
 
    {:db/ident       :kontor.fiscal-position/country-code
     :db/valueType   :db.type/string

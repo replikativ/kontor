@@ -21,6 +21,7 @@
    for v1 — it requires Sterbetafel + discount-rate assumptions; a
    future `kontor-l10n-at-abfertigung` artifact covers it."
   (:require [datahike.api :as d]
+            [kontor.account :as kacct]
             [kontor.posting :as posting]
             [kontor.validation :as validation])
   (:import [java.math BigDecimal RoundingMode]))
@@ -46,7 +47,7 @@
                       {:key k :known (keys default-accrual-accounts)}))))
 
 (defn- account-eid [db code]
-  (or (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code)
+  (or (kacct/resolve-code db code {:context "AT payroll accrual"})
       (throw (ex-info "Account code not in db"
                       {:code code
                        :hint "Install the AT Kontenrahmen first."}))))

@@ -84,7 +84,15 @@
      return a vector of disposal-event maps whose realizing date
      (`:kontor.disposal/disposed-on`) falls within `:period`. See the
      namespace docstring for the map shape.
-     Implementations MUST exclude `:state :voided` entries."))
+
+     Implementations MUST exclude `:state :voided` entries, and MUST
+     return the vector in a TOTAL, reproducible order: ascending
+     `:kontor.disposal/disposed-on`, ties broken by `:db/id` (or, for a
+     non-datahike source, any stable per-record key). This is part of the
+     contract, not a nicety — consumers fold the list against stateful
+     caps and pools (an annual exemption, a loss pool, a §54EC-style
+     lifetime cap) where first-come wins, so an unordered result makes the
+     tax owed depend on iteration order. note 198 audit (H8)."))
 
 ;; ============================================================================
 ;; Nil-source convenience — for callers without a configured provider

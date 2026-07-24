@@ -46,12 +46,32 @@
 ;; ============================================================================
 
 (defn by-name
-  "Resolve a fiscal position entity-id by `:kontor.fiscal-position/name`."
+  "Resolve a fiscal position entity-id by `:kontor.fiscal-position/name`.
+   nil when no position carries that name; throws
+   `:kontor.fiscal-position/ambiguous-name` when more than one does.
+
+   note 198 audit (M9): `:kontor.fiscal-position/name` is neither unique nor
+   scoped to an entity, so a multi-entity book with an \"EU B2B\" position per
+   entity had the old `:find ?e .` pick one at random. The position chosen is
+   what decides whether an invoice carries 19% domestic VAT or an
+   intra-community reverse charge — picking silently is picking the tax
+   treatment of a legal document."
   [db name]
-  (d/q '[:find ?e .
-         :in $ ?n
-         :where [?e :kontor.fiscal-position/name ?n]]
-       db name))
+  (let [eids (d/q '[:find [?e ...]
+                    :in $ ?n
+                    :where [?e :kontor.fiscal-position/name ?n]]
+                  db name)]
+    (cond
+      (= 1 (count eids)) (first eids)
+      (empty? eids)      nil
+      :else
+      (throw (ex-info (str "Fiscal-position name " (pr-str name) " matches "
+                           (count eids) " positions — :kontor.fiscal-position/name "
+                           "is not unique. Pass the entity-id (or a pulled map) "
+                           "instead of the name.")
+                      {:type :kontor.fiscal-position/ambiguous-name
+                       :name name
+                       :matches (vec (sort eids))})))))
 
 (defn resolve-fiscal-position
   "Coerce `spec` to an entity-id: nil → nil, string → name lookup, map with

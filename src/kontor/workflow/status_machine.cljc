@@ -501,7 +501,12 @@
                :where [?h :kontor.status-history/entity ?entity]]
              db entity)
         (map #(d/pull db '[*] %))
-        (sort-by :kontor.status-history/changed-at)
+        ;; note 198 audit (LOW): `bulk-record-status-change!` stamps ONE
+        ;; shared `now` across every change in the batch, so a bulk
+        ;; transition leaves N history rows with identical `:changed-at`
+        ;; and this audit timeline reordered itself between reads. Eid is
+        ;; the write order.
+        (sort-by (juxt :kontor.status-history/changed-at :db/id))
         vec))
   ([db entity facet]
    (->> (d/q '[:find [?h ...]
@@ -511,5 +516,5 @@
                [?h :kontor.status-history/facet ?facet]]
              db entity facet)
         (map #(d/pull db '[*] %))
-        (sort-by :kontor.status-history/changed-at)
+        (sort-by (juxt :kontor.status-history/changed-at :db/id))
         vec)))

@@ -428,7 +428,12 @@ eol        = #'[ \\t]*\\n'
               [?e :beancount/option-value ?v]
               [?e :beancount/option-order ?ord]]
             db)
-       (sort-by #(nth % 2))
+       ;; note 198 audit (M7): `:beancount/option-order` is not unique, so
+       ;; two options sharing an order tied and `dump` emitted them in set
+       ;; order — a re-dump of an unmodified ledger produced a byte-different
+       ;; file, which is exactly what the round-trip contract promises not to
+       ;; happen. The key settles it.
+       (sort-by (juxt #(nth % 2) first))
        (mapv (fn [[k v _]] {:key k :value v}))))
 
 (defn- account-rows
@@ -500,8 +505,18 @@ eol        = #'[ \\t]*\\n'
                        :where [?t :kontor.transaction/external-id _]]
                      db)]
     (vec
+     ;; note 198 audit (M7): `dump`'s docstring promises round-trip
+     ;; stability, but sorting on `:effective-date` alone is not a total
+     ;; order — every transaction booked on the same day ties, which in a
+     ;; real ledger is most of them. Two dumps of an unchanged database
+     ;; emitted the day's entries in different orders, so a diff of the
+     ;; exported file showed changes nobody made. `:external-id` (which the
+     ;; query already requires) then eid gives a stable order.
      (for [t (sort-by (fn [eid]
-                        (.getTime ^Date (:kontor.transaction/effective-date (d/entity db eid))))
+                        (let [e (d/entity db eid)]
+                          [(.getTime ^Date (:kontor.transaction/effective-date e))
+                           (str (:kontor.transaction/external-id e))
+                           eid]))
                       tx-eids)]
        (let [tx (d/pull db [:kontor.transaction/effective-date :kontor.transaction/narration] t)
              postings (d/q '[:find ?p

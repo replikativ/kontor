@@ -53,7 +53,11 @@
                      db))]
      (->> rows
           (map #(d/pull db '[*] %))
-          (sort-by :kontor.side-effect-intent/created-at)
+          ;; note 198 audit (LOW): intents queued inside one transaction
+          ;; share a `:created-at`, so the drain order of a batch was set
+          ;; iteration order — side effects fired in a different sequence
+          ;; on a retry than on the first attempt. Eid is the queue order.
+          (sort-by (juxt :kontor.side-effect-intent/created-at :db/id))
           vec))))
 
 (defn failed

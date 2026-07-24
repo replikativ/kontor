@@ -58,7 +58,8 @@
    and link via `:kontor.account/tags`."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [datahike.api :as d]))
+            [datahike.api :as d]
+            [kontor.account :as kacct]))
 
 ;; ============================================================================
 ;; Resource loading
@@ -199,4 +200,4 @@
 (defn account-by-code
   "Resolve `code` to an account entity-id against `db`, or nil."
   [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
+  (kacct/resolve-code db code {:context "MX chart"}))

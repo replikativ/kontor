@@ -38,7 +38,7 @@
    base-posting work `invoice.clj` keeps. The JP class rides the
    component's `:jurisdiction-specific-codes` so the QIS / Peppol
    PINT emitters can recover it."
-  (:require [datahike.api :as d]
+  (:require [kontor.account :as kacct]
             [kontor.l10n-jp.consumption-tax :as jct]
             [kontor.tax.tax-posting-builder :as tpb]
             [kontor.tax.tax-rate-provider :as trp]))
@@ -92,7 +92,7 @@
 ;; ============================================================================
 
 (defn- account-by-code [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
+  (kacct/resolve-code db code {:context "JP tax posting builder"}))
 
 (defrecord JpTaxPostingBuilder [opts]
   tpb/TaxPostingBuilder

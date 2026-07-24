@@ -442,3 +442,36 @@
       (is (= [33.33M 33.33M 33.34M] (mapv :amount ts)))
       (is (== 100.00M (reduce + 0M (map :amount ts)))
           "tranches sum to the invoice total exactly"))))
+
+;; ============================================================================
+;; note 198 audit (M9) — `by-name` refuses to guess between two positions
+;; ============================================================================
+
+(deftest fiscal-position-by-name-ambiguity-throws
+  ;; `:kontor.fiscal-position/name` is neither unique nor entity-scoped, so a
+  ;; multi-entity book holding one "Intra-Community (EU B2B)" position per
+  ;; entity had the old `:find ?e .` pick one of them arbitrarily. The
+  ;; position chosen decides whether the invoice carries 19% domestic VAT or
+  ;; an intra-community reverse charge — that is the tax treatment of a legal
+  ;; document, not an internal detail.
+  (let [conn (fresh-fp-db)]
+    (testing "one match resolves as before"
+      (is (integer? (fp/by-name (d/db conn) "Intra-Community (EU B2B)"))))
+    (testing "no match is nil, not a throw"
+      (is (nil? (fp/by-name (d/db conn) "No Such Position"))))
+    ;; A second entity's chart lands in the same connection (ADR-073
+    ;; consolidation puts several books in one DB).
+    (d/transact conn [{:kontor.fiscal-position/name "Intra-Community (EU B2B)"
+                       :kontor.fiscal-position/country-code "NL"
+                       :kontor.fiscal-position/auto-apply true}])
+    (testing "two positions sharing a name is an error, not a coin flip"
+      (let [ex (is (thrown? clojure.lang.ExceptionInfo
+                            (fp/by-name (d/db conn) "Intra-Community (EU B2B)")))]
+        (is (= :kontor.fiscal-position/ambiguous-name (:type (ex-data ex))))
+        (is (= 2 (count (:matches (ex-data ex)))))))
+    (testing "resolve-fiscal-position by eid still works — the escape hatch
+              the error message points at"
+      (let [eid (first (:matches (ex-data (try (fp/by-name (d/db conn)
+                                                           "Intra-Community (EU B2B)")
+                                               (catch clojure.lang.ExceptionInfo e e)))))]
+        (is (= eid (fp/resolve-fiscal-position (d/db conn) eid)))))))

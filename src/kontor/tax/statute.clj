@@ -152,7 +152,20 @@
    Returns the BigDecimal (`:kontor.parameter-value/decimal-value`) or nil if
    no value is in effect at the asked instant. The chosen value is the
    one whose `[:effective-from, :effective-until)` half-open range
-   contains as-of (open `:effective-until` ⇒ still in effect)."
+   contains as-of (open `:effective-until` ⇒ still in effect).
+
+   Exactly one value may be in effect at a time; two overlapping windows
+   throw `:kontor.tax/ambiguous-parameter-value`.
+
+   note 198 audit (M1): this used `some` over the raw `d/q` SET, so two
+   `:parameter-value` rows with OVERLAPPING effective windows both matched
+   and the one that happened to come first in set iteration became the tax
+   RATE — a wrong rate applied silently, to the cent, on a return.
+   `:kontor.parameter-value/identity` is `[parameter, effective-from]`,
+   which stops exact duplicates but says nothing about overlap. The audit
+   scanned all 427 shipped parameters and found zero overlaps today, so
+   this is latent rather than live — but a mis-encoded statute must fail
+   loudly, not pick."
   [db parameter-code ^java.util.Date as-of]
   (let [param-eid (d/q '[:find ?p .
                          :in $ ?code
@@ -160,18 +173,36 @@
                        db parameter-code)]
     (when param-eid
       (let [as-ms  (instant-ms as-of)
-            values (d/q '[:find (pull ?v [:kontor.parameter-value/effective-from
+            values (d/q '[:find (pull ?v [:db/id
+                                          :kontor.parameter-value/effective-from
                                           :kontor.parameter-value/effective-until
                                           :kontor.parameter-value/decimal-value])
                           :in $ ?p
                           :where [?v :kontor.parameter-value/parameter ?p]]
-                        db param-eid)]
-        (some (fn [[{:kontor.parameter-value/keys [effective-from effective-until decimal-value]}]]
-                (when (and (<= (instant-ms effective-from) as-ms)
-                           (or (nil? effective-until)
-                               (< as-ms (instant-ms effective-until))))
-                  decimal-value))
-              values)))))
+                        db param-eid)
+            in-effect (->> values
+                           (map first)
+                           (filter (fn [{:kontor.parameter-value/keys [effective-from effective-until]}]
+                                     (and (<= (instant-ms effective-from) as-ms)
+                                          (or (nil? effective-until)
+                                              (< as-ms (instant-ms effective-until))))))
+                           (sort-by (juxt #(instant-ms (:kontor.parameter-value/effective-from %))
+                                          :db/id)))]
+        (when (> (count in-effect) 1)
+          (throw (ex-info (str "Parameter " parameter-code " has " (count in-effect)
+                               " values in effect at " as-of
+                               " — their [effective-from, effective-until) windows overlap. "
+                               "Close the superseded window with an :effective-until.")
+                          {:type :kontor.tax/ambiguous-parameter-value
+                           :parameter-code parameter-code
+                           :as-of as-of
+                           :values (mapv #(select-keys
+                                           % [:db/id
+                                              :kontor.parameter-value/effective-from
+                                              :kontor.parameter-value/effective-until
+                                              :kontor.parameter-value/decimal-value])
+                                         in-effect)})))
+        (some-> (last in-effect) :kontor.parameter-value/decimal-value)))))
 
 ;; ============================================================================
 ;; Period-cliff condition builders (ADR-101 Addendum 2)
@@ -223,7 +254,13 @@
    must have `:kontor.parameter/unit :bracket-scale`) effective at `as-of`.
    Returns a vector `[{:rate <bigdec> :upper <bigdec>|nil} …]` sorted
    by `:kontor.parameter-bracket/index`, ready to feed
-   `kontor.tax.tax-schedule/progressive`."
+   `kontor.tax.tax-schedule/progressive`.
+
+   Two CONFLICTING bands (same `:index`, different rate/upper) in effect at
+   the same instant throw `:kontor.tax/ambiguous-parameter-bracket` — see
+   `parameter-value-at` for the same reasoning (note 198 audit, M1). A ladder
+   is read positionally, so an arbitrary pick between two bands at one index
+   does not merely change a rate, it shifts every threshold above it."
   [db parameter-code ^java.util.Date as-of]
   (let [param-eid (d/q '[:find ?p .
                          :in $ ?code
@@ -231,7 +268,8 @@
                        db parameter-code)]
     (when param-eid
       (let [as-ms    (instant-ms as-of)
-            brackets (d/q '[:find (pull ?b [:kontor.parameter-bracket/index
+            brackets (d/q '[:find (pull ?b [:db/id
+                                            :kontor.parameter-bracket/index
                                             :kontor.parameter-bracket/rate
                                             :kontor.parameter-bracket/upper
                                             :kontor.parameter-bracket/effective-from
@@ -243,11 +281,31 @@
                                 (and (<= (instant-ms effective-from) as-ms)
                                      (or (nil? effective-until)
                                          (< as-ms (instant-ms effective-until)))))
-                              brackets)]
+                              brackets)
+            conflicts (->> in-effect
+                           (map first)
+                           (group-by :kontor.parameter-bracket/index)
+                           (filter (fn [[_ bs]]
+                                     (> (count (distinct
+                                                (map (juxt :kontor.parameter-bracket/rate
+                                                           :kontor.parameter-bracket/upper)
+                                                     bs)))
+                                        1)))
+                           (into (sorted-map)))]
+        (when (seq conflicts)
+          (throw (ex-info (str "Parameter " parameter-code " has conflicting bracket bands "
+                               "in effect at " as-of " at index/indices "
+                               (pr-str (vec (keys conflicts)))
+                               " — their [effective-from, effective-until) windows overlap. "
+                               "Close the superseded window with an :effective-until.")
+                          {:type :kontor.tax/ambiguous-parameter-bracket
+                           :parameter-code parameter-code
+                           :as-of as-of
+                           :conflicts conflicts})))
         (when (seq in-effect)
           (->> in-effect
                (map first)
-               (sort-by :kontor.parameter-bracket/index)
+               (sort-by (juxt :kontor.parameter-bracket/index :db/id))
                (mapv (fn [{:kontor.parameter-bracket/keys [rate upper]}]
                        {:rate rate :upper upper}))
                ;; Collapse identical bands. `:kontor.parameter-bracket/identity`

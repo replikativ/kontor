@@ -65,6 +65,7 @@
    builder from a `kontor.workflow.process` step."
   (:require [clojure.string :as str]
             [datahike.api :as d]
+            [kontor.account :as kacct]
             [kontor.l10n-au.tax-provider :as tax-provider]
             [kontor.posting :as posting]
             [kontor.tax.tax-posting-builder :as tpb]
@@ -88,7 +89,7 @@
 ;; ============================================================================
 
 (defn- account-by-code [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
+  (kacct/resolve-code db code {:context "AU invoice bridge"}))
 
 (defn- require-account [db code]
   (or (account-by-code db code)

@@ -46,7 +46,7 @@
    account map ships as code (not bundled rate table); HGB §249 is
    facts of law not subject to copyright; the algorithm sketch is
    clean-room from the cited public sources (Haufe / hrworks)."
-  (:require [datahike.api :as d]
+  (:require [kontor.account :as kacct]
             [kontor.payroll-de-datev.wage-types :as wage-types]
             [kontor.provider.payroll-provider :as pp])
   (:import [java.math BigDecimal RoundingMode]))
@@ -64,19 +64,13 @@
    Exactly one match → its eid; none → nil (caller throws \"no account\");
    more than one → a clear ambiguity error naming the fix. With no `db`,
    fall back to the code lookup-ref (works only if the caller later resolves
-   it or the store happens to make code unique)."
+   it or the store happens to make code unique).
+
+   The strict semantics this fn pioneered now live in `kontor.account/resolve-code`
+   — the kernel's single home for code→eid resolution (note 198 audit)."
   [db code]
   (if db
-    (let [eids (d/q '[:find [?a ...] :in $ ?c :where [?a :kontor.account/code ?c]] db code)]
-      (cond
-        (= 1 (count eids)) (first eids)
-        (empty? eids)      nil
-        :else (throw (ex-info (str "DE payroll: SKR04 code " code " matches "
-                                   (count eids) " accounts — :kontor.account/code is not "
-                                   "unique (ADR-119). Supply an explicit :accounts ref "
-                                   "(eid or [:kontor.account/path …]).")
-                              {:type :payroll/ambiguous-account-code
-                               :code code :matches eids}))))
+    (kacct/resolve-code db code {:context "DE payroll (SKR04/SKR03)"})
     [:kontor.account/code code]))
 
 (defn resolve-account-ref

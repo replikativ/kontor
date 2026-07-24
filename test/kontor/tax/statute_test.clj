@@ -191,6 +191,60 @@
               "200,000 → 42,500×15% + 157,500×25% = 6,375 + 39,375 = 45,750")
           (is (= 0M (ts/apply-schedule schedule 0M))))))))
 
+(deftest parameter-value-at-overlapping-windows-throws
+  ;; note 198 audit (M1): the resolver used `some` over the unordered `d/q`
+  ;; set, so two values whose [effective-from, effective-until) windows
+  ;; OVERLAP both matched and the winner was set-iteration order — a wrong
+  ;; RATE applied silently on a tax return. `:kontor.parameter-value/identity`
+  ;; is [parameter, effective-from], which stops exact duplicates but says
+  ;; nothing about overlap.
+  (let [conn (core/create-test-db)]
+    (d/transact conn [{:kontor.parameter/code "OVL.rate" :kontor.parameter/label "Overlap"
+                       :kontor.parameter/jurisdiction :test :kontor.parameter/unit :rate}])
+    (d/transact conn [{:kontor.parameter-value/parameter [:kontor.parameter/code "OVL.rate"]
+                       :kontor.parameter-value/effective-from #inst "2020-01-01"
+                       :kontor.parameter-value/effective-until #inst "2026-01-01"
+                       :kontor.parameter-value/decimal-value 0.20M}
+                      ;; The mis-encoding: a new rate opened before the old
+                      ;; one was closed.
+                      {:kontor.parameter-value/parameter [:kontor.parameter/code "OVL.rate"]
+                       :kontor.parameter-value/effective-from #inst "2024-01-01"
+                       :kontor.parameter-value/decimal-value 0.25M}])
+    (testing "inside the overlap the substrate refuses to pick a rate"
+      (let [ex (is (thrown? clojure.lang.ExceptionInfo
+                            (statute/parameter-value-at (d/db conn) "OVL.rate"
+                                                        #inst "2025-06-01")))]
+        (is (= :kontor.tax/ambiguous-parameter-value (:type (ex-data ex))))
+        (is (= 2 (count (:values (ex-data ex)))))))
+    (testing "outside the overlap it still answers normally"
+      (is (= 0.20M (statute/parameter-value-at (d/db conn) "OVL.rate" #inst "2021-06-01")))
+      (is (= 0.25M (statute/parameter-value-at (d/db conn) "OVL.rate" #inst "2027-06-01"))))))
+
+(deftest parameter-brackets-at-conflicting-bands-throw
+  ;; The ladder sibling of the above. A ladder is read POSITIONALLY, so an
+  ;; arbitrary pick between two bands at one index does not merely change a
+  ;; rate — it shifts every threshold above it.
+  (let [conn (core/create-test-db)]
+    (d/transact conn [{:kontor.parameter/code "OVL.scale" :kontor.parameter/label "Overlap scale"
+                       :kontor.parameter/jurisdiction :test :kontor.parameter/unit :bracket-scale}])
+    (d/transact conn [{:kontor.parameter-bracket/parameter [:kontor.parameter/code "OVL.scale"]
+                       :kontor.parameter-bracket/index 0 :kontor.parameter-bracket/rate 0.15M
+                       :kontor.parameter-bracket/upper 42500M
+                       :kontor.parameter-bracket/effective-from #inst "2020-01-01"}
+                      {:kontor.parameter-bracket/parameter [:kontor.parameter/code "OVL.scale"]
+                       :kontor.parameter-bracket/index 0 :kontor.parameter-bracket/rate 0.18M
+                       :kontor.parameter-bracket/upper 50000M
+                       :kontor.parameter-bracket/effective-from #inst "2022-01-01"}
+                      {:kontor.parameter-bracket/parameter [:kontor.parameter/code "OVL.scale"]
+                       :kontor.parameter-bracket/index 1 :kontor.parameter-bracket/rate 0.25M
+                       :kontor.parameter-bracket/effective-from #inst "2020-01-01"}])
+    (let [ex (is (thrown? clojure.lang.ExceptionInfo
+                          (statute/parameter-brackets-at (d/db conn) "OVL.scale"
+                                                         #inst "2025-06-01")))]
+      (is (= :kontor.tax/ambiguous-parameter-bracket (:type (ex-data ex))))
+      (is (= [0] (vec (keys (:conflicts (ex-data ex)))))
+          "only index 0 conflicts; index 1 has a single band"))))
+
 ;; ============================================================================
 ;; §4. Provision applicability
 ;; ============================================================================

@@ -17,10 +17,16 @@
     :kontor.account/type :liability :kontor.account/name "Rückstellung 13./14."
     :kontor.account/active true
     :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
-   {:kontor.account/code "6000" :kontor.account/path "Aufwendungen:Personal:Gehälter"
-    :kontor.account/type :expense :kontor.account/name "Gehälter"
-    :kontor.account/active true
-    :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}])
+   ;; NOTE (note 198 audit): this fixture used to ALSO declare code "6000"
+   ;; at path "Aufwendungen:Personal:Gehälter", but the l10n-at
+   ;; Einheitskontenrahmen already ships "6000" at "Aufwendungen:Personal"
+   ;; (and `payroll-at/coa_starter.edn` deliberately does not redefine it).
+   ;; Two accounts under one code meant `account-eid` resolved the payroll
+   ;; expense leg to an ARBITRARY one of them — the accrual landed on the
+   ;; base salary account or on this shadow account depending on set
+   ;; iteration. `kontor.account/resolve-code` now refuses that, which is how
+   ;; the duplicate was found. 6000 comes from the base chart.
+   ])
 
 (defn- bootstrap []
   (let [conn (core/create-test-db)]

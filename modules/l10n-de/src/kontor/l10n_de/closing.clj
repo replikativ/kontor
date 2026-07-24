@@ -7,13 +7,14 @@
    :gewinnvortrag (2900) from :verlustvortrag (2978) before the
    shareholder resolution may want their own routing."
   (:require [datahike.api :as d]
+            [kontor.account :as kacct]
             [kontor.reporting.closing :as closing]))
 
 (def ^:const default-retained-code "2900")
 (def ^:const default-journal-code "CLOSE")
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
+  (kacct/resolve-code db code {:context "DE year-end closing"}))
 
 (defn close-fiscal-year!
   "Close a fiscal-year period using SKR04 conventions.

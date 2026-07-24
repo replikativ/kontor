@@ -31,7 +31,7 @@
 
    Zero / exempt produce no USt leg (their revenue still routes to
    4100 / 4200, which is base-posting work `invoice.clj` keeps)."
-  (:require [datahike.api :as d]
+  (:require [kontor.account :as kacct]
             [kontor.l10n-at.tax :as tax]
             [kontor.tax.tax-posting-builder :as tpb]
             [kontor.tax.tax-rate-provider :as trp]))
@@ -89,7 +89,7 @@
 ;; ============================================================================
 
 (defn- account-by-code [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
+  (kacct/resolve-code db code {:context "AT tax posting builder"}))
 
 (defrecord AtTaxPostingBuilder [opts]
   tpb/TaxPostingBuilder

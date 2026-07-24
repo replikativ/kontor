@@ -71,6 +71,7 @@
    `kontor.workflow.process` step."
   (:require [clojure.string :as str]
             [datahike.api :as d]
+            [kontor.account :as kacct]
             [kontor.l10n-mx.chart :as chart]
             [kontor.l10n-mx.tax :as tax]
             [kontor.posting :as posting]
@@ -115,7 +116,7 @@
 ;; ============================================================================
 
 (defn- account-by-code [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
+  (kacct/resolve-code db code {:context "MX invoice bridge"}))
 
 (defn- require-account [db code]
   (or (account-by-code db code)

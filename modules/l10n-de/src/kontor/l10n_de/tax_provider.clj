@@ -48,7 +48,7 @@
    HALF-EVEN and the product rounded to 2 decimal places HALF-EVEN —
    byte-identical to the legacy `bucket-by-rate` arithmetic so the
    per-account sums the existing tests assert stay green."
-  (:require [datahike.api :as d]
+  (:require [kontor.account :as kacct]
             [kontor.tax.tax-posting-builder :as tpb]
             [kontor.tax.tax-rate-provider :as trp]))
 
@@ -124,7 +124,7 @@
 ;; ============================================================================
 
 (defn- account-by-code [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
+  (kacct/resolve-code db code {:context "DE tax posting builder"}))
 
 (defrecord DeTaxPostingBuilder [opts]
   tpb/TaxPostingBuilder
