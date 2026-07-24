@@ -56,7 +56,9 @@
    hold their own keys — ADR-005). Per-l10n migration of the 11
    country modules is consumer-demand-driven (ADR-071 Implication).
    The `:tax-fact/*` audit-snapshot entity is a deferred follow-up."
-  (:require [datahike.api :as d]))
+  (:require [datahike.api :as d]
+            [kontor.tax.fiscal-position :as fp])
+  (:import [java.math BigDecimal RoundingMode]))
 
 ;; ============================================================================
 ;; The component-kind enum (ADR-071)
@@ -182,6 +184,15 @@
        :at            — bitemporal valid-time of the transaction (Date)
        :subdivision   — optional state/province code
        :place-of-supply — optional
+       :fiscal-position — optional `:kontor.fiscal-position` (eid or name).
+                        Substitutes or drops the taxes the jurisdiction
+                        rules resolved — an EU B2B customer's position turns
+                        the domestic VAT into an intra-community reverse
+                        charge. See `kontor.tax.fiscal-position`.
+       :price-include — optional boolean. True when `:base` is a
+                        tax-INCLUSIVE gross, so the provider extracts the
+                        pre-tax net instead of taxing the gross. Overrides
+                        the per-tax `:kontor.tax/price-include` default.
        :db            — optional db override (else the provider reads
                         its own connection)
 
@@ -223,52 +234,149 @@
    Supports `:percent` and `:fixed`; `:group` / `:division` return nil
    (the static provider does not expand tax groups — a per-l10n
    provider handles those)."
-  [tax ^java.math.BigDecimal base]
+  [tax ^BigDecimal base]
   (let [rate (:kontor.tax/amount tax)]
     (case (:kontor.tax/amount-type tax)
-      :percent (.multiply base rate)
+      :percent (.multiply base ^BigDecimal rate)
       :fixed   rate
       nil)))
+
+(defn- computable?
+  "True when `component-amount` can produce a number for this tax."
+  [tax]
+  (and (:kontor.tax/amount tax)
+       (#{:percent :fixed} (:kontor.tax/amount-type tax))))
+
+;; ----------------------------------------------------------------------------
+;; Compound ordering (note 198 R3-FP-03)
+;;
+;; `:kontor.tax/include-base-amount` promises that a tax folds its amount into
+;; the base of *subsequent* taxes — which is meaningless without an order. The
+;; resolver's `d/q` returns an unordered set, so before this the answer
+;; depended on set iteration. Sort by `:kontor.tax/sequence` (absent = 0),
+;; breaking ties on `:kontor.tax/code` so the result is total and stable.
+;; ----------------------------------------------------------------------------
+
+(defn- tax-order [tax]
+  [(or (:kontor.tax/sequence tax) 0) (str (:kontor.tax/code tax))])
+
+(defn- forward-pass
+  "Walk `taxes` (already ordered) accumulating the compound base, and return a
+   vector of `{:base :amount}` aligned with them.
+
+   A tax with `:include-base-amount` adds its amount to the running base seen
+   by later taxes: a 10% excise then a 19% VAT on a net of 100 gives
+   excise 10.00 on base 100 and VAT 20.90 on base 110 — not 19.00 on 100."
+  [taxes ^BigDecimal net]
+  (loop [ts taxes, running net, acc []]
+    (if-let [t (first ts)]
+      (let [amt ^BigDecimal (component-amount t running)]
+        (recur (rest ts)
+               (if (:kontor.tax/include-base-amount t) (.add running amt) running)
+               (conj acc {:base running :amount amt})))
+      acc)))
+
+(defn- extract-net
+  "Solve for the pre-tax net given a tax-INCLUSIVE `gross` (note 198 R3-FP-02).
+
+   `gross = net + Σ amount_i(net)` over the price-INCLUDED taxes only —
+   excluded taxes are charged on top of the quoted price and are not part of
+   it. Every `amount_i` is affine in `net` (percent taxes scale it, fixed
+   taxes add a constant, and compounding composes affine maps), so evaluating
+   the forward pass at net=1 and net=0 recovers the slope and intercept and
+   the inversion is exact:
+
+     gross = net·(1 + a) + b   ⟹   net = (gross − b) / (1 + a)
+
+   This is why the naive `gross / (1 + rate)` is not enough: it is only
+   correct for a single non-compound percent tax, and silently wrong the
+   moment a second included tax or a fixed levy joins the chain.
+
+   `included?` is a predicate over the tax entity; `scale` is the commodity's
+   precision. Rounding is HALF-EVEN per the money convention."
+  [taxes included? ^BigDecimal gross ^long scale]
+  (let [sum-included (fn [^BigDecimal n]
+                       (->> (map vector taxes (forward-pass taxes n))
+                            (keep (fn [[t r]] (when (included? t) (:amount r))))
+                            (reduce (fn [^BigDecimal a ^BigDecimal b] (.add a b))
+                                    BigDecimal/ZERO)))
+        at-one  (sum-included BigDecimal/ONE)
+        at-zero (sum-included BigDecimal/ZERO)
+        slope   (.subtract ^BigDecimal at-one ^BigDecimal at-zero)]
+    (.divide (.subtract gross ^BigDecimal at-zero)
+             (.add BigDecimal/ONE slope)
+             scale
+             RoundingMode/HALF_EVEN)))
+
+(defn- commodity-precision
+  "Decimal places for `commodity` (eid, lookup-ref, or nil). Defaults to 2 —
+   the overwhelmingly common case and a safe floor for an unresolvable ref."
+  [db commodity]
+  (or (when commodity
+        (try (:kontor.commodity/precision
+              (d/pull db [:kontor.commodity/precision] commodity))
+             (catch Exception _ nil)))
+      2))
 
 (defrecord StaticTableProvider [conn opts]
   TaxRateProvider
   (provider-id [_] :static-table)
   (rate-facts [_ {:keys [base commodity country-code tax-use at db
-                         subdivision place-of-supply]}]
+                         subdivision place-of-supply
+                         fiscal-position price-include]}]
     (let [db   (or db (d/db conn))
           at   (or at (java.util.Date.))
           base (bigdec base)
           cc   (or country-code (:default-country-code opts))
-          tax-eids (d/q '[:find [?t ...]
+          resolved (d/q '[:find [?t ...]
                           :in $ ?cc ?use
                           :where
                           [?t :kontor.tax/country-code ?cc]
                           [?t :kontor.tax/type-tax-use ?use]
                           [?t :kontor.tax/active true]]
                         db cc tax-use)
+          ;; The customer's fiscal position substitutes (or drops) taxes the
+          ;; jurisdiction rules already selected — it never adds new ones.
+          tax-eids (fp/map-taxes db fiscal-position resolved)
+          taxes    (->> tax-eids
+                        (map #(d/pull db '[*] %))
+                        (filter #(effective? % at))
+                        (filter computable?)
+                        (sort-by tax-order)
+                        vec)
+          ;; A per-line :price-include in the context overrides the tax's own
+          ;; attr: the same tax is quoted gross to consumers and net to
+          ;; businesses, so inclusiveness is a property of the QUOTE, with the
+          ;; tax attr as the default.
+          included? (fn [tax] (if (some? price-include)
+                                (boolean price-include)
+                                (boolean (:kontor.tax/price-include tax))))
+          net (if (some included? taxes)
+                (extract-net taxes included? base
+                             (commodity-precision db commodity))
+                base)
+          results (forward-pass taxes net)
           components
-          (->> tax-eids
-               (map #(d/pull db '[*] %))
-               (filter #(effective? % at))
-               (keep (fn [tax]
-                       (when-let [amt (component-amount tax base)]
-                         {:kind         (component-kind tax tax-use)
-                          :rate         (:kontor.tax/amount tax)
-                          :base         base
-                          :amount       amt
-                          :recoverable? (boolean (:kontor.tax/recoverable? tax))
-                          :tax-eid      (:db/id tax)
-                          :tax-code     (:kontor.tax/code tax)
-                          :provenance   {:provider-id :static-table
-                                         :rate-source (:kontor.tax/code tax)
-                                         :statute     nil}
-                          :jurisdiction (when (:kontor.tax/authority tax)
-                                          {:authority (:kontor.tax/authority tax)})
-                          :jurisdiction-specific-codes {}})))
-               vec)]
+          (vec (for [[tax r] (map vector taxes results)]
+                 {:kind         (component-kind tax tax-use)
+                  :rate         (:kontor.tax/amount tax)
+                  :base         (:base r)
+                  :amount       (:amount r)
+                  :recoverable? (boolean (:kontor.tax/recoverable? tax))
+                  :tax-eid      (:db/id tax)
+                  :tax-code     (:kontor.tax/code tax)
+                  :price-include (included? tax)
+                  :provenance   {:provider-id :static-table
+                                 :rate-source (:kontor.tax/code tax)
+                                 :statute     nil}
+                  :jurisdiction (when (:kontor.tax/authority tax)
+                                  {:authority (:kontor.tax/authority tax)})
+                  :jurisdiction-specific-codes {}}))]
       (when (seq components)
         (tax-facts {:tax-use      tax-use
-                    :line-base    base
+                    ;; the PRE-tax net, which differs from the incoming
+                    ;; `base` exactly when the quote was tax-inclusive
+                    :line-base    net
                     :commodity    commodity
                     :jurisdiction {:country         cc
                                    :subdivision     subdivision

@@ -659,3 +659,224 @@
       :kontor.inventory-detail/source transfer-eid
       :kontor.inventory-detail/description "Transfer cancelled"}
      {:db/id transfer-eid :kontor.inventory-transfer/status :cancelled}]))
+
+;; ============================================================================
+;; Value-only verbs — landed cost / NRV write-down / GR-IR true-up
+;; (note 198 R3-INV-5, R3-INV-6, R3-INV-7)
+;;
+;; All three ride `kontor.posting/plan-adjustment-move`: they differ only in
+;; how they SPLIT a value across layers and which role absorbs the contra.
+;; ============================================================================
+
+(defn- ^java.math.BigDecimal money [bd]
+  (.setScale ^java.math.BigDecimal bd 2 java.math.RoundingMode/HALF_EVEN))
+
+(defn- allocate-residue
+  "Distribute `total` across `weights` (a vector of BigDecimal) proportionally,
+   rounding to 2dp and giving the LAST entry the residue so the parts sum to
+   `total` EXACTLY. A freight voucher that allocates to 299.99 of 300.00 leaves
+   a cent stranded in the clearing account forever."
+  [^java.math.BigDecimal total weights]
+  (let [w-total (reduce (fn [^java.math.BigDecimal a ^java.math.BigDecimal b] (.add a b))
+                        0M weights)
+        n       (count weights)]
+    (if (or (zero? n) (zero? (.signum w-total)))
+      []
+      (let [heads (mapv (fn [^java.math.BigDecimal w]
+                          (money (.divide (.multiply total w) w-total
+                                          6 java.math.RoundingMode/HALF_EVEN)))
+                        (butlast weights))
+            used  (reduce (fn [^java.math.BigDecimal a ^java.math.BigDecimal b] (.add a b))
+                          0M heads)]
+        (conj heads (.subtract total used))))))
+
+(def split-methods
+  "How a landed cost is spread over the receipt layers it applies to.
+   Odoo's stock.landed.cost SPLIT_METHOD, minus the ones that need physical
+   master data kontor does not own (by_weight / by_volume — a consumer with
+   those attributes passes explicit `:allocations` instead)."
+  #{:by-quantity :by-value :equal})
+
+(defn apply-landed-cost-tx-data
+  "Pure tx-data builder for `apply-landed-cost!` (ADR-068)."
+  [db {:keys [product book commodity journal account-fn amount split-method
+              layers allocations effective-date narration note ledger]
+       :or   {split-method :by-quantity}}]
+  (when-not journal    (throw (ex-info ":journal required" {})))
+  (when-not account-fn (throw (ex-info ":account-fn required" {})))
+  (let [eff  (or effective-date (Date.))
+        allocs
+        (or allocations
+            (let [_ (when (nil? amount) (throw (ex-info ":amount required" {})))
+                  _ (when-not (contains? split-methods split-method)
+                      (throw (ex-info "Unknown :split-method"
+                                      {:split-method split-method :known split-methods})))
+                  bk   (valuation/resolve-book db book)
+                  ls   (or layers (valuation/available-layers db bk product))
+                  _    (when (empty? ls)
+                         (throw (ex-info "apply-landed-cost!: no layers to allocate across"
+                                         {:type :inventory/no-layers :product product :book bk})))
+                  opts {}
+                  weights (mapv (fn [l]
+                                  (case split-method
+                                    :by-quantity (valuation/qty-remaining db l opts)
+                                    :by-value    (valuation/layer-value-remaining db l opts)
+                                    :equal       1M))
+                                ls)]
+              (mapv (fn [l a] {:layer l :amount a})
+                    ls (allocate-residue (money (bigdec amount)) weights))))]
+    (seal-stock-move
+     (posting/plan-adjustment-move
+      db {:journal journal :effective-date eff :commodity commodity
+          :account-fn account-fn :ledger ledger
+          :allocations allocs
+          :contra-role :landed-cost-clearing
+          :reason :landed-cost
+          :note (or note "Landed cost")
+          :narration (or narration "Landed cost allocation")})
+     eff)))
+
+(defn apply-landed-cost!
+  "Capitalise a freight / duty / insurance voucher onto the receipt layers it
+   belongs to — the cost of getting the goods where they are is part of what
+   they cost (IAS 2.11).
+
+   Required: :product :book :commodity :journal :account-fn and either
+             :amount (+ optional :split-method, default :by-quantity) or an
+             explicit :allocations vector.
+   Optional: :layers (restrict the allocation set), :effective-date,
+             :narration, :note, :ledger, :vt-from / :vt-to.
+
+   The voucher's total lands on the layers exactly — the last layer absorbs
+   the rounding residue — and the contra is `:landed-cost-clearing`, which the
+   vendor bill later clears.
+
+   The pure tx-data builder is `apply-landed-cost-tx-data` (ADR-068)."
+  [conn {:keys [effective-date vt-from vt-to] :as opts}]
+  (let [eff (or effective-date (Date.))]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (apply-landed-cost-tx-data (d/db conn)
+                                                  (assoc opts :effective-date eff))
+            (or vt-from eff) (or vt-to kbt/forever)))))
+
+(defn write-down-to-nrv-tx-data
+  "Pure tx-data builder for `write-down-to-nrv!` (ADR-068)."
+  [db {:keys [product book commodity journal account-fn nrv-unit-cost
+              effective-date narration note ledger]}]
+  (when-not journal    (throw (ex-info ":journal required" {})))
+  (when-not account-fn (throw (ex-info ":account-fn required" {})))
+  (when (nil? nrv-unit-cost) (throw (ex-info ":nrv-unit-cost required" {})))
+  (let [eff   (or effective-date (Date.))
+        bk    (valuation/resolve-book db book)
+        ls    (valuation/available-layers db bk product)
+        qty   (valuation/on-hand-qty db bk product)
+        carry (valuation/on-hand-value db bk product)
+        target (money (.multiply ^java.math.BigDecimal qty
+                                 ^java.math.BigDecimal (bigdec nrv-unit-cost)))
+        delta  (.subtract target (money carry))]
+    (when (empty? ls)
+      (throw (ex-info "write-down-to-nrv!: nothing on hand to write down"
+                      {:type :inventory/no-layers :product product :book bk})))
+    ;; IAS 2.9 is lower-of-cost-and-NRV: a recovery above carrying cost is NOT
+    ;; a write-up. IAS 2.33 allows REVERSING a previous write-down up to the
+    ;; original cost, which needs the write-down history this verb does not
+    ;; read — refuse rather than silently book an unsupported gain.
+    (when-not (neg? (.signum delta))
+      (throw (ex-info "write-down-to-nrv!: NRV is at or above carrying value — IAS 2.9 permits no write-up"
+                      {:type :inventory/nrv-above-cost
+                       :carrying-value carry :nrv-value target})))
+    (let [weights (mapv #(valuation/layer-value-remaining db %) ls)]
+      (seal-stock-move
+       (posting/plan-adjustment-move
+        db {:journal journal :effective-date eff :commodity commodity
+            :account-fn account-fn :ledger ledger
+            :allocations (mapv (fn [l a] {:layer l :amount a})
+                               ls (allocate-residue delta weights))
+            :contra-role :write-down-expense
+            :reason :write-down
+            :note (or note "NRV write-down")
+            :narration (or narration "Inventory write-down to net realisable value")})
+       eff))))
+
+(defn write-down-to-nrv!
+  "Write on-hand stock down to net realisable value (IAS 2.9 lower of cost and
+   NRV), allocating the write-down across layers pro-rata to their carrying
+   value. Books Dr `:write-down-expense` / Cr `:inventory` in the GL and the
+   matching `:layer-adjustment`s in the subledger, in ONE transaction — so the
+   two views move together the way `receive!` / `issue!` already guarantee.
+
+   Required: :product :book :commodity :journal :account-fn :nrv-unit-cost.
+   Optional: :effective-date, :narration, :note, :ledger, :vt-from / :vt-to.
+
+   Refuses when NRV is at or above carrying value.
+
+   The pure tx-data builder is `write-down-to-nrv-tx-data` (ADR-068)."
+  [conn {:keys [effective-date vt-from vt-to] :as opts}]
+  (let [eff (or effective-date (Date.))]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (write-down-to-nrv-tx-data (d/db conn)
+                                                  (assoc opts :effective-date eff))
+            (or vt-from eff) (or vt-to kbt/forever)))))
+
+(defn true-up-gr-ir-tx-data
+  "Pure tx-data builder for `true-up-gr-ir!` (ADR-068)."
+  [db {:keys [layer billed-unit-cost commodity journal account-fn
+              effective-date narration note ledger]}]
+  (when-not layer      (throw (ex-info ":layer required" {})))
+  (when-not journal    (throw (ex-info ":journal required" {})))
+  (when-not account-fn (throw (ex-info ":account-fn required" {})))
+  (when (nil? billed-unit-cost) (throw (ex-info ":billed-unit-cost required" {})))
+  (let [eff    (or effective-date (Date.))
+        pulled (d/pull db [:kontor.valuation-layer/qty-original
+                           :kontor.valuation-layer/unit-cost-original]
+                       layer)
+        qty-orig  ^java.math.BigDecimal (:kontor.valuation-layer/qty-original pulled)
+        unit-orig ^java.math.BigDecimal (:kontor.valuation-layer/unit-cost-original pulled)]
+    (when (nil? qty-orig)
+      (throw (ex-info "true-up-gr-ir!: :layer is not a valuation layer" {:layer layer})))
+    (let [remaining (valuation/qty-remaining db layer)
+          delta     (money (.multiply (.subtract ^java.math.BigDecimal (bigdec billed-unit-cost)
+                                                 unit-orig)
+                                      qty-orig))
+          ;; Split by WHERE THE GOODS ARE NOW. The share still on hand
+          ;; revalues the stock; the share already issued is a period cost —
+          ;; capitalising it onto stock that no longer exists would overstate
+          ;; inventory and understate COGS indefinitely.
+          on-hand   (money (.divide (.multiply delta remaining) qty-orig
+                                    6 java.math.RoundingMode/HALF_EVEN))
+          consumed  (.subtract delta on-hand)]
+      (seal-stock-move
+       (posting/plan-adjustment-move
+        db (cond-> {:journal journal :effective-date eff :commodity commodity
+                    :account-fn account-fn :ledger ledger
+                    :allocations (if (zero? (.signum on-hand))
+                                   []
+                                   [{:layer layer :amount on-hand}])
+                    :contra-role :gr-ir-clearing
+                    :reason :correction
+                    :note (or note "GR-IR price difference")
+                    :narration (or narration "Vendor bill / receipt price true-up")}
+             (not (zero? (.signum consumed)))
+             (assoc :expense-legs [{:role :cogs :amount consumed}])))
+       eff))))
+
+(defn true-up-gr-ir!
+  "Reconcile a vendor bill against the receipt it settles when the billed
+   price differs from the received price, SPLITTING the variance by where the
+   goods are now: the still-on-hand share revalues the layer, the already-
+   issued share lands in COGS.
+
+   `true-up-negative-fill!` handles a different case — a negative-fill layer
+   whose ESTIMATED cost is being replaced by the actual — and books the whole
+   delta to one inventory/variance pair with no split.
+
+   Required: :layer :billed-unit-cost :commodity :journal :account-fn.
+   Optional: :effective-date, :narration, :note, :ledger, :vt-from / :vt-to.
+
+   The pure tx-data builder is `true-up-gr-ir-tx-data` (ADR-068)."
+  [conn {:keys [effective-date vt-from vt-to] :as opts}]
+  (let [eff (or effective-date (Date.))]
+    (validation/transact-with-validation
+     conn (kbt/with-vt (true-up-gr-ir-tx-data (d/db conn)
+                                              (assoc opts :effective-date eff))
+            (or vt-from eff) (or vt-to kbt/forever)))))

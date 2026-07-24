@@ -48,6 +48,7 @@
             [kontor.inventory.schema :as inv-schema]
             [kontor.partner.schema :as partner-schema]
             [kontor.posting :as posting]
+            [kontor.inventory.report :as inv-report]
             [kontor.provider.valuation :as valuation]
             [kontor.reporting.balance :as balance]))
 
@@ -76,6 +77,8 @@
                   :kontor.account/type :expense :kontor.account/active true}
                  {:db/id "acct-wd" :kontor.account/code "5910" :kontor.account/name "Inventory Write-down"
                   :kontor.account/type :expense :kontor.account/active true}
+                 {:db/id "acct-lcc" :kontor.account/code "1420" :kontor.account/name "Landed Cost Clearing"
+                  :kontor.account/type :liability :kontor.account/active true}
                  {:db/id "book" :kontor.valuation-book/code "primary"
                   :kontor.valuation-book/name "Primary (FIFO)"
                   :kontor.valuation-book/cost-method :fifo :kontor.valuation-book/active true}
@@ -96,10 +99,12 @@
 (defn- eur     [db]      (ref-eid db :kontor.commodity/symbol "EUR"))
 
 (defn- account-fn [db]
-  (let [m {:inventory      (acct db "1400")
-           :gr-ir-clearing (acct db "1410")
-           :cogs           (acct db "5000")
-           :price-variance (acct db "5900")}]
+  (let [m {:inventory            (acct db "1400")
+           :gr-ir-clearing       (acct db "1410")
+           :landed-cost-clearing (acct db "1420")
+           :cogs                 (acct db "5000")
+           :price-variance       (acct db "5900")
+           :write-down-expense   (acct db "5910")}]
     (fn [_move role] (get m role))))
 
 (defn- warehouse! [conn]
@@ -241,12 +246,12 @@
           (is (bd= 1400.00M (valuation/on-hand-value db2 bk widget))))))))
 
 ;; ============================================================================
-;; PENDING(NEW) (4) — AVCO on-hand VALUE drifts from the GL inventory account
+;; CLOSED (4) — AVCO on-hand VALUE drifted from the GL inventory account
 ;; ============================================================================
 ;;
 ;; kontor.inventory's headline guarantee is that the physical and financial
 ;; views "cannot drift, because they are written together" (ops.clj:9-12).
-;; That holds for QUANTITY and for FIFO value — but NOT for AVCO value.
+;; That held for QUANTITY and for FIFO value — but NOT for AVCO value.
 ;;
 ;; AVCO book: receive 100 @ 10.00 (value 1000), receive 100 @ 14.00
 ;; (value 1400), issue 50. The WeightedAverageProvider stamps the issue at
@@ -254,16 +259,23 @@
 ;; the cheapest physical layer FIFO-style (50 units off layer-1 @ 10):
 ;;   GL 1400 inventory = 1000 + 1400 − 600            = 1800.00
 ;;   layer on-hand-value = 50·10 (layer-1) + 100·14   = 1900.00
-;; They diverge by (avg 12 − drawn 10)·50 = 100 — the average premium on
-;; the issued units is never carried back into the layer valuation, so the
-;; remaining stock is over-valued by 100.
+;; They diverged by (avg 12 − drawn 10)·50 = 100 — the average premium on
+;; the issued units was never carried back into the layer valuation, so the
+;; remaining stock was over-valued by 100.
+;;
+;; FIX (note 198 R3-INV-4): `on-hand-value` now nets what the GL actually
+;; relieved — Σ (qty × :unit-cost-at-consumption), the number the costing
+;; provider stamped — instead of re-deriving consumption at the layer's own
+;; cost. The stamped cost was already recorded; the view just ignored it.
+;; This makes subledger == GL hold for EVERY cost method, not only the ones
+;; where the two happen to coincide.
 ;;
 ;; Odoo has no persistent per-layer cost under AVCO: _run_avco values
 ;; on-hand at qty × standard_price(avg) = 150 × 12 = 1800, matching the GL.
 ;; stock_account/models/stock_valuation_layer.py:651 (_run_avco);
 ;; product avg maintenance at :626-:646.
 
-(deftest ^:kaocha/pending avco-onhand-value-drifts-from-gl
+(deftest avco-onhand-value-no-longer-drifts-from-gl
   (let [conn   (bootstrap)
         wh     (warehouse! conn)
         db     (d/db conn)
@@ -286,13 +298,80 @@
           layer-val (valuation/on-hand-value db2 bk widget)]
       (testing "GL inventory = 1000 + 1400 − 600 = 1800.00 (hand-derived)"
         (is (bd= 1800.00M gl-inv)))
-      (testing "layer on-hand value = 50·10 + 100·14 = 1900.00 (hand-derived)"
-        (is (bd= 1900.00M layer-val)))
-      ;; PENDING(NEW): under AVCO the subledger valuation and the GL
-      ;; inventory account MUST agree; here they drift by 100. No substrate
-      ;; carries the average premium on issued units back into the layers.
-      (testing "AVCO: subledger valuation should equal GL inventory (drifts by 100)"
-        (is (bd= gl-inv layer-val))))))
+      (testing "layer on-hand value = 1000 + 1400 − 50·12 = 1800.00 (hand-derived)"
+        (is (bd= 1800.00M layer-val)))
+      (testing "AVCO: subledger valuation equals GL inventory — no drift"
+        (is (bd= gl-inv layer-val)))
+      (testing "and the implied average is the running average, 1800/150 = 12"
+        (is (bd= 12M (.divide ^java.math.BigDecimal layer-val
+                              ^java.math.BigDecimal (valuation/on-hand-qty db2 bk widget)
+                              4 java.math.RoundingMode/HALF_EVEN)))))))
+
+(deftest avco-passes-the-modules-own-tie-out-report
+  ;; `inv-report/valuation-tie-out` is kontor-inventory's own subledger↔GL
+  ;; reconciliation — the "my balance-sheet inventory number is wrong"
+  ;; detector. It was present the whole time the AVCO drift was live and
+  ;; would have reported :difference 100; the detector was right and the
+  ;; number it compared against was wrong.
+  (let [conn   (bootstrap)
+        wh     (warehouse! conn)
+        db     (d/db conn)
+        widget (p db "P-widget")
+        bk     (book db "avco")]
+    (ops/receive! conn {:product widget :facility wh :book bk
+                        :qty 100M :unit-cost 10.00M :commodity (eur db)
+                        :journal (journal db) :account-fn (account-fn db)
+                        :effective-date #inst "2026-03-01"})
+    (ops/receive! conn {:product widget :facility wh :book bk
+                        :qty 100M :unit-cost 14.00M :commodity (eur (d/db conn))
+                        :journal (journal (d/db conn)) :account-fn (account-fn (d/db conn))
+                        :effective-date #inst "2026-03-02"})
+    (ops/issue! conn {:product widget :facility wh :book bk
+                      :qty 50M :commodity (eur (d/db conn))
+                      :journal (journal (d/db conn)) :account-fn (account-fn (d/db conn))
+                      :effective-date #inst "2026-03-03"})
+    (let [db2 (d/db conn)
+          out (inv-report/valuation-tie-out
+               conn {:book bk
+                     :inventory-account (acct db2 "1400")
+                     :commodity (eur db2)})]
+      (is (bd= 1800.00M (:subledger out)))
+      (is (bd= 1800.00M (:gl out)))
+      (is (bd= 0M (:difference out)))
+      (is (true? (:ok? out))))))
+
+(deftest avco-full-drain-of-a-layer-keeps-the-books-tied
+  ;; The harder AVCO case: draw MORE than the first layer holds, so a layer is
+  ;; fully drained while still carrying residual value. Layers with zero
+  ;; remaining QUANTITY must still be counted for VALUE, or the drift comes
+  ;; straight back.
+  ;;   receive 100 @ 10 (1000), receive 100 @ 14 (1400), issue 120 @ avg 12
+  ;;   GL 1400 = 1000 + 1400 − 1440 = 960.00
+  ;;   layer-1 = 1000 − 100·12 = −200 ; layer-2 = 1400 − 20·12 = 1160
+  ;;   total   = 960.00  ✓ (and 80 units on hand × 12 = 960)
+  (let [conn   (bootstrap)
+        wh     (warehouse! conn)
+        db     (d/db conn)
+        widget (p db "P-widget")
+        bk     (book db "avco")]
+    (ops/receive! conn {:product widget :facility wh :book bk
+                        :qty 100M :unit-cost 10.00M :commodity (eur db)
+                        :journal (journal db) :account-fn (account-fn db)
+                        :effective-date #inst "2026-03-01"})
+    (ops/receive! conn {:product widget :facility wh :book bk
+                        :qty 100M :unit-cost 14.00M :commodity (eur (d/db conn))
+                        :journal (journal (d/db conn)) :account-fn (account-fn (d/db conn))
+                        :effective-date #inst "2026-03-02"})
+    (ops/issue! conn {:product widget :facility wh :book bk
+                      :qty 120M :commodity (eur (d/db conn))
+                      :journal (journal (d/db conn)) :account-fn (account-fn (d/db conn))
+                      :effective-date #inst "2026-03-03"})
+    (let [db2 (d/db conn)]
+      (is (bd= 80M (valuation/on-hand-qty db2 bk widget)))
+      (is (bd= 960.00M (gl-balance conn "1400")))
+      (is (bd= 960.00M (valuation/on-hand-value db2 bk widget))
+          "the fully-drained layer's residual value is still counted")
+      (is (bd= (gl-balance conn "1400") (valuation/on-hand-value db2 bk widget))))))
 
 ;; ============================================================================
 ;; PENDING(NEW) (5) — no landed-cost allocation builder
@@ -312,28 +391,70 @@
 ;; with split_method by_quantity / by_weight / by_volume /
 ;; by_current_cost_price / equal (:207-:226; SPLIT_METHOD :11-:17).
 
-(deftest ^:kaocha/pending landed-cost-allocation-builder-absent
+(deftest landed-cost-allocation-splits-and-capitalises
+  (doseq [split [:by-quantity :by-value]]
+    (testing (str "split method " split)
+      (let [conn   (bootstrap)
+            wh     (warehouse! conn)
+            db     (d/db conn)
+            widget (p db "P-widget")
+            bk     (book db "primary")]
+        (ops/receive! conn {:product widget :facility wh :book bk
+                            :qty 100M :unit-cost 12.00M :commodity (eur db)
+                            :journal (journal db) :account-fn (account-fn db)
+                            :effective-date #inst "2026-03-01"})
+        (ops/receive! conn {:product widget :facility wh :book bk
+                            :qty 50M :unit-cost 12.00M :commodity (eur (d/db conn))
+                            :journal (journal (d/db conn)) :account-fn (account-fn (d/db conn))
+                            :effective-date #inst "2026-03-02"})
+        (is (= 2 (count (valuation/available-layers (d/db conn) bk widget)))
+            "two layers exist to allocate freight across")
+        (let [db1 (d/db conn)]
+          (ops/apply-landed-cost! conn {:product widget :book bk :amount 300.00M
+                                        :split-method split
+                                        :commodity (eur db1) :journal (journal db1)
+                                        :account-fn (account-fn db1)
+                                        :effective-date #inst "2026-03-03"}))
+        (let [db2    (d/db conn)
+              layers (valuation/all-layers db2 bk widget)]
+          (testing "the voucher lands on the layers 200 / 100 (100u vs 50u; 1200 vs 600)"
+            (is (bd= 200.00M (valuation/adjustment-total db2 (first layers))))
+            (is (bd= 100.00M (valuation/adjustment-total db2 (second layers)))))
+          (testing "landed cost is capitalised, not expensed — IAS 2.11"
+            (is (bd= 2100.00M (valuation/on-hand-value db2 bk widget))
+                "1800 goods + 300 freight")
+            (is (bd= 2100.00M (gl-balance conn "1400")))
+            (is (bd= (gl-balance conn "1400") (valuation/on-hand-value db2 bk widget))))
+          (testing "the contra sits in the landed-cost clearing account"
+            (is (bd= -300.00M (gl-balance conn "1420")))))))))
+
+(deftest landed-cost-residue-lands-on-the-last-layer
+  ;; 100.00 over three equal layers is 33.333…; a cent stranded in the
+  ;; clearing account never clears, so the parts must sum to the voucher.
   (let [conn   (bootstrap)
         wh     (warehouse! conn)
         db     (d/db conn)
         widget (p db "P-widget")
         bk     (book db "primary")]
-    (ops/receive! conn {:product widget :facility wh :book bk
-                        :qty 100M :unit-cost 12.00M :commodity (eur db)
-                        :journal (journal db) :account-fn (account-fn db)
-                        :effective-date #inst "2026-03-01"})
-    (ops/receive! conn {:product widget :facility wh :book bk
-                        :qty 50M :unit-cost 12.00M :commodity (eur (d/db conn))
-                        :journal (journal (d/db conn)) :account-fn (account-fn (d/db conn))
-                        :effective-date #inst "2026-03-02"})
-    (testing "two layers exist to allocate freight across"
-      (is (= 2 (count (valuation/available-layers (d/db conn) bk widget)))))
-    ;; PENDING(NEW): no builder allocates a freight/duty voucher across
-    ;; layers by qty/value/weight and books :landed-cost-clearing.
-    (testing "an ops/apply-landed-cost! builder should exist"
-      (is (some? (resolve 'kontor.inventory.ops/apply-landed-cost!))))
-    (testing "a posting/plan-adjustment-move builder should exist"
-      (is (some? (resolve 'kontor.posting/plan-adjustment-move))))))
+    (doseq [d [#inst "2026-03-01" #inst "2026-03-02" #inst "2026-03-03"]]
+      (ops/receive! conn {:product widget :facility wh :book bk
+                          :qty 10M :unit-cost 1.00M :commodity (eur (d/db conn))
+                          :journal (journal (d/db conn))
+                          :account-fn (account-fn (d/db conn))
+                          :effective-date d}))
+    (let [db1 (d/db conn)]
+      (ops/apply-landed-cost! conn {:product widget :book bk :amount 100.00M
+                                    :split-method :equal
+                                    :commodity (eur db1) :journal (journal db1)
+                                    :account-fn (account-fn db1)
+                                    :effective-date #inst "2026-03-04"}))
+    (let [db2  (d/db conn)
+          adjs (mapv #(valuation/adjustment-total db2 %)
+                     (valuation/all-layers db2 bk widget))]
+      (is (= [33.33M 33.33M 33.34M] adjs))
+      (is (bd= 100.00M (reduce + 0M adjs)) "the voucher is fully allocated")
+      (is (bd= -100.00M (gl-balance conn "1420"))
+          "the clearing credit equals the allocated total — no stranded cent"))))
 
 ;; ============================================================================
 ;; PENDING(NEW) (6) — no NRV write-down / standard-cost revaluation verb
@@ -352,7 +473,7 @@
 ;; stock_valuation_layer.py:286-:323 (revaluation SVL when standard_price
 ;; changes).
 
-(deftest ^:kaocha/pending nrv-write-down-verb-absent
+(deftest nrv-write-down-books-gl-and-layer-together
   (let [conn   (bootstrap)
         wh     (warehouse! conn)
         db     (d/db conn)
@@ -367,12 +488,48 @@
       (is (contains? posting/stock-move-roles :revaluation-loss)))
     (testing "on-hand value is at cost before any write-down"
       (is (bd= 1200.00M (valuation/on-hand-value (d/db conn) bk widget))))
-    ;; PENDING(NEW): no verb books an IAS 2 NRV write-down / standard-cost
-    ;; revaluation of on-hand (GL leg + layer adjustment) atomically.
-    (testing "an inventory NRV write-down verb should exist"
-      (is (or (some? (resolve 'kontor.inventory.ops/write-down-to-nrv!))
-              (some? (resolve 'kontor.inventory.ops/revalue!))
-              (some? (resolve 'kontor.inventory.ops/revalue-inventory!)))))))
+    (let [db1 (d/db conn)]
+      (ops/write-down-to-nrv! conn {:product widget :book bk :nrv-unit-cost 9.00M
+                                    :commodity (eur db1) :journal (journal db1)
+                                    :account-fn (account-fn db1)
+                                    :effective-date #inst "2026-03-05"}))
+    (let [db2 (d/db conn)]
+      (testing "carried at the lower of cost (12) and NRV (9) — IAS 2.9"
+        (is (bd= 900.00M (valuation/on-hand-value db2 bk widget))
+            "100 × 9.00"))
+      (testing "the GL moves with it, in the same transaction"
+        (is (bd= 900.00M (gl-balance conn "1400")))
+        (is (bd= 300.00M (gl-balance conn "5910")) "100 × (12 − 9)")
+        (is (bd= (gl-balance conn "1400") (valuation/on-hand-value db2 bk widget))))
+      (testing "quantity is untouched — this is a value event, not a movement"
+        (is (bd= 100M (valuation/on-hand-qty db2 bk widget)))))))
+
+(deftest nrv-write-up-above-cost-is-refused
+  ;; IAS 2.9 is lower-of-cost-and-NRV; a recovery above carrying cost is not a
+  ;; write-up. IAS 2.33 permits REVERSING a prior write-down up to original
+  ;; cost, which needs write-down history this verb does not read — refusing
+  ;; beats silently booking an unsupported gain.
+  (let [conn   (bootstrap)
+        wh     (warehouse! conn)
+        db     (d/db conn)
+        widget (p db "P-widget")
+        bk     (book db "primary")]
+    (ops/receive! conn {:product widget :facility wh :book bk
+                        :qty 100M :unit-cost 12.00M :commodity (eur db)
+                        :journal (journal db) :account-fn (account-fn db)
+                        :effective-date #inst "2026-03-01"})
+    (let [db1 (d/db conn)
+          ex  (try (ops/write-down-to-nrv!
+                    conn {:product widget :book bk :nrv-unit-cost 15.00M
+                          :commodity (eur db1) :journal (journal db1)
+                          :account-fn (account-fn db1)
+                          :effective-date #inst "2026-03-05"})
+                   nil
+                   (catch clojure.lang.ExceptionInfo e e))]
+      (is (some? ex) "NRV above cost must be refused")
+      (is (= :inventory/nrv-above-cost (:type (ex-data ex))))
+      (is (bd= 1200.00M (valuation/on-hand-value (d/db conn) bk widget))
+          "and nothing was written"))))
 
 ;; ============================================================================
 ;; PENDING(NEW) (7) — no GR-IR bill-vs-receipt true-up split by on-hand/consumed
@@ -394,7 +551,7 @@
 ;; (stock_account/models/stock_valuation_layer.py:527 _run_fifo /
 ;; account_move price-difference posting).
 
-(deftest ^:kaocha/pending gr-ir-price-diff-trueup-split-absent
+(deftest gr-ir-price-diff-trueup-splits-by-on-hand-vs-consumed
   (let [conn   (bootstrap)
         wh     (warehouse! conn)
         db     (d/db conn)
@@ -412,10 +569,54 @@
       (testing "60 on hand, GR-IR credited 1200 (setup is real)"
         (is (bd= 60M (valuation/on-hand-qty db2 bk widget)))
         (is (bd= -1200.00M (gl-balance conn "1410"))))
-      ;; PENDING(NEW): no builder trues up a vendor bill vs the receipt
-      ;; price and splits the variance by on-hand (revalue inventory) vs
-      ;; consumed (COGS). true-up-negative-fill! is negative-fill-only and
-      ;; does not split.
-      (testing "a GR-IR bill/receipt price-diff true-up verb should exist"
-        (is (or (some? (resolve 'kontor.inventory.ops/true-up-gr-ir!))
-                (some? (resolve 'kontor.inventory.ops/true-up-purchase-price!))))))))
+      ;; The vendor bill lands at 13.00/unit → 100 × (13 − 12) = 100.00 total
+      ;; variance, split by where the goods are NOW:
+      ;;   60 still on hand → +60.00 revalues inventory (a :layer-adjustment)
+      ;;   40 consumed      → +40.00 is a period cost in COGS
+      (let [layer (first (valuation/all-layers db2 bk widget))]
+        (ops/true-up-gr-ir! conn {:layer layer :billed-unit-cost 13.00M
+                                  :commodity (eur db2) :journal (journal db2)
+                                  :account-fn (account-fn db2)
+                                  :effective-date #inst "2026-03-03"}))
+      (let [db3 (d/db conn)]
+        (testing "the still-on-hand share revalues the stock"
+          (is (bd= 60.00M (valuation/adjustment-total db3
+                                                      (first (valuation/all-layers db3 bk widget)))))
+          (is (bd= 780.00M (valuation/on-hand-value db3 bk widget))
+              "720 at cost + 60 price difference"))
+        (testing "the already-consumed share is a period cost, not capitalised"
+          (is (bd= 520.00M (gl-balance conn "5000")) "480 at 12.00 + 40 true-up"))
+        (testing "GR-IR now carries the billed value, ready for the AP invoice"
+          (is (bd= -1300.00M (gl-balance conn "1410")) "100 × 13.00"))
+        (testing "and subledger still ties to the GL"
+          (is (bd= 780.00M (gl-balance conn "1400")))
+          (is (bd= (gl-balance conn "1400") (valuation/on-hand-value db3 bk widget))))))))
+
+(deftest gr-ir-trueup-on-fully-consumed-stock-is-all-cogs
+  ;; The degenerate end of the split: nothing is left to revalue, so the whole
+  ;; variance is a period cost. Capitalising any of it onto stock that no
+  ;; longer exists would overstate inventory indefinitely.
+  (let [conn   (bootstrap)
+        wh     (warehouse! conn)
+        db     (d/db conn)
+        widget (p db "P-widget")
+        bk     (book db "primary")]
+    (ops/receive! conn {:product widget :facility wh :book bk
+                        :qty 100M :unit-cost 12.00M :commodity (eur db)
+                        :journal (journal db) :account-fn (account-fn db)
+                        :effective-date #inst "2026-03-01"})
+    (ops/issue! conn {:product widget :facility wh :book bk
+                      :qty 100M :commodity (eur (d/db conn))
+                      :journal (journal (d/db conn)) :account-fn (account-fn (d/db conn))
+                      :effective-date #inst "2026-03-02"})
+    (let [db2   (d/db conn)
+          layer (first (valuation/all-layers db2 bk widget))]
+      (ops/true-up-gr-ir! conn {:layer layer :billed-unit-cost 13.00M
+                                :commodity (eur db2) :journal (journal db2)
+                                :account-fn (account-fn db2)
+                                :effective-date #inst "2026-03-03"})
+      (let [db3 (d/db conn)]
+        (is (bd= 0M (valuation/adjustment-total db3 layer)) "nothing capitalised")
+        (is (bd= 1300.00M (gl-balance conn "5000")) "1200 + the full 100 variance")
+        (is (bd= 0M (gl-balance conn "1400")))
+        (is (bd= 0M (valuation/on-hand-value db3 bk widget)))))))

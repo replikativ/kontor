@@ -147,6 +147,37 @@
                   ^java.math.BigDecimal (qty-consumed db layer-eid opts))
        0M))))
 
+(defn value-consumed
+  "Total BOOK VALUE drawn out of `layer-eid`:
+     Σ (qty × :kontor.layer-consumption/unit-cost-at-consumption)
+   over the consumption events included under the opts filter.
+
+   This is deliberately NOT `qty-consumed × the layer's own unit cost`. The
+   costing provider decides what a consumption is WORTH, and only FIFO/LIFO/
+   FEFO stamp it at the drawn layer's cost. Weighted-average stamps the
+   running average and standard cost stamps the standard — in both cases the
+   value the GL relieves differs from the layer's acquisition cost, and this
+   is the number that matches the GL. note 198 R3-INV-4."
+  (^java.math.BigDecimal [db layer-eid] (value-consumed db layer-eid {}))
+  (^java.math.BigDecimal [db layer-eid {:keys [as-of-valid include-states]
+                                        :or {include-states default-include-states}}]
+   (let [rows (d/q '[:find ?q ?u ?tx ?issued
+                     :in $ ?layer
+                     :where
+                     [?c :kontor.layer-consumption/layer ?layer]
+                     [?c :kontor.layer-consumption/qty ?q]
+                     [?c :kontor.layer-consumption/unit-cost-at-consumption ?u]
+                     [?c :kontor.layer-consumption/issue-transaction ?tx]
+                     [?c :kontor.layer-consumption/issued-at ?issued]]
+                   db layer-eid)]
+     (reduce (fn [^java.math.BigDecimal acc
+                  [^java.math.BigDecimal q ^java.math.BigDecimal u tx issued]]
+               (if (event-included? db tx include-states issued as-of-valid)
+                 (.add acc (.multiply q u))
+                 acc))
+             0M
+             rows))))
+
 (defn adjustment-total
   "Sum of `:kontor.layer-adjustment/amount` for the given layer, scoped by opts."
   (^java.math.BigDecimal [db layer-eid] (adjustment-total db layer-eid {}))
@@ -268,6 +299,65 @@
                      (juxt second first)))
           (mapv first)))))
 
+(defn all-layers
+  "Every layer of the (book, item) pair that passes the state + valid-time
+   filter, INCLUDING layers already drawn down to zero, ordered FIFO.
+
+   `available-layers` keeps only layers with positive remaining quantity,
+   which is right for deciding what to draw from next but wrong for
+   valuation: under weighted-average a fully-drained layer can still carry a
+   non-zero residual VALUE (its units left at the running average, not at
+   what they cost), and dropping it silently loses that value."
+  ([db book item] (all-layers db book item nil {}))
+  ([db book item lot {:keys [as-of-valid include-states]
+                      :or {include-states default-include-states}}]
+   (->> (if (some? lot)
+          (d/q '[:find ?l ?received ?tx
+                 :in $ ?book ?item ?lot
+                 :where
+                 [?l :kontor.valuation-layer/book ?book]
+                 [?l :kontor.valuation-layer/item ?item]
+                 [?l :kontor.valuation-layer/lot ?lot]
+                 [?l :kontor.valuation-layer/received-at ?received]
+                 [?l :kontor.valuation-layer/origin-transaction ?tx]]
+               db book item lot)
+          (d/q '[:find ?l ?received ?tx
+                 :in $ ?book ?item
+                 :where
+                 [?l :kontor.valuation-layer/book ?book]
+                 [?l :kontor.valuation-layer/item ?item]
+                 [?l :kontor.valuation-layer/received-at ?received]
+                 [?l :kontor.valuation-layer/origin-transaction ?tx]]
+               db book item))
+        (keep (fn [[layer received tx]]
+                (when (event-included? db tx include-states received as-of-valid)
+                  [layer received])))
+        (sort-by (juxt second first))
+        (mapv first))))
+
+(defn layer-value-remaining
+  "The book value still sitting on `layer-eid`:
+
+     (qty-original × unit-cost-original + Σ adjustments) − Σ value-consumed
+
+   i.e. what came in, plus what was capitalised onto it, minus what the GL
+   already relieved. Under FIFO this equals `qty-remaining × current-unit-cost`
+   because consumption is stamped at the layer's own cost; under
+   weighted-average or standard cost it does not, and THIS is the figure that
+   ties to the GL inventory account."
+  (^java.math.BigDecimal [db layer-eid] (layer-value-remaining db layer-eid {}))
+  (^java.math.BigDecimal [db layer-eid opts]
+   (let [pulled (d/pull db [:kontor.valuation-layer/qty-original
+                            :kontor.valuation-layer/unit-cost-original]
+                        layer-eid)
+         q ^java.math.BigDecimal (:kontor.valuation-layer/qty-original pulled)
+         u ^java.math.BigDecimal (:kontor.valuation-layer/unit-cost-original pulled)]
+     (if (or (nil? q) (nil? u))
+       0M
+       (-> (.multiply q u)
+           (.add ^java.math.BigDecimal (adjustment-total db layer-eid opts))
+           (.subtract ^java.math.BigDecimal (value-consumed db layer-eid opts)))))))
+
 (defn on-hand-qty
   "Total quantity on hand for a (book, item) pair at the bitemporal
    cursor in opts."
@@ -279,13 +369,32 @@
            (available-layers db book item nil opts))))
 
 (defn on-hand-value
-  "Total accounting value on hand: Σ (qty-remaining × current-unit-cost)
-   across all in-scope layers."
+  "Total accounting value on hand: Σ `layer-value-remaining` over every layer
+   of the (book, item) pair.
+
+   This ties to the GL inventory account by construction, for EVERY cost
+   method: what a receipt debits is `qty × unit-cost` (the layer's opening
+   value), what an adjustment debits is the adjustment amount, and what an
+   issue credits is `qty × unit-cost-at-consumption` — exactly the three terms
+   `layer-value-remaining` nets.
+
+   It previously summed `qty-remaining × current-unit-cost` over layers with
+   stock left, which silently disagreed with the GL under weighted-average:
+   consumption was RELIEVED at the running average but the layer kept its
+   original cost, so the average premium on the issued units stayed in the
+   subledger and over-valued the remaining stock. That contradicted the
+   inventory module's own headline guarantee that the physical and financial
+   views cannot drift. note 198 R3-INV-4.
+
+   Under FIFO/LIFO/FEFO the per-layer residual is still the intuitive
+   `qty-remaining × unit cost`. Under weighted average it is not: the per-layer
+   split of the book's value is an artifact of which layer happened to be
+   drained, and only the book-level total is meaningful. Odoo takes the same
+   position — it keeps no persistent per-layer cost under AVCO at all
+   (stock_account/models/stock_valuation_layer.py `_run_avco`)."
   (^java.math.BigDecimal [db book item] (on-hand-value db book item {}))
   (^java.math.BigDecimal [db book item opts]
    (reduce (fn [^java.math.BigDecimal acc layer]
-             (let [q ^java.math.BigDecimal (qty-remaining db layer opts)
-                   c ^java.math.BigDecimal (current-unit-cost db layer opts)]
-               (.add acc (.multiply q c))))
+             (.add acc ^java.math.BigDecimal (layer-value-remaining db layer opts)))
            0M
-           (available-layers db book item nil opts))))
+           (all-layers db book item nil opts))))

@@ -207,6 +207,10 @@ The current set (ADR-005 → ADR-071 for tax; plus ADR-017, ADR-029, ADR-055, AD
 
 Two providers stay record-shaped rather than protocol-shaped on purpose: the FxRateProvider's `query` map IS already ctx, and CostingProvider's positional `db` argument is on the "normalise next" list rather than a blocker.
 
+**Inventory value ties to the GL by construction, for every cost method.** `valuation/on-hand-value` nets `(qty×unit + Σ adjustments) − Σ (qty × unit-cost-at-consumption)` — the value the GL actually relieved, as stamped by the costing provider — rather than re-deriving consumption at each layer's own cost. Those two agree under FIFO/LIFO/FEFO and *disagree under weighted average and standard cost*, which is exactly where a subledger silently drifts from the GL. It walks all layers, not only those with stock left: under AVCO a layer drained to zero quantity can still carry residual value. Accepted consequence — under AVCO the per-layer split is an artifact of which layer was drained, and only the book-level total is meaningful (Odoo keeps no persistent per-layer cost under AVCO either). (ADR-122)
+
+**`kontor.posting/plan-adjustment-move`** is the value-only sibling of `plan-stock-move`: value lands on specific layers (`:allocations` → one `:layer-adjustment` each plus one `:inventory` GL leg), optionally on non-layer `:expense-legs` for value whose goods are already gone, and a `:contra-role` absorbs the total — sized as the negation of everything else, so it balances by construction. `kontor-inventory` ships three verbs on it: `apply-landed-cost!` (`:by-quantity` / `:by-value` / `:equal`, last layer absorbs the residue so nothing strands in the clearing account), `write-down-to-nrv!` (IAS 2.9 lower-of-cost-and-NRV; refuses a write-up, since IAS 2.33 reversal needs history this verb does not read), and `true-up-gr-ir!` (splits a bill-vs-receipt variance by where the goods are now — on-hand share revalues the layer, consumed share is a period cost). (ADR-122)
+
 ### 7.2 Consolidation
 
 `kontor.provider.consolidation` provides three primitives over `kontor.entity/family`:
@@ -240,6 +244,16 @@ Plus statute-as-data (§8.3) for jurisdictions where the rules themselves should
 - `kontor.tax.tax-return-posting-builder` — provision / payment postings via the verb facade.
 
 Kernel records (`StandalonePayrollTaxProvider`, `CorporateIncomeTaxProvider`, `PersonalIncomeTaxProvider`) cover the rate/threshold shape; per-jurisdiction richer logic uses statute-as-data (§8.3). **11 jurisdictions ship full CIT** on this path — DE / US / CA + QC / FR / JP / AU / BR / IN / MX / CN / AT. UK ships CGT + investment-income only, pending iXBRL substrate work (see §12). (ADR-099)
+
+### 8.1a Transaction-tax determination: fiscal positions, inclusive pricing, compounding
+
+Three things a real VAT/GST line needs beyond a rate lookup, all resolved inside `StaticTableProvider` and all optional (a context that passes none behaves exactly as before):
+
+- **Fiscal positions** — `:kontor.fiscal-position-tax/*` mapping lines (and `:kontor.fiscal-position-account/*` for account routing) point *back* at a `:kontor.fiscal-position`, mirroring Odoo's `account.fiscal.position.tax`. `kontor.tax.fiscal-position/map-taxes` substitutes or drops the taxes the jurisdiction rules already resolved when a `rate-facts` context carries `:fiscal-position`; a position never conjures a tax that was not selected. An **absent destination drops** the tax, which is deliberately distinct from mapping it to a 0% tax — a dropped tax leaves no component, while a 0% reverse-charge tax leaves a zero-amount component that still reaches the VAT return with its tags.
+- **Tax-inclusive pricing** — `:kontor.tax/price-include` plus a per-line `:price-include` context override, because inclusiveness is a property of the *quote* (gross to consumers, net to businesses), not only of the tax. The extraction inverts the whole forward pass rather than dividing by `1 + rate`: every component amount is affine in the net, so the slope and intercept recovered at net=1 / net=0 give an exact inversion that stays correct with compounding and fixed levies. `TaxFacts :line-base` reports the pre-tax net.
+- **Compound ordering** — `:kontor.tax/include-base-amount` is now honoured, which required `:kontor.tax/sequence` (absent = 0, ties on code): "subsequent" has no referent without a total order, and the resolver had been consuming an unordered query result. (ADR-121)
+
+Payment terms gained instalment tranches in the same pass: `:kontor.payment-term-line/*` (`:percent` / `:fixed` / `:balance`) + `kontor.banking.payment-term/compute-tranches`, with the last tranche absorbing the rounding residue so a plan always sums to the invoice exactly. A term with no lines yields one tranche, so the call is safe on every term.
 
 ### 8.2 Sole-prop + VAT return
 
