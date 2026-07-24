@@ -98,6 +98,27 @@
     (try (:db/id (d/entity db id))
          (catch #?(:clj Exception :cljs :default) _ nil))))
 
+(def post-posting-mutable-attrs
+  "Attributes that may legitimately be written to an ALREADY-POSTED entity.
+
+   Sealing (ADR-007) freezes what a posted entry SAYS — its amount, account,
+   commodity, entity, partner, dates. Reconciliation state is different: it
+   records how a line has since been MATCHED against other lines, and it
+   necessarily changes after posting. Odoo draws the same line — posted move
+   lines are immutable for accounting content, while `amount_residual` /
+   `full_reconcile_id` / `matching_number` are reconciliation fields updated by
+   `account.partial.reconcile` long after the move is posted, and are excluded
+   from the inalterability hash.
+
+   Writing one of these does not alter what was booked, so it is not a sealing
+   violation. Everything else on a posted entity — including AUGMENTING it with
+   a previously-absent accounting attribute — remains refused (note 198 G1).
+
+   note 198 Tier 2."
+  #{:kontor.posting/amount-residual
+    :kontor.posting/full-reconcile
+    :kontor.posting/matching-number})
+
 (defn- unique-identity-attrs
   "The set of attributes declared `:db.unique/identity` in the live schema —
    datahike UPSERTS an entity-map carrying one of these onto the existing
@@ -140,7 +161,9 @@
            :let  [eid (effective-target-eid db uid-attrs tx)] ; nil for genuinely-new entities
            :when (and eid (posted? db eid))
            [attr new-val] tx
-           :when (not= attr :db/id)
+           :when (and (not= attr :db/id)
+                      ;; reconciliation state legitimately changes post-posting
+                      (not (contains? post-posting-mutable-attrs attr)))
            :let  [cur (get (d/pull db [attr] eid) attr)]
            ;; report a CHANGE (cur present + differs) OR an AUGMENTATION
            ;; (cur absent); a same-value re-assert is (not= v v) = false.

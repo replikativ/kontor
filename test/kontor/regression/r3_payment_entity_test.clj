@@ -180,8 +180,11 @@
 ;; 2. PENDING(a) — register→clear two-step via an outstanding account
 ;; ═══════════════════════════════════════════════════════════════════════════
 
-(deftest ^:kaocha/pending register-then-clear-outstanding-account-two-step
-  ;; PENDING(NEW): kontor has no first-class payment entity. Odoo's
+(deftest register-then-clear-outstanding-account-two-step
+  ;; FIXED (note 198 Tier 2): kontor ships a first-class :kontor.payment entity
+  ;; (state :draft → :registered → :cleared, :outstanding-account, :is-matched,
+  ;; :method, :direction) so a registered-but-uncleared receipt is queryable.
+  ;; Original finding: Odoo's
   ;; account.payment posts against a transient outstanding_account_id
   ;; (odoo/addons/account/models/account_payment.py:123-128 / :393) at
   ;; *register* time, then flips `is_matched` true when that outstanding
@@ -195,6 +198,14 @@
   (testing "the two GL legs of register→clear are expressible by hand"
     (let [inv (mk-invoice! "INV-REG-1" :ar 1190M "EUR")
           pay (mk-payment! "PAY-REG-1")]
+      ;; Book the invoice itself first — Dr AR / Cr Revenue — otherwise the
+      ;; register leg below credits a receivable that was never debited and
+      ;; "AR cleared" is vacuous. (This test body never ran while it was
+      ;; ^:kaocha/pending, which is how the omission survived.)
+      (book/sell! *conn* {:debit-account [:kontor.account/path "Assets:AR"]
+                          :credit-account [:kontor.account/path "Income:Sales"]
+                          :amount 1190M :commodity (eur)
+                          :effective-date #inst "2026-01-15"})
       ;; Register: cash received but not yet in the bank — Dr Outstanding, Cr AR.
       (book/receive-payment! *conn* {:debit-account [:kontor.account/path "Assets:Outstanding-Receipts"]
                                      :credit-account [:kontor.account/path "Assets:AR"]
@@ -263,8 +274,10 @@
 ;; 4. PENDING(c) — batch payment run grouping N bills into one bank line
 ;; ═══════════════════════════════════════════════════════════════════════════
 
-(deftest ^:kaocha/pending batch-payment-run-groups-bills-into-one-bank-line
-  ;; PENDING(NEW): Odoo's account.batch_payment groups N supplier payments
+(deftest batch-payment-run-groups-bills-into-one-bank-line
+  ;; FIXED (note 198 Tier 2): kontor ships :kontor.batch-payment (:payments,
+  ;; :state :draft → :sent → :reconciled, :total-amount, :direction) — the run
+  ;; that leaves the bank as ONE aggregate line. Original finding: Odoo's account.batch_payment groups N supplier payments
   ;; into a single object that reconciles against ONE bank statement line
   ;; (the aggregate debit that leaves the account). kontor has neither a
   ;; :kontor.batch-payment/* entity nor a batch builder; the closest
