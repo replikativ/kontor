@@ -480,3 +480,178 @@
       ;; single-commodity open items stay unaffected — covered by
       ;; open-receivables-finds-three-invoices above
       )))
+
+;; ============================================================================
+;; note 198 audit — the AR subledger must tie to the GL control account
+;; ============================================================================
+
+(deftest ar-tie-out-holds-across-a-settlement
+  (testing "Σ open items == the GL receivable balance, both before and
+            after a bank line settles one of the invoices"
+    (let [conn (bootstrap)
+          _ (seed-three-invoices conn)
+          db0 (d/db conn)
+          eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
+          bank-acct (ace db0 "1200")
+          bank-jnl (:db/id (d/entity db0 [:kontor.journal/code "BANK"]))
+          tie #(recon/ar-tie-out conn {:ar-codes #{"1400"} :commodity eur})]
+
+      (testing "three unsettled invoices: 1190.00 + 2380.00 + 595.00 = 4165.00"
+        ;; nets: 1000 / 2000 / 500; 19% USt: 190.00 / 380.00 / 95.00
+        ;; grosses:            1190.00 / 2380.00 / 595.00  → Σ 4165.00
+        (let [t (tie)]
+          (is (= 4165.00M (:subledger t)))
+          (is (= 4165.00M (:gl t)))
+          (is (= 0M (:difference t)))
+          (is (:ok? t))))
+
+      (recon/ingest-statement! conn (bank-candidates)
+                               {:source-account-eid bank-acct :commodity-eid eur})
+      (let [db (d/db conn)
+            [acme-bl] (d/q '[:find [?bl]
+                             :where [?bl :kontor.bank-line/counterparty "ACME GmbH"]]
+                           db)
+            best (first (recon/suggest-match db acme-bl {}))]
+        (recon/commit-match! conn acme-bl (:match best) bank-jnl {}))
+
+      (testing "after settling ACME both sides drop by 1190.00, to 2975.00"
+        ;; GL:        4165.00 − 1190.00 = 2975.00
+        ;; subledger: 2380.00 + 595.00  = 2975.00 (INV-001 nets to 0 via
+        ;;            :kontor.transaction/settles and drops out)
+        (let [t (tie)]
+          (is (= 2975.00M (:subledger t)))
+          (is (= 2975.00M (:gl t)))
+          (is (= 0M (:difference t)))
+          (is (:ok? t) (str "AR tie-out broken: " t)))))))
+
+(deftest ar-tie-out-reports-an-unlinked-relief-as-a-difference
+  (testing "a posting that relieves AR WITHOUT :kontor.transaction/settles
+            drives the GL down while the subledger keeps the invoice open —
+            the tie-out is the detector that reports it"
+    (let [conn (bootstrap)
+          _ (seed-three-invoices conn)
+          db0 (d/db conn)
+          eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
+          bank-jnl (:db/id (d/entity db0 [:kontor.journal/code "BANK"]))
+          leg (fn [acct amt] {:kontor.posting/account acct
+                              :kontor.posting/amount amt
+                              :kontor.posting/commodity eur
+                              :kontor.posting/posted-at feb-1})]
+      ;; Dr Bank 1190 / Cr AR 1190, but NO :settles ref — the shape of both
+      ;; note 198 audit HIGH-3 (bad-debt write-off) and HIGH-4 (settlement).
+      (v/transact-with-validation
+       conn (posting/build-transaction
+             {:transaction {:kontor.transaction/external-id "PAY-UNLINKED"
+                            :kontor.transaction/journal bank-jnl
+                            :kontor.transaction/effective-date feb-1
+                            :kontor.transaction/state :posted
+                            :kontor.transaction/posted-at feb-1}
+              :postings [(leg (ace db0 "1200") 1190.00M)
+                         (leg (ace db0 "1400") -1190.00M)]}))
+      (let [t (recon/ar-tie-out conn {:ar-codes #{"1400"} :commodity eur})]
+        ;; subledger still 4165.00 (nothing was linked); GL 4165.00 − 1190.00
+        (is (= 4165.00M (:subledger t)))
+        (is (= 2975.00M (:gl t)))
+        (is (= 1190.00M (:difference t)))
+        (is (not (:ok? t)) "the drift is surfaced, not hidden")))))
+
+;; ============================================================================
+;; note 198 audit H2 — the settle contra account must not be guessed
+;; ============================================================================
+
+(deftest settle-contra-account-refuses-to-guess-across-two-ar-accounts
+  (testing "a :settle match spanning two distinct AR accounts throws instead
+            of picking one out of an unordered d/q result and posting it to a
+            sealed payment leg"
+    (let [conn (bootstrap)
+          _ (seed-three-invoices conn)
+          _ (d/transact conn [{:kontor.account/path "Assets:Receivable:Other"
+                               :kontor.account/code "1410" :kontor.account/type :asset
+                               :kontor.account/active true}])
+          db0 (d/db conn)
+          eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
+          bank-acct (ace db0 "1200")
+          inv-jnl (:db/id (d/entity db0 [:kontor.journal/code "INV"]))
+          bank-jnl (:db/id (d/entity db0 [:kontor.journal/code "BANK"]))
+          leg (fn [acct amt] {:kontor.posting/account acct
+                              :kontor.posting/amount amt
+                              :kontor.posting/commodity eur
+                              :kontor.posting/posted-at jan-15})
+          ;; A fourth invoice whose receivable sits on 1410, not 1400.
+          _ (v/transact-with-validation
+             conn (posting/build-transaction
+                   {:transaction {:kontor.transaction/external-id "INV-2026-004"
+                                  :kontor.transaction/journal inv-jnl
+                                  :kontor.transaction/effective-date jan-15
+                                  :kontor.transaction/state :posted
+                                  :kontor.transaction/posted-at jan-15}
+                    :postings [(leg (ace db0 "1410") 100.00M)
+                               (leg (ace db0 "4400") -100.00M)]}))
+          _ (recon/ingest-statement! conn (bank-candidates)
+                                     {:source-account-eid bank-acct :commodity-eid eur})
+          db (d/db conn)
+          tx-of (fn [ext] (d/q '[:find ?t . :in $ ?x
+                                 :where [?t :kontor.transaction/external-id ?x]]
+                               db ext))
+          [acme-bl] (d/q '[:find [?bl]
+                           :where [?bl :kontor.bank-line/counterparty "ACME GmbH"]]
+                         db)
+          ;; The Sammelüberweisung shape: one bank line settling several
+          ;; invoices, here straddling two receivable accounts.
+          match {:kind :settle
+                 :transactions [(tx-of "INV-2026-001") (tx-of "INV-2026-004")]}
+          opts {:ar-codes #{"1400" "1410"}}
+          e (try (recon/commit-match-tx-data db acme-bl match bank-jnl opts)
+                 nil
+                 (catch clojure.lang.ExceptionInfo ex ex))]
+      (is (some? e) "the ambiguous contra account is refused, not guessed")
+      (is (= :reconciliation/ambiguous-contra-account (:type (ex-data e))))
+      (is (= #{"1400" "1410"} (set (:candidate-codes (ex-data e))))
+          "the error names both candidates so the caller can choose")
+
+      (testing "and the caller's explicit :contra-account resolves it"
+        (let [tx-data (recon/commit-match-tx-data
+                       db acme-bl match bank-jnl
+                       (assoc opts :contra-account (ace db "1400")))]
+          (is (seq tx-data))))
+
+      (testing "zero candidates is refused too, rather than yielding nil"
+        (let [e2 (try (recon/commit-match-tx-data
+                       db acme-bl match bank-jnl {:ar-codes #{"9999"}})
+                      nil
+                      (catch clojure.lang.ExceptionInfo ex ex))]
+          (is (= :reconciliation/no-contra-account (:type (ex-data e2)))))))))
+
+;; ============================================================================
+;; note 198 audit M8 — suggestion ordering must be a TOTAL order
+;; ============================================================================
+
+(deftest suggestions-are-totally-ordered-when-confidences-tie
+  (testing "two identical-amount invoices for the same partner both score
+            0.9; the tie is broken by transaction eid rather than by
+            whatever order d/q happened to return"
+    (let [conn (bootstrap)
+          _ (seed-three-invoices conn)
+          ;; A second ACME invoice at the same 1190.00 gross as INV-2026-001.
+          _ (post-invoice! conn "INV-2026-005" "ACME" 1000)
+          db0 (d/db conn)
+          eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
+          bank-acct (ace db0 "1200")
+          _ (recon/ingest-statement! conn (bank-candidates)
+                                     {:source-account-eid bank-acct :commodity-eid eur})
+          db (d/db conn)
+          [acme-bl] (d/q '[:find [?bl]
+                           :where [?bl :kontor.bank-line/counterparty "ACME GmbH"]]
+                         db)
+          suggestions (recon/suggest-match db acme-bl {})
+          tied (->> suggestions
+                    (filter #(= :exact-amount (:strategy %)))
+                    (mapv #(-> % :match :transactions first)))]
+      (is (= 2 (count tied)) "both 1190.00 ACME invoices are exact-amount candidates")
+      (is (= (vec (sort tied)) tied)
+          "tied candidates come back in ascending transaction-eid order")
+      (is (= suggestions (recon/suggest-match db acme-bl {}))
+          "and the whole ranking is reproducible")
+      (testing "confidence still dominates the tie-break"
+        (is (= 0.95 (:confidence (first suggestions)))
+            ":reference-id (0.95) still outranks the tied 0.9 pair")))))

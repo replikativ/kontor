@@ -309,3 +309,33 @@
     (let [d (disp/pull-disposal (d/db conn) "jp-residence")]
       (is (true? (:kontor.disposal/residence? d)))
       (is (= :jp-residence-§35 (:kontor.disposal/asset-class d))))))
+
+;; ============================================================================
+;; note 198 audit (H8) — same-day disposals must come back in a TOTAL order
+;; ============================================================================
+
+(deftest same-day-disposals-are-totally-ordered
+  ;; `:kontor.disposal/disposed-on` is day-granular, so several sales on one
+  ;; day is ordinary — and CGT providers fold this list order-dependently
+  ;; against stateful caps and pools (AU absorbs the loss pool and elects
+  ;; Subdiv 152 per disposal in sequence; IN consumes the ₹50L §54EC cap
+  ;; first-come across lanes taxed at different rates). Sorting on the date
+  ;; alone left the tie to `d/q` set iteration, so the tax owed on an
+  ;; unchanged ledger was not reproducible.
+  (let [conn (fresh)]
+    (doseq [xid ["D-1" "D-2" "D-3" "D-4" "D-5"]]
+      (record-basic conn xid 1000M 400M {:disposed-on #inst "2025-06-15"}))
+    (record-basic conn "D-EARLY" 500M 100M {:disposed-on #inst "2025-03-01"})
+    (let [db     (d/db conn)
+          period {:from #inst "2025-01-01" :to #inst "2026-01-01"}
+          run    #(mapv :db/id (disp/disposals-in-period db holdco %))
+          eids   (run period)]
+      (testing "the earlier disposal still sorts first"
+        (is (= 6 (count eids)))
+        (is (= "D-EARLY" (:kontor.disposal/external-id
+                          (d/pull db [:kontor.disposal/external-id] (first eids))))))
+      (testing "the five same-day disposals come back in eid order, every time"
+        (is (= (rest eids) (sort (rest eids))))
+        (is (= eids (run period) (run period))))
+      (testing "the all-entities arity is ordered the same way"
+        (is (= eids (mapv :db/id (disp/disposals-in-period db period))))))))

@@ -68,13 +68,14 @@
    `kontor.l10n-us.reports/1099-nec` namespace will handle it; the
    close itself does not."
   (:require [datahike.api :as d]
+            [kontor.account :as kacct]
             [kontor.reporting.closing :as closing]))
 
 (def ^:const default-retained-code "3100")
 (def ^:const default-journal-code "CLOSE")
 
 (defn- account-by-code [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
+  (kacct/resolve-code db code {:context "US year-end closing"}))
 
 (defn- require-retained [db code]
   (or (account-by-code db code)

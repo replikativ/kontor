@@ -285,7 +285,7 @@
               [(not= ?st :voided)]]
             db subject)
        (map #(pull-disposal db %))
-       (sort-by :kontor.disposal/disposed-on)
+       (sort-by (juxt :kontor.disposal/disposed-on :db/id))
        vec))
 
 (defn disposals-in-period
@@ -297,7 +297,13 @@
    - `[db entity period]` — only disposals owned by `entity` (an eid
      or `[:kontor.entity/code <code>]` lookup ref). The entity-scoped form
      is what CGT providers call — per-entity is the natural CGT
-     unit of analysis."
+     unit of analysis.
+
+   Ordered chronologically, then by entity-id. note 198 audit (H8): the
+   date alone is not a total order — `:disposed-on` is day-granular and
+   two sales on one day are ordinary — and CGT providers consume this
+   list order-dependently against caps and loss pools, so a tie decided
+   the tax owed."
   ([db period]
    (->> (d/q '[:find [?d ...]
                :in $ ?from ?to
@@ -309,7 +315,7 @@
                [(not= ?st :voided)]]
              db (:from period) (:to period))
         (map #(pull-disposal db %))
-        (sort-by :kontor.disposal/disposed-on)
+        (sort-by (juxt :kontor.disposal/disposed-on :db/id))
         vec))
   ([db entity {:keys [from to]}]
    (->> (d/q '[:find [?d ...]
@@ -323,7 +329,7 @@
                [(not= ?st :voided)]]
              db entity from to)
         (map #(pull-disposal db %))
-        (sort-by :kontor.disposal/disposed-on)
+        (sort-by (juxt :kontor.disposal/disposed-on :db/id))
         vec)))
 
 ;; ============================================================================

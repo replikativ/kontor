@@ -66,7 +66,7 @@
      base. Documented as a roadmap item.
    - DIOT (Declaración Informativa de Operaciones con Terceros) —
      vendor reporting; lives in `kontor.l10n-mx`, not here."
-  (:require [datahike.api :as d]))
+  (:require [kontor.account :as kacct]))
 
 ;; ============================================================================
 ;; MxEngineProvider protocol — MX-private engine-CSV ingestion seam
@@ -175,7 +175,5 @@
    `:kontor.account/code` we store on l10n-mx accounts — '601.01', '601.02',
    etc). Returns nil if not found."
   [db codigo-agrupador]
-  (d/q '[:find ?e .
-         :in $ ?code
-         :where [?e :kontor.account/code ?code]]
-       db codigo-agrupador))
+  (kacct/resolve-code db codigo-agrupador
+                      {:context "MX payroll (Código Agrupador)"}))

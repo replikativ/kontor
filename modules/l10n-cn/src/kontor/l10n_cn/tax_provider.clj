@@ -45,7 +45,7 @@
    VAT payable* at filing time — `kontor.l10n-cn.vat`) are filing-side,
    not per-invoice-line. This provider migrates only the per-line
    output-VAT posting; the surcharges stay where they are."
-  (:require [datahike.api :as d]
+  (:require [kontor.account :as kacct]
             [kontor.l10n-cn.tax :as tax]
             [kontor.tax.tax-posting-builder :as tpb]
             [kontor.tax.tax-rate-provider :as trp]))
@@ -105,7 +105,7 @@
 ;; ============================================================================
 
 (defn- account-by-code [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
+  (kacct/resolve-code db code {:context "CN tax posting builder"}))
 
 (defrecord CnTaxPostingBuilder [opts]
   tpb/TaxPostingBuilder

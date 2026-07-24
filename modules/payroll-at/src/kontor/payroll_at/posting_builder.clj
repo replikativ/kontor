@@ -30,6 +30,7 @@
    the LSt amounts (regular vs Sonderzahlung) — the adapter
    aggregates them on a single 3500 credit."
   (:require [datahike.api :as d]
+            [kontor.account :as kacct]
             [kontor.bitemporal :as kbt]
             [kontor.payroll-at.wage-types :as wt]
             [kontor.posting :as posting]
@@ -60,7 +61,7 @@
   "Resolve an account code to an eid via [:kontor.account/code <code>]. Returns
    nil if not present in db."
   [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
+  (kacct/resolve-code db code {:context "AT payroll posting builder"}))
 
 (defn- resolve-acct
   [db code]

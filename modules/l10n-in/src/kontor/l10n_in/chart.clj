@@ -58,7 +58,8 @@
      - GST 2.0 slab structure (56th GST Council, effective 2025-09-22)"
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [datahike.api :as d]))
+            [datahike.api :as d]
+            [kontor.account :as kacct]))
 
 ;; ============================================================================
 ;; Resource loading
@@ -186,4 +187,4 @@
 (defn account-by-code
   "Resolve `code` to an account entity-id against `db`, or nil."
   [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
+  (kacct/resolve-code db code {:context "IN chart"}))

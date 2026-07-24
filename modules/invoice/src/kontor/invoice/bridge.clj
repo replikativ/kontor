@@ -337,10 +337,19 @@
                                  [?r :kontor.receipt/status :accepted]
                                  [?r :kontor.receipt/received-at ?when]]
                                db order-item-eid)
+                          ;; note 198 audit (M3): FIFO across receipts sorted
+                          ;; on `:received-at` alone. Two goods receipts booked
+                          ;; in the same posting session share a timestamp
+                          ;; routinely, and the tie decided which receipt the
+                          ;; billed quantity was allocated against — so the
+                          ;; 3-way-match audit trail (`:receipt-invoice-billing`)
+                          ;; pointed at a different receipt on a rebuild, and
+                          ;; the remaining-to-bill quantities followed it.
                           (sort-by (fn [[r _]]
-                                     (or (:kontor.receipt/received-at
-                                          (d/pull db [:kontor.receipt/received-at] r))
-                                         (java.util.Date. 0)))))
+                                     [(or (:kontor.receipt/received-at
+                                           (d/pull db [:kontor.receipt/received-at] r))
+                                          (java.util.Date. 0))
+                                      r])))
             allocations (loop [remaining bill-qty
                                receipts receipts
                                out []]
@@ -439,11 +448,24 @@
                           :where [?i :kontor.sales.order-item/order ?o]]
                         db order-eid)
                    (map #(d/pull db '[*] %))
-                   (sort-by :kontor.sales.order-item/seq-id))
+                   ;; note 198 audit (M2): `seq-id` is not unique, so two
+                   ;; items sharing one tied here and swapped invoice line
+                   ;; numbers between builds. Eid settles it.
+                   (sort-by (juxt :kontor.sales.order-item/seq-id :db/id)))
+        ;; note 198 audit (M2): the adjustments came straight off the
+        ;; unordered `d/q` set and were then `map-indexed` into
+        ;; `:kontor.invoice-line/sequence` values and "adj-N" tempids. Line
+        ;; numbering on a legal e-invoice therefore differed run to run for
+        ;; the same order — the shipping charge on line 4 in one build and
+        ;; line 5 in the next, with a credit note referencing a line number
+        ;; that no longer means the same thing. `:kontor.order-adjustment`
+        ;; carries no sequence attr, so eid (creation order) is the ordering
+        ;; key. The `items` sort two lines above is the in-file precedent.
         adjustments (->> (d/q '[:find [?a ...]
                                 :in $ ?o
                                 :where [?a :kontor.order-adjustment/order ?o]]
                               db order-eid)
+                         sort
                          (map #(d/pull db '[*] %)))
         invoice-tempid "inv-1"
         ;; ADR-042: default :kontor.invoice/type from :kontor.order/type (was hardcoded :sales).

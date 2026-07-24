@@ -37,9 +37,13 @@
    ## Idempotency (cross-DB safe)
 
    Each entry carries a deterministic `:external-id`
-   (`kontor-meter|<period>|<project>|<provider>|<class>`); `summarize!`
-   skips any that already exist, so re-running a period — or retrying
-   after a crash between the meter read and the GL write — is a no-op.
+   (`kontor-meter|<period>|<project>|<provider>|<class>|<settlement>|<commodity>`);
+   `summarize!` skips any that already exist, so re-running a period — or
+   retrying after a crash between the meter read and the GL write — is a
+   no-op. The id must name EVERY grouping dimension: an id narrower than
+   the group key makes two distinct entries collide, and a collision
+   reads as `:skipped`, indistinguishable from a legitimate re-run
+   (note 198 audit HIGH-6).
 
    ## Settlement, closing the loop
 
@@ -119,6 +123,28 @@
    :settlement settlement
    :commodity  (:commodity money)})
 
+(defn- seg
+  "Render one grouping dimension into the `:external-id`. Keywords lose
+   their leading colon so `:USD` and `\"USD\"` read alike; everything
+   else stringifies. `nil` becomes a literal so an absent dimension is
+   still a distinct id rather than an empty run of separators."
+  [v]
+  (cond
+    (nil? v)     "nil"
+    (keyword? v) (name v)
+    :else        (str v)))
+
+(defn external-id
+  "The deterministic idempotency key for one accrual entry. MUST name every
+   dimension of [[group-key]] — see the namespace docstring."
+  [period-key {:keys [project provider class settlement commodity]}]
+  (str "kontor-meter|" period-key
+       "|" (seg project)
+       "|" (seg (or provider :unknown))
+       "|" (seg class)
+       "|" (seg settlement)
+       "|" (seg commodity)))
+
 (defn accrual-entries
   "Pure: subledger `rows` + config → a seq of `kontor.book/entry!` opts maps,
    one balanced accrual per (project, class, settlement, provider, commodity).
@@ -127,13 +153,12 @@
          :or   {classify (constantly :cogs)}}]
   (let [accounts  (merge default-accounts accounts)
         posted-at (or posted-at effective-date)]        ; accruals are born sealed
-    (for [[{:keys [project provider class settlement commodity]} rs]
+    (for [[{:keys [project provider class settlement commodity] :as gk} rs]
           (group-by #(group-key classify %) rows)]
       (let [amt  (reduce m/add (map :money rs))         ; same commodity per group
             exp  (expense-account accounts class)
             ctr  (counter-account accounts settlement provider)
-            ext  (str "kontor-meter|" period-key "|" project
-                      "|" (name (or provider :unknown)) "|" (name class))
+            ext  (external-id period-key gk)
             dims {:project project :provider provider}]
         {:journal        journal
          :effective-date effective-date
@@ -161,6 +186,25 @@
      {:posted [ext-id …] :skipped [ext-id …]}."
   [conn rows config]
   (let [entries (accrual-entries rows config)
+        ;; note 198 audit HIGH-6. A collision INSIDE one batch is silently
+        ;; absorbed by the `seen` check below — the second entry reads
+        ;; `:skipped`, which is indistinguishable from a legitimate re-run, so
+        ;; a whole accrual (and its counter account) never reaches the GL. The
+        ;; id now names every grouping dimension, which makes this
+        ;; unreachable; the guard keeps it that way, loudly, if either side
+        ;; is ever changed alone.
+        dupes   (->> entries
+                     (map :external-id)
+                     frequencies
+                     (keep (fn [[k n]] (when (> n 1) k)))
+                     sort)
+        _ (when (seq dupes)
+            (throw (ex-info (str "kontor.metering/summarize!: " (count dupes)
+                                 " :external-id collision(s) within one batch — the id "
+                                 "does not name every grouping dimension, so an accrual "
+                                 "would be silently dropped as :skipped")
+                            {:type :metering/external-id-collision
+                             :external-ids (vec dupes)})))
         seen    (existing-external-ids @conn)]
     (reduce (fn [acc opts]
               (let [ext (:external-id opts)]
@@ -201,10 +245,23 @@
    :ok? bool}. `:expected` is the magnitude of the accrued liability (the
    credit balance's sign is flipped for readability). Compared on amounts
    and re-tagged with `actual`'s commodity, so it is agnostic to whether
-   the stored balance carries a keyword or an eid commodity."
+   the stored balance carries a keyword or an eid commodity.
+
+   The balance is selected BY COMMODITY, not by position. `account-balance`
+   returns `{commodity Money}`, and a provider accrued in two currencies puts
+   two entries in it; `(first (vals …))` picked an arbitrary one, so the
+   detector could report `:ok?` against a currency nobody asked about — the
+   multi-commodity half of what note 198 audit HIGH-6 let through. An absent
+   commodity reconciles against zero."
   [conn config provider actual & [opts]]
-  (let [bals         (accrued-balance conn config provider opts)
-        raw-amt      (or (some-> (first (vals bals)) :amount) BigDecimal/ZERO)
+  (let [db           @conn
+        bals         (accrued-balance conn config provider opts)
+        want         (balance/resolve-commodity-symbol db (:commodity actual))
+        raw-amt      (or (some (fn [[c m]]
+                                 (when (= want (balance/resolve-commodity-symbol db c))
+                                   (:amount m)))
+                               bals)
+                         BigDecimal/ZERO)
         expected-amt (.abs ^BigDecimal raw-amt)
         delta-amt    (.subtract ^BigDecimal (:amount actual) expected-amt)]
     {:expected (m/money expected-amt (:commodity actual))

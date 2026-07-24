@@ -447,6 +447,23 @@
   (let [invoice-eid (or (resolve-invoice db invoice)
                         (throw (ex-info "Invoice not found" {:spec invoice})))
         inv          (pull-invoice-min db invoice-eid)
+        ;; note 198 audit HIGH-4. The settlement must LINK to the invoice's GL
+        ;; transaction, not merely offset it by amount. Kernel aging
+        ;; (`kontor.banking.reconciliation/aging-rows` +
+        ;; `open-receivables-by-tx`) computes the open amount by walking
+        ;; `[?settler :kontor.transaction/settles ?settled]` and subtracting
+        ;; the settler's AR-side legs. Without the ref a fully-settled invoice
+        ;; still ages at its full gross while the GL receivable is already
+        ;; zero — the open-item subledger and the control account disagree,
+        ;; and the direction of the error flips depending on which of the two
+        ;; write paths was used.
+        ;;
+        ;; NB the opts key `:settles` is a BigDecimal AMOUNT, unrelated to the
+        ;; `:kontor.transaction/settles` REF built here. That collision is how
+        ;; the missing link went unnoticed.
+        invoice-tx   (:db/id (:kontor.invoice/transaction
+                              (d/pull db [{:kontor.invoice/transaction [:db/id]}]
+                                      invoice-eid)))
         inv-currency (:kontor.invoice/currency inv)
         inv-comm     (commodity-eid-by-symbol db inv-currency)
         pay-symbol   (commodity-symbol db commodity)
@@ -526,14 +543,16 @@
             (seq wo-leg) (into wo-leg)))
         gl-tx (posting/build-transaction
                {:tx-tempid tx-tempid
-                :transaction {:kontor.transaction/journal journal
-                              :kontor.transaction/effective-date settle-date
-                              :kontor.transaction/state :posted
-                              :kontor.transaction/posted-at settle-date
-                              :kontor.transaction/narration
-                              (or narration (str "Settlement of invoice "
-                                                 (or (:kontor.invoice/external-id inv)
-                                                     invoice-eid)))}
+                :transaction (cond-> {:kontor.transaction/journal journal
+                                      :kontor.transaction/effective-date settle-date
+                                      :kontor.transaction/state :posted
+                                      :kontor.transaction/posted-at settle-date
+                                      :kontor.transaction/narration
+                                      (or narration (str "Settlement of invoice "
+                                                         (or (:kontor.invoice/external-id inv)
+                                                             invoice-eid)))}
+                               invoice-tx
+                               (assoc :kontor.transaction/settles [invoice-tx]))
                 :postings (mapv #(assoc % :kontor.posting/posted-at settle-date) postings)})
         ;; The tracking row is recorded in the INVOICE currency, so
         ;; open-amount-of-invoice nets correctly and reverse-application!
@@ -739,7 +758,19 @@
          ;; which converts and books the realized FX.
          (filter #(or (nil? currency) (nil? (:currency %))
                       (= currency (:currency %))))
-         (sort-by :due-date)
+         ;; note 198 audit H1. `:due-date` ALONE is not a total order, and the
+         ;; ties are the common case rather than an edge: the date is read
+         ;; from `:kontor.transaction/due-date`, which only `payment-term` and
+         ;; `document.invoice` ever write — every invoice booked through a
+         ;; `kontor.book` verb has none and falls back to the epoch, so they
+         ;; all tie with each other. `allocate-fifo!` then walks this list
+         ;; allocating a remainder sequentially, so a partial payment landed
+         ;; on an ARBITRARY one of the tied invoices: one reads :paid, another
+         ;; stays :sent, and aging and dunning point at the wrong document —
+         ;; differently between runs. Same bug class as the DATEV contra pick.
+         ;; The eid tie-break makes it total; it is stable within a DB, though
+         ;; a re-import that renumbers eids may reorder same-due-date invoices.
+         (sort-by (juxt :due-date :invoice-eid))
          vec)))
 
 (defn allocate-fifo!

@@ -476,3 +476,122 @@
               _ (assert-balanced! tx-base posting-entities)]
           (kbt/with-vt (into (into [tx-base] posting-entities) consumption-entities)
             effective-date kbt/forever))))))
+
+;; ============================================================================
+;; Value-only moves — ADR-030 sibling of `plan-stock-move` (note 198 R3-INV-5/6/7)
+;; ============================================================================
+
+(defn plan-adjustment-move
+  "Plan a VALUE-ONLY stock move: change what the on-hand stock is WORTH
+   without moving any quantity. Pure (db-read only; no transact).
+
+   `plan-stock-move` covers quantity events — a receipt creates a layer, an
+   issue consumes one. But three routine accounting events change value with
+   no physical movement at all: a freight/duty voucher arriving after the
+   goods (landed cost), an IAS 2 write-down to net realisable value, and a
+   vendor bill that disagrees with the receipt price (GR-IR true-up). The
+   `:landed-cost-clearing` / `:write-down-expense` / `:revaluation-*` roles
+   were reserved for exactly this and left unimplemented; this is the builder
+   that consumes them.
+
+   Every such event has the same shape — value lands on (or leaves) specific
+   valuation LAYERS, and something on the other side of the GL absorbs it:
+
+     :allocations   [{:layer eid :amount bd :note str?} ...]
+                    signed; positive capitalises value ONTO the layer. Each
+                    produces one `:layer-adjustment` and contributes to the
+                    single `:inventory` GL leg.
+     :expense-legs  [{:role kw :amount bd} ...]   optional
+                    value that does NOT land on a layer because the goods are
+                    already gone — the consumed share of a GR-IR variance
+                    belongs in COGS, not in the stock asset.
+     :contra-role   the role absorbing the total on the other side
+                    (:landed-cost-clearing / :write-down-expense /
+                    :gr-ir-clearing / :revaluation-gain / …).
+
+   Mandatory: :journal :effective-date :commodity :account-fn :contra-role
+              and at least one of :allocations / :expense-legs.
+   Optional:  :reason (`:kontor.layer-adjustment/reason`, default :correction)
+              :narration :ledger :note :transaction-state (default :posted).
+
+   The contra leg is sized as the negation of everything else, so the result
+   balances by construction and is checked before it is returned."
+  [db {:keys [journal effective-date commodity account-fn contra-role
+              allocations expense-legs reason narration ledger note
+              transaction-state]
+       :or   {transaction-state :posted reason :correction}
+       :as   move-spec}]
+  (when-not account-fn
+    (throw (ex-info "plan-adjustment-move: :account-fn is required" {:move move-spec})))
+  (when-not contra-role
+    (throw (ex-info "plan-adjustment-move: :contra-role is required" {:move move-spec})))
+  (when-not (contains? stock-move-roles contra-role)
+    (throw (ex-info "plan-adjustment-move: unknown :contra-role"
+                    {:contra-role contra-role :known stock-move-roles})))
+  (when (empty? (concat allocations expense-legs))
+    (throw (ex-info "plan-adjustment-move: nothing to adjust"
+                    {:move move-spec})))
+  (doseq [{:keys [layer amount]} allocations]
+    (when-not layer  (throw (ex-info "plan-adjustment-move: allocation without :layer" {:move move-spec})))
+    (when (nil? amount) (throw (ex-info "plan-adjustment-move: allocation without :amount" {:move move-spec})))
+    ;; A layer that does not exist would silently swallow the value: the GL
+    ;; leg would still post, so the books would balance while the subledger
+    ;; lost the adjustment.
+    (when-not (:kontor.valuation-layer/qty-original
+               (d/pull db [:kontor.valuation-layer/qty-original] layer))
+      (throw (ex-info "plan-adjustment-move: :layer is not a valuation layer"
+                      {:layer layer}))))
+  (let [tx-tempid -1
+        tx-base   (cond-> {:db/id                             tx-tempid
+                           :kontor.transaction/journal        journal
+                           :kontor.transaction/effective-date effective-date
+                           :kontor.transaction/state          transaction-state}
+                    narration (assoc :kontor.transaction/narration narration))
+        sum       (fn [xs] (reduce (fn [^java.math.BigDecimal a x]
+                                     (.add a ^java.math.BigDecimal (:amount x)))
+                                   0M xs))
+        inv-total (money-amount (sum allocations))
+        exp-total (money-amount (sum expense-legs))
+        contra    (.negate (.add inv-total exp-total))
+        postings
+        (cond-> []
+          (not (zero? (.signum inv-total)))
+          (conj (ledger-assoc {:kontor.posting/account     (account-fn move-spec :inventory)
+                               :kontor.posting/amount      inv-total
+                               :kontor.posting/commodity   commodity
+                               :kontor.posting/transaction tx-tempid}
+                              ledger))
+          :always
+          (into (for [{:keys [role amount]} expense-legs
+                      :when (not (zero? (.signum ^java.math.BigDecimal amount)))]
+                  (ledger-assoc {:kontor.posting/account     (account-fn move-spec role)
+                                 :kontor.posting/amount      (money-amount amount)
+                                 :kontor.posting/commodity   commodity
+                                 :kontor.posting/transaction tx-tempid}
+                                ledger)))
+          (not (zero? (.signum ^java.math.BigDecimal contra)))
+          (conj (ledger-assoc {:kontor.posting/account     (account-fn move-spec contra-role)
+                               :kontor.posting/amount      contra
+                               :kontor.posting/commodity   commodity
+                               :kontor.posting/transaction tx-tempid}
+                              ledger)))
+        posting-entities
+        (mapv (fn [i p]
+                (cond-> (assoc p :db/id (- -300 i))
+                  (nil? (:kontor.posting/display-type p))
+                  (assoc :kontor.posting/display-type :product)))
+              (range) postings)
+        adjustment-entities
+        (mapv (fn [i {:keys [layer amount] alloc-note :note}]
+                (cond-> {:db/id                                     (- -400 i)
+                         :kontor.layer-adjustment/layer             layer
+                         :kontor.layer-adjustment/amount            (money-amount amount)
+                         :kontor.layer-adjustment/reason            reason
+                         :kontor.layer-adjustment/origin-transaction tx-tempid
+                         :kontor.layer-adjustment/applied-at        effective-date}
+                  (or alloc-note note)
+                  (assoc :kontor.layer-adjustment/note (or alloc-note note))))
+              (range) allocations)
+        _ (assert-balanced! tx-base posting-entities)]
+    (kbt/with-vt (into (into [tx-base] posting-entities) adjustment-entities)
+      effective-date kbt/forever)))

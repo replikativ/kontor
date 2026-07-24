@@ -86,7 +86,7 @@
     (testing ":kontor.audit/create-uid is stamped to the recording actor"
       (is (= (p (d/db conn) "U-cfo")
              (:db/id (:kontor.audit/create-uid (d/pull (d/db conn) [:kontor.audit/create-uid]
-                                          (lease/by-code (d/db conn) "LSE-1")))))))
+                                                       (lease/by-code (d/db conn) "LSE-1")))))))
     (testing "a status-history row records nil → :draft"
       (is (= 1 (count (d/q '[:find [?h ...]
                              :in $ ?e

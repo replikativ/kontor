@@ -166,7 +166,15 @@
   "The contact-mech entity-id serving `purpose-type` for `partner`
    at `:as-of`. If multiple contact-mechs serve the same purpose
    simultaneously (e.g. two billing addresses during a transition),
-   returns the one with the latest `from-date`. Returns nil if none."
+   returns the one with the latest `from-date`, and on an equal
+   `from-date` the most recently created row. Returns nil if none.
+
+   note 198 audit (H6): the tiebreak matters because `from-date` collides
+   routinely — a bulk partner import stamps one `now` across every contact
+   mechanism it writes. Sorting on `from-date` alone over an unordered `d/q`
+   set then left the winner to set iteration, so the billing address an
+   invoice was mailed to, or the invoice-email a dunning notice went to,
+   could differ between two reads of the same unchanged database."
   ([db partner purpose-type]
    (contact-mech-by-purpose db partner purpose-type nil))
   ([db partner purpose-type opts]
@@ -183,7 +191,7 @@
                    db pid purpose-type)]
      (->> rows
           (filter (fn [[_ from thru]] (active-as-of? from thru as-of)))
-          (sort-by (fn [[_ from _]] from) #(compare %2 %1))
+          (sort-by (fn [[cm from _]] [(- (inst-ms from)) (- cm)]))
           ffirst))))
 
 (defn primary-email
@@ -905,6 +913,42 @@
         _ (when-not reason
             (throw (ex-info "merge-partners! requires :reason"
                             {:type :kontor.partner-merge/missing-reason})))
+        ;; note 198 audit (M5): nothing stopped a SECOND merge of an
+        ;; already-superseded partner. `A→B` followed by `A→C` transacted
+        ;; cleanly and left A with two `:kontor.partner-merge` rows, so
+        ;; `resolve-canonical-partner`'s `:find ?c .` picked B or C at
+        ;; random — the same archived customer resolving to two different
+        ;; live partners on two different reads, and invoices/payments
+        ;; filed against whichever came out. Reject on the write path;
+        ;; the operator merges the chain head instead (`A→B`, then `B→C`).
+        already (d/q '[:find ?c .
+                       :in $ ?super
+                       :where
+                       [?m :kontor.partner-merge/superseded ?super]
+                       [?m :kontor.partner-merge/duplicate-of ?c]]
+                     db superseded-eid)
+        _ (when already
+            (throw (ex-info (str "Partner " superseded-eid " has already been merged into "
+                                 already " — a partner may be superseded only once. "
+                                 "Merge the canonical head of the chain instead "
+                                 "(see resolve-canonical-partner).")
+                            {:type :kontor.partner-merge/already-superseded
+                             :superseded superseded-eid
+                             :existing-canonical already
+                             :requested-canonical canonical-eid})))
+        ;; …and the mirror case: merging INTO a partner that is itself
+        ;; superseded would build a chain whose head is not canonical.
+        _ (when-let [head (d/q '[:find ?c .
+                                 :in $ ?super
+                                 :where
+                                 [?m :kontor.partner-merge/superseded ?super]
+                                 [?m :kontor.partner-merge/duplicate-of ?c]]
+                               db canonical-eid)]
+            (throw (ex-info (str "Canonical partner " canonical-eid " has itself been "
+                                 "merged into " head " — merge into the chain head.")
+                            {:type :kontor.partner-merge/canonical-superseded
+                             :canonical canonical-eid
+                             :canonical-head head})))
         merge-row (cond-> {:kontor.partner-merge/duplicate-of canonical-eid
                            :kontor.partner-merge/superseded superseded-eid
                            :kontor.partner-merge/merged-at (or merged-at (java.util.Date.))
@@ -964,7 +1008,21 @@
 
 (defn primary-disbursement-account
   "The :bank-account preferred-for-disbursement for partner at
-   `:as-of`. Returns the pulled :bank-account map, or nil."
+   `:as-of`. Returns the pulled :bank-account map, or nil.
+
+   Ordering: explicitly `:preferred?` first, then latest `from-date`,
+   then entity-id. Throws `:kontor.partner-bank-account/ambiguous-preferred`
+   when more than one active row is explicitly flagged preferred — two
+   flagged IBANs is a data error only the operator can settle.
+
+   note 198 audit (H4): this used to be `(or (first (filter preferred? active))
+   (first active))` over the raw `d/q` SET. `:kontor.partner-bank-account/identity`
+   is `[partner bank-account from-date]`, so N simultaneously-active accounts
+   are perfectly legal, and `:preferred?` is read through `get-else … false`
+   so in practice NOTHING is flagged and the fallback `(first active)` ran —
+   handing a payment run an arbitrary IBAN. Money went out to whichever of the
+   supplier's accounts the set-iteration happened to surface, and a rerun could
+   pick a different one."
   ([db partner] (primary-disbursement-account db partner nil))
   ([db partner opts]
    (let [as-of (now-or (:as-of opts))
@@ -981,9 +1039,20 @@
                      [(contains? #{:disbursement :both} ?purp)]]
                    db pid)
          active (filter (fn [[_ from thru _]] (active-as-of? from thru as-of)) rows)
-         preferred (or (first (filter #(true? (nth % 3)) active))
-                       (first active))]
-     (when-let [[ba-eid _ _ _] preferred]
+         flagged (filter #(true? (nth % 3)) active)
+         _ (when (> (count flagged) 1)
+             (throw (ex-info (str "Partner has " (count flagged) " bank accounts flagged "
+                                  ":kontor.partner-bank-account/preferred? for disbursement "
+                                  "as of " as-of " — exactly one may be preferred. "
+                                  "Close the stale row with a :thru-date or clear its flag.")
+                             {:type :kontor.partner-bank-account/ambiguous-preferred
+                              :partner pid
+                              :as-of as-of
+                              :bank-accounts (vec (sort (map first flagged)))})))
+         ordered (sort-by (fn [[ba from _ pref]]
+                            [(if (true? pref) 0 1) (- (inst-ms from)) ba])
+                          active)]
+     (when-let [[ba-eid _ _ _] (first ordered)]
        (d/pull db '[*] ba-eid)))))
 
 ;; ============================================================================
@@ -1059,8 +1128,15 @@
    or :kontor.country/code string). Returns the string or nil.
 
    When multiple tax-id-types apply in the same country (e.g. NL has
-   :kvk-nl + :rsin-nl + :btw-nl), pass `:tax-id-type` opt to
-   disambiguate. Otherwise returns the first match."
+   :kvk-nl + :rsin-nl + :btw-nl), pass the `:tax-id-type` opt to say which
+   one you mean. Without it, more than one surviving row throws
+   `:kontor.partner-tax-id/ambiguous`.
+
+   note 198 audit (H7): the old contract was \"returns the first match\" over
+   an unordered `d/q` set. NL routinely carries :kvk-nl + :rsin-nl + :btw-nl
+   on one partner at once, so the Chamber-of-Commerce number could print in
+   the VAT-number field of an invoice — a compliance defect on a legal
+   document, produced silently and not reproducibly."
   ([db partner country] (tax-id-for-country db partner country nil))
   ([db partner country opts]
    (let [as-of (now-or (:as-of opts))
@@ -1074,5 +1150,15 @@
          hits (tax-ids-of db partner {:as-of as-of :country country-eid})
          filtered (if tax-id-type
                     (filter #(= tax-id-type (:kontor.partner-tax-id/tax-id-type %)) hits)
-                    hits)]
-     (some-> filtered first :kontor.partner-tax-id/tax-id))))
+                    hits)
+         _ (when (and (nil? tax-id-type) (> (count filtered) 1))
+             (throw (ex-info (str "Partner holds " (count filtered) " tax-ids in this "
+                                  "country — pass :tax-id-type to say which one you "
+                                  "mean (e.g. :btw-nl for the VAT number).")
+                             {:type :kontor.partner-tax-id/ambiguous
+                              :partner (resolve-partner db partner)
+                              :country country-eid
+                              :tax-id-types (vec (sort-by str (map :kontor.partner-tax-id/tax-id-type
+                                                                   filtered)))})))]
+     (some-> (first (sort-by :db/id filtered))
+             :kontor.partner-tax-id/tax-id))))

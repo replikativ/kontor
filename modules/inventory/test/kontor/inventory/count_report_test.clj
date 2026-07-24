@@ -181,7 +181,23 @@
     (testing "the first run posts the variance; a re-run posts nothing (idempotent)"
       (is (= 1 (:count first-run)))
       (is (= 0 (:count second-run)))
-      (is (= 92M (inv/on-hand-qty (d/db conn) item)) "QOH not double-adjusted"))))
+      (is (= 92M (inv/on-hand-qty (d/db conn) item)) "QOH not double-adjusted"))
+    ;; QOH is a QUANTITY view — it cannot see a second GL relief, which is
+    ;; the half of a double-post that actually costs money. `valuation-tie-out`
+    ;; (used 90 lines below in this same file) compares the VALUE subledger
+    ;; against the GL inventory account and is the assertion this test always
+    ;; wanted (note 198 audit).
+    ;; Received 100 @ 10.00 = 1000.00; the −8 shrinkage relieves 8 × 10.00 =
+    ;; 80.00 under FIFO → 920.00 on both sides. A second posting of the same
+    ;; variance would drive the GL to 840.00 while the subledger stayed at
+    ;; 920.00, i.e. :difference 80.00.
+    (testing "and the VALUE subledger still ties to the GL inventory account"
+      (let [tie (report/valuation-tie-out conn {:book (book (d/db conn))
+                                                :inventory-account (acct (d/db conn) "1400")
+                                                :commodity (eur (d/db conn))})]
+        (is (= 0 (.compareTo 920.00M (:subledger tie))))
+        (is (= 0 (.compareTo 920.00M (:gl tie))))
+        (is (true? (:ok? tie)) (str "inventory tie-out broken: " tie))))))
 
 (deftest post-count-recount-supersedes-the-original
   (let [conn (bootstrap)

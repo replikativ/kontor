@@ -313,6 +313,52 @@
                           (:kontor.partial-reconcile/amount
                            (d/pull db [:kontor.partial-reconcile/amount] (first ps)))))))))))))
 
+(deftest open-lines-agree-with-account-balance-on-state
+  ;; note 198 audit M9. `open-lines-on-account` had NO state or valid-time
+  ;; filter while `account-balance` defaults to `:include-states #{:posted}`,
+  ;; so the two disagreed about which lines even exist on the account: a DRAFT
+  ;; line showed as an open item against a balance that had never counted it,
+  ;; and the clearing account could never be shown to net to zero.
+  (testing "a draft line is not an open item, because it is not in the balance"
+    (let [conn (fresh-conn)]
+      (book/entry! conn {:journal-type :general
+                         :debit-account [:kontor.account/path "Assets:Inventory"]
+                         :credit-account clearing
+                         :amount 100 :commodity eur-ref
+                         :effective-date #inst "2026-04-10" :narration "GR (posted)"})
+      ;; A DRAFT entry touching the same clearing account. Written raw so it
+      ;; stays :draft — the gate's builders seal what they post.
+      (d/transact conn
+                  [{:db/id -1
+                    :kontor.transaction/journal [:kontor.journal/code "GJ"]
+                    :kontor.transaction/effective-date #inst "2026-04-12"
+                    :kontor.transaction/narration "IR (still draft)"
+                    :kontor.transaction/state :draft}
+                   {:db/id -2 :kontor.posting/transaction -1
+                    :kontor.posting/account clearing
+                    :kontor.posting/amount 50M :kontor.posting/commodity eur-ref}
+                   {:db/id -3 :kontor.posting/transaction -1
+                    :kontor.posting/account [:kontor.account/path "Liabilities:AP"]
+                    :kontor.posting/amount -50M :kontor.posting/commodity eur-ref}])
+      (let [db   (d/db conn)
+            acct (:db/id (d/entity db clearing))
+            eur  (:db/id (d/entity db eur-ref))
+            open (lr/open-lines-on-account db acct)
+            gl   (or (some-> (get (balance/account-balance conn acct) eur) :amount) 0M)
+            sum  (reduce (fn [^java.math.BigDecimal a l]
+                           (.add a ^java.math.BigDecimal (:residual l)))
+                         0M open)]
+        ;; posted GR credits the clearing account 100 → GL −100.00.
+        ;; The draft's +50 is NOT in the balance, so it must not be an open
+        ;; item either; before the fix `open` held 2 lines summing to −50.
+        (is (= 1 (count open)) "only the posted line is open")
+        (is (= 0 (.compareTo -100M gl)))
+        (is (= 0 (.compareTo gl sum))
+            "Σ open residuals == the GL balance — the two views agree")
+        (testing "and the caller can opt the draft back in explicitly"
+          (is (= 2 (count (lr/open-lines-on-account
+                           db acct {:include-states #{:draft :posted}})))))))))
+
 (deftest partial-line-match-leaves-a-residual
   ;; The partial case: a 100 credit matched against a 60 debit leaves 40 open on
   ;; the credit line, and NO full-reconcile group (Odoo: amount_residual > 0,

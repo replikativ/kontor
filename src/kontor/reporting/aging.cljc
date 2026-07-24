@@ -89,7 +89,11 @@
                           :bucket (bucket-for overdue buckets)
                           :partner-eid (:db/id partner)
                           :partner-name (:kontor.partner/name partner)))))
-         (sort-by :due-date)
+         ;; note 198 audit (LOW): invoices routinely share a due-date (same
+         ;; terms, same invoice run), so the aging report reshuffled its rows
+         ;; between two reads of an unchanged ledger — and a collections
+         ;; worklist built off the top N rows was not the same worklist twice.
+         (sort-by (juxt :due-date :transaction-eid))
          vec)))
 
 (declare rows-commodity)

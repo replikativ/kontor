@@ -237,10 +237,24 @@
           _ (schedule/record-occurrence! conn "sub-monthly" 1 date 100.00M (:eur cat)
                                          (posted-dep-tx-data cat 100.00M date))
           _ (schedule/record-occurrence! conn "sub-monthly" 1 date 100.00M (:eur cat)
-                                         (posted-dep-tx-data cat 100.00M date))]
+                                         (posted-dep-tx-data cat 100.00M date))
+          bal (fn [acct] (or (some-> (get (balance/account-balance conn acct) (:eur cat))
+                                     :amount)
+                             0M))]
       (is (= 1 (d/q '[:find (count ?o) . :where [?o :kontor.schedule-occurrence/sequence 1]]
                     (d/db conn)))
-          "composite identity collapses the occurrence row"))))
+          "composite identity collapses the occurrence row")
+      ;; WF-B (note 198). The row count was ALWAYS 1 — including throughout
+      ;; the window in which the ledger silently double-posted, because
+      ;; `posted-dep-tx-data` mints fresh tempids on every call. Asserting the
+      ;; log alone is asserting a proxy; the money is the effect.
+      ;; One firing of 100.00: Dr Expense:Depreciation 100.00 /
+      ;; Cr Asset:AccumDep 100.00. A re-fire that posts reads 200.00 / −200.00.
+      (testing "and the LEDGER, which is what a re-fire actually risks"
+        (is (= 0 (.compareTo 100.00M (bal (:expense cat))))
+            "depreciation expense is 100.00 after two firings, not 200.00")
+        (is (= 0 (.compareTo -100.00M (bal (:accum cat))))
+            "accumulated depreciation is −100.00, not −200.00")))))
 
 (deftest schedule-pending-occurrences-correct-sequence-green
   (testing "pending-occurrences computes the right due sequence given

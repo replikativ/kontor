@@ -16,7 +16,8 @@
    `:contra-resolver` in the bank-import → posting bridge."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [datahike.api :as d]))
+            [datahike.api :as d]
+            [kontor.account :as kacct]))
 
 ;; ============================================================================
 ;; Resource loading
@@ -126,7 +127,4 @@
    handle this (typically: route to a manual-review queue)."
   [db category]
   (when-let [code (category->contra-code category)]
-    (some-> (d/q '[:find ?a .
-                   :in $ ?code
-                   :where [?a :kontor.account/code ?code]]
-                 db code))))
+    (kacct/resolve-code db code {:context "DE chart (category → contra)"})))

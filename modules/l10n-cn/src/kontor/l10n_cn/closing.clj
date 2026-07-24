@@ -63,6 +63,7 @@
      calls the planner, runs `kontor.reporting.closing/close-fiscal-year!`,
      and returns the close + period-close report."
   (:require [datahike.api :as d]
+            [kontor.account :as kacct]
             [kontor.reporting.closing :as closing]))
 
 (def ^:const default-retained-code "3104")     ; 利润分配 (Retained earnings)
@@ -70,7 +71,7 @@
 (def ^:const default-journal-code "CLOSE")
 
 (defn- account-by-code [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
+  (kacct/resolve-code db code {:context "CN year-end closing"}))
 
 (defn- require-retained [db code]
   (or (account-by-code db code)

@@ -163,7 +163,10 @@
                         :kontor.status-history/supporting-doc
                         :kontor.status-history/origin-transaction]
                        eid)))
-       (sort-by :kontor.status-history/changed-at)
+       ;; note 198 audit (LOW): bulk status changes share one `:changed-at`
+       ;; (see `kontor.workflow.status-machine`), so the explain walk's
+       ;; timeline was unstable exactly where an auditor reads it.
+       (sort-by (juxt :kontor.status-history/changed-at :db/id))
        vec))
 
 (defn- audit-docs-for

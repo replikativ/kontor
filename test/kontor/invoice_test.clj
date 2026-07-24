@@ -17,6 +17,7 @@
             [kontor.l10n-de.invoice :as inv-de]
             [kontor.banking.payment-term :as pt]
             [kontor.banking.reconciliation :as recon]
+            [kontor.reporting.balance :as balance]
             [kontor.validation :as v]))
 
 (def jan-1  #inst "2026-01-01T00:00:00Z")
@@ -192,8 +193,29 @@
           settled-tx-eids (:transactions (:match best))
           _ (inv/flip-paid-on-settlement conn settled-tx-eids)
           db (d/db conn)
-          inv (d/pull db [:kontor.invoice/status] inv-eid)]
-      (is (= :paid (:kontor.invoice/status inv))))))
+          inv (d/pull db [:kontor.invoice/status] inv-eid)
+          bal (fn [code]
+                (or (some-> (get (balance/account-balance conn (ace db code)) eur)
+                            :amount)
+                    0M))]
+      (is (= :paid (:kontor.invoice/status inv)))
+      ;; The status keyword is a PROXY: it is set by `flip-paid-on-settlement`
+      ;; independently of whether the reconciliation posted anything, so a
+      ;; commit that moved no money — or moved it to the wrong account — reads
+      ;; :paid all the same (note 198 audit). Assert the MONEY.
+      ;; INV-2026-0001 is 1891.50 gross (1589.50 net + 302.00 USt), so the
+      ;; bank receipt of 1891.50 leaves: bank 1200 = +1891.50, receivable
+      ;; 1400 = 1891.50 − 1891.50 = 0.00.
+      (testing "and the ledger actually moved: bank up, receivable cleared"
+        (is (= 0 (.compareTo 1891.50M (bal "1200")))
+            "the bank account carries the receipt")
+        (is (= 0 (.compareTo 0M (bal "1400")))
+            "the receivable is fully relieved"))
+      (testing "and the AR subledger ties to the receivable control account"
+        (let [tie (recon/ar-tie-out conn {:ar-codes #{"1400"} :commodity eur})]
+          (is (= 0 (.compareTo 0M (:subledger tie))))
+          (is (= 0 (.compareTo 0M (:gl tie))))
+          (is (:ok? tie) (str "AR tie-out broken: " tie)))))))
 
 ;; ============================================================================
 ;; cancel!

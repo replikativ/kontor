@@ -58,6 +58,7 @@
      - Ley del ISR Art. 11 (fiscal-year = calendar year)
      - Anexo 24 RMF (Código Agrupador account labels)"
   (:require [datahike.api :as d]
+            [kontor.account :as kacct]
             [kontor.reporting.closing :as closing]
             [kontor.l10n-mx.chart :as chart]))
 
@@ -65,7 +66,7 @@
 (def ^:const default-journal-code "CLOSE")
 
 (defn- account-by-code [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
+  (kacct/resolve-code db code {:context "MX year-end closing"}))
 
 (defn- require-retained [db code]
   (or (account-by-code db code)

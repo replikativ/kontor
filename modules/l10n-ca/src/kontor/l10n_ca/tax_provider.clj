@@ -51,7 +51,7 @@
    component — `rate-facts` returns `nil`. Their revenue still routes
    to the zero-rated / exempt accounts, which is base-posting work
    `invoice.clj` keeps."
-  (:require [datahike.api :as d]
+  (:require [kontor.account :as kacct]
             [kontor.l10n-ca.tax :as tax]
             [kontor.tax.tax-posting-builder :as tpb]
             [kontor.tax.tax-rate-provider :as trp]))
@@ -195,7 +195,7 @@
 ;; ============================================================================
 
 (defn- account-by-code [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
+  (kacct/resolve-code db code {:context "CA tax posting builder"}))
 
 (defn- account-code-for-component
   "Resolve the CA-chart tax-payable account code for one `TaxFacts`

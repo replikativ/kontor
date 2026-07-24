@@ -57,6 +57,13 @@
            :where [?c :kontor.commodity/symbol ?sym]]
          db sym)))
 
+(defn- invoice-tx-eid
+  "The kernel `:transaction` the invoice was booked as, or nil for an
+   invoice that never hit the GL."
+  [db invoice-eid]
+  (:db/id (:kontor.invoice/transaction
+           (d/pull db [{:kontor.invoice/transaction [:db/id]}] invoice-eid))))
+
 (defn- open-invoices-for-case
   "Sales invoices linked to the case's partner + entity that are not
    yet fully :paid. Returns vec of {:invoice-eid :open-amount
@@ -95,13 +102,23 @@
   "Write off the remaining open balance of every open invoice on a
    case. Atomically:
      - For each open invoice on the case, build a kernel :transaction
-       Dr :bad-debt-expense / Cr :ar at the invoice's open-amount.
+       Dr :bad-debt-expense / Cr :ar at the invoice's open-amount,
+       linked to the invoice's own GL transaction via
+       `:kontor.transaction/settles`.
        (Multi-invoice cases produce N transactions, all in one tx.)
+     - For each, ALSO close the AR open item: a `:payment-application`
+       row carrying the amount as `:write-off-amount`, which drives the
+       invoice's `:kontor.invoice/status` to `:paid`. Without it the
+       subledger keeps reporting the invoice fully open while the GL
+       receivable is already relieved (note 198 audit HIGH-3).
      - Drive :kontor.collection-case/state → :written-off via the status
        machine (must be legal from current state — typically requires
        case at :legal).
      - Write :audit-doc with :type :write-off-supporting; ref it on
        the status-history row.
+
+   Writing off a case whose invoices are all already closed is a no-op
+   on the ledger: `:invoices-written-off` is 0 and no posting is made.
 
    Required opts:
      :case            ref/eid/code
@@ -178,6 +195,7 @@
                                          :entity entity-eid})
                  bad-debt (resolve-account db {:account-type :bad-debt-expense
                                                :entity entity-eid})
+                 inv-tx (invoice-tx-eid db invoice-eid)
                  input {:transaction (cond-> {:kontor.transaction/journal journal-ref
                                               :kontor.transaction/effective-date effective-date
                                               :kontor.transaction/state :posted
@@ -187,7 +205,16 @@
                                                    " " open-amount " "
                                                    commodity-sym)}
                                        partner-eid
-                                       (assoc :kontor.transaction/partner partner-eid))
+                                       (assoc :kontor.transaction/partner partner-eid)
+                                       ;; note 198 audit HIGH-3. The write-off RELIEVES the
+                                       ;; receivable, so it must link to the transaction that
+                                       ;; raised it — kernel aging
+                                       ;; (`reconciliation/open-receivables-by-tx`) nets an
+                                       ;; open item by walking
+                                       ;; `[?settler :kontor.transaction/settles ?settled]`.
+                                       ;; Same reasoning as HIGH-4 on `settle-invoice!`.
+                                       inv-tx
+                                       (assoc :kontor.transaction/settles [inv-tx]))
                         :postings [(cond-> {:kontor.posting/account bad-debt
                                             :kontor.posting/amount open-amount
                                             :kontor.posting/commodity commodity-eid
@@ -212,9 +239,37 @@
                                      (not (instance? java.math.BigInteger x)))
                               (- x offset)
                               x))
-                          raw)]
-             {:tx-tempid (- -1 offset)
-              :tx-data shifted}))
+                          raw)
+                 wo-tx-tempid (- -1 offset)
+                 ;; note 198 audit HIGH-3. The GL leg above relieves AR, but the
+                 ;; AR SUBLEDGER is `open-amount-of-invoice` = gross − applied,
+                 ;; and nothing here was ever applied. So the write-off left the
+                 ;; invoice reading fully open at status :sent — exactly the two
+                 ;; predicates `open-invoices-for-case` selects on — and a second
+                 ;; collections case wrote the SAME invoice off AGAIN: GL AR
+                 ;; −2,000 / bad-debt +2,000 against a 1,000 invoice, subledger
+                 ;; still 1,000. Close the open item with a `:payment-application`
+                 ;; carrying the amount as `:write-off-amount` (the schema's own
+                 ;; stated use for this path: "closes the remaining open amount
+                 ;; ... as PART of the settlement"), which also drives the
+                 ;; invoice status to :paid. `:amount` is 0 because NO CASH was
+                 ;; applied; the whole open balance closes as a write-off.
+                 app-tx (papp/apply-payment-tx-data
+                         db (cond-> {:payment wo-tx-tempid
+                                     :invoice invoice-eid
+                                     :amount 0M
+                                     :write-off-amount open-amount
+                                     :write-off-account bad-debt
+                                     :commodity commodity-eid
+                                     :applied-by-uid written-off-by
+                                     :applied-at effective-date
+                                     :strategy :write-off
+                                     :reason reason
+                                     :tempid-suffix (str "-wo-" idx)}
+                              reason-note    (assoc :reason-note reason-note)
+                              supporting-doc (assoc :supporting-doc supporting-doc)))]
+             {:tx-tempid wo-tx-tempid
+              :tx-data (into (vec shifted) app-tx)}))
          opens)
         all-posting-tx (vec (mapcat :tx-data per-invoice-txs))
         ;; Status transition + supporting-doc ref. The transition

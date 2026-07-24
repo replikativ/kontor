@@ -128,8 +128,8 @@
     (validation/transact-with-validation
      conn (kbt/with-vt (define-lease-tx-data
                          (d/db conn) (assoc opts :recorded-at now))
-                       (or vt-from commencement-date)
-                       (or vt-to kbt/forever)))))
+            (or vt-from commencement-date)
+            (or vt-to kbt/forever)))))
 
 (defn define-lease-tx-data
   "Pure tx-data builder for `define-lease!` (ADR-068). Optional

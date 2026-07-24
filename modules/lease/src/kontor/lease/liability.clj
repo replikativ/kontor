@@ -25,8 +25,20 @@
 
 (defn book-for
   "Resolve the `:lease-liability` book eid for a (lease, ledger) pair,
-   or nil. `lease-spec` is a code or eid; `ledger` is an eid."
+   or nil. `lease-spec` is a code or eid; `ledger` is an eid.
+
+   A nil `ledger` THROWS. Passing one through to the query does not
+   narrow the join — datahike leaves the variable unbound — so
+   `:find ?e .` then returns an ARBITRARY book of the lease. On a
+   single-book lease that is silently right; on the ADR-021
+   parallel-ledger shape it hands back the wrong framework's book and
+   nothing downstream can tell. Note 198 (found via the ROU plug,
+   which was destructuring a `:ledger` key `book-plan-inputs` never
+   supplied)."
   [db lease-spec ledger]
+  (when (nil? ledger)
+    (throw (ex-info "book-for: :ledger is required — a nil ledger would silently return an arbitrary book of the lease"
+                    {:type :kontor.lease/ledger-required :lease lease-spec})))
   (when-let [lease-eid (lease/resolve-lease db lease-spec)]
     (d/q '[:find ?e .
            :in $ ?l ?led
@@ -60,16 +72,16 @@
   (when-let [eid (resolve-book db spec)]
     (d/pull db
             '[* {:kontor.lease-liability/lease [:db/id :kontor.lease/code :kontor.lease/name
-                                         :kontor.lease/status]
+                                                :kontor.lease/status]
                  :kontor.lease-liability/ledger [:db/id :kontor.ledger/code :kontor.ledger/framework]
                  :kontor.lease-liability/commodity [:db/id]
                  :kontor.lease-liability/liability-account [:db/id]
                  :kontor.lease-liability/interest-account [:db/id]
                  :kontor.lease-liability/schedule [:db/id :kontor.schedule/code
-                                            :kontor.schedule/kind :kontor.schedule/state
-                                            :kontor.schedule/start-date
-                                            :kontor.schedule/end-date
-                                            :kontor.schedule/frequency]}]
+                                                   :kontor.schedule/kind :kontor.schedule/state
+                                                   :kontor.schedule/start-date
+                                                   :kontor.schedule/end-date
+                                                   :kontor.schedule/frequency]}]
             eid)))
 
 ;; ============================================================================
@@ -85,7 +97,10 @@
      {:book :lease :ledger :schedule
       :provider-id :classification
       :opening-liability :discount-rate :opening-fired-through
-      :payment-amount :payment-timing :payment-frequency
+      :payment-amount :contract-payment-amount :variable-payment-delta
+      :variable-expense-account
+      :liability-account :interest-account :recognition-transaction
+      :payment-timing :payment-frequency
       :periods-per-year :period-rate
       :n-periods :start-date :commodity
       :purchase-option-price
@@ -94,7 +109,15 @@
 
    `:period-rate` is `:discount-rate / :periods-per-year` carried to
    12dp — the per-period effective rate the unwind compounds at.
-   `:n-periods` is `term-months` expressed at the payment frequency."
+   `:n-periods` is `term-months` expressed at the payment frequency.
+
+   `:payment-amount` is the payment THIS book unwinds on — the
+   per-book pin (`:kontor.lease-liability/payment-amount`) when set,
+   else the shared `:kontor.lease/payment-amount`. The contract fact is
+   always also returned as `:contract-payment-amount`, and their
+   difference as `:variable-payment-delta` — the ASC 842 variable
+   lease cost the runner recognises when the payment is made (ADR-064
+   Addendum 2 / note 198 HIGH-5)."
   [db book-spec]
   (let [eid (resolve-book db book-spec)
         _ (when-not eid
@@ -105,6 +128,7 @@
                     :kontor.lease-liability/opening-liability
                     :kontor.lease-liability/discount-rate
                     :kontor.lease-liability/opening-fired-through
+                    :kontor.lease-liability/payment-amount
                     {:kontor.lease-liability/lease
                      [:db/id :kontor.lease/term-months :kontor.lease/payment-amount
                       :kontor.lease/payment-timing :kontor.lease/payment-frequency
@@ -114,8 +138,12 @@
                       :kontor.lease/incentives-received]}
                     {:kontor.lease-liability/ledger [:db/id]}
                     {:kontor.lease-liability/commodity [:db/id]}
+                    {:kontor.lease-liability/liability-account [:db/id]}
+                    {:kontor.lease-liability/interest-account [:db/id]}
+                    {:kontor.lease-liability/variable-expense-account [:db/id]}
+                    {:kontor.lease-liability/recognition-transaction [:db/id]}
                     {:kontor.lease-liability/schedule [:db/id :kontor.schedule/frequency
-                                                :kontor.schedule/start-date]}]
+                                                       :kontor.schedule/start-date]}]
                   eid)
         l     (:kontor.lease-liability/lease b)
         sched (:kontor.lease-liability/schedule b)
@@ -124,7 +152,10 @@
         ppy   (lease/periods-per-year freq)
         period-rate (.divide ^java.math.BigDecimal rate
                              (java.math.BigDecimal/valueOf ppy)
-                             12 java.math.RoundingMode/HALF_EVEN)]
+                             12 java.math.RoundingMode/HALF_EVEN)
+        contract-payment ^java.math.BigDecimal (:kontor.lease/payment-amount l)
+        book-payment ^java.math.BigDecimal (or (:kontor.lease-liability/payment-amount b)
+                                               contract-payment)]
     {:book                  eid
      :lease                 (:db/id l)
      :ledger                (:db/id (:kontor.lease-liability/ledger b))
@@ -134,7 +165,13 @@
      :opening-liability     (:kontor.lease-liability/opening-liability b)
      :discount-rate         rate
      :opening-fired-through (or (:kontor.lease-liability/opening-fired-through b) 0)
-     :payment-amount        (:kontor.lease/payment-amount l)
+     :payment-amount        book-payment
+     :contract-payment-amount contract-payment
+     :variable-payment-delta (.subtract contract-payment book-payment)
+     :variable-expense-account (:db/id (:kontor.lease-liability/variable-expense-account b))
+     :liability-account     (:db/id (:kontor.lease-liability/liability-account b))
+     :interest-account      (:db/id (:kontor.lease-liability/interest-account b))
+     :recognition-transaction (:db/id (:kontor.lease-liability/recognition-transaction b))
      :payment-timing        (:kontor.lease/payment-timing l)
      :payment-frequency     freq
      :periods-per-year      ppy
@@ -146,6 +183,65 @@
      :initial-direct-costs  (or (:kontor.lease/initial-direct-costs l) 0M)
      :prepaid-at-commencement (or (:kontor.lease/prepaid-at-commencement l) 0M)
      :incentives-received   (or (:kontor.lease/incentives-received l) 0M)}))
+
+;; ============================================================================
+;; What the GL actually posted — the occurrence-log anchor
+;; ============================================================================
+
+(defn posted-period-legs
+  "For each FIRED occurrence of a liability book's schedule, what the
+   GL actually posted — `{sequence {:interest bigdec :principal bigdec
+   :payment bigdec}}`.
+
+   This is the subledger's anchor to the ledger. A liability book must
+   never RE-DERIVE an already-fired period from current contract data:
+   the payment amount, the term or the rate can all move under it
+   (ADR-064 modifications; the ASC 842 fork that deliberately declines
+   to remeasure), and the re-derivation then silently disagrees with the
+   entry the GL is actually carrying — note 198 HIGH-5, the same bug
+   class as the inventory AVCO drift. The ROU side already did this
+   (`kontor.lease.rou-provider/fired-amounts`); this is its liability
+   sibling.
+
+   `:principal` is the sum of the occurrence transaction's legs on the
+   book's `:liability-account`; `:interest` the legs on its
+   `:interest-account`; `:payment` their sum (the liability-service
+   cash — the ASC 842 variable-cost leg, which hits a THIRD account, is
+   deliberately excluded: it services no liability).
+
+   Takes the flat map from [[book-plan-inputs]]. PURE (a read)."
+  [db {:keys [schedule liability-account interest-account]}]
+  (let [rows (d/q '[:find ?seq ?p ?acct ?pamt
+                    :in $ ?s
+                    :where
+                    [?o :kontor.schedule-occurrence/schedule ?s]
+                    [?o :kontor.schedule-occurrence/sequence ?seq]
+                    [?o :kontor.schedule-occurrence/transaction ?tx]
+                    [?p :kontor.posting/transaction ?tx]
+                    [?p :kontor.posting/account ?acct]
+                    [?p :kontor.posting/amount ?pamt]]
+                  db schedule)
+        ;; Seed from the occurrence log, not from the join: a fired
+        ;; occurrence whose entry happens to carry no leg on either
+        ;; account must still read as FIRED (zero movement), never fall
+        ;; back to being re-planned.
+        seeded (into {} (map (fn [sq] [sq {:interest 0M :principal 0M}]))
+                     (schedule/fired-sequences db schedule))
+        by-seq (reduce
+                (fn [acc [sq _p acct ^java.math.BigDecimal pamt]]
+                  (let [m (get acc sq {:interest 0M :principal 0M})]
+                    (assoc acc sq
+                           (cond-> m
+                             (= acct liability-account)
+                             (update :principal #(.add ^java.math.BigDecimal % pamt))
+                             (= acct interest-account)
+                             (update :interest #(.add ^java.math.BigDecimal % pamt))))))
+                seeded rows)]
+    (reduce-kv (fn [acc sq {:keys [interest principal] :as m}]
+                 (assoc acc sq (assoc m :payment
+                                      (.add ^java.math.BigDecimal interest
+                                            ^java.math.BigDecimal principal))))
+               {} by-seq)))
 
 ;; ============================================================================
 ;; open-liability-book!
@@ -279,7 +375,7 @@
         _ (when-not eid
             (throw (ex-info "Lease-liability book not found" {:spec book})))
         b (d/pull db [{:kontor.lease-liability/lease [:kontor.lease/term-months
-                                               :kontor.lease/payment-frequency]}
+                                                      :kontor.lease/payment-frequency]}
                       {:kontor.lease-liability/schedule [:db/id :kontor.schedule/start-date]}]
                   eid)
         l (:kontor.lease-liability/lease b)
@@ -300,6 +396,35 @@
        (assoc :kontor.lease-liability/discount-rate new-discount-rate)
        note (assoc :kontor.lease-liability/note note))
      {:db/id sched-eid :kontor.schedule/end-date end-date}]))
+
+(defn pin-book-payment-tx-data
+  "Pure tx-data builder — pin the payment THIS book unwinds on
+   (`:kontor.lease-liability/payment-amount`) and the account its
+   variable lease cost is charged to.
+
+   ADR-064 Addendum 2 / note 198 HIGH-5. `remeasure!` writes the new
+   indexed rent onto the SHARED `:kontor.lease/payment-amount` because
+   the IFRS 16 book on the same lease is genuinely remeasured — but an
+   ASC 842 operating book on an index-only reset is NOT (ASC
+   842-10-30-5), so it must keep unwinding on its ORIGINAL payments.
+   Pinning is idempotent across successive resets: the pin is written
+   ONCE, at the first reset, and later resets leave it alone (the
+   measurement never moved), so each reset simply widens the variable
+   delta.
+
+   Required: :book, :payment-amount (the payment to pin),
+             :variable-expense-account."
+  [db {:keys [book payment-amount variable-expense-account]}]
+  (when (nil? payment-amount)
+    (throw (ex-info ":payment-amount required" {})))
+  (when-not variable-expense-account
+    (throw (ex-info ":variable-expense-account required" {})))
+  (let [eid (resolve-book db book)
+        _ (when-not eid
+            (throw (ex-info "Lease-liability book not found" {:spec book})))]
+    [{:db/id eid
+      :kontor.lease-liability/payment-amount payment-amount
+      :kontor.lease-liability/variable-expense-account variable-expense-account}]))
 
 (defn revise-liability-book!
   "Re-anchor a `:lease-liability` book after an ADR-064 modification:

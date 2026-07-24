@@ -1705,7 +1705,12 @@
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":fifo | :customer-instruction | :proportional
-                     | :cherry-pick | :reversal"}
+                     | :cherry-pick | :reversal | :write-off.
+                     :write-off is the bad-debt path — the application
+                     carries the amount as :write-off-amount with
+                     :amount 0M, because no cash was applied; it closes
+                     the open item that the GL relief already removed
+                     (note 198 audit HIGH-3)."}
 
    {:db/ident       :kontor.payment-application/reason
     :db/valueType   :db.type/keyword
@@ -2079,14 +2084,24 @@
 ;;
 ;; Implements Odoo's account_fiscal_position concept: when a customer
 ;; is in country X, replace the default tax with the X-appropriate one.
-;; The mapping itself lives in :kontor.fiscal-position/tax-mappings (a many-ref
-;; to remap entities — declared once we have a remap entity).
+;;
+;; The mapping lines are SEPARATE entities that point BACK at the position
+;; (`:kontor.fiscal-position-tax/fiscal-position`), mirroring Odoo's
+;; account.fiscal.position.tax / .account rather than a forward many-ref off
+;; the position. That keeps the position entity itself a pure marker and lets
+;; a mapping line carry its own attributes (sequence, a nil destination
+;; meaning \"drop this tax\"). note 198 R3-FP-01.
 ;; ============================================================================
 
 (def ^:private fiscal-position-attrs
   [{:db/ident       :kontor.fiscal-position/name
     :db/valueType   :db.type/string
-    :db/cardinality :db.cardinality/one}
+    :db/cardinality :db.cardinality/one
+    ;; Indexed, not unique: a book may legitimately hold "EU B2B" positions
+    ;; for two entities. `kontor.tax.fiscal-position/by-name` therefore
+    ;; refuses to guess when a name resolves to more than one — note 198
+    ;; audit (M9), same posture as `kontor.account/resolve-code`.
+    :db/index       true}
 
    {:db/ident       :kontor.fiscal-position/country-code
     :db/valueType   :db.type/string
@@ -2103,6 +2118,65 @@
     :db/doc         "Whether partner must have a tax-id for this
                      position to apply (e.g. EU intra-community
                      reverse charge requires a VAT ID)."}])
+
+;; Odoo: account.fiscal.position.tax (tax_src_id → tax_dest_id), consumed by
+;; AccountFiscalPosition.map_tax. kontor's equivalent is read by
+;; `kontor.tax.fiscal-position/map-tax` and applied by the
+;; StaticTableProvider when a rate-facts context carries :fiscal-position.
+(def ^:private fiscal-position-tax-attrs
+  [{:db/ident       :kontor.fiscal-position-tax/fiscal-position
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The position this mapping line belongs to."}
+
+   {:db/ident       :kontor.fiscal-position-tax/src-tax
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The tax that would otherwise apply (the domestic
+                     default)."}
+
+   {:db/ident       :kontor.fiscal-position-tax/dest-tax
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The tax that replaces it. ABSENT means the source tax
+                     is DROPPED — the export case, where a domestic VAT
+                     simply does not apply and no substitute exists."}
+
+   {:db/ident       :kontor.fiscal-position-tax/sequence
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one}
+
+   ;; One mapping per (position, source tax) — re-transacting the same pair
+   ;; updates the destination instead of accumulating contradictory lines.
+   {:db/ident       :kontor.fiscal-position-tax/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:kontor.fiscal-position-tax/fiscal-position
+                     :kontor.fiscal-position-tax/src-tax]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity}])
+
+;; Odoo: account.fiscal.position.account (account_src_id → account_dest_id),
+;; consumed by AccountFiscalPosition.map_account. Lets an EU/export position
+;; route revenue to a different income account than the domestic default.
+(def ^:private fiscal-position-account-attrs
+  [{:db/ident       :kontor.fiscal-position-account/fiscal-position
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :kontor.fiscal-position-account/src-account
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :kontor.fiscal-position-account/dest-account
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :kontor.fiscal-position-account/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:kontor.fiscal-position-account/fiscal-position
+                     :kontor.fiscal-position-account/src-account]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity}])
 
 ;; ============================================================================
 ;; Tax + tax-repartition-line + tax-group.
@@ -2183,6 +2257,33 @@
     :db/cardinality :db.cardinality/one
     :db/doc         "Whether this tax's amount is added to the base for
                      subsequent (compound) taxes."}
+
+   ;; note 198 R3-FP-03. `include-base-amount` is only meaningful given an
+   ;; ORDER — \"subsequent\" has no referent otherwise. Until this attr
+   ;; existed the StaticTableProvider consumed an unordered `d/q` result set,
+   ;; so which tax counted as \"subsequent\" was whatever the set happened to
+   ;; iterate first. Lower sequences are computed first.
+   {:db/ident       :kontor.tax/sequence
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Order within the compound chain. Lower is computed
+                     first; a tax with :include-base-amount true folds its
+                     amount into the base seen by higher-sequence taxes.
+                     Absent = 0; ties break on :kontor.tax/code so
+                     resolution is always deterministic."}
+
+   ;; note 198 R3-FP-02. Odoo `account.tax.price_include` (account_tax.py).
+   {:db/ident       :kontor.tax/price-include
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one
+    :db/doc         "True when quoted prices already CONTAIN this tax (the
+                     B2C gross-price convention). The rate provider then
+                     extracts the pre-tax net from the gross instead of
+                     treating the gross as the base: 119.00 @ 19% → net
+                     100.00 + tax 19.00, not 119.00 × 19% = 22.61. A
+                     per-line `:price-include` in the rate-facts context
+                     overrides this attr, since the same tax is quoted gross
+                     to consumers and net to businesses."}
 
    {:db/ident       :kontor.tax/exigibility
     :db/valueType   :db.type/keyword
@@ -2901,6 +3002,57 @@
    {:db/ident       :kontor.payment-term/active
     :db/valueType   :db.type/boolean
     :db/cardinality :db.cardinality/one}])
+
+;; ============================================================================
+;; Payment-term LINES — instalment plans ("30% now, 70% in 60 days").
+;;
+;; A term with no lines is the scalar net-days case and keeps behaving
+;; exactly as before; `compute-tranches` synthesises the single 100%
+;; tranche for it. A term WITH lines explodes an invoice into one tranche
+;; per line, each with its own due date, so tranches age and settle
+;; independently. Odoo: account.payment.term.line (value_amount + nb_days),
+;; exploded by AccountPaymentTerm._compute_terms. note 198 R3-FP-04.
+;; ============================================================================
+
+(def ^:private payment-term-line-attrs
+  [{:db/ident       :kontor.payment-term-line/term
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Back-ref to the owning :payment-term."}
+
+   {:db/ident       :kontor.payment-term-line/sequence
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Order of the tranche within the term. Lower first;
+                     the LAST tranche absorbs any rounding residue so the
+                     tranches always sum to the invoice total exactly."}
+
+   {:db/ident       :kontor.payment-term-line/value-type
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":percent — :value percent of the total.
+                     :fixed   — :value as an absolute amount.
+                     :balance — whatever is left after the other lines
+                                (Odoo's `balance`; :value is ignored)."}
+
+   {:db/ident       :kontor.payment-term-line/value
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "30M for 30% when :value-type is :percent; the absolute
+                     amount when :fixed; ignored when :balance."}
+
+   {:db/ident       :kontor.payment-term-line/nb-days
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Calendar days from the invoice date to THIS tranche's
+                     due date. 0 = due immediately."}
+
+   {:db/ident       :kontor.payment-term-line/identity
+    :db/valueType   :db.type/tuple
+    :db/tupleAttrs  [:kontor.payment-term-line/term
+                     :kontor.payment-term-line/sequence]
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity}])
 
 ;; ============================================================================
 ;; Invoice + line item — thin accounting-side invoice. NOT a CRM /
@@ -4830,6 +4982,8 @@
     partner-attrs
     person-attrs                         ; kernel-shared :kontor.person/*
     fiscal-position-attrs
+    fiscal-position-tax-attrs
+    fiscal-position-account-attrs
     tax-attrs
     tax-rep-attrs
     tax-group-attrs
@@ -4840,6 +4994,7 @@
     posting-attrs                        ; +tax-breakdown + clearance-token
     posting-dimension-attrs              ; ADR-097
     payment-term-attrs
+    payment-term-line-attrs
     invoice-attrs
     invoice-line-attrs
     bank-line-attrs

@@ -49,6 +49,7 @@
             [kontor.money :as money]
             [datahike.api :as d]
             [kontor.posting.build :as posting]
+            [kontor.reporting.balance :as balance]
             [kontor.validation :as validation]))
 
 (defn- ->ms [x] #?(:clj (.getTime ^java.util.Date x) :cljs (if (number? x) x (.getTime x))))
@@ -153,14 +154,31 @@
                        :commodities cs})))
     (first cs)))
 
+(defn- open-item-sort-key
+  "Total order over open items: oldest effective-date first, ties broken by
+   the transaction eid.
+
+   `:date` ALONE is not a total order, and the result it orders comes out of
+   `d/q` — a SET, which has no order of its own. Every downstream consumer of
+   these lists is order-sensitive: `subsets-summing-to` TRUNCATES to the
+   first `max-subset-search`, and a caller auto-committing
+   `(first (suggest-match …))` takes whatever landed on top. Ties are the
+   common case, not an edge — a batch import gives every invoice the same
+   effective-date. Same bug class as the DATEV contra-account pick and the
+   `open-invoices-for-partner` FIFO tie (note 198 audit M8 / H1). Stable
+   within a DB; a re-import that renumbers eids may reorder same-date items."
+  [{:keys [date transaction-eid]}]
+  [(if date (->ms date) 0) (or transaction-eid 0)])
+
 (defn open-receivables-by-tx
   "For each posted transaction whose journal type is :sale, compute
    the AR amount remaining open: gross-AR − sum-of-settling-payments.
 
    Returns vec of {:transaction-eid :external-id :open-amount
-                   :original-amount :partner-eid :date}. Skips fully-
-   paid transactions (open = 0). Filters out :draft and :cancelled
-   transactions automatically.
+                   :original-amount :partner-eid :date}, in a TOTAL
+   order (see [[open-item-sort-key]]). Skips fully-paid transactions
+   (open = 0). Filters out :draft and :cancelled transactions
+   automatically.
 
    `ar-account-codes` is the set of chart codes that count as AR for
    the purposes of this query (e.g. #{\"1400\" \"1410\"} on SKR04)."
@@ -230,13 +248,14 @@
                         :commodity (single-commodity tx fields)
                         :partner-eid (:partner-eid fields)
                         :date (:date fields)})))))
-         (sort-by :date)
+         (sort-by open-item-sort-key)
          vec)))
 
 (defn open-payables-by-tx
   "Mirror of `open-receivables-by-tx` for AP. AP postings are credits
    on the payable account, so the original amount is negative; the
-   open amount stays negative (debt) until settled."
+   open amount stays negative (debt) until settled. Same total order
+   (see [[open-item-sort-key]])."
   [db ap-account-codes]
   (let [rows (d/q '[:find ?p ?tx ?ext-id ?amount ?commodity ?partner ?date ?journal-type ?state
                     :in $ [?ap-code ...]
@@ -297,8 +316,74 @@
                         :commodity (single-commodity tx fields)
                         :partner-eid (:partner-eid fields)
                         :date (:date fields)})))))
-         (sort-by :date)
+         (sort-by open-item-sort-key)
          vec)))
+
+;; ============================================================================
+;; Tie-out — the AR subledger against the GL control account
+;; ============================================================================
+
+(defn ar-tie-out
+  "Reconcile the AR open-item subledger to the GL receivable control
+   account(s) — the detective control for \"my balance-sheet receivable
+   number is wrong\". Sibling of `kontor.inventory.report/valuation-tie-out`.
+
+   `subledger` = Σ `:open-amount` over [[open-receivables-by-tx]], i.e. what
+   the open-item list says customers still owe.
+   `gl`        = Σ `account-balance` over EVERY account carrying one of
+   `:ar-codes` — the same account set the subledger query reads, so the two
+   sides cannot drift by looking at different accounts.
+
+   The two tie iff every posting that relieves a receivable is LINKED to the
+   invoice it relieves via `:kontor.transaction/settles`. A relief that posts
+   to the GL without the link (a settlement, a bad-debt write-off, a credit
+   note) drives the GL down while the subledger keeps reporting the invoice
+   fully open — the exact shape of note 198 audit HIGH-3 and HIGH-4, both of
+   which this reports as a non-zero `:difference`. A `:sale`-journal invoice
+   posted to a NON-AR account shows up as the opposite-signed drift.
+
+   Required: `:commodity` (eid — the tie-out is per-commodity, since a
+   blended figure across currencies means nothing).
+   Optional: `:ar-codes` (default `#{\"1400\"}`), `:as-of-valid`,
+   `:as-of-tx` (applied to BOTH sides — `:as-of-tx` snapshots the db the
+   subledger query runs against, so a current subledger is never compared
+   to a historical GL), `:entity`, `:ledger` (passed to `account-balance`).
+
+   Returns `{:ar-codes :accounts :subledger :gl :difference :ok?}`, all
+   amounts BigDecimal."
+  [conn {:keys [ar-codes commodity as-of-valid as-of-tx entity ledger]
+         :or   {ar-codes #{"1400"}}}]
+  (when-not commodity (throw (ex-info "ar-tie-out: :commodity required" {})))
+  (let [db        (cond-> (d/db conn) as-of-tx (d/as-of as-of-tx))
+        opts      (cond-> {}
+                    as-of-valid (assoc :as-of-valid as-of-valid)
+                    as-of-tx    (assoc :as-of-tx as-of-tx)
+                    entity      (assoc :entity entity)
+                    ledger      (assoc :ledger ledger))
+        accounts  (sort (d/q '[:find [?a ...]
+                               :in $ [?code ...]
+                               :where [?a :kontor.account/code ?code]]
+                             db ar-codes))
+        subledger (->> (open-receivables-by-tx db ar-codes)
+                       (filter #(= commodity (:commodity %)))
+                       (reduce (fn [acc row]
+                                 (money/add-amount acc (:open-amount row)))
+                               (money/zero-amount)))
+        gl        (reduce (fn [acc a]
+                            (money/add-amount
+                             acc
+                             (or (:amount (get (balance/account-balance conn a opts)
+                                               commodity))
+                                 (money/zero-amount))))
+                          (money/zero-amount)
+                          accounts)
+        diff      (money/add-amount subledger (money/negate-amount gl))]
+    {:ar-codes   ar-codes
+     :accounts   (vec accounts)
+     :subledger  subledger
+     :gl         gl
+     :difference diff
+     :ok?        (money/amount-zero? diff)}))
 
 ;; ============================================================================
 ;; Matchers
@@ -346,10 +431,16 @@
    Strategy: depth-first search with two pruning rules:
      - skip when the running sum + remaining > target * 2 (no chance
        to reach target without overshooting)
-     - prefer smaller subsets (caller sorts results by count)"
+     - prefer smaller subsets (caller sorts results by count)
+
+   `opens` is re-sorted into [[open-item-sort-key]] order BEFORE the
+   truncation. Dropping all but 12 candidates is only defensible if the 12
+   are a defined 12 — an unordered `d/q` result truncated at 12 makes WHICH
+   invoices are even eligible for the match arbitrary, and the caller may
+   auto-commit the result (note 198 audit M8)."
   [opens target & {:keys [max-results min-size]
                    :or {max-results 5 min-size 2}}]
-  (let [opens (vec (take max-subset-search opens))
+  (let [opens (vec (take max-subset-search (sort-by open-item-sort-key opens)))
         n (count opens)
         results (atom [])]
     (letfn [(go [start picked sum]
@@ -370,9 +461,25 @@
       (go 0 [] 0M)
       @results)))
 
+(defn- suggestion-sort-key
+  "Total order over suggestions: confidence descending, then strategy, then
+   the settled-transaction eids, then the contra account.
+
+   Confidence alone is NOT an order — it comes from a fixed four-value set
+   (0.95 / 0.9 / 0.85 / 0.7 / 0.5), so ties are the rule rather than the
+   exception, and the tied entries arrive from an unordered `d/q`. A caller
+   that auto-commits `(first (suggest-match …))` was therefore committing an
+   ARBITRARY match — against a real, sealed GL entry (note 198 audit M8)."
+  [{:keys [confidence strategy match]}]
+  [(- (double (or confidence 0)))
+   (str strategy)
+   (vec (or (:transactions match) []))
+   (or (:contra-account match) 0)])
+
 (defn suggest-match
   "Given a `:bank-line` entity and a db, return a seq of match
-   candidates sorted by confidence (high → low). Each candidate:
+   candidates in a TOTAL order, best first (see [[suggestion-sort-key]]).
+   Each candidate:
 
      {:strategy   keyword
       :confidence number ∈ [0,1]
@@ -445,8 +552,9 @@
                 subsets (when (seq partner-opens)
                           (subsets-summing-to partner-opens amount))]
             (->> subsets
-                 ;; Prefer fewer invoices first.
-                 (sort-by count)
+                 ;; Prefer fewer invoices first; the eid vector breaks the
+                 ;; (very common) count tie into a total order.
+                 (sort-by (juxt count #(mapv :transaction-eid %)))
                  (mapv (fn [subset]
                          {:strategy :multi-line
                           ;; 0.85 — strong signal (counterparty + exact
@@ -466,7 +574,7 @@
                           :match {:kind :categorize
                                   :contra-account contra}}]))]
     (->> (concat ref-matches amount-matches multi-line-matches cat-matches)
-         (sort-by :confidence >)
+         (sort-by suggestion-sort-key)
          vec)))
 
 ;; ============================================================================
@@ -474,20 +582,66 @@
 ;; ============================================================================
 
 (defn- ar-or-ap-account
-  "Pick the contra account for a bank-side posting in :settle mode.
-   For AR settlement (inflow), the contra is the AR account. For AP
-   (outflow), the contra is the AP account. Reads from the FIRST
-   settled transaction's posting on a reconcilable account."
+  "Resolve the contra account for a bank-side posting in :settle mode.
+   For AR settlement (inflow) that is the AR account the settled invoices
+   sit on; for AP (outflow), the AP account.
+
+   Returns the account when the settled transactions touch EXACTLY ONE
+   reconcilable account, and throws otherwise.
+
+   note 198 audit H2. This used to read `(ffirst (d/q …))` under a docstring
+   promising \"the FIRST settled transaction's posting\" — but a `d/q` result
+   is a SET and has no first. Two independent multipliers make the set bigger
+   than one routinely: `ar-codes`/`ap-codes` are documented as a SET
+   (`#{\"1400\" \"1410\"}`), and a `:settle` match may carry SEVERAL
+   transactions (the multi-line Sammelüberweisung path passes
+   `(mapv :transaction-eid subset)`). The pick lands as
+   `:kontor.posting/account` of a POSTED, SEALED payment leg, so an arbitrary
+   choice permanently overstates one receivable and understates another with
+   no error anywhere. Refusing is the only safe answer; the caller resolves
+   the ambiguity by passing `:contra-account` explicitly.
+
+   Same shape as `kontor.book/resolve-journal`: one → use it, none → throw,
+   several → throw naming the candidates."
   [db settled-tx-eids ar-codes ap-codes inflow?]
   (let [target-codes (if inflow? ar-codes ap-codes)
-        eids (vec settled-tx-eids)]
-    (ffirst (d/q '[:find ?a
-                   :in $ [?ar-code ...] [?tx ...]
-                   :where
-                   [?p :kontor.posting/transaction ?tx]
-                   [?p :kontor.posting/account ?a]
-                   [?a :kontor.account/code ?ar-code]]
-                 db target-codes eids))))
+        eids (vec settled-tx-eids)
+        as (sort (d/q '[:find [?a ...]
+                        :in $ [?ar-code ...] [?tx ...]
+                        :where
+                        [?p :kontor.posting/transaction ?tx]
+                        [?p :kontor.posting/account ?a]
+                        [?a :kontor.account/code ?ar-code]]
+                      db target-codes eids))
+        side (if inflow? "AR" "AP")]
+    (cond
+      (= 1 (count as)) (first as)
+
+      (empty? as)
+      (throw (ex-info (str "reconciliation: none of the " (count eids)
+                           " settled transaction(s) posts to a " side
+                           " account in " (vec (sort target-codes))
+                           " — widen :" (if inflow? "ar" "ap")
+                           "-codes, or pass :contra-account explicitly")
+                      {:type :reconciliation/no-contra-account
+                       :side (if inflow? :ar :ap)
+                       :codes target-codes
+                       :transactions eids}))
+
+      :else
+      (throw (ex-info (str "reconciliation: the settled transaction(s) span "
+                           (count as) " distinct " side
+                           " accounts — the contra account is ambiguous and "
+                           "picking one would silently misstate the others. "
+                           "Pass :contra-account explicitly.")
+                      {:type :reconciliation/ambiguous-contra-account
+                       :side (if inflow? :ar :ap)
+                       :candidates (vec as)
+                       :candidate-codes
+                       (mapv #(:kontor.account/code
+                               (d/pull db [:kontor.account/code] %))
+                             as)
+                       :transactions eids})))))
 
 (declare commit-match-tx-data)
 
@@ -505,6 +659,11 @@
 
    `opts`:
      :ar-codes / :ap-codes  — same as suggest-match
+     :contra-account        — account eid, overriding the AR/AP account
+                              derived from the settled transactions. The
+                              required escape hatch when the settled set
+                              spans several receivable/payable accounts,
+                              which `ar-or-ap-account` refuses to guess.
      :external-id-prefix    — string used to build the payment tx's
                               external-id; default \"PAY-<bank-line-id>\""
   [conn bank-line-eid match journal-eid opts]
@@ -525,7 +684,7 @@
    string `\"pay-tx-p0\"` so datahike resolves it consistently in
    the one commit."
   [db bank-line-eid match journal-eid
-   {:keys [ar-codes ap-codes external-id-prefix]
+   {:keys [ar-codes ap-codes external-id-prefix contra-account]
     :or {ar-codes #{"1400"} ap-codes #{"3300"}
          external-id-prefix "PAY-"}}]
   (let [bl (d/pull db [:kontor.bank-line/external-id :kontor.bank-line/amount
@@ -537,10 +696,11 @@
         commodity (:db/id (:kontor.bank-line/commodity bl))
         date (:kontor.bank-line/date bl)
         inflow? (money/amount-positive? amount)
-        contra (case (:kind match)
-                 :settle    (ar-or-ap-account db (:transactions match)
-                                              ar-codes ap-codes inflow?)
-                 :categorize (:contra-account match))
+        contra (or contra-account
+                   (case (:kind match)
+                     :settle     (ar-or-ap-account db (:transactions match)
+                                                   ar-codes ap-codes inflow?)
+                     :categorize (:contra-account match)))
         _ (when-not contra
             (throw (ex-info "Cannot resolve contra account for match"
                             {:match match :inflow? inflow?})))

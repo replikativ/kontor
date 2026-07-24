@@ -23,6 +23,7 @@
    collapses the result with `aggregate-postings`. Revenue routing
    stays here — revenue is a base posting, not tax."
   (:require [datahike.api :as d]
+            [kontor.account :as kacct]
             [kontor.l10n-de.tax-provider :as tax-provider]
             [kontor.tax.tax-posting-builder :as tpb]))
 
@@ -31,7 +32,7 @@
 ;; ============================================================================
 
 (defn- ace [db code]
-  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] db code))
+  (kacct/resolve-code db code {:context "DE invoice bridge"}))
 
 (def ^:private rev-account-by-rate
   "VAT rate (BigDecimal) → SKR04 revenue account code. Caller can

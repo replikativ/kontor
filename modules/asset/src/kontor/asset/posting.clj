@@ -31,7 +31,8 @@
   (:require [datahike.api :as d]
             [kontor.asset.asset :as asset]
             [kontor.asset.depreciation :as depreciation]
-            [kontor.posting :as posting]))
+            [kontor.posting :as posting])
+  (:import [java.math BigDecimal RoundingMode]))
 
 ;; ============================================================================
 ;; Internals
@@ -74,6 +75,16 @@
            ;; Per-book :expense-account override (ADR-063) wins.
            (when-let [ovr (:db/id (:kontor.asset-depreciation/expense-account b))]
              {:expense-account ovr}))))
+
+(defn- commodity-precision
+  "Decimal places for `commodity` (eid, lookup-ref, or nil). Defaults
+   to 2 — the common case and a safe floor for an unresolvable ref."
+  ^long [db commodity]
+  (or (when commodity
+        (try (:kontor.commodity/precision
+              (d/pull db [:kontor.commodity/precision] commodity))
+             (catch Exception _ nil)))
+      2))
 
 (defn- posting*
   "Build one posting map, tagging :kontor.posting/ledger only when `ledger`
@@ -185,13 +196,15 @@
     Cr :kontor.asset/asset-account` ± gain/loss.
 
    Gain/loss = `proceeds − net-book-value`, where NBV =
-   `acquisition-cost − accumulated-depreciation` for THIS book
+   `gross-carrying-amount − accumulated-depreciation` for THIS book
    (HGB NBV ≠ tax NBV → disposal is a per-book posting). A gain
    credits `<gain-account>`; a loss debits `<loss-account>`.
 
    Required: :book, :journal, :date
-   Optional: :asset-account-cost (default = the asset's
-             :acquisition-cost — see note below),
+   Optional: :asset-account-cost (default = the book's
+             `gross-carrying-amount` — see note below),
+             :accumulated-relieved (default = the pro-rata share of
+             `accumulated-depreciation` — see note below),
              :proceeds (default 0M — a scrap/write-off),
              :proceeds-account (required iff :proceeds > 0),
              :gain-account (required iff a gain results),
@@ -199,27 +212,66 @@
              :commodity (default = the book's :commodity),
              :narration, :external-id, :posted-at (seal the entry)
 
-   `:asset-account-cost` defaults to the asset's `:acquisition-cost`
-   (the whole-asset disposal — the common case, matching the cost
-   side of `net-book-value`). A partial disposal overrides it with
-   the disposed portion."
+   ## Both control-account legs move together
+
+   `:asset-account-cost` defaults to
+   `kontor.asset.depreciation/gross-carrying-amount` — acquisition
+   cost PLUS the `:revaluation` / `:addition` `:asset-event`s that were
+   also debited to the asset-account. `:acquisition-cost` alone would
+   strand a revaluation on the balance sheet.
+
+   `:accumulated-relieved` defaults to
+   `accumulated-depreciation × (asset-account-cost / gross-carrying-
+   amount)`, rounded HALF-EVEN at the commodity's precision. On a
+   whole-asset disposal the ratio is exactly 1 and the full contra
+   balance comes off (no rounding). On a PARTIAL disposal it relieves
+   the same fraction of accumulated as of cost: relieving 100% of
+   accumulated against a fraction of the cost silently inflated the
+   gain and left the control accounts inconsistent (0299 driven to 0
+   while 0210 still carried the retained portion).
+
+   Pass `:accumulated-relieved` explicitly when the disposed component
+   carries a share of accumulated depreciation that is not
+   proportional to its cost."
   [db {:keys [book proceeds proceeds-account gain-account loss-account
-              commodity asset-account-cost]
+              commodity asset-account-cost accumulated-relieved]
        :or {proceeds 0M}
        :as spec}]
-  (let [{:keys [ledger asset-account accumulated-account
-                acquisition-cost] book-com :commodity}
+  (let [{:keys [ledger asset-account accumulated-account] book-com :commodity}
         (book-context db book)
-        asset-account-cost (or asset-account-cost acquisition-cost)
+        gross (depreciation/gross-carrying-amount db book)
+        asset-account-cost (or asset-account-cost
+                               (when (pos? (.signum ^BigDecimal gross)) gross))
         _ (when-not asset-account-cost
             (throw (ex-info ":asset-account-cost required (the asset has no :acquisition-cost)" {})))
         com (or commodity book-com)
-        accumulated (depreciation/accumulated-depreciation db book)
-        nbv (.subtract ^java.math.BigDecimal asset-account-cost accumulated)
-        gain-loss (.subtract ^java.math.BigDecimal proceeds nbv)
-        gain? (pos? (.signum gain-loss))
-        loss? (neg? (.signum gain-loss))]
-    (when (and (pos? (.signum ^java.math.BigDecimal proceeds))
+        book-accumulated (depreciation/accumulated-depreciation db book)
+        accumulated
+        (or accumulated-relieved
+            (cond
+              ;; Whole-asset disposal — relieve the whole contra
+              ;; balance, no division and so no rounding residue.
+              (zero? (.compareTo ^BigDecimal asset-account-cost gross))
+              book-accumulated
+
+              (zero? (.signum ^BigDecimal gross))
+              (throw (ex-info ":accumulated-relieved required — the book's gross carrying amount is zero, so the disposed fraction cannot be derived"
+                              {:type :kontor.asset/indeterminate-disposal-fraction
+                               :book book}))
+
+              ;; Partial disposal — relieve the same FRACTION of
+              ;; accumulated as of cost.
+              :else
+              (.divide (.multiply ^BigDecimal book-accumulated
+                                  ^BigDecimal asset-account-cost)
+                       ^BigDecimal gross
+                       (int (commodity-precision db com))
+                       RoundingMode/HALF_EVEN)))
+        nbv (.subtract ^BigDecimal asset-account-cost ^BigDecimal accumulated)
+        gain-loss (.subtract ^BigDecimal proceeds ^BigDecimal nbv)
+        gain? (pos? (.signum ^BigDecimal gain-loss))
+        loss? (neg? (.signum ^BigDecimal gain-loss))]
+    (when (and (pos? (.signum ^BigDecimal proceeds))
                (not proceeds-account))
       (throw (ex-info ":proceeds-account required when :proceeds > 0" {})))
     (when (and gain? (not gain-account))
@@ -227,12 +279,12 @@
                       {:gain gain-loss})))
     (when (and loss? (not loss-account))
       (throw (ex-info ":loss-account required — disposal results in a loss"
-                      {:loss (.negate ^java.math.BigDecimal gain-loss)})))
+                      {:loss (.negate ^BigDecimal gain-loss)})))
     (build spec
            (cond-> [(posting* proceeds-account proceeds com ledger)
                     (posting* accumulated-account accumulated com ledger)
                     (posting* asset-account
-                              (.negate ^java.math.BigDecimal asset-account-cost)
+                              (.negate ^BigDecimal asset-account-cost)
                               com ledger)]
              gain? (conj (posting* gain-account
                                    (.negate ^java.math.BigDecimal gain-loss)

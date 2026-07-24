@@ -18,7 +18,37 @@
 
    The ROU asset's *depreciation* entry is NOT here — it is built by
    `kontor.asset.posting/plan-depreciation-charge`, since the ROU
-   asset is an `:asset` and reuses the kontor-asset machinery whole."
+   asset is an `:asset` and reuses the kontor-asset machinery whole.
+
+   ## Hazard — `plan-fx-retranslation` is UNWIRED (note 198 MED-1)
+
+   `plan-fx-retranslation` is a consumer-composed builder: nothing in
+   kontor-lease calls it, and no transactor routes through it. Two
+   traps a consumer that adopts it must handle itself, because the
+   builder cannot:
+
+   1. **It moves the GL without moving the subledger.** The entry
+      credits/debits the book's `:liability-account`, but nothing
+      updates `:kontor.lease-liability/opening-liability`. The liability
+      subledger (`lease-provider/outstanding-liability`) is measured in
+      the BOOK commodity and will not follow, so every retranslation
+      widens the gap `kontor.lease.report/reconcile-liability` reports.
+      A consumer retranslating a foreign-currency lease must either
+      keep the retranslation on a separate reporting-currency ledger
+      (the ADR-021 shape) or re-anchor the book itself.
+
+   2. **In provider mode the amount and the commodity disagree.**
+      `:gain-loss` is computed as `(book-balance × closing-rate) −
+      prior-rc-carrying`, i.e. a REPORTING-commodity number, but the
+      legs are tagged with `:commodity` — the BOOK commodity. Pass the
+      reporting commodity as `:commodity` (and post onto the reporting
+      ledger) if you use that mode, or compute `:gain-loss` yourself
+      and use mode 1.
+
+   Fixing this properly means deciding where a retranslated lease book
+   lives (ADR-021 parallel ledger vs. an in-place remeasurement) —
+   a design call, not a patch, so it is documented rather than
+   half-fixed."
   (:require [kontor.fx.fx :as fx]
             [kontor.money :as money]
             [kontor.posting :as posting]))
@@ -115,22 +145,30 @@
   "Build one period's lease-payment entry for ONE (lease, ledger)
    book:
 
-     Dr  <interest-account>      interest
-     Dr  <liability-account>     principal
-     Cr  <cash-account>          payment       (= interest + principal)
+     Dr  <interest-account>          interest
+     Dr  <liability-account>         principal
+     Dr  <variable-expense-account>  variable      (optional, ASC 842)
+     Cr  <cash-account>              payment + variable
 
    For a FINANCE book `:interest-account` is an interest-expense
    account; for an OPERATING book `commence!` set it to the single
    lease-expense account — so the interest leg lands in the same P&L
    line as the ROU plug, and the two sum to the straight-line cost.
 
+   `:variable` is the ASC 842-10-30-5 variable lease cost — the excess
+   of the CONTRACTUAL rent over the payment this book's liability is
+   measured on (ADR-064 Addendum 2). It services no liability: it is
+   recognised as a period cost WHEN PAID, so it rides the same cash
+   outflow but touches neither `:liability-account` nor the unwind.
+
    Required: :interest-account, :liability-account, :cash-account,
              :interest, :principal, :payment, :commodity, :journal,
              :date
-   Optional: :ledger, :narration, :external-id, :posted-at,
+   Optional: :variable + :variable-expense-account (both, or neither),
+             :ledger, :narration, :external-id, :posted-at,
              :tx-tempid (ADR-067)"
   [{:keys [interest-account liability-account cash-account interest principal
-           payment commodity ledger] :as spec}]
+           payment commodity ledger variable variable-expense-account] :as spec}]
   (when-not interest-account  (throw (ex-info ":interest-account required" {})))
   (when-not liability-account (throw (ex-info ":liability-account required" {})))
   (when-not cash-account      (throw (ex-info ":cash-account required" {})))
@@ -138,11 +176,18 @@
   (when (nil? principal)      (throw (ex-info ":principal required" {})))
   (when (nil? payment)        (throw (ex-info ":payment required" {})))
   (when-not commodity         (throw (ex-info ":commodity required" {})))
-  (build spec
-         [(posting* interest-account interest commodity ledger)
-          (posting* liability-account principal commodity ledger)
-          (posting* cash-account (.negate ^java.math.BigDecimal payment)
-                    commodity ledger)]))
+  (let [variable ^java.math.BigDecimal (or variable 0M)
+        _ (when (and (not (zero? (.signum variable))) (not variable-expense-account))
+            (throw (ex-info "plan-lease-payment: :variable is non-zero but :variable-expense-account was not supplied"
+                            {:type :kontor.lease/missing-variable-lease-expense-account
+                             :variable variable})))
+        cash (.add ^java.math.BigDecimal payment variable)]
+    (build spec
+           [(posting* interest-account interest commodity ledger)
+            (posting* liability-account principal commodity ledger)
+            (posting* (or variable-expense-account interest-account) variable
+                      commodity ledger)
+            (posting* cash-account (.negate cash) commodity ledger)])))
 
 ;; ============================================================================
 ;; Modification adjustments (ADR-064)
