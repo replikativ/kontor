@@ -9,20 +9,53 @@
 
    This namespace is the book lifecycle: `open-book!` creates a book
    + its schedule + its optional method-params in one tx;
-   `accumulated-depreciation` / `net-book-value` are the asset-local
+   `scheduled-depreciation` / `accumulated-depreciation` /
+   `gross-carrying-amount` / `net-book-value` are the asset-local
    roll-forward queries.
 
-   ## Why the roll-forward reads `:schedule-occurrence`, not the GL
+   ## Why the roll-forward reads subledger facts, not the GL
 
-   `accumulated-depreciation` sums `:kontor.schedule-occurrence/amount` over
-   the book's schedule — it does NOT sum GL postings to the
-   `:kontor.asset/accumulated-account`. The GL accounts are shared across
-   every asset in a class and a `:posting` carries no per-asset
-   back-ref, so a GL sum cannot be attributed to one asset. The
-   subsystem's own occurrence log is the source of truth for the
-   roll-forward; the GL postings are its *consequence* (built by
-   `kontor.asset.posting`). This is also what makes the query
-   ledger-aware by construction — each book owns its own schedule."
+   The roll-forward queries read `:schedule-occurrence` +
+   `:asset-event` — they do NOT sum GL postings to the
+   `:kontor.asset/asset-account` / `:kontor.asset/accumulated-account`.
+   The GL accounts are shared across every asset in a class and a
+   `:posting` carries no per-asset back-ref, so a GL sum cannot be
+   attributed to one asset. The subsystem's own logs are the source of
+   truth for the roll-forward; the GL postings are its *consequence*
+   (built by `kontor.asset.posting`). This is also what makes the query
+   ledger-aware by construction — each book owns its own schedule.
+
+   ## The event fold, and why it is load-bearing
+
+   A subledger figure must account for EVERY value movement the module
+   posts to the control account, not just the ones its own schedule
+   planned. `kontor.asset.posting/plan-impairment` credits the
+   accumulated-account and `plan-revaluation` debits the asset-account,
+   and neither writes a `:schedule-occurrence`. So:
+
+     scheduled-depreciation  = :opening-accumulated + Σ occurrences
+     accumulated-depreciation = scheduled-depreciation + Σ :impairment
+     gross-carrying-amount    = :acquisition-cost + Σ :revaluation
+                                                  + Σ :addition
+
+   `accumulated-depreciation` (not `scheduled-depreciation`) is what
+   `plan-disposal` relieves — reading the schedule alone left the
+   impairment stranded in the GL and flipped the sign of the
+   disposal gain/loss.
+
+   `:asset-event` is asset-level, not per-book (there is no
+   `:kontor.asset-event/ledger`), so a value-moving event folds into
+   EVERY book of the asset — matching the intended flow, where
+   `plan-impairment` / `plan-revaluation` are called once per book.
+   A caller that impairs only one ledger of a multi-book asset must
+   record one event per affected book's amount; the drift is surfaced
+   by `kontor.asset.report/asset-tie-out`, never hidden.
+
+   `asset-tie-out` is the detective control for the other direction:
+   an event recorded here whose GL entry was never posted shows up as
+   a non-zero `:difference`, which is the correct finding (\"someone
+   recorded an impairment and forgot to post it\") rather than a
+   report bug."
   (:require [datahike.api :as d]
             [kontor.asset.asset :as asset]
             [kontor.workflow.schedule :as schedule]
@@ -83,12 +116,43 @@
 ;; Roll-forward queries
 ;; ============================================================================
 
-(defn accumulated-depreciation
-  "Total accumulated depreciation for this (asset, ledger) book:
-   the book's `:opening-accumulated` (pre-schedule depreciation from
-   a mid-life import — usually absent) plus Σ `:kontor.schedule-occurrence/
-   amount` over the book's schedule. Returns a bigdec (0M when
-   nothing has been charged)."
+(defn asset-of
+  "The `:asset` eid a book belongs to."
+  [db book-spec]
+  (when-let [eid (resolve-book db book-spec)]
+    (:db/id (:kontor.asset-depreciation/asset
+             (d/pull db [:kontor.asset-depreciation/asset] eid)))))
+
+(defn event-amount-sum
+  "Σ `:kontor.asset-event/amount` over an asset's `:asset-event`s of
+   `kind`. Returns a bigdec (0M when there are none).
+
+   `:with ?e` is load-bearing: without it two events sharing a
+   `(kind, amount)` collapse into ONE row of the value-set and the sum
+   silently undercounts — the same hazard the occurrence sum below
+   documents."
+  ^java.math.BigDecimal [db asset-eid kind]
+  (or (d/q '[:find (sum ?amt) .
+             :with ?e
+             :in $ ?a ?k
+             :where
+             [?e :kontor.asset-event/asset ?a]
+             [?e :kontor.asset-event/kind ?k]
+             [?e :kontor.asset-event/amount ?amt]]
+           db asset-eid kind)
+      0M))
+
+(defn scheduled-depreciation
+  "The PLANNED depreciation charged on this (asset, ledger) book: the
+   book's `:opening-accumulated` (pre-schedule depreciation from a
+   mid-life import — usually absent) plus Σ
+   `:kontor.schedule-occurrence/amount` over the book's schedule.
+   Returns a bigdec (0M when nothing has been charged).
+
+   This is the schedule's own log and NOT the control-account figure —
+   `plan-impairment` credits the accumulated-account without writing an
+   occurrence. Use `accumulated-depreciation` for anything that has to
+   agree with the GL."
   ^java.math.BigDecimal [db book-spec]
   (let [eid (resolve-book db book-spec)
         b (d/pull db [:kontor.asset-depreciation/schedule
@@ -111,20 +175,57 @@
             0M)]
     (.add ^java.math.BigDecimal opening ^java.math.BigDecimal from-occurrences)))
 
+(defn accumulated-depreciation
+  "Everything this book has credited to the asset's
+   `:kontor.asset/accumulated-account`:
+   `scheduled-depreciation + Σ :impairment :asset-event amounts`.
+
+   The impairment fold is what makes this the CONTROL-ACCOUNT figure
+   rather than the schedule's log — `kontor.asset.posting/plan-impairment`
+   credits the accumulated-account and writes no
+   `:schedule-occurrence`, so a schedule-only sum understates the
+   contra-asset and, via `plan-disposal`, mis-signs the gain/loss on
+   disposal. See the ns docstring for the per-book caveat on
+   asset-level events."
+  ^java.math.BigDecimal [db book-spec]
+  (let [eid (resolve-book db book-spec)]
+    (.add (scheduled-depreciation db eid)
+          (event-amount-sum db (asset-of db eid) :impairment))))
+
+(defn gross-carrying-amount
+  "Everything this book has debited to the asset's
+   `:kontor.asset/asset-account`:
+   `acquisition-cost + Σ :revaluation + Σ :addition :asset-event
+   amounts`.
+
+   `plan-revaluation` debits the asset-account and a capitalised
+   `:addition` is booked to it too, while neither restates
+   `:kontor.asset/acquisition-cost` (one cost, shared by every book —
+   ADR-054). So the gross cost the GL carries is the acquisition cost
+   PLUS the mid-life value movements, and that is what `plan-disposal`
+   must relieve."
+  ^java.math.BigDecimal [db book-spec]
+  (let [asset-eid (asset-of db book-spec)
+        cost (or (:kontor.asset/acquisition-cost
+                  (d/pull db [:kontor.asset/acquisition-cost] asset-eid))
+                 0M)]
+    (.add (.add ^java.math.BigDecimal cost
+                (event-amount-sum db asset-eid :revaluation))
+          (event-amount-sum db asset-eid :addition))))
+
 (defn net-book-value
   "Carrying amount of the asset in this book:
-   `acquisition-cost − accumulated-depreciation`.
+   `gross-carrying-amount − accumulated-depreciation`.
 
-   ADR-054's NBV reflects the depreciation schedule only. Mid-life
-   events (impairment, revaluation, subsequent additions) adjust NBV
-   via ADR-055's re-planning — folded in there, not here."
+   Mid-life events ARE folded in: a `:revaluation` / `:addition` lifts
+   the gross side, an `:impairment` lifts the accumulated side —
+   mirroring the GL entries `kontor.asset.posting` builds for them.
+   (`revise-book!` additionally re-spreads the un-fired schedule tail
+   prospectively per IAS 16; that changes the FUTURE charges, not this
+   figure.)"
   ^java.math.BigDecimal [db book-spec]
-  (let [eid (resolve-book db book-spec)
-        asset-eid (:db/id (:kontor.asset-depreciation/asset
-                           (d/pull db [:kontor.asset-depreciation/asset] eid)))
-        cost (:kontor.asset/acquisition-cost
-              (d/pull db [:kontor.asset/acquisition-cost] asset-eid))]
-    (.subtract ^java.math.BigDecimal (or cost 0M)
+  (let [eid (resolve-book db book-spec)]
+    (.subtract (gross-carrying-amount db eid)
                (accumulated-depreciation db eid))))
 
 ;; ============================================================================

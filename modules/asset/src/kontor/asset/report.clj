@@ -1,7 +1,7 @@
 (ns kontor.asset.report
   "kontor-asset Jahresabschluss reports — ADR-056.
 
-   Two pieces:
+   Three pieces:
 
    1. `asset-roll-forward` — the Anlagengitter / Anlagenspiegel
       (HGB §284 Abs. 3) arithmetic: the per-class gross-cost and
@@ -14,7 +14,16 @@
       *layout* (the HGB column order, the SKR04 class grouping) is
       l10n's.
 
-   2. `pending-depreciation-issues` — a `kontor.compliance.period/close!`
+   2. `asset-tie-out` — the detective control that keeps (1) honest:
+      it asserts the asset subledger (Σ gross carrying amount, Σ
+      accumulated depreciation) equals the GL cost + accumulated
+      control-account balances, and surfaces any delta. Because the
+      roll-forward reads subledger facts rather than postings, an
+      `:asset-event` whose GL entry was never posted would otherwise
+      show up in the Anlagengitter and nowhere else; `asset-tie-out`
+      is what turns that into a reported `:difference`.
+
+   3. `pending-depreciation-issues` — a `kontor.compliance.period/close!`
       `:pre-checks` fn that flags 'you forgot to run depreciation for
       this period'.
 
@@ -23,8 +32,11 @@
    book and the Steuerbilanz book are two `asset-roll-forward` calls
    with different `:ledger`s."
   (:require [datahike.api :as d]
+            [kontor.asset.depreciation :as depreciation]
+            [kontor.reporting.balance :as balance]
             [kontor.workflow.schedule :as schedule])
-  (:import [java.util Date]))
+  (:import [java.math BigDecimal]
+           [java.util Date]))
 
 ;; ============================================================================
 ;; Anlagengitter — the asset roll-forward
@@ -65,8 +77,8 @@
   "Gather one asset's roll-forward inputs: cost, entry-date, the
    earliest disposal/transfer date (if any), the book's
    `:opening-accumulated`, its fired `:schedule-occurrence`
-   `[date amount]` pairs, and its `:impairment` / `:revaluation`
-   `:asset-event` `[date amount]` pairs."
+   `[date amount]` pairs, and its `:impairment` / `:revaluation` /
+   `:addition` `:asset-event` `[date amount]` pairs."
   [db asset book sched]
   (let [a (d/pull db [:kontor.asset/acquisition-cost :kontor.asset/in-service-date
                       :kontor.asset/acquisition-date {:kontor.asset/class [:db/id]}]
@@ -75,7 +87,16 @@
                                  (d/pull db [:kontor.asset-depreciation/opening-accumulated]
                                          book))
                                 0M)
+        ;; `:with ?o` / `:with ?e` are load-bearing on BOTH queries
+        ;; below: a datalog :find set collapses duplicate tuples, so
+        ;; two occurrences sharing a (scheduled-date, amount) — the
+        ;; ADR-055 re-planning case — or two events sharing a
+        ;; (kind, date, amount) would fuse into ONE row and the
+        ;; window sums would silently UNDERSTATE the Anlagengitter.
+        ;; `kontor.asset.depreciation/scheduled-depreciation` carries
+        ;; the same note; this file was missed when that one was fixed.
         occ (d/q '[:find ?d ?amt
+                   :with ?o
                    :in $ ?s
                    :where
                    [?o :kontor.schedule-occurrence/schedule ?s]
@@ -92,11 +113,12 @@
                            db asset)
         ;; [kind date amount] for the value-moving mid-life events.
         kind-events (d/q '[:find ?kind ?d ?amt
+                           :with ?e
                            :in $ ?asset
                            :where
                            [?e :kontor.asset-event/asset ?asset]
                            [?e :kontor.asset-event/kind ?kind]
-                           [(contains? #{:impairment :revaluation} ?kind)]
+                           [(contains? #{:impairment :revaluation :addition} ?kind)]
                            [?e :kontor.asset-event/date ?d]
                            [?e :kontor.asset-event/amount ?amt]]
                          db asset)
@@ -111,7 +133,8 @@
      :opening-accumulated opening-accumulated
      :occ                 occ
      :impairments         (pairs :impairment)
-     :revaluations        (pairs :revaluation)}))
+     :revaluations        (pairs :revaluation)
+     :additions           (pairs :addition)}))
 
 (defn- record-contributions
   "Per-asset contributions to the roll-forward buckets over
@@ -119,12 +142,18 @@
 
    Depreciation occurrences AND `:impairment` events flow into the
    accumulated-depreciation roll-forward (HGB §284 Abs. 3 shows
-   außerplanmäßige Abschreibung). `:revaluation` events adjust the
-   gross-cost roll-forward (`plan-revaluation` posts `Dr asset-account`).
+   außerplanmäßige Abschreibung). `:revaluation` and `:addition`
+   events adjust the gross-cost roll-forward (`plan-revaluation` posts
+   `Dr asset-account`, and a capitalised addition is booked there too).
    The book's `:opening-accumulated` (a mid-life import's pre-schedule
-   depreciation) is always opening accumulated."
+   depreciation) is always opening accumulated.
+
+   The buckets mirror `kontor.asset.depreciation`'s
+   `accumulated-depreciation` / `gross-carrying-amount` exactly — the
+   two must not compute 'accumulated depreciation' differently, or
+   the Anlagengitter and the disposal entry disagree."
   [{:keys [cost entry-date removal-date opening-accumulated
-           occ impairments revaluations]}
+           occ impairments revaluations additions]}
    ^Date from ^Date to]
   (let [entry-before-from? (and entry-date (before? entry-date from))
         entry-in-window?   (and entry-date
@@ -144,6 +173,7 @@
       (let [occ*    (split-by-window occ from to)
             impair* (split-by-window impairments from to)
             reval*  (split-by-window revaluations from to)
+            addn*   (split-by-window additions from to)
             ;; accumulated = scheduled depreciation + impairments
             ;;   (+ the book's pre-schedule opening-accumulated)
             accum-opening   (bd+ opening-accumulated
@@ -151,10 +181,10 @@
             accum-period    (bd+ (:in-window occ*) (:in-window impair*))
             accum-before-to (bd+ opening-accumulated
                                  (bd+ (:before-to occ*) (:before-to impair*)))
-            ;; gross cost = acquisition cost + revaluations
-            cost-before     (bd+ cost (:before reval*))
-            cost-in-window  (:in-window reval*)
-            cost-before-to  (bd+ cost (:before-to reval*))]
+            ;; gross cost = acquisition cost + revaluations + additions
+            cost-before     (bd+ cost (bd+ (:before reval*) (:before addn*)))
+            cost-in-window  (bd+ (:in-window reval*) (:in-window addn*))
+            cost-before-to  (bd+ cost (bd+ (:before-to reval*) (:before-to addn*)))]
         {:cost-opening    (if entry-before-from? cost-before 0M)
          :cost-additions  (bd+ (if entry-in-window? cost 0M) cost-in-window)
          :cost-disposals  (if removed-in-window? cost-before-to 0M)
@@ -162,7 +192,8 @@
          :accum-period    accum-period
          :accum-disposals (if removed-in-window? accum-before-to 0M)
          :impairments     (:in-window impair*)
-         :revaluations    (:in-window reval*)}))))
+         :revaluations    (:in-window reval*)
+         :additions       (:in-window addn*)}))))
 
 (defn- aggregate-group
   "Sum a group's per-asset contribution maps into the roll-forward
@@ -187,10 +218,11 @@
      :accum-period    accum-period
      :accum-disposals accum-disposals
      :accum-closing   accum-closing
-     ;; Memo lines — the in-window impairment / revaluation totals,
-     ;; already folded into accum-period / cost-additions above.
+     ;; Memo lines — the in-window impairment / revaluation / addition
+     ;; totals, already folded into accum-period / cost-additions above.
      :impairments     (add-k :impairments)
      :revaluations    (add-k :revaluations)
+     :additions       (add-k :additions)
      :nbv-opening     (bd- cost-opening accum-opening)
      :nbv-closing     (bd- cost-closing accum-closing)}))
 
@@ -204,7 +236,7 @@
                 :asset-count n
                 :cost-opening   :cost-additions :cost-disposals :cost-closing
                 :accum-opening  :accum-period   :accum-disposals :accum-closing
-                :impairments    :revaluations   ; in-window memo totals
+                :impairments    :revaluations   :additions  ; in-window memos
                 :nbv-opening    :nbv-closing} …]
       :totals {…same keys, summed across groups…}}
 
@@ -221,11 +253,20 @@
    Mid-life events are folded in (review-after market-pain):
    `:impairment` `:asset-event`s flow into the accumulated-depreciation
    roll-forward (HGB §284 Abs. 3 shows außerplanmäßige Abschreibung);
-   `:revaluation` events adjust the gross-cost roll-forward; a book's
-   `:opening-accumulated` (a mid-life import's pre-schedule
-   depreciation) is opening accumulated. `:impairments` /
-   `:revaluations` are exposed as in-window memo totals (already
-   folded into `:accum-period` / `:cost-additions`).
+   `:revaluation` and `:addition` events adjust the gross-cost
+   roll-forward; a book's `:opening-accumulated` (a mid-life import's
+   pre-schedule depreciation) is opening accumulated. `:impairments` /
+   `:revaluations` / `:additions` are exposed as in-window memo totals
+   (already folded into `:accum-period` / `:cost-additions`).
+
+   This is a SUBLEDGER report: it counts every value-moving
+   `:asset-event`, whether or not its GL entry was posted. That is
+   deliberate — the event log is the register's own record of what the
+   books owe, and the same figures drive `plan-disposal`, so counting
+   only linked events would make a disposal silently under-relieve.
+   The consequence — a recorded-but-unposted event makes the
+   Anlagengitter disagree with the balance sheet — is caught by
+   [[asset-tie-out]], not papered over here.
 
    Required opts: `:from`, `:to`, `:ledger` (eid).
    Optional: `:group-by` — `:class` (default, group by `:kontor.asset/class`)
@@ -259,6 +300,123 @@
      :ledger ledger
      :groups groups
      :totals (dissoc totals :group)}))
+
+;; ============================================================================
+;; asset-tie-out
+;; ============================================================================
+
+(def ^:private gone-statuses
+  "Statuses whose assets `plan-disposal` has already relieved out of
+   BOTH control accounts, so the subledger must stop counting them."
+  #{:disposed :transferred})
+
+(defn asset-tie-out
+  "Reconcile the asset subledger to its two GL control accounts.
+   `subledger` = `Σ depreciation/gross-carrying-amount` and
+   `Σ depreciation/accumulated-depreciation` over every still-held
+   asset on `:ledger` that posts to those accounts; `gl` = the
+   corresponding account balances for `:commodity`. A non-zero
+   `:difference` is the 'my balance-sheet fixed-asset number is wrong'
+   finding — surfaced, not hidden.
+
+   This is the asset sibling of
+   `kontor.inventory.report/valuation-tie-out`, and it exists for the
+   same reason: the roll-forward reads subledger facts
+   (`:schedule-occurrence` + `:asset-event`), because GL accounts are
+   shared across a whole class and a `:posting` carries no per-asset
+   back-ref. Nothing structurally forces the two to agree, so the
+   agreement has to be MEASURED. The three ways they drift:
+
+   - an `:asset-event` (impairment / revaluation / addition) was
+     recorded but its GL entry never posted;
+   - a GL entry was posted straight to the control account without a
+     corresponding register fact;
+   - a partial disposal — `:partial-disposal` is a RESERVED
+     `:kontor.asset-event/kind` with no transactor, so the register
+     still carries the full `:acquisition-cost` while
+     `plan-disposal` has already relieved the disposed slice from the
+     GL. Expect a `:difference` of exactly the disposed portion until
+     that follow-up lands.
+
+   Required: :ledger (eid), :asset-account (eid),
+             :accumulated-account (eid), :commodity (eid).
+   Optional: :as-of-valid, :as-of-tx (the bitemporal cursor, applied
+             to BOTH sides — `:as-of-tx` snapshots the db the
+             subledger reduce runs against, so it cannot compare a
+             current subledger to a historical GL);
+             :include-states (passed through to
+             `kontor.reporting.balance/account-balance`; default
+             `#{:posted}`, so a DRAFT disposal entry is correctly
+             absent from the GL side).
+
+   Returns
+     {:ledger eid :asset-count n
+      :subledger  {:cost bigdec :accumulated bigdec :nbv bigdec}
+      :gl         {:cost bigdec :accumulated bigdec :nbv bigdec}
+      :difference {:cost bigdec :accumulated bigdec :nbv bigdec}
+      :ok? boolean}
+
+   `:accumulated` is stated POSITIVE on both sides: the GL
+   accumulated-account carries a credit (negative) balance, and it is
+   negated here so it reads as the contra-asset figure the
+   Anlagengitter shows. `:nbv` = `:cost − :accumulated`. `:ok?` is
+   true iff both `:cost` and `:accumulated` differences are zero."
+  [conn {:keys [ledger asset-account accumulated-account commodity
+                as-of-valid as-of-tx include-states]}]
+  (when-not ledger              (throw (ex-info ":ledger required" {})))
+  (when-not asset-account       (throw (ex-info ":asset-account required" {})))
+  (when-not accumulated-account (throw (ex-info ":accumulated-account required" {})))
+  (when-not commodity           (throw (ex-info ":commodity required" {})))
+  (let [;; :as-of-tx is honoured on the subledger side by snapshotting
+        ;; the db — the depreciation roll-forward queries take a db,
+        ;; so the tx-time axis must be applied to `db` itself
+        ;; (account-balance applies it on the GL side).
+        db    (cond-> (d/db conn) as-of-tx (d/as-of as-of-tx))
+        opts  (cond-> {:ledger ledger}
+                as-of-valid    (assoc :as-of-valid as-of-valid)
+                as-of-tx       (assoc :as-of-tx as-of-tx)
+                include-states (assoc :include-states include-states))
+        books (d/q '[:find ?book ?status
+                     :in $ ?ledger ?aa ?ca
+                     :where
+                     [?book :kontor.asset-depreciation/ledger ?ledger]
+                     [?book :kontor.asset-depreciation/asset ?asset]
+                     [?asset :kontor.asset/asset-account ?aa]
+                     [?asset :kontor.asset/accumulated-account ?ca]
+                     [(get-else $ ?asset :kontor.asset/status :none) ?status]]
+                   db ledger asset-account accumulated-account)
+        held  (into [] (comp (remove (fn [[_ status]] (gone-statuses status)))
+                             (map first))
+                    books)
+        sub   (reduce (fn [acc book]
+                        (-> acc
+                            (update :cost
+                                    (fn [^BigDecimal c]
+                                      (.add c (depreciation/gross-carrying-amount db book))))
+                            (update :accumulated
+                                    (fn [^BigDecimal a]
+                                      (.add a (depreciation/accumulated-depreciation db book))))))
+                      {:cost 0M :accumulated 0M}
+                      held)
+        gl-of (fn ^BigDecimal [account]
+                (or (:amount (get (balance/account-balance conn account opts) commodity))
+                    0M))
+        gl    {:cost        (gl-of asset-account)
+               ;; A contra-asset carries a credit balance — negate so
+               ;; both sides speak the Anlagengitter's sign.
+               :accumulated (.negate ^BigDecimal (gl-of accumulated-account))}
+        nbv   (fn [{:keys [^BigDecimal cost ^BigDecimal accumulated]}]
+                (.subtract cost accumulated))
+        diff  {:cost        (.subtract ^BigDecimal (:cost sub) ^BigDecimal (:cost gl))
+               :accumulated (.subtract ^BigDecimal (:accumulated sub)
+                                       ^BigDecimal (:accumulated gl))}]
+    {:ledger      ledger
+     :asset-count (count held)
+     :subledger   (assoc sub :nbv (nbv sub))
+     :gl          (assoc gl  :nbv (nbv gl))
+     :difference  (assoc diff :nbv (nbv diff))
+     :ok?         (and (zero? (.signum ^BigDecimal (:cost diff)))
+                       (zero? (.signum ^BigDecimal (:accumulated diff))))}))
 
 ;; ============================================================================
 ;; Pre-close hook — :no-pending-depreciation

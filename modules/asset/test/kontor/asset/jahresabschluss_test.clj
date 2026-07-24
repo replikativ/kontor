@@ -298,6 +298,20 @@
   ;; roll-forward (HGB §284), a revaluation in the cost roll-forward,
   ;; and a mid-life import's :opening-accumulated must be opening
   ;; accumulated depreciation.
+  ;;
+  ;; NOTE on the bare :asset-event rows below: they are transacted
+  ;; with NO GL entry, and the expectations here (105,000 cost
+  ;; additions, 12,000 impairments) are deliberately the SUBLEDGER's
+  ;; figures, not the GL's. The roll-forward counts every value-moving
+  ;; event because kontor.asset.posting/plan-disposal relieves the
+  ;; same figures — a report that silently dropped un-posted events
+  ;; would make a disposal under-relieve the control accounts, which
+  ;; is the far worse failure. The gap between register and GL is a
+  ;; real finding, and it is REPORTED, by
+  ;; kontor.asset.report/asset-tie-out — see
+  ;; kontor.asset.tie-out-test/tie-out-reports-an-event-that-was-recorded-but-never-posted,
+  ;; which runs exactly this scenario and asserts
+  ;; :difference {:cost 5000 :accumulated 12000} / :ok? false.
   (let [conn (bootstrap)
         _ (acquire-machine! conn "EV-1" 100000.00M #inst "2026-02-01")
         db (d/db conn)

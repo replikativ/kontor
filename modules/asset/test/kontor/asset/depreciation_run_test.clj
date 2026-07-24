@@ -19,7 +19,8 @@
             [kontor.asset.depreciation-provider :as dp]
             [kontor.asset.runner :as runner]
             [kontor.asset.schema :as asset-schema]
-            [kontor.core :as core]))
+            [kontor.core :as core]
+            [kontor.reporting.balance :as balance]))
 
 ;; ============================================================================
 ;; Fixture
@@ -84,6 +85,15 @@
 
 (def ^:private far-future #inst "2060-01-01")
 
+(defn- gl
+  "The GL balance on `code` in EUR — a DEBIT reads positive, a credit
+   negative. The ledger effect, not the subledger log."
+  [conn code]
+  (let [db (d/db conn)]
+    (or (:amount (get (balance/account-balance conn (acct db code))
+                      (commodity db)))
+        0M)))
+
 ;; ============================================================================
 ;; Straight-line provider + the runner
 ;; ============================================================================
@@ -117,8 +127,14 @@
       (is (= 120 (:count result)))
       (is (= 120000.00M (:total result)))
       (is (true? (:completed? result))))
-    (testing "accumulated depreciation tracks the occurrence log"
-      (is (= 120000.00M (dep/accumulated-depreciation (d/db conn) book)))
+    (testing "the LEDGER carries the full charge — not just the occurrence log"
+      ;; 120 × €1,000: Dr 6220 120,000 / Cr 0299 120,000. Asserting
+      ;; dep/accumulated-depreciation alone only proves the subledger
+      ;; agrees with itself; the money lives in the GL.
+      (is (= 120000.00M (gl conn "6220")))
+      (is (= -120000.00M (gl conn "0299")))
+      (is (= 120000.00M (dep/accumulated-depreciation (d/db conn) book))
+          "and the subledger agrees with the control account")
       (is (= 0M (dep/net-book-value (d/db conn) book))))
     (testing "the asset is driven to :fully-depreciated"
       (is (= :fully-depreciated
@@ -134,11 +150,22 @@
         (is (= 120 (count posted)) "120 sealed depreciation-expense postings")
         (is (every? #(= (hgb db) (:db/id (:kontor.posting/ledger (d/pull db [:kontor.posting/ledger] %))))
                     posted))))
-    (testing "re-running fires nothing — record-occurrence! is idempotent"
+    (testing "re-running is idempotent in the LEDGER, not only in the log"
+      ;; A re-fire that leaves the occurrence count alone while
+      ;; double-posting the journal entry is the WF-B bug class
+      ;; (kontor.workflow.schedule, note 198): a row count can stay
+      ;; put while the balance doubles. Assert the balance.
       (let [again (runner/run-depreciation! conn book
                                             {:journal (journal (d/db conn))
                                              :as-of far-future})]
-        (is (= 0 (:count again)))))))
+        (is (= 0 (:count again)))
+        (is (= 120000.00M (gl conn "6220")) "6220 did NOT double to 240,000")
+        (is (= -120000.00M (gl conn "0299")))
+        (is (= 120 (count (d/q '[:find [?p ...]
+                                 :in $ ?acct
+                                 :where [?p :kontor.posting/account ?acct]]
+                               (d/db conn) (acct (d/db conn) "6220"))))
+            "and no second batch of postings was created")))))
 
 (deftest revise-book-re-plans-only-the-unfired-tail
   (let [conn (bootstrap)
@@ -153,7 +180,9 @@
                                         :as-of #inst "2028-01-01"})]
     (testing "24 months fired @ €1,000"
       (is (= 24 (:count run1)))
-      (is (= 24000.00M (dep/accumulated-depreciation (d/db conn) book))))
+      (is (= 24000.00M (dep/accumulated-depreciation (d/db conn) book)))
+      (is (= 24000.00M (gl conn "6220")))
+      (is (= -24000.00M (gl conn "0299"))))
     (testing "revise total useful life 120 → 60 months"
       (dep/revise-book! conn {:book book :new-useful-life-months 60
                               :note "IAS 16 review — life shortened"})
@@ -172,7 +201,12 @@
                                             :changed-by-uid (uid (d/db conn))})]
         (is (= 36 (:count run2)))
         (is (true? (:completed? run2)))
-        (is (= 120000.00M (dep/accumulated-depreciation (d/db conn) book)))))))
+        (is (= 120000.00M (dep/accumulated-depreciation (d/db conn) book)))
+        ;; 24 × 1,000 + 36 × 2,666.67 = 24,000 + 96,000.12. The
+        ;; re-spread's per-period rounding lands in the ledger too —
+        ;; assert it there rather than only in the log.
+        (is (= (dep/accumulated-depreciation (d/db conn) book) (gl conn "6220")))
+        (is (= (.negate ^java.math.BigDecimal (gl conn "6220")) (gl conn "0299")))))))
 
 ;; ============================================================================
 ;; Declining-balance
