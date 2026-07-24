@@ -89,6 +89,11 @@
 (defn- eur-eid [conn]
   (d/q '[:find ?c . :where [?c :kontor.commodity/symbol "EUR"]] (d/db conn)))
 
+(defn- writeoff-account
+  "Where a short-payment tolerance is charged — the sales-discount account."
+  [conn]
+  (d/q '[:find ?a . :where [?a :kontor.account/code "4900"]] (d/db conn)))
+
 (defn- actor [conn]
   (d/q '[:find ?a . :where [?a :kontor.partner/external-id "ACTOR"]] (d/db conn)))
 
@@ -301,27 +306,33 @@
 ;; reconcile against the invoice, the residual nets to zero, and
 ;; account_full_reconcile closes it (see the write-off wizard driving
 ;; account_move_line.py:242 amount_residual → 0 + full_reconcile_id).
-(deftest ^:kaocha/pending underpayment-writeoff-leg-not-linked-to-payment
-  (testing "a 1-cent underpayment cannot be written off as part of the
-            settlement: no write-off leg links to the payment-application, so
-            the invoice stays open at 0.01 / :partially-paid"
+;; FIXED (note 198 r3-recon-b): the `:payment-application` now carries a
+;; payment-linked write-off/tolerance leg — `:write-off-amount` +
+;; `:write-off-account`. `applied-amount-of-invoice` nets the write-off
+;; alongside the cash, so a short payment closes the invoice to :paid instead
+;; of sticking at :partially-paid forever. `settle-invoice!` additionally books
+;; the `Dr write-off-account / Cr receivable` GL leg in the same transaction.
+;; (Distinct from `kontor.collections.writeoff`, which writes off the FULL open
+;; amount as a bad-debt collections event gated behind a :collection-case.)
+(deftest underpayment-writeoff-leg-not-linked-to-payment
+  (testing "a 1-cent underpayment is written off as part of the settlement, so
+            the invoice closes to 0 / :paid"
     (let [conn (fresh-conn)
           inv  (make-invoice! conn "INV-WO" 100.00M)
           pay  (make-payment! conn "PAY-WO")
           cur  (eur-eid conn)
           who  (actor conn)]
-      ;; Customer pays 99.99 (short by 0.01 — a rounding / cash-discount case).
+      ;; Customer pays 99.99 (short by 0.01 — a rounding / cash-discount case);
+      ;; the 0.01 residual is written off to tolerance in the same application.
       (papp/apply-payment! conn {:payment pay :invoice inv :amount 99.99M
                                  :commodity cur :applied-by-uid who
-                                 :applied-at #inst "2026-05-02"})
+                                 :applied-at #inst "2026-05-02"
+                                 :write-off-amount 0.01M
+                                 :write-off-account (writeoff-account conn)})
       (let [db (d/db conn)]
-        ;; What actually happens today (documented, would pass on its own):
-        ;; open = 0.01, status = :partially-paid. The assertions below encode
-        ;; the DESIRED post-write-off state, which the substrate cannot reach.
-        (testing "DESIRED: a 0.01 tolerance write-off closes the invoice"
+        (testing "the 0.01 tolerance write-off closes the invoice"
           (is (zero? (.compareTo 0M (papp/open-amount-of-invoice db inv))))
           (is (= :paid (sm/current-status db inv :kontor.invoice/status))))
-        ;; The substrate a payment-linked write-off leg would require — absent.
         (testing "payment-application carries a write-off account ref"
           (is (schema-has-attr? db :kontor.payment-application/write-off-account)))
         (testing "payment-application carries a write-off amount"

@@ -227,8 +227,11 @@
 ;; 3. PENDING(b) — AP-side bulk allocation across N vendor bills
 ;; ═══════════════════════════════════════════════════════════════════════════
 
-(deftest ^:kaocha/pending ap-side-bulk-allocation-across-vendor-bills
-  ;; PENDING(NEW): `allocate-fifo!` (and its `open-invoices-for-partner`
+(deftest ap-side-bulk-allocation-across-vendor-bills
+  ;; FIXED (note 198 PAY-B): allocate-fifo! takes a `:side` — :ar (default,
+  ;; partner is the invoice :buyer) or :ap (partner is the :seller, i.e. vendor
+  ;; bills) — matching Odoo's symmetric inbound/outbound register wizard.
+  ;; Original finding: `allocate-fifo!` (and its `open-invoices-for-partner`
   ;; helper, payment_application.clj:427-456) query ONLY
   ;; `[?i :kontor.invoice/buyer ?p]` — i.e. AR receivables. There is no
   ;; AP-side counterpart that walks vendor bills (`:kontor.invoice/seller`)
@@ -241,7 +244,10 @@
   (let [_b1 (mk-invoice! "BILL-1" :ap 2000M "EUR")
         _b2 (mk-invoice! "BILL-2" :ap 3000M "EUR")
         pay (mk-payment! "PAY-AP-1")
+        ;; :side :ap — the partner is the invoice SELLER (a vendor bill). Explicit
+        ;; rather than inferred, since one partner can be both buyer and seller.
         allocations (papp/allocate-fifo! *conn* {:payment pay :partner (vendor)
+                                                 :side :ap
                                                  :total-amount 4000M :commodity (eur)
                                                  :applied-by-uid (actor)})]
     (testing "a 4000 vendor payment allocates FIFO across the two bills"
@@ -281,8 +287,11 @@
 ;; 5. PENDING(NEW) — FIFO allocator is currency-blind
 ;; ═══════════════════════════════════════════════════════════════════════════
 
-(deftest ^:kaocha/pending fifo-allocator-ignores-invoice-currency
-  ;; PENDING(NEW): `open-invoices-for-partner` (payment_application.clj:427-456)
+(deftest fifo-allocator-ignores-invoice-currency
+  ;; FIXED (note 198 PAY-NEW): `open-invoices-for-partner` now filters candidates
+  ;; by the payment's commodity, so a EUR payment can no longer be netted 1:1
+  ;; onto a USD invoice. Cross-currency settlement goes through settle-invoice!,
+  ;; which converts and books the realized FX. Original finding:
   ;; selects a partner's :sent/:partially-paid invoices with NO filter on
   ;; :kontor.invoice/currency, and `allocate-fifo!` compares open-amount vs
   ;; remaining purely by magnitude (payment_application.clj:497-512) and
