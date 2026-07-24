@@ -74,7 +74,9 @@
       {:line/code "A.5" :line/label "其他应收款 Other receivables"
        :line/codes ["1221"]}
       {:line/code "A.6" :line/label "存货 Inventories"
-       :line/codes ["1403" "1405" "1406"]}
+       ;; incl. 4101/4105 WIP cost-gathering (生产成本/制造费用) — capitalised
+       ;; into inventory, an asset until cleared to 营业成本 (note 197)
+       :line/codes ["1403" "1405" "1406" "4101" "4105"]}
       ;; asset-typed VAT memo-columns under 应交税费 — see namespace docstring
       {:line/code "A.7" :line/label "增值税进项 (待抵扣/留抵) Deductible / carried-forward input VAT"
        :line/codes ["2221.01.02" "2221.01.05" "2221.04" "2221.05" "2221.07"]}]}

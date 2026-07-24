@@ -34,6 +34,7 @@
             [kontor.l10n-jp.consumption-tax :as jct]
             [kontor.l10n-jp.preset :as jp]
             [kontor.l10n-uk.preset :as uk]
+            [kontor.l10n-uk.vat :as uk-vat]
             [kontor.money :as money]
             [kontor.posting :as posting]
             [kontor.tax.vat-return :as vat]
@@ -243,26 +244,33 @@
 ;;
 ;; UK standard VAT rate = 20% (HMRC; unchanged since 4 Jan 2011).
 ;;
-;; GAP: l10n-uk ships NO VAT-return machinery and NO chart-of-accounts
-;; module. Its preset docstring says outright "UK does not yet ship a
-;; chart module"; the src tree carries only CGT + investment-income.
-;; Contrast IN (generate-gstr-3b), AU (compute-bas) and JP
-;; (compute-return), each of which ships a turnkey periodic return over
-;; a tag-bound chart. A UK consumer gets ZERO default code binding for
-;; the VAT100 boxes 1–9.
+;; FIXED (note 197): l10n-uk now ships a turnkey VAT100 binding
+;; (kontor.l10n-uk.vat/compute-vat100) over the shipped nominal-ledger chart's
+;; VAT codes (output 2200 / input 1120), mirroring IN (generate-gstr-3b),
+;; AU (compute-bas) and JP (compute-return) — no manual code wiring.
 
-(defn- uk-vat-ns-present? []
-  (or (some? (find-ns 'kontor.l10n-uk.vat))
-      (try (require 'kontor.l10n-uk.vat) true
-           (catch Throwable _ false))))
-
-(deftest ^:kaocha/pending uk-vat-return-machinery-missing
-  ;; PENDING(NEW): l10n-uk ships no turnkey VAT-return (VAT100) namespace
-  ;; and no chart/code binding, whereas IN/AU/JP each ship a turnkey
-  ;; periodic indirect-tax return. There is no `kontor.l10n-uk.vat` (or
-  ;; equivalent) a consumer can call — the whole l10n VAT surface is absent.
-  (is (uk-vat-ns-present?)
-      "expected a turnkey kontor.l10n-uk VAT100 return namespace — none ships"))
+(deftest uk-vat100-turnkey-over-shipped-chart
+  (testing "compute-vat100 nets output vs input VAT over the l10n-uk chart"
+    (let [conn (uk/create-uk-db)]
+      (v/install-invariants! conn)
+      (let [db (d/db conn)]
+        ;; Sale £10,000 net + 20% output VAT → Cr output VAT (2200) £2,000
+        (post-manual! conn "GBP" "SJ" "R2-UK-SALE" jan-15
+                      [[(ace db "1200") 12000M]      ; Dr Bank
+                       [(ace db "4000") -10000M]     ; Cr Sales
+                       [(ace db "2200") -2000M]])    ; Cr Output VAT
+        ;; Purchase £4,000 net + 20% input VAT → Dr input VAT (1120) £800
+        (post-manual! conn "GBP" "PJ" "R2-UK-PURCH" jan-20
+                      [[(ace db "5000") 4000M]       ; Dr Purchases
+                       [(ace db "1120") 800M]        ; Dr Input VAT (recoverable)
+                       [(ace db "1200") -4800M]]))   ; Cr Bank
+      (let [r (uk-vat/compute-vat100 conn {:from jan-1 :to feb-1})]
+        (is (money/equiv? (money/money "2000.00" :GBP) (:box-1-vat-due-on-sales r))
+            "VAT100 box 1: output VAT = 20% × £10,000")
+        (is (money/equiv? (money/money "800.00" :GBP) (:box-4-vat-reclaimed r))
+            "VAT100 box 4: input VAT = 20% × £4,000")
+        (is (money/equiv? (money/money "1200.00" :GBP) (:box-5-net-vat r))
+            "VAT100 box 5: 2,000 − 800 = 1,200 payable to HMRC")))))
 
 (deftest uk-vat100-nets-via-kernel-when-codes-supplied
   (testing "The KERNEL substrate (kontor.tax.vat-return) CAN net a UK

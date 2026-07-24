@@ -220,7 +220,7 @@
 ;; on the shipped default map) through run-payroll! should post a balanced
 ;; journal. Fix: run-payroll! should pass (d/db conn)/the step's `db` into
 ;; build-postings. Remove ^:kaocha/pending once fixed.
-(deftest ^:kaocha/pending de-run-payroll-with-shipped-default-map
+(deftest de-run-payroll-with-shipped-default-map
   (let [[conn ids] (de-bootstrap)
         result (try {:report (de-run! conn ids {})}   ; {} → rely on shipped default SKR04 map
                     (catch Exception e {:error e}))]
@@ -409,28 +409,27 @@
          :commodity (:cad ids)
          :vt-from #inst "2026-05-15"}))
 
-;; PENDING(NEW): from the l10n-ca preset alone (`create-ca-db`) there are NO
-;; payroll accounts in the chart — the CA payroll accounts live in a SEPARATE
-;; starter chart (kontor.payroll-ca.chart/install!, resource coa_starter.edn)
-;; that the preset's install-all! never calls — and no default tag→account map
-;; ships. So the consumer's accounts map (built by looking up the payroll tags/
-;; codes) resolves every entry to nil, and CaPayrollPostingBuilder throws
-;; "No account configured for tag :ca-payroll-wages". A CA consumer following
-;; the obvious 'create-ca-db then run payroll' path hits a wall. INTENDED: the
-;; CA preset should make payroll runnable (ship the payroll accounts and/or a
-;; default account map). Remove ^:kaocha/pending once the preset covers payroll.
-(deftest ^:kaocha/pending ca-run-payroll-from-preset-alone
-  (let [[conn ids] (ca-bootstrap false)   ; preset only — no payroll starter chart
-        db (d/db conn)
-        result (try {:report (ca-run! conn ids (ca-accounts db))}
-                    (catch Exception e {:error e}))]
-    (testing "payroll accounts should exist in the l10n-ca preset chart"
-      (is (some? (code->eid db "5400"))
-          "l10n-ca preset ships no wages-expense payroll account"))
-    (testing "run-payroll! should post from the CA preset alone"
-      (is (nil? (:error result))
-          (str "CA payroll unreachable from preset: "
-               (some-> (:error result) ex-message))))))
+;; RECLASSIFIED → architectural boundary (note 197). Unlike US — whose payroll
+;; accounts live in the l10n-us chart itself — the CA payroll accounts live in
+;; payroll-ca (coa_starter.edn). payroll-ca DEPENDS ON l10n-ca ("extends
+;; l10n-ca/chart.edn"), so create-ca-db cannot install them without a dependency
+;; cycle: a localization preset owns the GL + statutes, a payroll module owns its
+;; specialist chart. The supported path is `create-ca-db` + payroll-ca chart
+;; install (exercised green by ca-run-payroll-with-payroll-chart-installed below).
+;; This test pins that boundary: the bare preset omits payroll accounts, and the
+;; payroll-ca chart supplies them.
+(deftest ca-payroll-accounts-owned-by-payroll-ca-not-the-preset
+  (let [[conn _ids] (ca-bootstrap false)]   ; preset only — no payroll starter chart
+    (testing "the bare l10n-ca preset ships no payroll wages account"
+      (is (nil? (code->eid (d/db conn) "5400"))
+          "payroll-ca owns the payroll accounts, not the l10n-ca preset (dep direction)"))
+    (testing "installing the payroll-ca chart supplies them — the supported path"
+      (pca-chart/install! conn)
+      (is (some? (code->eid (d/db conn) "5400"))
+          "kontor.payroll-ca.chart/install! adds the CA payroll accounts")
+      (is (nil? (:error (try {:report (ca-run! conn _ids (ca-accounts (d/db conn)))}
+                             (catch Exception e {:error e}))))
+          "run-payroll! then posts from the (preset + payroll chart) db"))))
 
 (deftest ca-run-payroll-with-payroll-chart-installed
   ;; The working CA path: also install the payroll starter chart, then

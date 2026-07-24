@@ -8,14 +8,13 @@
    `kontor.book: N journals of type :cash — ambiguous`.
 
    Every l10n preset, however, seeds TWO journals of type `:cash`:
-   `CR` (Cash Receipts) + `CD` (Cash Disbursements). This is the
-   conventional double-cash-book split. Consequence: on a standard
-   preset db, the four ergonomic cash verbs — `receive!`, `pay!`,
-   `receive-payment!`, `pay-bill!` (and `distribute-dividend!`) —
-   which resolve `:journal-type :cash` cannot post without the caller
-   passing `:journal` explicitly. The `book` namespace docstring and
-   each verb's docstring advertise the journal-resolved-by-type path as
-   the ergonomic default, so this is a real usability gap.
+   `CR` (Cash Receipts) + `CD` (Cash Disbursements) — the conventional
+   double-cash-book split. FIXED (PR #26): the cash verbs now resolve the
+   ambiguous `:cash` type by the verb's cash-flow DIRECTION — receipts
+   (`receive!` / `receive-payment!`) → CR, disbursements (`pay!` /
+   `pay-bill!` / `distribute-dividend!`) → CD, via a `:journal-code-hint`
+   — so the ergonomic resolved-by-type path the docstrings advertise now
+   works on every shipped preset with no explicit `:journal`.
 
    The single-type verbs are fine: presets seed exactly one journal of
    each of `:sale` (SJ), `:purchase` (PJ), `:general` (GJ) — so
@@ -117,21 +116,34 @@
       (is (eq? -50M   (bal-amount conn kasse)) "cash -50 (transfer out)"))))
 
 ;; ============================================================================
-;; 3. The ambiguity is reachable — GREEN (confirms current thrown behaviour)
+;; 3. The cash verbs resolve CR/CD by direction — GREEN (FIXED, PR #26)
 ;; ============================================================================
 
-(deftest cash-verbs-throw-ambiguous-on-a-preset
-  (testing "receive-payment! / pay-bill! / receive! / pay! all throw a clear
-            ambiguity ex-info on the DE preset, because two :cash journals exist"
-    (let [conn (de/create-de-db)]
-      (doseq [verb [book/receive-payment! book/pay-bill! book/receive! book/pay!]]
-        (let [e (try (verb conn {:debit-account kasse :credit-account ar
-                                 :amount 100 :commodity eur :effective-date d1})
-                     nil
-                     (catch clojure.lang.ExceptionInfo ex ex))]
-          (is (some? e) "a cash verb throws")
-          (is (= :cash (:journal-type (ex-data e))) "ex-data names :cash")
-          (is (= 2 (count (:found (ex-data e)))) "ex-data reports the 2 candidates"))))))
+(deftest cash-verbs-resolve-cr-cd-on-a-preset
+  (testing "FIXED (note 197 / PR #26): receipts (receive / receive-payment)
+            resolve the ambiguous :cash type to CR, disbursements (pay /
+            pay-bill) to CD, and post on the DE preset with NO explicit :journal"
+    (let [conn (de/create-de-db)
+          jcode (fn [narr]
+                  (d/q '[:find ?c .
+                         :in $ ?n
+                         :where
+                         [?t :kontor.transaction/narration ?n]
+                         [?t :kontor.transaction/journal ?j]
+                         [?j :kontor.journal/code ?c]]
+                       (d/db conn) narr))]
+      (book/receive-payment! conn {:debit-account kasse :credit-account ar
+                                   :amount 100 :commodity eur :effective-date d1 :narration "rp"})
+      (book/receive!         conn {:debit-account kasse :credit-account ar
+                                   :amount 10 :commodity eur :effective-date d1 :narration "rcv"})
+      (book/pay!             conn {:debit-account ar :credit-account kasse
+                                   :amount 20 :commodity eur :effective-date d1 :narration "pay"})
+      (book/pay-bill!        conn {:debit-account ap :credit-account kasse
+                                   :amount 30 :commodity eur :effective-date d1 :narration "pb"})
+      (is (= "CR" (jcode "rp"))  "receive-payment! → Cash Receipts")
+      (is (= "CR" (jcode "rcv")) "receive! → Cash Receipts")
+      (is (= "CD" (jcode "pay")) "pay! → Cash Disbursements")
+      (is (= "CD" (jcode "pb"))  "pay-bill! → Cash Disbursements"))))
 
 (deftest explicit-journal-is-the-workaround
   (testing "passing :journal explicitly (CR for receipts) bypasses resolution
@@ -149,19 +161,11 @@
 ;; 4. THE GAP — the ergonomic cash-verb path the docstrings promise is broken
 ;; ============================================================================
 
-;; PENDING(NEW): kontor.book cash verbs (receive!/pay!/receive-payment!/
-;; pay-bill!/distribute-dividend!) all bake in :journal-type :cash and rely on
-;; resolve-journal (book.clj:100) picking the single journal of that type. But
-;; EVERY l10n preset seeds two :cash journals (CR + CD, the standard split), so
-;; resolve-journal throws "N journals of type :cash — ambiguous" and no cash
-;; verb can post without the caller hand-passing :journal. The verb docstrings
-;; advertise "Journal type :cash" as the resolved-by-type ergonomic default, so
-;; on any shipped preset that default is unusable. A correct facade would either
-;; distinguish receipts (CR) from disbursements (CD) by the verb's cash-flow
-;; direction, or the presets would seed a single :cash journal. This test asserts
-;; the promised behaviour (receive-payment! posts a customer payment with no
-;; explicit :journal) and currently ERRORS on the ambiguity throw.
-(deftest ^:kaocha/pending receive-payment-resolves-cash-journal-on-preset
+;; FIXED (note 197 / PR #26): kontor.book cash verbs now resolve the ambiguous
+;; :cash type by the verb's cash-flow direction (receipts → CR, disbursements →
+;; CD via a :journal-code-hint), so the ergonomic resolved-by-type path the verb
+;; docstrings advertise works on every shipped preset with no explicit :journal.
+(deftest receive-payment-resolves-cash-journal-on-preset
   (testing "receive-payment! posts on the DE preset WITHOUT an explicit :journal"
     (let [conn (de/create-de-db)]
       (book/receive-payment! conn {:debit-account kasse :credit-account ar

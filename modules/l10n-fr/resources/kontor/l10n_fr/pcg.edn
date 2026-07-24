@@ -107,6 +107,12 @@
   :tax-payable? true :tags [:ca3-06-tva]}
  {:code "44581" :path "État:TVA-à-régulariser"
   :type :asset :name "Acomptes — Régime simplifié"}
+ ;; VAT credit carried forward / refund requested — the Bilan asset line B.3
+ ;; references these; a French book in a VAT-credit position needs them (note 197).
+ {:code "44567" :path "État:TVA-crédit-à-reporter"
+  :type :asset :name "Crédit de TVA à reporter" :tax-recoverable? true :tags [:ca3-25]}
+ {:code "44583" :path "État:TVA-remboursement-demandé"
+  :type :asset :name "Remboursement de TVA demandé" :tax-recoverable? true :tags [:ca3-26]}
 
  ;; Classe 5 — Comptes financiers
  {:code "512"  :path "Banque"

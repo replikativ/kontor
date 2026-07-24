@@ -202,33 +202,24 @@
 ;; PENDING — genuine coverage gaps
 ;; ===========================================================================
 
-;; PENDING(NEW): l10n-uk ships financial-statement definitions (uk.pnl / uk.bs,
-;; Companies-Act-2006 Sch-1 Format-1) but its preset installs NO chart of
-;; accounts at all — `(create-uk-db)` yields a DB with zero accounts. Every
-;; exact code the shipped statements reference therefore dangles (28 in the
-;; P&L, 31 in the balance sheet), and `uk.bs/compute` returns an all-zero,
-;; trivially-"balanced" sheet out of the box. Documented ("a UK consumer brings
-;; their own nominal ledger") but it means the UK module's own reports are
-;; non-functional against its own preset.
-(deftest ^:kaocha/pending uk-preset-ships-no-chart
+;; FIXED (note 197): l10n-uk now ships a nominal-ledger starter chart
+;; (kontor.l10n-uk.chart), installed by create-uk-db, covering every exact code
+;; the shipped Companies-Act-2006 Sch-1 Format-1 P&L + Balance Sheet reference —
+;; so the UK module's own reports work against its own preset out of the box.
+(deftest uk-preset-ships-no-chart
   (let [db @(uk/create-uk-db)]
-    ;; the gap: these are NON-empty (all dangle). A shipped UK chart would
-    ;; make both []. Hand-derived counts from the shipped defs.
     (is (= [] (dangling-exact db uk-pnl/definition))
-        "UK P&L exact codes should resolve to shipped accounts")
+        "UK P&L exact codes resolve to shipped accounts")
     (is (= [] (dangling-exact db uk-bs/definition))
-        "UK balance-sheet exact codes should resolve to shipped accounts")
-    (is (zero? (count (present-codes db)))
-        "documents that create-uk-db installs zero accounts")))
+        "UK balance-sheet exact codes resolve to shipped accounts")
+    (is (pos? (count (present-codes db)))
+        "create-uk-db installs a nominal-ledger chart")))
 
-;; PENDING(NEW): the FR Bilan asset line B.3 ("Autres créances (dont État, TVA
-;; déductible)") enumerates exact codes 44567 (Crédit de TVA à reporter) and
-;; 44583 (Remboursement de TVA demandé), but the shipped PCG skeleton ships
-;; NEITHER — while it DOES ship their classe-44 siblings 44562, 44566 and
-;; 44581. A French book in a VAT-credit / refund-requested position (routine
-;; for exporters / capex-heavy companies) thus has no shipped account for the
-;; carried-forward credit, and that B.3 sub-total is a permanent zero for it.
-(deftest ^:kaocha/pending fr-bilan-vat-credit-accounts-absent
+;; FIXED (note 197): the PCG skeleton now ships 44567 (Crédit de TVA à reporter)
+;; and 44583 (Remboursement de TVA demandé) — the two VAT-asset codes the Bilan
+;; asset line B.3 references — so an exporter / capex-heavy French book in a
+;; VAT-credit or refund-requested position has a shipped account for the credit.
+(deftest fr-bilan-vat-credit-accounts-absent
   (let [db @(fr/create-fr-db)]
     ;; the two VAT-asset codes the Bilan references but the chart omits:
     (is (resolves? db "44567") "44567 Crédit de TVA à reporter should ship")
@@ -243,14 +234,14 @@
 ;; PENDING(NEW): l10n-cn ships accounts 4101 (生产成本 / production cost) and
 ;; 4105 (制造费用 / manufacturing overhead) with :kontor.account/type :expense,
 ;; but NO line of the CN income statement (cn.pnl) covers them. A period cost
-;; booked directly to either account is therefore invisible on the shipped P&L
-;; (statement-coverage flags them as :uncovered income/expense accounts).
-;; Either the P&L needs a cost-of-production line, or these WIP/cost-gathering
-;; accounts should not carry :type :expense.
-(deftest ^:kaocha/pending cn-pnl-omits-manufacturing-cost-accounts
+;; FIXED (note 197): 4101/4105 are 成本类 WIP cost-gathering accounts that
+;; capitalise into inventory and clear into 营业成本 — an ASSET, not a P&L
+;; expense (ASBE). Retyped :expense → :asset (so the income statement no longer
+;; leaves them uncovered) and carried on the Balance Sheet 存货 (inventory) line.
+(deftest cn-pnl-omits-manufacturing-cost-accounts
   (let [db @(cn/create-cn-db)]
     (is (= [] (uncovered-codes db cn-pnl/definition income+expense))
-        "4101/4105 are :expense accounts no P&L line covers")
-    ;; grounding: they are indeed present and typed :expense
+        "no income/expense account is left uncovered by the P&L")
+    ;; grounding: they still ship, now typed :asset (WIP inventory)
     (is (resolves? db "4101"))
     (is (resolves? db "4105"))))
