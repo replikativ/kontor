@@ -145,7 +145,22 @@
                           pulled)
         rows (mapcat
               (fn [[_ ps]]
-                (let [contra (->> ps (sort-by #(.abs ^BigDecimal (:amount %)) >) first)
+                ;; The Gegenkonto is the largest-magnitude leg. On a balanced
+                ;; TWO-leg entry both legs tie on magnitude, and `posting-ids`
+                ;; comes from an unordered `d/q` set — so picking `first` after
+                ;; a magnitude-only sort chose the Konto/Gegenkonto pair
+                ;; ARBITRARILY (it flipped whenever entity ids shifted, e.g. on
+                ;; a schema addition). Tie-break deterministically by amount
+                ;; ascending (most-negative first) so the CREDIT leg becomes the
+                ;; Gegenkonto and the DEBIT leg the Konto with `S` — the DATEV
+                ;; convention — then by account-code for full determinism.
+                ;; note 198.
+                (let [contra (->> ps
+                                  (sort-by (juxt #(.negate ^BigDecimal
+                                                   (.abs ^BigDecimal (:amount %)))
+                                                 :amount
+                                                 :account-code))
+                                  first)
                       contra-code (:account-code contra)]
                   (->> ps
                        (remove #(= contra %))

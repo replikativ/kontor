@@ -1731,6 +1731,30 @@
     :db/doc         "Optional ref to :audit-doc (e.g. remittance
                      advice PDF)."}
 
+   ;; Payment-linked write-off / tolerance leg (note 198 r3-recon-b). A short
+   ;; payment — a rounding difference, an agreed cash discount, a bank fee
+   ;; deducted at source, a small bad-debt tolerance — closes the remaining
+   ;; open amount as PART of the settlement rather than leaving the invoice
+   ;; stuck at :partially-paid forever. `open-amount-of-invoice` nets the
+   ;; write-off alongside the cash, so the invoice reaches :paid.
+   ;; Distinct from `kontor.collections.writeoff`, which writes off the FULL
+   ;; open amount as a bad-debt collections event gated behind a
+   ;; :collection-case. Odoo: the reconcile write-off wizard driving
+   ;; account_move_line.py amount_residual → 0 + full_reconcile_id.
+   {:db/ident       :kontor.payment-application/write-off-amount
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Amount of the invoice's open balance closed by a
+                     write-off as part of this settlement (same commodity
+                     as :amount). Counts toward the applied total."}
+
+   {:db/ident       :kontor.payment-application/write-off-account
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Account the write-off is charged to (cash-discount
+                     granted, rounding difference, bank charges, small
+                     bad-debt). Required whenever :write-off-amount is set."}
+
    {:db/ident       :kontor.payment-application/identity
     :db/valueType   :db.type/tuple
     :db/tupleAttrs  [:kontor.payment-application/payment
