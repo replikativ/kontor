@@ -1705,7 +1705,12 @@
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":fifo | :customer-instruction | :proportional
-                     | :cherry-pick | :reversal"}
+                     | :cherry-pick | :reversal | :write-off.
+                     :write-off is the bad-debt path — the application
+                     carries the amount as :write-off-amount with
+                     :amount 0M, because no cash was applied; it closes
+                     the open item that the GL relief already removed
+                     (note 198 audit HIGH-3)."}
 
    {:db/ident       :kontor.payment-application/reason
     :db/valueType   :db.type/keyword
