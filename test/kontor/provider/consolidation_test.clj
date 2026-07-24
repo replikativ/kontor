@@ -602,16 +602,37 @@
                  :at-date jan-2
                  :journal jnl
                  :cta-account cta}
+          count-translations
+          #(d/q '[:find (count ?t) .
+                  :where [?t :kontor.transaction/consolidation-kind :translation]]
+                (d/db conn))
           _ (cons/consolidate! input)
-          translations-after-1
-          (d/q '[:find (count ?t) .
-                 :where [?t :kontor.transaction/consolidation-kind :translation]]
-               (d/db conn))
+          translations-after-1 (count-translations)
           _ (cons/consolidate! input)
-          translations-after-2
-          (d/q '[:find (count ?t) .
-                 :where [?t :kontor.transaction/consolidation-kind :translation]]
-               (d/db conn))]
-      ;; Should be 2 translations (DE + US), same after 2nd run
-      (is (= translations-after-1 translations-after-2)
-          "translation tx count is stable across re-runs"))))
+          translations-after-2 (count-translations)
+          db (d/db conn)
+          states {:include-states #{:draft :posted}}
+          group-tb (trial/trial-balance conn (merge {:entity group} states))
+          amt-at (fn [path]
+                   (some-> (get group-tb
+                                (:db/id (d/entity db [:kontor.account/path path])))
+                           vals first :amount))]
+      ;; `(= after-1 after-2)` is satisfied by 0 = 0 — it passes just as
+      ;; happily when consolidate! silently produced NOTHING. Two operating
+      ;; entities (DE + US) ⇒ exactly 2 translation txs (note 198 audit).
+      (is (= 2 translations-after-1) "DE + US each get one translation tx")
+      (is (= 2 translations-after-2) "and the re-run adds none")
+      ;; The count alone would still miss a re-run that re-posted into the
+      ;; EXISTING translation txs, so pin the translated amounts too. US books
+      ;; AP-IC −108 USD; closing EUR→USD is 1.08, so −108 ÷ 1.08 = −100.00 EUR
+      ;; at group level, and Purchases-IC +108 ÷ 1.08 = +100.00 EUR. A doubled
+      ;; re-run reads −200.00 / +200.00.
+      (is (= 0 (.compareTo -100.00M (amt-at "Liabilities:AP-Intercompany")))
+          "AP-IC translated once, not twice")
+      (is (= 0 (.compareTo 100.00M (amt-at "Expenses:Purchases-Intercompany")))
+          "Purchases-IC translated once, not twice")
+      ;; Closing and average rates are both 1.08 here, so translation leaves
+      ;; no residual: CTA must be zero (absent), and must STAY zero — the
+      ;; balance a doubled run would move first.
+      (is (= 0 (.compareTo 0M (or (amt-at "Equity:CTA") 0M)))
+          "CTA is not doubled by the second run — still 0.00 EUR"))))

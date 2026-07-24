@@ -5,6 +5,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
             [kontor.core :as core]
+            [kontor.reporting.balance :as balance]
             [kontor.workflow.schedule :as schedule]))
 
 ;; ============================================================================
@@ -222,9 +223,26 @@
           db (d/db conn)
           n (d/q '[:find (count ?o) .
                    :where [?o :kontor.schedule-occurrence/sequence 1]]
-                 db)]
+                 db)
+          bal (fn [acct]
+                (or (some-> (get (balance/account-balance conn acct) (:commodity cat))
+                            :amount)
+                    0M))]
       (is (= 1 n)
-          "Composite identity collapses duplicates"))))
+          "Composite identity collapses duplicates")
+      ;; WF-B (note 198): the occurrence ROW COUNT was the only thing this
+      ;; test ever asserted, and the count collapsed correctly the whole
+      ;; time the LEDGER was double-posting — the caller's journal tx-data
+      ;; carries its own tempids, so a re-fire transacted the entry a
+      ;; second time. Idempotency has to be asserted on the EFFECT.
+      ;; One firing of 1000.00: Dr Expense:Depreciation 1000.00 /
+      ;; Cr Asset:AccumulatedDepreciation 1000.00. A double post reads
+      ;; 2000.00 / −2000.00.
+      (testing "the LEDGER is idempotent too, not just the occurrence log"
+        (is (= 0 (.compareTo 1000.00M (bal (:dep-expense cat))))
+            "depreciation expense is 1000.00 after two firings, not 2000.00")
+        (is (= 0 (.compareTo -1000.00M (bal (:accum-dep cat))))
+            "accumulated depreciation is −1000.00, not −2000.00")))))
 
 (deftest fired-and-pending
   (testing "fired-sequences + next-pending-sequence + pending-occurrences"

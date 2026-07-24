@@ -40,21 +40,53 @@
         (:kontor.posting/amount p)
         0M)))
 
+(def ^:private default-included-states
+  "Mirrors `kontor.reporting.balance`'s default. Kept in step with it
+   deliberately — see [[open-lines-on-account]]."
+  #{:posted})
+
 (defn open-lines-on-account
   "Postings on `account-eid` whose residual is non-zero — the account's open
    items. The clearing-account question (\"does GR/IR net to zero?\") answered
-   directly."
-  [db account-eid]
-  (->> (d/q '[:find [?p ...]
-              :in $ ?acct
-              :where [?p :kontor.posting/account ?acct]]
-            db account-eid)
-       (keep (fn [p]
-               (let [r (residual-of db p)]
-                 (when-not (zero? (.signum ^java.math.BigDecimal r))
-                   {:posting-eid p :residual r}))))
-       (sort-by :posting-eid)
-       vec))
+   directly.
+
+   Filtered on the SAME two axes as `kontor.reporting.balance/account-balance`,
+   because the only useful reading of this list is against that balance:
+
+     :include-states — transaction states that count (default `#{:posted}`,
+                       matching `account-balance`). A draft or cancelled
+                       entry is not in the balance, so it is not an open
+                       item either.
+     :as-of-valid    — upper bound on the writing tx's `:db.valid/from`
+                       (default nil = all valid time, again matching
+                       `account-balance`).
+
+   note 198 audit M9: this query had NO state or valid-time filter at all,
+   so it and `account-balance` disagreed about which lines even exist on the
+   account. A draft GR/IR line showed as open against a balance that had
+   never counted it, and the clearing account read as un-nettable forever."
+  ([db account-eid] (open-lines-on-account db account-eid nil))
+  ([db account-eid {:keys [include-states as-of-valid]
+                    :or   {include-states default-included-states}}]
+   (let [cutoff-ms (when as-of-valid (.getTime ^java.util.Date as-of-valid))]
+     (->> (d/q '[:find ?p ?state ?vf
+                 :in $ ?acct
+                 :where
+                 [?p :kontor.posting/account ?acct]
+                 [?p :kontor.posting/transaction ?t ?tx]
+                 [?t :kontor.transaction/state ?state]
+                 [?tx :db/txInstant ?ti]
+                 [(get-else $ ?tx :db.valid/from ?ti) ?vf]]
+               db account-eid)
+          (keep (fn [[p state ^java.util.Date vf]]
+                  (when (and (contains? include-states state)
+                             (or (nil? cutoff-ms)
+                                 (<= (.getTime vf) ^long cutoff-ms)))
+                    (let [r (residual-of db p)]
+                      (when-not (zero? (.signum ^java.math.BigDecimal r))
+                        {:posting-eid p :residual r})))))
+          (sort-by :posting-eid)
+          vec))))
 
 (defn matched-set
   "Every posting sharing a `:full-reconcile` group with `posting-eid`."
