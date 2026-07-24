@@ -337,7 +337,7 @@
 ;;
 ;; This test re-fires sequence 1 and asserts the DESIRED single ledger effect.
 ;; It fails today because the expense balance is 200, not 100.
-(deftest ^:kaocha/pending schedule-refire-double-posts-journal
+(deftest schedule-refire-double-posts-journal
   (testing "re-firing an occurrence must not double-post the journal
             (DESIRED — fails today: the ledger effect is not idempotent)"
     (let [conn (bootstrap-conn)
