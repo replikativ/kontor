@@ -205,10 +205,33 @@
    (record-occurrence! conn schedule sequence scheduled-date amount
                        commodity tx-data (java.util.Date.)))
   ([conn schedule sequence scheduled-date amount commodity tx-data fired-at]
-   (validation/transact-with-validation
-    conn (record-occurrence-tx-data
-          (d/db conn) schedule sequence scheduled-date amount
-          commodity tx-data fired-at))))
+   ;; note 198 WF-B: the `[schedule, sequence]` composite identity collapses the
+   ;; OCCURRENCE row, but `tx-data` carries its own tempids — so a re-fire used
+   ;; to transact the journal entry a SECOND time, silently DOUBLE-POSTING the
+   ;; ledger (100 → 200) while the occurrence log still showed one firing. The
+   ;; shipped idempotency test only counted log rows, so it stayed green.
+   ;; Guard on the occurrence up front: if this (schedule, sequence) already
+   ;; fired, do nothing at all. Idempotency must cover the LEDGER EFFECT, not
+   ;; just the bookkeeping row.
+   (let [db (d/db conn)
+         sched-eid (resolve-schedule db schedule)
+         existing (when sched-eid
+                    (d/q '[:find ?o .
+                           :in $ ?s ?seq
+                           :where
+                           [?o :kontor.schedule-occurrence/schedule ?s]
+                           [?o :kontor.schedule-occurrence/sequence ?seq]]
+                         db sched-eid sequence))]
+     (if existing
+       {:already-recorded? true
+        :occurrence        existing
+        :db-before         db
+        :db-after          db
+        :tx-data           []}
+       (validation/transact-with-validation
+        conn (record-occurrence-tx-data
+              db schedule sequence scheduled-date amount
+              commodity tx-data fired-at))))))
 
 ;; ============================================================================
 ;; Lifecycle
