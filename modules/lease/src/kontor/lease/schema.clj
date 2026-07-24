@@ -281,6 +281,58 @@
                      lease-expense line (interest + the ROU plug both
                      land there = the straight-line expense)."}
 
+   ;; ADR-064 Addendum 2 — the per-book payment pin.
+   {:db/ident       :kontor.lease-liability/payment-amount
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "PER-BOOK override of :kontor.lease/payment-amount —
+                     the payment THIS book's liability actually unwinds
+                     on. Absent ⇒ the shared contract fact.
+
+                     Written only by the ASC 842-10-30-5 operating +
+                     :index-reset fork (ADR-064 Addendum 1/2). That fork
+                     deliberately does NOT remeasure the liability, but
+                     `remeasure!` still moves the SHARED
+                     :kontor.lease/payment-amount to the new indexed rent
+                     (the IFRS 16 book on the same lease needs it). Without
+                     this pin the un-remeasured book's deterministic
+                     re-plan would silently start amortising against a
+                     payment the GL never posted for it — the liability
+                     subledger and the GL control account then diverge
+                     permanently (note 198 HIGH-5).
+
+                     The difference (contract payment − this pin) is the
+                     ASC 842 variable lease cost, recognised WHEN PAID
+                     against :kontor.lease-liability/variable-expense-account."}
+
+   {:db/ident       :kontor.lease-liability/variable-expense-account
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The P&L account the per-period ASC 842 variable
+                     lease cost is charged to when the runner fires a
+                     payment — the (contract payment − pinned
+                     :kontor.lease-liability/payment-amount) delta.
+                     Required once the payment pin is set. ADR-064
+                     Addendum 2."}
+
+   ;; note 198 MED-2 — per-lease GL attribution
+   {:db/ident       :kontor.lease-liability/recognition-transaction
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The GL :transaction that put this book's opening
+                     liability onto the balance sheet — `commence!`'s
+                     day-one recognition entry, or (for an ADR-069
+                     mid-life import) the consumer's import bridge
+                     journal passed as :bridge-transaction.
+
+                     The lease-liability control account is SHARED across
+                     leases, so without this anchor no per-lease tie-out
+                     is possible even in principle:
+                     `kontor.lease.report/reconcile-liability` walks
+                     recognition-transaction + the fired occurrences'
+                     transactions + the :lease-modification adjustments
+                     to attribute the control account to one book."}
+
    {:db/ident       :kontor.lease-liability/opening-fired-through
     :db/valueType   :db.type/long
     :db/cardinality :db.cardinality/one

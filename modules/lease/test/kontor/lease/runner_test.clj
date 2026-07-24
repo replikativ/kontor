@@ -30,6 +30,7 @@
             [kontor.lease.core :as lease]
             [kontor.lease.lease-provider :as lp]
             [kontor.lease.liability :as liability]
+            [kontor.lease.report :as lreport]
             [kontor.lease.runner :as lrun]
             [kontor.lease.schema :as lease-schema]))
 
@@ -89,6 +90,12 @@
 (defn- adoc       [db] (ref-eid db :kontor.audit-doc/code "LEASE-CONTRACT-1"))
 (defn- ledger     [db code] (ref-eid db :kontor.ledger/code code))
 
+(defn- bd-cmp
+  "Scale-insensitive BigDecimal comparison — 0.00M and 0M are the same
+   money; `=` on BigDecimal is not."
+  ^long [^java.math.BigDecimal a ^java.math.BigDecimal b]
+  (.compareTo a b))
+
 (defn- ledger-balance
   "Sum of `:kontor.posting/amount` for `account` on `ledger` over :posted
    transactions — the per-ledger balance kontor.reporting.balance does not (yet)
@@ -137,13 +144,13 @@
        :discount-rate 0.06M :origin-document (adoc db)
        :changed-by-uid (p db "U-cfo")})
     (lrun/commence! conn
-      {:lease "LSE-FIN" :journal (journal db) :changed-by-uid (p db "U-cfo")
-       :rou-asset-account (acct db "0250")
-       :rou-accumulated-account (acct db "0259")
-       :books [{:ledger (ledger db "ifrs") :classification :finance
-                :liability-account (acct db "1750")
-                :interest-account (acct db "7300")
-                :rou-expense-account (acct db "6200")}]})
+                    {:lease "LSE-FIN" :journal (journal db) :changed-by-uid (p db "U-cfo")
+                     :rou-asset-account (acct db "0250")
+                     :rou-accumulated-account (acct db "0259")
+                     :books [{:ledger (ledger db "ifrs") :classification :finance
+                              :liability-account (acct db "1750")
+                              :interest-account (acct db "7300")
+                              :rou-expense-account (acct db "6200")}]})
     (let [book (liability/book-for (d/db conn) "LSE-FIN" (ledger (d/db conn) "ifrs"))
           plan (lp/plan-for-book (d/db conn) book)
           periods (:periods plan)]
@@ -176,13 +183,13 @@
        :discount-rate 0.08M :origin-document (adoc db)
        :changed-by-uid (p db "U-cfo")})
     (lrun/commence! conn
-      {:lease "LSE-ADV" :journal (journal db) :changed-by-uid (p db "U-cfo")
-       :rou-asset-account (acct db "0250")
-       :rou-accumulated-account (acct db "0259")
-       :books [{:ledger (ledger db "ifrs") :classification :finance
-                :liability-account (acct db "1750")
-                :interest-account (acct db "7300")
-                :rou-expense-account (acct db "6200")}]})
+                    {:lease "LSE-ADV" :journal (journal db) :changed-by-uid (p db "U-cfo")
+                     :rou-asset-account (acct db "0250")
+                     :rou-accumulated-account (acct db "0259")
+                     :books [{:ledger (ledger db "ifrs") :classification :finance
+                              :liability-account (acct db "1750")
+                              :interest-account (acct db "7300")
+                              :rou-expense-account (acct db "6200")}]})
     (let [book (liability/book-for (d/db conn) "LSE-ADV" (ledger (d/db conn) "ifrs"))
           periods (:periods (lp/plan-for-book (d/db conn) book))]
       (testing "the payment made AT commencement carries no interest — it is all principal"
@@ -208,13 +215,13 @@
              :discount-rate 0.06M :origin-document (adoc db)
              :changed-by-uid (p db "U-cfo")})
         result (lrun/commence! conn
-                 {:lease "LSE-FIN" :journal (journal db) :changed-by-uid (p db "U-cfo")
-                  :rou-asset-account (acct db "0250")
-                  :rou-accumulated-account (acct db "0259")
-                  :books [{:ledger (ledger db "ifrs") :classification :finance
-                           :liability-account (acct db "1750")
-                           :interest-account (acct db "7300")
-                           :rou-expense-account (acct db "6200")}]})
+                               {:lease "LSE-FIN" :journal (journal db) :changed-by-uid (p db "U-cfo")
+                                :rou-asset-account (acct db "0250")
+                                :rou-accumulated-account (acct db "0259")
+                                :books [{:ledger (ledger db "ifrs") :classification :finance
+                                         :liability-account (acct db "1750")
+                                         :interest-account (acct db "7300")
+                                         :rou-expense-account (acct db "6200")}]})
         db' (d/db conn)
         ifrs (ledger db' "ifrs")]
     (testing "the lease moves :draft → :active"
@@ -248,14 +255,14 @@
              :discount-rate 0.06M :origin-document (adoc db)
              :changed-by-uid (p db "U-cfo")})
         commence! #(lrun/commence! conn
-                     {:lease "LSE-FIN" :journal (journal (d/db conn))
-                      :changed-by-uid (p (d/db conn) "U-cfo")
-                      :rou-asset-account (acct (d/db conn) "0250")
-                      :rou-accumulated-account (acct (d/db conn) "0259")
-                      :books [{:ledger (ledger (d/db conn) "ifrs") :classification :finance
-                               :liability-account (acct (d/db conn) "1750")
-                               :interest-account (acct (d/db conn) "7300")
-                               :rou-expense-account (acct (d/db conn) "6200")}]})]
+                                   {:lease "LSE-FIN" :journal (journal (d/db conn))
+                                    :changed-by-uid (p (d/db conn) "U-cfo")
+                                    :rou-asset-account (acct (d/db conn) "0250")
+                                    :rou-accumulated-account (acct (d/db conn) "0259")
+                                    :books [{:ledger (ledger (d/db conn) "ifrs") :classification :finance
+                                             :liability-account (acct (d/db conn) "1750")
+                                             :interest-account (acct (d/db conn) "7300")
+                                             :rou-expense-account (acct (d/db conn) "6200")}]})]
     (commence!)
     (testing "a second commence! on an already-:active lease is refused"
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"not :draft"
@@ -276,19 +283,19 @@
              :discount-rate 0.06M :origin-document (adoc db)
              :changed-by-uid (p db "U-cfo")})
         _ (lrun/commence! conn
-            {:lease "LSE-FIN" :journal (journal db) :changed-by-uid (p db "U-cfo")
-             :rou-asset-account (acct db "0250")
-             :rou-accumulated-account (acct db "0259")
-             :books [{:ledger (ledger db "ifrs") :classification :finance
-                      :liability-account (acct db "1750")
-                      :interest-account (acct db "7300")
-                      :rou-expense-account (acct db "6200")}]})
+                          {:lease "LSE-FIN" :journal (journal db) :changed-by-uid (p db "U-cfo")
+                           :rou-asset-account (acct db "0250")
+                           :rou-accumulated-account (acct db "0259")
+                           :books [{:ledger (ledger db "ifrs") :classification :finance
+                                    :liability-account (acct db "1750")
+                                    :interest-account (acct db "7300")
+                                    :rou-expense-account (acct db "6200")}]})
         ifrs (ledger (d/db conn) "ifrs")
         result (lrun/run-lease! conn
-                 {:lease "LSE-FIN" :ledger ifrs :journal (journal (d/db conn))
-                  :cash-account (acct (d/db conn) "1800")
-                  :changed-by-uid (p (d/db conn) "U-cfo")
-                  :as-of #inst "2026-04-15"})
+                                {:lease "LSE-FIN" :ledger ifrs :journal (journal (d/db conn))
+                                 :cash-account (acct (d/db conn) "1800")
+                                 :changed-by-uid (p (d/db conn) "U-cfo")
+                                 :as-of #inst "2026-04-15"})
         db' (d/db conn)]
     (testing "three liability payments + three ROU depreciation charges fire"
       (is (= [1 2 3] (:fired (:liability result))))
@@ -306,18 +313,41 @@
              (ledger-balance db' (acct db' "6200") ifrs))))
     (testing "cash out = three level payments"
       (is (= -3000.00M (ledger-balance db' (acct db' "1800") ifrs))))
-    (testing "outstanding-liability tracks the unwind"
+    (testing "outstanding-liability equals −(GL 1750) — the control account"
+      ;; This used to compare `outstanding-liability` to the very plan it
+      ;; is derived from, which is a tautology: any drift between the
+      ;; subledger and the ledger passes it unchanged (note 198 HIGH-5).
+      ;; The only assertion with teeth is against the GL.
+      ;; Hand derivation, 36 × €1,000 in arrears @ 6% (0.5%/period):
+      ;;   PV  = 1000 × (1 − 1.005⁻³⁶)/0.005            = 32,871.02
+      ;;   p1  int = round2(32,871.02 × .005) = 164.36 → 32,035.38
+      ;;   p2  int = round2(32,035.38 × .005) = 160.18 → 31,195.56
+      ;;   p3  int = round2(31,195.56 × .005) = 155.98 → 30,351.54
       (let [book (liability/book-for db' "LSE-FIN" ifrs)
-            plan (lp/plan-for-book db' book)]
-        (is (= (:balance-remaining (nth (:periods plan) 2))
-               (lp/outstanding-liability db' book)))))
-    (testing "re-running the same window is idempotent — nothing fires twice"
+            sub  (lp/outstanding-liability db' book)
+            gl   (ledger-balance db' (acct db' "1750") ifrs)
+            recon (lreport/reconcile-liability conn {:book book})]
+        (is (zero? (bd-cmp 30351.54M sub)))
+        (is (zero? (bd-cmp sub
+                           (.negate ^java.math.BigDecimal gl))))
+        (is (:ok? recon) (pr-str recon))))
+    (testing "re-running the same window is idempotent — in the LEDGER, not just the log"
       (let [again (lrun/run-lease! conn
-                    {:lease "LSE-FIN" :ledger ifrs :journal (journal db')
-                     :cash-account (acct db' "1800")
-                     :changed-by-uid (p db' "U-cfo") :as-of #inst "2026-04-15"})]
+                                   {:lease "LSE-FIN" :ledger ifrs :journal (journal db')
+                                    :cash-account (acct db' "1800")
+                                    :changed-by-uid (p db' "U-cfo") :as-of #inst "2026-04-15"})
+            db'' (d/db conn)]
         (is (= 0 (:count (:liability again))))
-        (is (= 0 (:count (:rou again))))))))
+        (is (= 0 (:count (:rou again))))
+        ;; `ledger-balance` was already in scope 10 lines above and never
+        ;; re-read: a double-post would have left the counts at 0 and the
+        ;; ledger doubled. Assert the numbers, not the bookkeeping row.
+        (is (zero? (bd-cmp -30351.54M
+                           (ledger-balance db'' (acct db'' "1750") ifrs))))
+        (is (zero? (bd-cmp -3000.00M
+                           (ledger-balance db'' (acct db'' "1800") ifrs))))
+        (is (:ok? (lreport/reconcile-liability
+                   conn {:book (liability/book-for db'' "LSE-FIN" ifrs)})))))))
 
 ;; ============================================================================
 ;; run-lease! — operating (ASC 842 single straight-line cost)
@@ -334,25 +364,25 @@
              :discount-rate 0.05M :initial-direct-costs 1200.00M
              :origin-document (adoc db) :changed-by-uid (p db "U-cfo")})
         _ (lrun/commence! conn
-            {:lease "LSE-OP" :journal (journal db) :changed-by-uid (p db "U-cfo")
-             :rou-asset-account (acct db "0250")
-             :rou-accumulated-account (acct db "0259")
-             :cash-account (acct db "1800")
+                          {:lease "LSE-OP" :journal (journal db) :changed-by-uid (p db "U-cfo")
+                           :rou-asset-account (acct db "0250")
+                           :rou-accumulated-account (acct db "0259")
+                           :cash-account (acct db "1800")
              ;; operating book: interest leg AND ROU plug both → the
              ;; single lease-expense account.
-             :books [{:ledger (ledger db "us-gaap") :classification :operating
-                      :liability-account (acct db "1750")
-                      :interest-account (acct db "6740")
-                      :rou-expense-account (acct db "6740")}]})
+                           :books [{:ledger (ledger db "us-gaap") :classification :operating
+                                    :liability-account (acct db "1750")
+                                    :interest-account (acct db "6740")
+                                    :rou-expense-account (acct db "6740")}]})
         usgaap (ledger (d/db conn) "us-gaap")
         book   (liability/book-for (d/db conn) "LSE-OP" usgaap)
         plan   (lp/plan-for-book (d/db conn) book)
         ;; run the full 24-month term.
         result (lrun/run-lease! conn
-                 {:lease "LSE-OP" :ledger usgaap :journal (journal (d/db conn))
-                  :cash-account (acct (d/db conn) "1800")
-                  :changed-by-uid (p (d/db conn) "U-cfo")
-                  :as-of #inst "2028-06-01"})
+                                {:lease "LSE-OP" :ledger usgaap :journal (journal (d/db conn))
+                                 :cash-account (acct (d/db conn) "1800")
+                                 :changed-by-uid (p (d/db conn) "U-cfo")
+                                 :as-of #inst "2028-06-01"})
         db' (d/db conn)]
     (testing "the single straight-line cost = (Σ payments + IDC) / n"
       (is (= 2050.00M (:straight-line-expense plan))))
@@ -390,17 +420,17 @@
              :discount-rate 0.08M :origin-document (adoc db)
              :changed-by-uid (p db "U-cfo")})
         result (lrun/commence! conn
-                 {:lease "LSE-MB" :journal (journal db) :changed-by-uid (p db "U-cfo")
-                  :rou-asset-account (acct db "0250")
-                  :rou-accumulated-account (acct db "0259")
-                  :books [{:ledger (ledger db "ifrs") :classification :finance
-                           :liability-account (acct db "1750")
-                           :interest-account (acct db "7300")
-                           :rou-expense-account (acct db "6200")}
-                          {:ledger (ledger db "us-gaap") :classification :operating
-                           :liability-account (acct db "1750")
-                           :interest-account (acct db "6740")
-                           :rou-expense-account (acct db "6740")}]})
+                               {:lease "LSE-MB" :journal (journal db) :changed-by-uid (p db "U-cfo")
+                                :rou-asset-account (acct db "0250")
+                                :rou-accumulated-account (acct db "0259")
+                                :books [{:ledger (ledger db "ifrs") :classification :finance
+                                         :liability-account (acct db "1750")
+                                         :interest-account (acct db "7300")
+                                         :rou-expense-account (acct db "6200")}
+                                        {:ledger (ledger db "us-gaap") :classification :operating
+                                         :liability-account (acct db "1750")
+                                         :interest-account (acct db "6740")
+                                         :rou-expense-account (acct db "6740")}]})
         db' (d/db conn)
         ifrs (ledger db' "ifrs")
         usgaap (ledger db' "us-gaap")]
@@ -423,6 +453,88 @@
                                     0M ["0250" "0259" "1750" "7300" "6200" "1800"]))))
         (is (zero? (.signum (reduce (fn [a code] (.add a (ledger-balance db'' (acct db'' code) usgaap)))
                                     0M ["0250" "0259" "1750" "6740" "1800"]))))))))
+
+(deftest multi-book-lease-with-DIFFERING-discount-rates
+  ;; Parallel books may discount at different rates (a subsidiary's IBR
+  ;; is not the parent's). Then the PV — and hence the ROU cost — is
+  ;; per-book, while the ROU :asset carries a SINGLE
+  ;; :kontor.asset/acquisition-cost. runner.clj documents that this
+  ;; scalar matches only the PRIMARY (first) book; nothing tested it, so
+  ;; a consumer disposing the non-primary book through
+  ;; `kontor.asset.asset/dispose!` would silently net against the wrong
+  ;; cost. This pins the shape so the caveat cannot rot into a surprise.
+  (let [conn (bootstrap)
+        db   (d/db conn)
+        _ (lease/define-lease! conn
+            {:code "LSE-2R" :name "Two rates" :lessor (p db "L-acme")
+             :asset-class (class-eid db) :commencement-date #inst "2026-01-01"
+             :term-months 12 :payment-amount 500.00M :payment-frequency :monthly
+             :payment-timing :in-arrears :commodity (commodity db)
+             :discount-rate 0.06M :origin-document (adoc db)
+             :changed-by-uid (p db "U-cfo")})
+        result (lrun/commence! conn
+                               {:lease "LSE-2R" :journal (journal db) :changed-by-uid (p db "U-cfo")
+                                :rou-asset-account (acct db "0250")
+                                :rou-accumulated-account (acct db "0259")
+                                :books [{:ledger (ledger db "ifrs") :classification :finance
+                                         :liability-account (acct db "1750")
+                                         :interest-account (acct db "7300")
+                                         :rou-expense-account (acct db "6200")}
+                                        {:ledger (ledger db "us-gaap") :classification :finance
+                                         :discount-rate 0.08M
+                                         :liability-account (acct db "1750")
+                                         :interest-account (acct db "7300")
+                                         :rou-expense-account (acct db "6200")}]})
+        db'    (d/db conn)
+        ifrs   (ledger db' "ifrs")
+        usgaap (ledger db' "us-gaap")]
+    ;; Hand derivation — ordinary annuity, 12 payments of 500:
+    ;;   @6% → i = .06/12 = .005          PV = 500 × (1 − 1.005⁻¹²)/.005
+    ;;                                       = 500 × 11.618932 = 5,809.47
+    ;;   @8% → i = .08/12 = .006666666667 PV = 500 × (1 − (1+i)⁻¹²)/i
+    ;;                                       = 500 × 11.495782 = 5,747.89
+    (testing "each book measures its own PV at its own rate"
+      (is (zero? (bd-cmp 5809.47M
+                         (:pv (first (:books result))))))
+      (is (zero? (bd-cmp 5747.89M
+                         (:pv (second (:books result))))))
+      (is (zero? (bd-cmp 5809.47M
+                         (:kontor.lease-liability/opening-liability
+                          (liability/pull-book db' (liability/book-for db' "LSE-2R" ifrs))))))
+      (is (zero? (bd-cmp 5747.89M
+                         (:kontor.lease-liability/opening-liability
+                          (liability/pull-book db' (liability/book-for db' "LSE-2R" usgaap)))))))
+    (testing "each ROU depreciation book carries its OWN depreciable base"
+      (is (zero? (bd-cmp 5809.47M
+                         (:kontor.asset-depreciation/depreciable-base
+                          (d/pull db' [:kontor.asset-depreciation/depreciable-base]
+                                  (:rou-dep-book (first (:books result))))))))
+      (is (zero? (bd-cmp 5747.89M
+                         (:kontor.asset-depreciation/depreciable-base
+                          (d/pull db' [:kontor.asset-depreciation/depreciable-base]
+                                  (:rou-dep-book (second (:books result)))))))))
+    (testing "the :asset's single :acquisition-cost matches ONLY the primary book"
+      (let [cost (:kontor.asset/acquisition-cost
+                  (d/pull db' [:kontor.asset/acquisition-cost] (:rou-asset result)))]
+        (is (zero? (bd-cmp 5809.47M cost)))
+        (is (not (zero? (bd-cmp 5747.89M cost)))
+            "62.42 adrift of the us-gaap book — dispose! needs an explicit :asset-account-cost")))
+    (testing "each ledger recognises its own liability, and each ties"
+      (is (zero? (bd-cmp -5809.47M
+                         (ledger-balance db' (acct db' "1750") ifrs))))
+      (is (zero? (bd-cmp -5747.89M
+                         (ledger-balance db' (acct db' "1750") usgaap))))
+      (is (:ok? (lreport/reconcile-liability
+                 conn {:book (liability/book-for db' "LSE-2R" ifrs)})))
+      (is (:ok? (lreport/reconcile-liability
+                 conn {:book (liability/book-for db' "LSE-2R" usgaap)}))))
+    (testing "the control-account tie-out sums BOTH books on one ledger's account"
+      ;; Per-ledger: only that ledger's book counts.
+      (let [r (lreport/reconcile-liability
+               conn {:ledger usgaap :liability-account (acct db' "1750")
+                     :commodity (commodity db')})]
+        (is (:ok? r) (pr-str r))
+        (is (zero? (bd-cmp 5747.89M (:subledger r))))))))
 
 ;; ============================================================================
 ;; import-lease! — ADR-069 mid-life portfolio import
@@ -452,16 +564,16 @@
              :imported-original-term-months 36
              :changed-by-uid (p db "U-cfo")})
         result (lrun/import-lease! conn
-                 {:lease "LSE-IMP" :changed-by-uid (p db "U-cfo")
-                  :rou-asset-account (acct db "0250")
-                  :rou-accumulated-account (acct db "0259")
-                  :books [{:ledger (ledger db "ifrs") :classification :finance
-                           :liability-account (acct db "1750")
-                           :interest-account (acct db "7300")
-                           :rou-expense-account (acct db "6200")
-                           :remaining-pv 7891.86M
-                           :remaining-rou-base 7304.67M
-                           :pre-import-accumulated 25566.35M}]})
+                                   {:lease "LSE-IMP" :changed-by-uid (p db "U-cfo")
+                                    :rou-asset-account (acct db "0250")
+                                    :rou-accumulated-account (acct db "0259")
+                                    :books [{:ledger (ledger db "ifrs") :classification :finance
+                                             :liability-account (acct db "1750")
+                                             :interest-account (acct db "7300")
+                                             :rou-expense-account (acct db "6200")
+                                             :remaining-pv 7891.86M
+                                             :remaining-rou-base 7304.67M
+                                             :pre-import-accumulated 25566.35M}]})
         db' (d/db conn)
         ifrs (ledger db' "ifrs")]
     (testing "the lease moves :draft → :active via :lease-imported"
@@ -573,16 +685,16 @@
              :imported-original-term-months 36
              :changed-by-uid (p db "U-cfo")})
         _ (lrun/import-lease! conn
-            {:lease "LSE-IMP2" :changed-by-uid (p db "U-cfo")
-             :rou-asset-account (acct db "0250")
-             :rou-accumulated-account (acct db "0259")
-             :books [{:ledger (ledger db "ifrs") :classification :finance
-                      :liability-account (acct db "1750")
-                      :interest-account (acct db "7300")
-                      :rou-expense-account (acct db "6200")
-                      :remaining-pv 2970.40M
-                      :remaining-rou-base 2740.92M
-                      :pre-import-accumulated 30130.10M}]})
+                              {:lease "LSE-IMP2" :changed-by-uid (p db "U-cfo")
+                               :rou-asset-account (acct db "0250")
+                               :rou-accumulated-account (acct db "0259")
+                               :books [{:ledger (ledger db "ifrs") :classification :finance
+                                        :liability-account (acct db "1750")
+                                        :interest-account (acct db "7300")
+                                        :rou-expense-account (acct db "6200")
+                                        :remaining-pv 2970.40M
+                                        :remaining-rou-base 2740.92M
+                                        :pre-import-accumulated 30130.10M}]})
         ifrs (ledger (d/db conn) "ifrs")
         db1 (d/db conn)
         rou-dep-book (asset-dep/book-for db1
@@ -590,10 +702,10 @@
                                                   (lease/pull-lease db1 "LSE-IMP2")))
                                          ifrs)
         result (lrun/run-lease! conn
-                 {:lease "LSE-IMP2" :ledger ifrs :journal (journal (d/db conn))
-                  :cash-account (acct (d/db conn) "1800")
-                  :changed-by-uid (p (d/db conn) "U-cfo")
-                  :as-of #inst "2026-08-15"})]
+                                {:lease "LSE-IMP2" :ledger ifrs :journal (journal (d/db conn))
+                                 :cash-account (acct (d/db conn) "1800")
+                                 :changed-by-uid (p (d/db conn) "U-cfo")
+                                 :as-of #inst "2026-08-15"})]
     (testing "the ROU dep book carries the pre-import accumulated as a scalar"
       (let [b (d/pull db1 [:kontor.asset-depreciation/opening-accumulated
                            :kontor.asset-depreciation/depreciable-base

@@ -279,7 +279,16 @@
                                     :tx-tempid (str "lease-recog" suffix)
                                     :narration (str "Lease recognition — "
                                                     (:kontor.lease/code l))}
-                             cash-account (assoc :cash-account cash-account))))))))
+                             cash-account (assoc :cash-account cash-account))))
+                    ;; note 198 MED-2 — anchor the book to the GL entry
+                    ;; that put it on the balance sheet. The lease-
+                    ;; liability control account is SHARED across leases,
+                    ;; so without this back-ref no per-lease tie-out is
+                    ;; possible even in principle: a liability break is
+                    ;; undetectable, not merely untested.
+                    (conj {:db/id (str "lease-liab-book" suffix)
+                           :kontor.lease-liability/recognition-transaction
+                           (str "lease-recog" suffix)})))))
           book-calcs))
         ;; FINAL STEP — link the ROU asset + drive :draft → :active.
         link-and-activate
@@ -369,7 +378,18 @@
         :remaining-useful-life-months long — defaults to
                                 :kontor.lease/term-months
         :discount-rate         bigdec (default = :kontor.lease/discount-rate)
-        :liability-provider-id keyword (default :effective-interest)}
+        :liability-provider-id keyword (default :effective-interest)
+        :bridge-transaction    eid of the consumer's import-day
+                               balance-sheet bridge :transaction — the
+                               GL entry that actually puts
+                               :remaining-pv onto the liability control
+                               account. STRONGLY recommended: without
+                               it this book has NO GL provenance, so
+                               `kontor.lease.report/reconcile-liability`
+                               cannot tie it and `terminate!` /
+                               `purchase!` refuse to derecognise an
+                               amount the ledger never held (note 198
+                               MED-4)}
 
    Optional opts:
      :rou-asset-code  string (default \"<lease-code>-ROU\")
@@ -486,7 +506,8 @@
           (fn [i {:keys [ledger classification liability-account interest-account
                          rou-expense-account liability-provider-id
                          remaining-pv remaining-rou-base pre-import-accumulated
-                         remaining-useful-life-months discount-rate rate-rationale]}]
+                         remaining-useful-life-months discount-rate rate-rationale
+                         bridge-transaction]}]
             (when-not ledger (throw (ex-info "book spec: :ledger required" {})))
             (when-not (#{:finance :operating} classification)
               (throw (ex-info "book spec: :classification must be :finance | :operating"
@@ -536,7 +557,18 @@
                                 :expense-account rou-expense-account
                                 :schedule-code (str rou-code "-dep-"
                                                     (or (ledger-codes ledger) ledger))
-                                :tempid-suffix suffix}))))))
+                                :tempid-suffix suffix}))
+                    ;; ADR-069 posts NO day-one GL entry — the import-day
+                    ;; balance-sheet bridge journal is the consumer's.
+                    ;; When they pass its eid here it becomes this book's
+                    ;; GL anchor, so `reconcile-liability` can tie the
+                    ;; shared control account back to this lease and
+                    ;; `terminate!` / `purchase!` will let it derecognise
+                    ;; (note 198 MED-2 / MED-4).
+                    (cond-> bridge-transaction
+                      (conj {:db/id (str "lease-liab-book" suffix)
+                             :kontor.lease-liability/recognition-transaction
+                             bridge-transaction}))))))
           books))
         ;; FINAL STEP — link the ROU + drive :draft → :active.
         link-and-activate
@@ -588,6 +620,13 @@
    When the liability schedule becomes fully fired and `:mark-expired?`
    is true (default), drives `:kontor.lease/status :active → :expired`.
 
+   When the book's payment is PINNED below the contract rent
+   (`:kontor.lease-liability/payment-amount` — the ASC 842-10-30-5
+   operating + `:index-reset` fork, ADR-064 Addendum 2), each payment
+   also carries `Dr variable-lease-expense` for the delta and credits
+   cash for the full contractual rent. The liability keeps unwinding on
+   the ORIGINAL payments — that is the whole point of the fork.
+
    Required opts:
      :lease           code or eid
      :ledger          eid
@@ -629,6 +668,19 @@
                   liab-book)
         liability-account (:db/id (:kontor.lease-liability/liability-account b))
         interest-account  (:db/id (:kontor.lease-liability/interest-account b))
+        ;; ASC 842-10-30-5 variable lease cost (ADR-064 Addendum 2):
+        ;; the excess of the CONTRACTUAL rent over the payment this
+        ;; book's liability is measured on. Non-zero only for a book
+        ;; that took the operating + :index-reset fork. It services no
+        ;; liability — it rides the same cash outflow and is expensed
+        ;; when paid.
+        variable ^BigDecimal (:variable-payment-delta inputs)
+        variable-account (:variable-expense-account inputs)
+        _ (when (and (not (zero? (.signum variable))) (not variable-account))
+            (throw (ex-info "run-lease!: this book's payment is pinned below the contract rent but it has no :kontor.lease-liability/variable-expense-account — the ASC 842 variable lease cost has nowhere to go"
+                            {:type :kontor.lease/missing-variable-lease-expense-account
+                             :book liab-book
+                             :variable-payment-delta variable})))
         ;; The sibling ROU depreciation book — resolved up-front so the
         ;; lockstep invariant can be checked before anything fires.
         rou-asset (:db/id (:kontor.lease/rou-asset
@@ -684,6 +736,8 @@
                                              :interest interest
                                              :principal principal
                                              :payment payment
+                                             :variable variable
+                                             :variable-expense-account variable-account
                                              :commodity commodity
                                              :ledger ledger
                                              :journal journal
@@ -691,8 +745,11 @@
                                              :narration (str "Lease payment "
                                                              sequence)}
                                       posted? (assoc :posted-at date)))]
+                       ;; The occurrence's :amount is the CASH that left
+                       ;; — liability service + variable lease cost.
                        (schedule/record-occurrence-tx-data
-                        sdb schedule-eid sequence date payment commodity
+                        sdb schedule-eid sequence date
+                        (.add ^BigDecimal payment variable) commodity
                         tx-data (Date.))))]
                (try
                  (process/run-process
@@ -712,12 +769,14 @@
                        (throw e))))))
              (conj acc {:sequence sequence :date date
                         :interest interest :principal principal
-                        :payment payment})))
+                        :payment payment :variable variable})))
          []
          pending)
         total-interest  (reduce (fn [^BigDecimal a m] (.add a ^BigDecimal (:interest m)))
                                 0M fired)
         total-principal (reduce (fn [^BigDecimal a m] (.add a ^BigDecimal (:principal m)))
+                                0M fired)
+        total-variable  (reduce (fn [^BigDecimal a m] (.add a ^BigDecimal (:variable m)))
                                 0M fired)
         ;; Run the sibling ROU depreciation book — with the
         ;; :lease-rou-plug provider for an operating book, the
@@ -757,6 +816,7 @@
                  :fired (mapv :sequence fired)
                  :count (count fired)
                  :total-interest total-interest
-                 :total-principal total-principal}
+                 :total-principal total-principal
+                 :total-variable total-variable}
      :rou rou-result
      :completed? completed?}))

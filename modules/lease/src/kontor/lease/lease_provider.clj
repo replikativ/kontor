@@ -18,12 +18,21 @@
    `straight-line-expense − interest` each period; a FINANCE lease
    ignores it and depreciates the ROU asset straight-line.
 
-   PURE — reads a `db` value, transacts nothing. The unwind is fully
-   deterministic from the book's `:opening-liability` + `:discount-
-   rate` + the lease's payment terms, so a re-plan mid-run reproduces
-   the already-fired periods bit-exact (ADR-063 has
-   `:opening-fired-through` = 0 always; ADR-064's modifications move
-   it forward and re-anchor `:opening-liability`)."
+   PURE — reads a `db` value, transacts nothing.
+
+   ## Fired periods are READ, not re-derived (note 198 HIGH-5)
+
+   The un-fired tail is planned deterministically from the book's
+   `:opening-liability` + `:discount-rate` + payment terms. The
+   ALREADY-FIRED periods are not: they carry the amounts the GL posted,
+   read back through the occurrence log
+   (`liability/posted-period-legs`). Re-deriving them from current
+   contract data was the drift vector — `:kontor.lease/payment-amount`
+   is SHARED across a lease's per-ledger books, so any book that
+   declines to remeasure (the ASC 842-10-30-5 operating + `:index-reset`
+   fork) would have silently restated periods the GL had already posted
+   at the old amount, and the liability subledger and the control
+   account would part company for good."
   (:require [kontor.lease.liability :as liability]
             [kontor.workflow.schedule :as schedule])
   (:import [java.math BigDecimal RoundingMode]))
@@ -68,18 +77,30 @@
 
 (defn- unwind
   "Walk the liability from `opening-liability` for periods
-   `(ofthr+1) … n`. Each non-final period pays the level
-   `payment-amount` split into `interest = round2(balance ×
-   period-rate)` and `principal = payment − interest`; the FINAL
-   period drives the balance exactly to zero (`principal = balance`,
-   `payment = interest + principal`), absorbing the rounding drift.
+   `(ofthr+1) … n`.
 
-   `:in-advance` period 1 (only when nothing is yet fired — the
-   contract's first payment, made AT commencement) carries zero
-   interest; after a modification (`ofthr > 0`) the first un-fired
-   period is mid-lease and accrues interest normally."
+   An ALREADY-FIRED period carries the amounts the GL actually posted
+   (`posted`, from `kontor.lease.liability/posted-period-legs`) — it is
+   never re-derived. This is the liability sibling of the ROU plug's
+   `fired-amounts` re-levelling, and it is what keeps the subledger tied
+   to the control account when the contract facts move under an
+   un-remeasured book (note 198 HIGH-5): a payment-amount change is
+   PROSPECTIVE by construction, never a silent restatement of what the
+   ledger is already carrying.
+
+   An UN-FIRED non-final period pays the level `payment-amount` split
+   into `interest = round2(balance × period-rate)` and `principal =
+   payment − interest`; the FINAL period drives the balance exactly to
+   zero (`principal = balance`, `payment = interest + principal`),
+   absorbing the rounding drift.
+
+   `:in-advance` period 1 (the contract's first payment, made AT
+   commencement) carries zero interest; after a modification
+   (`ofthr > 0`) the first un-fired period is mid-lease and accrues
+   interest normally."
   [{:keys [opening-liability period-rate payment-amount payment-timing
-           n-periods opening-fired-through start-date payment-frequency]}]
+           n-periods opening-fired-through start-date payment-frequency]}
+   posted]
   (let [ofthr (or opening-fired-through 0)
         in-advance? (= payment-timing :in-advance)]
     (loop [seq (inc ofthr)
@@ -87,18 +108,23 @@
            acc []]
       (if (> seq n-periods)
         acc
-        (let [first-unfired? (= seq (inc ofthr))
-              interest (if (and in-advance? (zero? ofthr) first-unfired?)
-                         0M
-                         (round2 (.multiply balance ^BigDecimal period-rate)))
+        (let [fired (get posted seq)
+              interest (if fired
+                         (:interest fired)
+                         (if (and in-advance? (= seq 1))
+                           0M
+                           (round2 (.multiply balance ^BigDecimal period-rate))))
               last? (= seq n-periods)
-              principal (if last?
-                          balance
-                          (.subtract ^BigDecimal payment-amount interest))
-              payment (if last?
-                        (.add interest principal)
-                        payment-amount)
-              balance' (.subtract balance principal)]
+              principal (cond
+                          fired (:principal fired)
+                          last? balance
+                          :else (.subtract ^BigDecimal payment-amount
+                                           ^BigDecimal interest))
+              payment (cond
+                        fired (:payment fired)
+                        last? (.add ^BigDecimal interest ^BigDecimal principal)
+                        :else payment-amount)
+              balance' (.subtract balance ^BigDecimal principal)]
           (recur (inc seq)
                  balance'
                  (conj acc {:sequence          seq
@@ -107,7 +133,8 @@
                             :payment           payment
                             :interest          interest
                             :principal         principal
-                            :balance-remaining balance'})))))))
+                            :balance-remaining balance'
+                            :fired?            (some? fired)})))))))
 
 (defn- straight-line-expense
   "The single periodic lease cost an OPERATING lease recognises
@@ -138,10 +165,7 @@
   (provider-id [_] :effective-interest)
   (plan-schedule [_ db book]
     (let [inputs (liability/book-plan-inputs db book)
-          schedule-eid (:schedule inputs)
-          fired (schedule/fired-sequences db schedule-eid)
-          periods (mapv (fn [p] (assoc p :fired? (contains? fired (:sequence p))))
-                        (unwind inputs))]
+          periods (unwind inputs (liability/posted-period-legs db inputs))]
       {:periods               periods
        :total-interest        (reduce (fn [^BigDecimal a p]
                                         (.add a ^BigDecimal (:interest p)))
@@ -187,9 +211,14 @@
 (defn outstanding-liability
   "The carrying amount of a `:lease-liability` book right now: the
    `:balance-remaining` of the highest fired occurrence, or the
-   book's `:opening-liability` when nothing has fired yet. Derived
-   from the provider's deterministic plan — the fired log only says
-   *which* periods have run, not the running balance."
+   book's `:opening-liability` when nothing has fired yet.
+
+   The fired periods in the plan carry the amounts the GL ACTUALLY
+   posted (see [[unwind]] / `liability/posted-period-legs`), so this is
+   `opening-liability − Σ principal relieved` — a NETTING of the ledger,
+   not a re-derivation of it from current contract data. It therefore
+   ties to the GL control account by construction; a break is a real
+   break, and `kontor.lease.report/reconcile-liability` surfaces it."
   ^BigDecimal [db book-spec]
   (let [inputs (liability/book-plan-inputs db book-spec)
         plan   (plan-for-book db (:book inputs))

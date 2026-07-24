@@ -28,8 +28,16 @@ same contract differently). `kontor-lease` provides:
   fires.
 - **`LeaseProvider` protocol** (`kontor.lease.lease-provider`) — the
   liability unwind. Ships `EffectiveInterestProvider` as the built-in
-  (`:effective-interest`); registered via `provider-for`. PURE: a
-  re-plan mid-run reproduces fired periods bit-exact.
+  (`:effective-interest`); registered via `provider-for`. PURE. Only
+  the UN-FIRED tail is planned — already-fired periods are read back
+  from the GL (`liability/posted-period-legs`), so the subledger nets
+  the ledger rather than re-deriving it from current contract data
+  (note 198 HIGH-5, the mirror of the ROU plug's `fired-amounts`).
+- **Liability tie-out** (`kontor.lease.report/reconcile-liability`) —
+  the detective control: subledger vs. GL control account, per book or
+  per (ledger, account). Same shape as
+  `kontor.inventory.report/valuation-tie-out` —
+  `{:subledger :gl :difference :ok?}`.
 - **Operating-lease ROU plug** (`kontor.lease.rou-provider`) — a
   `DepreciationProvider` registered as `:lease-rou-plug` that an
   `:operating` book uses for its ROU `:asset-depreciation` book. The
@@ -121,6 +129,8 @@ When NOT to use it:
   `kontor.posting/build-transaction`)
 - `kontor.lease.modification` — `remeasure!`, `partial-terminate!`,
   `terminate!`, `purchase!`
+- `kontor.lease.report` — `reconcile-liability`, `reconcile-lease`,
+  `attributed-transactions`
 - `kontor.lease.runner` — `commence!`, `import-lease!`, `run-lease!`
 
 ## Minimal example
@@ -185,7 +195,13 @@ When NOT to use it:
 - **No FX-rate engine.** `plan-fx-retranslation` retranslates the
   liability at the closing rate the consumer supplies. Use
   `kontor.fx-rate-provider` (ADR-072) for sourcing — kontor-lease
-  bundles no rates.
+  bundles no rates. It is a builder only: nothing in kontor-lease
+  wires it, and a consumer that adopts it owns two traps the builder
+  cannot close — it moves the GL without moving
+  `:lease-liability/opening-liability`, and in provider mode the
+  gain/loss is a REPORTING-commodity number tagged with the book
+  commodity. Both are spelled out in the `kontor.lease.posting` ns
+  docstring (note 198 MED-1).
 - **No lessor-side accounting.** Sales-type, direct-financing, and
   operating-lessor are out of scope.
 - **No automatic discount-rate determination.** The IBR /

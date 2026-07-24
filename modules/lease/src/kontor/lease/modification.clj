@@ -38,6 +38,29 @@
    re-plan kontor-asset already does for an IAS 16 useful-life
    revision).
 
+   ## ADR-064 Addendum 2 — a book that declines to remeasure must PIN
+
+   `:kontor.lease/payment-amount` is a CONTRACT fact, shared by every
+   per-ledger book of the lease, and `remeasure!` rewrites it. A book
+   that legitimately declines to remeasure (the ASC 842-10-30-5
+   operating + `:index-reset` fork) is therefore left reading a payment
+   its ledger never acted on, and its re-plan silently restates
+   already-fired periods — the liability subledger and the control
+   account then part company permanently (note 198 HIGH-5). Two
+   complementary defences:
+
+   - the fork writes `:kontor.lease-liability/payment-amount`, so the
+     book keeps unwinding on the payments it is measured on, and
+     `run-lease!` recognises the excess contractual rent as variable
+     lease cost when each payment is made;
+   - `lease-provider/unwind` reads FIRED periods back from the GL
+     rather than re-deriving them at all, so no future contract-fact
+     change can restate history either.
+
+   `kontor.lease.report/reconcile-liability` is the detective control
+   over both, and `terminate!` / `purchase!` refuse to derecognise a
+   book that does not tie.
+
    ## v1 simplification — the remeasurement PV
 
    `remeasure!` discounts the revised *remaining* payments as an
@@ -62,6 +85,7 @@
             [kontor.lease.lease-provider :as lp]
             [kontor.lease.liability :as liability]
             [kontor.lease.posting :as lposting]
+            [kontor.lease.report :as report]
             [kontor.workflow.process :as process]
             [kontor.workflow.schedule :as schedule]
             [kontor.workflow.status-machine :as sm])
@@ -99,7 +123,9 @@
                             {:type :kontor.lease/not-commenced :lease lease-eid})))
         rou-asset-account (:db/id (:kontor.asset/asset-account
                                    (d/pull db [{:kontor.asset/asset-account [:db/id]}]
-                                           rou-asset)))]
+                                           rou-asset)))
+        contract-payment (:kontor.lease/payment-amount
+                          (d/pull db [:kontor.lease/payment-amount] lease-eid))]
     (mapv (fn [lb]
             (let [pb (liability/pull-book db lb)
                   ledger (:db/id (:kontor.lease-liability/ledger pb))
@@ -117,6 +143,11 @@
                :ledger            ledger
                :framework         framework
                :classification    classification
+               ;; The payment THIS book is currently measured on —
+               ;; the per-book pin if a prior ASC 842 index reset set
+               ;; one, else the shared contract fact.
+               :effective-payment (or (:kontor.lease-liability/payment-amount pb)
+                                      contract-payment)
                :commodity         (:db/id (:kontor.lease-liability/commodity pb))
                :liability-account (:db/id (:kontor.lease-liability/liability-account pb))
                :liability-schedule (:db/id (:kontor.lease-liability/schedule pb))
@@ -148,13 +179,32 @@
       floor
       rou-base-change)))
 
+(defn- adjustment-moves-gl?
+  "Does this book's modification actually move the ledger? A
+   remeasurement whose revised PV reproduces the unwound balance
+   exactly — the COMMON case for a level in-arrears lease re-measured
+   at the same payment and rate — produces a liability leg and a ROU
+   leg of zero, i.e. an entry with no postings at all. That used to
+   surface as an opaque `build-transaction: input failed structural
+   validation` from the kernel (note 198 MED-3). It is not an error: a
+   zero-delta remeasurement is a legitimate re-anchor, it simply has
+   nothing to post. Callers use this to decide whether the book
+   contributes a `mod-adj-<i>` transaction at all."
+  [{:keys [old-outstanding rou-carrying]} new-liability rou-base-change]
+  (let [liab (bd- old-outstanding new-liability)
+        rou  (clamp-rou-base-change rou-base-change rou-carrying)]
+    (or (not (zero? (.signum liab)))
+        (not (zero? (.signum rou))))))
+
 (defn- apply-book-adjustment-tx-data
   "Pure tx-data builder for ONE book's modification adjustment +
    re-anchor (ADR-067). Returns the concatenation of: the GL
-   adjustment entry, the liability-book re-anchor, and (when the ROU
-   base moves or term changed) the ROU dep-book re-anchor. The
-   adjustment transaction takes `:tx-tempid (str \"mod-adj\"
-   tempid-suffix)` so several books compose into one process tx-data.
+   adjustment entry (omitted entirely when the modification moves
+   neither the liability nor the ROU — see [[adjustment-moves-gl?]]),
+   the liability-book re-anchor, and (when the ROU base moves or term
+   changed) the ROU dep-book re-anchor. The adjustment transaction
+   takes `:tx-tempid (str \"mod-adj\" tempid-suffix)` so several books
+   compose into one process tx-data.
 
    `:rou-base-change` is clamped here via `clamp-rou-base-change` so
    the ROU carrying amount never goes below zero — the excess lands
@@ -177,15 +227,16 @@
                       {:account rou-asset-account :amount rou-leg}]
                (not (zero? (.signum pl-leg)))
                (conj {:account gain-loss-account :amount pl-leg}))
-        adjustment (lposting/plan-adjustment
-                    {:legs legs
-                     :commodity commodity
-                     :ledger ledger
-                     :journal journal
-                     :date date
-                     :posted-at date
-                     :tx-tempid (str "mod-adj" tempid-suffix)
-                     :narration (str "Lease " (name kind))})
+        adjustment (when (adjustment-moves-gl? snapshot new-liability rou-base-change)
+                     (lposting/plan-adjustment
+                      {:legs legs
+                       :commodity commodity
+                       :ledger ledger
+                       :journal journal
+                       :date date
+                       :posted-at date
+                       :tx-tempid (str "mod-adj" tempid-suffix)
+                       :narration (str "Lease " (name kind))}))
         revise-liab (liability/revise-liability-book-tx-data
                      db (cond-> {:book liability-book
                                  :new-opening-liability new-liability}
@@ -210,6 +261,14 @@
 ;; changes in the index itself triggering a contractual reset event do.
 ;; Routine CPI escalations are expensed as variable lease cost.
 ;;
+;; ADR-064 Addendum 2 (note 198 HIGH-5) — declining to remeasure is
+;; only half the job. `remeasure!` still writes the new indexed rent
+;; onto the SHARED `:kontor.lease/payment-amount`, and the liability
+;; plan reads it, so the un-remeasured book silently began amortising
+;; against a payment the GL never posted for it. The fork therefore
+;; PINS the book's own payment and lets the runner recognise the delta
+;; as variable lease cost when each payment is actually made.
+;;
 ;; The fork fires when ALL of:
 ;;   - kind = :index-reset
 ;;   - ledger's :kontor.ledger/framework = :us-gaap (or "us-gaap" string)
@@ -225,45 +284,73 @@
            (= framework :US-GAAP))
        (= classification :operating)))
 
-(defn- apply-variable-expense-tx-data
+(defn- apply-payment-pin-tx-data
   "Pure tx-data builder for the ASC 842-operating-on-index-reset book
-   path. No liability remeasurement, no ROU adjustment — instead post
-   `Dr variable-lease-expense / Cr cash-or-payable` for the period
-   delta. Returns a vector of `:transaction` +
-   `:posting` maps.
+   path. NO liability remeasurement, NO ROU adjustment and — this is
+   the note-198 HIGH-5 fix — NO GL entry at all at the modification
+   date: an index reset that is not a remeasurement is not an event
+   the ledger records.
 
-   `:period-delta` is `(new-payment − old-payment)` × 1 period; the
-   per-period variable cost the index reset triggers for the affected
-   book on this date. Going forward the schedule fires the new payment
-   (the `:lease/payment-amount` update in `remeasure!`)."
-  [_db {:keys [snapshot period-delta variable-lease-expense-account
-               variable-lease-payable-account journal date kind note
-               tempid-suffix]
-        :or {tempid-suffix ""}}]
+   What it does instead is PIN this book's measurement. `remeasure!`
+   moves the SHARED `:kontor.lease/payment-amount` to the new indexed
+   rent (the IFRS 16 book on the same lease is genuinely remeasured),
+   so an un-remeasured book must record the payment it is still
+   measured on, or its deterministic re-plan starts amortising against
+   money the GL never posted for it. The difference then becomes the
+   ASC 842 variable lease cost, which
+   `kontor.lease.runner/run-lease!` recognises WHEN PAID — one delta
+   per period actually paid, which is what ASC 842-10-35-4(c) asks for
+   and what the old one-shot post at the modification date could not
+   express (it charged exactly one period's delta for a reset that
+   affects every remaining period).
+
+   `:pinned-payment` is the payment this book keeps unwinding on — the
+   book's CURRENT effective payment, so a second index reset widens the
+   variable delta rather than re-pinning (the measurement never moved)."
+  [db {:keys [snapshot pinned-payment variable-lease-expense-account]}]
   (when-not variable-lease-expense-account
     (throw (ex-info "modification: ASC 842 operating + :index-reset needs :variable-lease-expense-account"
                     {:type :kontor.lease/missing-variable-lease-expense-account
                      :book (:liability-book snapshot)})))
-  (when-not variable-lease-payable-account
-    (throw (ex-info "modification: ASC 842 operating + :index-reset needs :variable-lease-payable-account (typically the lease-liability account or a separate variable-payable account)"
-                    {:type :kontor.lease/missing-variable-lease-payable-account
-                     :book (:liability-book snapshot)})))
-  (let [{:keys [commodity ledger]} snapshot
-        ;; Dr variable-lease-expense / Cr variable-lease-payable
-        ;; (or cash). The credit side is the consumer's call; default
-        ;; pattern is a payable account (consumer settles later).
-        legs [{:account variable-lease-expense-account :amount period-delta}
-              {:account variable-lease-payable-account :amount (.negate ^BigDecimal period-delta)}]]
-    (lposting/plan-adjustment
-     {:legs legs
-      :commodity commodity
-      :ledger ledger
-      :journal journal
-      :date date
-      :posted-at date
-      :tx-tempid (str "mod-adj" tempid-suffix)
-      :narration (str "Lease " (name kind)
-                      " (ASC 842 operating: variable lease expense)")})))
+  (liability/pin-book-payment-tx-data
+   db {:book (:liability-book snapshot)
+       :payment-amount pinned-payment
+       :variable-expense-account variable-lease-expense-account}))
+
+;; ============================================================================
+;; Derecognition guard — note 198 MED-4
+;; ============================================================================
+
+(defn- assert-liability-is-on-the-ledger!
+  "`terminate!` / `purchase!` derecognise a book's whole
+   `old-outstanding` — they debit the liability account for whatever
+   the SUBLEDGER says. If the GL never held that amount, the debit
+   strands an equal-and-opposite balance on the liability account
+   forever, and the P&L gain/loss absorbs a number that never existed.
+
+   The concrete way in is ADR-069: `import-lease!` deliberately posts
+   NO GL entry (the import-day bridge journal is the consumer's), so a
+   freshly-imported lease carries a full subledger liability against an
+   empty ledger. Nothing used to stop it being terminated.
+
+   The check is `kontor.lease.report/reconcile-liability` per book.
+   Pass `:allow-gl-mismatch? true` to override deliberately — e.g. mid
+   remediation, or when the bridge journal genuinely lives outside the
+   lease's attributable transactions (in which case the better fix is
+   to pass it as `import-lease!`'s `:bridge-transaction`)."
+  [conn op snapshot allow?]
+  (when-not allow?
+    (doseq [{:keys [liability-book old-outstanding]} snapshot]
+      (let [r (report/reconcile-liability conn {:book liability-book})]
+        (when-not (:ok? r)
+          (throw (ex-info (str op ": the lease-liability subledger does not tie to the GL for this book — "
+                               "refusing to derecognise " old-outstanding
+                               " the ledger does not hold (difference " (:difference r) "). "
+                               "An ADR-069 imported lease needs its import bridge journal posted and passed "
+                               "as :bridge-transaction; otherwise investigate before derecognising. "
+                               "Override with :allow-gl-mismatch? true.")
+                          (assoc r :type :kontor.lease/liability-gl-mismatch
+                                 :operation op))))))))
 
 ;; ============================================================================
 ;; The :lease-modification event
@@ -346,8 +433,7 @@
    Optional: :justification (ref :audit-doc), :note,
              :gain-loss-account (required only if a remeasurement
              would drive a ROU book below zero — IFRS 16.39),
-             :variable-lease-expense-account +
-             :variable-lease-payable-account (required only when a
+             :variable-lease-expense-account (required only when a
              book matches the ASC 842 operating + :index-reset fork
              — see [[asc842-operating-index-reset?]]).
 
@@ -357,21 +443,25 @@
    `:kontor.ledger/framework :us-gaap` AND the book's
    `:lease-liability/classification` is `:operating`, kontor takes the
    ASC 842-10-30-5 path: NO liability remeasurement, NO ROU
-   adjustment, and the per-period delta `(new-payment − old-payment)`
-   posts as variable lease expense for the modification date. Going
-   forward the schedule fires the new `:kontor.lease/payment-amount`.
-   Other books on the same lease (an IFRS 16 finance book, an ASC 842
-   finance book) continue to remeasure normally.
+   adjustment, and NO GL entry. The book's own payment is PINNED
+   (`:kontor.lease-liability/payment-amount`) so it keeps unwinding on
+   the payments it is measured on, and `run-lease!` recognises the
+   excess of the new contractual rent over that pin as variable lease
+   cost each period, when paid. Other books on the same lease (an IFRS
+   16 finance book, an ASC 842 finance book) continue to remeasure
+   normally — which is exactly why the pin is needed: they share one
+   `:kontor.lease/payment-amount`.
 
    Returns {:lease eid :modification eid :books [{:ledger
    :liability-book :old-outstanding :new-liability :delta
-   :variable-expense?} …]}. `:variable-expense?` is true when the book
-   took the ASC 842 fork."
+   :variable-expense? :pinned-payment :period-delta :transaction} …]}.
+   `:variable-expense?` is true when the book took the ASC 842 fork;
+   `:transaction` is present only for books that actually posted an
+   adjustment."
   [conn {:keys [lease date kind journal changed-by-uid new-payment-amount
                 new-term-months new-discount-rate justification note
                 gain-loss-account
-                variable-lease-expense-account
-                variable-lease-payable-account]}]
+                variable-lease-expense-account]}]
   (when-not lease          (throw (ex-info ":lease required" {})))
   (when-not date           (throw (ex-info ":date required" {})))
   (when-not (#{:remeasurement :index-reset :term-change :rate-reset} kind)
@@ -397,7 +487,6 @@
         rate    (or new-discount-rate (:kontor.lease/discount-rate l))
         n       (lease/periods-for term freq)
         snapshot (pre-mod-snapshot db lease-eid)
-        old-payment (:kontor.lease/payment-amount l)
         ;; Precompute the per-book new-liability + delta. Done from the
         ;; start-snapshot (db) — the modification is one event, all books
         ;; see the same pre-mod state.
@@ -411,7 +500,8 @@
         ;; pick the right branch and the modification event records
         ;; truthful per-book deltas.
         book-plans
-        (mapv (fn [{:keys [liability-book liability-schedule old-outstanding]
+        (mapv (fn [{:keys [liability-book liability-schedule old-outstanding
+                           effective-payment]
                     :as snap}]
                 (let [variable-expense? (asc842-operating-index-reset? kind snap)
                       ofthr (long (count (schedule/fired-sequences
@@ -419,13 +509,17 @@
                       remaining-n (- n ofthr)]
                   (if variable-expense?
                     ;; ASC 842 operating + :index-reset → no liability /
-                    ;; ROU movement; one-period variable expense delta.
-                    (let [period-delta (bd- payment old-payment)]
-                      (assoc snap
-                             :variable-expense? true
-                             :period-delta      period-delta
-                             :new-liability     old-outstanding
-                             :delta             0M))
+                    ;; ROU movement and no GL entry. Pin the book's own
+                    ;; payment so the plan keeps reproducing what the
+                    ;; ledger holds; the runner recognises the delta as
+                    ;; variable lease cost, per period, when paid.
+                    (assoc snap
+                           :variable-expense?  true
+                           :pinned-payment     effective-payment
+                           :period-delta       (bd- payment effective-payment)
+                           :new-liability      old-outstanding
+                           :delta              0M
+                           :posts-adjustment?  false)
                     (do
                       (when (<= remaining-n 0)
                         (throw (ex-info "remeasure!: revised term leaves no un-fired periods"
@@ -436,23 +530,30 @@
                         (assoc snap
                                :variable-expense? false
                                :new-liability     new-liability
-                               :delta             delta))))))
+                               :delta             delta
+                               :posts-adjustment?
+                               (adjustment-moves-gl? snap new-liability delta)))))))
               snapshot)
+        ;; The per-book adjustment tx-tempids the modification event
+        ;; back-references — ONLY the books that actually post one. A
+        ;; forked book posts nothing; neither does a zero-delta
+        ;; remeasurement (note 198 MED-3). Referencing a tempid no step
+        ;; creates would be a dangling ref.
+        adj-tx-tempids (into [] (comp (filter :posts-adjustment?)
+                                      (map #(str "mod-adj-" (:book-index %))))
+                             (map-indexed #(assoc %2 :book-index %1) book-plans))
         ;; Per-book step: dispatch on :variable-expense?
         book-steps
         (vec
          (map-indexed
-          (fn [i {:keys [variable-expense? new-liability delta period-delta]
+          (fn [i {:keys [variable-expense? new-liability delta pinned-payment]
                   :as snap}]
             (fn [sdb _ctx]
               (if variable-expense?
-                (apply-variable-expense-tx-data
+                (apply-payment-pin-tx-data
                  sdb {:snapshot snap
-                      :period-delta period-delta
-                      :variable-lease-expense-account variable-lease-expense-account
-                      :variable-lease-payable-account variable-lease-payable-account
-                      :journal journal :date date :kind kind :note note
-                      :tempid-suffix (str "-" i)})
+                      :pinned-payment pinned-payment
+                      :variable-lease-expense-account variable-lease-expense-account})
                 (apply-book-adjustment-tx-data
                  sdb {:snapshot snap
                       :new-liability new-liability
@@ -482,8 +583,7 @@
                       :new-term-months new-term-months
                       :new-discount-rate new-discount-rate
                       :justification justification :note note
-                      :tx-tempids (mapv #(str "mod-adj-" %)
-                                        (range (count book-plans)))
+                      :tx-tempids adj-tx-tempids
                       :liability-delta total-liab-delta
                       :rou-delta total-liab-delta
                       :pnl-delta 0M}))
@@ -499,14 +599,16 @@
      :modification (get tempids "lease-mod")
      :books (mapv (fn [i {:keys [ledger liability-book old-outstanding
                                  new-liability delta variable-expense?
-                                 period-delta]}]
+                                 pinned-payment period-delta posts-adjustment?]}]
                     (cond-> {:ledger ledger :liability-book liability-book
                              :old-outstanding old-outstanding
                              :new-liability new-liability
-                             :delta delta
-                             :transaction (get tempids (str "mod-adj-" i))}
+                             :delta delta}
+                      posts-adjustment?
+                      (assoc :transaction (get tempids (str "mod-adj-" i)))
                       variable-expense?
                       (assoc :variable-expense? true
+                             :pinned-payment   pinned-payment
                              :period-delta     period-delta)))
                   (range) book-plans)}))
 
@@ -527,12 +629,13 @@
                   :new-payment-amount, :journal, :changed-by-uid,
                   :gain-loss-account
    Optional: :new-term-months, :new-discount-rate, :justification,
-             :note
+             :note, :allow-gl-mismatch? (default false — see
+             [[assert-liability-is-on-the-ledger!]])
 
    Returns the same shape as `remeasure!`."
   [conn {:keys [lease date scope-decrease-pct new-payment-amount new-term-months
                 new-discount-rate journal changed-by-uid justification note
-                gain-loss-account]}]
+                gain-loss-account allow-gl-mismatch?]}]
   (when-not lease          (throw (ex-info ":lease required" {})))
   (when-not date           (throw (ex-info ":date required" {})))
   (when (or (nil? scope-decrease-pct)
@@ -560,6 +663,8 @@
         rate (or new-discount-rate (:kontor.lease/discount-rate l))
         n    (lease/periods-for term freq)
         snapshot (pre-mod-snapshot db lease-eid)
+        _ (assert-liability-is-on-the-ledger! conn "partial-terminate!" snapshot
+                                              allow-gl-mismatch?)
         ;; Precompute per-book new-liability + total ROU base change.
         book-plans
         (mapv (fn [{:keys [liability-book liability-schedule old-outstanding
@@ -585,9 +690,15 @@
                       ;; write-off + the remeasurement adjustment.
                       rou-base-change (bd+ (.negate rou-reduction) remeasure-delta)]
                   (assoc snap :new-liability new-liability
-                              :delta (bd- new-liability old-outstanding)
-                              :rou-base-change rou-base-change)))
+                         :delta (bd- new-liability old-outstanding)
+                         :rou-base-change rou-base-change
+                         :posts-adjustment?
+                         (adjustment-moves-gl? snap new-liability
+                                               rou-base-change))))
               snapshot)
+        adj-tx-tempids (into [] (comp (filter :posts-adjustment?)
+                                      (map #(str "mod-adj-" (:book-index %))))
+                             (map-indexed #(assoc %2 :book-index %1) book-plans))
         book-steps
         (vec
          (map-indexed
@@ -628,8 +739,7 @@
                       :new-discount-rate new-discount-rate
                       :scope-decrease-pct scope-decrease-pct
                       :justification justification :note note
-                      :tx-tempids (mapv #(str "mod-adj-" %)
-                                        (range (count book-plans)))
+                      :tx-tempids adj-tx-tempids
                       :liability-delta total-liab-delta
                       :rou-delta total-rou-delta
                       :pnl-delta total-pnl-delta}))
@@ -667,12 +777,14 @@
                   :justification (the termination agreement),
                   :gain-loss-account
    Optional: :penalty (bigdec — a termination penalty paid in cash),
-             :cash-account (required iff :penalty > 0), :note
+             :cash-account (required iff :penalty > 0), :note,
+             :allow-gl-mismatch? (default false — see
+             [[assert-liability-is-on-the-ledger!]])
 
    Returns {:lease eid :modification eid :books [{:ledger
    :liability-book :derecognised-liability :derecognised-rou} …]}."
   [conn {:keys [lease date journal changed-by-uid justification gain-loss-account
-                penalty cash-account note]}]
+                penalty cash-account note allow-gl-mismatch?]}]
   (when-not lease          (throw (ex-info ":lease required" {})))
   (when-not date           (throw (ex-info ":date required" {})))
   (when-not journal        (throw (ex-info ":journal required" {})))
@@ -693,6 +805,8 @@
                             {:type :kontor.lease/not-active :lease lease-eid})))
         penalty* (bd penalty)
         snapshot (pre-mod-snapshot db lease-eid)
+        _ (assert-liability-is-on-the-ledger! conn "terminate!" snapshot
+                                              allow-gl-mismatch?)
         ;; Pre-pull each book's ROU :depreciable-base (needed to write
         ;; it down by rou-carrying → carrying-after = accumulated).
         book-plans
@@ -733,8 +847,18 @@
                                  :tx-tempid (str "mod-adj-" i)
                                  :narration "Lease termination"})]
                 (-> (vec adjustment)
+                    ;; Zero the book AND advance its anchor past every
+                    ;; fired period. `outstanding-liability` nets the
+                    ;; opening against the principal the GL relieved
+                    ;; SINCE the anchor (note 198 HIGH-5), so leaving
+                    ;; :opening-fired-through behind would make a
+                    ;; derecognised book report a negative carrying
+                    ;; amount.
                     (conj {:db/id liability-book
-                           :kontor.lease-liability/opening-liability 0M}
+                           :kontor.lease-liability/opening-liability 0M
+                           :kontor.lease-liability/opening-fired-through
+                           (long (count (schedule/fired-sequences
+                                         sdb liability-schedule)))}
                           {:db/id rou-dep-book
                            :kontor.asset-depreciation/depreciable-base
                            (bd- rou-base rou-carrying)})
@@ -809,11 +933,13 @@
    Required opts: :lease, :date, :cash-account, :journal,
                   :changed-by-uid, :gain-loss-account
    Optional: :purchase-price (bigdec — defaults to the lease's
-             :purchase-option-price), :justification, :note
+             :purchase-option-price), :justification, :note,
+             :allow-gl-mismatch? (default false — see
+             [[assert-liability-is-on-the-ledger!]])
 
    Returns {:lease eid :modification eid :books […]}."
   [conn {:keys [lease date cash-account journal changed-by-uid gain-loss-account
-                purchase-price justification note]}]
+                purchase-price justification note allow-gl-mismatch?]}]
   (when-not lease          (throw (ex-info ":lease required" {})))
   (when-not date           (throw (ex-info ":date required" {})))
   (when-not cash-account   (throw (ex-info ":cash-account required" {})))
@@ -832,6 +958,8 @@
         _ (when (nil? price)
             (throw (ex-info "purchase!: :purchase-price required (the lease has no :purchase-option-price)" {})))
         snapshot (pre-mod-snapshot db lease-eid)
+        _ (assert-liability-is-on-the-ledger! conn "purchase!" snapshot
+                                              allow-gl-mismatch?)
         book-steps
         (vec
          (map-indexed
@@ -856,8 +984,13 @@
                                  :tx-tempid (str "mod-adj-" i)
                                  :narration "Lease purchase-option exercise"})]
                 (-> (vec adjustment)
+                    ;; See terminate! — zero the book and advance its
+                    ;; anchor past every fired period (note 198 HIGH-5).
                     (conj {:db/id liability-book
-                           :kontor.lease-liability/opening-liability 0M})
+                           :kontor.lease-liability/opening-liability 0M
+                           :kontor.lease-liability/opening-fired-through
+                           (long (count (schedule/fired-sequences
+                                         sdb liability-schedule)))})
                     (into (schedule/set-state-tx-data
                            sdb liability-schedule :cancelled))
                     (into (schedule/set-state-tx-data

@@ -89,9 +89,24 @@
   adp/DepreciationProvider
   (provider-id [_] :lease-rou-plug)
   (plan-schedule [_ {:keys [db book]}]
-    (let [{:keys [asset ledger depreciable-base n-periods start-date
+    (let [{:keys [asset depreciable-base n-periods start-date
                   frequency schedule convention] :as _inputs}
           (asset-dep/book-plan-inputs db book)
+          ;; The ledger comes from the dep book ITSELF, not from
+          ;; `book-plan-inputs` — that map has never carried `:ledger`,
+          ;; so destructuring it here silently bound nil, and
+          ;; `liability/book-for` with a nil ledger degenerates to
+          ;; "any liability book of this lease" (a `:find ?e .` over an
+          ;; unconstrained join). On a single-book lease that is
+          ;; accidentally right; on a dual-ledger lease — the whole
+          ;; point of ADR-021 — the operating ROU plug amortised
+          ;; against the OTHER framework's interest schedule. Note 198.
+          ledger (:db/id (:kontor.asset-depreciation/ledger
+                          (d/pull db [{:kontor.asset-depreciation/ledger [:db/id]}]
+                                  (asset-dep/resolve-book db book))))
+          _ (when-not ledger
+              (throw (ex-info "rou-provider: the ROU :asset-depreciation book has no :ledger — cannot find its sibling :lease-liability book"
+                              {:type :kontor.lease/dep-book-without-ledger :book book})))
           liab-book (sibling-liability-book db asset ledger)
           lease-plan (lp/plan-for-book db liab-book)
           seq->interest (into {} (map (juxt :sequence :interest))
@@ -108,7 +123,13 @@
           interest-of (fn [seq]
                         (or (get seq->interest seq)
                             (throw (ex-info "rou-provider: liability plan has no interest for an un-fired ROU period — the liability + ROU schedules are misaligned"
-                                            {:book book :sequence seq}))))
+                                            {:type :kontor.lease/rou-liability-misaligned
+                                             :book book :sequence seq
+                                             :liability-book liab-book
+                                             :liability-plan-sequences
+                                             (mapv :sequence (:periods lease-plan))
+                                             :rou-n-periods n-periods
+                                             :rou-fired (sort (keys fired))}))))
           remaining-rou (.subtract ^BigDecimal depreciable-base accumulated)
           ;; The single straight-line cost, re-levelled over the
           ;; REMAINING term: (remaining ROU + Σ un-fired interest) /
@@ -141,7 +162,7 @@
                            :date            (schedule/date-of-occurrence
                                              start-date frequency seq)
                            :amount          (or (get fired seq)
-                                                 (get unfired->amt seq))
+                                                (get unfired->amt seq))
                            :method-used     :lease-rou-plug
                            :basis-remaining nil
                            :fired?          (contains? fired seq)})
