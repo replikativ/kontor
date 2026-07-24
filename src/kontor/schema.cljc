@@ -1763,6 +1763,208 @@
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity}])
 
+;; ============================================================================
+;; Posting-level reconciliation — note 198 (Tier 2, r3-recon-a)
+;;
+;; The `:payment-application` above nets an INVOICE against cash. It cannot
+;; close out a clearing account: a GR/IR pair, a suspense line, an inter-account
+;; transfer — arbitrary GL lines that offset each other but belong to no
+;; invoice. Odoo models this with `account.partial.reconcile` (a debit line
+;; matched against a credit line for an amount) plus `account.full.reconcile`
+;; (the group formed once every member's residual reaches zero), surfaced on the
+;; line as `amount_residual` / `full_reconcile_id` / `matching_number`
+;; (account_move_line.py:242/255/284). kontor mirrors that shape.
+;;
+;; `:amount-residual` is MATERIALISED on the posting — it is the unmatched
+;; remainder of that line, maintained by `kontor.banking.line-reconcile`, so
+;; "what is still open on this clearing account?" is a direct query rather than
+;; a fold over every partial.
+;; ============================================================================
+
+(def ^:private posting-reconcile-attrs
+  [{:db/ident       :kontor.posting/amount-residual
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Unmatched remainder of this posting, same commodity as
+                     :kontor.posting/amount. Absent = never reconciled (treat as
+                     the full amount); 0 = fully matched. Maintained by
+                     kontor.banking.line-reconcile."}
+
+   {:db/ident       :kontor.posting/full-reconcile
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The :full-reconcile group this posting belongs to, set
+                     once the whole matched set nets to zero (Odoo
+                     full_reconcile_id)."}
+
+   {:db/ident       :kontor.posting/matching-number
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Human-facing match code shared by every line in the
+                     matched set (Odoo matching_number). Fully-matched sets
+                     carry the :full-reconcile code; a partially-matched line
+                     carries a provisional marker."}])
+
+(def ^:private partial-reconcile-attrs
+  [{:db/ident       :kontor.partial-reconcile/debit-line
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The debit-side posting of this match (Odoo
+                     debit_move_id)."}
+
+   {:db/ident       :kontor.partial-reconcile/credit-line
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The credit-side posting of this match (credit_move_id)."}
+
+   {:db/ident       :kontor.partial-reconcile/amount
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Amount matched between the two lines (always positive)."}
+
+   {:db/ident       :kontor.partial-reconcile/commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :kontor.partial-reconcile/matched-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :kontor.partial-reconcile/full-reconcile
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Back-ref to the :full-reconcile group this partial became
+                     part of, once the set closed."}
+
+   {:db/ident       :kontor.full-reconcile/code
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Stable matching code for a fully-reconciled set — the
+                     value mirrored onto each member's
+                     :kontor.posting/matching-number."}
+
+   {:db/ident       :kontor.full-reconcile/reconciled-at
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :kontor.full-reconcile/reconciled-by-uid
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}])
+
+;; ============================================================================
+;; Payment + batch payment — note 198 (Tier 2, PAY-A / PAY-C)
+;;
+;; kontor's "payment" was a bare cash `:transaction`. A business backbone needs
+;; the register→clear two-step Odoo models on `account.payment`: at REGISTER
+;; time the cash lands in a transient OUTSTANDING (undeposited-funds / in-transit)
+;; account; at CLEAR time the bank statement reconciles that outstanding line
+;; and `is_matched` flips (account_payment.py:123-128 / :478-492). Without it
+;; "which cash have we received but not yet banked?" is unanswerable.
+;; ============================================================================
+
+(def ^:private payment-attrs
+  [{:db/ident       :kontor.payment/external-id
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity}
+
+   {:db/ident       :kontor.payment/direction
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":inbound (customer receipt) | :outbound (vendor payment)
+                     — Odoo's payment_type."}
+
+   {:db/ident       :kontor.payment/state
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "ADR-034 lifecycle: :draft → :registered → :cleared, plus
+                     :cancelled. :registered = cash sits in the outstanding
+                     account; :cleared = the bank line reconciled it."}
+
+   {:db/ident       :kontor.payment/method
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Payment method — :bank-transfer | :cheque | :card | :cash
+                     | :direct-debit | :other. Consumers may extend."}
+
+   {:db/ident       :kontor.payment/outstanding-account
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Transient account the cash rests in between register and
+                     clear (undeposited funds / payments in transit) — Odoo's
+                     outstanding_account_id."}
+
+   {:db/ident       :kontor.payment/is-matched
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one
+    :db/doc         "True once the outstanding line has been reconciled against
+                     a bank line. False on a registered-but-uncleared payment —
+                     the flag that answers 'which cash is still undeposited?'."}
+
+   {:db/ident       :kontor.payment/amount
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :kontor.payment/commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :kontor.payment/partner
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :kontor.payment/payment-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :kontor.payment/transaction
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The GL transaction this payment booked."}
+
+   {:db/ident       :kontor.payment/batch
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The :batch-payment run this payment belongs to, if any."}])
+
+(def ^:private batch-payment-attrs
+  [{:db/ident       :kontor.batch-payment/external-id
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity}
+
+   {:db/ident       :kontor.batch-payment/payments
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "The N payments this run aggregates — they leave the bank
+                     as ONE aggregate line (Odoo account.batch_payment)."}
+
+   {:db/ident       :kontor.batch-payment/state
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "ADR-034 lifecycle: :draft → :sent → :reconciled, plus
+                     :cancelled."}
+
+   {:db/ident       :kontor.batch-payment/total-amount
+    :db/valueType   :db.type/bigdec
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Sum of the member payments — the figure that must match
+                     the single bank statement line."}
+
+   {:db/ident       :kontor.batch-payment/commodity
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one}
+
+   {:db/ident       :kontor.batch-payment/direction
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":inbound | :outbound — a batch is single-direction."}
+
+   {:db/ident       :kontor.batch-payment/batch-date
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one}])
+
 (def ^:private account-type-direction-attrs
   ;; ADR-041: debit/credit data table replacing hardcoded map.
   [{:db/ident       :kontor.account-type-direction/invoice-type
@@ -4684,6 +4886,10 @@
     cross-tx-attrs                        ; ADR-074
     account-type-direction-attrs          ; ADR-041
     payment-application-attrs             ; ADR-043
+    posting-reconcile-attrs               ; note 198 Tier 2 (kontor.banking.line-reconcile)
+    partial-reconcile-attrs               ; note 198 Tier 2
+    payment-attrs                         ; note 198 Tier 2 (kontor.banking.payment)
+    batch-payment-attrs                   ; note 198 Tier 2
     ;; ADR-048 valid-time attrs are now upstream (:db.valid/from + :db.valid/to,
     ;; pre-installed by datahike's feature/bitemporal-v1)
     legal-hold-attrs                      ; ADR-049 (kontor.compliance.legal-hold)

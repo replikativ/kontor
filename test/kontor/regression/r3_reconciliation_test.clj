@@ -42,6 +42,7 @@
             [kontor.book :as book]
             [kontor.invoice.schema :as inv-schema]
             [kontor.banking.payment-application :as papp]
+            [kontor.banking.line-reconcile :as lr]
             [kontor.reporting.balance :as balance]
             [kontor.workflow.status-machine :as sm]))
 
@@ -242,9 +243,14 @@
 ;; This test books the GR/IR pair, then asserts the substrate that a
 ;; line-matcher would require. All of the following are ABSENT today, so the
 ;; test fails and is pinned pending.
-(deftest ^:kaocha/pending arbitrary-gl-line-reconciliation-no-substrate
-  (testing "two arbitrary GL lines on a reconcilable clearing account cannot
-            be matched into a group / marked reconciled / carry a residual"
+;; FIXED (note 198 Tier 2): `kontor.banking.line-reconcile` ships the
+;; posting-level matcher — `:partial-reconcile` rows pairing a debit line
+;; against a credit line, a materialised `:kontor.posting/amount-residual` per
+;; line, and a `:full-reconcile` group (with its code mirrored onto each
+;; member's `:matching-number`) once the whole set nets to zero.
+(deftest arbitrary-gl-line-reconciliation-no-substrate
+  (testing "two arbitrary GL lines on a reconcilable clearing account are
+            matched into a group, marked reconciled, and carry a residual"
     (let [conn (fresh-conn)]
       (book/entry! conn {:journal-type :general
                          :debit-account  [:kontor.account/path "Assets:Inventory"]
@@ -266,8 +272,7 @@
                  db (:db/id (d/entity db clearing)))]
         (testing "both clearing lines exist (the accounting is real)"
           (is (= 2 (count clearing-lines))))
-        ;; The substrate a line-matcher needs — none of these attributes /
-        ;; entity types exist in kontor.schema (cf. Odoo account_move_line.py
+        ;; The substrate a line-matcher needs (cf. Odoo account_move_line.py
         ;; :255 / :284 / :242, account_partial_reconcile.py).
         (testing "posting-level matching-group ref (Odoo full_reconcile_id)"
           (is (schema-has-attr? db :kontor.posting/full-reconcile)))
@@ -277,7 +282,64 @@
           (is (schema-has-attr? db :kontor.posting/amount-residual)))
         (testing "a partial-reconcile entity linking two lines
                   (Odoo account.partial.reconcile)"
-          (is (schema-has-attr? db :kontor.partial-reconcile/debit-line)))))))
+          (is (schema-has-attr? db :kontor.partial-reconcile/debit-line))))
+      ;; …and the matcher actually WORKS end-to-end.
+      (let [db (d/db conn)
+            acct (:db/id (d/entity db clearing))
+            lines (mapv :posting-eid (lr/open-lines-on-account db acct))]
+        (testing "before matching, both clearing lines are open"
+          (is (= 2 (count lines))))
+        (lr/reconcile-lines! conn {:postings lines
+                                   :matched-at #inst "2026-04-15"})
+        (let [db (d/db conn)]
+          (testing "the clearing account nets to zero — no open items left"
+            (is (empty? (lr/open-lines-on-account db acct))))
+          (testing "each line carries a zero residual and joins the match group"
+            (doseq [p lines]
+              (is (zero? (.compareTo 0M (lr/residual-of db p))))
+              (is (lr/fully-reconciled? db p))))
+          (testing "both lines share one matching-number (Odoo matching_number)"
+            (let [codes (into #{} (map #(:kontor.posting/matching-number
+                                         (d/pull db [:kontor.posting/matching-number] %)))
+                              lines)]
+              (is (= 1 (count codes)) "one shared match code")
+              (is (every? some? codes))))
+          (testing "a partial-reconcile row records the matched pair for 100.00"
+            (let [ps (d/q '[:find [?pr ...]
+                            :where [?pr :kontor.partial-reconcile/amount _]] db)]
+              (is (= 1 (count ps)))
+              (is (zero? (.compareTo
+                          100M
+                          (:kontor.partial-reconcile/amount
+                           (d/pull db [:kontor.partial-reconcile/amount] (first ps)))))))))))))
+
+(deftest partial-line-match-leaves-a-residual
+  ;; The partial case: a 100 credit matched against a 60 debit leaves 40 open on
+  ;; the credit line, and NO full-reconcile group (Odoo: amount_residual > 0,
+  ;; full_reconcile_id unset).
+  (testing "an unequal match leaves the remainder open and forms no group"
+    (let [conn (fresh-conn)]
+      (book/entry! conn {:journal-type :general
+                         :debit-account [:kontor.account/path "Assets:Inventory"]
+                         :credit-account clearing
+                         :amount 100 :commodity eur-ref
+                         :effective-date #inst "2026-04-10" :narration "GR"})
+      (book/entry! conn {:journal-type :general
+                         :debit-account clearing
+                         :credit-account [:kontor.account/path "Liabilities:AP"]
+                         :amount 60 :commodity eur-ref
+                         :effective-date #inst "2026-04-12" :narration "IR partial"})
+      (let [db (d/db conn)
+            acct (:db/id (d/entity db clearing))
+            lines (mapv :posting-eid (lr/open-lines-on-account db acct))]
+        (lr/reconcile-lines! conn {:postings lines :matched-at #inst "2026-04-15"})
+        (let [db (d/db conn)
+              open (lr/open-lines-on-account db acct)]
+          (is (= 1 (count open)) "the 40 remainder stays open")
+          (is (zero? (.compareTo -40M (:residual (first open))))
+              "credit line keeps a −40 residual")
+          (is (not (lr/fully-reconciled? db (:posting-eid (first open))))
+              "no full-reconcile group forms while a residual remains"))))))
 
 ;; ============================================================================
 ;; GAP (b) — settling an invoice with an underpayment / cash-discount /
