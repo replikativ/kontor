@@ -92,7 +92,36 @@
                   :kontor.account/code "6880"
                   :kontor.account/name "Realized FX gain/loss"
                   :kontor.account/type :expense
-                  :kontor.account/active true}])
+                  :kontor.account/commodity [:kontor.commodity/symbol "EUR"]
+                  :kontor.account/active true}
+                 ;; The EUR receivable the invoice carries, and a USD bank
+                 ;; account — each PINNED to its own commodity, as every
+                 ;; shipped l10n chart pins them (commodity-match invariant).
+                 {:kontor.account/path "Assets:Receivable"
+                  :kontor.account/code "1400"
+                  :kontor.account/name "Accounts receivable"
+                  :kontor.account/type :asset
+                  :kontor.account/commodity [:kontor.commodity/symbol "EUR"]
+                  :kontor.account/active true}
+                 {:kontor.account/path "Assets:Bank-USD"
+                  :kontor.account/code "1210"
+                  :kontor.account/name "Bank (USD)"
+                  :kontor.account/type :asset
+                  :kontor.account/commodity [:kontor.commodity/symbol "USD"]
+                  :kontor.account/active true}
+                 ;; The currency-clearing bridge — deliberately POLYMORPHIC
+                 ;; (no :kontor.account/commodity), Beancount Equity:Conversions
+                 ;; / GnuCash Trading-Account shaped. A technical account,
+                 ;; excluded from statement presentation by convention.
+                 {:kontor.account/path "Assets:FX-Clearing"
+                  :kontor.account/code "1490"
+                  :kontor.account/name "Currency clearing (technical)"
+                  :kontor.account/type :asset
+                  :kontor.account/active true}
+                 {:kontor.journal/code "GJ"
+                  :kontor.journal/name "General Journal"
+                  :kontor.journal/type :general
+                  :kontor.journal/active true}])
     ;; EUR→USD spot at both dates; the USD→EUR direction is derived by the
     ;; StaticTableProvider's inverse machinery, but we also store the exact
     ;; payment-date USD→EUR = 0.80 so the settlement math is noise-free.
@@ -111,6 +140,10 @@
 
 (defn- comm [sym]
   (d/q '[:find ?c . :in $ ?s :where [?c :kontor.commodity/symbol ?s]] (d/db *conn*) sym))
+(defn- acct [code]
+  (d/q '[:find ?a . :in $ ?c :where [?a :kontor.account/code ?c]] (d/db *conn*) code))
+(defn- jnl []
+  (d/q '[:find ?j . :where [?j :kontor.journal/code "GJ"]] (d/db *conn*)))
 (defn- actor [] "actor-1")
 
 (defn- make-invoice!
@@ -249,24 +282,33 @@
 ;; apply-payment! converts the payment commodity to the invoice currency.
 ;; ===========================================================================
 
-(deftest ^:kaocha/pending cross-currency-settlement-should-close-not-overpay
-  (testing "1,200 USD paid on a 1,000 EUR invoice should fully close it
-            (open 0 EUR), not read as a 200-EUR overpayment."
+;; FIXED (note 198 FX-A): `apply-payment!` stays TRACKING-only and now REFUSES a
+;; commodity mismatch (FX-C, pinned below) instead of silently number-netting.
+;; The cross-currency settlement is owned by `settle-invoice!`, which books the
+;; GL entry AND the tracking row in one transaction, recording the application
+;; in the INVOICE currency so the open item nets correctly.
+(deftest cross-currency-settlement-should-close-not-overpay
+  (testing "1,200 USD paid on a 1,000 EUR invoice fully closes it (open 0 EUR),
+            rather than reading as a 200-EUR overpayment."
     (let [inv (make-invoice! "INV-XCUR-A" 1000M "EUR")
           pay (make-payment! "PAY-XCUR-A")]
       ;; The customer paid the contractual 1,200 USD.
-      (papp/apply-payment! *conn*
-                           {:payment pay :invoice inv :amount 1200M
-                            :commodity (comm "USD") :applied-by-uid (actor)
-                            :applied-at payment-date})
+      (papp/settle-invoice! *conn*
+                            {:payment pay :invoice inv :amount 1200M
+                             :commodity (comm "USD") :applied-by-uid (actor)
+                             :effective-date payment-date
+                             :cash-account (acct "1210")
+                             :receivable-account (acct "1400")
+                             :fx-clearing-account (acct "1490")
+                             :fx-gain-loss-account (acct "6880")
+                             :fx-provider (fxp/make-static-table-provider *conn*)
+                             :journal (jnl)})
       (let [db (d/db *conn*)
             open (papp/open-amount-of-invoice db inv)]
-        ;; PENDING(NEW): actual is −200M — 1,200 USD netted against 1,000 EUR
-        ;; as bare numbers. The receivable currency (EUR) is ignored.
         (is (amt= 0M open)
-            "cross-currency full settlement should leave 0 EUR open")
+            "cross-currency full settlement leaves 0 EUR open")
         (is (= :paid (sm/current-status db inv :kontor.invoice/status))
-            "the invoice should be :paid after the customer paid in full (in USD)")))))
+            "the invoice is :paid after the customer paid in full (in USD)")))))
 
 ;; ===========================================================================
 ;; PENDING(NEW) B — settlement books no realized FX gain/loss posting.
@@ -298,24 +340,46 @@
          :where [?p :kontor.posting/account ?acct]]
        (d/db *conn*) (fx-account-eid)))
 
-(deftest ^:kaocha/pending cross-currency-settlement-should-book-realized-fx-loss
+;; FIXED (note 198 FX-B): settle-invoice! books the five-leg bridge —
+;;   Dr Bank:USD 1200 USD / Cr FX-Clearing 1200 USD      (USD nets 0)
+;;   Dr FX-Clearing 960 EUR + Dr FX-Loss 40 EUR / Cr AR 1000 EUR  (EUR nets 0)
+;; The polymorphic clearing account is what lets a single transaction span two
+;; commodities under kontor's per-(ledger,commodity) sum-to-zero rule.
+(deftest cross-currency-settlement-should-book-realized-fx-loss
   (testing "settling the 1,000 EUR invoice with 1,200 USD (= 960 EUR @ payment
-            date) should book a 40.00 EUR realized FX loss to account 6880."
+            date) books a 40.00 EUR realized FX loss to account 6880."
     (let [inv (make-invoice! "INV-XCUR-B" 1000M "EUR")
           pay (make-payment! "PAY-XCUR-B")]
-      (papp/apply-payment! *conn*
-                           {:payment pay :invoice inv :amount 1200M
-                            :commodity (comm "USD") :applied-by-uid (actor)
-                            :applied-at payment-date})
-      ;; PENDING(NEW): apply-payment! produces no GL posting and has no
-      ;; exchange-account parameter — the FX account is never touched.
+      (papp/settle-invoice! *conn*
+                            {:payment pay :invoice inv :amount 1200M
+                             :commodity (comm "USD") :applied-by-uid (actor)
+                             :effective-date payment-date
+                             :cash-account (acct "1210")
+                             :receivable-account (acct "1400")
+                             :fx-clearing-account (acct "1490")
+                             :fx-gain-loss-account (acct "6880")
+                             :fx-provider (fxp/make-static-table-provider *conn*)
+                             :journal (jnl)})
       (let [fx-postings (postings-on-fx-account)]
         (is (= 1 (count fx-postings))
-            "exactly one realized-FX posting should be booked on settlement")
+            "exactly one realized-FX posting is booked on settlement")
         (let [amt (:kontor.posting/amount
                    (d/pull (d/db *conn*) [:kontor.posting/amount] (first fx-postings)))]
           (is (amt= 40.00M amt)
-              "the realized FX loss should be 40.00 EUR (1,000 − 1,200×0.80)"))))))
+              "the realized FX loss is 40.00 EUR (1,000 − 1,200×0.80)")))
+      ;; the currency-clearing account holds the open position, by construction
+      (testing "the technical clearing account carries the currency position"
+        (let [db (d/db *conn*)
+              legs (d/q '[:find ?amt ?sym
+                          :in $ ?acct
+                          :where
+                          [?p :kontor.posting/account ?acct]
+                          [?p :kontor.posting/amount ?amt]
+                          [?p :kontor.posting/commodity ?c]
+                          [?c :kontor.commodity/symbol ?sym]]
+                        db (acct "1490"))]
+          (is (= #{[-1200M "USD"] [960.00M "EUR"]} (set legs))
+              "clearing holds −1,200 USD / +960 EUR — the open currency position"))))))
 
 ;; ===========================================================================
 ;; PENDING(NEW) C — apply-payment! ignores its own commodity contract.

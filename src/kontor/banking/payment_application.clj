@@ -40,6 +40,9 @@
    existing callers keep their semantics."
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
+            [kontor.fx.fx :as fx]
+            [kontor.money :as money]
+            [kontor.posting :as posting]
             [kontor.workflow.process :as process]
             [kontor.workflow.status-machine :as sm]
             [kontor.validation :as validation]))
@@ -328,6 +331,203 @@
                        reason-note (assoc :reason-note reason-note))))]
     (cond-> [app-row]
       status-tx (into status-tx))))
+
+;; ============================================================================
+;; Cross-currency settlement — realized FX (note 198 FX-A / FX-B)
+;; ============================================================================
+;;
+;; `apply-payment!` above is TRACKING-only: it nets an open item, it writes no
+;; GL. Settling an invoice in a commodity OTHER than its currency additionally
+;; needs a general-ledger entry, because the cash received is worth something
+;; different from the receivable's carrying amount and that difference is a
+;; REALIZED FX gain/loss belonging in P&L.
+;;
+;; kontor balances sum-to-zero PER (ledger, commodity), so — unlike Odoo, which
+;; balances in company currency with `amount_currency` as a free per-line tag —
+;; a single entry cannot mix `Dr Bank 1200 USD / Cr AR 1000 EUR`. The bridge is
+;; a POLYMORPHIC currency-clearing account (`:kontor.account/commodity` unset),
+;; exactly Beancount's `Equity:Conversions` / GnuCash's Trading Accounts — the
+;; right lineage for a kernel that ships a Beancount round-trip (ADR-009). One
+;; transaction, five legs, each commodity netting to zero:
+;;
+;;   Dr  Bank:USD            +1200.00 USD
+;;   Cr  FX-Clearing         -1200.00 USD     ; USD nets to 0
+;;   Dr  FX-Clearing          +960.00 EUR
+;;   Dr  FX-Loss               +40.00 EUR
+;;   Cr  Receivable          -1000.00 EUR     ; EUR nets to 0
+;;
+;; The clearing account deliberately does NOT net to zero in its own
+;; commodities — it holds the open currency position (−1200 USD / +960 EUR).
+;; That is correct by construction; it is a TECHNICAL account and is excluded
+;; from statement presentation by convention (note 198 decision (a)). Translated
+;; at the settlement-date rate it is zero; at a later closing rate a spread
+;; re-opens, which a consumer wanting IAS 21 monetary revaluation sweeps
+;; separately.
+
+(defn- commodity-eid-by-symbol [db sym]
+  (:db/id (d/entity db [:kontor.commodity/symbol sym])))
+
+(defn settle-invoice-tx-data
+  "Pure tx-data builder for settling an invoice with a cash receipt, booking
+   the GL entry AND the `:payment-application` tracking row in one transaction.
+
+   Handles the cross-currency case: when `:commodity` differs from the
+   invoice's currency the cash is converted at `:effective-date` and the
+   realized FX difference is booked to `:fx-gain-loss-account`, bridged through
+   the polymorphic `:fx-clearing-account` (see the commentary above). When the
+   commodities match this collapses to the plain two-leg
+   `Dr cash / Cr receivable` entry and neither FX account is touched.
+
+   Required opts:
+     :invoice              ref/eid/external-id of the invoice.
+     :payment              ref or eid of the cash-receipt :transaction (the
+                           `:payment-application` back-reference).
+     :amount               BigDecimal — the cash actually received.
+     :commodity            ref to the :commodity the cash is in.
+     :cash-account         account eid the cash lands on (bank/cash).
+     :receivable-account   account eid carrying the invoice's open item.
+     :journal              journal eid for the settlement transaction.
+     :applied-by-uid       ref to :kontor.audit/create-uid.
+
+   Required only when `:commodity` ≠ the invoice currency:
+     :fx-provider          an `FxRateProvider` (ADR-072) for the conversion.
+     :fx-clearing-account  POLYMORPHIC account eid (no :kontor.account/commodity)
+                           bridging the two commodities.
+     :fx-gain-loss-account P&L account eid for the realized difference. Distinct
+                           from consolidation's `:fx-gain-loss-account`, which
+                           books UNREALIZED intragroup translation residuals
+                           (IAS 21.45) on the elimination entity — do not share
+                           one account between them or group P&L conflates them.
+
+   Optional:
+     :settles              BigDecimal in the INVOICE currency — how much of the
+                           open balance this clears. Default: the full open
+                           amount (the customer paid the contractual amount, so
+                           the whole receivable clears and the difference is
+                           FX). Pass explicitly for a partial settlement.
+     :effective-date       instant — the settlement date, used for both the
+                           transaction and the FX rate. Default: now.
+     :rate-type            FX rate-type. Default `:spot` — realized FX is always
+                           settled at spot, never a closing/average rate.
+     :narration :reason :reason-note :supporting-doc :strategy — as per
+                           `apply-payment-tx-data`.
+
+   Returns tx-data (transaction + postings + application row + status change)."
+  [db {:keys [invoice payment amount commodity cash-account receivable-account
+              fx-provider fx-clearing-account fx-gain-loss-account
+              settles effective-date rate-type journal applied-by-uid
+              narration]
+       :or   {rate-type :spot}
+       :as   opts}]
+  (when-not invoice            (throw (ex-info ":invoice required" {})))
+  (when-not amount             (throw (ex-info ":amount required" {})))
+  (when-not commodity          (throw (ex-info ":commodity required" {})))
+  (when-not cash-account       (throw (ex-info ":cash-account required" {})))
+  (when-not receivable-account (throw (ex-info ":receivable-account required" {})))
+  (when-not journal            (throw (ex-info ":journal required" {})))
+  (let [invoice-eid (or (resolve-invoice db invoice)
+                        (throw (ex-info "Invoice not found" {:spec invoice})))
+        inv          (pull-invoice-min db invoice-eid)
+        inv-currency (:kontor.invoice/currency inv)
+        inv-comm     (commodity-eid-by-symbol db inv-currency)
+        pay-symbol   (commodity-symbol db commodity)
+        settle-date  (or effective-date (java.util.Date.))
+        cross?       (and inv-currency pay-symbol (not= inv-currency pay-symbol))
+        ;; How much of the open item this clears, in the INVOICE currency.
+        settles      (or settles
+                         (if cross?
+                           (open-amount-of-invoice db invoice-eid)
+                           amount))
+        ;; The invoice-currency value of the cash actually received.
+        cash-in-inv  (if cross?
+                       (do (when-not fx-provider
+                             (throw (ex-info (str "settle-invoice: cross-currency settlement ("
+                                                  pay-symbol " → " inv-currency
+                                                  ") requires an :fx-provider")
+                                             {:type :settlement/fx-provider-required
+                                              :invoice-currency inv-currency
+                                              :payment-commodity pay-symbol})))
+                           (:amount (fx/convert (money/money amount pay-symbol)
+                                                fx-provider
+                                                {:to inv-currency
+                                                 :at-date settle-date
+                                                 :rate-type rate-type})))
+                       amount)
+        ;; Realized FX: what the receivable carried, less what the cash is
+        ;; worth. Positive = loss (debit), negative = gain (credit).
+        fx-diff      (.subtract ^java.math.BigDecimal settles
+                                ^java.math.BigDecimal cash-in-inv)
+        _ (when (and cross? (not (zero? (.signum ^java.math.BigDecimal fx-diff))))
+            (when-not fx-gain-loss-account
+              (throw (ex-info "settle-invoice: a realized FX difference needs :fx-gain-loss-account"
+                              {:type :settlement/fx-account-required :fx-diff fx-diff})))
+            (when-not fx-clearing-account
+              (throw (ex-info "settle-invoice: cross-currency settlement needs :fx-clearing-account"
+                              {:type :settlement/fx-clearing-required}))))
+        tx-tempid "settle-tx"
+        postings
+        (if cross?
+          ;; five-leg bridge — each commodity nets to zero on its own
+          (cond-> [{:kontor.posting/account cash-account
+                    :kontor.posting/amount amount
+                    :kontor.posting/commodity commodity}
+                   {:kontor.posting/account fx-clearing-account
+                    :kontor.posting/amount (.negate ^java.math.BigDecimal amount)
+                    :kontor.posting/commodity commodity}
+                   {:kontor.posting/account fx-clearing-account
+                    :kontor.posting/amount cash-in-inv
+                    :kontor.posting/commodity inv-comm}
+                   {:kontor.posting/account receivable-account
+                    :kontor.posting/amount (.negate ^java.math.BigDecimal settles)
+                    :kontor.posting/commodity inv-comm}]
+            (not (zero? (.signum ^java.math.BigDecimal fx-diff)))
+            (conj {:kontor.posting/account fx-gain-loss-account
+                   :kontor.posting/amount fx-diff
+                   :kontor.posting/commodity inv-comm}))
+          ;; same-currency — the plain two-leg settlement
+          [{:kontor.posting/account cash-account
+            :kontor.posting/amount amount
+            :kontor.posting/commodity commodity}
+           {:kontor.posting/account receivable-account
+            :kontor.posting/amount (.negate ^java.math.BigDecimal amount)
+            :kontor.posting/commodity commodity}])
+        gl-tx (posting/build-transaction
+               {:tx-tempid tx-tempid
+                :transaction {:kontor.transaction/journal journal
+                              :kontor.transaction/effective-date settle-date
+                              :kontor.transaction/state :posted
+                              :kontor.transaction/posted-at settle-date
+                              :kontor.transaction/narration
+                              (or narration (str "Settlement of invoice "
+                                                 (or (:kontor.invoice/external-id inv)
+                                                     invoice-eid)))}
+                :postings (mapv #(assoc % :kontor.posting/posted-at settle-date) postings)})
+        ;; The tracking row is recorded in the INVOICE currency, so
+        ;; open-amount-of-invoice nets correctly and reverse-application!
+        ;; round-trips without reintroducing the FX-C corruption.
+        app-tx (apply-payment-tx-data
+                db (merge (select-keys opts [:reason :reason-note :supporting-doc
+                                             :strategy :tempid-suffix])
+                          {:payment payment
+                           :invoice invoice-eid
+                           :amount settles
+                           :commodity inv-comm
+                           :applied-by-uid applied-by-uid
+                           :applied-at settle-date}))]
+    (into (vec gl-tx) app-tx)))
+
+(defn settle-invoice!
+  "ADR-068 `!` wrapper for [[settle-invoice-tx-data]] — books the settlement GL
+   entry (including any realized FX) and the `:payment-application` row in ONE
+   gated transaction, stamped with the settlement date as valid-time.
+
+   See [[settle-invoice-tx-data]] for the options."
+  [conn opts]
+  (let [settle-date (or (:effective-date opts) (java.util.Date.))
+        tx-data (settle-invoice-tx-data (d/db conn)
+                                        (assoc opts :effective-date settle-date))]
+    (validation/transact-with-validation
+     conn (kbt/with-vt tx-data settle-date))))
 
 (declare reverse-application-tx-data)
 
