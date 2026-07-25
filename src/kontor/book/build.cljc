@@ -53,16 +53,48 @@
          {:kontor.posting-dimension/axis  axis
           :kontor.posting-dimension/value (->dimension-value one)})))
 
+(defn- ->analytic-distributions
+  "Map a friendly `[{:plan p :account a :percent 60}]` vector into
+   `:kontor.analytic-distribution/*` entity maps (ADR-022). Already-shaped
+   maps (any key already in the `:kontor.analytic-distribution` namespace)
+   pass through untouched, so a caller holding kernel-shaped data is not
+   forced to un-shape it."
+  [dists]
+  (mapv (fn [{:keys [plan account percent] :as d}]
+          (if (some #(= "kontor.analytic-distribution" (namespace %)) (keys d))
+            d
+            (cond-> {}
+              plan    (assoc :kontor.analytic-distribution/plan plan)
+              account (assoc :kontor.analytic-distribution/account account)
+              (some? percent)
+              (assoc :kontor.analytic-distribution/percent (->bigdec percent)))))
+        dists))
+
 (defn- ->posting
   "Map a friendly `{:account :amount :commodity? :entity? :partner?
-   :dimensions?}` posting (used in `:postings` for multi-leg entries)
-   into the kernel `:kontor.posting/*` shape, defaulting commodity + entity +
-   partner to the entry-level ones. Per-posting overrides:
+   :dimensions? :period-tag? :analytic-distributions?}` posting (used in
+   `:postings` for multi-leg entries) into the kernel `:kontor.posting/*`
+   shape, defaulting commodity + entity + partner to the entry-level ones.
+   Per-posting overrides:
    - `:entity`  — ADR-031 intercompany pattern (per-entity sum-to-zero)
    - `:partner` — per-leg counterparty (e.g. multi-shareholder dividend
-                  declaration; note 160 §I-15)."
+                  declaration; note 160 §I-15)
+   - `:period-tag` — ADR-014 adjustment-period routing. This builder
+     rebuilds each posting from a fixed key list, so a key absent from that
+     list is SILENTLY DROPPED — which is what happened to `:ledger` before
+     note 160 and to `:period-tag` until ADR-140. The consequence for
+     `:period-tag` was that a `:kontor.period/tag :adjustment-13` period
+     locked nothing writable: the lock predicate demands a matching
+     `:kontor.posting/period-tag`, and no posting written through the verb
+     facade could carry one. SAP-style period 13 was documented, checked,
+     and unreachable.
+   - `:analytic-distributions` — ADR-022 cost-centre splits. Same defect,
+     worse consequence once ADR-140 made `:kontor.account/required-analytic-plans`
+     actually refuse an undistributed posting: an account naming a required
+     plan would have become unpostable through `kontor.book` entirely."
   [default-commodity default-entity default-partner default-ledger
-   {:keys [account amount commodity entity partner ledger dimensions] :as p}]
+   {:keys [account amount commodity entity partner ledger dimensions
+           period-tag analytic-distributions] :as p}]
   (when (nil? account)
     (throw (ex-info "kontor.book: each :postings entry needs :account" {:posting p})))
   (when (nil? amount)
@@ -80,7 +112,11 @@
       e                (assoc :kontor.posting/entity e)
       pa               (assoc :kontor.posting/partner pa)
       lg               (assoc :kontor.posting/ledger lg)
-      (seq dimensions) (assoc :kontor.posting/dimensions (->dimensions dimensions)))))
+      (seq dimensions) (assoc :kontor.posting/dimensions (->dimensions dimensions))
+      period-tag       (assoc :kontor.posting/period-tag period-tag)
+      (seq analytic-distributions)
+      (assoc :kontor.posting/analytic-distributions
+             (->analytic-distributions analytic-distributions)))))
 
 (defn build-input
   "Translate a verb options map into the `{:transaction … :postings …}`
@@ -98,14 +134,26 @@
    BECAUSE it was previously reachable through neither: this builder
    rebuilt each posting from a fixed key list, so a `:ledger` passed in
    `:postings` was silently discarded and ADR-021 parallel books could
-   not be written through `kontor.book` at all."
+   not be written through `kontor.book` at all.
+
+   `:period-tag` (optional, ADR-014) is stamped on every posting via
+   `:kontor.posting/period-tag` — the adjustment-period routing axis. It is
+   an entry-level option for the same reason `:ledger` is: it was reachable
+   through neither path, which made a `:kontor.period/tag :adjustment-13`
+   period a lock with nothing to lock (ADR-140). A per-posting `:period-tag`
+   overrides it, though routing one leg of an entry into a different period
+   than its counter-leg is almost always a mistake."
   [{:keys [debit-account credit-account amount commodity journal
-           effective-date narration partner external-id entity ledger postings]}]
+           effective-date narration partner external-id entity ledger
+           period-tag postings]}]
   (when (nil? journal)
     (throw (ex-info "kontor.book: :journal is required" {})))
   (when (nil? effective-date)
     (throw (ex-info "kontor.book: :effective-date is required" {})))
-  (let [ps (cond
+  (let [stamp-tag (fn [p] (cond-> p
+                            (and period-tag (nil? (:kontor.posting/period-tag p)))
+                            (assoc :kontor.posting/period-tag period-tag)))
+        ps (cond
              (seq postings)
              (mapv #(->posting commodity entity partner ledger %) postings)
 
@@ -129,7 +177,8 @@
                          :kontor.posting/amount    (money/negate-amount amt)
                          :kontor.posting/commodity c}
                   entity (assoc :kontor.posting/entity entity)
-                  ledger (assoc :kontor.posting/ledger ledger))]))]
+                  ledger (assoc :kontor.posting/ledger ledger))]))
+        ps (mapv stamp-tag ps)]
     {:transaction (cond-> {:kontor.transaction/journal        journal
                            :kontor.transaction/effective-date effective-date}
                     narration   (assoc :kontor.transaction/narration narration)

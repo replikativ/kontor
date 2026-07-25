@@ -83,7 +83,7 @@
        (>= (.compareTo d start) 0)
        (< (.compareTo d end) 0)))
 
-(defn- closed-periods-for
+(defn closed-periods-covering
   "Find :period entities in `db` that:
      (a) are SOFT-closed (`:kontor.period/locked-at` set) OR HARD-sealed
          (`:kontor.period/sealed-at` set),
@@ -119,36 +119,65 @@
 ;; find-violations (pure)
 ;; ============================================================================
 
-(defn find-violations
-  "Return a vector of {:posting :valid-from :journal-eid :period-tag :periods}
-   for every proposed posting in `tx-data` whose valid-time falls in a
-   (soft- or hard-)closed period matching its journal+tag.
+(defn- posting-effective-date
+  "Fallback valid-time for a proposed posting when the tx-data carries no
+   `:db.valid/from` tx-meta: the `:kontor.transaction/effective-date` of the
+   transaction the posting hangs off.
 
-   Valid-time is the tx-data's `:db.valid/from` on its `\"datomic.tx\"`
-   tx-meta map (upstream datahike). All postings in one tx share that
-   vf. If the tx-data has no `:db.valid/from`, no posting is in
-   violation — wrap your writes with `kbt/with-vt` (or use the kernel
-   builders which do that for you)."
+   Resolves through `tx-by-id` for a transaction built in the SAME tx-data
+   (the normal shape — the posting refs a tempid), and falls back to reading
+   the effective-date off an already-committed transaction in `db` when the
+   posting attaches to an existing eid or lookup-ref."
+  [db posting tx-by-id]
+  (let [t (:kontor.posting/transaction posting)]
+    (or (:kontor.transaction/effective-date (tx-by-id t))
+        (when (some? t)
+          (try (:kontor.transaction/effective-date
+                (d/pull db [:kontor.transaction/effective-date] t))
+               ;; an unresolvable ref (tempid string with no sibling map) is
+               ;; not a period question — leave it to the other validators
+               (catch #?(:clj Exception :cljs :default) _ nil))))))
+
+(defn find-violations
+  "Return a vector of {:posting :valid-from :valid-from-source :journal-eid
+   :period-tag :periods} for every proposed posting in `tx-data` whose
+   valid-time falls in a (soft- or hard-)closed period matching its
+   journal+tag.
+
+   Valid-time is read from the tx-data's `:db.valid/from` on its
+   `\"datomic.tx\"` tx-meta map (upstream datahike) — all postings in one tx
+   share that vf, so `:valid-from-source` is `:tx-meta`.
+
+   When the tx-data carries NO `:db.valid/from`, each posting falls back to
+   its transaction's `:kontor.transaction/effective-date`
+   (`:valid-from-source` `:effective-date`). This fallback is load-bearing,
+   not a convenience: the accounting date IS the period anchor (Odoo derives
+   the lock check from the move's own `date` in
+   `account_move/_check_fiscal_lock_dates`), so a hand-built write that names
+   an effective-date inside a closed period must be refused whether or not
+   the caller remembered to wrap it in `kbt/with-vt`. Failing open here let a
+   back-dated posting into a SEALED period."
   [db tx-data]
   (let [tx-by-id (into {} (map (juxt :db/id identity)) (proposed-transactions tx-data))
-        vf (some (fn [e]
-                   (when (and (map? e) (= (:db/id e) "datomic.tx"))
-                     (:db.valid/from e)))
-                 tx-data)]
-    (if (nil? vf)
-      []
-      (vec
-       (keep (fn [posting]
-               (let [j   (posting-journal posting tx-by-id)
-                     tag (posting-period-tag posting)
-                     periods (closed-periods-for db vf j tag)]
-                 (when (seq periods)
-                   {:posting     posting
-                    :valid-from  vf
-                    :journal-eid j
-                    :period-tag  tag
-                    :periods     periods})))
-             (proposed-postings tx-data))))))
+        meta-vf (some (fn [e]
+                        (when (and (map? e) (= (:db/id e) "datomic.tx"))
+                          (:db.valid/from e)))
+                      tx-data)]
+    (vec
+     (keep (fn [posting]
+             (let [vf  (or meta-vf (posting-effective-date db posting tx-by-id))
+                   src (if meta-vf :tx-meta :effective-date)
+                   j   (posting-journal posting tx-by-id)
+                   tag (posting-period-tag posting)
+                   periods (when (some? vf) (closed-periods-covering db vf j tag))]
+               (when (seq periods)
+                 {:posting           posting
+                  :valid-from        vf
+                  :valid-from-source src
+                  :journal-eid       j
+                  :period-tag        tag
+                  :periods           periods})))
+           (proposed-postings tx-data)))))
 
 (defn assert-not-in-locked-period!
   "Throws ex-info :type :kontor.period/locked-period-violation if any new
