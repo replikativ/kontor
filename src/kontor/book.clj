@@ -90,6 +90,12 @@
    `kontor.reporting.report/check-options!` on the read side; see
    `kontor.book.build/entry-option-keys` for the accepted set).
 
+   Option keys are STRICT: an unrecognised key throws
+   `:kontor.book/unknown-option` rather than being silently dropped
+   (ADR-124 — same discipline as
+   `kontor.reporting.report/check-options!` on the read side; see
+   `kontor.book.build/entry-option-keys` for the accepted set).
+
    For a multi-leg / judgment entry, instead of debit/credit/amount
    pass `:postings` — a vector of `{:account … :amount … :commodity …}`
    maps (`:commodity` falls back to the top-level `:commodity`). The

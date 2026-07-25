@@ -200,14 +200,27 @@
     sup-doc :supporting-doc
     :as change-spec}]
   (case rule
-    ;; FAILS CLOSED (ADR-150). This rule used to return "no violation"
-    ;; whenever either side was nil — so an approval with no recorded actor,
-    ;; or against an entity with no recorded creator, sailed through the
-    ;; four-eyes control that exists precisely to stop it. That is the
-    ;; failure mode an auditor tests for first: separation of duties cannot
-    ;; be VERIFIED from incomplete data, and "cannot verify" must mean
-    ;; "refuse", not "allow". A consumer that genuinely has no actor concept
-    ;; simply does not install this policy.
+    ;; ADR-140: this rule used to read `(and creator actor (= creator actor))`,
+    ;; which fails OPEN on a missing actor — the strictest control in the
+    ;; audit story was defeated by omitting `:changed-by-uid`. The schema
+    ;; says "recorded actor must differ from :kontor.audit/create-uid", and
+    ;; an UNRECORDED actor cannot satisfy that: you cannot verify a
+    ;; segregation-of-duties rule against an unknown person. An anonymous
+    ;; approval is not an approval.
+    ;;
+    ;; A missing CREATOR is refused for the same reason: there is nothing to
+    ;; compare the approver against, so separation of duties is unverifiable
+    ;; in exactly the same way. ADR-140 initially argued the opposite — that a
+    ;; nil creator is a property of already-stored data (rows written before
+    ;; audit-uid stamping), so refusing would make historical entities
+    ;; permanently unapprovable. ADR-150 wins the disagreement on two counts:
+    ;; the policy is OPT-IN per transition, so the burden falls only on a
+    ;; consumer that has explicitly asked for four-eyes and cannot honestly
+    ;; claim it on documents whose creator is unknown; and the gate now
+    ;; normalises actor refs, so entries written through it DO carry a
+    ;; resolvable creator. A consumer with genuinely no actor concept simply
+    ;; does not install this policy; one with historical gaps backfills
+    ;; :kontor.audit/create-uid or scopes the policy to newer transitions.
     :no-self-approval
     (let [creator (->eid (:kontor.audit/create-uid (d/pull db [:kontor.audit/create-uid] entity)))
           actor   (->eid changed-by-uid)]

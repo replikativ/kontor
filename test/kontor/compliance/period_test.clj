@@ -7,6 +7,7 @@
      - Domain helpers: open?, close!, reopen!."
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
+            [kontor.book.build :as book-build]
             [kontor.core :as core]
             [kontor.compliance.period :as period]
             [kontor.posting :as posting]
@@ -271,6 +272,114 @@
          (v/transact-with-validation conn bad-write))
         "Sealed period entities cannot be written/retracted via the
          validated transact.")))
+
+;; ============================================================================
+;; ADR-014 / ADR-140: the ADJUSTMENT period actually locks something
+;;
+;; `:kontor.period/tag` documents SAP-style special periods 13..16, and
+;; `:kontor.period/adjustment?`'s `:db/doc` says "Postings opt into the
+;; adjustment period via :kontor.posting/period-tag". The lock predicate
+;; honoured that tag — but `kontor.book`, the verb facade every business
+;; write is supposed to go through, rebuilt each posting from a fixed key
+;; list that did not include `:period-tag`. The key was silently dropped, so
+;; no posting written through the public API could ever carry one, and a
+;; period tagged anything other than `:normal` closed and sealed cleanly
+;; while locking nothing writable. The promise was checked and unreachable.
+;;
+;; Each test below pairs the REFUSAL with the write that must still be
+;; accepted, so "the lock has teeth" cannot be satisfied by a lock that
+;; refuses everything (nor by one that refuses nothing).
+;; ============================================================================
+
+(defn- tagged-period!
+  "Create + soft-close a period over [start,end) carrying `:kontor.period/tag`."
+  [conn start end tag]
+  (let [eid (-> (d/transact conn [{:db/id -1
+                                   :kontor.period/start start
+                                   :kontor.period/end end
+                                   :kontor.period/tag tag
+                                   :kontor.period/adjustment? true}])
+                :tempids (get -1))]
+    (period/close! conn eid {:pre-checks (constantly [])})
+    eid))
+
+(defn- book-entry
+  "A two-leg entry through the `kontor.book` verb facade — the public write
+   path — optionally carrying `:period-tag`."
+  [{:keys [eur rec rev sales-jnl]} effective-date tag]
+  (book-build/entry-tx-data
+   (cond-> {:debit-account rec :credit-account rev :amount 100M
+            :commodity eur :journal sales-jnl :effective-date effective-date}
+     tag (assoc :period-tag tag))))
+
+(deftest book-can-write-a-period-tag-at-all
+  ;; The precondition everything below rests on: the verb facade must not
+  ;; silently drop the key.
+  (let [conn (core/create-test-db)
+        cat  (catalog! conn)
+        tags (fn [td] (into #{} (keep :kontor.posting/period-tag) td))]
+    (is (= #{:adjustment-13} (tags (book-entry cat feb-15 :adjustment-13)))
+        "entry-level :period-tag reaches every posting")
+    (is (= #{} (tags (book-entry cat feb-15 nil)))
+        "and is not invented when the caller did not ask for one")
+    (testing "a per-posting :period-tag overrides the entry-level one"
+      (let [td (book-build/entry-tx-data
+                {:journal (:sales-jnl cat) :effective-date feb-15
+                 :commodity (:eur cat) :period-tag :adjustment-13
+                 :postings [{:account (:rec cat) :amount 100M :period-tag :adjustment-14}
+                            {:account (:rev cat) :amount -100M}]})]
+        (is (= #{:adjustment-14 :adjustment-13} (tags td)))))))
+
+(deftest a-closed-adjustment-period-refuses-the-tagged-write
+  (let [conn (core/create-test-db)
+        _    (v/install-invariants! conn)
+        cat  (catalog! conn)
+        _    (tagged-period! conn feb-1 mar-1 :adjustment-13)]
+    (testing "a posting routed into the closed :adjustment-13 period is REFUSED"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"Period violation"
+           (v/transact-with-validation conn (book-entry cat feb-15 :adjustment-13)))))
+    ;; TEETH #1: the lock is tag-SCOPED, not date-scoped. Closing period 13
+    ;; must not close the ordinary February book — that is the entire point
+    ;; of a special period, and a lock that refused this would be worse than
+    ;; no lock at all.
+    (testing "an UNtagged posting on the same date still commits"
+      (is (some? (v/transact-with-validation conn (book-entry cat feb-15 nil)))))
+    ;; TEETH #2: a different special period is a different bucket.
+    (testing "a posting tagged :adjustment-14 still commits"
+      (is (some? (v/transact-with-validation conn (book-entry cat feb-15 :adjustment-14)))))
+    ;; TEETH #3: the lock is still date-scoped WITHIN the tag.
+    (testing "an :adjustment-13 posting OUTSIDE the range still commits"
+      (is (some? (v/transact-with-validation conn (book-entry cat mar-15 :adjustment-13)))))))
+
+(deftest a-closed-normal-period-does-not-lock-the-adjustment-bucket
+  ;; The converse routing direction, and the reason the tag exists: HGB
+  ;; year-end corrections dated 31 December must post after the ordinary
+  ;; December book is closed.
+  (let [conn (core/create-test-db)
+        _    (v/install-invariants! conn)
+        cat  (catalog! conn)
+        _    (closed-period! conn feb-1 mar-1)]
+    (testing "the untagged February book is closed"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"Period violation"
+           (v/transact-with-validation conn (book-entry cat feb-15 nil)))))
+    (testing "but the :adjustment-13 bucket over the same dates is open"
+      (is (some? (v/transact-with-validation conn (book-entry cat feb-15 :adjustment-13)))))))
+
+(deftest a-sealed-adjustment-period-refuses-the-tagged-write
+  (let [conn (core/create-test-db)
+        _    (v/install-invariants! conn)
+        cat  (catalog! conn)
+        eid  (tagged-period! conn feb-1 mar-1 :adjustment-13)]
+    (period/seal! conn eid)
+    (is (period/sealed? (d/db conn) eid))
+    (testing "sealing an adjustment period refuses the tagged backdated write"
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"Period violation"
+           (v/transact-with-validation conn (book-entry cat feb-15 :adjustment-13)))))
+    (testing "and the untagged book over the same dates is still writable"
+      (is (some? (v/transact-with-validation conn (book-entry cat feb-15 nil)))))))
 
 ;; ============================================================================
 ;; ADR-014: pre-close checks

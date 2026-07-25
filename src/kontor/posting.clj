@@ -199,8 +199,13 @@
    `[posting]` unchanged (caller can fold this into a mapcat).
 
    The expander does NOT validate the per-plan sum-to-100 invariant
-   itself — that's `kontor.posting/validate`'s job at posting time.
-   Callers that build by hand should validate before expanding.
+   itself — that's `kontor.posting.validate/validate`'s job at posting
+   time, backed at commit time by `kontor.governance/analytic-violations`
+   in the datahike writer (ADR-140). Both of those genuinely check it now;
+   until ADR-140 neither did, so this sentence named a job nobody held and
+   a 60/30 split expanded into children summing to 90% of the parent.
+   Callers that build by hand should still validate before expanding, to
+   get the error against the draft rather than at commit.
 
    Returns a sequence of posting maps."
   ([posting plan-spec]

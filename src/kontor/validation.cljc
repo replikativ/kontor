@@ -27,19 +27,31 @@
           - actor (`actor.cljc`): a sealed entry must record the actor
             that sealed it, once the consumer installs the
             `:requires-actor` policy (ADR-150).
+          - analytic (`analytic.cljc`): a posting against an account
+            naming :kontor.account/required-analytic-plans carries
+            distributions summing to exactly 100% in each named plan
+            (ADR-022 / ADR-140).
 
      3. **In-transaction ALLOCATION.** `validate-and-apply` is not only a
         validator — it is the kernel's one `:db.fn/call` seam, so it is also
         where gapless legal numbering is allocated
         (`numbering.cljc`, ADR-151). See its docstring.
 
-   The composed gate-fn `validate-and-apply` runs the middleware
+   The composed gate-fn `validate-and-apply` runs all middleware
    validators in order. Per T-2 of note 160 the gate API itself
    lives in `kontor.gate`; this namespace registers the composed
-   `validate-and-apply` into `kontor.gate` at load time."
+   `validate-and-apply` into `kontor.gate` at load time.
+
+   **This gate is bypassable** — a raw `d/transact` skips it. The
+   mandatory sibling is `kontor.governance/validate-report`, registered
+   as a datahike `tx-pred` by `kontor.governance/govern!`, which runs
+   the same families post-resolution in the writer on every committed
+   write. Anything added here that protects the LEDGER (as opposed to
+   improving an error message) belongs there too."
   (:require #?(:clj [clojure.java.io :as io])
             [datahike.api :as d]
             [kontor.actor :as actor]
+            [kontor.analytic :as analytic]
             [kontor.gate :as gate]
             [kontor.money :as money]
             [kontor.numbering :as numbering]
@@ -245,12 +257,20 @@
     (period/assert-not-in-locked-period! txdb tx-data)
     (state-machine/assert-transition! txdb tx-data)
     (assert-postings-sum-to-zero! txdb tx-data)
+    ;; ADR-022 / ADR-140: an account that names required analytic plans must be
+    ;; fully distributed. The authoritative pass is `kontor.governance` in the
+    ;; writer; this one runs pre-resolution so the operator gets the error with
+    ;; the offending posting map attached. Grouped with the structural checks
+    ;; above: it is a statement about the entry's own content.
+    (analytic/assert-required-analytic-plans! txdb tx-data)
     ;; ADR-150 — refuse an unattributed seal when the consumer has installed
     ;; the :requires-actor policy. Runs after the structural checks (a broken
     ;; entry's first complaint should be that it is broken) and before
     ;; allocation (an entry that will be refused must not consume a number).
     (actor/assert-actor-on-posted! txdb tx-data)
     ;; ADR-151 — allocate gapless legal numbers, atomically with the entry.
+    ;; LAST for the same reason: allocation is the only step with a durable
+    ;; side effect on the journal counter.
     (numbering/allocate txdb tx-data)))
 
 (defn pg-tx-wrap

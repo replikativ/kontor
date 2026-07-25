@@ -9,11 +9,9 @@
      kontor.compliance.dsar         — the bitemporal collect walk (ADR-052)
      kontor.compliance.period       — soft/hard period lock (ADR-014)
 
-   Green tests assert a substrate GUARANTEE that holds today. Two tests
-   are pinned `^:kaocha/pending` — each asserts the CORRECT behaviour and
-   fails today because of a genuine substrate gap surfaced by adversarial
-   probing (see the `PENDING(NEW)` comment above each, with an Odoo
-   reference where the behaviour diverges).
+   Every test here asserts a substrate GUARANTEE that holds today; the
+   suite carries no `^:kaocha/pending` pins since ADR-140 closed the
+   period-lock fail-open gap (§7).
 
    Everything is booked through `kontor.book` / the validation gate over a
    small EUR/USD chart on `kontor.core/create-test-db`, so the suite
@@ -27,6 +25,7 @@
             [kontor.compliance.legal-hold :as lhold]
             [kontor.compliance.period :as period]
             [kontor.compliance.retention :as ret]
+            [kontor.gate :as gate]
             [kontor.reporting.balance :as balance]
             [kontor.validation :as v]))
 
@@ -416,44 +415,62 @@
                                    :effective-date feb-15 :narration "Open Feb"}))))))
 
 ;; ============================================================================
-;; 7. Period GAP — the documented `:kontor.transaction/effective-date` fallback
-;;    for the period-lock valid-time is NOT implemented.
+;; 7. Period lock: the documented `:kontor.transaction/effective-date` fallback
+;;    for the period-lock valid-time. CLOSED (ADR-140).
 ;; ============================================================================
 ;;
-;; PENDING(NEW): `kontor.compliance.period` claims (ns docstring, period.cljc:15-18)
-;; that a locked period refuses a new posting "whose inbound valid-time
-;; (`:tx/valid-from`, falling back to `:kontor.transaction/effective-date`) is in
-;; range". But `find-violations` (period.cljc:132-151) reads the valid-time
-;; ONLY from the tx-meta `:db.valid/from`; when that is absent it returns `[]`
-;; with NO fallback to `:kontor.transaction/effective-date`. So gate-routed
-;; tx-data that carries an effective-date inside a sealed period but no
-;; `:db.valid/from` tx-meta (a hand-built write not wrapped by `kbt/with-vt`)
-;; slips past the period lock. Kernel builders always stamp vf = effective-date,
-;; so the normal path is safe — but the documented fallback that a consumer
-;; relying on the docstring would expect does not exist.
+;; `kontor.compliance.period` claims (ns docstring) that a locked period
+;; refuses a new posting "whose inbound valid-time (`:tx/valid-from`, falling
+;; back to `:kontor.transaction/effective-date`) is in range". `find-violations`
+;; used to read the valid-time ONLY from the tx-meta `:db.valid/from` and
+;; return `[]` when it was absent — so a hand-built write naming an
+;; effective-date inside a SEALED period slipped through the lock entirely.
+;; The fallback now exists.
 ;;
 ;; Odoo derives the lock-check date from the move's own `date`
 ;; (account_move.py `_check_fiscal_lock_dates`, invoked from
 ;; account_move_line.py:1807-1808 on any protected-field write) — the
 ;; accounting date IS the anchor, never an optional tx-meta.
-(deftest ^:kaocha/pending period-lock-should-fall-back-to-effective-date
+(defn- no-vt-tx-data
+  "Hand-built tx-data with an effective-date but NO `:db.valid/from` tx-meta."
+  [db effective-date]
+  [{:db/id "t"
+    :kontor.transaction/journal (eid db [:kontor.journal/code "SALE"])
+    :kontor.transaction/effective-date effective-date}
+   {:kontor.posting/account (eid db ar)
+    :kontor.posting/transaction "t"
+    :kontor.posting/amount 500M
+    :kontor.posting/commodity (eid db eur)}
+   {:kontor.posting/account (eid db rev)
+    :kontor.posting/transaction "t"
+    :kontor.posting/amount -500M
+    :kontor.posting/commodity (eid db eur)}])
+
+(deftest period-lock-falls-back-to-effective-date
   (let [conn (fresh-book)
         jan  (-> (d/transact conn [{:db/id -1
                                     :kontor.period/start jan-1
                                     :kontor.period/end   feb-1}])
                  :tempids (get -1))
         _ (period/close! conn jan {:pre-checks (constantly [])})
-        db (d/db conn)
-        ;; Hand-built tx-data: a posting whose transaction carries
-        ;; effective-date jan-15 (inside the closed period) but NO tx-meta
-        ;; :db.valid/from.
-        tx-data [{:db/id "t"
-                  :kontor.transaction/journal (eid db [:kontor.journal/code "SALE"])
-                  :kontor.transaction/effective-date jan-15}
-                 {:kontor.posting/account (eid db ar)
-                  :kontor.posting/transaction "t"
-                  :kontor.posting/amount 500M
-                  :kontor.posting/commodity (eid db eur)}]]
-    (testing "the effective-date inside the closed period should register a violation"
-      (is (seq (period/find-violations db tx-data))
-          "find-violations should fall back to :kontor.transaction/effective-date"))))
+        db (d/db conn)]
+    (testing "the effective-date inside the closed period registers a violation"
+      (let [vs (period/find-violations db (no-vt-tx-data db jan-15))]
+        (is (seq vs) "find-violations falls back to :kontor.transaction/effective-date")
+        (is (= [:effective-date] (distinct (map :valid-from-source vs)))
+            "and says so, so the operator can tell which anchor was used")
+        (is (= [jan-15] (distinct (map :valid-from vs))))))
+    (testing "the gate REFUSES the hand-built write, not merely reports it"
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Period violation"
+                            (gate/transact-with-validation conn (no-vt-tx-data db jan-15)))))
+    ;; The teeth test: the same shape OUTSIDE the closed range must still
+    ;; commit. Without this, `(constantly [violation])` would pass above.
+    (testing "an effective-date OUTSIDE the closed period still commits"
+      (is (empty? (period/find-violations db (no-vt-tx-data db feb-15))))
+      (is (some? (gate/transact-with-validation conn (no-vt-tx-data db feb-15)))))
+    (testing "and the fallback does not fire when the tx-meta vf says otherwise"
+      ;; tx-meta wins: an effective-date in the closed period but an explicit
+      ;; vf outside it is anchored by the vf (documented precedence).
+      (let [td (conj (no-vt-tx-data db jan-15)
+                     {:db/id "datomic.tx" :db.valid/from feb-15})]
+        (is (empty? (period/find-violations db td)))))))
