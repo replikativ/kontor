@@ -92,7 +92,19 @@
                                                   :kontor.account/tags]}
                         {:kontor.posting/account-tags [:kontor.account-tag/name]}
                         {:kontor.posting/dimensions [:kontor.posting-dimension/axis
-                                                     :kontor.posting-dimension/value]}]
+                                                     :kontor.posting-dimension/value]}
+                        ;; ADR-022 analytic distributions (ADR-140). Omitted
+                        ;; from this pull until 2026-07: a percentage-split
+                        ;; cost-centre P&L was literally unreachable through
+                        ;; the report engine, because nothing downstream could
+                        ;; see the split.
+                        {:kontor.posting/analytic-distributions
+                         [:kontor.analytic-distribution/percent
+                          {:kontor.analytic-distribution/plan
+                           [:db/id :kontor.analytic-plan/code]}
+                          {:kontor.analytic-distribution/account
+                           [:db/id :kontor.analytic-account/code
+                            :kontor.analytic-account/path]}]}]
                        p)
         tx-state (some-> (-> pulled :kontor.posting/transaction :db/id)
                          (#(d/pull db [:kontor.transaction/state] %))
@@ -124,10 +136,23 @@
                              (update acc (:kontor.posting-dimension/axis d)
                                      (fnil conj #{}) (:kontor.posting-dimension/value d)))
                            {}
-                           (:kontor.posting/dimensions pulled))]
+                           (:kontor.posting/dimensions pulled))
+        ;; ADR-022 analytic distributions → flat rows the weighted
+        ;; `{:analytic-plan …}` axis consumes.
+        analytics (mapv (fn [d]
+                          (let [pl (:kontor.analytic-distribution/plan d)
+                                ac (:kontor.analytic-distribution/account d)]
+                            {:plan-eid     (:db/id pl)
+                             :plan-code    (:kontor.analytic-plan/code pl)
+                             :account-eid  (:db/id ac)
+                             :account-code (:kontor.analytic-account/code ac)
+                             :account-path (:kontor.analytic-account/path ac)
+                             :percent      (:kontor.analytic-distribution/percent d)}))
+                        (:kontor.posting/analytic-distributions pulled))]
     (assoc pulled
            :valid-from vf
            :tx-state tx-state
+           :analytics analytics
            :commodity-symbol (balance/resolve-commodity-symbol db (:kontor.posting/commodity pulled))
            :ledger-eid (:db/id (:kontor.posting/ledger pulled))
            :entity-eid (:db/id (:kontor.posting/entity pulled))
@@ -232,22 +257,89 @@
 
 (def ^:private set-valued-dimensions #{:account-tags})
 
+;; ============================================================================
+;; The weighted axis: ADR-022 analytic distributions (ADR-140)
+;;
+;; ADR-097 `:posting-dimension` axes are SET-valued: a posting contributes its
+;; FULL amount to every class it carries, so two values on one axis
+;; double-count (documented, and fine for tags). Analytic distributions are
+;; different in kind — they are a *partition of the amount itself*, weighted by
+;; percent. Summing them like a set-valued axis would report 100% of the cost
+;; under each cost centre; that is why they need their own mode rather than
+;; another entry in `dimension-extractors`.
+;; ============================================================================
+
+(def ^:private analytic-weight-scale
+  "Fractional places kept when scaling an amount by percent/100. Ten is well
+   past any commodity precision, so the per-class figures are exact to the
+   presentation rounding that follows. For a split that must be bit-exact to
+   the parent posting (children summing to the cent, largest-remainder
+   apportioned), materialize it instead with
+   `kontor.posting/expand-distribution`."
+  10)
+
+(defn- analytic-weights
+  "`{class percent}` for one pulled posting under an `{:analytic-plan p :by k}`
+   axis. `p` matches either the plan's eid or its
+   `:kontor.analytic-plan/code`; `:by` picks the class key — `:eid` (default,
+   consistent with the other ref axes), `:code`, or `:path`."
+  [{:keys [analytic-plan by] :or {by :eid}} posting]
+  (let [k (case by
+            :eid :account-eid
+            :code :account-code
+            :path :account-path
+            (throw (ex-info "report: unknown :analytic-plan :by"
+                            {:by by :supported #{:eid :code :path}})))]
+    (reduce (fn [acc {:keys [plan-eid plan-code percent] :as row}]
+              (if (and (or (= analytic-plan plan-eid) (= analytic-plan plan-code))
+                       (some? percent))
+                (update acc (get row k)
+                        (fnil #(money/add-amount % (money/->amount percent))
+                              (money/zero-amount)))
+                acc))
+            {}
+            (:analytics posting))))
+
+(defn- scale-posting
+  "A derived posting whose `:kontor.posting/amount` is `amount × percent/100`,
+   so the existing `sum-postings` fold can be reused unchanged for a weighted
+   axis. HALF-EVEN at [[analytic-weight-scale]] places."
+  [posting percent]
+  (update posting :kontor.posting/amount
+          (fn [amt]
+            (money/divide-amounts (money/multiply-amounts (money/->amount amt)
+                                                          (money/->amount percent))
+                                  (money/->amount 100)
+                                  analytic-weight-scale
+                                  :half-even))))
+
 (defn- resolve-dimension
-  "Resolve a `dimension` argument to `[extract-fn set-valued?]`.
-   `dimension` is a `posting→class` function, a built-in axis keyword
-   (see `dimension-extractors`), or — for any other keyword — a
-   `:kontor.posting/dimensions` classification axis (ADR-097), which is
-   set-valued (a posting may carry several values on one axis)."
+  "Resolve a `dimension` argument to `[extract-fn kind]` where `kind` is
+   `:scalar` (one class per posting, full amount), `:set` (several classes,
+   full amount in each — a covering, may double-count) or `:weighted` (several
+   classes, amount apportioned by percent).
+
+   `dimension` is:
+     - a `posting→class` function                        → `:scalar`
+     - a built-in axis keyword (`dimension-extractors`)  → `:scalar` / `:set`
+     - `{:analytic-plan p}` / `{:analytic-plan p :by k}` → `:weighted`
+       (ADR-022 analytic distributions; `p` is the plan eid or code)
+     - any other keyword → a `:kontor.posting/dimensions` classification
+       axis (ADR-097)                                    → `:set`"
   [dimension]
   (cond
     (fn? dimension)
-    [dimension false]
+    [dimension :scalar]
 
     (dimension-extractors dimension)
-    [(dimension-extractors dimension) (contains? set-valued-dimensions dimension)]
+    [(dimension-extractors dimension)
+     (if (contains? set-valued-dimensions dimension) :set :scalar)]
+
+    (and (map? dimension) (contains? dimension :analytic-plan))
+    [(partial analytic-weights dimension) :weighted]
 
     (keyword? dimension)
-    [#(get (:dimensions %) dimension) true]
+    [#(get (:dimensions %) dimension) :set]
 
     :else
     (throw (ex-info "report: unresolvable dimension" {:dimension dimension}))))
@@ -263,6 +355,12 @@
    exactly one class, and the classes' values sum to the grand total.
    For a set-valued axis (`:account-tags` and any `:kontor.posting/dimensions`
    axis) a posting contributes to each class it carries (a covering).
+   For the WEIGHTED analytic axis `{:analytic-plan p}` (ADR-022 / ADR-140) a
+   posting's amount is apportioned by percent across the classes it
+   distributes to — the classes sum back to the posting because the
+   distribution is validated to total 100% per plan. A posting carrying no
+   distribution in `p` lands under class nil, so an incompletely-tagged book
+   is visible rather than silently dropped.
 
    Opts: `:sign` (`:raw` | `:inflow`, default `:raw`), `:commodity`
    (default `:EUR`), and `:strict-commodity?` (default false — when
@@ -271,12 +369,19 @@
   ([postings dimension] (marginalize postings dimension {}))
   ([postings dimension {:keys [sign commodity strict-commodity?]
                         :or {sign :raw commodity :EUR}}]
-   (let [[extract set-axis?] (resolve-dimension dimension)
+   (let [[extract kind] (resolve-dimension dimension)
          grouped  (reduce (fn [acc p]
                             (let [v (extract p)]
-                              (if set-axis?
-                                (reduce #(update %1 %2 (fnil conj []) p) acc (or v #{}))
-                                (update acc v (fnil conj []) p))))
+                              (case kind
+                                :scalar   (update acc v (fnil conj []) p)
+                                :set      (reduce #(update %1 %2 (fnil conj []) p)
+                                                  acc (or v #{}))
+                                :weighted (if (seq v)
+                                            (reduce-kv (fn [a cls pct]
+                                                         (update a cls (fnil conj [])
+                                                                 (scale-posting p pct)))
+                                                       acc v)
+                                            (update acc nil (fnil conj []) p)))))
                           {}
                           postings)]
      (update-vals grouped #(sum-postings % sign commodity
@@ -325,20 +430,32 @@
 
 (defmethod run-engine :dimension
   ;; The generic σ_E line: sum the postings of one class under a
-  ;; built-in axis OR a `:kontor.posting/dimensions` axis (ADR-097). `:match`
+  ;; built-in axis, a `:kontor.posting/dimensions` axis (ADR-097), or the
+  ;; weighted `{:analytic-plan …}` axis (ADR-022 / ADR-140). `:match`
   ;; is the class value (or a collection — any of). For a set-valued
-  ;; axis, `:match` is matched by intersection.
+  ;; axis, `:match` is matched by intersection; for the weighted axis the
+  ;; matching classes' apportioned shares are summed, so a line scoped to one
+  ;; cost centre reports that cost centre's PERCENTAGE of each posting rather
+  ;; than the whole posting.
   [postings {:keys [dimension match sign commodity strict-commodity?]
              :or {sign :raw commodity :EUR}} _opts]
-  (let [[extract set-axis?] (resolve-dimension dimension)
-        match-set (if (coll? match) (set match) #{match})]
-    (sum-postings (filter (fn [p]
-                            (let [v (extract p)]
-                              (if set-axis?
-                                (seq (clojure.set/intersection match-set (or v #{})))
-                                (contains? match-set v))))
-                          postings)
-                  sign commodity {:strict-commodity? strict-commodity?})))
+  (let [[extract kind] (resolve-dimension dimension)
+        match-set (if (coll? match) (set match) #{match})
+        selected
+        (case kind
+          :scalar (filterv (fn [p] (contains? match-set (extract p))) postings)
+          :set    (filterv (fn [p]
+                             (seq (clojure.set/intersection match-set
+                                                            (or (extract p) #{}))))
+                           postings)
+          :weighted (into []
+                          (comp (mapcat (fn [p]
+                                          (keep (fn [[cls pct]]
+                                                  (when (contains? match-set cls)
+                                                    (scale-posting p pct)))
+                                                (extract p)))))
+                          postings))]
+    (sum-postings selected sign commodity {:strict-commodity? strict-commodity?})))
 
 (defmethod run-engine :default
   [_ expression _opts]

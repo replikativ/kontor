@@ -24,13 +24,25 @@
             or regressing (ADR-034, ADR-068).
           - legal-hold (`legal_hold.clj`): no destructive write against
             an entity in an active hold's scope (ADR-049).
+          - analytic (`analytic.cljc`): a posting against an account
+            naming :kontor.account/required-analytic-plans carries
+            distributions summing to exactly 100% in each named plan
+            (ADR-022 / ADR-140).
 
-   The composed gate-fn `validate-and-apply` runs all 4 middleware
+   The composed gate-fn `validate-and-apply` runs all middleware
    validators in order. Per T-2 of note 160 the gate API itself
    lives in `kontor.gate`; this namespace registers the composed
-   `validate-and-apply` into `kontor.gate` at load time."
+   `validate-and-apply` into `kontor.gate` at load time.
+
+   **This gate is bypassable** — a raw `d/transact` skips it. The
+   mandatory sibling is `kontor.governance/validate-report`, registered
+   as a datahike `tx-pred` by `kontor.governance/govern!`, which runs
+   the same families post-resolution in the writer on every committed
+   write. Anything added here that protects the LEDGER (as opposed to
+   improving an error message) belongs there too."
   (:require #?(:clj [clojure.java.io :as io])
             [datahike.api :as d]
+            [kontor.analytic :as analytic]
             [kontor.gate :as gate]
             [kontor.money :as money]
             [kontor.compliance.legal-hold :as legal-hold]
@@ -219,6 +231,11 @@
   (period/assert-not-in-locked-period! txdb tx-data)
   (state-machine/assert-transition! txdb tx-data)
   (assert-postings-sum-to-zero! txdb tx-data)
+  ;; ADR-022 / ADR-140: an account that names required analytic plans must be
+  ;; fully distributed. The authoritative pass is `kontor.governance` in the
+  ;; writer; this one runs pre-resolution so the operator gets the error with
+  ;; the offending posting map attached.
+  (analytic/assert-required-analytic-plans! txdb tx-data)
   tx-data)
 
 (defn pg-tx-wrap
