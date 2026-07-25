@@ -73,6 +73,16 @@
                         Stamped on every posting as :kontor.posting/entity;
                         required for per-entity trial-balance / BS /
                         GuV filters to scope correctly.
+     :actor           — WHO is booking this (ADR-150)  (optional by
+                        default; MANDATORY once the consumer calls
+                        `kontor.actor/require-actor-on-posted!`).
+                        Accepts an eid, a lookup-ref, or the bare
+                        `:kontor.actor/uid` string — `\"sarah\"` resolves
+                        the registered actor and is REFUSED if there is
+                        none. Lands on :kontor.transaction/posted-by
+                        (GoBD's *Bearbeiter*) + :kontor.audit/create-uid
+                        (what ADR-038's :no-self-approval compares a later
+                        approver against) + :kontor.audit/write-uid.
 
    Option keys are STRICT: an unrecognised key throws
    `:kontor.book/unknown-option` rather than being silently dropped
@@ -111,6 +121,8 @@
   (:require [datahike.api :as d]
             [kontor.book.build :as build]
             [kontor.gate :as gate]
+            [kontor.money :as money]
+            [kontor.numbering :as numbering]
             [kontor.posting :as posting]))
 
 ;; ============================================================================
@@ -334,6 +346,193 @@
      (posting/post-transaction! conn
                                 (build-input opts')
                                 (merge (post-opts opts') extra-post-opts)))))
+
+;; ============================================================================
+;; Reversal — the generic GL reverse builder (ADR-152)
+;; ============================================================================
+;;
+;; Before ADR-152 the only way to reverse anything in kontor was the
+;; document-specific `kontor.document.invoice/cancel!`, which hard-codes the
+;; reversal's effective-date to `now` — so a January invoice discovered in
+;; March could not be reversed INTO January, which is the case that actually
+;; arises (you close a period, then find the error). A raw `entry!` GL entry
+;; had no reverse path at all: the caller hand-rolled leg negation, the
+;; `:reverses` link and the sealing dance. `:kontor.transaction/reverses` has
+;; existed since ADR-007; what was missing was the builder.
+;;
+;; Odoo's equivalent is `account.move._reverse_moves`
+;; (`addons/account/models/account_move.py:5430`).
+
+(def ^:private reversible-posting-pull
+  [:kontor.posting/account
+   :kontor.posting/amount
+   :kontor.posting/commodity
+   :kontor.posting/partner
+   :kontor.posting/entity
+   :kontor.posting/ledger
+   :kontor.posting/narration
+   :kontor.posting/display-type
+   {:kontor.posting/dimensions [:kontor.posting-dimension/axis
+                                :kontor.posting-dimension/value]}])
+
+(defn- ->eid
+  "Unwrap a pulled ref (`{:db/id n}`) to its eid; pass scalars through."
+  [v]
+  (if (map? v) (:db/id v) v))
+
+(defn resolve-transaction
+  "Entity id of the transaction `spec` denotes — an eid, a lookup-ref, or a
+   bare `:kontor.transaction/external-id` string. nil when it resolves to
+   nothing."
+  [db spec]
+  (cond
+    (and (integer? spec) (pos? spec)) (when (seq (d/datoms db :eavt spec)) spec)
+    (vector? spec) (try (:db/id (d/entity db spec))
+                        (catch Exception _ nil))
+    (string? spec) (d/q '[:find ?t . :in $ ?x
+                          :where [?t :kontor.transaction/external-id ?x]]
+                        db spec)
+    :else nil))
+
+(defn reversal-of
+  "The transaction that reverses `spec`, or nil. `(some? (reversal-of db t))`
+   is the \"has this been reversed?\" predicate."
+  [db spec]
+  (when-let [eid (resolve-transaction db spec)]
+    (d/q '[:find ?r . :in $ ?o :where [?r :kontor.transaction/reverses ?o]] db eid)))
+
+(defn- with-reverses-link
+  "Splice `:kontor.transaction/reverses` onto the transaction entity map of
+   an already-built tx-data vector. Kept separate because `build-input`'s
+   friendly option set deliberately carries no raw kernel attrs, and the
+   transaction map is identifiable by the one attr every entry has."
+  [tx-data orig]
+  (mapv (fn [form]
+          (if (and (map? form) (contains? form :kontor.transaction/journal))
+            (assoc form :kontor.transaction/reverses orig)
+            form))
+        tx-data))
+
+(defn reverse-tx-data
+  "Pure-over-`db` tx-data for a reversing entry: every leg of the original
+   with the sign flipped, in the same journal, dated `:reversal-date`, linked
+   back by `:kontor.transaction/reverses`. Per ADR-007 a correction is a
+   reversal plus a re-posting, never an in-place edit — this is the builder
+   that makes that the cheap path.
+
+   Options:
+     :transaction    — the original (eid / lookup-ref / external-id string).
+                       REQUIRED.
+     :reversal-date  — `:kontor.transaction/effective-date` of the reversal.
+                       Defaults to NOW, matching `entry!`. Pass it
+                       explicitly whenever the reversal belongs in a
+                       specific period — that is the whole reason this
+                       option exists, and `invoice/cancel!` not having it is
+                       the defect ADR-152 closes.
+     :narration      — defaults to \"reversal of <external-id or eid>\".
+     :external-id    — optional. Deliberately NOT derived from the
+                       original's (no \"-REV\" suffix): a reversal is its own
+                       legal document and, in a journal with ADR-151
+                       allocation on, receives its own gapless number.
+     :journal        — defaults to the original's journal.
+     :actor          — who is reversing (ADR-150).
+     :posted-at / :vt-from / :vt-to — as for `entry!`.
+
+   Refuses, rather than producing something subtly wrong:
+     - an unknown transaction                (`:kontor.book/unknown-transaction`)
+     - a transaction that is not posted      (`:kontor.book/not-posted`) — a
+       draft is not reversed, it is corrected or discarded
+     - one already reversed                  (`:kontor.book/already-reversed`) —
+       double-reversing silently re-books the original amount, which reads
+       as a duplicate sale in every report
+     - one with no postings                  (`:kontor.book/no-postings`)"
+  [db {:keys [transaction reversal-date narration external-id journal] :as opts}]
+  (let [orig (or (resolve-transaction db transaction)
+                 (throw (ex-info (str "kontor.book/reverse: no transaction found for "
+                                      (pr-str transaction))
+                                 {:type :kontor.book/unknown-transaction
+                                  :transaction transaction})))
+        hdr  (d/pull db [:kontor.transaction/posted-at
+                         :kontor.transaction/external-id
+                         :kontor.transaction/effective-date
+                         {:kontor.transaction/journal [:db/id]}]
+                     orig)]
+    (when-not (:kontor.transaction/posted-at hdr)
+      (throw (ex-info (str "kontor.book/reverse: transaction " orig " is not posted — "
+                           "a draft is corrected or discarded, not reversed")
+                      {:type :kontor.book/not-posted :transaction orig})))
+    (when-let [r (reversal-of db orig)]
+      (throw (ex-info (str "kontor.book/reverse: transaction " orig
+                           " has already been reversed by " r
+                           " — reversing twice re-books the original amount, which "
+                           "reads as a duplicate entry in every report")
+                      {:type :kontor.book/already-reversed
+                       :transaction orig :reversal r})))
+    (let [ps (mapv #(d/pull db reversible-posting-pull %)
+                   (sort (d/q '[:find [?p ...] :in $ ?t
+                                :where [?p :kontor.posting/transaction ?t]]
+                              db orig)))]
+      (when (empty? ps)
+        (throw (ex-info (str "kontor.book/reverse: transaction " orig " has no postings")
+                        {:type :kontor.book/no-postings :transaction orig})))
+      (with-reverses-link
+        (entry-tx-data
+         (merge
+          (select-keys opts [:posted-at :vt-from :vt-to :actor :partner :entity])
+          {:journal        (or journal (->eid (:kontor.transaction/journal hdr)))
+           :effective-date (or reversal-date (java.util.Date.))
+           :narration      (or narration
+                               (str "reversal of "
+                                    (or (:kontor.transaction/external-id hdr) orig)))
+           :postings
+           (mapv (fn [p]
+                   (cond-> {:account   (->eid (:kontor.posting/account p))
+                            :amount    (money/negate-amount (:kontor.posting/amount p))
+                            :commodity (->eid (:kontor.posting/commodity p))}
+                     (:kontor.posting/partner p)
+                     (assoc :partner (->eid (:kontor.posting/partner p)))
+                     (:kontor.posting/entity p)
+                     (assoc :entity (->eid (:kontor.posting/entity p)))
+                     (:kontor.posting/ledger p)
+                     (assoc :ledger (->eid (:kontor.posting/ledger p)))
+                     (seq (:kontor.posting/dimensions p))
+                     (assoc :dimensions
+                            (reduce (fn [m d]
+                                      (update m (:kontor.posting-dimension/axis d)
+                                              (fnil conj [])
+                                              (:kontor.posting-dimension/value d)))
+                                    {}
+                                    (:kontor.posting/dimensions p)))))
+                 ps)}
+          (when external-id {:external-id external-id})))
+        orig))))
+
+(defn reverse!
+  "Reverse a posted transaction: sign-flip every leg, date the reversal
+   where you want it, link `:kontor.transaction/reverses`, commit through
+   the gate. See [[reverse-tx-data]] for options and refusals.
+
+   The reversal is its own sealed transaction — the original is untouched,
+   which is what ADR-007 requires and what an auditor expects to see. After
+   it commits, the account balances of the original net to zero as of the
+   reversal date, while a bitemporal read as of the day before still shows
+   the original standing (`kontor.reporting.balance`, ADR-048).
+
+   Returns the tx-report."
+  [conn opts]
+  (gate/transact-with-validation conn (reverse-tx-data (d/db conn) opts)))
+
+;; ============================================================================
+;; Gapless legal numbering (ADR-151) — re-exported for discoverability
+;; ============================================================================
+
+(def sequence-gaps
+  "Re-export of `kontor.numbering/sequence-gaps` — holes in a journal's
+   allocated legal-number series, per reset bucket (ADR-151). Here as well
+   as in `kontor.numbering` because `kontor.book` is the front door a
+   consumer reads first, and \"is my invoice series intact?\" is a question
+   they ask on day one."
+  numbering/sequence-gaps)
 
 ;; ============================================================================
 ;; Non-committing validation — the "web-form check" (research note 190)

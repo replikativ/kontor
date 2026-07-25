@@ -200,14 +200,49 @@
     sup-doc :supporting-doc
     :as change-spec}]
   (case rule
+    ;; FAILS CLOSED (ADR-150). This rule used to return "no violation"
+    ;; whenever either side was nil — so an approval with no recorded actor,
+    ;; or against an entity with no recorded creator, sailed through the
+    ;; four-eyes control that exists precisely to stop it. That is the
+    ;; failure mode an auditor tests for first: separation of duties cannot
+    ;; be VERIFIED from incomplete data, and "cannot verify" must mean
+    ;; "refuse", not "allow". A consumer that genuinely has no actor concept
+    ;; simply does not install this policy.
     :no-self-approval
     (let [creator (->eid (:kontor.audit/create-uid (d/pull db [:kontor.audit/create-uid] entity)))
           actor   (->eid changed-by-uid)]
-      (when (and creator actor (= creator actor))
+      (cond
+        (nil? actor)
+        {:rule rule
+         :reason (str "no :changed-by-uid recorded — separation of duties cannot be "
+                      "verified, so the transition is refused. Pass the acting "
+                      "actor (kontor.actor/register-actor! + :changed-by-uid).")
+         :creator creator}
+
+        (nil? creator)
+        {:rule rule
+         :reason (str "the entity records no :kontor.audit/create-uid, so there is "
+                      "nothing to compare the approver against — separation of "
+                      "duties cannot be verified, and the transition is refused. "
+                      "Stamp :kontor.audit/create-uid when creating the entity "
+                      "(the `:actor` option does this for ledger entries).")
+         :actor actor}
+
+        (= creator actor)
         {:rule rule
          :reason "transition actor must differ from entity creator"
          :actor actor
          :creator creator}))
+
+    ;; ADR-150 — the same policy row the gate reads to require an actor on a
+    ;; sealed entry also has meaning HERE: a status transition under it must
+    ;; name who made it. Both enforcement points, one row.
+    :requires-actor
+    (when (nil? (->eid changed-by-uid))
+      {:rule rule
+       :reason (str "no actor recorded for this transition — an active "
+                    ":requires-actor policy makes attribution mandatory "
+                    "(:changed-by-uid). ADR-150.")})
 
     :requires-supporting-doc
     (when-not sup-doc

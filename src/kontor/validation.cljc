@@ -24,15 +24,25 @@
             or regressing (ADR-034, ADR-068).
           - legal-hold (`legal_hold.clj`): no destructive write against
             an entity in an active hold's scope (ADR-049).
+          - actor (`actor.cljc`): a sealed entry must record the actor
+            that sealed it, once the consumer installs the
+            `:requires-actor` policy (ADR-150).
 
-   The composed gate-fn `validate-and-apply` runs all 4 middleware
+     3. **In-transaction ALLOCATION.** `validate-and-apply` is not only a
+        validator — it is the kernel's one `:db.fn/call` seam, so it is also
+        where gapless legal numbering is allocated
+        (`numbering.cljc`, ADR-151). See its docstring.
+
+   The composed gate-fn `validate-and-apply` runs the middleware
    validators in order. Per T-2 of note 160 the gate API itself
    lives in `kontor.gate`; this namespace registers the composed
    `validate-and-apply` into `kontor.gate` at load time."
   (:require #?(:clj [clojure.java.io :as io])
             [datahike.api :as d]
+            [kontor.actor :as actor]
             [kontor.gate :as gate]
             [kontor.money :as money]
+            [kontor.numbering :as numbering]
             [kontor.compliance.legal-hold :as legal-hold]
             [kontor.compliance.period :as period]
             [kontor.compliance.sealing :as sealing]
@@ -200,26 +210,48 @@
 
 (defn validate-and-apply
   "Transactor function. Runs structural validators against the
-   speculative `txdb` + the user's original `tx-data`; returns
-   tx-data so the transactor applies it. Throws to abort.
+   speculative `txdb` + the user's original `tx-data`; returns the tx-data
+   the transactor applies. Throws to abort.
 
    Use as `[:db.fn/call kontor.validation/validate-and-apply
    tx-data]` either from Clojure (via `transact-with-validation`) or
    from pg-datahike (via the `:tx-wrap` config) so SQL writes route
    through the same validators.
 
-   Order: cheap structural checks first; failures short-circuit."
+   Order: cheap structural checks first; failures short-circuit.
+
+   The RETURN value is not always the input. `kontor.numbering/allocate`
+   (ADR-151) runs last and may append gapless legal-number allocations —
+   `:kontor.transaction/sequence-number` on the entry plus a `:db/cas`
+   increment of the journal's counter. That has to happen HERE and nowhere
+   else: this fn is invoked as a `:db.fn/call` against the in-transaction
+   db, which is the only point in datahike where reading a counter and
+   writing it back is atomic with respect to other transactions (see the
+   `kontor.numbering` ns docstring). Allocating any earlier — in the pure
+   builders, or eagerly in the gate — reintroduces the lost update that
+   hands two invoices the same legal number."
   [txdb tx-data]
-  ;; ADR-049: hold-blocks-destructive-write runs BEFORE sealing's
-  ;; no-silent-retract check so the more-specific 'blocked by hold X'
-  ;; error wins on destructive-write-of-posted-held-entity.
-  (legal-hold/assert-no-hold-violating-destructive-writes! txdb tx-data)
-  (sealing/assert-no-silent-retracts! txdb tx-data)
-  (period/assert-no-write-on-sealed! txdb tx-data)
-  (period/assert-not-in-locked-period! txdb tx-data)
-  (state-machine/assert-transition! txdb tx-data)
-  (assert-postings-sum-to-zero! txdb tx-data)
-  tx-data)
+  ;; ADR-150 — FIRST, before anything inspects a ref: re-point every opaque
+  ;; `…-uid` actor string at a real `:kontor.actor` entity. Must be first so
+  ;; every validator below (and `:no-self-approval` later) sees a resolvable
+  ;; actor rather than a string that datahike would turn into a phantom.
+  (let [tx-data (actor/resolve-uid-refs txdb tx-data)]
+    ;; ADR-049: hold-blocks-destructive-write runs BEFORE sealing's
+    ;; no-silent-retract check so the more-specific 'blocked by hold X'
+    ;; error wins on destructive-write-of-posted-held-entity.
+    (legal-hold/assert-no-hold-violating-destructive-writes! txdb tx-data)
+    (sealing/assert-no-silent-retracts! txdb tx-data)
+    (period/assert-no-write-on-sealed! txdb tx-data)
+    (period/assert-not-in-locked-period! txdb tx-data)
+    (state-machine/assert-transition! txdb tx-data)
+    (assert-postings-sum-to-zero! txdb tx-data)
+    ;; ADR-150 — refuse an unattributed seal when the consumer has installed
+    ;; the :requires-actor policy. Runs after the structural checks (a broken
+    ;; entry's first complaint should be that it is broken) and before
+    ;; allocation (an entry that will be refused must not consume a number).
+    (actor/assert-actor-on-posted! txdb tx-data)
+    ;; ADR-151 — allocate gapless legal numbers, atomically with the entry.
+    (numbering/allocate txdb tx-data)))
 
 (defn pg-tx-wrap
   "Build the `:tx-wrap` fn pg-datahike's `make-query-handler` accepts.

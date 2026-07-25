@@ -24,12 +24,14 @@ file is the reading order over what the code already encodes.
 4. [Sealing + audit + governance](#4-sealing--audit--governance)
    4.1 [Sealing — `:posting/posted-at` + purge-is-a-commit (ADR-007)](#41-sealing)
    4.2 [Audit-doc + privilege + retention + DSAR + legal hold (ADR-038, ADR-049, ADR-050, ADR-051, ADR-052)](#42-audit-doc--governance)
+   4.2a [Actor identity — `:kontor.actor/*` on ledger writes (ADR-150)](#42a-actor-identity--who-acted)
    4.3 [Status machines as data (ADR-034)](#43-status-machines)
 5. [Write substrate — process, *-tx-data, kontor.book](#5-write-substrate)
    5.1 [Validation gate — vendored `datopia/invariant` (ADR-011)](#51-validation-gate)
    5.2 [`kontor.process` orchestrator (ADR-067)](#52-kontorprocess)
    5.3 [Every business write exposes a `*-tx-data` builder (ADR-068)](#53-tx-data-builders)
-   5.4 [`kontor.book` verb facade (ADR-095)](#54-kontorbook)
+   5.4 [`kontor.book` verb facade + ref/option discipline + `reverse!` (ADR-095, ADR-124, ADR-152)](#54-kontorbook)
+6a. [Legal document numbering — gapless per-journal allocation (ADR-151)](#6a-legal-document-numbering)
 6. [Reports as marginalizations](#6-reports-as-marginalizations)
    6.1 [`marginalize` / σ_E + `:posting/dimensions` (ADR-096, ADR-097)](#61-marginalize)
 7. [Providers — the kernel's pluggable surface](#7-providers)
@@ -124,6 +126,16 @@ Five interlocking governance primitives, each a thin kernel schema:
 
 The whole governance stack composes because every primitive is a queryable schema entity, not a side-channel API.
 
+### 4.2a Actor identity — who acted
+
+Every `…-uid` attribute in the kernel is a `:db.type/ref`, and until ADR-150 there was **no entity type for them to point at** — so an opaque actor string (the de-facto convention, 296 writes across the shipped suite) minted an attribute-less phantom, and the audit trail recorded a pointer resolving to nothing. Worse, two writes of `"bob"` were two *different* phantoms, so `:no-self-approval` — which compares eids — could never fire. The control was inert, not merely unenforced.
+
+**`:kontor.actor/*`** (`uid` / `name` / `kind` / `external-ref` / `person` / `active`) is the entity every actor ref resolves through. Deliberately **actor, not user**: kontor does not authenticate and does not authorize (§1.2), and not every actor is a person — a bank importer, an ADR-032 schedule and an ADR-050 sweeper all write to the ledger, and an auditor needs machine writes distinguishable from human ones (`:kontor.actor/kind`). The consumer's identity store stays the source of truth behind `:kontor.actor/external-ref`. A **ref at a modelled actor** (rather than an opaque `:db.type/string`) is what makes `:no-self-approval` and delegation-of-authority checkable at all.
+
+`:kontor.actor/uid` is a `:db.unique/identity` **string**, so `:actor "sarah"` keeps the convention's ergonomics while changing its meaning from "mint a phantom" to "resolve the registered actor". `:actor` is threaded through `kontor.book` (it joins the strict `entry-option-keys`) and `kontor.posting`, stamping `:kontor.transaction/posted-by` (GoBD's *Bearbeiter*) + `:kontor.audit/create-uid` + `:kontor.audit/write-uid`.
+
+The 296 existing call sites are **not migrated**: `kontor.actor/resolve-uid-refs` normalises them in the gate, so each uid becomes one canonical actor and repeat writes converge on the same entity. Unknown uids are *provisioned* (tagged `:kontor.actor/kind :unregistered`, so an auditor can tell the enrolled from the incidental) — unless the consumer installs `:kontor.approval-policy/rule :requires-actor`, after which an unregistered actor and an unattributed seal are both **refused**. Off by default: a kernel cannot decide a consumer's control environment. And `:no-self-approval` now fails **CLOSED** — a nil actor or nil creator refuses the transition, because separation of duties that cannot be verified must not be assumed. (ADR-150)
+
 ### 4.3 Status machines
 
 **`:status-transition`** declares the legal `(entity-type, facet, from, to)` graph (with optional per-org overrides). **`:status-history`** records every actual transition with audit metadata. `kontor.workflow.status-machine/record-status-change!` writes both the facet update and the history row in one tx, after legality check. Every workflow companion (`kontor-sales`, `kontor-invoice`, `kontor-procurement`, `kontor-collections`, `kontor-disposal`, …) uses the same primitive — six independent transition-table inventions would otherwise emerge. (ADR-034)
@@ -160,7 +172,21 @@ This convention is the substrate's load-bearing pattern — every write everywhe
 
 `kontor.book` is **organising sugar** over `*-tx-data` builders: 8 named verbs (`receive` / `pay` / `sell` / `buy` / `receive-payment` / `pay-bill` / `transfer` / `adjust`) + a generic `entry-tx-data` / `entry!`. The verbs do not add schema or capability — they exist so a Clojure dev reads `(book/sell conn {...})` instead of constructing posting maps by hand. Verbs stamp `:posting/entity` from `book` context so per-entity trial-balance filters work without consumer book-keeping. (ADR-095; the McComb arc deliberately deflated to "verb facade" rather than a θ-as-data framework — `*-tx-data` builders already ARE θ in code, and sealing neutralises the re-derivability payoff.)
 
-**Ref and option discipline (ADR-124).** A bare string in an account slot means `:kontor.account/path` (the account's UNIQUE identity attribute — never `:kontor.account/code`, which collides across charts per ADR-119/ADR-123); in `:journal` it means `:kontor.journal/code`; in `:commodity`, `:kontor.commodity/symbol`. All three are resolved STRICTLY: naming something that does not exist raises `:kontor.book/unresolved-ref` with the verb slot named, and is never read as a tempid. Option keys are strict too — an unrecognised key raises `:kontor.book/unknown-option` instead of being dropped, the same discipline `kontor.reporting.report/check-options!` applies on the read side. `:settles` is an entry option (`:kontor.transaction/settles`), without which the GL clears a receivable that the open-item subledger still reports as fully open. A settlement verb falls back from a `:cash` to a `:bank` journal when the book has no `:cash` one.
+**Ref and option discipline (ADR-124).** A bare string in an account slot means `:kontor.account/path` (the account's UNIQUE identity attribute — never `:kontor.account/code`, which collides across charts per ADR-119/ADR-123); in `:journal` it means `:kontor.journal/code`; in `:commodity`, `:kontor.commodity/symbol`. All three are resolved STRICTLY: naming something that does not exist raises `:kontor.book/unresolved-ref` with the verb slot named, and is never read as a tempid. Option keys are strict too — an unrecognised key raises `:kontor.book/unknown-option` instead of being dropped, the same discipline `kontor.reporting.report/check-options!` applies on the read side. `:settles` is an entry option (`:kontor.transaction/settles`), without which the GL clears a receivable that the open-item subledger still reports as fully open. A settlement verb falls back from a `:cash` to a `:bank` journal when the book has no `:cash` one. `:actor` is an entry option too — see §4.2a. (ADR-150)
+
+**Reversal (ADR-152).** `kontor.book/reverse!` is the generic GL reverse builder: negate every leg, file in the original's journal, link `:kontor.transaction/reverses`, and — the point — date the reversal where the CALLER says. Before it, the only reversal in the kernel was `kontor.document.invoice/cancel!`, which hard-codes `now`, so a January error found in March could not be reversed into January. The reversal is its own sealed transaction (ADR-007 forbids editing the original), gets its own legal number rather than a `-REV` suffix, and refuses the cases that would silently double-book: not-posted, already-reversed, no-postings, unknown.
+
+---
+
+## 6a. Legal document numbering
+
+`:kontor.journal/sequence-prefix` used to be a bare string no code read, and the legal number landed in caller-supplied `:kontor.transaction/external-id` — which is `:db.unique/identity`, so reusing a posted number **upserted onto the sealed original**. In DE (GoBD / §14 UStG), FR (NF525), IT, ES, PT, BR, IN and MX a gapless per-journal number is a legal condition of issuing an invoice.
+
+**`kontor.numbering`** (ADR-151) allocates one. `:kontor.transaction/sequence-number` (a long) is the authoritative ordinal; the rendered string is a display of it. Per-journal opt-in (`:kontor.journal/auto-sequence`) because an internal accrual journal must not mint invoice numbers; `:kontor.journal/sequence-reset` gives per-year (default), per-month or never; buckets are derived in UTC from the entry's `effective-date` — the *document* date. `sequence-gaps` / `gapless?` are the auditor's side, grouped per reset bucket so a 1-January restart is not read as a 5,000-entry hole.
+
+**Allocation happens INSIDE the transaction**, in `validate-and-apply` — the kernel's one `:db.fn/call` seam. This is the load-bearing design choice. Allocating eagerly (read the counter, then transact) loses updates: two threads that read the same `n` both write `n+1`, and the loser does not even fail — it upserts onto the first, sealed entry. In-transaction, the counter read and write are one atomic unit, and datahike's writer is what makes it airtight: `LocalWriter` owns one transaction thread with one queue and recurs on the previous transaction's `:db-after`, so transactions against a connection are strictly serialized and each `:db.fn/call` sees the chained db. The commit loop is separate and *lagging*, which is why the allocator must read the `txdb` it is handed and never `@conn`. A `:db/cas` on the counter is defence in depth on top. Measured: 8 threads × 25 posts → 200 distinct consecutive ordinals, zero gaps.
+
+Because allocation and consumption are the same transaction, a rolled-back entry consumes no number — there is no reserved-but-unused state to leak a hole from, which is why kontor needs no equivalent of Odoo's `standard` vs `no_gap` distinction. Backdating into a bucket the journal has already left is **refused** (it would restart at 1 and re-issue a used number). The one hole that can still appear is an ADR-007 `:db/purge`, which is exactly what `sequence-gaps` exists to surface rather than hide.
 
 ---
 

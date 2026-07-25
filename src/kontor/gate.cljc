@@ -33,6 +33,10 @@
    their require list."
   (:require [clojure.string :as str]
             [datahike.api :as d]
+            ;; ADR-150. Safe to require here: `kontor.actor` depends only on
+            ;; `datahike.api` + the pure `kontor.actor.ref`, so it does not
+            ;; reach back into the gate and no cycle forms.
+            [kontor.actor :as actor]
             [kontor.invariant :as inv]))
 
 ;; ============================================================================
@@ -284,12 +288,23 @@
                            "`kontor.core` requires it for you on standard "
                            "consumer paths.")
                       {:error :gate/not-registered})))
-    (assert-no-dangling-string-refs! (d/db conn) tx-data)
-    (inv/assert-invariants conn tx-data)
-    ;; datahike's synchronous `transact` is JVM-only; cljs must use the
-    ;; async `transact!`. The tx-fn wrap + validation are identical.
-    #?(:clj  (d/transact conn [[:db.fn/call f tx-data]])
-       :cljs (d/transact! conn [[:db.fn/call f tx-data]]))))
+    ;; ADR-150 — normalise actor references BEFORE the two pre-checks below.
+    ;; Both of them resolve refs against the db (`assert-invariants` builds a
+    ;; speculative db from the tx-data), so an as-yet-unprovisioned
+    ;; `[:kontor.actor/uid "bob"]` would raise datahike's raw
+    ;; `:entity-id/missing` here — before the normaliser inside
+    ;; `validate-and-apply` ever got the chance to turn it into a real
+    ;; actor. Running it at both points is deliberate and safe: the pass is
+    ;; idempotent (its output declares its tempids, which
+    ;; `collect-uid-strings` then excludes), and the transactor-side call is
+    ;; what covers pg-datahike's `:tx-wrap`, which never enters this fn.
+    (let [tx-data (actor/resolve-uid-refs (d/db conn) tx-data)]
+      (assert-no-dangling-string-refs! (d/db conn) tx-data)
+      (inv/assert-invariants conn tx-data)
+      ;; datahike's synchronous `transact` is JVM-only; cljs must use the
+      ;; async `transact!`. The tx-fn wrap + validation are identical.
+      #?(:clj  (d/transact conn [[:db.fn/call f tx-data]])
+         :cljs (d/transact! conn [[:db.fn/call f tx-data]])))))
 
 ;; ============================================================================
 ;; Dry-run — the "web-form check" half (research note 190)
@@ -326,7 +341,16 @@
     (when-not f
       (throw (ex-info "kontor.gate: no validate-and-apply registered (require kontor.validation)."
                       {:error :gate/not-registered})))
-    (let [diags (-> []
+    (let [tx-data (try (actor/resolve-uid-refs (d/db conn) tx-data)
+                       ;; strict mode refuses an unregistered actor; report it
+                       ;; as a diagnostic like any other, and keep checking the
+                       ;; rest of the form rather than bailing out.
+                       (catch #?(:clj clojure.lang.ExceptionInfo :cljs cljs.core/ExceptionInfo) _
+                         tx-data))
+          diags (-> []
+                    (into (try (actor/resolve-uid-refs (d/db conn) tx-data) nil
+                               (catch #?(:clj clojure.lang.ExceptionInfo :cljs cljs.core/ExceptionInfo) e
+                                 [(ex->diagnostic e)])))
                     (into (try (assert-no-dangling-string-refs! (d/db conn) tx-data) nil
                                (catch #?(:clj clojure.lang.ExceptionInfo :cljs cljs.core/ExceptionInfo) e
                                  [(ex->diagnostic e)])))
