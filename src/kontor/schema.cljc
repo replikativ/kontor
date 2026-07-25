@@ -395,14 +395,20 @@
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":invoice | :credit-note | :debit-note | :all.
-                     Drives credit/debit-note routing through the same
-                     document-type as the origin invoice."}
+                     RESERVED — NO READER. Credit/debit-note routing is
+                     done today by a `case` on the invoice type in
+                     `kontor.invoice.posting/debit-credit-for`, which
+                     never consults the document-type. Previously
+                     documented as 'Drives credit/debit-note routing'
+                     (ADR-140)."}
 
    {:db/ident       :kontor.document-type/prefix
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/doc         "Prefix for the clearance-token / access key
-                     when applicable ('NFe', 'NFCe')."}
+                     when applicable ('NFe', 'NFCe'). RESERVED — NO
+                     READER; the l10n providers build their own
+                     prefixes (ADR-140)."}
 
    {:db/ident       :kontor.document-type/active?
     :db/valueType   :db.type/boolean
@@ -545,14 +551,25 @@
    {:db/ident       :kontor.journal/default-account
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
-    :db/doc         "Account auto-debited/credited when a transaction
-                     in this journal omits the contra side."}
+    :db/doc         "Consumer-supplied default contra account for UIs
+                     that pre-fill the second leg. RESERVED — NO KERNEL
+                     READER. The kernel never auto-generates a contra
+                     posting and structurally cannot: an unbalanced
+                     transaction is refused outright by
+                     `assert-postings-sum-to-zero!` before any journal
+                     default could be consulted. This doc previously
+                     read 'auto-debited/credited when a transaction in
+                     this journal omits the contra side', describing
+                     behaviour the kernel contradicts (ADR-140)."}
 
    {:db/ident       :kontor.journal/sequence-prefix
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
-    :db/doc         "Prefix for auto-generated transaction names
-                     (\"INV/{year}/\")."}
+    :db/doc         "Consumer-side numbering convention (\"INV/{year}/\").
+                     RESERVED — NO KERNEL READER. kontor ships no
+                     sequence generator; `:kontor.transaction/external-id`
+                     is always caller-supplied. Previously described as
+                     driving 'auto-generated transaction names' (ADR-140)."}
 
    {:db/ident       :kontor.journal/active
     :db/valueType   :db.type/boolean
@@ -587,8 +604,16 @@
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true
-    :db/doc         "ISO-3166 alpha-2; used for fiscal-position auto-
-                     application and tax-provider routing."}
+    :db/doc         "ISO-3166 alpha-2. Written by the partner module and
+                     available to consumer routing logic, but READ BY NO
+                     KERNEL CODE. In particular there is no
+                     fiscal-position auto-application:
+                     `kontor.tax.fiscal-position/resolve-fiscal-position`
+                     only coerces an explicitly-supplied reference, and
+                     `:kontor.fiscal-position/auto-apply` is likewise
+                     unwired. The caller passes the fiscal position.
+                     Previously documented as 'used for fiscal-position
+                     auto-application' (ADR-140)."}
 
    {:db/ident       :kontor.partner/tax-id
     :db/valueType   :db.type/string
@@ -603,9 +628,16 @@
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Credit limit amount in :kontor.partner/credit-commodity.
-                     Nil = unlimited. Consumer's responsibility to
-                     define 'open' / 'pending' for credit-available
-                     calculation (kontor.partner/credit-available)."}
+                     Nil = unlimited. The KERNEL DOES NOT GATE ON THIS
+                     ATTRIBUTE — it is a carrier the consumer compares
+                     against a computed exposure. The shipped exposure
+                     query is
+                     `kontor.collections.credit-hold/credit-utilization`
+                     (kontor-collections companion), which sums open
+                     amounts across :sent / :partially-paid sales
+                     invoices; limit minus that is the headroom. This
+                     doc previously named `kontor.partner/credit-available`,
+                     a kernel function that has never existed (ADR-140)."}
 
    {:db/ident       :kontor.partner/credit-commodity
     :db/valueType   :db.type/ref
@@ -616,9 +648,14 @@
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":open | :hold | :review | :closed. ADR-039.
-                     Consumers enforce: post-to-ledger may refuse
-                     posting against a :hold partner; sales flows
-                     gate order approval on :review."}
+                     Consumers enforce — and NO IN-REPO CONSUMER DOES.
+                     `kontor.collections.credit-hold/credit-status-for`
+                     resolves the effective status (active :credit-hold
+                     rows first, this scalar as fallback) but blocks
+                     nothing; neither the sales nor the invoice module
+                     gates on it. Previously phrased as though
+                     post-to-ledger and sales order approval already
+                     honoured it (ADR-140)."}
 
    ;; ADR-039: KYC hooks. The actual sanctions-screening engine is a
    ;; future SanctionsProvider companion; these scalars capture the
@@ -627,8 +664,11 @@
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":not-required | :pending | :cleared | :flagged |
-                     :blocked. Trade should be forbidden when
-                     :blocked (consumer enforces)."}
+                     :blocked. Trade should be forbidden when :blocked —
+                     but NOTHING IN THIS REPOSITORY ENFORCES THAT, kernel
+                     or companion. It is a carrier for a consumer control
+                     that must be written; do not assume a :blocked
+                     partner is unable to transact (ADR-140)."}
 
    {:db/ident       :kontor.partner/kyc-checked-at
     :db/valueType   :db.type/instant
@@ -1883,9 +1923,17 @@
    {:db/ident       :kontor.payment/state
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
-    :db/doc         "ADR-034 lifecycle: :draft → :registered → :cleared, plus
-                     :cancelled. :registered = cash sits in the outstanding
-                     account; :cleared = the bank line reconciled it."}
+    :db/doc         "Intended ADR-034 lifecycle: :draft → :registered →
+                     :cleared, plus :cancelled. RESERVED — THE WHOLE
+                     :kontor.payment/* AND :kontor.batch-payment/*
+                     BLOCK IS UNWIRED: no non-schema source reads or
+                     writes any of it, and NO :status-transition rows
+                     are seeded for entity-type :payment, so the ADR-034
+                     legality machine has nothing to check either. Naming
+                     an 'ADR-034 lifecycle' with no seeded transitions
+                     reads as an enforced state machine and is not one
+                     (ADR-140). The live settlement mechanism is
+                     :kontor.payment-application/* (ADR-043)."}
 
    {:db/ident       :kontor.payment/method
     :db/valueType   :db.type/keyword
@@ -2740,8 +2788,13 @@
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "Optional cost-basis per unit at posting time, in
-                     :kontor.posting/cost-commodity. Used by FIFO/LIFO disposal
-                     calculation."}
+                     :kontor.posting/cost-commodity. RESERVED — NO
+                     READER, as with :kontor.posting/lot and the whole
+                     :kontor.lot/* block. The live FIFO/LIFO/AVCO
+                     cost-flow runs in the inventory module over its own
+                     valuation-layer entities (ADR-029) and never touches
+                     these attributes. Previously documented as 'Used by
+                     FIFO/LIFO disposal calculation' (ADR-140)."}
 
    {:db/ident       :kontor.posting/cost-commodity
     :db/valueType   :db.type/ref
@@ -2753,8 +2806,14 @@
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
     :db/doc         "The same amount, expressed in the journal/company
-                     base currency. Set iff :kontor.posting/commodity differs
-                     from the base currency."}
+                     base currency. RESERVED — NO READER AND NO WRITER;
+                     reports translate through `kontor.fx` against an
+                     `FxRateProvider` instead (ADR-072). The doc said
+                     'Set iff :kontor.posting/commodity differs from the
+                     base currency', an 'iff' phrasing that implies a
+                     maintained invariant — nothing maintains it, so a
+                     consumer must not infer the commodity from this
+                     attribute's presence (ADR-140)."}
 
    {:db/ident       :kontor.posting/base-commodity
     :db/valueType   :db.type/ref
@@ -2852,18 +2911,22 @@
     :db/cardinality :db.cardinality/many
     :db/doc         "Many-ref to :tax-application entities. ADR-016."}
 
-   ;; ADR-018 — clearance token mirror at the posting level. Set
-   ;; together with :kontor.transaction/clearance-token by the country
-   ;; module's EInvoiceProvider on transition :pending-attestation
-   ;; → :posted. Mirrored at the posting level so reports keyed off
-   ;; postings (rather than transactions) can find the token directly.
+   ;; ADR-018 — clearance token mirror at the posting level. RESERVED:
+   ;; no EInvoiceProvider writes it and no report reads it. The LIVE
+   ;; attribute is :kontor.transaction/clearance-token (written by the
+   ;; provider bridge, read by kontor.workflow.event-bus and
+   ;; kontor.reporting.explain).
    {:db/ident       :kontor.posting/clearance-token
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/index       true
-    :db/doc         "Mirror of :kontor.transaction/clearance-token at the
-                     posting level for query ergonomics. Set together
-                     with the parent transaction's token. ADR-018."}
+    :db/doc         "Intended mirror of :kontor.transaction/clearance-token
+                     at the posting level. RESERVED — NO WRITER AND NO
+                     READER, so a posting-keyed query must join up to its
+                     transaction to find the token. The doc previously
+                     stated it was 'Set together with the parent
+                     transaction's token' by the country module's
+                     EInvoiceProvider; it is not (ADR-140). ADR-018."}
 
    ;; ADR-097 — classification dimensions. `:kontor.posting/account` is ONE
    ;; classification axis; this many-ref carries the others (cost-
@@ -2912,7 +2975,10 @@
   "ADR-016 — per-posting per-tax computation record. Captures the
    base, the resulting tax amount, and the compound-on lineage for
    audit + report queries that need direct (not derived) per-tax
-   detail. One :tax-application entity per (product-line × tax) pair."
+   detail. Intended shape: one :tax-application entity per
+   (product-line × tax) pair — but RESERVED, no builder produces these
+   entities and nothing reads them, so the per-pair cardinality is an
+   intention rather than an enforced invariant (ADR-140)."
   [{:db/ident       :kontor.tax-application/posting
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
@@ -3365,9 +3431,9 @@
 ;;   - German Kostenrechnung
 ;;   - Canadian SR&ED project tracking
 ;;   - US job costing
-;; Phase-1 schema only; the report-time aggregator that consumes
-;; distributions ships in Phase 1.5 alongside the declarative report
-;; engine. (Actual cost-allocation algorithms — overhead allocation,
+;; The report-time aggregator that consumes distributions is the
+;; weighted `{:analytic-plan …}` axis of `kontor.reporting.report/marginalize`
+;; (ADR-140). (Actual cost-allocation algorithms — overhead allocation,
 ;; multi-step distribution — are deferred or remain consumer-app
 ;; concerns.)
 ;; ============================================================================
@@ -3387,8 +3453,15 @@
    {:db/ident       :kontor.analytic-plan/applicability
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
-    :db/doc         "Optional gate: which posting context the plan
-                     applies to. nil = all postings."}
+    :db/doc         "Descriptive marker for which posting context the
+                     plan is meant for (:optional / :mandatory /
+                     consumer-defined). nil = all postings. The KERNEL
+                     DOES NOT GATE ON THIS ATTRIBUTE — enforcement is
+                     per-account and explicit via
+                     :kontor.account/required-analytic-plans (ADR-140),
+                     because 'mandatory' has no well-defined posting
+                     scope on its own. Consumers may read it to decide
+                     which accounts to add to that set."}
 
    {:db/ident       :kontor.analytic-plan/active
     :db/valueType   :db.type/boolean
@@ -3439,8 +3512,13 @@
    {:db/ident       :kontor.analytic-distribution/percent
     :db/valueType   :db.type/bigdec
     :db/cardinality :db.cardinality/one
-    :db/doc         "0..100 inclusive. Sum-to-100 per plan is enforced
-                     by the report engine, not by the schema."}
+    :db/doc         "0..100 inclusive. Sum-to-100 per plan is enforced —
+                     structurally by `kontor.posting.validate/validate`
+                     (pure, cljc, no db) and mandatorily by
+                     `kontor.governance/analytic-violations` in the
+                     datahike writer. NOT by the schema, and NOT by the
+                     report engine (a report cannot refuse a write).
+                     ADR-140."}
 
    {:db/ident       :kontor.analytic-distribution/posting
     :db/valueType   :db.type/ref
@@ -3476,9 +3554,13 @@
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/many
     :db/doc         "Set of :analytic-plan entities that postings
-                     against this account must populate. The posting
-                     validator enforces a sum-to-100 invariant per
-                     named plan. nil = no plan required."}])
+                     against this account must populate, each summing
+                     to exactly 100%. Enforced by `kontor.analytic`
+                     in the transact gate and — un-bypassably —
+                     by `kontor.governance/analytic-violations` in the
+                     datahike writer. A posting with NO distribution
+                     for a named plan is refused, as is a partial one.
+                     nil = no plan required. ADR-022 / ADR-140."}])
 
 ;; ============================================================================
 ;; Ledgers — ADR-021.
@@ -3816,8 +3898,13 @@
     :db/doc         "Refs to :attestation entities. ADR-024.
 
                      Coexists with :kontor.transaction/clearance-token
-                     (singular string). When both present, the
-                     cardinality-many is authoritative.
+                     (singular string). The INTENDED precedence is that
+                     the cardinality-many wins when both are present —
+                     but no code resolves the conflict, because nothing
+                     writes or reads :attestation entities at all
+                     (the l10n IRN / EWB / CFDI modules mention them only
+                     in prose). A consumer must apply the precedence
+                     itself; the kernel does not (ADR-140).
 
                      Multi-attestation jurisdictions (IN IRN+EWB,
                      IT SdI synthetic-issuer, KR NTS chain) MUST use
@@ -4098,8 +4185,13 @@
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":hgb | :us-gaap | :br-gaap | :ifrs | :local
-                     | … free-form. Drives reporting + tax filing
-                     choices; consumed by l10n modules."}
+                     | … free-form. Consumer-readable tag — NO KERNEL
+                     OR l10n READER; no module branches on it. The live
+                     framework discriminator is
+                     :kontor.ledger/framework, which the lease module
+                     does branch on (ADR-064 Addendum 1). Previously
+                     documented as 'Drives reporting + tax filing
+                     choices; consumed by l10n modules' (ADR-140)."}
 
    {:db/ident       :kontor.entity/kind
     :db/valueType   :db.type/keyword
@@ -4931,10 +5023,13 @@
     :db/doc         "What event triggers the reversal of a
                      :tax-deferral elimination. :externalisation |
                      :regime-exit | :asset-disposal | :member-exit.
-                     Used by the deferral-crystallisation walk
-                     (`kontor.tax.fiscal-unit/crystallise-deferrals`,
-                     stub in v1; full impl in v1.1 with US §1502-13).
-                     ADR-113."}
+                     RESERVED — NO READER. Intended for the
+                     deferral-crystallisation walk planned for v1.1
+                     (US §1502-13). The doc previously named
+                     `kontor.tax.fiscal-unit/crystallise-deferrals` as a
+                     'stub in v1'; no function of that name has ever
+                     existed, so a reader could not find it to extend
+                     (ADR-140). ADR-113."}
 
    {:db/ident       :kontor.transaction/elimination-components
     :db/valueType   :db.type/ref
