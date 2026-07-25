@@ -160,8 +160,17 @@
          ;; Sum :kontor.posting/amount on cash account for this partner up
          ;; to as-of-valid, anchored on :kontor.transaction/effective-date
          ;; (equal to the writing tx's :tx/valid-from per ADR-048).
+         ;; `:with ?ps` is load-bearing (ADR-162). Datahike's :find has SET
+         ;; semantics, so summing only `?amt` collapses two postings of the
+         ;; SAME amount on the same partner + cash account — two €500 receipts
+         ;; read as €500 received. That UNDERSTATES unapplied cash, which is
+         ;; what the `:unapplied-cash-pending` dunning gate consumes, so a
+         ;; customer whose money is sitting unapplied still gets the letter.
+         ;; The `applied` query below already carried `:with ?app`; these two
+         ;; did not.
          received (or (if commodity-eid
                         (d/q '[:find (sum ?amt) .
+                               :with ?ps
                                :in $ ?acct ?p ?c ?as-of-ms
                                :where
                                [?ps :kontor.posting/account ?acct]
@@ -174,6 +183,7 @@
                                [(<= ?eff-ms ?as-of-ms)]]
                              db cash-account-eid partner commodity-eid as-of-ms)
                         (d/q '[:find (sum ?amt) .
+                               :with ?ps
                                :in $ ?acct ?p ?as-of-ms
                                :where
                                [?ps :kontor.posting/account ?acct]

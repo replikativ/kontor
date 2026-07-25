@@ -30,6 +30,7 @@
    external billing system) avoids round-trip rounding mismatches."
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
+            [kontor.banking.payment-application :as papp]
             [kontor.banking.payment-term :as pt]
             [kontor.posting :as posting]
             [kontor.workflow.status-machine :as sm]
@@ -414,47 +415,87 @@
 ;; Reconciliation hook
 ;; ============================================================================
 
+(defn- status-from-residual
+  "The invoice status implied by the subledger residual (ADR-161).
+
+   This is Odoo's shape — `payment_state` is COMPUTED from
+   `amount_residual` (`account_move.py:_compute_payment_state`: residual
+   zero → paid, residual non-zero with reconciliation rows → partial,
+   otherwise not_paid) and is never set independently. Returns nil for
+   \"no status change\", which is the honest answer when nothing has been
+   applied: a `:settles` link with no cash behind it must not close an
+   invoice."
+  [applied open]
+  (cond
+    (not (pos? (.signum ^java.math.BigDecimal applied))) nil
+    (<= (.signum ^java.math.BigDecimal open) 0) :paid
+    :else :partially-paid))
+
 (defn flip-paid-on-settlement-tx-data
   "Pure tx-data builder for `flip-paid-on-settlement` (ADR-068).
-   Returns the status-change tx-data vector (possibly empty when all
-   referenced invoices are already :paid)."
+   Returns the status-change tx-data vector (empty when no invoice needs
+   to move).
+
+   AMOUNT-AWARE (ADR-161). This used to flip every referenced invoice
+   straight to `:paid` with no comparison against gross, so a 10% deposit
+   matched through reconciliation closed the invoice and the remaining
+   90% stopped being collected. The status is now DERIVED from the
+   `:payment-application` residual: `≤ 0 → :paid`, `> 0 with something
+   applied → :partially-paid`, nothing applied → no-op."
   [db {:keys [settled-tx-eids changed-by-uid reason reason-note supporting-doc
-              changed-at]}]
+              changed-at as-of-valid]}]
   (let [invoice-eids (d/q '[:find [?inv ...]
                             :in $ [?tx ...]
                             :where [?inv :kontor.invoice/transaction ?tx]]
-                          db settled-tx-eids)
+                          db (vec settled-tx-eids))
         now (or changed-at (Date.))
-        ;; Compose all status-change tx-data in one tx. Skip invoices
-        ;; already :paid (idempotent).
-        pending (filter (fn [eid]
-                          (not= :paid
-                                (:kontor.invoice/status (d/pull db [:kontor.invoice/status] eid))))
-                        invoice-eids)]
+        opts {:as-of-valid (or as-of-valid now)}
+        moves (keep (fn [eid]
+                      (let [current (:kontor.invoice/status
+                                     (d/pull db [:kontor.invoice/status] eid))
+                            applied (papp/applied-amount-of-invoice db eid opts)
+                            open    (papp/open-amount-of-invoice db eid opts)
+                            target  (status-from-residual applied open)]
+                        (when (and target
+                                   (not= target current)
+                                   (sm/legal-transition? db :invoice
+                                                         :kontor.invoice/status
+                                                         current target))
+                          [eid current target])))
+                    invoice-eids)]
     (vec (mapcat
-          (fn [eid]
+          (fn [[eid current target]]
             (sm/record-status-change-tx-data
              db
              (cond-> {:entity eid
                       :entity-type :invoice
                       :facet :kontor.invoice/status
-                      :to :paid
+                      :from current
+                      :to target
                       :changed-at now
                       :reason (or reason :reconciled)}
                changed-by-uid (assoc :changed-by-uid changed-by-uid)
                reason-note    (assoc :reason-note reason-note)
                supporting-doc (assoc :supporting-doc supporting-doc))))
-          pending))))
+          moves))))
 
 (defn flip-paid-on-settlement
-  "Call after a reconciliation/commit-match! that settled
-   transactions which are linked to invoices. Walks each settled
-   transaction's `:kontor.invoice/_transaction` backref and moves any
-   referenced invoice to :paid via the status machine. Routes through
-   the gate (ADR-068).
+  "The GL-only settlement bridge: given transactions that were settled
+   OUTSIDE the reconciliation path (a hand-posted cash receipt, an
+   import), walk each one's `:kontor.invoice/_transaction` backref and
+   move the referenced invoice to the status its subledger residual
+   implies. Routes through the gate (ADR-068).
+
+   `commit-match!` no longer needs this — it writes the
+   `:payment-application` row itself and `apply-payment-tx-data` derives
+   the status in the same commit (ADR-161). This is for the settlements
+   that path does not cover.
+
+   Amount-aware: `≤ 0 residual → :paid`, `> 0 with something applied →
+   :partially-paid`, nothing applied → no-op. An invoice already at the
+   implied status is skipped, so the call is idempotent.
 
    Each invoice's :from is auto-detected (:sent or :partially-paid).
-   Already-:paid invoices are skipped (no-op).
 
    `opts`:
      :vt-from / :vt-to  — valid-time bounds (default :vt-from = now;

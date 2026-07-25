@@ -23,6 +23,7 @@
             [kontor.sales.schema :as sales-schema]
             [kontor.invoice.schema :as inv-schema]
             [kontor.invoice.bridge :as inv]
+            [kontor.document.invoice :as kinv]
             [kontor.banking.payment-application :as papp]
             [kontor.banking.reconciliation :as recon]
             [kontor.reporting.aging :as kaging]
@@ -418,3 +419,266 @@
           (is (zero? (money/compare-amounts 200M (:open-amount (first opens))))))
         (testing "the full 200 flows into the aging summary total"
           (is (zero? (.compareTo 200M (:amount (:total sum))))))))))
+
+;; ══════════════════════════════════════════════════════════════════════
+;; 7. ADR-161 — the two AR settlement paths must agree
+;;
+;; Observable failure before this: a dunning letter to a customer who had
+;; already paid. `commit-match!` set `:kontor.transaction/settles` (so the
+;; KERNEL aging saw the invoice as paid) but wrote no payment-application
+;; row and no status change, so `kontor.collections.aging/open-ar-invoices`
+;; — which is what dunning reads — still reported it fully open in :sent.
+;; ══════════════════════════════════════════════════════════════════════
+
+(defn- ingest-and-match!
+  "Ingest one bank line for `amount` referencing `narration`, take the best
+   suggestion and commit it. Returns the settled transaction eids."
+  [amount narration opts]
+  (recon/ingest-statement! *conn*
+                           [{:bank :test :date #inst "2026-02-01" :amount amount
+                             :counterparty "Big Customer Co"
+                             :description narration
+                             :raw-row ["02/01/2026" (str amount) narration]}]
+                           {:source-account-eid (ace "1200")
+                            :commodity-eid (eur)})
+  (let [db (d/db *conn*)
+        bl (d/q '[:find ?bl . :in $ ?amt
+                  :where [?bl :kontor.bank-line/amount ?amt]
+                  [?bl :kontor.bank-line/status :unmatched]]
+                db amount)
+        best (first (recon/suggest-match db bl {}))]
+    (recon/commit-match! *conn* bl (:match best)
+                         (eid :kontor.journal/code "CR")
+                         (merge {:ar-codes #{"1400"}} opts))
+    (:transactions (:match best))))
+
+(deftest commit-match-writes-the-subledger-so-dunning-agrees
+  (testing "A full settlement through reconciliation must close the invoice in
+            BOTH views: the kernel :settles-based open-item list AND the
+            collections payment-application subledger that dunning reads."
+    (let [invoice (open-invoice! "ORD-7" 10M 25M VAT)]
+      (ingest-and-match! GROSS "Rechnung INV-ORD-7" {:applied-by-uid (actor)})
+      (let [db (d/db *conn*)]
+        (testing "the subledger records the cash"
+          (is (= 1 (count (papp/applications-of db invoice))))
+          (is (zero? (.compareTo GROSS (papp/applied-amount-of-invoice db invoice))))
+          (is (zero? (.compareTo 0M (papp/open-amount-of-invoice db invoice)))))
+        (testing "status is DERIVED from the residual, in the same commit"
+          (is (= :paid (sm/current-status db invoice :kontor.invoice/status))))
+        (testing "the collections view — what dunning reads — no longer shows it"
+          (is (empty? (caging/aging-rows db {:entity-eid (entity)
+                                             :as-of #inst "2026-04-30"})))
+          (is (zero? (.compareTo 0M (:total (caging/aging-summary
+                                             db {:entity-eid (entity)
+                                                 :as-of #inst "2026-04-30"}))))))
+        (testing "and the kernel :settles view agrees"
+          (is (empty? (recon/open-receivables-by-tx db #{"1400"}))))))))
+
+(deftest commit-match-of-a-partial-does-not-close-the-invoice
+  (testing "flip-paid-on-settlement used to flip straight to :paid with no
+            comparison against gross, so a deposit closed the invoice and the
+            rest stopped being collected. A 100.00 receipt on a 297.50 invoice
+            must leave 197.50 open and the status at :partially-paid."
+    (let [invoice (open-invoice! "ORD-8" 10M 25M VAT)]
+      (ingest-and-match! 100.00M "Anzahlung INV-ORD-8" {:applied-by-uid (actor)})
+      (let [db (d/db *conn*)]
+        (is (zero? (.compareTo 100.00M (papp/applied-amount-of-invoice db invoice))))
+        (is (zero? (.compareTo 197.50M (papp/open-amount-of-invoice db invoice))))
+        (is (= :partially-paid (sm/current-status db invoice :kontor.invoice/status)))
+        (testing "the remaining 197.50 is still collectible"
+          (let [rows (caging/aging-rows db {:entity-eid (entity)
+                                            :as-of #inst "2026-04-30"})]
+            (is (= 1 (count rows)))
+            (is (zero? (.compareTo 197.50M (:open-amount (first rows)))))))))))
+
+(deftest flip-paid-on-settlement-is-amount-aware
+  (testing "The GL-only bridge (for settlements written outside the
+            reconciliation path) derives the status from the residual too:
+            nothing applied → no-op, partial → :partially-paid, full → :paid."
+    (let [invoice (open-invoice! "ORD-9" 10M 25M VAT)
+          settled-tx (:db/id (:kontor.invoice/transaction
+                              (d/pull (d/db *conn*)
+                                      [{:kontor.invoice/transaction [:db/id]}]
+                                      invoice)))
+          pay (payment! "PAY-9")]
+      (testing "no cash applied → the bridge must NOT close the invoice"
+        (kinv/flip-paid-on-settlement *conn* [settled-tx])
+        (is (= :sent (sm/current-status (d/db *conn*) invoice :kontor.invoice/status))
+            "a :settles link with no cash behind it is not payment"))
+      (testing "partial cash → :partially-paid, not :paid"
+        (papp/apply-payment! *conn* {:payment pay :invoice invoice :amount 97.50M
+                                     :commodity (eur) :applied-by-uid (actor)
+                                     :applied-at #inst "2026-02-01"})
+        (kinv/flip-paid-on-settlement *conn* [settled-tx])
+        (is (= :partially-paid
+               (sm/current-status (d/db *conn*) invoice :kontor.invoice/status))))
+      (testing "the rest → :paid"
+        (papp/apply-payment! *conn* {:payment pay :invoice invoice :amount 200.00M
+                                     :commodity (eur) :applied-by-uid (actor)
+                                     :applied-at #inst "2026-02-02"})
+        (kinv/flip-paid-on-settlement *conn* [settled-tx])
+        (is (= :paid (sm/current-status (d/db *conn*) invoice :kontor.invoice/status)))))))
+
+(deftest commit-match-refuses-an-unattributed-subledger-row
+  (testing "A `:payment-application` needs `:applied-by-uid`. When the settled
+            transactions have invoices behind them and it is missing, the call
+            REFUSES rather than writing an unattributed row or silently
+            skipping the subledger and desyncing the two views again — the same
+            DEFER-don't-corrupt stance as `ar-or-ap-account`."
+    (let [invoice (open-invoice! "ORD-10" 10M 25M VAT)
+          ex (try (ingest-and-match! GROSS "Rechnung INV-ORD-10" {})
+                  (catch clojure.lang.ExceptionInfo e e))]
+      (is (instance? clojure.lang.ExceptionInfo ex))
+      (is (= :reconciliation/missing-applied-by-uid (:type (ex-data ex))))
+      (is (= [invoice] (:invoices (ex-data ex))))
+      (testing "and nothing was written — the refusal is atomic"
+        (let [db (d/db *conn*)]
+          (is (empty? (papp/applications-of db invoice)))
+          (is (= :sent (sm/current-status db invoice :kontor.invoice/status))))))))
+
+(deftest ar-tie-out-is-ok-after-settlement-through-either-path
+  (testing "The acceptance check (no module test called `ar-tie-out` before):
+            the AR open-item subledger must equal the GL receivable control
+            account after a settlement, whichever path wrote it."
+    (testing "path A — reconciliation commit-match!"
+      (let [_ (open-invoice! "ORD-11" 10M 25M VAT)
+            _ (ingest-and-match! GROSS "Rechnung INV-ORD-11" {:applied-by-uid (actor)})
+            t (recon/ar-tie-out *conn* {:commodity (eur) :ar-codes #{"1400"}})]
+        (is (:ok? t) (pr-str t))
+        (is (zero? (.compareTo 0M (:difference t))))
+        (is (zero? (.compareTo 0M (:gl t)))
+            "the receivable is fully relieved in the GL")
+        (is (zero? (.compareTo 0M (:subledger t)))
+            "and the open-item list agrees")))
+    (testing "path B — payment-application settle-invoice! (GL + subledger)"
+      (let [invoice (open-invoice! "ORD-12" 10M 25M VAT)]
+        (papp/settle-invoice! *conn*
+                              {:invoice invoice
+                               :payment (payment! "PAY-12")
+                               :amount GROSS
+                               :commodity (eur)
+                               :cash-account (ace "1200")
+                               :receivable-account (ace "1400")
+                               :journal (eid :kontor.journal/code "CR")
+                               :applied-by-uid (actor)
+                               :effective-date #inst "2026-02-01"})
+        (let [db (d/db *conn*)
+              t (recon/ar-tie-out *conn* {:commodity (eur) :ar-codes #{"1400"}})]
+          (is (:ok? t) (pr-str t))
+          (is (zero? (.compareTo 0M (:difference t))))
+          (is (= :paid (sm/current-status db invoice :kontor.invoice/status))
+              "settle-invoice! already derived the status from the residual")
+          (testing "and this path is NOT double-counted: the invoice writes both
+                    a :settles ref and an application row, which is exactly why
+                    `open-amount-of-invoice` must NOT also net :settles"
+            (is (zero? (.compareTo GROSS (papp/applied-amount-of-invoice db invoice))))
+            (is (zero? (.compareTo 0M (papp/open-amount-of-invoice db invoice))))))))))
+
+(deftest overpayment-surfaces-as-a-credit-instead-of-vanishing
+  (testing "`open-ar-invoices` used to end in `(filter #(pos? open-amount))`, so
+            an OVERPAID invoice disappeared from the collections view entirely.
+            It now surfaces with :overpaid? and :unapplied-credit — and is
+            excluded from AGING (a credit balance is not a receivable to dun),
+            which is where the exclusion belongs."
+    (let [invoice (open-invoice! "ORD-13" 10M 25M VAT)
+          pay (payment! "PAY-13")]
+      ;; 350.00 against a 297.50 invoice — 52.50 of unapplied customer credit.
+      (papp/apply-payment! *conn* {:payment pay :invoice invoice :amount 350.00M
+                                   :commodity (eur) :applied-by-uid (actor)
+                                   :applied-at #inst "2026-02-01"})
+      (let [db (d/db *conn*)
+            opens (caging/open-ar-invoices db {:entity-eid (entity)})
+            rows (caging/aging-rows db {:entity-eid (entity)
+                                        :as-of #inst "2026-04-30"})]
+        (testing "the overpaid invoice is VISIBLE with its credit quantified"
+          ;; The status machine closed it to :paid, so it leaves the
+          ;; (:sent :partially-paid) working set — assert on whichever rows
+          ;; remain, and on the residual itself, which is the load-bearing part.
+          (is (zero? (.compareTo -52.50M (papp/open-amount-of-invoice db invoice)))
+              "a negative residual IS the customer credit")
+          (doseq [r opens]
+            (when (neg? (.signum ^java.math.BigDecimal (:open-amount r)))
+              (is (:overpaid? r))
+              (is (zero? (.compareTo 52.50M (:unapplied-credit r)))))))
+        (testing "but it is never dunned"
+          (is (every? #(pos? (.signum ^java.math.BigDecimal (:open-amount %))) rows)))))))
+
+;; ══════════════════════════════════════════════════════════════════════
+;; 8. ADR-162 — `(sum ?x)` without `:with` collapses equal values
+;; ══════════════════════════════════════════════════════════════════════
+
+(deftest two-equal-invoice-lines-do-not-collapse-into-one
+  (testing "`kontor.collections.aging/open-ar-invoices` computed :gross with a
+            `(sum ?amt)` that had NO `:with ?l`, so datahike set-semantics
+            collapsed two lines of the SAME amount: a 2 x 500.00 invoice
+            reported :gross 500.00. This is the LIVE path for bridge invoices,
+            which never set :kontor.invoice/total-gross — the shipped fixtures
+            all used a single line, so the branch was never exercised."
+    ;; TWO order items, each 1 x 500.00 → two invoice LINES of 500.00 each.
+    ;; (One item of qty 2 would produce a single 1000.00 line and miss the bug.)
+    (let [_ (d/transact
+             *conn*
+             [{:db/id "ord14"
+               :kontor.order/external-id "ORD-14"
+               :kontor.order/type :sales
+               :kontor.order/status :order.status/created
+               :kontor.order/order-date #inst "2026-01-15"
+               :kontor.order/entry-date #inst "2026-01-15"
+               :kontor.order/currency [:kontor.commodity/symbol "EUR"]
+               :kontor.order/bill-from-partner [:kontor.partner/external-id "SELLER"]
+               :kontor.order/bill-to-partner [:kontor.partner/external-id "BUYER"]}
+              {:kontor.sales.order-item/order "ord14"
+               :kontor.sales.order-item/seq-id "00001"
+               :kontor.sales.order-item/type :product
+               :kontor.sales.order-item/product-id "MILESTONE-1"
+               :kontor.sales.order-item/description "Milestone 1"
+               :kontor.sales.order-item/quantity 1M
+               :kontor.sales.order-item/unit-price 500M
+               :kontor.sales.order-item/cancel-quantity 0M
+               :kontor.sales.order-item/status :order-item.status/approved}
+              {:kontor.sales.order-item/order "ord14"
+               :kontor.sales.order-item/seq-id "00002"
+               :kontor.sales.order-item/type :product
+               :kontor.sales.order-item/product-id "MILESTONE-2"
+               :kontor.sales.order-item/description "Milestone 2"
+               :kontor.sales.order-item/quantity 1M
+               :kontor.sales.order-item/unit-price 500M
+               :kontor.sales.order-item/cancel-quantity 0M
+               :kontor.sales.order-item/status :order-item.status/approved}])
+          _ (inv/make-invoice-from-order! *conn* "ORD-14"
+                                          {:external-id "INV-ORD-14"
+                                           :issue-date #inst "2026-01-15"
+                                           :entity (entity)})
+          _ (inv/make-ready! *conn* "INV-ORD-14")
+          _ (inv/post-to-ledger! *conn* "INV-ORD-14"
+                                 {:journal-ref [:kontor.journal/code "SJ"]
+                                  :posted-at #inst "2026-01-15"})
+          invoice (eid :kontor.invoice/external-id "INV-ORD-14")
+          db (d/db *conn*)]
+      (testing "the invoice really has two lines of the same amount"
+        (let [tuples (d/q '[:find ?l ?amt :in $ ?i
+                            :where
+                            [?l :kontor.invoice-line/invoice ?i]
+                            [?l :kontor.invoice-line/amount ?amt]]
+                          db invoice)
+              values (d/q '[:find [?amt ...] :in $ ?i
+                            :where
+                            [?l :kontor.invoice-line/invoice ?i]
+                            [?l :kontor.invoice-line/amount ?amt]]
+                          db invoice)]
+          (is (= 2 (count tuples)) "two distinct line entities")
+          (is (= #{500M} (set (map second tuples))) "both carrying 500")
+          (is (= 1 (count values))
+              "and THIS is the trap: binding only the value collapses the two
+               lines to one tuple, so `(sum ?amt)` without `:with ?l` returns
+               500 for a 1000 invoice")))
+      (testing ":kontor.invoice/total-gross is unset, so the line-sum branch runs"
+        (is (nil? (:kontor.invoice/total-gross
+                   (d/pull db [:kontor.invoice/total-gross] invoice)))))
+      (testing "gross = 1000.00, not 500.00"
+        (is (zero? (.compareTo 1000.00M (papp/gross-of-invoice db invoice))))
+        (is (zero? (.compareTo 1000.00M (papp/open-amount-of-invoice db invoice))))
+        (let [row (first (filter #(= invoice (:invoice-eid %))
+                                 (caging/open-ar-invoices db {:entity-eid (entity)})))]
+          (is (zero? (.compareTo 1000.00M (:gross row))))
+          (is (zero? (.compareTo 1000.00M (:open-amount row)))))))))

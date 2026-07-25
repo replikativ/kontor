@@ -150,7 +150,7 @@
                         db item-eid))))
         (testing "Dr inventory 250.00"
           (is (= 0 (.compareTo (bigdec "250.00")
-                               (or (d/q '[:find (sum ?amt) .
+                               (or (d/q '[:find (sum ?amt) . :with ?p
                                           :where
                                           [?a :kontor.account/path "1400"]
                                           [?p :kontor.posting/account ?a]
@@ -158,7 +158,7 @@
                                         db) 0M)))))
         (testing "Cr GR-IR 250.00 (= negative 250)"
           (is (= 0 (.compareTo (bigdec "-250.00")
-                               (or (d/q '[:find (sum ?amt) .
+                               (or (d/q '[:find (sum ?amt) . :with ?p
                                           :where
                                           [?a :kontor.account/path "2150"]
                                           [?p :kontor.posting/account ?a]
@@ -256,7 +256,7 @@
           (is (= 2 (d/q '[:find (count ?l) . :where [?l :kontor.valuation-layer/book _]] db))))
         (testing "Dr Inventory total = 250 + 180 = 430"
           (is (= 0 (.compareTo (bigdec "430.00")
-                               (d/q '[:find (sum ?amt) .
+                               (d/q '[:find (sum ?amt) . :with ?p
                                       :where
                                       [?a :kontor.account/path "1400"]
                                       [?p :kontor.posting/account ?a]
@@ -264,7 +264,7 @@
                                     db)))))
         (testing "Cr GR-IR total = -430"
           (is (= 0 (.compareTo (bigdec "-430.00")
-                               (d/q '[:find (sum ?amt) .
+                               (d/q '[:find (sum ?amt) . :with ?p
                                       :where
                                       [?a :kontor.account/path "2150"]
                                       [?p :kontor.posting/account ?a]
@@ -366,7 +366,7 @@
                                     :kontor.invoice/status))))
         (testing "GR-IR residual = 0 (Cr 250 at receipt + Dr 250 at invoice)"
           (is (= 0 (.compareTo (bigdec "0")
-                               (d/q '[:find (sum ?amt) .
+                               (d/q '[:find (sum ?amt) . :with ?p
                                       :where
                                       [?a :kontor.account/path "2150"]
                                       [?p :kontor.posting/account ?a]
@@ -377,7 +377,7 @@
           ;; lines routes to :gr-ir-clearing (not :inventory again),
           ;; so inventory stays at +250 from the receipt.
           (is (= 0 (.compareTo (bigdec "250.00")
-                               (d/q '[:find (sum ?amt) .
+                               (d/q '[:find (sum ?amt) . :with ?p
                                       :where
                                       [?a :kontor.account/path "1400"]
                                       [?p :kontor.posting/account ?a]
@@ -385,7 +385,7 @@
                                     db)))))
         (testing "AP credited 250 (the supplier obligation)"
           (is (= 0 (.compareTo (bigdec "-250.00")
-                               (d/q '[:find (sum ?amt) .
+                               (d/q '[:find (sum ?amt) . :with ?p
                                       :where
                                       [?a :kontor.account/path "2000"]
                                       [?p :kontor.posting/account ?a]
@@ -394,7 +394,7 @@
         (testing "overall ledger balances (sum = 0)"
           (is (= 0 (.compareTo (bigdec "0")
                                (d/q '[:find (sum ?amt) .
-                                      :where [_ :kontor.posting/amount ?amt]]
+                                      :with ?p :where [?p :kontor.posting/amount ?amt]]
                                     db)))))))))
 
 ;; ============================================================================
@@ -570,7 +570,7 @@
       (let [db (d/db *conn*)]
         (testing "Dr Sales Revenue +75 (reverses the original +75 credit)"
           (is (= 0 (.compareTo (bigdec "75.00")
-                               (d/q '[:find (sum ?amt) .
+                               (d/q '[:find (sum ?amt) . :with ?p
                                       :where
                                       [?a :kontor.account/path "4000"]
                                       [?p :kontor.posting/account ?a]
@@ -578,7 +578,7 @@
                                     db)))))
         (testing "Cr AR -75 (reverses the original +75 debit)"
           (is (= 0 (.compareTo (bigdec "-75.00")
-                               (d/q '[:find (sum ?amt) .
+                               (d/q '[:find (sum ?amt) . :with ?p
                                       :where
                                       [?a :kontor.account/path "1200"]
                                       [?p :kontor.posting/account ?a]
@@ -587,5 +587,5 @@
         (testing "ledger balances"
           (is (= 0 (.compareTo (bigdec "0")
                                (d/q '[:find (sum ?amt) .
-                                      :where [_ :kontor.posting/amount ?amt]]
+                                      :with ?p :where [?p :kontor.posting/amount ?amt]]
                                     db)))))))))

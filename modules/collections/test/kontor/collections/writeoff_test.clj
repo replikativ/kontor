@@ -209,7 +209,7 @@
               (is (some? (:kontor.collection-case/closed-at c)))))
           (testing "Dr Bad-Debt-Expense = 1000"
             (is (= 0 (.compareTo 1000M
-                                 (d/q '[:find (sum ?amt) .
+                                 (d/q '[:find (sum ?amt) . :with ?p
                                         :where
                                         [?a :kontor.account/path "6900"]
                                         [?p :kontor.posting/account ?a]
@@ -217,7 +217,7 @@
                                       db)))))
           (testing "Cr AR = -1000"
             (is (= 0 (.compareTo (bigdec "-1000")
-                                 (d/q '[:find (sum ?amt) .
+                                 (d/q '[:find (sum ?amt) . :with ?p
                                         :where
                                         [?a :kontor.account/path "1200"]
                                         [?p :kontor.posting/account ?a]
@@ -226,7 +226,7 @@
           (testing "balance = 0"
             (is (= 0 (.compareTo 0M
                                  (d/q '[:find (sum ?amt) .
-                                        :where [_ :kontor.posting/amount ?amt]]
+                                        :with ?p :where [?p :kontor.posting/amount ?amt]]
                                       db))))))))))
 
 ;; ============================================================================
@@ -399,5 +399,5 @@
       (testing "GL = 0 (balanced posting)"
         (is (= 0 (.compareTo 0M
                              (d/q '[:find (sum ?amt) .
-                                    :where [_ :kontor.posting/amount ?amt]]
+                                    :with ?p :where [?p :kontor.posting/amount ?amt]]
                                   db))))))))

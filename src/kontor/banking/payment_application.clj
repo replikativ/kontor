@@ -119,25 +119,46 @@
              0M
              apps))))
 
+(defn gross-of-invoice
+  "The invoice's gross: `:kontor.invoice/total-gross` when set, else the
+   sum of `:kontor.invoice-line/amount` across its lines. 0M when
+   neither. Returns BigDecimal.
+
+   THE `:with ?l` IS LOAD-BEARING (ADR-162). Datahike's `:find` has SET
+   semantics, so `(sum ?amt)` over a relation that binds only `?amt`
+   collapses equal values: a 2 x 500.00 invoice would report gross
+   500.00. Binding the line entity in `:with` keeps the two rows
+   distinct. The line-sum fallback is the LIVE path for bridge invoices,
+   which never set `:total-gross`.
+
+   Extracted so there is ONE such query. It had been copied inline three
+   times and the copy in `kontor.collections.aging` was missing the
+   `:with`."
+  ^java.math.BigDecimal [db invoice-eid]
+  (or (:kontor.invoice/total-gross
+       (d/pull db [:kontor.invoice/total-gross] invoice-eid))
+      (d/q '[:find (sum ?amt) .
+             :with ?l
+             :in $ ?inv
+             :where
+             [?l :kontor.invoice-line/invoice ?inv]
+             [?l :kontor.invoice-line/amount ?amt]]
+           db invoice-eid)
+      0M))
+
 (defn open-amount-of-invoice
   "Bitemporal open-amount = (invoice gross − applied). The invoice
    gross is `:kontor.invoice/total-gross` if present, else the sum of
    `:kontor.invoice-line/amount` across lines.
 
+   NEGATIVE when the invoice is OVERPAID — that is a customer credit, and
+   callers must surface it rather than filter it away (ADR-161).
+
    Returns BigDecimal."
   ([db invoice-spec] (open-amount-of-invoice db invoice-spec nil))
   ([db invoice-spec {:keys [as-of-valid] :as opts}]
    (when-let [invoice-eid (resolve-invoice db invoice-spec)]
-     (let [gross (or (:kontor.invoice/total-gross
-                      (d/pull db [:kontor.invoice/total-gross] invoice-eid))
-                     (or (d/q '[:find (sum ?amt) .
-                                :with ?l
-                                :in $ ?inv
-                                :where
-                                [?l :kontor.invoice-line/invoice ?inv]
-                                [?l :kontor.invoice-line/amount ?amt]]
-                              db invoice-eid)
-                         0M))
+     (let [gross (gross-of-invoice db invoice-eid)
            applied (applied-amount-of-invoice db invoice-eid opts)]
        (.subtract ^java.math.BigDecimal gross
                   ^java.math.BigDecimal applied)))))
@@ -308,16 +329,7 @@
                   write-off-account (assoc :kontor.payment-application/write-off-account
                                            write-off-account))
         already-applied (applied-amount-of-invoice db invoice-eid nil)
-        gross (or (:kontor.invoice/total-gross
-                   (d/pull db [:kontor.invoice/total-gross] invoice-eid))
-                  (or (d/q '[:find (sum ?amt) .
-                             :with ?l
-                             :in $ ?inv
-                             :where
-                             [?l :kontor.invoice-line/invoice ?inv]
-                             [?l :kontor.invoice-line/amount ?amt]]
-                           db invoice-eid)
-                      0M))
+        gross (gross-of-invoice db invoice-eid)
         open-after (.subtract ^java.math.BigDecimal gross
                               ^java.math.BigDecimal
                               (-> ^java.math.BigDecimal already-applied
@@ -657,16 +669,7 @@
         prior-applied (applied-amount-of-invoice db invoice-eid nil)
         new-applied (.add ^java.math.BigDecimal prior-applied
                           ^java.math.BigDecimal negated)
-        gross (or (:kontor.invoice/total-gross
-                   (d/pull db [:kontor.invoice/total-gross] invoice-eid))
-                  (or (d/q '[:find (sum ?amt) .
-                             :with ?l
-                             :in $ ?inv
-                             :where
-                             [?l :kontor.invoice-line/invoice ?inv]
-                             [?l :kontor.invoice-line/amount ?amt]]
-                           db invoice-eid)
-                      0M))
+        gross (gross-of-invoice db invoice-eid)
         open-after (.subtract ^java.math.BigDecimal gross
                               ^java.math.BigDecimal new-applied)
         next-status (cond

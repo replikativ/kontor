@@ -50,7 +50,19 @@
 
    Returns vec of {:invoice-eid :external-id :open-amount :gross
                    :issue-date :due-date :partner-eid :partner-name
-                   :currency}.
+                   :currency :overpaid? :unapplied-credit}.
+
+   NON-POSITIVE ROWS ARE NOT DROPPED (ADR-161). This used to end in
+   `(filter #(pos? (:open-amount %)))`, so an OVERPAID invoice vanished
+   from the collections view entirely instead of surfacing as a customer
+   credit — and an invoice sitting at residual zero with a stale `:sent`
+   status vanished with it, hiding exactly the desync this ADR fixes.
+   An overpaid row carries `:overpaid? true` and `:unapplied-credit`
+   (the positive magnitude of the negative residual).
+
+   `aging-rows` still excludes non-positive rows from the aged buckets —
+   a credit balance is not a receivable to age or dun — so the dunning
+   path is unaffected. Existence and dunnability are different questions.
 
    Filter by `:partner-eid` opt to scope to one customer."
   [db {:keys [entity-eid partner-eid as-of-valid]}]
@@ -83,27 +95,34 @@
                                        {:kontor.invoice/transaction
                                         [:kontor.transaction/due-date]}]
                                      eid)
-                      open (papp/open-amount-of-invoice
-                            db eid {:as-of-valid as-of-valid})]
-                  {:invoice-eid (:db/id pulled)
-                   :external-id (:kontor.invoice/external-id pulled)
-                   :open-amount open
-                   ;; N4 (note 196): :kontor.invoice/total-gross is unset on
-                   ;; line-based (bridge) invoices, which reported :gross nil.
-                   ;; Fall back to summing the invoice lines.
-                   :gross (or (:kontor.invoice/total-gross pulled)
-                              (d/q '[:find (sum ?amt) . :in $ ?i :where
-                                     [?l :kontor.invoice-line/invoice ?i]
-                                     [?l :kontor.invoice-line/amount ?amt]]
-                                   db (:db/id pulled))
-                              0M)
-                   :issue-date (:kontor.invoice/issue-date pulled)
-                   :due-date (get-in pulled [:kontor.invoice/transaction
-                                             :kontor.transaction/due-date])
-                   :partner-eid (get-in pulled [:kontor.invoice/buyer :db/id])
-                   :partner-name (get-in pulled [:kontor.invoice/buyer :kontor.partner/name])
-                   :currency (:kontor.invoice/currency pulled)})))
-         (filter #(pos? (.signum ^java.math.BigDecimal (:open-amount %))))
+                      open ^java.math.BigDecimal
+                      (papp/open-amount-of-invoice
+                       db eid {:as-of-valid as-of-valid})
+                      overpaid? (neg? (.signum open))]
+                  (cond-> {:invoice-eid (:db/id pulled)
+                           :external-id (:kontor.invoice/external-id pulled)
+                           :open-amount open
+                           ;; N4 (note 196): :kontor.invoice/total-gross is unset
+                           ;; on line-based (bridge) invoices, which reported
+                           ;; :gross nil. Fall back to the line sum — and reuse
+                           ;; the kernel's `gross-of-invoice`, whose aggregate
+                           ;; carries `:with ?l`. The inline copy that used to
+                           ;; live here did NOT, so datahike set-semantics
+                           ;; collapsed two lines of the SAME amount and a
+                           ;; 2 x 500.00 invoice reported :gross 500.00
+                           ;; (ADR-162). This is the LIVE path for bridge
+                           ;; invoices, since modules/invoice never sets
+                           ;; :total-gross while bridge.clj creates the lines.
+                           :gross (papp/gross-of-invoice db (:db/id pulled))
+                           :issue-date (:kontor.invoice/issue-date pulled)
+                           :due-date (get-in pulled [:kontor.invoice/transaction
+                                                     :kontor.transaction/due-date])
+                           :partner-eid (get-in pulled [:kontor.invoice/buyer :db/id])
+                           :partner-name (get-in pulled [:kontor.invoice/buyer
+                                                         :kontor.partner/name])
+                           :currency (:kontor.invoice/currency pulled)}
+                    overpaid? (assoc :overpaid? true
+                                     :unapplied-credit (.negate open))))))
          vec)))
 
 (defn aging-rows
@@ -146,6 +165,12 @@
                                    :partner-eid partner-eid
                                    :as-of-valid as-of-valid})]
     (->> invs
+         ;; ADR-161: `open-ar-invoices` now surfaces non-positive rows so an
+         ;; overpayment is visible instead of vanishing. Aging is where they
+         ;; are correctly excluded: a credit balance is not a receivable to
+         ;; age, bucket or dun. Dunning callers derive their `:cases` from
+         ;; here, so this is the gate that keeps a credit out of a letter.
+         (filter #(pos? (.signum ^java.math.BigDecimal (:open-amount %))))
          (mapv (fn [{:keys [invoice-eid issue-date due-date partner-eid] :as inv}]
                  (let [reference (case method
                                    :due-date due-date
