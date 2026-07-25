@@ -30,8 +30,18 @@
 
    One options map. For a normal two-leg entry:
 
-     :debit-account   — account ref or lookup-ref   (required)
-     :credit-account  — account ref or lookup-ref   (required)
+     :debit-account   — account ref                 (required). Accepts:
+                        bare string \"Assets:AR\" (means
+                        `:kontor.account/path` — the account's UNIQUE
+                        identity attribute; NOT `:kontor.account/code`,
+                        which is not unique per ADR-119), an explicit
+                        lookup-ref `[:kontor.account/path \"Assets:AR\"]`,
+                        or an eid. A bare string is promoted to the
+                        lookup-ref and resolved STRICTLY: naming an
+                        account that does not exist throws
+                        `:kontor.book/unresolved-ref` (ADR-124) — it is
+                        never read as a tempid.
+     :credit-account  — account ref, same forms      (required)
      :amount          — number, coerced to BigDecimal (required)
      :commodity       — commodity ref               (required). Accepts:
                         bare keyword `:EUR`, short string `\"EUR\"`,
@@ -41,16 +51,34 @@
      :effective-date  — #inst, the bitemporal valid-time
                         (required for `entry-tx-data`; `entry!` and
                          the verbs default it to now)
-     :journal         — journal ref / lookup-ref / external-id
-                        (required for `entry-tx-data`; the verbs
-                         resolve it from the verb's journal type)
+     :journal         — journal ref                 (required for
+                        `entry-tx-data`; the verbs resolve it from the
+                        verb's journal type). Accepts a bare string
+                        \"SALE\" (means `:kontor.journal/code`, which IS
+                        `:db.unique/identity`), a lookup-ref, or an eid;
+                        same strict-resolution rule as the accounts.
      :narration       — string                      (optional)
      :partner         — partner ref                 (optional)
      :external-id     — string                      (optional)
+     :settles         — coll of transaction refs    (optional)
+                        `:kontor.transaction/settles` — the invoice(s) this
+                        entry clears. REQUIRED for the AR/AP open-item
+                        subledger to agree with the GL control account:
+                        without the link the GL receivable goes to zero
+                        while the subledger still reports the invoice
+                        fully open, and
+                        `kontor.banking.reconciliation/ar-tie-out`
+                        reports the whole invoice as drift (ADR-124).
      :entity          — entity ref (ADR-031)        (optional)
                         Stamped on every posting as :kontor.posting/entity;
                         required for per-entity trial-balance / BS /
                         GuV filters to scope correctly.
+
+   Option keys are STRICT: an unrecognised key throws
+   `:kontor.book/unknown-option` rather than being silently dropped
+   (ADR-124 — same discipline as
+   `kontor.reporting.report/check-options!` on the read side; see
+   `kontor.book.build/entry-option-keys` for the accepted set).
 
    For a multi-leg / judgment entry, instead of debit/credit/amount
    pass `:postings` — a vector of `{:account … :amount … :commodity …}`
@@ -97,6 +125,91 @@
 (def ^:private build-input build/build-input)
 (def ^:private post-opts build/post-opts)
 
+;; ----------------------------------------------------------------------------
+;; Ref resolution — ADR-124
+;; ----------------------------------------------------------------------------
+;;
+;; `kontor.book.build` coerces a bare string into the right lookup-ref
+;; (`\"Assets:AR\"` → `[:kontor.account/path \"Assets:AR\"]`), which is what
+;; stops datahike from reading it as a tempid and minting an empty phantom
+;; entity. But a lookup-ref that names a nonexistent account is still a
+;; consumer error, and datahike's own message for it (`Nothing found for
+;; entity id …`) surfaces from deep inside the transactor with no hint of
+;; which verb slot was wrong. Since `kontor.book` is the documented
+;; \"start here\" facade, it checks its own refs up front and says what to
+;; write instead.
+
+(def ^:private ref-slot-hints
+  "Verb slot → the identity attribute a bare string means there."
+  {:debit-account  :kontor.account/path
+   :credit-account :kontor.account/path
+   :account        :kontor.account/path
+   :commodity      :kontor.commodity/symbol
+   :journal        :kontor.journal/code})
+
+(defn- check-ref!
+  "Assert that `v` (already coerced to a ref by `kontor.book.build`)
+   resolves to an existing entity in `db`. `slot` names the verb option
+   for the error message."
+  [db slot v]
+  (when (some? v)
+    (let [eid (try
+                (cond
+                  ;; lookup-ref — resolve by datalog rather than d/entity so a
+                  ;; miss is a nil, not a logged transactor error.
+                  (vector? v)  (d/q '[:find ?e . :in $ ?a ?val :where [?e ?a ?val]]
+                                    db (first v) (second v))
+                  ;; eid — an integer always "resolves" syntactically; the real
+                  ;; question is whether any datom carries it. This is what
+                  ;; catches a phantom eid left over from an earlier bad write.
+                  (integer? v) (when (seq (d/datoms db :eavt v)) v)
+                  (keyword? v) (d/q '[:find ?e . :in $ ?k :where [?e :db/ident ?k]] db v)
+                  ;; entity map / anything else — let the transactor judge it.
+                  :else        v)
+                (catch Exception _ nil))]
+      (when-not eid
+        (let [id-attr (get ref-slot-hints slot)]
+          (throw (ex-info
+                  (str "kontor.book: " slot " " (pr-str v) " does not resolve to an "
+                       "existing entity"
+                       (when (and id-attr (vector? v) (= id-attr (first v)))
+                         (str " — no entity has " id-attr " " (pr-str (second v))))
+                       ". A bare string in this slot means "
+                       (pr-str id-attr) "; create the entity first, or pass a "
+                       "lookup-ref " (pr-str [id-attr "<value>"]) " / an entity id "
+                       "that exists. (ADR-124)")
+                  {:type  :kontor.book/unresolved-ref
+                   :slot  slot
+                   :value v
+                   :identity-attribute id-attr})))))))
+
+(defn- assert-refs-resolve!
+  "Check every account / commodity / journal ref an entry names against
+   `db` BEFORE tx-data is emitted, so the consumer gets a slot-named
+   error instead of a transactor-level lookup miss.
+
+   Only refs the caller supplied are checked; `nil` slots are left to
+   `build-input`'s own required-field errors, which are more specific."
+  [db {:keys [debit-account credit-account commodity journal postings] :as _opts}]
+  (check-ref! db :journal (build/->journal-ref journal))
+  (check-ref! db :commodity (build/->commodity-ref commodity))
+  (if (seq postings)
+    (doseq [p postings]
+      (check-ref! db :account (build/->account-ref (:account p)))
+      (when-let [c (:commodity p)]
+        (check-ref! db :commodity (build/->commodity-ref c))))
+    (do (check-ref! db :debit-account (build/->account-ref debit-account))
+        (check-ref! db :credit-account (build/->account-ref credit-account)))))
+
+(def ^:private journal-type-fallbacks
+  "Journal types that may stand in for a requested type when the book holds
+   NONE of the requested one. `:cash` and `:bank` are both settlement
+   journals — see `resolve-journal`'s docstring. Deliberately one-directional:
+   a `:bank` request does not fall back to `:cash`, because the verbs only
+   ever request `:cash`, and a book with a `:bank` journal and no `:cash`
+   journal has exactly one settlement journal to mean."
+  {:cash [:bank]})
+
 (defn- resolve-journal
   "Resolve a journal entity from a `:kontor.journal/type` keyword, for the
    `!`-side verb conveniences. Returns the eid when exactly one journal of
@@ -111,19 +224,46 @@
    journals share the type we narrow by `:kontor.journal/code` to that one.
    A consumer whose preset codes its cash journals differently still gets
    the informative ambiguity error telling them to pass `:journal`
-   explicitly. (note 197 — cash-journal-ambiguous P1.)"
+   explicitly. (note 197 — cash-journal-ambiguous P1.)
+
+   ## `:cash` falls back to `:bank` (ADR-124)
+
+   The settlement verbs (`receive!` / `pay!` / `receive-payment!` /
+   `pay-bill!` / `distribute-dividend!`) bake in `:kontor.journal/type
+   :cash`. But `:cash` and `:bank` are both settlement journal types in
+   the kernel enum, and the distinction between them is about the SOURCE
+   DOCUMENT (a till receipt vs a bank statement), not about the shape of
+   the entry. A consumer whose chart models settlements as a single
+   `:bank` journal — an entirely reasonable modelling choice, and the one
+   a bank-statement-driven workflow leads to — could not call
+   `receive-payment!` at all: it failed with \"no :journal of type :cash\",
+   a clear message about a distinction the consumer had no reason to
+   anticipate.
+
+   So a settlement verb passes `fallback-types`, tried in order only when
+   the preferred type yields NOTHING. A book that has a `:cash` journal
+   behaves exactly as before — the fallback never engages — so this
+   cannot silently reroute an existing consumer's entries."
   ([db journal-type] (resolve-journal db journal-type nil))
   ([db journal-type prefer-code]
-   (let [js (d/q '[:find [?j ...]
-                   :in $ ?t
-                   :where [?j :kontor.journal/type ?t]]
-                 db journal-type)]
+   (let [fallback-types (get journal-type-fallbacks journal-type)
+         of-type (fn [t] (d/q '[:find [?j ...]
+                                :in $ ?t
+                                :where [?j :kontor.journal/type ?t]]
+                              db t))
+         [journal-type js] (or (first (keep (fn [t]
+                                              (let [js (of-type t)]
+                                                (when (seq js) [t js])))
+                                            (cons journal-type fallback-types)))
+                               [journal-type []])]
      (cond
        (= 1 (count js)) (first js)
        (empty? js)
        (throw (ex-info (str "kontor.book: no :journal of type " journal-type
+                            (when (seq fallback-types)
+                              (str " (nor " (pr-str (vec fallback-types)) ")"))
                             " in the db — create one, or pass :journal explicitly")
-                       {:journal-type journal-type}))
+                       {:journal-type journal-type :fallback-types fallback-types}))
        :else
        (let [narrowed (when prefer-code
                         (d/q '[:find [?j ...]
@@ -170,11 +310,13 @@
    read `(get-in result [:tempids \"datomic.tx\"])` to find the new
    transaction's eid.
 
-   Multi-tx orchestrations (`consolidate!`, `vat-return/file!`, and
-   anything routed through `kontor.workflow.process/run-process`) return a
-   process-result map per `kontor.workflow.process` — different shape, carries
-   per-step tx-reports under `:reports`. Callers needing the final
-   `:db-after` should pull it from the last entry of `:reports`."
+   Orchestrations routed through `kontor.workflow.process/run-process`
+   (`consolidate!`, `kontor.hr.payroll/run-payroll!`, …) return whatever
+   `run-process`'s commit fn returns — by default the single tx-report for
+   the ONE transaction every step's fragment is concatenated into, so the
+   same `:db-after` / `:tempids` keys apply. (The earlier wording here
+   pointed at a `vat-return/file!` that does not exist and a `:reports` key
+   that `run-process` does not return; note 199 W4.)"
   ([conn opts] (entry! conn opts {}))
   ([conn opts extra-post-opts]
    (let [opts' (cond-> (dissoc opts :journal-code-hint)
@@ -184,6 +326,11 @@
 
                  (nil? (:effective-date opts))
                  (assoc :effective-date (java.util.Date.)))]
+     ;; ADR-124 — refuse a ref that does not resolve BEFORE any tx-data is
+     ;; emitted, with the verb slot named. Without this a bare string in an
+     ;; account slot was read by datahike as a tempid and the money went
+     ;; into an empty phantom entity, still balanced, still :posted.
+     (assert-refs-resolve! (d/db conn) opts')
      (posting/post-transaction! conn
                                 (build-input opts')
                                 (merge (post-opts opts') extra-post-opts)))))
@@ -233,10 +380,11 @@
 
                 (nil? (:effective-date opts))
                 (assoc :effective-date (java.util.Date.)))
-        built (try {:input (build-input opts')}
+        built (try (assert-refs-resolve! (d/db conn) opts')   ; ADR-124
+                   {:input (build-input opts')}
                    (catch clojure.lang.ExceptionInfo e
                      {:diag {:severity :error
-                             :code     :book/malformed-entry
+                             :code     (or (:type (ex-data e)) :book/malformed-entry)
                              :message  (ex-message e)
                              :data     (ex-data e)}}))]
     (if-let [d (:diag built)]
@@ -332,8 +480,8 @@
    `distribute-dividend!`.
 
    Conventional accounts (the consumer wires the chart):
-     :debit-account   Equity:Retained-Earnings
-     :credit-account  Liabilities:Dividends-Payable
+     :debit-account   \"Equity:Retained-Earnings\"
+     :credit-account  \"Liabilities:Dividends-Payable\"
 
    The shareholder is `:partner` (a `:partner` ref) — the GL stamps
    `:kontor.transaction/partner` so the dividend liability is shareholder-
@@ -349,8 +497,8 @@
    Journal type `:cash`.
 
    Conventional accounts:
-     :debit-account   Liabilities:Dividends-Payable
-     :credit-account  Assets:Bank
+     :debit-account   \"Liabilities:Dividends-Payable\"
+     :credit-account  \"Assets:Bank\"
 
    The shareholder records the receipt separately on their books
    via `receive!` (Dr Bank, Cr Income:Dividends) — the investment-

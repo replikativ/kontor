@@ -31,7 +31,8 @@
    Direct callers of sub-validator `!` wrappers without going
    through `kontor.core` should ensure `kontor.validation` is on
    their require list."
-  (:require [datahike.api :as d]
+  (:require [clojure.string :as str]
+            [datahike.api :as d]
             [kontor.invariant :as inv]))
 
 ;; ============================================================================
@@ -58,6 +59,180 @@
   (reset! validate-and-apply-fn f))
 
 ;; ============================================================================
+;; Dangling string tempids in ref positions (ADR-124)
+;; ============================================================================
+;;
+;; datahike (like datascript/datomic) reads a STRING in a `:db.type/ref`
+;; position as a TEMPID. That is a deliberate, useful feature — it is how
+;; `{:db/id "count" …}` links to `{:kontor.x/row "count"}` inside one
+;; tx-data (see kontor.inventory.count, kontor.hr.payroll, …).
+;;
+;; It is also a silent-corruption hazard the moment a consumer writes an
+;; IDENTIFIER where a ref belongs:
+;;
+;;     (book/sell! conn {:debit-account "Assets:AR" …})
+;;
+;; "Assets:AR" is not declared as a `:db/id` anywhere in that tx-data, so
+;; datahike mints a BRAND NEW entity for it — one with no attributes at
+;; all — and posts the money into it. The entry still sums to zero, the
+;; sealing/period/state validators still pass, the transaction still
+;; reports `:posted`, and the consumer's balance query on their real
+;; account reads 0. Money vanishes into an entity that does not exist.
+;;
+;; The distinction between the legitimate and the corrupt case is exact
+;; and cheap to check: a string in a ref position is a tempid ONLY IF the
+;; same tx-data DECLARES it — as a `:db/id`, or in the entity position of
+;; a `[:db/add …]` / `[:db/retract …]` form. Anything else is a dangling
+;; reference to an entity that will never exist, and no kernel write ever
+;; wants one. So the gate refuses it for EVERY builder at once, rather
+;; than each of the ~200 `*-tx-data` builders having to defend itself.
+
+(defn- ref-attr?
+  [schema a]
+  (= :db.type/ref (:db/valueType (get schema a))))
+
+(defn actor-uid-attr?
+  "True for the `…-uid` family — `:kontor.audit/create-uid`,
+   `:kontor.status-history/changed-by-uid`,
+   `:kontor.payment-application/applied-by-uid`,
+   `:kontor.dispute/opened-by-uid`, `:kontor.receipt/inspector-uid`, … —
+   which this check deliberately does NOT guard.
+
+   All of them are `:db.type/ref`, and all of them point at a USER. But
+   **kontor models no user entity**: `:kontor.audit/{create-uid,write-uid}`
+   is an audit-trail seam and the consumer app owns its own users
+   (ADR-002 cohabitation). So there is no identity attribute the kernel
+   could name in a \"did you mean …?\" hint, and the de-facto convention
+   across the shipped suite is an OPAQUE ACTOR STRING (`\"test\"`,
+   `\"sarah\"`, `\"actor-1\"` — 296 call sites).
+
+   Those strings DO mint phantom entities, so the audit trail records a
+   pointer that resolves to nothing. That is a real finding, but fixing it
+   is a separate decision from the money-loss fix this check exists for:
+   either kontor grows a user entity for consumers to point at, or the
+   `-uid` attributes become `:db.type/string`. Both need their own ADR.
+   Until then, refusing them here would break every consumer that follows
+   the existing convention, so the check stays scoped to the refs that
+   carry accounting identity. Note 199 W10."
+  [a]
+  (str/ends-with? (name a) "-uid"))
+
+(defn- lookup-ref?
+  "`[:kontor.account/path \"Assets:AR\"]` — a 2-vector whose head is a
+   keyword. This is datahike's own shape test, and it MUST be applied
+   before treating a vector value as a cardinality-many collection:
+   a lookup-ref's second slot is a string that is emphatically not a
+   tempid."
+  [v]
+  (and (vector? v) (= 2 (count v)) (keyword? (first v))))
+
+(defn- collect-refs
+  "One walk over `tx-data`, returning
+     {:declared #{string-tempid …} :used {attr #{string …}}}
+   `:declared` = strings this tx-data introduces as tempids (a `:db/id`
+   at any nesting depth, or the entity slot of a list form).
+   `:used`     = every string found in an attribute-value slot, keyed by
+   attribute, so the schema only has to be consulted for those.
+
+   Nothing is judged here — [[dangling-string-refs]] applies the schema
+   and the [[actor-uid-attr?]] scope."
+  [tx-data]
+  (let [declared (volatile! #{})
+        used     (volatile! {})
+        use!     (fn [a v] (vswap! used update a (fnil conj #{}) v))]
+    (letfn [(walk-map [m]
+              (when (string? (:db/id m)) (vswap! declared conj (:db/id m)))
+              (doseq [[a v] (dissoc m :db/id)]
+                (cond
+                  (string? v)     (use! a v)
+                  (lookup-ref? v) nil                   ; not a tempid
+                  (map? v)        (walk-map v)
+                  (sequential? v) (doseq [x v]
+                                    (cond (string? x)     (use! a x)
+                                          (lookup-ref? x) nil
+                                          (map? x)        (walk-map x))))))
+            (walk-form [form]
+              (cond
+                (map? form) (walk-map form)
+                (sequential? form)
+                (let [[op e a & vs] form]
+                  ;; A string in the ENTITY slot of any list form is a tempid
+                  ;; declaration (`[:db/add \"p0\" …]`); be permissive there so
+                  ;; unfamiliar ops (tx-fns, :db/purge, …) never false-positive.
+                  (when (and (keyword? op) (string? e))
+                    (vswap! declared conj e))
+                  ;; Only the ops whose trailing slots are genuinely VALUES get
+                  ;; their values checked. :db/cas carries two (old, new).
+                  (when (#{:db/add :db/retract :db/cas} op)
+                    (doseq [v vs :when (string? v)] (use! a v))))))]
+      (doseq [form tx-data] (walk-form form)))
+    {:declared @declared :used @used}))
+
+(defn dangling-string-refs
+  "Every `[attr string]` pair in `tx-data` that sits in a `:db.type/ref`
+   slot without the string being declared as a tempid in the same
+   tx-data. Empty vector when the tx-data is clean. Pure; exposed for
+   testing and for callers that want to inspect rather than throw."
+  [db tx-data]
+  (let [{:keys [declared used]} (collect-refs tx-data)
+        suspects (into {} (keep (fn [[a vs]]
+                                  (let [vs' (into #{} (remove declared) vs)]
+                                    (when (seq vs') [a vs']))))
+                       used)]
+    (if (empty? suspects)
+      []
+      (let [schema (or (:schema db) (d/schema db))]
+        (vec (for [[a vs] suspects
+                   :when  (and (ref-attr? schema a)
+                               (not (actor-uid-attr? a)))
+                   v      (sort vs)]
+               [a v]))))))
+
+(defn- lookup-ref-hint
+  "The idiomatic lookup-ref for the identity attribute of `a`'s target,
+   for the error message. Falls back to a generic phrasing."
+  [a v]
+  (let [id-attr (case a
+                  (:kontor.posting/account
+                   :kontor.account/parent
+                   :kontor.journal/default-account) :kontor.account/path
+                  (:kontor.posting/commodity
+                   :kontor.account/commodity)       :kontor.commodity/symbol
+                  :kontor.transaction/journal       :kontor.journal/code
+                  (:kontor.posting/partner
+                   :kontor.transaction/partner)     :kontor.partner/external-id
+                  (:kontor.posting/entity
+                   :kontor.fiscal-unit/parent-entity) :kontor.entity/code
+                  :kontor.posting/ledger            :kontor.ledger/code
+                  nil)]
+    (if id-attr
+      (str "[" id-attr " " (pr-str v) "]")
+      (str "[<identity-attribute> " (pr-str v) "]"))))
+
+(defn assert-no-dangling-string-refs!
+  "Throw `:kontor.gate/dangling-string-ref` when `tx-data` puts a bare
+   string in a `:db.type/ref` slot without declaring it as a tempid.
+
+   See the section comment above for why this is a gate-level check and
+   not a per-builder one."
+  [db tx-data]
+  (when-let [bad (seq (dangling-string-refs db tx-data))]
+    (throw (ex-info
+            (str "kontor.gate: bare string in a reference position — "
+                 (str/join
+                  "; "
+                  (for [[a v] bad]
+                    (str (pr-str v) " under " a
+                         " (did you mean the lookup-ref " (lookup-ref-hint a v) "?)")))
+                 ". datahike reads a string in a ref slot as a TEMPID, so this "
+                 "write would have created an EMPTY entity and posted against "
+                 "it — silently, and still balanced. Pass a lookup-ref, an "
+                 "entity id, or declare the string as a :db/id in this same "
+                 "tx-data. (ADR-124)")
+            {:type :kontor.gate/dangling-string-ref
+             :refs (mapv (fn [[a v]] {:attribute a :value v}) bad)}))))
+
+;; ============================================================================
 ;; Gate API — the entry point sub-validators (and end-user code) call
 ;; ============================================================================
 
@@ -69,12 +244,22 @@
    write.
 
    Throws `ex-info` on any failed check:
+     - a bare string in a ref position raises
+       `:type :kontor.gate/dangling-string-ref` (ADR-124)
      - state invariants raise `:type :invariant/invariant-mismatch`
      - sealing raises `:type :sealing/silent-retract-of-posted`
      - legal-hold raises `:type :legal-hold/blocked-destructive-write`
      - period-lock raises `:type :period/locked`
      - state-machine raises `:type :state-machine/forbidden-transition`
      - sum-to-zero raises `:type :validation/sum-to-zero`
+
+   CAVEAT on those `:type`s: only the first two run EAGERLY here and so
+   reach the caller with their `ex-data` intact. The rest are composed
+   in-transactor via `[:db.fn/call validate-and-apply …]`, and datahike's
+   tx-fn wrapping FLATTENS the `ex-info` into the message string — so
+   `(ex-data e)` is `nil` and the `:type` is only greppable out of
+   `(ex-message e)`. Consumers that branch on the failure kind must
+   currently regex the message. Note 199 W6.
 
    Returns the resulting tx-report on success **on the JVM**. On
    ClojureScript, datahike has no synchronous `transact`, so this commits
@@ -99,6 +284,7 @@
                            "`kontor.core` requires it for you on standard "
                            "consumer paths.")
                       {:error :gate/not-registered})))
+    (assert-no-dangling-string-refs! (d/db conn) tx-data)
     (inv/assert-invariants conn tx-data)
     ;; datahike's synchronous `transact` is JVM-only; cljs must use the
     ;; async `transact!`. The tx-fn wrap + validation are identical.
@@ -141,6 +327,9 @@
       (throw (ex-info "kontor.gate: no validate-and-apply registered (require kontor.validation)."
                       {:error :gate/not-registered})))
     (let [diags (-> []
+                    (into (try (assert-no-dangling-string-refs! (d/db conn) tx-data) nil
+                               (catch #?(:clj clojure.lang.ExceptionInfo :cljs cljs.core/ExceptionInfo) e
+                                 [(ex->diagnostic e)])))
                     (into (try (inv/assert-invariants conn tx-data) nil
                                (catch #?(:clj clojure.lang.ExceptionInfo :cljs cljs.core/ExceptionInfo) e
                                  [(ex->diagnostic e)])))
