@@ -71,9 +71,16 @@
     ;; \"Date\" + \"Description\" anyway, but skip-rows is the safety net.
     :col-indexes {:date 0 :description 1 :amount 2 :balance 3}}
 
+   ;; AmEx is ISSUER-side: a charge is written POSITIVE because it
+   ;; increases what you owe. Every deposit-account export here — and
+   ;; :chase-credit, the other shipped card layout — writes money-out
+   ;; negative. Unnormalised, a $450.20 Delta ticket parses +450.20 and
+   ;; `categorize-transaction` (which branches on the sign) files it as
+   ;; :income. :amount-sign -1 puts the card on the same convention as
+   ;; the rest: positive = the holder's position improves.
    :amex
    {:encoding "UTF-8" :skip-rows 1 :date-format "MM/dd/yyyy" :separator \,
-    :amount-style :english
+    :amount-style :english :amount-sign -1
     :col-indexes {:date 0 :description 1 :amount 2 :extended 3
                   :statement-as 4 :address 5 :reference 6 :category 7}}})
 

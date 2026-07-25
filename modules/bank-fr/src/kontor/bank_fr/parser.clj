@@ -49,9 +49,14 @@
                   :description 4 :category 5 :amount 6
                   :original-amount 7 :original-currency 8 :exchange-rate 9}}
 
+   ;; Crédit Agricole — split Débit/Crédit columns with FRENCH numerals
+   ;; (3850,00). `:number-format :german` is not a claim about the
+   ;; country, it names the comma-decimal convention. Retail deposit
+   ;; account: the Débit column is money LEAVING → :debit-sign -1.
    :credit-agricole
    {:encoding "ISO-8859-1" :skip-rows 0 :date-format "dd/MM/yyyy" :separator \;
     :amount-style :split-debit-credit
+    :number-format :german :debit-sign -1 :credit-sign 1
     :col-indexes {:date 0 :value-date 1 :description 2 :debit 3 :credit 4}}
 
    :societe-generale

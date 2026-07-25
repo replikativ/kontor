@@ -319,6 +319,19 @@ A module that posts to a fixed set of GL accounts (the `payroll-*` adapters) **o
 
 The kernel exposes `kontor.core/install-all-companions!` for the "one connection, every companion" case, and one-by-one `kontor-asset/install!` etc. for the "I only want this one" case.
 
+### 9.3 Bank importers: the amount convention is declared, never defaulted
+
+`kontor.banking.bank-csv` is the single engine behind all five `modules/bank-*` adapters (~30 shipped layouts). Its contract: **`:amount` is signed from the account holder's point of view — positive = money in.** Every layout that disagrees says so, in its config:
+
+- `:number-format` (`:german` / `:english`) — the decimal convention. Implied by `:amount-style` for the single-column styles; **required** for `:split-debit-credit`, which is a column layout and says nothing about numerals.
+- `:debit-sign` / `:credit-sign` (`-1` / `1`) — **required** for `:split-debit-credit`. A retail deposit account is `-1 / 1` (the debit column is money LEAVING); a bank that already signs its debit column uses `1 / 1`. There is no default because the two shipped layouts disagree.
+- `:amount-sign` (`-1` / `1`, default `1`) — normalises an issuer-side layout, e.g. AmEx writing a card charge positive.
+- **Negative `:col-indexes` count from the end of the row** — the declarative answer to a ragged export (ING omits a field entirely on one row shape), instead of the engine guessing which column moved.
+
+`validate-config!` runs once per parse, **before** the row loop: `parse-statement-with-config` swallows per-row exceptions, so a throw from inside the loop would silently return an empty statement rather than an error.
+
+Test discipline (ADR-160): importer amount assertions are **control totals**, never ratios or non-zero counts. Layouts with a running-balance column tie out against it row by row (`kontor.banking.statement-tie-out`); statements shipped in several export formats must agree on Σ; every fixture carries a golden Σ plus exact signed spot checks that also assert the resulting `:category`, because the category is the consequence of the sign. Two blind spots are pinned by test rather than assumed away — the balance chain cannot see a *uniform* scale error (it scales the balance column too) nor truncation at either *end* (the opening is derived), so `statement-tie-out` accepts the statement's declared `:opening` / `:closing` and the golden Σ is not redundant. Seven silent money defects — two sign inversions, two 100× misparses, a dropped row, an ignored credit column and a deleted €2,647.74 credit — lived behind `(is (>= ratio 0.5))` on the count of non-zero rows.
+
 ---
 
 ## 10. McComb-aligned substrate seams
