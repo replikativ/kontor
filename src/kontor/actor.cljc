@@ -223,8 +223,17 @@
      become people.
 
    Either way no phantom is left behind, which is the invariant: after this
-   runs, every `…-uid` datom in the db points at an entity that pulls to
-   something an auditor can read."
+   runs, every `…-uid` datom in the tx-data points at an entity that pulls
+   to something an auditor can read.
+
+   **Scope, stated plainly:** that invariant covers writes that pass through
+   the gate (`kontor.gate/transact-with-validation`, and pg-datahike's
+   `:tx-wrap`, which routes through `kontor.validation/validate-and-apply`).
+   A bare `d/transact` bypasses it and can still mint a phantom. This is the
+   same boundary every other kernel guarantee has — sealing, period locks
+   and the sum-to-zero invariant are all gate-enforced — and it is the
+   reason `kontor.book` / `kontor.posting` are the documented write path
+   rather than one option among several."
   [db tx-data]
   (let [uids (aref/collect-uid-strings tx-data)]
     (if (empty? uids)

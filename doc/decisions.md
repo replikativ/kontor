@@ -31,7 +31,7 @@ file is the reading order over what the code already encodes.
    5.2 [`kontor.process` orchestrator (ADR-067)](#52-kontorprocess)
    5.3 [Every business write exposes a `*-tx-data` builder (ADR-068)](#53-tx-data-builders)
    5.4 [`kontor.book` verb facade + ref/option discipline + `reverse!` (ADR-095, ADR-124, ADR-152)](#54-kontorbook)
-6a. [Legal document numbering — gapless per-journal allocation (ADR-151)](#6a-legal-document-numbering)
+   5.5 [Gapless per-journal legal document numbering (ADR-151)](#55-legal-document-numbering)
 6. [Reports as marginalizations](#6-reports-as-marginalizations)
    6.1 [`marginalize` / σ_E + `:posting/dimensions` (ADR-096, ADR-097)](#61-marginalize)
 7. [Providers — the kernel's pluggable surface](#7-providers)
@@ -176,9 +176,7 @@ This convention is the substrate's load-bearing pattern — every write everywhe
 
 **Reversal (ADR-152).** `kontor.book/reverse!` is the generic GL reverse builder: negate every leg, file in the original's journal, link `:kontor.transaction/reverses`, and — the point — date the reversal where the CALLER says. Before it, the only reversal in the kernel was `kontor.document.invoice/cancel!`, which hard-codes `now`, so a January error found in March could not be reversed into January. The reversal is its own sealed transaction (ADR-007 forbids editing the original), gets its own legal number rather than a `-REV` suffix, and refuses the cases that would silently double-book: not-posted, already-reversed, no-postings, unknown.
 
----
-
-## 6a. Legal document numbering
+### 5.5 Legal document numbering
 
 `:kontor.journal/sequence-prefix` used to be a bare string no code read, and the legal number landed in caller-supplied `:kontor.transaction/external-id` — which is `:db.unique/identity`, so reusing a posted number **upserted onto the sealed original**. In DE (GoBD / §14 UStG), FR (NF525), IT, ES, PT, BR, IN and MX a gapless per-journal number is a legal condition of issuing an invoice.
 
