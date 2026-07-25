@@ -397,6 +397,38 @@ A module that posts to a fixed set of GL accounts (the `payroll-*` adapters) **o
 
 The kernel exposes `kontor.core/install-all-companions!` for the "one connection, every companion" case, and one-by-one `kontor-asset/install!` etc. for the "I only want this one" case.
 
+### 9.3 Bank importers: the amount convention is declared, never defaulted
+
+`kontor.banking.bank-csv` is the single engine behind all five `modules/bank-*` adapters (~30 shipped layouts). Its contract: **`:amount` is signed from the account holder's point of view — positive = money in.** Every layout that disagrees says so, in its config:
+
+- `:number-format` (`:german` / `:english`) — the decimal convention. Implied by `:amount-style` for the single-column styles; **required** for `:split-debit-credit`, which is a column layout and says nothing about numerals.
+- `:debit-sign` / `:credit-sign` (`-1` / `1`) — **required** for `:split-debit-credit`. A retail deposit account is `-1 / 1` (the debit column is money LEAVING); a bank that already signs its debit column uses `1 / 1`. There is no default because the two shipped layouts disagree.
+- `:amount-sign` (`-1` / `1`, default `1`) — normalises an issuer-side layout, e.g. AmEx writing a card charge positive.
+- **Negative `:col-indexes` count from the end of the row** — the declarative answer to a ragged export (ING omits a field entirely on one row shape), instead of the engine guessing which column moved.
+
+`validate-config!` runs once per parse, **before** the row loop: `parse-statement-with-config` swallows per-row exceptions, so a throw from inside the loop would silently return an empty statement rather than an error.
+
+Test discipline (ADR-160): importer amount assertions are **control totals**, never ratios or non-zero counts. Layouts with a running-balance column tie out against it row by row (`kontor.banking.statement-tie-out`); statements shipped in several export formats must agree on Σ; every fixture carries a golden Σ plus exact signed spot checks that also assert the resulting `:category`, because the category is the consequence of the sign. Two blind spots are pinned by test rather than assumed away — the balance chain cannot see a *uniform* scale error (it scales the balance column too) nor truncation at either *end* (the opening is derived), so `statement-tie-out` accepts the statement's declared `:opening` / `:closing` and the golden Σ is not redundant. Seven silent money defects — two sign inversions, two 100× misparses, a dropped row, an ignored credit column and a deleted €2,647.74 credit — lived behind `(is (>= ratio 0.5))` on the count of non-zero rows.
+
+### 9.4 AR settlement has ONE residual
+
+Two write paths reach an open receivable — `commit-match!` (bank reconciliation) and `apply-payment!` (the `:payment-application` subledger). They now converge: **`commit-match!` emits the application row in the same gated transaction as the cash posting, and `:kontor.invoice/status` is DERIVED from the open amount** (`≤ 0 → :paid`, `> 0 with something applied → :partially-paid`, nothing applied → no-op), never set independently.
+
+This is Odoo's shape — `account_move_line.amount_residual` as the single source of truth with `payment_state` computed from it (`account_move.py:_compute_payment_state`) — and it is why the alternative (teaching `open-amount-of-invoice` to net `:kontor.transaction/settles`) was rejected: the GL/FX settlement path already writes both a `:settles` ref and an application row, so netting both double-counts, and it would leave the status at `:sent` forever — and the status is what dunning, e-invoicing and the customer portal read.
+
+Consequences worth knowing before you call it:
+
+- `:applied-by-uid` is **required** when the settled transactions have invoices behind them. Absent, `commit-match!` REFUSES rather than writing an unattributed subledger row or silently skipping it (`:skip-subledger? true` is the explicit escape hatch). Same DEFER-don't-corrupt stance as `ar-or-ap-account`.
+- A multi-transaction `:settle` allocates oldest-open-first on a **total** order `[due-date, invoice-eid]` — `:kontor.transaction/due-date` is unset on anything booked through a `kontor.book` verb, so ties are the common case, not an edge.
+- Allocation never OVER-applies. An overpayment is not forced onto an arbitrary document; it surfaces from `open-ar-invoices` as `:overpaid?` + `:unapplied-credit` instead of vanishing behind a `(pos? open-amount)` filter, and the filter moved to `aging-rows`, where it belongs — a credit balance is not a receivable to age or dun.
+- `ar-tie-out` is the acceptance check: subledger == GL receivable control account after settlement through **either** path. (ADR-161)
+
+### 9.5 An aggregate over a value attribute must bind the entity in `:with`
+
+Datahike's `:find` has **set** semantics, so `(sum ?amt)` over a relation binding only `?amt` collapses equal values: a 2 × 500.00 invoice reports gross 500.00, two €500 receipts read as €500 received, and a whole-ledger `sum-to-zero` control total can pass an unbalanced ledger. The rule is positive: **bind the owning entity in `:with`.** Where the aggregate must also run on ClojureScript (core `+` cannot add a fress `Bigdec`), fetch `[?e ?v]` tuples and sum in Clojure instead — `modules/payroll-ca/.../pd7a.clj` is the reference.
+
+`(count ?e)` over an entity id and `(max ?x)` are safe (distinct by construction; idempotent under collapse). Everything else needs the `:with`. Enumerate by READING forms, not grepping — the sweep behind ADR-162 walked all 93 aggregate `:find` specs in the repo that way and found two production defects that a text search had previously missed. (ADR-162)
+
 ---
 
 ## 10. McComb-aligned substrate seams

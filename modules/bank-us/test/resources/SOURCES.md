@@ -43,6 +43,18 @@ English amounts, English-decimal numbers.
 Confidence: MODERATE. The preamble structure varies slightly by
 account type and export tool.
 
+CORRECTION (ADR-131): as originally committed the preamble contradicted
+the fixture's own rows by exactly $850.00 — it claimed
+`Total debits -$3,612.50` / `Ending balance $7,033.10` where the rows
+sum to `-$2,762.50` and the last `Running Bal.` is `$7,883.10`. The
+per-row running balance is internally consistent, so the rows were
+authoritative and the preamble was corrected to match. This matters
+because the preamble is now a genuine SECOND oracle for this fixture:
+`bofa-preamble-is-a-second-oracle` in `parser_test.clj` pins the parse
+against it, which catches truncation at either end of the statement —
+something the running-balance chain alone cannot see (the derived
+opening just shifts).
+
 ## amex.csv  — SYNTHESIZED (moderate confidence)
 
 Built from the documented American Express activity export shape with

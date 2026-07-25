@@ -35,12 +35,31 @@
      4. `unmatched-queue` — return all `:bank-line` entities still
         in `:unmatched` status, for a UI / batch tool to walk.
 
+   ## ONE RESIDUAL (ADR-161)
+
+   `commit-match!` also writes the `:payment-application` subledger row
+   for every invoice behind the settled transactions, in the SAME gated
+   transaction as the cash posting. Before that it wrote only the GL
+   posting plus `:kontor.transaction/settles`, so a customer who paid by
+   bank transfer looked paid to `kontor.reporting.aging` (which reads
+   `:settles`) and still fully open to
+   `kontor.collections.aging/open-ar-invoices` (which reads the
+   subledger) — and dunning reads the latter. The observable failure was
+   a dunning letter to a customer who had already paid.
+
+   The `:payment-application` subledger is kontor's `amount_residual`:
+   the ONE place a partial amount lives, and `:kontor.invoice/status` is
+   DERIVED from it, never set independently. See ADR-161 for why the
+   alternative (teaching `open-amount-of-invoice` to net `:settles`) was
+   rejected.
+
    Scope cuts (deferred):
-   - Partial payments (one bank line settles part of an invoice;
-     remainder stays open).
-   - Installments (multiple bank lines progressively settle one
-     invoice — needs partial-payment support first).
-   - FX revaluation when bank commodity ≠ invoice commodity.
+   - Installments (several bank lines progressively settling one invoice
+     across separate `commit-match!` calls compose correctly through the
+     subledger, but `suggest-match` does not yet propose them).
+   - FX revaluation when bank commodity ≠ invoice commodity — refused
+     loudly on the subledger path rather than silently mis-netted
+     (note 198 FX-C); use `payment-application/settle-invoice!`.
    - Date-tolerance matching (bank lines often hit a few days after
      invoice date; v1 doesn't use date as a match heuristic).
    These are real but rare for the SMB workflows the kernel targets;
@@ -50,6 +69,10 @@
             [datahike.api :as d]
             [kontor.posting.build :as posting]
             [kontor.reporting.balance :as balance]
+            ;; CLJ-only: the payment-application subledger (ADR-043) is not
+            ;; part of the cross-platform substrate yet. Everything else in
+            ;; this namespace stays portable, so the cljs lane keeps loading it.
+            #?(:clj [kontor.banking.payment-application :as papp])
             [kontor.validation :as validation]))
 
 (defn- ->ms [x] #?(:clj (.getTime ^java.util.Date x) :cljs (if (number? x) x (.getTime x))))
@@ -643,6 +666,140 @@
                              as)
                        :transactions eids})))))
 
+;; ============================================================================
+;; ADR-161 — the settlement bridge: one residual, in the subledger
+;; ============================================================================
+
+#?(:clj
+   (defn invoices-behind-settled
+     "The invoices whose `:kontor.invoice/transaction` is one of
+      `settled-tx-eids`, each with its open amount, ordered oldest-open-item
+      first.
+
+      The sort key is `[due-date invoice-eid]` — the SAME total order
+      `kontor.banking.payment-application/allocate-fifo!` uses, for the same
+      reason (note 198 audit H1): `:kontor.transaction/due-date` is unset on
+      anything booked through a `kontor.book` verb, so `due-date` alone is not
+      a total order and the ties are the common case, not an edge. An
+      arbitrary pick would land a partial payment on a different invoice
+      between runs."
+     [db settled-tx-eids {:keys [as-of-valid]}]
+     (let [as-of-valid (or as-of-valid (now))
+           eids (d/q '[:find [?inv ...]
+                       :in $ [?tx ...]
+                       :where [?inv :kontor.invoice/transaction ?tx]]
+                     db (vec settled-tx-eids))]
+       (->> eids
+            (map (fn [eid]
+                   (let [pulled (d/pull db
+                                        [:kontor.invoice/currency
+                                         :kontor.invoice/status
+                                         {:kontor.invoice/transaction
+                                          [:db/id :kontor.transaction/due-date]}]
+                                        eid)]
+                     {:invoice-eid eid
+                      :open-amount (papp/open-amount-of-invoice
+                                    db eid {:as-of-valid as-of-valid})
+                      :currency (:kontor.invoice/currency pulled)
+                      :status (:kontor.invoice/status pulled)
+                      :due-date (or (get-in pulled [:kontor.invoice/transaction
+                                                    :kontor.transaction/due-date])
+                                    (java.util.Date. 0))})))
+            (sort-by (juxt :due-date :invoice-eid))
+            vec))))
+
+#?(:clj
+   (defn allocate-across-settled
+     "Split `cash` (a positive BigDecimal) across `openers` oldest-first,
+      never over-applying: each invoice receives `min(remaining, open)`.
+
+      Over-applying would push an invoice's residual negative and manufacture
+      a phantom credit on a specific document; an overpayment belongs on the
+      customer account, not on an arbitrary invoice. Cash left over after
+      every invoice is full is therefore NOT applied — it stays visible as an
+      over-relief of the AR control account in the GL, which is what an
+      overpayment is, and
+      `kontor.collections.credit-hold/unapplied-cash-balance` re-derives it
+      from the postings. (That query itself summed postings without `:with`
+      until ADR-162, so the remainder really was invisible before; the two
+      fixes close the loop.)
+
+      Returns `{:allocations [{:invoice-eid :allocated}] :unallocated BigDecimal}`."
+     [cash openers]
+     (loop [remaining ^java.math.BigDecimal cash
+            cands openers
+            out []]
+       (if (or (empty? cands) (not (pos? (.signum remaining))))
+         {:allocations out :unallocated remaining}
+         (let [{:keys [invoice-eid open-amount]} (first cands)
+               open ^java.math.BigDecimal open-amount]
+           (if-not (pos? (.signum open))
+             ;; Already settled (or overpaid) — nothing to relieve here.
+             (recur remaining (rest cands) out)
+             (let [alloc (if (>= (.compareTo open remaining) 0) remaining open)]
+               (recur (.subtract remaining ^java.math.BigDecimal alloc)
+                      (rest cands)
+                      (conj out {:invoice-eid invoice-eid :allocated alloc})))))))))
+
+#?(:cljs
+   (defn settlement-subledger-tx-data
+     "CLJS stub. The `:payment-application` subledger (ADR-043) is CLJ-only, so
+      on ClojureScript a `commit-match!` writes the GL posting and the
+      `:settles` link and nothing else. Returns nil."
+     [_db _opts]
+     nil))
+
+#?(:clj
+   (defn settlement-subledger-tx-data
+     "The `:payment-application` row(s) a `:settle` match must write, plus the
+      derived `:kontor.invoice/status` change — the tx-data half of ADR-161.
+
+      `payment-tempid` is the string tempid of the cash transaction being
+      built in the same commit; datahike resolves it in-commit.
+
+      Returns nil when there is nothing to write (not a settle, an outflow, no
+      invoices behind the settled transactions, or `:skip-subledger?`).
+      THROWS `:reconciliation/missing-applied-by-uid` when invoices ARE behind
+      the match but no actor was supplied: a `:payment-application` is
+      unattributed without one, and silently skipping it is what left dunning
+      chasing customers who had already paid."
+     [db {:keys [match amount commodity date payment-tempid bank-line-eid
+                 applied-by-uid skip-subledger?]}]
+     (when (and (= :settle (:kind match))
+                (seq (:transactions match))
+                (money/amount-positive? amount)
+                (not skip-subledger?))
+       (let [openers (invoices-behind-settled db (:transactions match)
+                                              {:as-of-valid date})]
+         (when (seq openers)
+           (when-not applied-by-uid
+             (throw (ex-info
+                     (str "commit-match!: the settled transaction(s) have "
+                          (count openers) " invoice(s) behind them, so this "
+                          "settlement must write the :payment-application "
+                          "subledger row that dunning and collections aging "
+                          "read — but :applied-by-uid is missing and the row "
+                          "would be unattributed. Pass :applied-by-uid, or "
+                          ":skip-subledger? true if you maintain the "
+                          "subledger yourself.")
+                     {:type :reconciliation/missing-applied-by-uid
+                      :bank-line bank-line-eid
+                      :invoices (mapv :invoice-eid openers)})))
+           (let [{:keys [allocations]} (allocate-across-settled amount openers)]
+             (vec (mapcat
+                   (fn [i {:keys [invoice-eid allocated]}]
+                     (papp/apply-payment-tx-data
+                      db {:payment payment-tempid
+                          :invoice invoice-eid
+                          :amount allocated
+                          :commodity commodity
+                          :applied-by-uid applied-by-uid
+                          :applied-at date
+                          :strategy :fifo
+                          :reason :reconciled
+                          :tempid-suffix (str "-recon-" i)}))
+                   (range) allocations))))))))
+
 (declare commit-match-tx-data)
 
 (defn commit-match!
@@ -650,6 +807,9 @@
      - construct a payment-receipt transaction with two postings
        (bank ↔ AR/AP/contra)
      - link via :kontor.transaction/settles when match is :settle
+     - write the `:payment-application` subledger row for every invoice
+       behind the settled transactions, and derive
+       `:kontor.invoice/status` from the resulting residual (ADR-161)
      - update bank-line/status to :reconciled and link
        :kontor.bank-line/posting
 
@@ -665,7 +825,19 @@
                               spans several receivable/payable accounts,
                               which `ar-or-ap-account` refuses to guess.
      :external-id-prefix    — string used to build the payment tx's
-                              external-id; default \"PAY-<bank-line-id>\""
+                              external-id; default \"PAY-<bank-line-id>\"
+     :applied-by-uid        — ref to `:kontor.audit/create-uid`. REQUIRED
+                              when the settled transactions have invoices
+                              behind them, because a
+                              `:payment-application` row is unattributed
+                              without it. Absent, the call REFUSES rather
+                              than writing an unattributed subledger row
+                              or silently skipping it — the same
+                              DEFER-don't-corrupt stance as
+                              `ar-or-ap-account`.
+     :skip-subledger?       — escape hatch for a caller that maintains the
+                              subledger itself. Leaves the two views
+                              disagreeing; use only with a plan."
   [conn bank-line-eid match journal-eid opts]
   (let [report (validation/transact-with-validation
                 conn (commit-match-tx-data
@@ -686,7 +858,8 @@
   [db bank-line-eid match journal-eid
    {:keys [ar-codes ap-codes external-id-prefix contra-account]
     :or {ar-codes #{"1400"} ap-codes #{"3300"}
-         external-id-prefix "PAY-"}}]
+         external-id-prefix "PAY-"}
+    :as opts}]
   (let [bl (d/pull db [:kontor.bank-line/external-id :kontor.bank-line/amount
                        :kontor.bank-line/source-account :kontor.bank-line/commodity
                        :kontor.bank-line/date :kontor.bank-line/counterparty]
@@ -728,12 +901,22 @@
            {:kontor.posting/account contra
             :kontor.posting/amount (money/negate-amount amount)
             :kontor.posting/commodity commodity
-            :kontor.posting/posted-at date}]})]
-    (conj (vec payment-tx)
-          {:db/id bank-line-eid
-           :kontor.bank-line/status :reconciled
-           :kontor.bank-line/reconciled-at (now)
-           :kontor.bank-line/posting "pay-tx-p0"})))
+            :kontor.posting/posted-at date}]})
+        ;; ADR-161: the subledger row(s) ride in the SAME gated tx as the
+        ;; cash posting. `:payment` is the tempid string "pay-tx" —
+        ;; datahike resolves it in-commit, exactly as
+        ;; `:kontor.bank-line/posting "pay-tx-p0"` below already relies on.
+        subledger-tx (settlement-subledger-tx-data
+                      db (assoc opts :match match :amount amount
+                                :commodity commodity :date date
+                                :payment-tempid "pay-tx"
+                                :bank-line-eid bank-line-eid))]
+    (cond-> (vec payment-tx)
+      (seq subledger-tx) (into subledger-tx)
+      :always (conj {:db/id bank-line-eid
+                     :kontor.bank-line/status :reconciled
+                     :kontor.bank-line/reconciled-at (now)
+                     :kontor.bank-line/posting "pay-tx-p0"}))))
 
 (defn unmatched-queue
   "Return all `:bank-line` entities still in `:unmatched` status,

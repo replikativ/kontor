@@ -117,8 +117,11 @@
 ;; ============================================================================
 
 (def category-patterns
+  ;; NOTE `\bRECHNUNG`: without the boundary the substring in
+  ;; "VERBUND AG/STROMRECHNUNG 01.2026" made a €128.40 electricity bill
+  ;; :einnahmen — a debit booked as revenue. Same defect in bank-de.
   {:einnahmen        [#"(?i)\bGEHALT\b" #"(?i)LOHN" #"(?i)\bENTGELT\b"
-                      #"(?i)RECHNUNG" #"(?i)HONORAR" #"(?i)PROVISION"
+                      #"(?i)\bRECHNUNG" #"(?i)HONORAR" #"(?i)PROVISION"
                       #"(?i)FAMILIENBEIHILFE"]
    :miete            [#"(?i)\bMIETE\b" #"(?i)GENOSSENSCHAFT" #"(?i)BAUTRÄGER"]
    :strom-gas        [#"(?i)\bWIEN ENERGIE\b" #"(?i)\bENERGIE AG\b"

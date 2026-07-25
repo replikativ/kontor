@@ -7,10 +7,18 @@
    (debugged once, reused everywhere) while letting each country
    add a new bank format in ~10 LOC.
 
+   THE AMOUNT CONTRACT (ADR-131). `:amount` on every candidate is
+   signed from the ACCOUNT HOLDER's point of view: **positive = money
+   in**. Banks disagree wildly about how they encode that, so every
+   layout DECLARES its convention; nothing is defaulted, because a
+   defaulted convention is what shipped a 100x misparse and two sign
+   inversions past `(is (>= ratio 0.5))`.
+
    Bank configurations carry:
      :encoding         — \"UTF-8\" / \"ISO-8859-1\" / \"UTF-16LE\"
      :skip-rows        — fallback header-row offset if the
                          keyword-driven auto-detect misses
+     :no-header?       — bypass keyword auto-detect; every row is data
      :date-format      — Java DateTimeFormatter pattern, e.g.
                          \"dd.MM.yy\", \"dd/MM/yyyy\", \"yyyy-MM-dd\"
      :separator        — \\;, \\,, \\\\t
@@ -18,17 +26,49 @@
                          | :english (1,234.56)
                          | :split-debit-credit (separate debit + credit
                            columns; one is blank per row)
-     :col-indexes      — map keyword → 0-based column index. Required
-                         keys: :date :amount (or :debit + :credit when
+     :number-format    — :german | :english. The DECIMAL convention,
+                         which is a different question from the column
+                         layout. Derived from :amount-style for the two
+                         single-column styles; **required** for
+                         :split-debit-credit, which names a column
+                         layout and says nothing about numerals.
+     :debit-sign       — -1 | 1, **required** for :split-debit-credit
+     :credit-sign      — -1 | 1, **required** for :split-debit-credit
+                         Each column's parsed magnitude is multiplied by
+                         its sign and the two products added. The retail
+                         deposit-account pair is `-1 / 1` — the debit
+                         column is money LEAVING. A bank that already
+                         writes its debit column signed (Targobank) uses
+                         `1 / 1`.
+     :amount-sign      — -1 | 1, default 1, for the single-column
+                         styles. `-1` normalises an ISSUER-side layout
+                         (AmEx writes a card charge POSITIVE because it
+                         increases what you owe).
+     :col-indexes      — map keyword → column index. Required keys:
+                         :date :amount (or :debit + :credit when
                          :amount-style :split-debit-credit). Optional:
                          :value-date :counterparty :recipient
                          :description :type :iban :currency :info
+                         :balance.
+                         **A NEGATIVE index counts from the END of the
+                         row** — `-1` is the last field. Tail anchoring
+                         is how a config declares which columns the
+                         layout pins to the end of the line, which is
+                         the only non-guessing answer to a ragged export
+                         (ING omits a field entirely on one row shape).
+                         The engine never right-shifts on its own.
 
    `parse-statement` runs the parse and returns a vector of
    candidate maps with structured fields + the raw row. Caller-
    supplied `categorize-fn` (defaults to identity) tags each
    candidate with a category keyword for downstream contra-account
    resolution.
+
+   When the layout declares a `:balance` column the parsed running
+   balance rides along on the candidate (nil — not 0M — when the layout
+   has none or the cell is blank). That is what lets
+   `kontor.banking.statement-tie-out` check a parse against the bank's
+   own arithmetic instead of against a row count.
 
    See modules/bank-de/parser.clj for the reference set of bank
    configs and the openclaw-derived categorizer."
@@ -106,39 +146,155 @@
           (if negative? (.negate v) v))
         (catch NumberFormatException _ 0M)))))
 
+;; ============================================================================
+;; Column access: negative indexes are TAIL-anchored (ADR-131)
+;; ============================================================================
+
+(defn cell
+  "Read column `i` of `row`. A NEGATIVE `i` counts from the end of the
+   row: -1 is the last field, -2 the second-to-last. Returns nil when
+   `i` is nil or out of range.
+
+   Tail anchoring is a config author's declaration that the layout pins
+   this column to the END of the line. It is the answer to a ragged
+   export — a bank that omits an optional field on some row shapes — and
+   it is a DECLARATION, not a guess: the engine never re-aligns a row on
+   its own."
+  [row i]
+  (when (and i (seq row))
+    (let [n (count row)
+          j (if (neg? i) (+ n i) i)]
+      (when (and (>= j 0) (< j n))
+        (nth row j)))))
+
+;; ============================================================================
+;; Config validation (ADR-131)
+;; ============================================================================
+
+(def amount-styles #{:german :english :split-debit-credit})
+(def number-formats #{:german :english})
+(def signs #{-1 1})
+
+(defn number-format
+  "The DECIMAL convention for `config`. `:number-format` is
+   authoritative when present; otherwise it is derived from the
+   single-column `:amount-style`. Returns nil for
+   `:amount-style :split-debit-credit` without an explicit
+   `:number-format` — a column layout says nothing about numerals, and
+   defaulting it is exactly the defect that made every Crédit Agricole
+   amount 100x too large."
+  [{:keys [number-format amount-style]}]
+  (or number-format (number-formats amount-style)))
+
+(defn validate-config
+  "Return a vector of human-readable problems with `config`, empty when
+   it is well-formed. Pure — see `validate-config!` for the throwing
+   variant."
+  [{:keys [amount-style col-indexes amount-sign debit-sign credit-sign] :as config}]
+  (let [nf (number-format config)]
+    (cond-> []
+      (not (map? col-indexes))
+      (conj ":col-indexes must be a map of keyword → column index")
+
+      (and (map? col-indexes) (nil? (:date col-indexes)))
+      (conj ":col-indexes is missing the required :date column")
+
+      (not (amount-styles amount-style))
+      (conj (str ":amount-style must be one of " (pr-str amount-styles)
+                 " — got " (pr-str amount-style)))
+
+      (and (:number-format config) (not (number-formats (:number-format config))))
+      (conj (str ":number-format must be one of " (pr-str number-formats)
+                 " — got " (pr-str (:number-format config))))
+
+      (and (= :split-debit-credit amount-style) (nil? nf))
+      (conj (str ":amount-style :split-debit-credit requires an explicit "
+                 ":number-format — the column layout does not imply the "
+                 "decimal convention"))
+
+      (and (= :split-debit-credit amount-style) (map? col-indexes)
+           (or (nil? (:debit col-indexes)) (nil? (:credit col-indexes))))
+      (conj ":amount-style :split-debit-credit requires both :debit and :credit in :col-indexes")
+
+      (and (= :split-debit-credit amount-style) (not (signs debit-sign)))
+      (conj (str ":amount-style :split-debit-credit requires :debit-sign ∈ #{-1 1} "
+                 "— got " (pr-str debit-sign)
+                 ". A retail deposit account is -1 (the debit column is money LEAVING)."))
+
+      (and (= :split-debit-credit amount-style) (not (signs credit-sign)))
+      (conj (str ":amount-style :split-debit-credit requires :credit-sign ∈ #{-1 1} "
+                 "— got " (pr-str credit-sign)))
+
+      (and (not= :split-debit-credit amount-style) (map? col-indexes)
+           (nil? (:amount col-indexes)))
+      (conj (str ":amount-style " (pr-str amount-style)
+                 " requires :amount in :col-indexes"))
+
+      (and (some? amount-sign) (not (signs amount-sign)))
+      (conj (str ":amount-sign must be -1 or 1 — got " (pr-str amount-sign))))))
+
+(defn validate-config!
+  "Throw `:bank-csv/invalid-config` when `config` is malformed; return
+   `config` otherwise.
+
+   Called ONCE per parse, BEFORE the row loop. That placement is
+   load-bearing: `parse-statement-with-config` wraps `row->candidate` in
+   a catch-all, so a throw raised from inside the loop would silently
+   drop EVERY transaction and hand the caller an empty statement instead
+   of an error."
+  [config]
+  (let [problems (validate-config config)]
+    (when (seq problems)
+      (throw (ex-info (str "Invalid bank config: " (str/join "; " problems))
+                      {:type :bank-csv/invalid-config
+                       :problems problems
+                       :config config})))
+    config))
+
+;; ============================================================================
+;; Amount resolution
+;; ============================================================================
+
+(defn- amount-parser
+  [config]
+  (if (= :german (number-format config)) parse-german-amount parse-english-amount))
+
+(defn- signed
+  ^java.math.BigDecimal [^java.math.BigDecimal v sign]
+  (if (neg? (long sign)) (.negate v) v))
+
 (defn- pull-amount
-  "Resolve the signed amount from a row per the config's amount style.
-     :german / :english       — one column carries a signed value
-     :split-debit-credit      — separate :debit + :credit columns; one
-                                blank per row; the parser combines
-                                them, treating debit as positive
-                                inflow and credit as negative outflow
-                                (matching most CA / FR retail-bank
-                                conventions).
+  "Resolve the account-holder-signed amount from a row (positive = money
+   in) per the config's declared conventions.
+
+     :german / :english     — one column carries a signed value; the
+                              magnitude is multiplied by :amount-sign
+                              (default 1) so an issuer-side export can
+                              be normalised without a bespoke parser.
+     :split-debit-credit    — separate :debit + :credit columns, one
+                              blank per row. Each column's parsed value
+                              is multiplied by its declared sign and the
+                              products are added. No default: see
+                              `validate-config`.
 
    Returns BigDecimal."
-  ^java.math.BigDecimal [row {:keys [amount-style col-indexes] :as _config}]
-  (let [parser (case amount-style
-                 :english parse-english-amount
-                 :split-debit-credit parse-english-amount   ;; numeric format
-                 parse-german-amount)]
-    (case amount-style
-      :split-debit-credit
-      (let [debit  (parser (get row (:debit col-indexes)))
-            credit (parser (get row (:credit col-indexes)))
-            ;; Convention: debit-side appears as a POSITIVE inflow on
-            ;; bank statements (it's money OUT of the account in
-            ;; bookkeeping but we surface the bank's POV here);
-            ;; credit-side is NEGATIVE. Most CA/FR bank exports follow
-            ;; this. If a particular bank inverts, swap in the config
-            ;; via :debit-sign / :credit-sign overrides (TODO).
-            ;; For now: debit positive, credit negated.
-            ]
-        (cond-> (.subtract debit credit)
-          ;; (already signed: inflow positive, outflow negative)
-          ))
-      ;; Default: signed-amount in one column
-      (parser (get row (:amount col-indexes))))))
+  ^java.math.BigDecimal [row {:keys [amount-style col-indexes debit-sign credit-sign
+                                     amount-sign] :as config}]
+  (let [parser (amount-parser config)]
+    (if (= :split-debit-credit amount-style)
+      (.add (signed (parser (cell row (:debit col-indexes))) debit-sign)
+            (signed (parser (cell row (:credit col-indexes))) credit-sign))
+      (signed (parser (cell row (:amount col-indexes))) (or amount-sign 1)))))
+
+(defn- pull-balance
+  "The layout's running-balance cell, or nil when the layout declares no
+   `:balance` column or the cell is blank. Deliberately nil rather than
+   0M — 0M is a legitimate balance and would make an absent column
+   indistinguishable from an account at zero."
+  [row {:keys [col-indexes] :as config}]
+  (let [raw (cell row (:balance col-indexes))]
+    (when-not (str/blank? raw)
+      ((amount-parser config) raw))))
 
 ;; ============================================================================
 ;; Header auto-detection
@@ -192,21 +348,22 @@
   [bank config row]
   (let [idx       (:col-indexes config)
         amount    (pull-amount row config)
-        date      (parse-date (get row (:date idx)) (:date-format config))
-        value     (parse-date (or (get row (:value-date idx))
-                                  (get row (:date idx)))
+        date      (parse-date (cell row (:date idx)) (:date-format config))
+        value     (parse-date (or (cell row (:value-date idx))
+                                  (cell row (:date idx)))
                               (:date-format config))]
     (when date
       {:bank             bank
        :date             date
        :value-date       value
        :amount           amount
-       :counterparty     (str/trim (or (get row (:counterparty idx))
-                                       (get row (:recipient idx)) ""))
-       :description      (str/trim (str (or (get row (:description idx))
-                                            (get row (:libelle idx)) "")))
-       :counterparty-iban (str/trim (str (get row (:iban idx) "")))
-       :transaction-type (str/trim (str (get row (:type idx) "")))
+       :balance          (pull-balance row config)
+       :counterparty     (str/trim (or (cell row (:counterparty idx))
+                                       (cell row (:recipient idx)) ""))
+       :description      (str/trim (str (or (cell row (:description idx))
+                                            (cell row (:libelle idx)) "")))
+       :counterparty-iban (str/trim (str (or (cell row (:iban idx)) "")))
+       :transaction-type (str/trim (str (or (cell row (:type idx)) "")))
        :raw-row          row})))
 
 (defn parse-statement-with-config
@@ -220,6 +377,10 @@
   ([path bank config]
    (parse-statement-with-config path bank config identity))
   ([path bank config categorize-fn]
+   ;; ONCE, before the row loop — the `keep`/`catch` below swallows
+   ;; per-row exceptions, so a config error raised inside the loop would
+   ;; return an empty statement instead of an error. ADR-131.
+   (validate-config! config)
    (let [file (java.io.File. ^String path)
          rows (read-csv file config)
          hdr (header-row-index rows config)

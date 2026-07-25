@@ -35,10 +35,16 @@
          :col-indexes {:date 0 :value-date 1 :counterparty 3 :recipient 4
                        :description 5 :type 6 :iban 7 :amount 8}}
 
+   ;; ING — RAGGED EXPORT. The Buchungstext field is omitted entirely on
+   ;; some row shapes (see the `Rente` credit in ing.csv: 6 fields where
+   ;; every other row has 7), so a head-anchored :amount 5 reads the
+   ;; currency code and silently drops the largest inflow in the file.
+   ;; :amount / :currency / :description are TAIL-anchored — the layout
+   ;; pins them to the end of the line. ADR-131.
    :ing {:encoding "ISO-8859-1" :skip-rows 12 :date-format "dd.MM.yyyy" :separator \;
          :amount-style :german
          :col-indexes {:date 0 :value-date 1 :counterparty 2
-                       :description 4 :type 3 :amount 5}}
+                       :description -3 :type 3 :amount -2 :currency -1}}
 
    :commerzbank {:encoding "UTF-8" :skip-rows 1 :date-format "dd.MM.yyyy" :separator \;
                  :amount-style :german
@@ -72,10 +78,32 @@
                                    :iban 6 :bic 7 :amount 8 :currency 9
                                    :info 10}}
 
-   :targobank {:encoding "UTF-8" :skip-rows 0 :date-format "dd.MM.yyyy" :separator \;
-               :amount-style :german
+   ;; Targobank — headerless, and SPLIT debit/credit: field 2 carries
+   ;; debits (already signed, `-5,00`), field 3 carries credits
+   ;; (`83,16`). Mapping only :amount 2 silently deleted every Gutschrift.
+   ;; Because the debit column arrives already signed, :debit-sign is 1
+   ;; — this is exactly the case the retail-bank -1/1 default would get
+   ;; wrong, which is why there is no default.
+   ;; :no-header? is required: with no header keyword to auto-detect,
+   ;; `header-row-index` falls through to :skip-rows 0 and
+   ;; `(drop (inc 0) rows)` eats the first transaction.
+   ;; The bank ships this layout in BOTH decimal conventions; see
+   ;; `targobank-decimal-style` in `detect-bank`.
+   :targobank {:encoding "UTF-8" :no-header? true :date-format "dd.MM.yyyy" :separator \;
+               :amount-style :split-debit-credit
+               :number-format :german :debit-sign 1 :credit-sign 1
                :col-indexes {:date 0 :type 1 :counterparty 1 :description 1
-                             :amount 2 :currency 5}}
+                             :debit 2 :credit 3 :iban -1}}
+
+   ;; Same layout, DOT decimal separator (`-5.00`). Documented in
+   ;; test/resources/FORMATS.md as "CSV-Variante 2 (Punkt-Dezimal)".
+   ;; Routing it to the comma config parsed -5.00 as -500 — a silent
+   ;; 100x on every amount.
+   :targobank-punkt {:encoding "UTF-8" :no-header? true :date-format "dd.MM.yyyy" :separator \;
+                     :amount-style :split-debit-credit
+                     :number-format :english :debit-sign 1 :credit-sign 1
+                     :col-indexes {:date 0 :type 1 :counterparty 1 :description 1
+                                   :debit 2 :credit 3 :iban -1}}
 
    :gls-bank {:encoding "UTF-8" :skip-rows 1 :date-format "dd.MM.yyyy" :separator \;
               :amount-style :german
@@ -105,6 +133,30 @@
 ;; Detection
 ;; ============================================================================
 
+(def ^:private comma-decimal-amount #"(?m);-?\d+,\d{1,2};")
+(def ^:private dot-decimal-amount #"(?m);-?\d+\.\d{1,2};")
+
+(defn targobank-decimal-style
+  "Which Targobank decimal convention is this file? The bank ships the
+   SAME headerless layout with `,` or with `.` as the decimal separator
+   (FORMATS.md: 'CSV-Variante 1 (Komma-Dezimal)' /
+   'CSV-Variante 2 (Punkt-Dezimal)'), and the file carries no marker
+   distinguishing them — so this is a DETECTION question (which layout
+   is this?), answered once per file, not a per-row number-parsing
+   guess.
+
+   The evidence is an amount cell with one or two decimal places, which
+   `1.234` (German thousands) cannot produce. When a file contains only
+   thousands-shaped amounts the evidence is genuinely absent and we
+   return the documented default, `:targobank` (comma) — a caller with
+   a dot-decimal export of that shape must pass the config explicitly."
+  [content]
+  (let [s (str content)]
+    (if (and (re-find dot-decimal-amount s)
+             (not (re-find comma-decimal-amount s)))
+      :targobank-punkt
+      :targobank)))
+
 (defn detect-bank
   [filename content-preview]
   (let [lower (str/lower-case (str filename))
@@ -118,7 +170,7 @@
       (str/includes? lower "sparkasse")    (if (str/includes? lower "mt940")
                                              :sparkasse-mt940
                                              :sparkasse-camt)
-      (str/includes? lower "targobank")    :targobank
+      (str/includes? lower "targobank")    (targobank-decimal-style preview)
       (str/includes? lower "gls")          :gls-bank
       (str/includes? lower "sparda")       :sparda-bank-west
       (str/includes? lower "vr-")          :vr-bank
@@ -137,7 +189,12 @@
 ;; ============================================================================
 
 (def category-patterns
-  {:einnahmen        [#"(?i)RECHNUNG" #"(?i)RG-" #"(?i)RE-\d" #"(?i)LEISTUNG"
+  ;; NOTE the word boundaries. Without `\b` on RECHNUNG, the substring in
+  ;; "Visa BestCard ABRECHNUNG VOM 23 10 25" made a -24,00 Lastschrift
+  ;; :einnahmen; without one on RENT, "RV-RENTE" made a €2,647.74 pension
+  ;; credit a :miete expense. Both are the same failure as the sign bugs
+  ;; ADR-131 fixed — a debit filed as income and vice versa.
+  {:einnahmen        [#"(?i)\bRECHNUNG" #"(?i)RG-" #"(?i)RE-\d" #"(?i)LEISTUNG"
                       #"(?i)AUFTRAG" #"(?i)HONORAR" #"(?i)PROVISION"]
    :gehalt           [#"(?i)GEHALT" #"(?i)LOHN" #"(?i)ENTGELT"]
    :buero            [#"(?i)PAPER" #"(?i)PENDEL" #"(?i)STAPLES" #"(?i)BUERO"
@@ -154,7 +211,7 @@
    :bewirtung        [#"(?i)RESTAURANT" #"(?i)CAFE" #"(?i)BAR" #"(?i)LIEFERANDO"]
    :fahrzeuge        [#"(?i)TANK" #"(?i)SHELL" #"(?i)ARAL" #"(?i)ESSO" #"(?i)BP"
                       #"(?i)TANKSTELLE" #"(?i)KFZ"]
-   :miete            [#"(?i)MIETE" #"(?i)RENT" #"(?i)STELLPLATZ"]
+   :miete            [#"(?i)MIETE" #"(?i)\bRENT\b" #"(?i)STELLPLATZ"]
    :nebenkosten      [#"(?i)NEBENKOSTEN" #"(?i)HEIZUNG" #"(?i)WASSER"
                       #"(?i)STROM" #"(?i)GAS" #"(?i)ELEKTRIZIT"]
    :versicherung     [#"(?i)VERSICHERUNG" #"(?i)AXA" #"(?i)ALLIANZ" #"(?i)HUK"]

@@ -49,7 +49,7 @@
 (defn bal-by-code
   "Signed sum of all posting amounts against the account with `code`."
   [db code]
-  (or (d/q '[:find (sum ?amt) . :in $ ?c :where
+  (or (d/q '[:find (sum ?amt) . :with ?p :in $ ?c :where
              [?a :kontor.account/code ?c]
              [?p :kontor.posting/account ?a]
              [?p :kontor.posting/amount ?amt]] db code)

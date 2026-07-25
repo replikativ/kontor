@@ -56,9 +56,12 @@
 
    ;; TD Canada Trust EasyWeb — NO header, 5 cols (Date, Description,
    ;; Withdrawal, Deposit, Balance).
+   ;; Retail deposit account: the Withdrawal column is money LEAVING
+   ;; → :debit-sign -1, :credit-sign 1. English numerals (3,850.00).
    :td
    {:encoding "UTF-8" :no-header? true :date-format "MM/dd/yyyy" :separator \,
     :amount-style :split-debit-credit
+    :number-format :english :debit-sign -1 :credit-sign 1
     :col-indexes {:date 0 :description 1 :debit 2 :credit 3 :balance 4}}
 
    ;; Scotiabank PERSONAL banking — 5 cols, NO header.

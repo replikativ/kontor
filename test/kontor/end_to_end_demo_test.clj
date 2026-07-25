@@ -165,10 +165,17 @@
                   [?bl :kontor.bank-line/amount ?amt]
                   (not [?bl :kontor.bank-line/matched-tx _])]
                 db amount)
-        best (first (recon/suggest-match db bl {}))]
+        best (first (recon/suggest-match db bl {}))
+        ;; ADR-161: commit-match! writes the :payment-application subledger row
+        ;; that dunning + collections aging read, and refuses to write it
+        ;; unattributed — hence :applied-by-uid. The status change now lands in
+        ;; the same commit, so flip-paid-on-settlement below is a no-op kept for
+        ;; the settlements this path does not cover.
+        actor (:db/id (d/entity db [:kontor.partner/external-id "OWN"]))]
     (when-not best
       (throw (ex-info "No match found for bank line" {:amount amount})))
-    (recon/commit-match! conn bl (:match best) bank-jnl {})
+    (recon/commit-match! conn bl (:match best) bank-jnl
+                         {:applied-by-uid actor})
     (invoice/flip-paid-on-settlement conn (:transactions (:match best)))))
 
 ;; ============================================================================

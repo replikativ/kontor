@@ -188,9 +188,20 @@
           db (d/db conn)
           [bl] (d/q '[:find [?bl] :where [?bl :kontor.bank-line/amount 1891.50M]] db)
           best (first (recon/suggest-match db bl {}))
-          _ (recon/commit-match! conn bl (:match best) bank-jnl {})
-          ;; Now flip-paid-on-settlement
+          ;; ADR-161: :applied-by-uid is REQUIRED when the settled
+          ;; transactions have invoices behind them — commit-match! now writes
+          ;; the :payment-application subledger row that dunning reads, and it
+          ;; refuses to write it unattributed.
+          actor (:db/id (d/entity db [:kontor.partner/external-id "OWN"]))
+          _ (recon/commit-match! conn bl (:match best) bank-jnl
+                                 {:applied-by-uid actor})
           settled-tx-eids (:transactions (:match best))
+          ;; ADR-161: the status is already :paid — commit-match! derived it
+          ;; from the residual in the same commit. flip-paid-on-settlement is
+          ;; now the GL-only bridge for settlements written outside this path,
+          ;; and is a no-op here (idempotent).
+          mid-status (:kontor.invoice/status
+                      (d/pull (d/db conn) [:kontor.invoice/status] inv-eid))
           _ (inv/flip-paid-on-settlement conn settled-tx-eids)
           db (d/db conn)
           inv (d/pull db [:kontor.invoice/status] inv-eid)
@@ -198,11 +209,16 @@
                 (or (some-> (get (balance/account-balance conn (ace db code)) eur)
                             :amount)
                     0M))]
-      (is (= :paid (:kontor.invoice/status inv)))
-      ;; The status keyword is a PROXY: it is set by `flip-paid-on-settlement`
+      (is (= :paid mid-status)
+          "ADR-161: commit-match! itself derived :paid from the residual —
+           the invoice does not need a second call to look settled")
+      (is (= :paid (:kontor.invoice/status inv))
+          "and the GL-only bridge is idempotent on top of it")
+      ;; The status keyword used to be a PROXY: `flip-paid-on-settlement` set it
       ;; independently of whether the reconciliation posted anything, so a
-      ;; commit that moved no money — or moved it to the wrong account — reads
-      ;; :paid all the same (note 198 audit). Assert the MONEY.
+      ;; commit that moved no money — or moved it to the wrong account — read
+      ;; :paid all the same (note 198 audit). It is now derived from the
+      ;; subledger residual, but still assert the MONEY.
       ;; INV-2026-0001 is 1891.50 gross (1589.50 net + 302.00 USt), so the
       ;; bank receipt of 1891.50 leaves: bank 1200 = +1891.50, receivable
       ;; 1400 = 1891.50 − 1891.50 = 0.00.

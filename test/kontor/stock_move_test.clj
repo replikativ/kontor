@@ -98,7 +98,7 @@
         (is (= 2 n-postings))))
     (testing "Postings sum to zero per (ledger, commodity)"
       (let [sum (d/q '[:find (sum ?amt) .
-                       :where [_ :kontor.posting/amount ?amt]]
+                       :with ?p :where [?p :kontor.posting/amount ?amt]]
                      db)]
         (is (= 0 (.compareTo (bigdec "0") sum)))))))
 
@@ -122,21 +122,21 @@
           tx-data (posting/plan-stock-move (d/db conn) move)
           _ (d/transact conn tx-data)
           db (d/db conn)
-          asset-bal (d/q '[:find (sum ?amt) .
+          asset-bal (d/q '[:find (sum ?amt) . :with ?p
                            :in $ ?path
                            :where
                            [?a :kontor.account/path ?path]
                            [?p :kontor.posting/account ?a]
                            [?p :kontor.posting/amount ?amt]]
                          db asset-acc-path)
-          var-bal (d/q '[:find (sum ?amt) .
+          var-bal (d/q '[:find (sum ?amt) . :with ?p
                          :in $ ?path
                          :where
                          [?a :kontor.account/path ?path]
                          [?p :kontor.posting/account ?a]
                          [?p :kontor.posting/amount ?amt]]
                        db variance-path)
-          gr-ir-bal (d/q '[:find (sum ?amt) .
+          gr-ir-bal (d/q '[:find (sum ?amt) . :with ?p
                            :in $ ?path
                            :where
                            [?a :kontor.account/path ?path]
@@ -182,7 +182,7 @@
                                 :direction :out :qty 120M
                                 :effective-date #inst "2026-05-15")))
           db (d/db conn)
-          cogs-bal (d/q '[:find (sum ?amt) .
+          cogs-bal (d/q '[:find (sum ?amt) . :with ?p
                           :in $ ?path
                           :where
                           [?a :kontor.account/path ?path]
