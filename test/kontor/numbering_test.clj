@@ -89,6 +89,20 @@
                   (d/pull db [:kontor.transaction/sequence-number] t)))
             "the ordinal is allocated even when the display string is the caller's"))))
 
+  (testing "a reversal draws its OWN number from the series (ADR-151 x ADR-152)"
+    ;; A reversal is its own legal document, so it takes the next number rather
+    ;; than a "<orig>-REV" derivative of the original's — and taking a real
+    ;; number is what keeps the series gapless rather than leaving the reversal
+    ;; outside it.
+    (let [conn (numbered-db)]
+      (sell! conn {:amount 1000M})
+      (let [orig (d/q '[:find ?t . :where
+                        [?t :kontor.transaction/sequence-number 1]] (d/db conn))]
+        (book/reverse! conn {:transaction orig :reversal-date #inst "2026-04-01"})
+        (is (= ["RE/2026/0001" "RE/2026/0002"] (xids (d/db conn)))
+            "the reversal is the next document in the series, not a suffixed clone")
+        (is (numbering/gapless? (d/db conn) sj)))))
+
   (testing "the preview is advisory and does not reserve"
     (let [conn (numbered-db)]
       (is (= 1 (:sequence-number (numbering/next-number (d/db conn) sj d1))))
