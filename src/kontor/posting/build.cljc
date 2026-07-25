@@ -5,7 +5,8 @@
    (valid-time stamping) — no datahike, no gate, no costing/valuation. The
    JVM-only inventory / GR-IR / costing builders and the gate-routed
    `post-transaction!` stay in `kontor.posting`, which re-exports these two."
-  (:require [kontor.bitemporal :as kbt]
+  (:require [kontor.actor.ref :as actor]
+            [kontor.bitemporal :as kbt]
             [kontor.posting.validate :as pv]))
 
 (defn build-transaction
@@ -99,13 +100,28 @@
    `:kontor.transaction/state :posted` + `:posted-at` (default now),
    propagates `:posted-at` onto each posting, builds via
    `build-transaction`, and applies `kbt/with-vt` (vt-from defaults
-   to `:kontor.transaction/effective-date`)."
+   to `:kontor.transaction/effective-date`).
+
+   Opts:
+     :posted-at — sealing timestamp (default now)
+     :vt-from / :vt-to — valid-time window
+     :actor     — WHO sealed this entry (ADR-150). Accepts an eid, a
+                  lookup-ref, or the bare `:kontor.actor/uid` string;
+                  `kontor.actor/->ref` coerces it and it lands on
+                  `:kontor.transaction/posted-by` +
+                  `:kontor.audit/create-uid` + `:kontor.audit/write-uid`.
+                  Because `:kontor.actor/uid` is `:db.unique/identity`, an
+                  unregistered actor is REFUSED by datahike rather than
+                  silently becoming a phantom entity. A journal-level
+                  policy can make it mandatory —
+                  `kontor.actor/require-actor-on-posted!`."
   ([input] (post-transaction-tx-data input {}))
-  ([input {:keys [posted-at vt-from vt-to]}]
+  ([input {:keys [posted-at vt-from vt-to actor]}]
    (let [pa (or posted-at #?(:clj (java.util.Date.) :cljs (js/Date.)))
          input' (-> input
                     (assoc-in [:transaction :kontor.transaction/state] :posted)
                     (assoc-in [:transaction :kontor.transaction/posted-at] pa)
+                    (update :transaction actor/stamp actor)
                     (update :postings
                             (fn [ps]
                               (mapv #(if (:kontor.posting/posted-at %)

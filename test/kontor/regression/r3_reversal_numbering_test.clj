@@ -38,6 +38,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
             [kontor.book :as book]
+            [kontor.numbering :as numbering]
             [kontor.posting :as posting]
             [kontor.compliance.sealing :as sealing]
             [kontor.reporting.balance :as balance]
@@ -52,6 +53,9 @@
 (def ^:private rev   [:kontor.account/path "Erträge:Erlöse:19%"])
 (def ^:private d1    #inst "2026-03-15")
 (def ^:private d2    #inst "2026-04-01")
+(def ^:private sj    [:kontor.journal/code "SJ"])
+
+(defn- resolve-journal [db j] (:db/id (d/entity db j)))
 
 (defn- eq? [^java.math.BigDecimal expected actual]
   (and (some? actual) (zero? (.compareTo expected ^java.math.BigDecimal actual))))
@@ -121,56 +125,114 @@
           (is (eq? 0M (bal conn ar))  "receivable nets to zero after reversal")
           (is (eq? 0M (bal conn rev)) "revenue nets to zero after reversal"))))))
 
-;; PENDING(NEW): there is NO generic GL reverse builder in the kernel. Only the
-;; document-specific kontor.document.invoice/cancel! reverses (and it hard-codes
-;; the reversal effective-date to `now`, so it cannot reverse into a chosen
-;; period). A raw kontor.book/entry! GL entry has no reverse path at all — the
-;; caller must hand-roll leg negation + the :reverses link + any settlement, as
-;; the GREEN test above demonstrates. Odoo exposes account.move._reverse_moves
-;; (account_move.py:5430) — one call takes a reversal date, sign-flips (or
-;; storno-doubles at :5464), sets reversed_entry_id, and optionally reconciles
-;; the reversal against the original (auto-settle). Remove ^:kaocha/pending once
-;; kontor ships e.g. kontor.book/reverse! / kontor.posting/reverse-transaction!.
-(deftest ^:kaocha/pending generic-gl-reverse-builder-exists
-  (testing "the kernel should expose a generic reverse builder for a posted GL tx"
-    (let [candidates ['kontor.book/reverse!
-                      'kontor.book/reverse-entry!
-                      'kontor.posting/reverse-transaction!
-                      'kontor.posting/reverse!]
-          found (keep resolve candidates)]
-      (is (seq found)
-          (str "no generic GL reverse builder found among " (vec candidates)
-               " — reversal is document-specific (invoice/cancel!) only")))))
+;; CLOSED by ADR-152 (`kontor.book/reverse!`). The pin above used to assert that
+;; one of four candidate SYMBOLS resolved, which a stub would have satisfied;
+;; what follows asserts the EFFECTS the hand-built reversal at :88-122 spells
+;; out — same legs negated, same journal, :reverses linked, and the reversal
+;; landing in the period the CALLER chose rather than `now`. That last one is
+;; the whole reason the builder had to exist: kontor.document.invoice/cancel!
+;; hard-codes `now`, so a March-discovered January error could not be reversed
+;; into January. Odoo: account.move._reverse_moves (account_move.py:5430).
+(deftest reverse!-negates-every-leg-into-a-caller-chosen-period
+  (testing "book/reverse! sign-flips into the requested period and links :reverses"
+    (let [conn (de/create-de-db)]
+      (sell-1000! conn)
+      (let [orig (tx-by-xid (d/db conn) "SJ-2026-0001")]
+        (book/reverse! conn {:transaction "SJ-2026-0001" :reversal-date d2})
+        (let [db  (d/db conn)
+              rvs (d/q '[:find ?r . :in $ ?o :where
+                         [?r :kontor.transaction/reverses ?o]] db orig)]
+          (is (some? rvs) ":reverses links the reversal back at the original")
+          (is (not= orig rvs) "the reversal is its own transaction, not an edit")
+
+          ;; the effect that matters: both legs net to zero…
+          (is (eq? 0M (bal conn ar))  "receivable nets to zero after reversal")
+          (is (eq? 0M (bal conn rev)) "revenue nets to zero after reversal")
+
+          ;; …but ONLY from the reversal date onward. A bitemporal read before
+          ;; it still shows the original standing — which is what proves the
+          ;; reversal landed in the period asked for and not at `now`.
+          (is (eq? 1000M (some-> (balance/account-balance
+                                  conn ar {:as-of-valid #inst "2026-03-20"})
+                                 vals first :amount))
+              "as of before the reversal date the original still stands")
+
+          ;; the reversal carries the negated legs, not a fresh guess at them
+          (is (= #{-1000M 1000M}
+                 (set (map #(.stripTrailingZeros ^java.math.BigDecimal %)
+                           (d/q '[:find [?a ...] :in $ ?t :where
+                                  [?p :kontor.posting/transaction ?t]
+                                  [?p :kontor.posting/amount ?a]] db rvs))))
+              "the reversal's legs are the original's, negated")
+          (is (= (d/q '[:find ?j . :in $ ?t :where
+                        [?t :kontor.transaction/journal ?j]] db orig)
+                 (d/q '[:find ?j . :in $ ?t :where
+                        [?t :kontor.transaction/journal ?j]] db rvs))
+              "the reversal is filed in the original's journal"))))))
+
+(deftest reverse!-refuses-the-cases-that-would-silently-double-book
+  (testing "reversing twice would re-book the original amount — it is refused"
+    (let [conn (de/create-de-db)]
+      (sell-1000! conn)
+      (book/reverse! conn {:transaction "SJ-2026-0001" :reversal-date d2})
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"already been reversed"
+                            (book/reverse! conn {:transaction "SJ-2026-0001"
+                                                 :reversal-date d2})))
+      (is (eq? 0M (bal conn ar))
+          "the refused second reversal left the receivable at zero, not +1000")))
+  (testing "an unknown transaction is refused rather than reversing nothing"
+    (let [conn (de/create-de-db)]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"no transaction found"
+                            (book/reverse! conn {:transaction "NOPE"}))))))
 
 ;; ============================================================================
 ;; B. Gapless legal numbering
 ;; ============================================================================
 
-;; GREEN — document the numbering substrate as it actually is: a bare
-;; :kontor.journal/sequence-prefix string and NO counter/allocation attribute.
-;; This is a factual schema check, not a bug in itself — it pins the shape the
-;; gapless-allocation gap (B2/B3) sits on top of.
-(deftest journal-sequence-substrate-is-a-bare-prefix
-  (testing ":kontor.journal/sequence-prefix exists but no last/next counter attr does"
-    (let [db (d/db (de/create-de-db))]
-      (is (schema-ident? db :kontor.journal/sequence-prefix)
-          "the prefix attribute is present")
-      (is (not (schema-ident? db :kontor.journal/last-sequence))
-          "no :kontor.journal/last-sequence counter")
-      (is (not (schema-ident? db :kontor.journal/next-sequence))
-          "no :kontor.journal/next-sequence counter")
-      (is (not (schema-ident? db :kontor.transaction/sequence-number))
-          "no per-transaction sequence number attribute"))))
-
-;; PENDING(NEW): nothing ALLOCATES a gapless per-journal legal number. Posting
-;; three sales through book/sell! with no :external-id leaves every transaction
-;; with a nil external-id — the substrate never assigns SJ/2026/0001..0003.
-;; Odoo's sequence.mixin (_get_last_sequence, account_move.py:4155) computes the
-;; next name per journal at post time so posted moves are gaplessly numbered.
-;; Remove ^:kaocha/pending once kontor auto-allocates a per-journal legal number.
-(deftest ^:kaocha/pending posted-entries-get-gapless-per-journal-numbers
-  (testing "three sales with no :external-id should receive sequential legal numbers"
+;; REWRITTEN. This test used to assert that :kontor.journal/last-sequence and
+;; :kontor.transaction/sequence-number did NOT exist in the schema. That made it
+;; true by construction and, worse, it would have gone RED the moment the gap it
+;; described was closed — a test that fails when the bug is fixed is an alarm
+;; wired backwards. What it was really pinning is that a journal does not
+;; allocate until somebody asks it to, so that is what it now asserts, by
+;; effect: post into an unconfigured journal and no number appears.
+(deftest allocation-is-opt-in-per-journal
+  (testing "a journal with no numbering configured allocates nothing"
     (let [conn (de/create-de-db)]
+      (book/sell! conn {:debit-account ar :credit-account rev
+                        :amount 100 :commodity eur :effective-date d1})
+      (let [db (d/db conn)]
+        (is (empty? (d/q '[:find [?n ...] :where
+                           [?t :kontor.transaction/sequence-number ?n]] db))
+            "no ordinal is allocated in an unconfigured journal")
+        (is (empty? (d/q '[:find [?x ...] :where
+                           [?t :kontor.transaction/external-id ?x]] db))
+            "and no legal number is invented for the caller")))
+    ;; Opt-in because only some journals carry legally numbered documents: an
+    ;; internal accrual journal must NOT mint invoice numbers. Odoo scopes the
+    ;; series per journal for the same reason (ir_sequence.py:132).
+    (testing "…and an internal journal stays unnumbered while a sales journal does not"
+      (let [conn (de/create-de-db)]
+        (numbering/configure-journal! conn sj {:prefix "RE/{year}/"})
+        (book/sell! conn {:debit-account ar :credit-account rev
+                          :amount 100 :commodity eur :effective-date d1})
+        (book/adjust! conn {:debit-account ar :credit-account rev
+                            :amount 5 :commodity eur :effective-date d1})
+        (is (= ["RE/2026/0001"]
+               (d/q '[:find [?x ...] :where
+                      [?t :kontor.transaction/external-id ?x]] (d/db conn)))
+            "only the configured sales journal allocated")))))
+
+;; CLOSED by ADR-151. The pin asserted that three sales with no :external-id
+;; each receive a distinct legal number; that assertion is kept verbatim below
+;; and strengthened — distinct is not enough for a legal series, the numbers
+;; must be CONSECUTIVE FROM 1 with no hole, which is the actual statutory
+;; requirement in DE/FR/IT/ES/PT/BR/IN/MX. Odoo: sequence.mixin
+;; `_get_last_sequence` (account_move.py:4155).
+(deftest posted-entries-get-gapless-per-journal-numbers
+  (testing "three sales with no :external-id receive sequential legal numbers"
+    (let [conn (de/create-de-db)]
+      (numbering/configure-journal! conn sj {:prefix "SJ/{year}/" :reset :yearly})
       (dotimes [_ 3]
         (book/sell! conn {:debit-account ar :credit-account rev
                           :amount 100 :commodity eur :effective-date d1}))
@@ -179,27 +241,83 @@
                         [?t :kontor.transaction/journal ?j]
                         [?j :kontor.journal/type :sale]
                         [?t :kontor.transaction/external-id ?x]] db)]
-        ;; DESIRED: three distinct, sequential legal numbers. ACTUAL: the query
-        ;; returns nothing because external-id was never set — no allocator.
         (is (= 3 (count xids))
-            "each posted sale should carry an auto-allocated legal number")
+            "each posted sale carries an auto-allocated legal number")
         (is (apply distinct? xids)
-            "allocated legal numbers must be unique per journal")))))
+            "allocated legal numbers are unique per journal")
+        (is (= ["SJ/2026/0001" "SJ/2026/0002" "SJ/2026/0003"] (sort xids))
+            "and they run consecutively from 1 — a legal series, not just unique ids")
+        (is (numbering/gapless? db sj) "the series has no hole"))))
 
-;; PENDING(NEW): there is no gap DETECTION. Odoo stores made_sequence_gap
-;; (account_move.py:972 _compute_made_sequence_gap) so a break in a journal's
-;; posted sequence is flagged for the auditor. kontor has no equivalent helper
-;; and no sequence field to scan. Remove ^:kaocha/pending once a gap-detector
-;; (e.g. kontor.reporting/sequence-gaps) ships.
-(deftest ^:kaocha/pending journal-sequence-gap-detection-exists
-  (testing "the kernel should expose a per-journal sequence gap detector"
-    (let [candidates ['kontor.reporting.ledger/sequence-gaps
-                      'kontor.reporting/sequence-gaps
-                      'kontor.compliance.sealing/sequence-gaps
-                      'kontor.book/sequence-gaps]
-          found (keep resolve candidates)]
-      (is (seq found)
-          (str "no gapless-sequence gap detector found among " (vec candidates))))))
+  (testing "the ordinal restarts at 1 in the next year, and that is not a gap"
+    (let [conn (de/create-de-db)]
+      (numbering/configure-journal! conn sj {:prefix "SJ/{year}/" :reset :yearly})
+      (book/sell! conn {:debit-account ar :credit-account rev
+                        :amount 100 :commodity eur :effective-date d1})
+      (book/sell! conn {:debit-account ar :credit-account rev
+                        :amount 100 :commodity eur :effective-date #inst "2027-01-04"})
+      (let [db (d/db conn)]
+        (is (= #{"SJ/2026/0001" "SJ/2027/0001"}
+               (set (d/q '[:find [?x ...] :where
+                           [?t :kontor.transaction/external-id ?x]] db)))
+            "each year opens its own series at 1")
+        (is (numbering/gapless? db sj)
+            "a 1-January restart is not read as a 5,000-entry hole"))))
+
+  (testing "backdating into a bucket the journal has left is REFUSED"
+    ;; Allocating into last year after this year's series started would restart
+    ;; at 1 and re-issue a number last year already used. A duplicate legal
+    ;; number is worse than a missing feature. Odoo refuses the same shape in
+    ;; sequence.mixin._constrains_date_sequence (sequence_mixin.py:157).
+    (let [conn (de/create-de-db)]
+      (numbering/configure-journal! conn sj {:prefix "SJ/{year}/" :reset :yearly})
+      (book/sell! conn {:debit-account ar :credit-account rev
+                        :amount 100 :commodity eur :effective-date #inst "2027-01-04"})
+      (is (thrown? Exception
+                   (book/sell! conn {:debit-account ar :credit-account rev
+                                     :amount 100 :commodity eur :effective-date d1})))
+      (is (= ["SJ/2027/0001"]
+             (d/q '[:find [?x ...] :where
+                    [?t :kontor.transaction/external-id ?x]] (d/db conn)))
+          "the refused entry consumed no number — allocation and commit are one unit"))))
+
+;; CLOSED by ADR-151. The pin asserted a SYMBOL resolved; this asserts the
+;; detector actually finds a hole, and — the part a symbol check can never
+;; reach — that it does not cry wolf on an intact series. The only way to make
+;; a hole is ADR-007's :db/purge, which is exactly the auditable event the
+;; detector must surface rather than hide. Odoo:
+;; account_move._compute_made_sequence_gap (account_move.py:972).
+(deftest journal-sequence-gap-detection-exists
+  (testing "a purge of a numbered entry leaves a hole the detector reports"
+    (let [conn (de/create-de-db)]
+      (numbering/configure-journal! conn sj {:prefix "SJ/{year}/"})
+      (dotimes [_ 3]
+        (book/sell! conn {:debit-account ar :credit-account rev
+                          :amount 100 :commodity eur :effective-date d1}))
+      (is (numbering/gapless? (d/db conn) sj) "sanity: 1,2,3 is intact")
+
+      (let [second-tx (tx-by-xid (d/db conn) "SJ/2026/0002")]
+        (d/transact conn [[:db/purge second-tx :kontor.transaction/sequence-number 2]])
+        (let [db   (d/db conn)
+              gaps (numbering/sequence-gaps db sj)]
+          (is (not (numbering/gapless? db sj)) "the series is no longer intact")
+          (is (= [{:journal (resolve-journal db sj) :sequence-key "2026"
+                   :missing [2] :highest 3}]
+                 gaps)
+              "the detector names the missing ordinal and the bucket it is missing from")))))
+
+  (testing "an entry missing from the START of a bucket is reported too"
+    ;; "the first two invoices of the year are gone" is precisely what an
+    ;; auditor is looking for, and a naive max-minus-count check misses it.
+    (let [conn (de/create-de-db)]
+      (numbering/configure-journal! conn sj {:prefix "SJ/{year}/"})
+      (dotimes [_ 2]
+        (book/sell! conn {:debit-account ar :credit-account rev
+                          :amount 100 :commodity eur :effective-date d1}))
+      (d/transact conn [[:db/purge (tx-by-xid (d/db conn) "SJ/2026/0001")
+                         :kontor.transaction/sequence-number 1]])
+      (is (= [1] (:missing (first (numbering/sequence-gaps (d/db conn) sj))))
+          "ordinal 1 is reported missing, not silently treated as 'series starts at 2'"))))
 
 ;; PENDING(NEW) — a real correctness / sealing-bypass hazard. Because a legal
 ;; number lives in :kontor.transaction/external-id, which is :db.unique/identity

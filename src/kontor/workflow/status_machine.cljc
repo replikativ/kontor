@@ -208,27 +208,54 @@
     ;; segregation-of-duties rule against an unknown person. An anonymous
     ;; approval is not an approval.
     ;;
-    ;; A missing CREATOR is treated differently and deliberately: it is a
-    ;; property of already-stored data (rows written before audit-uid
-    ;; stamping), not something the approver controls, and refusing there
-    ;; would make historical entities permanently unapprovable. There is
-    ;; also no self-approval to detect when nobody is recorded as creator.
+    ;; A missing CREATOR is refused for the same reason: there is nothing to
+    ;; compare the approver against, so separation of duties is unverifiable
+    ;; in exactly the same way. ADR-140 initially argued the opposite — that a
+    ;; nil creator is a property of already-stored data (rows written before
+    ;; audit-uid stamping), so refusing would make historical entities
+    ;; permanently unapprovable. ADR-150 wins the disagreement on two counts:
+    ;; the policy is OPT-IN per transition, so the burden falls only on a
+    ;; consumer that has explicitly asked for four-eyes and cannot honestly
+    ;; claim it on documents whose creator is unknown; and the gate now
+    ;; normalises actor refs, so entries written through it DO carry a
+    ;; resolvable creator. A consumer with genuinely no actor concept simply
+    ;; does not install this policy; one with historical gaps backfills
+    ;; :kontor.audit/create-uid or scopes the policy to newer transitions.
     :no-self-approval
     (let [creator (->eid (:kontor.audit/create-uid (d/pull db [:kontor.audit/create-uid] entity)))
           actor   (->eid changed-by-uid)]
       (cond
         (nil? actor)
         {:rule rule
-         :reason (str "this transition is :no-self-approval-gated, so it "
-                      "requires a recorded :changed-by-uid — an anonymous "
-                      "actor cannot be shown to differ from the creator")
+         :reason (str "no :changed-by-uid recorded — separation of duties cannot be "
+                      "verified, so the transition is refused. Pass the acting "
+                      "actor (kontor.actor/register-actor! + :changed-by-uid).")
          :creator creator}
 
-        (and creator (= creator actor))
+        (nil? creator)
+        {:rule rule
+         :reason (str "the entity records no :kontor.audit/create-uid, so there is "
+                      "nothing to compare the approver against — separation of "
+                      "duties cannot be verified, and the transition is refused. "
+                      "Stamp :kontor.audit/create-uid when creating the entity "
+                      "(the `:actor` option does this for ledger entries).")
+         :actor actor}
+
+        (= creator actor)
         {:rule rule
          :reason "transition actor must differ from entity creator"
          :actor actor
          :creator creator}))
+
+    ;; ADR-150 — the same policy row the gate reads to require an actor on a
+    ;; sealed entry also has meaning HERE: a status transition under it must
+    ;; name who made it. Both enforcement points, one row.
+    :requires-actor
+    (when (nil? (->eid changed-by-uid))
+      {:rule rule
+       :reason (str "no actor recorded for this transition — an active "
+                    ":requires-actor policy makes attribution mandatory "
+                    "(:changed-by-uid). ADR-150.")})
 
     :requires-supporting-doc
     (when-not sup-doc

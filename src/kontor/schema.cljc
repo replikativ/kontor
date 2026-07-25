@@ -53,6 +53,115 @@
                      level (last logical update, not last tx)."}])
 
 ;; ============================================================================
+;; Actor — the entity every `…-uid` ref points AT (ADR-150).
+;;
+;; The `-uid` family (`:kontor.audit/create-uid`, `:kontor.audit/write-uid`,
+;; `:kontor.transaction/posted-by`, `:kontor.status-history/changed-by-uid`,
+;; `:kontor.payment-application/applied-by-uid`, …) has always been
+;; `:db.type/ref`, and until ADR-150 there was NO entity type in the kernel
+;; for them to reference. The consequence was not "the field is optional" —
+;; it was that a consumer following the de-facto convention (an opaque
+;; string, `"sarah"`) minted a phantom entity with no attributes, so the
+;; audit trail recorded a pointer resolving to nothing, and every control
+;; built on top (four-eyes / `:no-self-approval`, delegation of authority,
+;; GoBD's *Bearbeiter*, SOX) had nothing to compare.
+;;
+;; Why `:kontor.actor/*` and not `:kontor.user/*`:
+;;
+;;   1. kontor deliberately does NOT implement authentication or
+;;      authorization — see `:kontor.audit-doc/category` below, where authz
+;;      is explicitly deferred to the consumer. "User" is an authn/authz
+;;      word (credentials, roles, sessions); modelling one would invite the
+;;      kernel across that boundary. "Actor" is the audit word: the party
+;;      an internal control attributes an action to.
+;;   2. Not every actor is a human. A bank-statement importer, a payroll
+;;      provider callback, an ADR-032 recurring schedule, an ADR-074 saga
+;;      drain and an ADR-050 retention sweeper all write to the ledger, and
+;;      an auditor needs them distinguishable from a person —
+;;      `:kontor.actor/kind`.
+;;   3. The consumer's user table stays the source of truth.
+;;      `:kontor.actor/external-ref` points back at it (an OIDC `sub`, a
+;;      beleg `:advisor/id` UUID stringified — the same convention
+;;      `:kontor.partner/external-id` already documents), and
+;;      `:kontor.actor/person` optionally links the kernel-shared
+;;      `:kontor.person/*` record. kontor learns WHO ACTED without owning
+;;      identity.
+;;
+;; `:kontor.actor/uid` is a `:db.unique/identity` STRING precisely so the
+;; existing convention keeps its ergonomics: `:actor "sarah"` coerces to the
+;; lookup-ref `[:kontor.actor/uid "sarah"]` (`kontor.actor/->ref`), which
+;; datahike resolves — and REFUSES when no such actor is registered. That
+;; refusal is the point: an unregistered actor can no longer silently become
+;; a phantom entity.
+;; ============================================================================
+
+(def ^:private actor-attrs
+  [{:db/ident       :kontor.actor/uid
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Stable opaque handle for the actor — the value every
+                     `…-uid` ref resolves through. String (not uuid) so a
+                     consumer can use whatever it already has: a login
+                     name, an OIDC subject, a stringified UUID. Identity
+                     attribute, so `[:kontor.actor/uid \"sarah\"]` is the
+                     canonical lookup-ref. ADR-150."}
+
+   {:db/ident       :kontor.actor/name
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Human-readable name for audit reports and the GoBD
+                     *Bearbeiter* column. Display only — never an
+                     identifier."}
+
+   {:db/ident       :kontor.actor/kind
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "What kind of actor this is. Open-set keyword; nil
+                     treated as :person. Canonical values:
+                       :person  — a human being
+                       :service — an automated integration acting on the
+                                  company's behalf (bank importer, payroll
+                                  provider callback)
+                       :system  — kontor itself (an ADR-032 schedule
+                                  firing, an ADR-050 retention sweep)
+                     An auditor needs machine writes distinguishable from
+                     human ones."}
+
+   {:db/ident       :kontor.actor/external-ref
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "Pointer back into the CONSUMER's identity store — an
+                     OIDC `sub`, an LDAP dn, a beleg `:advisor/id` UUID
+                     stringified. Indexed, deliberately NOT unique: two
+                     kontor actors may legitimately map to the same human
+                     principal across tenants or over a rename. kontor
+                     never authenticates against this value; it exists so
+                     an auditor can join the ledger to the identity system
+                     of record. ADR-150."}
+
+   {:db/ident       :kontor.actor/person
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to the kernel-shared `:kontor.person/*`
+                     record for this actor, when one exists (an employee
+                     approving invoices is both an actor and a person).
+                     Absent for :service / :system actors."}
+
+   {:db/ident       :kontor.actor/active
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one
+    :db/doc         "False deactivates the actor. Deactivation is NOT
+                     deletion — historical `-uid` refs must keep
+                     resolving, or the audit trail breaks. Absent =
+                     active. Once the `:requires-actor` policy is
+                     installed, `kontor.actor/resolve-uid-refs` refuses
+                     a NEW write attributed to a deactivated actor —
+                     old refs still read, but a retired actor cannot
+                     act. ADR-150."}])
+
+;; ============================================================================
 ;; Commodity — currencies and other tradeable units.
 ;;
 ;; PTA-style: keep small. A commodity is identified by its symbol (EUR,
@@ -565,11 +674,69 @@
    {:db/ident       :kontor.journal/sequence-prefix
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
-    :db/doc         "Consumer-side numbering convention (\"INV/{year}/\").
-                     RESERVED — NO KERNEL READER. kontor ships no
-                     sequence generator; `:kontor.transaction/external-id`
-                     is always caller-supplied. Previously described as
-                     driving 'auto-generated transaction names' (ADR-140)."}
+    :db/doc         "Prefix template for the allocated legal document
+                     number (\"RE/{year}/\"). `{year}` / `{month}` are
+                     substituted from the entry's effective-date by
+                     `kontor.numbering/render`. Read by the allocator only
+                     when :kontor.journal/auto-sequence is true. ADR-151."}
+
+   ;; ── ADR-151: gapless per-journal legal numbering ────────────────────
+   ;; DE (GoBD / §14 UStG), FR (NF525), IT, ES, PT, BR, IN, MX all make a
+   ;; gapless, per-journal, immutable document number a LEGAL CONDITION of
+   ;; issuing an invoice. Before ADR-151 `:sequence-prefix` above was a bare
+   ;; string nothing read, and the number landed in caller-supplied
+   ;; `:kontor.transaction/external-id`.
+   {:db/ident       :kontor.journal/auto-sequence
+    :db/valueType   :db.type/boolean
+    :db/cardinality :db.cardinality/one
+    :db/doc         "True turns on gapless legal-number ALLOCATION for this
+                     journal: every entry sealed in it receives the next
+                     :kontor.transaction/sequence-number, allocated inside
+                     the transaction (so allocation and use are
+                     inseparable — a rolled-back entry consumes no number).
+                     Absent/false = no allocation, the pre-ADR-151
+                     behaviour. Opt-in per journal because only some
+                     journals carry legally numbered documents — an
+                     internal accrual journal wants no series. ADR-151."}
+
+   {:db/ident       :kontor.journal/last-sequence
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Highest ordinal allocated so far WITHIN the current
+                     :kontor.journal/last-sequence-key bucket. Written only
+                     by the in-transaction allocator, via :db/cas against
+                     the value it read — so a lost update cannot silently
+                     hand two entries the same number. Absent = nothing
+                     allocated yet (next is 1). ADR-151."}
+
+   {:db/ident       :kontor.journal/last-sequence-key
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/doc         "The reset bucket :last-sequence counts within — \"2026\"
+                     for :yearly, \"2026-03\" for :monthly, \"\" for :never.
+                     When an entry's computed bucket differs from this, the
+                     counter restarts at 1 (per-year reset). Storing the
+                     bucket rather than re-parsing the last rendered name is
+                     what makes the reset explicit instead of inferred.
+                     ADR-151."}
+
+   {:db/ident       :kontor.journal/sequence-reset
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         "When the ordinal restarts at 1: :never | :yearly |
+                     :monthly. Absent = :yearly (what DE/FR/IT/ES/PT/BR
+                     require, and what every reference ERP defaults to).
+                     The bucket is derived from the entry's
+                     :kontor.transaction/effective-date — the DOCUMENT date,
+                     not the wall clock. ADR-151."}
+
+   {:db/ident       :kontor.journal/sequence-padding
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Zero-padding width for the ordinal in the rendered
+                     number (4 → \"0001\"). Absent = 4. Cosmetic: the
+                     authoritative ordinal is the long in
+                     :kontor.transaction/sequence-number. ADR-151."}
 
    {:db/ident       :kontor.journal/active
     :db/valueType   :db.type/boolean
@@ -2685,7 +2852,36 @@
    {:db/ident       :kontor.transaction/posted-by
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one
-    :db/doc         "Caller-supplied user ref recorded at posting time."}
+    :db/doc         "The ACTOR that sealed this entry — a ref to
+                     :kontor.actor/*, stamped by the `:actor` option on
+                     `kontor.book`'s verbs and
+                     `kontor.posting/post-transaction!` (ADR-150). This is
+                     GoBD's *Bearbeiter* and SOX's 'who posted it'; a
+                     journal-level policy can REQUIRE it via
+                     `kontor.actor/require-actor-on-posted!`."}
+
+   ;; ── ADR-151: the allocated legal number ─────────────────────────────
+   {:db/ident       :kontor.transaction/sequence-number
+    :db/valueType   :db.type/long
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "The gapless ordinal allocated to this entry within
+                     (journal, :kontor.transaction/sequence-key). AUTHORITATIVE
+                     — the rendered string in :external-id is a display of
+                     this number, not the other way round. Set only by the
+                     in-transaction allocator; because it lands in the same
+                     atomic transaction as the sealed entry, and the entry is
+                     sealed, ADR-007 sealing then makes it immutable.
+                     ADR-151."}
+
+   {:db/ident       :kontor.transaction/sequence-key
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/index       true
+    :db/doc         "The reset bucket this entry's ordinal counts within
+                     (\"2026\", \"2026-03\", \"\"). Gap detection groups by
+                     (journal, sequence-key), so a legitimate 1-Jan restart
+                     is not read as a 5,000-entry hole. ADR-151."}
 
    {:db/ident       :kontor.transaction/reverses
     :db/valueType   :db.type/ref
@@ -4801,7 +4997,14 @@
     :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/doc         ":no-self-approval — recorded actor must differ
-                     from :kontor.audit/create-uid of the entity.
+                     from :kontor.audit/create-uid of the entity. FAILS
+                     CLOSED per ADR-150: a nil actor or a nil creator
+                     REFUSES the transition, because separation of duties
+                     that cannot be verified must not be assumed.
+                     :requires-actor — every entry sealed in this book must
+                     record :kontor.transaction/posted-by (ADR-150).
+                     Installed via kontor.actor/require-actor-on-posted!;
+                     enforced in the gate, not only on status transitions.
                      :requires-supporting-doc — :supporting-doc must
                      be set in the change-spec.
                      :requires-non-empty-reason-note — :reason-note
@@ -5066,6 +5269,7 @@
   (vec
    (concat
     audit-attrs
+    actor-attrs                          ; ADR-150 (kontor.actor)
     commodity-attrs
     fx-rate-attrs                        ; ADR-072
     lot-attrs

@@ -177,7 +177,12 @@
   #{:debit-account :credit-account :amount :commodity :journal
     :effective-date :narration :partner :external-id :entity :ledger
     :postings :settles :period-tag
-    :journal-type :journal-code-hint :posted-at :vt-from :vt-to})
+    :journal-type :journal-code-hint :posted-at :vt-from :vt-to
+    ;; ADR-150. This set is STRICT — it throws on anything it does not name —
+    ;; so an actor could not be threaded through the facade CLAUDE.md calls
+    ;; "start here for any new business write" until `:actor` was added here.
+    ;; `post-opts` forwards it.
+    :actor})
 
 (def posting-option-keys
   "Every key a `:postings` entry understands.
@@ -302,9 +307,16 @@
 
 (defn post-opts
   "The subset of an options map that is forwarded to
-   `post-transaction-tx-data` as builder opts."
+   `post-transaction-tx-data` as builder opts.
+
+   `:actor` is here rather than in [[build-input]] deliberately (ADR-150):
+   the actor is a property of the SEALING, not of the double-entry, so it
+   belongs to the one builder that seals. Threading it through this one
+   key is also what makes it reachable from every `kontor.book` verb at
+   once — `entry-tx-data` is `(post-transaction-tx-data (build-input opts)
+   (post-opts opts))`, so no verb needed changing."
   [opts]
-  (select-keys opts [:posted-at :vt-from :vt-to]))
+  (select-keys opts [:posted-at :vt-from :vt-to :actor]))
 
 (defn entry-tx-data
   "Pure tx-data builder for a balanced, sealed transaction — the single
