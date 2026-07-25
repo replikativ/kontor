@@ -9,9 +9,31 @@
    `:return-item-billing`) ARE the source of truth.
 
    This namespace ships the tolerance-policy lookup + match-report
-   query + state-machine driver. The actual posting-time enforcement
-   happens via ADR-038's `:kontor.approval-policy/rule :requires-three-way-
-   match-pass` consulted by kontor.invoice.posting/post-to-ledger!."
+   query + state-machine driver.
+
+   **Posting-time enforcement is OPT-IN and this module does not opt in.**
+   ADR-038's `:kontor.approval-policy/rule :requires-three-way-match-pass`
+   is implemented (`kontor.workflow.status-machine/check-policy`) and
+   `kontor.invoice.posting/post-to-ledger!` does route its status change
+   through the policy engine — so the rule fires the moment a matching
+   `:kontor.approval-policy` row exists. But NO `src/` file in this module
+   seeds one; only `posting_test.clj` transacts it. In a stock install a
+   three-way-match exception therefore does NOT block posting.
+
+   This docstring previously read \"The actual posting-time enforcement
+   happens via ADR-038's …\", stating as fact a gate with nothing behind
+   it (ADR-140). Whether procurement should seed the policy by default is
+   a deliberate open question: it is an organisational control (some
+   businesses post exceptions and reconcile later), and turning it on
+   silently would start refusing writes that every existing consumer
+   currently makes. To enforce it, transact:
+
+       {:kontor.approval-policy/entity-type     :invoice
+        :kontor.approval-policy/facet           :kontor.invoice/status
+        :kontor.approval-policy/transition-from :draft
+        :kontor.approval-policy/transition-to   :sent
+        :kontor.approval-policy/rule            :requires-three-way-match-pass
+        :kontor.approval-policy/active          true}"
   (:require [datahike.api :as d]
             [kontor.workflow.status-machine :as sm]
             [kontor.procurement.receipt :as receipt]))

@@ -112,9 +112,32 @@
                                   (assoc opts :created-at (java.util.Date.)))))
 
 (defn approve-requirement!
-  "Transition :proposed → :approved. Runs ADR-038 :approval-policy
-   checks (e.g., :no-self-approval, :requires-supporting-doc) via
-   record-status-change!."
+  "Transition :proposed → :approved via `record-status-change!`, which
+   consults ADR-038 `:kontor.approval-policy` rows matching
+   `(:requirement, :kontor.requirement/status, :proposed → :approved)`.
+
+   **This module seeds NO approval policies, so out of the box the
+   transition is unconditional** — the machinery runs and matches nothing.
+   The docstring used to read \"Runs ADR-038 :approval-policy checks (e.g.
+   :no-self-approval, :requires-supporting-doc)\", which described a gate
+   that had nothing behind it (ADR-140): a reader would reasonably conclude
+   that self-approval of a requisition was already refused. It is not, until
+   the consumer installs a policy, because who may approve a purchase
+   requisition and above what value is a per-organisation control, not
+   something a kernel companion may decide.
+
+   To make it a real gate, transact e.g.
+
+       {:kontor.approval-policy/entity-type      :requirement
+        :kontor.approval-policy/facet            :kontor.requirement/status
+        :kontor.approval-policy/transition-from  :proposed
+        :kontor.approval-policy/transition-to    :approved
+        :kontor.approval-policy/rule             :no-self-approval
+        :kontor.approval-policy/active           true}
+
+   and pass `:changed-by-uid` in `opts` (`:no-self-approval` compares it
+   against the entity's `:kontor.audit/create-uid`). See
+   `kontor.workflow.status-machine/apply-policy` for the supported rules."
   ([conn requirement] (approve-requirement! conn requirement nil))
   ([conn requirement opts]
    (let [eid (resolve-requirement (d/db conn) requirement)]

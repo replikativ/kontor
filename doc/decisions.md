@@ -26,12 +26,14 @@ file is the reading order over what the code already encodes.
    4.2 [Audit-doc + privilege + retention + DSAR + legal hold (ADR-038, ADR-049, ADR-050, ADR-051, ADR-052)](#42-audit-doc--governance)
    4.3 [Status machines as data (ADR-034)](#43-status-machines)
 5. [Write substrate — process, *-tx-data, kontor.book](#5-write-substrate)
-   5.1 [Validation gate — vendored `datopia/invariant` (ADR-011)](#51-validation-gate)
+   5.1 [Validation gate — vendored `datopia/invariant` + the mandatory `tx-pred` (ADR-011, ADR-140)](#51-validation-gate)
+   5.1a [Schema promises are enforced or deleted (ADR-140)](#51a-schema-promises-are-enforced-or-deleted--never-a-third-state)
    5.2 [`kontor.process` orchestrator (ADR-067)](#52-kontorprocess)
    5.3 [Every business write exposes a `*-tx-data` builder (ADR-068)](#53-tx-data-builders)
    5.4 [`kontor.book` verb facade (ADR-095)](#54-kontorbook)
 6. [Reports as marginalizations](#6-reports-as-marginalizations)
    6.1 [`marginalize` / σ_E + `:posting/dimensions` (ADR-096, ADR-097)](#61-marginalize)
+   6.2 [Three axis kinds: scalar, set, weighted (ADR-022, ADR-097, ADR-140)](#62-three-axis-kinds-scalar-set-weighted)
 7. [Providers — the kernel's pluggable surface](#7-providers)
    7.1 [TaxRateProvider + FxRateProvider + others (ADR-005, ADR-071, ADR-072, ADR-029, ADR-017, ADR-055, ADR-063, ADR-075)](#71-provider-surface)
    7.2 [Consolidation primitive (ADR-073)](#72-consolidation)
@@ -144,6 +146,21 @@ All business writes route through `kontor.gate/transact-with-validation` (also e
 
 We vendor `datopia/invariant` into `src/kontor/_invariant/` rather than depending on it, because the upstream library is unmaintained and we own the only patches. (ADR-011)
 
+**The gate is bypassable — a raw `d/transact` skips it.** The mandatory sibling is `kontor.governance/validate-report`, registered as a datahike **writer `tx-pred`** by `govern!`. It runs post-resolution on every committed write, whatever the client, and sees `db-before` / `db-after` / per-datom `:added` flags — so it catches retractions whatever tx-op syntax produced them, which no pre-resolution scan can.
+
+**Rule (ADR-140): any promise that protects the LEDGER lands on the tx-pred, and every validator FAMILY exists on both seams.** The gate exists to give a well-addressed error against the caller's own data structure; it is error-message quality, not enforcement. A family present on only one seam means the two disagree about what is legal — which is how a store ends up rejecting at commit what it accepted at validation time. Individual predicates may be *stronger* on the writer side; where they are, the predicate's docstring says so. A backstop weaker than the thing it backstops is not a backstop: the governor's balance check once grouped by commodity alone while the gate grouped by (entity, ledger, commodity), so the un-bypassable seam waved through parallel-book corruption the bypassable seam caught.
+
+### 5.1a Schema promises are enforced or deleted — never a third state
+
+A `:db/doc` is a contract. A consumer that reads *"the posting validator enforces a sum-to-100 invariant per named plan"* and gets no check does not get an error — it gets **plausible wrong numbers**, the worst failure mode an accounting kernel has. ADR-140 audited the kernel for docs asserting enforcement no code performed and resolved each one in exactly one of two ways: make it true with the strongest available mechanism, or delete the claim.
+
+Three failure shapes to watch for when adding an attribute:
+- **The promise points sideways.** Doc A says "B enforces this", B says "that's C's job", C says "the report engine does it". Three nominated enforcers, zero implementations; each reader stops at the pointer.
+- **The check exists but the write path cannot reach it.** `kontor.book`'s builder rebuilds each posting from a fixed key list, so an unlisted key is *silently dropped*. This hit `:ledger` (note 160) and again `:period-tag` — a `:kontor.period/tag :adjustment-13` period locked nothing any consumer could write.
+- **Enforcement that fires on correct usage.** Making `:kontor.account/required-analytic-plans` real would have made such an account unpostable through the verb facade had `:analytic-distributions` not been made reachable in the same change.
+
+Every invariant is pinned by a PAIR of tests: one asserting the refusal, one proving the invariant has **teeth** — that it still accepts the shape it is meant to allow. A validator that rejects everything satisfies "it throws"; only the pair distinguishes enforcement from breakage. (ADR-140)
+
 ### 5.2 `kontor.process`
 
 A `kontor.process` is a pure list of `{:builder ... :args ...}` steps. `run-process` resolves each step's builder (a `*-tx-data` function), threads the in-progress db value through, and emits one final transaction containing every step's effects. The orchestrator gives us **multi-step atomic writes** — depreciation-roll + lease-remeasurement + tax-return + payroll-run all run as single transactions; partial failure is impossible because nothing is written until the whole step list resolves. (ADR-067)
@@ -174,6 +191,18 @@ This convention is the substrate's load-bearing pattern — every write everywhe
 **`:posting-dimension` + `:posting/dimensions`** is the kernel-schema extension point. A companion installs a new `:posting-dimension` (`{:posting-dimension/key :project :posting-dimension/cardinality :one ...}`) and every posting carries `:posting/dimensions {:project <ref>}`; `marginalize` pivots over `:project` for free. (ADR-096, ADR-097)
 
 The substrate's "reports" are not a separate subsystem — they are read patterns over the posting stream.
+
+### 6.2 Three axis KINDS: scalar, set, weighted
+
+`marginalize` resolves a dimension to one of three kinds, and the distinction is load-bearing:
+
+- **`:scalar`** — one class per posting, full amount. Classical trial balance (`:account`). Classes partition the postings and sum to the grand total.
+- **`:set`** — several classes, full amount in EACH (`:account-tags`, every `:posting-dimension` axis). A **covering**, not a partition: a posting carrying two values on one axis contributes its whole amount twice, so the classes sum to MORE than the grand total. This is the correct answer for a *classification* ("is this posting EU? is it B2B?" — it can genuinely be both).
+- **`:weighted`** — ADR-022 analytic distributions, selected by an `{:analytic-plan p}` dimension. The amount is **apportioned by percent** across the classes, which sum back to the posting because the distribution is validated to total 100%. This is the correct answer for an *allocation* (cost centre, project, job costing, German Kostenrechnung).
+
+Analytic distributions could not simply be registered as another set-valued extractor: a 60/40 cost-centre split would then report **100% of the cost under each centre**. They were also, until ADR-140, not pulled by the report engine at all — a percentage-split cost-centre P&L was not merely wrong, it was unreachable.
+
+**Both mechanisms are kept; they are not rivals.** `:posting-dimension` is for classification (covering), `analytic-distributions` for allocation (partition). Two follow-ups are flagged, not decided: (a) `marginalize` over a set-valued axis should surface the overlap mass rather than silently returning classes that do not sum to the total; (b) the default cardinality for a newly installed axis — set-valued is the cheap default and the dangerous one. (ADR-140)
 
 ---
 

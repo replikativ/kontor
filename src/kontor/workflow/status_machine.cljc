@@ -200,10 +200,31 @@
     sup-doc :supporting-doc
     :as change-spec}]
   (case rule
+    ;; ADR-140: this rule used to read `(and creator actor (= creator actor))`,
+    ;; which fails OPEN on a missing actor — the strictest control in the
+    ;; audit story was defeated by omitting `:changed-by-uid`. The schema
+    ;; says "recorded actor must differ from :kontor.audit/create-uid", and
+    ;; an UNRECORDED actor cannot satisfy that: you cannot verify a
+    ;; segregation-of-duties rule against an unknown person. An anonymous
+    ;; approval is not an approval.
+    ;;
+    ;; A missing CREATOR is treated differently and deliberately: it is a
+    ;; property of already-stored data (rows written before audit-uid
+    ;; stamping), not something the approver controls, and refusing there
+    ;; would make historical entities permanently unapprovable. There is
+    ;; also no self-approval to detect when nobody is recorded as creator.
     :no-self-approval
     (let [creator (->eid (:kontor.audit/create-uid (d/pull db [:kontor.audit/create-uid] entity)))
           actor   (->eid changed-by-uid)]
-      (when (and creator actor (= creator actor))
+      (cond
+        (nil? actor)
+        {:rule rule
+         :reason (str "this transition is :no-self-approval-gated, so it "
+                      "requires a recorded :changed-by-uid — an anonymous "
+                      "actor cannot be shown to differ from the creator")
+         :creator creator}
+
+        (and creator (= creator actor))
         {:rule rule
          :reason "transition actor must differ from entity creator"
          :actor actor
