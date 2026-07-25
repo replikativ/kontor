@@ -268,12 +268,27 @@
                        "book has retired. Re-activate the actor, or attribute the "
                        "action to whoever is actually performing it. (ADR-150)")
                   {:type :kontor.actor/inactive-actor :uids (vec (sort dead))})))
-        (into (aref/rewrite-uid-strings tx-data #(when (contains? known? %) (tempid-for %)))
-              (map (fn [u]
-                     (cond-> {:db/id            (tempid-for u)
-                              :kontor.actor/uid u}
-                       (not (known? u)) (assoc :kontor.actor/kind unregistered-kind))))
-              (sort uids)))))) ; sorted so the emitted tx-data is deterministic
+        ;; A uid that ALREADY resolves becomes a plain lookup-ref; only an
+        ;; unknown one gets a tempid plus a provisioning map.
+        ;;
+        ;; Do not "simplify" this by giving every uid a tempid and letting
+        ;; `:db.unique/identity` upsert. It looks equivalent and is not:
+        ;; datahike assigns the tempid a fresh eid before it discovers the
+        ;; upsert target, and when the same tempid also sits in a ref slot the
+        ;; two resolutions collide — `:transact/upsert`, "resolves both to 899
+        ;; and 901". Found by a mid-life-import case: `:actor "importer"` with
+        ;; a caller-supplied `:kontor.audit/create-uid "original-author"`,
+        ;; where both actors were registered.
+        ;;
+        ;; It is also less churn: a registered actor's uid datom is not
+        ;; re-asserted on every single write that mentions them.
+        (into (aref/rewrite-uid-strings
+               tx-data
+               (fn [u] (if (known? u) [:kontor.actor/uid u] (tempid-for u))))
+              (map (fn [u] {:db/id             (tempid-for u)
+                            :kontor.actor/uid  u
+                            :kontor.actor/kind unregistered-kind}))
+              (sort unknown))))))          ; sorted → deterministic tx-data
 
 ;; ============================================================================
 ;; The policy — "a posted entry must name its actor"

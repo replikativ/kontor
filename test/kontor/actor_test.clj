@@ -12,6 +12,7 @@
             [kontor.actor :as actor]
             [kontor.book :as book]
             [kontor.gate :as gate]
+            [kontor.posting :as posting]
             [kontor.workflow.status-machine :as sm]
             [kontor.l10n-de.preset :as de]))
 
@@ -105,6 +106,40 @@
           "the inline registration wins; the tempid was not mistaken for a uid")
       (is (nil? (actor/actor (d/db conn) "a1"))
           "and no actor was invented for the tempid string itself"))))
+
+(deftest mid-life-import-keeps-the-ORIGINAL-creator
+  ;; A mid-life import legitimately has two different actors: the service
+  ;; account doing the importing, and whoever created the record in the system
+  ;; being imported from. `stamp` must not overwrite a create-uid the caller
+  ;; set explicitly — if it did, every imported entry would claim the importer
+  ;; created it, and `:no-self-approval` would then compare later approvers
+  ;; against a service account instead of against the real author.
+  ;;
+  ;; This also regression-pins a `:transact/upsert` conflict: giving every uid
+  ;; a tempid and relying on `:db.unique/identity` to upsert collides when the
+  ;; same tempid is also in a ref slot ("resolves both to 899 and 901"), so an
+  ;; already-registered actor must become a plain lookup-ref instead.
+  (let [conn (de/create-de-db)]
+    (actor/register-actor! conn {:uid "importer" :kind :service})
+    (actor/register-actor! conn {:uid "original-author" :kind :person})
+    (gate/transact-with-validation
+     conn
+     (posting/post-transaction-tx-data
+      {:transaction {:kontor.transaction/journal [:kontor.journal/code "SJ"]
+                     :kontor.transaction/effective-date d1
+                     :kontor.audit/create-uid "original-author"}
+       :postings [{:kontor.posting/account ar :kontor.posting/amount 100M
+                   :kontor.posting/commodity eur}
+                  {:kontor.posting/account rev :kontor.posting/amount -100M
+                   :kontor.posting/commodity eur}]}
+      {:actor "importer"}))
+    (let [db (d/db conn) t (the-tx db)]
+      (is (= "original-author" (actor-of db t :kontor.audit/create-uid))
+          "the caller's creator survives — the importer did not claim authorship")
+      (is (= "importer" (actor-of db t :kontor.transaction/posted-by))
+          "and the importer is recorded as who sealed it")
+      (is (= "importer" (actor-of db t :kontor.audit/write-uid))
+          "…and as the last logical writer"))))
 
 ;; ============================================================================
 ;; Requiring an actor
